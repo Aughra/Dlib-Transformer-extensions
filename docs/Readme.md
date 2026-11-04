@@ -25,6 +25,11 @@ What the project covers, the trade between model size and usefulness, and why th
 **[Buffer-Level Residency Management for GPU Memory Extension](buffer-level-residency.pdf)** (PDF)  
 A research report on the extended device memory of this fork: how a model larger than the card is streamed through it without any network being told, why the usual place for such a mechanism is one level higher in the stack, and what it costs measured against keeping everything resident. Written in the format of a conference paper rather than an article, with the prior art it sits beside, the measurements, and the limitations stated as such.
 
+## Technical Notes
+
+**[macOS Apple Silicon build memo](memo-portage-macos-arm64.md)**  
+The single native ARM64 CPU build, its baseline tests, and separate checks for Accelerate, image codecs, and FFmpeg.
+
 ---
 
 ## Planned
