@@ -5,6 +5,7 @@
 #include <dlib/privacy/pii_sequence_tagger.h>
 #include <dlib/privacy/pii_span_model.h>
 #include <dlib/rand.h>
+#include <algorithm>
 #include <cstdio>
 #include <fstream>
 #include <functional>
@@ -2522,6 +2523,333 @@ namespace
 
 // ----------------------------------------------------------------------------------------
 
+    void test_five_languages()
+    {
+        /* Italian, Spanish and German: civilities, dates, telephone numbers and tax numbers
+           found by the rules; regulations in capitals and the words for a company left
+           readable; the division of a group kept in its name. */
+        pii_detector detector;
+        string text = "Sehr geehrte Frau Schneider,\nvielen Dank für Ihre Nachricht vom 12. März 2024. Der Vertrag "
+                      "wurde von Herrn Thomas Müller unterschrieben. Bitte rufen Sie mich unter 0221 123456 an.";
+        std::vector<pii_entity> e = detector.detect(text);
+        DLIB_TEST(found(e, text, pii_type::title, "Frau") && found(e, text, pii_type::person, "Schneider"));
+        DLIB_TEST(found(e, text, pii_type::title, "Herrn") && found(e, text, pii_type::person, "Thomas Müller"));
+        DLIB_TEST(found(e, text, pii_type::date, "12. März 2024"));
+        DLIB_TEST(found(e, text, pii_type::phone, "0221 123456"));
+        DLIB_TEST(!covered(e, text, "Vertrag"));
+        text = "Gentile Sig.ra Rossi, il contratto è stato firmato dal Dott. Marco Esposito il 3 aprile 2024. "
+               "Per informazioni chiamare il 02 1234 5678. P.IVA 04808411203.";
+        e = detector.detect(text);
+        DLIB_TEST(found(e, text, pii_type::title, "Sig.ra") && found(e, text, pii_type::person, "Rossi"));
+        DLIB_TEST(found(e, text, pii_type::person, "Marco Esposito") && !covered(e, text, "Dott."));
+        DLIB_TEST(found(e, text, pii_type::date, "3 aprile 2024"));
+        DLIB_TEST(found(e, text, pii_type::phone, "02 1234 5678"));
+        DLIB_TEST(found(e, text, pii_type::identifier, "04808411203"));
+        text = "Estimada Sra. García:\nel contrato fue firmado por D. Javier Martínez el 5 de mayo de 2024. "
+               "Conforme al RGPD y a la LOPDGDD, puede llamarnos al 954 123 456. CIF: A07119548.";
+        e = detector.detect(text);
+        DLIB_TEST(found(e, text, pii_type::title, "Sra.") && found(e, text, pii_type::person, "García"));
+        DLIB_TEST(found(e, text, pii_type::title, "D.") && found(e, text, pii_type::person, "Javier Martínez"));
+        DLIB_TEST(found(e, text, pii_type::date, "5 de mayo de 2024"));
+        DLIB_TEST(found(e, text, pii_type::phone, "954 123 456"));
+        DLIB_TEST(found(e, text, pii_type::identifier, "A07119548"));
+        DLIB_TEST(!covered(e, text, "RGPD") && !covered(e, text, "LOPDGDD"));
+        /* Stacked civilities, a German mobile number in a table, a reference after its noun, the
+           plates of the United Kingdom and of Spain before 2000 after a make of car or the word
+           of a vehicle, and a profile link written without its scheme. */
+        text = "Sr. D. Francisco Javier Ortega Ruiz y D.ª Esperanza Cid Lobo.\n"
+               "49  01.12.2025  Tobias Brehm    0171 6043187\nMieternummer 0815-3307-02\n"
+               "Vehicle: BMW 118i, YV19 HDX. Vehículo B: Renault Clio S-4512-BK.\n"
+               "Perfil: linkedin.com/in/alvarodelasheras";
+        e = detector.detect(text);
+        DLIB_TEST(found(e, text, pii_type::title, "Sr.") && found(e, text, pii_type::title, "D."));
+        DLIB_TEST(found(e, text, pii_type::title, "D.ª"));
+        DLIB_TEST(found(e, text, pii_type::phone, "0171 6043187"));
+        DLIB_TEST(found(e, text, pii_type::identifier, "0815-3307-02"));
+        DLIB_TEST(found(e, text, pii_type::license_plate, "YV19 HDX"));
+        DLIB_TEST(found(e, text, pii_type::license_plate, "S-4512-BK"));
+        DLIB_TEST(found(e, text, pii_type::url, "linkedin.com/in/alvarodelasheras"));
+        // A role after a civility names nobody; a name after the role is a person.
+        text = "Illustrissimo Signor Sindaco,\nil Signor Rossi ha firmato. Caro Collega, Herr Bürgermeister.";
+        e = detector.detect(text);
+        DLIB_TEST(!covered(e, text, "Signor") && !covered(e, text, "Sindaco") && !covered(e, text, "Collega"));
+        DLIB_TEST(!covered(e, text, "Herr") && !covered(e, text, "Bürgermeister"));
+        DLIB_TEST(found(e, text, pii_type::person, "Rossi"));
+        // The door after the floor of a Spanish street, and "Gran Vía".
+        text = "Gran Vía de Don Diego López de Haro, 41, 3.º dcha., 48011 Bilbao. "
+               "En Calle Cervantes, 14, 2.º izq. hoy.";
+        e = detector.detect(text);
+        DLIB_TEST(found(e, text, pii_type::address, "Gran Vía de Don Diego López de Haro, 41, 3.º dcha."));
+        DLIB_TEST(found(e, text, pii_type::address, "Calle Cervantes, 14, 2.º izq."));
+        // A known organisation with its division, before a civility.
+        text = "Gemäß DSGVO hat die Deutsche Telekom IT Herrn Thomas Müller informiert.";
+        e = detector.detect(text);
+        DLIB_TEST(found(e, text, pii_type::organization, "Deutsche Telekom IT"));
+        DLIB_TEST(found(e, text, pii_type::person, "Thomas Müller") && !covered(e, text, "DSGVO"));
+        // Spanish companies and streets, a German public body with its place, a reference after its cue.
+        text = "Construcciones Duero, S.A., Calle de los Almendros, 6, 1.º A, y el Finanzamt Köln (Aktenzeichen "
+               "2511-004712, Polizza n. 0471/882331).";
+        e = detector.detect(text);
+        DLIB_TEST(found(e, text, pii_type::organization, "Construcciones Duero, S.A."));
+        DLIB_TEST(found(e, text, pii_type::address, "Calle de los Almendros, 6, 1.º A"));
+        DLIB_TEST(found(e, text, pii_type::organization, "Finanzamt Köln"));
+        DLIB_TEST(found(e, text, pii_type::identifier, "2511-004712"));
+        DLIB_TEST(found(e, text, pii_type::identifier, "0471/882331"));
+        // A German address block: the civility on a line of its own; a VAT number.
+        text = "Herrn\nMarius Kopp\nKanalstraße 9\n52349 Düren\nUSt-IdNr.: DE763208364";
+        e = detector.detect(text);
+        DLIB_TEST(found(e, text, pii_type::title, "Herrn") && found(e, text, pii_type::person, "Marius Kopp"));
+        DLIB_TEST(found(e, text, pii_type::identifier, "DE763208364"));
+
+        // The dates of the new languages move and come back.
+        const pseudonymization_key key = pseudonymization_key::from_bytes(string(32, '\x29'));
+        const pseudonymizer p(key);
+        text = "Termin am 12. März 2024, firmato il 1° marzo 2023 e il 3 aprile 2024, el 5 de mayo de 2024, "
+               "desde marzo de 2022.";
+        e = detector.detect(text);
+        for (const char* date : { "12. März 2024", "1° marzo 2023", "3 aprile 2024", "5 de mayo de 2024",
+                                  "marzo de 2022" })
+            DLIB_TEST_MSG(found(e, text, pii_type::date, date), date);
+        const string protected_text = p.apply(text, e);
+        for (const char* date : { "12. März 2024", "1° marzo 2023", "3 aprile 2024", "5 de mayo de 2024",
+                                  "marzo de 2022" })
+            DLIB_TEST_MSG(protected_text.find(date) == string::npos, date);
+        DLIB_TEST(p.restore(protected_text) == text);
+
+        /* What a recognizer reads: a regulation in capitals is no organisation, the word for a
+           company before its name stays readable, a division after a group joins its name, and a
+           civility read as a name is a title. */
+        auto spans = std::make_shared<std::vector<std::pair<string, string>>>();
+        auto confidence = std::make_shared<double>(0.9);
+        pii_detector learned;
+        learned.add_recognizer([spans, confidence](const string& t) {
+            std::vector<pii_span> out;
+            for (const auto& v : *spans)
+            {
+                const size_t at = t.find(v.first);
+                if (at == string::npos) continue;
+                pii_span s;
+                s.begin = at; s.end = at + v.first.size(); s.label = v.second; s.confidence = *confidence;
+                out.push_back(s);
+            }
+            std::sort(out.begin(), out.end(), [](const pii_span& a, const pii_span& b) { return a.begin < b.begin; });
+            return out;
+        });
+        auto read_with = [&](const string& t, const std::vector<std::pair<string, string>>& values, double c) {
+            *spans = values;
+            *confidence = c;
+            learned.begin_document();
+            return learned.detect(t);
+        };
+        auto read = [&](const string& t, const std::vector<std::pair<string, string>>& values) {
+            return read_with(t, values, 0.9);
+        };
+        text = "Est-ce que cette information est une donnée personnelle au sens RGPD ? Mon nom est Albert. "
+               "Ce document est issu d'informations techniques de Veolia Water.";
+        e = read(text, {{"RGPD", "ORGANIZATION"}, {"Albert", "GIVEN_NAME"}, {"Veolia", "ORGANIZATION"},
+                        {"Water", "FAMILY_NAME"}});
+        DLIB_TEST(!covered(e, text, "RGPD"));
+        DLIB_TEST(found(e, text, pii_type::person, "Albert"));
+        DLIB_TEST(found(e, text, pii_type::organization, "Veolia Water"));
+        text = "Der Vertrag mit der Firma Bauer Logistik GmbH gilt gemäß DSGVO. Dora Martin und die DORA-Prüfung.";
+        e = read(text, {{"Firma Bauer Logistik GmbH", "ORGANIZATION"}, {"DSGVO", "ORGANIZATION"},
+                        {"Dora", "GIVEN_NAME"}, {"Martin", "FAMILY_NAME"}});
+        DLIB_TEST(found(e, text, pii_type::organization, "Bauer Logistik GmbH") && !covered(e, text, "Firma"));
+        DLIB_TEST(!covered(e, text, "DSGVO"));
+        DLIB_TEST(found(e, text, pii_type::person, "Dora Martin"));
+        text = "Caro Sig. Bianchi, il team di Deutsche Telekom IT e di Enel Green Power la contatterà.";
+        e = read(text, {{"Sig", "FAMILY_NAME"}, {"Bianchi", "FAMILY_NAME"}, {"Deutsche Telekom", "ORGANIZATION"},
+                        {"Enel", "ORGANIZATION"}});
+        DLIB_TEST(found(e, text, pii_type::title, "Sig.") && found(e, text, pii_type::person, "Bianchi"));
+        DLIB_TEST(found(e, text, pii_type::organization, "Deutsche Telekom IT"));
+        DLIB_TEST(found(e, text, pii_type::organization, "Enel Green Power"));
+        /* A warning read as a name stays readable, an article opens no company, and the floor of
+           a street read apart joins its line. */
+        text = "RISERVATO. Die Geschäftsführung der Müller & Partner GmbH, Calle Larios, 9, 4.º, 29005 Málaga.";
+        e = read(text, {{"RISERVATO", "CITY"}, {"Müller & Partner GmbH", "ORGANIZATION"},
+                        {"Calle Larios, 9", "STREET_ADDRESS"}, {"4.º", "STREET_ADDRESS"}});
+        DLIB_TEST(!covered(e, text, "RISERVATO"));
+        DLIB_TEST(found(e, text, pii_type::organization, "Müller & Partner GmbH") && !covered(e, text, "der M"));
+        DLIB_TEST(found(e, text, pii_type::address, "Calle Larios, 9, 4.º"));
+        /* Regions alone or joined, a country read as a person, the number of a standard and
+           common words in lower case name nothing; a region read as a name after a civility
+           stays one. */
+        text = "Abbiamo uffici in Puglia e Sicilia e un cliente in Bretagne. Albania ha firmato l'accordo.\n"
+               "Conforme alle norme ISO 27001 ed EN 50600. ok ci vediamo stasera, anche io.\nFirmato: Sig. Aragón";
+        e = read(text, {{"Puglia e Sicilia", "ORGANIZATION"}, {"Bretagne", "CITY"}, {"Albania", "FAMILY_NAME"},
+                        {"27001", "POSTAL_CODE"}, {"50600", "POSTAL_CODE"}, {"stasera", "GIVEN_NAME"},
+                        {"anche", "FAMILY_NAME"}, {"Aragón", "FAMILY_NAME"}});
+        DLIB_TEST(!covered(e, text, "Puglia") && !covered(e, text, "Sicilia") && !covered(e, text, "Bretagne"));
+        DLIB_TEST(!covered(e, text, "Albania") && !covered(e, text, "27001") && !covered(e, text, "50600"));
+        DLIB_TEST(!covered(e, text, "stasera") && !covered(e, text, "anche"));
+        DLIB_TEST(found(e, text, pii_type::person, "Aragón"));
+        // A street of the rules joins the street read on the same line, without the dash after it.
+        text = "Entregar en: Calle Asunción, 51, 1.º - 41011 Sevilla. Bar en Plaza Mayor, 12, Valladolid.";
+        e = read(text, {{"Calle Asunción, 51, 1.º -", "STREET_ADDRESS"}, {"Plaza Mayor", "STREET_ADDRESS"}});
+        DLIB_TEST(found(e, text, pii_type::address, "Calle Asunción, 51, 1.º"));
+        DLIB_TEST(found(e, text, pii_type::address, "Plaza Mayor, 12"));
+        // After a comma, "de" says where the person comes from and stays out of the organisation.
+        text = "Mon nom est Albert, de Veolia Water, au sens du RGPD.";
+        e = read(text, {{"Albert", "GIVEN_NAME"}, {"Veolia Water", "ORGANIZATION"}});
+        DLIB_TEST(found(e, text, pii_type::organization, "Veolia Water") && !covered(e, text, "de Veolia"));
+        // A file name with a numbered extension, a letter repeated and a common word read as a place.
+        text = "journal.log2 dddddddddddd copies";
+        e = read(text, {{"journal.log2", "USERNAME"}, {"dddddddddddd", "USERNAME"}, {"copies", "CITY"}});
+        DLIB_TEST(!covered(e, text, "journal") && !covered(e, text, "dddd") && !covered(e, text, "copies"));
+        // Two organisations that the rules read apart stay two values when a recognizer joins them.
+        text = "Siemens Energy and Veolia Water signed the contract.";
+        e = read(text, {{"Siemens Energy and Veolia", "ORGANIZATION"}, {"Water", "FAMILY_NAME"}});
+        DLIB_TEST(found(e, text, pii_type::organization, "Siemens Energy"));
+        DLIB_TEST(found(e, text, pii_type::organization, "Veolia Water"));
+        text = "Il contratto tra Enel Green Power e Veolia Water è firmato.";
+        e = read(text, {{"Enel Green Power e Veolia", "ORGANIZATION"}, {"Water", "FAMILY_NAME"}});
+        DLIB_TEST(found(e, text, pii_type::organization, "Enel Green Power"));
+        DLIB_TEST(found(e, text, pii_type::organization, "Veolia Water") && !covered(e, text, " e "));
+        // A name whose rules read it whole keeps its conjunction.
+        text = "Le contrat de Martin et Fils est signé.";
+        e = read(text, {{"Martin et Fils", "ORGANIZATION"}});
+        DLIB_TEST(found(e, text, pii_type::organization, "Martin et Fils"));
+        // A known organisation written with a conjunction for its ampersand.
+        text = "Our supplier Marks and Spencer delivered, and Ernst und Young audited.";
+        e = read(text, {{"Marks", "ORGANIZATION"}});
+        DLIB_TEST(found(e, text, pii_type::organization, "Marks and Spencer"));
+        DLIB_TEST(found(e, text, pii_type::organization, "Ernst und Young"));
+        // A firm name closed by partners after the conjunction stays whole.
+        text = "La Gestoría Navarro y Asociados S.L. presentó la declaración.";
+        e = read(text, {{"Gestoría Navarro y Asociados S.L.", "ORGANIZATION"}});
+        DLIB_TEST(found(e, text, pii_type::organization, "Gestoría Navarro y Asociados S.L."));
+        // A capitalized word joined by a conjunction to a person found is another person.
+        text = "Our lawyers Martin and Dupont signed the letter.";
+        e = read(text, {{"Martin", "GIVEN_NAME"}});
+        DLIB_TEST(found(e, text, pii_type::person, "Martin") && found(e, text, pii_type::person, "Dupont"));
+        text = "Dupont et Martin ont signé. Les cabinets Clifford & Chance et Lefèvre ont répondu.";
+        e = read(text, {{"Martin", "FAMILY_NAME"}, {"Clifford", "ORGANIZATION"}});
+        DLIB_TEST(found(e, text, pii_type::person, "Dupont"));
+        // Beside an organisation, it completes its name, unless a legal form ends the name.
+        DLIB_TEST(found(e, text, pii_type::organization, "Clifford & Chance"));
+        text = "La reunión con la Oficina de Asilo y Refugio queda confirmada.";
+        e = read(text, {{"Oficina de Asilo", "ORGANIZATION"}});
+        DLIB_TEST(found(e, text, pii_type::organization, "Oficina de Asilo y Refugio"));
+        text = "Portabilità richiesta verso Porcu e Lo Cascio S.a.s.: codice fornito.";
+        e = read(text, {{"Lo Cascio S.a.s.", "ORGANIZATION"}});
+        DLIB_TEST(found(e, text, pii_type::organization, "Porcu e Lo Cascio S.a.s."));
+        text = "The contract between Acme Ltd and Zorvane was signed.";
+        e = read(text, {{"Acme Ltd", "ORGANIZATION"}});
+        DLIB_TEST(found(e, text, pii_type::organization, "Acme Ltd") &&
+                  found(e, text, pii_type::organization, "Zorvane"));
+        // A name read with less confidence than 0.8 joins nothing.
+        text = "Our lawyers Martin and Dupont signed the letter.";
+        e = read_with(text, {{"Martin", "GIVEN_NAME"}}, 0.7);
+        DLIB_TEST(found(e, text, pii_type::person, "Martin") && !covered(e, text, "Dupont"));
+        // Partners, months, holidays, roles, regions, lists, capitals beside a name that is not, and
+        // German nouns after "und" stay readable.
+        text = "Pierre Martin et Partners, Paul Morel et Lundi, Anne Roux et Directeur, Jean Blanc et Bretagne. "
+               "Thomas Müller und Kollegen.";
+        e = read(text, {{"Pierre Martin", "GIVEN_NAME"}, {"Paul Morel", "GIVEN_NAME"}, {"Anne Roux", "GIVEN_NAME"},
+                        {"Jean Blanc", "GIVEN_NAME"}, {"Thomas Müller", "GIVEN_NAME"}});
+        DLIB_TEST(!covered(e, text, "Partners") && !covered(e, text, "Lundi") && !covered(e, text, "Directeur"));
+        DLIB_TEST(!covered(e, text, "Bretagne") && !covered(e, text, "Kollegen"));
+        text = "Los días festivos son Inmaculada y Navidad. Natale, Santo Stefano e Capodanno: sportelli chiusi.";
+        e = read(text, {{"Inmaculada", "GIVEN_NAME"}, {"Stefano", "GIVEN_NAME"}});
+        DLIB_TEST(!covered(e, text, "Navidad") && !covered(e, text, "Capodanno"));
+        text = "El tribunal estima la demanda de la Sra. Luisa María Oliveira Roca y CONDENA a la empresa.";
+        e = read(text, {{"Luisa María Oliveira Roca", "GIVEN_NAME"}});
+        DLIB_TEST(found(e, text, pii_type::person, "Luisa María Oliveira Roca") && !covered(e, text, "CONDENA"));
+        text = "Les clients, dont Société Quaevum SAS et Conseil de prud'hommes de La Flèche, et les équipes STD et "
+               "DTCO sont informés.";
+        e = read(text, {{"Société Quaevum SAS", "ORGANIZATION"}, {"DTCO", "ORGANIZATION"}});
+        DLIB_TEST(!found(e, text, pii_type::organization, "Conseil") && !covered(e, text, "STD"));
+        DLIB_TEST(found(e, text, pii_type::organization, "DTCO"));
+        text = "ESTIMA la demanda interpuesta por el Sr. Dario LUQUE Y FONT y CONDENA a la empresa.";
+        e = read(text, {{"Dario LUQUE Y FONT", "GIVEN_NAME"}, {"CONDENA", "FAMILY_NAME"}});
+        DLIB_TEST(found(e, text, pii_type::person, "Dario LUQUE Y FONT") && !covered(e, text, "CONDENA"));
+    }
+
+// ----------------------------------------------------------------------------------------
+
+    void test_imposed_terms()
+    {
+        pii_detector_options options;
+        options.imposed_terms.push_back(pii_imposed_term{ "Projet Alpha", pii_type::organization, false });
+        options.imposed_terms.push_back(pii_imposed_term{ "ACME", pii_type::organization, true });
+        options.imposed_terms.push_back(pii_imposed_term{ "Contrat CT-2024-17", pii_type::identifier, false });
+        options.imposed_terms.push_back(pii_imposed_term{ "dupont", pii_type::person, false });
+        options.imposed_terms.push_back(pii_imposed_term{ "Société Générale", pii_type::organization, false });
+        options.imposed_terms.push_back(pii_imposed_term{ "---", pii_type::organization, false });
+        options.imposed_terms.push_back(pii_imposed_term{ "Kept", pii_type::none, false });
+        pii_detector detector(options);
+        DLIB_TEST(detector.imposed_term_count() == 5);
+
+        // Case and accents ignored, separators of one or two characters, whole words only.
+        string text = "Le projet alpha et le PROJET-ALPHA avancent ; Alphabet et Projet Alphas non.";
+        std::vector<pii_entity> e = detector.detect(text);
+        DLIB_TEST(found(e, text, pii_type::organization, "projet alpha"));
+        DLIB_TEST(found(e, text, pii_type::organization, "PROJET-ALPHA"));
+        DLIB_TEST(!covered(e, text, "Alphabet") && !covered(e, text, "Projet Alphas"));
+        text = "SOCIETE GENERALE et Societe Generale";
+        e = detector.detect(text);
+        DLIB_TEST(found(e, text, pii_type::organization, "SOCIETE GENERALE"));
+        DLIB_TEST(found(e, text, pii_type::organization, "Societe Generale"));
+        // Case sensitive: the case must match.
+        text = "Acme n'est pas ACME, acme non plus.";
+        e = detector.detect(text);
+        DLIB_TEST(found(e, text, pii_type::organization, "ACME") && !covered(e, text, "Acme") &&
+                  !covered(e, text, "acme"));
+        // Not across a line, and not inside a tag of the pseudonymizer.
+        text = "Projet\nAlpha [[ORG:Acme Projet Alpha#K7Q]]";
+        e = detector.detect(text);
+        DLIB_TEST(e.empty());
+        // A value that overlaps a term keeps its parts outside it; a term inside an e-mail address stays in it.
+        text = "Signé dans le cadre du contrat ct-2024-17 par Jean Dupont, jean.dupont@exemple.fr.";
+        e = detector.detect(text);
+        DLIB_TEST(found(e, text, pii_type::identifier, "contrat ct-2024-17"));
+        DLIB_TEST(found(e, text, pii_type::person, "Dupont"));
+        DLIB_TEST(found(e, text, pii_type::email, "jean.dupont@exemple.fr"));
+        DLIB_TEST(!found(e, text, pii_type::person, "Jean Dupont"));
+        // Above the rules and the recognizers of every type.
+        pii_detector learned(options);
+        learned.add_recognizer([](const string& t) {
+            std::vector<pii_span> out;
+            const size_t at = t.find("Projet Alpha Industries");
+            if (at != string::npos)
+            {
+                pii_span s;
+                s.begin = at;
+                s.end = at + string("Projet Alpha Industries").size();
+                s.label = "ORGANIZATION";
+                s.confidence = 0.95;
+                out.push_back(s);
+            }
+            return out;
+        });
+        text = "La société Projet Alpha Industries, au 12 rue de la Paix, 75002 Paris.";
+        learned.begin_document();
+        e = learned.detect(text);
+        DLIB_TEST(found(e, text, pii_type::organization, "Projet Alpha"));
+        DLIB_TEST(found(e, text, pii_type::organization, "Industries"));
+        // The terms of a type left out are ignored.
+        pii_detector_options no_org = options;
+        no_org.types.erase(std::remove(no_org.types.begin(), no_org.types.end(), pii_type::organization),
+                           no_org.types.end());
+        pii_detector partial(no_org);
+        DLIB_TEST(partial.imposed_term_count() == 2);
+        // A long text, read in pieces: each occurrence, across the pieces too.
+        string longer;
+        while (longer.size() < 200000) longer += "Le projet alpha avance. Rien d'autre ici. ";
+        e = detector.detect(longer);
+        size_t terms = 0;
+        for (const pii_entity& x : e)
+            if (x.type == pii_type::organization && longer.substr(x.begin, x.end - x.begin) == "projet alpha") ++terms;
+        DLIB_TEST(terms == longer.size() / string("Le projet alpha avance. Rien d'autre ici. ").size());
+        // Openings of tags without their end hide nothing: the term after them is found.
+        string openings;
+        while (openings.size() < 100000) openings += "[[ORG:a ";
+        openings += "projet alpha";
+        e = detector.detect(openings);
+        DLIB_TEST(!e.empty() && e.back().type == pii_type::organization &&
+                  openings.substr(e.back().begin, e.back().end - e.back().begin) == "projet alpha");
+    }
+
     void test_dataset()
     {
         const pii_example ex = parse_pii_example(
@@ -2912,6 +3240,10 @@ namespace
             test_foreign_identifiers();
             print_spinner();
             test_detector_boundaries();
+            print_spinner();
+            test_five_languages();
+            print_spinner();
+            test_imposed_terms();
             print_spinner();
             test_dataset();
             print_spinner();
