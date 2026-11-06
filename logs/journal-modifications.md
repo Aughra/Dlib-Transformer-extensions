@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-06 — Trouver pourquoi le moteur d'Albireo n'occupait qu'un cœur
+
+- **Quoi** : la cause était le mode économie d'énergie du Mac (`pmset -g` : `lowpowermode 1`, sur secteur). Une fois coupé par l'humain, `engine_chat` (moteur en bibliothèque) passe de 0,8 à 7,9 tokens/s à 8 fils, presque comme `bench_runtime` (8,3). Une piste de code a été essayée puis abandonnée : `isb` au lieu de `std::this_thread::yield()` dans `ALBIREO_CPU_RELAX()` sur ARM64 (`engine/thread_pool.h`). Elle remettait les fils d'aide à la priorité 31 (ils étaient à 0 d'après `ps -M`), mais ne gagnait rien.
+- **Fichiers** : `CLAUDE.md` (règle de mesure), `docs/memo-portage-macos-arm64.md` (mesures de référence refaites), `logs/reprise.md`, ce journal, `blog/07-le-mode-economie.md`, `blog/README.md`. Aucun code modifié au final.
+- **Pourquoi** : priorité de l'humain : la vitesse d'Albireo.
+- **Étapes** : `ps -M` (priorités et part de processeur par fil), `sample` ; correction `isb`, recompilation, `test_qkernels` passé, aucun gain ; découverte de `lowpowermode 1` et d'une charge moyenne de 16 ; mode coupé par l'humain ; moteur sans la correction construit à part (`build/macos-albireo-nofix`, supprimé ensuite), mesures alternées avec et sans (5,2 et 5,5 tokens/s avec, 5,7 et 6,4 sans) ; correction retirée (`git checkout`), moteur identique octet pour octet à l'original ; mesures de référence refaites à 1, 4 et 8 fils. Erreur de Claude : les mesures de l'épisode 6 ont été prises sans vérifier le mode d'énergie.
+
 ## 2026-11-06 — Faire répondre Albireo sur le Mac et mesurer sa vitesse
 
 - **Quoi** : premier modèle pour Albireo, Qwen3-VL 2B Instruct (Q4_K_M), téléchargé depuis l'adresse du catalogue et vérifié (taille et SHA-256). Le moteur répond juste. Mesures : 0,78 à 0,85 token/s en génération avec le moteur en bibliothèque (`engine_chat`, un seul cœur occupé) ; 1,9 token/s avec `bench_runtime` à 4 fils, 1,8 à 8 fils, 0,5 à 1 fil. Profils : calcul scalaire (`matmul_float`, `qk_dot_portable`), et des fils du moteur en bibliothèque qui attendent dans `swtch_pri`.

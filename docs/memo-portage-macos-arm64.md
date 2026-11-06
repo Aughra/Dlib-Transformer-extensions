@@ -111,27 +111,32 @@ Sur Mac M2, macOS arm64, avec AppleClang 21, CMake 4.1.2 et Ninja (2026-11-06, a
 
 ### Albireo : premier modèle et vitesse
 
-Modèle : Qwen3-VL 2B Instruct, `Qwen3VL-2B-Instruct-Q4_K_M.gguf` (1 107 409 952 octets, SHA-256 `089d75c5…dca6c2ae`, conforme à `dist/albireo/catalog.json`), téléchargé dans `build/models/`. Mac M2 : 4 cœurs performance, 4 cœurs efficacité. Moteur portable (sans SIMD), température 0.
+Modèle : Qwen3-VL 2B Instruct, `Qwen3VL-2B-Instruct-Q4_K_M.gguf` (1 107 409 952 octets, SHA-256 `089d75c5…dca6c2ae`, conforme à `dist/albireo/catalog.json`), téléchargé dans `build/models/`. Machine : MacBook Air M2 (`Mac14,15`, sans ventilateur), 4 cœurs performance et 4 cœurs efficacité, sur secteur. Moteur portable (sans SIMD), température 0.
+
+**Avant toute mesure de vitesse**, vérifier que le mode économie d'énergie est coupé (`pmset -g | grep lowpowermode` doit donner `0`) et noter la charge (`sysctl -n vm.loadavg`). En mode économie d'énergie, le moteur va environ dix fois moins vite et paraît n'occuper qu'un cœur.
 
 ```sh
 build/macos-albireo/tests/engine_chat build/macos-albireo/bin/engines/libalbireo-engine-cpu.dylib \
-  build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf --threads 4 --max 40 --temperature 0 "<question>"
+  build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf --threads 8 --max 88 --temperature 0 "<question>"
 build/macos-albireo/tests/bench_runtime build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf <fils> 64 16 2
 ```
 
-| Mesure (2026-11-06) | Prompt | Génération | Cœurs occupés en moyenne |
-|---|---|---|---|
-| `engine_chat`, moteur `libalbireo-engine-cpu.dylib`, 8 fils (21 tokens de prompt, 88 générés) | 0,99 token/s | 0,78 token/s | 0,9 |
-| `engine_chat`, même moteur, 4 fils (21 / 39 tokens) | 0,99 token/s | 0,85 token/s | 0,95 |
-| `bench_runtime`, 1 fil (32 tokens de prompt) | 0,5 token/s | 0,5 token/s (1 978 ms par token) | 0,5 |
-| `bench_runtime`, 4 fils (64 tokens de prompt) | 2,5 tokens/s | 1,9 token/s (526 ms par token) ; 2 séquences : 2,1 tokens/s | 2,1 |
-| `bench_runtime`, 8 fils (64 tokens de prompt) | 2,1 tokens/s | 1,8 token/s (551 ms par token) ; 2 séquences : 2,0 tokens/s | 2,1 |
+Mesures de référence (2026-11-06, mode économie d'énergie coupé, charge moyenne entre 13 et 30 : mises à jour de l'App Store en cours) :
 
-La réponse est correcte (une explication juste d'un compilateur, en français). Constats :
+| Programme | Fils | Prompt | Génération | Cœurs occupés en moyenne |
+|---|---|---|---|---|
+| `engine_chat` (moteur en bibliothèque), 21 tokens de prompt, 88 générés | 4 | 7,7 tokens/s | 6,0 tokens/s | 2,9 |
+| `engine_chat` | 8 | 9,2 tokens/s | 7,9 tokens/s | 4,6 |
+| `bench_runtime` (moteur compilé dans le programme), 64 tokens de prompt | 1 | 2,7 tokens/s | 2,2 tokens/s (457 ms par token) | 1,0 |
+| `bench_runtime` | 4 | 9,6 tokens/s | 7,0 tokens/s (144 ms) ; 2 séquences : 6,9 tokens/s | 3,7 |
+| `bench_runtime` | 8 | 11,3 tokens/s | 8,3 tokens/s (120 ms) ; 2 séquences : 8,9 tokens/s | 5,9 |
 
-- **Le calcul est scalaire.** Profil (`sample`) : presque tout le temps est dans `matmul_float` (prompt) et `qk_dot_portable` (génération), les versions portables des produits, qui traitent un nombre à la fois. Les versions AVX2 traitent 8 nombres par instruction ; il n'existe pas de version NEON.
-- **Le moteur en bibliothèque n'occupe qu'un cœur**, alors que `bench_runtime`, qui compile le même code dans le programme, en occupe environ deux. Profil de `engine_chat` à 4 fils : 5 fils présents, `qk_dot_portable` dans 6 143 échantillons, `swtch_pri` (le `std::this_thread::yield()` de `ALBIREO_CPU_RELAX` hors x86, `engine/thread_pool.h`) dans 5 664 ; le processus est à 85 % d'un cœur. Cause pas encore établie.
-- 8 fils ne vont pas plus vite que 4 : les cœurs d'efficacité n'aident pas.
+Pour mémoire, en mode économie d'énergie : `engine_chat` 0,78 token/s à 8 fils et 0,85 à 4 fils (0,9 cœur occupé) ; `bench_runtime` 1,9 token/s à 4 fils.
+
+Constats :
+
+- **Le calcul est scalaire.** Profil (`sample`) : presque tout le temps est dans `matmul_float` (prompt) et `qk_dot_portable` (génération), les versions portables des produits, qui traitent un nombre à la fois. Les versions AVX2 traitent 8 nombres par instruction ; il n'existe pas de version NEON. C'est la prochaine piste de vitesse.
+- **L'attente des fils.** Hors x86, `ALBIREO_CPU_RELAX()` (`engine/thread_pool.h`) est `std::this_thread::yield()`, qui fait tomber la priorité du fil à 0 sur macOS (`ps -M`). Essai : l'instruction `isb` à la place sur ARM64. Les fils restent alors à la priorité 31, mais la génération n'est pas plus rapide (deux essais alternés : 5,2 et 5,5 tokens/s avec `isb`, 5,7 et 6,4 sans). Essai abandonné, code d'origine gardé.
 - `bench_runtime` lit toujours 64 tokens de son prompt pour la génération groupée : avec un prompt plus court, il lit hors du tableau (exception `token identifier out of range`). Lui donner au moins 64 tokens.
 
 `tools/test_linux.sh` demande deux outils de Linux absents de macOS : `nproc` (remplacé par `sysctl -n hw.ncpu`) et `stat -c` de GNU (`gstat`, paquet Homebrew `coreutils`). Sans eux, la taille lue est 0, et l'étape « drive signatures » échoue pour une raison qui ne tient pas au programme.

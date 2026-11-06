@@ -48,7 +48,9 @@ La référence des commandes et des résultats est [docs/memo-portage-macos-arm6
 
 Tous les dossiers de build vont sous `build/`, que `.gitignore` ignore déjà. Un dossier par configuration. Avec Ninja, `-- -k 0` relève toutes les erreurs en un seul passage. Les compilations longues tournent en arrière-plan.
 
-Outils présents sur le Mac : AppleClang (Xcode), CMake et Ninja (Homebrew), `gh`.
+Outils présents sur le Mac : AppleClang (Xcode), CMake et Ninja (Homebrew), `gh`, `gstat` (coreutils).
+
+**Mesurer la vitesse.** Le Mac actuel est un MacBook Air M2 sans ventilateur. Avant toute mesure : `pmset -g | grep lowpowermode` doit donner `0` (sinon le demander à l'humain : en mode économie d'énergie, le moteur va environ dix fois moins vite), et noter la charge (`sysctl -n vm.loadavg`). Pour comparer deux versions, les mesurer en alternance (A, B, A, B) dans la même séance, jamais une version aujourd'hui et l'autre demain. Une optimisation n'est gardée que si elle gagne dans ces conditions.
 
 ---
 

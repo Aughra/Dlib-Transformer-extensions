@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 6 : Albireo parle, lentement
 
+*Correction : toutes les mesures de cet épisode ont été prises alors que le Mac était, sans qu'on le sache, en mode économie d'énergie. La « seconde cause » décrite plus bas venait de là, et non du moteur. Les vraies mesures sont dans [l'épisode 7](07-le-mode-economie.md).*
+
 Suite de [l'épisode 5](05-cinq-corrections.md) : Albireo et Pseudalis compilent sur le Mac, et leurs tests passent. Il restait à donner un modèle de langage à Albireo, à lui poser une question, et à chronométrer sa réponse.
 
 ## Un premier modèle

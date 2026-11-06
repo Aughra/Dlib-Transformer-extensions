@@ -15,6 +15,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-06 : tests : Pseudalis `test_engine` et `test_host` passent ; Albireo `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api`, `test_host` passent. `pseudalis/tools/test_linux.sh` (service complet) : 26 étapes sur 28.
 
 - 2026-11-06 : **Albireo répond sur le Mac** : Qwen3-VL 2B Instruct (Q4_K_M, 1,1 Go, dans `build/models/`, SHA-256 conforme au catalogue), réponse juste. Vitesse : 0,8 token/s avec le moteur en bibliothèque (`engine_chat`), 1,9 token/s avec `bench_runtime` à 4 fils. Chiffres et profils dans le mémo. Blog : épisode 6.
+- 2026-11-06 : **le « moteur sur un seul cœur » venait du mode économie d'énergie** (`lowpowermode 1`). Coupé par l'humain : `engine_chat` passe à 6,0 tokens/s à 4 fils et 7,9 à 8 fils, presque comme `bench_runtime` (7,0 et 8,3). Essai de l'instruction `isb` dans `ALBIREO_CPU_RELAX()` sur ARM64 : remet les fils à la priorité 31 mais ne gagne rien en mesures alternées ; abandonné, code d'origine gardé. Règle de mesure ajoutée à CLAUDE.md. Blog : épisode 7.
 
 ## En cours
 
@@ -22,9 +23,8 @@ Rien. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
 ## À faire, dans l'ordre proposé
 
-1. **Albireo, le moteur en bibliothèque n'occupe qu'un cœur** (`engine_chat` : 85 % d'un cœur avec 4 fils ; `bench_runtime`, même code compilé dans le programme : environ 2 cœurs). Profil : les fils sont là et ont du travail (`qk_dot_portable`), mais passent autant de temps dans `swtch_pri` (le `yield()` de `ALBIREO_CPU_RELAX` hors x86, `engine/thread_pool.h`). Pistes : la priorité (QoS) des fils créés par le moteur, le `yield()` de macOS qui abaisse la priorité du fil qui l'appelle, une différence de chemin entre `engine_chat` et `bench_runtime`. Critère : `engine_chat` occupe autant de cœurs que `bench_runtime`.
-2. **Albireo, des noyaux NEON** pour `qk_dot`, `matmul_float` et `gemm_rows` (aujourd'hui portables, un nombre à la fois). Le plus gros gain attendu. Critère : `test_qkernels` passe et `bench_runtime` va plus vite, à fils égaux.
-3. Lancer le service d'Albireo en `--console`, poser une question par l'interface web.
+1. **Albireo, des noyaux NEON** pour `qk_dot`, `matmul_float` et `gemm_rows` (aujourd'hui portables, un nombre à la fois). Le plus gros gain attendu. Critère : `test_qkernels` passe et `bench_runtime` va plus vite, à fils égaux.
+2. Lancer le service d'Albireo en `--console`, poser une question par l'interface web.
 
 Ensuite, Pseudalis :
 
@@ -44,7 +44,7 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 ## Problèmes ouverts
 
 - L'ancien fork `PapyTortueTech/Dlib-Transformer-extensions` n'est plus utilisé ; l'humain s'occupe de l'arrêter. Ne plus jamais y pousser.
-- Le moteur d'Albireo sur Mac est le moteur portable : correct, mais sans accélération SIMD, et en bibliothèque il n'occupe qu'un cœur (voir À faire, point 1).
+- Le moteur d'Albireo sur Mac est le moteur portable : correct, mais sans accélération SIMD (7,9 tokens/s à 8 fils, voir le mémo).
 - `bench_runtime` exige un prompt d'au moins 64 tokens (sinon il lit hors de son tableau) : `bench_runtime <modèle> 4 64 16 2`.
 
 ## Commandes pour reprendre
