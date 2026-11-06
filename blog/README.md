@@ -8,3 +8,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 2. [Compiler dlib et les exemples](02-compiler-dlib-et-les-exemples.md)
 3. [Albireo, Pseudalis et cinq obstacles](03-albireo-pseudalis-et-cinq-obstacles.md)
 4. [Le fork déménage](04-le-fork-demenage.md)
+5. [Cinq corrections et un premier démarrage](05-cinq-corrections.md)

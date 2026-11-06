@@ -965,6 +965,10 @@ if (NOT TARGET dlib)
       else()
          find_package(Threads REQUIRED)
          target_link_libraries(dlib_httplib INTERFACE Threads::Threads)
+         if (APPLE)
+            # cpp-httplib reads the certificates of the macOS Keychain.
+            target_link_libraries(dlib_httplib INTERFACE "-framework CoreFoundation" "-framework Security")
+         endif()
       endif()
 
       if (DLIB_HTTPLIB_TLS)

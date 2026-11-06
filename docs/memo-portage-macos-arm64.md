@@ -101,21 +101,23 @@ cmake --build build/macos-pseudalis --parallel 3 -- -k 0
 
 ## État constaté
 
-Sur Mac M2, macOS arm64, avec AppleClang 21, CMake 4.1.2 et Ninja (2026-11-05) :
+Sur Mac M2, macOS arm64, avec AppleClang 21, CMake 4.1.2 et Ninja (2026-11-06, après la fusion de `upstream/main` à `f0f9f91`) :
 
-| Build | Résultat |
-|---|---|
-| dlib + exemples (CPU de référence) | Compilé, 0 erreur ; les 24 exemples `slm_*` sont des Mach-O arm64. Avertissements : `ld: -s is obsolete` (25), `-Wbraced-scalar-init` (3). Exemples et `dtest` pas encore exécutés. |
-| Albireo | Configuré ; compilation arrêtée à 279 étapes sur 303. |
-| Pseudalis | Configuré ; compilation arrêtée à 172 étapes sur 174. Le moteur `libpseudalis-engine.dylib`, `test_engine` et `test_host` sont construits. |
+| Build | Compilation | Tests |
+|---|---|---|
+| dlib + exemples (CPU de référence) | 0 erreur ; les 24 exemples `slm_*` sont des Mach-O arm64. Avertissements : `ld: -s is obsolete`, `-Wbraced-scalar-init`. | Exemples et `dtest` pas encore exécutés. |
+| Albireo | 0 erreur, 0 avertissement. `albireo-service`, `albireo-speech`, `albireo-builtin`, `albireo-sign` et le moteur `libalbireo-engine-cpu.dylib` (portable) sont construits. | Passent : `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api` (sur le moteur cpu), `test_host`. Pas lancés (il leur faut un modèle GGUF) : `test_runtime`, `test_tokenizer`, `bench_runtime`. Le service n'a pas encore été lancé. |
+| Pseudalis | 0 erreur, 1 avertissement (`-Wunused-private-field`). `pseudalis-service` et `libpseudalis-engine.dylib` sont construits. | `test_engine` et `test_host` passent. `tools/test_linux.sh` : 26 étapes sur 28 passent (service, anonymisation et restauration par l'interface et par le lecteur). Échouent : « drive signatures » (une archive protégée renommée sur le lecteur part dans `refused/`) et « copies on the drive » (la copie d'un fichier protégé crée un nouvel enregistrement). |
 
-Causes des échecs, aucune corrigée à cette date :
+`tools/test_linux.sh` demande deux outils de Linux absents de macOS : `nproc` (remplacé par `sysctl -n hw.ncpu`) et `stat -c` de GNU (`gstat`, paquet Homebrew `coreutils`). Sans eux, la taille lue est 0, et l'étape « drive signatures » échoue pour une raison qui ne tient pas au programme.
 
-1. Moteurs et noyaux `avx2` (les deux applications) : `-mavx2 -mfma -mf16c` sont passés à clang pour une cible arm64.
-2. `svox_pico/lib/picopltf.h` (synthèse vocale d'Albireo) inclut `<endian.h>`, qui n'existe pas sous ce nom sur macOS.
-3. libpng d'Albireo active ses routines NEON sans compiler leurs sources : symboles `_png_*_neon` manquants.
-4. httplib lit les certificats du Trousseau sur macOS : `CoreFoundation` et `Security` ne sont pas liés.
-5. `pseudalis/host/drive_folders.cpp` emploie `st_mtim` (Linux) au lieu de `st_mtimespec` (macOS).
+Ce qui a été changé pour compiler sur ARM64, chaque fois sous une condition qui ne vaut que pour macOS ou ARM64 :
+
+1. Moteurs `avx2` : non construits sur ARM64 (`albireo/CMakeLists.txt`, `pseudalis/CMakeLists.txt`) ; les tests d'Albireo qui prennent les noyaux AVX2 les compilent sans options x86, donc en code portable.
+2. `svox_pico/lib/picopltf.h` : sur macOS, `<machine/endian.h>`, avec `__BYTE_ORDER` et `__BIG_ENDIAN` ramenés aux noms de macOS (`BYTE_ORDER`, `BIG_ENDIAN`).
+3. libpng d'Albireo : sur ARM64, compilation de ses sources NEON (`arm/arm_init.c`, `arm/filter_neon_intrinsics.c`, `arm/palette_neon_intrinsics.c`), comme le fait le CMake de dlib.
+4. `dlib/dlib/CMakeLists.txt`, cible `dlib_httplib` : sur macOS, liaison de `CoreFoundation` et `Security` (certificats du Trousseau).
+5. `pseudalis/host/drive_folders.cpp` : sur macOS, `st_mtim` devient `st_mtimespec`.
 
 ## Points à surveiller
 

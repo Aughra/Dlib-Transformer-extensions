@@ -74,6 +74,11 @@
 #define __BYTE_ORDER _BYTE_ORDER
 #define __BIG_ENDIAN _BIG_ENDIAN
 #include <sys/endian.h>
+#elif defined(__APPLE__)
+/* macOS names the byte order macros without their leading underscores, in machine/endian.h. */
+#include <machine/endian.h>
+#define __BYTE_ORDER BYTE_ORDER
+#define __BIG_ENDIAN BIG_ENDIAN
 #else
 #include <endian.h>
 #endif

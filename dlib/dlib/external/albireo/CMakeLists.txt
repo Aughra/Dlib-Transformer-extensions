@@ -168,6 +168,11 @@ add_library(albireo_image STATIC
    ${jpeg_dir}/jdpostct.c ${jpeg_dir}/jdsample.c ${jpeg_dir}/jerror.c ${jpeg_dir}/jidctflt.c ${jpeg_dir}/jidctfst.c
    ${jpeg_dir}/jidctint.c ${jpeg_dir}/jmemmgr.c ${jpeg_dir}/jmemnobs.c ${jpeg_dir}/jquant1.c ${jpeg_dir}/jquant2.c
    ${jpeg_dir}/jutils.c)
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$")
+   # On ARM64, libpng calls its NEON routines, as in the build of dlib.
+   target_sources(albireo_image PRIVATE ${png_dir}/arm/arm_init.c ${png_dir}/arm/filter_neon_intrinsics.c
+      ${png_dir}/arm/palette_neon_intrinsics.c)
+endif()
 target_include_directories(albireo_image PRIVATE ${png_dir} ${jpeg_dir})
 target_link_libraries(albireo_image PUBLIC albireo_zlib)
 if (MSVC)
@@ -205,6 +210,11 @@ if (MSVC)
    if (MSVC_VERSION GREATER_EQUAL 1930)
       set(ALBIREO_HAS_avxvnni ON)
    endif()
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$")
+   # ARM64 (Apple Silicon): no x86 instruction set.  No engine of the AVX2 family is built, and
+   # the tests that take the kernels of AVX2 build them portable.
+   set(ALBIREO_ARM64 ON)
+   set(ALBIREO_ISA_avx2 "")
 else()
    set(ALBIREO_ISA_avx2 -mavx2 -mfma -mf16c)
    set(ALBIREO_ISA_avxvnni ${ALBIREO_ISA_avx2} -mavxvnni)
@@ -288,7 +298,9 @@ if (ALBIREO_PROGRAMS)
    # Portable engine: the instructions of every x86-64 processor.
    albireo_engine(cpu portable)
    # Engine for the processors with AVX2, FMA and F16C (2013 and later).
-   albireo_engine(cpu-avx2 avx2)
+   if (NOT ALBIREO_ARM64)
+      albireo_engine(cpu-avx2 avx2)
+   endif()
    # AVX-VNNI: Intel Core 12th generation and later, AMD Zen 5.  The processors with AVX-512
    # and without AVX-VNNI run the engine of AVX2.
    if (ALBIREO_HAS_avxvnni)

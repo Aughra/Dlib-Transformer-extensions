@@ -133,7 +133,10 @@ function(pseudalis_engine target isa)
 endfunction()
 
 pseudalis_engine(pseudalis-engine "")
-pseudalis_engine(pseudalis-engine-avx2 "${PSEUDALIS_ISA_avx2}")
+if (NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$")
+   # ARM64 (Apple Silicon) has no AVX2: the engine above serves it alone.
+   pseudalis_engine(pseudalis-engine-avx2 "${PSEUDALIS_ISA_avx2}")
+endif()
 
 # ---------------------------------------------------------------------------------------------
 # The programs.

@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-06 — Faire compiler Albireo et Pseudalis sur ARM64
+
+- **Quoi** : correction des 5 causes d'échec : moteurs `avx2` non construits sur ARM64 (tests d'Albireo en noyaux portables), `<machine/endian.h>` pour `svox_pico` sur macOS, sources NEON de libpng pour `albireo_image` sur ARM64, `CoreFoundation` et `Security` liés à `dlib_httplib` sur macOS, `st_mtim` → `st_mtimespec` sur macOS. Albireo et Pseudalis compilent en entier.
+- **Fichiers** : `dlib/dlib/CMakeLists.txt`, `dlib/dlib/external/albireo/CMakeLists.txt`, `dlib/dlib/external/pseudalis/CMakeLists.txt`, `dlib/dlib/external/pseudalis/host/drive_folders.cpp`, `dlib/dlib/external/svox_pico/lib/picopltf.h` ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal, `blog/05-cinq-corrections.md`, `blog/README.md`.
+- **Pourquoi** : porter les deux applications sur Mac, avec des changements limités au Mac ou à ARM64 pour ne pas gêner les fusions avec l'original.
+- **Étapes** : recompilation d'abord sans rien changer (mêmes 5 causes après la fusion) ; corrections ; vérifié que `PICO_ENDIANNESS` vaut bien `ENDIANNESS_LITTLE` sur macOS (le premier essai de la correction de `endian.h` aurait donné « big endian » : macOS ne définit pas `__BYTE_ORDER`) ; recompilation : 0 erreur ; tests unitaires des deux applications passés ; `test_linux.sh` de Pseudalis : 26 étapes sur 28 (`nproc` et `stat` de GNU fournis par le `PATH`). Exemples dlib recompilés après la modification de `dlib/dlib/CMakeLists.txt`.
+
 ## 2026-11-06 — Reprendre les trois épisodes du carnet TortueTech en tête du blog
 
 - **Quoi** : les épisodes 1 à 3 du carnet TortueTech (`/carnet/dlib-transformer-extensions-macos`, `-compilation`, `-albireo-pseudalis`) deviennent les pages 01 à 03 du blog ; ils remplacent les pages 00 et 01 écrites par Claude, qui racontaient la même chose. Épisode 4 « Le fork déménage » écrit dans le même ton. Règles du blog de CLAUDE.md réécrites d'après ces épisodes (épisodes, ton au « on », images, « Pour les curieux », « La suite »).

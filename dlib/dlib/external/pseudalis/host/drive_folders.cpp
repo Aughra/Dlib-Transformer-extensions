@@ -47,6 +47,10 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined(__APPLE__)
+// macOS names st_mtimespec the modification time that Linux names st_mtim.
+#define st_mtim st_mtimespec
+#endif
 #endif
 
 #include "drive.h"
