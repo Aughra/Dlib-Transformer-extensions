@@ -83,9 +83,43 @@ Dans un nouveau build, activer les options `DLIB_JPEG_SUPPORT`, `DLIB_PNG_SUPPOR
 
 Installer FFmpeg et `pkg-config` (par exemple avec Homebrew), puis configurer un répertoire neuf avec `DLIB_USE_FFMPEG=ON`. Le module [`find_ffmpeg.cmake`](../dlib/dlib/cmake_utils/find_ffmpeg.cmake) recherche les composants `libav*` via `pkg-config`. Confirmer leur détection dans la sortie CMake, compiler `dtest` et exécuter ses tests vidéo/audio.
 
+## Applications Albireo et Pseudalis
+
+Les deux applications de `dlib/dlib/external/` (Albireo : moteur GGUF et service de chat ; Pseudalis : anonymisation de documents) sont des programmes Windows 11. Elles ont chacune un CMake à elles, que le build des exemples ne compile pas. Leur variante Linux (service lancé avec `--console`, sans icône, installateur ni service Windows) est celle qui vise macOS :
+
+```sh
+cmake -S dlib/dlib/external/albireo -B build/macos-albireo -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+cmake --build build/macos-albireo --parallel 3 -- -k 0
+
+cmake -S dlib/dlib/external/pseudalis -B build/macos-pseudalis -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+cmake --build build/macos-pseudalis --parallel 3 -- -k 0
+```
+
+`-- -k 0` fait continuer Ninja après une erreur, pour relever toutes les erreurs d'un seul passage. Restent hors de portée sur macOS : l'icône de la zone de notification, l'installateur, le service Windows, le lecteur avec sa lettre et les commandes de l'Explorateur.
+
+## État constaté
+
+Sur Mac M2, macOS arm64, avec AppleClang 21, CMake 4.1.2 et Ninja (2026-11-05) :
+
+| Build | Résultat |
+|---|---|
+| dlib + exemples (CPU de référence) | Compilé, 0 erreur ; les 24 exemples `slm_*` sont des Mach-O arm64. Avertissements : `ld: -s is obsolete` (25), `-Wbraced-scalar-init` (3). Exemples et `dtest` pas encore exécutés. |
+| Albireo | Configuré ; compilation arrêtée à 279 étapes sur 303. |
+| Pseudalis | Configuré ; compilation arrêtée à 172 étapes sur 174. Le moteur `libpseudalis-engine.dylib`, `test_engine` et `test_host` sont construits. |
+
+Causes des échecs, aucune corrigée à cette date :
+
+1. Moteurs et noyaux `avx2` (les deux applications) : `-mavx2 -mfma -mf16c` sont passés à clang pour une cible arm64.
+2. `svox_pico/lib/picopltf.h` (synthèse vocale d'Albireo) inclut `<endian.h>`, qui n'existe pas sous ce nom sur macOS.
+3. libpng d'Albireo active ses routines NEON sans compiler leurs sources : symboles `_png_*_neon` manquants.
+4. httplib lit les certificats du Trousseau sur macOS : `CoreFoundation` et `Security` ne sont pas liés.
+5. `pseudalis/host/drive_folders.cpp` emploie `st_mtim` (Linux) au lieu de `st_mtimespec` (macOS).
+
 ## Points à surveiller
 
 - Le code NEON dlib est le chemin SIMD attendu sur ARM64; vérifier les tests CPU et les résultats des exemples sur le Mac réel.
 - Les sorties numériques d'ARM64 peuvent différer de celles d'une machine x86; comparer avec des tolérances, sauf pour les chemins qui promettent explicitement un résultat déterministe.
 - Les tests d'intégration du chat doivent couvrir `/`, `/v1/models`, `/v1/chat/completions`, le streaming, l'annulation, l'UTF-8 et le décodage d'images lorsque les codecs sont activés.
-- Ce mémo décrit les commandes à exécuter sur macOS; il ne constitue pas un résultat de build. L'environnement de développement Windows ne peut pas valider un build macOS natif.
+- La section « État constaté » est tenue à jour à chaque build vérifié sur le Mac ; un résultat qui n'y figure pas n'a pas été vérifié.
