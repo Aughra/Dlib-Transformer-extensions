@@ -14,9 +14,11 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-05 : résumé des erreurs envoyé à la session « Mode mock sans API » (Remote Control, autre machine) ; lecture non confirmée.
 - 2026-11-06 : CLAUDE.md, ce fichier et `logs/journal-modifications.md` créés ; section « État constaté » ajoutée au mémo de portage ; blog ouvert en français (`blog/`, pages 00 et 01). L'humain a validé CLAUDE.md et autorisé commit et push ; commit fait, push refusé (403, voir Problèmes ouverts).
 
+- 2026-11-06 : 10 nouveaux commits de l'original fusionnés (commit `037a32e`, 78 fichiers, sans conflit) : Albireo 1.0.9 à 1.0.11, Pseudalis 1.0.3, GGUF sur CPU (`dlib/dlib/cuda/cpu_gguf.*`). La fusion touche `albireo/CMakeLists.txt` (+50 lignes) et `pseudalis/CMakeLists.txt`.
+
 ## En cours
 
-Rien. Prochaine étape : corriger les 5 erreurs de compilation, une par une.
+Rien. Prochaine étape : **recompiler Albireo et Pseudalis** pour revoir l'état après la fusion du 2026-11-06 (le CMake d'Albireo a changé : les erreurs 2 à 5 peuvent avoir bougé), puis corriger les erreurs une par une.
 
 ## À faire, dans l'ordre proposé
 
@@ -36,7 +38,7 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 
 ## Problèmes ouverts
 
-- **Push refusé (403)** : sur ce Mac, `gh` est connecté au compte `Aughra`, mais le fork appartient à `PapyTortueTech`. Deux solutions : `gh auth login` avec PapyTortueTech puis `gh auth switch --user PapyTortueTech`, ou ajouter `Aughra` comme collaborateur du fork. `main` a 6 commits d'avance sur `origin/main` ; dès que l'accès marche, lancer `git push origin main`.
+- **Push refusé (403)** : sur ce Mac, `gh` est connecté au compte `Aughra`, mais le fork appartient à `PapyTortueTech`. Deux solutions : `gh auth login` avec PapyTortueTech puis `gh auth switch --user PapyTortueTech`, ou ajouter `Aughra` comme collaborateur du fork. `main` a 18 commits d'avance sur `origin/main` ; dès que l'accès marche, lancer `git push origin main`.
 - Les 24 exemples `slm_*` n'ont pas été lancés ; `dtest` n'est pas encore construit.
 
 ## Commandes pour reprendre
