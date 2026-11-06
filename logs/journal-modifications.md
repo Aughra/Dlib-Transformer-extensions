@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-06 — Faire répondre Albireo sur le Mac et mesurer sa vitesse
+
+- **Quoi** : premier modèle pour Albireo, Qwen3-VL 2B Instruct (Q4_K_M), téléchargé depuis l'adresse du catalogue et vérifié (taille et SHA-256). Le moteur répond juste. Mesures : 0,78 à 0,85 token/s en génération avec le moteur en bibliothèque (`engine_chat`, un seul cœur occupé) ; 1,9 token/s avec `bench_runtime` à 4 fils, 1,8 à 8 fils, 0,5 à 1 fil. Profils : calcul scalaire (`matmul_float`, `qk_dot_portable`), et des fils du moteur en bibliothèque qui attendent dans `swtch_pri`.
+- **Fichiers** : `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal, `blog/06-albireo-parle-lentement.md`, `blog/README.md`. Aucun code modifié. Le modèle reste dans `build/models/` (ignoré par git).
+- **Pourquoi** : priorité de l'humain : Albireo avant Pseudalis ; d'abord savoir où l'on en est.
+- **Étapes** : `engine_chat` à 8 puis 4 fils ; `bench_runtime` à 1, 4 et 8 fils ; `sample` sur les deux. Erreur de Claude corrigée : un premier `bench_runtime` avec un prompt de 32 tokens a planté (`token identifier out of range`) parce que le banc lit toujours 64 tokens ; relancé avec 64.
+
 ## 2026-11-06 — Faire compiler Albireo et Pseudalis sur ARM64
 
 - **Quoi** : correction des 5 causes d'échec : moteurs `avx2` non construits sur ARM64 (tests d'Albireo en noyaux portables), `<machine/endian.h>` pour `svox_pico` sur macOS, sources NEON de libpng pour `albireo_image` sur ARM64, `CoreFoundation` et `Security` liés à `dlib_httplib` sur macOS, `st_mtim` → `st_mtimespec` sur macOS. Albireo et Pseudalis compilent en entier.

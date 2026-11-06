@@ -106,8 +106,33 @@ Sur Mac M2, macOS arm64, avec AppleClang 21, CMake 4.1.2 et Ninja (2026-11-06, a
 | Build | Compilation | Tests |
 |---|---|---|
 | dlib + exemples (CPU de référence) | 0 erreur ; les 24 exemples `slm_*` sont des Mach-O arm64. Avertissements : `ld: -s is obsolete`, `-Wbraced-scalar-init`. | Exemples et `dtest` pas encore exécutés. |
-| Albireo | 0 erreur, 0 avertissement. `albireo-service`, `albireo-speech`, `albireo-builtin`, `albireo-sign` et le moteur `libalbireo-engine-cpu.dylib` (portable) sont construits. | Passent : `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api` (sur le moteur cpu), `test_host`. Pas lancés (il leur faut un modèle GGUF) : `test_runtime`, `test_tokenizer`, `bench_runtime`. Le service n'a pas encore été lancé. |
+| Albireo | 0 erreur, 0 avertissement. `albireo-service`, `albireo-speech`, `albireo-builtin`, `albireo-sign` et le moteur `libalbireo-engine-cpu.dylib` (portable) sont construits. | Passent : `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api` (sur le moteur cpu), `test_host`. Le moteur répond juste avec Qwen3-VL 2B Instruct (`engine_chat`) ; vitesse ci-dessous. Pas lancés (il leur faut un fichier de référence) : `test_runtime`, `test_tokenizer`. Le service n'a pas encore été lancé. |
 | Pseudalis | 0 erreur, 1 avertissement (`-Wunused-private-field`). `pseudalis-service` et `libpseudalis-engine.dylib` sont construits. | `test_engine` et `test_host` passent. `tools/test_linux.sh` : 26 étapes sur 28 passent (service, anonymisation et restauration par l'interface et par le lecteur). Échouent : « drive signatures » (une archive protégée renommée sur le lecteur part dans `refused/`) et « copies on the drive » (la copie d'un fichier protégé crée un nouvel enregistrement). |
+
+### Albireo : premier modèle et vitesse
+
+Modèle : Qwen3-VL 2B Instruct, `Qwen3VL-2B-Instruct-Q4_K_M.gguf` (1 107 409 952 octets, SHA-256 `089d75c5…dca6c2ae`, conforme à `dist/albireo/catalog.json`), téléchargé dans `build/models/`. Mac M2 : 4 cœurs performance, 4 cœurs efficacité. Moteur portable (sans SIMD), température 0.
+
+```sh
+build/macos-albireo/tests/engine_chat build/macos-albireo/bin/engines/libalbireo-engine-cpu.dylib \
+  build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf --threads 4 --max 40 --temperature 0 "<question>"
+build/macos-albireo/tests/bench_runtime build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf <fils> 64 16 2
+```
+
+| Mesure (2026-11-06) | Prompt | Génération | Cœurs occupés en moyenne |
+|---|---|---|---|
+| `engine_chat`, moteur `libalbireo-engine-cpu.dylib`, 8 fils (21 tokens de prompt, 88 générés) | 0,99 token/s | 0,78 token/s | 0,9 |
+| `engine_chat`, même moteur, 4 fils (21 / 39 tokens) | 0,99 token/s | 0,85 token/s | 0,95 |
+| `bench_runtime`, 1 fil (32 tokens de prompt) | 0,5 token/s | 0,5 token/s (1 978 ms par token) | 0,5 |
+| `bench_runtime`, 4 fils (64 tokens de prompt) | 2,5 tokens/s | 1,9 token/s (526 ms par token) ; 2 séquences : 2,1 tokens/s | 2,1 |
+| `bench_runtime`, 8 fils (64 tokens de prompt) | 2,1 tokens/s | 1,8 token/s (551 ms par token) ; 2 séquences : 2,0 tokens/s | 2,1 |
+
+La réponse est correcte (une explication juste d'un compilateur, en français). Constats :
+
+- **Le calcul est scalaire.** Profil (`sample`) : presque tout le temps est dans `matmul_float` (prompt) et `qk_dot_portable` (génération), les versions portables des produits, qui traitent un nombre à la fois. Les versions AVX2 traitent 8 nombres par instruction ; il n'existe pas de version NEON.
+- **Le moteur en bibliothèque n'occupe qu'un cœur**, alors que `bench_runtime`, qui compile le même code dans le programme, en occupe environ deux. Profil de `engine_chat` à 4 fils : 5 fils présents, `qk_dot_portable` dans 6 143 échantillons, `swtch_pri` (le `std::this_thread::yield()` de `ALBIREO_CPU_RELAX` hors x86, `engine/thread_pool.h`) dans 5 664 ; le processus est à 85 % d'un cœur. Cause pas encore établie.
+- 8 fils ne vont pas plus vite que 4 : les cœurs d'efficacité n'aident pas.
+- `bench_runtime` lit toujours 64 tokens de son prompt pour la génération groupée : avec un prompt plus court, il lit hors du tableau (exception `token identifier out of range`). Lui donner au moins 64 tokens.
 
 `tools/test_linux.sh` demande deux outils de Linux absents de macOS : `nproc` (remplacé par `sysctl -n hw.ncpu`) et `stat -c` de GNU (`gstat`, paquet Homebrew `coreutils`). Sans eux, la taille lue est 0, et l'étape « drive signatures » échoue pour une raison qui ne tient pas au programme.
 
