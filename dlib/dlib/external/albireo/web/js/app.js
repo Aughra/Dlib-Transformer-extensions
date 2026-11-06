@@ -75,6 +75,18 @@ const summaryShare = 0.15;
 const maxContextImages = 10;
 const maxQuestionProjectImages = 4;
 const maxProjectImages = 10;
+// The items of the knowledge of a project, its documents and its images together.
+const maxProjectItems = 100;
+/*
+    The tokens of the end of reasoning the engine writes at once for a model that always reasons when the request asks
+    for no reasoning: the sentence and the marker that end it.
+*/
+const closedReasoningTokens = 32;
+
+// The tokens a discussion keeps free for the answer of the model of caps, with or without its reasoning.
+function answerReserve(caps, reasoning) {
+  return (state.settings.maxTokens || 2048) + (caps.reasoningAlways && !reasoning ? closedReasoningTokens : 0);
+}
 
 // Tokens of a text, estimated from its characters.
 function estimateTokens(text) {
@@ -83,7 +95,7 @@ function estimateTokens(text) {
 
 const defaults = {
   theme: 'auto', language: 'auto', userName: '', defaultRole: 'general', temperature: null, topP: null, topK: null,
-  maxTokens: 0, sendOnEnter: true, systemPrompt: '', lastReasoning: false, lastAgent: false, sidebar: true,
+  maxTokens: 0, sendOnEnter: true, systemPrompt: '', sidebar: true,
   memoryEnabled: true, memorySensitive: false, memory: '', memoryUpdated: 0, memoryLanguage: '', storagePersisted: null
 };
 
@@ -635,21 +647,40 @@ function acceptFor(role, room) {
   return accept;
 }
 
+/*
+    The capabilities of the model of a function: reasoning, reasoningAlways for a model trained to reason before
+    every answer (without Deep reasoning, the engine ends its reasoning at once), tools, and its context.
+*/
 function roleCapabilities(role) {
   const id = roleModel(role);
   const loaded = loadedModel(id);
-  if (loaded) return { reasoning: loaded.reasoning !== false, tools: loaded.tools !== false, context: loaded.context || 0 };
+  if (loaded) {
+    return { reasoning: loaded.reasoning !== false, reasoningAlways: loaded.reasoning_always === true,
+      tools: loaded.tools !== false, context: loaded.context || 0 };
+  }
   const m = modelInfo(id);
-  return { reasoning: m ? m.reasoning !== false : true, tools: m ? m.tools !== false : true, context: 0 };
+  return { reasoning: m ? m.reasoning !== false : true, reasoningAlways: !!(m && m.reasoning_always === true),
+    tools: m ? m.tools !== false : true, context: 0 };
 }
 
 /*
-    Why the web access cannot serve a discussion whose model has the capabilities caps, '' when it can: a model that
-    calls no tool, a service set offline, a web access the administrator turned off (the "web" member of the status),
-    or a status without it.
+    Whether the tools of the agent and of the web can come with the questions to a model of the capabilities caps,
+    reasoning telling whether the deep reasoning of the discussion is on: a model that can reason calls them with its
+    deep reasoning only, so that it reasons before each call; a model that cannot reason calls them as it answers.
 */
-function webUnavailable(caps) {
+function toolsAvailable(caps, reasoning) {
+  return !!caps.tools && (!caps.reasoning || !!reasoning);
+}
+
+/*
+    Why the web access cannot serve a discussion whose model has the capabilities caps, reasoning telling whether its
+    deep reasoning is on, '' when it can: a model that calls no tool, a model that can reason without its deep
+    reasoning, a service set offline, a web access the administrator turned off (the "web" member of the status), or
+    a status without it.
+*/
+function webUnavailable(caps, reasoning) {
   if (!caps.tools) return t('webNoTools');
+  if (!toolsAvailable(caps, reasoning)) return t('webNeedsReasoning');
   const s = state.status;
   if (!s || !s.web || typeof s.web !== 'object') return t('webUnavailable');
   if (s.web.available) return '';
@@ -674,8 +705,9 @@ function searchProvider() {
     that the beginning of the prompt stays the same from one question to the next.
 */
 function toolSet(c, caps) {
-  const agent = !!(c.agent && caps.tools);
-  const webOn = !!(c.web && !webUnavailable(caps));
+  const reasoning = !!(c.reasoning && caps.reasoning);
+  const agent = !!(c.agent && toolsAvailable(caps, reasoning));
+  const webOn = !!(c.web && !webUnavailable(caps, reasoning));
   const search = webOn && state.status.web.search === 'wikipedia';
   const definitions = (agent ? tools.definitions : []).concat(webOn ? web.definitions(search) : []);
   return { agent, web: webOn, search, definitions: definitions.length ? definitions : null };
@@ -684,7 +716,8 @@ function toolSet(c, caps) {
 /*
     The work done in the background (titles, summaries, memory) goes to the model that comes
     with Albireo, which the service keeps loaded, without reasoning; the service gives it to
-    the general model when there is none.
+    the general model when there is none.  A model that always reasons has its reasoning ended
+    at once by the engine, outside the answer and its max_tokens.
 */
 const backgroundModel = 'albireo-background';
 
@@ -711,12 +744,14 @@ function backgroundText(system, user, maxTokens, signal) {
 */
 const backgroundTimeout = 10 * 60 * 1000;
 
-// The text the background model writes after a list of messages; signal, when given, stops it too.
+/*
+    The text the background model writes after a list of messages; signal, when given, stops it too.  Without a
+    temperature, the engine samples as the authors of the model advise, without the presence penalty some of them give:
+    the titles, the summaries and the quotes of the memory take up the words of the discussion.
+*/
 async function backgroundChat(messages, maxTokens, signal, temperature) {
-  const body = {
-    model: backgroundModel, reasoning: false, temperature: temperature == null ? 0.2 : temperature,
-    max_tokens: maxTokens, messages
-  };
+  const body = { model: backgroundModel, reasoning: false, max_tokens: maxTokens, messages, presence_penalty: 0 };
+  if (temperature != null) body.temperature = temperature;
   let text = '';
   let finish = null;
   const limit = api.limitedSignal(signal, backgroundTimeout);
@@ -1574,8 +1609,9 @@ async function rewriteSummary(c) {
   const start = c.contextStart || 0;
   c.summary = null;
   if (start === 0 || !roleModel(c.role)) return;
-  const context = roleCapabilities(c.role).context || 8192;
-  const room = context - Math.min(state.settings.maxTokens || 2048, Math.floor(context / 2));
+  const caps = roleCapabilities(c.role);
+  const context = caps.context || 8192;
+  const room = context - Math.min(answerReserve(caps, !!(c.reasoning && caps.reasoning)), Math.floor(context / 2));
   toast(t('compacting'));
   cancelWarmup(c.id);
   const abort = new AbortController();
@@ -1816,7 +1852,9 @@ function describeMessages(url, name) {
 
 // A description as the model writes it, without a heading, within 4,000 characters.
 function cleanDescription(text) {
-  const s = String(text || '').replace(/^\s*(description|beschreibung|descrizione|descripci[oó]n)\s*:\s*/i, '').trim();
+  // A description that repeats its lines, written by a model that looped, keeps each of them once.
+  const label = /^\s*(description|beschreibung|descrizione|descripci[oó]n)\s*:\s*/i;
+  const s = distinctLines(String(text || '').replace(label, ''));
   return s.length > 4000 ? keepStart(s, 4000) : s;
 }
 
@@ -1873,7 +1911,7 @@ async function describeImage(projectId, imageId) {
         const url = await images.dataUrl(imageId).catch(() => null);
         if (url) {
           try {
-            const r = await backgroundChat(describeMessages(url, img.name), 1024, job.signal, 0.2);
+            const r = await backgroundChat(describeMessages(url, img.name), 1024, job.signal);
             text = cleanDescription(r.text);
           } catch (e) {
             console.warn('Albireo: the description of an image failed', e);
@@ -1958,6 +1996,21 @@ async function newProject(silent) {
   return p;
 }
 
+/*
+    The edits of the projects in this tab, one after the other for each project: task, an async function, starts
+    once the previous edit of the project ended, whether it succeeded or not.  Returns the promise of task.
+*/
+const projectEdits = new Map();
+function queueProjectEdit(id, task) {
+  const run = (projectEdits.get(id) || Promise.resolve()).then(task);
+  const tail = run.catch(() => {});
+  projectEdits.set(id, tail);
+  tail.then(() => {
+    if (projectEdits.get(id) === tail) projectEdits.delete(id);
+  });
+  return run;
+}
+
 function renderProject(p) {
   const main = ui.content;
   const convs = state.conversations.filter((c) => c.projectId === p.id);
@@ -1970,10 +2023,11 @@ function renderProject(p) {
   /*
       Saves an edit of the project, edit(project) changing the fields it concerns.  The edit applies to the
       project as stored, read again, so that what another tab or the descriptions of the images wrote meanwhile
-      stays; a project deleted meanwhile is not written again.  The name, the description and the color show at
-      once in the page, the top bar, the side panel and the other tabs.
+      stays; the edits of this tab run one after the other (queueProjectEdit()), so that each one reads what the
+      previous one wrote, and a project deleted meanwhile is not written again.  The name, the description and the
+      color show at once in the page, the top bar, the side panel and the other tabs.
   */
-  const save = async (edit) => {
+  const save = (edit) => queueProjectEdit(p.id, async () => {
     let stored = p;
     try {
       stored = await store.getProject(p.id);
@@ -2001,7 +2055,7 @@ function renderProject(p) {
     broadcast({ type: 'projects' });
     renderSidebar();
     renderTopbar();
-  };
+  });
   name.addEventListener('change', () => save((x) => { x.name = name.value.trim() || x.name; }));
   description.addEventListener('change', () => save((x) => { x.description = description.value; }));
   instructions.addEventListener('change', () => save((x) => { x.instructions = instructions.value; }));
@@ -2015,21 +2069,55 @@ function renderProject(p) {
       }
     }));
   }
-  // The documents and the images, maxProjectImages of them at most: the documents are indexed, the images described.
+  /*
+    The documents and the images, maxProjectItems of them at most, of which maxProjectImages images: the documents
+    are indexed, the images described.  A project of an earlier version that holds more keeps them, and takes no
+    other until some are deleted.
+  */
+  const items = () => (p.files || []).length + (p.images || []).length;
+  const room = () => Math.max(0, maxProjectItems - items());
   const places = () => Math.max(0, maxProjectImages - (p.images || []).length);
   const fileInput = h('input', {
     type: 'file', multiple: true, class: 'hidden', accept: documentAccept() + (places() ? ',image/*' : '')
   });
   // Adds the files chosen with the button or dropped on the card of the knowledge to the project.
   const addFiles = async (files) => {
-    const added = await readFiles(files, null, places());
-    const docs = added.filter((a) => a.kind !== 'image');
-    const pictures = added.filter((a) => a.kind === 'image')
-      .map((a) => Object.assign(imageRecord(a), { state: 'pending', description: '' }));
+    if (!room()) {
+      toast(t('projectItemsFull', { max: maxProjectItems }), true, 9000);
+      return;
+    }
+    const added = await readFiles(files, null, places(), room());
+    // The limits apply again to the project as stored, which an earlier addition may have filled meanwhile.
+    const docs = [];
+    const pictures = [];
+    const late = [];
+    const lateImages = [];
     await save((x) => {
+      let free = Math.max(0, maxProjectItems - (x.files || []).length - (x.images || []).length);
+      let imageFree = Math.max(0, maxProjectImages - (x.images || []).length);
+      for (const a of added) {
+        const image = a.kind === 'image';
+        if (free <= 0) {
+          late.push(a.name);
+          continue;
+        }
+        if (image && imageFree <= 0) {
+          lateImages.push(a.name);
+          continue;
+        }
+        --free;
+        if (!image) {
+          docs.push(a);
+          continue;
+        }
+        --imageFree;
+        pictures.push(Object.assign(imageRecord(a), { state: 'pending', description: '' }));
+      }
       x.files = (x.files || []).concat(docs);
       if (pictures.length) x.images = (x.images || []).concat(pictures);
     });
+    if (lateImages.length) toast(imageLimitText(lateImages, places(), true), true, 10000);
+    if (late.length) toast(itemLimitText(late, room()), true, 10000);
     // The images are stored once the project that holds them is (pruneImages).
     try {
       await images.keep(p.id, pictures, true);
@@ -2098,12 +2186,17 @@ function renderProject(p) {
       h('span', { class: 'faint' }, new Date(c.updated).toLocaleDateString(language()))));
   }
   if (!convs.length) convList.append(h('div', { class: 'empty-note' }, t('noDiscussions')));
-  // The card of the knowledge, which also takes the files dropped on it.
-  const knowledge = h('div', { class: 'card' }, h('h3', { html: icon('book') + escapeHtml(t('knowledge')) }),
+  // The card of the knowledge, which also takes the files dropped on it, with the count of its items.
+  const full = !room();
+  const knowledge = h('div', { class: 'card' },
+    h('h3', { html: icon('book') + escapeHtml(t('knowledge')) },
+      h('span', { class: 'count', title: t('projectItemsCount', { n: items(), max: maxProjectItems }) },
+        items() + ' / ' + maxProjectItems)),
     h('p', { class: 'help' }, t('knowledgeHelp')), capacity, fileList, imagesBlock,
     h('div', { class: 'buttons', style: { marginTop: '10px' } },
       h('button', {
-        class: 'button', type: 'button', onclick: () => fileInput.click(),
+        class: 'button', type: 'button', disabled: full, onclick: () => fileInput.click(),
+        title: full ? t('projectItemsFull', { max: maxProjectItems }) : null,
         html: icon('upload') + '<span>' + escapeHtml(t('addFiles')) + '</span>'
       }),
       fileInput));
@@ -2153,13 +2246,19 @@ function renderProject(p) {
     maxFileBytes and an image of more than images.maxImageBytes are refused before they are read, with a message
     that names the file and the limit.
 */
-async function readFiles(files, role, room) {
+async function readFiles(files, role, room, most) {
   const out = [];
   const scans = [];
   const refused = [];
+  const overflow = [];
   const inputs = role ? roleInputs(role) : ['text', 'image'];
   let left = room || 0;
   for (const f of files) {
+    // The knowledge of a project, which takes most items more at most.
+    if (most !== undefined && out.length >= most) {
+      overflow.push(f.name);
+      continue;
+    }
     const kind = fileKind(f);
     if (kind !== 'document' && !inputs.includes(kind)) {
       const model = role ? modelName(roleModel(role)) : '';
@@ -2207,6 +2306,7 @@ async function readFiles(files, role, room) {
     }
   }
   if (refused.length) toast(imageLimitText(refused, left, !role), true, 10000);
+  if (overflow.length) toast(itemLimitText(overflow, most - out.length), true, 10000);
   for (const scan of scans) {
     if (role && inputs.includes('image')) {
       const pages = await scanPages(scan, left);
@@ -2299,6 +2399,14 @@ function imageLimitText(names, left, project) {
     max: project ? maxProjectImages : maxContextImages, left: Math.max(0, left),
     notAdded: tn('notAddedImages', names.length, { names: names.join(', ') })
   });
+}
+
+// The message of the files left out of the knowledge of a project, whose items reach maxProjectItems.
+function itemLimitText(names, left) {
+  const n = formatNumber(names.length);
+  const notAdded = names.length > 8 ? t('notAddedItemsAmong', { n, names: names.slice(0, 8).join(', ') })
+    : tn('notAddedItems', names.length, { n, names: names.join(', ') });
+  return t('projectItemsNotAdded', { max: maxProjectItems, left: Math.max(0, left), notAdded });
 }
 
 // The description of an image as a question or a project keeps it.
@@ -2653,12 +2761,15 @@ async function keepImages(c, list) {
   }
 }
 
-// Conversations.  The web access starts off in every discussion, whatever the previous ones did.
+/*
+    Conversations.  The deep reasoning, the agent and the web access start off in every discussion, in a project or
+    not, whatever the previous ones did; each discussion then keeps its own choice.
+*/
 function newConversation(projectId) {
   return {
     id: store.uid(), title: '', projectId: projectId || null, created: Date.now(), updated: Date.now(), pinned: false,
-    role: state.settings.defaultRole || 'general', reasoning: !!state.settings.lastReasoning, agent: !!state.settings.lastAgent,
-    web: false, messages: [], incognito: state.incognito
+    role: state.settings.defaultRole || 'general', reasoning: false, agent: false, web: false, messages: [],
+    incognito: state.incognito
   };
 }
 
@@ -2911,7 +3022,8 @@ function renderWelcome() {
   if (state.statusError) notice = h('div', { class: 'error-box' }, t('serviceDown'));
   else if (state.status && !roleModel(c.role)) notice = h('div', { class: 'error-box' }, t('noModel'));
   // With the agent on, what it does and the tools it has.
-  const agent = c.agent && roleCapabilities(c.role).tools
+  const caps = roleCapabilities(c.role);
+  const agent = c.agent && toolsAvailable(caps, c.reasoning && caps.reasoning)
     ? h('div', { class: 'agent-note' }, h('span', { html: icon('tool') }), h('span', null, t('agentHelp'))) : null;
   ui.content.replaceChildren(h('div', { class: 'welcome' },
     h('img', { class: 'hero', src: 'img/albireo-mark.svg', alt: '' }),
@@ -3613,6 +3725,7 @@ function noteElements(m, live, steps) {
   if (m.imagesNamed) note(h('span', { html: icon('image') }), t('imagesNamed', { model: modelName(m.model) }));
   if (m.error) out.push(h('div', { class: 'error-box' }, t('errorPrefix', { message: m.error })));
   if (m.cancelled) note(t('cancelled'));
+  if (m.repetition && !m.cancelled) note(h('span', { html: icon('info') }), t('answerRepeated'));
   if (!live && !m.error && !m.cancelled && !steps.some((s) => s.content || (s.toolCalls || []).length)) {
     note(t('emptyAnswer'));
   }
@@ -3753,16 +3866,21 @@ function renderComposerState() {
   const c = state.current;
   const caps = roleCapabilities(c ? c.role : 'general');
   const reasoning = !!(c && c.reasoning && caps.reasoning);
-  const agent = !!(c && c.agent && caps.tools);
+  // The agent and the web of a model that can reason come with its deep reasoning (toolsAvailable()).
+  const ready = toolsAvailable(caps, reasoning);
+  const agent = !!(c && c.agent && ready);
   ui.reasonButton.classList.toggle('on', reasoning);
   ui.reasonButton.setAttribute('aria-pressed', String(reasoning));
   ui.reasonButton.disabled = !caps.reasoning;
+  // A model trained to reason before every answer answers directly without the button, as the other models do.
+  ui.reasonButton.title = t('reasoningHint');
   ui.agentButton.classList.toggle('on', agent);
   ui.agentButton.setAttribute('aria-pressed', String(agent));
-  ui.agentButton.disabled = !caps.tools;
-  // The Web button is off and disabled, with the reason as its title, while the model calls no tool or the service
-  // gives no web access.
-  const reason = webUnavailable(caps);
+  ui.agentButton.disabled = !ready;
+  ui.agentButton.title = ready ? t('agentHint') : caps.tools ? t('agentNeedsReasoning') : t('agentNoTools');
+  // The Web button is off and disabled, with the reason as its title, while the model calls no tool, while a model
+  // that can reason lacks its deep reasoning, or while the service gives no web access.
+  const reason = webUnavailable(caps, reasoning);
   const webOn = !!(c && c.web && !reason);
   ui.webButton.classList.toggle('on', webOn);
   ui.webButton.setAttribute('aria-pressed', String(webOn));
@@ -4252,7 +4370,8 @@ function apiMessages(c, system, cuts, media) {
   const sent = read ? sentImages(messages) : null;
   let last = null;
   for (const m of messages) if (m.role === 'user') last = m;
-  let summary = start > 0 && c.summary && c.summary.text ? c.summary.text : '';
+  // A summary an earlier version kept with its lines repeated gives each of them once.
+  let summary = start > 0 && c.summary && c.summary.text ? distinctLines(c.summary.text) : '';
   if (summary && cuts && cuts.summary != null) summary = keepEnd(summary, cuts.summary);
   for (const m of messages) {
     if (m.role === 'user') {
@@ -4464,6 +4583,42 @@ function transcriptOf(messages) {
   return lines.join('\n\n');
 }
 
+/*
+    The lines of a text written by a model that looped, compared without case and spaces: a line of 24 characters
+    or more that comes three times or more keeps its first place alone, and a run of blank lines one of them.  The
+    lines of code between fences, the short ones and those that come twice stay, as a summary or a description
+    writes them.
+*/
+function distinctLines(text) {
+  const lines = String(text || '').split('\n');
+  const keyOf = (line) => line.trim().replace(/\s+/g, ' ').toLowerCase();
+  const fenced = [];
+  let inCode = false;
+  for (const line of lines) {
+    const fence = /^\s*(```|~~~)/.test(line);
+    fenced.push(inCode || fence);
+    if (fence) inCode = !inCode;
+  }
+  const times = new Map();
+  lines.forEach((line, i) => {
+    const key = keyOf(line);
+    if (!fenced[i] && key.length >= 24) times.set(key, (times.get(key) || 0) + 1);
+  });
+  const seen = new Set();
+  const out = [];
+  lines.forEach((line, i) => {
+    const key = keyOf(line);
+    if (!fenced[i] && (times.get(key) || 0) >= 3) {
+      if (seen.has(key)) return;
+      seen.add(key);
+    } else if (!key && !fenced[i] && (!out.length || !out[out.length - 1].trim())) {
+      return;
+    }
+    out.push(line);
+  });
+  return out.join('\n').trim();
+}
+
 function summaryInstructions(words) {
   return 'You keep the memory of a long discussion between a user and an assistant. Rewrite the previous summary, '
     + 'when there is one, together with the new exchanges, into a single summary that the assistant will read in '
@@ -4479,7 +4634,8 @@ async function summarize(c, previous, transcript, limit, signal) {
   const r = await backgroundText(summaryInstructions(Math.floor(limit * 0.6)),
     (previous ? '<previous_summary>\n' + previous + '\n</previous_summary>\n\n' : '')
       + '<exchanges>\n' + transcript + '\n</exchanges>', limit, signal);
-  const text = r.text;
+  // A summary that repeats its lines, written by a model that looped, keeps each of them once.
+  const text = distinctLines(r.text);
   const finish = r.finish;
   if (!text) throw new Error('empty summary');
   // A summary stopped by its length ends with its last whole sentence.
@@ -4905,7 +5061,7 @@ async function runTurn(c, abort, turn) {
       const build = (x) => apiMessages(Object.assign({}, c, {
         messages: c.messages.slice(0, -1).concat([Object.assign({}, turn, { steps: turn.steps.slice(0, -1) })])
       }), system, x, media);
-      const fitted = await fitContext(c, build, toolDefs, state.settings.maxTokens || 2048, signal, () => {
+      const fitted = await fitContext(c, build, toolDefs, answerReserve(caps, reasoning), signal, () => {
         turn.compacting = true;
         scheduleRender(c);
       }, 'albireo-' + role, cuts);
@@ -4939,6 +5095,8 @@ async function runTurn(c, abort, turn) {
           } : chunk.usage;
           turn.timings = chunk.timings || turn.timings;
         }
+        // An answer the engine stopped because it repeated itself.
+        if (chunk.repetition) turn.repetition = true;
         const choice = chunk.choices && chunk.choices[0];
         if (!choice) continue;
         const d = choice.delta || {};
@@ -5789,7 +5947,8 @@ async function compactInBackground(c, signal) {
   const [all, base] = await Promise.all([api.count(model, text, toolDefs),
     api.count(model, text.slice(0, 1), toolDefs).catch(() => null)]);
   if (signal.aborted || !all || typeof all.tokens !== 'number' || !all.context) return;
-  const room = all.context - Math.min(state.settings.maxTokens || 2048, Math.floor(all.context / 2));
+  const reserve = answerReserve(caps, !!(view.reasoning && caps.reasoning));
+  const room = all.context - Math.min(reserve, Math.floor(all.context / 2));
   const estimate = tokenEstimate(text, all.tokens, model);
   const media = estimateMedia(role);
   const build = () => apiMessages(view, system, null, media);
@@ -6499,8 +6658,12 @@ function buildLayout() {
     onclick: async () => {
       const c = state.current;
       c.reasoning = !c.reasoning;
+      // The agent and the web of a model that can reason end with its deep reasoning.
+      if (!c.reasoning) {
+        c.agent = false;
+        c.web = false;
+      }
       renderComposerState();
-      await saveSetting('lastReasoning', c.reasoning);
       if (c.messages.length) await persist(c);
       refreshViews();
     }
@@ -6511,14 +6674,13 @@ function buildLayout() {
       const c = state.current;
       c.agent = !c.agent;
       renderComposerState();
-      await saveSetting('lastAgent', c.agent);
       if (c.messages.length) await persist(c);
       refreshViews();
     }
   });
   /*
-      The web access of the discussion shown, off in every new discussion: the choice belongs to its discussion and
-      never becomes the default of the next ones.
+      The web access of the discussion shown, off in every new discussion as the deep reasoning and the agent are: the
+      choice belongs to its discussion and never becomes the default of the next ones.
   */
   ui.webButton = h('button', {
     class: 'toggle web', type: 'button', title: t('webHint'), 'aria-label': t('webAccess'), 'aria-pressed': 'false',

@@ -8,10 +8,12 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <exception>
 #include <list>
 #include <new>
 #include <stdexcept>
+#include <unordered_map>
 
 #include "../common/engine_api.h"
 #include "../common/system_info.h"
@@ -402,6 +404,35 @@ namespace albireo
         render_options options;
         std::string answer, thought;
         bool warm = false;
+        /*
+            The reasoning of the answer: the tokens it may take before the engine ends it (-1
+            without bound), the tokens it took, the tokens of the end the engine writes in place
+            of the model (closing), those of that end still to write, one per step (forced), and
+            whether the token being handled is one of them (forcing), which the client does not
+            receive as reasoning.  brief marks the reasoning of a model that always reasons, for a
+            request that asked for none, which the engine ends at once unless the request gives
+            a budget; its answer then receives answer_tokens tokens once the reasoning ends (-1
+            without a limit of its own).
+        */
+        long reasoning_budget = -1;
+        long reasoning_tokens = 0;
+        std::vector<int> closing;
+        std::deque<int> forced;
+        bool forcing = false;
+        bool brief = false;
+        long answer_tokens = -1;
+        /*
+            The repetition of the part being written, the reasoning or the answer (loops()): its
+            last tokens, the times each window of them was written, whether each of the last
+            tokens ended a window written twice before, and how many of them did; in_reasoning
+            tells which part it is.  repetition marks an answer stopped because it looped.
+        */
+        std::deque<int> written;
+        std::unordered_map<uint64_t, unsigned char> windows;
+        std::deque<char> repeats;
+        long repeated = 0;
+        bool in_reasoning = false;
+        bool repetition = false;
 
         bool is_cancelled() const { return cancelled || (job && job->cancelled); }
     };
@@ -411,6 +442,179 @@ namespace albireo
         bool request_done(const std::shared_ptr<request_state>& r)
         {
             return r->ph == request_state::phase::done;
+        }
+
+        /*
+            The tokens of the short reasoning of a request that asks for a low effort: an answer of
+            a user, and a work in the background (titles, summaries, memory), which waits for less.
+        */
+        const long low_effort_budget = 512;
+        const long background_low_effort_budget = 256;
+
+        /*
+            The sampling the authors of a family of models advise on the cards of their models,
+            for the requests that give none, reasoning telling whether the model reasons before
+            its answer and images whether the request holds images:
+                - Qwen3-VL Thinking: temperature 1, top-p 0.95, top-k 20, and a presence penalty
+                  of 1.5 over the whole answer for a request of text alone; the reasoning ended
+                  at once, the model answers as a model without reasoning, with the values the
+                  authors of Qwen3 advise for that mode, temperature 0.7, top-p 0.8 and top-k 20,
+                  and the presence penalty of 1.5 they give against repetitions;
+                - Qwen3-VL Instruct: temperature 0.7, top-p 0.8, top-k 20 and a presence penalty
+                  of 1.5 over the whole answer with images, temperature 1, top-p 1, top-k 40 and a
+                  presence penalty of 2 for text alone;
+                - CyberSecQwen-4B: temperature 0.3, that of the use and of the evaluations its
+                  card describes, top-p 0.8 and top-k 20;
+                - Qwen3: temperature 0.6, top-p 0.95, top-k 20 with reasoning, 0.7, 0.8 and 20
+                  without;
+                - Qwen2.5: temperature 0.7, top-p 0.8, top-k 20 and a repetition penalty of 1.05;
+                - Foundation-Sec-8B-Reasoning and Foundation-Sec 1.1 8B Instruct: temperature 0.3,
+                  the setting of the evaluations of their authors, top-p 0.95 and top-k 20;
+                - Granite 4.2: temperature 1 and top-p 0.95 for every task, with and without
+                  reasoning, without top-k;
+                - Ministral 3: temperature 0.1; Devstral and the other Mistral models without
+                  reasoning: temperature 0.15; without top-p or top-k;
+                - the other models: temperature 0.6, top-p 0.95 and top-k 20 when they reason,
+                  0.7, 0.9 and 40 otherwise.
+            None of them selects by min-p.
+        */
+        sampling_params advised_sampling(const loaded_model& m, bool reasoning, bool images)
+        {
+            sampling_params p;
+            p.min_p = 0.0f;
+            const std::string& arch = m.cfg.arch;
+            const std::string format = m.format->name();
+            const bool chatml = format == "chatml";
+            const bool qwen3vl = arch == "qwen3vl" || arch == "qwen3vlmoe";
+            std::string name = m.cfg.name;
+            for (char& c : name)
+                if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+            if (chatml && qwen3vl && m.format->always_reasons() && reasoning)
+            {
+                p.temperature = 1.0f;
+                p.top_p = 0.95f;
+                p.top_k = 20;
+                if (!images)
+                {
+                    p.presence_penalty = 1.5f;
+                    p.repeat_last_n = -1;
+                }
+            }
+            else if (chatml && qwen3vl && m.format->always_reasons())
+            {
+                p.temperature = 0.7f;
+                p.top_p = 0.8f;
+                p.top_k = 20;
+                p.presence_penalty = 1.5f;
+                p.repeat_last_n = -1;
+            }
+            else if (chatml && qwen3vl)
+            {
+                p.temperature = images ? 0.7f : 1.0f;
+                p.top_p = images ? 0.8f : 1.0f;
+                p.top_k = images ? 20 : 40;
+                p.presence_penalty = images ? 1.5f : 2.0f;
+                p.repeat_last_n = -1;
+            }
+            else if (chatml && name.find("cybersecqwen") != std::string::npos)
+            {
+                p.temperature = 0.3f;
+                p.top_p = 0.8f;
+                p.top_k = 20;
+            }
+            else if (chatml && (arch == "qwen3" || arch == "qwen3moe") && !reasoning)
+            {
+                p.temperature = 0.7f;
+                p.top_p = 0.8f;
+                p.top_k = 20;
+            }
+            else if (chatml && arch == "qwen2")
+            {
+                p.temperature = 0.7f;
+                p.top_p = 0.8f;
+                p.top_k = 20;
+                p.repeat_penalty = 1.05f;
+            }
+            else if (format == "foundation-sec" || format == "role-tags")
+            {
+                p.temperature = 0.3f;
+                p.top_p = 0.95f;
+                p.top_k = 20;
+            }
+            else if (format == "granite4")
+            {
+                p.temperature = 1.0f;
+                p.top_p = 0.95f;
+                p.top_k = 0;
+            }
+            else if (format == "mistral" && !m.format->supports_reasoning())
+            {
+                p.temperature = name.find("ministral") != std::string::npos ? 0.1f : 0.15f;
+                p.top_p = 1.0f;
+                p.top_k = 0;
+            }
+            else if (reasoning)
+            {
+                p.temperature = 0.6f;
+                p.top_p = 0.95f;
+                p.top_k = 20;
+            }
+            else
+            {
+                p.temperature = 0.7f;
+                p.top_p = 0.9f;
+                p.top_k = 40;
+            }
+            return p;
+        }
+
+        // The tokens of a window whose repetition the guard against loops counts, and the last tokens it reads.
+        const size_t repeat_window = 16;
+        const size_t repeat_span = 384;
+
+        // Forgets the repetitions of the part being written.
+        void reset_loops(request_state& r)
+        {
+            r.written.clear();
+            r.windows.clear();
+            r.repeats.clear();
+            r.repeated = 0;
+        }
+
+        /*
+            Records a token of the reasoning or of the answer, in_reasoning telling which, and tells
+            whether that part loops: nine tenths of its last repeat_span tokens end a window of
+            repeat_window tokens that the part wrote twice before, which a reasoning or an answer
+            that goes on does not do.  A passage written again once, a code given before and after
+            its correction, does not count; nor do the windows of the prompt, so that an answer
+            that takes up a document or code given to it is not concerned, nor those of the
+            reasoning for the answer, which may take up its draft.
+        */
+        bool loops(request_state& r, int token, bool in_reasoning)
+        {
+            if (in_reasoning != r.in_reasoning)
+            {
+                reset_loops(r);
+                r.in_reasoning = in_reasoning;
+            }
+            r.written.push_back(token);
+            if (r.written.size() > repeat_window) r.written.pop_front();
+            if (r.written.size() < repeat_window) return false;
+            // FNV-1a over the identifiers of the tokens of the window.
+            uint64_t h = 14695981039346656037ull;
+            for (int t : r.written) h = (h ^ static_cast<uint32_t>(t)) * 1099511628211ull;
+            unsigned char& times = r.windows[h];
+            if (times < 255) ++times;
+            const char seen = times >= 3 ? 1 : 0;
+            r.repeats.push_back(seen);
+            r.repeated += seen;
+            if (r.repeats.size() > repeat_span)
+            {
+                r.repeated -= r.repeats.front();
+                r.repeats.pop_front();
+            }
+            return r.repeats.size() == repeat_span
+                && static_cast<size_t>(r.repeated) * 10 >= static_cast<size_t>(repeat_span) * 9;
         }
 
         // The images of one request, at most.
@@ -900,6 +1104,8 @@ namespace albireo
         // The tokens the engine adds or stops on must be tokens of the vocabulary.
         if (m->tok.bos_id() >= m->cfg.vocab || m->tok.eos_id() >= m->cfg.vocab)
             throw std::runtime_error("the tokenizer of the model names a special token outside its vocabulary");
+        // A file published without its template takes the template of the repository of its model.
+        if (m->cfg.chat_template.empty()) m->cfg.chat_template = published_template(m->cfg.name);
         m->format = chat_format::detect(m->tok, m->cfg.chat_template);
 
         // The image encoder: the projector file of the options, or the vision tensors of the model file.
@@ -982,7 +1188,13 @@ namespace albireo
         };
         long ctx = embedding && !options.contains("context") ? 0
             : static_cast<long>(setting("context", 0, 0, 1 << 26));
-        if (ctx <= 0) ctx = std::min<long>(m->cfg.ctx_train, embedding ? 8192 : 32768);
+        /*
+            By default, the context the model was trained for, which the memory given to its keys
+            and values may reduce below; an embedding model reads inputs of 8192 tokens at most.
+        */
+        if (ctx <= 0 && m->cfg.ctx_train > 0)
+            ctx = embedding ? std::min<long>(m->cfg.ctx_train, 8192) : m->cfg.ctx_train;
+        if (ctx <= 0) ctx = 4096;
         const long limit = m->cfg.ctx_train > 0 ? std::max<long>(m->cfg.ctx_train, 256) : ctx;
         m->context = std::max<long>(256, std::min<long>(ctx, limit));
         m->max_sequences = embedding && !options.contains("max_sequences") ? 8
@@ -1001,9 +1213,11 @@ namespace albireo
         else if (kv == 0)
         {
             /*
-                Two full contexts, within a quarter of the memory available once the other
+                Two full contexts, within a third of the memory available once the other
                 models have grown to their own budgets: the blocks are allocated as the
-                sequences grow, so the memory free now still has to hold that growth.
+                sequences grow, so the memory free now still has to hold that growth.  The
+                context of a model trained on a long one then comes down to what this
+                memory holds.
             */
             const memory_info mem = read_memory_info();
             size_t growth = 0;
@@ -1021,7 +1235,7 @@ namespace albireo
             if (mem.available > 0)
             {
                 const size_t available = static_cast<size_t>(mem.available);
-                kv = std::min<size_t>(kv, (available > growth ? available - growth : 0) / 4);
+                kv = std::min<size_t>(kv, (available > growth ? available - growth : 0) / 3);
             }
             kv = std::max<size_t>(kv, per_token * static_cast<size_t>(std::min<long>(m->context, 4096)));
         }
@@ -1100,6 +1314,8 @@ namespace albireo
         j["format"] = m.format->name();
         j["tools"] = !m.cfg.is_embedding() && m.format->supports_tools();
         j["reasoning"] = !m.cfg.is_embedding() && m.format->supports_reasoning();
+        // A model that reasons before every answer, the reasoning of a request that asks for none being short.
+        j["reasoning_always"] = !m.cfg.is_embedding() && m.format->always_reasons();
         j["parameters"] = static_cast<unsigned long long>(m.parameters);
         j["quantization"] = m.quantization;
         j["bytes"] = static_cast<unsigned long long>(m.bytes);
@@ -1161,6 +1377,27 @@ namespace albireo
         if (req["chat_template_kwargs"].contains("enable_thinking"))
             reasoning = req["chat_template_kwargs"]["enable_thinking"].as_bool(reasoning);
         opt.reasoning = reasoning && m->format->supports_reasoning();
+        /*
+            The budget of the reasoning: the tokens it may take before the engine ends it.  The
+            template of a model that always reasons opens its reasoning whatever the request asks:
+            for a request that asks for no reasoning, the engine ends it at once with the sentence
+            its authors give for a budget, so that the model answers without reasoning and without
+            a prompt outside what it learned, the tokens of that end not taking from those of the
+            answer; a request that asks for a low effort receives a short reasoning, within its
+            max_tokens.  A budget given as null is no budget.
+        */
+        const bool budget_given = req["reasoning_budget"].is_number();
+        long budget = budget_given ? static_cast<long>(bounded(req["reasoning_budget"], -1, -1, 1 << 24)) : -1;
+        bool brief = false;
+        if (m->format->always_reasons() && !opt.reasoning)
+        {
+            opt.reasoning = true;
+            brief = true;
+        }
+        if (!budget_given && brief) budget = 0;
+        else if (!budget_given && effort == "low")
+            budget = req["priority"].as_string() == "background" ? background_low_effort_budget : low_effort_budget;
+        if (!opt.reasoning) budget = -1;
         if (req["tool_choice"].as_string() != "none" && req["tools"].is_array() && !req["tools"].empty())
         {
             if (!m->format->supports_tools()) throw std::invalid_argument("this model does not support tools");
@@ -1212,19 +1449,24 @@ namespace albireo
             throw std::invalid_argument("the prompt holds " + std::to_string(r->prompt.size())
                 + " tokens, beyond the context of " + std::to_string(m->context) + " tokens of the model");
 
-        // Sampling: the values of the request, or those advised for the family.
+        /*
+            Sampling: the values of the request, or those the authors of the model advise for an
+            answer with or without a reasoning of the model, a reasoning ended at once counting as
+            none.
+        */
+        const sampling_params advised = advised_sampling(*m, opt.reasoning && budget != 0, !r->images.empty());
         sampling_params sp;
-        const bool chatml_reasoning = opt.reasoning && std::string(m->format->name()) == "chatml";
-        sp.temperature = static_cast<float>(req["temperature"].as_double(chatml_reasoning ? 0.6 : 0.7));
-        sp.top_p = static_cast<float>(req["top_p"].as_double(chatml_reasoning ? 0.95 : 0.9));
+        sp.temperature = static_cast<float>(req["temperature"].as_double(advised.temperature));
+        sp.top_p = static_cast<float>(req["top_p"].as_double(advised.top_p));
         // The candidates are selected in a heap: more than 1024 of them would cost time at every
         // token for a mass that temperature and top-p leave aside.
-        sp.top_k = static_cast<int>(bounded(req["top_k"], chatml_reasoning ? 20 : 40, 0, 1024));
-        sp.min_p = static_cast<float>(req["min_p"].as_double(0.0));
-        const double repeat_penalty = req["repeat_penalty"].as_double(req["repetition_penalty"].as_double(1.0));
+        sp.top_k = static_cast<int>(bounded(req["top_k"], advised.top_k, 0, 1024));
+        sp.min_p = static_cast<float>(req["min_p"].as_double(advised.min_p));
+        const double repeat_penalty = req["repeat_penalty"].as_double(req["repetition_penalty"].as_double(
+            advised.repeat_penalty));
         sp.repeat_penalty = static_cast<float>(repeat_penalty);
-        sp.repeat_last_n = static_cast<int>(bounded(req["repeat_last_n"], 64, -1, 1 << 20));
-        const double presence = req["presence_penalty"].as_double(0.0);
+        sp.repeat_last_n = static_cast<int>(bounded(req["repeat_last_n"], advised.repeat_last_n, -1, 1 << 20));
+        const double presence = req["presence_penalty"].as_double(advised.presence_penalty);
         const double frequency = req["frequency_penalty"].as_double(0.0);
         sp.presence_penalty = static_cast<float>(presence);
         sp.frequency_penalty = static_cast<float>(frequency);
@@ -1256,6 +1498,32 @@ namespace albireo
         const long long asked = req["max_completion_tokens"].as_int(req["max_tokens"].as_int(0));
         r->max_tokens = asked <= 0 || asked > room ? room : static_cast<long>(asked);
         r->background = req["priority"].as_string() == "background";
+        /*
+            The end of a reasoning the engine may write: at the budget, and in place of a reasoning
+            that goes round in circles (loops()).
+        */
+        r->brief = brief;
+        if (opt.reasoning && req.contains("messages"))
+        {
+            r->closing = chat_format::tokenize(m->tok, m->format->reasoning_close());
+            if (!r->closing.empty())
+            {
+                r->reasoning_budget = budget;
+                // The short reasoning of a request that asked for none comes on top of its answer.
+                if (brief && asked > 0 && budget >= 0)
+                {
+                    r->max_tokens = static_cast<long>(std::min<long long>(room,
+                        static_cast<long long>(r->max_tokens) + budget + static_cast<long long>(r->closing.size())));
+                    r->answer_tokens = static_cast<long>(std::min<long long>(asked, room));
+                }
+                // A budget of 0 ends at once the reasoning the prompt opens.
+                if (budget == 0 && r->parser->in_reasoning())
+                {
+                    r->forced.assign(r->closing.begin(), r->closing.end());
+                    r->closing.clear();
+                }
+            }
+        }
 
         if (req["stop"].is_string() && !req["stop"].as_string().empty()) r->stops.push_back(req["stop"].as_string());
         for (const auto& s : req["stop"].elements())
@@ -1264,6 +1532,10 @@ namespace albireo
         // Each token compares the end of the answer with the stop sequences, whose length is bounded for that.
         for (const auto& s : r->stops)
             if (s.size() > 1024) throw std::invalid_argument("a stop sequence holds 1024 bytes at most");
+        // The markers of a format written as plain text end the turn of the model too.
+        if (req.contains("messages"))
+            for (const auto& s : m->format->stop_strings())
+                if (std::find(r->stops.begin(), r->stops.end(), s) == r->stops.end()) r->stops.push_back(s);
 
         // The decoded pixels this request holds, counted against the budget of its model below.
         size_t pixels = 0;
@@ -2157,9 +2429,16 @@ namespace albireo
             if (r.ph == request_state::phase::prefill)
             {
                 r.prompt_end = clock_type::now();
-                // The penalties see the end of the prompt as the reference servers do.
-                const size_t tail = std::min<size_t>(r.prompt.size(), 64);
-                for (size_t i = r.prompt.size() - tail; i < r.prompt.size(); ++i) r.smp->accept(r.prompt[i]);
+                /*
+                    The penalties over the last tokens see the end of the prompt as the reference
+                    servers do; those over the whole answer read the answer alone, as the servers
+                    whose values the authors of the models give.
+                */
+                if (r.smp->params().repeat_last_n >= 0)
+                {
+                    const size_t tail = std::min<size_t>(r.prompt.size(), 64);
+                    for (size_t i = r.prompt.size() - tail; i < r.prompt.size(); ++i) r.smp->accept(r.prompt[i]);
+                }
                 r.ph = request_state::phase::decode;
             }
             if (r.cancelled)
@@ -2179,7 +2458,15 @@ namespace albireo
         for (const draw& d : draws)
         {
             ++generated;
-            handle_token(m, *d.r, d.token);
+            int token = d.token;
+            // The end of a reasoning that reached its budget takes the place of the tokens drawn.
+            d.r->forcing = !d.r->forced.empty();
+            if (d.r->forcing)
+            {
+                token = d.r->forced.front();
+                d.r->forced.pop_front();
+            }
+            handle_token(m, *d.r, token);
         }
 
         m.prompted += static_cast<uint64_t>(prompt_tokens);
@@ -2212,7 +2499,8 @@ namespace albireo
             return;
         }
         ++r.generated;
-        r.smp->accept(token);
+        // The end of a reasoning the engine writes is not a text of the model for its penalties.
+        if (!r.forcing) r.smp->accept(token);
         // Control tokens are not text, except the markers the output parser reads.
         if (m.tok.token_type(token) != dlib::hf_tokenizer::TT_CONTROL
             || std::binary_search(m.format->marker_tokens().begin(), m.format->marker_tokens().end(), token))
@@ -2224,6 +2512,44 @@ namespace albireo
             r.pending_bytes.erase(0, n);
             emit_text(m, r, text);
             if (r.ph == request_state::phase::done) return;
+        }
+        const bool reasoning = r.parser && r.parser->in_reasoning();
+        /*
+            The end of a short reasoning: the answer receives the tokens the request gave it, after
+            the separation the engine still writes when it ends the reasoning itself.
+        */
+        if (r.in_reasoning && !reasoning && r.answer_tokens >= 0)
+        {
+            r.max_tokens = std::min(r.max_tokens, r.generated + static_cast<long>(r.forced.size()) + r.answer_tokens);
+            r.answer_tokens = -1;
+        }
+        // The end of a reasoning the engine writes takes no part in the repetitions of the model.
+        if (!r.forcing && loops(r, token, reasoning))
+        {
+            if (reasoning && !r.closing.empty())
+            {
+                // A reasoning that goes round in circles ends as a reasoning that reached its budget.
+                r.forced.assign(r.closing.begin(), r.closing.end());
+                r.closing.clear();
+                reset_loops(r);
+                log(ALBIREO_LOG_INFO, "engine: model '" + r.model_id + "': a reasoning that repeated itself was "
+                    "ended after " + std::to_string(r.generated) + " tokens");
+            }
+            else
+            {
+                r.repetition = true;
+                log(ALBIREO_LOG_WARNING, "engine: model '" + r.model_id + "': an answer that repeated itself was "
+                    "stopped after " + std::to_string(r.generated) + " tokens");
+                finish(m, r, "length");
+                return;
+            }
+        }
+        // A reasoning that reached its budget: the engine writes its end, one token per step.
+        if (r.reasoning_budget >= 0 && r.forced.empty() && !r.closing.empty() && r.parser->in_reasoning()
+            && ++r.reasoning_tokens >= r.reasoning_budget)
+        {
+            r.forced.assign(r.closing.begin(), r.closing.end());
+            r.closing.clear();
         }
         if (r.generated >= r.max_tokens || m.runtime->sequence_length(r.seq) + 1 >= m.context)
         {
@@ -2268,9 +2594,33 @@ namespace albireo
     void engine::emit_text(loaded_model& m, request_state& r, const std::string& text)
     {
         std::vector<output_event> events;
-        if (r.stops.empty())
+        /*
+            The stop sequences apply to the text the model writes for the request: neither to the
+            end of a reasoning the engine writes, nor to the short reasoning of a request that
+            asked for none.
+        */
+        if (r.forcing)
         {
+            /*
+                The end of a reasoning the engine writes in place of the model is not shown as its
+                reasoning; the text of the model held back for the stop sequences goes first.
+            */
+            if (!r.held.empty())
+            {
+                r.parser->feed(r.held, events);
+                r.held.clear();
+                deliver(r, events);
+            }
             r.parser->feed(text, events);
+            events.erase(std::remove_if(events.begin(), events.end(),
+                [](const output_event& e) { return e.kind == output_kind::reasoning; }), events.end());
+            deliver(r, events);
+            return;
+        }
+        if (r.stops.empty() || (r.brief && r.parser->in_reasoning()))
+        {
+            r.parser->feed(r.held + text, events);
+            r.held.clear();
             deliver(r, events);
             return;
         }
@@ -2329,6 +2679,7 @@ namespace albireo
 
         json done = json::object();
         done["finish_reason"] = reason == "stop" && r.tool_calls > 0 ? std::string("tool_calls") : reason;
+        if (r.repetition) done["repetition"] = true;
         json usage = json::object();
         usage["prompt_tokens"] = static_cast<long>(r.prompt.size());
         usage["completion_tokens"] = r.generated;
@@ -2692,7 +3043,8 @@ namespace albireo
         {
             render_options opt;
             current_dates(opt);
-            opt.reasoning = req["reasoning"].as_bool(m->format->supports_reasoning());
+            // As a request to answer renders it: a model that always reasons opens its reasoning.
+            opt.reasoning = req["reasoning"].as_bool(m->format->supports_reasoning()) || m->format->always_reasons();
             if (req["tools"].is_array()) opt.tools = req["tools"];
             if (m->vision) strip_marks(opt.tools);
             std::vector<image_part> parts;

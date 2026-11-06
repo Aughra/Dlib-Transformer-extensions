@@ -16,7 +16,30 @@
 # folders whose files go into the engines folder of the installation.
 
 cmake_minimum_required(VERSION 3.16)
-project(albireo VERSION 1.0.8 LANGUAGES C CXX)
+project(albireo VERSION 1.0.11 LANGUAGES C CXX)
+
+# The version is written in four places that must agree: project() above, the numbers of
+# common/version.h, which the version resources of the programs and of the installer carry and
+# which the installer compares before it replaces an installation, the text of common/version.h,
+# which the service, the engines and the update feed give, and the description of the interface.
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/common/version.h" version_lines REGEX "^#define ALBIREO_VERSION")
+set(version_numbers)
+foreach (part MAJOR MINOR PATCH)
+   string(REGEX MATCH "#define ALBIREO_VERSION_${part} +([0-9]+)" found "${version_lines}")
+   list(APPEND version_numbers "${CMAKE_MATCH_1}")
+endforeach()
+string(REPLACE ";" "." version_numbers "${version_numbers}")
+string(REGEX MATCH "#define ALBIREO_VERSION +\"([0-9.]+)\"" found "${version_lines}")
+set(version_text "${CMAKE_MATCH_1}")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/openapi.json" openapi_text)
+string(REGEX MATCH "\"version\" *: *\"([0-9.]+)\"" found "${openapi_text}")
+set(openapi_version "${CMAKE_MATCH_1}")
+if (NOT version_numbers STREQUAL PROJECT_VERSION OR NOT version_text STREQUAL PROJECT_VERSION OR
+    NOT openapi_version STREQUAL PROJECT_VERSION)
+   message(FATAL_ERROR "the version differs between project() (${PROJECT_VERSION}), the numbers of "
+      "common/version.h (${version_numbers}), its text (${version_text}) and web/openapi.json "
+      "(${openapi_version}): the four must agree")
+endif()
 
 option(ALBIREO_PROGRAMS "Build the service, the tray, the installer and the processor engines" ON)
 option(ALBIREO_ENGINE_CUDA "Build the engine for NVIDIA graphics processors (dlib built with CUDA)" OFF)
@@ -391,16 +414,20 @@ if (ALBIREO_ENGINE_CUDA)
    find_package(CUDAToolkit REQUIRED)
    albireo_tensor_engine(cuda)
    target_link_libraries(albireo-engine-cuda PRIVATE CUDA::cudart)
-   # The folders of the toolkit and of cuDNN; cuDNN loads its parts by name, those of the
-   # tensor descriptors and of the elementary operations being the ones the engine uses.
-   set(ALBIREO_RUNTIME_DIRS ${CUDAToolkit_BIN_DIR} ${CUDAToolkit_BIN_DIR}/x64)
+   # The folders of cuDNN, then those of the toolkit, which may carry another version of cuDNN
+   # whose libraries the search must not take.  cuDNN loads its parts by name, those of the
+   # tensor descriptors and of the elementary operations being the ones the engine uses, copied
+   # from the folders of cuDNN alone.
+   set(cudnn_dirs ${CUDAToolkit_BIN_DIR} ${CUDAToolkit_BIN_DIR}/x64)
    if (CUDNN_LIBRARY_PATH)
       get_filename_component(cudnn_lib_dir "${CUDNN_LIBRARY_PATH}" DIRECTORY)
       string(REGEX REPLACE "/lib(/|$)" "/bin\\1" cudnn_bin_dir "${cudnn_lib_dir}")
       get_filename_component(cudnn_bin_parent "${cudnn_bin_dir}" DIRECTORY)
-      list(APPEND ALBIREO_RUNTIME_DIRS "${cudnn_bin_dir}" "${cudnn_bin_parent}")
+      set(cudnn_dirs "${cudnn_bin_dir}" "${cudnn_bin_parent}")
    endif()
-   foreach (dir ${ALBIREO_RUNTIME_DIRS})
+   set(ALBIREO_RUNTIME_DIRS ${cudnn_dirs} ${CUDAToolkit_BIN_DIR} ${CUDAToolkit_BIN_DIR}/x64)
+   list(REMOVE_DUPLICATES ALBIREO_RUNTIME_DIRS)
+   foreach (dir ${cudnn_dirs})
       list(APPEND ALBIREO_RUNTIME_EXTRA "${dir}/cudnn_graph64_*.dll" "${dir}/cudnn_ops64_*.dll")
    endforeach()
    # dlib links the random numbers and the solvers of CUDA, which the engine never calls:
@@ -748,6 +775,22 @@ if (ALBIREO_TESTS AND (ALBIREO_ENGINE_CUDA OR ALBIREO_ENGINE_OPENVINO OR ALBIREO
    albireo_output_dir(test_offload ${CMAKE_BINARY_DIR}/tests)
    list(APPEND ALBIREO_RUNTIME_EXTRA ${ALBIREO_TEST_RUNTIME_EXTRA})
    albireo_device_runtime(test_offload)
+
+   # The operations of dlib on the weights in their GGUF formats, against the processor kernels.
+   add_executable(test_device_ops tests/test_device_ops.cpp engine/qkernels.cpp common/system_info.cpp)
+   target_include_directories(test_device_ops PRIVATE ${ALBIREO_INCLUDE_DIR})
+   target_link_libraries(test_device_ops PRIVATE dlib::dlib)
+   if (ALBIREO_ENGINE_CUDA)
+      target_link_libraries(test_device_ops PRIVATE CUDA::cudart)
+   endif()
+   if (MSVC)
+      target_compile_options(test_device_ops PRIVATE /arch:AVX2)
+   else()
+      target_compile_options(test_device_ops PRIVATE -mavx2 -mfma -mf16c)
+      target_link_libraries(test_device_ops PRIVATE Threads::Threads)
+   endif()
+   albireo_output_dir(test_device_ops ${CMAKE_BINARY_DIR}/tests)
+   albireo_device_runtime(test_device_ops)
 endif()
 
 if (ALBIREO_TESTS AND ALBIREO_PROGRAMS)

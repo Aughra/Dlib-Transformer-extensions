@@ -62,9 +62,10 @@ application, the description of the interface and the list of the programs of Wi
 - **Images** given to the models that read them: a question carries PNG or JPEG images (the
   browser converts the other formats it shows), attached, pasted or dropped, shown as thumbnails
   that open whole in a viewer, ten at most in the context of a discussion, the images of the
-  exchanges that a compression summarized leaving the context with them. A project holds ten
-  images, which the model that comes with Albireo describes in the background; their descriptions
-  are searched with its documents, and a question that finds one receives the image, four at most.
+  exchanges that a compression summarized leaving the context with them. The knowledge of a project
+  holds 100 items at most, documents and images together, of which ten images, which the model that
+  comes with Albireo describes in the background; their descriptions are searched with its
+  documents, and a question that finds one receives the image, four at most.
   A model that reads text only receives the names of the images.
 - **Reading aloud**: each answer has a button that reads it aloud, in English, French, German,
   Italian or Spanish as its words show, with the speech synthesis that comes with Albireo, which
@@ -76,17 +77,18 @@ application, the description of the interface and the list of the programs of Wi
   catalog, chosen in the Models window or by the service when a model arrives, and an embedding
   model for the search in documents, which the service installs in every case.
 - **Models that come with Albireo**: the complete installer carries Qwen3-VL-4B-Thinking-albireo,
-  which reads images and text, reasons when asked, and serves the three functions as soon as
-  Albireo is installed, and Qwen3-Embedding-0.6B-albireo for the search, both retrieved and
-  checked by the build (see [Models that come with Albireo](#models-that-come-with-albireo)).
+  which reads images and text, reasons before its answer when deep reasoning is on and answers
+  directly otherwise, and serves the three functions as soon as Albireo is installed, and Qwen3-Embedding-0.6B-albireo for the
+  search, both retrieved and checked by the build (see
+  [Models that come with Albireo](#models-that-come-with-albireo)).
 - **Agent mode**: the model calls tools that run in the page (calculator, JavaScript in a
   sandboxed frame, outline, reading and search of the documents, search of the other
   discussions, date, files to download), up to 100 steps per answer, the context fitted before
   each step. The help next to its button describes the tools; each step of an answer shows
   its tool, its arguments, its result, its state and its duration. The calculator reads the
   percentages ("17,5 % de 2 340"), the decimal commas and the thousands written with spaces.
-- **Web access**: the Web button of the composer, off in each new discussion, gives the model a
-  search of Wikipedia and the reading of the pages and PDF files of public addresses, which the
+- **Web access**: the Web button of the composer, off in each new discussion as the deep
+  reasoning and the agent are, gives the model a search of Wikipedia and the reading of the pages and PDF files of public addresses, which the
   service fetches; the model reads only the addresses that the discussion holds (see
   [Web access](#web-access)).
 - **Several conversations at once**: the requests of every client are computed together, one
@@ -210,25 +212,50 @@ with cuBLAS, whose libraries the installers carry.
 The engines of the devices add a `matmul_offload` ([`engine/offload.h`](engine/offload.h)) that
 receives each product with the way to compute it on the processor
 ([`engine/tensor_backend.cpp`](engine/tensor_backend.cpp)). The product goes to the device through
-the tensors of dlib, with a copy of the weight matrix in single precision kept while the copies of
-all the models fit in a budget:
+the tensors of dlib, with a copy of the weight matrix kept while the copies of all the models fit
+in a budget:
 
-- with OpenVINO, the routing of the NPU module of dlib times the processor kernels against the NPU
-  and the GPU, shape by shape, and keeps the faster;
-- with CUDA, the engine makes these measures itself, on two matrices of each shape, and checks its
-  choice at growing intervals. The copies are written on the card by blocks of 64 MB that a buffer
-  of the host holds in turn, without an image in the memory of the host, and stay within the memory
-  of the card that the extended device memory of dlib (V²RAM) manages, less 1 GiB (a quarter of it
-  on a smaller card) for the products, the matrices that cross the bus and cuBLAS. A matrix left
-  out of the copies is computed by the processor from its quantized weights for a product of fewer
-  than 128 tokens, a generated token among them, and crosses the bus for that product alone from
-  128 tokens on. A size given to the file of V²RAM (`v2ram_max_mb`) lets the copies go beyond the
-  card into it, the blocks that do not fit moving to the memory of the host or to that file and
-  coming back ahead of their use; once the copies exceed the memory of the card, the products of
-  fewer than eight tokens stay on the processor. Only the rows of a product cross the bus.
+- with OpenVINO, the copies hold floats in single precision, and the routing of the NPU module of
+  dlib times the processor kernels against the NPU and the GPU, shape by shape, and keeps the
+  faster;
+- with CUDA, a copy holds the blocks of the GGUF format of its matrix as the file holds them, for
+  F32, F16, BF16, Q4_0, Q4_1, Q5_0, Q5_1, Q8_0, IQ4_NL, Q4_K, Q5_K and Q6_K, and floats in single
+  precision for the other formats. The kernels of dlib
+  ([`dlib/cuda/cuda_gguf.cu`](../../cuda/cuda_gguf.cu)) read the blocks in place for a product of
+  fewer than 64 tokens, a warp per row decoding each group of 32 weights once for up to eight
+  tokens, and expand them from 64 tokens on by tiles of 64 MB that cuBLAS multiplies. Before a new
+  copy serves, its first 64 rows multiply probe activations and are expanded on the card, against
+  the same work of the processor: a format whose results differ keeps its matrices in single
+  precision. The engine measures the
+  products of each shape on two matrices and on the processor, and checks its choice at growing
+  intervals. The blocks cross the bus from the mapping of the file, without an image in the memory
+  of the host, and the copies stay within the memory of the card that the extended device memory
+  of dlib (V²RAM) manages, less 1 GiB (a quarter of it on a smaller card) for the hidden states of
+  the passes, the tiles and cuBLAS. A matrix left out of the copies is computed by the processor
+  from its quantized weights for a product of fewer than 128 tokens, a generated token among them,
+  and crosses the bus in its format for that product alone from 128 tokens on. A size given to the
+  file of V²RAM (`v2ram_max_mb`) lets the copies go beyond the card into it, the blocks that do not
+  fit moving to the memory of the host or to that file and coming back ahead of their use; once
+  the copies exceed the memory of the card, the products of fewer than eight tokens stay on the
+  processor. Only the rows of a product cross the bus.
 
-The products of a single token often stay on the processor, which serves them from the compact
-weights; the products of the prompts go to the device. The image encoder of a model sends its
+With CUDA, the layers of a dense model run on the card as a whole (`layer_pass`): the hidden states
+of a pass stay on the card from the first layer to the last, the card computes the normalizations,
+the seven products, the SwiGLU gate and the residual sums of each layer, and the processor keeps
+the attention over the paged keys and values, the biases, the normalizations of queries and keys
+and the rotary positions. A layer crosses the bus once each way, the queries, keys and values of
+its tokens to the processor and the outputs of their attention back, through pinned memory and
+asynchronous copies, where the products alone crossed it twice per product. Before its first use,
+a pass of the card over 8 probe tokens, whose products read the blocks in place, and a pass over
+64, whose products go through the tiles, must give the logits of the processor alone within 1 %,
+the most likely token differing for one of the 8 probe tokens and four of the 64 at most, or the
+layers stay with the products; a check that the keys and values or the card put off is made
+again 64 passes later. A failure of the card brings the pass back to the processor, which
+computes it again. A model with a mixture of experts, and the passes that add the DeepStack
+slices of an image, keep the products.
+
+With OpenVINO, the products of a single token often stay on the processor, which serves them from
+the compact weights; the products of the prompts go to the device. The image encoder of a model sends its
 products to the device of the engine too, its copies leaving the device for the decoder between
 two images.
 
@@ -267,28 +294,54 @@ choice then gives the processor engine the place of an accelerator measured slow
 the service restarts when its choice changes. The Accelerator menu and the window of the computer
 give the measures in the language of the interface ("23.5 tokens/s", "23,5 jetons/s").
 
-The CUDA engine computes on the card, one product at a time, the products of the matrices whose
-copies in single precision it holds, and the attention on the processor: each product of a
-generated token sends its row to the card and reads its result back, and the products the card
-lacks room for run on the processor from their quantized weights. The prompts gain the most from
-the card; for the generated tokens, the gain over the processor engine depends on the share of the
-model the card holds.
+The CUDA engine keeps the weights on the card in their GGUF formats and computes there the layers
+of a dense model, the attention staying on the processor: a generated token crosses the bus once
+each way per layer and reads 1.1 GB of weights on the card for Qwen3-VL 2B in Q4_K_M, where it read
+them in single precision, six times as many bytes, and crossed the bus twice for each of the 197
+products of its pass. The products the card lacks room for run on the processor from their
+quantized weights.
 
 The conversation formats are written natively ([`engine/chat_format.cpp`](engine/chat_format.cpp)),
 the chat template of a model naming its format: ChatML (Qwen2.5, Qwen3, Qwen3-VL, EuroLLM, with the
 reasoning between `<think>` and `</think>`), Mistral (Ministral 3, Devstral Small 2), Llama 3,
-Granite 3, Granite 4.2 (ChatML with the tool calls in the XML form `<function=...>`), Phi-4-mini
-and the format of Foundation-Sec-8B-Reasoning. The tests compare the prompts with those of the
-reference templates rendered by Jinja, byte for byte. A model that always reasons, such as the
-Thinking variants of Qwen3-VL and Foundation-Sec-8B-Reasoning, answers at once when the request
-asks for no reasoning: the prompt then closes its reasoning before it starts, as the switchable
-templates do. The prompt of Foundation-Sec-8B-Reasoning opens its reasoning with `<think>`, as the
-current template of the model does; the template of its GGUF file, an earlier one, leaves that
-marker to the model, whose answer written without it would read as a reasoning. The tokenizer of dlib
-reads the byte-level BPE vocabularies, with the pre-tokenizers of GPT-2, Llama 3, Qwen2, tekken and
-GPT-4o (Phi-4-mini) among others, and the SentencePiece ones (EuroLLM), whose leading space it puts
-after each control token as the reference tokenizers do; the token identifiers of the tests are
-those of llama.cpp.
+Granite 3, Granite 4.2 (ChatML with the tool calls in the XML form `<function=...>`), Phi-4-mini,
+the format of Foundation-Sec-8B-Reasoning and that of Foundation-Sec 1.1 8B Instruct, whose role
+markers `<|system|>`, `<|user|>` and `<|assistant|>` are plain text of its vocabulary: its GGUF files
+carry no template, the engine takes the one of the repository of the model, and these markers end
+its answer as its end of text token does. The instructions of the tools of Qwen2.5 keep the doubled
+braces of the example of its template, and CyberSecQwen 4B receives a system message in the turn of
+the user, as the template of its training writes it. The tests compare the prompts with those of the reference
+templates rendered by Jinja, byte for byte, as the libraries that apply chat templates render them,
+the line break after each tag and the spaces before it removed: the template of
+Foundation-Sec-8B-Reasoning, written over several lines, gives its turns one after the other, the
+answer right after `<|assistant|>`. The tokenizer of dlib reads the byte-level BPE vocabularies,
+with the pre-tokenizers of GPT-2, Llama 3, Qwen2, tekken and GPT-4o (Phi-4-mini) among others, and
+the SentencePiece ones (EuroLLM), whose leading space it puts after each control token as the
+reference tokenizers do; the token identifiers of the tests are those of llama.cpp.
+
+A model whose template opens the reasoning of every answer, the Thinking variants of Qwen3 and
+Qwen3-VL and Foundation-Sec-8B-Reasoning, was trained to reason before each answer, and its prompt
+opens that reasoning whatever the request asks. When the request asks for no reasoning, the engine
+ends it at once by writing in place of the model the sentence its authors give for the budget of a
+reasoning ("Considering the limited time by the user, I have to give the solution based on the
+thinking directly now.") and the marker `</think>`; the model then answers directly, the prompt
+staying within what it learned, where a reasoning closed empty before it starts led its answer to
+take up the corrections and returns of a reasoning, which could loop. With the effort `low`, the
+engine ends the reasoning after 512 tokens, 256 for the work in the background, and
+`reasoning_budget` sets that limit for any request, -1 lifting it. The end the engine writes counts
+among the tokens of the answer and stays out of the `reasoning_content` the client receives; the
+answer of a request that asked for no reasoning receives its `max_tokens` once the reasoning ends,
+and its stop sequences apply to that answer alone. The prompt of
+Foundation-Sec-8B-Reasoning opens its reasoning with `<think>`, as the current template of the model
+does; the template of its GGUF file, an earlier one, leaves that marker to the model.
+
+The engine watches the repetitions of the reasoning and of the answer apart: a part loops when nine
+tenths of its last 384 tokens end a passage of 16 tokens that it wrote twice before. A reasoning
+that loops ends as a reasoning that reached its budget, and the model answers; an answer that loops
+ends with the reason `length` and the field `repetition`, and the web application says that the
+model repeated itself. A passage written again once, a code shown before and after its correction,
+does not count; nor do the passages of the prompt, so that an answer that takes up a document or
+code given to it goes on, nor those of the reasoning for the answer, which may take up its draft.
 
 ### Images
 
@@ -443,7 +496,12 @@ another model, a dialog says that its text cannot be read. A PDF where some page
 is added with a notice of the number of these pages, whose text is missing. The same rules apply
 to the files attached to a question and to the knowledge of a project. A document of more than
 100 MB and an image of more than 15 MB, attached to a question or added to a project, are refused
-before they are read, with a message that names the file and the limit.
+before they are read, with a message that names the file and the limit. The knowledge of a project
+takes 100 items at most, documents and images together: its card shows their count, its button
+turns off once they are there, and the files of a choice or of a drop beyond them are left out with
+a message that counts them and names the first ones. A project of an earlier version that holds
+more keeps them, and takes no other until it holds fewer than 100. The additions of a page apply
+one after the other, each to the project as the previous one left it.
 
 The images of a question ([`web/js/images.js`](web/js/images.js)) are reduced in the browser to
 1,536 pixels on their longest side at most and kept in its database; the message gives them before
@@ -529,8 +587,11 @@ of the discussion stops it, and its failure is silent.
 
 The work the application does in the background, the titles, the summaries and the memory, goes
 to the background model: the model that comes with Albireo (`albireo-background`), which the
-service keeps loaded whatever the functions, without reasoning; without it, the general model
-serves it.
+service keeps loaded whatever the functions, without reasoning, the reasoning of a model that
+always reasons ended at once; without it, the general model serves it. It samples as its authors
+advise, without the presence penalty some of them give, so that the titles, the summaries and the
+quotes of the memory take up the words of the discussion, and a summary that repeats its lines keeps
+each of them once.
 
 The memory of the discussions holds short sentences on the user, one after the other in one
 paragraph (profession, projects, preferences, the way to answer), the lasting facts the user
@@ -630,7 +691,8 @@ missing and prints a table of what it found and installed:
 - The free space of each volume that receives the build trees and the caches, estimated at 7 GB
   for the tree of the programs and of the installers, 1 GB for the one of OpenVINO, 2 GB for the
   one of CUDA, 6.8 GB for the models that come with Albireo in their cache and 4.2 GB for the
-  archives of NVIDIA, less what these folders hold already; the script stops when a volume is short.
+  archives of NVIDIA (1.5 GB for cuDNN alone), less what these folders hold already; the script
+  stops when a volume is short.
 
 An installation that fails stops the build with the place of its log. `-NoInstall` installs
 nothing; the table then gives the command that installs each missing item, for a computer where an
@@ -685,11 +747,13 @@ without it, or with 12.9), `-Cudnn <folder>` one cuDNN installation for an insta
 (`C:\Program Files\NVIDIA\CUDNN\v9.11` for instance), and
 `-CudaArchitectures` replaces the list of architectures of the CUDA engine. Of several cuDNN
 versions in `C:\Program Files\NVIDIA\CUDNN`, the script takes the latest before 9.12 that serves
-the toolkit, else the latest; each configuration sets the architectures, the list given or the
-default one, never a list an earlier configuration kept, and the configuration and the end of the
-script warn when the CUDA engine leaves out the GTX 900 and 10 series. After a device tree is
-rebuilt by hand, delete `build-albireo/payload` so that the installer packs its engines again. The
-script amounts to:
+the toolkit, else the latest; when the cuDNN found is 9.12 or later, a CUDA 12 toolkit receives
+cuDNN 9.11.0 from the archives of NVIDIA instead, 0.6 GB downloaded once and 1.4 GB in the cache,
+unless `-Cudnn` or `-CudaArchitectures` is given. Each configuration sets the architectures, the
+list given or the default one, never a list an earlier configuration kept, and the configuration
+and the end of the script warn when the CUDA engine leaves out the GTX 900 and 10 series. After a
+device tree is rebuilt by hand, delete `build-albireo/payload` so that the installer packs its
+engines again. The script amounts to:
 
 ```
 cmake -S dlib/dlib/external/albireo -B build-albireo-ov -G "Visual Studio 17 2022" -A x64 -DALBIREO_PROGRAMS=OFF -DALBIREO_ENGINE_OPENVINO=ON
@@ -733,7 +797,9 @@ the cards that follow:
 cuDNN 9.12 and later run on Turing and later cards only (GTX 16 and RTX series). A build for the
 GTX 900 and 10 series therefore takes CUDA 12.8 or 12.9 with cuDNN 9.11 or earlier, the version
 copied beside the engine, which the archives of NVIDIA provide (CUDA 12.9.1, cuDNN 9.11.0). The
-configuration prints the toolkit, the cuDNN version and the oldest
+headers and the libraries of the cuDNN given to the configuration come before those of the
+toolkit, whose folder may carry another version of cuDNN. The configuration prints the toolkit,
+the cuDNN version and the oldest
 compute capability of the result, which the engine also checks at its start: a card below it is
 reported as unusable, with its compute capability, and the other engines serve the models.
 
@@ -789,16 +855,20 @@ cmake --build build-albireo-win -j
 | `test_qkernels`  | every quantized kernel against its portable version and a reference in floats, the attention by tiles against a reference in double precision, and the expansion of Q6_K bit for bit with dlib; `test_qkernels_avxvnni` checks the kernels of AVX-VNNI, and skips the processors without its instructions, and `test_qkernels_vnni256` (GCC, Clang) runs the 256-bit VNNI kernels through the AVX-512 form of their instructions |
 | `test_runtime`   | the logits of a model against `tests/reference_forward.py`, and the same results whatever the cut of the batches |
 | `test_tokenizer` | the tokenizer of a GGUF file against reference token sequences                     |
-| `test_offload`   | the products of a device against the processor kernels, the small budget path and the measured routing |
+| `test_offload`   | the products and the layers of a device against the processor kernels, the small budget path and the measured routing |
+| `test_device_ops` | the operations of dlib on the weights in their GGUF formats (`tt::gguf_matvec`, `tt::gguf_dequantize`, `tt::rms_norm_rows`, `tt::silu_multiply`) against the processor kernels, for every format, with activations on 16 bytes and off them, then the time of the products of a generated token on the matrices of a 2B model |
 | `test_model_file` | a small Qwen3 model built in memory and 144 damaged forms of it (names given twice and tensors off the alignment among them), which the loader must all refuse without allocating more than 256 MB, then a sparse file of more than 2 GiB whose last tensor lies beyond 2 GiB, read mapped and streamed, each value of that tensor checked and the logits compared with those of the same model in a small file |
 | `test_engine_api` | the refusals of the C interface, three threads of requests with cancellations under the pressure of the keys and values, the unloading and the destruction during requests, one final event per request, and the history of an answer read ahead of the next question |
 | `test_chat_format` | the prompts of the agent mode and of each chat format against those of its template rendered by Jinja, the marker tokens and the parsing of the tool calls, whole or cut in pieces, the calls of Mistral with and without their identifier, the Llama 3 answers that are no call and an earlier answer holding `</think>` |
 | `test_host`      | in a data folder of its own: the files of the downloads and of the imports through no link, the refusals of the import route, the copies of models already installed, the identifiers of the imports, the replacement of a model file, the ranges of the downloads, a damaged database, the downloads through a local interface of pCloud and a local server of official addresses (the listing of the space and the copies it holds; a part it lacks, a copy of another size or of other bytes, a web page in place of a copy, an interface that refuses the connections and a space not set, each taken from its official address, the segments that follow a failure of the space sent there at once and one line of the log for each change of source; a file that neither source holds failing with the name of the file in the space, the official address and the failure of each; a download from an official address cancelled at once; the catalog from the space, or from its official address when the space refuses it, lacks it or holds it with another signature; the feed of the updates from the space alone, with no request to an official address; a refused password), each failure of the space with the bounds of the tests shortened (web pages with 200 and 403 and a proxy that asks for its authentication from each method of the interface and from a content server, connections reset or refused, a JSON cut short or of other types, sizes of another type, negative or beyond the integers, a server that stalls or answers byte by byte) failing with its message, without exception, the local server still answering, and no message or line of the log naming pCloud, the link or its code, the last guard of the messages and of the log files of an earlier version, the settings of an earlier version written again without the link and the search providers, and the web access through a local server (the public addresses on both sides of each range, the addresses refused before any connection, a page, a text cut at 2 MB, a type refused, the PDF files above 20 MB, a redirection to a private address, the search of Wikipedia, the refusals offline, with the web access turned off and without provider) |
-| `engine_chat`    | drives an engine library through its C interface: chat, images with their projector (`--image`, `--detail`), tools, the results of the tool calls given back to the model as the agent mode gives them (`--tools --tool-result`), reasoning, parallel requests, turns with pauses (`--turns --pause`), embeddings compared with a reference; it ends without unloading the engine of a device, as the service does |
+| `engine_chat`    | drives an engine library through its C interface: chat, images with their projector (`--image`, `--detail`), tools, the results of the tool calls given back to the model as the agent mode gives them (`--tools --tool-result`), reasoning and its budget (`--budget`), the sampling the authors of the model advise (`--temperature auto`) and a presence penalty (`--presence`), parallel requests, turns with pauses (`--turns --pause`), embeddings compared with a reference; it ends without unloading the engine of a device, as the service does |
 | `bench_runtime`  | tokens per second of the prompt and of the generation, also as `bench_runtime_avxvnni` and `bench_runtime_vnni256` |
 
 `test_offload model.gguf CPU` validates the OpenVINO engine on a machine without NPU, with the CPU
-plugin of OpenVINO; `ALBIREO_ENGINE_DLIB=ON` builds the same test on the host code of dlib.
+plugin of OpenVINO; `ALBIREO_ENGINE_DLIB=ON` builds the same tests on the host code of dlib, which
+runs the layers of a dense model as the card does. A fourth argument gives the megabytes of the
+copies of its first pass, so that the layers of a larger model run there on a computer whose
+automatic budget does not hold them: `test_offload qwen3-vl-4b-thinking-albireo.gguf "" 2 2400`.
 
 Two scripts run these programs and the service, then print one line per step with its result:
 
@@ -825,7 +895,7 @@ A build gives two installers. `albireo-setup.exe` is complete: it carries the mo
 with Albireo and installs a computer that answers at once, without network. `albireo-setup-online.exe`
 is the same program without them: the updates take it, and on a new computer the service
 downloads the default models of the catalog. Windows runs no program of 4 GiB or more: when the
-program and its models would reach that size, as the installer of 1.0.8 does with the libraries of
+program and its models would reach that size, as the complete installer does with the libraries of
 CUDA and of OpenVINO, its models lie beside it in `albireo-setup.models`, which the installer reads
 when it carries none; the two files travel together and are renamed together
 (`albireo-setup-complete-<version>.exe` and `albireo-setup-complete-<version>.models`).
@@ -861,16 +931,30 @@ bundle when it bears the signature of Albireo and the models this catalog lists,
 against its hash. The option "This computer has no Internet access" of the wizard, or `/offline`,
 sets the service offline from the start.
 
-The folder of the data must lie on a local fixed drive, those of the programs and of the models on
-a local drive; the installer refuses a drive root, the folders of Windows and of the users, a
-folder that holds them, a link made by another account, a program or data folder on whose path
-another account could rename a folder (`folder_parent_unsafe`), a program or data folder that is
-neither empty nor an installation of Albireo, or that lies inside Windows or the profiles of the
-users, and a models folder inside the folder of the programs, or that holds it (`folder_overlap`),
-in the wizard as with `/silent /models` and `/models-dir`. It gives the
-folders it creates or takes over, and the parent folders it creates, the rights of the data
-folder (writing for the administrators and the service only), and records the files it installs
-in `albireo-files.json`.
+The folder of the data must lie on a local fixed drive, which most external hard drives and SSDs
+are and most USB keys are not (`folder_not_fixed`), those of the programs and of the models on a
+local drive, each on a drive that answers (`folder_drive_unavailable` for a drive locked by
+BitLocker, empty or not ready) and whose file system keeps permissions, NTFS or ReFS; the installer
+refuses a folder of an exFAT or FAT32 drive (`folder_no_permissions`, which names the file system),
+a drive root, the folders of Windows and of the users, a folder that holds them, a link made by
+another account, a program or data folder on whose path another account could rename a folder
+(`folder_parent_unsafe`, which names that folder), or whose drive root belongs to another account
+or lets other accounts delete or rename what it holds, as a root open to everyone does
+(`folder_root_unsafe`), a program or data folder that is neither empty nor an installation of
+Albireo, or that lies inside Windows or the profiles of the users, and a models folder inside the
+folder of the programs, or that holds it (`folder_overlap`), in the wizard as with
+`/silent /models` and `/models-dir`. On an external NTFS drive whose root keeps the permissions Windows
+gives a drive it formats, the folders of the programs, of the data and of the models can lie below
+a new folder at the root, `E:\Albireo` for instance, which the installer creates with them. It
+gives the folders it creates or takes over, and the parent folders it creates for the programs,
+the data and the models, the rights of the data folder (writing for the administrators and the
+service only), checks the path of the programs and of the data again once their folders exist, so
+that a folder another account made on it meanwhile stops the installation, and records the files
+it installs in `albireo-files.json`. The service refuses the same drives without permissions for
+its data folder and its models folder, a models folder there leaving the models to the data
+folder, and loads a model only from a folder that SYSTEM and the administrators alone may change,
+its projector included: a model left in a folder that another account may write in, or in a
+folder put in the place of the models folder, stays unloaded with that reason.
 
 The uninstallation stops the tray of every session, the service and the programs of the
 installation folder, removes the trust of the local authority and the certificates, then
@@ -941,9 +1025,9 @@ and another provider of the search, read as `wikipedia`, leave it at the next st
 | `v2ram_max_mb`  | 0       | size of its file in megabytes, 0 for automatic; a size lets the copies of the weights go beyond the card into it; on a volume without sparse files (exFAT, FAT32), the budget and half of the free space at most |
 | `device_mb`     | 0       | memory of the device for the copies of the weights, 0 for automatic       |
 | `threads`       | 0       | threads of the engine, 0 for the physical cores                           |
-| `context`       | 0       | context of the models, 0 for the trained one up to 32768, within `kv_mb`  |
+| `context`       | 0       | context of the models, 0 for the trained one, within `kv_mb`              |
 | `max_sequences` | 4       | requests computed together per model                                      |
-| `kv_mb`         | 0       | memory of the keys and values, 0 for automatic                            |
+| `kv_mb`         | 0       | memory of the keys and values, 0 for two contexts within a third of the available memory |
 | `check_updates` | true    | checks the feed at each start and every six hours                          |
 | `default_model` | true    | downloads the default language model of the catalog at the first start    |
 | `offline`       | false   | no connection: catalog, models and updates come from imports              |
@@ -980,12 +1064,38 @@ of `/v1/embeddings` takes `albireo-embedding`.
 
 The sampling of every model goes through the sampler of Albireo, whatever the architecture of
 the model and the engine: `temperature`, `top_p`, `top_k`, `min_p` and the penalties apply the
-same way to all of them. `top_k`, 40 by default (20 for a model of the ChatML format while it
-reasons), keeps the most likely tokens, at most 1,024 even with 0; a value outside 0 to 1024, or
+same way to all of them. The settings a request leaves out take the values the authors of the
+family of the model advise on its card, for a request of text alone or with images as the cards of
+Qwen3-VL distinguish them, or the temperature of the use and of the evaluations their cards describe
+for CyberSecQwen 4B and the Foundation-Sec models, `min_p` being 0 for all of them. A Thinking model
+of Qwen3-VL whose reasoning the engine ends at once answers as a model without reasoning, with the
+values the authors of Qwen3 advise for that mode. The "Generation" tab of the web application leaves
+them out while its settings stay on automatic:
+
+| Models                                   | `temperature` | `top_p` | `top_k` | Penalty                                   |
+|------------------------------------------|---------------|---------|---------|-------------------------------------------|
+| Qwen3-VL Thinking, text alone            | 1             | 0.95    | 20      | `presence_penalty` 1.5 over the answer    |
+| Qwen3-VL Thinking, with images           | 1             | 0.95    | 20      | none                                      |
+| Qwen3-VL Thinking, reasoning ended at once | 0.7         | 0.8     | 20      | `presence_penalty` 1.5 over the answer    |
+| Qwen3-VL Instruct, text alone            | 1             | 1       | 40      | `presence_penalty` 2 over the answer      |
+| Qwen3-VL Instruct, with images           | 0.7           | 0.8     | 20      | `presence_penalty` 1.5 over the answer    |
+| CyberSecQwen 4B                          | 0.3           | 0.8     | 20      | none                                      |
+| Qwen3 without reasoning                  | 0.7           | 0.8     | 20      | none                                      |
+| Qwen2.5                                  | 0.7           | 0.8     | 20      | `repeat_penalty` 1.05 over 64 tokens      |
+| Foundation-Sec 1.1 8B and 8B Reasoning   | 0.3           | 0.95    | 20      | none                                      |
+| Granite 4.2, with and without reasoning  | 1             | 0.95    | none    | none                                      |
+| Ministral 3                              | 0.1           | 1       | none    | none                                      |
+| Devstral, other Mistral without reasoning | 0.15         | 1       | none    | none                                      |
+| Other models, while they reason          | 0.6           | 0.95    | 20      | none                                      |
+| Other models                             | 0.7           | 0.9     | 40      | none                                      |
+
+`top_k` keeps the most likely tokens, at most 1,024 even with 0; a value outside 0 to 1024, or
 one that is not a whole number, is refused with 400. At temperature 0, the most likely token is
-taken, which `top_k` 1 gives too. The engine refuses the other values out of their bounds:
-`temperature` 0 to 10,000, `top_p` and `min_p` 0 to 1, `repeat_penalty` above 0 and up to 100,
-`presence_penalty`, `frequency_penalty` and the values of `logit_bias` -100 to 100, each stop
+taken, which `top_k` 1 gives too. `repeat_last_n` gives the tokens the penalties read: the last 64
+by default, the end of the prompt included as the reference servers read it, and -1 for the whole
+answer alone, neither the prompt nor the end of a reasoning the engine writes. The engine refuses the other values out of their
+bounds: `temperature` 0 to 10,000, `top_p` and `min_p` 0 to 1, `repeat_penalty` above 0 and up to
+100, `presence_penalty`, `frequency_penalty` and the values of `logit_bias` -100 to 100, each stop
 sequence 1,024 bytes at most. A pass that the memory of the system cannot hold ends its requests
 with `out_of_memory` and gives back the pages of the cache.
 
@@ -1104,13 +1214,16 @@ The administrator sets the web access through the settings route of the administ
 {"web_search": "wikipedia"}
 ```
 
-In the web application, the Web button stands beside Agent. It is off in every new discussion,
-whatever the earlier ones chose: its state belongs to its discussion, which keeps it with its
-messages, after an answer, a regeneration, an edit and a reload and in the other tabs, until the
-user turns it off, while the last choice of Agent and of the reasoning becomes the default of the
-next discussions. The button is disabled, with the reason as its title, while the model of the function
-calls no tools, while the service works offline and once the administrator turned the web access
-off. With Web on, each question carries `web_search`, when the service offers the search of
+In the web application, the Web button stands beside Agent. The buttons of the deep reasoning, of
+the agent and of the web are off in every new discussion, in a project or not, whatever the earlier
+ones chose: their state belongs to their discussion, which keeps it with its messages, after an
+answer, a regeneration, an edit and a reload and in the other tabs, so that another discussion may
+show another state. With a model that can reason, Agent and Web come with the deep reasoning, so
+that the model reasons before each call of a tool: they are disabled while it is off, and turning
+it off turns them off; a model that calls tools without reasoning (Qwen3-VL Instruct, Ministral 3,
+Devstral Small 2, Qwen2.5 Coder) takes them alone. The Web button is disabled, with the reason as
+its title, while the model of the function calls no tools, while it lacks the deep reasoning it
+needs, while the service works offline and once the administrator turned the web access off. With Web on, each question carries `web_search`, when the service offers the search of
 Wikipedia, and `fetch_page`, after the tools of the agent while Agent is on, and the answer runs the
 calls of the tools even with Agent off. The tools and the system message stay the same from one
 question to the next while the buttons and the provider do not change, so that the beginning of
@@ -1197,6 +1310,7 @@ and its projector.
 |--------------------------------|--------------------|-------------------------|---------------|----------|---------|
 | Qwen3-VL 4B Thinking (default) | Alibaba            | general, code, security | text, image   | 2.95 GB  | Apache-2.0 |
 | Qwen3 Embedding 0.6B (default) | Alibaba            | embedding               | text          | 0.64 GB  | Apache-2.0 |
+| Qwen3-VL 2B Thinking           | Alibaba            | general, code, security | text, image   | 1.55 GB  | Apache-2.0 |
 | Qwen3-VL 2B Instruct           | Alibaba            | general                 | text, image   | 1.55 GB  | Apache-2.0 |
 | Qwen3-VL 4B Instruct           | Alibaba            | general, code           | text, image   | 2.95 GB  | Apache-2.0 |
 | Qwen3-VL 8B Instruct           | Alibaba            | general, code, security | text, image   | 5.78 GB  | Apache-2.0 |
@@ -1208,11 +1322,11 @@ and its projector.
 | EuroLLM 9B Instruct            | EuroLLM consortium | general                 | text          | 5.58 GB  | Apache-2.0 |
 | Granite 4.2 3B                 | IBM                | general, code           | text          | 2.24 GB  | Apache-2.0 |
 | Granite 4.2 8B                 | IBM                | general, code           | text          | 5.35 GB  | Apache-2.0 |
-| Qwen3 8B                       | Alibaba            | general, code, security | text          | 5.03 GB  | Apache-2.0 |
-| Qwen3 30B A3B                  | Alibaba            | general, code, security | text          | 18.56 GB | Apache-2.0 |
+| Qwen3-VL 30B A3B Thinking      | Alibaba            | general, code, security | text, image   | 19.27 GB | Apache-2.0 |
 | Qwen2.5 Coder 1.5B             | Alibaba            | code                    | text          | 1.12 GB  | Apache-2.0 |
 | Qwen2.5 Coder 7B               | Alibaba            | code                    | text          | 4.68 GB  | Apache-2.0 |
 | Devstral Small 2               | Mistral AI         | code                    | text, image   | 15.21 GB | Apache-2.0 |
+| CyberSecQwen 4B                | athena129 (lablab.ai) | security             | text          | 2.50 GB  | Apache-2.0 |
 | Foundation-Sec 1.1 8B          | Cisco              | security                | text          | 4.92 GB  | Llama 3.1 Community License |
 | Foundation-Sec 8B Reasoning    | Cisco              | security                | text          | 4.92 GB  | Llama 3.1 Community License |
 
@@ -1222,16 +1336,20 @@ programming agent for those of 32 GB:
 
 | Function | Text and images | Text |
 |----------|-----------------|------|
-| General  | Qwen3-VL 2B, 4B and 8B, Ministral 3 3B and 8B, EuroVLM 9B | Phi-4-mini, EuroLLM 9B, Granite 4.2 3B and 8B, Qwen3 8B, Qwen3 30B A3B |
-| Code     | Qwen3-VL 4B (Thinking and Instruct), Qwen3-VL 8B (Instruct and Thinking), Devstral Small 2 | Granite 4.2 3B and 8B, Qwen2.5 Coder 1.5B and 7B, Qwen3 8B, Qwen3 30B A3B |
-| Security | Qwen3-VL 4B Thinking, Qwen3-VL 8B (Instruct and Thinking) | Foundation-Sec 1.1 8B and 8B Reasoning, Qwen3 8B, Qwen3 30B A3B |
+| General  | Qwen3-VL 2B, 4B and 8B, Qwen3-VL 30B A3B Thinking, Ministral 3 3B and 8B, EuroVLM 9B | Phi-4-mini, EuroLLM 9B, Granite 4.2 3B and 8B |
+| Code     | Qwen3-VL 2B Thinking, Qwen3-VL 4B (Thinking and Instruct), Qwen3-VL 8B (Instruct and Thinking), Qwen3-VL 30B A3B Thinking, Devstral Small 2 | Granite 4.2 3B and 8B, Qwen2.5 Coder 1.5B and 7B |
+| Security | Qwen3-VL 2B and 4B Thinking, Qwen3-VL 8B (Instruct and Thinking), Qwen3-VL 30B A3B Thinking | CyberSecQwen 4B, Foundation-Sec 1.1 8B and 8B Reasoning |
 
 The choices follow the published measures: Qwen3-VL gives the best scores of the models that read
 images and that the engine runs (MMMU 67.4 for the 4B Instruct, 74.1 for the 8B Thinking, OCRBench
 881 and 896); Granite 4.2 gives the best scores of reasoning and code under 6 GB (LiveCodeBench v6
 69.7 for the 3B and 73.2 for the 8B); Foundation-Sec 8B Reasoning maps the vulnerabilities to their
-weaknesses best among the models of 8B (CTIBench-RCM 0.753), and Qwen3 8B leads them on the
-knowledge of security (CyberMetric-2000 0.903, SecEval 0.886, measured by Cisco). Ministral 3,
+weaknesses best among the models of 8B (CTIBench-RCM 0.753), and CyberSecQwen 4B, fine-tuned from
+Qwen3-4B-Instruct-2507, keeps 97 % of the score of Foundation-Sec 8B Instruct on that task at half
+its size (CTI-RCM 0.666) and exceeds it on the questions of threat intelligence (CTI-MCQ 0.587,
+measured by its authors under the protocol of Cisco). Qwen3-VL 30B A3B Thinking, a mixture of 128
+experts of which 8 compute each token, reads images and reasons as the other Qwen3-VL Thinking
+models do, at the pace of a model of 3B. Ministral 3,
 which Mistral AI trained in partnership with NVIDIA, reads images through its Pixtral encoder, as
 does Devstral Small 2, the programming agent of 24B of Mistral AI, which reads screenshots and
 diagrams; Phi-4-mini is the latest small model of Microsoft with a standard decoder. EuroLLM 9B

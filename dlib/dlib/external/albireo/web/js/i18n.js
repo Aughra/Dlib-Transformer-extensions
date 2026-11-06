@@ -17,7 +17,10 @@ const texts = {
     roleHint_security: 'Security analysis, audits, hardening, incidents',
     roleServedBy: 'Model: {model}', roleShared: 'Served by the general model',
     reasoning: 'Deep reasoning', reasoningHint: 'The model thinks step by step before it answers',
+    answerRepeated: 'The answer was stopped: the model was repeating itself.',
     agent: 'Agent', agentHint: 'The model may use tools: calculation, code, documents, files',
+    agentNoTools: 'The model of this function cannot call tools',
+    agentNeedsReasoning: 'Turn on Deep reasoning first: this model reasons before it calls its tools',
     attach: 'Attach files', send: 'Send', stop: 'Stop', placeholder: 'Ask Albireo anything…',
     placeholderProject: 'Ask about {project}…',
     thinking: 'Thinking', thoughtFor: 'Thought for {s}', thoughtBriefly: 'Thought for a moment',
@@ -41,15 +44,18 @@ const texts = {
     agentHelpTitle: 'How the agent mode works',
     agentHelp: 'With the agent on, the model can call tools while it answers. It computes, runs code, reads your ' +
       'documents and creates files, then answers with their results. Each call shows in the answer with its input, ' +
-      'its result and its duration.',
+      'its result and its duration. With a model that can reason, the agent and the web access come with Deep ' +
+      'reasoning.',
     web: 'Web', webAccess: 'Web access', webHint: 'The model may search the web and read web pages',
     webNoTools: 'The model of this function cannot call tools, which the web access needs',
+    webNeedsReasoning: 'Turn on Deep reasoning first: this model reasons before it searches the web',
     webOffline: 'Albireo works offline: the web access is unavailable',
     webOff: 'The web access is turned off in the settings of the Albireo service',
     webUnavailable: 'The Albireo service gives no web access',
     webHelp: 'With Web on, the model can search Wikipedia and read web pages and PDF files through the Albireo ' +
       'service. It reads only the addresses you write in your questions, those of the results of its searches and ' +
-      'the links of the pages it already read. Web starts off in every new discussion.',
+      'the links of the pages it already read. Deep reasoning, Agent and Web start off in every new discussion, ' +
+      'and each discussion keeps its own choice.',
     tool_web_search: 'Web search', tool_fetch_page: 'Page reading',
     toolHint_web_search: 'Searches the articles of Wikipedia through the Albireo service and lists the results ' +
       'with their addresses.',
@@ -117,14 +123,17 @@ const texts = {
     general: 'General', model: 'Generation', data: 'Data', theme: 'Theme', themeAuto: 'System', themeLight: 'Light',
     themeDark: 'Dark', language: 'Language', languageAuto: 'Automatic', yourName: 'Your name',
     yourNameHelp: 'The assistant uses it to address you.', defaultRole: 'Default function',
-    temperature: 'Temperature', temperatureHelp: 'Lower values give more focused answers, higher values more varied ones.',
+    temperature: 'Temperature',
+    temperatureHelp: 'Lower values give more focused answers, higher values more varied ones. Automatic takes the ' +
+      'value the authors of the model advise, or a usual value when they give none.',
     topP: 'Nucleus sampling (top-p)', maxTokens: 'Maximum length of an answer (tokens)', maxTokensAuto: 'automatic',
     topPHelp: 'Each word is chosen among the most likely ones, which together make up this share of the chances. A ' +
-      'lower value gives more predictable answers.',
+      'lower value gives more predictable answers. Automatic takes the value the authors of the model advise, or a ' +
+      'usual value when they give none.',
     topK: 'Number of candidate words (top-k)',
     topKHelp: 'Each word is chosen among this number of the most likely words. A small number gives steadier ' +
-      'answers, and 1 always takes the most likely word. 0 sets no limit, and automatic leaves the choice to the ' +
-      'service.',
+      'answers, and 1 always takes the most likely word. 0 sets no limit, and automatic takes the value ' +
+      'the authors of the model advise, or a usual value when they give none.',
     sendOnEnter: 'Send with Enter, Shift+Enter for a new line', systemPrompt: 'Personal instructions',
     systemPromptHelp: 'Added to every discussion, for instance your role or the style you prefer.',
     exportAll: 'Export everything', importAll: 'Import', clearAll: 'Delete all discussions and projects',
@@ -188,6 +197,12 @@ const texts = {
       '{left}. The images of the oldest exchanges leave the context once the discussion summarizes them, which ' +
       'frees their places.',
     projectImagesNotAdded: '{notAdded} A project holds at most {max} images; places left in this one: {left}.',
+    notAddedItems_one: 'Not added: {names}.', notAddedItems_other: '{n} not added: {names}.',
+    notAddedItemsAmong: '{n} not added, among them {names}.',
+    projectItemsNotAdded: '{notAdded} The knowledge of a project holds at most {max} items, documents and images; ' +
+      'places left in this one: {left}.',
+    projectItemsCount: 'Items of the knowledge: {n} of {max} at most',
+    projectItemsFull: 'The knowledge of this project has reached its limit of {max} items: delete some to add others.',
     replayImagesFull: 'Images of this question: {n}; places left in the context of this discussion: {left} of {max}. ' +
       'The images of the oldest exchanges leave the context once the discussion summarizes them.',
     imagePlaces: 'image places left in the context: {left} of {max}',
@@ -286,7 +301,11 @@ const texts = {
     roleHint_security: 'Analyse de sécurité, audits, durcissement, incidents',
     roleServedBy: 'Modèle : {model}', roleShared: 'Assuré par le modèle général',
     reasoning: 'Raisonnement approfondi', reasoningHint: 'Le modèle réfléchit étape par étape avant de répondre',
+    answerRepeated: 'Réponse arrêtée : le modèle se répétait.',
     agent: 'Agent', agentHint: 'Le modèle peut utiliser des outils : calcul, code, documents, fichiers',
+    agentNoTools: 'Le modèle de cette fonction ne peut pas appeler d\'outils',
+    agentNeedsReasoning: 'Activez d\'abord le raisonnement approfondi : ce modèle raisonne avant d\'appeler ses ' +
+      'outils',
     attach: 'Joindre des fichiers', send: 'Envoyer', stop: 'Arrêter', placeholder: 'Posez votre question à Albireo…',
     placeholderProject: 'Une question sur {project}…',
     thinking: 'Réflexion', thoughtFor: 'Réflexion de {s}', thoughtBriefly: 'Réflexion brève',
@@ -312,16 +331,19 @@ const texts = {
     agentHelpTitle: 'Fonctionnement du mode agent',
     agentHelp: 'Avec l\'agent activé, le modèle peut appeler des outils pendant sa réponse. Il calcule, exécute du ' +
       'code, lit vos documents et crée des fichiers, puis répond à partir de leurs résultats. Chaque appel apparaît ' +
-      'dans la réponse avec son entrée, son résultat et sa durée.',
+      'dans la réponse avec son entrée, son résultat et sa durée. Avec un modèle qui sait raisonner, l\'agent et ' +
+      'l\'accès au Web s\'activent avec le raisonnement approfondi.',
     web: 'Web', webAccess: 'Accès au Web', webHint: 'Le modèle peut chercher sur le Web et lire des pages Web',
     webNoTools: 'Le modèle de cette fonction ne peut pas appeler d\'outils, ce que demande l\'accès au Web',
+    webNeedsReasoning: 'Activez d\'abord le raisonnement approfondi : ce modèle raisonne avant de chercher sur ' +
+      'le Web',
     webOffline: 'Albireo fonctionne hors ligne : l\'accès au Web est indisponible',
     webOff: 'L\'accès au Web est désactivé dans les paramètres du service Albireo',
     webUnavailable: 'Le service Albireo ne donne pas d\'accès au Web',
     webHelp: 'Avec le Web activé, le modèle peut chercher dans Wikipédia et lire des pages Web et des fichiers PDF ' +
       'par le service Albireo. Il ne lit que les adresses que vous écrivez dans vos questions, celles des ' +
-      'résultats de ses recherches et les liens des pages qu\'il a déjà lues. Le Web est désactivé au début de ' +
-      'chaque nouvelle discussion.',
+      'résultats de ses recherches et les liens des pages qu\'il a déjà lues. Le raisonnement approfondi, l\'agent ' +
+      'et le Web sont désactivés au début de chaque nouvelle discussion, et chaque discussion garde son propre choix.',
     tool_web_search: 'Recherche Web', tool_fetch_page: 'Lecture d\'une page',
     toolHint_web_search: 'Cherche dans les articles de Wikipédia par le service Albireo et liste les résultats ' +
       'avec leurs adresses.',
@@ -392,14 +414,18 @@ const texts = {
     general: 'Général', model: 'Génération', data: 'Données', theme: 'Thème', themeAuto: 'Système', themeLight: 'Clair',
     themeDark: 'Sombre', language: 'Langue', languageAuto: 'Automatique', yourName: 'Votre nom',
     yourNameHelp: 'L\'assistant l\'utilise pour s\'adresser à vous.', defaultRole: 'Fonction par défaut',
-    temperature: 'Température', temperatureHelp: 'Une valeur basse donne des réponses plus ciblées, une valeur haute des réponses plus variées.',
+    temperature: 'Température',
+    temperatureHelp: 'Une valeur basse donne des réponses plus ciblées, une valeur haute des réponses plus ' +
+      'variées. Automatique prend la valeur que conseillent les auteurs du modèle, ou une valeur usuelle s\'ils ' +
+      'n\'en donnent pas.',
     topP: 'Échantillonnage par noyau (top-p)', maxTokens: 'Longueur maximale d\'une réponse (jetons)', maxTokensAuto: 'automatique',
     topPHelp: 'Chaque mot est choisi parmi les plus probables, qui réunissent ensemble cette part des chances. Une ' +
-      'valeur basse donne des réponses plus prévisibles.',
+      'valeur basse donne des réponses plus prévisibles. Automatique prend la valeur que conseillent les auteurs ' +
+      'du modèle, ou une valeur usuelle s\'ils n\'en donnent pas.',
     topK: 'Nombre de mots candidats (top-k)',
     topKHelp: 'Chaque mot est choisi parmi ce nombre de mots les plus probables. Un petit nombre donne des réponses ' +
-      'plus régulières, et 1 prend toujours le mot le plus probable. 0 ne fixe aucune limite, et automatique laisse ' +
-      'le choix au service.',
+      'plus régulières, et 1 prend toujours le mot le plus probable. 0 ne fixe aucune limite, et automatique prend ' +
+      'la valeur que conseillent les auteurs du modèle, ou une valeur usuelle s\'ils n\'en donnent pas.',
     sendOnEnter: 'Envoyer avec Entrée, Maj+Entrée pour aller à la ligne', systemPrompt: 'Instructions personnelles',
     systemPromptHelp: 'Ajoutées à chaque discussion, par exemple votre fonction ou le style que vous préférez.',
     exportAll: 'Tout exporter', importAll: 'Importer', clearAll: 'Supprimer toutes les discussions et tous les projets',
@@ -464,6 +490,13 @@ const texts = {
       'les résume, ce qui libère leurs places.',
     projectImagesNotAdded: '{notAdded} Un projet contient au plus {max} images ; places restantes dans celui-ci : ' +
       '{left}.',
+    notAddedItems_one: 'Non ajouté : {names}.', notAddedItems_other: '{n} non ajoutés : {names}.',
+    notAddedItemsAmong: '{n} non ajoutés, dont {names}.',
+    projectItemsNotAdded: '{notAdded} Les connaissances d\'un projet contiennent au plus {max} éléments, ' +
+      'documents et images ; places restantes dans celui-ci : {left}.',
+    projectItemsCount: 'Éléments des connaissances : {n} sur {max} au plus',
+    projectItemsFull: 'Les connaissances de ce projet ont atteint leur limite de {max} éléments : supprimez-en ' +
+      'pour en ajouter d\'autres.',
     replayImagesFull: 'Images de cette question : {n} ; places restantes dans le contexte de cette discussion : ' +
       '{left} sur {max}. Les images des échanges les plus anciens quittent le contexte une fois que la discussion ' +
       'les résume.',
@@ -567,7 +600,11 @@ const texts = {
     roleHint_security: 'Sicherheitsanalysen, Audits, Härtung, Vorfälle',
     roleServedBy: 'Modell: {model}', roleShared: 'Vom allgemeinen Modell übernommen',
     reasoning: 'Gründliches Nachdenken', reasoningHint: 'Das Modell denkt Schritt für Schritt nach, bevor es antwortet',
+    answerRepeated: 'Antwort angehalten: Das Modell wiederholte sich.',
     agent: 'Agent', agentHint: 'Das Modell darf Werkzeuge nutzen: Berechnungen, Code, Dokumente, Dateien',
+    agentNoTools: 'Das Modell dieser Funktion kann keine Werkzeuge aufrufen',
+    agentNeedsReasoning: 'Schalten Sie zuerst Gründliches Nachdenken ein: Dieses Modell denkt nach, bevor es ' +
+      'seine Werkzeuge aufruft',
     attach: 'Dateien anhängen', send: 'Senden', stop: 'Stoppen', placeholder: 'Fragen Sie Albireo…',
     placeholderProject: 'Eine Frage zu {project}…',
     thinking: 'Denkt nach', thoughtFor: '{s} nachgedacht', thoughtBriefly: 'Kurz nachgedacht',
@@ -592,16 +629,20 @@ const texts = {
     agentHelpTitle: 'So funktioniert der Agentenmodus',
     agentHelp: 'Mit eingeschaltetem Agenten kann das Modell beim Antworten Werkzeuge aufrufen. Es rechnet, führt ' +
       'Code aus, liest Ihre Dokumente und erstellt Dateien und antwortet dann anhand der Ergebnisse. Jeder Aufruf ' +
-      'erscheint in der Antwort mit Eingabe, Ergebnis und Dauer.',
+      'erscheint in der Antwort mit Eingabe, Ergebnis und Dauer. Bei einem Modell, das nachdenken kann, lassen ' +
+      'sich Agent und Webzugriff nur mit Gründlichem Nachdenken einschalten.',
     web: 'Web', webAccess: 'Zugriff auf das Web', webHint: 'Das Modell darf im Web suchen und Webseiten lesen',
     webNoTools: 'Das Modell dieser Funktion kann keine Werkzeuge aufrufen, die der Webzugriff braucht',
+    webNeedsReasoning: 'Schalten Sie zuerst Gründliches Nachdenken ein: Dieses Modell denkt nach, bevor es im ' +
+      'Web sucht',
     webOffline: 'Albireo arbeitet offline: Der Webzugriff ist nicht verfügbar',
     webOff: 'Der Webzugriff ist in den Einstellungen des Albireo-Dienstes ausgeschaltet',
     webUnavailable: 'Der Albireo-Dienst bietet keinen Webzugriff',
     webHelp: 'Mit eingeschaltetem Web kann das Modell über den Albireo-Dienst in Wikipedia suchen und Webseiten ' +
       'und PDF-Dateien lesen. Es liest nur die Adressen, die Sie in Ihren Fragen schreiben, die Adressen der ' +
-      'Ergebnisse seiner Suchen und die Links der Seiten, die es bereits gelesen hat. Web ist zu Beginn jeder ' +
-      'neuen Unterhaltung ausgeschaltet.',
+      'Ergebnisse seiner Suchen und die Links der Seiten, die es bereits gelesen hat. Gründliches Nachdenken, ' +
+      'Agent und Web sind zu Beginn jeder neuen Unterhaltung ausgeschaltet, und jede Unterhaltung behält ihre ' +
+      'eigene Wahl.',
     tool_web_search: 'Websuche', tool_fetch_page: 'Seite lesen',
     toolHint_web_search: 'Sucht in den Artikeln von Wikipedia über den Albireo-Dienst und listet die Ergebnisse ' +
       'mit ihren Adressen auf.',
@@ -670,14 +711,17 @@ const texts = {
     general: 'Allgemein', model: 'Generierung', data: 'Daten', theme: 'Design', themeAuto: 'System', themeLight: 'Hell',
     themeDark: 'Dunkel', language: 'Sprache', languageAuto: 'Automatisch', yourName: 'Ihr Name',
     yourNameHelp: 'Der Assistent verwendet ihn für die Anrede.', defaultRole: 'Standardfunktion',
-    temperature: 'Temperatur', temperatureHelp: 'Niedrige Werte ergeben gezieltere Antworten, hohe Werte vielfältigere.',
+    temperature: 'Temperatur',
+    temperatureHelp: 'Niedrige Werte ergeben gezieltere Antworten, hohe Werte vielfältigere. Automatisch nimmt den ' +
+      'Wert, den die Autoren des Modells empfehlen, oder einen üblichen Wert, wenn sie keinen angeben.',
     topP: 'Nucleus-Sampling (top-p)', maxTokens: 'Maximale Antwortlänge (Token)', maxTokensAuto: 'automatisch',
     topPHelp: 'Jedes Wort wird unter den wahrscheinlichsten gewählt, die zusammen diesen Anteil der Chancen ' +
-      'ausmachen. Ein niedriger Wert ergibt vorhersehbarere Antworten.',
+      'ausmachen. Ein niedriger Wert ergibt vorhersehbarere Antworten. Automatisch nimmt den Wert, den die ' +
+      'Autoren des Modells empfehlen, oder einen üblichen Wert, wenn sie keinen angeben.',
     topK: 'Anzahl der Kandidatenwörter (top-k)',
     topKHelp: 'Jedes Wort wird unter dieser Anzahl der wahrscheinlichsten Wörter gewählt. Eine kleine Zahl ergibt ' +
       'gleichmäßigere Antworten, und 1 nimmt immer das wahrscheinlichste Wort. 0 setzt keine Grenze, und automatisch ' +
-      'überlässt die Wahl dem Dienst.',
+      'nimmt den Wert, den die Autoren des Modells empfehlen, oder einen üblichen Wert, wenn sie keinen angeben.',
     sendOnEnter: 'Mit Eingabe senden, Umschalt+Eingabe für eine neue Zeile', systemPrompt: 'Persönliche Anweisungen',
     systemPromptHelp: 'Werden jeder Unterhaltung hinzugefügt, zum Beispiel Ihre Rolle oder Ihr bevorzugter Stil.',
     exportAll: 'Alles exportieren', importAll: 'Importieren', clearAll: 'Alle Unterhaltungen und Projekte löschen',
@@ -741,6 +785,13 @@ const texts = {
       'dieser: {left}. Die Bilder der ältesten Beiträge verlassen den Kontext, sobald die Unterhaltung sie ' +
       'zusammenfasst, und geben ihre Plätze frei.',
     projectImagesNotAdded: '{notAdded} Ein Projekt enthält höchstens {max} Bilder; freie Plätze in diesem: {left}.',
+    notAddedItems_one: 'Nicht hinzugefügt: {names}.', notAddedItems_other: '{n} nicht hinzugefügt: {names}.',
+    notAddedItemsAmong: '{n} nicht hinzugefügt, darunter {names}.',
+    projectItemsNotAdded: '{notAdded} Das Wissen eines Projekts enthält höchstens {max} Elemente, Dokumente und ' +
+      'Bilder; freie Plätze in diesem: {left}.',
+    projectItemsCount: 'Elemente des Wissens: {n} von höchstens {max}',
+    projectItemsFull: 'Das Wissen dieses Projekts hat seine Grenze von {max} Elementen erreicht: Löschen Sie welche, ' +
+      'um andere hinzuzufügen.',
     replayImagesFull: 'Bilder dieser Frage: {n}; freie Plätze im Kontext dieser Unterhaltung: {left} von {max}. Die ' +
       'Bilder der ältesten Beiträge verlassen den Kontext, sobald die Unterhaltung sie zusammenfasst.',
     imagePlaces: 'freie Bildplätze im Kontext: {left} von {max}',
@@ -841,7 +892,11 @@ const texts = {
     roleHint_security: 'Analisi di sicurezza, audit, hardening, incidenti',
     roleServedBy: 'Modello: {model}', roleShared: 'Servito dal modello generale',
     reasoning: 'Ragionamento approfondito', reasoningHint: 'Il modello ragiona passo dopo passo prima di rispondere',
+    answerRepeated: 'Risposta interrotta: il modello si ripeteva.',
     agent: 'Agente', agentHint: 'Il modello può usare strumenti: calcolo, codice, documenti, file',
+    agentNoTools: 'Il modello di questa funzione non può chiamare strumenti',
+    agentNeedsReasoning: 'Attiva prima il ragionamento approfondito: questo modello ragiona prima di chiamare i ' +
+      'suoi strumenti',
     attach: 'Allega file', send: 'Invia', stop: 'Interrompi', placeholder: 'Chiedi qualsiasi cosa ad Albireo…',
     placeholderProject: 'Una domanda su {project}…',
     thinking: 'Sta ragionando', thoughtFor: 'Ragionamento di {s}', thoughtBriefly: 'Breve ragionamento',
@@ -865,16 +920,19 @@ const texts = {
     agentHelpTitle: 'Come funziona la modalità agente',
     agentHelp: 'Con l\'agente attivo, il modello può chiamare strumenti mentre risponde. Calcola, esegue codice, ' +
       'legge i tuoi documenti e crea file, poi risponde con i loro risultati. Ogni chiamata compare nella risposta ' +
-      'con il suo ingresso, il suo risultato e la sua durata.',
+      'con il suo ingresso, il suo risultato e la sua durata. Con un modello che sa ragionare, l\'agente e ' +
+      'l\'accesso al Web si attivano con il ragionamento approfondito.',
     web: 'Web', webAccess: 'Accesso al Web', webHint: 'Il modello può cercare sul Web e leggere pagine Web',
     webNoTools: 'Il modello di questa funzione non può chiamare strumenti, che l\'accesso al Web richiede',
+    webNeedsReasoning: 'Attiva prima il ragionamento approfondito: questo modello ragiona prima di cercare sul ' +
+      'Web',
     webOffline: 'Albireo funziona offline: l\'accesso al Web non è disponibile',
     webOff: 'L\'accesso al Web è disattivato nelle impostazioni del servizio Albireo',
     webUnavailable: 'Il servizio Albireo non offre l\'accesso al Web',
     webHelp: 'Con il Web attivo, il modello può cercare su Wikipedia e leggere pagine Web e file PDF tramite il ' +
       'servizio Albireo. Legge solo gli indirizzi che scrivi nelle tue domande, quelli dei risultati delle sue ' +
-      'ricerche e i link delle pagine che ha già letto. Il Web è disattivato all\'inizio di ogni nuova ' +
-      'conversazione.',
+      'ricerche e i link delle pagine che ha già letto. Il ragionamento approfondito, l\'agente e il Web sono ' +
+      'disattivati all\'inizio di ogni nuova conversazione, e ogni conversazione mantiene la propria scelta.',
     tool_web_search: 'Ricerca sul Web', tool_fetch_page: 'Lettura di una pagina',
     toolHint_web_search: 'Cerca negli articoli di Wikipedia tramite il servizio Albireo ed elenca i risultati con ' +
       'i loro indirizzi.',
@@ -944,14 +1002,17 @@ const texts = {
     general: 'Generale', model: 'Generazione', data: 'Dati', theme: 'Tema', themeAuto: 'Sistema', themeLight: 'Chiaro',
     themeDark: 'Scuro', language: 'Lingua', languageAuto: 'Automatica', yourName: 'Il tuo nome',
     yourNameHelp: 'L\'assistente lo usa per rivolgersi a te.', defaultRole: 'Funzione predefinita',
-    temperature: 'Temperatura', temperatureHelp: 'Valori bassi danno risposte più mirate, valori alti risposte più varie.',
+    temperature: 'Temperatura',
+    temperatureHelp: 'Valori bassi danno risposte più mirate, valori alti risposte più varie. Automatica prende il ' +
+      'valore consigliato dagli autori del modello, o un valore usuale se non ne indicano.',
     topP: 'Campionamento nucleus (top-p)', maxTokens: 'Lunghezza massima di una risposta (token)', maxTokensAuto: 'automatica',
     topPHelp: 'Ogni parola è scelta tra le più probabili, che insieme raggiungono questa quota delle possibilità. Un ' +
-      'valore basso dà risposte più prevedibili.',
+      'valore basso dà risposte più prevedibili. Automatica prende il valore consigliato dagli autori del ' +
+      'modello, o un valore usuale se non ne indicano.',
     topK: 'Numero di parole candidate (top-k)',
     topKHelp: 'Ogni parola è scelta tra questo numero di parole più probabili. Un numero piccolo dà risposte più ' +
-      'regolari, e 1 prende sempre la parola più probabile. 0 non pone limiti, e automatica lascia la scelta al ' +
-      'servizio.',
+      'regolari, e 1 prende sempre la parola più probabile. 0 non pone limiti, e automatica prende il valore ' +
+      'consigliato dagli autori del modello, o un valore usuale se non ne indicano.',
     sendOnEnter: 'Invia con Invio, Maiusc+Invio per andare a capo', systemPrompt: 'Istruzioni personali',
     systemPromptHelp: 'Aggiunte a ogni conversazione, ad esempio il tuo ruolo o lo stile che preferisci.',
     exportAll: 'Esporta tutto', importAll: 'Importa', clearAll: 'Elimina tutte le conversazioni e tutti i progetti',
@@ -1015,6 +1076,13 @@ const texts = {
       'questa: {left}. Le immagini degli scambi più vecchi lasciano il contesto quando la conversazione li riassume, ' +
       'liberando i loro posti.',
     projectImagesNotAdded: '{notAdded} Un progetto contiene al massimo {max} immagini; posti liberi in questo: {left}.',
+    notAddedItems_one: 'Non aggiunto: {names}.', notAddedItems_other: '{n} non aggiunti: {names}.',
+    notAddedItemsAmong: '{n} non aggiunti, tra cui {names}.',
+    projectItemsNotAdded: '{notAdded} Le conoscenze di un progetto contengono al massimo {max} elementi, documenti e ' +
+      'immagini; posti liberi in questo: {left}.',
+    projectItemsCount: 'Elementi delle conoscenze: {n} su {max} al massimo',
+    projectItemsFull: 'Le conoscenze di questo progetto hanno raggiunto il limite di {max} elementi: eliminatene ' +
+      'alcuni per aggiungerne altri.',
     replayImagesFull: 'Immagini di questa domanda: {n}; posti liberi nel contesto di questa conversazione: {left} ' +
       'su {max}. Le immagini degli scambi più vecchi lasciano il contesto quando la conversazione li riassume.',
     imagePlaces: 'posti liberi per immagini nel contesto: {left} su {max}',
@@ -1115,7 +1183,11 @@ const texts = {
     roleHint_security: 'Análisis de seguridad, auditorías, bastionado, incidentes',
     roleServedBy: 'Modelo: {model}', roleShared: 'Atendido por el modelo general',
     reasoning: 'Razonamiento profundo', reasoningHint: 'El modelo razona paso a paso antes de responder',
+    answerRepeated: 'Respuesta detenida: el modelo se repetía.',
     agent: 'Agente', agentHint: 'El modelo puede usar herramientas: cálculo, código, documentos, archivos',
+    agentNoTools: 'El modelo de esta función no puede llamar a herramientas',
+    agentNeedsReasoning: 'Active primero el razonamiento profundo: este modelo razona antes de llamar a sus ' +
+      'herramientas',
     attach: 'Adjuntar archivos', send: 'Enviar', stop: 'Detener', placeholder: 'Pregunte lo que quiera a Albireo…',
     placeholderProject: 'Una pregunta sobre {project}…',
     thinking: 'Pensando', thoughtFor: 'Pensó durante {s}', thoughtBriefly: 'Pensó un momento',
@@ -1139,16 +1211,18 @@ const texts = {
     agentHelpTitle: 'Cómo funciona el modo agente',
     agentHelp: 'Con el agente activado, el modelo puede llamar a herramientas mientras responde. Calcula, ejecuta ' +
       'código, lee sus documentos y crea archivos, y luego responde con sus resultados. Cada llamada aparece en la ' +
-      'respuesta con su entrada, su resultado y su duración.',
+      'respuesta con su entrada, su resultado y su duración. Con un modelo que sabe razonar, el agente y el acceso ' +
+      'a la Web se activan con el razonamiento profundo.',
     web: 'Web', webAccess: 'Acceso a la Web', webHint: 'El modelo puede buscar en la Web y leer páginas web',
     webNoTools: 'El modelo de esta función no puede llamar a herramientas, que el acceso a la Web necesita',
+    webNeedsReasoning: 'Active primero el razonamiento profundo: este modelo razona antes de buscar en la Web',
     webOffline: 'Albireo funciona sin conexión: el acceso a la Web no está disponible',
     webOff: 'El acceso a la Web está desactivado en la configuración del servicio Albireo',
     webUnavailable: 'El servicio Albireo no ofrece acceso a la Web',
     webHelp: 'Con la Web activada, el modelo puede buscar en Wikipedia y leer páginas web y archivos PDF a través ' +
       'del servicio Albireo. Solo lee las direcciones que usted escribe en sus preguntas, las de los resultados ' +
-      'de la búsqueda y los enlaces de las páginas ya leídas. La Web está desactivada al comienzo de cada nueva ' +
-      'conversación.',
+      'de la búsqueda y los enlaces de las páginas ya leídas. El razonamiento profundo, el agente y la Web están ' +
+      'desactivados al comienzo de cada nueva conversación, y cada conversación conserva su propia elección.',
     tool_web_search: 'Búsqueda web', tool_fetch_page: 'Lectura de una página',
     toolHint_web_search: 'Busca en los artículos de Wikipedia a través del servicio Albireo y enumera los ' +
       'resultados con sus direcciones.',
@@ -1219,14 +1293,17 @@ const texts = {
     general: 'General', model: 'Generación', data: 'Datos', theme: 'Tema', themeAuto: 'Sistema', themeLight: 'Claro',
     themeDark: 'Oscuro', language: 'Idioma', languageAuto: 'Automático', yourName: 'Su nombre',
     yourNameHelp: 'El asistente lo usa para dirigirse a usted.', defaultRole: 'Función predeterminada',
-    temperature: 'Temperatura', temperatureHelp: 'Los valores bajos dan respuestas más precisas, los altos respuestas más variadas.',
+    temperature: 'Temperatura',
+    temperatureHelp: 'Los valores bajos dan respuestas más precisas, los altos respuestas más variadas. ' +
+      'Automática toma el valor que aconsejan los autores del modelo, o un valor habitual si no dan ninguno.',
     topP: 'Muestreo de núcleo (top-p)', maxTokens: 'Longitud máxima de una respuesta (tokens)', maxTokensAuto: 'automática',
     topPHelp: 'Cada palabra se elige entre las más probables, que juntas suman esta parte de las posibilidades. Un ' +
-      'valor bajo da respuestas más previsibles.',
+      'valor bajo da respuestas más previsibles. Automática toma el valor que aconsejan los autores del ' +
+      'modelo, o un valor habitual si no dan ninguno.',
     topK: 'Número de palabras candidatas (top-k)',
     topKHelp: 'Cada palabra se elige entre este número de palabras más probables. Un número pequeño da respuestas ' +
-      'más regulares, y 1 toma siempre la palabra más probable. 0 no fija ningún límite, y automática deja la ' +
-      'elección al servicio.',
+      'más regulares, y 1 toma siempre la palabra más probable. 0 no fija ningún límite, y automática toma el ' +
+      'valor que aconsejan los autores del modelo, o un valor habitual si no dan ninguno.',
     sendOnEnter: 'Enviar con Intro, Mayús+Intro para una línea nueva', systemPrompt: 'Instrucciones personales',
     systemPromptHelp: 'Se añaden a cada conversación, por ejemplo su función o el estilo que prefiere.',
     exportAll: 'Exportar todo', importAll: 'Importar', clearAll: 'Eliminar todas las conversaciones y proyectos',
@@ -1292,6 +1369,13 @@ const texts = {
       'esta: {left}. Las imágenes de los intercambios más antiguos salen del contexto cuando la conversación los ' +
       'resume, lo que libera sus plazas.',
     projectImagesNotAdded: '{notAdded} Un proyecto contiene como máximo {max} imágenes; plazas libres en este: {left}.',
+    notAddedItems_one: 'No añadido: {names}.', notAddedItems_other: '{n} no añadidos: {names}.',
+    notAddedItemsAmong: '{n} no añadidos, entre ellos {names}.',
+    projectItemsNotAdded: '{notAdded} Los conocimientos de un proyecto contienen como máximo {max} elementos, ' +
+      'documentos e imágenes; plazas libres en este: {left}.',
+    projectItemsCount: 'Elementos de los conocimientos: {n} de {max} como máximo',
+    projectItemsFull: 'Los conocimientos de este proyecto han alcanzado su límite de {max} elementos: elimine ' +
+      'algunos para añadir otros.',
     replayImagesFull: 'Imágenes de esta pregunta: {n}; plazas libres en el contexto de esta conversación: {left} de ' +
       '{max}. Las imágenes de los intercambios más antiguos salen del contexto cuando la conversación los resume.',
     imagePlaces: 'plazas libres para imágenes en el contexto: {left} de {max}',

@@ -48,7 +48,14 @@ namespace albireo
                 answer, each head of the group makes a task of its own.
 
                 With a matmul_offload, the products with the weight matrices go through it,
-                and it decides, product by product, whether a device computes them.
+                and it decides, product by product, whether a device computes them.  When the
+                offload computes whole layers (layer_pass), the runtime of a dense model hands
+                it the layers of its passes, once the logits of passes of the device over
+                probe_tokens tokens, and over the tokens from which it expands the weights by
+                tiles, agreed with those of the processor alone: the hidden states then stay
+                on the device, and the processor keeps the attention.  The batches with
+                DeepStack slices keep the products, as does every pass after a failure of the
+                device.
 
                 A batch that gives the rotary positions of its tokens (forward_batch::
                 positions) rotates each pair of a head by the position component its
@@ -87,8 +94,8 @@ namespace albireo
 
         std::string description() const override;
 
-        // Hands the products of the following passes to a device.
-        void set_offload(std::unique_ptr<matmul_offload> offload) { offload_ = std::move(offload); }
+        // Hands the products, or the layers, of the following passes to a device.
+        void set_offload(std::unique_ptr<matmul_offload> offload);
 
         /*!
             requires
@@ -114,6 +121,15 @@ namespace albireo
         // The rows of queries of an attention tile, at most: the scores of a tile over one
         // block of the cache stay within a few tens of kilobytes.
         static const long tile_rows = 64;
+
+        // The tokens of the passes that compare the layers of the device with the processor.
+        static const long probe_tokens = 8;
+
+        // Failures for lack of device memory in a row after which the layers stay on the processor.
+        static const int max_layer_pass_memory_failures = 4;
+
+        // The passes that follow a check of the layer pass put off for lack of room, before the next one.
+        static const int layer_pass_check_interval = 64;
 
         // Consecutive tokens of one segment of the batch, which attend together.
         struct attention_tile
@@ -144,6 +160,15 @@ namespace albireo
         void attention(long layer, const forward_batch& batch, const std::vector<long>& positions);
         void moe_ffn(const layer& L, long n_tokens);
         void embed(const std::vector<int>& tokens);
+        /*
+            The forward pass, with the layers on the device through layer_pass_ when on_device is
+            true; false when the device did not take the pass, which then did nothing.
+        */
+        bool run(const forward_batch& batch, std::vector<float>& logits, bool on_device);
+        bool takes_layer_pass(const forward_batch& batch) const;
+        int probe_layer_pass(long n, std::string& detail);
+        void check_layer_pass();
+        void drop_layer_pass(const std::string& why);
         // Y = X W^T through the offload when there is one, with the kernels of qkernels.h
         // otherwise.
         void product(const weight_matrix& W, const float* X, long n, long x_stride, float* Y, long y_stride,
@@ -153,6 +178,13 @@ namespace albireo
         model_config cfg_;
         thread_pool& pool_;
         std::unique_ptr<matmul_offload> offload_;
+        // Destroyed before offload_, which it uses.
+        std::unique_ptr<layer_pass> layer_pass_;
+        bool layer_pass_checked_ = false;
+        int layer_pass_memory_failures_ = 0;
+        int layer_pass_wait_ = 0;
+        // The products of the probe passes of the processor do not go to the offload.
+        bool host_only_ = false;
         kv_pool kv_;
         std::vector<std::unique_ptr<kv_sequence>> sequences_;
         std::vector<int> free_sequences_;
