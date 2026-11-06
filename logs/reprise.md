@@ -18,6 +18,8 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 - 2026-11-06 : le push vers PapyTortueTech restant refusé (403), l'humain a choisi de déménager le fork sur `Aughra`. Fork de Cydral créé sur Aughra (public), `origin` repointé, `main` poussé : le Mac et le fork en ligne sont à égalité.
 
+- 2026-11-06 : blog refait à partir des 3 épisodes du carnet TortueTech (pages 01 à 03), plus l'épisode 4 « Le fork déménage ». Prochain épisode : la nouvelle compilation et les premières corrections.
+
 ## En cours
 
 Rien. Prochaine étape : **recompiler Albireo et Pseudalis** pour revoir l'état après la fusion du 2026-11-06 (le CMake d'Albireo a changé : les erreurs 2 à 5 peuvent avoir bougé), puis corriger les erreurs une par une.

@@ -1,8 +1,10 @@
 # Le blog du portage Mac
 
-L'histoire du portage de Dlib-Transformer-extensions sur Mac Apple Silicon, une page par grande étape.
+Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisode. Les épisodes 1 à 3 ont d'abord paru sur le carnet TortueTech.
 
-## Sommaire
+## Épisodes
 
-1. [00 — Deux cahiers](00-prologue.md)
-2. [01 — Première compilation](01-premiere-compilation.md)
+1. [Le fork et l'original](01-le-fork-et-l-original.md)
+2. [Compiler dlib et les exemples](02-compiler-dlib-et-les-exemples.md)
+3. [Albireo, Pseudalis et cinq obstacles](03-albireo-pseudalis-et-cinq-obstacles.md)
+4. [Le fork déménage](04-le-fork-demenage.md)

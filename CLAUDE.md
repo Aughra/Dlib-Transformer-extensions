@@ -105,18 +105,23 @@ Documents du fork qui doivent toujours rester **vrais** :
 
 Les documents de l'original (`Readme.md`, `examples/Readme.md`, les README d'Albireo et de Pseudalis) ne sont modifiés que si un changement du fork les rend faux, et le plus légèrement possible (règle de fusion).
 
-### Le blog du portage (une page par grande étape, en français)
+### Le blog du portage (un épisode par grande étape, en français)
 
-Le blog raconte le portage **comme un roman**, page après page, pour un lecteur qui découvre le projet. Il vit dans [blog/](blog/), un dossier propre au fork (aucun conflit avec l'original). Claude ne publie rien en ligne : l'humain décide où et quand.
+Le blog raconte le portage **épisode par épisode**, comme un billet de carnet, pour un lecteur curieux qui n'est pas forcément développeur. Il vit dans [blog/](blog/), un dossier propre au fork (aucun conflit avec l'original). Les épisodes 1 à 3 ont d'abord paru sur le carnet TortueTech (`/carnet/dlib-transformer-extensions-macos*`) : ils fixent **le ton à suivre**. Claude ne publie rien en ligne : l'humain décide où et quand.
 
-- **Une page par grande étape, en français seulement** : `blog/NN-nom.md`, numérotée dans l'ordre du récit. Est une grande étape : un programme ou une application qui compile ou tourne pour la première fois sur Mac, une décision de portage importante, une fusion de l'original qui change la donne, un tournant. Une étape neuve, c'est une page neuve : on ne corrige une ancienne page que pour une erreur de fait.
-- **Écrite dans le même commit que la fin de l'étape**, avec l'entrée du journal. Ne jamais laisser une grande étape sans sa page.
-- **Le sommaire** [blog/README.md](blog/README.md) liste chaque page.
-- **Récit d'abord** : à la première personne (Claude), avec l'humain comme l'autre voix du récit (ses demandes, ses questions, ses corrections sont des scènes). Dans le blog, l'utilisateur s'appelle **« l'humain »**, jamais par son nom ni par celui de ses comptes ; un extrait de log qui contient un nom de compte est raccourci à la ligne utile. Le ton concis du reste du projet ne s'applique pas ici ; l'exactitude, si.
-- **Chaque page se termine par un « Carnet de bord »** (citation Markdown `>`) qui consigne, sans rien embellir : les **résultats vérifiés** (chiffres tirés du journal, des commits ou des sorties de build), les **choix** de Claude et pourquoi, les **questions** posées à l'humain et **ses réponses** (fidèles), les **difficultés et erreurs** (celles de Claude comprises), et les **conseils** qu'on en tire.
-- **Le code montré est réel** : un extrait de code, de log ou de commande est copié du dépôt ou d'une sortie réelle, jamais inventé ; la page nomme le commit ou le fichier d'où il vient.
-- **Aucune donnée personnelle ni secret** : pas d'adresse e-mail, de nom de compte, de chemin privé (`/Users/...`), de clé ni de jeton.
-- Critère vérifiable : chaque page `blog/NN-*.md` figure au sommaire, et aucune ne contient de nom de compte, d'adresse e-mail ni de chemin `/Users/`.
+- **Un épisode par grande étape, en français seulement** : `blog/NN-titre-court.md`, numéroté à la suite. Est une grande étape : un programme ou une application qui compile ou tourne pour la première fois sur Mac, une décision de portage importante, une fusion de l'original qui change la donne, un tournant. Un épisode publié ne se réécrit pas ; on ne le corrige que pour une erreur de fait.
+- **Écrit dans le même commit que la fin de l'étape**, avec l'entrée du journal, et ajouté au sommaire [blog/README.md](blog/README.md).
+- **Forme d'un épisode** :
+  - titre `# Dlib Transformer Extensions sur macOS, épisode N : <sujet>` ;
+  - une ouverture d'une ou deux phrases qui renvoie à l'épisode précédent (« Suite de l'épisode N : … ») ;
+  - des sections `##` aux titres parlants, souvent imagés (« L'envoi refusé : bonne clé, mauvais casier », « Cinq obstacles, une seule famille ») ;
+  - quand il y a de la technique précise, une section **« Pour les curieux : … »** en fin d'épisode, avec les commandes, les chiffres et les extraits de log, pour que le corps du texte reste lisible sans eux ;
+  - une fin **« La suite »** ou **« À suivre »** qui annonce l'épisode suivant (avec un lien quand il existe).
+- **Ton** : journalistique, posé, au « on » (« on a voulu le voir tourner sur un Mac »), pas à la première personne de Claude, sans dialogue mis en scène. Chaque notion technique reçoit une **image de la vie courante** (le cahier photocopié, la clé et le casier, l'architecte et l'immeuble, la voiture électrique sans boîte de vitesses, le sel dans un autre placard). Phrases complètes et sobres, un peu d'humour discret, aucune emphase. Les erreurs commises se disent franchement (« l'erreur est facile à commettre et qu'on l'a commise »), et le mérite est rendu à qui il revient (« le mérite revient à l'amont, pas au portage »).
+- **Exactitude** : chaque chiffre vient du journal, des commits ou d'une sortie réelle ; un extrait de code, de log ou de commande est copié, jamais inventé. Distinguer ce qui est vérifié de ce qui ne l'est pas (« compilé, pas encore lancé »).
+- **Tableaux** pour comparer (applications, options, relevés de build), listes à puces pour énumérer des causes ou des choix.
+- **Aucun secret ni donnée privée** : pas d'adresse e-mail, de chemin privé (`/Users/...`), de clé ni de jeton. Les noms des comptes GitHub du fork peuvent apparaître, comme dans l'épisode 1.
+- Critère vérifiable : chaque `blog/NN-*.md` figure au sommaire, commence par le titre « Dlib Transformer Extensions sur macOS, épisode N », et ne contient ni adresse e-mail ni chemin `/Users/`.
 
 ### Autorité
 

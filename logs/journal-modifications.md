@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-06 — Reprendre les trois épisodes du carnet TortueTech en tête du blog
+
+- **Quoi** : les épisodes 1 à 3 du carnet TortueTech (`/carnet/dlib-transformer-extensions-macos`, `-compilation`, `-albireo-pseudalis`) deviennent les pages 01 à 03 du blog ; ils remplacent les pages 00 et 01 écrites par Claude, qui racontaient la même chose. Épisode 4 « Le fork déménage » écrit dans le même ton. Règles du blog de CLAUDE.md réécrites d'après ces épisodes (épisodes, ton au « on », images, « Pour les curieux », « La suite »).
+- **Fichiers** : `blog/01-le-fork-et-l-original.md`, `blog/02-compiler-dlib-et-les-exemples.md`, `blog/03-albireo-pseudalis-et-cinq-obstacles.md`, `blog/04-le-fork-demenage.md`, `blog/README.md`, `CLAUDE.md` ; supprimés : `blog/00-prologue.md`, `blog/01-premiere-compilation.md`.
+- **Pourquoi** : demande de l'humain : partir des épisodes déjà publiés et continuer dans leur ton.
+- **Étapes** : pages lues sur le serveur local du carnet ; texte repris tel quel, sans le menu, le pied de page ni les liens du glossaire du site, liens entre épisodes changés en liens vers les fichiers du blog. Vérifié : titres, sommaire, ni e-mail ni chemin privé.
+
 ## 2026-11-06 — Déménager le fork sur le compte Aughra
 
 - **Quoi** : nouveau fork de `Cydral/Dlib-Transformer-extensions` sur le compte `Aughra` (public, seule possibilité pour un fork d'un dépôt public) ; `origin` pointe désormais sur `Aughra/Dlib-Transformer-extensions` ; tout `main` y est poussé (`f0f9f91..50c2c96`), commit `pour mac` compris.
