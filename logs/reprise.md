@@ -16,6 +16,8 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 - 2026-11-06 : 10 nouveaux commits de l'original fusionnés (commit `037a32e`, 78 fichiers, sans conflit) : Albireo 1.0.9 à 1.0.11, Pseudalis 1.0.3, GGUF sur CPU (`dlib/dlib/cuda/cpu_gguf.*`). La fusion touche `albireo/CMakeLists.txt` (+50 lignes) et `pseudalis/CMakeLists.txt`.
 
+- 2026-11-06 : le push vers PapyTortueTech restant refusé (403), l'humain a choisi de déménager le fork sur `Aughra`. Fork de Cydral créé sur Aughra (public), `origin` repointé, `main` poussé : le Mac et le fork en ligne sont à égalité.
+
 ## En cours
 
 Rien. Prochaine étape : **recompiler Albireo et Pseudalis** pour revoir l'état après la fusion du 2026-11-06 (le CMake d'Albireo a changé : les erreurs 2 à 5 peuvent avoir bougé), puis corriger les erreurs une par une.
@@ -38,7 +40,7 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 
 ## Problèmes ouverts
 
-- **Push refusé (403)** : sur ce Mac, `gh` est connecté au compte `Aughra`, mais le fork appartient à `PapyTortueTech`. Deux solutions : `gh auth login` avec PapyTortueTech puis `gh auth switch --user PapyTortueTech`, ou ajouter `Aughra` comme collaborateur du fork. `main` a 18 commits d'avance sur `origin/main` ; dès que l'accès marche, lancer `git push origin main`.
+- L'ancien fork `PapyTortueTech/Dlib-Transformer-extensions` n'est plus utilisé ; l'humain s'occupe de l'arrêter. Ne plus jamais y pousser.
 - Les 24 exemples `slm_*` n'ont pas été lancés ; `dtest` n'est pas encore construit.
 
 ## Commandes pour reprendre

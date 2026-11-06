@@ -24,7 +24,7 @@ Les solutions propres au Mac sont permises (instructions NEON, `__fp16`, Acceler
 
 | Nom | Dépôt | Rôle |
 |---|---|---|
-| `origin` | `PapyTortueTech/Dlib-Transformer-extensions` | Le fork, où l'on pousse. |
+| `origin` | `Aughra/Dlib-Transformer-extensions` | Le fork (public, comme l'original), où l'on pousse. Le compte `gh` connecté sur le Mac est `Aughra`. |
 | `upstream` | `Cydral/Dlib-Transformer-extensions` | L'original, qui continue d'avancer ; on ne fait qu'y lire. |
 
 ### Rester facile à fusionner
