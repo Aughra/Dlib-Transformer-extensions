@@ -93,4 +93,51 @@ namespace
         }
         return sum;
     }
+
+    /*
+        The products of NT tokens of X (stride xs) with 4 rows of W (K floats each, one after
+        the other), written to Y (stride ys) or added to it: each weight read serves NT tokens.
+        Each sum keeps the order of dot_f32_ref, four lanes over the columns, the columns left
+        over added to the first lane, then (s0 + s1) + (s2 + s3), and its roundings: each
+        product rounded, then added, as Apple clang compiles the reference (a fused multiply-add
+        changes the last bit of most sums).  The results are those of qk_dot_f32() in this
+        build, bit for bit.
+    */
+    template <int NT>
+    void gemm_neon(const float* X, long xs, const float* W, long K, float* Y, long ys, bool accumulate)
+    {
+        float32x4_t acc[NT][4];
+        for (int i = 0; i < NT; ++i)
+            for (int j = 0; j < 4; ++j) acc[i][j] = vdupq_n_f32(0.0f);
+        long k = 0;
+        for (; k + 4 <= K; k += 4)
+        {
+            const float32x4_t w0 = vld1q_f32(W + k);
+            const float32x4_t w1 = vld1q_f32(W + K + k);
+            const float32x4_t w2 = vld1q_f32(W + 2 * K + k);
+            const float32x4_t w3 = vld1q_f32(W + 3 * K + k);
+            for (int i = 0; i < NT; ++i)
+            {
+                const float32x4_t x = vld1q_f32(X + i * xs + k);
+                acc[i][0] = vaddq_f32(acc[i][0], vmulq_f32(w0, x));
+                acc[i][1] = vaddq_f32(acc[i][1], vmulq_f32(w1, x));
+                acc[i][2] = vaddq_f32(acc[i][2], vmulq_f32(w2, x));
+                acc[i][3] = vaddq_f32(acc[i][3], vmulq_f32(w3, x));
+            }
+        }
+        for (int i = 0; i < NT; ++i)
+        {
+            for (int j = 0; j < 4; ++j)
+            {
+                float s0 = vgetq_lane_f32(acc[i][j], 0);
+                const float s1 = vgetq_lane_f32(acc[i][j], 1);
+                const float s2 = vgetq_lane_f32(acc[i][j], 2);
+                const float s3 = vgetq_lane_f32(acc[i][j], 3);
+                for (long c = k; c < K; ++c) s0 += W[j * K + c] * X[i * xs + c];
+                const float v = (s0 + s1) + (s2 + s3);
+                float* out = Y + i * ys + j;
+                *out = accumulate ? *out + v : v;
+            }
+        }
+    }
 }

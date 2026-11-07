@@ -12,3 +12,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 6. [Albireo parle, lentement](06-albireo-parle-lentement.md)
 7. [Le mode économie](07-le-mode-economie.md)
 8. [Seize à la fois](08-seize-a-la-fois.md)
+9. [Le dernier chiffre](09-le-dernier-chiffre.md)

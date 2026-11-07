@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-07 — Accélérer la lecture du prompt d'Albireo avec un produit NEON en floats
+
+- **Quoi** : `gemm_neon<4>` et `gemm_neon<1>` (4 tokens, ou 1, contre 4 lignes de poids) pour `gemm_rows`, le produit en floats des prompts d'au moins 8 tokens. Identique au bit près à `qk_dot_f32`. Prompt multiplié par 3,5 à 4 (8 fils : 35 à 50 tokens/s contre 5 à 13).
+- **Fichiers** : `dlib/dlib/external/albireo/engine/qkernels_neon.inc`, `dlib/dlib/external/albireo/engine/qkernels.cpp` (une branche `#elif ALBIREO_QK_NEON` dans `gemm_rows`) ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal, `blog/09-le-dernier-chiffre.md`, `blog/README.md`.
+- **Pourquoi** : après l'épisode 8, la lecture des questions était devenue l'étape lente.
+- **Étapes** : moteur précédent mis de côté (`build/baseline-gen/`) ; premier noyau avec `vfmaq_f32` : 23 953 sommes sur 32 436 différaient au dernier bit de `qk_dot_f32` ; essai avec `vmulq_f32` puis `vaddq_f32` : 0 différence, gardé ; `test_qkernels` passé ; `bitcheck` des noyaux entiers toujours à 0 ; mesures alternées avant / après (`bench_runtime` à 64 et 256 tokens, `engine_chat`), `lowpowermode 0`, charge 6 à 23 ; réponse identique à celle du moteur d'origine.
+
 ## 2026-11-07 — Donner au moteur d'Albireo des noyaux NEON pour Q4_K et Q6_K
 
 - **Quoi** : noyaux NEON de `qk_dot` pour les deux formats du modèle (Q4_K, Q6_K), avec l'instruction de produit scalaire `vdotq_s32`. Mêmes sommes entières que les références, même fin de bloc : résultat identique au bit près. Génération multipliée par 3 environ (8 fils : 33 à 37 tokens/s contre 11).

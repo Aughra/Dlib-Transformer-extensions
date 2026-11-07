@@ -17,6 +17,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-06 : **Albireo répond sur le Mac** : Qwen3-VL 2B Instruct (Q4_K_M, 1,1 Go, dans `build/models/`, SHA-256 conforme au catalogue), réponse juste. Vitesse : 0,8 token/s avec le moteur en bibliothèque (`engine_chat`), 1,9 token/s avec `bench_runtime` à 4 fils. Chiffres et profils dans le mémo. Blog : épisode 6.
 - 2026-11-06 : **le « moteur sur un seul cœur » venait du mode économie d'énergie** (`lowpowermode 1`). Coupé par l'humain : `engine_chat` passe à 6,0 tokens/s à 4 fils et 7,9 à 8 fils, presque comme `bench_runtime` (7,0 et 8,3). Essai de l'instruction `isb` dans `ALBIREO_CPU_RELAX()` sur ARM64 : remet les fils à la priorité 31 mais ne gagne rien en mesures alternées ; abandonné, code d'origine gardé. Règle de mesure ajoutée à CLAUDE.md. Blog : épisode 7.
 - 2026-11-07 : **noyaux NEON de `qk_dot` pour Q4_K et Q6_K** (`engine/qkernels_neon.inc`, branchés dans `qkernels.cpp`). Résultat identique au bit près à la version portable (0 différence sur 12 000 produits ; même réponse). Génération à 8 fils : 33 à 37 tokens/s contre 11 (mesures alternées). Le prompt ne change pas (`matmul_float`). Blog : épisode 8. L'original a 1 commit de plus (`8743fcd`, mesure du compresseur sur enwik9), pas fusionné.
+- 2026-11-07 : **produit en floats NEON pour le prompt** (`gemm_neon` dans `qkernels_neon.inc`, branché dans `gemm_rows`), identique au bit près à `qk_dot_f32` (0 différence sur 32 436 produits ; un `vfmaq_f32` aurait changé le dernier bit). Prompt à 8 fils : 35 à 50 tokens/s contre 5 à 13 (mesures alternées). Même réponse. Blog : épisode 9.
 
 ## En cours
 
@@ -24,8 +25,8 @@ Rien. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
 ## À faire, dans l'ordre proposé
 
-1. **Albireo, le prompt en NEON** : à partir de 8 tokens, le prompt passe par `matmul_float` (poids développés en floats, `gemm_rows`, `qk_dot_f32` portable, un token et une ligne à la fois). Pistes : un `gemm` NEON par tuiles (plusieurs tokens par poids lu, comme `gemm_3x4` en AVX2), ou faire passer les petits prompts par les noyaux quantifiés NEON. Critère : `test_qkernels` passe, et le prompt de `bench_runtime` va plus vite en mesures alternées. Attention : un `qk_dot_f32` NEON qui changerait l'ordre des additions ne serait plus identique au bit près à la référence ; le dire, et le vérifier avec la tolérance du test.
-2. Lancer le service d'Albireo en `--console`, poser une question par l'interface web.
+1. Lancer le service d'Albireo en `--console`, poser une question par l'interface web.
+2. Plus tard, si utile : noyaux NEON pour les autres formats de poids (Q8_0, Q5_K…), et pour l'attention (`qk_attention_scores`, `qk_attention_values`), qui deviendra visible avec les longs contextes.
 
 Ensuite, Pseudalis :
 

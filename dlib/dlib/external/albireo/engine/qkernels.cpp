@@ -1813,6 +1813,15 @@ namespace albireo
                 for (long r = 0; r < r4; r += 4)
                     gemm_1x4(X + u * x_stride, W + r * K, K, Y + u * y_stride + r, accumulate);
             t = 0;
+#elif ALBIREO_QK_NEON
+            r4 = n_rows / 4 * 4;
+            for (; t + 4 <= n_tokens; t += 4)
+                for (long r = 0; r < r4; r += 4)
+                    gemm_neon<4>(X + t * x_stride, x_stride, W + r * K, K, Y + t * y_stride + r, y_stride, accumulate);
+            for (long u = t; u < n_tokens; ++u)
+                for (long r = 0; r < r4; r += 4)
+                    gemm_neon<1>(X + u * x_stride, x_stride, W + r * K, K, Y + u * y_stride + r, y_stride, accumulate);
+            t = 0;
 #endif
             // What the blocks above leave: every token against the last rows, or all of
             // it in the portable build.

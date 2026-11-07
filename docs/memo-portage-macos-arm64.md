@@ -134,7 +134,20 @@ build/macos-albireo/tests/bench_runtime build/models/Qwen3VL-2B-Instruct-Q4_K_M.
 | `bench_runtime` | 2 | origine | 13,4 tokens/s | 10,8 tokens/s | 10,5 tokens/s |
 | `bench_runtime` | 2 | NEON | 13,2 tokens/s | 32,9 tokens/s | 41,5 tokens/s |
 
-Le prompt ne change pas : à partir de 8 tokens (`qk_float_product_tokens`), il passe par `matmul_float` (poids développés en floats, puis `gemm_rows` et `qk_dot_f32`), que les noyaux NEON ne touchent pas.
+Le prompt ne change pas : à partir de 8 tokens (`qk_float_product_tokens`), il passe par `matmul_float` (poids développés en floats, puis `gemm_rows` et `qk_dot_f32`), que ces noyaux ne touchent pas.
+
+**Produit en floats NEON pour le prompt (2026-11-07).** `gemm_rows` prend, sous `ALBIREO_QK_NEON`, le noyau `gemm_neon<4>` (4 tokens contre 4 lignes de poids, chaque poids lu servant 4 tokens) et `gemm_neon<1>` pour les tokens restants. Chaque somme garde l'ordre et les arrondis de `dot_f32_ref` : quatre voies, les colonnes restantes dans la première, puis `(s0 + s1) + (s2 + s3)`, et le produit arrondi avant l'addition (`vmulq_f32` puis `vaddq_f32`). Un `vfmaq_f32` (multiplication-addition fusionnée) changeait le dernier bit de 23 953 sommes sur 32 436 : Apple clang ne fusionne pas la référence. Contrôle : 0 différence sur 32 436 produits contre `qk_dot_f32` (K = 64, 2 048 et 2 051 ; 16 et 37 lignes ; 8 à 64 tokens ; avec et sans accumulation) ; même réponse que le moteur d'origine. Mesures alternées le même jour, 8 fils, charge moyenne de 6 à 23 :
+
+| Programme | Essai | Avant (NEON pour la génération seule) | Après |
+|---|---|---|---|
+| `bench_runtime`, prompt de 64 tokens | 1 | 13,1 tokens/s | 38,3 tokens/s |
+| `bench_runtime`, prompt de 256 tokens | 1 | 12,8 tokens/s | 50,4 tokens/s |
+| `engine_chat`, prompt de 21 tokens | 1 | 4,6 tokens/s | 34,6 tokens/s |
+| `bench_runtime`, prompt de 64 tokens | 2 | 10,8 tokens/s | 46,8 tokens/s |
+| `bench_runtime`, prompt de 256 tokens | 2 | 10,3 tokens/s | 44,9 tokens/s |
+| `engine_chat`, prompt de 21 tokens | 2 | 11,0 tokens/s | 39,1 tokens/s |
+
+La génération, que ce changement ne touche pas, varie pendant cette série de 14 à 34 tokens/s selon la charge du Mac.
 
 Mesures de référence du moteur d'origine, avant NEON (2026-11-06, mode économie d'énergie coupé, charge moyenne entre 13 et 30 : mises à jour de l'App Store en cours) :
 
@@ -150,7 +163,7 @@ Pour mémoire, en mode économie d'énergie : `engine_chat` 0,78 token/s à 8 fi
 
 Constats :
 
-- **Avant NEON, le calcul était scalaire.** Profil (`sample`) : presque tout le temps est dans `matmul_float` (prompt) et `qk_dot_portable` (génération). La génération a maintenant ses noyaux NEON (ci-dessus) ; le prompt reste sur `matmul_float`, prochaine piste de vitesse.
+- **Avant NEON, le calcul était scalaire.** Profil (`sample`) : presque tout le temps est dans `matmul_float` (prompt) et `qk_dot_portable` (génération). Les deux ont maintenant leurs noyaux NEON (ci-dessus). Les autres formats de poids (Q4_0, Q5_K, Q8_0, F16…) restent sur les noyaux portables : à faire si un modèle du catalogue les emploie.
 - **L'attente des fils.** Hors x86, `ALBIREO_CPU_RELAX()` (`engine/thread_pool.h`) est `std::this_thread::yield()`, qui fait tomber la priorité du fil à 0 sur macOS (`ps -M`). Essai : l'instruction `isb` à la place sur ARM64. Les fils restent alors à la priorité 31, mais la génération n'est pas plus rapide (deux essais alternés : 5,2 et 5,5 tokens/s avec `isb`, 5,7 et 6,4 sans). Essai abandonné, code d'origine gardé.
 - `bench_runtime` lit toujours 64 tokens de son prompt pour la génération groupée : avec un prompt plus court, il lit hors du tableau (exception `token identifier out of range`). Lui donner au moins 64 tokens.
 
@@ -166,7 +179,7 @@ Ce qui a été changé pour compiler sur ARM64, chaque fois sous une condition q
 
 Ce qui a été ajouté pour la vitesse :
 
-6. `albireo/engine/qkernels_neon.inc` (fichier du fork) : noyaux NEON de `qk_dot` pour Q4_K et Q6_K. `albireo/engine/qkernels.cpp` les branche par quatre ajouts sous `ALBIREO_QK_NEON` (`__ARM_NEON` et `__ARM_FEATURE_DOTPROD`) : `#include <arm_neon.h>`, l'inclusion du fichier, deux cas dans `qk_dot`, le nom `NEON+dotprod` dans `qk_isa()`.
+6. `albireo/engine/qkernels_neon.inc` (fichier du fork) : noyaux NEON de `qk_dot` pour Q4_K et Q6_K. Le même fichier porte `gemm_neon`, le produit en floats du prompt. `albireo/engine/qkernels.cpp` les branche par cinq ajouts sous `ALBIREO_QK_NEON` (`__ARM_NEON` et `__ARM_FEATURE_DOTPROD`) : `#include <arm_neon.h>`, l'inclusion du fichier, deux cas dans `qk_dot`, une branche dans `gemm_rows`, le nom `NEON+dotprod` dans `qk_isa()`.
 
 ## Points à surveiller
 
