@@ -11,3 +11,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 5. [Cinq corrections et un premier démarrage](05-cinq-corrections.md)
 6. [Albireo parle, lentement](06-albireo-parle-lentement.md)
 7. [Le mode économie](07-le-mode-economie.md)
+8. [Seize à la fois](08-seize-a-la-fois.md)

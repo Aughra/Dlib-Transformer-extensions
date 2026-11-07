@@ -106,12 +106,12 @@ Sur Mac M2, macOS arm64, avec AppleClang 21, CMake 4.1.2 et Ninja (2026-11-06, a
 | Build | Compilation | Tests |
 |---|---|---|
 | dlib + exemples (CPU de référence) | 0 erreur ; les 24 exemples `slm_*` sont des Mach-O arm64. Avertissements : `ld: -s is obsolete`, `-Wbraced-scalar-init`. | Exemples et `dtest` pas encore exécutés. |
-| Albireo | 0 erreur, 0 avertissement. `albireo-service`, `albireo-speech`, `albireo-builtin`, `albireo-sign` et le moteur `libalbireo-engine-cpu.dylib` (portable) sont construits. | Passent : `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api` (sur le moteur cpu), `test_host`. Le moteur répond juste avec Qwen3-VL 2B Instruct (`engine_chat`) ; vitesse ci-dessous. Pas lancés (il leur faut un fichier de référence) : `test_runtime`, `test_tokenizer`. Le service n'a pas encore été lancé. |
+| Albireo | 0 erreur, 0 avertissement. `albireo-service`, `albireo-speech`, `albireo-builtin`, `albireo-sign` et le moteur `libalbireo-engine-cpu.dylib` (noyaux `NEON+dotprod` pour Q4_K et Q6_K, portables pour les autres formats) sont construits. | Passent : `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api` (sur le moteur cpu), `test_host`. Le moteur répond juste avec Qwen3-VL 2B Instruct (`engine_chat`) ; vitesse ci-dessous. Pas lancés (il leur faut un fichier de référence) : `test_runtime`, `test_tokenizer`. Le service n'a pas encore été lancé. |
 | Pseudalis | 0 erreur, 1 avertissement (`-Wunused-private-field`). `pseudalis-service` et `libpseudalis-engine.dylib` sont construits. | `test_engine` et `test_host` passent. `tools/test_linux.sh` : 26 étapes sur 28 passent (service, anonymisation et restauration par l'interface et par le lecteur). Échouent : « drive signatures » (une archive protégée renommée sur le lecteur part dans `refused/`) et « copies on the drive » (la copie d'un fichier protégé crée un nouvel enregistrement). |
 
 ### Albireo : premier modèle et vitesse
 
-Modèle : Qwen3-VL 2B Instruct, `Qwen3VL-2B-Instruct-Q4_K_M.gguf` (1 107 409 952 octets, SHA-256 `089d75c5…dca6c2ae`, conforme à `dist/albireo/catalog.json`), téléchargé dans `build/models/`. Machine : MacBook Air M2 (`Mac14,15`, sans ventilateur), 4 cœurs performance et 4 cœurs efficacité, sur secteur. Moteur portable (sans SIMD), température 0.
+Modèle : Qwen3-VL 2B Instruct, `Qwen3VL-2B-Instruct-Q4_K_M.gguf` (1 107 409 952 octets, SHA-256 `089d75c5…dca6c2ae`, conforme à `dist/albireo/catalog.json`), téléchargé dans `build/models/`. Machine : MacBook Air M2 (`Mac14,15`, sans ventilateur), 4 cœurs performance et 4 cœurs efficacité, sur secteur. Température 0. Le modèle n'a que deux formats de poids : Q4_K (168 tenseurs, 1 204 M valeurs) et Q6_K (29 tenseurs, 517 M valeurs), plus des normes en F32.
 
 **Avant toute mesure de vitesse**, vérifier que le mode économie d'énergie est coupé (`pmset -g | grep lowpowermode` doit donner `0`) et noter la charge (`sysctl -n vm.loadavg`). En mode économie d'énergie, le moteur va environ dix fois moins vite et paraît n'occuper qu'un cœur.
 
@@ -121,7 +121,22 @@ build/macos-albireo/tests/engine_chat build/macos-albireo/bin/engines/libalbireo
 build/macos-albireo/tests/bench_runtime build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf <fils> 64 16 2
 ```
 
-Mesures de référence (2026-11-06, mode économie d'énergie coupé, charge moyenne entre 13 et 30 : mises à jour de l'App Store en cours) :
+**Noyaux NEON (2026-11-07).** Sur ARM64 avec les instructions de produit scalaire (`__ARM_FEATURE_DOTPROD`, présentes sur toutes les puces Apple), `qk_dot` prend pour Q4_K et Q6_K les noyaux de `engine/qkernels_neon.inc` (`vdotq_s32`). Ils calculent les mêmes sommes entières que les références, exactes quel que soit l'ordre, et finissent chaque bloc par la même expression : résultat identique au bit près (contrôle : 0 différence sur 12 000 produits contre `qk_dot_portable`, longueurs 256, 2 048 et 6 144 ; même réponse octet pour octet à température 0). Le moteur s'annonce `NEON+dotprod`. Mesures alternées le même jour, 8 fils, charge moyenne de 5 à 7 :
+
+| Programme | Essai | Version | Prompt | Génération | 2 séquences |
+|---|---|---|---|---|---|
+| `engine_chat` (21 / 88 tokens) | 1 | origine | 7,8 tokens/s | 10,9 tokens/s | |
+| `engine_chat` | 1 | NEON | 10,3 tokens/s | 32,5 tokens/s | |
+| `engine_chat` | 2 | origine | 12,8 tokens/s | 11,0 tokens/s | |
+| `engine_chat` | 2 | NEON | 12,7 tokens/s | 36,9 tokens/s | |
+| `bench_runtime` (64 tokens de prompt, 32 pas) | 1 | origine | 8,8 tokens/s | 6,5 tokens/s | 11,3 tokens/s |
+| `bench_runtime` | 1 | NEON | 13,7 tokens/s | 33,7 tokens/s | 43,2 tokens/s |
+| `bench_runtime` | 2 | origine | 13,4 tokens/s | 10,8 tokens/s | 10,5 tokens/s |
+| `bench_runtime` | 2 | NEON | 13,2 tokens/s | 32,9 tokens/s | 41,5 tokens/s |
+
+Le prompt ne change pas : à partir de 8 tokens (`qk_float_product_tokens`), il passe par `matmul_float` (poids développés en floats, puis `gemm_rows` et `qk_dot_f32`), que les noyaux NEON ne touchent pas.
+
+Mesures de référence du moteur d'origine, avant NEON (2026-11-06, mode économie d'énergie coupé, charge moyenne entre 13 et 30 : mises à jour de l'App Store en cours) :
 
 | Programme | Fils | Prompt | Génération | Cœurs occupés en moyenne |
 |---|---|---|---|---|
@@ -135,7 +150,7 @@ Pour mémoire, en mode économie d'énergie : `engine_chat` 0,78 token/s à 8 fi
 
 Constats :
 
-- **Le calcul est scalaire.** Profil (`sample`) : presque tout le temps est dans `matmul_float` (prompt) et `qk_dot_portable` (génération), les versions portables des produits, qui traitent un nombre à la fois. Les versions AVX2 traitent 8 nombres par instruction ; il n'existe pas de version NEON. C'est la prochaine piste de vitesse.
+- **Avant NEON, le calcul était scalaire.** Profil (`sample`) : presque tout le temps est dans `matmul_float` (prompt) et `qk_dot_portable` (génération). La génération a maintenant ses noyaux NEON (ci-dessus) ; le prompt reste sur `matmul_float`, prochaine piste de vitesse.
 - **L'attente des fils.** Hors x86, `ALBIREO_CPU_RELAX()` (`engine/thread_pool.h`) est `std::this_thread::yield()`, qui fait tomber la priorité du fil à 0 sur macOS (`ps -M`). Essai : l'instruction `isb` à la place sur ARM64. Les fils restent alors à la priorité 31, mais la génération n'est pas plus rapide (deux essais alternés : 5,2 et 5,5 tokens/s avec `isb`, 5,7 et 6,4 sans). Essai abandonné, code d'origine gardé.
 - `bench_runtime` lit toujours 64 tokens de son prompt pour la génération groupée : avec un prompt plus court, il lit hors du tableau (exception `token identifier out of range`). Lui donner au moins 64 tokens.
 
@@ -148,6 +163,10 @@ Ce qui a été changé pour compiler sur ARM64, chaque fois sous une condition q
 3. libpng d'Albireo : sur ARM64, compilation de ses sources NEON (`arm/arm_init.c`, `arm/filter_neon_intrinsics.c`, `arm/palette_neon_intrinsics.c`), comme le fait le CMake de dlib.
 4. `dlib/dlib/CMakeLists.txt`, cible `dlib_httplib` : sur macOS, liaison de `CoreFoundation` et `Security` (certificats du Trousseau).
 5. `pseudalis/host/drive_folders.cpp` : sur macOS, `st_mtim` devient `st_mtimespec`.
+
+Ce qui a été ajouté pour la vitesse :
+
+6. `albireo/engine/qkernels_neon.inc` (fichier du fork) : noyaux NEON de `qk_dot` pour Q4_K et Q6_K. `albireo/engine/qkernels.cpp` les branche par quatre ajouts sous `ALBIREO_QK_NEON` (`__ARM_NEON` et `__ARM_FEATURE_DOTPROD`) : `#include <arm_neon.h>`, l'inclusion du fichier, deux cas dans `qk_dot`, le nom `NEON+dotprod` dans `qk_isa()`.
 
 ## Points à surveiller
 

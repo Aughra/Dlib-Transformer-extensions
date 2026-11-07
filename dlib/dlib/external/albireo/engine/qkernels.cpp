@@ -18,6 +18,12 @@
 #include <immintrin.h>
 #endif
 
+// ARM64 with the dot product instructions (Apple Silicon): the NEON kernels of qkernels_neon.inc.
+#if defined(__ARM_NEON) && defined(__ARM_FEATURE_DOTPROD)
+#define ALBIREO_QK_NEON 1
+#include <arm_neon.h>
+#endif
+
 /*
     The instructions beyond AVX2, the kernels of the processor engine cpu-avxvnni:
         ALBIREO_QK_VNNI     the dot products of bytes and of 16-bit integers in one
@@ -144,6 +150,8 @@ namespace albireo
         return "AVX2+FMA+F16C";
 #elif defined(__SSE2__) || defined(_M_X64)
         return "SSE2";
+#elif ALBIREO_QK_NEON
+        return "NEON+dotprod";
 #else
         return "portable";
 #endif
@@ -697,6 +705,10 @@ namespace albireo
             return s0 + s1;
         }
     }
+
+#if ALBIREO_QK_NEON
+#include "qkernels_neon.inc"
+#endif
 
 // AVX2 dot products
 
@@ -1522,6 +1534,14 @@ namespace albireo
         case ggml_type::Q6_K: return dot_q6_K_avx2(w, static_cast<const block_q8_K*>(act), n);
         case ggml_type::F32: return dot_f32_avx2(reinterpret_cast<const float*>(w), static_cast<const float*>(act), n);
         case ggml_type::F16: return dot_f16_avx2(w, static_cast<const float*>(act), n);
+        default: break;
+        }
+#endif
+#if ALBIREO_QK_NEON
+        switch (t)
+        {
+        case ggml_type::Q4_K: return dot_q4_K_neon(w, static_cast<const block_q8_K*>(act), n);
+        case ggml_type::Q6_K: return dot_q6_K_neon(w, static_cast<const block_q8_K*>(act), n);
         default: break;
         }
 #endif

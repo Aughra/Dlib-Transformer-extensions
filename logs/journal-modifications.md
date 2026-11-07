@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-07 — Donner au moteur d'Albireo des noyaux NEON pour Q4_K et Q6_K
+
+- **Quoi** : noyaux NEON de `qk_dot` pour les deux formats du modèle (Q4_K, Q6_K), avec l'instruction de produit scalaire `vdotq_s32`. Mêmes sommes entières que les références, même fin de bloc : résultat identique au bit près. Génération multipliée par 3 environ (8 fils : 33 à 37 tokens/s contre 11).
+- **Fichiers** : `dlib/dlib/external/albireo/engine/qkernels_neon.inc` (nouveau, propre au fork), `dlib/dlib/external/albireo/engine/qkernels.cpp` (quatre ajouts sous `ALBIREO_QK_NEON`) ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal, `blog/08-seize-a-la-fois.md`, `blog/README.md`.
+- **Pourquoi** : la génération passait presque tout son temps dans `qk_dot_portable`, qui calcule un nombre à la fois.
+- **Étapes** : formats du modèle relevés dans le GGUF (Q4_K, Q6_K, F32) ; `__ARM_FEATURE_DOTPROD` vérifié dans clang ; moteur et banc d'origine mis de côté (`build/baseline/`) ; build ; `test_qkernels` passé (erreur relative 9e-9) ; programme de contrôle hors dépôt : 0 différence sur 12 000 produits contre `qk_dot_portable` ; mesures alternées origine / NEON avec `engine_chat` et `bench_runtime`, `lowpowermode 0`, charge 5 à 7 ; réponse identique octet pour octet.
+
 ## 2026-11-06 — Trouver pourquoi le moteur d'Albireo n'occupait qu'un cœur
 
 - **Quoi** : la cause était le mode économie d'énergie du Mac (`pmset -g` : `lowpowermode 1`, sur secteur). Une fois coupé par l'humain, `engine_chat` (moteur en bibliothèque) passe de 0,8 à 7,9 tokens/s à 8 fils, presque comme `bench_runtime` (8,3). Une piste de code a été essayée puis abandonnée : `isb` au lieu de `std::this_thread::yield()` dans `ALBIREO_CPU_RELAX()` sur ARM64 (`engine/thread_pool.h`). Elle remettait les fils d'aide à la priorité 31 (ils étaient à 0 d'après `ps -M`), mais ne gagnait rien.
