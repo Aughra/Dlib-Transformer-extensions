@@ -18,6 +18,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-06 : **le « moteur sur un seul cœur » venait du mode économie d'énergie** (`lowpowermode 1`). Coupé par l'humain : `engine_chat` passe à 6,0 tokens/s à 4 fils et 7,9 à 8 fils, presque comme `bench_runtime` (7,0 et 8,3). Essai de l'instruction `isb` dans `ALBIREO_CPU_RELAX()` sur ARM64 : remet les fils à la priorité 31 mais ne gagne rien en mesures alternées ; abandonné, code d'origine gardé. Règle de mesure ajoutée à CLAUDE.md. Blog : épisode 7.
 - 2026-11-07 : **noyaux NEON de `qk_dot` pour Q4_K et Q6_K** (`engine/qkernels_neon.inc`, branchés dans `qkernels.cpp`). Résultat identique au bit près à la version portable (0 différence sur 12 000 produits ; même réponse). Génération à 8 fils : 33 à 37 tokens/s contre 11 (mesures alternées). Le prompt ne change pas (`matmul_float`). Blog : épisode 8. L'original a 1 commit de plus (`8743fcd`, mesure du compresseur sur enwik9), pas fusionné.
 - 2026-11-07 : **produit en floats NEON pour le prompt** (`gemm_neon` dans `qkernels_neon.inc`, branché dans `gemm_rows`), identique au bit près à `qk_dot_f32` (0 différence sur 32 436 produits ; un `vfmaq_f32` aurait changé le dernier bit). Prompt à 8 fils : 35 à 50 tokens/s contre 5 à 13 (mesures alternées). Même réponse. Blog : épisode 9.
+- 2026-11-07 : 1 commit de l'original fusionné (`8743fcd`, mesure du compresseur de tokens sur enwik9), sans conflit. Il ne touche que `Readme.md` et `examples/Readme.md` : pas de code, donc pas de rebuild.
 
 ## En cours
 

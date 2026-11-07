@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-07 — Fusionner le dernier commit de l'original
+
+- **Quoi** : `git merge upstream/main`, 1 commit (`8743fcd`, résultats du compresseur de tokens sur enwik9 : archive de 117 169 624 octets, 0,937 bit par octet). Fusion sans conflit.
+- **Fichiers** : `Readme.md`, `examples/Readme.md` (venus de l'original) ; `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain (« fusion »).
+- **Étapes** : `git fetch upstream`, `git merge --no-edit upstream/main` ; le commit ne change que deux documents, donc ni build ni test à refaire ; pas d'épisode de blog (fusion qui ne change rien au portage).
+
 ## 2026-11-07 — Accélérer la lecture du prompt d'Albireo avec un produit NEON en floats
 
 - **Quoi** : `gemm_neon<4>` et `gemm_neon<1>` (4 tokens, ou 1, contre 4 lignes de poids) pour `gemm_rows`, le produit en floats des prompts d'au moins 8 tokens. Identique au bit près à `qk_dot_f32`. Prompt multiplié par 3,5 à 4 (8 fils : 35 à 50 tokens/s contre 5 à 13).
