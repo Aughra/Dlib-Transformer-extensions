@@ -140,4 +140,169 @@ namespace
             }
         }
     }
+
+    /*
+        The attention by tiles (qk_attention_scores and qk_attention_values), with the sums of
+        the portable code in the same order: each score is one sum over the hd elements, from
+        the first to the last, each output element one sum over the keys of a group, from the
+        first to the last.  The four lanes of a register hold four keys (scores) or four
+        elements (values), never two parts of one sum.  The roundings are those of the portable
+        loops as Apple clang compiles them.  A score of hd terms: over the first hd / 4 * 4,
+        each product rounded, then added (the loop is vectorized); over the last hd % 4, a
+        fused multiply-add.  A value: a fused multiply-add for every key (the loop reads the
+        values with a stride of hd and stays scalar; only hd == 1, which no model has, is
+        vectorized).  The results are those of the portable code of this build, bit for bit.  The halves are
+        converted by the instruction of the processor, exact as the table of h2f().
+    */
+
+    // n halves of src to floats.
+    inline void halves_to_floats(const uint16_t* src, float* dst, long n)
+    {
+        long i = 0;
+        for (; i + 4 <= n; i += 4) vst1q_f32(dst + i, vcvt_f32_f16(vreinterpret_f16_u16(vld1_u16(src + i))));
+        for (; i < n; ++i) dst[i] = h2f(src[i]);
+    }
+
+    // Groups of four keys of hd halves to floats, transposed: kt[(c4 * hd + i) * 4 + c] holds
+    // element i of key 4 c4 + c, so that one register holds element i of four keys.
+    inline void keys_to_floats_x4(const uint16_t* K, long groups, long hd, float* kt)
+    {
+        for (long c4 = 0; c4 < groups; ++c4)
+        {
+            const uint16_t* k = K + c4 * 4 * hd;
+            float* out = kt + c4 * hd * 4;
+            long i = 0;
+            for (; i + 4 <= hd; i += 4)
+            {
+                float32x4x4_t t;
+                t.val[0] = vcvt_f32_f16(vreinterpret_f16_u16(vld1_u16(k + i)));
+                t.val[1] = vcvt_f32_f16(vreinterpret_f16_u16(vld1_u16(k + hd + i)));
+                t.val[2] = vcvt_f32_f16(vreinterpret_f16_u16(vld1_u16(k + 2 * hd + i)));
+                t.val[3] = vcvt_f32_f16(vreinterpret_f16_u16(vld1_u16(k + 3 * hd + i)));
+                vst4q_f32(out + i * 4, t);
+            }
+            for (; i < hd; ++i)
+                for (int c = 0; c < 4; ++c) out[i * 4 + c] = h2f(k[c * hd + i]);
+        }
+    }
+
+    // The scores of R rows of queries with NB groups of four transposed keys.
+    template <int R, int NB>
+    void scores_tile(const float* const* q, const float* kt, long hd, float* const* s)
+    {
+        float32x4_t acc[R][NB];
+        for (int r = 0; r < R; ++r)
+            for (int b = 0; b < NB; ++b) acc[r][b] = vdupq_n_f32(0.0f);
+        const long hd4 = hd / 4 * 4;
+        for (long i = 0; i < hd; ++i)
+        {
+            float32x4_t k[NB];
+            for (int b = 0; b < NB; ++b) k[b] = vld1q_f32(kt + (b * hd + i) * 4);
+            for (int r = 0; r < R; ++r)
+            {
+                const float32x4_t x = vdupq_n_f32(q[r][i]);
+                if (i < hd4)
+                    for (int b = 0; b < NB; ++b) acc[r][b] = vaddq_f32(acc[r][b], vmulq_f32(x, k[b]));
+                else
+                    for (int b = 0; b < NB; ++b) acc[r][b] = vfmaq_f32(acc[r][b], x, k[b]);
+            }
+        }
+        for (int r = 0; r < R; ++r)
+            for (int b = 0; b < NB; ++b) vst1q_f32(s[r] + 4 * b, acc[r][b]);
+    }
+
+    template <int R>
+    void scores_rows(const float* Q, long r, long hd, const float* kt, long g4, float* S, long lds, long j0)
+    {
+        const float* q[R];
+        for (int e = 0; e < R; ++e) q[e] = Q + (r + e) * hd;
+        long j = 0;
+        for (; j + 16 <= g4; j += 16)
+        {
+            float* s[R];
+            for (int e = 0; e < R; ++e) s[e] = S + (r + e) * lds + j0 + j;
+            scores_tile<R, 4>(q, kt + j * hd, hd, s);
+        }
+        for (; j < g4; j += 4)
+        {
+            float* s[R];
+            for (int e = 0; e < R; ++e) s[e] = S + (r + e) * lds + j0 + j;
+            scores_tile<R, 1>(q, kt + j * hd, hd, s);
+        }
+    }
+
+    void attention_scores_neon(const float* Q, long rows, const uint16_t* K, long m, long hd, float* S, long lds,
+        float* scratch, long G)
+    {
+        for (long j0 = 0; j0 < m; j0 += G)
+        {
+            const long g = std::min(G, m - j0);
+            const long g4 = g / 4 * 4;
+            keys_to_floats_x4(K + j0 * hd, g4 / 4, hd, scratch);
+            // The keys left over, as the portable code: qk_dot_f32 on keys converted in order.
+            float* rest = scratch + g4 * hd;
+            halves_to_floats(K + (j0 + g4) * hd, rest, (g - g4) * hd);
+            long r = 0;
+            for (; r + 4 <= rows; r += 4) scores_rows<4>(Q, r, hd, scratch, g4, S, lds, j0);
+            for (; r < rows; ++r) scores_rows<1>(Q, r, hd, scratch, g4, S, lds, j0);
+            for (long j = g4; j < g; ++j)
+                for (r = 0; r < rows; ++r) S[r * lds + j0 + j] = qk_dot_f32(Q + r * hd, rest + (j - g4) * hd, hd);
+        }
+    }
+
+    // o[r][i .. i + 4 NB) += sum over j < g of p[r][j] * v[j * hd + i ..], key after key.
+    template <int R, int NB>
+    void values_tile(const float* const* p, const float* v, long g, long hd, float* const* o, long i)
+    {
+        float32x4_t acc[R][NB];
+        for (int r = 0; r < R; ++r)
+            for (int b = 0; b < NB; ++b) acc[r][b] = vld1q_f32(o[r] + i + 4 * b);
+        for (long j = 0; j < g; ++j)
+        {
+            float32x4_t x[NB];
+            for (int b = 0; b < NB; ++b) x[b] = vld1q_f32(v + j * hd + i + 4 * b);
+            for (int r = 0; r < R; ++r)
+            {
+                const float32x4_t w = vdupq_n_f32(p[r][j]);
+                for (int b = 0; b < NB; ++b) acc[r][b] = vfmaq_f32(acc[r][b], w, x[b]);
+            }
+        }
+        for (int r = 0; r < R; ++r)
+            for (int b = 0; b < NB; ++b) vst1q_f32(o[r] + i + 4 * b, acc[r][b]);
+    }
+
+    template <int R>
+    void values_rows(const float* P, long lds, long r, long j0, const float* v, long g, long hd, float* O)
+    {
+        const float* p[R];
+        float* o[R];
+        for (int e = 0; e < R; ++e)
+        {
+            p[e] = P + (r + e) * lds + j0;
+            o[e] = O + (r + e) * hd;
+        }
+        long i = 0;
+        for (; i + 16 <= hd; i += 16) values_tile<R, 4>(p, v, g, hd, o, i);
+        for (; i + 4 <= hd; i += 4) values_tile<R, 1>(p, v, g, hd, o, i);
+        for (; i < hd; ++i)
+            for (int e = 0; e < R; ++e)
+            {
+                float t = o[e][i];
+                for (long j = 0; j < g; ++j) t = std::fma(p[e][j], v[j * hd + i], t);
+                o[e][i] = t;
+            }
+    }
+
+    void attention_values_neon(const float* P, long lds, long rows, const uint16_t* V, long m, long hd, float* O,
+        float* scratch, long G)
+    {
+        for (long j0 = 0; j0 < m; j0 += G)
+        {
+            const long g = std::min(G, m - j0);
+            halves_to_floats(V + j0 * hd, scratch, g * hd);
+            long r = 0;
+            for (; r + 4 <= rows; r += 4) values_rows<4>(P, lds, r, j0, scratch, g, hd, O);
+            for (; r < rows; ++r) values_rows<1>(P, lds, r, j0, scratch, g, hd, O);
+        }
+    }
 }

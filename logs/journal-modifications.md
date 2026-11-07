@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-07 — Accélérer l'attention d'Albireo avec NEON
+
+- **Quoi** : `attention_scores_neon` et `attention_values_neon`, appelées en tête de `qk_attention_scores` et `qk_attention_values` sous `ALBIREO_QK_NEON`. Identiques au bit près au code portable. Sur 4 096 tokens : prompt et génération environ deux fois plus rapides.
+- **Fichiers** : `dlib/dlib/external/albireo/engine/qkernels_neon.inc`, `dlib/dlib/external/albireo/engine/qkernels.cpp` (deux fois quatre lignes) ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal, `blog/11-deux-facons-d-arrondir.md`, `blog/README.md`.
+- **Pourquoi** : sur le résumé d'un PDF, l'attention prenait les deux tiers du calcul et l'écriture tombait à 3,4 tokens/s.
+- **Étapes** : contrôle `attcheck` (NEON contre portable compilé avec `-U__ARM_FEATURE_DOTPROD`, mêmes options que le moteur) : première version tout en produit puis addition, scores justes pour hd 64 à 128 mais 28 907 valeurs sur 49 152 différentes ; lecture de l'assembleur du code portable : Apple clang vectorise la boucle des scores (produit puis addition, `fmadd` sur le reste) et laisse scalaire celle des valeurs (`fmadd` partout) ; règle reproduite : 0 différence sur 549 760. `test_qkernels`, `bitcheck` (0/12 000), `gemmcheck` (0/32 436) OK. Mesures alternées (`bench_runtime` 8 fils, 4 096 tokens ; une première série coupée par la fin de session, refaite entière) : prompt 25,5 / 24,5 → 52,8 / 50,0 tokens/s, génération 9,0 / 7,5 → 19,6 / 22,0 tokens/s. `engine_chat` sur 4 329 tokens (épisodes 8 et 9 du blog) : même réponse, prompt 23,1 → 47,0, génération 7,9 → 16,9 tokens/s.
+
 ## 2026-11-07 — Noter l'essai de la page web et le coût de l'attention
 
 - **Quoi** : l'humain a essayé la page d'Albireo dans son navigateur (conversation, résumé d'un PDF de 4,6 Mo « consulté par recherche », juste). Sur ce long contexte, l'écriture tombe à 3,4 tokens/s ; profil : l'attention (`qk_attention_values` 3 007, `qk_attention_scores` 2 807 échantillons) pèse deux fois `qk_dot` (2 737).

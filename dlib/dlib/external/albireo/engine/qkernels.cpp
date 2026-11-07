@@ -2376,6 +2376,10 @@ namespace albireo
     void qk_attention_scores(const float* Q, long rows, const uint16_t* K, long m, long hd, float* S, long lds,
         float* scratch)
     {
+#if ALBIREO_QK_NEON
+        attention_scores_neon(Q, rows, K, m, hd, S, lds, scratch, attention_group(hd));
+        return;
+#endif
         const long G = attention_group(hd);
         for (long j0 = 0; j0 < m; j0 += G)
         {
@@ -2411,6 +2415,10 @@ namespace albireo
     void qk_attention_values(const float* P, long lds, long rows, const uint16_t* V, long m, long hd, float* O,
         float* scratch)
     {
+#if ALBIREO_QK_NEON
+        attention_values_neon(P, lds, rows, V, m, hd, O, scratch, attention_group(hd));
+        return;
+#endif
         const long G = attention_group(hd);
         for (long j0 = 0; j0 < m; j0 += G)
         {

@@ -182,7 +182,20 @@ Mesures de référence du moteur d'origine, avant NEON (2026-11-06, mode économ
 
 Le 4B pèse deux fois le 2B (2,3 Go contre 1,1) : sa génération va à peu près deux fois moins vite. Son projecteur d'images est en Q8_0, format qui n'a pas encore de noyau NEON.
 
-**Long contexte : l'attention devient l'étape lente.** Pendant le résumé du PDF (environ 28 500 tokens lus par le service au total, une vingtaine de milliers pour cette requête), l'écriture tombe à 3,4 tokens/s. Profil (`sample`, 3 s, pendant l'écriture) : `qk_attention_values` 3 007 échantillons et `qk_attention_scores` 2 807, contre 2 737 pour `qk_dot` (déjà en NEON). L'attention, qui relit à chaque token toutes les clés et valeurs (en F16), prend les deux tiers du calcul et reste en code portable.
+**Long contexte : l'attention devient l'étape lente.** Pendant le résumé du PDF (environ 28 500 tokens lus par le service au total, une vingtaine de milliers pour cette requête), l'écriture tombe à 3,4 tokens/s. Profil (`sample`, 3 s, pendant l'écriture) : `qk_attention_values` 3 007 échantillons et `qk_attention_scores` 2 807, contre 2 737 pour `qk_dot` (déjà en NEON). L'attention, qui relit à chaque token toutes les clés et valeurs (en F16), prenait les deux tiers du calcul en code portable.
+
+**Attention NEON (2026-11-07).** `qk_attention_scores` et `qk_attention_values` prennent, sous `ALBIREO_QK_NEON`, `attention_scores_neon` et `attention_values_neon` (`engine/qkernels_neon.inc`). Les demi-flottants sont convertis par `vcvt_f32_f16`. Pour les scores, les clés sont rangées en travers par quatre (`vst4q_f32`), pour qu'une voie suive une clé ; pour les valeurs, une voie suit un élément. Chaque somme garde l'ordre du code portable et ses arrondis tels qu'Apple clang 21 les compile : un score fait produit puis addition sur ses `hd / 4 * 4` premiers termes (boucle vectorisée par le compilateur), puis `fma` sur les autres ; une valeur fait `fma` sur chaque clé (boucle à pas de `hd`, restée scalaire, sauf pour `hd == 1`). Contrôle : 0 différence sur 549 760 résultats contre le code portable compilé avec les mêmes options (`-U__ARM_FEATURE_DOTPROD`), `hd` de 128, 64, 80, 72 et 6, 1 à 2 049 clés, 1 à 9 lignes ; réponse identique, mot pour mot, avant et après, sur un résumé de 4 329 tokens (`engine_chat`, `--context 8192 --temperature 0`). Une règle d'arrondi uniforme ne suffisait pas : tout en produit puis addition laissait 28 907 valeurs différentes sur 49 152 (hd 128) ; la règle des scores appliquée aux valeurs, 25 676.
+
+Mesures alternées, modèle 2B, 8 fils, `bench_runtime <modèle> 8 4096 32 1` (4 096 tokens de prompt, puis 32 tokens écrits), `lowpowermode 0`, charge moyenne de 4 à 16 :
+
+| Essai | Version | Prompt de 4 096 tokens | Génération après 4 096 tokens |
+|---|---|---|---|
+| 1 | avant | 25,5 tokens/s (161 s) | 9,0 tokens/s |
+| 1 | NEON | 52,8 tokens/s (78 s) | 19,6 tokens/s |
+| 2 | avant | 24,5 tokens/s (167 s) | 7,5 tokens/s |
+| 2 | NEON | 50,0 tokens/s (82 s) | 22,0 tokens/s |
+
+Avec `engine_chat`, résumé de 4 329 tokens : prompt 23,1 → 47,0 tokens/s, génération 7,9 → 16,9 tokens/s.
 
 Pour mémoire, en mode économie d'énergie : `engine_chat` 0,78 token/s à 8 fils et 0,85 à 4 fils (0,9 cœur occupé) ; `bench_runtime` 1,9 token/s à 4 fils.
 
@@ -204,7 +217,7 @@ Ce qui a été changé pour compiler sur ARM64, chaque fois sous une condition q
 
 Ce qui a été ajouté pour la vitesse :
 
-6. `albireo/engine/qkernels_neon.inc` (fichier du fork) : noyaux NEON de `qk_dot` pour Q4_K et Q6_K. Le même fichier porte `gemm_neon`, le produit en floats du prompt. `albireo/engine/qkernels.cpp` les branche par cinq ajouts sous `ALBIREO_QK_NEON` (`__ARM_NEON` et `__ARM_FEATURE_DOTPROD`) : `#include <arm_neon.h>`, l'inclusion du fichier, deux cas dans `qk_dot`, une branche dans `gemm_rows`, le nom `NEON+dotprod` dans `qk_isa()`.
+6. `albireo/engine/qkernels_neon.inc` (fichier du fork) : noyaux NEON de `qk_dot` pour Q4_K et Q6_K. Le même fichier porte `gemm_neon`, le produit en floats du prompt. `albireo/engine/qkernels.cpp` les branche par cinq ajouts sous `ALBIREO_QK_NEON` (`__ARM_NEON` et `__ARM_FEATURE_DOTPROD`) : `#include <arm_neon.h>`, l'inclusion du fichier, deux cas dans `qk_dot`, une branche dans `gemm_rows`, le nom `NEON+dotprod` dans `qk_isa()`. Il porte aussi l'attention (`attention_scores_neon`, `attention_values_neon`), appelée en tête de `qk_attention_scores` et `qk_attention_values` (deux fois quatre lignes).
 
 Ce qui a été changé pour lancer le service d'Albireo, sous `#if defined(__APPLE__)` :
 
