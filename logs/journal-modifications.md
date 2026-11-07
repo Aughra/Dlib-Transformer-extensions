@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-07 — Noter l'essai de la page web et le coût de l'attention
+
+- **Quoi** : l'humain a essayé la page d'Albireo dans son navigateur (conversation, résumé d'un PDF de 4,6 Mo « consulté par recherche », juste). Sur ce long contexte, l'écriture tombe à 3,4 tokens/s ; profil : l'attention (`qk_attention_values` 3 007, `qk_attention_scores` 2 807 échantillons) pèse deux fois `qk_dot` (2 737).
+- **Fichiers** : `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : l'attention passe en tête des choses à accélérer.
+- **Étapes** : état du moteur par `/albireo/v1/status` (28 556 tokens de prompt au total, 3,4 tokens/s en génération) ; `sample` de 3 s du service pendant l'écriture. Pas de changement de code.
+
 ## 2026-11-07 — Lancer le service d'Albireo sur le Mac
 
 - **Quoi** : le service `albireo-service --console` trouve son moteur et sa page web, télécharge ses modèles par défaut et répond aux questions, en une fois et en flux. Deux corrections sous `#if defined(__APPLE__)` : chemin du programme par `_NSGetExecutablePath` au lieu de `/proc/self/exe` ; mémoire (`hw.memsize`, `host_statistics64`) et nom du processeur (`machdep.cpu.brand_string`) par `sysctl` au lieu de `/proc/meminfo`.

@@ -20,6 +20,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-07 : **produit en floats NEON pour le prompt** (`gemm_neon` dans `qkernels_neon.inc`, branché dans `gemm_rows`), identique au bit près à `qk_dot_f32` (0 différence sur 32 436 produits ; un `vfmaq_f32` aurait changé le dernier bit). Prompt à 8 fils : 35 à 50 tokens/s contre 5 à 13 (mesures alternées). Même réponse. Blog : épisode 9.
 - 2026-11-07 : 1 commit de l'original fusionné (`8743fcd`, mesure du compresseur de tokens sur enwik9), sans conflit. Il ne touche que `Readme.md` et `examples/Readme.md` : pas de code, donc pas de rebuild.
 - 2026-11-07 : **le service d'Albireo tourne sur le Mac** (`--console`, données dans `build/albireo-home`, port 18443). Deux corrections sous `#if defined(__APPLE__)` : chemin du programme par `_NSGetExecutablePath` (`common/platform.cpp`, sans quoi ni moteur ni page web n'étaient trouvés), mémoire et nom du processeur par `sysctl` (`common/system_info.cpp`). Modèles par défaut téléchargés en une minute (Qwen3-VL 4B Thinking, 2,3 Go + projecteur 433 Mo ; Qwen3 Embedding 0.6B, 610 Mo). Page web et fichiers servis (200) ; `/v1/chat/completions` répond « Paris est la capitale de la France. » en 3,7 s (14 tokens/s), et en flux. Tests `test_host`, `test_model_file`, `test_engine_api`, `test_qkernels`, `test_chat_format` repassés. Blog : épisode 10.
+- 2026-11-07 : **page web essayée par l'humain** dans son navigateur : conversation, puis résumé juste d'un PDF de 4,6 Mo (guide d'hygiène de l'ANSSI) lu par recherche. Écriture à 3,4 tokens/s sur ce long contexte : l'attention, non accélérée, prend les deux tiers du calcul.
 
 ## En cours
 
@@ -27,8 +28,8 @@ Rien. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
 ## À faire, dans l'ordre proposé
 
-1. Essai de la page `https://localhost:18443/` dans un navigateur, par l'humain (Claude n'a pas de navigateur ici) : avertissement de certificat attendu, conversation, envoi d'une image.
-2. Plus tard, si utile : noyaux NEON pour les autres formats de poids (Q8_0, Q5_K…), et pour l'attention (`qk_attention_scores`, `qk_attention_values`), qui deviendra visible avec les longs contextes.
+1. **Noyaux NEON pour l'attention** (`qk_attention_scores`, `qk_attention_values`, clés et valeurs en F16) : avec un PDF (~20 000 tokens de contexte), l'écriture tombe à 3,4 tokens/s et l'attention prend les deux tiers du calcul (profil dans le mémo). Viser le résultat au bit près, comme pour `gemm_neon`, et mesurer en alternance sur un long contexte.
+2. Plus tard, si utile : noyaux NEON pour les autres formats de poids (Q8_0 du projecteur et du modèle de recherche, Q5_K…).
 
 Ensuite, Pseudalis :
 
