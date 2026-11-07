@@ -99,6 +99,20 @@ cmake --build build/macos-pseudalis --parallel 3 -- -k 0
 
 `-- -k 0` fait continuer Ninja après une erreur, pour relever toutes les erreurs d'un seul passage. Restent hors de portée sur macOS : l'icône de la zone de notification, l'installateur, le service Windows, le lecteur avec sa lettre et les commandes de l'Explorateur.
 
+### Lancer le service d'Albireo
+
+Le service garde ses données (réglages, certificats, base, modèles) dans `$ALBIREO_HOME`. Un dossier sous `build/`, que git ignore, convient :
+
+```sh
+mkdir -p build/albireo-home
+echo '{"port": 18443, "check_updates": false}' > build/albireo-home/settings.json
+ALBIREO_HOME=$PWD/build/albireo-home build/macos-albireo/bin/albireo-service --console
+```
+
+Puis ouvrir `https://localhost:18443/` (certificat d'une autorité locale créée au premier démarrage, `build/albireo-home/certificates/albireo-authority.crt` : le navigateur l'avertit tant qu'on ne lui fait pas confiance). `check_updates: false` empêche le service de chercher une mise à jour de l'original, faite pour Windows et Linux. Au premier démarrage, s'il n'est pas `offline`, il télécharge son modèle par défaut (Qwen3-VL 4B Thinking Q4_K_M, 2,3 Go, et son projecteur d'images, 433 Mo) et son modèle de recherche (Qwen3 Embedding 0.6B Q8_0, 610 Mo) depuis Hugging Face, le catalogue depuis GitHub.
+
+Pour l'arrêter : Ctrl-C dans son terminal, ou `kill -TERM`. Lancé en arrière-plan par un shell non interactif (un script, `( … &)`), il ignore SIGINT : le shell le lui fait ignorer, et macOS, contrairement à Linux, jette alors le signal même quand le fil qui l'attend avec `sigwait` le bloque. `kill -INT` reste donc sans effet dans ce cas ; `kill -TERM` l'arrête en une seconde.
+
 ## État constaté
 
 Sur Mac M2, macOS arm64, avec AppleClang 21, CMake 4.1.2 et Ninja (2026-11-06, après la fusion de `upstream/main` à `f0f9f91`) :
@@ -106,7 +120,7 @@ Sur Mac M2, macOS arm64, avec AppleClang 21, CMake 4.1.2 et Ninja (2026-11-06, a
 | Build | Compilation | Tests |
 |---|---|---|
 | dlib + exemples (CPU de référence) | 0 erreur ; les 24 exemples `slm_*` sont des Mach-O arm64. Avertissements : `ld: -s is obsolete`, `-Wbraced-scalar-init`. | Exemples et `dtest` pas encore exécutés. |
-| Albireo | 0 erreur, 0 avertissement. `albireo-service`, `albireo-speech`, `albireo-builtin`, `albireo-sign` et le moteur `libalbireo-engine-cpu.dylib` (noyaux `NEON+dotprod` pour Q4_K et Q6_K, portables pour les autres formats) sont construits. | Passent : `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api` (sur le moteur cpu), `test_host`. Le moteur répond juste avec Qwen3-VL 2B Instruct (`engine_chat`) ; vitesse ci-dessous. Pas lancés (il leur faut un fichier de référence) : `test_runtime`, `test_tokenizer`. Le service n'a pas encore été lancé. |
+| Albireo | 0 erreur, 0 avertissement. `albireo-service`, `albireo-speech`, `albireo-builtin`, `albireo-sign` et le moteur `libalbireo-engine-cpu.dylib` (noyaux `NEON+dotprod` pour Q4_K et Q6_K, portables pour les autres formats) sont construits. | Passent : `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api` (sur le moteur cpu), `test_host`. Le moteur répond juste avec Qwen3-VL 2B Instruct (`engine_chat`) ; vitesse ci-dessous. Pas lancés (il leur faut un fichier de référence) : `test_runtime`, `test_tokenizer`. Le service `--console` démarre, télécharge ses modèles, sert la page web et ses fichiers, et répond par `/v1/chat/completions`, en une fois et en flux (ci-dessous). La page n'a pas encore été essayée dans un navigateur. |
 | Pseudalis | 0 erreur, 1 avertissement (`-Wunused-private-field`). `pseudalis-service` et `libpseudalis-engine.dylib` sont construits. | `test_engine` et `test_host` passent. `tools/test_linux.sh` : 26 étapes sur 28 passent (service, anonymisation et restauration par l'interface et par le lecteur). Échouent : « drive signatures » (une archive protégée renommée sur le lecteur part dans `refused/`) et « copies on the drive » (la copie d'un fichier protégé crée un nouvel enregistrement). |
 
 ### Albireo : premier modèle et vitesse
@@ -159,6 +173,15 @@ Mesures de référence du moteur d'origine, avant NEON (2026-11-06, mode économ
 | `bench_runtime` | 4 | 9,6 tokens/s | 7,0 tokens/s (144 ms) ; 2 séquences : 6,9 tokens/s | 3,7 |
 | `bench_runtime` | 8 | 11,3 tokens/s | 8,3 tokens/s (120 ms) ; 2 séquences : 8,9 tokens/s | 5,9 |
 
+**Le service (2026-11-07).** Le service lancé comme ci-dessus annonce « Apple M2 », 8 cœurs, 24 Go, le moteur `cpu` en `NEON+dotprod` à 8 fils, et réduit le contexte du modèle 4B de 262 144 à 20 736 tokens selon la mémoire. Charge moyenne de 4 à 5, `lowpowermode 0` :
+
+| Requête (modèle `albireo-general` = Qwen3-VL 4B Thinking) | Tokens | Durée | Prompt | Génération | Résultat |
+|---|---|---|---|---|---|
+| « Quelle est la capitale de la France ? Réponds en une phrase. », sans raisonnement | 27 lus, 33 écrits | 3,7 s | 19,4 tokens/s | 14,0 tokens/s | « Paris est la capitale de la France. » |
+| « Explique en trois phrases ce qu'est une puce Apple M2. », en flux, raisonnement, 600 au plus | 25 lus, 600 écrits | 54 s | 18,6 tokens/s | 11,3 tokens/s | 604 messages du flux ; les 600 tokens restent dans le raisonnement (en anglais), la réponse n'a pas commencé |
+
+Le 4B pèse deux fois le 2B (2,3 Go contre 1,1) : sa génération va à peu près deux fois moins vite. Son projecteur d'images est en Q8_0, format qui n'a pas encore de noyau NEON.
+
 Pour mémoire, en mode économie d'énergie : `engine_chat` 0,78 token/s à 8 fils et 0,85 à 4 fils (0,9 cœur occupé) ; `bench_runtime` 1,9 token/s à 4 fils.
 
 Constats :
@@ -180,6 +203,11 @@ Ce qui a été changé pour compiler sur ARM64, chaque fois sous une condition q
 Ce qui a été ajouté pour la vitesse :
 
 6. `albireo/engine/qkernels_neon.inc` (fichier du fork) : noyaux NEON de `qk_dot` pour Q4_K et Q6_K. Le même fichier porte `gemm_neon`, le produit en floats du prompt. `albireo/engine/qkernels.cpp` les branche par cinq ajouts sous `ALBIREO_QK_NEON` (`__ARM_NEON` et `__ARM_FEATURE_DOTPROD`) : `#include <arm_neon.h>`, l'inclusion du fichier, deux cas dans `qk_dot`, une branche dans `gemm_rows`, le nom `NEON+dotprod` dans `qk_isa()`.
+
+Ce qui a été changé pour lancer le service d'Albireo, sous `#if defined(__APPLE__)` :
+
+7. `albireo/common/platform.cpp`, `executable_path()` : le chemin du programme par `_NSGetExecutablePath` puis `realpath`, à la place de `/proc/self/exe`, qui n'existe pas sur macOS. Sans cela, le service ne trouve ni ses moteurs (« no usable engine in ») ni sa page web (« no web folder at web »). Pseudalis a sa copie du même code (`pseudalis/common/platform.cpp`), pas encore corrigée.
+8. `albireo/common/system_info.cpp` : la mémoire (`hw.memsize`, et les pages libres, inactives ou purgeables de `host_statistics64`) à la place de `/proc/meminfo`, qui donnait 0, et le nom du processeur (`machdep.cpu.brand_string`). Le moteur se sert de la mémoire libre pour borner la place des clés et valeurs ; à 0, il sautait ce calcul.
 
 ## Points à surveiller
 

@@ -19,6 +19,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-07 : **noyaux NEON de `qk_dot` pour Q4_K et Q6_K** (`engine/qkernels_neon.inc`, branchés dans `qkernels.cpp`). Résultat identique au bit près à la version portable (0 différence sur 12 000 produits ; même réponse). Génération à 8 fils : 33 à 37 tokens/s contre 11 (mesures alternées). Le prompt ne change pas (`matmul_float`). Blog : épisode 8. L'original a 1 commit de plus (`8743fcd`, mesure du compresseur sur enwik9), pas fusionné.
 - 2026-11-07 : **produit en floats NEON pour le prompt** (`gemm_neon` dans `qkernels_neon.inc`, branché dans `gemm_rows`), identique au bit près à `qk_dot_f32` (0 différence sur 32 436 produits ; un `vfmaq_f32` aurait changé le dernier bit). Prompt à 8 fils : 35 à 50 tokens/s contre 5 à 13 (mesures alternées). Même réponse. Blog : épisode 9.
 - 2026-11-07 : 1 commit de l'original fusionné (`8743fcd`, mesure du compresseur de tokens sur enwik9), sans conflit. Il ne touche que `Readme.md` et `examples/Readme.md` : pas de code, donc pas de rebuild.
+- 2026-11-07 : **le service d'Albireo tourne sur le Mac** (`--console`, données dans `build/albireo-home`, port 18443). Deux corrections sous `#if defined(__APPLE__)` : chemin du programme par `_NSGetExecutablePath` (`common/platform.cpp`, sans quoi ni moteur ni page web n'étaient trouvés), mémoire et nom du processeur par `sysctl` (`common/system_info.cpp`). Modèles par défaut téléchargés en une minute (Qwen3-VL 4B Thinking, 2,3 Go + projecteur 433 Mo ; Qwen3 Embedding 0.6B, 610 Mo). Page web et fichiers servis (200) ; `/v1/chat/completions` répond « Paris est la capitale de la France. » en 3,7 s (14 tokens/s), et en flux. Tests `test_host`, `test_model_file`, `test_engine_api`, `test_qkernels`, `test_chat_format` repassés. Blog : épisode 10.
 
 ## En cours
 
@@ -26,11 +27,12 @@ Rien. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
 ## À faire, dans l'ordre proposé
 
-1. Lancer le service d'Albireo en `--console`, poser une question par l'interface web.
+1. Essai de la page `https://localhost:18443/` dans un navigateur, par l'humain (Claude n'a pas de navigateur ici) : avertissement de certificat attendu, conversation, envoi d'une image.
 2. Plus tard, si utile : noyaux NEON pour les autres formats de poids (Q8_0, Q5_K…), et pour l'attention (`qk_attention_scores`, `qk_attention_values`), qui deviendra visible avec les longs contextes.
 
 Ensuite, Pseudalis :
 
+0. **Pseudalis, chemin du programme** : `pseudalis/common/platform.cpp` et `pseudalis/host/main.cpp` lisent aussi `/proc/self/exe`. Même correction que pour Albireo (`_NSGetExecutablePath`). À faire avant de chercher la cause des deux étapes qui échouent.
 1. **Pseudalis, « drive signatures »** : une archive protégée (`grosse.zip`) renommée sur le lecteur en `grosse.zip.bak` est déplacée dans `refused/files/` au lieu de rester. Sur Linux, elle reste. Piste : la façon dont le lecteur (`host/drive_folders.cpp`, scrutation par `stat`) reconnaît un fichier qu'il a déjà protégé, après un renommage, sur APFS.
 2. **Pseudalis, « copies on the drive »** : la copie d'un fichier protégé (`cp copies.txt "copies (2).txt"`) crée un nouvel enregistrement au lieu de reprendre celui du fichier. Même piste : la reconnaissance d'un fichier déjà protégé. Attention, `cp` sur APFS fait un clone : à comparer avec Linux.
 
@@ -47,7 +49,9 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 ## Problèmes ouverts
 
 - L'ancien fork `PapyTortueTech/Dlib-Transformer-extensions` n'est plus utilisé ; l'humain s'occupe de l'arrêter. Ne plus jamais y pousser.
-- Le moteur d'Albireo sur Mac est le moteur portable : correct, mais sans accélération SIMD (7,9 tokens/s à 8 fils, voir le mémo).
+- Noyaux NEON seulement pour Q4_K, Q6_K et le produit en floats. Les autres formats (Q8_0 du projecteur d'images et du modèle de recherche, Q5_K…) et l'attention restent portables.
+- Lancé en arrière-plan par un script, le service ignore SIGINT (le shell le lui fait ignorer, et macOS jette alors le signal) : l'arrêter par `kill -TERM`. Dans un terminal, Ctrl-C marche. Même chose attendue pour `test_linux.sh` d'Albireo à l'étape « service stop ».
+- Le modèle par défaut est un modèle « Thinking » : il raisonne longtemps (en anglais) avant de répondre ; prévoir un `max_tokens` large ou `"reasoning": false`.
 - `bench_runtime` exige un prompt d'au moins 64 tokens (sinon il lit hors de son tableau) : `bench_runtime <modèle> 4 64 16 2`.
 
 ## Commandes pour reprendre
@@ -62,4 +66,9 @@ cmake --build build/macos-albireo -- -k 0
 mkdir -p /tmp/shim && printf '#!/bin/sh\nsysctl -n hw.ncpu\n' > /tmp/shim/nproc && chmod +x /tmp/shim/nproc
 ln -sf /opt/homebrew/bin/gstat /tmp/shim/stat
 PATH=/tmp/shim:$PATH bash dlib/dlib/external/pseudalis/tools/test_linux.sh $PWD/build/macos-pseudalis
+
+# Service d'Albireo (page : https://localhost:18443/ ; arrêt : Ctrl-C, ou kill -TERM)
+ALBIREO_HOME=$PWD/build/albireo-home build/macos-albireo/bin/albireo-service --console
+curl -sk https://localhost:18443/v1/chat/completions -H "Content-Type: application/json" \
+  -d '{"model": "albireo-general", "reasoning": false, "max_tokens": 80, "messages": [{"role": "user", "content": "Bonjour"}]}'
 ```

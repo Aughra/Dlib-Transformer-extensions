@@ -13,3 +13,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 7. [Le mode économie](07-le-mode-economie.md)
 8. [Seize à la fois](08-seize-a-la-fois.md)
 9. [Le dernier chiffre](09-le-dernier-chiffre.md)
+10. [Le programme qui ne savait pas où il habitait](10-le-programme-qui-ne-savait-pas-ou-il-habitait.md)

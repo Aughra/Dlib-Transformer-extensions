@@ -28,6 +28,10 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 #endif
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <sys/sysctl.h>
+#endif
 #if !defined(_MSC_VER) && (defined(__x86_64__) || defined(__i386__))
 #include <cpuid.h>
 #endif
@@ -130,6 +134,14 @@ namespace albireo
         }
 #endif
 
+#if defined(__APPLE__)
+        // The name of the processor, "Apple M2" for instance.
+        char brand[128];
+        size_t brand_size = sizeof(brand);
+        if (sysctlbyname("machdep.cpu.brand_string", brand, &brand_size, nullptr, 0) == 0)
+            c.brand = trim(std::string(brand, strnlen(brand, brand_size)));
+#endif
+
 #if defined(_WIN32)
         DWORD len = 0;
         GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &len);
@@ -176,6 +188,17 @@ namespace albireo
             m.total = s.ullTotalPhys;
             m.available = s.ullAvailPhys;
         }
+#elif defined(__APPLE__)
+        // macOS has no /proc: the memory installed, and the pages free, inactive or purgeable.
+        uint64_t total = 0;
+        size_t size = sizeof(total);
+        if (sysctlbyname("hw.memsize", &total, &size, nullptr, 0) == 0) m.total = total;
+        vm_statistics64_data_t vm;
+        mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+        if (host_statistics64(mach_host_self(), HOST_VM_INFO64, reinterpret_cast<host_info64_t>(&vm), &count)
+            == KERN_SUCCESS)
+            m.available = (static_cast<uint64_t>(vm.free_count) + vm.inactive_count + vm.purgeable_count)
+                * static_cast<uint64_t>(vm_kernel_page_size);
 #else
         std::ifstream in("/proc/meminfo");
         std::string key;

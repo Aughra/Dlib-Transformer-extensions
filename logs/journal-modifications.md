@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-07 — Lancer le service d'Albireo sur le Mac
+
+- **Quoi** : le service `albireo-service --console` trouve son moteur et sa page web, télécharge ses modèles par défaut et répond aux questions, en une fois et en flux. Deux corrections sous `#if defined(__APPLE__)` : chemin du programme par `_NSGetExecutablePath` au lieu de `/proc/self/exe` ; mémoire (`hw.memsize`, `host_statistics64`) et nom du processeur (`machdep.cpu.brand_string`) par `sysctl` au lieu de `/proc/meminfo`.
+- **Fichiers** : `dlib/dlib/external/albireo/common/platform.cpp`, `dlib/dlib/external/albireo/common/system_info.cpp` ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal, `blog/10-le-programme-qui-ne-savait-pas-ou-il-habitait.md`, `blog/README.md`.
+- **Pourquoi** : étape suivante de la reprise ; au premier lancement, le journal disait « programs in  » (vide), « no usable engine in », « no web folder at web », et la mémoire valait 0.
+- **Étapes** : premier lancement (données dans `build/albireo-home`, port 18443, `check_updates: false`) : modèles téléchargés (Qwen3-VL 4B Thinking 2,3 Go + projecteur 433 Mo, Qwen3 Embedding 0.6B 610 Mo) mais aucun moteur ; correction, rebuild sans erreur ; relance : « Apple M2 », 24 Go, moteur `NEON+dotprod` ; page `/` et ses fichiers en 200 ; `/v1/chat/completions` : « Paris est la capitale de la France. » (3,7 s, 14,0 tokens/s), flux de 604 messages (600 tokens de raisonnement) ; `test_host`, `test_model_file`, `test_engine_api`, `test_qkernels`, `test_chat_format` passent. Constaté : lancé en arrière-plan par un shell non interactif, le service ignore SIGINT (macOS jette le signal ignoré même bloqué) ; `kill -TERM` l'arrête en 1 s. Pseudalis a la même lecture de `/proc/self/exe`, pas encore corrigée. Page pas essayée dans un navigateur.
+
 ## 2026-11-07 — Fusionner le dernier commit de l'original
 
 - **Quoi** : `git merge upstream/main`, 1 commit (`8743fcd`, résultats du compresseur de tokens sur enwik9 : archive de 117 169 624 octets, 0,937 bit par octet). Fusion sans conflit.
