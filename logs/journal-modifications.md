@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-08 — Relever le second essai du PDF
+
+- **Quoi** : suivi de `/albireo/v1/status` toutes les 5 s pendant que l'humain refait le résumé du PDF de l'ANSSI : rangement par le modèle de recherche (~2 min), lecture d'environ 1 800 tokens par le 4B, 578 tokens écrits à 12 à 13 tokens/s.
+- **Fichiers** : `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : voir l'effet de l'attention NEON sur un vrai document ; le contexte étant bien plus court qu'au premier essai, la comparaison ne vaut pas, celle de l'épisode 11 (à texte égal) reste la référence.
+- **Étapes** : service relancé détaché de la session (le précédent s'était arrêté avec elle) ; relevés dans `build/att/pdf-suivi.txt`.
+
 ## 2026-11-07 — Accélérer l'attention d'Albireo avec NEON
 
 - **Quoi** : `attention_scores_neon` et `attention_values_neon`, appelées en tête de `qk_attention_scores` et `qk_attention_values` sous `ALBIREO_QK_NEON`. Identiques au bit près au code portable. Sur 4 096 tokens : prompt et génération environ deux fois plus rapides.

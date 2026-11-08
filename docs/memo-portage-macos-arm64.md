@@ -197,6 +197,8 @@ Mesures alternées, modèle 2B, 8 fils, `bench_runtime <modèle> 8 4096 32 1` (4
 
 Avec `engine_chat`, résumé de 4 329 tokens : prompt 23,1 → 47,0 tokens/s, génération 7,9 → 16,9 tokens/s.
 
+Le résumé du PDF refait dans la page (2026-11-08, `/albireo/v1/status` relevé toutes les 5 s) : le modèle de recherche range le document (~25 000 tokens, environ 200 tokens/s, 2 min), puis le 4B lit environ 1 800 tokens de passages choisis et écrit 578 tokens à 12 à 13 tokens/s. Pas comparable au premier essai (3,4 tokens/s), dont la quantité de contexte n'a pas été relevée et était bien plus grande.
+
 Pour mémoire, en mode économie d'énergie : `engine_chat` 0,78 token/s à 8 fils et 0,85 à 4 fils (0,9 cœur occupé) ; `bench_runtime` 1,9 token/s à 4 fils.
 
 Constats :
