@@ -70,3 +70,26 @@
             });
         }
     }
+
+    /*
+        The two products of a tile of the encoder attention (qk_encoder_attention), through
+        Accelerate as well: the scores S = Q Kt of rows queries against n keys, and the
+        weighted values O += P V.  The tiles are small (64 queries, 128 keys) and the threads
+        of the pool call them together, which costs Accelerate much of its rate, but it stays
+        far ahead of the portable loops, which read Kt across its rows one float at a time.
+    */
+    void encoder_scores_accelerate(const float* Q, long rows, long hd, const float* Kt, long ldk, long n,
+        float* S, long lds)
+    {
+        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, static_cast<int>(rows), static_cast<int>(n),
+            static_cast<int>(hd), 1.0f, Q, static_cast<int>(hd), Kt, static_cast<int>(ldk), 0.0f, S,
+            static_cast<int>(lds));
+    }
+
+    void encoder_values_accelerate(const float* P, long lds, long rows, const float* V, long ldv, long n,
+        long hd, float* O, long ldo)
+    {
+        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, static_cast<int>(rows), static_cast<int>(hd),
+            static_cast<int>(n), 1.0f, P, static_cast<int>(lds), V, static_cast<int>(ldv), 1.0f, O,
+            static_cast<int>(ldo));
+    }

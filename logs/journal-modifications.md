@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-08 — Passer l'attention de l'encodeur d'images par Accelerate
+
+- **Quoi** : sur Mac, les deux produits de chaque tuile de `qk_encoder_attention` (notes `S = Q Kt`, valeurs `O += P V`) passent par `cblas_sgemm` (`encoder_scores_accelerate`, `encoder_values_accelerate` dans `qkernels_accelerate.inc`), appelés en tête de `encoder_scores` et `encoder_values` sous `ALBIREO_QK_ACCELERATE`. Encodage d'une image 512 × 512 (16 × 16 tokens) par le projecteur du 4B : 6,6 à 8,5 s → 1,8 à 2,2 s.
+- **Fichiers** : `albireo/engine/qkernels_accelerate.inc`, `albireo/engine/qkernels.cpp` (deux aiguillages de quatre lignes), ce journal.
+- **Pourquoi** : mesurer une image après le passage des produits par Accelerate (point annoncé) ; le profil de l'encodage montrait `qk_encoder_attention` à 20 143 échantillons, tout le reste à quelques centaines (code portable sur Mac, clés lues en travers).
+- **Étapes** : images de macOS converties en JPEG (`sips`, zèbre et perroquet) ; avant le changement, mêmes descriptions qu'avec le moteur de l'attention NEON (zèbre mot pour mot, perroquet à trois mots près), lecture de l'image et de la question 20,2 → 10,5 s et 23,3 → 11,6 s ; profil ; contrôle hors dépôt contre une attention en double précision (84 cas, `hd` 64 à 128, 1 à 1 100 clés, 1 à 64 lignes) : plus grand écart 3,0e-6 contre 4,0e-6 pour le code portable ; build sans avertissement ; tests `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api`, `test_host` passent ; mesures alternées (`lowpowermode 0`, charge 5 à 11) : encodage 6 668 / 7 749 / 8 495 / 8 526 ms → 2 101 / 2 181 / 1 781 / 1 886 ms, lecture complète 10,7 à 12,9 s → 5,9 à 7,3 s, descriptions identiques mot pour mot ; service relancé.
+
 ## 2026-11-08 — Donner le code avant et après pour les erreurs qui touchent aussi Windows
 
 - **Quoi** : `docs/notes-pour-l-auteur.md`, entrée 1 (`bench_runtime` sous 64 tokens) : fichier à corriger, code avant (lignes 12 et 76 à 85 de `upstream/main`), code après (`head = std::min<long>(64, prompt)`), preuve par AddressSanitizer, ce qui est vérifié et ce qui ne l'est pas ; entrée 3 : rien à corriger dans le code (serveur). Consigne ajoutée à CLAUDE.md.

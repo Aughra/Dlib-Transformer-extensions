@@ -2635,6 +2635,10 @@ namespace albireo
 
         void encoder_scores(const float* Q, long rows, long hd, const float* Kt, long ldk, long n, float* S, long lds)
         {
+#if ALBIREO_QK_ACCELERATE
+            encoder_scores_accelerate(Q, rows, hd, Kt, ldk, n, S, lds);
+            return;
+#endif
             const long G = 16;
             for (long r = 0; r < rows; r += 6)
             {
@@ -2711,6 +2715,10 @@ namespace albireo
         void encoder_values(const float* P, long lds, long rows, const float* V, long ldv, long n, long hd, float* O,
             long ldo)
         {
+#if ALBIREO_QK_ACCELERATE
+            encoder_values_accelerate(P, lds, rows, V, ldv, n, hd, O, ldo);
+            return;
+#endif
 #if ALBIREO_QK_AVX2
             const long RG = 2, W = 32;
 #else
