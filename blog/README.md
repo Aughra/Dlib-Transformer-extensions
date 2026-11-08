@@ -17,3 +17,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 11. [Deux façons d'arrondir](11-deux-facons-d-arrondir.md)
 12. [Le chronomètre du test](12-le-chronometre-du-test.md)
 13. [L'atelier d'à côté](13-l-atelier-d-a-cote.md)
+14. [Le zèbre et le perroquet](14-le-zebre-et-le-perroquet.md)

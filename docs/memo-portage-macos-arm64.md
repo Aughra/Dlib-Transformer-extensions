@@ -182,7 +182,7 @@ Mesures de référence du moteur d'origine, avant NEON (2026-11-06, mode économ
 | « Quelle est la capitale de la France ? Réponds en une phrase. », sans raisonnement | 27 lus, 33 écrits | 3,7 s | 19,4 tokens/s | 14,0 tokens/s | « Paris est la capitale de la France. » |
 | « Explique en trois phrases ce qu'est une puce Apple M2. », en flux, raisonnement, 600 au plus | 25 lus, 600 écrits | 54 s | 18,6 tokens/s | 11,3 tokens/s | 604 messages du flux ; les 600 tokens restent dans le raisonnement (en anglais), la réponse n'a pas commencé |
 
-Le 4B pèse deux fois le 2B (2,3 Go contre 1,1) : sa génération va à peu près deux fois moins vite. Son projecteur d'images est en Q8_0 ; ses longs produits passent par Accelerate depuis le 2026-11-08, mais pas encore mesurés sur une image.
+Le 4B pèse deux fois le 2B (2,3 Go contre 1,1) : sa génération va à peu près deux fois moins vite. Son projecteur d'images est en Q8_0 ; ses produits et son attention passent par Accelerate depuis le 2026-11-08 (mesures ci-dessous).
 
 **Long contexte : l'attention devient l'étape lente.** Pendant le résumé du PDF (environ 28 500 tokens lus par le service au total, une vingtaine de milliers pour cette requête), l'écriture tombe à 3,4 tokens/s. Profil (`sample`, 3 s, pendant l'écriture) : `qk_attention_values` 3 007 échantillons et `qk_attention_scores` 2 807, contre 2 737 pour `qk_dot` (déjà en NEON). L'attention, qui relit à chaque token toutes les clés et valeurs (en F16), prenait les deux tiers du calcul en code portable.
 
@@ -214,6 +214,8 @@ Mesures alternées, 8 fils, `lowpowermode 0`, charge moyenne de 2 à 14 (prompt 
 
 Avec `engine_chat`, résumé de 4 329 tokens : prompt 51,7 → 134,9 tokens/s, réponse de même sens mais formulée autrement. Question de 21 tokens : « Paris », prompt 45,6 → 58,4 tokens/s (une paire de mesures). Le service, relancé avec ce moteur, transforme 1 834 tokens en vecteur de recherche en 5,3 s (mesure seule).
 
+**Attention de l'encodeur d'images par Accelerate (2026-11-08).** Sous `ALBIREO_QK_ACCELERATE`, `encoder_scores` et `encoder_values` (tuiles de `qk_encoder_attention`) appellent `cblas_sgemm`. Contrôle hors dépôt contre une attention en double précision (84 cas, `hd` 64 à 128, 1 à 1 100 clés) : écart maximal 3,0e-6, contre 4,0e-6 en portable. Image 512 × 512 (zèbre et perroquet de macOS, convertis par `sips`), 4B Thinking et son projecteur, `engine_chat --projector … --image … --reasoning off --temperature 0`, mesures alternées : encodage 6,7 à 8,5 s → 1,8 à 2,2 s, lecture complète 10,7 à 12,9 s → 5,9 à 7,3 s ; descriptions justes et identiques mot pour mot.
+
 Pour mémoire, en mode économie d'énergie : `engine_chat` 0,78 token/s à 8 fils et 0,85 à 4 fils (0,9 cœur occupé) ; `bench_runtime` 1,9 token/s à 4 fils.
 
 Constats :
@@ -244,7 +246,7 @@ Ce qui a été changé pour lancer le service d'Albireo, sous `#if defined(__APP
 
 Ajouté ensuite pour la vitesse :
 
-10. `albireo/engine/qkernels_accelerate.inc` (fichier du fork) : les produits des prompts par `cblas_sgemm` d'Accelerate, à partir de 16 tokens. `qkernels.cpp` : `ALBIREO_QK_ACCELERATE` et `#include <vecLib/cblas_new.h>` sous NEON et `__APPLE__`, l'inclusion du fichier avant `matmul_float`, et un aiguillage en tête de `matmul_float`. `qkernels.h` : `qk_float_product_tokens` à 24 sous `__APPLE__` et `__ARM_FEATURE_DOTPROD` (8 ailleurs). `albireo/CMakeLists.txt` : `link_libraries("-framework Accelerate")` dans la branche ARM64, sous `if (APPLE)`.
+10. `albireo/engine/qkernels_accelerate.inc` (fichier du fork) : les produits des prompts par `cblas_sgemm` d'Accelerate, à partir de 16 tokens. `qkernels.cpp` : `ALBIREO_QK_ACCELERATE` et `#include <vecLib/cblas_new.h>` sous NEON et `__APPLE__`, l'inclusion du fichier avant `matmul_float`, et un aiguillage en tête de `matmul_float`, puis en tête de `encoder_scores` et `encoder_values` (attention de l'encodeur d'images). `qkernels.h` : `qk_float_product_tokens` à 24 sous `__APPLE__` et `__ARM_FEATURE_DOTPROD` (8 ailleurs). `albireo/CMakeLists.txt` : `link_libraries("-framework Accelerate")` dans la branche ARM64, sous `if (APPLE)`.
 
 ## Points à surveiller
 

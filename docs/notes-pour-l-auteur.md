@@ -341,6 +341,23 @@ Un profil (`sample`) montrait presque tout le temps dans `matmul_float` (prompt)
 
 La génération, un token à la fois, ne passe pas par ce chemin : elle est inchangée (32 à 36 tokens/s avant comme après, sur une question courte).
 
+### Changement 5 : l'attention de l'encodeur d'images par Accelerate
+
+- **Pourquoi** : après le changement 4, l'encodage d'une image de 512 × 512 pixels par le projecteur de Qwen3-VL 4B (Q8_0) prenait encore 6,6 à 8,5 s. Un profil montrait `qk_encoder_attention` à 20 143 échantillons, et tout le reste à quelques centaines. Sur le Mac, `encoder_scores` et `encoder_values` n'ont que leur forme portable : la boucle des notes lit `Kt` en travers de ses lignes, un flottant à la fois.
+- **Quoi** : sous `ALBIREO_QK_ACCELERATE`, les deux produits de chaque tuile (`S = Q Kt`, puis `O += P V`) sont confiés à `cblas_sgemm` (`encoder_scores_accelerate`, `encoder_values_accelerate` dans `qkernels_accelerate.inc`), appelés en tête de `encoder_scores` et `encoder_values` (deux fois quatre lignes). Les tuiles sont petites (64 requêtes, 128 clés) et les fils du pool les appellent ensemble, ce qui coûte à Accelerate une part de son débit, mais il reste loin devant les boucles portables.
+- **Exactitude** : aucun test de l'original ne couvre `qk_encoder_attention`. Contrôle du fork contre une attention calculée en double précision, sur 84 cas (`hd` 64, 72, 80 et 128 ; 1 à 1 100 clés ; 1 à 64 lignes) : plus grand écart absolu 3,0e-6 avec Accelerate, 4,0e-6 avec le code portable. Les descriptions de deux images sont identiques, mot pour mot, avant et après ce changement.
+- **Commit du fork** : [72091df](https://github.com/Aughra/Dlib-Transformer-extensions/commit/72091df).
+
+| `engine_chat`, 4B Thinking et son projecteur, image 512 × 512 (16 × 16 tokens), « Décris cette image en une phrase. » | Essai | Avant (changement 4) | Après |
+|---|---|---|---|
+| Zèbre, encodage de l'image | 1 | 6 668 ms | 2 101 ms |
+| Perroquet, encodage de l'image | 1 | 7 749 ms | 2 181 ms |
+| Zèbre, encodage de l'image | 2 | 8 495 ms | 1 781 ms |
+| Perroquet, encodage de l'image | 2 | 8 526 ms | 1 886 ms |
+| Lecture complète (image et 277 tokens de prompt) | 1 et 2 | 10,7 à 12,9 s | 5,9 à 7,3 s |
+
+Pour mémoire, avec les changements 1 à 3 seulement : encodage de 8,9 et 10,3 s, lecture complète de 20,2 et 23,3 s (une mesure par image).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -351,8 +368,9 @@ La génération, un token à la fois, ne passe pas par ce chemin : elle est inch
 | Prompt de 4 096 tokens | pas mesuré | 156 à 163 tokens/s (50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |
 | Génération après 4 096 tokens | pas mesuré | 20 à 22 tokens/s (7,5 à 9 avec les changements 1 et 2 seuls) |
 | Modèle de recherche (Q8_0), 512 tokens | pas mesuré | 573 à 601 tokens/s (184 à 213 avec les changements 1 à 3) |
+| Encodage d'une image 512 × 512, projecteur du 4B | pas mesuré | 1,8 à 2,2 s (8,9 à 10,3 avec les changements 1 à 3) |
 
-Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate.
+Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
 
 ---
 
