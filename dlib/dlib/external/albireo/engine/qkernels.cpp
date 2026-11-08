@@ -24,6 +24,13 @@
 #include <arm_neon.h>
 #endif
 
+// Apple: the products of the long passes through Accelerate (qkernels_accelerate.inc).
+#if ALBIREO_QK_NEON && defined(__APPLE__)
+#define ALBIREO_QK_ACCELERATE 1
+#define ACCELERATE_NEW_LAPACK
+#include <vecLib/cblas_new.h>
+#endif
+
 /*
     The instructions beyond AVX2, the kernels of the processor engine cpu-avxvnni:
         ALBIREO_QK_VNNI     the dot products of bytes and of 16-bit integers in one
@@ -1985,9 +1992,20 @@ namespace albireo
         }
 #endif
 
+#if ALBIREO_QK_ACCELERATE
+#include "qkernels_accelerate.inc"
+#endif
+
         void matmul_float(const weight_matrix& W, const float* X, long n_tokens, long x_stride,
             float* Y, long y_stride, thread_pool& pool, bool accumulate)
         {
+#if ALBIREO_QK_ACCELERATE
+            if (n_tokens >= accelerate_min_tokens)
+            {
+                matmul_accelerate(W, X, n_tokens, x_stride, Y, y_stride, pool, accumulate);
+                return;
+            }
+#endif
 #if ALBIREO_QK_AVX2
             if (n_tokens >= packed_min_tokens)
             {

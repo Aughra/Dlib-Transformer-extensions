@@ -215,6 +215,10 @@ elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$")
    # the tests that take the kernels of AVX2 build them portable.
    set(ALBIREO_ARM64 ON)
    set(ALBIREO_ISA_avx2 "")
+   if (APPLE)
+      # The products of the long passes go through Accelerate (engine/qkernels_accelerate.inc).
+      link_libraries("-framework Accelerate")
+   endif()
 else()
    set(ALBIREO_ISA_avx2 -mavx2 -mfma -mf16c)
    set(ALBIREO_ISA_avxvnni ${ALBIREO_ISA_avx2} -mavxvnni)

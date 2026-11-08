@@ -134,7 +134,13 @@ namespace albireo
         integer kernels compute each dot product from the compact weights, which is what a
         generation step, bound by the reading of the weights, needs.
     !*/
+#if defined(__APPLE__) && defined(__ARM_FEATURE_DOTPROD)
+    // Apple Silicon: the integer kernels stay faster than the products of Accelerate up to
+    // about 24 tokens (qkernels_accelerate.inc).
+    const long qk_float_product_tokens = 24;
+#else
     const long qk_float_product_tokens = 8;
+#endif
 
     /*!
         ensures
