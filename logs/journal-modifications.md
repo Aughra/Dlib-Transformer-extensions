@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-08 — Donner le code avant et après pour les erreurs qui touchent aussi Windows
+
+- **Quoi** : `docs/notes-pour-l-auteur.md`, entrée 1 (`bench_runtime` sous 64 tokens) : fichier à corriger, code avant (lignes 12 et 76 à 85 de `upstream/main`), code après (`head = std::min<long>(64, prompt)`), preuve par AddressSanitizer, ce qui est vérifié et ce qui ne l'est pas ; entrée 3 : rien à corriger dans le code (serveur). Consigne ajoutée à CLAUDE.md.
+- **Fichiers** : `docs/notes-pour-l-auteur.md`, `CLAUDE.md`, ce journal.
+- **Pourquoi** : l'humain propose des PR à l'auteur pour les erreurs reproductibles sous Windows.
+- **Étapes** : correction écrite dans une copie hors du dépôt (le fork ne touche pas au fichier de l'original), compilée avec les options du build plus `-Wall -Wextra` : 0 avertissement ; original avec AddressSanitizer : `heap-buffer-overflow`, lecture de 256 octets dans 128 (ligne 83, tableau alloué ligne 48) ; version corrigée : rien signalé ; `bench_runtime` corrigé va au bout avec 1, 32 et 64 tokens. Sans AddressSanitizer, l'original à 32 tokens a fini une fois normalement et s'est arrêté une fois sans la ligne « batched generation » (comportement indéfini). Non testé sous Windows.
+
 ## 2026-11-08 — Dire, pour chaque erreur de l'auteur, si Windows est concerné
 
 - **Quoi** : `docs/notes-pour-l-auteur.md` : une ligne « Mac ou Windows » par entrée et une colonne au résumé (aussi sous Windows : n° 1 `bench_runtime`, n° 3 espace de publication ; Linux et Mac : n° 2 ; propre au Mac : n° 4, 6 à 15, 18 ; avertissements du n° 5 détaillés) ; remarque 19 (seuil de 8 tokens trop bas sur Mac) ; changement 4 (Accelerate) dans la partie vitesse et bilan mis à jour. Consigne ajoutée à CLAUDE.md. Mémo (produits par Accelerate, correction 10), reprise et blog (épisode 13, « L'atelier d'à côté ») mis à jour.

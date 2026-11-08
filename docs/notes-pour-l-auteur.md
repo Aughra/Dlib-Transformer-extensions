@@ -15,6 +15,8 @@ Chaque entrée dit aussi **si elle concerne Windows** (ligne « Mac ou Windows �
 
 Le portage n'a pas de machine Windows : « aussi sous Windows » est déduit de la lecture du code, pas vérifié sur une machine Windows.
 
+Pour chaque point « aussi sous Windows » qui se corrige dans le code, l'entrée donne le fichier à changer, le code avant et le code après la correction, et ce qui a été vérifié sur le Mac.
+
 La dernière partie donne les vitesses mesurées sur le Mac, avant et après les noyaux NEON du fork, que vous voudrez peut-être reprendre.
 
 - **Comparé à** : `Cydral/Dlib-Transformer-extensions`, branche `main`, commit `8743fcd`. Les numéros de ligne renvoient à ce commit.
@@ -52,10 +54,63 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
   libc++abi: terminating due to uncaught exception of type std::runtime_error: token identifier out of range
   ```
 
-- **Reproduire** : `bench_runtime modele.gguf 4 32 16 2` (prompt de 32 tokens).
-- **Correction suggérée** (non testée) : prendre `std::min<long>(64, prompt)` tokens pour ces séquences, à la fois dans `reserve_sequence(s, 64 + steps)` (ligne 81), dans l'`assign` et dans `logit_rows` (63). Ou bien refuser un prompt de moins de 64 tokens dans le message d'usage.
-- **Ce que le fork a fait** : rien dans le code. On donne toujours au moins 64 tokens.
+- **Reproduire** : `bench_runtime modele.gguf 8 32 2 2` (prompt de 32 tokens). Le résultat varie d'un lancement à l'autre, comme toujours avec une lecture hors du tableau : arrêt sur l'exception ci-dessus, arrêt sans la ligne « batched generation », ou fin normale avec des tokens lus au hasard. Pour une preuve nette, compiler `bench_runtime.cpp` avec AddressSanitizer (`-fsanitize=address`). Extrait de la sortie sur le Mac, le fichier de l'original copié sous le nom `bench_runtime.orig.cpp` :
+
+  ```
+  ==65634==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x60c000005a00 ...
+  READ of size 256 at 0x60c000005a00 thread T0
+      #11 0x000100c0d4dc in main bench_runtime.orig.cpp:83
+  0x60c000005a00 is located 0 bytes after 128-byte region [0x60c000005980,0x60c000005a00)
+  allocated by thread T0 here:
+      #7 0x000100c0cfd8 in main bench_runtime.orig.cpp:48
+  ```
+
+  La ligne 83 lit 256 octets (64 tokens) dans le tableau de 128 octets (32 tokens) alloué à la ligne 48.
 - **Mac ou Windows** : **aussi sous Windows**. `bench_runtime.cpp` est le même partout, et le CMake le construit sous Windows (`bench_runtime`, `bench_runtime_<famille>`). La lecture hors du vecteur ne dépend pas du système. Non vérifié sur une machine Windows.
+- **Fichier à corriger** : `dlib/dlib/external/albireo/tests/bench_runtime.cpp`.
+- **Code avant** (lignes 12 et 76 à 85 de `upstream/main`) :
+
+  ```cpp
+  #include <chrono>
+  ```
+
+  ```cpp
+      // Several sequences advancing together.
+      std::vector<int> seqs;
+      for (long p = 0; p < parallel; ++p)
+      {
+          const int s = rt.create_sequence();
+          rt.reserve_sequence(s, 64 + steps);
+          b.clear();
+          b.tokens.assign(tokens.begin(), tokens.begin() + 64);
+          b.segments.push_back({ s, 0, 64 });
+          b.logit_rows.push_back(63);
+  ```
+
+- **Code après la correction** : les séquences parallèles prennent les 64 premiers tokens du prompt, ou tout le prompt s'il est plus court.
+
+  ```cpp
+  #include <algorithm>
+  #include <chrono>
+  ```
+
+  ```cpp
+      // Several sequences advancing together, each after the first tokens of the prompt (64 at most).
+      const long head = std::min<long>(64, prompt);
+      std::vector<int> seqs;
+      for (long p = 0; p < parallel; ++p)
+      {
+          const int s = rt.create_sequence();
+          rt.reserve_sequence(s, head + steps);
+          b.clear();
+          b.tokens.assign(tokens.begin(), tokens.begin() + head);
+          b.segments.push_back({ s, 0, head });
+          b.logit_rows.push_back(head - 1);
+  ```
+
+- **Vérifié sur le Mac** (copie corrigée hors du dépôt, mêmes options que le build, plus `-Wall -Wextra`) : compile sans avertissement ; AddressSanitizer ne signale plus rien avec un prompt de 32 tokens ; `bench_runtime modele.gguf 8 <prompt> 4 2` va au bout avec 1, 32 et 64 tokens et affiche la ligne « batched generation ». À 64 tokens et plus, le comportement est celui d'avant (`head` vaut 64). **Non testé sous Windows.**
+- **Non couvert par cette correction** : un prompt de 0 token (`prompt - 1` vaut alors -1 à la ligne 55) et `steps` à 0 (division par zéro aux lignes 72 et 101, qui affiche un temps infini ou NaN). On peut les refuser dans le message d'usage.
+- **Ce que le fork a fait** : rien dans son code (pour ne pas créer de conflit avec l'original). On donne toujours au moins 64 tokens. La correction ci-dessus est prête pour une demande de fusion.
 
 ### 2. Deux étapes du test de Pseudalis attendent un temps fixe
 
@@ -78,7 +133,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
   Le même message apparaît pour `models/qwen3-embedding-0.6b/Qwen3-Embedding-0.6B-Q8_0.gguf` et pour `models/qwen3-vl-4b-thinking/Qwen3VL-4B-Thinking-Q4_K_M.gguf`. Ces deux fichiers sont alors venus de Hugging Face.
 - **Constaté** : le 2026-11-07, avec Albireo Community Edition 1.0.11, un dossier de données neuf, et les réglages par défaut sauf `port` et `check_updates: false`.
 - **Conséquence** : aucune pour l'utilisateur, puisque le repli marche. Mais si l'espace de publication doit servir ces fichiers, il faut vérifier son lien ou les réglages de son serveur. Si la protection est voulue, l'avertissement apparaît à chaque démarrage de chaque installation.
-- **Mac ou Windows** : **aussi sous Windows**. La réponse vient du serveur de l'espace de publication, pas du code du Mac : toute installation qui le consulte devrait la recevoir. Non vérifié depuis Windows. C'est un réglage de serveur, pas une correction de code.
+- **Mac ou Windows** : **aussi sous Windows**. La réponse vient du serveur de l'espace de publication, pas du code du Mac : toute installation qui le consulte devrait la recevoir. Non vérifié depuis Windows. C'est un réglage de serveur, pas une correction de code : aucun fichier du dépôt à changer, donc pas de code avant ni après à proposer.
 
 ### 4. En `--console`, un service lancé en arrière-plan ne s'arrête pas par SIGINT sur macOS
 
