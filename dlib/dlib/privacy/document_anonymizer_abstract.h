@@ -254,6 +254,48 @@ namespace dlib
                   default, restores no substitute.
         !*/
 
+        void set_untagged_text(
+            bool untagged
+        );
+        /*!
+            ensures
+                - #untagged_text() == untagged
+        !*/
+
+        bool untagged_text(
+        ) const;
+        /*!
+            ensures
+                - Returns false, the default, when anonymize() and anonymize_text() replace
+                  each value of the text of a document by its tag.
+                - Returns true when they write its substitute instead (pseudonymizer::
+                  substitute()), a protected value without the brackets, the type and the
+                  check of its tag: in the text formats, the cells and the markup, in the
+                  runs, cells, formulas and links of Word, Excel and PowerPoint, in the text
+                  of the pages of a PDF. Each substitute is listed with its tag in
+                  report.substitutions, text set to true, once for each place it is written
+                  in, so that the caller can keep them: a substitute carries no check, and
+                  only a resolver that knows it gives its value back
+                  (set_text_substitute_resolver()). The names of the sheets of a workbook
+                  and the tags that a document keeps for them in its custom properties are
+                  written as without untagged text.
+        !*/
+
+        void set_text_substitute_resolver(
+            const pseudonymizer::substitute_resolver& resolve
+        );
+        /*!
+            ensures
+                - restore() gives resolve the candidates of the text of the document, in
+                  every place where anonymize() writes values (pseudonymizer::
+                  find_substitutes()), besides its tags: the substitutes that resolve knows,
+                  outside the tags and the texts of the pictures, take their original values
+                  back, counted in report.substitutes_restored.
+                - anonymize() and anonymize_text() leave as they are the substitutes that
+                  resolve knows, an untagged document protected again.
+                - An empty function, the default, restores no substitute of the text.
+        !*/
+
         std::string anonymize_name(
             const std::string& name,
             document_report& report
@@ -283,6 +325,21 @@ namespace dlib
                 - Returns name with the substitutes that the resolver of
                   set_substitute_resolver() knows replaced by their original values, counted
                   in report.substitutes_restored.
+        !*/
+
+        void set_picture_text_finder(
+            const document_picture_text_finder& find
+        );
+        /*!
+            ensures
+                - restore() then removes from every text the ranges that find gives, the texts
+                  that a describer wrote in the place of pictures, with the tags they hold,
+                  and counts them in report.pictures_removed: in the text formats, the cells
+                  and the markup; in Word documents, from their runs; on slides, the gray
+                  text box of the picture with its text; in PDF documents, the text written
+                  over the gray box, the box staying. A restoration made without the
+                  original thus leaves no trace of a picture it cannot give back.
+                - An empty function, the default, removes nothing.
         !*/
 
         void set_image_describer(

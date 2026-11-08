@@ -18,7 +18,8 @@
     is a protected file of the vault (a copy, a move, a rename) is recorded without being
     processed again, and its record leaves the list of the removed ones; the record is marked
     removed once the last file of the drive that shows it leaves.  A protected file whose
-    original was forgotten stays as it is, unrecorded, so that nothing restores it.  A file
+    original was forgotten stays as it is, unrecorded: its restoration puts back the values of
+    its tags.  A file
     extracted from a protected archive that the database records stays as it is too, recorded
     with the original of its entry (service::adopt()).
 
@@ -1109,7 +1110,8 @@ namespace pseudalis
             }
             /*
                 A protected file whose original was forgotten, or kept its time after its file left
-                the drive: kept as it is and unrecorded, so that no new original restores its tags.
+                the drive: kept as it is and unrecorded, so that no new original stands for it; its
+                restoration puts back the values of its tags.
             */
             int64_t forgotten_at = 0;
             std::string forgotten_why;
@@ -1153,7 +1155,9 @@ namespace pseudalis
             bool ok = false;
             try
             {
-                ok = svc.protect(data, base_of(path), "drive", true, r, e);
+                // The files of the drive take their tags, or their substitutes alone, as the settings say.
+                // A version replacing another keeps the substitutes of its record, without tags.
+                ok = svc.protect(data, base_of(path), "drive", true, svc.settings().get().tags, r, e, before.record);
             }
             catch (const std::exception& x)
             {

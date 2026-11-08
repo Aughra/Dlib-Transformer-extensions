@@ -21,6 +21,7 @@ namespace dlib
     {
         std::string substitute;
         std::string tag;
+        bool text = false;
     };
 
 // ----------------------------------------------------------------------------------------
@@ -39,6 +40,7 @@ namespace dlib
         std::vector<std::string> notes;
         std::vector<document_substitution> substitutions;
         std::size_t substitutes_restored = 0;
+        std::size_t pictures_removed = 0;
 
         void count(pii_type t) { ++entities[pii_type_keyword(t)]; }
 
@@ -82,7 +84,8 @@ namespace dlib
             o << (entities.empty() ? "" : "\n  ") << "},\n  \"entities_total\": " << total_entities()
               << ",\n  \"tags_restored\": " << tags_restored << ",\n  \"tags_rejected\": " << tags_rejected
               << ",\n  \"dates_shifted\": " << dates_shifted << ",\n  \"substitutes\": " << substitutions.size()
-              << ",\n  \"substitutes_restored\": " << substitutes_restored << ",\n  \"removed\": [";
+              << ",\n  \"substitutes_restored\": " << substitutes_restored << ",\n  \"pictures_removed\": "
+              << pictures_removed << ",\n  \"removed\": [";
             for (std::size_t i = 0; i < removed.size(); ++i)
                 o << (i ? ", " : "") << "\"" << esc(removed[i]) << "\"";
             o << "],\n  \"notes\": [";

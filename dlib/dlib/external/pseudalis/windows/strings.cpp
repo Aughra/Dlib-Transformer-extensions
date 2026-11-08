@@ -443,6 +443,26 @@ namespace pseudalis
                 "{f} ist anonymisiert: {n} Wert ersetzt.",
                 "{f} è anonimizzato: {n} valore sostituito.",
                 "{f} está anonimizado: {n} valor sustituido." } },
+            { "shell_protected_untagged", { "{f} is anonymized without tags: {n} values replaced.",
+                "{f} est anonymisé sans balises : {n} valeurs remplacées.",
+                "{f} ist ohne Markierungen anonymisiert: {n} Werte ersetzt.",
+                "{f} è anonimizzato senza tag: {n} valori sostituiti.",
+                "{f} está anonimizado sin etiquetas: {n} valores sustituidos." } },
+            { "shell_protected_untagged_one", { "{f} is anonymized without tags: {n} value replaced.",
+                "{f} est anonymisé sans balises : {n} valeur remplacée.",
+                "{f} ist ohne Markierungen anonymisiert: {n} Wert ersetzt.",
+                "{f} è anonimizzato senza tag: {n} valore sostituito.",
+                "{f} está anonimizado sin etiquetas: {n} valor sustituido." } },
+            { "shell_protected_copy_untagged", { "{f} is written, anonymized without tags: {n} values replaced.",
+                "{f} est écrit, anonymisé sans balises : {n} valeurs remplacées.",
+                "{f} ist ohne Markierungen anonymisiert geschrieben: {n} Werte ersetzt.",
+                "{f} è stato scritto, anonimizzato senza tag: {n} valori sostituiti.",
+                "{f} se ha escrito, anonimizado sin etiquetas: {n} valores sustituidos." } },
+            { "shell_protected_copy_untagged_one", { "{f} is written, anonymized without tags: {n} value replaced.",
+                "{f} est écrit, anonymisé sans balises : {n} valeur remplacée.",
+                "{f} ist ohne Markierungen anonymisiert geschrieben: {n} Wert ersetzt.",
+                "{f} è stato scritto, anonimizzato senza tag: {n} valore sostituito.",
+                "{f} se ha escrito, anonimizado sin etiquetas: {n} valor sustituido." } },
             { "shell_protected_copy", { "{f} is written, anonymized: {n} values replaced.",
                 "{f} est écrit, anonymisé : {n} valeurs remplacées.",
                 "{f} ist anonymisiert geschrieben: {n} Werte ersetzt.",
@@ -458,25 +478,52 @@ namespace pseudalis
             { "shell_restored_copy", { "{f} is written, restored.", "{f} est écrit, restauré.",
                 "{f} ist wiederhergestellt geschrieben.", "{f} è stato scritto, ripristinato.",
                 "{f} se ha escrito, restaurado." } },
-            { "shell_restored_tags", { "{f} is restored from its tags, {n} values put back: the file changed after "
-                "its anonymization.",
-                "{f} est restauré à partir de ses balises, {n} valeurs remises : le fichier a changé après son "
-                "anonymisation.",
-                "{f} ist aus seinen Markierungen wiederhergestellt, {n} Werte zurückgesetzt: Die Datei wurde nach "
-                "ihrer Anonymisierung geändert.",
-                "{f} è ripristinato dai suoi tag, {n} valori rimessi: il file è cambiato dopo la sua "
-                "anonimizzazione.",
-                "{f} se restauró a partir de sus etiquetas, {n} valores repuestos: el archivo cambió después de "
-                "su anonimización." } },
-            { "shell_restored_tags_one", { "{f} is restored from its tags, {n} value put back: the file changed after "
-                "its anonymization.",
-                "{f} est restauré à partir de ses balises, {n} valeur remise : le fichier a changé après son "
-                "anonymisation.",
-                "{f} ist aus seinen Markierungen wiederhergestellt, {n} Wert zurückgesetzt: Die Datei wurde nach "
-                "ihrer Anonymisierung geändert.",
-                "{f} è ripristinato dai suoi tag, {n} valore rimesso: il file è cambiato dopo la sua anonimizzazione.",
-                "{f} se restauró a partir de sus etiquetas, {n} valor repuesto: el archivo cambió después de su "
-                "anonimización." } },
+            { "shell_restored_tags", { "{f} is restored from its tags, {n} values put back: the file is not the one "
+                "that Pseudalis wrote.",
+                "{f} est restauré à partir de ses balises, {n} valeurs remises : le fichier n'est pas celui que "
+                "Pseudalis a écrit.",
+                "{f} ist aus seinen Markierungen wiederhergestellt, {n} Werte zurückgesetzt: Die Datei ist nicht "
+                "die, die Pseudalis geschrieben hat.",
+                "{f} è ripristinato dai suoi tag, {n} valori rimessi: il file non è quello scritto da Pseudalis.",
+                "{f} se restauró a partir de sus etiquetas, {n} valores repuestos: el archivo no es el que escribió "
+                "Pseudalis." } },
+            { "shell_restored_tags_one", { "{f} is restored from its tags, {n} value put back: the file is not the one "
+                "that Pseudalis wrote.",
+                "{f} est restauré à partir de ses balises, {n} valeur remise : le fichier n'est pas celui que "
+                "Pseudalis a écrit.",
+                "{f} ist aus seinen Markierungen wiederhergestellt, {n} Wert zurückgesetzt: Die Datei ist nicht "
+                "die, die Pseudalis geschrieben hat.",
+                "{f} è ripristinato dai suoi tag, {n} valore rimesso: il file non è quello scritto da Pseudalis.",
+                "{f} se restauró a partir de sus etiquetas, {n} valor repuesto: el archivo no es el que escribió "
+                "Pseudalis." } },
+            { "shell_restored_forgotten", { "{f} is restored from its tags, {n} values put back: its original was "
+                "forgotten on {date}.",
+                "{f} est restauré à partir de ses balises, {n} valeurs remises : son original a été oublié le "
+                "{date}.",
+                "{f} ist aus seinen Markierungen wiederhergestellt, {n} Werte zurückgesetzt: Sein Original wurde am "
+                "{date} vergessen.",
+                "{f} è ripristinato dai suoi tag, {n} valori rimessi: il suo originale è stato dimenticato il "
+                "{date}.",
+                "{f} se restauró a partir de sus etiquetas, {n} valores repuestos: su original se olvidó el "
+                "{date}." } },
+            { "shell_restored_forgotten_one", { "{f} is restored from its tags, {n} value put back: its original was "
+                "forgotten on {date}.",
+                "{f} est restauré à partir de ses balises, {n} valeur remise : son original a été oublié le {date}.",
+                "{f} ist aus seinen Markierungen wiederhergestellt, {n} Wert zurückgesetzt: Sein Original wurde am "
+                "{date} vergessen.",
+                "{f} è ripristinato dai suoi tag, {n} valore rimesso: il suo originale è stato dimenticato il "
+                "{date}.",
+                "{f} se restauró a partir de sus etiquetas, {n} valor repuesto: su original se olvidó el {date}." } },
+            { "shell_pictures_removed", { "{n} pictures, which their originals alone could give back, are removed.",
+                "{n} images, que seuls leurs originaux pouvaient rendre, sont retirées.",
+                "{n} Bilder, die nur ihre Originale zurückgeben konnten, sind entfernt.",
+                "{n} immagini, che solo i loro originali potevano restituire, sono rimosse.",
+                "{n} imágenes, que solo sus originales podían devolver, se han retirado." } },
+            { "shell_pictures_removed_one", { "{n} picture, which its original alone could give back, is removed.",
+                "{n} image, que seul son original pouvait rendre, est retirée.",
+                "{n} Bild, das nur sein Original zurückgeben konnte, ist entfernt.",
+                "{n} immagine, che solo il suo originale poteva restituire, è rimossa.",
+                "{n} imagen, que solo su original podía devolver, se ha retirado." } },
             { "count_files_anonymized", { "{n} files anonymized",
                 "{n} fichiers anonymisés",
                 "{n} Dateien anonymisiert",
@@ -487,6 +534,16 @@ namespace pseudalis
                 "{n} Datei anonymisiert",
                 "{n} file anonimizzato",
                 "{n} archivo anonimizado" } },
+            { "count_files_anonymized_untagged", { "{n} files anonymized without tags",
+                "{n} fichiers anonymisés sans balises",
+                "{n} Dateien ohne Markierungen anonymisiert",
+                "{n} file anonimizzati senza tag",
+                "{n} archivos anonimizados sin etiquetas" } },
+            { "count_files_anonymized_untagged_one", { "{n} file anonymized without tags",
+                "{n} fichier anonymisé sans balises",
+                "{n} Datei ohne Markierungen anonymisiert",
+                "{n} file anonimizzato senza tag",
+                "{n} archivo anonimizado sin etiquetas" } },
             { "count_values_replaced", { "{n} values replaced",
                 "{n} valeurs remplacées",
                 "{n} Werte ersetzt",
@@ -682,32 +739,26 @@ namespace pseudalis
                 "Der Dienst verarbeitet andere Dateien: Versuchen Sie es gleich noch einmal.",
                 "Il servizio sta elaborando altri file: riprovate tra un momento.",
                 "El servicio está procesando otros archivos: vuelva a intentarlo en un momento." } },
-            { "err_original_forgotten", { "The original of this file was forgotten on {date}: it can no longer be "
-                "restored.",
-                "L'original de ce fichier a été oublié le {date} : il ne peut plus être restauré.",
-                "Das Original dieser Datei wurde am {date} vergessen: Es kann nicht mehr wiederhergestellt werden.",
-                "L'originale di questo file è stato dimenticato il {date}: non può più essere ripristinato.",
-                "El original de este archivo se olvidó el {date}: ya no se puede restaurar." } },
-            { "err_original_space", { "The original of this file was forgotten on {date} to make room for newer "
-                "originals: it can no longer be restored.",
-                "L'original de ce fichier a été oublié le {date} pour faire place à des originaux plus récents : il "
-                "ne peut plus être restauré.",
-                "Das Original dieser Datei wurde am {date} vergessen, um Platz für neuere Originale zu schaffen: Es "
-                "kann nicht mehr wiederhergestellt werden.",
-                "L'originale di questo file è stato dimenticato il {date} per fare spazio a originali più recenti: "
-                "non può più essere ripristinato.",
-                "El original de este archivo se olvidó el {date} para dejar sitio a originales más recientes: ya no "
-                "se puede restaurar." } },
-            { "err_original_expired", { "The original of this file was kept until {date} after the file left the "
-                "drive: it can no longer be restored.",
-                "L'original de ce fichier a été conservé jusqu'au {date} après la sortie du fichier du lecteur : il "
-                "ne peut plus être restauré.",
-                "Das Original dieser Datei wurde bis zum {date} aufbewahrt, nachdem die Datei das Laufwerk verlassen "
-                "hatte: Es kann nicht mehr wiederhergestellt werden.",
-                "L'originale di questo file è stato conservato fino al {date} dopo l'uscita del file dall'unità: non "
-                "può più essere ripristinato.",
-                "El original de este archivo se conservó hasta el {date} después de que el archivo saliera de la "
-                "unidad: ya no se puede restaurar." } },
+            { "err_tagless_forgotten", { "This file was protected without tags and its original was forgotten on "
+                "{date}: its values cannot come back.",
+                "Ce fichier a été protégé sans balises et son original a été oublié le {date} : ses valeurs ne "
+                "peuvent plus revenir.",
+                "Diese Datei wurde ohne Markierungen geschützt und ihr Original am {date} vergessen: Ihre Werte "
+                "können nicht zurückkehren.",
+                "Questo file è stato protetto senza tag e il suo originale è stato dimenticato il {date}: i suoi "
+                "valori non possono più tornare.",
+                "Este archivo se protegió sin etiquetas y su original se olvidó el {date}: sus valores ya no pueden "
+                "volver." } },
+            { "err_picture_forgotten", { "The picture of this file was forgotten on {date}: it cannot be given back.",
+                "L'image de ce fichier, oubliée le {date}, ne peut plus être rendue.",
+                "Das Bild dieser Datei wurde am {date} vergessen: Es kann nicht zurückgegeben werden.",
+                "L'immagine di questo file è stata dimenticata il {date}: non può essere restituita.",
+                "La imagen de este archivo se olvidó el {date}: no se puede devolver." } },
+            { "err_picture_missing", { "The picture of this file is not in the vault of this computer.",
+                "Le coffre de cet ordinateur ne contient pas l'image de ce fichier.",
+                "Das Bild dieser Datei ist nicht im Tresor dieses Computers.",
+                "L'immagine di questo file non è nella cassaforte di questo computer.",
+                "La imagen de este archivo no está en la caja fuerte de este equipo." } },
             { "err_vault", { "The original cannot be kept in the vault.",
                 "L'original ne peut pas être conservé dans le coffre.",
                 "Das Original kann nicht im Tresor aufbewahrt werden.",
@@ -873,9 +924,17 @@ namespace pseudalis
                 "Aggiungi Anonimizza e Ripristina al menu dei file e delle cartelle in Esplora file",
                 "Añadir Anonimizar y Restaurar al menú de los archivos y las carpetas en el Explorador" } },
             { "verb_menu", { "Pseudalis", "Pseudalis", "Pseudalis", "Pseudalis", "Pseudalis" } },
-            { "verb_protect", { "Anonymize", "Anonymiser", "Anonymisieren", "Anonimizza", "Anonimizar" } },
-            { "verb_protect_copy", { "Anonymize as a copy", "Anonymiser dans une copie", "Als Kopie anonymisieren",
-                "Anonimizza in una copia", "Anonimizar en una copia" } },
+            { "verb_protect_tags", { "Anonymize with tags", "Anonymiser avec balises", "Mit Markierungen anonymisieren",
+                "Anonimizza con tag", "Anonimizar con etiquetas" } },
+            { "verb_protect_bare", { "Anonymize without tags", "Anonymiser sans balises",
+                "Ohne Markierungen anonymisieren", "Anonimizza senza tag", "Anonimizar sin etiquetas" } },
+            { "verb_protect_copy_tags", { "Anonymize as a copy, with tags", "Anonymiser dans une copie, avec balises",
+                "Als Kopie mit Markierungen anonymisieren", "Anonimizza in una copia, con tag",
+                "Anonimizar en una copia, con etiquetas" } },
+            { "verb_protect_copy_bare", { "Anonymize as a copy, without tags",
+                "Anonymiser dans une copie, sans balises",
+                "Als Kopie ohne Markierungen anonymisieren", "Anonimizza in una copia, senza tag",
+                "Anonimizar en una copia, sin etiquetas" } },
             { "verb_restore", { "Restore the original", "Restaurer l'original", "Original wiederherstellen",
                 "Ripristina l'originale", "Restaurar el original" } },
             { "verb_restore_copy", { "Restore as a copy", "Restaurer dans une copie", "Als Kopie wiederherstellen",

@@ -880,6 +880,201 @@ namespace
         DLIB_TEST(read_pdf_text(a.anonymize(pdf, document_format::pdf, plain)).info.empty());
     }
 
+    void test_untagged_text()
+    {
+        const pseudonymizer p(pseudonymization_key::from_bytes(string(32, '\x38')));
+        pii_detector detector;
+
+        // A text without tags: substitutes alone, listed with their tags, which alone give the values back.
+        const string text = "Contrat de M. Jean Dupont, signé à Rennes le 12/03/2024.\n\n"
+                            "Contact : jean.dupont@exemple.fr, 06 12 34 56 78.\n";
+        document_anonymizer a(p, detector);
+        a.set_untagged_text(true);
+        document_report report;
+        const string out = a.anonymize(text, document_format::text, report);
+        DLIB_TEST_MSG(out.find("[[") == string::npos && out.find("Dupont") == string::npos, out);
+        DLIB_TEST_MSG(out.find("dupont@") == string::npos && out.find("06 12 34 56 78") == string::npos, out);
+        DLIB_TEST(!report.substitutions.empty() && report.substitutions.size() >= report.total_entities());
+        for (const document_substitution& s : report.substitutions)
+            DLIB_TEST_MSG(s.text && out.find(s.substitute) != string::npos && s.tag.compare(0, 2, "[[") == 0,
+                          s.substitute);
+        document_anonymizer b(p, detector);
+        document_report none;
+        DLIB_TEST(b.restore(out, document_format::text, none) == out);
+        DLIB_TEST(none.tags_restored == 0 && none.substitutes_restored == 0);
+        b.set_text_substitute_resolver(resolver_of(report.substitutions));
+        document_report back;
+        const string values = b.restore(out, document_format::text, back);
+        DLIB_TEST_MSG(values == text, values);
+        DLIB_TEST(back.substitutes_restored == report.substitutions.size());
+
+        // Protected again with the substitutes known, the text keeps them as they are.
+        document_anonymizer again(p, detector);
+        again.set_untagged_text(true);
+        again.set_text_substitute_resolver(resolver_of(report.substitutions));
+        document_report second;
+        const string twice = again.anonymize(out, document_format::text, second);
+        DLIB_TEST_MSG(twice == out, twice);
+        DLIB_TEST(second.substitutions.empty());
+
+        // A text holding tags and substitutes, the old values of a file protected again: both come back.
+        const string tagged = p.tag(pii_type::person, "Hélène Martin");
+        const string mixed = "Visa de " + tagged + ". " + out;
+        document_report both;
+        const string mixed_back = b.restore(mixed, document_format::text, both);
+        DLIB_TEST_MSG(mixed_back == "Visa de Hélène Martin. " + text, mixed_back);
+        DLIB_TEST(both.tags_restored == 1 && both.substitutes_restored == report.substitutions.size());
+
+        // A text protected before with tags, by an older engine for instance, and protected again
+        // without them: its tags take the substitutes of their values, given back with the others.
+        DLIB_TEST(p.substitute(pii_type::person, tagged) == p.substitute(pii_type::person, "Hélène Martin"));
+        DLIB_TEST(p.substitute(pii_type::organization, tagged) != p.substitute(pii_type::person, "Hélène Martin"));
+        const string old_tags = "Visa de " + tagged + ".\n\n" + text;
+        document_report converted;
+        const string bare = a.anonymize(old_tags, document_format::text, converted);
+        DLIB_TEST_MSG(bare.find("[[") == string::npos && bare.find("Martin") == string::npos &&
+                      bare.find("Dupont") == string::npos, bare);
+        DLIB_TEST(bare.find(p.substitute(pii_type::person, "Hélène Martin")) != string::npos);
+        document_anonymizer bare_back(p, detector);
+        bare_back.set_text_substitute_resolver(resolver_of(converted.substitutions));
+        document_report bare_report;
+        const string bare_values = bare_back.restore(bare, document_format::text, bare_report);
+        DLIB_TEST_MSG(bare_values == "Visa de Hélène Martin.\n\n" + text, bare_values);
+        // A tag that an entity overlaps stays out; the others join the entities in text order.
+        const string two = "ab" + tagged + " cd " + tagged;
+        std::vector<pii_entity> one(1);
+        one[0].begin = 2;
+        one[0].end = 10;
+        one[0].type = pii_type::location;
+        const std::vector<pii_entity> with = p.with_tag_entities(two, one);
+        DLIB_TEST(with.size() == 2 && with[0].type == pii_type::location && with[1].type == pii_type::person);
+        DLIB_TEST(with[1].begin == two.size() - tagged.size() && with[1].end == two.size());
+        DLIB_TEST(p.with_tag_entities("Jean [[PERSON:abc#XYZ]]", one).size() == 1);
+
+        // The cells of a CSV file.
+        const string csv = "nom;prenom;email\nDupont;Jean;jean.dupont@exemple.fr\nMartin;Hélène;h.martin@exemple.fr\n";
+        document_report creport;
+        const string cout_ = a.anonymize(csv, document_format::delimited, creport);
+        DLIB_TEST_MSG(cout_.find("[[") == string::npos && cout_.find("Dupont") == string::npos, cout_);
+        document_anonymizer c(p, detector);
+        c.set_text_substitute_resolver(resolver_of(creport.substitutions));
+        document_report cback;
+        const string cvalues = c.restore(cout_, document_format::delimited, cback);
+        DLIB_TEST_MSG(cvalues == csv, cvalues);
+
+        // Markup: the text and a link, whose substitute stays a valid address.
+        const string html = "<html><body><p>Écrire à <a href=\"mailto:jean.dupont@exemple.fr\">M. Jean Dupont</a>."
+                            "</p></body></html>";
+        document_report hreport;
+        const string hout = a.anonymize(html, document_format::markup, hreport);
+        DLIB_TEST_MSG(hout.find("[[") == string::npos && hout.find("Dupont") == string::npos, hout);
+        DLIB_TEST_MSG(hout.find("href=\"mailto:") != string::npos && hout.find("%5B") == string::npos, hout);
+        document_anonymizer h(p, detector);
+        h.set_text_substitute_resolver(resolver_of(hreport.substitutions));
+        document_report hback;
+        const string hvalues = h.restore(hout, document_format::markup, hback);
+        DLIB_TEST_MSG(hvalues == html, hvalues);
+
+        // A Word document: the runs of its text.
+        zip_archive_writer w;
+        w.add("[Content_Types].xml",
+              "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+              "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+              "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+              "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+              "<Override PartName=\"/word/document.xml\" "
+              "ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>"
+              "</Types>");
+        w.add("_rels/.rels",
+              "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+              "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+              "<Relationship Id=\"rId1\" "
+              "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
+              "Target=\"word/document.xml\"/></Relationships>");
+        w.add("word/document.xml",
+              "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+              "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>"
+              "<w:p><w:r><w:t>Je soussigné, M. Jean </w:t></w:r><w:r><w:t>Dupont, demeurant à Rennes, atteste.</w:t>"
+              "</w:r></w:p><w:sectPr/></w:body></w:document>");
+        const string docx = w.finish();
+        document_report dreport;
+        const string dout = a.anonymize(docx, document_format::docx, dreport);
+        const string body = zip_archive_reader(dout).read("word/document.xml");
+        DLIB_TEST_MSG(body.find("[[") == string::npos && body.find("Dupont") == string::npos, body);
+        document_anonymizer d(p, detector);
+        d.set_text_substitute_resolver(resolver_of(dreport.substitutions));
+        document_report dback;
+        const string dtext =
+            zip_archive_reader(d.restore(dout, document_format::docx, dback)).read("word/document.xml");
+        // A value written across runs comes back in the first one, as from its tag.
+        DLIB_TEST_MSG(dtext.find("<w:t>Je soussigné, M. Jean Dupont</w:t>") != string::npos &&
+                      dtext.find("<w:t>, demeurant à Rennes, atteste.</w:t>") != string::npos, dtext);
+        DLIB_TEST(dback.substitutes_restored == dreport.substitutions.size() && dback.tags_restored == 0);
+        // Its tags, written by a protection before, take substitutes too.
+        zip_archive_writer w2;
+        w2.add("[Content_Types].xml", zip_archive_reader(docx).read("[Content_Types].xml"));
+        w2.add("_rels/.rels", zip_archive_reader(docx).read("_rels/.rels"));
+        w2.add("word/document.xml",
+               "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+               "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>"
+               "<w:p><w:r><w:t>Visa de " + tagged + ", demeurant à Rennes.</w:t></w:r></w:p><w:sectPr/>"
+               "</w:body></w:document>");
+        document_report treport;
+        const string tout = a.anonymize(w2.finish(), document_format::docx, treport);
+        const string tbody = zip_archive_reader(tout).read("word/document.xml");
+        DLIB_TEST_MSG(tbody.find("[[") == string::npos && tbody.find("Martin") == string::npos, tbody);
+        document_anonymizer t(p, detector);
+        t.set_text_substitute_resolver(resolver_of(treport.substitutions));
+        document_report tback;
+        const string ttext =
+            zip_archive_reader(t.restore(tout, document_format::docx, tback)).read("word/document.xml");
+        DLIB_TEST_MSG(ttext.find("<w:t>Visa de Hélène Martin, demeurant à Rennes.</w:t>") != string::npos, ttext);
+
+        // A PDF: the text of its pages.
+        pdf_text_document source;
+        source.pages.resize(1);
+        source.pages[0].x1 = 595;
+        source.pages[0].y1 = 842;
+        std::vector<std::vector<pdf_text_segment>> lines(1);
+        pdf_text_segment seg;
+        seg.text = "Je soussigné, M. Jean Dupont, demeurant à Rennes, atteste.";
+        seg.x = 72;
+        seg.y = 700;
+        seg.font_size = 11;
+        seg.width = 330;
+        lines[0].push_back(seg);
+        const string pdf = write_pdf_text(source, lines);
+        document_report preport;
+        const string pout = a.anonymize(pdf, document_format::pdf, preport);
+        string pall;
+        for (const auto& page : layout_pdf_text(read_pdf_text(pout)))
+            for (const pdf_text_segment& ps : page) pall += ps.text + " ";
+        DLIB_TEST_MSG(pall.find("[[") == string::npos && pall.find("Dupont") == string::npos, pall);
+        document_anonymizer q(p, detector);
+        q.set_text_substitute_resolver(resolver_of(preport.substitutions));
+        document_report pback;
+        string prestored;
+        for (const auto& page : layout_pdf_text(read_pdf_text(q.restore(pout, document_format::pdf, pback))))
+            for (const pdf_text_segment& ps : page) prestored += ps.text + " ";
+        DLIB_TEST_MSG(prestored.find("M. Jean Dupont") != string::npos && prestored.find("Rennes") != string::npos,
+                      prestored);
+        // Its tags, each in one piece of its text, take substitutes too.
+        lines[0][0].text = "Visa de " + tagged + ", demeurant à Rennes.";
+        document_report p2report;
+        const string p2out = a.anonymize(write_pdf_text(source, lines), document_format::pdf, p2report);
+        string p2all;
+        for (const auto& page : layout_pdf_text(read_pdf_text(p2out)))
+            for (const pdf_text_segment& ps : page) p2all += ps.text + " ";
+        DLIB_TEST_MSG(p2all.find("[[") == string::npos && p2all.find("Martin") == string::npos, p2all);
+        document_anonymizer q2(p, detector);
+        q2.set_text_substitute_resolver(resolver_of(p2report.substitutions));
+        document_report p2back;
+        string p2restored;
+        for (const auto& page : layout_pdf_text(read_pdf_text(q2.restore(p2out, document_format::pdf, p2back))))
+            for (const pdf_text_segment& ps : page) p2restored += ps.text + " ";
+        DLIB_TEST_MSG(p2restored.find("Visa de Hélène Martin") != string::npos, p2restored);
+    }
+
     // A PDF written by hand, its objects numbered from 1, with a cross-reference table.
     string pdf_file(const std::vector<string>& objects)
     {
@@ -1095,6 +1290,35 @@ namespace
         DLIB_TEST(image_media_type(png) == "image/png" && png.size() > 40);
         DLIB_TEST(image_media_type("\xFF\xD8\xFF\xE0") == "image/jpeg" && image_media_type("abc").empty());
         const pseudonymizer p(pseudonymization_key::from_bytes(string(32, '\x41')));
+        // The texts of the describer, which a restoration without the pictures removes.
+        const document_picture_text_finder pictures = [](const string& text) {
+            std::vector<std::pair<size_t, size_t>> out;
+            size_t b = text.find("[Image@");
+            while (b != string::npos)
+            {
+                size_t e = b + 7;
+                while (e < text.size() && text[e] != ']')
+                    e = text.compare(e, 2, "[[") == 0 ? text.find("]]", e) + 2 : e + 1;
+                if (e >= text.size()) break;
+                out.push_back(std::make_pair(b, e + 1));
+                b = text.find("[Image@", e);
+            }
+            return out;
+        };
+        // A text: the picture text leaves with the tag of its description, the tag outside comes back.
+        {
+            pii_detector detector;
+            document_anonymizer a(p, detector);
+            a.set_picture_text_finder(pictures);
+            document_report report;
+            string tagged = a.anonymize("Photo de Jean Dupont\n", document_format::text, report);
+            tagged.pop_back();
+            document_report back;
+            const string restored = a.restore("Voir [Image@42 : " + tagged + "] et " + tagged + ".\n",
+                                              document_format::text, back);
+            DLIB_TEST_MSG(restored == "Voir  et Photo de Jean Dupont.\n" && back.pictures_removed == 1 &&
+                          back.tags_restored == 1, restored);
+        }
 
         // Word: the drawing of a run becomes a run text.
         {
@@ -1134,13 +1358,21 @@ namespace
             document_anonymizer a(p, detector);
             a.set_image_describer(describer);
             document_report report;
-            const zip_archive_reader z(a.anonymize(w.finish(), document_format::docx, report));
+            const string protected_docx = a.anonymize(w.finish(), document_format::docx, report);
+            const zip_archive_reader z(protected_docx);
             const string doc = z.read("word/document.xml");
             DLIB_TEST(seen.size() == 1 && seen[0].location == "word/media/image1.png" && seen[0].bytes == png);
             DLIB_TEST_MSG(doc.find("<w:t xml:space=\"preserve\">[Image@42 : a red &amp; green square]</w:t>") !=
                           string::npos, doc);
             DLIB_TEST(doc.find("blip") == string::npos && doc.find("Dupont") == string::npos);
             DLIB_TEST(!z.contains("word/media/image1.png"));
+            // Restored without its pictures: their texts leave the runs, the values come back.
+            document_report back;
+            a.set_picture_text_finder(pictures);
+            const zip_archive_reader r(a.restore(protected_docx, document_format::docx, back));
+            const string restored = r.read("word/document.xml");
+            DLIB_TEST_MSG(restored.find("Image@") == string::npos && restored.find("Jean Dupont") != string::npos &&
+                          back.pictures_removed == 2, restored);
         }
 
         // PowerPoint: the picture becomes a text box at its position.
@@ -1195,7 +1427,8 @@ namespace
             document_anonymizer a(p, detector);
             a.set_image_describer(describer);
             document_report report;
-            const zip_archive_reader z(a.anonymize(w.finish(), document_format::pptx, report));
+            const string protected_pptx = a.anonymize(w.finish(), document_format::pptx, report);
+            const zip_archive_reader z(protected_pptx);
             const string slide = z.read("ppt/slides/slide1.xml");
             DLIB_TEST(seen.size() == 1 && seen[0].location == "ppt/media/image1.png");
             DLIB_TEST_MSG(slide.find("<p:sp><p:nvSpPr><p:cNvPr id=\"4\" name=\"Picture 3\"/><p:cNvSpPr txBox=\"1\"/>") !=
@@ -1205,6 +1438,14 @@ namespace
             DLIB_TEST(slide.find("<a:t>[Image@42 : a red &amp; green square]</a:t>") != string::npos);
             DLIB_TEST(slide.find("blip") == string::npos && slide.find("Dupont") == string::npos);
             DLIB_TEST(!z.contains("ppt/media/image1.png"));
+            // Restored without its picture: the gray text box leaves the slide, the title comes back.
+            document_report back;
+            a.set_picture_text_finder(pictures);
+            const zip_archive_reader r(a.restore(protected_pptx, document_format::pptx, back));
+            const string restored = r.read("ppt/slides/slide1.xml");
+            DLIB_TEST_MSG(restored.find("Image@") == string::npos && restored.find("txBox") == string::npos &&
+                          restored.find("E6E6E6") == string::npos && restored.find("Jean Dupont") != string::npos &&
+                          back.pictures_removed == 1, restored);
         }
 
         // PDF: the text is written over the gray box of the picture, drawn twice, described once.
@@ -1241,6 +1482,14 @@ namespace
                 if (s.text.find("Image@42") != string::npos)
                     DLIB_TEST_MSG(std::abs(s.angle) < 1 && s.x >= 72 && s.x < 272 &&
                                   ((s.y > 500 && s.y < 600) || (s.y > 300 && s.y < 400)), s.x << " " << s.y);
+            // Restored without its pictures: the texts over the gray boxes leave, the values come back.
+            document_report back;
+            a.set_picture_text_finder(pictures);
+            string restored;
+            for (const auto& page : layout_pdf_text(read_pdf_text(a.restore(out, document_format::pdf, back))))
+                for (const pdf_text_segment& s : page) restored += s.text + "\n";
+            DLIB_TEST_MSG(restored.find("Image@") == string::npos && restored.find("Jean Dupont") != string::npos &&
+                          back.pictures_removed == 2, restored << back.pictures_removed);
             // Without a describer the boxes stay empty.
             document_anonymizer plain(p, detector);
             document_report r2;
@@ -2913,6 +3162,156 @@ namespace
         DLIB_TEST(!covered(e, text, "CVE-2014") && found(e, text, pii_type::identifier, "INC-2026-0147"));
     }
 
+    void test_technical_documents()
+    {
+        /* Security bulletins, architecture files, inventories and reports of scans: the versions of
+           programs, their makers, the ports, the codes and the labels of their tables name nothing,
+           while the host names of the domain of an e-mail address and the organisation named after
+           its descriptor are found everywhere in the document. */
+        auto spans = std::make_shared<std::vector<pii_span>>();
+        auto recognizer = [spans](const string& t) {
+            std::vector<pii_span> out;
+            for (const pii_span& v : *spans)
+            {
+                const string wanted = v.label.substr(v.label.find('|') + 1);
+                for (size_t at = t.find(wanted); at != string::npos; at = t.find(wanted, at + 1))
+                {
+                    pii_span s = v;
+                    s.label = v.label.substr(0, v.label.find('|'));
+                    s.begin = at;
+                    s.end = at + wanted.size();
+                    out.push_back(s);
+                }
+            }
+            std::sort(out.begin(), out.end(), [](const pii_span& a, const pii_span& b) { return a.begin < b.begin; });
+            return out;
+        };
+        pii_detector detector;
+        detector.add_recognizer(recognizer, 0);
+        auto value = [](const string& text, const string& label, double confidence) {
+            pii_span s;
+            s.label = label + "|" + text;
+            s.confidence = confidence;
+            return s;
+        };
+        auto read = [&](const string& text, const std::vector<pii_span>& values) {
+            *spans = values;
+            detector.begin_document();
+            detector.learn(text);
+            return detector.detect(text);
+        };
+        auto dated = [](const std::vector<pii_entity>& e) {
+            for (const pii_entity& x : e)
+                if (x.type == pii_type::date) return true;
+            return false;
+        };
+
+        // The versions of programs, whatever reads them as dates; a date after its word stays one.
+        string text = "Le serveur exécute Tomcat 6.1.24. Mise à jour : Tomcat 6.2.19, 6.3.11 et 6.4.17 ; niveaux "
+                      "< 5.4.18, tomcat@6.1.24 et v6.1.24 ; versions publiées 6.1.25, antérieure à 6.1.25, "
+                      "IIS 7.5.19, Tomcat détecté 6.1.24.";
+        DLIB_TEST_MSG(!dated(read(text, {})), text);
+        text = "Cette version du 07.04.21 remplace la note du 7.4.21.";
+        std::vector<pii_entity> e = read(text, {});
+        DLIB_TEST(found(e, text, pii_type::date, "07.04.21") && found(e, text, pii_type::date, "7.4.21"));
+        // Versions in table cells, after a revision of a package and after a German word of versions.
+        for (const char* d : { "| Tomcat | 7.1.24 |", "| OpenSearch (moteur) | 1.1.19 |",
+                               "Correctif : tomcat 4.0.17-3, 4.1.18.", "DIE KORRIGIERTEN VERSIONEN 6.4.28." })
+            DLIB_TEST_MSG(!dated(read(d, {})), d);
+        DLIB_TEST(dated(read("| Dupont | 3.4.85 |", {})));
+        // The dates of a document, of its issue and of a birth, whatever word or capitals before them.
+        for (const char* d : { "Fassung vom 01.02.24 des Vertrags.", "Stand 01.02.24 der Liste.",
+                               "Data di rilascio 12.03.24 del documento.", "DDN 3.4.85 du patient.",
+                               "NÉ LE 3.4.85 À BREST." })
+            DLIB_TEST_MSG(dated(read(d, {})), d);
+        // A version alone in its cell, written after its product elsewhere in the document.
+        detector.begin_document();
+        detector.learn("Tomcat 6.1.24 est déployé.");
+        detector.learn("6.1.24");
+        DLIB_TEST(!dated(detector.detect("6.1.24")));
+
+        // The maker of the product that follows its name, and the department before "pour".
+        text = "Le séminaire réunit 15 participants autour de Google Chrome et Mozilla Firefox.";
+        e = read(text, { value("Google", "GIVEN_NAME", 0.6), value("Firefox", "FAMILY_NAME", 0.77) });
+        DLIB_TEST(!covered(e, text, "Google") && !covered(e, text, "Firefox"));
+        text = "La Direction Juridique et Technique pour Électricité de France valide le contrat.";
+        e = read(text, { value("Électricité de France", "ORGANIZATION", 0.9) });
+        DLIB_TEST(found(e, text, pii_type::organization, "Électricité de France"));
+        DLIB_TEST(!covered(e, text, "Direction") && !covered(e, text, "Technique pour"));
+        text = "La Fondation pour la Recherche Médicale finance le projet.";
+        e = read(text, { value("Fondation pour la Recherche Médicale", "ORGANIZATION", 0.9) });
+        DLIB_TEST(found(e, text, pii_type::organization, "Fondation pour la Recherche Médicale"));
+        text = "The Centre for London published the report.";
+        e = read(text, { value("Centre for London", "ORGANIZATION", 0.9) });
+        DLIB_TEST(found(e, text, pii_type::organization, "Centre for London"));
+        text = "L'Agenzia per l'Italia Digitale pubblica le linee guida.";
+        e = read(text, { value("Agenzia per l'Italia Digitale", "ORGANIZATION", 0.9) });
+        DLIB_TEST(found(e, text, pii_type::organization, "Agenzia per l'Italia Digitale"));
+        text = "Das Bayerische Landesamt für Statistik veröffentlicht die Zahlen.";
+        e = read(text, { value("Bayerische Landesamt für Statistik", "ORGANIZATION", 0.9) });
+        DLIB_TEST(found(e, text, pii_type::organization, "Bayerische Landesamt für Statistik"));
+
+        // The numbers of ports, codes, the labels of a table, a series of levels and the scheme of a package.
+        text = "Flux W8 vers l'annuaire en LDAPS 636 et la messagerie en SMTP 25 ; lot H12.\n"
+               "Échelon 3 Échelon 2 Échelon 1 Total\nRéférence NRV-DOC-ARC-2025-031 ; "
+               "paquet pkg:maven/org.acme/tool@2.1, hôte kel-billing-api.\nBranch Tomcat Affected Fixed\n"
+               "Utilitaires | Bastions";
+        e = read(text, { value("W8", "CITY", 0.6), value("636", "CITY", 0.6), value("25", "CITY", 0.6),
+                         value("H12", "CITY", 0.6), value("Échelon 3 Échelon 2 Échelon 1", "STREET_ADDRESS", 0.9),
+                         value("DOC-ARC", "FAMILY_NAME", 0.7), value("pkg", "USERNAME", 0.7),
+                         value("kel", "CITY", 0.6), value("Branch", "GIVEN_NAME", 0.57),
+                         value("Tomcat Affected Fixed", "ORGANIZATION", 0.7), value("Utilitaires", "ORGANIZATION", 0.6),
+                         value("Bastions", "ORGANIZATION", 0.6) });
+        for (const char* v : { "W8", "636", "SMTP 25", "H12", "Échelon", "pkg:", "kel-", "Branch", "Affected",
+                               "Utilitaires", "Bastions" })
+            DLIB_TEST_MSG(!covered(e, text, v), v);
+        // The reference stays one, which its label announces: no name inside it.
+        DLIB_TEST(!found(e, text, pii_type::person, "DOC-ARC"));
+        // A Spanish address with its number, floor and door stays one.
+        text = "Domicilio: Calle de Sevilla, n.º 174, 3.º 1.ª, 41001 Sevilla.";
+        e = read(text, { value("Calle de Sevilla, n.º 174, 3.º 1.ª", "STREET_ADDRESS", 0.9) });
+        DLIB_TEST(found(e, text, pii_type::address, "Calle de Sevilla, n.º 174, 3.º 1.ª"));
+        // A name damaged by a scanner and a postal code of Argentina keep their type.
+        text = "Le courrier de Mi1let est arrivé ; envoi à C1425 Buenos Aires.";
+        e = read(text, { value("Mi1let", "FAMILY_NAME", 0.8), value("C1425", "POSTAL_CODE", 0.8) });
+        DLIB_TEST(found(e, text, pii_type::person, "Mi1let") && covered(e, text, "C1425"));
+
+        // The host names of the domain of an e-mail address of the document, not those of a webmail.
+        text = "Contact : jean.martin@acme-conseil.fr ; portail intranet.acme-conseil.fr/connexion et domaine "
+               "acme-conseil.fr. Courrier de paul.roux@gmail.com, aide sur gmail.com et www.exemple.org.";
+        e = read(text, {});
+        DLIB_TEST(found(e, text, pii_type::url, "intranet.acme-conseil.fr/connexion"));
+        DLIB_TEST(found(e, text, pii_type::url, "acme-conseil.fr"));
+        DLIB_TEST(!covered(e, text, "aide sur gmail.com") && !covered(e, text, "www.exemple.org"));
+
+        // The organisation named after its descriptor, found alone in the rest of the document.
+        detector.begin_document();
+        *spans = { value("société Novexa", "ORGANIZATION", 0.9) };
+        detector.learn("La société Novexa signe le contrat.");
+        *spans = {};
+        detector.learn("Novexa livre le 3 mars.");
+        text = "Novexa livre le 3 mars.";
+        DLIB_TEST(found(detector.detect(text), text, pii_type::organization, "Novexa"));
+        // A reference that starts with that name keeps no person inside it.
+        text = "NOVEXA-DOC-ARC-2025-031 · version 2.4";
+        e = detector.detect(text);
+        DLIB_TEST(!found(e, text, pii_type::person, "DOC-ARC") && !covered(e, text, "DOC-ARC-2025"));
+
+        // The glyphs of ligatures of a PDF font read as their letters, so that a name stays whole.
+        const string pdf = pdf_file({
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R "
+            "/Resources << /Font << /F1 5 0 R >> >> >>",
+            pdf_stream("", "BT /F1 11 Tf 72 700 Td (Ra\\311aella Fiorini, \\310ole) Tj ET\n"),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding << /BaseEncoding /WinAnsiEncoding "
+            "/Differences [200 /fi /ff] >> >>" });
+        string read_back;
+        for (const auto& page : layout_pdf_text(read_pdf_text(pdf)))
+            for (const pdf_text_segment& s : page) read_back += s.text;
+        DLIB_TEST_MSG(read_back.find("Raffaella Fiorini, fiole") != string::npos, read_back);
+    }
+
     void test_imposed_terms()
     {
         pii_detector_options options;
@@ -3355,6 +3754,7 @@ namespace
             test_office_document();
             print_spinner();
             test_untagged_values();
+            test_untagged_text();
             print_spinner();
             test_pdf_document();
             test_pdf_layout();
@@ -3390,6 +3790,8 @@ namespace
             test_five_languages();
             print_spinner();
             test_business_documents();
+            print_spinner();
+            test_technical_documents();
             print_spinner();
             test_imposed_terms();
             print_spinner();
