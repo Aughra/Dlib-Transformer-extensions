@@ -53,6 +53,7 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 - L'ancien fork `PapyTortueTech/Dlib-Transformer-extensions` n'est plus utilisé ; l'humain s'occupe de l'arrêter. Ne plus jamais y pousser.
 - Noyaux NEON pour Q4_K, Q6_K, le produit en floats et l'attention. Les autres formats (Q8_0 du projecteur d'images et du modèle de recherche, Q5_K…) restent portables.
 - Lancé en arrière-plan par un script, le service ignore SIGINT (le shell le lui fait ignorer, et macOS jette alors le signal) : l'arrêter par `kill -TERM`. Dans un terminal, Ctrl-C marche. Même chose attendue pour `test_linux.sh` d'Albireo à l'étape « service stop ».
+- Un service lancé en arrière-plan par Claude s'arrête avec la session de Claude (« service stopped » à 22 h 22 le 2026-11-07, pendant le second essai du PDF, dont les chiffres sont perdus) : le lancer détaché (commande ci-dessous).
 - Le modèle par défaut est un modèle « Thinking » : il raisonne longtemps (en anglais) avant de répondre ; prévoir un `max_tokens` large ou `"reasoning": false`.
 - `bench_runtime` exige un prompt d'au moins 64 tokens (sinon il lit hors de son tableau) : `bench_runtime <modèle> 4 64 16 2`.
 
@@ -71,6 +72,9 @@ PATH=/tmp/shim:$PATH bash dlib/dlib/external/pseudalis/tools/test_linux.sh $PWD/
 
 # Service d'Albireo (page : https://localhost:18443/ ; arrêt : Ctrl-C, ou kill -TERM)
 ALBIREO_HOME=$PWD/build/albireo-home build/macos-albireo/bin/albireo-service --console
+# Lancé par Claude : détaché dans sa propre session, sinon la fin de la session de Claude l'arrête
+ALBIREO_HOME=$PWD/build/albireo-home nohup python3 -c "import os,sys; os.setsid(); os.execv(sys.argv[1], sys.argv[1:])" \
+  $PWD/build/macos-albireo/bin/albireo-service --console > build/albireo-service.log 2>&1 < /dev/null &
 curl -sk https://localhost:18443/v1/chat/completions -H "Content-Type: application/json" \
   -d '{"model": "albireo-general", "reasoning": false, "max_tokens": 80, "messages": [{"role": "user", "content": "Bonjour"}]}'
 ```
