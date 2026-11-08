@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-08 — Écrire les notes pour l'auteur de l'original
+
+- **Quoi** : `docs/notes-pour-l-auteur.md`, en français, à transmettre à l'auteur : 4 bugs ou fragilités (lecture hors tableau de `bench_runtime` sous 64 tokens, attentes fixes du test de Pseudalis, espace de publication « password protected », SIGINT ignoré en `--console` lancé en arrière-plan sur macOS), 4 avertissements (Apple clang et `ld -s`), 10 points de portabilité macOS avec erreurs copiées et corrections du fork, 3 remarques (arrondis du code portable, `yield`, mode économie), et la partie vitesse : temps d'origine, les trois changements NEON, nouveaux temps. Consignes ajoutées à CLAUDE.md pour le tenir à jour.
+- **Fichiers** : `docs/notes-pour-l-auteur.md`, `CLAUDE.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain, qui veut transmettre à l'auteur les erreurs trouvées et les gains, et le garder à jour.
+- **Étapes** : numéros de ligne relevés dans `upstream/main` (`8743fcd`) ; avertissements retrouvés dans l'historique de la session et dans `engine_loader.h:62` (vérification syntaxique) ; historique du journal relu (ajout du piège de `picopltf.h` : `0 == 0` choisit gros-boutiste) ; une première version en anglais remplacée par la version française à la demande de l'humain ; aucun chemin privé ni adresse dans le document.
+
 ## 2026-11-08 — Faire passer Pseudalis à 28 sur 28
 
 - **Quoi** : `executable_path()` de Pseudalis par `_NSGetExecutablePath` sous `#if defined(__APPLE__)`, comme pour Albireo. `test_linux.sh` : 28 étapes sur 28.

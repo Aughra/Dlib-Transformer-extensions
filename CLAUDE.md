@@ -101,11 +101,28 @@ Documents du fork qui doivent toujours rester **vrais** :
 
 - [docs/memo-portage-macos-arm64.md](docs/memo-portage-macos-arm64.md) : commandes de build pour Mac et section « État constaté » (ce qui compile, ce qui passe les tests, les problèmes restants) ;
 - ce fichier CLAUDE.md ;
-- [logs/reprise.md](logs/reprise.md).
+- [logs/reprise.md](logs/reprise.md) ;
+- [docs/notes-pour-l-auteur.md](docs/notes-pour-l-auteur.md) (voir ci-dessous).
 
 **À la fin de chaque sous-étape**, avant de la déclarer terminée : relire ces documents et corriger ce que le changement rend faux ou incomplet. Une doc qui décrit un état dépassé est un défaut, au même titre qu'un test qui ment. Critère vérifiable : aucune commande, option, cible ou résultat cité dans ces documents ne contredit le code ni le dernier build.
 
 Les documents de l'original (`Readme.md`, `examples/Readme.md`, les README d'Albireo et de Pseudalis) ne sont modifiés que si un changement du fork les rend faux, et le plus légèrement possible (règle de fusion).
+
+### Les notes pour l'auteur (à transmettre à l'auteur de l'original)
+
+[docs/notes-pour-l-auteur.md](docs/notes-pour-l-auteur.md) recense, en français et **de façon très explicite**, ce que le portage révèle sur le code de l'original. L'humain le transmet à l'auteur : il est écrit pour lui, sans jargon propre au fork, et doit pouvoir se lire seul.
+
+- **Chaque fois qu'on trouve une erreur de l'original**, l'y ajouter dans la même sous-étape. Une erreur, c'est un bug sur toute plateforme, un test fragile, un avertissement du compilateur, un réglage de serveur suspect, ou un code propre à Linux ou à x86 qui casse sur Mac. Ranger l'entrée dans la bonne partie : bugs et tests fragiles, portabilité macOS, ou remarques. Mettre à jour le tableau du résumé.
+- **Chaque entrée donne** :
+  - l'endroit exact dans l'original (fichier et ligne dans `upstream/main`, avec le commit de référence en tête du document) ;
+  - ce qui se passe, avec le message d'erreur copié ;
+  - comment le reproduire ;
+  - la correction du fork, avec son commit, ou une suggestion marquée **non testée** ;
+  - ce qui est vérifié et ce qui ne l'est pas.
+- **Chaque gain de vitesse** y est consigné dans la partie « Vitesse » : les temps d'avant, le changement (quoi, exactitude, commit) et les temps d'après, en mesures alternées selon la règle de mesure. Mettre aussi à jour le tableau « Bilan ».
+- Quand l'original corrige un point après une fusion, le marquer comme corrigé, avec le commit de l'original, plutôt que de l'effacer.
+- Ni secret, ni chemin privé (`/Users/...`), ni adresse e-mail.
+- Critère vérifiable : chaque correction du fork qui touche un fichier de l'original, et chaque noyau ou optimisation du fork, a son entrée dans ce document.
 
 ### Le blog du portage (un épisode par grande étape, en français)
 

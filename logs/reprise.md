@@ -24,6 +24,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-07 : **attention NEON** (`attention_scores_neon`, `attention_values_neon` dans `qkernels_neon.inc`), identique au bit près au code portable (0 différence sur 549 760 ; règle d'arrondi d'Apple clang reproduite : scores en produit puis addition sauf les `hd % 4` derniers termes en `fma`, valeurs en `fma`). Sur 4 096 tokens (2B, mesures alternées) : prompt 25 → 51 tokens/s, génération 8 → 21 tokens/s. Même réponse sur un résumé de 4 329 tokens. Blog : épisode 11.
 - 2026-11-08 : PDF refait dans la page : la recherche n'a donné au 4B qu'environ 1 800 tokens ; écriture à 12,5 tokens/s. Pas comparable au premier essai (contexte inconnu, bien plus long).
 - 2026-11-08 : **Pseudalis à 28 sur 28** (`test_linux.sh`). Correction du chemin du programme (`pseudalis/common/platform.cpp`, comme Albireo) : sans elle, la page web répond 404 quand le service est lancé hors de `bin/`. Les deux étapes qui échouaient (« drive signatures », « copies on the drive ») passent aussi sans elle : le premier passage avait très probablement été fait en mode économie, et elles attendent un délai fixe. La piste APFS (clones, renommages) était fausse. Blog : épisode 12.
+- 2026-11-08 : **notes pour l'auteur** (`docs/notes-pour-l-auteur.md`, en français) : erreurs de l'original trouvées depuis le début (bugs, tests fragiles, avertissements, portabilité macOS, remarques) et vitesses avant / après. Consignes dans CLAUDE.md : le tenir à jour à chaque erreur trouvée et chaque gain.
 
 ## En cours
 
@@ -41,6 +42,8 @@ Ensuite :
 Après chaque point : mettre à jour la section « État constaté » du mémo, ce fichier et le journal, puis commiter et pousser. Une grande étape (service d'Albireo qui répond, test de Pseudalis à 28 sur 28, première mesure de vitesse) a son épisode de blog.
 
 ## Décisions
+
+- Q8_0 : le profil du modèle de recherche (2026-11-08) montre que ses prompts passent par `matmul_float` → `gemm_neon` (16 512 échantillons) ; `gguf_dq_q8_0` ne pèse que 494. Un noyau Q8_0 ne gagnerait que 2 à 3 %. Le levier est le produit en flottants lui-même : en attente de la décision de l'humain (garder l'exactitude au bit près, ou passer par le FMA, l'int8 ou Accelerate).
 
 - Mac Apple Silicon uniquement ; Windows hors du périmètre.
 - Modifier le moins possible les fichiers de l'original, sous `if (APPLE)` / `#ifdef __APPLE__` ou un test d'ARM64 (`CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$"`), pour garder des fusions faciles avec upstream.
