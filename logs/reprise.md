@@ -27,6 +27,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-08 : **notes pour l'auteur** (`docs/notes-pour-l-auteur.md`, en français) : erreurs de l'original trouvées depuis le début (bugs, tests fragiles, avertissements, portabilité macOS, remarques) et vitesses avant / après. Consignes dans CLAUDE.md : le tenir à jour à chaque erreur trouvée et chaque gain.
 - 2026-11-08 : **produits des prompts par Accelerate** (`engine/qkernels_accelerate.inc`, `a38c30d`), décision de l'humain (option C, fin de l'exactitude au bit près pour ces produits). `cblas_sgemm` à partir de 16 tokens, poids décompressés par tranches de 256 lignes pendant le calcul ; seuil des noyaux entiers à 24 tokens sur Mac. Mesures alternées : 2B 512 tokens 64 à 72 → 217 tokens/s, 4 096 tokens 52 à 58 → 156 à 163, modèle de recherche 184 à 213 → 573 à 601 ; génération inchangée. Tests passent. Service relancé avec ce moteur. Notes pour l'auteur : changement 4, remarque 19 (seuil), et une ligne « Mac ou Windows » par entrée (demande de l'humain, qui fera des PR pour ce qui se reproduit sous Windows ; consigne ajoutée à CLAUDE.md). Blog : épisode 13.
 - 2026-11-08 : **image lue par le 4B** (zèbre et perroquet de macOS) : descriptions justes. Attention de l'encodeur d'images par Accelerate (`72091df`) : encodage d'une image 512 × 512 6,7 à 8,5 s → 1,8 à 2,2 s, même précision contre la double, descriptions identiques. Notes pour l'auteur : changement 5. Code avant / après de `bench_runtime` (entrée 1) ajouté aux notes, essayé avec AddressSanitizer (`5c81142`). Blog : épisode 14.
+- 2026-11-08 : **4 commits de l'original fusionnés** (`63f4af4` : Pseudalis 1.0.4 et 1.0.5, `dlib/privacy`, exemple d'anonymisation), sans conflit ; corrections Mac de `pseudalis/CMakeLists.txt` et `host/drive_folders.cpp` intactes. Builds de Pseudalis et d'Albireo sans erreur ; `test_engine`, `test_host` et `test_linux.sh` de Pseudalis : **34 sur 34**. Service de Pseudalis relancé en 1.0.5 (page en 200). Notes pour l'auteur recalées sur `0503bcb` (numéros de ligne de `test_linux.sh` et `drive_folders.cpp`) ; deux avertissements oubliés ajoutés (`language_model_data.h:185`, `scan_image_pyramid.h:873`).
 
 ## En cours
 
@@ -35,7 +36,6 @@ Rien. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 ## À faire, dans l'ordre proposé
 
 1. Plus tard, si utile : noyaux NEON de génération pour les autres formats de poids (Q8_0, Q5_K…).
-2. L'original a 3 commits de plus (vu le 2026-11-08) : fusion à la demande de l'humain.
 
 Ensuite :
 
@@ -73,6 +73,7 @@ cmake --build build/macos-albireo -- -k 0
 mkdir -p /tmp/shim && printf '#!/bin/sh\nsysctl -n hw.ncpu\n' > /tmp/shim/nproc && chmod +x /tmp/shim/nproc
 ln -sf /opt/homebrew/bin/gstat /tmp/shim/stat
 PATH=/tmp/shim:$PATH bash dlib/dlib/external/pseudalis/tools/test_linux.sh $PWD/build/macos-pseudalis
+# Service de Pseudalis déjà lancé sur 18444 : PSEUDALIS_TEST_PORT=18454 devant la commande
 
 # Service d'Albireo (page : https://localhost:18443/ ; arrêt : Ctrl-C, ou kill -TERM)
 ALBIREO_HOME=$PWD/build/albireo-home build/macos-albireo/bin/albireo-service --console

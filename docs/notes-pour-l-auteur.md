@@ -19,7 +19,7 @@ Pour chaque point « aussi sous Windows » qui se corrige dans le code, l'entré
 
 La dernière partie donne les vitesses mesurées sur le Mac, avant et après les noyaux NEON du fork, que vous voudrez peut-être reprendre.
 
-- **Comparé à** : `Cydral/Dlib-Transformer-extensions`, branche `main`, commit `8743fcd`. Les numéros de ligne renvoient à ce commit.
+- **Comparé à** : `Cydral/Dlib-Transformer-extensions`, branche `main`, commit `0503bcb` (Pseudalis 1.0.5). Les numéros de ligne renvoient à ce commit.
 - **Machine** : MacBook Air M2 (8 cœurs, 24 Go, sans ventilateur), macOS 27 (Darwin 27.0.0, arm64), Apple clang 21.0.0 (clang-2100.3.34.2), CMake 4.1.2, Ninja.
 - **Ce qui a été construit** : les variantes Linux d'Albireo et de Pseudalis (`--console`), comme le prévoient leurs fichiers CMake.
 
@@ -28,10 +28,10 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | N° | Nature | Où | En une ligne | Mac ou Windows |
 |---|---|---|---|---|
 | 1 | Bug, toutes plateformes | `albireo/tests/bench_runtime.cpp:83` | Un prompt de moins de 64 tokens fait lire le banc d'essai au-delà de son tableau. | **Aussi sous Windows** |
-| 2 | Test fragile | `pseudalis/tools/test_linux.sh:199, 303, 316, 318` | Deux étapes attendent un temps fixe au lieu d'attendre le résultat, et échouent sur une machine lente. | Linux et Mac (script non lancé sous Windows) |
+| 2 | Test fragile | `pseudalis/tools/test_linux.sh:202, 315, 328, 330` | Deux étapes attendent un temps fixe au lieu d'attendre le résultat, et échouent sur une machine lente. | Linux et Mac (script non lancé sous Windows) |
 | 3 | Réglage du serveur | espace de publication d'Albireo | Le catalogue et chaque téléchargement reçoivent « This link is password protected. » et retombent sur leurs adresses officielles. | **Aussi sous Windows** (côté serveur) |
 | 4 | Robustesse | `albireo/host/main.cpp:315`, `pseudalis/host/main.cpp:307` | En `--console`, un service lancé en arrière-plan par un script ne s'arrête pas par SIGINT sur macOS. | Propre au Mac |
-| 5 | Avertissements | exemples de dlib, Pseudalis | Trois avertissements du compilateur et un de l'éditeur de liens avec Apple clang. | Code commun, avertissements propres à clang ; voir l'entrée |
+| 5 | Avertissements | exemples de dlib, Pseudalis | Cinq avertissements du compilateur et un de l'éditeur de liens avec Apple clang. | Code commun, avertissements propres à clang ; voir l'entrée |
 | 6 à 15 | Portabilité macOS | CMake, `platform.cpp`, `system_info.cpp`, `picopltf.h`, `drive_folders.cpp`, scripts de test | Erreurs de compilation, et chemins propres à Linux (`/proc`, `/sys`, `endian.h`, `st_mtim`, options x86). | Propre au Mac |
 | 16 à 19 | Remarques | noyaux, pool de fils, mode économie d'énergie, seuil des produits en flottants | Pas de défaut, mais bon à savoir. | Voir chaque remarque |
 
@@ -115,8 +115,8 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 ### 2. Deux étapes du test de Pseudalis attendent un temps fixe
 
 - **Où** : `dlib/dlib/external/pseudalis/tools/test_linux.sh` :
-  - ligne 199 (`sleep 8`), avant « drive signatures » ;
-  - lignes 303 (`sleep 8`), 316 (`sleep 6`) et 318 (`sleep 4`), avant « copies on the drive ».
+  - ligne 202 (`sleep 8`), avant « drive signatures » ;
+  - lignes 315 (`sleep 8`), 328 (`sleep 6`) et 330 (`sleep 4`), avant « copies on the drive ».
 - **Ce qui se passe** : toutes les autres étapes du lecteur attendent leur résultat avec `wait_for <secondes> <vérification>`, en réessayant chaque seconde. Ces deux-là dorment un temps fixe, puis ne vérifient qu'une fois. Sur une machine lente, le lecteur n'a pas fini au moment de la vérification, et l'étape échoue alors que le service fonctionne.
 - **Constaté sur le Mac** : un premier passage a donné 26 étapes sur 28, avec « drive signatures » et « copies on the drive » en échec. Il a très probablement tourné avec le mode économie d'énergie de macOS actif (voir la remarque 18), qui rend la machine environ dix fois plus lente. Ce n'est pas vérifié pour ce passage précis, mais le mode était actif lors des mesures faites juste après. Mode coupé : 28 sur 28, avec et sans les modifications du fork.
 - **Correction suggérée** (non testée) : remplacer chaque `sleep` fixe par un `wait_for` sur la condition que l'étape vérifie ensuite, comme le font les autres étapes du lecteur.
@@ -155,10 +155,13 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | `dlib/examples/slm_transformer_configs_ex.cpp:883` et `:884` | `braces around scalar initializer [-Wbraced-scalar-init]`, dans `tokenizer.decode({ ref_subset[i] }, false)` et `tokenizer.decode({ gen_subset[i] }, false)` |
 | `dlib/examples/slm_cygnus_instruct_ex.cpp:197` | `braces around scalar initializer [-Wbraced-scalar-init]`, dans `get_dataset_as_pairs({ dataset_id::BLACK_HOLE_QA_PARTA })` |
 | `dlib/dlib/external/pseudalis/common/engine_loader.h:62` | `private field 'handle_' is not used [-Wunused-private-field]` : hors de Windows, le moteur est intégré au programme et `handle_` n'est jamais lu. |
+| `dlib/dlib/data_io/language_model_data.h:185` (`is_text_content`) | `variable 'whitespace_count' set but not used [-Wunused-but-set-variable]` : la variable est incrémentée ligne 195 mais jamais lue. Vu en compilant le moteur de Pseudalis. |
+| `dlib/dlib/image_processing/scan_image_pyramid.h:873` | `variable 'total_temp_score' set but not used [-Wunused-but-set-variable]` : la variable reçoit `+= max_val` ligne 940 mais n'est jamais lue. Vu en compilant le moteur de Pseudalis. |
 | `dlib/examples/CMakeLists.txt:136` | `ld: warning: -s is obsolete` : l'éditeur de liens d'Apple ne fait plus le dépouillement avec `-s`. Sur macOS, `-Wl,-x` ou une étape `strip` le remplace. |
 
 - **Mac ou Windows** :
   - les deux `-Wbraced-scalar-init` sont dans du code commun, mais c'est un avertissement de clang. MSVC ne le donne probablement pas (non vérifié) ; clang-cl sous Windows le donnerait. La correction, retirer les accolades (`tokenizer.decode(ref_subset[i], false)` si la fonction accepte un seul token, sinon `std::vector<int>{ ... }`), vaudrait pour toutes les plateformes (non testée) ;
+  - `whitespace_count` et `total_temp_score` : code commun à toutes les plateformes ; clang et GCC donnent cet avertissement (`-Wall`), MSVC probablement pas (non vérifié). Correction suggérée (non testée) : supprimer la variable et la ligne qui la modifie (`language_model_data.h` lignes 185 et 195, `scan_image_pyramid.h` lignes 873 et 940), ou s'en servir si un usage était prévu ;
   - `handle_` : hors Windows seulement, puisque sous Windows le moteur est une DLL et `handle_` sert ;
   - `ld -s` : propre au Mac.
 
@@ -178,7 +181,7 @@ Aucun de ces points n'est un bug sous Windows ou Linux : ce sont les changements
 | 7 | `svox_pico/lib/picopltf.h:70–81` | `error: 'endian.h' file not found` | `#elif defined(__APPLE__)` : `#include <machine/endian.h>`, `#define __BYTE_ORDER BYTE_ORDER`, `#define __BIG_ENDIAN BIG_ENDIAN`. Vérifié : `PICO_ENDIANNESS` vaut alors petit-boutiste. **Piège** : le test `#if __BYTE_ORDER == __BIG_ENDIAN` (ligne 81) choisit gros-boutiste sans aucune erreur quand ni `__BYTE_ORDER` ni `__BIG_ENDIAN` ne sont définis, puisque le préprocesseur compare alors `0 == 0`. C'est le cas sur macOS avec un simple `<machine/endian.h>`, qui ne définit que les noms sans soulignés. Un `#error` quand `__BYTE_ORDER` n'est pas défini protégerait toutes les plateformes. |
 | 8 | `albireo/CMakeLists.txt:161` (`albireo_image`) | `Undefined symbols for architecture arm64: _png_init_filter_functions_neon` | Sur ARM64, ajout des sources `arm/arm_init.c`, `arm/filter_neon_intrinsics.c` et `arm/palette_neon_intrinsics.c` de libpng, comme le fait le CMake de dlib. |
 | 9 | `dlib/dlib/CMakeLists.txt:959–964` (`dlib_httplib`) | `Undefined symbols: _CFRelease, _SecTrustSettingsCopyCertificates, ...` (httplib lit les certificats du Trousseau) | `if (APPLE) target_link_libraries(dlib_httplib INTERFACE "-framework CoreFoundation" "-framework Security")`. |
-| 10 | `pseudalis/host/drive_folders.cpp:448, 485, 518` | `error: no member named 'st_mtim' in 'stat'` | `#if defined(__APPLE__) #define st_mtim st_mtimespec #endif`, après `#include <unistd.h>`. |
+| 10 | `pseudalis/host/drive_folders.cpp:449, 486, 519` | `error: no member named 'st_mtim' in 'stat'` | `#if defined(__APPLE__) #define st_mtim st_mtimespec #endif`, après `#include <unistd.h>`. |
 
 ### Chemins propres à Linux, à l'exécution
 
@@ -188,7 +191,7 @@ Aucun de ces points n'est un bug sous Windows ou Linux : ce sont les changements
 | 12 | `albireo/host/main.cpp:329`, `pseudalis/host/main.cpp:321` (redémarrage dans un nouveau processus) | Même `readlink("/proc/self/exe")`. Il échoue, et le code se rabat sur `execvp(argv[0])`, qui devrait marcher quand le service a été lancé avec un chemin (non testé). | Pas modifié. `executable_path()` pourrait servir ici. |
 | 13 | `albireo/common/system_info.cpp:180` (`/proc/meminfo`) | Mémoire totale et disponible lues à 0 : l'état affiche `"memory":{"total":0,"available":0}`, et le moteur saute la borne qu'il met aux clés et valeurs selon la mémoire libre. | `#elif defined(__APPLE__)` : `sysctlbyname("hw.memsize")` pour le total, et les pages libres, inactives et purgeables de `host_statistics64` pour la mémoire disponible ([496c025](https://github.com/Aughra/Dlib-Transformer-extensions/commit/496c025)). |
 | 14 | `albireo/common/system_info.cpp`, `read_cpu_info` (`/sys/devices` à la ligne 157) | Pas de nom de processeur : il vient de CPUID, qui n'existe que sur x86. Le nombre de cœurs retombe sur `hardware_concurrency()`, ce qui est juste sur puce Apple. | `sysctlbyname("machdep.cpu.brand_string")`, qui donne par exemple « Apple M2 ». |
-| 15 | `albireo/tools/test_linux.sh:29` (`date +%s%N`), `pseudalis/tools/test_linux.sh:50` (`nproc`) et `:197` (`stat -c %s`) | Le `date` de macOS ne connaît pas `%N`, il n'y a pas de `nproc`, et le `stat` BSD n'a pas `-c`. Dans Pseudalis, la taille lue vaut alors 0, et « drive signatures » échoue pour cette seule raison. | Scripts non modifiés : on place en tête du `PATH` un `nproc` (`sysctl -n hw.ncpu`) et le `stat` de GNU (`gstat`, paquet Homebrew coreutils). |
+| 15 | `albireo/tools/test_linux.sh:29` (`date +%s%N`), `pseudalis/tools/test_linux.sh:53` (`nproc`) et `:200` (`stat -c %s`) | Le `date` de macOS ne connaît pas `%N`, il n'y a pas de `nproc`, et le `stat` BSD n'a pas `-c`. Dans Pseudalis, la taille lue vaut alors 0, et « drive signatures » échoue pour cette seule raison. | Scripts non modifiés : on place en tête du `PATH` un `nproc` (`sysctl -n hw.ncpu`) et le `stat` de GNU (`gstat`, paquet Homebrew coreutils). |
 
 ---
 

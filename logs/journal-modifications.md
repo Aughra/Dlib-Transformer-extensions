@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-08 — Fusionner l'original : Pseudalis 1.0.4 et 1.0.5
+
+- **Quoi** : 4 commits de Cydral fusionnés (`75d4376`, `0bf2814`, `5c2d401`, `0503bcb`) dans `63f4af4` : Pseudalis 1.0.4 et 1.0.5 (moteur, service, page web, `dlib/privacy`, test complet allongé), installateur Windows 1.0.5 dans `dist/`. Albireo n'est pas touché.
+- **Fichiers** : ceux de l'original ; pour le fork, `docs/notes-pour-l-auteur.md` (commit de référence `0503bcb`, numéros de ligne recalés, deux avertissements ajoutés), `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain.
+- **Étapes** : fichiers communs au fork et à la fusion : `pseudalis/CMakeLists.txt` et `pseudalis/host/drive_folders.cpp`, fusionnés sans conflit, corrections Mac intactes (branche ARM64, `#define st_mtim st_mtimespec`) ; message de fusion mis en français avant le push ; builds de Pseudalis et d'Albireo : 0 erreur, 3 avertissements de l'original dans Pseudalis (dont `whitespace_count` et `total_temp_score`, déjà présents aux builds précédents mais oubliés dans les notes) ; `test_engine`, `test_host` passent ; `test_linux.sh` sur le port 18454 (`lowpowermode 0`, charge 4) : 34 sur 34, 0 failed ; service de Pseudalis relancé (1.0.5, page en 200).
+
 ## 2026-11-08 — Passer l'attention de l'encodeur d'images par Accelerate
 
 - **Quoi** : sur Mac, les deux produits de chaque tuile de `qk_encoder_attention` (notes `S = Q Kt`, valeurs `O += P V`) passent par `cblas_sgemm` (`encoder_scores_accelerate`, `encoder_values_accelerate` dans `qkernels_accelerate.inc`), appelés en tête de `encoder_scores` et `encoder_values` sous `ALBIREO_QK_ACCELERATE`. Encodage d'une image 512 × 512 (16 × 16 tokens) par le projecteur du 4B : 6,6 à 8,5 s → 1,8 à 2,2 s.
