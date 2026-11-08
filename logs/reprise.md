@@ -23,6 +23,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-07 : **page web essayée par l'humain** dans son navigateur : conversation, puis résumé juste d'un PDF de 4,6 Mo (guide d'hygiène de l'ANSSI) lu par recherche. Écriture à 3,4 tokens/s sur ce long contexte : l'attention, non accélérée, prend les deux tiers du calcul.
 - 2026-11-07 : **attention NEON** (`attention_scores_neon`, `attention_values_neon` dans `qkernels_neon.inc`), identique au bit près au code portable (0 différence sur 549 760 ; règle d'arrondi d'Apple clang reproduite : scores en produit puis addition sauf les `hd % 4` derniers termes en `fma`, valeurs en `fma`). Sur 4 096 tokens (2B, mesures alternées) : prompt 25 → 51 tokens/s, génération 8 → 21 tokens/s. Même réponse sur un résumé de 4 329 tokens. Blog : épisode 11.
 - 2026-11-08 : PDF refait dans la page : la recherche n'a donné au 4B qu'environ 1 800 tokens ; écriture à 12,5 tokens/s. Pas comparable au premier essai (contexte inconnu, bien plus long).
+- 2026-11-08 : **Pseudalis à 28 sur 28** (`test_linux.sh`). Correction du chemin du programme (`pseudalis/common/platform.cpp`, comme Albireo) : sans elle, la page web répond 404 quand le service est lancé hors de `bin/`. Les deux étapes qui échouaient (« drive signatures », « copies on the drive ») passent aussi sans elle : le premier passage avait très probablement été fait en mode économie, et elles attendent un délai fixe. La piste APFS (clones, renommages) était fausse. Blog : épisode 12.
 
 ## En cours
 
@@ -32,13 +33,10 @@ Rien. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
 1. Plus tard, si utile : noyaux NEON pour les autres formats de poids (Q8_0 du projecteur et du modèle de recherche, Q5_K…).
 
-Ensuite, Pseudalis :
+Ensuite :
 
-0. **Pseudalis, chemin du programme** : `pseudalis/common/platform.cpp` et `pseudalis/host/main.cpp` lisent aussi `/proc/self/exe`. Même correction que pour Albireo (`_NSGetExecutablePath`). À faire avant de chercher la cause des deux étapes qui échouent.
-1. **Pseudalis, « drive signatures »** : une archive protégée (`grosse.zip`) renommée sur le lecteur en `grosse.zip.bak` est déplacée dans `refused/files/` au lieu de rester. Sur Linux, elle reste. Piste : la façon dont le lecteur (`host/drive_folders.cpp`, scrutation par `stat`) reconnaît un fichier qu'il a déjà protégé, après un renommage, sur APFS.
-2. **Pseudalis, « copies on the drive »** : la copie d'un fichier protégé (`cp copies.txt "copies (2).txt"`) crée un nouvel enregistrement au lieu de reprendre celui du fichier. Même piste : la reconnaissance d'un fichier déjà protégé. Attention, `cp` sur APFS fait un clone : à comparer avec Linux.
-
-Puis : construire et lancer `dtest` (tests dlib), et quelques exemples `slm_*`.
+1. Essai de la page de Pseudalis dans un navigateur, par l'humain (service lancé comme Albireo, port 18444, `PSEUDALIS_HOME`).
+2. Construire et lancer `dtest` (tests dlib), et quelques exemples `slm_*`.
 
 Après chaque point : mettre à jour la section « État constaté » du mémo, ce fichier et le journal, puis commiter et pousser. Une grande étape (service d'Albireo qui répond, test de Pseudalis à 28 sur 28, première mesure de vitesse) a son épisode de blog.
 

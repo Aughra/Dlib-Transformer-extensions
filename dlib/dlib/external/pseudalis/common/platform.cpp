@@ -45,6 +45,9 @@
 #if defined(__linux__)
 #include <sys/prctl.h>
 #endif
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 #endif
 
 namespace pseudalis
@@ -78,6 +81,13 @@ namespace pseudalis
         const DWORD n = GetModuleFileNameW(nullptr, &buf[0], static_cast<DWORD>(buf.size()));
         buf.resize(n);
         return narrow(buf);
+#elif defined(__APPLE__)
+        // macOS has no /proc: the path the program was started by, then without its links.
+        char buf[4096];
+        uint32_t size = sizeof(buf);
+        if (_NSGetExecutablePath(buf, &size) != 0) return std::string();
+        char real[PATH_MAX];
+        return realpath(buf, real) ? std::string(real) : std::string(buf);
 #else
         char buf[4096];
         const ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);

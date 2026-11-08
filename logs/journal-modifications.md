@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-08 — Faire passer Pseudalis à 28 sur 28
+
+- **Quoi** : `executable_path()` de Pseudalis par `_NSGetExecutablePath` sous `#if defined(__APPLE__)`, comme pour Albireo. `test_linux.sh` : 28 étapes sur 28.
+- **Fichiers** : `dlib/dlib/external/pseudalis/common/platform.cpp` ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal, `blog/12-le-chronometre-du-test.md`, `blog/README.md`.
+- **Pourquoi** : même lecture de `/proc/self/exe` qu'Albireo ; et reprise du chantier des deux étapes qui échouaient.
+- **Étapes** : correction, build sans erreur ; `test_linux.sh` (avec `nproc` et `gstat` par le `PATH`) : 28/28. Contre-épreuve sans la correction : 28/28 aussi, donc elle n'explique pas les deux étapes ; elles attendent un délai fixe (`sleep 8`, 6, 4) et le premier passage (26/28, 2026-11-06) avait très probablement été fait en mode économie d'énergie (découvert juste après, lors des mesures d'Albireo). Seconde contre-épreuve, service lancé depuis la racine du dépôt : page 404 (« no web folder at web ») sans la correction, 200 avec.
+
 ## 2026-11-08 — Relever le second essai du PDF
 
 - **Quoi** : suivi de `/albireo/v1/status` toutes les 5 s pendant que l'humain refait le résumé du PDF de l'ANSSI : rangement par le modèle de recherche (~2 min), lecture d'environ 1 800 tokens par le 4B, 578 tokens écrits à 12 à 13 tokens/s.
