@@ -118,7 +118,8 @@ Les documents de l'original (`Readme.md`, `examples/Readme.md`, les README d'Alb
   - ce qui se passe, avec le message d'erreur copié ;
   - comment le reproduire ;
   - la correction du fork, avec son commit, ou une suggestion marquée **non testée** ;
-  - ce qui est vérifié et ce qui ne l'est pas.
+  - ce qui est vérifié et ce qui ne l'est pas ;
+  - une ligne **« Mac ou Windows »** : « aussi sous Windows » quand le défaut est dans du code ou un service communs (l'humain en fait alors une PR vers l'original), « propre au Mac » (ou à Linux) quand il tient au système. Faute de machine Windows, dire que c'est déduit du code, non vérifié. Reporter le classement dans la colonne « Mac ou Windows » du résumé.
 - **Chaque gain de vitesse** y est consigné dans la partie « Vitesse » : les temps d'avant, le changement (quoi, exactitude, commit) et les temps d'après, en mesures alternées selon la règle de mesure. Mettre aussi à jour le tableau « Bilan ».
 - Quand l'original corrige un point après une fusion, le marquer comme corrigé, avec le commit de l'original, plutôt que de l'effacer.
 - Ni secret, ni chemin privé (`/Users/...`), ni adresse e-mail.

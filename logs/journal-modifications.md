@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-08 — Dire, pour chaque erreur de l'auteur, si Windows est concerné
+
+- **Quoi** : `docs/notes-pour-l-auteur.md` : une ligne « Mac ou Windows » par entrée et une colonne au résumé (aussi sous Windows : n° 1 `bench_runtime`, n° 3 espace de publication ; Linux et Mac : n° 2 ; propre au Mac : n° 4, 6 à 15, 18 ; avertissements du n° 5 détaillés) ; remarque 19 (seuil de 8 tokens trop bas sur Mac) ; changement 4 (Accelerate) dans la partie vitesse et bilan mis à jour. Consigne ajoutée à CLAUDE.md. Mémo (produits par Accelerate, correction 10), reprise et blog (épisode 13, « L'atelier d'à côté ») mis à jour.
+- **Fichiers** : `docs/notes-pour-l-auteur.md`, `CLAUDE.md`, `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, `blog/13-l-atelier-d-a-cote.md`, `blog/README.md`, ce journal.
+- **Pourquoi** : l'humain fera des PR vers l'original pour les erreurs qui se reproduisent sous Windows.
+- **Étapes** : classement déduit du code de `upstream/main` (pas de machine Windows) : `bench_runtime` construit sous Windows par le CMake, Pseudalis sans script de test Windows, `run_console` à `sigwait` dans la branche hors Windows (ligne 306), `handle_` lu seulement par le chargement de DLL ; aucun chemin privé ni adresse dans les documents.
+
 ## 2026-11-08 — Passer les longs produits d'Albireo par Accelerate
 
 - **Quoi** : sur Mac, `matmul_float` (prompts, modèle de recherche, images) appelle `cblas_sgemm` d'Accelerate, qui calcule sur le coprocesseur matriciel de la puce, à partir de 16 tokens ; les poids sont décompressés par tranches de 256 lignes par les fils du pool pendant qu'Accelerate multiplie la tranche précédente. Sur Mac, `qk_float_product_tokens` passe de 8 à 24 : en dessous, les noyaux entiers sont plus rapides. **Fin de l'exactitude au bit près** pour ces produits (décision de l'humain, option C) : les sommes d'Accelerate diffèrent au dernier chiffre.

@@ -73,6 +73,8 @@ Chaque variante doit utiliser un répertoire de build distinct afin de ne pas r�
 
 Le détecteur du dépôt, [`find_blas.cmake`](../dlib/dlib/cmake_utils/find_blas.cmake), cherche notamment BLAS via `pkg-config`, MKL, OpenBLAS, ATLAS et des bibliothèques génériques. Il ne contient pas de détection explicite du framework Apple Accelerate. Par conséquent, activer `DLIB_USE_BLAS` et `DLIB_USE_LAPACK` ne suffit pas à démontrer qu'Accelerate est utilisé.
 
+Albireo, lui, n'utilise pas ce détecteur : il lie Accelerate directement sur Mac (correction 10 ci-dessous). Ce paragraphe ne concerne que dlib.
+
 Avant de valider cette variante, ajouter ou confirmer une détection et un linkage explicites d'Accelerate dans CMake. Ensuite, configurer dans un nouveau répertoire avec `DLIB_USE_BLAS=ON` et `DLIB_USE_LAPACK=ON`, compiler `dtest` et comparer les tests numériques au build CPU de référence. Consigner dans la sortie CMake le framework effectivement lié.
 
 ### Codecs d'images
@@ -180,7 +182,7 @@ Mesures de référence du moteur d'origine, avant NEON (2026-11-06, mode économ
 | « Quelle est la capitale de la France ? Réponds en une phrase. », sans raisonnement | 27 lus, 33 écrits | 3,7 s | 19,4 tokens/s | 14,0 tokens/s | « Paris est la capitale de la France. » |
 | « Explique en trois phrases ce qu'est une puce Apple M2. », en flux, raisonnement, 600 au plus | 25 lus, 600 écrits | 54 s | 18,6 tokens/s | 11,3 tokens/s | 604 messages du flux ; les 600 tokens restent dans le raisonnement (en anglais), la réponse n'a pas commencé |
 
-Le 4B pèse deux fois le 2B (2,3 Go contre 1,1) : sa génération va à peu près deux fois moins vite. Son projecteur d'images est en Q8_0, format qui n'a pas encore de noyau NEON.
+Le 4B pèse deux fois le 2B (2,3 Go contre 1,1) : sa génération va à peu près deux fois moins vite. Son projecteur d'images est en Q8_0 ; ses longs produits passent par Accelerate depuis le 2026-11-08, mais pas encore mesurés sur une image.
 
 **Long contexte : l'attention devient l'étape lente.** Pendant le résumé du PDF (environ 28 500 tokens lus par le service au total, une vingtaine de milliers pour cette requête), l'écriture tombe à 3,4 tokens/s. Profil (`sample`, 3 s, pendant l'écriture) : `qk_attention_values` 3 007 échantillons et `qk_attention_scores` 2 807, contre 2 737 pour `qk_dot` (déjà en NEON). L'attention, qui relit à chaque token toutes les clés et valeurs (en F16), prenait les deux tiers du calcul en code portable.
 
@@ -199,11 +201,24 @@ Avec `engine_chat`, résumé de 4 329 tokens : prompt 23,1 → 47,0 tokens/s, g�
 
 Le résumé du PDF refait dans la page (2026-11-08, `/albireo/v1/status` relevé toutes les 5 s) : le modèle de recherche range le document (~25 000 tokens, environ 200 tokens/s, 2 min), puis le 4B lit environ 1 800 tokens de passages choisis et écrit 578 tokens à 12 à 13 tokens/s. Pas comparable au premier essai (3,4 tokens/s), dont la quantité de contexte n'a pas été relevée et était bien plus grande.
 
+**Produits des prompts par Accelerate (2026-11-08).** `matmul_float` appelle, sous `ALBIREO_QK_ACCELERATE` (NEON et `__APPLE__`), `matmul_accelerate` (`engine/qkernels_accelerate.inc`, fichier du fork) dès 16 tokens : les poids sont décompressés en flottants par tranches de 256 lignes par les fils du pool, pendant que `cblas_sgemm` d'Accelerate multiplie la tranche précédente sur le coprocesseur matriciel. Sous 16 tokens, `gemm_neon` reste en place. Sur Mac, `qk_float_product_tokens` passe de 8 à 24 (`engine/qkernels.h`) : en dessous, les noyaux entiers sont plus rapides. Le framework Accelerate est lié à toutes les cibles d'Albireo (`link_libraries` dans la branche ARM64 du CMake, sous `if (APPLE)`). **Les produits des prompts ne sont plus identiques au bit près** à ceux du code portable : `test_qkernels` (tolérance contre une référence en double) passe, et une réponse longue peut être formulée autrement. Repères mesurés hors dépôt : un appel `cblas_sgemm` 512 × 2 048 × 6 144 fait 1 060 Gflop/s ; le même découpé en blocs de 16 lignes sur 8 fils, 315.
+
+Mesures alternées, 8 fils, `lowpowermode 0`, charge moyenne de 2 à 14 (prompt ; la génération ne change pas) :
+
+| Essai | Version | 2B, 64 tokens | 2B, 512 tokens | 2B, 4 096 tokens | Recherche (Q8_0), 512 tokens |
+|---|---|---|---|---|---|
+| 1 | avant | 62,8 tokens/s | 71,7 tokens/s | 57,5 tokens/s | 212,5 tokens/s |
+| 1 | Accelerate | 133,7 tokens/s | 217,5 tokens/s | 162,8 tokens/s | 600,9 tokens/s |
+| 2 | avant | 60,4 tokens/s | 64,2 tokens/s | 51,6 tokens/s | 183,7 tokens/s |
+| 2 | Accelerate | 114,1 tokens/s | 216,8 tokens/s | 155,9 tokens/s | 572,8 tokens/s |
+
+Avec `engine_chat`, résumé de 4 329 tokens : prompt 51,7 → 134,9 tokens/s, réponse de même sens mais formulée autrement. Question de 21 tokens : « Paris », prompt 45,6 → 58,4 tokens/s (une paire de mesures). Le service, relancé avec ce moteur, transforme 1 834 tokens en vecteur de recherche en 5,3 s (mesure seule).
+
 Pour mémoire, en mode économie d'énergie : `engine_chat` 0,78 token/s à 8 fils et 0,85 à 4 fils (0,9 cœur occupé) ; `bench_runtime` 1,9 token/s à 4 fils.
 
 Constats :
 
-- **Avant NEON, le calcul était scalaire.** Profil (`sample`) : presque tout le temps est dans `matmul_float` (prompt) et `qk_dot_portable` (génération). Les deux ont maintenant leurs noyaux NEON (ci-dessus). Les autres formats de poids (Q4_0, Q5_K, Q8_0, F16…) restent sur les noyaux portables : à faire si un modèle du catalogue les emploie.
+- **Avant NEON, le calcul était scalaire.** Profil (`sample`) : presque tout le temps est dans `matmul_float` (prompt) et `qk_dot_portable` (génération). Les deux ont maintenant leurs noyaux NEON (ci-dessus), et le prompt passe par Accelerate. En génération, les autres formats de poids (Q4_0, Q5_K, Q8_0, F16…) restent sur les noyaux portables : à faire si un modèle du catalogue les emploie.
 - **L'attente des fils.** Hors x86, `ALBIREO_CPU_RELAX()` (`engine/thread_pool.h`) est `std::this_thread::yield()`, qui fait tomber la priorité du fil à 0 sur macOS (`ps -M`). Essai : l'instruction `isb` à la place sur ARM64. Les fils restent alors à la priorité 31, mais la génération n'est pas plus rapide (deux essais alternés : 5,2 et 5,5 tokens/s avec `isb`, 5,7 et 6,4 sans). Essai abandonné, code d'origine gardé.
 - `bench_runtime` lit toujours 64 tokens de son prompt pour la génération groupée : avec un prompt plus court, il lit hors du tableau (exception `token identifier out of range`). Lui donner au moins 64 tokens.
 
@@ -226,6 +241,10 @@ Ce qui a été changé pour lancer le service d'Albireo, sous `#if defined(__APP
 7. `albireo/common/platform.cpp`, `executable_path()` : le chemin du programme par `_NSGetExecutablePath` puis `realpath`, à la place de `/proc/self/exe`, qui n'existe pas sur macOS. Sans cela, le service ne trouve ni ses moteurs (« no usable engine in ») ni sa page web (« no web folder at web »). Pseudalis a sa copie du même code (correction 9).
 8. `albireo/common/system_info.cpp` : la mémoire (`hw.memsize`, et les pages libres, inactives ou purgeables de `host_statistics64`) à la place de `/proc/meminfo`, qui donnait 0, et le nom du processeur (`machdep.cpu.brand_string`). Le moteur se sert de la mémoire libre pour borner la place des clés et valeurs ; à 0, il sautait ce calcul.
 9. `pseudalis/common/platform.cpp`, `executable_path()` : la même correction que la 7. Le moteur de Pseudalis est intégré au service hors de Windows, mais sa page web se cherche dans `web` à côté du programme : sans la correction, lancé depuis un autre dossier que `bin/`, le service répond 404 (« no web folder at web ») ; avec, 200.
+
+Ajouté ensuite pour la vitesse :
+
+10. `albireo/engine/qkernels_accelerate.inc` (fichier du fork) : les produits des prompts par `cblas_sgemm` d'Accelerate, à partir de 16 tokens. `qkernels.cpp` : `ALBIREO_QK_ACCELERATE` et `#include <vecLib/cblas_new.h>` sous NEON et `__APPLE__`, l'inclusion du fichier avant `matmul_float`, et un aiguillage en tête de `matmul_float`. `qkernels.h` : `qk_float_product_tokens` à 24 sous `__APPLE__` et `__ARM_FEATURE_DOTPROD` (8 ailleurs). `albireo/CMakeLists.txt` : `link_libraries("-framework Accelerate")` dans la branche ARM64, sous `if (APPLE)`.
 
 ## Points à surveiller
 

@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-07, sur le Mac M2.
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-08, sur le Mac M2.
 
 ## Objectif
 
@@ -25,6 +25,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-08 : PDF refait dans la page : la recherche n'a donné au 4B qu'environ 1 800 tokens ; écriture à 12,5 tokens/s. Pas comparable au premier essai (contexte inconnu, bien plus long).
 - 2026-11-08 : **Pseudalis à 28 sur 28** (`test_linux.sh`). Correction du chemin du programme (`pseudalis/common/platform.cpp`, comme Albireo) : sans elle, la page web répond 404 quand le service est lancé hors de `bin/`. Les deux étapes qui échouaient (« drive signatures », « copies on the drive ») passent aussi sans elle : le premier passage avait très probablement été fait en mode économie, et elles attendent un délai fixe. La piste APFS (clones, renommages) était fausse. Blog : épisode 12.
 - 2026-11-08 : **notes pour l'auteur** (`docs/notes-pour-l-auteur.md`, en français) : erreurs de l'original trouvées depuis le début (bugs, tests fragiles, avertissements, portabilité macOS, remarques) et vitesses avant / après. Consignes dans CLAUDE.md : le tenir à jour à chaque erreur trouvée et chaque gain.
+- 2026-11-08 : **produits des prompts par Accelerate** (`engine/qkernels_accelerate.inc`, `a38c30d`), décision de l'humain (option C, fin de l'exactitude au bit près pour ces produits). `cblas_sgemm` à partir de 16 tokens, poids décompressés par tranches de 256 lignes pendant le calcul ; seuil des noyaux entiers à 24 tokens sur Mac. Mesures alternées : 2B 512 tokens 64 à 72 → 217 tokens/s, 4 096 tokens 52 à 58 → 156 à 163, modèle de recherche 184 à 213 → 573 à 601 ; génération inchangée. Tests passent. Service relancé avec ce moteur. Notes pour l'auteur : changement 4, remarque 19 (seuil), et une ligne « Mac ou Windows » par entrée (demande de l'humain, qui fera des PR pour ce qui se reproduit sous Windows ; consigne ajoutée à CLAUDE.md). Blog : épisode 13.
 
 ## En cours
 
@@ -32,7 +33,7 @@ Rien. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
 ## À faire, dans l'ordre proposé
 
-1. Plus tard, si utile : noyaux NEON pour les autres formats de poids (Q8_0 du projecteur et du modèle de recherche, Q5_K…).
+1. Plus tard, si utile : noyaux NEON de génération pour les autres formats de poids (Q8_0, Q5_K…) ; mesurer une image (projecteur Q8_0, désormais par Accelerate).
 
 Ensuite :
 
@@ -43,7 +44,7 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 
 ## Décisions
 
-- Q8_0 : le profil du modèle de recherche (2026-11-08) montre que ses prompts passent par `matmul_float` → `gemm_neon` (16 512 échantillons) ; `gguf_dq_q8_0` ne pèse que 494. Un noyau Q8_0 ne gagnerait que 2 à 3 %. Le levier est le produit en flottants lui-même : en attente de la décision de l'humain (garder l'exactitude au bit près, ou passer par le FMA, l'int8 ou Accelerate).
+- 2026-11-08 : les produits des prompts passent par Accelerate (option C choisie par l'humain) ; ils ne sont plus identiques au bit près au code portable. Les noyaux de génération (`qk_dot`) et l'attention restent exacts au bit près.
 
 - Mac Apple Silicon uniquement ; Windows hors du périmètre.
 - Modifier le moins possible les fichiers de l'original, sous `if (APPLE)` / `#ifdef __APPLE__` ou un test d'ARM64 (`CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$"`), pour garder des fusions faciles avec upstream.
@@ -52,7 +53,7 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 ## Problèmes ouverts
 
 - L'ancien fork `PapyTortueTech/Dlib-Transformer-extensions` n'est plus utilisé ; l'humain s'occupe de l'arrêter. Ne plus jamais y pousser.
-- Noyaux NEON pour Q4_K, Q6_K, le produit en floats et l'attention. Les autres formats (Q8_0 du projecteur d'images et du modèle de recherche, Q5_K…) restent portables.
+- Noyaux NEON pour Q4_K, Q6_K et l'attention ; prompts par Accelerate pour tous les formats. En génération, les autres formats (Q8_0, Q5_K…) restent portables.
 - Lancé en arrière-plan par un script, le service ignore SIGINT (le shell le lui fait ignorer, et macOS jette alors le signal) : l'arrêter par `kill -TERM`. Dans un terminal, Ctrl-C marche. Même chose attendue pour `test_linux.sh` d'Albireo à l'étape « service stop ».
 - Un service lancé en arrière-plan par Claude s'arrête avec la session de Claude (« service stopped » à 22 h 22 le 2026-11-07, pendant le second essai du PDF, dont les chiffres sont perdus) : le lancer détaché (commande ci-dessous).
 - Le modèle par défaut est un modèle « Thinking » : il raisonne longtemps (en anglais) avant de répondre ; prévoir un `max_tokens` large ou `"reasoning": false`.

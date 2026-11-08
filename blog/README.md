@@ -16,3 +16,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 10. [Le programme qui ne savait pas où il habitait](10-le-programme-qui-ne-savait-pas-ou-il-habitait.md)
 11. [Deux façons d'arrondir](11-deux-facons-d-arrondir.md)
 12. [Le chronomètre du test](12-le-chronometre-du-test.md)
+13. [L'atelier d'à côté](13-l-atelier-d-a-cote.md)

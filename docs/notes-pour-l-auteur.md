@@ -8,6 +8,13 @@ Ces notes viennent d'un fork de Dlib-Transformer-extensions, [Aughra/Dlib-Transf
 
 Chaque entrée donne l'endroit exact dans l'original, ce qui se passe, comment le reproduire, et la correction appliquée (avec son commit dans le fork) ou une suggestion. Une suggestion est marquée **non testée** quand elle n'a pas été essayée.
 
+Chaque entrée dit aussi **si elle concerne Windows** (ligne « Mac ou Windows ») :
+
+- **Aussi sous Windows** : le défaut est dans du code ou un service communs à toutes les plateformes. Il devrait se reproduire sous Windows. Ces points peuvent faire l'objet d'une demande de fusion (PR) vers l'original.
+- **Propre au Mac** (ou à Linux) : le défaut tient au système. Windows n'est pas concerné.
+
+Le portage n'a pas de machine Windows : « aussi sous Windows » est déduit de la lecture du code, pas vérifié sur une machine Windows.
+
 La dernière partie donne les vitesses mesurées sur le Mac, avant et après les noyaux NEON du fork, que vous voudrez peut-être reprendre.
 
 - **Comparé à** : `Cydral/Dlib-Transformer-extensions`, branche `main`, commit `8743fcd`. Les numéros de ligne renvoient à ce commit.
@@ -16,15 +23,15 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 
 ## Résumé
 
-| N° | Nature | Où | En une ligne |
-|---|---|---|---|
-| 1 | Bug, toutes plateformes | `albireo/tests/bench_runtime.cpp:83` | Un prompt de moins de 64 tokens fait lire le banc d'essai au-delà de son tableau. |
-| 2 | Test fragile | `pseudalis/tools/test_linux.sh:199, 303, 316, 318` | Deux étapes attendent un temps fixe au lieu d'attendre le résultat, et échouent sur une machine lente. |
-| 3 | Réglage du serveur | espace de publication d'Albireo | Le catalogue et chaque téléchargement reçoivent « This link is password protected. » et retombent sur leurs adresses officielles. |
-| 4 | Robustesse | `albireo/host/main.cpp:315`, `pseudalis/host/main.cpp:307` | En `--console`, un service lancé en arrière-plan par un script ne s'arrête pas par SIGINT sur macOS. |
-| 5 | Avertissements | exemples de dlib, Pseudalis | Trois avertissements du compilateur et un de l'éditeur de liens avec Apple clang. |
-| 6 à 15 | Portabilité macOS | CMake, `platform.cpp`, `system_info.cpp`, `picopltf.h`, `drive_folders.cpp`, scripts de test | Erreurs de compilation, et chemins propres à Linux (`/proc`, `/sys`, `endian.h`, `st_mtim`, options x86). |
-| 16 à 18 | Remarques | noyaux, pool de fils, mode économie d'énergie | Pas de défaut, mais bon à savoir. |
+| N° | Nature | Où | En une ligne | Mac ou Windows |
+|---|---|---|---|---|
+| 1 | Bug, toutes plateformes | `albireo/tests/bench_runtime.cpp:83` | Un prompt de moins de 64 tokens fait lire le banc d'essai au-delà de son tableau. | **Aussi sous Windows** |
+| 2 | Test fragile | `pseudalis/tools/test_linux.sh:199, 303, 316, 318` | Deux étapes attendent un temps fixe au lieu d'attendre le résultat, et échouent sur une machine lente. | Linux et Mac (script non lancé sous Windows) |
+| 3 | Réglage du serveur | espace de publication d'Albireo | Le catalogue et chaque téléchargement reçoivent « This link is password protected. » et retombent sur leurs adresses officielles. | **Aussi sous Windows** (côté serveur) |
+| 4 | Robustesse | `albireo/host/main.cpp:315`, `pseudalis/host/main.cpp:307` | En `--console`, un service lancé en arrière-plan par un script ne s'arrête pas par SIGINT sur macOS. | Propre au Mac |
+| 5 | Avertissements | exemples de dlib, Pseudalis | Trois avertissements du compilateur et un de l'éditeur de liens avec Apple clang. | Code commun, avertissements propres à clang ; voir l'entrée |
+| 6 à 15 | Portabilité macOS | CMake, `platform.cpp`, `system_info.cpp`, `picopltf.h`, `drive_folders.cpp`, scripts de test | Erreurs de compilation, et chemins propres à Linux (`/proc`, `/sys`, `endian.h`, `st_mtim`, options x86). | Propre au Mac |
+| 16 à 19 | Remarques | noyaux, pool de fils, mode économie d'énergie, seuil des produits en flottants | Pas de défaut, mais bon à savoir. | Voir chaque remarque |
 
 ---
 
@@ -48,6 +55,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 - **Reproduire** : `bench_runtime modele.gguf 4 32 16 2` (prompt de 32 tokens).
 - **Correction suggérée** (non testée) : prendre `std::min<long>(64, prompt)` tokens pour ces séquences, à la fois dans `reserve_sequence(s, 64 + steps)` (ligne 81), dans l'`assign` et dans `logit_rows` (63). Ou bien refuser un prompt de moins de 64 tokens dans le message d'usage.
 - **Ce que le fork a fait** : rien dans le code. On donne toujours au moins 64 tokens.
+- **Mac ou Windows** : **aussi sous Windows**. `bench_runtime.cpp` est le même partout, et le CMake le construit sous Windows (`bench_runtime`, `bench_runtime_<famille>`). La lecture hors du vecteur ne dépend pas du système. Non vérifié sur une machine Windows.
 
 ### 2. Deux étapes du test de Pseudalis attendent un temps fixe
 
@@ -57,6 +65,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 - **Ce qui se passe** : toutes les autres étapes du lecteur attendent leur résultat avec `wait_for <secondes> <vérification>`, en réessayant chaque seconde. Ces deux-là dorment un temps fixe, puis ne vérifient qu'une fois. Sur une machine lente, le lecteur n'a pas fini au moment de la vérification, et l'étape échoue alors que le service fonctionne.
 - **Constaté sur le Mac** : un premier passage a donné 26 étapes sur 28, avec « drive signatures » et « copies on the drive » en échec. Il a très probablement tourné avec le mode économie d'énergie de macOS actif (voir la remarque 18), qui rend la machine environ dix fois plus lente. Ce n'est pas vérifié pour ce passage précis, mais le mode était actif lors des mesures faites juste après. Mode coupé : 28 sur 28, avec et sans les modifications du fork.
 - **Correction suggérée** (non testée) : remplacer chaque `sleep` fixe par un `wait_for` sur la condition que l'étape vérifie ensuite, comme le font les autres étapes du lecteur.
+- **Mac ou Windows** : Linux et Mac. Le script ne tourne pas sous Windows, et Pseudalis n'a pas de script de test pour Windows. Sur une machine Linux lente ou chargée, l'échec devrait se reproduire, d'après le code (non vérifié).
 
 ### 3. L'espace de publication d'Albireo répond « protégé par mot de passe »
 
@@ -69,6 +78,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
   Le même message apparaît pour `models/qwen3-embedding-0.6b/Qwen3-Embedding-0.6B-Q8_0.gguf` et pour `models/qwen3-vl-4b-thinking/Qwen3VL-4B-Thinking-Q4_K_M.gguf`. Ces deux fichiers sont alors venus de Hugging Face.
 - **Constaté** : le 2026-11-07, avec Albireo Community Edition 1.0.11, un dossier de données neuf, et les réglages par défaut sauf `port` et `check_updates: false`.
 - **Conséquence** : aucune pour l'utilisateur, puisque le repli marche. Mais si l'espace de publication doit servir ces fichiers, il faut vérifier son lien ou les réglages de son serveur. Si la protection est voulue, l'avertissement apparaît à chaque démarrage de chaque installation.
+- **Mac ou Windows** : **aussi sous Windows**. La réponse vient du serveur de l'espace de publication, pas du code du Mac : toute installation qui le consulte devrait la recevoir. Non vérifié depuis Windows. C'est un réglage de serveur, pas une correction de code.
 
 ### 4. En `--console`, un service lancé en arrière-plan ne s'arrête pas par SIGINT sur macOS
 
@@ -81,6 +91,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 - **Reproduire** (macOS) : `bash -c 'albireo-service --console &'`, puis `kill -INT <pid>`. Le service continue de tourner. Un `sample` du processus montre son fil de signaux toujours dans `__sigwait`. `kill -TERM` l'arrête en une seconde environ, et Ctrl-C dans un terminal marche.
 - **Correction suggérée** (non testée) : avant `pthread_sigmask`, remettre les trois signaux à leur comportement par défaut, par exemple `signal(SIGINT, SIG_DFL); signal(SIGTERM, SIG_DFL); signal(SIGHUP, SIG_DFL);`. Ainsi, `sigwait` les reçoit quel que soit le réglage hérité du parent.
 - **Ce que le fork a fait** : rien dans le code. On arrête les services par SIGTERM.
+- **Mac ou Windows** : propre au Mac. Sous Linux, `sigwait` reçoit le signal. Sous Windows, ce code n'est pas compilé : `run_console` y a sa propre version (la branche `#else` commence à la ligne 306 d'Albireo).
 
 ### 5. Avertissements avec Apple clang
 
@@ -91,11 +102,18 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | `dlib/dlib/external/pseudalis/common/engine_loader.h:62` | `private field 'handle_' is not used [-Wunused-private-field]` : hors de Windows, le moteur est intégré au programme et `handle_` n'est jamais lu. |
 | `dlib/examples/CMakeLists.txt:136` | `ld: warning: -s is obsolete` : l'éditeur de liens d'Apple ne fait plus le dépouillement avec `-s`. Sur macOS, `-Wl,-x` ou une étape `strip` le remplace. |
 
+- **Mac ou Windows** :
+  - les deux `-Wbraced-scalar-init` sont dans du code commun, mais c'est un avertissement de clang. MSVC ne le donne probablement pas (non vérifié) ; clang-cl sous Windows le donnerait. La correction, retirer les accolades (`tokenizer.decode(ref_subset[i], false)` si la fonction accepte un seul token, sinon `std::vector<int>{ ... }`), vaudrait pour toutes les plateformes (non testée) ;
+  - `handle_` : hors Windows seulement, puisque sous Windows le moteur est une DLL et `handle_` sert ;
+  - `ld -s` : propre au Mac.
+
 ---
 
 ## 2. Portabilité vers macOS sur puce Apple
 
 Aucun de ces points n'est un bug sous Windows ou Linux : ce sont les changements dont le fork a eu besoin. Chacun est protégé par une condition, pour que les builds Windows et Linux restent inchangés. Si vous voulez que le projet se construise sur Mac, ce sont les endroits à toucher.
+
+**Mac ou Windows** : tous propres au Mac (le n° 15 concerne des scripts Linux lancés sur Mac). Rien ne se reproduit sous Windows. Une demande de fusion n'aurait de sens que si vous voulez accueillir le Mac dans l'original. Seule exception de principe : le piège du n° 7 (`0 == 0`) guette toute plateforme qui n'aurait pas `endian.h`.
 
 ### Erreurs de compilation (corrigées dans le commit [451c3fe](https://github.com/Aughra/Dlib-Transformer-extensions/commit/451c3fe) du fork)
 
@@ -129,6 +147,8 @@ Les boucles portables de `qkernels.cpp` sont toutes écrites de la même façon,
 - **Dans les scores de `dot_rows_x4`** (branche portable), le code machine vectorise les produits (`fmul.4s`), puis les ajoute un par un (`fadd`). Seuls les `n % 4` derniers termes passent par un `fmadd` fusionné.
 - **Dans les valeurs de `add_weighted_rows`** (branche portable), la boucle lit `v` avec un pas de `hd`. Le compilateur garde une boucle scalaire de `fmadd` : un seul arrondi par terme.
 
+**Mac ou Windows** : toutes plateformes, pour le principe : chaque compilateur fait ses propres choix (MSVC compris). Ce n'est pas un défaut à corriger.
+
 Les résultats du build portable dépendent donc des choix du compilateur. Ils devraient aussi différer, au dernier chiffre, de ceux du build AVX2, qui utilise le FMA partout (non vérifié faute de machine x86). Ce n'est pas un défaut, puisque les tests ont des tolérances. Mais si un jour le but est d'obtenir la même réponse sur toutes les machines, il faudra écrire explicitement `std::fma`, ou un produit séparé, dans le code portable. Les noyaux NEON du fork reproduisent au bit près les résultats portables de ce build : ils ont dû suivre ces deux règles.
 
 ### 17. `ALBIREO_CPU_RELAX()` vaut `std::this_thread::yield()` hors x86
@@ -136,18 +156,39 @@ Les résultats du build portable dépendent donc des choix du compilateur. Ils d
 - **Où** : `albireo/engine/thread_pool.h:20`.
 - Sur macOS, le `yield()` de la boucle d'attente fait tomber les fils en attente à la priorité 0 (vu avec `ps -M`).
 - Essai avec l'instruction ARM `isb` à la place : les fils restent à la priorité 31, mais la génération n'est pas plus rapide en mesures alternées (5,2 et 5,5 tokens/s avec `isb`, 5,7 et 6,4 sans). Le code d'origine a été gardé, il n'y a rien à changer.
+- **Mac ou Windows** : hors x86 seulement. Les PC Windows x86 utilisent `_mm_pause()`, ils ne sont pas concernés.
 
 ### 18. Le mode économie d'énergie de macOS fait croire que le moteur n'utilise qu'un cœur
 
 Mode économie actif (`pmset -g` affiche `lowpowermode 1`), le moteur tournait environ dix fois moins vite et n'occupait qu'environ un cœur : 0,78 token/s au lieu de 7,9 pour `engine_chat` à 8 fils. C'est un réglage du Mac, pas d'Albireo. Mais un utilisateur de Mac qui trouve Albireo très lent sera probablement dans ce cas. Une ligne dans la documentation, ou un avertissement dans l'état du service, pourrait lui faire gagner du temps.
 
+**Mac ou Windows** : propre au Mac. Un portable Windows en mode « économie d'énergie » ralentit aussi, mais ce point n'a pas été mesuré.
+
+### 19. Sur le Mac, le seuil de 8 tokens des produits en flottants est trop bas
+
+- **Où** : `albireo/engine/qkernels.h:137`, `const long qk_float_product_tokens = 8;`. À partir de ce nombre de tokens, `qk_matmul` décompresse les poids en flottants au lieu de quantifier les activations.
+- **Constaté sur le Mac** (6 144 lignes de 2 048 colonnes, 8 fils, meilleur de 15 appels) : les noyaux entiers restent plus rapides que le produit en flottants bien au-delà de 8 tokens.
+
+  | Tokens | Entiers, Q4_K | Flottants NEON (changement 2), Q4_K | Flottants Accelerate (changement 4), Q4_K |
+  |---|---|---|---|
+  | 8 | 0,84 à 0,99 ms | 1,64 à 1,68 ms | 2,33 à 2,46 ms |
+  | 16 | 1,68 à 1,86 ms | 2,41 à 2,63 ms | 2,35 à 2,48 ms |
+  | 24 | 2,68 à 2,83 ms | 3,36 à 3,53 ms | 2,56 à 2,63 ms |
+  | 64 | 6,99 à 7,25 ms | 7,79 à 7,91 ms | 3,09 à 3,33 ms |
+
+  Avec Q8_0, les entiers (noyau portable) gardent l'avantage sur Accelerate jusque vers 24 à 32 tokens.
+- **Ce que le fork a fait** : sur Mac seulement (`__APPLE__` et `__ARM_FEATURE_DOTPROD`), le seuil passe à 24 ([a38c30d](https://github.com/Aughra/Dlib-Transformer-extensions/commit/a38c30d)). Une question de 21 tokens passe ainsi de 45,6 à 58,4 tokens/s en lecture (une seule paire de mesures).
+- **Mac ou Windows** : la mesure est propre au Mac. Le commentaire du seuil semble viser les processeurs x86 ; il vaudrait peut-être la peine de le remesurer sur un PC Windows, par exemple avec les noyaux VNNI. Non vérifié.
+
 ---
 
 ## 4. Vitesse sur le Mac : temps d'origine, changements, nouveaux temps
 
-Le fork ajoute des noyaux NEON pour puce Apple, dans un fichier à lui, `albireo/engine/qkernels_neon.inc`. `qkernels.cpp` l'inclut et l'appelle sous `ALBIREO_QK_NEON` (`__ARM_NEON` et `__ARM_FEATURE_DOTPROD`), par quelques lignes ajoutées. Aucune ligne du code portable ou x86 n'est modifiée.
+Le fork ajoute des noyaux NEON pour puce Apple, dans un fichier à lui, `albireo/engine/qkernels_neon.inc`. `qkernels.cpp` l'inclut et l'appelle sous `ALBIREO_QK_NEON` (`__ARM_NEON` et `__ARM_FEATURE_DOTPROD`), par quelques lignes ajoutées. Le changement 4 ajoute un second fichier, `albireo/engine/qkernels_accelerate.inc`, sous `ALBIREO_QK_ACCELERATE` (NEON et `__APPLE__`). Aucune ligne du code portable ou x86 n'est modifiée.
 
-**Chaque noyau NEON donne les mêmes résultats que le code portable du même build, au bit près**, et les réponses du modèle sont identiques, mot pour mot, à température 0.
+**Mac ou Windows** : ces changements sont propres au Mac. Ils ne corrigent rien sous Windows.
+
+**Changements 1 à 3 : les noyaux NEON donnent les mêmes résultats que le code portable du même build, au bit près**, et les réponses du modèle sont identiques, mot pour mot, à température 0. **Changement 4 : ce n'est plus vrai** pour les produits des prompts, calculés par Accelerate. Les sommes diffèrent au dernier chiffre, comme celles des noyaux AVX2 avec leur FMA, et une réponse longue peut être formulée autrement.
 
 **Méthode de mesure** :
 - MacBook Air M2, mode économie d'énergie coupé, charge moyenne notée, 8 fils ;
@@ -218,16 +259,45 @@ Un profil (`sample`) montrait presque tout le temps dans `matmul_float` (prompt)
 | `engine_chat`, résumé de 4 329 tokens, prompt | 1 | 23,1 tokens/s | 47,0 tokens/s |
 | idem, génération | 1 | 7,9 tokens/s | 16,9 tokens/s |
 
+### Changement 4 : les produits des prompts par Accelerate
+
+- **Pourquoi** : pour le modèle de recherche (Q8_0), un profil du prompt montrait le produit en flottants (`matmul_float`, donc `gemm_neon`) à 16 512 échantillons, et la décompression `gguf_dq_q8_0` à 494 seulement. Un noyau Q8_0 n'aurait gagné que 2 à 3 %. Le levier était le produit lui-même.
+- **Quoi** : à partir de 16 tokens, `matmul_float` appelle `cblas_sgemm` d'Accelerate, la bibliothèque d'Apple, qui calcule sur le coprocesseur matriciel de la puce.
+  - Un seul gros appel est bien plus rapide que beaucoup de petits appels venus des fils du pool : 1 060 Gflop/s pour un produit 512 × 2 048 × 6 144, contre 315 par blocs de 16 lignes sur 8 fils. Le coprocesseur est partagé par les cœurs d'un groupe.
+  - Les poids sont donc décompressés en flottants par tranches de 256 lignes. Pendant qu'Accelerate multiplie une tranche (tâche 0 du pool, prise par le fil appelant), les autres fils décompressent la suivante.
+  - Tranches essayées : 64, 128, 256 et 512 lignes ; 256 est la meilleure.
+  - Sous 16 tokens, le coût fixe de la décompression rend Accelerate plus lent que `gemm_neon`, qui reste en place pour ces cas (les experts d'un mélange reçoivent parfois peu de tokens).
+  - Le seuil des noyaux entiers passe de 8 à 24 tokens sur Mac (remarque 19).
+- **Exactitude** : plus au bit près. `test_qkernels` passe (il compare `qk_matmul` à une référence en double précision, avec la tolérance de l'original, de 8 à 300 tokens), ainsi que `test_model_file`, `test_chat_format`, `test_engine_api` et `test_host`. Sur le résumé de 4 329 tokens, la réponse est formulée autrement mais garde le même sens. Une question courte donne toujours « La capitale de la France est **Paris**. »
+- **Dépendance** : le framework Accelerate de macOS (`link_libraries("-framework Accelerate")` dans la branche ARM64 du CMake, sous `if (APPLE)`).
+- **Commit du fork** : [a38c30d](https://github.com/Aughra/Dlib-Transformer-extensions/commit/a38c30d).
+
+| Programme (8 fils, `lowpowermode 0`, charge 2 à 14) | Essai | Avant (changements 1 à 3) | Après |
+|---|---|---|---|
+| `bench_runtime`, 2B, prompt de 64 tokens | 1 | 62,8 tokens/s | 133,7 tokens/s |
+| `bench_runtime`, 2B, prompt de 512 tokens | 1 | 71,7 tokens/s | 217,5 tokens/s |
+| `bench_runtime`, modèle de recherche Qwen3 Embedding 0.6B (Q8_0), 512 tokens | 1 | 212,5 tokens/s | 600,9 tokens/s |
+| `bench_runtime`, 2B, prompt de 4 096 tokens | 1 | 57,5 tokens/s (71 s) | 162,8 tokens/s (25 s) |
+| `bench_runtime`, 2B, prompt de 64 tokens | 2 | 60,4 tokens/s | 114,1 tokens/s |
+| `bench_runtime`, 2B, prompt de 512 tokens | 2 | 64,2 tokens/s | 216,8 tokens/s |
+| `bench_runtime`, modèle de recherche, 512 tokens | 2 | 183,7 tokens/s | 572,8 tokens/s |
+| `bench_runtime`, 2B, prompt de 4 096 tokens | 2 | 51,6 tokens/s (79 s) | 155,9 tokens/s (26 s) |
+| `engine_chat`, résumé de 4 329 tokens, prompt | 1 | 51,7 tokens/s | 134,9 tokens/s |
+
+La génération, un token à la fois, ne passe pas par ce chemin : elle est inchangée (32 à 36 tokens/s avant comme après, sur une question courte).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
 |---|---|---|
 | Génération, question courte | environ 7 à 11 tokens/s | 33 à 37 tokens/s |
-| Prompt | environ 8 à 13 tokens/s | 38 à 50 tokens/s |
-| Prompt de 4 096 tokens | pas mesuré | 50 à 53 tokens/s (25 avec les changements 1 et 2 seuls) |
+| Prompt de 64 tokens | environ 8 à 13 tokens/s | 114 à 134 tokens/s (38 à 50 avec les changements 1 à 3) |
+| Prompt de 512 tokens | pas mesuré | 217 tokens/s (64 à 72 avec les changements 1 à 3) |
+| Prompt de 4 096 tokens | pas mesuré | 156 à 163 tokens/s (50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |
 | Génération après 4 096 tokens | pas mesuré | 20 à 22 tokens/s (7,5 à 9 avec les changements 1 et 2 seuls) |
+| Modèle de recherche (Q8_0), 512 tokens | pas mesuré | 573 à 601 tokens/s (184 à 213 avec les changements 1 à 3) |
 
-Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s. Les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux portables sur le Mac. Pour le modèle de recherche (Q8_0), un profil montre que le prompt passe par `matmul_float`, donc par `gemm_neon`. La décompression `gguf_dq_q8_0` n'y pèse que 2 à 3 % (494 échantillons, contre 16 512 pour le produit).
+Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate.
 
 ---
 
