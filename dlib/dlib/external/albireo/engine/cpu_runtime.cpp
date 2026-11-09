@@ -528,8 +528,8 @@ namespace albireo
         */
         const long units = static_cast<long>(tiles_.size()) * KVH;
         long parts = 1;
-        if (units < pool_.size())
-            parts = std::max<long>(1, std::min<long>((2 * pool_.size() + units - 1) / units, span / part_positions));
+        if (units < pool_.active())
+            parts = std::max<long>(1, std::min<long>((2 * pool_.active() + units - 1) / units, span / part_positions));
         const long rows_cap = per_tile * rep;
         if (parts > 1) partial_.resize(static_cast<size_t>(units * parts * rows_cap * (hd + 2)));
 
@@ -855,6 +855,11 @@ namespace albireo
 
     void cpu_runtime::forward(const forward_batch& batch, std::vector<float>& logits)
     {
+#if defined(__APPLE__)
+        // A pass of fewer tokens than the products in floats take, as a step of the generation,
+        // runs on the performance cores alone (thread_pool_apple.inc).
+        const thread_pool::fast_team_scope fast_team(static_cast<long>(batch.tokens.size()) < qk_float_product_tokens);
+#endif
         if (layer_pass_ && !batch.tokens.empty() && takes_layer_pass(batch))
         {
             try

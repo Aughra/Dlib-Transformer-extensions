@@ -252,7 +252,7 @@ Mode économie actif (`pmset -g` affiche `lowpowermode 1`), le moteur tournait e
   | 2B, clés en 8 bits, prompt de 4 096 tokens | **154,0 à 162,7** tokens/s | 134,1 à 136,5 |
 
   Avec 4 fils, les questions courtes et la génération vont plus vite ; avec 8, les longs prompts, où le calcul domine, gardent l'avantage (12 à 18 %).
-- **Ce que le fork a fait** : rien encore. Pistes, **non testées** : prendre par défaut le nombre de cœurs de performance (`hw.perflevel0.physicalcpu` sur macOS), ou garder tous les cœurs pour les prompts et n'en employer que les rapides pour la génération.
+- **Ce que le fork a fait** : sur Mac, tous les cœurs pour les prompts et les cœurs de performance seuls pour la génération (changement 8, partie 4). L'autre piste, prendre par défaut le nombre de cœurs de performance (`hw.perflevel0.physicalcpu`), aurait coûté 12 à 18 % sur les longs prompts.
 - **Mac ou Windows** : **probablement aussi sous Windows** sur les processeurs hybrides (Intel de 12ᵉ génération et suivants) : `GetLogicalProcessorInformationEx(RelationProcessorCore)` compte tous les cœurs, rapides et lents, alors que la structure renvoyée donne leur classe (`EfficiencyClass`). Déduit du code, non vérifié sur une machine Windows.
 
 ---
@@ -263,7 +263,7 @@ Le fork ajoute des noyaux NEON pour puce Apple, dans un fichier à lui, `albireo
 
 **Mac ou Windows** : ces changements sont propres au Mac. Ils ne corrigent rien sous Windows.
 
-**Changements 1 à 3 : les noyaux NEON donnent les mêmes résultats que le code portable du même build, au bit près**, et les réponses du modèle sont identiques, mot pour mot, à température 0. Les changements 6 et 7 le sont aussi. **Changement 4 : ce n'est plus vrai** pour les produits des prompts, calculés par Accelerate. Les sommes diffèrent au dernier chiffre, comme celles des noyaux AVX2 avec leur FMA, et une réponse longue peut être formulée autrement.
+**Changements 1 à 3 : les noyaux NEON donnent les mêmes résultats que le code portable du même build, au bit près**, et les réponses du modèle sont identiques, mot pour mot, à température 0. Les changements 6 et 7 le sont aussi ; le changement 8 donne les résultats d'un moteur à 4 threads en génération. **Changement 4 : ce n'est plus vrai** pour les produits des prompts, calculés par Accelerate. Les sommes diffèrent au dernier chiffre, comme celles des noyaux AVX2 avec leur FMA, et une réponse longue peut être formulée autrement.
 
 **Méthode de mesure** :
 - MacBook Air M2, mode économie d'énergie coupé, charge moyenne notée, 8 fils ;
@@ -415,18 +415,42 @@ Pour comparaison, au même moment, les clés en demi-précision : prompt de 4 09
 
 **Mac ou Windows** : le changement est propre au Mac. Mais toute machine sans AVX2 (Linux sur ARM, par exemple) passe par les formes portables de ces deux fonctions, et le constat « quatre fois plus lent sur un long prompt » devrait s'y retrouver. Déduit du code, non vérifié.
 
+### Changement 8 : la génération sur les cœurs de performance, les prompts sur tous les cœurs
+
+- **Pourquoi** : voir la remarque 20. Sur le M2, 4 threads écrivent plus vite que 8, mais 8 lisent plus vite un long prompt.
+- **Quoi** : sur Mac seulement, un thread pool de plus de threads que de cœurs de performance garde une seconde équipe, plus petite, d'un thread par cœur de performance (`hw.perflevel0.physicalcpu`). Le thread qui ouvre les sections d'une passe la demande par un objet `fast_team_scope` ; ses sections passent alors sur cette équipe, toujours une section à la fois sur les deux équipes, et les threads de l'autre équipe, sans travail, s'endorment vite : le système garde sur les cœurs de performance les threads qui calculent. `cpu_runtime::forward` demande la petite équipe pour une passe de moins de `qk_float_product_tokens` tokens (24 sur Mac), c'est-à-dire la génération et les questions très courtes, dont les produits passent par les noyaux entiers, limités par la mémoire.
+- **Où** (`upstream/main`, `184ea00`) :
+  - `albireo/engine/thread_pool.h` : `<memory>` et `<sys/sysctl.h>` après la ligne 21 ; la création de l'équipe à la fin du constructeur ; après la ligne 79 (`size()`), l'inclusion de `thread_pool_apple.inc` (fichier du fork), ou `int active() const { return size(); }` hors Mac ; après la ligne 95, `if (n_tasks > 1 && run_on_fast_team(n_tasks, fn)) return;`. Tout est sous `#if defined(__APPLE__)`, sauf `active()`, qui vaut `size()` ailleurs.
+  - `albireo/engine/qkernels.cpp:2147` et `albireo/engine/cpu_runtime.cpp:531-532` : `pool.size()` devient `pool.active()`, le nombre de threads de la section (groupes de lignes de `qk_matmul`, découpage de l'attention de la génération). Hors Mac, c'est le même nombre.
+  - `albireo/engine/cpu_runtime.cpp:856` : la demande, sous `#if defined(__APPLE__)`, en tête de `forward`.
+- **Exactitude** : chaque produit reste le même. Le découpage de l'attention de la génération entre les threads (Albireo 1.0.12) dépend du nombre de threads actifs, si bien que les résultats sont ceux d'un moteur réglé à 4 threads, au dernier chiffre près, comme avec le réglage `threads` à 4. Tests de l'original passés ; `engine_chat` répond juste (deux questions, température 0).
+
+| `bench_runtime modele 8 <prompt> <pas> 1 q8` (`lowpowermode 0`, charge 2,7 à 8,4) | Essai | Avant (8 threads, changements 1 à 7) | Après | Repère : 4 threads |
+|---|---|---|---|---|
+| 4B Thinking, génération | 1 | 18,1 tokens/s | 18,6 tokens/s | 18,5 tokens/s |
+| idem | 2 | 17,9 tokens/s | 18,2 tokens/s | 18,3 tokens/s |
+| idem | 3 | 17,7 tokens/s | 18,4 tokens/s | 17,8 tokens/s |
+| idem | 4 | 17,6 tokens/s | 18,3 tokens/s | 18,2 tokens/s |
+| 2B, génération | 1 et 2 | 37,9 et 37,4 tokens/s | 39,7 et 40,8 tokens/s | |
+| 2B, prompt de 4 096 tokens | 1 et 2 | 173,1 et 163,2 tokens/s | 167,0 et 161,8 tokens/s | 134 à 137 (mesures de la remarque 20) |
+| 2B, génération après 4 096 tokens | 1 et 2 | 22,9 et 22,4 tokens/s | 24,1 et 22,4 tokens/s | |
+
+Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse des 8 threads. Avec `engine_chat`, une question de 22 tokens (petite équipe) est lue à 88 tokens/s, une de 25 tokens (toute l'équipe) à 61 (une mesure chacune, pas alternée).
+
+**Mac ou Windows** : le changement est propre au Mac. L'idée vaudrait pour les processeurs hybrides des PC (remarque 20), avec la classe des cœurs que donne Windows ; non essayé.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
 |---|---|---|
-| Génération, question courte | environ 7 à 11 tokens/s | 38 à 39 tokens/s (33 à 37 avec les changements 1 à 5) |
+| Génération, question courte | environ 7 à 11 tokens/s | 39,7 à 40,8 tokens/s (37 à 39 avec les changements 1 à 7, 33 à 37 avec 1 à 5) |
 | Prompt de 64 tokens | environ 8 à 13 tokens/s | 114 à 134 tokens/s (38 à 50 avec les changements 1 à 3) |
 | Prompt de 512 tokens | pas mesuré | 217 tokens/s (64 à 72 avec les changements 1 à 3) |
 | Prompt de 4 096 tokens | pas mesuré | 156 à 166 tokens/s, en demi-précision ou, avec le changement 7, en 8 bits (36 à 38 en 8 bits sans lui ; 50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |
 | Génération après 4 096 tokens | pas mesuré | 20 à 23 tokens/s (9 en 8 bits sans le changement 7 ; 7,5 à 9 avec les changements 1 et 2 seuls) |
 | Modèle de recherche (Q8_0), 512 tokens | pas mesuré | 573 à 601 tokens/s (184 à 213 avec les changements 1 à 3) |
 | Encodage d'une image 512 × 512, projecteur du 4B | pas mesuré | 1,8 à 2,2 s (8,9 à 10,3 avec les changements 1 à 3) |
-| 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 17,8 tokens/s (16,4 à 16,6 sans les changements 6 et 7) |
+| 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 18,2 à 18,6 tokens/s (17,6 à 18,1 sans le changement 8 ; 16,4 à 16,6 sans les changements 6 à 8) |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
 

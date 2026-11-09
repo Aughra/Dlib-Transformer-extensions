@@ -2191,7 +2191,7 @@ namespace albireo
         // Groups of output rows, enough of them to balance the threads, few enough for
         // each group to amortize its hand-over.
         const long rows = W.rows;
-        const long threads = pool.size();
+        const long threads = pool.active();
         long group = std::max<long>(1, rows / (threads * 8));
         group = std::min<long>(group, 128);
         if (n_tokens > 1) group = std::max<long>(1, std::min<long>(group, 32));

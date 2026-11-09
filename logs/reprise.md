@@ -31,6 +31,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-09 : **noyaux Q4_K et Q6_K, sommes gardées en vecteurs** (`791a211`), exacts au bit près (0 sur 43 200 produits, vrais poids) : génération 4B 16,5–17,0 → 18,0–18,1 tokens/s, 2B 35,4–36,8 → 38,2–38,9 (mesures alternées). Rejeté : paquets de lignes plus petits en génération (plus lent). Notes pour l'auteur : changement 6.
 - 2026-11-09 : **6 commits de l'original fusionnés** (`535a6fb`, Albireo 1.0.12 : clés et valeurs en 8 bits par défaut, attention de la génération répartie entre les fils). Un conflit dans `qkernels.cpp` (corps de l'attention devenu un modèle commun), résolu en gardant le corps de l'original et nos 4 lignes NEON en tête. Tests d'Albireo et de Pseudalis (34 sur 34) passent.
 - 2026-11-09 : **attention NEON pour les clés et valeurs en 8 bits**, exacte au bit près (0 sur 351 780 valeurs) : sans elle, la fusion faisait tomber un prompt de 4 096 tokens de 163 à 37 tokens/s sur Mac ; avec, 158–162, génération après 4 096 tokens 9 → 22,5. Notes pour l'auteur : changement 7, remarque 20 (fils), numéros recalés sur `184ea00`. Blog : épisode 15.
+- 2026-11-09 : **génération sur les cœurs de performance** (option B de l'humain) : petite équipe de 4 threads dans le thread pool sur Mac (`thread_pool_apple.inc`), prise par `forward` sous 24 tokens ; longs prompts sur les 8 threads. 4B génération 17,6–18,1 → 18,2–18,6 tokens/s, 2B 37,4–37,9 → 39,7–40,8 ; long prompt inchangé. Notes : changement 8. Blog : épisode 16. Vocabulaire : dire « thread pool » et « threads » (demande de l'humain).
 
 ## En cours
 
@@ -38,7 +39,7 @@ Rien. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
 ## À faire, dans l'ordre proposé
 
-1. **Nombre de fils par défaut sur Mac** (choix de l'humain, remarque 20 des notes) : 8 aujourd'hui (tous les cœurs). 4 fils (cœurs de performance) gagnent sur les questions courtes et en génération (4B : prompt 58 contre 46–52, génération 17–19 contre 16–18), 8 sur les longs prompts (154–169 contre 134–145). Options : (a) 4 par défaut via `hw.perflevel0.physicalcpu` ; (b) 8 pour les prompts, 4 pour la génération (touche `thread_pool.h` ou `qk_matmul`) ; (c) ne rien changer, le réglage `threads` existe.
+1. **Prochaine étape, décidée par l'humain pour le 2026-11-10 : moteur Metal (GPU du Mac).** Sur Mac, le GPU est intégré à la puce M2. Le moteur GPU d'Albireo est en CUDA, absent du Mac. Le GPU du M2 partage la mémoire et en tire presque tout le débit (environ 100 Go/s, contre 45 à 50 mesurés pour le processeur) : écriture peut-être doublée (déduit, non vérifié). Gros chantier : commencer par lire le moteur CUDA de l'original (`tensor_backend`, `offload.h`, `test_device_ops`) et proposer un plan par étapes, avec ses pour et ses contre et le critère vérifiable de chaque étape, avant d'écrire du code.
 2. Plus tard, si utile : noyaux NEON de génération pour les autres formats de poids (Q8_0, Q5_K…) ; `qk_float_to_q8_row` et `qk_rotate_row` restent portables (peu de temps au profil).
 
 Ensuite :

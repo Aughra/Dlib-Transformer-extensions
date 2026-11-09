@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-09 — Écrire sur les cœurs de performance du Mac, lire sur tous les cœurs
+
+- **Quoi** : sur Mac, le thread pool garde une petite équipe d'un thread par cœur de performance (`hw.perflevel0.physicalcpu`, 4 sur le M2) ; `cpu_runtime::forward` la demande (`fast_team_scope`) pour les passes de moins de `qk_float_product_tokens` tokens (24) : génération et questions très courtes. Les longs prompts restent sur les 8 threads. `active()` (nombre de threads de la section) remplace `size()` dans `qk_matmul` et le découpage de l'attention. Option B choisie par l'humain.
+- **Fichiers** : `dlib/dlib/external/albireo/engine/thread_pool_apple.inc` (nouveau, propre au fork), `dlib/dlib/external/albireo/engine/thread_pool.h` (inclusion et trois branchements sous `__APPLE__`, `active()` hors Mac), `dlib/dlib/external/albireo/engine/qkernels.cpp` (une ligne), `dlib/dlib/external/albireo/engine/cpu_runtime.cpp` (deux lignes, et la demande sous `__APPLE__`) ; `docs/notes-pour-l-auteur.md` (changement 8, remarque 20, bilan), `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal, `blog/16-deux-equipes.md`, `blog/README.md`.
+- **Pourquoi** : remarque 20 : 4 threads écrivent plus vite que 8, mais 8 lisent plus vite les longs prompts.
+- **Étapes** : build sans avertissement ; `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api`, `test_host` passent ; `engine_chat` répond juste (2 questions). Mesures alternées Q (8 threads) / T (avec la petite équipe), `bench_runtime ... q8`, charge 2,7 à 8,4 : 4B génération, 4 tours, 17,6–18,1 → 18,2–18,6 tokens/s (4 threads seuls : 17,8–18,5) ; 2B génération 37,9 / 37,4 → 39,7 / 40,8 ; 2B prompt de 4 096 tokens 173,1 / 163,2 → 167,0 / 161,8 (inchangé), génération qui suit 22,9 / 22,4 → 24,1 / 22,4. `engine_chat` : question de 22 tokens lue à 88 tokens/s, de 25 tokens à 61 (une mesure chacune).
+
 ## 2026-11-09 — Accélérer l'attention d'Albireo pour les clés et valeurs en 8 bits
 
 - **Quoi** : `attention_scores_neon` et `attention_values_neon` deviennent des modèles qui reçoivent une source de lignes (`half_rows` : demi-précision ; `q8_rows` : entiers de 8 bits et échelle par groupe de 32, dépliés huit à la fois) ; `attention_scores_q8_neon` et `attention_values_q8_neon` branchées en tête de `qk_attention_scores_q8` et `qk_attention_values_q8`. Identique au bit près au code portable. Remarque 20 (nombre de fils sur un processeur hybride) et changement 7 ajoutés aux notes pour l'auteur ; numéros de ligne recalés sur `184ea00`.

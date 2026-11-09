@@ -20,6 +20,11 @@
 #define ALBIREO_CPU_RELAX() std::this_thread::yield()
 #endif
 
+#if defined(__APPLE__)
+#include <memory>
+#include <sys/sysctl.h>
+#endif
+
 namespace albireo
 {
 
@@ -66,6 +71,17 @@ namespace albireo
                 stop_workers();
                 throw;
             }
+#if defined(__APPLE__)
+            try
+            {
+                make_fast_team(n);
+            }
+            catch (...)
+            {
+                stop_workers();
+                throw;
+            }
+#endif
         }
 
         ~thread_pool()
@@ -77,6 +93,13 @@ namespace albireo
         thread_pool& operator=(const thread_pool&) = delete;
 
         int size() const { return static_cast<int>(workers_.size()) + 1; }
+
+#if defined(__APPLE__)
+#include "thread_pool_apple.inc"
+#else
+        // The number of threads that the sections of the calling thread use.
+        int active() const { return size(); }
+#endif
 
         // How long the workers spin after a section before sleeping.
         void set_spin_time(std::chrono::microseconds t) { spin_us_.store(t.count(), std::memory_order_relaxed); }
@@ -93,6 +116,9 @@ namespace albireo
         void parallel_for(long n_tasks, F&& fn)
         {
             if (n_tasks <= 0) return;
+#if defined(__APPLE__)
+            if (n_tasks > 1 && run_on_fast_team(n_tasks, fn)) return;
+#endif
             if (n_tasks == 1 || workers_.empty())
             {
                 for (long t = 0; t < n_tasks; ++t) fn(t, 0);
