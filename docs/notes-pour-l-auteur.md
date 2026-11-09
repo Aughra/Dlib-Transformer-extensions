@@ -361,11 +361,27 @@ La génération, un token à la fois, ne passe pas par ce chemin : elle est inch
 
 Pour mémoire, avec les changements 1 à 3 seulement : encodage de 8,9 et 10,3 s, lecture complète de 20,2 et 23,3 s (une mesure par image).
 
+### Changement 6 : les noyaux Q4_K et Q6_K du changement 1 gardent leurs sommes en vecteurs
+
+- **Pourquoi** : en génération, un profil du 4B (8 fils) donne 75 % des échantillons à `qk_dot` et 21 % à l'attente des fils (`swtch_pri`). Les noyaux du changement 1 réduisaient chaque groupe de 32 valeurs (Q4_K) ou de 16 (Q6_K) à un entier par `vaddvq_s32`, puis le multipliaient par son échelle en scalaire, et décodaient les échelles et les minimums de Q4_K un par un (`get_scale_min_k4`).
+- **Quoi** : dans `qkernels_neon.inc` seulement. Chaque groupe est multiplié par son échelle dans le vecteur (`vmlaq_n_s32`), et un seul `vaddvq_s32` termine le bloc de 256 valeurs. Les huit échelles et les huit minimums de Q4_K sont décodés d'un coup, par masques sur trois mots de 32 bits. La somme des minimums passe par `vpaddq_s16` et `vmull_s16` sur `bsums`.
+- **Exactitude** : ce sont les mêmes sommes entières, exactes quel que soit l'ordre des additions, et la même fin de bloc en flottants. Le résultat reste identique au bit près au code portable. Contrôle du fork : 0 différence sur 43 200 produits, avec de vrais poids du 2B et du 4B (plongement Q6_K, `attn_q`, `attn_v`, `attn_output`, `ffn_gate`, `ffn_up`, `ffn_down`) et des activations de six formes (normales, très étalées, minuscules, avec des pics). `test_qkernels` passe.
+- **Commit du fork** : voir le journal du fork (2026-11-09).
+
+| `bench_runtime modele 8 64 64 1` (8 fils, `lowpowermode 0`, charge 3,2 à 7,1) | Essai | Avant (changements 1 à 5) | Après |
+|---|---|---|---|
+| 2B, génération | 1 | 35,4 tokens/s (28,2 ms) | 38,9 tokens/s (25,7 ms) |
+| 4B Thinking, génération | 1 | 17,0 tokens/s (58,8 ms) | 18,1 tokens/s (55,4 ms) |
+| 2B, génération | 2 | 36,8 tokens/s (27,2 ms) | 38,2 tokens/s (26,2 ms) |
+| 4B Thinking, génération | 2 | 16,5 tokens/s (60,4 ms) | 18,0 tokens/s (55,5 ms) |
+
+Le gain est de 4 à 9 %. Essayé aussi, et rejeté : des groupes de lignes plus petits en génération (`rows / (threads * 32)` au lieu de `* 8`), pour que les cœurs rapides attendent moins les cœurs lents à la fin de chaque produit. La génération du 4B tombe de 18,1 à 17,0 tokens/s, et à 13,7 avec `* 128`.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
 |---|---|---|
-| Génération, question courte | environ 7 à 11 tokens/s | 33 à 37 tokens/s |
+| Génération, question courte | environ 7 à 11 tokens/s | 38 à 39 tokens/s (33 à 37 avec les changements 1 à 5) |
 | Prompt de 64 tokens | environ 8 à 13 tokens/s | 114 à 134 tokens/s (38 à 50 avec les changements 1 à 3) |
 | Prompt de 512 tokens | pas mesuré | 217 tokens/s (64 à 72 avec les changements 1 à 3) |
 | Prompt de 4 096 tokens | pas mesuré | 156 à 163 tokens/s (50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |

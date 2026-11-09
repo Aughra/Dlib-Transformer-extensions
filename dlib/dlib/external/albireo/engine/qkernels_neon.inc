@@ -8,12 +8,6 @@
 
 namespace
 {
-    // The sum of the products of 16 signed bytes of a by 16 signed bytes of b.
-    inline int dot16(int8x16_t a, int8x16_t b)
-    {
-        return vaddvq_s32(vdotq_s32(vdupq_n_s32(0), a, b));
-    }
-
     float dot_q4_K_neon(const uint8_t* w, const block_q8_K* y, long n)
     {
         const uint8x16_t m4 = vdupq_n_u8(0x0F);
@@ -22,15 +16,28 @@ namespace
         {
             const float d = h2f(w) * y[b].d;
             const float dmin = h2f(w + 2) * y[b].d;
-            const uint8_t* scales = w + 4;
+            /*
+                The eight scales and the eight minimums of the block decoded at once, in the order
+                of get_scale_min_k4(0 to 7): u[0..1] hold the scales, u[2..3] the minimums.
+            */
+            uint32_t u[4];
+            std::memcpy(u, w + 4, 12);
+            u[3] = ((u[2] >> 4) & 0x0F0F0F0F) | (((u[1] >> 6) & 0x03030303) << 4);
+            const uint32_t low_mins = u[1] & 0x3F3F3F3F;
+            u[1] = (u[2] & 0x0F0F0F0F) | (((u[0] >> 6) & 0x03030303) << 4);
+            u[2] = low_mins;
+            u[0] &= 0x3F3F3F3F;
+            const uint8_t* sc = reinterpret_cast<const uint8_t*>(u);
+            // The minimums against the sums of the activations, 32 by 32: pair k of bsums is group k.
+            const int16x8_t pairs = vpaddq_s16(vld1q_s16(y[b].bsums), vld1q_s16(y[b].bsums + 8));
+            const int16x8_t mins = vreinterpretq_s16_u16(vmovl_u8(vld1_u8(sc + 8)));
+            const int summ = vaddvq_s32(vmlal_high_s16(vmull_s16(vget_low_s16(pairs), vget_low_s16(mins)), pairs, mins));
+            // The products stay in vectors, each group of 32 scaled there, and are summed once per block.
             const uint8_t* qs = w + 16;
             const int8_t* q8 = y[b].qs;
-            int isum = 0, summ = 0;
+            int32x4_t acc1 = vdupq_n_s32(0), acc2 = vdupq_n_s32(0);
             for (int j = 0; j < 4; ++j)
             {
-                int sc1, m1, sc2, m2;
-                get_scale_min_k4(2 * j, scales, sc1, m1);
-                get_scale_min_k4(2 * j + 1, scales, sc2, m2);
                 const uint8x16_t q0 = vld1q_u8(qs);
                 const uint8x16_t q1 = vld1q_u8(qs + 16);
                 // The low four bits against the first 32 activations, the high four against the next 32.
@@ -38,14 +45,12 @@ namespace
                 a1 = vdotq_s32(a1, vreinterpretq_s8_u8(vandq_u8(q1, m4)), vld1q_s8(q8 + 16));
                 int32x4_t a2 = vdotq_s32(vdupq_n_s32(0), vreinterpretq_s8_u8(vshrq_n_u8(q0, 4)), vld1q_s8(q8 + 32));
                 a2 = vdotq_s32(a2, vreinterpretq_s8_u8(vshrq_n_u8(q1, 4)), vld1q_s8(q8 + 48));
-                const int s1 = vaddvq_s32(a1);
-                const int s2 = vaddvq_s32(a2);
-                isum += sc1 * s1 + sc2 * s2;
-                summ += m1 * (y[b].bsums[4 * j] + y[b].bsums[4 * j + 1])
-                      + m2 * (y[b].bsums[4 * j + 2] + y[b].bsums[4 * j + 3]);
+                acc1 = vmlaq_n_s32(acc1, a1, sc[2 * j]);
+                acc2 = vmlaq_n_s32(acc2, a2, sc[2 * j + 1]);
                 qs += 32;
                 q8 += 64;
             }
+            const int isum = vaddvq_s32(vaddq_s32(acc1, acc2));
             sum += d * static_cast<float>(isum) - dmin * static_cast<float>(summ);
         }
         return sum;
@@ -64,10 +69,12 @@ namespace
             const int8_t* sc = reinterpret_cast<const int8_t*>(w + 192);
             const float d = h2f(w + 208) * y[b].d;
             const int8_t* q8 = y[b].qs;
-            int isum = 0;
+            // The sums s[j] of the reference stay in vectors, each scaled by sc[j] there, and are
+            // summed once per block.
+            const int32x4_t zero = vdupq_n_s32(0);
+            int32x4_t acc1 = zero, acc2 = zero;
             for (int k = 0; k < 2; ++k)
             {
-                int s[8];
                 // Values 16 h to 16 h + 15 of each quarter: the sums s[2 i + h] of the reference.
                 for (int h = 0; h < 2; ++h)
                 {
@@ -78,17 +85,17 @@ namespace
                     const uint8x16_t u2 = vorrq_u8(vandq_u8(lb, m4), vshlq_n_u8(vandq_u8(vshrq_n_u8(hb, 2), m2), 4));
                     const uint8x16_t u3 = vorrq_u8(vshrq_n_u8(la, 4), vshlq_n_u8(vandq_u8(vshrq_n_u8(hb, 4), m2), 4));
                     const uint8x16_t u4 = vorrq_u8(vshrq_n_u8(lb, 4), vshlq_n_u8(vshrq_n_u8(hb, 6), 4));
-                    s[0 + h] = dot16(vsubq_s8(vreinterpretq_s8_u8(u1), offset), vld1q_s8(q8 + 16 * h));
-                    s[2 + h] = dot16(vsubq_s8(vreinterpretq_s8_u8(u2), offset), vld1q_s8(q8 + 32 + 16 * h));
-                    s[4 + h] = dot16(vsubq_s8(vreinterpretq_s8_u8(u3), offset), vld1q_s8(q8 + 64 + 16 * h));
-                    s[6 + h] = dot16(vsubq_s8(vreinterpretq_s8_u8(u4), offset), vld1q_s8(q8 + 96 + 16 * h));
+                    acc1 = vmlaq_n_s32(acc1, vdotq_s32(zero, vsubq_s8(vreinterpretq_s8_u8(u1), offset), vld1q_s8(q8 + 16 * h)), sc[0 + h]);
+                    acc2 = vmlaq_n_s32(acc2, vdotq_s32(zero, vsubq_s8(vreinterpretq_s8_u8(u2), offset), vld1q_s8(q8 + 32 + 16 * h)), sc[2 + h]);
+                    acc1 = vmlaq_n_s32(acc1, vdotq_s32(zero, vsubq_s8(vreinterpretq_s8_u8(u3), offset), vld1q_s8(q8 + 64 + 16 * h)), sc[4 + h]);
+                    acc2 = vmlaq_n_s32(acc2, vdotq_s32(zero, vsubq_s8(vreinterpretq_s8_u8(u4), offset), vld1q_s8(q8 + 96 + 16 * h)), sc[6 + h]);
                 }
-                for (int j = 0; j < 8; ++j) isum += sc[j] * s[j];
                 ql += 64;
                 qh += 32;
                 sc += 8;
                 q8 += 128;
             }
+            const int isum = vaddvq_s32(vaddq_s32(acc1, acc2));
             sum += d * static_cast<float>(isum);
         }
         return sum;

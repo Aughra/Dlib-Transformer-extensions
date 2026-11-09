@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-09 — Garder en vecteurs les sommes des noyaux Q4_K et Q6_K
+
+- **Quoi** : dans `dot_q4_K_neon` et `dot_q6_K_neon`, chaque groupe est multiplié par son échelle dans le vecteur (`vmlaq_n_s32`) et un seul `vaddvq_s32` termine le bloc de 256 valeurs ; échelles et minimums de Q4_K décodés d'un coup par masques ; somme des minimums par `vpaddq_s16` et `vmull_s16`. `dot16` retirée (plus utilisée). Toujours identique au bit près au code portable. Génération 4 à 9 % plus rapide.
+- **Fichiers** : `dlib/dlib/external/albireo/engine/qkernels_neon.inc` ; `docs/notes-pour-l-auteur.md` (changement 6, bilan), ce journal.
+- **Pourquoi** : profil de la génération du 4B à 8 fils : `qk_dot` 75 %, attente des fils 21 % ; les noyaux réduisaient chaque groupe de 16 ou 32 valeurs en scalaire.
+- **Étapes** : `git fetch upstream` : 6 commits de l'original non fusionnés (Albireo 1.0.12, Pseudalis 1.0.5 bis, exemples HRM). Mesure « avant » (8 fils, 64 tokens, `lowpowermode 0`, charge 2,6) : 2B prompt 118,6 / génération 37,0 tokens/s, 4B 51,1 / 16,8. Formats des modèles relevés : chat Q4_K et Q6_K seulement ; Q8_0 pour le modèle de recherche et le projecteur d'images (prompts longs, par Accelerate). Contrôle hors dépôt `bitcheck` (vrais poids du 2B et du 4B, 6 formes d'activations) : 0 différence sur 43 200 produits avant et après. Build sans avertissement ; `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api` passent. Mesures alternées A/B/A/B (`bench_runtime modele 8 64 64 1`, charge 3,2 à 7,1) : 2B 35,4 / 36,8 → 38,9 / 38,2 tokens/s, 4B 17,0 / 16,5 → 18,1 / 18,0. Essayé et rejeté : groupes de lignes plus petits en génération (4B 18,1 → 17,0 et 13,7). Relevé, pas encore changé : 4 fils (les cœurs de performance) battent 8 en génération et en prompt court, 8 gagnent sur un prompt de 4 096 tokens.
+
 ## 2026-11-08 — Fusionner l'original : Pseudalis 1.0.4 et 1.0.5
 
 - **Quoi** : 4 commits de Cydral fusionnés (`75d4376`, `0bf2814`, `5c2d401`, `0503bcb`) dans `63f4af4` : Pseudalis 1.0.4 et 1.0.5 (moteur, service, page web, `dlib/privacy`, test complet allongé), installateur Windows 1.0.5 dans `dist/`. Albireo n'est pas touché.
