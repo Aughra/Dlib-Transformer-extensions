@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-08, sur le Mac M2.
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-09, sur le Mac M2.
 
 ## Objectif
 
@@ -28,6 +28,9 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-08 : **produits des prompts par Accelerate** (`engine/qkernels_accelerate.inc`, `a38c30d`), décision de l'humain (option C, fin de l'exactitude au bit près pour ces produits). `cblas_sgemm` à partir de 16 tokens, poids décompressés par tranches de 256 lignes pendant le calcul ; seuil des noyaux entiers à 24 tokens sur Mac. Mesures alternées : 2B 512 tokens 64 à 72 → 217 tokens/s, 4 096 tokens 52 à 58 → 156 à 163, modèle de recherche 184 à 213 → 573 à 601 ; génération inchangée. Tests passent. Service relancé avec ce moteur. Notes pour l'auteur : changement 4, remarque 19 (seuil), et une ligne « Mac ou Windows » par entrée (demande de l'humain, qui fera des PR pour ce qui se reproduit sous Windows ; consigne ajoutée à CLAUDE.md). Blog : épisode 13.
 - 2026-11-08 : **image lue par le 4B** (zèbre et perroquet de macOS) : descriptions justes. Attention de l'encodeur d'images par Accelerate (`72091df`) : encodage d'une image 512 × 512 6,7 à 8,5 s → 1,8 à 2,2 s, même précision contre la double, descriptions identiques. Notes pour l'auteur : changement 5. Code avant / après de `bench_runtime` (entrée 1) ajouté aux notes, essayé avec AddressSanitizer (`5c81142`). Blog : épisode 14.
 - 2026-11-08 : **4 commits de l'original fusionnés** (`63f4af4` : Pseudalis 1.0.4 et 1.0.5, `dlib/privacy`, exemple d'anonymisation), sans conflit ; corrections Mac de `pseudalis/CMakeLists.txt` et `host/drive_folders.cpp` intactes. Builds de Pseudalis et d'Albireo sans erreur ; `test_engine`, `test_host` et `test_linux.sh` de Pseudalis : **34 sur 34**. Service de Pseudalis relancé en 1.0.5 (page en 200). Notes pour l'auteur recalées sur `0503bcb` (numéros de ligne de `test_linux.sh` et `drive_folders.cpp`) ; deux avertissements oubliés ajoutés (`language_model_data.h:185`, `scan_image_pyramid.h:873`).
+- 2026-11-09 : **noyaux Q4_K et Q6_K, sommes gardées en vecteurs** (`791a211`), exacts au bit près (0 sur 43 200 produits, vrais poids) : génération 4B 16,5–17,0 → 18,0–18,1 tokens/s, 2B 35,4–36,8 → 38,2–38,9 (mesures alternées). Rejeté : paquets de lignes plus petits en génération (plus lent). Notes pour l'auteur : changement 6.
+- 2026-11-09 : **6 commits de l'original fusionnés** (`535a6fb`, Albireo 1.0.12 : clés et valeurs en 8 bits par défaut, attention de la génération répartie entre les fils). Un conflit dans `qkernels.cpp` (corps de l'attention devenu un modèle commun), résolu en gardant le corps de l'original et nos 4 lignes NEON en tête. Tests d'Albireo et de Pseudalis (34 sur 34) passent.
+- 2026-11-09 : **attention NEON pour les clés et valeurs en 8 bits**, exacte au bit près (0 sur 351 780 valeurs) : sans elle, la fusion faisait tomber un prompt de 4 096 tokens de 163 à 37 tokens/s sur Mac ; avec, 158–162, génération après 4 096 tokens 9 → 22,5. Notes pour l'auteur : changement 7, remarque 20 (fils), numéros recalés sur `184ea00`. Blog : épisode 15.
 
 ## En cours
 
@@ -35,7 +38,8 @@ Rien. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
 ## À faire, dans l'ordre proposé
 
-1. Plus tard, si utile : noyaux NEON de génération pour les autres formats de poids (Q8_0, Q5_K…).
+1. **Nombre de fils par défaut sur Mac** (choix de l'humain, remarque 20 des notes) : 8 aujourd'hui (tous les cœurs). 4 fils (cœurs de performance) gagnent sur les questions courtes et en génération (4B : prompt 58 contre 46–52, génération 17–19 contre 16–18), 8 sur les longs prompts (154–169 contre 134–145). Options : (a) 4 par défaut via `hw.perflevel0.physicalcpu` ; (b) 8 pour les prompts, 4 pour la génération (touche `thread_pool.h` ou `qk_matmul`) ; (c) ne rien changer, le réglage `threads` existe.
+2. Plus tard, si utile : noyaux NEON de génération pour les autres formats de poids (Q8_0, Q5_K…) ; `qk_float_to_q8_row` et `qk_rotate_row` restent portables (peu de temps au profil).
 
 Ensuite :
 
@@ -55,11 +59,11 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 ## Problèmes ouverts
 
 - L'ancien fork `PapyTortueTech/Dlib-Transformer-extensions` n'est plus utilisé ; l'humain s'occupe de l'arrêter. Ne plus jamais y pousser.
-- Noyaux NEON pour Q4_K, Q6_K et l'attention ; prompts par Accelerate pour tous les formats. En génération, les autres formats (Q8_0, Q5_K…) restent portables.
+- Noyaux NEON pour Q4_K, Q6_K et l'attention (clés en demi-précision et en 8 bits) ; prompts par Accelerate pour tous les formats. En génération, les autres formats (Q8_0, Q5_K…) restent portables.
 - Lancé en arrière-plan par un script, le service ignore SIGINT (le shell le lui fait ignorer, et macOS jette alors le signal) : l'arrêter par `kill -TERM`. Dans un terminal, Ctrl-C marche. Même chose attendue pour `test_linux.sh` d'Albireo à l'étape « service stop ».
 - Un service lancé en arrière-plan par Claude s'arrête avec la session de Claude (« service stopped » à 22 h 22 le 2026-11-07, pendant le second essai du PDF, dont les chiffres sont perdus) : le lancer détaché (commande ci-dessous).
 - Le modèle par défaut est un modèle « Thinking » : il raisonne longtemps (en anglais) avant de répondre ; prévoir un `max_tokens` large ou `"reasoning": false`.
-- `bench_runtime` exige un prompt d'au moins 64 tokens (sinon il lit hors de son tableau) : `bench_runtime <modèle> 4 64 16 2`.
+- `bench_runtime` exige un prompt d'au moins 64 tokens (sinon il lit hors de son tableau) : `bench_runtime <modèle> 4 64 16 2`. Il range les clés en demi-précision, sauf avec `q8` en 6ᵉ argument ; le service, lui, les range en 8 bits : mesurer avec `q8`.
 
 ## Commandes pour reprendre
 

@@ -18,3 +18,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 12. [Le chronomètre du test](12-le-chronometre-du-test.md)
 13. [L'atelier d'à côté](13-l-atelier-d-a-cote.md)
 14. [Le zèbre et le perroquet](14-le-zebre-et-le-perroquet.md)
+15. [Le classeur en noir et blanc](15-le-classeur-en-noir-et-blanc.md)

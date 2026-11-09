@@ -19,7 +19,7 @@ Pour chaque point « aussi sous Windows » qui se corrige dans le code, l'entré
 
 La dernière partie donne les vitesses mesurées sur le Mac, avant et après les noyaux NEON du fork, que vous voudrez peut-être reprendre.
 
-- **Comparé à** : `Cydral/Dlib-Transformer-extensions`, branche `main`, commit `0503bcb` (Pseudalis 1.0.5). Les numéros de ligne renvoient à ce commit.
+- **Comparé à** : `Cydral/Dlib-Transformer-extensions`, branche `main`, commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5). Les numéros de ligne renvoient à ce commit.
 - **Machine** : MacBook Air M2 (8 cœurs, 24 Go, sans ventilateur), macOS 27 (Darwin 27.0.0, arm64), Apple clang 21.0.0 (clang-2100.3.34.2), CMake 4.1.2, Ninja.
 - **Ce qui a été construit** : les variantes Linux d'Albireo et de Pseudalis (`--console`), comme le prévoient leurs fichiers CMake.
 
@@ -27,13 +27,13 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 
 | N° | Nature | Où | En une ligne | Mac ou Windows |
 |---|---|---|---|---|
-| 1 | Bug, toutes plateformes | `albireo/tests/bench_runtime.cpp:83` | Un prompt de moins de 64 tokens fait lire le banc d'essai au-delà de son tableau. | **Aussi sous Windows** |
+| 1 | Bug, toutes plateformes | `albireo/tests/bench_runtime.cpp:92` | Un prompt de moins de 64 tokens fait lire le banc d'essai au-delà de son tableau. | **Aussi sous Windows** |
 | 2 | Test fragile | `pseudalis/tools/test_linux.sh:202, 315, 328, 330` | Deux étapes attendent un temps fixe au lieu d'attendre le résultat, et échouent sur une machine lente. | Linux et Mac (script non lancé sous Windows) |
 | 3 | Réglage du serveur | espace de publication d'Albireo | Le catalogue et chaque téléchargement reçoivent « This link is password protected. » et retombent sur leurs adresses officielles. | **Aussi sous Windows** (côté serveur) |
 | 4 | Robustesse | `albireo/host/main.cpp:315`, `pseudalis/host/main.cpp:307` | En `--console`, un service lancé en arrière-plan par un script ne s'arrête pas par SIGINT sur macOS. | Propre au Mac |
 | 5 | Avertissements | exemples de dlib, Pseudalis | Cinq avertissements du compilateur et un de l'éditeur de liens avec Apple clang. | Code commun, avertissements propres à clang ; voir l'entrée |
 | 6 à 15 | Portabilité macOS | CMake, `platform.cpp`, `system_info.cpp`, `picopltf.h`, `drive_folders.cpp`, scripts de test | Erreurs de compilation, et chemins propres à Linux (`/proc`, `/sys`, `endian.h`, `st_mtim`, options x86). | Propre au Mac |
-| 16 à 19 | Remarques | noyaux, pool de fils, mode économie d'énergie, seuil des produits en flottants | Pas de défaut, mais bon à savoir. | Voir chaque remarque |
+| 16 à 20 | Remarques | noyaux, pool de fils, mode économie d'énergie, seuil des produits en flottants, nombre de fils sur un processeur hybride | Pas de défaut, mais bon à savoir. | Voir chaque remarque |
 
 ---
 
@@ -41,7 +41,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 
 ### 1. `bench_runtime` lit au-delà de son prompt quand celui-ci compte moins de 64 tokens
 
-- **Où** : `dlib/dlib/external/albireo/tests/bench_runtime.cpp`, ligne 83, dans la partie « Several sequences advancing together ».
+- **Où** : `dlib/dlib/external/albireo/tests/bench_runtime.cpp`, ligne 92 (ligne 83 avant Albireo 1.0.12), dans la partie « Several sequences advancing together ».
 - **Ce qui se passe** : chaque séquence parallèle reçoit les 64 premiers tokens du prompt, quelle que soit la longueur demandée sur la ligne de commande :
 
   ```cpp
@@ -54,7 +54,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
   libc++abi: terminating due to uncaught exception of type std::runtime_error: token identifier out of range
   ```
 
-- **Reproduire** : `bench_runtime modele.gguf 8 32 2 2` (prompt de 32 tokens). Le résultat varie d'un lancement à l'autre, comme toujours avec une lecture hors du tableau : arrêt sur l'exception ci-dessus, arrêt sans la ligne « batched generation », ou fin normale avec des tokens lus au hasard. Pour une preuve nette, compiler `bench_runtime.cpp` avec AddressSanitizer (`-fsanitize=address`). Extrait de la sortie sur le Mac, le fichier de l'original copié sous le nom `bench_runtime.orig.cpp` :
+- **Reproduire** : `bench_runtime modele.gguf 8 32 2 2` (prompt de 32 tokens). Le résultat varie d'un lancement à l'autre, comme toujours avec une lecture hors du tableau : arrêt sur l'exception ci-dessus, arrêt sans la ligne « batched generation », ou fin normale avec des tokens lus au hasard. Pour une preuve nette, compiler `bench_runtime.cpp` avec AddressSanitizer (`-fsanitize=address`). Extrait de la sortie sur le Mac, avec le fichier de l'original au commit `0503bcb` (avant Albireo 1.0.12, d'où les numéros 83 et 48, devenus 92 et 57) copié sous le nom `bench_runtime.orig.cpp` :
 
   ```
   ==65634==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x60c000005a00 ...
@@ -68,11 +68,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
   La ligne 83 lit 256 octets (64 tokens) dans le tableau de 128 octets (32 tokens) alloué à la ligne 48.
 - **Mac ou Windows** : **aussi sous Windows**. `bench_runtime.cpp` est le même partout, et le CMake le construit sous Windows (`bench_runtime`, `bench_runtime_<famille>`). La lecture hors du vecteur ne dépend pas du système. Non vérifié sur une machine Windows.
 - **Fichier à corriger** : `dlib/dlib/external/albireo/tests/bench_runtime.cpp`.
-- **Code avant** (lignes 12 et 76 à 85 de `upstream/main`) :
-
-  ```cpp
-  #include <chrono>
-  ```
+- **Code avant** (lignes 85 à 94 de `upstream/main`) :
 
   ```cpp
       // Several sequences advancing together.
@@ -89,10 +85,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 
 - **Code après la correction** : les séquences parallèles prennent les 64 premiers tokens du prompt, ou tout le prompt s'il est plus court.
 
-  ```cpp
-  #include <algorithm>
-  #include <chrono>
-  ```
+  `<algorithm>`, nécessaire à `std::min`, est déjà inclus (ligne 13) depuis Albireo 1.0.12.
 
   ```cpp
       // Several sequences advancing together, each after the first tokens of the prompt (64 at most).
@@ -109,7 +102,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
   ```
 
 - **Vérifié sur le Mac** (copie corrigée hors du dépôt, mêmes options que le build, plus `-Wall -Wextra`) : compile sans avertissement ; AddressSanitizer ne signale plus rien avec un prompt de 32 tokens ; `bench_runtime modele.gguf 8 <prompt> 4 2` va au bout avec 1, 32 et 64 tokens et affiche la ligne « batched generation ». À 64 tokens et plus, le comportement est celui d'avant (`head` vaut 64). **Non testé sous Windows.**
-- **Non couvert par cette correction** : un prompt de 0 token (`prompt - 1` vaut alors -1 à la ligne 55) et `steps` à 0 (division par zéro aux lignes 72 et 101, qui affiche un temps infini ou NaN). On peut les refuser dans le message d'usage.
+- **Non couvert par cette correction** : un prompt de 0 token (`prompt - 1` vaut alors -1 à la ligne 64) et `steps` à 0 (division par zéro aux lignes 81 et 110, qui affiche un temps infini ou NaN). On peut les refuser dans le message d'usage.
 - **Ce que le fork a fait** : rien dans son code (pour ne pas créer de conflit avec l'original). On donne toujours au moins 64 tokens. La correction ci-dessus est prête pour une demande de fusion.
 
 ### 2. Deux étapes du test de Pseudalis attendent un temps fixe
@@ -189,7 +182,7 @@ Aucun de ces points n'est un bug sous Windows ou Linux : ce sont les changements
 |---|---|---|---|
 | 11 | `albireo/common/platform.cpp:83` et `pseudalis/common/platform.cpp:83` (`executable_path()`, `readlink("/proc/self/exe")`) | macOS n'a pas de `/proc`, donc le dossier du programme est vide. Albireo écrit `programs in ` (vide), `http: no web folder at web` et `engines: no usable engine in` : il ne sert ni son moteur ni sa page. Pseudalis, dont le moteur est intégré, répond 404 pour sa page quand on le lance depuis un autre dossier que `bin/`. | `#elif defined(__APPLE__)` : `_NSGetExecutablePath`, puis `realpath` ([496c025](https://github.com/Aughra/Dlib-Transformer-extensions/commit/496c025), [25715b5](https://github.com/Aughra/Dlib-Transformer-extensions/commit/25715b5)). Vérifié dans les deux sens : page de Pseudalis en 404 sans la correction, en 200 avec. |
 | 12 | `albireo/host/main.cpp:329`, `pseudalis/host/main.cpp:321` (redémarrage dans un nouveau processus) | Même `readlink("/proc/self/exe")`. Il échoue, et le code se rabat sur `execvp(argv[0])`, qui devrait marcher quand le service a été lancé avec un chemin (non testé). | Pas modifié. `executable_path()` pourrait servir ici. |
-| 13 | `albireo/common/system_info.cpp:180` (`/proc/meminfo`) | Mémoire totale et disponible lues à 0 : l'état affiche `"memory":{"total":0,"available":0}`, et le moteur saute la borne qu'il met aux clés et valeurs selon la mémoire libre. | `#elif defined(__APPLE__)` : `sysctlbyname("hw.memsize")` pour le total, et les pages libres, inactives et purgeables de `host_statistics64` pour la mémoire disponible ([496c025](https://github.com/Aughra/Dlib-Transformer-extensions/commit/496c025)). |
+| 13 | `albireo/common/system_info.cpp:182` (`/proc/meminfo`) | Mémoire totale et disponible lues à 0 : l'état affiche `"memory":{"total":0,"available":0}`, et le moteur saute la borne qu'il met aux clés et valeurs selon la mémoire libre. | `#elif defined(__APPLE__)` : `sysctlbyname("hw.memsize")` pour le total, et les pages libres, inactives et purgeables de `host_statistics64` pour la mémoire disponible ([496c025](https://github.com/Aughra/Dlib-Transformer-extensions/commit/496c025)). |
 | 14 | `albireo/common/system_info.cpp`, `read_cpu_info` (`/sys/devices` à la ligne 157) | Pas de nom de processeur : il vient de CPUID, qui n'existe que sur x86. Le nombre de cœurs retombe sur `hardware_concurrency()`, ce qui est juste sur puce Apple. | `sysctlbyname("machdep.cpu.brand_string")`, qui donne par exemple « Apple M2 ». |
 | 15 | `albireo/tools/test_linux.sh:29` (`date +%s%N`), `pseudalis/tools/test_linux.sh:53` (`nproc`) et `:200` (`stat -c %s`) | Le `date` de macOS ne connaît pas `%N`, il n'y a pas de `nproc`, et le `stat` BSD n'a pas `-c`. Dans Pseudalis, la taille lue vaut alors 0, et « drive signatures » échoue pour cette seule raison. | Scripts non modifiés : on place en tête du `PATH` un `nproc` (`sysctl -n hw.ncpu`) et le `stat` de GNU (`gstat`, paquet Homebrew coreutils). |
 
@@ -238,6 +231,30 @@ Mode économie actif (`pmset -g` affiche `lowpowermode 1`), le moteur tournait e
 - **Ce que le fork a fait** : sur Mac seulement (`__APPLE__` et `__ARM_FEATURE_DOTPROD`), le seuil passe à 24 ([a38c30d](https://github.com/Aughra/Dlib-Transformer-extensions/commit/a38c30d)). Une question de 21 tokens passe ainsi de 45,6 à 58,4 tokens/s en lecture (une seule paire de mesures).
 - **Mac ou Windows** : la mesure est propre au Mac. Le commentaire du seuil semble viser les processeurs x86 ; il vaudrait peut-être la peine de le remesurer sur un PC Windows, par exemple avec les noyaux VNNI. Non vérifié.
 
+### 20. Sur un processeur à cœurs rapides et lents, le nombre de fils par défaut compte aussi les cœurs lents
+
+- **Où** : `albireo/engine/engine.cpp:959` (`if (threads_ <= 0) threads_ = cpu.physical_cores;`), avec `read_cpu_info` dans `albireo/common/system_info.cpp`.
+- **Ce qui se passe** : le M2 a 4 cœurs de performance et 4 cœurs d'efficacité (`sysctl hw.perflevel0.physicalcpu` et `hw.perflevel1.physicalcpu` donnent 4 et 4). Sur le Mac, `physical_cores` vaut 8 (voir l'entrée 14), et le moteur prend 8 fils. Or écrire un token relit tous les poids : la mémoire est vite saturée, et à la fin de chaque produit les cœurs rapides attendent le dernier groupe de lignes pris par un cœur lent. Un profil de la génération du 4B à 8 fils donne 21 % des échantillons à cette attente (`swtch_pri`), et 47 % sur un contexte de 4 096 tokens.
+- **Constaté sur le Mac** (`bench_runtime`, mesures alternées 8 / 4 / 8 / 4 fils, `lowpowermode 0`, charge 5 à 9, avec les changements 1 à 6 ; dernière série avec le changement 7 et les clés et valeurs en 8 bits) :
+
+  | Cas | 8 fils | 4 fils |
+  |---|---|---|
+  | 4B, génération, 1 fil / 2 / 4 / 6 / 8 fils | 8,6 / 14,7 / **19,4** / 18,3 / 18,2 tokens/s (une série) | |
+  | 4B, prompt de 64 tokens | 51,4 à 52,1 tokens/s | **58,0 à 59,6** |
+  | 4B, prompt de 512 tokens | 91,2 à 92,7 tokens/s | 92,5 à 93,2 |
+  | 4B, génération | 17,1 à 17,9 tokens/s | **17,7 à 19,0** |
+  | 2B, prompt de 64 tokens | 113,2 à 126,0 tokens/s | **149,8 à 151,6** |
+  | 2B, génération | 38,6 à 39,8 tokens/s | **41,2 à 42,0** |
+  | 2B, prompt de 4 096 tokens | **163,3 à 169,3** tokens/s | 143,0 à 145,2 |
+  | 2B, génération après 4 096 tokens | 22,7 à 22,9 tokens/s | 23,0 à 23,4 |
+  | 4B, clés en 8 bits, prompt de 64 tokens | 45,9 à 49,4 tokens/s | **57,8 à 58,2** |
+  | 4B, clés en 8 bits, génération | 15,8 à 16,2 tokens/s | **16,9 à 17,1** |
+  | 2B, clés en 8 bits, prompt de 4 096 tokens | **154,0 à 162,7** tokens/s | 134,1 à 136,5 |
+
+  Avec 4 fils, les questions courtes et la génération vont plus vite ; avec 8, les longs prompts, où le calcul domine, gardent l'avantage (12 à 18 %).
+- **Ce que le fork a fait** : rien encore. Pistes, **non testées** : prendre par défaut le nombre de cœurs de performance (`hw.perflevel0.physicalcpu` sur macOS), ou garder tous les cœurs pour les prompts et n'en employer que les rapides pour la génération.
+- **Mac ou Windows** : **probablement aussi sous Windows** sur les processeurs hybrides (Intel de 12ᵉ génération et suivants) : `GetLogicalProcessorInformationEx(RelationProcessorCore)` compte tous les cœurs, rapides et lents, alors que la structure renvoyée donne leur classe (`EfficiencyClass`). Déduit du code, non vérifié sur une machine Windows.
+
 ---
 
 ## 4. Vitesse sur le Mac : temps d'origine, changements, nouveaux temps
@@ -246,7 +263,7 @@ Le fork ajoute des noyaux NEON pour puce Apple, dans un fichier à lui, `albireo
 
 **Mac ou Windows** : ces changements sont propres au Mac. Ils ne corrigent rien sous Windows.
 
-**Changements 1 à 3 : les noyaux NEON donnent les mêmes résultats que le code portable du même build, au bit près**, et les réponses du modèle sont identiques, mot pour mot, à température 0. **Changement 4 : ce n'est plus vrai** pour les produits des prompts, calculés par Accelerate. Les sommes diffèrent au dernier chiffre, comme celles des noyaux AVX2 avec leur FMA, et une réponse longue peut être formulée autrement.
+**Changements 1 à 3 : les noyaux NEON donnent les mêmes résultats que le code portable du même build, au bit près**, et les réponses du modèle sont identiques, mot pour mot, à température 0. Les changements 6 et 7 le sont aussi. **Changement 4 : ce n'est plus vrai** pour les produits des prompts, calculés par Accelerate. Les sommes diffèrent au dernier chiffre, comme celles des noyaux AVX2 avec leur FMA, et une réponse longue peut être formulée autrement.
 
 **Méthode de mesure** :
 - MacBook Air M2, mode économie d'énergie coupé, charge moyenne notée, 8 fils ;
@@ -366,7 +383,7 @@ Pour mémoire, avec les changements 1 à 3 seulement : encodage de 8,9 et 10,3 s
 - **Pourquoi** : en génération, un profil du 4B (8 fils) donne 75 % des échantillons à `qk_dot` et 21 % à l'attente des fils (`swtch_pri`). Les noyaux du changement 1 réduisaient chaque groupe de 32 valeurs (Q4_K) ou de 16 (Q6_K) à un entier par `vaddvq_s32`, puis le multipliaient par son échelle en scalaire, et décodaient les échelles et les minimums de Q4_K un par un (`get_scale_min_k4`).
 - **Quoi** : dans `qkernels_neon.inc` seulement. Chaque groupe est multiplié par son échelle dans le vecteur (`vmlaq_n_s32`), et un seul `vaddvq_s32` termine le bloc de 256 valeurs. Les huit échelles et les huit minimums de Q4_K sont décodés d'un coup, par masques sur trois mots de 32 bits. La somme des minimums passe par `vpaddq_s16` et `vmull_s16` sur `bsums`.
 - **Exactitude** : ce sont les mêmes sommes entières, exactes quel que soit l'ordre des additions, et la même fin de bloc en flottants. Le résultat reste identique au bit près au code portable. Contrôle du fork : 0 différence sur 43 200 produits, avec de vrais poids du 2B et du 4B (plongement Q6_K, `attn_q`, `attn_v`, `attn_output`, `ffn_gate`, `ffn_up`, `ffn_down`) et des activations de six formes (normales, très étalées, minuscules, avec des pics). `test_qkernels` passe.
-- **Commit du fork** : voir le journal du fork (2026-11-09).
+- **Commit du fork** : [791a211](https://github.com/Aughra/Dlib-Transformer-extensions/commit/791a211).
 
 | `bench_runtime modele 8 64 64 1` (8 fils, `lowpowermode 0`, charge 3,2 à 7,1) | Essai | Avant (changements 1 à 5) | Après |
 |---|---|---|---|
@@ -377,6 +394,27 @@ Pour mémoire, avec les changements 1 à 3 seulement : encodage de 8,9 et 10,3 s
 
 Le gain est de 4 à 9 %. Essayé aussi, et rejeté : des groupes de lignes plus petits en génération (`rows / (threads * 32)` au lieu de `* 8`), pour que les cœurs rapides attendent moins les cœurs lents à la fin de chaque produit. La génération du 4B tombe de 18,1 à 17,0 tokens/s, et à 13,7 avec `* 128`.
 
+### Changement 7 : l'attention en NEON pour les clés et valeurs en 8 bits (Albireo 1.0.12)
+
+- **Pourquoi** : depuis Albireo 1.0.12, le service range par défaut les clés et valeurs des modèles de langue en entiers de 8 bits (`kv_type` « auto »), par groupes de 32 avec une échelle en demi-précision. Les nouvelles fonctions `qk_attention_scores_q8` et `qk_attention_values_q8` n'ont, hors AVX2, que leur forme portable, et le changement 3 ne servait plus que les clés en demi-précision. Juste après la fusion de l'original, avec les clés en 8 bits, un prompt de 4 096 tokens retombait à 36 à 38 tokens/s, contre 163 en demi-précision.
+- **Quoi** : dans `qkernels_neon.inc`, les deux fonctions du changement 3 deviennent des modèles qui reçoivent une « source » de lignes : demi-précision ou 8 bits. La source 8 bits déplie huit entiers à la fois (`vmovl_s8`, `vcvtq_f32_s32`, `vmulq_n_f32` par l'échelle du groupe), à l'endroit ou transposés par quatre clés comme au changement 3. Le calcul qui suit est celui du changement 3. Dans `qkernels.cpp`, quatre lignes sous `ALBIREO_QK_NEON` en tête de chacune des deux fonctions `_q8` (lignes 2529 et 2537 de `upstream/main`).
+- **Exactitude** : un entier de 8 bits multiplié par une échelle en demi-précision tient exactement dans un flottant, donc les valeurs dépliées sont celles de `qk_q8_to_float_row`, au bit près. Contrôle du fork (build NEON contre build portable compilé avec `-U__ARM_FEATURE_DOTPROD`) : 0 différence sur 351 780 valeurs (224 cas : `hd` 64 et 128 ; 1 à 1 100 clés ; 1 à 16 lignes ; clés en demi-précision et en 8 bits). `test_qkernels` (avec les nouveaux contrôles 8 bits de l'original) passe. `engine_chat` répond juste avec les clés en 8 bits.
+
+| `bench_runtime modele 8 <prompt> <pas> 1 q8` (8 fils, `lowpowermode 0`, charge 2,7 à 9,9) | Essai | Avant (fusion d'Albireo 1.0.12, changements 1 à 6) | Après |
+|---|---|---|---|
+| 4B Thinking, prompt de 64 tokens | 1 | 48,2 tokens/s | 52,2 tokens/s |
+| 4B Thinking, génération | 1 | 16,4 tokens/s (61,1 ms) | 17,8 tokens/s (56,2 ms) |
+| 2B, prompt de 4 096 tokens | 1 | 37,7 tokens/s (109 s) | 162,3 tokens/s (25 s) |
+| 2B, génération après 4 096 tokens | 1 | 9,1 tokens/s | 22,6 tokens/s |
+| 4B Thinking, prompt de 64 tokens | 2 | 47,2 tokens/s | 50,5 tokens/s |
+| 4B Thinking, génération | 2 | 16,6 tokens/s (60,2 ms) | 17,8 tokens/s (56,1 ms) |
+| 2B, prompt de 4 096 tokens | 2 | 36,0 tokens/s (114 s) | 157,7 tokens/s (26 s) |
+| 2B, génération après 4 096 tokens | 2 | 8,9 tokens/s | 22,5 tokens/s |
+
+Pour comparaison, au même moment, les clés en demi-précision : prompt de 4 096 tokens à 165,6 tokens/s, génération à 21,9 (une mesure). Sur le Mac, le format 8 bits ne coûte donc plus rien en vitesse, et il divise par deux la mémoire des clés et valeurs.
+
+**Mac ou Windows** : le changement est propre au Mac. Mais toute machine sans AVX2 (Linux sur ARM, par exemple) passe par les formes portables de ces deux fonctions, et le constat « quatre fois plus lent sur un long prompt » devrait s'y retrouver. Déduit du code, non vérifié.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -384,10 +422,11 @@ Le gain est de 4 à 9 %. Essayé aussi, et rejeté : des groupes de lignes plus 
 | Génération, question courte | environ 7 à 11 tokens/s | 38 à 39 tokens/s (33 à 37 avec les changements 1 à 5) |
 | Prompt de 64 tokens | environ 8 à 13 tokens/s | 114 à 134 tokens/s (38 à 50 avec les changements 1 à 3) |
 | Prompt de 512 tokens | pas mesuré | 217 tokens/s (64 à 72 avec les changements 1 à 3) |
-| Prompt de 4 096 tokens | pas mesuré | 156 à 163 tokens/s (50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |
-| Génération après 4 096 tokens | pas mesuré | 20 à 22 tokens/s (7,5 à 9 avec les changements 1 et 2 seuls) |
+| Prompt de 4 096 tokens | pas mesuré | 156 à 166 tokens/s, en demi-précision ou, avec le changement 7, en 8 bits (36 à 38 en 8 bits sans lui ; 50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |
+| Génération après 4 096 tokens | pas mesuré | 20 à 23 tokens/s (9 en 8 bits sans le changement 7 ; 7,5 à 9 avec les changements 1 et 2 seuls) |
 | Modèle de recherche (Q8_0), 512 tokens | pas mesuré | 573 à 601 tokens/s (184 à 213 avec les changements 1 à 3) |
 | Encodage d'une image 512 × 512, projecteur du 4B | pas mesuré | 1,8 à 2,2 s (8,9 à 10,3 avec les changements 1 à 3) |
+| 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 17,8 tokens/s (16,4 à 16,6 sans les changements 6 et 7) |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
 

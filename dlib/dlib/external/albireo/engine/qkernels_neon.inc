@@ -238,23 +238,103 @@ namespace
         }
     }
 
-    void attention_scores_neon(const float* Q, long rows, const uint16_t* K, long m, long hd, float* S, long lds,
+    /*
+        The keys or values of the attention as floats, from their two storages: halves, or 8-bit
+        integers by groups of 32 sharing a scale in half precision (the q8 format of kv_cache.h).
+        A q8 value is its integer times its scale: the product of an 8-bit integer by a half is
+        exact in a float, so that the floats are those of qk_q8_to_float_row(), whatever the
+        order.  transposed() fills groups of four keys as keys_to_floats_x4(), rows() count rows
+        in order.
+    */
+    struct half_rows
+    {
+        const uint16_t* x;
+        long hd;
+        void transposed(long j0, long groups, float* kt) const { keys_to_floats_x4(x + j0 * hd, groups, hd, kt); }
+        void rows(long j0, long count, float* dst) const { halves_to_floats(x + j0 * hd, dst, count * hd); }
+    };
+
+    struct q8_rows
+    {
+        const int8_t* x;
+        const uint16_t* scales;   // hd / 32 per row
+        long hd;
+
+        // 8 integers of q times d, to two registers of four floats.
+        static void eight(const int8_t* q, float d, float32x4_t& lo, float32x4_t& hi)
+        {
+            const int16x8_t w = vmovl_s8(vld1_s8(q));
+            lo = vmulq_n_f32(vcvtq_f32_s32(vmovl_s16(vget_low_s16(w))), d);
+            hi = vmulq_n_f32(vcvtq_f32_s32(vmovl_high_s16(w)), d);
+        }
+
+        void transposed(long j0, long groups, float* kt) const
+        {
+            const long spr = hd / 32;
+            for (long c4 = 0; c4 < groups; ++c4)
+            {
+                const long j = j0 + 4 * c4;
+                float* out = kt + c4 * hd * 4;
+                for (long i = 0; i < hd; i += 8)
+                {
+                    float32x4x4_t lo, hi;
+                    for (int c = 0; c < 4; ++c)
+                        eight(x + (j + c) * hd + i, h2f(scales[(j + c) * spr + i / 32]), lo.val[c], hi.val[c]);
+                    vst4q_f32(out + i * 4, lo);
+                    vst4q_f32(out + (i + 4) * 4, hi);
+                }
+            }
+        }
+
+        void rows(long j0, long count, float* dst) const
+        {
+            const long n = count * hd;
+            const int8_t* q = x + j0 * hd;
+            const uint16_t* sc = scales + j0 * (hd / 32);
+            for (long b = 0; b * 32 < n; ++b)
+            {
+                const float d = h2f(sc[b]);
+                for (int k = 0; k < 4; ++k)
+                {
+                    float32x4_t lo, hi;
+                    eight(q + b * 32 + 8 * k, d, lo, hi);
+                    vst1q_f32(dst + b * 32 + 8 * k, lo);
+                    vst1q_f32(dst + b * 32 + 8 * k + 4, hi);
+                }
+            }
+        }
+    };
+
+    template <typename Keys>
+    void attention_scores_neon(const float* Q, long rows, const Keys& keys, long m, long hd, float* S, long lds,
         float* scratch, long G)
     {
         for (long j0 = 0; j0 < m; j0 += G)
         {
             const long g = std::min(G, m - j0);
             const long g4 = g / 4 * 4;
-            keys_to_floats_x4(K + j0 * hd, g4 / 4, hd, scratch);
+            keys.transposed(j0, g4 / 4, scratch);
             // The keys left over, as the portable code: qk_dot_f32 on keys converted in order.
             float* rest = scratch + g4 * hd;
-            halves_to_floats(K + (j0 + g4) * hd, rest, (g - g4) * hd);
+            keys.rows(j0 + g4, g - g4, rest);
             long r = 0;
             for (; r + 4 <= rows; r += 4) scores_rows<4>(Q, r, hd, scratch, g4, S, lds, j0);
             for (; r < rows; ++r) scores_rows<1>(Q, r, hd, scratch, g4, S, lds, j0);
             for (long j = g4; j < g; ++j)
                 for (r = 0; r < rows; ++r) S[r * lds + j0 + j] = qk_dot_f32(Q + r * hd, rest + (j - g4) * hd, hd);
         }
+    }
+
+    void attention_scores_neon(const float* Q, long rows, const uint16_t* K, long m, long hd, float* S, long lds,
+        float* scratch, long G)
+    {
+        attention_scores_neon(Q, rows, half_rows{ K, hd }, m, hd, S, lds, scratch, G);
+    }
+
+    void attention_scores_q8_neon(const float* Q, long rows, const int8_t* K, const uint16_t* K_scales, long m,
+        long hd, float* S, long lds, float* scratch, long G)
+    {
+        attention_scores_neon(Q, rows, q8_rows{ K, K_scales, hd }, m, hd, S, lds, scratch, G);
     }
 
     // o[r][i .. i + 4 NB) += sum over j < g of p[r][j] * v[j * hd + i ..], key after key.
@@ -300,16 +380,29 @@ namespace
             }
     }
 
-    void attention_values_neon(const float* P, long lds, long rows, const uint16_t* V, long m, long hd, float* O,
+    template <typename Values>
+    void attention_values_neon(const float* P, long lds, long rows, const Values& values, long m, long hd, float* O,
         float* scratch, long G)
     {
         for (long j0 = 0; j0 < m; j0 += G)
         {
             const long g = std::min(G, m - j0);
-            halves_to_floats(V + j0 * hd, scratch, g * hd);
+            values.rows(j0, g, scratch);
             long r = 0;
             for (; r + 4 <= rows; r += 4) values_rows<4>(P, lds, r, j0, scratch, g, hd, O);
             for (; r < rows; ++r) values_rows<1>(P, lds, r, j0, scratch, g, hd, O);
         }
+    }
+
+    void attention_values_neon(const float* P, long lds, long rows, const uint16_t* V, long m, long hd, float* O,
+        float* scratch, long G)
+    {
+        attention_values_neon(P, lds, rows, half_rows{ V, hd }, m, hd, O, scratch, G);
+    }
+
+    void attention_values_q8_neon(const float* P, long lds, long rows, const int8_t* V, const uint16_t* V_scales,
+        long m, long hd, float* O, float* scratch, long G)
+    {
+        attention_values_neon(P, lds, rows, q8_rows{ V, V_scales, hd }, m, hd, O, scratch, G);
     }
 }

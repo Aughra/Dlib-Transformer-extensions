@@ -2,6 +2,20 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-09 — Accélérer l'attention d'Albireo pour les clés et valeurs en 8 bits
+
+- **Quoi** : `attention_scores_neon` et `attention_values_neon` deviennent des modèles qui reçoivent une source de lignes (`half_rows` : demi-précision ; `q8_rows` : entiers de 8 bits et échelle par groupe de 32, dépliés huit à la fois) ; `attention_scores_q8_neon` et `attention_values_q8_neon` branchées en tête de `qk_attention_scores_q8` et `qk_attention_values_q8`. Identique au bit près au code portable. Remarque 20 (nombre de fils sur un processeur hybride) et changement 7 ajoutés aux notes pour l'auteur ; numéros de ligne recalés sur `184ea00`.
+- **Fichiers** : `dlib/dlib/external/albireo/engine/qkernels_neon.inc`, `dlib/dlib/external/albireo/engine/qkernels.cpp` (deux fois quatre lignes sous `ALBIREO_QK_NEON`) ; `docs/notes-pour-l-auteur.md`, `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal, `blog/15-le-classeur-en-noir-et-blanc.md`, `blog/README.md`.
+- **Pourquoi** : depuis Albireo 1.0.12, le service range les clés et valeurs en 8 bits par défaut ; sur Mac, ce format passait par le code portable, et un prompt de 4 096 tokens retombait de 163 à 37 tokens/s.
+- **Étapes** : lecture de `engine.cpp` (`kv_type` « auto » : 8 bits pour les modèles de langue) ; contrôle hors dépôt `attcheck` (build NEON contre build `-U__ARM_FEATURE_DOTPROD`, 224 cas, `hd` 64 et 128, 1 à 1 100 clés, 1 à 16 lignes, demi-précision et 8 bits) : 0 différence sur 351 780 valeurs ; build sans avertissement ; `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api` passent ; `bitcheck` toujours à 0 sur 43 200 ; `engine_chat` (2B, « keys and values in 8 bits ») : « La capitale de la France est Paris. ». Mesures alternées M (fusion seule) / Q (`bench_runtime ... q8`, 8 fils, charge 2,7 à 9,9) : 2B 4 096 tokens, prompt 37,7 / 36,0 → 162,3 / 157,7 tokens/s, génération 9,1 / 8,9 → 22,6 / 22,5 ; 4B 64 tokens, prompt 48,2 / 47,2 → 52,2 / 50,5, génération 16,4 / 16,6 → 17,8 / 17,8. Demi-précision au même moment : 165,6 et 21,9. Profil de la génération après 4 096 tokens : attente des fils 8 691 échantillons, `qk_dot` 5 891, attention 3 808. Fils : 4 contre 8 remesurés en 8 bits, même conclusion qu'avant la fusion (4 pour le court, 8 pour le long) ; pas changé, choix laissé à l'humain.
+
+## 2026-11-09 — Fusionner l'original : Albireo 1.0.12 et Pseudalis 1.0.5
+
+- **Quoi** : 6 commits de Cydral fusionnés (`6e24fac`, `12f383f`, `76188fb`, `3cf725e`, `fccf819`, `184ea00`) dans `535a6fb` : Albireo 1.0.12 (clés et valeurs en 8 bits, budget de mémoire engageable, attention de la génération répartie entre les fils, recherche et compression, page web), réglage des balises de Pseudalis, moyenne des poids des exemples HRM (`parameter_average`), flux de mises à jour.
+- **Fichiers** : ceux de l'original ; conflit dans `dlib/dlib/external/albireo/engine/qkernels.cpp`.
+- **Pourquoi** : demande de l'humain (« refresh du fork »).
+- **Étapes** : conflit dans `qk_attention_scores` et `qk_attention_values` : l'original a déplacé leur corps dans un modèle commun (`attention_scores(..., expand)`) ; résolu en gardant ce corps et, en tête, les quatre lignes NEON du fork. Corrections Mac de `system_info.cpp`, `platform.cpp` et des CMake intactes. Albireo : 0 erreur, 0 avertissement ; Pseudalis : 0 erreur, avertissements connus. `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api`, `test_host` d'Albireo passent ; `bitcheck` 0 sur 43 200 ; Pseudalis `test_engine`, `test_host`, `test_linux.sh` : 34 sur 34.
+
 ## 2026-11-09 — Garder en vecteurs les sommes des noyaux Q4_K et Q6_K
 
 - **Quoi** : dans `dot_q4_K_neon` et `dot_q6_K_neon`, chaque groupe est multiplié par son échelle dans le vecteur (`vmlaq_n_s32`) et un seul `vaddvq_s32` termine le bloc de 256 valeurs ; échelles et minimums de Q4_K décodés d'un coup par masques ; somme des minimums par `vpaddq_s16` et `vmull_s16`. `dot16` retirée (plus utilisée). Toujours identique au bit près au code portable. Génération 4 à 9 % plus rapide.
