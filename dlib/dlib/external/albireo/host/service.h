@@ -118,9 +118,6 @@ namespace albireo
         settings_store& settings() { return *settings_; }
         store& db() { return *db_; }
         model_manager& models() { return *models_; }
-        // Le dossier des voix de la synthèse vocale et son programme, à côté du service.
-        std::string speech_dir() const;
-        std::string speech_program() const;
         engine_host& engine() { return engine_; }
 
         json status();

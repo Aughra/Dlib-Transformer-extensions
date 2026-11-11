@@ -238,23 +238,6 @@ schemas = {
         "choices": {"type": "array", "items": {"type": "object", "properties": {
             "index": {"type": "integer"}, "text": {"type": "string"}, "finish_reason": {"type": "string"}}}},
         "usage": ref("Usage")}},
-    "SpeechRequest": {"type": "object", "required": ["input"], "properties": {
-        "model": {"type": "string", "description": "Not checked: one synthesizer serves every model name."},
-        "input": {"type": "string",
-                  "description": "The text read aloud, at most 8192 bytes of UTF-8, counted in bytes and not in "
-                                 "characters: a longer text is refused (code string_above_max_length). The letters "
-                                 "of the Latin scripts, the digits and the usual punctuation are read; any other "
-                                 "character is a pause."},
-        "voice": {"type": "string",
-                  "description": "The voice of Albireo, fr-FR, or its language, fr (the fork for macOS speaks "
-                                 "French only); another name (the voices of other services) takes the voice of "
-                                 "language."},
-        "language": {"type": "string", "enum": ["fr"], "default": "fr",
-                     "description": "Albireo: the language of the voice when voice names none of Albireo."},
-        "speed": {"type": "number", "minimum": 0.25, "maximum": 4, "default": 1,
-                  "description": "The speed of the reading, applied from 0.5 to 2."},
-        "response_format": {"type": "string", "enum": ["wav", "pcm"], "default": "wav",
-                            "description": "A WAVE file, or its 16-bit mono samples at 16 kHz alone."}}},
     "EmbeddingRequest": {"type": "object", "required": ["input"], "properties": {
         "model": {"type": "string", "description": "albireo-embedding, auto, or the identifier of an active embedding "
                                                    "model.", "example": "albireo-embedding"},
@@ -447,31 +430,6 @@ paths = {
         "requestBody": json_body(ref("EmbeddingRequest")),
         "responses": dict({"200": reply("One vector per input, in the order of the inputs", ref("EmbeddingList"))},
                           **engine_replies)}},
-    "/v1/audio/speech": {"post": {
-        "tags": ["OpenAI"], "summary": "A text read aloud",
-        "description": "The speech synthesis that comes with Albireo, which needs no network and no voice of the "
-                       "system, in six voices of five languages. The program albireo-speech reads the text, "
-                       "started by the service with the rights of a process of low integrity; two read at a time "
-                       "and the others wait up to 30 seconds.",
-        "requestBody": json_body(ref("SpeechRequest")),
-        "responses": {
-            "200": {"description": "The sound, 16-bit mono samples at 16 kHz",
-                    "content": {"audio/wav": {"schema": {"type": "string", "format": "binary"}},
-                                "audio/pcm": {"schema": {"type": "string", "format": "binary"}}}},
-            "400": reply("Invalid request: input, voice, language, speed or response_format", ref("Error")),
-            "500": reply("The synthesis failed (code speech_failed)", ref("Error")),
-            "503": reply("The speech program or its voices are not installed (code speech_unavailable)",
-                         ref("Error"))}}},
-    "/albireo/v1/speech/voices": {"get": {
-        "tags": ["Service"], "summary": "Voices of the speech synthesis",
-        "description": "The voices whose files the installation holds, which /v1/audio/speech reads with; none "
-                       "when the speech program is missing.",
-        "responses": {"200": reply("The voices", {"type": "object", "properties": {
-            "voices": {"type": "array", "items": {"type": "object", "properties": {
-                "id": {"type": "string", "description": "fr-FR."},
-                "language": {"type": "string", "enum": ["fr"]}}}},
-            "format": {"type": "string", "enum": ["wav"]},
-            "sample_rate": {"type": "integer", "enum": [16000]}}})}}},
     "/albireo/v1/status": {"get": {
         "tags": ["Service"], "summary": "State of the service, of the engine and of the models",
         "description": "The server answers while the service starts: state is \"starting\" and starting names the "

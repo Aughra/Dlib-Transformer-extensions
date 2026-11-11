@@ -2,6 +2,17 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 3.0.0 — 11 novembre 2026
+
+Version majeure : une route de l'interface a été retirée.
+
+### Retraits
+
+- La lecture des réponses à voix haute a été retirée, avec la route `POST /v1/audio/speech` de l'interface compatible OpenAI, la route `GET /albireo/v1/speech/voices`, le programme `albireo-speech`, la bibliothèque de synthèse SVOX Pico et sa voix française. Les applications qui appelaient ces routes reçoivent désormais une réponse 404.
+- Le bouton « Lire à voix haute » des réponses n'apparaît plus.
+
+---
+
 ## 2.0.2 — 11 novembre 2026
 
 ### Interface

@@ -5,10 +5,10 @@
 
 // Version des programmes et des moteurs d'Albireo, comparée par le flux de mises à
 // jour et par l'installateur sur une installation existante.
-#define ALBIREO_VERSION_MAJOR 2
+#define ALBIREO_VERSION_MAJOR 3
 #define ALBIREO_VERSION_MINOR 0
-#define ALBIREO_VERSION_PATCH 2
-#define ALBIREO_VERSION "2.0.2"
+#define ALBIREO_VERSION_PATCH 0
+#define ALBIREO_VERSION "3.0.0"
 
 #define ALBIREO_PRODUCT_NAME "Albireo"
 // L'édition de cette version, affichée à côté de son nom par chaque programme.

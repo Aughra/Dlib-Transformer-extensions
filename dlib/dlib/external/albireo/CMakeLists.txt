@@ -6,10 +6,10 @@
 #   cmake -S dlib/dlib/external/albireo -B build/macos-albireo -G Ninja -DCMAKE_BUILD_TYPE=Release
 #
 # Chaque programme arrive dans <build>/bin et le moteur dans <build>/bin/engines ; l'application web
-# est copiée dans <build>/bin/web et les voix de la synthèse vocale dans <build>/bin/speech.
+# est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(albireo VERSION 2.0.2 LANGUAGES C CXX OBJCXX)
+project(albireo VERSION 3.0.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -174,24 +174,6 @@ if (ALBIREO_PROGRAMS)
    target_compile_options(albireo_common PRIVATE ${ALBIREO_WARNINGS})
    target_link_libraries(albireo_common PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
 
-   # La synthèse vocale qui lit les réponses à voix haute : SVOX Pico dans son propre programme,
-   # albireo-speech, que le service lance pour chaque lecture, et sa voix française (le fork
-   # pour macOS ne parle que français).
-   set(pico_dir ${ALBIREO_DLIB_DIR}/external/svox_pico)
-   file(GLOB pico_sources ${pico_dir}/lib/*.c)
-   add_library(albireo_pico STATIC ${pico_sources})
-   target_include_directories(albireo_pico PUBLIC ${pico_dir}/lib)
-   # Code tiers de 2009, compilé tel qu'il est publié : ce n'est pas à nous de corriger ses
-   # avertissements.
-   target_compile_options(albireo_pico PRIVATE -w)
-
-   # Le programme de la synthèse vocale : le synthétiseur et le runtime du compilateur, aucune
-   # autre bibliothèque (host/speech.h).
-   add_executable(albireo-speech host/speech_worker.cpp host/speech_text.cpp)
-   target_link_libraries(albireo-speech PRIVATE albireo_pico)
-   target_include_directories(albireo-speech PRIVATE ${ALBIREO_INCLUDE_DIR})
-   target_compile_options(albireo-speech PRIVATE ${ALBIREO_WARNINGS})
-
    # Le mot de passe du lien public des fichiers publiés (host/public_link.h), lu à chaque
    # configuration dans un fichier hors du dépôt et intégré au service, masqué : l'en-tête
    # généré ne se trouve que dans l'arbre de build.  Sans ce fichier, le service atteint le
@@ -232,7 +214,7 @@ if (ALBIREO_PROGRAMS)
    # Le service.
    add_executable(albireo-service host/main.cpp host/service.cpp host/server.cpp host/settings.cpp host/store.cpp
       host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/public_link.cpp host/crypto.cpp
-      host/certificates.cpp host/speech.cpp host/speech_text.cpp host/web_access.cpp)
+      host/certificates.cpp host/web_access.cpp)
    target_include_directories(albireo-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
    target_link_libraries(albireo-service PRIVATE albireo_common albireo_sqlite albireo_zlib dlib::httplib)
    target_compile_options(albireo-service PRIVATE ${ALBIREO_WARNINGS})
@@ -283,13 +265,6 @@ if (ALBIREO_PROGRAMS)
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/web ${CMAKE_BINARY_DIR}/bin/web
       COMMENT "Copying the web application")
    add_dependencies(albireo-service albireo-web)
-   # Le programme et les voix de la synthèse vocale, à côté du service.
-   add_custom_target(albireo-speech-voices ALL
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/bin/speech
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${pico_dir}/lang/fr-FR_ta.bin ${pico_dir}/lang/fr-FR_nk0_sg.bin
-         ${CMAKE_BINARY_DIR}/bin/speech
-      COMMENT "Copying the voices of the speech synthesis")
-   add_dependencies(albireo-service albireo-speech albireo-speech-voices)
 
 endif()
 

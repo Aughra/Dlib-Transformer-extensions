@@ -67,15 +67,6 @@ export function limitedSignal(signal, ms) {
   };
 }
 
-// Un son du service (la synthèse vocale), sous forme de Blob.
-export async function postAudio(url, body, signal) {
-  const r = await fetch(url, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal
-  });
-  if (!r.ok) throw await errorOf(r);
-  return r.blob();
-}
-
 export async function putJSON(url, body, signal) {
   const r = await fetch(url, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal

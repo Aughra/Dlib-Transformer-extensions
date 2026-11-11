@@ -79,9 +79,7 @@ const texts = {
     storageUnknown: 'état inconnu', storageEstimate: '{used} utilisés sur {quota} disponibles',
     storageHint: 'Le navigateur peut effacer ces données quand le disque manque de place. Exportez-les ' +
       'régulièrement avec le bouton ci-dessous.',
-    readingContext: 'Lecture du contexte… {p} %', copy: 'Copier', copied: 'Copié',
-    readAloud: 'Lire à voix haute', stopReading: 'Arrêter la lecture',
-    readAloudFailed: 'La réponse ne peut pas être lue à voix haute : {reason}', regenerate: 'Régénérer',
+    readingContext: 'Lecture du contexte… {p} %', copy: 'Copier', copied: 'Copié', regenerate: 'Régénérer',
     edit: 'Modifier', delete: 'Supprimer', save: 'Enregistrer', cancel: 'Annuler', rename: 'Renommer', pin: 'Épingler',
     unpin: 'Détacher', moveToProject: 'Déplacer vers un projet', removeFromProject: 'Retirer du projet',
     exportMarkdown: 'Exporter en Markdown', exportJson: 'Exporter en JSON', deleteDiscussion: 'Supprimer cette discussion ?',
@@ -155,8 +153,6 @@ const texts = {
     dbBlocked: 'Un onglet d\'une version précédente d\'Albireo garde ouvertes les données de ce navigateur : ' +
       'fermez-le, puis rechargez cette page.',
     tokensCount_one: '{n} jeton', tokensCount_other: '{n} jetons',
-    errSpeechUnavailable: 'La synthèse vocale ou ses voix ne sont pas installées.',
-    errSpeechFailed: 'La synthèse vocale a échoué.',
     errTooManyImages: 'La requête contient plus d\'images que le service n\'en lit à la fois (16).',
     errImageFormat: 'Une image n\'est pas un fichier PNG ou JPEG, les formats que lit le service.',
     errEngineBusy: 'Le modèle est occupé par d\'autres images : envoyez de nouveau la question dans un instant.',

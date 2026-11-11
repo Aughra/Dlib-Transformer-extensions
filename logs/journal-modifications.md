@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Albireo 3.0.0 : retirer la lecture à voix haute
+
+- **Quoi** : suppression de la synthèse vocale : routes `POST /v1/audio/speech` et `GET /albireo/v1/speech/voices` (404 désormais), `handle_speech`, `service::speech_dir/speech_program`, `host/speech.cpp`, `speech.h`, `speech_text.cpp`, `speech_worker.cpp`, programme `albireo-speech`, cible des voix, bibliothèque `dlib/dlib/external/svox_pico` (76 fichiers, utilisée par Albireo seul) ; dans la page, `web/js/speech.js`, le bouton de lecture des réponses et tout ce qui l'arrêtait, `postAudio`, les textes et codes d'erreur de la voix. `openapi.json` sans la voix. Test complet : les trois étapes de la voix remplacées par « service without speech » (404). Version **3.0.0** (rupture : une route de l'interface disparaît), notes de version, README (encadré du fork), mémo, notes pour l'auteur (n° 7 : la voix retirée du fork, l'entrée reste valable pour l'original), CLAUDE.md.
+- **Fichiers** : `dlib/dlib/external/albireo/CMakeLists.txt`, `host/server.cpp`, `host/service.cpp`, `host/service.h`, `host/speech*.{cpp,h}` (supprimés), `web/js/app.js`, `web/js/api.js`, `web/js/i18n.js`, `web/js/speech.js` (supprimé), `tools/make_openapi.py`, `web/openapi.json`, `tools/test_macos.sh`, `web/changelog.md`, `common/version.h`, `README.md` ; `dlib/dlib/external/svox_pico/` (supprimé) ; `CLAUDE.md`, `docs/memo-portage-macos-arm64.md`, `docs/notes-pour-l-auteur.md`, ce journal.
+- **Pourquoi** : demande de l'humain : « ça alourdit le programme et ne sert pas ».
+- **Étapes** : build sans avertissement ; `node --check` ; `tools/test_macos.sh` : 17 étapes sur 17, dont « service without speech » (404).
+
 ## 2026-11-11 — Albireo 2.0.2 : commentaires du code en français, fiche « Pas de serrure » retirée
 
 - **Quoi** : les commentaires du code d'Albireo et de Pseudalis traduits en français (173 fichiers, neuf lots traduits en parallèle par des agents ; lignes de licence, mots-clés `requires` / `ensures` / `WHAT THIS OBJECT REPRESENTS`, identifiants, chaînes et consignes au modèle laissés tels quels). Fiche « Pas de serrure sur ce Mac » retirée de l'onglet Service. Version 2.0.2, section des notes de version. Outils de contrôle rangés dans `macos/outils/` (commit précédent).

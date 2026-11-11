@@ -114,15 +114,6 @@ else
   skip "embedding model" "no $EMBEDDING"
 fi
 
-# Le programme de la synthèse vocale seul : une phrase lue à voix haute dans le dossier des voix.
-SPEAKER=$BUILD/bin/albireo-speech
-if [ -x "$SPEAKER" ] && [ -d "$BUILD/bin/speech" ]; then
-  step "speech program" "RIFF" sh -c "cd '$BUILD/bin/speech' && printf '%s' 'Bonjour, Albireo lit à voix haute.' \
-    | '$SPEAKER' fr-FR 1 > '$WORK/program.wav' && head -c 4 '$WORK/program.wav' && echo && wc -c < '$WORK/program.wav'"
-else
-  skip "speech program" "no $SPEAKER or no $BUILD/bin/speech"
-fi
-
 # Le service, hors ligne, dans un dossier de données à lui.
 SERVICE=$BUILD/bin/albireo-service
 if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
@@ -159,14 +150,9 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
     BODY="$BODY \"messages\": [{\"role\": \"user\", \"content\": \"$QUESTION\"}]}"
     step "service chat" "Paris" curl -sk --max-time 300 https://localhost:$PORT/v1/chat/completions \
       -H "Content-Type: application/json" -d "$BODY"
-    # Les voix de la synthèse vocale, puis une phrase lue à voix haute par le programme que lance le
-    # service.
-    step "service speech voices" '"id":"fr-FR"' curl -sk --max-time 5 \
-      https://localhost:$PORT/albireo/v1/speech/voices
-    SPEECH="{\"input\": \"Bonjour, Albireo lit ses réponses à voix haute.\", \"voice\": \"fr-FR\"}"
-    step "service speech" "RIFF" sh -c "curl -sk --max-time 60 -o '$WORK/speech.wav' \
-      -H 'Content-Type: application/json' -d '$SPEECH' https://localhost:$PORT/v1/audio/speech \
-      && head -c 4 '$WORK/speech.wav' && echo && wc -c < '$WORK/speech.wav'"
+    # Le fork n'a plus de lecture à voix haute : la route speech de l'interface OpenAI n'existe plus.
+    step "service without speech" "404" curl -sk --max-time 5 -o /dev/null -w "%{http_code}" \
+      -H "Content-Type: application/json" -d '{"input": "Bonjour"}' https://localhost:$PORT/v1/audio/speech
   else
     record "service start" FAIL "no answer, log in $WORK/service.log" 0.0
   fi

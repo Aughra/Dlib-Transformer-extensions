@@ -317,16 +317,6 @@ namespace albireo
         if (restarter_.joinable()) restarter_.join();
     }
 
-    std::string service::speech_dir() const
-    {
-        return join_path(program_dir_, "speech");
-    }
-
-    std::string service::speech_program() const
-    {
-        return join_path(program_dir_, "albireo-speech");
-    }
-
     std::string service::engines_dir() const
     {
         const std::string d = join_path(program_dir_, "engines");

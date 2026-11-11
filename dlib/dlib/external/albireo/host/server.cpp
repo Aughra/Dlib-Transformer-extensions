@@ -53,7 +53,6 @@
 #include "crypto.h"
 #include "http_fetch.h"
 #include "service.h"
-#include "speech.h"
 #include "web_access.h"
 
 namespace albireo
@@ -1017,77 +1016,6 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         }
 
         /*
-            Le texte lu à voix haute par la synthèse vocale fournie avec Albireo, comme la route
-            speech de l'interface OpenAI : input (au plus 8192 octets UTF-8), voice (une voix
-            d'Albireo ou sa langue, sinon la langue de la requête ou l'anglais), speed (0,25 à 4
-            accepté, lu de 0,5 à 2) et response_format (wav, ou pcm pour les seuls
-            échantillons).  model n'est pas vérifié : un seul synthétiseur sert tous les noms de
-            modèles.
-        */
-        void handle_speech(service& svc, const httplib::Request& req, httplib::Response& res)
-        {
-            json body;
-            if (!parse_body(req, res, body)) return;
-            if (!body["input"].is_string() || body["input"].as_string().empty())
-            {
-                send_error(res, 400, "invalid_request_error", "input must be a non-empty string", "", "input");
-                return;
-            }
-            const std::string input = body["input"].as_string();
-            if (input.size() > speech_max_bytes)
-            {
-                send_error(res, 400, "invalid_request_error", "input holds more than 8192 bytes",
-                    "string_above_max_length", "input");
-                return;
-            }
-            const std::string format = body["response_format"].str("wav");
-            if (format != "wav" && format != "pcm")
-            {
-                send_error(res, 400, "invalid_request_error", "response_format must be wav or pcm", "",
-                    "response_format");
-                return;
-            }
-            double speed = 1.0;
-            if (body.contains("speed"))
-            {
-                speed = body["speed"].as_double(-1.0);
-                if (!body["speed"].is_number() || !(speed >= 0.25 && speed <= 4.0))
-                {
-                    send_error(res, 400, "invalid_request_error", "speed must be a number from 0.25 to 4", "", "speed");
-                    return;
-                }
-            }
-            // Une voix d'Albireo par son nom ou sa langue ; les voix d'autres services lisent
-            // avec la voix de la langue que donne la requête.
-            const speech_voice* voice = find_voice(body["voice"].as_string());
-            if (!voice) voice = find_voice(body["language"].str("fr"));
-            if (!voice)
-            {
-                send_error(res, 400, "invalid_request_error", "the only voice is French: voice fr-FR, language fr", "",
-                    "language");
-                return;
-            }
-            const std::string dir = svc.speech_dir();
-            if (!file_exists(svc.speech_program()) || installed_voices(dir).empty())
-            {
-                send_error(res, 503, "server_error", "the speech synthesis or its voices are not installed",
-                    "speech_unavailable");
-                return;
-            }
-            std::string wav, error;
-            if (!speak(svc.speech_program(), dir, *voice, speed, input, wav, error))
-            {
-                log_warning("speech: " + error);
-                send_error(res, 500, "server_error", error, "speech_failed");
-                return;
-            }
-            res.status = 200;
-            if (format == "pcm") res.set_content(wav.substr(44), "audio/pcm");
-            else res.set_content(wav, "audio/wav");
-            res.set_header("Cache-Control", "no-store");
-        }
-
-        /*
             Les vecteurs de textes, tels que les calcule l'interface OpenAI : "input" un texte ou
             une liste de textes (ou de listes de tokens), "encoding_format" float ou base64, et
             "dimensions" pour les modèles qui gardent leur sens une fois raccourcis.  Les
@@ -1492,27 +1420,6 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         });
         srv.Post("/v1/embeddings", [s](const httplib::Request& req, httplib::Response& res) {
             handle_embeddings(*s, req, res);
-        });
-        srv.Post("/v1/audio/speech", [s](const httplib::Request& req, httplib::Response& res) {
-            handle_speech(*s, req, res);
-        });
-        // Les voix de la synthèse vocale dont les fichiers sont installés, aucune sans son programme.
-        srv.Get("/albireo/v1/speech/voices", [s](const httplib::Request&, httplib::Response& res) {
-            json list = json::array();
-            const std::vector<speech_voice> voices = file_exists(s->speech_program())
-                ? installed_voices(s->speech_dir()) : std::vector<speech_voice>();
-            for (const auto& v : voices)
-            {
-                json o = json::object();
-                o["id"] = v.id;
-                o["language"] = v.language;
-                list.push_back(o);
-            }
-            json out = json::object();
-            out["voices"] = list;
-            out["format"] = "wav";
-            out["sample_rate"] = 16000;
-            send_json(res, 200, out);
         });
 
         // Interface de l'application web et de la zone de notification.  Le statut dit à l'application web

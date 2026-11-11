@@ -39,7 +39,6 @@ import * as rag from './rag.js';
 import * as tools from './tools.js';
 import * as web from './web.js';
 import * as images from './images.js';
-import * as speech from './speech.js';
 import { serviceTab } from './service.js';
 
 const roles = ['general', 'code', 'security'];
@@ -912,7 +911,6 @@ let serviceWasReady = false;
 async function pollStatus() {
   let changed = false;
   let back = false;
-  let voices = false;
   try {
     const s = await api.status();
     // L'accès au web et le mode hors ligne changent le bouton Web de la zone de saisie et les outils de la question
@@ -931,12 +929,6 @@ async function pollStatus() {
     // Le modèle d'embedding de la recherche dans les documents ; les documents qui n'ont pas encore
     // reçu de vecteurs sont indexés dès qu'il est là.
     const embedder = (s.loaded_models || []).find((m) => m.embedding && s.active && m.id === s.active.embedding);
-    // Les voix de la synthèse vocale, redemandées tant que le service n'en a donné aucune.
-    if (!speechVoices.length) {
-      await askSpeechVoices();
-      voices = speechVoices.length > 0;
-      changed = changed || voices;
-    }
     const previous = rag.embeddingModel();
     rag.setEmbeddingModel(embedder ? { id: embedder.id, dimensions: embedder.dimensions } : null);
     if (embedder && (!previous || previous.id !== embedder.id)) indexProjects();
@@ -953,12 +945,6 @@ async function pollStatus() {
     lockThread();
   } else {
     renderStatusLine();
-  }
-  // Les réponses dessinées avant l'arrivée des voix reçoivent leurs boutons, sauf si une question est en cours de
-  // modification.
-  if (voices && state.view === 'chat' && ui.thread && ui.thread.isConnected && !ui.thread.querySelector('textarea')
-    && !editingIn(ui.content)) {
-    renderMain();
   }
   const ready = serviceReady();
   const became = ready && !serviceWasReady;
@@ -1655,7 +1641,6 @@ async function deleteQuestion(c, index) {
   let end = index + 1;
   while (end < c.messages.length && c.messages[end].role !== 'user') ++end;
   const removed = end - index;
-  stopReadingOf(c, c.messages.slice(index, end), index);
   // Les documents et les images de la question partent, sauf si une autre question, une relance, les partage.
   const others = attachmentIds(c.messages.slice(0, index).concat(c.messages.slice(end)));
   for (const a of (m && m.attachments) || []) {
@@ -3029,8 +3014,6 @@ function leaveCurrent() {
 
 // Une nouvelle discussion, que remplit le brouillon de "New chat".
 function newChat(projectId) {
-  // La lecture à voix haute se termine avec la discussion à laquelle elle appartient, comme route() la termine.
-  speech.stopReading();
   leaveCurrent();
   showDiscussion(newConversation(projectId));
   state.view = 'chat';
@@ -3066,8 +3049,6 @@ function go(hash) {
 let routeSequence = 0;
 
 async function route() {
-  // Une lecture à voix haute se termine avec la page à laquelle elle appartient.
-  speech.stopReading();
   closeMenu();
   const sequence = ++routeSequence;
   const hash = location.hash || '#/';
@@ -3217,22 +3198,11 @@ function toggleSidebar() {
 }
 
 /*
-    Dessine la zone principale pour la vue.  Ensuite, la lecture à voix haute d'une réponse que la page ne montre plus
-    se termine, et les images qu'elle ne montre plus rendent leurs URL d'objet.
+    Dessine la zone principale pour la vue.  Ensuite, les images qu'elle ne montre plus rendent leurs URL d'objet.
 */
 function renderMain() {
   drawMain();
-  keepReadingShown();
   releaseHiddenImages();
-}
-
-// Termine la lecture à voix haute d'une réponse que le fil affiché ne contient plus, comme une réponse supprimée ou
-// regénérée.
-function keepReadingShown() {
-  const key = speech.readingKey();
-  if (!key) return;
-  const buttons = ui.thread && ui.thread.isConnected ? Array.from(ui.thread.querySelectorAll('[data-speech]')) : [];
-  if (!buttons.some((b) => b.dataset.speech === key)) speech.stopReading();
 }
 
 // Révoque les URL d'objet des images qu'aucun élément de la page ne montre (data-image), visionneuse comprise.
@@ -3664,8 +3634,6 @@ function editMessage(c, m, index, el) {
           for (const img of x.images || []) if (!keptImages.has(img.id)) gone.push(img.id);
         }
         images.remove(gone).catch(() => {});
-        // La lecture à voix haute d'une réponse qui part avec la question modifiée se termine.
-        stopReadingOf(c, c.messages.slice(index), index);
         c.messages = c.messages.slice(0, index);
         if ((c.memoryMark || 0) > index) c.memoryMark = index;
         if ((c.contextStart || 0) > index) {
@@ -3691,57 +3659,8 @@ function answerText(m) {
   return (m.steps || []).map((s) => s.content || '').join('\n\n').trim();
 }
 
-// Les langues que lit la synthèse vocale du service, vide tant qu'elle n'en donne aucune.
-let speechVoices = [];
-
-async function askSpeechVoices() {
-  if (!speechVoices.length) speechVoices = await speech.speechLanguages();
-}
-
 /*
-    La clé de la lecture à voix haute du message m de c, à l'indice index : l'identifiant du message, que les
-    suppressions, les modifications et les regénérations lui laissent, sinon sa position pour un message enregistré sans
-    identifiant.
-*/
-function speechKey(c, m, index) {
-  return c.id + ':' + (m.id || 'at' + index);
-}
-
-// Termine la lecture à voix haute de l'un des messages de c qui quittent la discussion, le premier d'entre eux à from.
-function stopReadingOf(c, messages, from) {
-  const key = speech.readingKey();
-  if (key && messages.some((m, k) => speechKey(c, m, from + k) === key)) speech.stopReading();
-}
-
-// Les boutons de la réponse key montrent si elle est en cours de lecture.
-function markReading(key, on) {
-  for (const b of document.querySelectorAll('[data-speech]')) {
-    if (b.dataset.speech !== key) continue;
-    b.innerHTML = icon(on ? 'stop' : 'speaker');
-    b.title = t(on ? 'stopReading' : 'readAloud');
-    b.setAttribute('aria-label', b.title);
-    b.setAttribute('aria-pressed', on ? 'true' : 'false');
-  }
-}
-
-// Lit une réponse à voix haute dans la langue de ses mots, ou arrête la lecture de cette réponse.
-function toggleReading(m, key) {
-  if (speech.readingKey() === key) {
-    speech.stopReading();
-    return;
-  }
-  const text = speech.spokenText(answerText(m));
-  const fallback = speechVoices.includes(language()) ? language() : speechVoices[0];
-  const lang = speech.textLanguage(text, fallback);
-  speech.readAloud(text, speechVoices.includes(lang) ? lang : fallback, key, {
-    start: (k) => markReading(k, true),
-    end: (k) => markReading(k, false),
-    error: (k, e) => toast(t('readAloudFailed', { reason: errorText(e) }), true)
-  });
-}
-
-/*
-    Une réponse, avec ses boutons.  Copier, lire à voix haute et exporter attendent que la réponse soit écrite, qu'elle
+    Une réponse, avec ses boutons.  Copier et exporter attendent que la réponse soit écrite, qu'elle
     soit affichée au fil de son écriture ou écrite en arrière-plan.
 */
 function assistantElement(c, m, index, last) {
@@ -3754,16 +3673,6 @@ function assistantElement(c, m, index, last) {
   // Les boutons d'une réponse attendent qu'elle soit écrite ; regénérer attend aussi la discussion.
   const meta = h('div', { class: 'meta' });
   meta.append(lockable(iconButton('copy', t('copy'), () => copyText(answerText(m))), 'turn', live));
-  if (speechVoices.length) {
-    // La réponse lue à voix haute, une fois écrite.
-    const key = speechKey(c, m, index);
-    const on = speech.readingKey() === key;
-    const reader = lockable(iconButton(on ? 'stop' : 'speaker', t(on ? 'stopReading' : 'readAloud'),
-      () => toggleReading(m, key)), 'turn', live);
-    reader.dataset.speech = key;
-    reader.setAttribute('aria-pressed', on ? 'true' : 'false');
-    meta.append(reader);
-  }
   if (last) meta.append(lockable(iconButton('refresh', t('regenerate'), () => regenerate(liveCopy(c))), 'busy'));
   const exporter = lockable(iconButton('download', t('exportAnswer'), () => showMenu(exporter, [
     { label: t('exportMarkdown'), icon: 'download', action: () => exportAnswer(liveCopy(c), index, 'md') },
@@ -4431,9 +4340,6 @@ async function regenerate(c) {
   if (generations.has(c.id) || answeredElsewhere(c)) return;
   const removed = [];
   while (c.messages.length && c.messages[c.messages.length - 1].role === 'assistant') removed.unshift(c.messages.pop());
-  // La lecture à voix haute d'une réponse qui part se termine avec elle : la nouvelle réponse est dessinée à la place
-  // de l'ancienne.
-  stopReadingOf(c, removed, c.messages.length);
   if (!c.messages.length) return;
   // Une discussion compressée par une version antérieure jusqu'à sa dernière réponse recommence à sa dernière question.
   const lastQuestion = c.messages.map((x) => x.role).lastIndexOf('user');
@@ -6227,8 +6133,8 @@ async function updateMemory(force) {
 */
 function errorText(e) {
   const known = { model_not_found: 'errModelNotFound', context_length_exceeded: 'errContextLength', unloaded: 'errUnloaded',
-    starting: 'errStarting', model_loading: 'modelLoading', speech_unavailable: 'errSpeechUnavailable',
-    speech_failed: 'errSpeechFailed', too_many_images: 'errTooManyImages', invalid_image_format: 'errImageFormat',
+    starting: 'errStarting', model_loading: 'modelLoading',
+    too_many_images: 'errTooManyImages', invalid_image_format: 'errImageFormat',
     engine_busy: 'errEngineBusy', busy: 'errBusy' };
   if (e && known[e.code]) return t(known[e.code]);
   const reading = {
@@ -7179,8 +7085,6 @@ function buildLayout() {
     class: 'incognito-toggle' + (state.incognito ? ' on' : ''), type: 'button', title: t('incognitoStart'), html: icon('incognito'),
     onclick: () => {
       state.incognito = !state.incognito;
-      // La lecture à voix haute se termine avec la discussion à laquelle elle appartient, comme route() la termine.
-      speech.stopReading();
       leaveCurrent();
       showDiscussion(newConversation(null));
       state.view = 'chat';
@@ -7363,7 +7267,6 @@ async function init() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') saveDraft(true);
   });
-  await askSpeechVoices();
   await route();
   /*
       La première lecture de l'état, une fois le service prêt maintenant ou plus tard (pollStatus),
@@ -7377,7 +7280,6 @@ async function init() {
   if (!rag.embeddingModel()) indexProjects();
   // Un onglet qui se ferme rend le bail de la mémoire et dit qu'il ne répond plus.
   window.addEventListener('pagehide', () => {
-    speech.stopReading();
     if (memoryRunning) releaseMemoryLease().catch(() => {});
     for (const g of generations.values()) {
       if (!g.c.incognito) broadcast({ type: 'busy', id: g.c.id, tab: tabId, busy: false });
