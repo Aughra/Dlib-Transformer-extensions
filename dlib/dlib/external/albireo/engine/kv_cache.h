@@ -13,6 +13,9 @@
 #include <stdexcept>
 #include <vector>
 
+#include <sys/mman.h>
+#include <unistd.h>
+
 namespace albireo
 {
 
@@ -51,7 +54,11 @@ namespace albireo
 
                 Blocks are allocated in groups as sequences grow, up to a budget in bytes;
                 a block given back is reused before any new memory is taken, and trim()
-                returns the memory of the blocks no sequence holds to the system.  A guard
+                returns the memory of the blocks no sequence holds to the system.  All the
+                blocks lie in one region of addresses reserved for the budget at once, aligned
+                on the pages of the system, whose pages the system gives on first use only: a
+                graphics processor that shares the memory of the processor can take the whole
+                region as one buffer (region(), block_offset()).  A guard
                 (set_guard) may refuse a new block, from the memory the system has left:
                 the pool then acts as when its budget is exhausted.
 
@@ -81,10 +88,34 @@ namespace albireo
             // The table of blocks never moves, so that the threads reading a block during
             // a forward pass never see it relocated by an allocation, and the lists never
             // grow, so that giving a block back cannot fail.
+            reserve_region();
             blocks_.reserve(max_blocks_);
             refs_.reserve(max_blocks_);
             free_.reserve(max_blocks_);
             vacant_.reserve(max_blocks_);
+        }
+
+        ~kv_pool() { release_region(); }
+
+        kv_pool(const kv_pool&) = delete;
+        kv_pool& operator=(const kv_pool&) = delete;
+
+        // The region of all the blocks, and its length, a multiple of the page.
+        uint8_t* region() const { return region_; }
+        size_t region_bytes() const { return region_bytes_; }
+
+        // Where block b starts in the region.
+        size_t block_offset(int b) const { return static_cast<size_t>(b) * stride_; }
+
+        // Where the keys (values false) or the values (values true) of a layer and a head start
+        // in a block, and where their scales start (q8).
+        size_t slab_offset(bool values, long layer, long head) const
+        {
+            return (values ? bytes_per_kind_ : 0) + offset(layer, head);
+        }
+        size_t scales_offset(bool values, long layer, long head) const
+        {
+            return slab_offset(values, layer, head) + static_cast<size_t>(positions_) * head_dim_;
         }
 
         /*
@@ -135,16 +166,17 @@ namespace albireo
             if (!vacant_.empty())
             {
                 const int b = vacant_.back();
-                blocks_[static_cast<size_t>(b)].reset(new uint8_t[block_bytes_]);
+                commit(b);
                 vacant_.pop_back();
                 refs_[static_cast<size_t>(b)] = 1;
                 return b;
             }
             if (blocks_.size() >= max_blocks_) return -1;
-            std::unique_ptr<uint8_t[]> memory(new uint8_t[block_bytes_]);
-            blocks_.push_back(std::move(memory));
+            const int b = static_cast<int>(blocks_.size());
+            commit(b);
+            blocks_.push_back(region_ + block_offset(b));
             refs_.push_back(1);
-            return static_cast<int>(blocks_.size() - 1);
+            return b;
         }
 
         // Gives a hold on a block back; the block returns to the pool with the last one.
@@ -177,7 +209,7 @@ namespace albireo
             std::lock_guard<std::mutex> l(m_);
             for (int b : free_)
             {
-                blocks_[static_cast<size_t>(b)].reset();
+                decommit(b);
                 vacant_.push_back(b);
             }
             free_.clear();
@@ -187,8 +219,8 @@ namespace albireo
         void copy_block(int src, int dst)
         {
             if (src == dst) return;
-            const uint8_t* from = blocks_[static_cast<size_t>(src)].get();
-            std::copy(from, from + block_bytes_, blocks_[static_cast<size_t>(dst)].get());
+            const uint8_t* from = blocks_[static_cast<size_t>(src)];
+            std::copy(from, from + block_bytes_, blocks_[static_cast<size_t>(dst)]);
         }
 
         /*
@@ -198,11 +230,11 @@ namespace albireo
         */
         uint8_t* keys(int block, long layer, long head)
         {
-            return blocks_[static_cast<size_t>(block)].get() + offset(layer, head);
+            return blocks_[static_cast<size_t>(block)] + offset(layer, head);
         }
         uint8_t* values(int block, long layer, long head)
         {
-            return blocks_[static_cast<size_t>(block)].get() + bytes_per_kind_ + offset(layer, head);
+            return blocks_[static_cast<size_t>(block)] + bytes_per_kind_ + offset(layer, head);
         }
         uint16_t* key_scales(int block, long layer, long head)
         {
@@ -221,6 +253,36 @@ namespace albireo
             return (static_cast<size_t>(layer) * heads_ + head) * slab_bytes_;
         }
 
+        static size_t page_bytes() { return static_cast<size_t>(sysconf(_SC_PAGESIZE)); }
+
+        // The addresses of max_blocks_ blocks, reserved without memory behind them.
+        void reserve_region()
+        {
+            // Each block starts on a page, so that its memory goes back to the system whole.
+            const size_t page = page_bytes();
+            stride_ = (block_bytes_ + page - 1) / page * page;
+            region_bytes_ = max_blocks_ * stride_;
+            void* p = mmap(nullptr, region_bytes_, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+            if (p == MAP_FAILED) throw std::bad_alloc();
+            region_ = static_cast<uint8_t*>(p);
+        }
+
+        void release_region()
+        {
+            if (!region_) return;
+            munmap(region_, region_bytes_);
+            region_ = nullptr;
+        }
+
+        // Takes the pages of block b back after decommit(); the system gives them on first use.
+        void commit(int b) { madvise(region_ + block_offset(b), stride_, MADV_FREE_REUSE); }
+
+        // Gives the memory of block b back to the system, the addresses staying reserved.
+        void decommit(int b)
+        {
+            madvise(region_ + block_offset(b), stride_, MADV_FREE_REUSABLE);
+        }
+
         long layers_, heads_, head_dim_, positions_;
         kv_format format_;
         size_t slab_bytes_ = 0;
@@ -228,7 +290,10 @@ namespace albireo
         size_t block_bytes_ = 0;
         size_t max_blocks_ = 0;
         mutable std::mutex m_;
-        std::vector<std::unique_ptr<uint8_t[]>> blocks_;
+        uint8_t* region_ = nullptr;
+        size_t region_bytes_ = 0;
+        size_t stride_ = 0;         // the distance between two blocks, whole pages
+        std::vector<uint8_t*> blocks_;
         std::vector<int> refs_;     // the number of sequences holding each block
         std::vector<int> free_;     // blocks with memory, held by no sequence
         std::vector<int> vacant_;   // slots whose memory trim() freed

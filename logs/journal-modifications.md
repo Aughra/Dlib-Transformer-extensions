@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Ranger les clés et valeurs dans une seule zone réservée (moteur Metal, M1)
+
+- **Quoi** : `kv_pool` réserve d'un coup, par `mmap`, les adresses de tous ses blocs (une zone alignée sur les pages, chaque bloc commençant sur une page) ; macOS ne donne la mémoire qu'au premier usage. `trim()` rend les pages des blocs libres par `madvise(MADV_FREE_REUSABLE)`, `MADV_FREE_REUSE` les reprend. Accès pour le GPU : `region()`, `region_bytes()`, `block_offset()`, `slab_offset()`, `scales_offset()`. Code pour macOS seulement (demande de l'humain : du pur Apple).
+- **Fichiers** : `dlib/dlib/external/albireo/engine/kv_cache.h` ; ce journal.
+- **Pourquoi** : le GPU du Mac partage la mémoire du processeur ; une zone unique peut devenir un seul tampon Metal sans copie, que le processeur et le GPU liront et écriront tous les deux.
+- **Étapes** : build sans avertissement ; `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api`, `test_host` passent ; `engine_chat` (2B) : « La capitale de la France est Paris. » ; `bench_runtime` 2B 512 tokens q8 : prompt 216,8 tokens/s, génération 36,6 (une mesure, pas de comparaison alternée : changement d'allocation seulement).
+
 ## 2026-11-11 — Se détacher de l'original
 
 - **Quoi** : décision de l'humain : le fork ne fusionne plus `upstream/main` (dernière fusion `535a6fb`, original à `184ea00`, Albireo 1.0.12). Les fichiers de l'original peuvent être modifiés librement ; `upstream` reste en lecture, pour reprendre une idée à la main. Inchangé : push vers `origin` seulement, pas de PR vers l'original sans demande, la doc et le blog suivent le code, les notes pour l'auteur continuent pour les vrais bugs. Objectif : moteur Metal complet.
