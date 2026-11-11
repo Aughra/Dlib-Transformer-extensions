@@ -49,7 +49,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 | M3 (**fait**, `5f0b07f`) | Un pas de génération entier sur le GPU, une commande par passe ; contrôle au chargement (logits à 1 % près, même token le plus probable) ; repli sur le processeur sinon | `engine_chat` juste ; mesures alternées processeur / GPU |
 | M4 (en cours ; gabarits faits, `5f0b07f` : 4B 18,3-19,0 → 21,3-21,7 tokens/s) | Réglages : noyau Q4_K (54 Go/s contre 70 au plafond), tête des logits, contrôle au chargement du modèle (fait, `f199a04`), Q8_0 (modèle de recherche) | gain en mesures alternées |
 | M5 (**fait**, `cbefd5c` : lecture ×1,7 à ×2, jusqu'à 2 048 positions) | Prompts sur le GPU (produits en tuiles, attention groupée) contre Accelerate | le plus rapide gardé, mesuré |
-| M6 (presque fait : `accelerator` à `none` coupe le GPU ; la page montre le GPU et ses tampons par modèle, onglet « À propos » ; la barre V²RAM et les restes CUDA / OpenVINO de la page sont retirés) | Reste : couper le GPU **depuis la page**. Les réglages du service exigent le jeton d'administration (`X-Albireo-Admin`), que seule l'icône de Windows lisait et que la page n'a pas, exprès (un site ne doit pas piloter le service). Options : une petite app de barre des menus macOS qui lit le jeton (sûr, plus long) ; donner le jeton à la page (plus simple, mais affaiblit la protection, surtout avec le lien public) ; garder le fichier de réglages (rien à faire). À décider par l'humain | page web et API servies par le GPU ; le réglage choisi marche |
+| M6 (**fait**, `bef3d9a`, `982c951`) | Page fidèle au moteur Metal : ligne « GPU » dans « À propos » ; onglet « Service » qui règle tout (GPU compris), avec fiches à trois explications et schémas ; plus de jeton ni de contrôle d'origine (choix de l'humain, version perso) ; accès réseau http sur le port 8444 derrière un mot de passe | page et API servies par le GPU ; réglages essayés depuis la page ; accès réseau essayé (cookie, refus) |
 | M7 (proposé) | Attention de prompt en tuiles (instructions matricielles), pour lever la limite de 2 048 positions ; noyau Q4_K (54 Go/s contre 70) | gain en mesures alternées |
 
 **Conception du pas sur le GPU (M2-M3)**, une commande par passe de 1 à 8 tokens, tout dans un seul encodeur sériel :
@@ -62,6 +62,8 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 Formats couverts d'abord : Q4_K et Q6_K (les modèles du service) ; les autres modèles restent sur le processeur. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
 ## À faire, dans l'ordre proposé
+
+0. **Documents depuis un dossier du Mac, et envoi de documents par la page** (demande de l'humain, 2026-11-11, depuis le canapé) : les fichiers à analyser pris dans un dossier dédié du Mac, et la possibilité d'en téléverser par l'interface (utile depuis le téléphone). Conception à valider avec l'humain avant de coder (emplacement du dossier, lien avec les projets et la recherche dans les documents de la page, qui vivent aujourd'hui dans le navigateur).
 
 1. ~~Décision de l'humain attendue~~ : prise le 2026-11-11, moteur Metal complet (voir « En cours »). Options qui étaient proposées : (a) fusionner d'abord les 16 commits de l'original (1.0.13 lit les prompts en entiers de 8 bits, ce qui touche le chemin Accelerate du fork, et écrit plusieurs tokens par pas à partir de brouillons : gain possible sans Metal), puis mesurer ; (b) moteur Metal complet, tout le token sur le GPU (`layer_pass` + `attend()`), gain estimé de 5 à 50 % en écriture sur M2 (sonde aujourd'hui, puis plafond), gros chantier, non exact au bit près ; (c) sonde n° 2 avant de décider : produits des prompts sur le GPU (MPS ou `simdgroup_matrix`) contre Accelerate. Relancer la sonde sur le Mac mini M5 Pro, où le rapport GPU / processeur sera différent.
 2. Plus tard, si utile : noyaux NEON de génération pour les autres formats de poids (Q8_0, Q5_K…) ; `qk_float_to_q8_row` et `qk_rotate_row` restent portables (peu de temps au profil).
@@ -83,6 +85,8 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 - Les tests complets sont `tools/test_macos.sh` (Albireo, Pseudalis), écrits pour macOS : plus de `nproc` ni de `stat` de GNU à fournir.
 
 ## Problèmes ouverts
+
+- **Sécurité, choix assumé** (2026-11-11) : sur le Mac, le service n'a plus de jeton d'administration ni de contrôle `Host` / `Origin`. Un site piégé ouvert dans un navigateur du Mac pourrait piloter le service (DNS rebinding). L'accès réseau, lui, est derrière un mot de passe, mais en http : le trafic passe en clair sur le Wi-Fi. À remettre si l'usage change (fiche « Pas de serrure sur ce Mac » de l'onglet Service).
 
 - L'ancien fork `PapyTortueTech/Dlib-Transformer-extensions` n'est plus utilisé ; l'humain s'occupe de l'arrêter. Ne plus jamais y pousser.
 - Noyaux NEON pour Q4_K, Q6_K et l'attention (clés en demi-précision et en 8 bits) ; prompts par Accelerate pour tous les formats. En génération, les autres formats (Q8_0, Q5_K…) restent portables.
