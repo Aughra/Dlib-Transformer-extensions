@@ -112,7 +112,7 @@ namespace
                 continue;
             }
             failures = 0;
-            if (svc.update_started() || !svc.restart_requested()) break;
+            if (!svc.restart_requested()) break;
             if (albireo::engine_host::pinned_engine_started())
             {
                 albireo::log_info("service: restart in a new process");

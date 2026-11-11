@@ -218,7 +218,7 @@ if (ALBIREO_PROGRAMS)
 
    # The service.
    add_executable(albireo-service host/main.cpp host/service.cpp host/server.cpp host/settings.cpp host/store.cpp
-      host/models.cpp host/updater.cpp host/engine_host.cpp host/http_fetch.cpp host/public_link.cpp host/crypto.cpp
+      host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/public_link.cpp host/crypto.cpp
       host/certificates.cpp host/speech.cpp host/speech_text.cpp host/web_access.cpp)
    target_include_directories(albireo-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
    target_link_libraries(albireo-service PRIVATE albireo_common albireo_sqlite albireo_zlib dlib::httplib)
@@ -282,7 +282,7 @@ if (ALBIREO_TESTS AND ALBIREO_PROGRAMS)
    # The files the service writes in its models folder and reads in its imports, the downloads and the
    # updates from the public link, the settings and the web access, with a local server.
    add_executable(test_host tests/test_host.cpp host/models.cpp host/store.cpp host/http_fetch.cpp
-      host/public_link.cpp host/crypto.cpp host/settings.cpp host/web_access.cpp host/updater.cpp)
+      host/public_link.cpp host/crypto.cpp host/settings.cpp host/web_access.cpp)
    target_include_directories(test_host PRIVATE ${CMAKE_BINARY_DIR}/generated)
    target_link_libraries(test_host PRIVATE albireo_common albireo_sqlite albireo_zlib dlib::httplib)
    target_compile_options(test_host PRIVATE ${ALBIREO_WARNINGS})

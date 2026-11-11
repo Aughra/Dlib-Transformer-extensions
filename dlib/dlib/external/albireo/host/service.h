@@ -19,7 +19,6 @@
 #include "models.h"
 #include "settings.h"
 #include "store.h"
-#include "updater.h"
 
 namespace httplib { class SSLServer; class Server; }
 
@@ -74,15 +73,11 @@ namespace albireo
                 The Albireo service: the engine and its models, the local HTTPS server
                 with the web application, the OpenAI compatible interface and the
                 administration interface of the tray, the catalog and the downloads of
-                the models, and the updates.
+                the models.
 
                 run() starts everything and blocks until stop() or a restart request; the
-                caller (the Windows service, or the console on other systems) then starts
-                a new service when restart_requested() says so, which is how a change of
-                port or of engine is applied.  When an update downloaded earlier is ready,
-                run() starts its installer instead of serving and returns with
-                update_started() true: the installer stops the service, replaces the
-                programs and starts the service again.
+                caller (the console) then starts a new service when restart_requested()
+                says so, which is how a change of port or of engine is applied.
 
                 The server answers as soon as its port is open.  The engines are described
                 and the chosen one starts in the background, then the active models load:
@@ -91,11 +86,11 @@ namespace albireo
                 that the tray and the clients tell a slow start from a failure.
 
             NETWORK
-                The catalog, the updates and the downloads run on threads of their own,
+                The catalog and the downloads run on threads of their own,
                 each request bounded in time, so that the local work (the models, the
                 imports, the requests of the users) never waits for the network.  With
-                the "offline" setting, no request leaves the machine: the catalog, the
-                updates and the models come from folders, the import folder of the data
+                the "offline" setting, no request leaves the machine: the catalog and the
+                models come from folders, the import folder of the data
                 folder or a folder named by the tray (import_folder()).
         !*/
     public:
@@ -107,7 +102,6 @@ namespace albireo
         void stop();
         bool stopping() const { return stopping_; }
         bool restart_requested() const { return restart_; }
-        bool update_started() const { return update_started_; }
         void request_restart();
 
         // The programs and the data.
@@ -123,7 +117,6 @@ namespace albireo
         // The folder of the voices of the speech synthesis and its program, beside the service.
         std::string speech_dir() const;
         std::string speech_program() const;
-        updater& updates() { return *updater_; }
         engine_host& engine() { return engine_; }
 
         json status();
@@ -204,18 +197,17 @@ namespace albireo
                   read, hashed, listed nor revealed:
                     - a folder or a file of the import folder of the data folder, which only
                       SYSTEM and the administrators fill: its signed catalog, its models
-                      (*.gguf, in the folder and in its "models" subfolder) and its signed
-                      update, as scan_inbox() installs them, the files staying in place;
-                    - a signed offline bundle (tools/make_offline_bundle.py) on a local
-                      drive: a folder whose catalog.json or feed.json bears the signature
-                      of Albireo.  Its catalog, the models that catalog lists (found by
-                      their names, sizes and hashes, model_manager::import_bundle()) and its
-                      update are installed; no other file of the folder is read.
+                      (*.gguf, in the folder and in its "models" subfolder), as scan_inbox()
+                      installs them, the files staying in place;
+                    - a signed offline bundle on a local drive: a folder whose catalog.json
+                      bears the signature of Albireo.  Its catalog and the models that
+                      catalog lists (found by their names, sizes and hashes,
+                      model_manager::import_bundle()) are installed; no other file of the
+                      folder is read.
                   Every file is read through no link.  A model file of the user goes to the
                   service through the upload route, read with the rights of the user.
                 - Returns {"imported", "already", "pending", "errors"} as
-                  model_manager::import_path(), with "catalog" and "update" when the folder
-                  holds them.
+                  model_manager::import_path(), with "catalog" when the folder holds one.
                 - Refuses path, with refusal set and an empty result, when it is relative
                   (code import_path_relative), on a network share or drive
                   (import_path_network), a device or a path of the system namespaces
@@ -325,7 +317,6 @@ namespace albireo
         std::unique_ptr<settings_store> settings_;
         std::unique_ptr<store> db_;
         std::unique_ptr<model_manager> models_;
-        std::unique_ptr<updater> updater_;
         engine_host engine_;
         // Written once by start_engines(), then read by the routes once engines_ready_ is
         // true.
@@ -339,14 +330,13 @@ namespace albireo
         // Set by run() when a damaged database was set aside and a new one started.
         bool database_restarted_ = false;
 
-        // Guards the server, the model manager and the updater while run() creates and
+        // Guards the server and the model manager while run() creates and
         // releases them, for stop(), which a thread of the system may call at any time.
         std::mutex server_m_;
         std::unique_ptr<httplib::SSLServer> server_;
 
         std::atomic<bool> stopping_{false};
         std::atomic<bool> restart_{false};
-        std::atomic<bool> update_started_{false};
         std::mutex m_;
         std::condition_variable cv_;
         std::thread background_;

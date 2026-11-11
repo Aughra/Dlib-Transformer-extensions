@@ -118,7 +118,6 @@ namespace albireo
         json a = json::object();
         for (const auto& kv : active) a[kv.first] = kv.second;
         j["active"] = a;
-        j["check_updates"] = check_updates;
         j["default_model"] = default_model;
         j["offline"] = offline;
         j["proxy"] = masked_proxy(proxy);
@@ -156,7 +155,6 @@ namespace albireo
                 if (kv.first == r) active[kv.first] = kv.second.as_string();
             if (kv.first == embedding_role) active[kv.first] = kv.second.as_string();
         }
-        check_updates = j["check_updates"].as_bool(d.check_updates);
         default_model = j["default_model"].as_bool(d.default_model);
         offline = j["offline"].as_bool(d.offline);
         proxy = j["proxy"].str(d.proxy);

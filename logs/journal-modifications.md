@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Retirer d'Albireo les mises à jour par installateur Windows (nettoyage, N4)
+
+- **Quoi** : `host/updater.{h,cpp}` supprimés : ils téléchargeaient, depuis l'espace de publication de l'original, l'installateur Windows d'une nouvelle version et le lançaient au démarrage ; sur Mac, ils auraient téléchargé des centaines de Mo inutilisables. Retirés aussi : les routes `/albireo/v1/updates`, `/updates/check` et `/updates/apply`, le réglage `check_updates`, l'état `updates` du service, la mise à jour d'un dossier hors ligne signé (`feed.json` ; le catalogue signé et ses modèles restent importables), les deux contrôles de `test_host` qui les visaient, et leur description dans `tools/make_openapi.py` et `web/openapi.json` (régénéré).
+- **Fichiers** : `dlib/dlib/external/albireo/` (`CMakeLists.txt`, `host/main.cpp`, `host/server.cpp`, `host/service.{h,cpp}`, `host/settings.{h,cpp}`, `host/updater.{h,cpp}` supprimés, `tests/test_host.cpp`, `tools/make_openapi.py`, `web/openapi.json`) ; ce journal.
+- **Pourquoi** : « du pur Apple » ; ces mises à jour n'existent que pour les installateurs Windows.
+- **Étapes** : build sans erreur ni avertissement ; `test_host`, `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api` passent ; service : page en 200, `/albireo/v1/status` sans `updates`, `/albireo/v1/updates` en 404, réponse « Paris ».
+
 ## 2026-11-11 — Donner à chaque épisode du blog son repère de vitesse
 
 - **Quoi** : demande de l'humain : sous le titre de chaque épisode, une ligne « Repère de vitesse » (tokens/s d'écriture et de lecture à la fin de l'épisode). Ajoutée aux épisodes 1 à 17, avec les chiffres de chaque épisode et du journal ; « pas encore de mesure » pour les épisodes 1 à 5. Règle ajoutée à CLAUDE.md (forme et critère vérifiable des épisodes).

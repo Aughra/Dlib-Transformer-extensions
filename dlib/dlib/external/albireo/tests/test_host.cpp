@@ -84,7 +84,6 @@
 #include "../host/public_link.h"
 #include "../host/settings.h"
 #include "../host/store.h"
-#include "../host/updater.h"
 #include "../host/web_access.h"
 #include "tiny_gguf.h"
 
@@ -1098,29 +1097,6 @@ int main(int argc, char** argv)
         check(complete(d, "absent", absent), "without a space, a model comes from its official address ("
             + d.dump() + ")");
         m.stop();
-        const int official_before_updates = official_requests;
-
-        // The updates: the feed and its signature come from the space alone; the space holds no signature.
-        albireo::public_link_for_tests(link);
-        {
-            albireo::updater u(albireo::join_path(work, "updates"));
-            u.check_async();
-            json update;
-            for (int i = 0; i < 600; ++i)
-            {
-                update = u.status();
-                const std::string state = update["state"].as_string();
-                if (state != "idle" && state != "checking") break;
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            }
-            check(update["state"].as_string() == "error" && update["code"].as_string() == "update_not_published"
-                && update["args"]["file"].as_string() == "dist/feed.json.sig"
-                && update["error"].as_string() == "the publication space of Albireo does not hold dist/feed.json.sig "
-                "yet", "a feed whose signature the space lacks fails as not published yet (" + update.dump() + ")");
-        }
-        check(official_requests == official_before_updates, "the updates send no request to an official address ("
-            + std::to_string(official_requests - official_before_updates) + ")");
-
         // A link that refuses the password: the message names the answer, never the query.
         protected_link = true;
         albireo::public_link_for_tests(link);
@@ -1283,8 +1259,8 @@ int main(int argc, char** argv)
             + "; " + error + ")");
 
         /*
-            A model whose copy is a web page, its official address a web page too, then the file; an update
-            whose feed is refused; a catalog from a stalled listing, its official address answering 404.
+            A model whose copy is a web page, its official address a web page too, then the file; a catalog
+            from a stalled listing, its official address answering 404.
         */
         albireo::store db(albireo::join_path(work, "albireo-4.db"));
         json catalog = json::object();
@@ -1329,25 +1305,6 @@ int main(int argc, char** argv)
                 "a catalog from a listing that stalls fails with both messages (" + refreshed + ")");
             listing_fault = no_fault;
             m.stop();
-        }
-        {
-            albireo::public_link_for_tests(link);
-            listing_fault = html_403;
-            albireo::updater u(albireo::join_path(work, "updates-4"));
-            u.check_async();
-            json update;
-            for (int i = 0; i < 600; ++i)
-            {
-                update = u.status();
-                const std::string state = update["state"].as_string();
-                if (state != "idle" && state != "checking") break;
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            }
-            listing_fault = no_fault;
-            check(update["state"].as_string() == "error" && update["code"].as_string() == "update_download"
-                && update["args"]["e"].as_string() == "the publication space of Albireo cannot be reached for "
-                "dist/feed.json: the request is answered with the status 403" && clean(update.dump()) && answers(),
-                "a feed refused by a filter of the network fails with its message (" + update.dump() + ")");
         }
         albireo::http_bounds_for_tests(0, 0);
         resetting.stop();

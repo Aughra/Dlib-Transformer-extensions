@@ -51,12 +51,7 @@ offline_reply = {"409": reply("Refused in offline mode", {"type": "object", "pro
 model_id = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
             "description": "Identifier of the model, as listed by /albireo/v1/models."}
 ok = {"type": "object", "properties": {"ok": {"type": "boolean"}, "error": {"type": "string"}}}
-# The codes of the errors of the updates (host/updater.h), and of the refusals of the imports by path
-# (service::import_folder() in host/service.h).
-update_codes = ["update_check", "update_record", "update_feed_missing", "update_feed_missing_folder",
-                "update_signature", "update_feed_mismatch", "update_outside", "update_installer_mismatch",
-                "update_feed_invalid", "update_download", "update_not_published", "update_not_ready",
-                "update_invalid", "update_start", "update_package_manager", "stopping"]
+# The codes of the refusals of the imports by path (service::import_folder() in host/service.h).
 import_codes = ["import_path_relative", "import_path_network", "import_path_device", "import_path_invalid",
                 "import_use_upload", "import_not_bundle", "import_not_found", "import_path_link",
                 "import_folder_insecure"]
@@ -322,9 +317,8 @@ schemas = {
                     "description": "Storage of the keys and values of the language models: q8, 8-bit integers by "
                                    "groups of 32 values with a scale, the keys rotated; f16, half precision. auto "
                                    "takes q8 for the models whose heads hold whole groups."},
-        "check_updates": {"type": "boolean"},
-        "offline": {"type": "boolean", "description": "No access to the network: the catalog, the models and the "
-                    "updates come from imports, and the service opens no connection."},
+        "offline": {"type": "boolean", "description": "No access to the network: the catalog and the models "
+                    "come from imports, and the service opens no connection."},
         "proxy": {"type": "string",
                   "description": "Proxy of the downloads: empty for the proxy of the system, none for a direct "
                                  "connection, or http://[user:password@]host:port.  The settings give the password "
@@ -401,21 +395,6 @@ schemas = {
         "setting": {"type": "string"}, "accelerator": {"type": "string"},
         "accelerators_available": {"type": "boolean"},
         "accelerators_reason": {"type": "string", "enum": ["not_installed", "unusable"]}}},
-    "UpdateState": {"type": "object", "description": "The updates: their state, the versions, the notes by language, "
-                    "and an error with its code and its values, which the tray translates.", "properties": {
-        "state": {"type": "string", "enum": ["idle", "checking", "up_to_date", "downloading", "ready", "error"]},
-        "current": {"type": "string"}, "latest": {"type": "string"}, "file": {"type": "string"},
-        "notes": {"type": "object", "additionalProperties": {"type": "string"}},
-        "received": {"type": "integer"}, "total": {"type": "integer"}, "checked_at": {"type": "integer"},
-        "error": {"type": "string", "description": "The error in English."},
-        "code": {"type": "string", "enum": update_codes,
-                 "description": "update_check {e}, update_record {version}, update_feed_missing {version}, "
-                                "update_feed_missing_folder {folder}, update_signature {file}, update_feed_mismatch "
-                                "{file, version}, update_outside {file}, update_installer_mismatch {version}, "
-                                "update_feed_invalid, update_download {e}, update_not_published {file}, "
-                                "update_not_ready, update_invalid {version}, update_start {code}, "
-                                "update_package_manager, stopping."},
-        "args": {"type": "object", "additionalProperties": {"type": "string"}}}},
     "Refusal": {"type": "object", "description": "A refused operation, with the code of its reason and its values.",
                 "properties": {"ok": {"type": "boolean", "enum": [False]}, "error": {"type": "string"},
                                "code": {"type": "string"},
@@ -490,7 +469,7 @@ paths = {
                              "language": {"type": "string", "enum": ["auto", "en", "fr", "de", "it", "es"]},
                              "engine": {"type": "string"}, "accelerator": {"type": "string"},
                              "v2ram": {"type": "boolean"}, "v2ram_max_mb": {"type": "integer"},
-                             "device_mb": {"type": "integer"}, "check_updates": {"type": "boolean"},
+                             "device_mb": {"type": "integer"},
                              "offline": {"type": "boolean"}}},
             "engine": {"type": "object", "description": "The engine running.", "properties": {
                 "running": {"type": "boolean"}, "variant": {"type": "string", "example": "cpu-avx2"},
@@ -606,8 +585,6 @@ paths = {
                                                    "requests": {"type": "integer"}}}}}})}}},
     "/albireo/v1/engines": {"get": {"tags": ["Service"], "summary": "Engines found, their devices and measures",
                                     "responses": {"200": reply("The engines", ref("Engines"))}}},
-    "/albireo/v1/updates": {"get": {"tags": ["Service"], "summary": "State of the updates",
-                                    "responses": {"200": reply("The state", ref("UpdateState"))}}},
     "/albireo/v1/licenses": {"get": {
         "tags": ["Service"], "summary": "License texts of the installation",
         "description": "The texts of the licenses folder of the programs, which the installer fills: those of the "
@@ -735,21 +712,19 @@ paths = {
         "summary": "Imports a signed offline bundle, or the content of the import folder",
         "description": "For a computer without network: a memory card or a disk brought to the machine. The "
                        "service reads with its own rights, so that it accepts two kinds of paths: a signed offline "
-                       "bundle on a local drive (a folder whose catalog.json or feed.json bears the signature of "
-                       "Albireo, as tools/make_offline_bundle.py prepares it), of which it reads only the signed "
-                       "files, the models the signed catalog lists, by their names, sizes and hashes, and the "
-                       "installer the signed feed names; and a folder or a file of the import folder of the data "
-                       "folder. Every file is read through no link. A model file of the user is sent through "
-                       "/albireo/v1/models/upload. An older catalog never replaces a newer one, a model installed "
-                       "already is listed under already, and the update is installed at the next start of the "
-                       "service.",
+                       "bundle on a local drive (a folder whose catalog.json bears the signature of Albireo), of "
+                       "which it reads only the signed catalog and the models it lists, by their names, sizes and "
+                       "hashes; and a folder or a file of the import folder of the data folder. Every file is read "
+                       "through no link. A model file of the user is sent through /albireo/v1/models/upload. An "
+                       "older catalog never replaces a newer one, and a model installed already is listed under "
+                       "already.",
         "requestBody": json_body({"type": "object", "required": ["path"], "properties": {"path": {"type": "string"}}}),
-        "responses": {"200": reply("Imported models, catalog, update and errors", {"type": "object", "properties": {
+        "responses": {"200": reply("Imported models, catalog and errors", {"type": "object", "properties": {
             "imported": {"type": "array", "items": {"type": "string"}},
             "already": {"type": "array", "items": {"type": "string"},
                         "description": "The installed models whose content the files repeat."},
             "errors": {"type": "array", "items": {"type": "string"}},
-            "catalog": {"type": "object"}, "update": ref("UpdateState")}}),
+            "catalog": {"type": "object"}}}),
                       "400": reply("The path is refused before anything of it is read; the code is the same "
                                    "whether a folder outside the import folder is missing, unreadable, unsigned or "
                                    "reached through a link (import_not_bundle)", import_refusal)}}},
@@ -784,18 +759,6 @@ paths = {
                                            "user, host or port (code proxy_password)", ref("Error")),
                               "409": reply("The new port is in use or cannot be opened (code port_unavailable)",
                                            ref("Error"))}}},
-    "/albireo/v1/updates/check": {"post": {"tags": ["Administration"], "security": admin,
-                                           "summary": "Checks for an update and downloads it, in the background",
-                                           "responses": dict({"202": reply("State", ref("UpdateState"))},
-                                                             **offline_reply)}},
-    "/albireo/v1/updates/apply": {"post": {"tags": ["Administration"], "security": admin,
-                                           "summary": "Restarts the service to install a downloaded update",
-                                           "responses": {"202": reply("Restarting", ok),
-                                                         "400": reply("No update is ready (code update_not_ready)",
-                                                                      ref("Refusal")),
-                                                         "409": reply("The package manager of the system applies "
-                                                                      "the updates (code update_package_manager)",
-                                                                      ref("Refusal"))}}},
     "/albireo/v1/restart": {"post": {"tags": ["Administration"], "security": admin, "summary": "Restarts the service",
                                      "responses": {"202": reply("Restarting", ok)}}},
     "/albireo/v1/engines/benchmark": {"post": {"tags": ["Administration"], "security": admin,

@@ -33,7 +33,6 @@ namespace albireo
     namespace
     {
         const int64_t catalog_period = 6 * 3600;
-        const int64_t update_period = 6 * 3600;
         const int64_t certificate_period = 24 * 3600;
         const int64_t inbox_period = 60;
 
@@ -439,26 +438,6 @@ namespace albireo
         bool renewed = false;
         if (!prepare_certificates(cert_dir, st.trust_authority, renewed, error)) return false;
 
-        // An update downloaded earlier is applied before anything else starts.
-        {
-            std::unique_ptr<updater> u(new updater(join_path(data_dir_, "updates")));
-            std::lock_guard<std::mutex> lock(server_m_);
-            if (stopping_) u->cancel();
-            updater_ = std::move(u);
-        }
-        if (!updater_->staged_installer().empty() && !stopping_)
-        {
-            user_error e;
-            if (updater_->launch_staged(e))
-            {
-                update_started_ = true;
-                log_info("updates: the installer of version " + updater_->status()["latest"].as_string()
-                    + " is started, the service stops for the update");
-                return true;
-            }
-            if (!e.text.empty()) log_warning("updates: " + e.text);
-        }
-
         /*
             The models and the models that come with Albireo read and write the database: a
             database found damaged only now is set aside as at its opening, and the step runs
@@ -630,12 +609,10 @@ namespace albireo
         stop();
         if (background_.joinable()) background_.join();
         std::unique_ptr<model_manager> models;
-        std::unique_ptr<updater> updates;
         {
             std::lock_guard<std::mutex> lock(server_m_);
             server_.reset();
             models = std::move(models_);
-            updates = std::move(updater_);
         }
         models.reset();
         engine_.stop();
@@ -650,7 +627,6 @@ namespace albireo
             for (auto& t : retirers)
                 if (t.joinable()) t.join();
         }
-        updates.reset();
         log_info("service stopped");
         if (!stopped)
         {
@@ -676,7 +652,6 @@ namespace albireo
         // The downloads, the imports and the checks end at once; their progress is kept.
         http_cancel_all(stopping_reason);
         if (models_) models_->stop();
-        if (updater_) updater_->cancel();
         if (server_) server_->stop();
     }
 
@@ -787,7 +762,6 @@ namespace albireo
         */
         bool online = false;
         int64_t next_catalog = 0;
-        int64_t next_update = 0;
         auto network = [&](const host_settings& st) {
             if (st.offline)
             {
@@ -798,21 +772,15 @@ namespace albireo
             if (!online)
             {
                 // At the start, and back online: the interrupted downloads resume, the
-                // catalog and the updates are checked at once.
+                // catalog is checked at once.
                 online = true;
                 models_->resume_pending();
                 next_catalog = now;
-                next_update = now;
             }
             if (now >= next_catalog)
             {
                 next_catalog = now + catalog_period;
                 models_->refresh_catalog_async();
-            }
-            if (st.check_updates && now >= next_update)
-            {
-                next_update = now + update_period;
-                updater_->check_async();
             }
         };
         // A task that fails, on a database that cannot be written for instance, is logged and
@@ -970,30 +938,6 @@ namespace albireo
         }
         if (stopping_) return;
 
-        const std::string feed = join_path(inbox, "feed.json");
-        if ((file_exists(feed) || is_link(feed)) && (file_exists(feed + ".sig") || is_link(feed + ".sig"))
-            && !stopping_)
-        {
-            const json r = updater_->import_offline(inbox, inbox);
-            const std::string installer = r["installer"].as_string();
-            const std::string source = installer.empty() ? std::string() : join_path(inbox, installer);
-            // The installer the feed names may still be on its way, and a stop leaves the files to the next start.
-            if (r.contains("error") && !source.empty() && !file_exists(source) && !is_link(source)) return;
-            if (r["code"].as_string() == "stopping") return;
-            if (r.contains("error"))
-            {
-                log_warning("updates: import folder: " + r["error"].as_string());
-                set_aside(feed);
-                set_aside(feed + ".sig");
-                if (!source.empty()) set_aside(source);
-            }
-            else
-            {
-                remove_file(feed);
-                remove_file(feed + ".sig");
-                if (!source.empty()) remove_file(source);
-            }
-        }
     }
 
     bool service::secure_inbox(std::string& error)
@@ -1061,8 +1005,6 @@ namespace albireo
             result["already"] = r["already"];
             result["pending"] = r["pending"];
             result["errors"] = r["errors"];
-            if (folder && file_exists(join_path(within, "feed.json")))
-                result["update"] = updater_->import_offline(within, inbox);
             log_info("import: " + path + ", " + std::to_string(r["imported"].size()) + " models");
             return result;
         }
@@ -1077,18 +1019,14 @@ namespace albireo
             answer is the same whether the folder is missing, unreadable, unsigned or reached
             through a link, so that it reveals nothing of a folder of another account.
         */
-        std::string catalog_body, catalog_sig, feed_body, feed_sig;
+        std::string catalog_body, catalog_sig;
         const bool catalog = read_file_link_free(join_path(path, "catalog.json"), std::string(), catalog_body,
                 16u << 20)
             && read_file_link_free(join_path(path, "catalog.json.sig"), std::string(), catalog_sig, 4096);
-        const bool feed = read_file_link_free(join_path(path, "feed.json"), std::string(), feed_body, 1u << 20)
-            && read_file_link_free(join_path(path, "feed.json.sig"), std::string(), feed_sig, 4096);
         const bool signed_catalog = catalog && verify_signature(catalog_body, catalog_sig, feed_public_key_pem);
-        const bool signed_feed = feed && verify_signature(feed_body, feed_sig, feed_public_key_pem);
-        if (!signed_catalog && !signed_feed)
+        if (!signed_catalog)
             return refuse("import_not_bundle", "the path " + path + " is no signed offline bundle of a local drive "
-                "reached through no link: a folder with catalog.json and catalog.json.sig, or feed.json and "
-                "feed.json.sig, signed by Albireo");
+                "reached through no link: a folder with catalog.json and catalog.json.sig, signed by Albireo");
         result["imported"] = json::array();
         result["already"] = json::array();
         result["pending"] = json::array();
@@ -1106,7 +1044,6 @@ namespace albireo
                 result["errors"] = r["errors"];
             }
         }
-        if (feed) result["update"] = updater_->import_offline(path, std::string());
         log_info("import: offline bundle " + path + ", " + std::to_string(result["imported"].size()) + " models");
         return result;
     }
@@ -1894,7 +1831,6 @@ namespace albireo
         usage["completion_tokens"] = usage_generated_.load();
         s["usage"] = usage;
         s["downloads"] = models_->downloads();
-        s["updates"] = updater_->status();
         s["catalog"] = models_->catalog_status();
         s["offline"] = st.offline;
         json settings = json::object();
@@ -1904,7 +1840,6 @@ namespace albireo
         settings["v2ram_max_mb"] = st.v2ram_max_mb;
         settings["device_mb"] = st.device_mb;
         settings["language"] = st.language;
-        settings["check_updates"] = st.check_updates;
         settings["offline"] = st.offline;
         s["settings"] = settings;
         return s;

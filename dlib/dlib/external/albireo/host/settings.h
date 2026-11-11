@@ -50,10 +50,9 @@ namespace albireo
         long long kv_mb = 0;                    // 0: automatic
         std::string kv_type = "auto";           // keys and values: auto (8 bits), q8 or f16
         std::map<std::string, std::string> active;   // role -> model identifier
-        bool check_updates = true;
         bool default_model = true;              // download the default model of the catalog at the first start
-        // A machine without Internet access: no request leaves the machine, the catalog,
-        // the updates and the models come from files (import folder, removable media).
+        // A machine without Internet access: no request leaves the machine, the catalog
+        // and the models come from files (import folder, removable media).
         bool offline = false;
         std::string proxy;                      // "": the proxy of the system, "none", or http://host:port
         /*

@@ -477,9 +477,6 @@
             "device_mb": {
              "type": "integer"
             },
-            "check_updates": {
-             "type": "boolean"
-            },
             "offline": {
              "type": "boolean"
             }
@@ -956,26 +953,6 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/Engines"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/albireo/v1/updates": {
-   "get": {
-    "tags": [
-     "Service"
-    ],
-    "summary": "State of the updates",
-    "responses": {
-     "200": {
-      "description": "The state",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/UpdateState"
         }
        }
       }
@@ -1840,7 +1817,7 @@
      }
     ],
     "summary": "Imports a signed offline bundle, or the content of the import folder",
-    "description": "For a computer without network: a memory card or a disk brought to the machine. The service reads with its own rights, so that it accepts two kinds of paths: a signed offline bundle on a local drive (a folder whose catalog.json or feed.json bears the signature of Albireo, as tools/make_offline_bundle.py prepares it), of which it reads only the signed files, the models the signed catalog lists, by their names, sizes and hashes, and the installer the signed feed names; and a folder or a file of the import folder of the data folder. Every file is read through no link. A model file of the user is sent through /albireo/v1/models/upload. An older catalog never replaces a newer one, a model installed already is listed under already, and the update is installed at the next start of the service.",
+    "description": "For a computer without network: a memory card or a disk brought to the machine. The service reads with its own rights, so that it accepts two kinds of paths: a signed offline bundle on a local drive (a folder whose catalog.json bears the signature of Albireo), of which it reads only the signed catalog and the models it lists, by their names, sizes and hashes; and a folder or a file of the import folder of the data folder. Every file is read through no link. A model file of the user is sent through /albireo/v1/models/upload. An older catalog never replaces a newer one, and a model installed already is listed under already.",
     "requestBody": {
      "required": true,
      "content": {
@@ -1861,7 +1838,7 @@
     },
     "responses": {
      "200": {
-      "description": "Imported models, catalog, update and errors",
+      "description": "Imported models, catalog and errors",
       "content": {
        "application/json": {
         "schema": {
@@ -1888,9 +1865,6 @@
           },
           "catalog": {
            "type": "object"
-          },
-          "update": {
-           "$ref": "#/components/schemas/UpdateState"
           }
          }
         }
@@ -2198,122 +2172,6 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/albireo/v1/updates/check": {
-   "post": {
-    "tags": [
-     "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
-    ],
-    "summary": "Checks for an update and downloads it, in the background",
-    "responses": {
-     "202": {
-      "description": "State",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/UpdateState"
-        }
-       }
-      }
-     },
-     "409": {
-      "description": "Refused in offline mode",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "properties": {
-          "ok": {
-           "type": "boolean"
-          },
-          "error": {
-           "type": "string"
-          }
-         }
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/albireo/v1/updates/apply": {
-   "post": {
-    "tags": [
-     "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
-    ],
-    "summary": "Restarts the service to install a downloaded update",
-    "responses": {
-     "202": {
-      "description": "Restarting",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "properties": {
-          "ok": {
-           "type": "boolean"
-          },
-          "error": {
-           "type": "string"
-          }
-         }
-        }
-       }
-      }
-     },
-     "400": {
-      "description": "No update is ready (code update_not_ready)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Refusal"
-        }
-       }
-      }
-     },
-     "409": {
-      "description": "The package manager of the system applies the updates (code update_package_manager)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Refusal"
         }
        }
       }
@@ -3399,12 +3257,9 @@
       "default": "auto",
       "description": "Storage of the keys and values of the language models: q8, 8-bit integers by groups of 32 values with a scale, the keys rotated; f16, half precision. auto takes q8 for the models whose heads hold whole groups."
      },
-     "check_updates": {
-      "type": "boolean"
-     },
      "offline": {
       "type": "boolean",
-      "description": "No access to the network: the catalog, the models and the updates come from imports, and the service opens no connection."
+      "description": "No access to the network: the catalog and the models come from imports, and the service opens no connection."
      },
      "proxy": {
       "type": "string",
@@ -3681,79 +3536,6 @@
        "not_installed",
        "unusable"
       ]
-     }
-    }
-   },
-   "UpdateState": {
-    "type": "object",
-    "description": "The updates: their state, the versions, the notes by language, and an error with its code and its values, which the tray translates.",
-    "properties": {
-     "state": {
-      "type": "string",
-      "enum": [
-       "idle",
-       "checking",
-       "up_to_date",
-       "downloading",
-       "ready",
-       "error"
-      ]
-     },
-     "current": {
-      "type": "string"
-     },
-     "latest": {
-      "type": "string"
-     },
-     "file": {
-      "type": "string"
-     },
-     "notes": {
-      "type": "object",
-      "additionalProperties": {
-       "type": "string"
-      }
-     },
-     "received": {
-      "type": "integer"
-     },
-     "total": {
-      "type": "integer"
-     },
-     "checked_at": {
-      "type": "integer"
-     },
-     "error": {
-      "type": "string",
-      "description": "The error in English."
-     },
-     "code": {
-      "type": "string",
-      "enum": [
-       "update_check",
-       "update_record",
-       "update_feed_missing",
-       "update_feed_missing_folder",
-       "update_signature",
-       "update_feed_mismatch",
-       "update_outside",
-       "update_installer_mismatch",
-       "update_feed_invalid",
-       "update_download",
-       "update_not_published",
-       "update_not_ready",
-       "update_invalid",
-       "update_start",
-       "update_package_manager",
-       "stopping"
-      ],
-      "description": "update_check {e}, update_record {version}, update_feed_missing {version}, update_feed_missing_folder {folder}, update_signature {file}, update_feed_mismatch {file, version}, update_outside {file}, update_installer_mismatch {version}, update_feed_invalid, update_download {e}, update_not_published {file}, update_not_ready, update_invalid {version}, update_start {code}, update_package_manager, stopping."
-     },
-     "args": {
-      "type": "object",
-      "additionalProperties": {
-       "type": "string"
-      }
      }
     }
    },

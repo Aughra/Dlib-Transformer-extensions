@@ -802,7 +802,7 @@ namespace albireo
         bool validate_settings(const json& body, std::string& error)
         {
             static const char* const keys[] = { "port", "language", "engine", "accelerator", "v2ram", "v2ram_max_mb",
-                "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "check_updates", "offline",
+                "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "offline",
                 "proxy", "web_access", "web_search" };
             for (const auto& kv : body.items())
             {
@@ -845,7 +845,6 @@ namespace albireo
                 && in_range("port", 1024, 65535) && in_range("threads", 0, 1024) && in_range("context", 0, 1 << 20)
                 && in_range("max_sequences", 1, 64) && in_range("kv_mb", 0, 1 << 24)
                 && in_range("v2ram_max_mb", 0, 1 << 24) && in_range("device_mb", 0, 1 << 24) && boolean("v2ram")
-                && boolean("check_updates")
                 && boolean("offline");
         }
 
@@ -1386,9 +1385,6 @@ namespace albireo
         srv.Get("/albireo/v1/engines", [s](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, s->engines());
         });
-        srv.Get("/albireo/v1/updates", [s](const httplib::Request&, httplib::Response& res) {
-            send_json(res, 200, s->updates().status());
-        });
         // The license texts of the installation, read only: their list, and each text by its file.
         const std::string licenses = join_path(svc.program_dir(), "licenses");
         srv.Get("/albireo/v1/licenses", [licenses](const httplib::Request&, httplib::Response& res) {
@@ -1629,29 +1625,6 @@ namespace albireo
             o["restart"] = restart;
             send_json(res, 200, o);
             if (restart) s->request_restart();
-        });
-        srv.Post("/albireo/v1/updates/check", [s, admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res) || refuse_offline(*s, res)) return;
-            s->updates().check_async();
-            send_json(res, 202, s->updates().status());
-        });
-        srv.Post("/albireo/v1/updates/apply", [s, admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res)) return;
-            /*
-                The staged installer runs at the start of the service: a restart applies it,
-                where the installer of Albireo installs the updates.  The refusal comes with
-                its code and its values, as every error of the updates.
-            */
-            user_error error;
-            if (!s->updates().can_apply(error))
-            {
-                json o = ok_result(false, error);
-                o["args"] = error.args;
-                send_json(res, error.code == "update_not_ready" ? 400 : 409, o);
-                return;
-            }
-            send_json(res, 202, ok_result(true));
-            s->request_restart();
         });
         srv.Post("/albireo/v1/restart", [s, admin](const httplib::Request& req, httplib::Response& res) {
             if (!admin(req, res)) return;
