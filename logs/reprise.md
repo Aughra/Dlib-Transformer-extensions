@@ -49,6 +49,13 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 | M5 | Prompts sur le GPU (produits en tuiles, attention groupée) contre Accelerate | le plus rapide gardé, mesuré |
 | M6 | Service, réglage `metal`, doc, notes, blog | page web et API servies par le GPU |
 
+**Conception du pas sur le GPU (M2-M3)**, une commande par passe de 1 à 8 tokens, tout dans un seul encodeur sériel :
+- tampons partagés par modèle : `x`, `xn`, `q`, `k`, `v`, `ctx`, `gate`, `up`, logits, morceaux de l'attention ; poids : la projection du fichier en un tampon sans copie (offsets des matrices) ; clés et valeurs : la zone de `kv_pool` en un tampon sans copie, budget du cache plafonné à `maxBufferLength` quand Metal est actif ;
+- par passe, écrits par le processeur : `x` (plongement, comme aujourd'hui), cos/sin de chaque token (tables de `cpu_runtime`), table des blocs de chaque séquence, positions ;
+- noyaux : `rms_norm` (lignes, largeur, eps), `mv_q4_K` / `mv_q6_K` pour T ≤ 8 tokens avec `y = alpha * W x + beta * y` (somme résiduelle), biais, normes des têtes (même `rms_norm`), `rope` (neox ou paires), `kv_store` (q8 : signes et Hadamard de `qk_rotate_row`, puis échelle en demi-précision comme `qk_float_to_q8_row` ; f16), préparation des requêtes (échelle, rotation en q8), attention en ligne par morceaux de positions (grille T × têtes kv × morceaux, 4 simdgroups, têtes groupées lues une fois), fusion des morceaux, `silu_mul`, norme finale et tête des logits ;
+- repli sur le processeur : MoE, images (positions données, DeepStack), `attn_temp_scale`, formats autres que Q4_K / Q6_K, plus de 8 tokens (prompts : M5) ;
+- contrôle : passe de sonde au premier usage (logits à 1 % près, même token le plus probable), comme `probe_layer_pass`.
+
 Formats couverts d'abord : Q4_K et Q6_K (les modèles du service) ; les autres modèles restent sur le processeur. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
 ## À faire, dans l'ordre proposé
