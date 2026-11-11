@@ -28,20 +28,6 @@ namespace albireo
         const char* const variant_order[] = { "cuda", "openvino-avxvnni", "openvino", "cpu-avxvnni", "cpu-avx2",
             "cpu" };
 
-        bool ends_with(const std::string& s, const std::string& tail)
-        {
-            return s.size() >= tail.size() && s.compare(s.size() - tail.size(), tail.size(), tail) == 0;
-        }
-
-        // The instruction sets the kernels of a variant use (CMakeLists.txt): the engines of
-        // the devices are built for AVX2, as "cpu-avx2".
-        unsigned variant_isa(const std::string& variant)
-        {
-            if (variant == "cpu") return 0;
-            if (ends_with(variant, "-avxvnni")) return qk_isa_avx2 | qk_isa_avx_vnni;
-            return qk_isa_avx2;
-        }
-
         std::atomic<bool> pinned_started{false};
 
         // The last line of a program output that holds a JSON object, the runtimes of the
@@ -88,28 +74,6 @@ namespace albireo
             c.variant = v;
             c.path = path;
             out.push_back(c);
-        }
-        // A library whose kernels the processor cannot run is described without being
-        // loaded: the runtimes of the devices take seconds to start, which a slow computer
-        // feels at each start of the service.
-        const cpu_info cpu = read_cpu_info();
-        for (auto& c : out)
-        {
-            const unsigned lacks = qk_lacking_isa(cpu, variant_isa(c.variant));
-            if (!lacks) continue;
-            json dev = json::object();
-            dev["type"] = "cpu";
-            dev["name"] = cpu.brand.empty() ? cpu.vendor : cpu.brand;
-            json devices = json::array();
-            devices.push_back(dev);
-            json d = json::object();
-            d["variant"] = c.variant;
-            d["version"] = ALBIREO_VERSION;
-            d["devices"] = devices;
-            d["usable"] = false;
-            d["reason"] = std::string("the processor or the system lacks ") + qk_isa_text(lacks);
-            d["reason_code"] = qk_isa_code(lacks);
-            c.description = d;
         }
         // Each other library is described by a process of its own, all at the same time:
         // the start of the service waits for the slowest one only.

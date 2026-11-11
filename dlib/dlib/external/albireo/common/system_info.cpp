@@ -6,8 +6,6 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
-#include <set>
 #include <sstream>
 #include <thread>
 #include <utility>
@@ -33,30 +31,33 @@ namespace albireo
         }
     }
 
+    namespace
+    {
+        int sysctl_int(const char* name, int fallback)
+        {
+            int v = 0;
+            size_t size = sizeof(v);
+            return sysctlbyname(name, &v, &size, nullptr, 0) == 0 ? v : fallback;
+        }
+    }
+
     cpu_info read_cpu_info()
     {
         cpu_info c;
-        c.logical_cores = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
-        c.physical_cores = c.logical_cores;
-
-
+        c.logical_cores = std::max(1, sysctl_int("hw.logicalcpu", static_cast<int>(std::thread::hardware_concurrency())));
+        c.physical_cores = std::max(1, sysctl_int("hw.physicalcpu", c.logical_cores));
+        c.performance_cores = sysctl_int("hw.perflevel0.physicalcpu", 0);
+        c.efficiency_cores = sysctl_int("hw.perflevel1.physicalcpu", 0);
         // The name of the processor, "Apple M2" for instance.
         char brand[128];
         size_t brand_size = sizeof(brand);
         if (sysctlbyname("machdep.cpu.brand_string", brand, &brand_size, nullptr, 0) == 0)
             c.brand = trim(std::string(brand, strnlen(brand, brand_size)));
-
-        // Distinct (package, core) pairs of the online processors.
-        std::set<std::pair<int, int>> cores;
-        for (int cpu = 0; cpu < c.logical_cores; ++cpu)
-        {
-            const std::string base = "/sys/devices/system/cpu/cpu" + std::to_string(cpu) + "/topology/";
-            std::ifstream pkg(base + "physical_package_id"), core(base + "core_id");
-            int p = -1, k = -1;
-            if (pkg >> p && core >> k) cores.insert(std::make_pair(p, k));
-        }
-        if (!cores.empty()) c.physical_cores = static_cast<int>(cores.size());
-        if (c.physical_cores < 1) c.physical_cores = 1;
+        static const char* const extensions[][2] = { { "hw.optional.arm.FEAT_DotProd", "DotProd" },
+            { "hw.optional.arm.FEAT_I8MM", "I8MM" }, { "hw.optional.arm.FEAT_BF16", "BF16" },
+            { "hw.optional.arm.FEAT_FP16", "FP16" } };
+        for (const auto& e : extensions)
+            if (sysctl_int(e[0], 0) == 1) c.features.push_back(e[1]);
         return c;
     }
 
@@ -73,7 +74,7 @@ namespace albireo
             == KERN_SUCCESS)
             m.available = (static_cast<uint64_t>(vm.free_count) + vm.inactive_count + vm.purgeable_count)
                 * static_cast<uint64_t>(vm_kernel_page_size);
-        // Never below the physical memory, which a system without paging file still commits.
+        // What the system can commit: the physical memory.
         m.commit_total = std::max(m.commit_total, m.total);
         m.commit_available = std::max(m.commit_available, m.available);
         return m;

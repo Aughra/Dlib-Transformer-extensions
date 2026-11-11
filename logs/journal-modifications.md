@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Décrire le processeur comme une puce Apple et retirer le réglage V²RAM (nettoyage, N4)
+
+- **Quoi** : `cpu_info` ne garde que le nom de la puce, ses cœurs (dont `performance_cores` et `efficiency_cores`, lus par `sysctl`) et les extensions ARM que macOS déclare (`hw.optional.arm.FEAT_DotProd`, `FEAT_I8MM`, `FEAT_BF16`, `FEAT_FP16`) ; les champs x86 (SSE4.2, AVX, AVX2, FMA, F16C, VNNI, AVX-512, AMX), `vendor` et la lecture de `/sys/devices` de Linux sont retirés, avec la mécanique des jeux d'instructions requis (`qk_isa_flags`, `qk_lacking_isa`, `qk_required_isa`, `qk_missing_isa`) et ses points d'appel dans le moteur, l'hôte (`engine_host.cpp`) et `test_qkernels`. Le réglage `v2ram` / `v2ram_max_mb` (mémoire étendue de CUDA) est retiré du service, du serveur et de l'API. Gardés pour le GPU du Mac : `accelerator`, `device_mb`, la barre de mémoire de la page ; gardés pour M3 : `offload.h` et `layer_pass`, où le chemin Metal se branchera.
+- **Fichiers** : `dlib/dlib/external/albireo/` (`common/system_info.{h,cpp}`, `engine/engine.cpp`, `engine/qkernels.{h,cpp}`, `host/engine_host.cpp`, `host/service.cpp`, `host/server.cpp`, `host/settings.{h,cpp}`, `tests/test_qkernels.cpp`, `tools/make_openapi.py`, `web/openapi.json`) ; ce journal.
+- **Pourquoi** : « du pur Apple ».
+- **Étapes** : build sans erreur ni avertissement (une fonction devenue inutile retirée) ; tests passent ; `engine_chat --describe` : « Apple M2 », 8 cœurs, extensions DotProd, I8MM, BF16, FP16 ; service : `host.cpu` avec 4 cœurs de performance et 4 d'efficacité, réponse « Paris ».
+
 ## 2026-11-11 — Retirer de Pseudalis les mises à jour par installateur Windows (nettoyage, N4)
 
 - **Quoi** : `host/updater.{h,cpp}` supprimés, avec les routes `/v1/updates`, `/updates/check` et `/updates/apply`, les réglages `check_updates` et `feed_url` (et sa validation), l'état `updates`, la case « Rechercher les mises à jour chaque jour » de la page web et ses textes dans les cinq langues, le contrôle de `feed_url` dans `test_host`, et leur description dans `web/openapi.json`. Le message `settings_publication` ne parle plus que du proxy. Restent, notés pour la suite : la clé publique du flux, `pseudalis-sign` et `verify_signature`, qui ne servaient qu'aux mises à jour.

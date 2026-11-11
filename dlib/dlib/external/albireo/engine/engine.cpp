@@ -1010,36 +1010,21 @@ namespace albireo
         d["kernels"] = qk_isa();
         json dev = json::object();
         dev["type"] = "cpu";
-        dev["name"] = cpu.brand.empty() ? cpu.vendor : cpu.brand;
+        dev["name"] = cpu.brand;
         dev["cores"] = cpu.physical_cores;
         dev["threads"] = cpu.logical_cores;
         dev["memory"] = static_cast<unsigned long long>(mem.total);
         json features = json::array();
-        if (cpu.avx2) features.push_back("AVX2");
-        if (cpu.fma) features.push_back("FMA");
-        if (cpu.f16c) features.push_back("F16C");
-        if (cpu.avx_vnni) features.push_back("AVX-VNNI");
-        if (cpu.avx512f) features.push_back("AVX-512");
-        if (cpu.avx512vnni) features.push_back("AVX-512 VNNI");
-        if (cpu.amx) features.push_back("AMX");
+        for (const auto& f : cpu.features) features.push_back(f);
         dev["features"] = features;
         json devices = json::array();
         devices.push_back(dev);
         bool usable = true;
         std::string reason;
-        // The kernels of the variant: the rest of the library uses AVX2 at most, so that
-        // this description runs on the processors that lack the instructions of the kernels.
-        const unsigned lacks = qk_missing_isa(cpu);
-        // The reasons carry a code, with which the windows explain them in the language of
-        // the user.
+        // The reasons carry a code, with which the web application explains them in the
+        // language of the user.
         std::string reason_code;
         json reason_args = json::object();
-        if (lacks)
-        {
-            usable = false;
-            reason = std::string("the processor or the system lacks ") + qk_isa_text(lacks);
-            reason_code = qk_isa_code(lacks);
-        }
         d["devices"] = devices;
         d["usable"] = usable;
         if (!reason.empty()) d["reason"] = reason;

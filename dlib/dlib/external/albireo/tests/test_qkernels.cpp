@@ -698,12 +698,6 @@ namespace
 
 int main()
 {
-    const unsigned lacks = qk_missing_isa(read_cpu_info());
-    if (lacks)
-    {
-        std::printf("albireo quantized kernels (%s): skipped, the processor lacks %s\n", qk_isa(), qk_isa_text(lacks));
-        return 0;
-    }
     std::printf("albireo quantized kernels (%s)\n", qk_isa());
     std::mt19937 rng(1234);
     thread_pool pool(4);

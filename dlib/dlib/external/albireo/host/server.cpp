@@ -801,7 +801,7 @@ namespace albireo
         // set by the installer only.
         bool validate_settings(const json& body, std::string& error)
         {
-            static const char* const keys[] = { "port", "language", "engine", "accelerator", "v2ram", "v2ram_max_mb",
+            static const char* const keys[] = { "port", "language", "engine", "accelerator",
                 "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "offline",
                 "proxy", "web_access", "web_search" };
             for (const auto& kv : body.items())
@@ -844,7 +844,7 @@ namespace albireo
                 && one_of("accelerator", { "auto", "none", "npu", "gpu", "both" })
                 && in_range("port", 1024, 65535) && in_range("threads", 0, 1024) && in_range("context", 0, 1 << 20)
                 && in_range("max_sequences", 1, 64) && in_range("kv_mb", 0, 1 << 24)
-                && in_range("v2ram_max_mb", 0, 1 << 24) && in_range("device_mb", 0, 1 << 24) && boolean("v2ram")
+                && in_range("device_mb", 0, 1 << 24)
                 && boolean("offline");
         }
 
@@ -1616,8 +1616,7 @@ namespace albireo
             s->apply_network_settings(after);
             // What the running engine or server cannot take without a restart.
             const bool restart = after.port != before.port || after.engine != before.engine
-                || after.accelerator != before.accelerator || after.v2ram != before.v2ram
-                || after.v2ram_max_mb != before.v2ram_max_mb || after.device_mb != before.device_mb
+                || after.accelerator != before.accelerator || after.device_mb != before.device_mb
                 || after.threads != before.threads
                 || after.context != before.context || after.max_sequences != before.max_sequences
                 || after.kv_mb != before.kv_mb || after.kv_type != before.kv_type;

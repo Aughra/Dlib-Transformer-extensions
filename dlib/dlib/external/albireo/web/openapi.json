@@ -468,12 +468,6 @@
             "accelerator": {
              "type": "string"
             },
-            "v2ram": {
-             "type": "boolean"
-            },
-            "v2ram_max_mb": {
-             "type": "integer"
-            },
             "device_mb": {
              "type": "integer"
             },
@@ -3218,14 +3212,6 @@
        "gpu",
        "both"
       ]
-     },
-     "v2ram": {
-      "type": "boolean",
-      "description": "Extended device memory of the graphics engines."
-     },
-     "v2ram_max_mb": {
-      "type": "integer",
-      "description": "Limit of the extended memory, 0 for automatic."
      },
      "device_mb": {
       "type": "integer",

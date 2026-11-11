@@ -189,12 +189,6 @@ namespace albireo
 #endif
     }
 
-    unsigned qk_required_isa()
-    {
-        unsigned isa = 0;
-        return isa;
-    }
-
     // Activation formats
 
     namespace

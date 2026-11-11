@@ -107,8 +107,6 @@ namespace albireo
         j["language"] = language;
         j["engine"] = engine;
         j["accelerator"] = accelerator;
-        j["v2ram"] = v2ram;
-        j["v2ram_max_mb"] = v2ram_max_mb;
         j["device_mb"] = device_mb;
         j["threads"] = threads;
         j["context"] = context;
@@ -137,8 +135,6 @@ namespace albireo
         language = j["language"].str(d.language);
         engine = j["engine"].str(d.engine);
         accelerator = j["accelerator"].str(d.accelerator);
-        v2ram = j["v2ram"].as_bool(d.v2ram);
-        v2ram_max_mb = j["v2ram_max_mb"].as_int(d.v2ram_max_mb);
         device_mb = std::max<long long>(0, j["device_mb"].as_int(d.device_mb));
         threads = static_cast<int>(j["threads"].as_int(d.threads));
         context = static_cast<long>(j["context"].as_int(d.context));

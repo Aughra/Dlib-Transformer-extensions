@@ -41,8 +41,6 @@ namespace albireo
         std::string language = "auto";          // auto, en, fr, de, it, es
         std::string engine = "auto";            // auto, best, or a variant: cpu, cpu-avx2, cpu-avxvnni, ...
         std::string accelerator = "auto";       // auto, none, npu, gpu, both (offloading engines)
-        bool v2ram = true;                      // extended device memory of the tensor engines
-        long long v2ram_max_mb = 0;             // 0: automatic
         long long device_mb = 0;                // copies of the weights on the device, 0: automatic
         int threads = 0;                        // 0: physical cores
         long context = 0;                       // 0: automatic per model

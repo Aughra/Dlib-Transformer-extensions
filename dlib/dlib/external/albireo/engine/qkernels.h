@@ -166,25 +166,6 @@ namespace albireo
     // Name of the instruction set the kernels were compiled for.
     const char* qk_isa();
 
-    /*!
-        ensures
-            - Returns the qk_isa_flags of this build, which the processor must have.  The
-              function holds no instruction of these sets: a program checks them before it
-              calls a kernel.
-    !*/
-    unsigned qk_required_isa();
-
-    /*!
-        ensures
-            - Returns the first of the qk_isa_flags that the kernels of this build, plus the
-              flags of extra, use and that cpu lacks, or 0 when cpu runs them.  Defined here,
-              it is compiled with the instructions of the program that calls it, as are the
-              two functions that follow.
-    !*/
-    inline unsigned qk_missing_isa(const cpu_info& cpu, unsigned extra = 0)
-    {
-        return qk_lacking_isa(cpu, qk_required_isa() | extra);
-    }
 
     /*!
         ensures

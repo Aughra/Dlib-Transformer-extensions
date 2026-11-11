@@ -302,8 +302,6 @@ schemas = {
                    "usable or when a measure found the accelerator slower. best: the fastest measured engine. A "
                    "variant: that engine, with the device of accelerator for the engines that have several."},
         "accelerator": {"type": "string", "enum": ["auto", "none", "npu", "gpu", "both"]},
-        "v2ram": {"type": "boolean", "description": "Extended device memory of the graphics engines."},
-        "v2ram_max_mb": {"type": "integer", "description": "Limit of the extended memory, 0 for automatic."},
         "device_mb": {"type": "integer", "description": "Memory of the device for the copies of the weights of "
                       "the models, in megabytes, 0 for automatic."},
         "threads": {"type": "integer"},
@@ -468,7 +466,6 @@ paths = {
                          "follows, such as the language of the interface.", "properties": {
                              "language": {"type": "string", "enum": ["auto", "en", "fr", "de", "it", "es"]},
                              "engine": {"type": "string"}, "accelerator": {"type": "string"},
-                             "v2ram": {"type": "boolean"}, "v2ram_max_mb": {"type": "integer"},
                              "device_mb": {"type": "integer"},
                              "offline": {"type": "boolean"}}},
             "engine": {"type": "object", "description": "The engine running.", "properties": {
