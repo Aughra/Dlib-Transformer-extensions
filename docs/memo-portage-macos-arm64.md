@@ -87,7 +87,7 @@ Installer FFmpeg et `pkg-config` (par exemple avec Homebrew), puis configurer un
 
 ## Applications Albireo et Pseudalis
 
-Les deux applications de `dlib/dlib/external/` (Albireo : moteur GGUF et service de chat ; Pseudalis : anonymisation de documents) sont des programmes Windows 11. Elles ont chacune un CMake à elles, que le build des exemples ne compile pas. Leur variante Linux (service lancé avec `--console`, sans icône, installateur ni service Windows) est celle qui vise macOS :
+Les deux applications de `dlib/dlib/external/` (Albireo : moteur GGUF et service de chat ; Pseudalis : anonymisation de documents) étaient chez l'original des programmes Windows 11. Depuis le nettoyage du 2026-11-11 (« du pur Apple », section suivante), elles ne se construisent plus que pour macOS sur Apple Silicon : leur CMake refuse toute autre plateforme. Elles ont chacune un CMake à elles, que le build des exemples ne compile pas. Le service se lance avec `--console` :
 
 ```sh
 cmake -S dlib/dlib/external/albireo -B build/macos-albireo -G Ninja \
@@ -99,7 +99,22 @@ cmake -S dlib/dlib/external/pseudalis -B build/macos-pseudalis -G Ninja \
 cmake --build build/macos-pseudalis --parallel 3 -- -k 0
 ```
 
-`-- -k 0` fait continuer Ninja après une erreur, pour relever toutes les erreurs d'un seul passage. Restent hors de portée sur macOS : l'icône de la zone de notification, l'installateur, le service Windows, le lecteur avec sa lettre et les commandes de l'Explorateur.
+`-- -k 0` fait continuer Ninja après une erreur, pour relever toutes les erreurs d'un seul passage.
+
+### Nettoyage « du pur Apple » (2026-11-11)
+
+Décision de l'humain : dans Albireo et Pseudalis, tout le code propre à Windows, à Linux, aux processeurs x86, à CUDA et à OpenVINO est retiré ; dlib reste tel quel. Le fork ne fusionne plus l'original (dernière fusion : Albireo 1.0.12, Pseudalis 1.0.5).
+
+| Retiré | Albireo | Pseudalis |
+|---|---|---|
+| Fichiers Windows (tray, installateur, scripts `.ps1`, ressources, icônes) | oui | oui |
+| `dist/` (installateurs et flux signés) | oui (racine du dépôt) | oui |
+| Moteur CUDA / OpenVINO (`tensor_backend`) et ses tests | oui | sans objet |
+| Branches `_WIN32`, x86 (AVX2, VNNI), CUDA, Linux (par `unifdef`) | 4 854 lignes | 2 831 lignes |
+| Mises à jour par installateur Windows (`updater`, routes, réglages) | oui | oui, avec la case de la page web |
+| CMake | 864 → 307 lignes, un seul moteur `cpu` | 255 → 161 lignes, moteur intégré au service |
+
+Restent à retirer : le pilotage d'un périphérique dans `cpu_runtime` (`offload.h`, `layer_pass`), les champs x86 de `cpu_info` et les réglages des moteurs de périphériques (`v2ram`, `accelerator`) dans Albireo, le chargeur de bibliothèque de Pseudalis, la clé du flux et `pseudalis-sign`, des commentaires qui parlent encore de Windows ; les scripts `test_linux.sh` à remplacer par une version macOS. Les corrections de portage listées plus bas (1 à 10) décrivent l'état d'avant ce nettoyage : plusieurs portaient sur des lignes qui n'existent plus.
 
 ### Lancer le service d'Albireo
 
@@ -230,9 +245,9 @@ Constats :
 - **L'attente des fils.** Hors x86, `ALBIREO_CPU_RELAX()` (`engine/thread_pool.h`) est `std::this_thread::yield()`, qui fait tomber la priorité du fil à 0 sur macOS (`ps -M`). Essai : l'instruction `isb` à la place sur ARM64. Les fils restent alors à la priorité 31, mais la génération n'est pas plus rapide (deux essais alternés : 5,2 et 5,5 tokens/s avec `isb`, 5,7 et 6,4 sans). Essai abandonné, code d'origine gardé.
 - `bench_runtime` lit toujours 64 tokens de son prompt pour la génération groupée : avec un prompt plus court, il lit hors du tableau (exception `token identifier out of range`). Lui donner au moins 64 tokens.
 
-`tools/test_linux.sh` demande deux outils de Linux absents de macOS : `nproc` (remplacé par `sysctl -n hw.ncpu`) et `stat -c` de GNU (`gstat`, paquet Homebrew `coreutils`). Sans eux, la taille lue est 0, et l'étape « drive signatures » échoue pour une raison qui ne tient pas au programme.
+`tools/test_linux.sh` (Pseudalis, toujours sous ce nom) demande deux outils de Linux absents de macOS : `nproc` (remplacé par `sysctl -n hw.ncpu`) et `stat -c` de GNU (`gstat`, paquet Homebrew `coreutils`). Sans eux, la taille lue est 0, et l'étape « drive signatures » échoue pour une raison qui ne tient pas au programme.
 
-Ce qui a été changé pour compiler sur ARM64, chaque fois sous une condition qui ne vaut que pour macOS ou ARM64 :
+Ce qui a été changé pour compiler sur ARM64, chaque fois sous une condition qui ne vaut que pour macOS ou ARM64 (avant le nettoyage du 2026-11-11, qui a rendu ces conditions inutiles) :
 
 1. Moteurs `avx2` : non construits sur ARM64 (`albireo/CMakeLists.txt`, `pseudalis/CMakeLists.txt`) ; les tests d'Albireo qui prennent les noyaux AVX2 les compilent sans options x86, donc en code portable.
 2. `svox_pico/lib/picopltf.h` : sur macOS, `<machine/endian.h>`, avec `__BYTE_ORDER` et `__BIG_ENDIAN` ramenés aux noms de macOS (`BYTE_ORDER`, `BIG_ENDIAN`).

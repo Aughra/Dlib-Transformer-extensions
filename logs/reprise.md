@@ -33,6 +33,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-09 : **attention NEON pour les clés et valeurs en 8 bits**, exacte au bit près (0 sur 351 780 valeurs) : sans elle, la fusion faisait tomber un prompt de 4 096 tokens de 163 à 37 tokens/s sur Mac ; avec, 158–162, génération après 4 096 tokens 9 → 22,5. Notes pour l'auteur : changement 7, remarque 20 (fils), numéros recalés sur `184ea00`. Blog : épisode 15.
 - 2026-11-09 : **génération sur les cœurs de performance** (option B de l'humain) : petite équipe de 4 threads dans le thread pool sur Mac (`thread_pool_apple.inc`), prise par `forward` sous 24 tokens ; longs prompts sur les 8 threads. 4B génération 17,6–18,1 → 18,2–18,6 tokens/s, 2B 37,4–37,9 → 39,7–40,8 ; long prompt inchangé. Notes : changement 8. Blog : épisode 16. Vocabulaire : dire « thread pool » et « threads » (demande de l'humain).
 - 2026-11-11 : **sonde Metal** (`macos/metal-sonde/`) : sur le M2, le GPU lit tous les poids du 4B en 45 à 48 ms contre 51 à 55 pour le processeur (plafond 35 ms, 70 Go/s) ; aller-retour 186 µs, donc rien à gagner produit par produit ni couche par couche (57 à 60 ms) ; exactitude 2,8e-8. L'estimation « écriture doublée » était fausse : 5 à 22 % aujourd'hui (un tiers sur le 2B), 1,5 fois au mieux, et seulement avec tout le token sur le GPU. Blog : épisode 17. 16 commits de l'original en attente (Albireo 1.0.13 à 1.0.15, dont prompts en 8 bits et écriture de plusieurs tokens par pas).
+- 2026-11-11 : **fork détaché de l'original** (plus de fusion) et **« du pur Apple »** dans Albireo et Pseudalis : fichiers Windows, `dist/`, moteur CUDA/OpenVINO, branches `_WIN32`/x86/CUDA/Linux (`unifdef`), mises à jour par installateur Windows retirés ; CMake pour macOS seulement. Tests d'Albireo et de Pseudalis passent, `test_linux.sh` 34 sur 34, service d'Albireo vérifié. Cache des clés et valeurs en une zone réservée (`c583d29`, M1). Repère de vitesse en tête de chaque épisode du blog. dlib reste ; on s'en éloignera plus tard.
 
 ## En cours
 
@@ -40,7 +41,8 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 | Sous-étape | Contenu | Critère vérifiable |
 |---|---|---|
-| M1 | Cache des clés et valeurs dans une seule zone réservée, alignée sur les pages (partagée processeur / GPU) ; accès au début de la projection du modèle ; bibliothèque `albireo_metal` (Objective-C++, noyaux compilés au lancement) liée sous `APPLE` ; le moteur s'ouvre avec le GPU | build sans avertissement ; tous les tests passent ; `engine_chat` répond juste ; le journal du moteur nomme le GPU |
+| N4 (avant M1, en cours) | Fin du nettoyage : `offload.h` et `layer_pass` dans `cpu_runtime`, champs x86 de `cpu_info`, réglages `v2ram` / `accelerator`, chargeur de Pseudalis, clé du flux et `pseudalis-sign`, commentaires ; `test_linux.sh` → `test_macos.sh` sans `nproc` ni `gstat` | build sans avertissement ; tous les tests ; services vérifiés |
+| M1 | Cache des clés et valeurs dans une seule zone réservée, alignée sur les pages (**fait**, `c583d29` ; la zone du 4B réserve 18,7 Go d'adresses, plus qu'un tampon Metal : n'envelopper que les blocs utilisés) ; accès au début de la projection du modèle ; bibliothèque `albireo_metal` (Objective-C++, noyaux compilés au lancement) liée sous `APPLE` ; le moteur s'ouvre avec le GPU | build sans avertissement ; tous les tests passent ; `engine_chat` répond juste ; le journal du moteur nomme le GPU |
 | M2 | Noyaux : produits Q4_K / Q6_K (1 à 8 tokens), normes RMS, rope, SiLU, écriture des clés et valeurs (q8 tournées, f16), attention en ligne sur les blocs, tête des logits | test `test_metal` : chaque noyau à 1e-4 près du processeur |
 | M3 | Un pas de génération entier sur le GPU, une commande par passe ; contrôle au chargement (logits à 1 % près, même token le plus probable) ; repli sur le processeur sinon | `engine_chat` juste ; mesures alternées processeur / GPU |
 | M4 | Réglages et fusions de noyaux | gain en mesures alternées |
@@ -58,6 +60,7 @@ Ensuite :
 
 1. Essai de la page de Pseudalis dans un navigateur, par l'humain (service lancé comme Albireo, port 18444, `PSEUDALIS_HOME`).
 2. Construire et lancer `dtest` (tests dlib), et quelques exemples `slm_*`.
+3. Plus tard (décision de l'humain) : s'éloigner de dlib.
 
 Après chaque point : mettre à jour la section « État constaté » du mémo, ce fichier et le journal, puis commiter et pousser. Une grande étape (service d'Albireo qui répond, test de Pseudalis à 28 sur 28, première mesure de vitesse) a son épisode de blog.
 
