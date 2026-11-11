@@ -16,7 +16,7 @@ Il a fallu écrire dix programmes pour le GPU, les « noyaux », dans le langage
 
 ## Le contrôle qui accusait le mauvais
 
-Le moteur ne fait pas confiance au GPU sur parole. À sa première utilisation, il lui fait écrire deux tokens et les compare à ceux du processeur. Si les résultats s'écartent de plus de 1 %, il le renvoie.
+Le moteur ne fait pas confiance au GPU sur parole. Au chargement du modèle, il lui fait écrire deux tokens et les compare à ceux du processeur. Si les résultats s'écartent de plus de 1 %, il le renvoie.
 
 Au premier essai, il l'a renvoyé : 5 % d'écart. On a d'abord soupçonné le GPU. C'était l'inverse. Pour aller vite, le processeur arrondit ses calculs intermédiaires sur 8 bits, quand le GPU calcule en nombres à virgule complets. Sur vingt-huit couches, ces arrondis finissent par peser quelques pour cent. Le contrôle comparait un GPU précis à un processeur approximatif, et il accusait le plus précis des deux.
 
@@ -34,7 +34,7 @@ En donnant ces tailles dès la compilation, une version du noyau par modèle pos
 
 Mesuré en alternance avec le processeur, le GPU gagne à chaque tour. Le modèle du service écrit à 21,3 à 21,7 tokens par seconde, contre 18,3 à 19,0. Le petit modèle passe de 36 à 41 tokens par seconde à près de 50. Après un document de 4 096 tokens, l'écriture passe de 22 à 23 tokens par seconde à 26,5 à 28,5. Et les réponses sont les mêmes, mot pour mot.
 
-Le moteur l'emploie donc par défaut. Il le contrôle à sa première utilisation après chaque démarrage et rend la main au processeur au moindre écart ou à la moindre panne. Le modèle de recherche, dans un autre format de poids, reste sur le processeur pour l'instant.
+Le moteur l'emploie donc par défaut. Il le contrôle au chargement de chaque modèle, en trois secondes, et rend la main au processeur au moindre écart ou à la moindre panne. Le modèle de recherche, dans un autre format de poids, reste sur le processeur pour l'instant.
 
 ## Pour les curieux : les chiffres
 

@@ -46,7 +46,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 | M1 (**fait**) | Cache des clés et valeurs dans une seule zone réservée, alignée sur les pages (`c583d29` ; la zone du 4B réserve 18,7 Go d'adresses, plus que les 13,6 Go d'un tampon Metal sur le M2 : n'envelopper que les blocs utilisés) ; module `metal_device` (fait) ; accès au début de la projection du modèle ; bibliothèque `albireo_metal` (Objective-C++, noyaux compilés au lancement) liée sous `APPLE` ; le moteur s'ouvre avec le GPU | build sans avertissement ; tous les tests passent ; `engine_chat` répond juste ; le journal du moteur nomme le GPU |
 | M2 (**fait**, `32312f6`) | Noyaux : produits Q4_K / Q6_K (1 à 8 tokens), normes RMS, rope, SiLU, écriture des clés et valeurs (q8 tournées, f16), attention en ligne sur les blocs, tête des logits | test `test_metal` : chaque noyau à 1e-4 près du processeur |
 | M3 (**fait**, `5f0b07f`) | Un pas de génération entier sur le GPU, une commande par passe ; contrôle au chargement (logits à 1 % près, même token le plus probable) ; repli sur le processeur sinon | `engine_chat` juste ; mesures alternées processeur / GPU |
-| M4 (en cours ; gabarits faits, `5f0b07f` : 4B 18,3-19,0 → 21,3-21,7 tokens/s) | Réglages : noyau Q4_K (54 Go/s contre 70 au plafond), tête des logits, contrôle au chargement du modèle plutôt qu'à la première requête, Q8_0 (modèle de recherche) | gain en mesures alternées |
+| M4 (en cours ; gabarits faits, `5f0b07f` : 4B 18,3-19,0 → 21,3-21,7 tokens/s) | Réglages : noyau Q4_K (54 Go/s contre 70 au plafond), tête des logits, contrôle au chargement du modèle (fait, `f199a04`), Q8_0 (modèle de recherche) | gain en mesures alternées |
 | M5 | Prompts sur le GPU (produits en tuiles, attention groupée) contre Accelerate | le plus rapide gardé, mesuré |
 | M6 | Service, réglage `metal`, doc, notes, blog | page web et API servies par le GPU |
 
@@ -55,7 +55,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - par passe, écrits par le processeur : `x` (plongement, comme aujourd'hui), cos/sin de chaque token (tables de `cpu_runtime`), table des blocs de chaque séquence, positions ;
 - noyaux : `rms_norm` (lignes, largeur, eps), `mv_q4_K` / `mv_q6_K` pour T ≤ 8 tokens avec `y = alpha * W x + beta * y` (somme résiduelle), biais, normes des têtes (même `rms_norm`), `rope` (neox ou paires), `kv_store` (q8 : signes et Hadamard de `qk_rotate_row`, puis échelle en demi-précision comme `qk_float_to_q8_row` ; f16), préparation des requêtes (échelle, rotation en q8), attention en ligne par morceaux de positions (grille T × têtes kv × morceaux, 4 simdgroups, têtes groupées lues une fois), fusion des morceaux, `silu_mul`, norme finale et tête des logits ;
 - repli sur le processeur : MoE, images (positions données, DeepStack), `attn_temp_scale`, formats autres que Q4_K / Q6_K, plus de 8 tokens (prompts : M5) ;
-- contrôle : passe de sonde au premier usage (logits à 1 % près, même token le plus probable), comme `probe_layer_pass`.
+- contrôle : passe de sonde au chargement du modèle (`check_gpu()`, fait), logits à 1 % près de ceux du processeur en produits flottants, même token le plus probable.
 
 Formats couverts d'abord : Q4_K et Q6_K (les modèles du service) ; les autres modèles restent sur le processeur. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
