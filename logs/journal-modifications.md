@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Se détacher de l'original
+
+- **Quoi** : décision de l'humain : le fork ne fusionne plus `upstream/main` (dernière fusion `535a6fb`, original à `184ea00`, Albireo 1.0.12). Les fichiers de l'original peuvent être modifiés librement ; `upstream` reste en lecture, pour reprendre une idée à la main. Inchangé : push vers `origin` seulement, pas de PR vers l'original sans demande, la doc et le blog suivent le code, les notes pour l'auteur continuent pour les vrais bugs. Objectif : moteur Metal complet.
+- **Fichiers** : `CLAUDE.md` (section « Détaché de l'original », Git, méthode), `logs/reprise.md` (plan du moteur Metal), ce journal.
+- **Pourquoi** : 16 commits de l'original en deux jours ; le moteur Metal demande des changements profonds du runtime et du cache des clés et valeurs.
+- **Étapes** : interprétation confirmée par l'humain ; aucune modification de code.
+
 ## 2026-11-11 — Sonder le GPU du Mac avant un moteur Metal
 
 - **Quoi** : sonde hors moteur, propre au fork : noyaux Metal Q4_K et Q6_K (produit matrice-vecteur, poids lus en place sans copie), mesures d'exactitude, de débit, de plafond, d'aller-retour, et du processeur sur les mêmes produits.

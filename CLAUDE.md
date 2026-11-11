@@ -25,15 +25,15 @@ Les solutions propres au Mac sont permises (instructions NEON, `__fp16`, Acceler
 | Nom | Dépôt | Rôle |
 |---|---|---|
 | `origin` | `Aughra/Dlib-Transformer-extensions` | Le fork (public, comme l'original), où l'on pousse. Le compte `gh` connecté sur le Mac est `Aughra`. |
-| `upstream` | `Cydral/Dlib-Transformer-extensions` | L'original, qui continue d'avancer ; on ne fait qu'y lire. |
+| `upstream` | `Cydral/Dlib-Transformer-extensions` | L'original, qui continue d'avancer ; on ne fait qu'y lire, et on ne le fusionne plus (voir ci-dessous). |
 
-### Rester facile à fusionner
+### Détaché de l'original (depuis le 2026-11-11)
 
-L'original reçoit souvent de gros commits. Chaque ligne que le fork change dans un fichier de l'original peut devenir un conflit à la prochaine fusion. Donc :
+Décision de l'humain : l'original avance trop vite pour être suivi (16 commits en deux jours), et le moteur Metal demande des changements profonds. **Le fork ne fusionne plus `upstream/main`** ; la dernière fusion est `535a6fb` (original à `184ea00`, Albireo 1.0.12). Donc :
 
-- **Préférer un fichier neuf** à la modification d'un fichier de l'original.
-- Quand il faut toucher un fichier de l'original, faire le **plus petit changement possible**, de préférence sous une condition qui ne s'applique qu'au Mac (`if (APPLE)` dans CMake, `#ifdef __APPLE__` dans le code) plutôt qu'en réécrivant la version Linux ou Windows.
-- Ne jamais reformater, renommer ou réorganiser du code de l'original sans nécessité.
+- Les fichiers de l'original peuvent être modifiés quand le travail le demande, sans la règle du plus petit changement sous `#ifdef __APPLE__`. Rester propre et lisible : ne pas reformater ni réorganiser sans raison.
+- Préférer encore un fichier neuf pour un module nouveau (le moteur Metal, par exemple).
+- `upstream` reste en lecture : on peut y reprendre une idée ou une correction **à la main**, en le disant dans le journal, jamais par `git merge`.
 - Ne pas toucher à `dist/` (installateurs et flux de mises à jour signés de l'original) ni aux scripts Windows (`*.ps1`, `windows/`).
 
 ---
@@ -57,7 +57,7 @@ Outils présents sur le Mac : AppleClang (Xcode), CMake et Ninja (Homebrew), `gh
 
 ## Méthode de travail
 
-- **Au début de chaque session : lire [logs/reprise.md](logs/reprise.md) en premier**, puis lancer `git fetch upstream` et dire combien de commits l'original a reçus depuis la dernière fusion.
+- **Au début de chaque session : lire [logs/reprise.md](logs/reprise.md) en premier**, puis, pour information seulement, lancer `git fetch upstream` et dire combien de commits l'original a reçus depuis la dernière fusion.
 - Énoncer ses hypothèses et traduire la demande en **critère vérifiable** avant de coder (par exemple « `cmake --build` finit sans erreur et `test_host` affiche *all tests passed* »).
 - Écrire le minimum qui résout le problème. Ne pas toucher aux fichiers hors du sujet de la demande.
 - Signaler toute dépendance ajoutée, et pourquoi.
@@ -156,5 +156,5 @@ CLAUDE.md est le document d'autorité du fork. En cas de contradiction avec un a
 - On travaille sur `main`. Pour garder un état, poser un tag (`archive/<sujet>-<date>`).
 - **Commit de soi-même** après chaque unité de travail cohérente et **vérifiée** (build ou test réussi), avec son entrée dans le journal. Messages en français, concis, à l'impératif : le *quoi* et le *pourquoi*.
 - **Push vers `origin` seulement**, après chaque commit. Jamais de push vers `upstream`, jamais de `--force`, jamais de PR vers l'original sans demande explicite.
-- **Fusionner l'original** (`git fetch upstream` puis `git merge upstream/main`) seulement à la demande. En cas de conflit, s'arrêter, montrer les deux versions et expliquer le choix à faire.
+- **Ne plus fusionner l'original** (décision du 2026-11-11, voir « Détaché de l'original ») ; si l'humain revenait dessus : `git fetch upstream` puis `git merge upstream/main`, seulement à sa demande. En cas de conflit, s'arrêter, montrer les deux versions et expliquer le choix à faire.
 - Ne jamais commiter `build/`, les modèles `.gguf` ni les `.dat` (déjà ignorés).

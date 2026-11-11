@@ -36,11 +36,22 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 ## En cours
 
-Rien. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
+**Moteur Metal complet** (décision de l'humain, 2026-11-11 ; le fork est détaché de l'original). Plan :
+
+| Sous-étape | Contenu | Critère vérifiable |
+|---|---|---|
+| M1 | Cache des clés et valeurs dans une seule zone réservée, alignée sur les pages (partagée processeur / GPU) ; accès au début de la projection du modèle ; bibliothèque `albireo_metal` (Objective-C++, noyaux compilés au lancement) liée sous `APPLE` ; le moteur s'ouvre avec le GPU | build sans avertissement ; tous les tests passent ; `engine_chat` répond juste ; le journal du moteur nomme le GPU |
+| M2 | Noyaux : produits Q4_K / Q6_K (1 à 8 tokens), normes RMS, rope, SiLU, écriture des clés et valeurs (q8 tournées, f16), attention en ligne sur les blocs, tête des logits | test `test_metal` : chaque noyau à 1e-4 près du processeur |
+| M3 | Un pas de génération entier sur le GPU, une commande par passe ; contrôle au chargement (logits à 1 % près, même token le plus probable) ; repli sur le processeur sinon | `engine_chat` juste ; mesures alternées processeur / GPU |
+| M4 | Réglages et fusions de noyaux | gain en mesures alternées |
+| M5 | Prompts sur le GPU (produits en tuiles, attention groupée) contre Accelerate | le plus rapide gardé, mesuré |
+| M6 | Service, réglage `metal`, doc, notes, blog | page web et API servies par le GPU |
+
+Formats couverts d'abord : Q4_K et Q6_K (les modèles du service) ; les autres modèles restent sur le processeur. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
 ## À faire, dans l'ordre proposé
 
-1. **Décision de l'humain attendue** (sonde Metal faite, voir le mémo) : (a) fusionner d'abord les 16 commits de l'original (1.0.13 lit les prompts en entiers de 8 bits, ce qui touche le chemin Accelerate du fork, et écrit plusieurs tokens par pas à partir de brouillons : gain possible sans Metal), puis mesurer ; (b) moteur Metal complet, tout le token sur le GPU (`layer_pass` + `attend()`), gain estimé de 5 à 50 % en écriture sur M2 (sonde aujourd'hui, puis plafond), gros chantier, non exact au bit près ; (c) sonde n° 2 avant de décider : produits des prompts sur le GPU (MPS ou `simdgroup_matrix`) contre Accelerate. Relancer la sonde sur le Mac mini M5 Pro, où le rapport GPU / processeur sera différent.
+1. ~~Décision de l'humain attendue~~ : prise le 2026-11-11, moteur Metal complet (voir « En cours »). Options qui étaient proposées : (a) fusionner d'abord les 16 commits de l'original (1.0.13 lit les prompts en entiers de 8 bits, ce qui touche le chemin Accelerate du fork, et écrit plusieurs tokens par pas à partir de brouillons : gain possible sans Metal), puis mesurer ; (b) moteur Metal complet, tout le token sur le GPU (`layer_pass` + `attend()`), gain estimé de 5 à 50 % en écriture sur M2 (sonde aujourd'hui, puis plafond), gros chantier, non exact au bit près ; (c) sonde n° 2 avant de décider : produits des prompts sur le GPU (MPS ou `simdgroup_matrix`) contre Accelerate. Relancer la sonde sur le Mac mini M5 Pro, où le rapport GPU / processeur sera différent.
 2. Plus tard, si utile : noyaux NEON de génération pour les autres formats de poids (Q8_0, Q5_K…) ; `qk_float_to_q8_row` et `qk_rotate_row` restent portables (peu de temps au profil).
 
 Ensuite :
