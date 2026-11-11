@@ -20,94 +20,95 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The image encoder of a model that reads images, read from a projector GGUF
-                file (architecture "clip"), or from the vision tensors and the clip metadata
-                of the model file itself.  Two families are read.
+                L'encodeur d'images d'un modèle qui lit des images, lu depuis un fichier GGUF
+                de projecteur (architecture "clip"), ou depuis les tenseurs de vision et les
+                métadonnées clip du fichier du modèle lui-même.  Deux familles sont lues.
 
-                Qwen3-VL (clip.projector_type "qwen3vl_merger"): a vision transformer whose
-                patches are merged by squares of merge_size() x merge_size() into the input
-                tokens of the language model.  The image, resized to multiples of factor()
-                pixels, is cut into patches of patch_size() pixels, taken square by square.
-                The patch embedding is the convolution of the reference with a still image,
-                which repeats the image in time: the sum of its two temporal kernels.  The
-                learned position table is interpolated bilinearly, corners aligned, to the
-                grid of the patches, and each head of the attention rotates the first half
-                of its rotary pairs by the row of the patch and the second half by its
-                column.  After the blocks that the file names, a DeepStack merger normalizes
-                each square of patches, then applies two linear layers around an exact GELU;
-                the final merger normalizes each patch, merges the squares and applies the
-                same layers.  The output of a merged token is the output of the final merger
-                followed by those of the DeepStack mergers, output_width() floats, which a
-                Qwen3-VL decoder reads as its input embedding and the slices it adds after
-                its first layers.
+                Qwen3-VL (clip.projector_type "qwen3vl_merger") : un vision transformer dont
+                les patchs sont fusionnés par carrés de merge_size() x merge_size() en tokens
+                d'entrée du modèle de langage.  L'image, redimensionnée à des multiples de
+                factor() pixels, est découpée en patchs de patch_size() pixels, pris carré par
+                carré.  L'embedding des patchs est la convolution de la référence avec une image
+                fixe, qui répète l'image dans le temps : la somme de ses deux noyaux temporels.
+                La table de positions apprise est interpolée bilinéairement, coins alignés, sur
+                la grille des patchs, et chaque tête de l'attention fait tourner la première
+                moitié de ses paires rotatives selon la ligne du patch et la seconde moitié
+                selon sa colonne.  Après les blocs que nomme le fichier, un fusionneur DeepStack
+                normalise chaque carré de patchs, puis applique deux couches linéaires autour
+                d'une GELU exacte ; le fusionneur final normalise chaque patch, fusionne les
+                carrés et applique les mêmes couches.  La sortie d'un token fusionné est la
+                sortie du fusionneur final suivie de celles des fusionneurs DeepStack,
+                output_width() floats, qu'un décodeur Qwen3-VL lit comme son embedding d'entrée
+                et les tranches qu'il ajoute après ses premières couches.
 
-                LLaVA-NeXT (clip.projector_type "mlp" with clip.vision.image_grid_pinpoints,
-                EuroVLM): a SigLIP vision transformer reads views of image_size() pixels
-                square, each one a token per patch.  The views are the whole image resized
-                to a square, then the tiles of the image resized, its aspect ratio kept, into
-                the resolution of the pinpoints that loses the least of it, black bands
-                filling the rest.  Each view goes through the blocks up to the feature layer
-                of the file, then through the projector, two linear layers around an exact
-                GELU.  The tokens of the image are those of the whole image, then the grid of
-                the tiles, row by row, without the rows or the columns of the black bands,
-                each row followed by the newline embedding of the file, as the reference
-                implementation packs them.
+                LLaVA-NeXT (clip.projector_type "mlp" avec clip.vision.image_grid_pinpoints,
+                EuroVLM) : un vision transformer SigLIP lit des vues carrées de image_size()
+                pixels, chacune donnant un token par patch.  Les vues sont l'image entière
+                redimensionnée en carré, puis les tuiles de l'image redimensionnée, son rapport
+                d'aspect gardé, dans la résolution des pinpoints qui en perd le moins, des bandes
+                noires remplissant le reste.  Chaque vue passe par les blocs jusqu'à la couche
+                de caractéristiques du fichier, puis par le projecteur, deux couches linéaires
+                autour d'une GELU exacte.  Les tokens de l'image sont ceux de l'image entière,
+                puis la grille des tuiles, ligne par ligne, sans les lignes ni les colonnes des
+                bandes noires, chaque ligne suivie de l'embedding de retour à la ligne du
+                fichier, tels que l'implémentation de référence les range.
 
-                Pixtral (clip.projector_type "pixtral", Ministral 3, Devstral Small 2 and the
-                other Mistral models that read images): the image, resized within the longest
-                edge of the file (image_size()), its aspect ratio kept, to multiples of
-                factor() pixels, is cut into patches of patch_size() pixels.  Each head of
-                the attention rotates its pairs of consecutive dimensions, the first half of
-                them by the row of the patch and the second half by its column, at the even
-                and the odd frequencies of the head.  The blocks normalize by their root mean
-                square and their feed-forward layer is a SiLU gate.  The projector normalizes
-                each patch, merges the squares of merge_size() x merge_size() patches through
-                a linear layer, then applies two linear layers around an exact GELU.  The
-                tokens of the image are its merged tokens row by row, each row but the last
-                followed by the [IMG_BREAK] embedding of the file, which a Pixtral encoder
-                must hold; the decoder reads the token [IMG_END] after them.
+                Pixtral (clip.projector_type "pixtral", Ministral 3, Devstral Small 2 et les
+                autres modèles Mistral qui lisent des images) : l'image, redimensionnée dans la
+                limite du plus long côté du fichier (image_size()), son rapport d'aspect gardé,
+                à des multiples de factor() pixels, est découpée en patchs de patch_size()
+                pixels.  Chaque tête de l'attention fait tourner ses paires de dimensions
+                consécutives, la première moitié selon la ligne du patch et la seconde moitié
+                selon sa colonne, aux fréquences paires et impaires de la tête.  Les blocs
+                normalisent par leur moyenne quadratique et leur couche feed-forward est une
+                porte SiLU.  Le projecteur normalise chaque patch, fusionne les carrés de
+                merge_size() x merge_size() patchs par une couche linéaire, puis applique deux
+                couches linéaires autour d'une GELU exacte.  Les tokens de l'image sont ses
+                tokens fusionnés ligne par ligne, chaque ligne sauf la dernière suivie de
+                l'embedding [IMG_BREAK] du fichier, qu'un encodeur Pixtral doit contenir ; le
+                décodeur lit le token [IMG_END] après eux.
 
-                The blocks of Qwen3-VL and LLaVA-NeXT normalize before the attention and
-                before the feed-forward layer, with a mean and a bias; the attention reads
-                every patch of the view; the feed-forward layer activates with the tanh form
-                of GELU.  Matrices stored in bfloat16 are converted to half precision when
-                the encoder loads, which keeps their values: the half format holds more
-                mantissa bits.
+                Les blocs de Qwen3-VL et de LLaVA-NeXT normalisent avant l'attention et avant
+                la couche feed-forward, avec une moyenne et un biais ; l'attention lit chaque
+                patch de la vue ; la couche feed-forward active avec la forme tanh de GELU.  Les
+                matrices stockées en bfloat16 sont converties en demi-précision au chargement de
+                l'encodeur, ce qui garde leurs valeurs : le format demi contient plus de bits de
+                mantisse.
 
-                The products go through the quantized kernels of qkernels.h on the threads of
-                the engine (Q8_0, F16 and F32 weights, and the other types the kernels read),
-                and the attention runs by tiles of queries against blocks of keys
-                (qk_encoder_attention).  With a matmul_offload (set_offload()), the products
-                go through it, which computes on its device the shapes the device runs
-                faster; the offload counts as busy from start() to release_work() only, so
-                that its copies of the weights may leave the device for the model between two
-                images.
+                Les produits passent par les noyaux quantifiés de qkernels.h sur les threads du
+                moteur (poids Q8_0, F16 et F32, et les autres types que lisent les noyaux), et
+                l'attention s'exécute par tuiles de requêtes contre des blocs de clés
+                (qk_encoder_attention).  Avec un matmul_offload (set_offload()), les produits
+                passent par lui, qui calcule sur son périphérique les formes que le périphérique
+                exécute plus vite ; l'offload compte comme occupé de start() à release_work()
+                seulement, pour que ses copies des poids puissent quitter le périphérique au
+                profit du modèle entre deux images.
 
-                An encoding runs a step at a time (advance()): the scheduler of the engine
-                interleaves the blocks of an image with the passes of the other requests.
+                Un encodage s'exécute une étape à la fois (advance()) : l'ordonnanceur du moteur
+                entrelace les blocs d'une image avec les passes des autres requêtes.
 
             THREAD SAFETY
-                One thread drives an encoder: its work buffers serve the job it advances.
-                The constructor runs on the loading thread alone and opens no section of
-                the pool, whose threads may be computing the passes of other models.
-                plan(), most_tokens() and the other const functions may be called from any
-                thread.
+                Un seul thread pilote un encodeur : ses tampons de travail servent la tâche
+                qu'il fait avancer.  Le constructeur s'exécute sur le seul thread de chargement
+                et n'ouvre aucune section du thread pool, dont les threads peuvent être en train
+                de calculer les passes d'autres modèles.  plan(), most_tokens() et les autres
+                fonctions const peuvent être appelées depuis n'importe quel thread.
         !*/
     public:
         enum class family { qwen3vl, llava_next, pixtral };
 
         vision_encoder(std::shared_ptr<model_file> file, thread_pool& pool);
 
-        // Whether a file holds the tensors of an image encoder.
+        // Indique si un fichier contient les tenseurs d'un encodeur d'images.
         static bool present(const model_file& f);
 
         family kind() const { return kind_; }
         long patch_size() const { return patch_; }
         long merge_size() const { return merge_; }
-        // Pixels per side of a merged token, the factor the sides of an image are multiples of
+        // Pixels par côté d'un token fusionné, le facteur dont les côtés d'une image sont des multiples
         // (Qwen3-VL, Pixtral).
         long factor() const { return patch_ * merge_; }
-        // Pixels per side of a view (LLaVA-NeXT), the longest edge of an image (Pixtral).
+        // Pixels par côté d'une vue (LLaVA-NeXT), le plus long côté d'une image (Pixtral).
         long image_size() const { return image_size_; }
         long output_dim() const { return out_dim_; }
         long deepstack_count() const { return static_cast<long>(deepstack_.size()); }
@@ -119,61 +120,63 @@ namespace albireo
         {
             /*!
                 WHAT THIS OBJECT REPRESENTS
-                    How the encoder reads an image, from its size alone: the size its pixels
-                    are decoded at, the tokens it takes in the prompt and, for Qwen3-VL, the
-                    grid of these tokens, which gives their rotary positions; for LLaVA-NeXT,
-                    the resolution of its tiles.
+                    La façon dont l'encodeur lit une image, d'après sa seule taille : la taille à
+                    laquelle ses pixels sont décodés, les tokens qu'elle prend dans le prompt et,
+                    pour Qwen3-VL, la grille de ces tokens, qui donne leurs positions rotatives ;
+                    pour LLaVA-NeXT, la résolution de ses tuiles.
             !*/
             long width = 0, height = 0;
             long tokens = 0;
             long grid_w = 0, grid_h = 0;
-            long tiles_w = 0, tiles_h = 0;      // pixels the tiles cover (LLaVA-NeXT)
+            long tiles_w = 0, tiles_h = 0;      // pixels que couvrent les tuiles (LLaVA-NeXT)
         };
 
         /*!
             ensures
-                - Returns how an image of width x height pixels is read with the detail
-                  "low", "auto" (also "") or "high": for Qwen3-VL, the size resized to
-                  multiples of factor() within 64 and 256, 576 or 1024 merged tokens; for
-                  LLaVA-NeXT, the pinpoints of 1, 2 or 4 tiles at most; for Pixtral, the
-                  size within the longest edge, rounded up to multiples of factor(), then
-                  reduced, when it holds more, to 256, 576 or 1024 merged tokens.
-                - Throws std::invalid_argument for another detail or an unusable size.
+                - Renvoie la façon dont une image de width x height pixels est lue avec le détail
+                  "low", "auto" (aussi "") ou "high" : pour Qwen3-VL, la taille redimensionnée à
+                  des multiples de factor() dans les limites de 64 et 256, 576 ou 1024 tokens
+                  fusionnés ; pour LLaVA-NeXT, les pinpoints de 1, 2 ou 4 tuiles au plus ; pour
+                  Pixtral, la taille dans la limite du plus long côté, arrondie au-dessus à des
+                  multiples de factor(), puis réduite, quand elle en contient plus, à 256, 576 ou
+                  1024 tokens fusionnés.
+                - Lève std::invalid_argument pour un autre détail ou une taille inutilisable.
         !*/
         image_plan plan(long width, long height, const std::string& detail) const;
 
-        // The most tokens an image takes with a detail, "min" giving the fewest an image can take.
+        // Le plus grand nombre de tokens que prend une image avec un détail, "min" donnant le plus petit
+        // nombre qu'une image peut prendre.
         long most_tokens(const std::string& detail) const;
 
         class job
         {
             /*!
                 WHAT THIS OBJECT REPRESENTS
-                    The encoding of one image in progress: its patches between the blocks,
-                    then its output.
+                    L'encodage d'une image en cours : ses patchs entre les blocs, puis sa
+                    sortie.
             !*/
         public:
             long tokens() const { return tokens_; }
-            long grid_width() const { return grid_w_; }     // merged tokens per row
+            long grid_width() const { return grid_w_; }     // tokens fusionnés par ligne
             long grid_height() const { return grid_h_; }
             bool done() const { return done_; }
-            // tokens() rows of output_width() floats, once done.
+            // tokens() lignes de output_width() floats, une fois terminé.
             const std::vector<float>& output() const { return out_; }
             std::vector<float>& output() { return out_; }
             double seconds() const { return seconds_; }
 
         private:
             friend class vision_encoder;
-            long pw_ = 0, ph_ = 0, n_ = 0;      // patches per row and column, patches
+            long pw_ = 0, ph_ = 0, n_ = 0;      // patchs par ligne et par colonne, patchs
             long grid_w_ = 0, grid_h_ = 0, tokens_ = 0;
-            long next_ = 0;                     // the next block; the final merger after the last one
+            long next_ = 0;                     // le bloc suivant ; le fusionneur final après le dernier
             bool done_ = false;
-            aligned_floats x_;                  // n_ rows of the width of the encoder
-            std::vector<float> cos_, sin_;      // n_ rows of head_dim / 2 values
+            aligned_floats x_;                  // n_ lignes de la largeur de l'encodeur
+            std::vector<float> cos_, sin_;      // n_ lignes de head_dim / 2 valeurs
             std::vector<float> out_;
             double seconds_ = 0;
-            // LLaVA-NeXT: the views, the one being encoded, the features of the views and the
-            // part of the grid of the tiles kept (rows and columns).
+            // LLaVA-NeXT : les vues, celle en cours d'encodage, les caractéristiques des vues et la
+            // partie de la grille des tuiles gardée (lignes et colonnes).
             std::vector<rgb_image> views_;
             size_t view_ = 0;
             long tile_rows_ = 0, tile_cols_ = 0;
@@ -183,54 +186,54 @@ namespace albireo
 
         /*!
             requires
-                - For Qwen3-VL and Pixtral, image.width and image.height are positive
-                  multiples of factor(); for LLaVA-NeXT, image is the image plan() was given
-                  the size of, decoded at plan.width x plan.height.
+                - Pour Qwen3-VL et Pixtral, image.width et image.height sont des multiples
+                  positifs de factor() ; pour LLaVA-NeXT, image est l'image dont plan() a reçu
+                  la taille, décodée en plan.width x plan.height.
             ensures
-                - Returns an encoding of the image with its first patch embedding computed.
+                - Renvoie un encodage de l'image avec son premier embedding de patchs calculé.
         !*/
         std::unique_ptr<job> start(const rgb_image& image, const image_plan& plan);
 
         /*!
             ensures
-                - Runs the next steps of j, a block each (with its DeepStack merger) and the
-                  final merger last, until seconds have passed or the encoding is complete;
-                  at least one step runs.
-                - Returns j.done().
+                - Exécute les étapes suivantes de j, un bloc chacune (avec son fusionneur
+                  DeepStack) et le fusionneur final en dernier, jusqu'à ce que seconds soient
+                  écoulées ou que l'encodage soit complet ; au moins une étape s'exécute.
+                - Renvoie j.done().
         !*/
         bool advance(job& j, double seconds);
 
-        // Encodes an image at once: out receives its tokens, output_width() floats each.
+        // Encode une image d'un coup : out reçoit ses tokens, output_width() floats chacun.
         void encode(const rgb_image& image, const image_plan& plan, std::vector<float>& out);
 
-        // Returns the memory of the work buffers to the system.
+        // Rend au système la mémoire des tampons de travail.
         void release_work();
 
-        // Hands the products of the following encodings to a device.
+        // Confie les produits des encodages suivants à un périphérique.
         void set_offload(std::unique_ptr<matmul_offload> offload) { offload_ = std::move(offload); }
 
     private:
         struct block
         {
-            // The biases are empty when the file has none (Pixtral).
+            // Les biais sont vides quand le fichier n'en a pas (Pixtral).
             std::vector<float> ln1_w, ln1_b, ln2_w, ln2_b, qkv_b, out_b, up_b, down_b;
             weight_matrix qkv, q, k, v, out, gate, up, down;
-            bool fused = true;          // queries, keys and values in one matrix
-            bool gated = false;         // a SiLU gate in the feed-forward layer (Pixtral)
+            bool fused = true;          // requêtes, clés et valeurs dans une seule matrice
+            bool gated = false;         // une porte SiLU dans la couche feed-forward (Pixtral)
         };
 
         struct merger
         {
             std::vector<float> norm_w, norm_b, fc1_b, fc2_b;
             weight_matrix fc1, fc2;
-            long after = -1;            // the block it reads the output of (DeepStack)
+            long after = -1;            // le bloc dont il lit la sortie (DeepStack)
         };
 
-        // The layout of the tokens of an image read by LLaVA-NeXT.
+        // La disposition des tokens d'une image lue par LLaVA-NeXT.
         struct tile_layout
         {
-            long res_w = 0, res_h = 0;  // the pinpoint, in pixels
-            long rows = 0, cols = 0;    // tiles
+            long res_w = 0, res_h = 0;  // le pinpoint, en pixels
+            long rows = 0, cols = 0;    // tuiles
             long y0 = 0, y1 = 0, x0 = 0, x1 = 0;
             long tokens = 0;
         };
@@ -238,7 +241,8 @@ namespace albireo
         tile_layout best_layout(long width, long height, long max_tiles) const;
 
         void embed_patches(job& j, const rgb_image& image);
-        // A layer norm with the mean and the bias of b, or a root mean square norm when b is empty.
+        // Une layer norm avec la moyenne et le biais de b, ou une norme par moyenne quadratique quand b
+        // est vide.
         void layer_norm_rows(const float* x, const std::vector<float>& w, const std::vector<float>& b, float* y,
             long rows, long width);
         void add_bias_rows(float* y, long stride, const std::vector<float>& bias, long rows);
@@ -249,15 +253,15 @@ namespace albireo
         void project_pixtral(job& j);
         void product(const weight_matrix& w, const float* x, long n, long x_stride, float* y, long y_stride,
             bool accumulate = false);
-        // A matrix of the file, converted to half precision when it is stored in bfloat16.
+        // Une matrice du fichier, convertie en demi-précision quand elle est stockée en bfloat16.
         weight_matrix readable(const weight_matrix& m);
 
         std::shared_ptr<model_file> file_;
         thread_pool& pool_;
         family kind_ = family::qwen3vl;
         long hidden_ = 0, heads_ = 0, head_dim_ = 0, ffn_ = 0, patch_ = 0, merge_ = 0, out_dim_ = 0, side_ = 0;
-        long image_size_ = 0;           // LLaVA-NeXT: pixels per side of a view
-        long feature_blocks_ = 0;       // the blocks a view goes through
+        long image_size_ = 0;           // LLaVA-NeXT : pixels par côté d'une vue
+        long feature_blocks_ = 0;       // les blocs par lesquels passe une vue
         float eps_ = 1e-6f;
         float mean_[3] = { 0.5f, 0.5f, 0.5f };
         float std_[3] = { 0.5f, 0.5f, 0.5f };
@@ -270,18 +274,18 @@ namespace albireo
         std::vector<block> blocks_;
         std::vector<merger> deepstack_;
         merger final_;
-        // LLaVA-NeXT: the pinpoints (width, height) and the newline embedding.
+        // LLaVA-NeXT : les pinpoints (largeur, hauteur) et l'embedding de retour à la ligne.
         std::vector<std::pair<long, long>> pinpoints_;
         std::vector<float> newline_;
-        // Pixtral: the norm after the patch embedding and before the projector, the merger of
-        // the squares of patches (its columns in the order of the patches of a square), the two
-        // layers of the projector and the [IMG_BREAK] embedding.
+        // Pixtral : la norme après l'embedding des patchs et avant le projecteur, le fusionneur des
+        // carrés de patchs (ses colonnes dans l'ordre des patchs d'un carré), les deux couches du
+        // projecteur et l'embedding [IMG_BREAK].
         std::vector<float> pre_ln_w_, proj_norm_w_, proj1_b_, proj2_b_, img_break_;
         weight_matrix patch_merger_, proj1_, proj2_;
-        // The matrices converted when the encoder loads.
+        // Les matrices converties au chargement de l'encodeur.
         std::vector<std::vector<uint16_t>> owned_;
 
-        // Work buffers; sum_ receives the products of the device that the encoder adds to its rows.
+        // Tampons de travail ; sum_ reçoit les produits du périphérique que l'encodeur ajoute à ses lignes.
         aligned_floats xn_, qkv_, q_, kt_, v_, ctx_, h_, u_, m_, sum_;
         std::vector<aligned_floats> attention_work_;
         qk_scratch scratch_;

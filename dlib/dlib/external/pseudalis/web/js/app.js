@@ -1,21 +1,21 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// The web application of Pseudalis: files and texts protected and restored by the local service.
+// L'application web de Pseudalis : des fichiers et des textes protégés et restaurés par le service local.
 (function () {
   'use strict';
 
   const texts = window.PSEUDALIS_TEXTS;
   let language = 'en';
-  // The text card is ready: its marks follow the language (renderMarks()).
+  // La carte du texte est prête : ses marques suivent la langue (renderMarks()).
   let textReady = false;
 
-  /* The language of the page: the one chosen in its menu, else the first language of the
-     browser, which follows the system unless its user chose otherwise, that the application
-     knows, else English. */
+  /* La langue de la page : celle choisie dans son menu, sinon la première langue du navigateur,
+     qui suit le système à moins que son utilisateur n'en ait décidé autrement, que l'application
+     connaisse, sinon l'anglais. */
   function pick() {
     let saved = null;
-    try { saved = localStorage.getItem('pseudalis.language'); } catch (e) { /* storage unavailable */ }
+    try { saved = localStorage.getItem('pseudalis.language'); } catch (e) { /* stockage indisponible */ }
     if (saved && texts[saved]) return saved;
     const wanted = navigator.languages && navigator.languages.length ? navigator.languages
       : [navigator.language || 'en'];
@@ -32,8 +32,8 @@
     return s;
   }
 
-  /* A text that counts n things: its singular form, key_one, for one thing, and for none in French,
-     else its plural form. */
+  /* Un texte qui compte n choses : sa forme au singulier, key_one, pour une chose, et pour aucune en
+     français, sinon sa forme au pluriel. */
   function tn(key, n, values) {
     const one = n === 1 || (language === 'fr' && n === 0);
     const k = one && texts[language] && texts[language][key + '_one'] ? key + '_one' : key;
@@ -51,8 +51,8 @@
     }
   }
 
-  /* The administration token, which the icon gives in the fragment of the address it opens: the
-     browser never sends a fragment, and the address loses it at once. */
+  /* Le jeton d'administration, que l'icône donne dans le fragment de l'adresse qu'elle ouvre : le
+     navigateur n'envoie jamais un fragment, et l'adresse le perd aussitôt. */
   let admin = '';
   (function () {
     const m = /(?:^#|&)admin=([0-9A-Za-z_-]+)/.exec(location.hash || '');
@@ -78,9 +78,10 @@
     return e;
   }
 
-  /* A window of the application over the page, in place of those of the browser: its title, its text and
-     its buttons, {title, text, confirm, cancel, danger}.  Escape and a click beside it close it as its
-     cancel button does; the focus goes back where it was.  Resolves with true for the confirm button. */
+  /* Une fenêtre de l'application par-dessus la page, à la place de celles du navigateur : son titre, son
+     texte et ses boutons, {title, text, confirm, cancel, danger}.  Échap et un clic à côté la ferment comme
+     le fait son bouton d'annulation ; le focus revient là où il était.  Se résout avec true pour le bouton
+     de confirmation. */
   function dialog(o) {
     return new Promise(function (resolve) {
       if (typeof HTMLDialogElement !== 'function') {
@@ -117,7 +118,7 @@
       d.appendChild(text);
       d.appendChild(buttons);
       d.addEventListener('click', function (e) {
-        // A click on its buttons, from the keyboard too (at 0, 0), is theirs.
+        // Un clic sur ses boutons, y compris depuis le clavier (en 0, 0), leur revient.
         if (e.target !== d) return;
         const r = d.getBoundingClientRect();
         if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) close(!o.cancel);
@@ -129,18 +130,18 @@
       });
       document.body.appendChild(d);
       d.showModal();
-      // The choice that changes nothing takes the focus first.
+      // Le choix qui ne change rien prend le focus en premier.
       (no || yes).focus();
     });
   }
 
-  // A failure told in a window of the application.
+  // Un échec annoncé dans une fenêtre de l'application.
   function failureDialog(text) {
     return dialog({ title: t('dialog_error'), text: text, confirm: t('btn_close') });
   }
 
   // ---------------------------------------------------------------------------------------
-  // The status of the service.
+  // L'état du service.
 
   function pill(label, value, ok) {
     const p = el('span', 'pill' + (ok === true ? ' ok' : ok === false ? ' off' : ''));
@@ -172,7 +173,7 @@
   }
 
   // ---------------------------------------------------------------------------------------
-  // Files.
+  // Les fichiers.
 
   function bytesOf(base64) {
     const s = atob(base64);
@@ -181,9 +182,9 @@
     return b;
   }
 
-  /* The failure of a request in the language of the page: the text of its code, with its values
-     (a date written in the manner of the language, sizes in megabytes), else the English text
-     of the service. */
+  /* L'échec d'une requête dans la langue de la page : le texte de son code, avec ses valeurs
+     (une date écrite à la manière de la langue, des tailles en mégaoctets), sinon le texte
+     anglais du service. */
   function errorText(body, status) {
     if (body && body.code && texts.en['err_' + body.code]) {
       const values = { e: body.error || '' };
@@ -201,8 +202,8 @@
     return t('err_http', { status: status });
   }
 
-  /* Sends an item, {name, read}, whose read() gives its bytes: a file, or the ZIP archive of a
-     folder, which the service processes whole and gives back as an archive. */
+  /* Envoie un élément, {name, read}, dont read() donne les octets : un fichier, ou l'archive ZIP d'un
+     dossier, que le service traite en entier et rend sous forme d'archive. */
   async function send(item, route, list, describe) {
     const li = el('li');
     const busy = el('span', 'busy');
@@ -243,7 +244,7 @@
       a.download = body.name;
       li.appendChild(a);
     } catch (e) {
-      // The request did not reach the service, or its answer was cut.
+      // La requête n'a pas atteint le service, ou sa réponse a été coupée.
       busy.remove();
       detail.className = 'error';
       detail.textContent = t('s_offline');
@@ -251,7 +252,7 @@
   }
 
   // ---------------------------------------------------------------------------------------
-  // Folders: their files and their folders, with their paths, in a ZIP archive.
+  // Les dossiers : leurs fichiers et leurs dossiers, avec leurs chemins, dans une archive ZIP.
 
   const crcTable = (function () {
     const table = new Uint32Array(256);
@@ -269,8 +270,8 @@
     return (c ^ 0xFFFFFFFF) >>> 0;
   }
 
-  /* A ZIP archive of the entries {path, bytes, folder}, stored without compression, their names
-     in UTF-8: the service reads it, and writes the archive it gives back compressed. */
+  /* Une archive ZIP des entrées {path, bytes, folder}, stockées sans compression, leurs noms en
+     UTF-8 : le service la lit, et écrit compressée l'archive qu'il rend. */
   function zipOf(entries) {
     const encoder = new TextEncoder();
     const now = new Date();
@@ -319,16 +320,16 @@
     return new Blob(parts.concat(central, [end.buffer]), { type: 'application/zip' });
   }
 
-  // The names that a folder holds for the system or for a program at work, left out.
+  // Les noms qu'un dossier contient pour le système ou pour un programme au travail, laissés de côté.
   function passed(name) {
     const n = name.toLowerCase();
     return n === 'desktop.ini' || n === 'thumbs.db' || n === 'ehthumbs.db' || n === '.ds_store' ||
       n.indexOf('~$') === 0;
   }
 
-  // The archive of the items {path, file} or {path, folder: true}, as an ArrayBuffer.
+  // L'archive des éléments {path, file} ou {path, folder: true}, sous forme d'ArrayBuffer.
   async function archiveOf(items) {
-    // The limits of a ZIP archive without its 64-bit extensions.
+    // Les limites d'une archive ZIP sans ses extensions 64 bits.
     if (items.length > 65535) throw new Error('folder_too_big');
     const entries = [];
     let total = 0;
@@ -345,7 +346,7 @@
     return zipOf(entries).arrayBuffer();
   }
 
-  // The files and the folders under a folder dropped, the folder itself first.
+  // Les fichiers et les dossiers sous un dossier déposé, le dossier lui-même en premier.
   async function collect(entry, prefix, out) {
     if (passed(entry.name)) return;
     if (entry.isFile) {
@@ -378,7 +379,7 @@
     };
   }
 
-  // A folder chosen in the dialog: its files, which keep their paths under it.
+  // Un dossier choisi dans la boîte de dialogue : ses fichiers, qui gardent leurs chemins sous lui.
   function chosenFolderItem(files) {
     const top = (files[0].webkitRelativePath || files[0].name).split('/')[0];
     return {
@@ -401,8 +402,8 @@
     return s;
   }
 
-  /* A restoration from the tags tells the day the original was forgotten, when it was, and the pictures
-     removed, which only their originals could give back. */
+  /* Une restauration à partir des étiquettes indique le jour où l'original a été oublié, s'il l'a été, et
+     les images retirées, que seuls leurs originaux pourraient rendre. */
   function restoreDetail(body) {
     if (body.restored === 'original') return t('restored_original');
     if (body.restored === 'picture') return t('restored_picture');
@@ -438,7 +439,7 @@
     });
     drop.addEventListener('drop', function (e) {
       e.preventDefault();
-      // The entries are taken during the event: a folder among them becomes an archive.
+      // Les entrées sont prises pendant l'événement : un dossier parmi elles devient une archive.
       const files = Array.from(e.dataTransfer.files);
       const entries = Array.from(e.dataTransfer.items || []).filter(function (it) { return it.kind === 'file'; })
         .map(function (it) { return it.webkitGetAsEntry ? it.webkitGetAsEntry() : null; });
@@ -457,7 +458,8 @@
       (tags ? 'true' : 'false'), document.getElementById('protect-results'), protectDetail).then(refreshStatus);
   });
 
-  // Without tags and without the originals kept, the files protected cannot come back: the card says so.
+  // Sans étiquettes et sans les originaux gardés, les fichiers protégés ne peuvent pas revenir : la
+  // carte le dit.
   function protectOptions() {
     document.getElementById('no-restore').hidden =
       document.getElementById('keep').checked || document.getElementById('tags').checked;
@@ -469,24 +471,25 @@
   });
 
   // ---------------------------------------------------------------------------------------
-  // Texts.
+  // Les textes.
 
-  /* The text card: Protect and Restore write their result in place of the text, whose tags
-     and values restored are coloured by kind on marks drawn under the text area; Show the values
-     found lists them below. */
+  /* La carte du texte : Protect et Restore écrivent leur résultat à la place du texte, dont les
+     étiquettes et les valeurs restaurées sont colorées par type sur des marques dessinées sous la
+     zone de texte ; Show the values found les liste en dessous. */
   const textArea = document.getElementById('text');
   const textMarks = document.getElementById('text-marks');
   const textLegend = document.getElementById('text-legend');
-  // The tags of the pseudonymizer: [[KEYWORD:body#CCC]].
+  // Les étiquettes du pseudonymiseur : [[KEYWORD:body#CCC]].
   const tagPattern = new RegExp('\\[\\[(PERSON|ORG|LOCATION|ADDRESS|EMAIL|PHONE|IBAN|CARD|NIR|SIRET|ID|IPV4|IPV6|' +
     'MAC|URL|DATE|PLATE|GEO|TITLE|GENDER|NATIONALITY):[^\\[\\]]{1,4096}?#[0-9A-Z]{3}\\]\\]', 'g');
-  // The values just restored, in UTF-16 units of the text, until the text changes.
+  // Les valeurs tout juste restaurées, en unités UTF-16 du texte, jusqu'à ce que le texte change.
   let restoredMarks = null;
-  /* The substitutes of the texts protected without tags in this page, which alone gives their values back:
-     they leave with the page. */
+  /* Les substituts des textes protégés sans étiquettes dans cette page, qui seule rend leurs valeurs : ils
+     s'en vont avec la page. */
   const textSubstitutions = [];
   const textSubstitutionKeys = new Set();
-  // The protected values of the text as the service placed them, in UTF-16 units: tags and substitutes.
+  // Les valeurs protégées du texte telles que le service les a placées, en unités UTF-16 : étiquettes et
+  // substituts.
   let protectedMarks = null;
 
   function markKind(type) {
@@ -499,8 +502,9 @@
     return 'person';
   }
 
-  /* Byte offsets of the UTF-8 text, as the service gives them, in UTF-16 units of the text as the
-     text area holds it, every line break a LF: the LF of a CR LF takes no room of its own. */
+  /* Des décalages en octets du texte UTF-8, tels que le service les donne, convertis en unités UTF-16
+     du texte tel que la zone de texte le contient, chaque saut de ligne étant un LF : le LF d'un CR LF
+     ne prend pas de place à lui. */
   function unitSpans(text, spans) {
     const at = new Map([[0, 0]]);
     let bytes = 0, units = 0, previous = '';
@@ -520,7 +524,8 @@
   }
 
   function syncMarks() {
-    // The scroll bar of the text area narrows its text: the marks take the same width.
+    // La barre de défilement de la zone de texte rétrécit son texte : les marques prennent la même
+    // largeur.
     const bar = Math.max(0, textArea.offsetWidth - textArea.clientWidth - 2);
     textMarks.style.paddingRight = (10 + bar) + 'px';
     textMarks.scrollTop = textArea.scrollTop;
@@ -549,7 +554,7 @@
       textMarks.appendChild(mark);
       pos = s.end;
     });
-    // A final line break keeps the height of a last empty line of the text area.
+    // Un saut de ligne final garde la hauteur d'une dernière ligne vide de la zone de texte.
     textMarks.appendChild(document.createTextNode(text.slice(pos) + '\n'));
     textLegend.hidden = spans.length === 0;
     document.getElementById('text-legend-how').textContent =
@@ -596,7 +601,7 @@
       }).join('\n') : t('none_found');
       return;
     }
-    // Protect and Restore: the result takes the place of the text.
+    // Protect et Restore : le résultat prend la place du texte.
     out.hidden = true;
     textArea.value = body.text.replace(/\r\n?/g, '\n');
     (body.substitutions || []).forEach(function (x) {
@@ -607,7 +612,7 @@
     });
     restoredMarks = route === 'v1/text/restore' ? unitSpans(body.text, body.restored) : null;
     if (restoredMarks && !restoredMarks.length) restoredMarks = null;
-    // The substitutes of a text without tags are coloured where the service found them.
+    // Les substituts d'un texte sans étiquettes sont colorés là où le service les a trouvés.
     protectedMarks = route === 'v1/text/anonymize' && body.substitutions ? unitSpans(body.text, body.tags) : null;
     renderMarks();
   }
@@ -621,7 +626,7 @@
   document.getElementById('text-detect').addEventListener('click', function () { textRoute('v1/text/detect'); });
 
   // ---------------------------------------------------------------------------------------
-  // Administration: the originals kept, the key, the settings.
+  // L'administration : les originaux gardés, la clé, les réglages.
 
   const records = [];
   let recordsTotal = 0;
@@ -662,9 +667,10 @@
       tr.appendChild(el('td', 'name', r.original_name));
       tr.appendChild(el('td', '', new Date(r.created).toLocaleString(language)));
       const source = el('td', '', t('source_' + r.source));
-      // Protected without tags: its values come back from this record alone.
+      // Protégé sans étiquettes : ses valeurs ne reviennent que grâce à cette fiche.
       if (r.tags === false) source.appendChild(el('div', 'note', t('records_untagged')));
-      // A file that left the drive: its original stays until a day, or without limit of time.
+      // Un fichier qui a quitté le lecteur : son original reste jusqu'à une date, ou sans limite de
+      // temps.
       if (r.forgotten) {
         const until = new Date(r.forgotten).toLocaleDateString(language);
         source.appendChild(el('div', 'note', t('records_removed', { d: until })));
@@ -744,7 +750,8 @@
     refreshStatus();
   }
 
-  // A request of the administration with a JSON body: its answer, or status 0 when the service did not answer.
+  // Une requête de l'administration avec un corps JSON : sa réponse, ou le statut 0 quand le service n'a
+  // pas répondu.
   async function sendJson(route, value, method) {
     let r;
     try {
@@ -802,14 +809,14 @@
     document.getElementById('set-tags').checked = s.tags !== false;
   }
 
-  // The settings that the card shows, by their name in the interface, with the key of their label.
+  // Les réglages que la carte affiche, par leur nom dans l'interface, avec la clé de leur libellé.
   const settingLabels = {
     language: 'set_language', drive_letter: 'set_drive', date_order: 'set_dates', max_file_mb: 'set_max',
     removed_days: 'set_removed', history_mb: 'set_history', albireo: 'set_albireo',
     tags: 'set_tags'
   };
 
-  // A whole number of a field, or null when it holds none: the service refuses it with its range.
+  // Le nombre entier d'un champ, ou null quand il n'en contient pas : le service le refuse avec sa plage.
   function wholeNumber(id) {
     const text = document.getElementById(id).value.trim();
     return /^\d+$/.test(text) ? parseInt(text, 10) : null;
@@ -838,12 +845,13 @@
     message('settings-message', t(r.body.restart ? 'saved_restart' : 'saved'));
     loadSettings();
     refreshStatus();
-    // The boxes of the cards start again from the setting of the tags when it changes, and only then.
+    // Les cases des cartes repartent du réglage des étiquettes quand il change, et seulement alors.
     if ((r.body.tags !== false) !== tagsDefault) applyTagsDefault(r.body.tags !== false);
   }
 
-  /* The setting of the tags by default, which the page reads at its start: the boxes of the cards
-     Protect files and Protect a text start from it, and each applies to its files or its text alone. */
+  /* Le réglage des étiquettes par défaut, que la page lit à son démarrage : les cases des cartes
+     Protect files et Protect a text en partent, et chacune ne s'applique qu'à ses fichiers ou à son
+     texte. */
   let tagsDefault = true;
   function applyTagsDefault(tags) {
     tagsDefault = tags;
@@ -854,7 +862,7 @@
   }
 
   // ---------------------------------------------------------------------------------------
-  // The imposed terms: replaced with the tag of their type before anything else of a text.
+  // Les termes imposés : remplacés par l'étiquette de leur type avant tout le reste d'un texte.
 
   let terms = [];
   let termTypes = ['ORG', 'PERSON', 'LOCATION', 'ADDRESS', 'ID', 'EMAIL', 'PHONE', 'URL'];
@@ -944,7 +952,7 @@
   }
 
   async function saveTerms() {
-    // The rows left empty are no terms; the others keep their place for the errors.
+    // Les lignes laissées vides ne sont pas des termes ; les autres gardent leur place pour les erreurs.
     const rows = [];
     const list = [];
     terms.forEach(function (x, i) {
@@ -1001,13 +1009,13 @@
   select.value = language;
   select.addEventListener('change', function () {
     language = select.value;
-    try { localStorage.setItem('pseudalis.language', language); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem('pseudalis.language', language); } catch (e) { /* stockage indisponible */ }
     translate();
   });
   translate();
   fetch('v1/info', { cache: 'no-store' }).then(function (r) { return r.json(); })
     .then(function (info) { if (info && info.tags === false) applyTagsDefault(false); })
-    .catch(function () { /* the service does not answer: the options keep their tags */ });
+    .catch(function () { /* le service ne répond pas : les options gardent leurs étiquettes */ });
   startAdmin();
   setInterval(refreshStatus, 15000);
 })();

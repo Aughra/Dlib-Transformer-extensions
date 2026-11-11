@@ -28,43 +28,45 @@ namespace albireo
         bool usable = false;
     };
 
-    // Receives the events of a request (kinds of engine_api.h).
+    // Reçoit les événements d'une requête (types de engine_api.h).
     typedef std::function<void(int kind, const std::string& data)> request_sink;
 
     class engine_host
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The engine the service runs: the libraries found next to the service,
-                described each in a child process so that a library that cannot load
-                (a missing graphics driver, say) never takes the service down, the one
-                selected for this machine, and the models it holds.
+                Le moteur que fait tourner le service : les bibliothèques trouvées à côté du
+                service, décrites chacune dans un processus enfant pour qu'une bibliothèque qui
+                ne peut pas se charger (un pilote graphique manquant, par exemple) ne fasse
+                jamais tomber le service, celle qui est choisie pour cette machine, et les
+                modèles qu'elle contient.
 
-            SELECTION
-                The service chooses the engine to start among the candidates discover()
-                describes (choose_engine() in service.h).
+            SÉLECTION
+                Le service choisit le moteur à démarrer parmi les candidats que décrit
+                discover() (choose_engine() dans service.h).
 
-            CONCURRENCY
-                A model being loaded or unloaded never delays the other operations: the
-                requests, the queries and the cancellations go on during a load, which
-                may read several gigabytes.  Only start() and stop() wait for them.
+            CONCURRENCE
+                Un modèle en cours de chargement ou de déchargement ne retarde jamais les
+                autres opérations : les requêtes, les interrogations et les annulations
+                continuent pendant un chargement, qui peut lire plusieurs gigaoctets.  Seuls
+                start() et stop() les attendent.
 
-            UNLOADING
-                A model leaves the engine once its requests are served: from the start of
-                unload_model(), submit() refuses the new requests for it, those in progress
-                and those waiting are computed, possibly together with those of the other
-                models, and the model is unloaded when the last one ends.  stop() ends the
-                waits.
+            DÉCHARGEMENT
+                Un modèle quitte le moteur une fois ses requêtes servies : dès le début de
+                unload_model(), submit() refuse les nouvelles requêtes pour lui, celles en cours
+                et celles en attente sont calculées, éventuellement avec celles des autres
+                modèles, et le modèle est déchargé quand la dernière se termine.  stop() met fin
+                aux attentes.
         !*/
     public:
         engine_host();
         ~engine_host();
 
         /*
-            Lists and describes the engine libraries of a folder, through probe_program,
-            probing them all at once.  A library whose kernels need instructions the processor
-            lacks is described without being loaded.  The probes end as soon as stop, when
-            given, becomes true.
+            Liste et décrit les bibliothèques de moteur d'un dossier, par probe_program, en les
+            sondant toutes à la fois.  Une bibliothèque dont les noyaux demandent des
+            instructions que le processeur n'a pas est décrite sans être chargée.  Les sondes
+            s'arrêtent dès que stop, s'il est fourni, devient vrai.
         */
         std::vector<engine_candidate> discover(const std::string& dir, const std::string& probe_program,
             const std::atomic<bool>* stop = nullptr);
@@ -74,10 +76,11 @@ namespace albireo
 
         /*!
             ensures
-                - Returns true once this process started an engine whose library stays loaded
-                  until the process ends ("pinned" in its description): the engines of the
-                  devices, whose runtimes keep threads and a state of their own.  A change of
-                  engine settings then takes a new process.
+                - Renvoie true dès que ce processus a démarré un moteur dont la bibliothèque
+                  reste chargée jusqu'à la fin du processus ("pinned" dans sa description) : les
+                  moteurs des périphériques, dont les environnements d'exécution gardent des
+                  threads et un état à eux.  Un changement des réglages du moteur demande alors
+                  un nouveau processus.
         !*/
         static bool pinned_engine_started();
         bool running() const;
@@ -87,35 +90,36 @@ namespace albireo
         bool load_model(const std::string& id, const std::string& path, const json& options, std::string& error);
         /*!
             ensures
-                - Unloads the model id once its requests are served (see UNLOADING) and
-                  returns true, or returns false when keep_model() cancelled the unloading
-                  while it waited.  The requests still running after drain_seconds end
-                  with the unloading.
+                - Décharge le modèle id une fois ses requêtes servies (voir DÉCHARGEMENT) et
+                  renvoie true, ou renvoie false quand keep_model() a annulé le déchargement
+                  pendant son attente.  Les requêtes encore en cours après drain_seconds se
+                  terminent avec le déchargement.
         !*/
         bool unload_model(const std::string& id, int drain_seconds = 1800);
         /*!
             ensures
-                - The two steps of unload_model(): begin_unload() returns at once, the model
-                  taking no new request from then on, and finish_unload() waits for its
-                  requests and unloads it, unless keep_model() was called in between.
+                - Les deux étapes de unload_model() : begin_unload() rend la main aussitôt, le
+                  modèle ne prenant plus de nouvelle requête dès lors, et finish_unload() attend
+                  ses requêtes et le décharge, sauf si keep_model() a été appelé entre-temps.
         !*/
         void begin_unload(const std::string& id);
         bool finish_unload(const std::string& id, int drain_seconds = 1800);
         /*!
             ensures
-                - Cancels the unloading of id while it waits for the requests of the model:
-                  the model takes requests again, and finish_unload() returns false.
-                - Returns false when id is not waiting to leave (not being unloaded, or its
-                  unloading already started).
+                - Annule le déchargement de id pendant qu'il attend les requêtes du modèle :
+                  le modèle reprend des requêtes, et finish_unload() renvoie false.
+                - Renvoie false quand id n'attend pas de partir (pas en cours de déchargement,
+                  ou son déchargement a déjà commencé).
         !*/
         bool keep_model(const std::string& id);
         std::vector<std::string> loaded_models() const;
 
         /*
-            Submits a request; the sink receives its events until the final one.  code, when
-            given, receives the result of albireo_engine_submit(): ALBIREO_OK, or the code of
-            its refusal, ALBIREO_E_BUSY for a request to submit again shortly; it receives
-            ALBIREO_E_NOT_FOUND when no engine runs or when the model is leaving the engine.
+            Soumet une requête ; le sink reçoit ses événements jusqu'au dernier.  code, s'il est
+            fourni, reçoit le résultat de albireo_engine_submit() : ALBIREO_OK, ou le code de
+            son refus, ALBIREO_E_BUSY pour une requête à soumettre de nouveau sous peu ; il
+            reçoit ALBIREO_E_NOT_FOUND quand aucun moteur ne tourne ou quand le modèle quitte
+            le moteur.
         */
         bool submit(const json& request, request_sink sink, uint64_t& id, std::string& error, int* code = nullptr);
         void cancel(uint64_t id);
@@ -123,8 +127,8 @@ namespace albireo
 
         /*!
             ensures
-                - Returns the number of requests the engine accepted since this object was
-                  created, and gives in active the number of those still in progress.
+                - Renvoie le nombre de requêtes que le moteur a acceptées depuis la création de
+                  cet objet, et donne dans active le nombre de celles encore en cours.
         !*/
         unsigned long long activity(long& active) const;
 
@@ -133,26 +137,26 @@ namespace albireo
         void request_ended(const std::string& model);
         static void ALBIREO_ENGINE_CALL on_log(void* user, int level, const char* message);
 
-        // The engine itself: held exclusively to start and to stop it, shared by the
-        // operations that use it.
+        // Le moteur lui-même : tenu en exclusivité pour le démarrer et l'arrêter, partagé par
+        // les opérations qui l'utilisent.
         mutable std::shared_timed_mutex life_;
         std::unique_ptr<engine_library> lib_;
         albireo_engine* engine_ = nullptr;
-        // What the service asks often: the state, the description and the models.
+        // Ce que le service demande souvent : l'état, la description et les modèles.
         mutable std::mutex m_;
         bool running_ = false;
         engine_candidate current_;
         std::vector<std::string> models_;
 
-        // The requests in progress of each model, which an unloading waits for, and the
-        // models being unloaded, which take no new request: false while they wait for their
-        // requests, true once they leave the engine.
+        // Les requêtes en cours de chaque modèle, qu'un déchargement attend, et les modèles en
+        // cours de déchargement, qui ne prennent plus de nouvelle requête : false pendant
+        // qu'ils attendent leurs requêtes, true une fois qu'ils quittent le moteur.
         mutable std::mutex flight_m_;
         std::condition_variable flight_cv_;
         std::map<std::string, long> in_flight_;
         std::map<std::string, bool> draining_;
         bool stopping_ = false;
-        // The requests accepted since the creation of this object, under flight_m_.
+        // Les requêtes acceptées depuis la création de cet objet, sous flight_m_.
         unsigned long long submitted_ = 0;
     };
 

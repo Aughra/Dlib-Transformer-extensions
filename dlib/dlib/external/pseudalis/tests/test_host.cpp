@@ -1,7 +1,8 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// Tests of the keys, the vault, the database and the settings of the service, in a temporary folder.
+// Tests des clés, du coffre, de la base de données et des réglages du service, dans un dossier
+// temporaire.
 
 #include <iostream>
 #include <string>
@@ -36,7 +37,7 @@ int main()
     const std::string dir = join_path(join_path(executable_dir(), "test-host-data"), random_hex(8));
     make_dirs(dir);
 
-    // The master key: made once, read again, and its export.
+    // La clé maîtresse : créée une fois, relue, et son export.
     std::string master, again, error;
     bool created = false;
     CHECK(load_master_key(join_path(dir, "keys"), master, created, error) && created && master.size() == 32);
@@ -50,7 +51,7 @@ int main()
     CHECK(aes256_ctr(keys.vault_encryption, std::string(16, '\1'),
                      aes256_ctr(keys.vault_encryption, std::string(16, '\1'), "round trip")) == "round trip");
 
-    // The vault: blobs read back, altered ones refused.
+    // Le coffre : des blobs relus, ceux qui sont altérés refusés.
     vault v(join_path(dir, "vault"), keys.vault_encryption, keys.vault_authentication);
     const std::string data(100000, 'x');
     const std::string id = v.put(data);
@@ -68,7 +69,7 @@ int main()
     CHECK(v.remove(id2) && !v.exists(id2));
     const std::string empty_id = v.put(std::string());
     CHECK(v.get(empty_id, back) && back.empty());
-    // The listing of the vault, which removes the writes cut short.
+    // La liste du coffre, qui retire les écritures interrompues.
     const std::string leftover =
         join_path(join_path(join_path(dir, "vault"), id.substr(0, 2)), id + ".bin.tmp-0a1b2c3d");
     CHECK(write_file_atomic(leftover, "cut short"));
@@ -85,9 +86,9 @@ int main()
     CHECK(v.remove(empty_id));
 
     /*
-        The settings: a value out of its range loses no original (days without limit, the largest
-        space), the space holds the largest file, and a file of a version before 1.0.2, without
-        space, keeps every original, its 30 days of default becoming 45.
+        Les réglages : une valeur hors de sa plage ne fait perdre aucun original (jours sans limite,
+        le plus grand espace), l'espace contient le plus gros fichier, et un fichier d'une version
+        antérieure à 1.0.2, sans espace, garde tous les originaux, ses 30 jours par défaut devenant 45.
     */
     {
         CHECK(host_settings().removed_days == 45 && host_settings().history_mb == 10240);
@@ -120,12 +121,13 @@ int main()
         s = host_settings::from_json(j);
         CHECK(s.removed_days == 90 && s.drive_letter == "P");
         CHECK(host_settings::from_json(s.to_json()).removed_days == 90);
-        // The tags by default: written unless the setting says otherwise, a file of a version before keeping them.
+        // Les étiquettes par défaut : écrites sauf si le réglage dit le contraire, un fichier d'une version
+        // antérieure les gardant.
         CHECK(host_settings().tags && host_settings::from_json(earlier).tags);
         s.tags = false;
         CHECK(!host_settings::from_json(s.to_json()).tags);
     }
-    // A damaged settings.json keeps the originals without limit of time, in the largest space.
+    // Un settings.json endommagé garde les originaux sans limite de temps, dans le plus grand espace.
     {
         const std::string path = join_path(dir, "settings.json");
         CHECK(write_file_atomic(path, "{ not json"));
@@ -136,13 +138,13 @@ int main()
         CHECK(damaged.update([](host_settings& s) { s.removed_days = 45; }, changed) && changed.removed_days == 45);
         settings_store again(path);
         CHECK(again.get().removed_days == 45 && again.get().tags);
-        // The setting of the tags, saved, is read again when the service starts again.
+        // Le réglage des étiquettes, enregistré, est relu quand le service redémarre.
         CHECK(again.update([](host_settings& s) { s.tags = false; }, changed) && !changed.tags);
         settings_store restarted(path);
         CHECK(!restarted.get().tags && restarted.get().removed_days == 45);
     }
 
-    // The imposed terms: a list the service takes, or the reason and the place of its refusal.
+    // Les termes imposés : une liste que le service accepte, ou la raison et l'endroit de son refus.
     {
         std::vector<imposed_term> terms;
         std::string message, code;
@@ -183,7 +185,7 @@ int main()
                                                       "\"}]"), terms, message, code, index));
     }
 
-    // The database: records, pictures and the tree of the drive.
+    // La base de données : les fiches, les images et l'arborescence du lecteur.
     {
         store db(join_path(dir, "pseudalis.db"));
         file_record r;
@@ -203,7 +205,8 @@ int main()
             && found.original_name == r.original_name);
         db.set_file_location(rec, std::string(32, 'c'), "C:\\docs\\cv.docx");
         CHECK(db.find_by_object(std::string(32, 'c'), found) && found.path == "C:\\docs\\cv.docx");
-        // A picture, under a keyed identifier that its SHA-256 does not give, kept first without description.
+        // Une image, sous un identifiant calculé avec la clé que son SHA-256 ne donne pas, gardée d'abord
+        // sans description.
         picture_record p;
         p.id = "0123456789abcdef";
         p.sha256 = std::string(64, 'e');
@@ -214,13 +217,14 @@ int main()
         picture_record q;
         std::string text, before;
         CHECK(db.get_picture(p.id, q) && q.sha256 == p.sha256 && q.blob == p.blob && q.description.empty());
-        // The description received later, encrypted in the vault; the blob named before would leave it.
+        // La description reçue plus tard, chiffrée dans le coffre ; le blob nommé auparavant le quitterait.
         p.description = v.put("a chart");
         CHECK(db.set_picture_description(p.id, p.description, before) && before.empty());
         CHECK(db.get_picture(p.id, q) && q.description == p.description && v.get(q.description, text) &&
               text == "a chart");
         CHECK(!db.set_picture_description("fedcba9876543210", p.description, before));
-        // A picture that no record names, the protection that kept it having failed, leaves at the start.
+        // Une image qu'aucune fiche ne nomme, la protection qui l'a gardée ayant échoué, s'en va au
+        // démarrage.
         picture_record lone = p;
         lone.id = "fedcba9876543210";
         lone.blob = v.put("gif");
@@ -228,14 +232,15 @@ int main()
         db.add_picture(lone);
         CHECK(db.remove_unlinked_pictures() == 1 && !db.get_picture(lone.id, q) && db.get_picture(p.id, q));
         CHECK(db.referenced_blobs().count(lone.blob) == 0 && db.remove_unlinked_pictures() == 0);
-        // The entries of a protected archive: found by what was written, those inside an archive taken from inside it.
+        // Les entrées d'une archive protégée : trouvées par ce qui a été écrit, celles d'une archive
+        // contenue prises depuis l'intérieur de celle-ci.
         file_record archive = r;
         archive.original_name = "Dossier Jean Dupont.zip";
         archive.output_sha256 = std::string(64, '9');
         archive.original_blob = v.put("archive");
         archive.original_size = 2500;
         const long long zip = db.add_file(archive);
-        // The space of the originals, and the oldest first.
+        // L'espace des originaux, et le plus ancien d'abord.
         CHECK(db.originals_bytes() == 3500 && db.oldest_files(1).size() == 1 && db.oldest_files(1)[0].first == rec &&
               db.oldest_files(5).size() == 2 && db.oldest_files(5)[1].first == zip &&
               db.oldest_files(5)[1].second == 2500);
@@ -261,7 +266,7 @@ int main()
         const std::vector<entry_record> inside = db.entries_inside(entry_found);
         CHECK(inside.size() == 1 && inside[0].name == "Y/note.txt" && inside[0].original == "Marie Curie/note.txt" &&
               inside[0].sha256 == std::string(64, '3'));
-        // Forgotten with its archive: its entries go, and are remembered as forgotten.
+        // Oubliée avec son archive : ses entrées s'en vont, et sont retenues comme oubliées.
         std::vector<std::string> zip_blobs;
         CHECK(db.remove_file(zip, zip_blobs, "forgotten") && zip_blobs.size() == 1);
         int64_t entry_time = 0;
@@ -270,7 +275,7 @@ int main()
         CHECK(db.find_forgotten(std::string(64, '3'), std::string(), entry_time, entry_reason) &&
               entry_reason == "forgotten");
 
-        // A record whose file left the drive keeps its original until its time is over.
+        // Une fiche dont le fichier a quitté le lecteur garde son original jusqu'à la fin de son délai.
         CHECK(found.removed == 0 && db.files_removed_before(now_unix()).empty());
         db.set_file_removed(rec, now_unix() - 31 * 86400);
         CHECK(db.get_file(rec, found) && found.removed > 0);
@@ -282,18 +287,19 @@ int main()
         int64_t when = 0;
         std::string reason;
         CHECK(!db.find_forgotten(std::string(64, 'b'), std::string(32, 'c'), when, reason));
-        // An original forgotten: its protected file is remembered, by its hash and its object identifier.
+        // Un original oublié : son fichier protégé est retenu, par son hash et son identifiant d'objet.
         CHECK(db.remove_file(rec, blobs, "forgotten") && blobs.size() == 3 && db.count_files() == 0);
         CHECK(db.find_forgotten(std::string(64, 'b'), std::string(), when, reason) && reason == "forgotten");
         CHECK(db.find_forgotten(std::string(64, 'f'), std::string(32, 'c'), when, reason) && when > 0);
         CHECK(!db.find_forgotten(std::string(64, 'f'), std::string(), when, reason));
         CHECK(!db.get_picture(p.id, q));
-        // The identifier of a record deleted is never given again.
+        // L'identifiant d'une fiche supprimée n'est jamais redonné.
         const long long next = db.add_file(r);
-        // A record that leaves without reason (the drive replaces its file) leaves no trace.
+        // Une fiche qui s'en va sans raison (le lecteur remplace son fichier) ne laisse aucune trace.
         CHECK(next > rec && db.remove_file(next, blobs) && db.count_files() == 0);
 
-        // A database of the version 1 of the schema: the descriptions that it kept in clear are erased.
+        // Une base de données de la version 1 du schéma : les descriptions qu'elle gardait en clair sont
+        // effacées.
         const std::string old_path = join_path(dir, "version1.db");
         {
             store fresh(old_path);
@@ -314,8 +320,9 @@ int main()
             CHECK(migrated.get_picture("aaaaaaaaaaaaaaaa", q) && q.description.empty() && !q.blob.empty());
             CHECK(migrated.get_picture("bbbbbbbbbbbbbbbb", q) && q.description == kept);
         }
-        // A database of the version 2, as Pseudalis 1.0.4 left it: its files hold their tags, and the
-        // substitutes of the files protected without tags are kept from then on.
+        // Une base de données de la version 2, telle que Pseudalis 1.0.4 l'a laissée : ses fichiers
+        // gardent leurs étiquettes, et les substituts des fichiers protégés sans étiquettes sont
+        // conservés à partir de là.
         const std::string v2_path = join_path(dir, "version2.db");
         {
             store fresh(v2_path);
@@ -340,7 +347,7 @@ int main()
                   migrated.text_substitutes(id).size() == 1);
         }
 
-        // The files of the folder of the drive as the service left them, and what they weigh.
+        // Les fichiers du dossier du lecteur tels que le service les a laissés, et ce qu'ils pèsent.
         folder_file note;
         note.folder = "drive";
         note.path = "Dossier/Note.txt";
@@ -358,7 +365,7 @@ int main()
         long long files = 0, bytes = 0;
         db.drive_usage(files, bytes);
         CHECK(files == 1 && bytes == 12);
-        // The paths compare without case, as Windows names its files.
+        // Les chemins se comparent sans tenir compte de la casse, comme Windows nomme ses fichiers.
         note.path = "DOSSIER/note.TXT";
         note.size = 13;
         db.set_folder_file(note);
@@ -367,7 +374,7 @@ int main()
         db.remove_folder_file("drive", "dossier/NOTE.txt");
         db.drive_usage(files, bytes);
         CHECK(files == 0 && bytes == 0 && db.folder_files("drive").size() == 1);
-        // A substitute comes back through the tags recorded for it, never through its value.
+        // Un substitut revient par les étiquettes enregistrées pour lui, jamais par sa valeur.
         db.add_substitutes({ { "Xoydoeh Nuggwdfsorn", "[[PERSON:Xoydoeh Nuggwdfsorn#EKR]]" } });
         CHECK(db.tags_for("Xoydoeh Nuggwdfsorn").size() == 1 && db.tags_for("Jean Dupont").empty());
         db.add_event("protected", "\\Dossier\\Note.txt", "3 values");

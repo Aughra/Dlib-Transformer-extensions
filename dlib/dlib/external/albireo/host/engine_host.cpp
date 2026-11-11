@@ -30,8 +30,9 @@ namespace albireo
 
         std::atomic<bool> pinned_started{false};
 
-        // The last line of a program output that holds a JSON object, the runtimes of the
-        // libraries writing their own messages to the same output, before or after it.
+        // La dernière ligne de la sortie d'un programme qui contient un objet JSON, les
+        // environnements d'exécution des bibliothèques écrivant leurs propres messages sur la
+        // même sortie, avant ou après elle.
         json last_json_line(const std::string& output)
         {
             size_t end = output.size();
@@ -75,8 +76,8 @@ namespace albireo
             c.path = path;
             out.push_back(c);
         }
-        // Each other library is described by a process of its own, all at the same time:
-        // the start of the service waits for the slowest one only.
+        // Chaque autre bibliothèque est décrite par un processus à elle, toutes en même temps :
+        // le démarrage du service n'attend que la plus lente.
         std::vector<std::thread> probes;
         for (auto& c : out)
         {
@@ -89,7 +90,7 @@ namespace albireo
                 const int code = run_process(probe_program, { "--probe-engine", p->path }, &output, limit_ms, stop);
                 const long long elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::steady_clock::now() - started).count();
-                // The description is the last line the probe prints.
+                // La description est la dernière ligne qu'affiche la sonde.
                 p->description = last_json_line(output);
                 p->usable = code == 0 && p->description["usable"].as_bool(false);
                 if (!p->usable && !p->description.contains("reason"))
@@ -98,7 +99,8 @@ namespace albireo
                     json args = json::object();
                     if (code == -1 && elapsed >= static_cast<long long>(limit_ms))
                     {
-                        // The runtime of a device that never answers, such as a driver that waits.
+                        // L'environnement d'exécution d'un périphérique qui ne répond jamais, comme un
+                        // pilote qui attend.
                         p->description["reason"] = "the engine did not describe itself within "
                             + std::to_string(limit_ms / 1000) + " seconds";
                         p->description["reason_code"] = "probe_timeout";
@@ -121,7 +123,8 @@ namespace albireo
         for (auto& t : probes) t.join();
         for (const auto& c : out)
         {
-            // The devices each engine found, and those its runtime left out with their reason.
+            // Les périphériques que chaque moteur a trouvés, et ceux que son environnement
+            // d'exécution a écartés, avec leur raison.
             std::string devices;
             for (const auto& d : c.description["devices"].elements())
                 if (d["type"].as_string() != "cpu" || d.contains("id"))
@@ -148,7 +151,7 @@ namespace albireo
         if (!lib->load(c.path, error)) return false;
         if (c.description["pinned"].as_bool(false))
         {
-            // The library of a device stays loaded until the process ends (main.cpp).
+            // La bibliothèque d'un périphérique reste chargée jusqu'à la fin du processus (main.cpp).
             pinned_started = true;
             lib->keep_loaded();
         }
@@ -174,7 +177,7 @@ namespace albireo
     void engine_host::stop()
     {
         {
-            // The unloadings waiting for their requests end at once.
+            // Les déchargements qui attendent leurs requêtes se terminent aussitôt.
             std::lock_guard<std::mutex> lock(flight_m_);
             stopping_ = true;
         }
@@ -237,8 +240,8 @@ namespace albireo
 
     void engine_host::begin_unload(const std::string& id)
     {
-        // From now on, submit() refuses the requests for it, and it leaves the list of the
-        // models, in one step for keep_model().
+        // Désormais, submit() refuse les requêtes pour lui, et il quitte la liste des modèles,
+        // en une seule étape pour keep_model().
         std::lock_guard<std::mutex> lock(flight_m_);
         draining_.emplace(id, false);
         std::lock_guard<std::mutex> models(m_);
@@ -248,8 +251,8 @@ namespace albireo
     bool engine_host::finish_unload(const std::string& id, int drain_seconds)
     {
         {
-            // The requests in progress and waiting are served first, without holding the
-            // engine, so that a stop never waits for them.
+            // Les requêtes en cours et en attente sont servies d'abord, sans tenir le moteur,
+            // pour qu'un arrêt ne les attende jamais.
             std::unique_lock<std::mutex> lock(flight_m_);
             flight_cv_.wait_for(lock, std::chrono::seconds(drain_seconds), [&]() {
                 return stopping_ || draining_.count(id) == 0 || in_flight_.find(id) == in_flight_.end();
@@ -328,7 +331,7 @@ namespace albireo
         }
         const std::string model = request["model"].as_string();
         {
-            // Counted before the engine sees it, since its last event may come first.
+            // Comptée avant que le moteur la voie, car son dernier événement peut arriver avant.
             std::lock_guard<std::mutex> lock(flight_m_);
             if (draining_.count(model) != 0)
             {

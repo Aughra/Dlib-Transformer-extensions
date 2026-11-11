@@ -1,27 +1,28 @@
-// The team of the performance cores, for the macOS port (Apple Silicon): included by
-// thread_pool.h inside class thread_pool, in its public part, when __APPLE__ is defined.
+// L'équipe des cœurs de performance, pour le portage macOS (Apple Silicon) : incluse par
+// thread_pool.h dans la classe thread_pool, dans sa partie publique, quand __APPLE__ est défini.
 //
-// An Apple processor has performance cores and efficiency cores (4 and 4 on an M2).  A pass of
-// a few tokens, as a step of the generation, reads every weight of the model for little
-// computation: the memory is soon saturated, and at the end of each product the fast cores
-// wait for the last group of rows that a slow core took.  Such a pass goes faster on the
-// performance cores alone (on an M2, 19.4 tokens/s with 4 threads against 18.2 with 8 for a
-// 4B model), while a long prompt, where the computation dominates, goes faster on all the
-// cores (163 to 169 tokens/s with 8 threads against 143 to 145 with 4 for 4 096 tokens).
+// Un processeur Apple a des cœurs de performance et des cœurs d'efficacité (4 et 4 sur un M2).  Une
+// passe de quelques tokens, comme une étape de la génération, lit chaque poids du modèle pour peu de
+// calcul : la mémoire est vite saturée, et à la fin de chaque produit les cœurs rapides attendent le
+// dernier groupe de lignes qu'un cœur lent a pris.  Une telle passe va plus vite sur les seuls cœurs
+// de performance (sur un M2, 19,4 tokens/s avec 4 threads contre 18,2 avec 8 pour un modèle 4B),
+// alors qu'un long prompt, où le calcul domine, va plus vite sur tous les cœurs (163 à 169 tokens/s
+// avec 8 threads contre 143 à 145 avec 4 pour 4 096 tokens).
 //
-// A pool of more threads than performance cores therefore keeps a second, smaller pool, the
-// fast team, of one thread per performance core.  The thread that opens the sections of a
-// pass asks for it with a fast_team_scope; its sections then run on the fast team, still one
-// section at a time over both teams, and the workers of the other team, idle, soon sleep: the
-// system then keeps the threads that compute on the performance cores.
+// Un thread pool de plus de threads qu'il n'y a de cœurs de performance garde donc un second thread
+// pool, plus petit, l'équipe rapide, d'un thread par cœur de performance.  Le thread qui ouvre les
+// sections d'une passe la demande avec un fast_team_scope ; ses sections s'exécutent alors sur
+// l'équipe rapide, toujours une section à la fois sur les deux équipes, et les workers de l'autre
+// équipe, inactifs, s'endorment vite : le système garde alors les threads qui calculent sur les
+// cœurs de performance.
 
-        // The number of threads that the sections of the calling thread use.
+        // Le nombre de threads qu'utilisent les sections du thread appelant.
         int active() const { return fast_team_ && fast_team_requested() ? fast_team_->size() : size(); }
 
         /*!
-            While an object of this type lives, the sections that the thread that made it opens
-            run on the fast team when fast is true, on the whole pool otherwise.  Nothing
-            changes for a pool without a fast team.
+            Tant qu'un objet de ce type existe, les sections qu'ouvre le thread qui l'a créé
+            s'exécutent sur l'équipe rapide quand fast vaut true, sur tout le thread pool sinon.
+            Rien ne change pour un thread pool sans équipe rapide.
         !*/
         class fast_team_scope
         {
@@ -43,7 +44,7 @@
             return fast;
         }
 
-        // The performance cores of the processor, 0 when the system does not tell.
+        // Les cœurs de performance du processeur, 0 quand le système ne le dit pas.
         static int performance_cores()
         {
             int n = 0;
@@ -58,7 +59,7 @@
             if (fast > 1 && fast < threads) fast_team_.reset(new thread_pool(fast));
         }
 
-        // Runs the section on the fast team, if the calling thread asked for it.
+        // Exécute la section sur l'équipe rapide, si le thread appelant l'a demandé.
         template <typename F>
         bool run_on_fast_team(long n_tasks, F& fn)
         {

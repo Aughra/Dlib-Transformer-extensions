@@ -13,37 +13,38 @@ namespace albireo
 
     enum class rope_style
     {
-        norm,   // consecutive pairs (x[2i], x[2i+1]), the llama convention of GGUF files
-        neox    // halves (x[i], x[i + d/2]), the convention of qwen, gemma and phi
+        norm,   // paires consécutives (x[2i], x[2i+1]), la convention llama des fichiers GGUF
+        neox    // moitiés (x[i], x[i + d/2]), la convention de qwen, gemma et phi
     };
 
     struct model_config
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The geometry and the numeric conventions of a decoder-only model, read
-                from the metadata of its GGUF file.  Everything the forward pass depends
-                on is resolved here once, so that the runtimes branch on fields rather
-                than on architecture names.
+                La géométrie et les conventions numériques d'un modèle à décodeur seul,
+                lues dans les métadonnées de son fichier GGUF.  Tout ce dont dépend la
+                passe avant est résolu ici une fois, de sorte que les runtimes se
+                branchent sur des champs plutôt que sur des noms d'architecture.
 
-            SUPPORTED ARCHITECTURES
-                llama, mistral and mistral3 (dense, GQA, SwiGLU, tied or separate
-                embeddings, llama 3 frequency factors, YaRN and the long context query
-                scaling of Ministral 3), qwen2 (with QKV biases), qwen3 (with QK
-                normalization), qwen3moe, mixtral and granitemoe (mixtures of experts),
-                granite (with its embedding, residual, attention and logit scales),
-                qwen3vl and qwen3vlmoe (the decoders of Qwen3-VL: qwen3 and qwen3moe with
-                multimodal rotary positions and DeepStack inputs, see rope_sections and
-                n_deepstack), phi3 (Phi-3 and Phi-4-mini: one matrix for the queries, keys
-                and values, one for the gate and up projections, rotary positions on the
-                leading dimensions of the heads, LongRoPE; the sliding window the files
-                declare is not applied, as in llama.cpp).
+            ARCHITECTURES PRISES EN CHARGE
+                llama, mistral et mistral3 (dense, GQA, SwiGLU, embeddings liés ou
+                séparés, facteurs de fréquence de llama 3, YaRN et la mise à l'échelle
+                des requêtes en contexte long de Ministral 3), qwen2 (avec biais QKV),
+                qwen3 (avec normalisation QK), qwen3moe, mixtral et granitemoe (mélanges
+                d'experts), granite (avec ses échelles d'embedding, de résidu,
+                d'attention et de logits), qwen3vl et qwen3vlmoe (les décodeurs de
+                Qwen3-VL : qwen3 et qwen3moe avec positions rotatives multimodales et
+                entrées DeepStack, voir rope_sections et n_deepstack), phi3 (Phi-3 et
+                Phi-4-mini : une matrice pour les requêtes, les clés et les valeurs, une
+                pour les projections gate et up, positions rotatives sur les premières
+                dimensions des têtes, LongRoPE ; la fenêtre glissante que déclarent les
+                fichiers n'est pas appliquée, comme dans llama.cpp).
 
-            EMBEDDING MODELS
-                A decoder that declares <arch>.pooling_type computes vectors instead of
-                text: its last step returns the normalized hidden state rather than the
-                logits.  The causal decoders take the state of their last token, the one
-                that has read the whole text (pooling type 3).
+            MODÈLES D'EMBEDDING
+                Un décodeur qui déclare <arch>.pooling_type calcule des vecteurs au lieu
+                de texte : sa dernière étape renvoie l'état caché normalisé plutôt que les
+                logits.  Les décodeurs causaux prennent l'état de leur dernier token,
+                celui qui a lu tout le texte (type de pooling 3).
         !*/
 
         std::string arch;               // general.architecture
@@ -53,82 +54,83 @@ namespace albireo
         long n_kv_heads = 0;
         long d_model = 0;
         long d_ffn = 0;
-        long head_dim = 0;              // keys and queries
-        long head_dim_v = 0;            // values
+        long head_dim = 0;              // clés et requêtes
+        long head_dim_v = 0;            // valeurs
         long vocab = 0;
-        long ctx_train = 0;             // context length the model was trained with
+        long ctx_train = 0;             // longueur de contexte avec laquelle le modèle a été entraîné
         double rms_eps = 1e-5;
 
-        // Rotary embedding.
+        // Embedding rotatif.
         rope_style rope = rope_style::norm;
-        long rope_dims = 0;             // leading dimensions of each head that rotate
+        long rope_dims = 0;             // premières dimensions de chaque tête qui tournent
         double rope_base = 10000.0;
-        double rope_freq_scale = 1.0;   // 1 / linear scaling factor
-        std::vector<float> rope_freq_factors;   // llama 3 per-frequency divisors
+        double rope_freq_scale = 1.0;   // 1 / facteur de mise à l'échelle linéaire
+        std::vector<float> rope_freq_factors;   // diviseurs par fréquence de llama 3
         bool yarn = false;
         double yarn_orig_ctx = 0;
         double yarn_beta_fast = 32.0;
         double yarn_beta_slow = 1.0;
         double yarn_ext_factor = 1.0;
-        double yarn_attn_factor = 1.0;  // magnitude correction applied to cos and sin
+        double yarn_attn_factor = 1.0;  // correction d'amplitude appliquée à cos et sin
 
         /*
-            LongRoPE (phi3): per-frequency divisors for a context within rope_orig_ctx
-            positions and for a longer one.  rope_freq_factors receives the set that
-            select_rope_factors() chooses for the context of a sequence.
+            LongRoPE (phi3) : diviseurs par fréquence pour un contexte d'au plus
+            rope_orig_ctx positions et pour un contexte plus long.  rope_freq_factors
+            reçoit le jeu que select_rope_factors() choisit pour le contexte d'une séquence.
         */
         std::vector<float> rope_factors_short, rope_factors_long;
         long rope_orig_ctx = 0;
-        double rope_attn_factor = 1.0;  // <arch>.rope.scaling.attn_factor, applied to cos and sin
+        double rope_attn_factor = 1.0;  // <arch>.rope.scaling.attn_factor, appliqué à cos et sin
 
-        // Fused projections (phi3): attn_qkv holds the rows of the queries, then those of the
-        // keys and of the values; ffn_up holds the rows of the gate, then those of the up
-        // projection.
+        // Projections fusionnées (phi3) : attn_qkv contient les lignes des requêtes, puis celles
+        // des clés et des valeurs ; ffn_up contient les lignes de gate, puis celles de la
+        // projection up.
         bool fused_qkv = false;
         bool fused_gate_up = false;
 
-        // Long context query scaling: q *= 1 + attn_temp_scale * log(1 + floor(pos / attn_temp_length)).
+        // Mise à l'échelle des requêtes en contexte long :
+        // q *= 1 + attn_temp_scale * log(1 + floor(pos / attn_temp_length)).
         double attn_temp_scale = 0.0;
         double attn_temp_length = 8192.0;
 
-        // Optional parts.
+        // Parties facultatives.
         bool qkv_bias = false;
         bool qk_norm = false;
         bool tied_embeddings = false;
 
-        // Global scale factors (granite); neutral values otherwise.
+        // Facteurs d'échelle globaux (granite) ; valeurs neutres sinon.
         double embedding_scale = 1.0;
         double residual_scale = 1.0;
-        double attention_scale = 0.0;   // 0: 1/sqrt(head_dim)
-        double logit_scale = 1.0;       // logits are divided by it
+        double attention_scale = 0.0;   // 0 : 1/sqrt(head_dim)
+        double logit_scale = 1.0;       // les logits sont divisés par lui
 
-        // Mixture of experts.
+        // Mélange d'experts.
         long n_experts = 0;
         long n_experts_used = 0;
         long d_ffn_expert = 0;
-        bool expert_weights_norm = true;   // renormalize the selected routing weights
+        bool expert_weights_norm = true;   // renormaliser les poids de routage sélectionnés
 
-        // Tokenizer and chat format, as declared.
+        // Tokenizer et format de chat, tels que déclarés.
         std::string chat_template;
         std::string tokenizer_pre;
 
-        // Pooling of an embedding model: 0 none (a language model), 1 mean, 2 first token,
-        // 3 last token, 4 rank.
+        // Pooling d'un modèle d'embedding : 0 aucun (un modèle de langage), 1 moyenne,
+        // 2 premier token, 3 dernier token, 4 rang.
         int pooling = 0;
 
         /*
-            Multimodal rotary positions (qwen3vl): a token has three position components,
-            time, row and column, and rotary pair j of a head takes its angle from the row
-            when j % 3 == 1 and j < 3 * rope_sections[1], from the column when j % 3 == 2
-            and j < 3 * rope_sections[2], and from the time otherwise.  A text token has the
-            same value in its three components, which gives the rotation of a model with
-            one position per token.  Empty for the other models.
+            Positions rotatives multimodales (qwen3vl) : un token a trois composantes de
+            position, temps, ligne et colonne, et la paire rotative j d'une tête prend son
+            angle de la ligne quand j % 3 == 1 et j < 3 * rope_sections[1], de la colonne
+            quand j % 3 == 2 et j < 3 * rope_sections[2], et du temps sinon.  Un token de
+            texte a la même valeur dans ses trois composantes, ce qui donne la rotation d'un
+            modèle à une position par token.  Vide pour les autres modèles.
         */
         std::vector<int> rope_sections;
 
-        // DeepStack (qwen3vl): an image token carries d_model * (1 + n_deepstack) input
-        // floats; the first d_model replace its embedding, and slice k is added to its
-        // hidden state after layer k.
+        // DeepStack (qwen3vl) : un token d'image porte d_model * (1 + n_deepstack) flottants
+        // d'entrée ; les d_model premiers remplacent son embedding, et la tranche k est
+        // ajoutée à son état caché après la couche k.
         long n_deepstack = 0;
 
         bool is_moe() const { return n_experts > 0; }
@@ -140,19 +142,21 @@ namespace albireo
         long v_dim() const { return n_kv_heads * head_dim_v; }
     };
 
-    // Reads the configuration of a model, or throws with the reason it cannot be served.
+    // Lit la configuration d'un modèle, ou lève une exception donnant la raison pour
+    // laquelle il ne peut pas être servi.
     model_config read_model_config(const model_file& f);
 
     /*!
         ensures
-            - When c holds LongRoPE divisors, makes c.rope_freq_factors the long ones if a
-              sequence may hold more than c.rope_orig_ctx positions, and the short ones
-              otherwise, as llama.cpp chooses them from the context of a sequence.
-              read_model_config() chooses them for the context the model was trained with.
+            - Quand c contient des diviseurs LongRoPE, fait de c.rope_freq_factors les
+              diviseurs longs si une séquence peut contenir plus de c.rope_orig_ctx
+              positions, et les courts sinon, comme llama.cpp les choisit d'après le
+              contexte d'une séquence.  read_model_config() les choisit pour le contexte
+              avec lequel le modèle a été entraîné.
     !*/
     void select_rope_factors(model_config& c, long context);
 
-    // One line describing a configuration, for the logs.
+    // Une ligne décrivant une configuration, pour les logs.
     std::string describe(const model_config& c);
 
 }

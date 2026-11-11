@@ -1,25 +1,26 @@
-// Metal kernels of the macOS port: the GPU of the Mac reads the GGUF weights where the file
-// lies (the memory is shared with the processor) and computes the passes of the generation.
-// macOS compiles this source when the engine opens the GPU (metal_device.mm): no Metal
-// compiler is needed to build the engine.  CMakeLists.txt embeds it in the engine as a string.
+// Noyaux Metal du portage macOS : le GPU du Mac lit les poids GGUF là où se trouve le fichier
+// (la mémoire est partagée avec le processeur) et calcule les passes de la génération.
+// macOS compile ce source quand le moteur ouvre le GPU (metal_device.mm) : aucun compilateur
+// Metal n'est nécessaire pour construire le moteur.  CMakeLists.txt l'embarque dans le moteur
+// sous forme de chaîne.
 //
-// Each kernel computes what the processor runtime computes (cpu_runtime.cpp, qkernels.cpp), in
-// floats: the sums come in another order, so that the results agree within the roundings of
-// floats, not bit for bit.
+// Chaque noyau calcule ce que calcule le runtime du processeur (cpu_runtime.cpp, qkernels.cpp),
+// en floats : les sommes viennent dans un autre ordre, si bien que les résultats concordent aux
+// arrondis des floats près, pas bit pour bit.
 
 #include <metal_stdlib>
 using namespace metal;
 
-// The tokens of one pass, at most (the generation steps of up to eight sequences).
+// Le nombre maximal de tokens d'une passe (les étapes de génération de huit séquences au plus).
 #define MAX_TOKENS 8
 
 // ---------------------------------------------------------------------------------------------
-// Products of a weight matrix (GGUF blocks, read in place) with the activations of up to
-// MAX_TOKENS tokens: y[t][r] = alpha * sum_i W[r][i] x[t][i] + beta * y[t][r].  A simdgroup
-// computes ROWS rows, a threadgroup holds SG_PER_TG simdgroups.  One dispatch may compute two
-// matrices of the same format and the same columns, W (rows rows, into y) then W2 (rows2 rows,
-// into y2): the products of the queries and of the keys, or of the gate and of the up branch,
-// read the same activations, and a dispatch costs more than its few rows on this GPU.
+// Produits d'une matrice de poids (blocs GGUF, lus en place) avec les activations de MAX_TOKENS
+// tokens au plus : y[t][r] = alpha * sum_i W[r][i] x[t][i] + beta * y[t][r].  Un simdgroup
+// calcule ROWS lignes, un threadgroup contient SG_PER_TG simdgroups.  Un dispatch peut calculer
+// deux matrices de même format et de mêmes colonnes, W (rows lignes, dans y) puis W2 (rows2
+// lignes, dans y2) : les produits des requêtes et des clés, ou de la porte et de la branche up,
+// lisent les mêmes activations, et un dispatch coûte plus que ses quelques lignes sur ce GPU.
 
 #define ROWS 4
 #define SG_PER_TG 4
@@ -37,7 +38,7 @@ struct mv_args
     long rows2;
 };
 
-// The matrix of the rows of a simdgroup: W, or W2 beyond the rows of W (a multiple of ROWS).
+// La matrice des lignes d'un simdgroup : W, ou W2 au-delà des lignes de W (un multiple de ROWS).
 struct mv_target
 {
     device const uchar* W;
@@ -80,9 +81,9 @@ static inline void store_rows(thread const mv_target& m, constant mv_args& a, ui
         }
 }
 
-// Q4_K: 8 threads per block of 256 values, 16 bytes of quants each (one aligned load), 4 blocks
-// per iteration of the simdgroup; the scales and minimums decoded without branch.  The tokens
-// go outside the rows, so that one token reads its activations once per block.
+// Q4_K : 8 threads par bloc de 256 valeurs, 16 octets de quants chacun (un chargement aligné),
+// 4 blocs par itération du simdgroup ; les échelles et les minimums décodés sans branchement. Les
+// tokens passent à l'extérieur des lignes, pour qu'un token lise ses activations une fois par bloc.
 template <uint NT>
 kernel void mv_q4_K(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
     device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
@@ -95,9 +96,9 @@ kernel void mv_q4_K(device const uchar* W0 [[buffer(0)]], device const float* x 
     const long r0 = m.r0;
     const long nb = a.cols / 256;
     const long row_bytes = nb * 144;
-    const int k = lane % 8;              // the 16 bytes k of the block
-    const int j = k / 2;                 // the chunk of 32 bytes: sub-blocks 2j (low bits) and 2j + 1 (high bits)
-    const int p = (k % 2) * 16;          // the position in the sub-block
+    const int k = lane % 8;              // les 16 octets k du bloc
+    const int j = k / 2;                 // le morceau de 32 octets : sous-blocs 2j (bits bas) et 2j + 1 (bits hauts)
+    const int p = (k % 2) * 16;          // la position dans le sous-bloc
     const int s1 = 2 * j, s2 = 2 * j + 1;
     float acc[ROWS][NT];
     for (int r = 0; r < ROWS; ++r)
@@ -124,7 +125,7 @@ kernel void mv_q4_K(device const uchar* W0 [[buffer(0)]], device const float* x 
                 device const uchar* blk = W + row * row_bytes + b * 144;
                 device const uint* u = (device const uint*)(blk + 4);
                 const uint u0 = u[0], u1 = u[1], u2 = u[2];
-                // The scales and minimums of sub-blocks 2j and 2j + 1, as get_scale_min_k4 decodes them.
+                // Les échelles et les minimums des sous-blocs 2j et 2j + 1, tels que get_scale_min_k4 les décode.
                 const uint sc_lo = u0 & 0x3F3F3F3F, sc_hi = (u2 & 0x0F0F0F0F) | (((u0 >> 6) & 0x03030303) << 4);
                 const uint mn_lo = u1 & 0x3F3F3F3F, mn_hi = ((u2 >> 4) & 0x0F0F0F0F) | (((u1 >> 6) & 0x03030303) << 4);
                 const float sc1 = float(((s1 < 4 ? sc_lo : sc_hi) >> (8 * (s1 & 3))) & 0xFF);
@@ -146,9 +147,9 @@ kernel void mv_q4_K(device const uchar* W0 [[buffer(0)]], device const float* x 
     store_rows(m, a, lane, acc);
 }
 
-// Q6_K: the unit u of a row is block u / 4, half n = (u / 2) % 2, values l0 to l0 + 15 of each
-// quarter, l0 = (u % 2) * 16; the blocks of 210 bytes are read byte by byte, their alignment
-// being 2.  The tokens go outside the rows, as for Q4_K.
+// Q6_K : l'unité u d'une ligne est le bloc u / 4, la moitié n = (u / 2) % 2, les valeurs l0 à l0 + 15
+// de chaque quart, l0 = (u % 2) * 16 ; les blocs de 210 octets sont lus octet par octet, leur
+// alignement étant de 2.  Les tokens passent à l'extérieur des lignes, comme pour Q4_K.
 template <uint NT>
 kernel void mv_q6_K(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
     device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
@@ -208,7 +209,8 @@ kernel void mv_q6_K(device const uchar* W0 [[buffer(0)]], device const float* x 
     store_rows(m, a, lane, acc);
 }
 
-// One token (a generation step), or up to MAX_TOKENS, the accumulators of each variant held in registers.
+// Un token (une étape de génération), ou jusqu'à MAX_TOKENS, les accumulateurs de chaque variante gardés
+// dans des registres.
 template [[host_name("mv_q4_K_1")]] kernel void mv_q4_K<1>(device const uchar*, device const float*, device float*,
     constant mv_args&, device const uchar*, device float*, uint, uint, uint);
 template [[host_name("mv_q4_K_n")]] kernel void mv_q4_K<8>(device const uchar*, device const float*, device float*,
@@ -219,9 +221,9 @@ template [[host_name("mv_q6_K_n")]] kernel void mv_q6_K<8>(device const uchar*, 
     constant mv_args&, device const uchar*, device float*, uint, uint, uint);
 
 // ---------------------------------------------------------------------------------------------
-// The weights expanded to floats, for the products of the prompts (metal_device::gemm()): row r of
-// the matrix into out[r * out_stride], as qk_dequantize_row() expands it.  Each thread expands 8
-// consecutive values of a block of 256: grid (32 * blocks of a row, rows).
+// Les poids développés en floats, pour les produits des prompts (metal_device::gemm()) : la ligne r
+// de la matrice dans out[r * out_stride], comme qk_dequantize_row() la développe.  Chaque thread
+// développe 8 valeurs consécutives d'un bloc de 256 : grille (32 * blocs d'une ligne, lignes).
 
 struct dequant_args
 {
@@ -235,7 +237,7 @@ kernel void dequant_q4_K(device const uchar* W [[buffer(0)]], device float* out 
     const long nb = a.cols / 256;
     const long b = g.x / 32;
     if (b >= nb) return;
-    const uint v0 = (g.x % 32) * 8;               // the first of the 8 values of the thread
+    const uint v0 = (g.x % 32) * 8;               // la première des 8 valeurs du thread
     device const uchar* blk = W + long(g.y) * nb * 144 + b * 144;
     const uint j = v0 / 64, high = (v0 % 64) / 32, l0 = v0 % 32, sub = v0 / 32;
     device const uchar* sc = blk + 4;
@@ -285,8 +287,8 @@ kernel void dequant_q6_K(device const uchar* W [[buffer(0)]], device float* out 
 }
 
 // ---------------------------------------------------------------------------------------------
-// Rows normalized by their root mean square (cpu_runtime::rms_norm_rows): one threadgroup per
-// row; x and y may be the same rows.
+// Lignes normalisées par leur moyenne quadratique (cpu_runtime::rms_norm_rows) : un threadgroup par
+// ligne ; x et y peuvent être les mêmes lignes.
 
 struct norm_args
 {
@@ -321,7 +323,7 @@ kernel void rms_norm(device const float* x [[buffer(0)]], device const float* w 
     for (uint i = tid; i < a.width; i += threads) yr[i] = xr[i] * scale * w[i];
 }
 
-// A bias added to rows of n values: x[t * stride + i] += b[i].
+// Un biais ajouté à des lignes de n valeurs : x[t * stride + i] += b[i].
 struct bias_args
 {
     uint n;
@@ -334,7 +336,7 @@ kernel void add_bias(device float* x [[buffer(0)]], device const float* b [[buff
     if (g.x < a.n) x[g.y * a.stride + g.x] += b[g.x];
 }
 
-// The gate of the feed-forward block: gate[i] = silu(gate[i]) * up[i] (qk_silu_mul).
+// La porte du bloc feed-forward : gate[i] = silu(gate[i]) * up[i] (qk_silu_mul).
 kernel void silu_mul(device float* gate [[buffer(0)]], device const float* up [[buffer(1)]],
     constant uint& n [[buffer(2)]], uint i [[thread_position_in_grid]])
 {
@@ -344,9 +346,10 @@ kernel void silu_mul(device float* gate [[buffer(0)]], device const float* up [[
 }
 
 // ---------------------------------------------------------------------------------------------
-// The rotary positions (cpu_runtime::apply_rope): token t turns the first rope_dims values of
-// each of its heads by the cosines and sines of its position, cs[t * cs_stride + i] and
-// cs[t * cs_stride + half + i], in pairs (i, i + half) (neox) or (2i, 2i + 1).
+// Les positions rotatives (cpu_runtime::apply_rope) : le token t fait tourner les rope_dims
+// premières valeurs de chacune de ses têtes des cosinus et sinus de sa position,
+// cs[t * cs_stride + i] et cs[t * cs_stride + half + i], par paires (i, i + half) (neox) ou
+// (2i, 2i + 1).
 
 struct rope_args
 {
@@ -354,7 +357,7 @@ struct rope_args
     uint hd;
     uint half_dims;
     uint neox;
-    uint stride;       // the floats of a token
+    uint stride;       // les floats d'un token
     uint cs_stride;
 };
 
@@ -372,9 +375,9 @@ kernel void rope(device float* x [[buffer(0)]], device const float* cs [[buffer(
 }
 
 // ---------------------------------------------------------------------------------------------
-// The rotation of the 8-bit keys and of the queries that read them (qk_rotate_row): the signs
-// of a hash, then a Walsh-Hadamard transform over the largest power of two that divides hd,
-// normalized.  One thread per value, the row in threadgroup memory; hd at most 256.
+// La rotation des clés 8 bits et des requêtes qui les lisent (qk_rotate_row) : les signes d'un
+// hachage, puis une transformée de Walsh-Hadamard sur la plus grande puissance de deux qui divise
+// hd, normalisée.  Un thread par valeur, la ligne en mémoire de threadgroup ; hd au plus 256.
 
 static inline void rotate_row(threadgroup float* v, uint i, uint hd)
 {
@@ -403,9 +406,9 @@ static inline void rotate_row(threadgroup float* v, uint i, uint hd)
     threadgroup_barrier(mem_flags::mem_threadgroup);
 }
 
-// The 8-bit form of a group of 32 values held by one simdgroup (qk_float_to_q8_row): the scale
-// in half precision, raised to the next half when its rounding would put the largest value
-// beyond 127, the values rounded to the nearest, ties to even, within [-127, 127].
+// La forme 8 bits d'un groupe de 32 valeurs détenu par un simdgroup (qk_float_to_q8_row) : l'échelle
+// en demi-précision, montée au demi-flottant suivant quand son arrondi mettrait la plus grande valeur
+// au-delà de 127, les valeurs arrondies au plus proche, à égalité vers le pair, dans [-127, 127].
 static inline void q8_group(float x, device char* q, device ushort* scale, uint lane)
 {
     const float amax = simd_max(fabs(x));
@@ -417,23 +420,23 @@ static inline void q8_group(float x, device char* q, device ushort* scale, uint 
     if (lane == 0) *scale = stored;
 }
 
-// Where the keys and values of a layer lie in the region of the pool (kv_cache.h): block b
-// starts at b * block_stride, the keys of head h at k_slab + h * head_stride, the values at
-// v_slab + h * head_stride, their scales positions * hd bytes further (q8).
+// L'endroit où se trouvent les clés et valeurs d'une couche dans la région du pool (kv_cache.h) : le
+// bloc b commence à b * block_stride, les clés de la tête h à k_slab + h * head_stride, les valeurs à
+// v_slab + h * head_stride, leurs échelles positions * hd octets plus loin (q8).
 struct kv_args
 {
     uint hd;
     uint q8;
-    uint positions;    // positions of a block
-    uint kv_stride;    // the floats of the keys (or values) of a token
+    uint positions;    // positions d'un bloc
+    uint kv_stride;    // les floats des clés (ou des valeurs) d'un token
     ulong block_stride;
     ulong k_slab;
     ulong v_slab;
     ulong head_stride;
 };
 
-// The keys and values of the tokens of a pass into their rows of the pool: token t at row
-// rows[t] of block blocks[t].  Grid: one threadgroup of hd threads per (head, token).
+// Les clés et valeurs des tokens d'une passe dans leurs lignes du pool : le token t à la ligne
+// rows[t] du bloc blocks[t].  Grille : un threadgroup de hd threads par (tête, token).
 kernel void kv_store(device const float* k [[buffer(0)]], device const float* v [[buffer(1)]],
     device uchar* region [[buffer(2)]], device const int* blocks [[buffer(3)]],
     device const int* rows [[buffer(4)]], constant kv_args& a [[buffer(5)]],
@@ -466,8 +469,8 @@ kernel void kv_store(device const float* k [[buffer(0)]], device const float* v 
     }
 }
 
-// The queries scaled for the attention, and rotated as the 8-bit keys: one threadgroup of hd
-// threads per (head, token).
+// Les requêtes mises à l'échelle pour l'attention, et tournées comme les clés 8 bits : un
+// threadgroup de hd threads par (tête, token).
 struct query_args
 {
     uint hd;
@@ -493,17 +496,17 @@ kernel void prepare_queries(device float* q [[buffer(0)]], constant query_args& 
 }
 
 // ---------------------------------------------------------------------------------------------
-// The attention of the tokens of a pass over the positions they see, in parts of part_len
-// positions (the split of FlashDecoding): the grid holds one threadgroup of ATT_SG simdgroups
-// per (part, key/value head, token); each simdgroup reads its keys and values once for the rep
-// query heads that share them, with a softmax kept online, and the threadgroup writes the sums
-// of its part, unnormalized, with their maximums and their sums.  merge_attention() joins the
-// parts.  The keys of token t are those of its sequence, blocks[t * table_stride + p / positions],
-// of which it sees the first lengths[t].
+// L'attention des tokens d'une passe sur les positions qu'ils voient, par parties de part_len
+// positions (le découpage de FlashDecoding) : la grille contient un threadgroup de ATT_SG
+// simdgroups par (partie, tête de clés et valeurs, token) ; chaque simdgroup lit ses clés et
+// valeurs une fois pour les rep têtes de requête qui les partagent, avec un softmax tenu en
+// ligne, et le threadgroup écrit les sommes de sa partie, non normalisées, avec leurs maximums et
+// leurs sommes.  merge_attention() réunit les parties.  Les clés du token t sont celles de sa
+// séquence, blocks[t * table_stride + p / positions], dont il voit les lengths[t] premières.
 
 #define ATT_SG 4
 #define MAX_REP 8
-#define MAX_PER_LANE 8      // hd / 32 at most: hd up to 256
+#define MAX_PER_LANE 8      // hd / 32 au plus : hd jusqu'à 256
 
 struct attention_args
 {
@@ -511,10 +514,10 @@ struct attention_args
     uint rep;
     uint kv_heads;
     uint q8;
-    uint positions;    // positions of a block
+    uint positions;    // positions d'un bloc
     uint part_len;
-    uint parts;        // parts of the grid
-    uint q_stride;     // the floats of the queries of a token
+    uint parts;        // parties de la grille
+    uint q_stride;     // les floats des requêtes d'un token
     uint table_stride;
     ulong block_stride;
     ulong k_slab;
@@ -585,7 +588,7 @@ kernel void attention_part(device const float* q [[buffer(0)]], device const uch
             m[i] = mx;
         }
     }
-    // The simdgroups of the threadgroup joined: each in turn, with the largest maximum.
+    // Les simdgroups du threadgroup réunis : chacun à son tour, avec le plus grand maximum.
     float jm[REP], jl[REP];
     for (uint i = 0; i < REP; ++i)
     {
@@ -606,7 +609,7 @@ kernel void attention_part(device const float* q [[buffer(0)]], device const uch
             if (tl[s][i] > 0.0f) sum += tl[s][i] * exp(tm[s][i] - mx);
         jl[i] = sum;
     }
-    // The outputs, a half of the row at a time so that the threadgroup memory stays small.
+    // Les sorties, une moitié de la ligne à la fois pour que la mémoire de threadgroup reste petite.
     const uint half_hd = a.hd / 2;
     for (uint h0 = 0; h0 < a.hd; h0 += half_hd)
     {
@@ -620,7 +623,7 @@ kernel void attention_part(device const float* q [[buffer(0)]], device const uch
             }
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
-        // A single part writes the outputs, normalized, merge_attention() having nothing to join.
+        // Une seule partie écrit les sorties, normalisées, merge_attention() n'ayant rien à réunir.
         if (sg == 0)
             for (uint i = 0; i < REP; ++i)
                 for (uint idx = lane; idx < half_hd; idx += 32)
@@ -632,8 +635,8 @@ kernel void attention_part(device const float* q [[buffer(0)]], device const uch
                 }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
-    // The maximums and the sums of the part, for merge_attention(); a single part has none to give,
-    // and partial then holds nothing for it.
+    // Les maximums et les sommes de la partie, pour merge_attention() ; une seule partie n'en a aucun à
+    // donner, et partial ne contient alors rien pour elle.
     if (a.parts > 1 && sg == 0 && lane == 0)
         for (uint i = 0; i < REP; ++i)
         {
@@ -643,7 +646,8 @@ kernel void attention_part(device const float* q [[buffer(0)]], device const uch
 }
 
 
-// The sizes the models take: query heads per key/value head (REP) and values of a head per lane (PER = hd / 32).
+// Les tailles que prennent les modèles : têtes de requête par tête de clés et valeurs (REP) et valeurs
+// d'une tête par voie (PER = hd / 32).
 template [[host_name("attention_part_1_2")]] kernel void attention_part<1, 2>(device const float*, device const uchar*,
     device const int*, device const int*, device float*, constant attention_args&, device float*, uint3, uint, uint);
 template [[host_name("attention_part_1_4")]] kernel void attention_part<1, 4>(device const float*, device const uchar*,
@@ -669,9 +673,9 @@ template [[host_name("attention_part_8_4")]] kernel void attention_part<8, 4>(de
 template [[host_name("attention_part_8_8")]] kernel void attention_part<8, 8>(device const float*, device const uchar*,
     device const int*, device const int*, device float*, constant attention_args&, device float*, uint3, uint, uint);
 
-// The parts of the attention joined: for token t and query head h, the parts its length
-// reaches, each weighted by exp(its maximum - the largest), divided by the total sum, into
-// ctx[t * q_stride + h * hd].  One threadgroup of hd threads per (head, token).
+// Les parties de l'attention réunies : pour le token t et la tête de requête h, les parties qu'atteint
+// sa longueur, chacune pondérée par exp(son maximum - le plus grand), divisées par la somme totale,
+// dans ctx[t * q_stride + h * hd].  Un threadgroup de hd threads par (tête, token).
 kernel void merge_attention(device const float* partial [[buffer(0)]], device const int* lengths [[buffer(1)]],
     device float* ctx [[buffer(2)]], constant attention_args& a [[buffer(3)]],
     uint2 tg [[threadgroup_position_in_grid]], uint e [[thread_index_in_threadgroup]])

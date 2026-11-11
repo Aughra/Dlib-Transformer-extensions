@@ -70,7 +70,8 @@ def api_of(link):
     return origin, m.group(2)
 
 
-# The codes and the passwords of the links read, the code of the default link first, which hidden() replaces as well.
+# Les codes et les mots de passe des liens lus, le code du lien par défaut d'abord, que hidden() remplace
+# aussi.
 _secrets = {api_of(DEFAULT_LINK)[1]}
 
 

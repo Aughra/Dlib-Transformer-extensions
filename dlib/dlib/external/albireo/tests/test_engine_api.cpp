@@ -1,16 +1,17 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
-    Checks an engine library through its C interface, on a tiny model it writes itself.
+    Vérifie une bibliothèque de moteur par son interface C, sur un tout petit modèle qu'il écrit lui-même.
 
         test_engine_api engine_library [folder]
 
-    The invalid arguments and documents of every function must be refused with their code,
-    the settings and the sampling parameters beyond their ranges too.  Then several threads
-    submit and cancel requests while the model is unloaded and loaded again, the memory of
-    the keys and values runs short, and the engine is destroyed with requests running: every
-    request accepted must receive exactly one final event, and nothing after it.  Returns 0
-    when every check passes, and when the processor lacks the instructions of the engine.
+    Les arguments et documents invalides de chaque fonction doivent être refusés avec leur code,
+    de même que les réglages et les paramètres d'échantillonnage hors de leurs plages.  Ensuite,
+    plusieurs threads soumettent et annulent des requêtes pendant que le modèle est déchargé puis
+    rechargé, que la mémoire des clés et valeurs vient à manquer, et que le moteur est détruit avec
+    des requêtes en cours : chaque requête acceptée doit recevoir exactement un événement final, et
+    rien après lui.  Renvoie 0 quand chaque vérification réussit, et quand le processeur n'a pas les
+    instructions du moteur.
 */
 
 #include <chrono>
@@ -45,7 +46,7 @@ namespace
         }
     }
 
-    // The events of one request.
+    // Les événements d'une requête.
     struct tracker
     {
         std::mutex m;
@@ -76,7 +77,7 @@ namespace
         return t.cv.wait_for(lock, std::chrono::seconds(seconds), [&]() { return t.finals > 0; });
     }
 
-    // The texts of the answer and of the reasoning of one request, and its final event.
+    // Les textes de la réponse et du raisonnement d'une requête, et son événement final.
     struct collector
     {
         std::mutex m;
@@ -107,7 +108,7 @@ namespace
         return c.cv.wait_for(lock, std::chrono::seconds(seconds), [&]() { return c.finals > 0; });
     }
 
-    // The text without the white space at its ends.
+    // Le texte sans les blancs à ses extrémités.
     std::string trimmed(const std::string& s)
     {
         const size_t a = s.find_first_not_of(" \n");
@@ -154,7 +155,7 @@ int main(int argc, char** argv)
     }
     std::printf("albireo engine interface (%s)\n", description["variant"].as_string().c_str());
 
-    // Arguments and documents.
+    // Arguments et documents.
     char err[1024] = { 0 };
     expect(lib.create("{\"threads\": ", nullptr, nullptr, err, sizeof(err)) == nullptr && err[0] != 0,
         "an invalid configuration is refused with a message");
@@ -207,11 +208,12 @@ int main(int argc, char** argv)
     std::printf("  arguments, settings and parameters out of range refused\n");
 
     /*
-        A request whose reasoning and tool calls carry the private-use characters U+E000 and
-        U+E001 around a digit, the marks the engine places images with: a model that reads
-        images strips them from every rendered string so that no field can pose as an image,
-        and a text model takes them as plain text.  Either way the request runs to its end and
-        receives one final event, rather than faulting on a forged placeholder.
+        Une requête dont le raisonnement et les appels d'outils portent les caractères à usage
+        privé U+E000 et U+E001 autour d'un chiffre, les marques par lesquelles le moteur place les
+        images : un modèle qui lit des images les retire de chaque chaîne rendue pour qu'aucun champ
+        ne puisse se faire passer pour une image, et un modèle de texte les prend comme du texte
+        ordinaire.  Dans les deux cas, la requête va jusqu'à sa fin et reçoit un événement final,
+        au lieu de planter sur un emplacement contrefait.
     */
     {
         const std::string e0 = "\xEE\x80\x80";   // U+E000
@@ -259,15 +261,15 @@ int main(int argc, char** argv)
     }
 
     /*
-        The history of an answer read ahead of the next question.  The answer, 40 letters
-        among a, b, c and d (every other token banned), ends at its length; the engine then
-        reads it as the next request renders it, without the empty reasoning that opened it.
-        The next request finds those tokens cached and computes its question only: its
-        uncached tokens are those of "more" and of the turns around it, fewer than 30, where
-        the answer and its end would add 48 more.
+        L'historique d'une réponse lu à l'avance de la question suivante.  La réponse, 40 lettres
+        parmi a, b, c et d (tous les autres tokens bannis), se termine à sa longueur ; le moteur la
+        lit alors telle que la requête suivante la rend, sans le raisonnement vide qui l'ouvrait.
+        La requête suivante trouve ces tokens en cache et ne calcule que sa question : ses tokens
+        hors cache sont ceux de "more" et des tours qui l'entourent, moins de 30, là où la réponse
+        et sa fin en ajouteraient 48 de plus.
     */
     {
-        // The size of the vocabulary: the first identifier the model cannot detokenize.
+        // La taille du vocabulaire : le premier identifiant que le modèle ne peut pas détokeniser.
         int vocab = 0;
         for (;; ++vocab)
         {
@@ -294,7 +296,7 @@ int main(int argc, char** argv)
             m["content"] = text;
             return m;
         };
-        // The tokens the warm-ups read so far, and the warm-ups not ended.
+        // Les tokens lus jusqu'ici par les préchauffages, et les préchauffages non terminés.
         auto warmed_total = [&](long long& warming) {
             json stats;
             lib.run_query(e, json::parse_or_null("{\"op\":\"stats\"}"), stats);
@@ -336,7 +338,7 @@ int main(int argc, char** argv)
         expect(wait_final(first, 60), "the first answer ends");
         expect(answer.size() == 40 && answer.find_first_not_of("abcd") == std::string::npos,
             "the first answer holds 40 letters a to d: " + answer);
-        // The warm-up reads in the background, and ends with the history.
+        // Le préchauffage lit en arrière-plan, et se termine avec l'historique.
         long long warmed = 0;
         for (int i = 0; i < 300; ++i)
         {
@@ -358,7 +360,7 @@ int main(int argc, char** argv)
             expect(prompt > 48 && prompt - cached < 30, "the next question finds its history cached ("
                 + std::to_string(cached) + " of " + std::to_string(prompt) + " tokens)");
         }
-        // A question that follows its answer at once takes over the warm-up, and ends once.
+        // Une question qui suit aussitôt sa réponse prend le relais du préchauffage, et se termine une fois.
         messages.push_back(content("assistant", "a"));
         messages.push_back(content("user", "again"));
         tracker third, fourth;
@@ -376,14 +378,14 @@ int main(int argc, char** argv)
     }
 
     /*
-        The guard against loops and the budget of a reasoning, the token "a" favoured by a bias
-        of 100 at temperature 0 so that every answer repeats it.  The engine stops an answer
-        once nine tenths of its last 384 tokens end a passage of 16 tokens it wrote before.  A
-        model whose template opens the reasoning of every answer, asked for no reasoning, has its
-        reasoning ended at once, or after the tokens of the budget the request gives: the engine
-        writes the sentence of the authors of Qwen3 and the marker that closes the reasoning,
-        which the client does not receive as reasoning, and the answer then receives the tokens
-        the request gave it.
+        La garde contre les boucles et le budget d'un raisonnement, le token "a" favorisé par un biais
+        de 100 à température 0 pour que chaque réponse le répète.  Le moteur arrête une réponse dès
+        que neuf dixièmes de ses 384 derniers tokens terminent un passage de 16 tokens qu'il a déjà
+        écrit.  Un modèle dont le template ouvre le raisonnement de chaque réponse, à qui l'on ne
+        demande aucun raisonnement, voit son raisonnement terminé aussitôt, ou après les tokens du
+        budget que donne la requête : le moteur écrit la phrase des auteurs de Qwen3 et le marqueur
+        qui ferme le raisonnement, que le client ne reçoit pas comme raisonnement, et la réponse
+        reçoit alors les tokens que la requête lui a donnés.
     */
     {
         const std::string thinking_path = folder + "test_engine_api_thinking.gguf";
@@ -423,7 +425,7 @@ int main(int argc, char** argv)
         }
         expect(always == 1 && switched == 1, "the description of a model tells whether it always reasons");
 
-        // The tokens of the end of a reasoning the engine writes.
+        // Les tokens de la fin d'un raisonnement qu'écrit le moteur.
         json counted;
         json q = json::object();
         q["op"] = "tokenize";
@@ -434,8 +436,8 @@ int main(int argc, char** argv)
         const long long closing = static_cast<long long>(counted["tokens"].size());
 
         /*
-            The end of a reasoning that reached its budget, which the engine writes, counts among the
-            tokens of the answer and stays out of the reasoning the client receives.
+            La fin d'un raisonnement qui a atteint son budget, qu'écrit le moteur, compte parmi les
+            tokens de la réponse et reste hors du raisonnement que reçoit le client.
         */
         collector brief;
         const json g = ask("t", ",\"reasoning\":false,\"reasoning_budget\":24,\"max_tokens\":40", brief);
@@ -451,14 +453,15 @@ int main(int argc, char** argv)
             && g0["usage"]["completion_tokens"].as_int(0) == closing + 8,
             "a budget of 0 ends the reasoning at once: " + g0.dump());
 
-        // A model that always reasons, asked for no reasoning: the engine ends its reasoning at once.
+        // Un modèle qui raisonne toujours, à qui l'on ne demande aucun raisonnement : le moteur termine
+        // son raisonnement aussitôt.
         collector plain;
         const json g1 = ask("t", ",\"reasoning\":false,\"max_tokens\":8", plain);
         expect(plain.reasoning.empty() && trimmed(plain.content) == std::string(8, 'a')
             && g1["usage"]["completion_tokens"].as_int(0) == closing + 8,
             "a model that always reasons, asked for no reasoning, answers at once: " + g1.dump());
 
-        // A budget given as null is no budget.
+        // Un budget donné à null n'est pas un budget.
         collector unset;
         const json g2 = ask("t", ",\"reasoning\":false,\"reasoning_budget\":null,\"max_tokens\":8", unset);
         expect(unset.reasoning.empty() && trimmed(unset.content) == std::string(8, 'a')
@@ -470,7 +473,8 @@ int main(int argc, char** argv)
         expect(background.reasoning.empty() && trimmed(background.content) == std::string(4, 'a'),
             "the work in the background answers at once: " + background.reasoning);
 
-        // The effort low gives a short reasoning, 256 tokens for the work in the background, within max_tokens.
+        // L'effort low donne un raisonnement court, 256 tokens pour le travail en arrière-plan, dans la
+        // limite de max_tokens.
         collector low;
         ask("t", ",\"reasoning_effort\":\"low\",\"priority\":\"background\",\"max_tokens\":"
             + std::to_string(256 + closing + 4), low);
@@ -478,13 +482,13 @@ int main(int argc, char** argv)
             "the effort low of the work in the background reasons for 256 tokens: "
             + std::to_string(low.reasoning.size()));
 
-        // A reasoning asked for has no budget by default, even for the work in the background.
+        // Un raisonnement demandé n'a pas de budget par défaut, même pour le travail en arrière-plan.
         collector deep;
         const json h = ask("t", ",\"reasoning\":true,\"priority\":\"background\",\"max_tokens\":300", deep);
         expect(deep.reasoning == std::string(300, 'a') && deep.content.empty()
             && h["finish_reason"].as_string() == "length", "a reasoning asked for has no budget by default");
 
-        // The repetitions of the reasoning and those of the answer are counted apart.
+        // Les répétitions du raisonnement et celles de la réponse sont comptées à part.
         collector parts;
         const json i = ask("t", ",\"reasoning\":false,\"reasoning_budget\":300,\"max_tokens\":390", parts);
         expect(trimmed(parts.content) == std::string(390, 'a') && !i["repetition"].as_bool(false)
@@ -492,8 +496,8 @@ int main(int argc, char** argv)
             "the answer after a reasoning of 300 tokens receives its 390 tokens: " + i.dump());
 
         /*
-            A reasoning that goes round in circles ends as at its budget, and the answer then
-            receives the tokens of the request, whatever is left of the budget.
+            Un raisonnement qui tourne en rond se termine comme à son budget, et la réponse reçoit
+            alors les tokens de la requête, quel que soit le reste du budget.
         */
         collector circles;
         const json j = ask("t", ",\"reasoning\":false,\"reasoning_budget\":1000,\"max_tokens\":40", circles);
@@ -505,7 +509,7 @@ int main(int argc, char** argv)
             && j["usage"]["completion_tokens"].as_int(0) == static_cast<long long>(looped) + closing + 40,
             "the answer after a reasoning ended early receives the tokens of the request: " + j.dump());
 
-        // The same with a reasoning asked for, whose answer then loops in turn.
+        // La même chose avec un raisonnement demandé, dont la réponse boucle alors à son tour.
         collector both;
         const json k = ask("t", ",\"reasoning\":true,\"max_tokens\":1500", both);
         expect(both.reasoning.size() >= 384 && both.reasoning.find_first_not_of('a') == std::string::npos
@@ -514,7 +518,8 @@ int main(int argc, char** argv)
             && k["finish_reason"].as_string() == "length", "a reasoning asked for that loops, then its answer: "
             + k.dump());
 
-        // The stop sequences of a request apply to its answer, not to the short reasoning the engine gives it.
+        // Les séquences d'arrêt d'une requête s'appliquent à sa réponse, pas au raisonnement court que le
+        // moteur lui donne.
         collector stopped;
         const json l = ask("t", ",\"reasoning\":false,\"reasoning_budget\":24,\"max_tokens\":40,"
             "\"stop\":[\"\\n\\n\"]", stopped);
@@ -526,10 +531,10 @@ int main(int argc, char** argv)
     }
 
     /*
-        Three threads submit 30 requests each and cancel a third of them.  The keys and values
-        of 1 MB hold 16 blocks of 256 positions for 16 sequences of up to 4 blocks: the answers
-        run out of memory and the prompts give theirs back.  The first round runs to its end,
-        the second one meets the unloading of the model, which is then loaded again.
+        Trois threads soumettent 30 requêtes chacun et en annulent un tiers.  Les clés et valeurs
+        de 1 Mo contiennent 16 blocs de 256 positions pour 16 séquences d'au plus 4 blocs : les
+        réponses manquent de mémoire et les prompts rendent la leur.  Le premier tour va jusqu'à sa
+        fin, le second rencontre le déchargement du modèle, qui est ensuite rechargé.
     */
     for (int round = 0; round < 2; ++round)
     {
@@ -565,7 +570,7 @@ int main(int argc, char** argv)
                     }
                     else
                     {
-                        // Refused while the model was unloaded.
+                        // Refusée pendant que le modèle était déchargé.
                         expect(rc == ALBIREO_E_INVALID_ARGUMENT, std::string("refusal of a request: ") + e2);
                     }
                 }
@@ -601,7 +606,8 @@ int main(int argc, char** argv)
             round == 1 ? " and a reload" : "", summary.c_str());
     }
 
-    // The engine destroyed with requests running: each one ends once, before destroy returns.
+    // Le moteur détruit avec des requêtes en cours : chacune se termine une fois, avant que destroy rende
+    // la main.
     std::vector<std::unique_ptr<tracker>> running;
     for (int i = 0; i < 6; ++i)
     {

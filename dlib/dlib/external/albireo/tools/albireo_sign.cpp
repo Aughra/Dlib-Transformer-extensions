@@ -1,25 +1,25 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
-    albireo-sign: the signatures of the documents the service downloads.
+    albireo-sign : les signatures des documents que télécharge le service.
 
         albireo-sign keygen <private key> <public key>
-            Creates a key pair (ECDSA P-256) in two new PEM files: a file in place is never
-            replaced.  Only the account that runs the program may read the private key.  The
-            public key goes into host/crypto.cpp (feed_public_key_pem); the private key stays
-            with the publisher.
+            Crée une paire de clés (ECDSA P-256) dans deux nouveaux fichiers PEM : un fichier
+            en place n'est jamais remplacé.  Seul le compte qui lance le programme peut lire la
+            clé privée.  La clé publique va dans host/crypto.cpp (feed_public_key_pem) ; la clé
+            privée reste chez l'éditeur.
 
         albireo-sign sign <private key> <file> [<file>...]
-            Writes <file>.sig, the signature of each file in base64, as the service expects
-            it next to the update feed and the model catalog.
+            Écrit <file>.sig, la signature de chaque fichier en base64, telle que le service
+            l'attend à côté du flux de mises à jour et du catalogue de modèles.
 
         albireo-sign verify <file> [<public key>]
-            Checks <file>.sig against the given public key, or against the key the
-            programs were built with.
+            Vérifie <file>.sig avec la clé publique donnée, ou avec la clé avec laquelle les
+            programmes ont été construits.
 
         albireo-sign hash <file> [<file>...]
-            Prints the size and the SHA-256 of each file, the values of the catalog and of
-            the feed.
+            Affiche la taille et le SHA-256 de chaque fichier, les valeurs du catalogue et du
+            flux.
 */
 
 #include <iostream>
@@ -57,15 +57,15 @@ namespace
 
 
     /*
-        Creates the file path, which must not exist, with data.  With owner_only, the account
-        that runs this program alone reads and writes it: the access list names that account
-        only on Windows, and the mode is 0600 elsewhere.  A file the write leaves incomplete
-        is removed.
+        Crée le fichier path, qui ne doit pas exister, avec data.  Avec owner_only, seul le
+        compte qui lance ce programme le lit et l'écrit : la liste d'accès ne nomme que ce
+        compte sous Windows, et le mode est 0600 ailleurs.  Un fichier que l'écriture laisse
+        incomplet est supprimé.
     */
     bool create_new_file(const std::string& path, const std::string& data, bool owner_only, std::string& error)
     {
         const std::string exists = path + " exists already: a key in place is never replaced";
-        // O_EXCL refuses any entry of that name, a link included.
+        // O_EXCL refuse toute entrée de ce nom, lien compris.
         const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, owner_only ? 0600 : 0644);
         if (fd < 0)
         {
@@ -89,7 +89,8 @@ namespace
 
     int keygen(const std::string& private_path, const std::string& public_path)
     {
-        // The services hold the public half of the key of the feed: a key in place is never replaced.
+        // Les services détiennent la moitié publique de la clé du flux : une clé en place n'est jamais
+        // remplacée.
         for (const std::string& p : { private_path, public_path })
         {
             if (albireo::file_exists(p) || albireo::dir_exists(p) || albireo::is_link(p))
@@ -122,7 +123,7 @@ namespace
             else if (!create_new_file(public_path, reinterpret_cast<const char*>(public_pem), false, error))
             {
                 std::cerr << error << "\n";
-                // The private key goes with the pair that could not be written whole.
+                // La clé privée part avec la paire qui n'a pas pu être écrite en entier.
                 albireo::remove_file(private_path);
             }
             else

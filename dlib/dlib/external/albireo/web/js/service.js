@@ -206,11 +206,7 @@ const schemas = {
   models_dir: schema('Où vivent les modèles',
     box(30, 76, 150, 56, 'Service', 's-blue') + arrow(180, 104, 300, 104, 'lit') +
     box(300, 60, 260, 88, 'Dossier des modèles', 's-gold', 'vide : dans les données') +
-    text(300, 180, 'un disque externe convient, s’il reste branché', 's-f'), 200),
-  security: schema('Sur le Mac, la porte est ouverte',
-    box(30, 70, 150, 56, 'Page Albireo', 's-blue') + arrow(180, 98, 330, 98, 'tout permis') +
-    box(330, 70, 150, 56, 'Service', 's-gold', '127.0.0.1') +
-    box(30, 146, 150, 44, 'autre site web', 's-soft') + arrow(180, 168, 330, 116, 'pourrait aussi', 's-cut'), 205)
+    text(300, 180, 'un disque externe convient, s’il reste branché', 's-f'), 200)
 };
 
 // ---------------------------------------------------------------------------------------------------
@@ -703,26 +699,6 @@ const items = {
   }
 };
 
-const security = {
-  title: 'Pas de serrure sur ce Mac',
-  effect: "Version personnelle : la page peut tout régler sans mot de passe, sur le Mac comme, si tu l’ouvres, depuis le réseau.",
-  principle: "L’original protégeait ses réglages par un jeton que seule son icône Windows lisait, et refusait les " +
-    "requêtes venues d’autres sites. Ce fork a retiré les deux.",
-  pros: ['Tout se règle depuis la page, sans fichier à éditer ni clé à chercher.'],
-  cons: ['Un site web piégé ouvert dans un navigateur du Mac pourrait, en théorie, piloter le service.'],
-  normal: "Sur le Mac, Albireo fait confiance à tout ce qui lui parle depuis le Mac lui-même. C’est simple, et sans " +
-    "danger tant qu’on ne visite pas de site malveillant pendant que le service tourne. Les autres appareils de la " +
-    "maison passent par la porte réseau, ouverte ou protégée selon le mot de passe choisi plus bas.",
-  owl: "Le service n’écoute que 127.0.0.1 (port du Mac) ; le contrôle des en-têtes Host et Origin a été retiré, et avec " +
-    "lui la protection contre le DNS rebinding : une page malveillante qui ferait résoudre son nom vers 127.0.0.1 " +
-    "pourrait appeler l’API. Les navigateurs bloquent encore les requêtes JSON d’une autre origine par le CORS " +
-    "(pré-vérification sans réponse), mais pas ce scénario. Le jeton X-Albireo-Admin n’existe plus.",
-  marmot: "C’est ta chambre sans verrou : chez toi, c’est pratique, personne ne vient fouiller. Mais si un inconnu " +
-    "entrait dans la maison, il pourrait y entrer aussi.",
-  bee: "Si un jour tu ouvres Albireo à d’autres personnes sur ce Mac, ou si tu navigues sur des sites douteux pendant " +
-    "qu’il tourne, une serrure redeviendrait utile. Demande-la : elle se remet."
-};
-
 // ---------------------------------------------------------------------------------------------------
 // Le rendu.
 
@@ -908,7 +884,7 @@ export function serviceTab(body, env) {
     const el = h('div', { class: 'svc-card', 'data-key': key },
       h('div', { class: 'svc-head' },
         h('div', { class: 'svc-title' }, h('span', null, item.title), help, badge, changed),
-        key === 'security' ? null : control(key)),
+        control(key)),
       h('p', { class: 'svc-effect' }, item.effect),
       advice(key),
       key === 'lan' ? lanAddresses() : null,
@@ -1031,7 +1007,6 @@ export function serviceTab(body, env) {
   function render() {
     const open = new Set(Array.from(list.querySelectorAll('.svc-card.open')).map((c) => c.dataset.key));
     list.replaceChildren(
-      card('security', security),
       tools(),
       ...groups.map((g) => h('section', { class: 'svc-group' }, h('h4', null, g.title), h('p', { class: 'help' }, g.note),
         g.items.map((k) => card(k, items[k])))));

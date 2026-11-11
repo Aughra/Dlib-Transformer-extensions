@@ -22,10 +22,10 @@ namespace pseudalis
 {
 
     /*
-        The public key of the update feed, read at the configuration from
-        resources/feed-public-key.pem (PSEUDALIS_FEED_PUBLIC_KEY_FILE in CMakeLists.txt), which
-        pseudalis-sign keygen writes with the private key of the publisher.  A program built
-        without it verifies no feed, and so installs no update.
+        La clé publique du flux de mises à jour, lue à la configuration depuis
+        resources/feed-public-key.pem (PSEUDALIS_FEED_PUBLIC_KEY_FILE dans CMakeLists.txt), que
+        pseudalis-sign keygen écrit avec la clé privée de l'éditeur.  Un programme construit
+        sans elle ne vérifie aucun flux, et n'installe donc aucune mise à jour.
     */
     const char* const feed_public_key_pem = PSEUDALIS_FEED_PUBLIC_KEY;
 

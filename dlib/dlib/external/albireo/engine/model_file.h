@@ -20,13 +20,13 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                A file mapped read-only into the address space of the process.  The
-                weights of a model are read in place from the mapping: the operating
-                system loads the pages on first use, shares them between processes and
-                drops them under memory pressure without writing anything back, which a
-                copy in the heap would not allow.
+                Un fichier mappé en lecture seule dans l'espace d'adressage du processus.
+                Les poids d'un modèle sont lus sur place dans le mappage : le système
+                d'exploitation charge les pages à la première utilisation, les partage
+                entre processus et les abandonne sous pression mémoire sans rien réécrire,
+                ce que ne permettrait pas une copie dans le tas.
 
-                The path is UTF-8 on every platform.
+                Le chemin est en UTF-8 sur toutes les plateformes.
         !*/
     public:
         explicit mapped_file(const std::string& utf8_path);
@@ -37,7 +37,7 @@ namespace albireo
         const uint8_t* data() const { return data_; }
         uint64_t size() const { return size_; }
 
-        // Asks the system to read a range ahead of its use.
+        // Demande au système de lire une plage avant son utilisation.
         void prefetch(uint64_t offset, uint64_t length) const;
 
     private:
@@ -49,7 +49,7 @@ namespace albireo
     {
         std::string name;
         dlib::ggml_type type = dlib::ggml_type::F32;
-        std::vector<uint64_t> dims;   // ggml order, dims[0] contiguous
+        std::vector<uint64_t> dims;   // ordre ggml, dims[0] contigu
         const uint8_t* data = nullptr;
         uint64_t nbytes = 0;
 
@@ -65,9 +65,9 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                A GGUF model opened for inference: its metadata, parsed by
-                dlib::gguf_reader from the mapping, and a view of every tensor pointing
-                into the mapping.
+                Un modèle GGUF ouvert pour l'inférence : ses métadonnées, analysées par
+                dlib::gguf_reader depuis le mappage, et une vue de chaque tenseur pointant
+                dans le mappage.
         !*/
     public:
         explicit model_file(const std::string& utf8_path);
@@ -75,29 +75,30 @@ namespace albireo
         const dlib::gguf_reader& reader() const { return *reader_; }
         const std::string& path() const { return path_; }
         uint64_t size() const { return file_->size(); }
-        // The first byte of the mapping of the file, on a page: the GPU takes it whole (cpu_runtime_metal.cpp).
+        // Le premier octet du mappage du fichier, sur une page : le GPU le prend en entier
+        // (cpu_runtime_metal.cpp).
         const uint8_t* data() const { return file_->data(); }
 
         const tensor_view* find(const std::string& name) const;
         bool has(const std::string& name) const { return find(name) != nullptr; }
 
-        // The tensor of the given name as a matrix of rows x cols, rows being its outer
-        // dimension.  Throws when the tensor is missing or has other dimensions.
+        // Le tenseur du nom donné sous forme de matrice rows x cols, rows étant sa dimension
+        // externe.  Lève une exception quand le tenseur manque ou a d'autres dimensions.
         weight_matrix matrix(const std::string& name, long rows, long cols) const;
 
-        // Same for an optional tensor, which yields an invalid matrix when absent.
+        // Idem pour un tenseur facultatif, qui donne une matrice invalide quand il est absent.
         weight_matrix optional_matrix(const std::string& name, long rows, long cols) const;
 
-        // A small tensor expanded to floats (norms, biases, frequency factors).  Throws
-        // when it is missing or does not hold exactly count values.
+        // Un petit tenseur converti en flottants (normes, biais, facteurs de fréquence).  Lève
+        // une exception quand il manque ou ne contient pas exactement count valeurs.
         std::vector<float> floats(const std::string& name, size_t count) const;
         bool optional_floats(const std::string& name, size_t count, std::vector<float>& out) const;
 
-        // Expert slice e of a 3D tensor holding n_experts matrices of rows x cols.
+        // Tranche de l'expert e d'un tenseur 3D contenant n_experts matrices rows x cols.
         weight_matrix expert_matrix(const std::string& name, long rows, long cols, long expert, long n_experts) const;
 
-        // Reads the whole data section once so that the first token does not wait for the
-        // disk, on a background thread when asynchronous is true.
+        // Lit toute la section de données une fois pour que le premier token n'attende pas le
+        // disque, sur un thread d'arrière-plan quand asynchronous vaut true.
         void warm_up(bool asynchronous) const;
 
     private:

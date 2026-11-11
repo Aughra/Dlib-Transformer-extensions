@@ -1,10 +1,10 @@
-// NEON kernels of the macOS port (Apple Silicon), included by qkernels.cpp inside namespace
-// albireo when ALBIREO_QK_NEON is set (ARM64 with the dot product instructions).
+// Noyaux NEON du portage macOS (Apple Silicon), inclus par qkernels.cpp dans l'espace de noms
+// albireo quand ALBIREO_QK_NEON est défini (ARM64 avec les instructions de produit scalaire).
 //
-// Each kernel computes, block by block, the same integer sums as its reference (dot_*_ref),
-// which are exact whatever the order of the additions, then ends each block with the same
-// floating point expression in the same order: its result is the one of the reference, bit
-// for bit, so that an answer does not depend on the kernel that computed it.
+// Chaque noyau calcule, bloc par bloc, les mêmes sommes entières que sa référence (dot_*_ref),
+// exactes quel que soit l'ordre des additions, puis termine chaque bloc par la même expression
+// en virgule flottante dans le même ordre : son résultat est celui de la référence, bit pour
+// bit, si bien qu'une réponse ne dépend pas du noyau qui l'a calculée.
 
 namespace
 {
@@ -17,8 +17,8 @@ namespace
             const float d = h2f(w) * y[b].d;
             const float dmin = h2f(w + 2) * y[b].d;
             /*
-                The eight scales and the eight minimums of the block decoded at once, in the order
-                of get_scale_min_k4(0 to 7): u[0..1] hold the scales, u[2..3] the minimums.
+                Les huit échelles et les huit minimums du bloc décodés d'un coup, dans l'ordre
+                de get_scale_min_k4(0 à 7) : u[0..1] contiennent les échelles, u[2..3] les minimums.
             */
             uint32_t u[4];
             std::memcpy(u, w + 4, 12);
@@ -28,11 +28,12 @@ namespace
             u[2] = low_mins;
             u[0] &= 0x3F3F3F3F;
             const uint8_t* sc = reinterpret_cast<const uint8_t*>(u);
-            // The minimums against the sums of the activations, 32 by 32: pair k of bsums is group k.
+            // Les minimums contre les sommes des activations, 32 par 32 : la paire k de bsums est le groupe k.
             const int16x8_t pairs = vpaddq_s16(vld1q_s16(y[b].bsums), vld1q_s16(y[b].bsums + 8));
             const int16x8_t mins = vreinterpretq_s16_u16(vmovl_u8(vld1_u8(sc + 8)));
             const int summ = vaddvq_s32(vmlal_high_s16(vmull_s16(vget_low_s16(pairs), vget_low_s16(mins)), pairs, mins));
-            // The products stay in vectors, each group of 32 scaled there, and are summed once per block.
+            // Les produits restent dans des vecteurs, chaque groupe de 32 y est mis à l'échelle, et sont
+            // additionnés une fois par bloc.
             const uint8_t* qs = w + 16;
             const int8_t* q8 = y[b].qs;
             int32x4_t acc1 = vdupq_n_s32(0), acc2 = vdupq_n_s32(0);
@@ -40,7 +41,8 @@ namespace
             {
                 const uint8x16_t q0 = vld1q_u8(qs);
                 const uint8x16_t q1 = vld1q_u8(qs + 16);
-                // The low four bits against the first 32 activations, the high four against the next 32.
+                // Les quatre bits de poids faible contre les 32 premières activations, les quatre de poids
+                // fort contre les 32 suivantes.
                 int32x4_t a1 = vdotq_s32(vdupq_n_s32(0), vreinterpretq_s8_u8(vandq_u8(q0, m4)), vld1q_s8(q8));
                 a1 = vdotq_s32(a1, vreinterpretq_s8_u8(vandq_u8(q1, m4)), vld1q_s8(q8 + 16));
                 int32x4_t a2 = vdotq_s32(vdupq_n_s32(0), vreinterpretq_s8_u8(vshrq_n_u8(q0, 4)), vld1q_s8(q8 + 32));
@@ -69,13 +71,13 @@ namespace
             const int8_t* sc = reinterpret_cast<const int8_t*>(w + 192);
             const float d = h2f(w + 208) * y[b].d;
             const int8_t* q8 = y[b].qs;
-            // The sums s[j] of the reference stay in vectors, each scaled by sc[j] there, and are
-            // summed once per block.
+            // Les sommes s[j] de la référence restent dans des vecteurs, chacune y est multipliée par sc[j],
+            // et sont additionnées une fois par bloc.
             const int32x4_t zero = vdupq_n_s32(0);
             int32x4_t acc1 = zero, acc2 = zero;
             for (int k = 0; k < 2; ++k)
             {
-                // Values 16 h to 16 h + 15 of each quarter: the sums s[2 i + h] of the reference.
+                // Valeurs 16 h à 16 h + 15 de chaque quart : les sommes s[2 i + h] de la référence.
                 for (int h = 0; h < 2; ++h)
                 {
                     const uint8x16_t la = vld1q_u8(ql + 16 * h);
@@ -102,13 +104,13 @@ namespace
     }
 
     /*
-        The products of NT tokens of X (stride xs) with 4 rows of W (K floats each, one after
-        the other), written to Y (stride ys) or added to it: each weight read serves NT tokens.
-        Each sum keeps the order of dot_f32_ref, four lanes over the columns, the columns left
-        over added to the first lane, then (s0 + s1) + (s2 + s3), and its roundings: each
-        product rounded, then added, as Apple clang compiles the reference (a fused multiply-add
-        changes the last bit of most sums).  The results are those of qk_dot_f32() in this
-        build, bit for bit.
+        Les produits de NT tokens de X (pas xs) avec 4 lignes de W (K floats chacune, l'une après
+        l'autre), écrits dans Y (pas ys) ou ajoutés à Y : chaque poids lu sert NT tokens.
+        Chaque somme garde l'ordre de dot_f32_ref, quatre voies sur les colonnes, les colonnes
+        restantes ajoutées à la première voie, puis (s0 + s1) + (s2 + s3), et ses arrondis : chaque
+        produit arrondi, puis ajouté, comme Apple clang compile la référence (une
+        multiplication-addition fusionnée change le dernier bit de la plupart des sommes).  Les
+        résultats sont ceux de qk_dot_f32() dans ce build, bit pour bit.
     */
     template <int NT>
     void gemm_neon(const float* X, long xs, const float* W, long K, float* Y, long ys, bool accumulate)
@@ -149,20 +151,21 @@ namespace
     }
 
     /*
-        The attention by tiles (qk_attention_scores and qk_attention_values), with the sums of
-        the portable code in the same order: each score is one sum over the hd elements, from
-        the first to the last, each output element one sum over the keys of a group, from the
-        first to the last.  The four lanes of a register hold four keys (scores) or four
-        elements (values), never two parts of one sum.  The roundings are those of the portable
-        loops as Apple clang compiles them.  A score of hd terms: over the first hd / 4 * 4,
-        each product rounded, then added (the loop is vectorized); over the last hd % 4, a
-        fused multiply-add.  A value: a fused multiply-add for every key (the loop reads the
-        values with a stride of hd and stays scalar; only hd == 1, which no model has, is
-        vectorized).  The results are those of the portable code of this build, bit for bit.  The halves are
-        converted by the instruction of the processor, exact as the table of h2f().
+        L'attention par tuiles (qk_attention_scores et qk_attention_values), avec les sommes du
+        code portable dans le même ordre : chaque score est une somme sur les hd éléments, du
+        premier au dernier, chaque élément de sortie une somme sur les clés d'un groupe, de la
+        première à la dernière.  Les quatre voies d'un registre contiennent quatre clés (scores) ou
+        quatre éléments (valeurs), jamais deux parties d'une même somme.  Les arrondis sont ceux des
+        boucles portables telles qu'Apple clang les compile.  Un score de hd termes : sur les
+        hd / 4 * 4 premiers, chaque produit arrondi, puis ajouté (la boucle est vectorisée) ; sur
+        les hd % 4 derniers, une multiplication-addition fusionnée.  Une valeur : une
+        multiplication-addition fusionnée pour chaque clé (la boucle lit les valeurs avec un pas de
+        hd et reste scalaire ; seul hd == 1, qu'aucun modèle n'a, est vectorisé).  Les résultats
+        sont ceux du code portable de ce build, bit pour bit.  Les demi-flottants sont convertis
+        par l'instruction du processeur, exacte comme la table de h2f().
     */
 
-    // n halves of src to floats.
+    // n demi-flottants de src en floats.
     inline void halves_to_floats(const uint16_t* src, float* dst, long n)
     {
         long i = 0;
@@ -170,8 +173,8 @@ namespace
         for (; i < n; ++i) dst[i] = h2f(src[i]);
     }
 
-    // Groups of four keys of hd halves to floats, transposed: kt[(c4 * hd + i) * 4 + c] holds
-    // element i of key 4 c4 + c, so that one register holds element i of four keys.
+    // Groupes de quatre clés de hd demi-flottants en floats, transposés : kt[(c4 * hd + i) * 4 + c]
+    // contient l'élément i de la clé 4 c4 + c, pour qu'un registre contienne l'élément i de quatre clés.
     inline void keys_to_floats_x4(const uint16_t* K, long groups, long hd, float* kt)
     {
         for (long c4 = 0; c4 < groups; ++c4)
@@ -193,7 +196,7 @@ namespace
         }
     }
 
-    // The scores of R rows of queries with NB groups of four transposed keys.
+    // Les scores de R lignes de requêtes avec NB groupes de quatre clés transposées.
     template <int R, int NB>
     void scores_tile(const float* const* q, const float* kt, long hd, float* const* s)
     {
@@ -239,12 +242,12 @@ namespace
     }
 
     /*
-        The keys or values of the attention as floats, from their two storages: halves, or 8-bit
-        integers by groups of 32 sharing a scale in half precision (the q8 format of kv_cache.h).
-        A q8 value is its integer times its scale: the product of an 8-bit integer by a half is
-        exact in a float, so that the floats are those of qk_q8_to_float_row(), whatever the
-        order.  transposed() fills groups of four keys as keys_to_floats_x4(), rows() count rows
-        in order.
+        Les clés ou les valeurs de l'attention en floats, depuis leurs deux stockages : demi-flottants,
+        ou entiers 8 bits par groupes de 32 partageant une échelle en demi-précision (le format q8 de
+        kv_cache.h).  Une valeur q8 est son entier multiplié par son échelle : le produit d'un entier
+        8 bits par un demi-flottant est exact dans un float, si bien que les floats sont ceux de
+        qk_q8_to_float_row(), quel que soit l'ordre.  transposed() remplit des groupes de quatre clés
+        comme keys_to_floats_x4(), rows() compte les lignes dans l'ordre.
     */
     struct half_rows
     {
@@ -257,10 +260,10 @@ namespace
     struct q8_rows
     {
         const int8_t* x;
-        const uint16_t* scales;   // hd / 32 per row
+        const uint16_t* scales;   // hd / 32 par ligne
         long hd;
 
-        // 8 integers of q times d, to two registers of four floats.
+        // 8 entiers de q multipliés par d, vers deux registres de quatre floats.
         static void eight(const int8_t* q, float d, float32x4_t& lo, float32x4_t& hi)
         {
             const int16x8_t w = vmovl_s8(vld1_s8(q));
@@ -314,7 +317,7 @@ namespace
             const long g = std::min(G, m - j0);
             const long g4 = g / 4 * 4;
             keys.transposed(j0, g4 / 4, scratch);
-            // The keys left over, as the portable code: qk_dot_f32 on keys converted in order.
+            // Les clés restantes, comme le code portable : qk_dot_f32 sur les clés converties dans l'ordre.
             float* rest = scratch + g4 * hd;
             keys.rows(j0 + g4, g - g4, rest);
             long r = 0;
@@ -337,7 +340,7 @@ namespace
         attention_scores_neon(Q, rows, q8_rows{ K, K_scales, hd }, m, hd, S, lds, scratch, G);
     }
 
-    // o[r][i .. i + 4 NB) += sum over j < g of p[r][j] * v[j * hd + i ..], key after key.
+    // o[r][i .. i + 4 NB) += somme sur j < g de p[r][j] * v[j * hd + i ..], clé après clé.
     template <int R, int NB>
     void values_tile(const float* const* p, const float* v, long g, long hd, float* const* o, long i)
     {

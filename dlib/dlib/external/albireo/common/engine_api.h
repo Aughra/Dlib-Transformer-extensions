@@ -4,34 +4,36 @@
 #define ALBIREO_ENGINE_API_H_
 
 /*
-    C interface between the Albireo host and its inference engines.
+    Interface C entre l'hôte Albireo et ses moteurs d'inférence.
 
-    An engine is a shared library built from the sources of engine/ for one class of
-    machine: plain x86-64, x86-64 with AVX2 and FMA, Intel NPU and GPU through OpenVINO,
-    or NVIDIA GPU through CUDA.  Every variant exports the functions below with the same
-    signatures, so the host loads whichever suits the machine and talks to it through this
-    single entry point; replacing an engine never requires rebuilding the host.
+    Un moteur est une bibliothèque partagée construite à partir des sources de engine/ pour une
+    classe de machines : x86-64 simple, x86-64 avec AVX2 et FMA, NPU et GPU Intel via OpenVINO,
+    ou GPU NVIDIA via CUDA.  Chaque variante exporte les fonctions ci-dessous avec les mêmes
+    signatures, si bien que l'hôte charge celle qui convient à la machine et lui parle par ce
+    point d'entrée unique ; remplacer un moteur n'oblige jamais à reconstruire l'hôte.
 
     Conventions
-      - Only C types cross the boundary.  Structured data travels as UTF-8 JSON, either
-        in a buffer owned by the caller (functions taking json, capacity and needed), or
-        as a pointer and a size valid only during a callback.
-      - A function writing JSON into a caller buffer returns ALBIREO_E_BUFFER_TOO_SMALL
-        when the document does not fit, and sets *needed to the size required, null
-        terminator included, so that the caller can retry with a larger buffer.
-      - Error messages are written NUL-terminated into the caller's error buffer, truncated
-        when it is too small.
-      - Every function is thread-safe.  Event callbacks run on threads of the engine, must
-        return quickly and may call albireo_engine_cancel(), and no other function, on the
-        engine that invoked them.
+      - Seuls des types C traversent la frontière.  Les données structurées voyagent en JSON
+        UTF-8, soit dans un tampon possédé par l'appelant (fonctions prenant json, capacity et
+        needed), soit sous forme d'un pointeur et d'une taille valables seulement pendant un
+        callback.
+      - Une fonction qui écrit du JSON dans un tampon de l'appelant renvoie
+        ALBIREO_E_BUFFER_TOO_SMALL quand le document ne tient pas, et place dans *needed la
+        taille requise, zéro terminal compris, pour que l'appelant puisse réessayer avec un
+        tampon plus grand.
+      - Les messages d'erreur sont écrits terminés par NUL dans le tampon d'erreur de
+        l'appelant, tronqués quand il est trop petit.
+      - Chaque fonction est thread-safe.  Les callbacks d'événements tournent sur des threads du
+        moteur, doivent rendre la main vite et peuvent appeler albireo_engine_cancel(), et
+        aucune autre fonction, sur le moteur qui les a invoqués.
 
-    Lifetime
-      albireo_engine_create() starts the engine with the configuration of the host;
-      models are then loaded and unloaded by identifier; requests are submitted against a
-      loaded model and report their progress through events until a single
-      ALBIREO_EVENT_DONE or ALBIREO_EVENT_ERROR, after which the callback is never invoked
-      again for that request.  albireo_engine_destroy() cancels the requests still running,
-      waits for their final event and releases everything.
+    Durée de vie
+      albireo_engine_create() démarre le moteur avec la configuration de l'hôte ; les modèles
+      sont ensuite chargés et déchargés par identifiant ; les requêtes sont soumises à un modèle
+      chargé et signalent leur avancement par des événements jusqu'à un unique
+      ALBIREO_EVENT_DONE ou ALBIREO_EVENT_ERROR, après quoi le callback n'est plus jamais
+      invoqué pour cette requête.  albireo_engine_destroy() annule les requêtes encore en
+      cours, attend leur événement final et libère tout.
 */
 
 #include <stddef.h>
@@ -48,7 +50,7 @@ extern "C" {
 
 typedef struct albireo_engine albireo_engine;
 
-/* Return codes. */
+/* Codes de retour. */
 enum
 {
     ALBIREO_OK = 0,
@@ -62,18 +64,18 @@ enum
     ALBIREO_E_CONTEXT_OVERFLOW = 8
 };
 
-/* Kinds of the events delivered to a request callback. */
+/* Types des événements remis au callback d'une requête. */
 enum
 {
-    ALBIREO_EVENT_CONTENT = 1,    /* UTF-8 text appended to the answer */
-    ALBIREO_EVENT_REASONING = 2,  /* UTF-8 text appended to the reasoning trace */
-    ALBIREO_EVENT_TOOL_CALL = 3,  /* JSON {"index","id","name","arguments"} of a complete call */
-    ALBIREO_EVENT_PROGRESS = 4,   /* JSON {"prompt_done","prompt_total","cached"} while reading */
-    ALBIREO_EVENT_DONE = 5,       /* JSON {"finish_reason","usage","timings"}, final event; see submit */
-    ALBIREO_EVENT_ERROR = 6       /* JSON {"code","message"}, final event */
+    ALBIREO_EVENT_CONTENT = 1,    /* texte UTF-8 ajouté à la réponse */
+    ALBIREO_EVENT_REASONING = 2,  /* texte UTF-8 ajouté à la trace de raisonnement */
+    ALBIREO_EVENT_TOOL_CALL = 3,  /* JSON {"index","id","name","arguments"} d'un appel complet */
+    ALBIREO_EVENT_PROGRESS = 4,   /* JSON {"prompt_done","prompt_total","cached"} pendant la lecture */
+    ALBIREO_EVENT_DONE = 5,       /* JSON {"finish_reason","usage","timings"}, événement final ; voir submit */
+    ALBIREO_EVENT_ERROR = 6       /* JSON {"code","message"}, événement final */
 };
 
-/* Severities passed to the log callback. */
+/* Gravités passées au callback de journal. */
 enum
 {
     ALBIREO_LOG_DEBUG = 0,
@@ -85,102 +87,106 @@ enum
 typedef void (ALBIREO_ENGINE_CALL *albireo_event_callback)(void* user, int kind, const char* data, size_t size);
 typedef void (ALBIREO_ENGINE_CALL *albireo_log_callback)(void* user, int level, const char* message);
 
-/* ABI version the library implements, ALBIREO_ENGINE_ABI_VERSION when it matches the
-   host.  The host checks it before calling anything else. */
+/* Version d'ABI que la bibliothèque implémente, ALBIREO_ENGINE_ABI_VERSION quand elle
+   correspond à l'hôte.  L'hôte la vérifie avant d'appeler quoi que ce soit d'autre. */
 ALBIREO_ENGINE_EXPORT uint32_t ALBIREO_ENGINE_CALL albireo_engine_abi_version(void);
 
-/* JSON description of the engine and of the devices it found on this machine:
+/* Description JSON du moteur et des appareils qu'il a trouvés sur cette machine :
    {"variant","version","backend","build","kernels","devices":[...],"usable":true|false,
-   "reason","reason_code","reason_args","missing"}.  An engine that cannot run here gives the
-   reason in English, and a code with its values for the windows, which explain it in the
-   language of the user: isa_avx2, isa_avx_vnni (the processor lacks the instructions of
-   the kernels), no_nvidia_driver, old_nvidia_driver {driver, runtime},
+   "reason","reason_code","reason_args","missing"}.  Un moteur qui ne peut pas tourner ici donne
+   la raison en anglais, et un code avec ses valeurs pour les fenêtres, qui l'expliquent dans la
+   langue de l'utilisateur : isa_avx2, isa_avx_vnni (le processeur n'a pas les instructions des
+   noyaux), no_nvidia_driver, old_nvidia_driver {driver, runtime},
    no_nvidia_card, old_nvidia_card {card, cc}, no_intel_device, intel_device_unusable
-   {detail} (the message of each plugin of OpenVINO).  An engine that runs gives in missing
-   why the other devices it looks for were left out, as their runtime reports it.
-   Safe to call before albireo_engine_create(); the host runs it in a child process to
-   rank the engines without risking its own process. */
+   {detail} (le message de chaque plugin d'OpenVINO).  Un moteur qui tourne donne dans missing
+   pourquoi les autres appareils qu'il cherche ont été écartés, tel que leur runtime le signale.
+   Peut être appelée avant albireo_engine_create() ; l'hôte la lance dans un processus enfant
+   pour classer les moteurs sans risquer son propre processus. */
 ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_describe(char* json, size_t capacity, size_t* needed);
 
-/* Starts an engine.  config_json holds the settings of the host (threads, context length,
-   number of sequences, memory budgets, devices); missing members take their defaults.
-   "warm_history" (true by default) reads the history of each answer of a chat request in the
-   background once the answer ends, as the next request of the conversation renders it, so that
-   this request computes its new message only; the "stats" query counts these tokens per model
-   in "warmed_total", and the reads in progress in "warming".
-   Returns NULL on failure, with the reason in error. */
+/* Démarre un moteur.  config_json contient les réglages de l'hôte (threads, longueur de
+   contexte, nombre de séquences, budgets mémoire, appareils) ; les membres absents prennent
+   leurs valeurs par défaut.  "warm_history" (true par défaut) lit l'historique de chaque
+   réponse d'une requête de chat en arrière-plan une fois la réponse terminée, tel que la
+   requête suivante de la conversation le rend, pour que cette requête ne calcule que son
+   nouveau message ; la requête "stats" compte ces tokens par modèle dans "warmed_total", et
+   les lectures en cours dans "warming".
+   Renvoie NULL en cas d'échec, avec la raison dans error. */
 ALBIREO_ENGINE_EXPORT albireo_engine* ALBIREO_ENGINE_CALL albireo_engine_create(const char* config_json,
     albireo_log_callback log, void* log_user, char* error, size_t error_capacity);
 
 ALBIREO_ENGINE_EXPORT void ALBIREO_ENGINE_CALL albireo_engine_destroy(albireo_engine* engine);
 
-/* Loads the GGUF model at path (UTF-8) under the identifier model_id.  options_json may
-   override the context length and other settings for this model.  The context never exceeds
-   the positions the memory of the keys and values holds ("kv_mb", or the automatic budget);
-   the "models" query gives the context in force.  "projector" names the GGUF file of the
-   image encoder of a model that reads images (an mmproj file of Qwen3-VL, of LLaVA-NeXT or of
-   Pixtral, the encoder of Ministral 3 and Devstral Small 2); a model file that holds its
-   vision tensors needs none.  The "models" query then gives
-   "inputs" ["text","image"], "image_tokens" {"min","low","auto","high"} (the tokens an image
-   takes at most with each detail), "images_per_request" and "projector_bytes". */
+/* Charge le modèle GGUF situé à path (UTF-8) sous l'identifiant model_id.  options_json peut
+   remplacer la longueur de contexte et d'autres réglages pour ce modèle.  Le contexte ne
+   dépasse jamais les positions que contient la mémoire des clés et valeurs ("kv_mb", ou le
+   budget automatique) ; la requête "models" donne le contexte en vigueur.  "projector" nomme le
+   fichier GGUF de l'encodeur d'images d'un modèle qui lit des images (un fichier mmproj de
+   Qwen3-VL, de LLaVA-NeXT ou de Pixtral, l'encodeur de Ministral 3 et de Devstral Small 2) ; un
+   fichier de modèle qui contient ses tenseurs de vision n'en a pas besoin.  La requête
+   "models" donne alors "inputs" ["text","image"], "image_tokens" {"min","low","auto","high"}
+   (les tokens qu'une image prend au plus avec chaque niveau de détail), "images_per_request"
+   et "projector_bytes". */
 ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_load_model(albireo_engine* engine,
     const char* model_id, const char* path, const char* options_json, char* error, size_t error_capacity);
 
 ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_unload_model(albireo_engine* engine, const char* model_id);
 
-/* Synchronous queries, request_json naming the operation in "op":
-     {"op":"stats"}                                   activity, throughput and memory
-     {"op":"models"}                                  loaded models and their properties
-     {"op":"tokenize","model":id,"text":s}            token identifiers of a text
-     {"op":"count","model":id,"messages":[...],...}   tokens of a rendered conversation */
+/* Requêtes synchrones, request_json nommant l'opération dans "op" :
+     {"op":"stats"}                                   activité, débit et mémoire
+     {"op":"models"}                                  modèles chargés et leurs propriétés
+     {"op":"tokenize","model":id,"text":s}            identifiants des tokens d'un texte
+     {"op":"count","model":id,"messages":[...],...}   tokens d'une conversation rendue */
 ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_query(albireo_engine* engine,
     const char* request_json, char* json, size_t capacity, size_t* needed);
 
-/* Submits a request and returns at once with its identifier.  Events reach callback,
-   invoked with user, until the final one.
+/* Soumet une requête et rend aussitôt la main avec son identifiant.  Les événements
+   parviennent à callback, invoqué avec user, jusqu'au dernier.
 
-   A language model takes the members of an OpenAI chat completion request:
-     "model", "messages" (or "prompt", a text read as it is), "tools", "tool_choice",
-     "reasoning" (true or false) or "reasoning_effort" or
-     "chat_template_kwargs":{"enable_thinking"}, "reasoning_budget", "max_tokens" or
+   Un modèle de langage prend les membres d'une requête de chat completion d'OpenAI :
+     "model", "messages" (ou "prompt", un texte lu tel quel), "tools", "tool_choice",
+     "reasoning" (true ou false) ou "reasoning_effort" ou
+     "chat_template_kwargs":{"enable_thinking"}, "reasoning_budget", "max_tokens" ou
      "max_completion_tokens", "temperature", "top_p", "top_k", "min_p", "presence_penalty",
      "frequency_penalty", "repeat_penalty", "repeat_last_n", "seed", "stop", "logit_bias".
-   "top_k" is limited to 1024, and the keys of "logit_bias" must be token identifiers of the
-   vocabulary.  The sampling settings a request leaves out take the values the authors of the
-   family of the model advise.  The engine ends a reasoning after "reasoning_budget" tokens
-   (-1 without limit) with a sentence that asks for the answer; without that member, the
-   effort "low" gives the reasoning 512 tokens, 256 with "priority":"background".  A model
-   whose template opens the reasoning of every answer ("reasoning_always" in the "models"
-   query) reasons whatever the request asks, with that short reasoning when the request asks
-   for none; its answer then receives the "max_tokens" of the request once the reasoning
-   ends, and the stop sequences apply to that answer alone.  When nine tenths of the last 384
-   tokens of a reasoning repeat passages of 16 tokens it wrote twice before, the engine ends
-   the reasoning in the same way; an answer that repeats itself so ends with the finish reason
-   "length" and "repetition":true in the JSON of DONE.  A model loaded with its projector
-   reads the parts "image_url" of the messages,
-   {"url": a data URL of a PNG or JPEG file, "detail": "low", "auto" or "high"}, 16 at most;
-   another model refuses them.  Its events are CONTENT, REASONING, TOOL_CALL and PROGRESS, then
-   DONE, or ERROR with the code "out_of_memory" when the answers being written fill the memory
-   of the keys and values or when the memory lacks for the encoding of one of its images (the
-   other requests go on).
+   "top_k" est limité à 1024, et les clés de "logit_bias" doivent être des identifiants de
+   tokens du vocabulaire.  Les réglages d'échantillonnage qu'une requête omet prennent les
+   valeurs que conseillent les auteurs de la famille du modèle.  Le moteur termine un
+   raisonnement après "reasoning_budget" tokens (-1 sans limite) par une phrase qui demande la
+   réponse ; sans ce membre, l'effort "low" donne au raisonnement 512 tokens, 256 avec
+   "priority":"background".  Un modèle dont le template ouvre le raisonnement de chaque réponse
+   ("reasoning_always" dans la requête "models") raisonne quoi que demande la requête, avec ce
+   raisonnement court quand la requête n'en demande pas ; sa réponse reçoit alors le
+   "max_tokens" de la requête une fois le raisonnement terminé, et les séquences d'arrêt ne
+   s'appliquent qu'à cette réponse.  Quand neuf dixièmes des 384 derniers tokens d'un
+   raisonnement répètent des passages de 16 tokens qu'il a déjà écrits deux fois, le moteur
+   termine le raisonnement de la même manière ; une réponse qui se répète ainsi se termine avec
+   la raison de fin "length" et "repetition":true dans le JSON de DONE.  Un modèle chargé avec
+   son projecteur lit les parties "image_url" des messages,
+   {"url": une URL data d'un fichier PNG ou JPEG, "detail": "low", "auto" ou "high"}, 16 au
+   plus ; un autre modèle les refuse.  Ses événements sont CONTENT, REASONING, TOOL_CALL et
+   PROGRESS, puis DONE, ou ERROR avec le code "out_of_memory" quand les réponses en cours
+   d'écriture remplissent la mémoire des clés et valeurs ou quand la mémoire manque pour
+   l'encodage d'une de ses images (les autres requêtes continuent).
 
-   An embedding model takes "model", "input" (a text, a list of texts, a list of token
-   identifiers or a list of such lists, 2048 inputs at most) and "dimensions" (0 or absent
-   for the width of the model; otherwise the leading dimensions, normalized again).  Its
-   only event is DONE, whose JSON holds "data":[{"index","embedding"}] with each vector as
-   the base64 form of its little-endian float32 values at unit length, "dimensions",
-   "usage" and "timings"; or ERROR when any input fails.  A request cancelled with
-   albireo_engine_cancel() ends, as any other, with DONE and the finish reason "cancelled".
+   Un modèle d'embeddings prend "model", "input" (un texte, une liste de textes, une liste
+   d'identifiants de tokens ou une liste de telles listes, 2048 entrées au plus) et
+   "dimensions" (0 ou absent pour la largeur du modèle ; sinon les premières dimensions,
+   normalisées à nouveau).  Son seul événement est DONE, dont le JSON contient
+   "data":[{"index","embedding"}] avec chaque vecteur sous la forme base64 de ses valeurs
+   float32 petit-boutistes de longueur unité, "dimensions", "usage" et "timings" ; ou ERROR
+   quand une entrée échoue.  Une requête annulée avec albireo_engine_cancel() se termine,
+   comme toute autre, par DONE et la raison de fin "cancelled".
 
-   Returns ALBIREO_E_BUSY for a request the engine refuses for a while: its images would
-   carry the decoded pixels the queued requests of the model hold beyond 1 GiB.  The same
-   request succeeds once these requests are encoded. */
+   Renvoie ALBIREO_E_BUSY pour une requête que le moteur refuse pour un temps : ses images
+   porteraient les pixels décodés que détiennent les requêtes en attente du modèle au-delà de
+   1 Gio.  La même requête réussit une fois ces requêtes encodées. */
 ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_submit(albireo_engine* engine,
     const char* request_json, albireo_event_callback callback, void* user, uint64_t* request_id,
     char* error, size_t error_capacity);
 
-/* Asks a request to stop.  Its final event, ALBIREO_EVENT_DONE with the finish reason
-   "cancelled", follows shortly.  Unknown or finished identifiers are ignored. */
+/* Demande à une requête de s'arrêter.  Son événement final, ALBIREO_EVENT_DONE avec la raison
+   de fin "cancelled", suit de peu.  Les identifiants inconnus ou terminés sont ignorés. */
 ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_cancel(albireo_engine* engine, uint64_t request_id);
 
 #ifdef __cplusplus

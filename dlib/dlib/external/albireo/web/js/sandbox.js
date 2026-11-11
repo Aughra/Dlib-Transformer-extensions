@@ -2,15 +2,15 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    The interpreter of the agent.  This page runs in a sandboxed frame of its own origin,
-    without network (policy of the server) and without access to the data of the
-    application; each run gets a new worker, terminated when it ends or exceeds its time.
+    L'interpréteur de l'agent.  Cette page tourne dans un cadre isolé (sandbox) de sa propre
+    origine, sans réseau (règle du serveur) et sans accès aux données de l'application ;
+    chaque exécution reçoit un nouveau worker, arrêté quand elle finit ou dépasse son temps.
 */
 (function () {
   'use strict';
   var workerSource = [
     '"use strict";',
-    // The interfaces that reach outside the worker are removed before any code runs.
+    // Les interfaces qui atteignent l'extérieur du worker sont retirées avant que du code ne s'exécute.
     '["fetch","XMLHttpRequest","WebSocket","EventSource","importScripts","indexedDB","caches","BroadcastChannel",',
     ' "Worker","SharedWorker","WebTransport","RTCPeerConnection","navigator"].forEach(function (name) {',
     '  try { var o = self; while (o) { if (Object.prototype.hasOwnProperty.call(o, name)) delete o[name];',
@@ -24,7 +24,7 @@
     '  if (typeof v === "bigint") return v.toString() + "n";',
     '  try { var s = JSON.stringify(v, null, 2); return s === undefined ? String(v) : s; } catch (e) { return String(v); }',
     '}',
-    // The output stops at limit characters, the text the page keeps of a run.
+    // La sortie s'arrête à limit caractères, le texte que la page garde d'une exécution.
     'var limit = 20000;',
     'function cut(s) { return s.length > limit ? s.slice(0, limit) + " [...]" : s; }',
     'self.onmessage = function (e) {',
@@ -65,9 +65,9 @@
     return typeof v === 'string' ? (v.length > maxChars ? v.slice(0, maxChars) : v) : undefined;
   };
   /*
-      The reply to the page, built from the fields of what the worker posted that are strings,
-      truncated: the code it runs may post anything itself, a number, null, a reply of its own
-      or objects that cannot be sent on.
+      La réponse à la page, construite à partir des champs de ce que le worker a posté qui sont
+      des chaînes, tronquées : le code qu'il exécute peut lui-même poster n'importe quoi, un
+      nombre, null, sa propre réponse ou des objets qui ne peuvent pas être transmis.
   */
   var reply = function (id, data) {
     try {
@@ -92,9 +92,9 @@
     }
   };
   /*
-      The application that frames this page is served from the origin of the address of this
-      page, while the sandbox gives this page an opaque origin of its own.  The code comes from
-      that application only, and the results go to it only.
+      L'application qui encadre cette page est servie depuis l'origine de l'adresse de cette
+      page, alors que la sandbox donne à cette page une origine opaque qui lui est propre.  Le
+      code ne vient que de cette application, et les résultats ne vont qu'à elle.
   */
   var appOrigin = '*';
   try {

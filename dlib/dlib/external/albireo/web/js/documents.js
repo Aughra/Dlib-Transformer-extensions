@@ -2,26 +2,27 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    Text of the files attached to a discussion or to a project, extracted in the browser:
-    plain text and source code, CSV, Markdown, Word, Excel and PowerPoint documents,
-    OpenDocument files, PDF (through pdf.js), RTF and HTML.  The archives of the Office and
-    OpenDocument formats are read with the decompression of the browser; nothing is sent to
-    the service but the text, inside the messages.
+    Texte des fichiers joints à une discussion ou à un projet, extrait dans le navigateur :
+    texte brut et code source, CSV, Markdown, documents Word, Excel et PowerPoint, fichiers
+    OpenDocument, PDF (par pdf.js), RTF et HTML.  Les archives des formats Office et
+    OpenDocument sont lues avec la décompression du navigateur ; rien n'est envoyé au service
+    hormis le texte, à l'intérieur des messages.
 
-    The text keeps the structure of its document in lines that start with "## ": one per
-    page of a PDF and per page break of a Word document, per slide of a presentation, in
-    the order of the presentation, per sheet of a workbook, in the order of its tabs.  The
-    search of the documents names its passages after them, and the tools of the agent read
-    a document part by part with them (outline() and partText()).
+    Le texte garde la structure de son document dans des lignes qui commencent par "## " : une
+    par page d'un PDF et par saut de page d'un document Word, par diapositive d'une
+    présentation, dans l'ordre de la présentation, par feuille d'un classeur, dans l'ordre de
+    ses onglets.  La recherche documentaire nomme ses passages d'après elles, et les outils de
+    l'agent lisent un document partie par partie grâce à elles (outline() et partText()).
 */
 
-// The size of a document at most, checked before the file is read.
+// La taille maximale d'un document, vérifiée avant la lecture du fichier.
 export const maxFileBytes = 100 * 1024 * 1024;
 export const maxTextChars = 4 * 1024 * 1024;
-// Rows of a sheet kept in the text; the following ones are counted.
+// Lignes d'une feuille gardées dans le texte ; les suivantes sont comptées.
 const maxSheetRows = 20000;
-// The bytes the entries of an archive read for its text may hold once decompressed, all of
-// them; an entry larger than ratioFloor may also hold at most maxRatio times its compressed size.
+// Les octets que les entrées d'une archive lues pour son texte peuvent contenir une fois décompressées, toutes
+// ensemble ; une entrée plus grande que ratioFloor ne peut en outre contenir plus de maxRatio fois sa taille
+// compressée.
 const maxUnzippedBytes = 256 * 1024 * 1024;
 const maxRatio = 200;
 const ratioFloor = 1024 * 1024;
@@ -32,10 +33,10 @@ const textExtensions = new Set(('txt md markdown rst csv tsv json jsonl ndjson x
   'css scss less vue svelte dart hs ml clj ex exs erl asm s v sv vhd tf hcl dockerfile gitignore editorconfig nix srt ' +
   'vtt diff patch').split(' '));
 
-// The binary formats of the Office versions before 2007, which the browser cannot read.
+// Les formats binaires des versions d'Office antérieures à 2007, que le navigateur ne sait pas lire.
 const legacyExtensions = new Set(['doc', 'dot', 'xls', 'xlt', 'ppt', 'pot', 'pps']);
 
-// The formats this module reads, for the file pickers: its documents and the text files.
+// Les formats que lit ce module, pour les sélecteurs de fichiers : ses documents et les fichiers texte.
 export function documentAccept() {
   const office = ['pdf', 'docx', 'docm', 'dotx', 'pptx', 'pptm', 'ppsx', 'potx', 'xlsx', 'xlsm', 'xltx', 'odt', 'ods',
     'odp', 'rtf', 'html', 'htm', 'xhtml'];
@@ -43,8 +44,8 @@ export function documentAccept() {
 }
 
 /*
-    What a file brings to a model: "image", "audio" or "video" by its type or its extension,
-    "document" otherwise, whose text extractText() reads.
+    Ce qu'un fichier apporte à un modèle : "image", "audio" ou "video" selon son type ou son
+    extension, "document" sinon, dont extractText() lit le texte.
 */
 export function fileKind(file) {
   const type = (file.type || '').toLowerCase();
@@ -69,7 +70,7 @@ function decodeText(bytes) {
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch (e) {
-    // Not UTF-8: the Windows code page of Western Europe, the most frequent other one.
+    // Pas de l'UTF-8 : la page de code Windows d'Europe de l'Ouest, l'autre la plus fréquente.
     return new TextDecoder('windows-1252').decode(bytes);
   }
 }
@@ -80,7 +81,7 @@ function looksBinary(bytes) {
   return false;
 }
 
-// The bytes of a deflated entry, from a stream that stops past limit bytes.
+// Les octets d'une entrée compressée par deflate, depuis un flux qui s'arrête au-delà de limit octets.
 async function inflate(data, limit) {
   const reader = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
   const parts = [];
@@ -105,19 +106,19 @@ async function inflate(data, limit) {
 }
 
 /*
-    The error of a damaged archive, "zip-invalid", for the errors that its offsets pointing outside the file
-    (RangeError) and its data that does not inflate (TypeError) raise; another error stays.
+    L'erreur d'une archive endommagée, "zip-invalid", pour les erreurs que lèvent ses décalages qui pointent hors du
+    fichier (RangeError) et ses données qui ne se décompressent pas (TypeError) ; une autre erreur reste telle quelle.
 */
 function zipError(e) {
   return e instanceof RangeError || e instanceof TypeError ? new Error('zip-invalid') : e;
 }
 
 /*
-    The entries of a ZIP archive, read on demand.  An entry whose size, declared by the
-    central directory or met while it is decompressed, goes beyond the limits of the archive
-    (maxUnzippedBytes for all the entries read, maxRatio) throws "too-large-content"; a file
-    that is not an archive, or a damaged one, throws "zip-invalid", and an entry compressed by
-    another method than deflate "zip-compression".
+    Les entrées d'une archive ZIP, lues à la demande.  Une entrée dont la taille, déclarée par
+    le répertoire central ou constatée pendant sa décompression, dépasse les limites de
+    l'archive (maxUnzippedBytes pour toutes les entrées lues, maxRatio) lève
+    "too-large-content" ; un fichier qui n'est pas une archive, ou une archive endommagée, lève
+    "zip-invalid", et une entrée compressée par une autre méthode que deflate "zip-compression".
 */
 async function unzip(buffer) {
   const dv = new DataView(buffer);
@@ -139,7 +140,7 @@ async function unzip(buffer) {
       if (dv.getUint32(p, true) !== 0x02014b50) break;
       const method = dv.getUint16(p + 10, true);
       const csize = dv.getUint32(p + 20, true);
-      // The size once decompressed; a ZIP64 entry declares 0xffffffff, beyond every limit here.
+      // La taille une fois décompressée ; une entrée ZIP64 déclare 0xffffffff, au-delà de toute limite ici.
       const usize = dv.getUint32(p + 24, true);
       const nlen = dv.getUint16(p + 28, true);
       const elen = dv.getUint16(p + 30, true);
@@ -151,7 +152,7 @@ async function unzip(buffer) {
   } catch (e) {
     throw zipError(e);
   }
-  // A central directory that holds fewer entries than its end record declares is damaged.
+  // Un répertoire central qui contient moins d'entrées que n'en déclare son enregistrement de fin est endommagé.
   if (k < count) throw new Error('zip-invalid');
   let used = 0;
   return {
@@ -160,8 +161,8 @@ async function unzip(buffer) {
     async text(name) {
       const e = entries.get(name);
       if (!e) return null;
-      // The bytes the entry may hold: what the archive has left, and for a compressed entry
-      // maxRatio times its compressed size.
+      // Les octets que l'entrée peut contenir : ce qu'il reste à l'archive, et pour une entrée compressée
+      // maxRatio fois sa taille compressée.
       const room = maxUnzippedBytes - used;
       const cap = e.method === 0 ? room : Math.min(room, Math.max(ratioFloor, maxRatio * e.csize));
       if ((e.method === 0 ? e.csize : e.usize) > cap) throw new Error('too-large-content');
@@ -196,14 +197,14 @@ function child(node, name) {
   return null;
 }
 
-// The value of an attribute whatever its namespace prefix (w:val, w:type...).
+// La valeur d'un attribut quel que soit son préfixe d'espace de noms (w:val, w:type...).
 function attr(node, name) {
   if (!node || !node.attributes) return null;
   for (const a of node.attributes) if (a.localName === name) return a.value;
   return null;
 }
 
-// The relationship an element names (r:id), distinct from its own id attribute.
+// La relation que nomme un élément (r:id), distincte de son propre attribut id.
 function relId(node) {
   if (!node || !node.attributes) return null;
   for (const a of node.attributes) {
@@ -218,7 +219,7 @@ function numericOrder(a, b) {
   return na - nb;
 }
 
-// The relationships of a part: id -> {target, type}, the targets resolved from the folder of the part.
+// Les relations d'une partie : id -> {target, type}, les cibles résolues depuis le dossier de la partie.
 async function relationships(zip, part) {
   const slash = part.lastIndexOf('/');
   const dir = part.slice(0, slash + 1);
@@ -253,10 +254,10 @@ async function docxText(zip) {
   let page = 1;
   let pageMarks = false;
   const lines = [];
-  // The characters read, which end the reading at maxTextChars.
+  // Les caractères lus, qui arrêtent la lecture à maxTextChars.
   let size = 0;
-  // A page starts at a break, unless nothing was written since the previous one: an explicit
-  // break and the break Word records where it rendered a page fall at the same place.
+  // Une page commence à un saut, sauf si rien n'a été écrit depuis le précédent : un saut
+  // explicite et le saut que Word enregistre là où il a rendu une page tombent au même endroit.
   const pageBreak = () => {
     let text = false;
     for (let k = lines.length - 1; k >= 0 && !lines[k].page; --k) text = text || !!String(lines[k]).trim();
@@ -266,7 +267,7 @@ async function docxText(zip) {
     lines.push({ page: true, n: page });
   };
 
-  // The text of a paragraph, its page breaks as markers between its pieces.
+  // Le texte d'un paragraphe, ses sauts de page comme marqueurs entre ses morceaux.
   const paragraph = (p) => {
     const ppr = child(p, 'pPr');
     let prefix = '';
@@ -305,10 +306,10 @@ async function docxText(zip) {
           flush();
           pageBreak();
         }
-        // Deleted text and field codes are not text; Fallback repeats the content of Choice.
+        // Le texte supprimé et les codes de champ ne sont pas du texte ; Fallback répète le contenu de Choice.
         else if (name === 'delText' || name === 'instrText' || name === 'Fallback' || name === 'pPr' || name === 'rPr') continue;
         else if (name === 'p') {
-          // A paragraph of a text box, inside the paragraph that anchors it.
+          // Un paragraphe d'une zone de texte, à l'intérieur du paragraphe qui l'ancre.
           s += '\n';
           walk(c);
           s += '\n';
@@ -317,7 +318,7 @@ async function docxText(zip) {
     };
     walk(p);
     flush();
-    // A section that starts on a new page.
+    // Une section qui commence sur une nouvelle page.
     const sect = ppr ? child(ppr, 'sectPr') : null;
     const kind = sect ? attr(child(sect, 'type'), 'val') : null;
     if (sect && (!kind || kind === 'nextPage' || kind === 'oddPage' || kind === 'evenPage')) pageBreak();
@@ -338,7 +339,7 @@ async function docxText(zip) {
     lines.push('');
   };
 
-  // The paragraphs and tables of a container, the content controls opened.
+  // Les paragraphes et les tableaux d'un conteneur, les contrôles de contenu ouverts.
   const blocks = (container) => {
     for (const node of container.childNodes) {
       if (size > maxTextChars) return;
@@ -354,19 +355,19 @@ async function docxText(zip) {
 
   const doc = parseXml(await zip.text('word/document.xml'));
   blocks(byLocalName(doc, 'body')[0] || doc.documentElement);
-  // The pages are marked when the document records where they break.
+  // Les pages sont marquées quand le document enregistre où elles se coupent.
   let current = 1;
   if (pageMarks) out.push('## Page 1');
   for (const l of lines) {
     if (l.page) {
-      // A break at the very end of the document opens no page.
+      // Un saut tout à la fin du document n'ouvre aucune page.
       current = l.n;
       out.push('', '## Page ' + current);
     } else out.push(l);
   }
   while (out.length && /^## Page \d+$/.test(out[out.length - 1])) out.pop();
 
-  // The parts outside the body: headers and footers, notes, comments.
+  // Les parties hors du corps : en-têtes et pieds de page, notes, commentaires.
   const extra = async (title, pattern, item) => {
     const texts = [];
     for (const name of zip.names().filter((n) => pattern.test(n)).sort(numericOrder)) {
@@ -375,7 +376,7 @@ async function docxText(zip) {
       lines.length = 0;
       const items = item ? byLocalName(part, item) : [part.documentElement];
       for (const it of items) {
-        // The separators of the notes carry no text.
+        // Les séparateurs des notes ne portent pas de texte.
         if (/separator|continuation/i.test(attr(it, 'type') || '')) continue;
         blocks(it);
       }
@@ -394,7 +395,8 @@ async function docxText(zip) {
 // PowerPoint.
 
 function shapeTexts(root) {
-  // The paragraphs of each shape and table, in the order of the slide; the tables cell by cell.
+  // Les paragraphes de chaque forme et de chaque tableau, dans l'ordre de la diapositive ; les tableaux cellule par
+  // cellule.
   const out = [];
   const walk = (n) => {
     for (const c of n.childNodes) {
@@ -445,7 +447,7 @@ async function chartText(zip, part) {
 }
 
 async function pptxText(zip) {
-  // The slides in the order of the presentation, not of their files.
+  // Les diapositives dans l'ordre de la présentation, pas dans celui de leurs fichiers.
   let slides = [];
   const pres = await zip.text('ppt/presentation.xml');
   if (pres) {
@@ -458,7 +460,7 @@ async function pptxText(zip) {
   if (!slides.length) slides = zip.names().filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort(numericOrder);
   const out = [];
   let i = 0;
-  // The characters read, which end the reading at maxTextChars.
+  // Les caractères lus, qui arrêtent la lecture à maxTextChars.
   let size = 0;
   for (const s of slides) {
     if (size > maxTextChars) break;
@@ -481,7 +483,7 @@ async function pptxText(zip) {
         const c = await chartText(zip, r.target);
         if (c) extras.push(c);
       } else if (/\/diagramData$/.test(r.type)) {
-        // The text of a SmartArt graphic.
+        // Le texte d'un graphique SmartArt.
         const text = await zip.text(r.target);
         if (text) {
           const items = byLocalName(parseXml(text), 'p').map((p) => byLocalName(p, 't').map((t) => t.textContent).join(''))
@@ -519,7 +521,8 @@ async function pptxText(zip) {
 const builtinDateFormats = new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 45, 46, 47]);
 
 function isDateFormat(code) {
-  // The quoted texts, the escaped characters and the bracketed colors and locales hold no date.
+  // Les textes entre guillemets, les caractères échappés et les couleurs et paramètres régionaux entre crochets ne
+  // contiennent pas de date.
   const s = String(code).replace(/"[^"]*"/g, '').replace(/\\./g, '').replace(/\[(?!h\]|m\]|mm\]|s\]|ss\])[^\]]*\]/gi, '');
   return /[dmyhs]/i.test(s) && !/^general$/i.test(s.trim());
 }
@@ -550,11 +553,11 @@ async function xlsxText(zip) {
   const sst = await zip.text('xl/sharedStrings.xml');
   if (sst) {
     for (const si of byLocalName(parseXml(sst), 'si')) {
-      // The phonetic guides (rPh) repeat the text in another script.
+      // Les guides phonétiques (rPh) répètent le texte dans une autre écriture.
       shared.push(byLocalName(si, 't').filter((t) => t.parentNode.localName !== 'rPh').map((t) => t.textContent).join(''));
     }
   }
-  // The styles that show a date.
+  // Les styles qui affichent une date.
   const dateStyles = new Set();
   const styles = await zip.text('xl/styles.xml');
   if (styles) {
@@ -569,7 +572,7 @@ async function xlsxText(zip) {
       });
     }
   }
-  // The sheets in the order of their tabs, through the relationships of the workbook.
+  // Les feuilles dans l'ordre de leurs onglets, par les relations du classeur.
   const sheets = [];
   let date1904 = false;
   const wb = await zip.text('xl/workbook.xml');
@@ -588,13 +591,13 @@ async function xlsxText(zip) {
       .forEach((n, k) => sheets.push({ name: 'Sheet ' + (k + 1), state: 'visible', part: n }));
   }
   const result = [];
-  // The characters read, which end the reading at maxTextChars.
+  // Les caractères lus, qui arrêtent la lecture à maxTextChars.
   let size = 0;
   for (const sheet of sheets) {
     if (size > maxTextChars) break;
     if (!sheet.part || !zip.has(sheet.part)) continue;
     if (!/worksheets\//.test(sheet.part)) {
-      // A chart sheet: its chart.
+      // Une feuille de graphique : son graphique.
       const rels = await relationships(zip, sheet.part);
       const charts = [];
       for (const r of rels.values()) {
@@ -612,8 +615,8 @@ async function xlsxText(zip) {
     const lines = [];
     let rows = 0, skipped = 0;
     for (const row of byLocalName(doc, 'row')) {
-      // The cells that hold a value, at their columns: the empty columns at the end of a row
-      // leave no separators.  A cell without a reference follows the previous one.
+      // Les cellules qui contiennent une valeur, à leurs colonnes : les colonnes vides en fin de ligne
+      // ne laissent pas de séparateurs.  Une cellule sans référence suit la précédente.
       const cells = [];
       let next = 0;
       for (const c of Array.from(row.childNodes).filter((n) => n.nodeType === 1 && n.localName === 'c')) {
@@ -630,7 +633,7 @@ async function xlsxText(zip) {
             value = serialDate(Number(value), date1904);
           }
         } else if (child(c, 'f') && child(c, 'f').textContent) {
-          // A formula never computed by a spreadsheet: its expression.
+          // Une formule jamais calculée par un tableur : son expression.
           value = '=' + child(c, 'f').textContent;
         }
         const ref = c.getAttribute('r');
@@ -661,7 +664,7 @@ async function odfText(zip) {
   const doc = parseXml(await zip.text('content.xml'));
   const out = [];
   let slide = 0;
-  // The characters read, which end the reading at maxTextChars.
+  // Les caractères lus, qui arrêtent la lecture à maxTextChars.
   let size = 0;
   const add = (...lines) => {
     for (const l of lines) {
@@ -690,22 +693,22 @@ async function odfText(zip) {
 }
 
 /*
-    PDF, read by pdf.js in its worker.  pdf.js reads the CMaps of the CJK fonts that a file
-    names without embedding them from its folder (cMapUrl).  Its standard fonts and its
-    WebAssembly decoders of images only draw pages and stay out (standardFontDataUrl and
-    wasmUrl unset, useWasm off), so that the reading requests the CMaps only.  A page holds
-    readable text from minPageChars letters and digits on; below, it holds a page number or a
-    stamp.
+    PDF, lu par pdf.js dans son worker.  pdf.js lit depuis son dossier (cMapUrl) les CMaps des
+    polices CJK qu'un fichier nomme sans les incorporer.  Ses polices standard et ses décodeurs
+    d'images WebAssembly ne servent qu'à dessiner les pages et restent à l'écart
+    (standardFontDataUrl et wasmUrl non définis, useWasm désactivé), pour que la lecture ne
+    demande que les CMaps.  Une page contient du texte lisible à partir de minPageChars lettres
+    et chiffres ; en dessous, elle contient un numéro de page ou un tampon.
 */
 const pdfjsFolder = new URL('../vendor/pdfjs/', import.meta.url).href;
 const minPageChars = 10;
-// The operators of pdf.js that draw an image.
+// Les opérateurs de pdf.js qui dessinent une image.
 const imageOperators = ['paintImageXObject', 'paintInlineImageXObject', 'paintImageMaskXObject',
   'paintImageXObjectRepeat', 'paintImageMaskXObjectRepeat', 'paintImageMaskXObjectGroup',
   'paintInlineImageXObjectGroup'];
 let pdfjs = null;
 
-// pdf.js, loaded at the first PDF; "pdf-reader" when this browser cannot run it.
+// pdf.js, chargé au premier PDF ; "pdf-reader" quand ce navigateur ne peut pas l'exécuter.
 async function pdfLibrary() {
   if (!pdfjs) {
     let lib;
@@ -721,17 +724,18 @@ async function pdfLibrary() {
   return pdfjs;
 }
 
-// The reason pdf.js gives for a file it cannot open, as extractText() names it.
+// La raison que donne pdf.js pour un fichier qu'il ne peut pas ouvrir, telle que extractText() la nomme.
 function pdfOpenError(e) {
   const name = e && e.name;
   if (name === 'PasswordException') return new Error('pdf-password');
   if (name === 'InvalidPDFException') return new Error('pdf-invalid');
-  // The worker of pdf.js, then the same script in the page, could not start.
+  // Le worker de pdf.js, puis le même script dans la page, n'ont pas pu démarrer.
   if (/fake worker/i.test(String(e && e.message))) return new Error('pdf-reader');
   return e;
 }
 
-// Whether a page of a document, given by its number, draws an image; false for a page pdf.js cannot read.
+// Si une page d'un document, donnée par son numéro, dessine une image ; false pour une page que pdf.js ne sait pas
+// lire.
 async function drawsImage(doc, number, imageOps) {
   let page = null;
   try {
@@ -745,7 +749,7 @@ async function drawsImage(doc, number, imageOps) {
   }
 }
 
-// The error of a PDF made of images, with its number of pages.
+// L'erreur d'un PDF fait d'images, avec son nombre de pages.
 function imagesError(pages) {
   const e = new Error('pdf-images');
   e.pages = pages;
@@ -753,11 +757,11 @@ function imagesError(pages) {
 }
 
 /*
-    The text of a PDF, one "## Page" part per page: {text, pages, unreadablePages}, the pages
-    without readable text that draw images counted in unreadablePages.  A PDF none of whose
-    pages holds readable text throws "pdf-images", with its number of pages in pages, when it
-    holds no text at all or when its pages draw images, as a scan does, whose text lies in the
-    pixels of its images.
+    Le texte d'un PDF, une partie "## Page" par page : {text, pages, unreadablePages}, les pages
+    sans texte lisible qui dessinent des images comptées dans unreadablePages.  Un PDF dont
+    aucune page ne contient de texte lisible lève "pdf-images", avec son nombre de pages dans
+    pages, quand il ne contient aucun texte ou quand ses pages dessinent des images, comme le
+    fait un document numérisé, dont le texte se trouve dans les pixels de ses images.
 */
 async function pdfText(buffer) {
   const lib = await pdfLibrary();
@@ -775,7 +779,7 @@ async function pdfText(buffer) {
     }
     if (!doc.numPages) throw new Error('pdf-invalid');
     const pages = [];
-    // The pages without readable text, and the letters and digits of the document.
+    // Les pages sans texte lisible, et les lettres et chiffres du document.
     const textless = [];
     let total = 0, chars = 0;
     for (let i = 1; i <= doc.numPages && total <= maxTextChars; ++i) {
@@ -798,7 +802,7 @@ async function pdfText(buffer) {
         page.cleanup();
       }
     }
-    // The operators of the pages are read only for the pages without text.
+    // Les opérateurs des pages ne sont lus que pour les pages sans texte.
     let unreadable = 0;
     if (textless.length === pages.length) {
       if (!chars) throw imagesError(doc.numPages);
@@ -813,9 +817,10 @@ async function pdfText(buffer) {
 }
 
 /*
-    Draws the first pages of a PDF, limit of them at most, each in a canvas whose longest side
-    is side pixels, on a white page: {canvases, pages}, pages counting all the pages of the
-    file.  The pages of a scan become images this way, for a model that reads them.
+    Dessine les premières pages d'un PDF, limit au plus, chacune dans un canvas dont le plus
+    grand côté fait side pixels, sur une page blanche : {canvases, pages}, pages comptant toutes
+    les pages du fichier.  Les pages d'un document numérisé deviennent ainsi des images, pour un
+    modèle qui les lit.
 */
 export async function pdfPages(file, side, limit) {
   const lib = await pdfLibrary();
@@ -851,7 +856,7 @@ export async function pdfPages(file, side, limit) {
   }
 }
 
-// Whether bytes are those of a PDF, which start with "%PDF-" whatever the name of the file.
+// Si bytes sont ceux d'un PDF, qui commencent par "%PDF-" quel que soit le nom du fichier.
 function isPdf(bytes) {
   return bytes.length >= 5 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46
     && bytes[4] === 0x2d;
@@ -869,15 +874,16 @@ function htmlText(s) {
 }
 
 /*
-    The text of a file: {text, format}, with for a PDF its number of pages and the number of
-    its pages without readable text that draw images (pages, unreadablePages).  Or an exception
-    whose message says why it cannot be read: too-large, too-large-content (an archive too large
-    once decompressed), legacy (an Office format before 2007), unsupported, pdf-images (a PDF
-    whose pages are images without text, a scan, with its number of pages in pages),
-    pdf-password (a PDF that opens with a password only), pdf-invalid (a damaged PDF),
-    pdf-reader (pdf.js cannot run in this browser), zip-invalid (an Office or OpenDocument file
-    that is not a ZIP archive, or a damaged one), zip-compression (an entry compressed by another
-    method than deflate), xml-invalid (an entry that is not well-formed XML).
+    Le texte d'un fichier : {text, format}, avec pour un PDF son nombre de pages et le nombre de
+    ses pages sans texte lisible qui dessinent des images (pages, unreadablePages).  Ou une
+    exception dont le message dit pourquoi il ne peut pas être lu : too-large, too-large-content
+    (une archive trop grande une fois décompressée), legacy (un format Office antérieur à 2007),
+    unsupported, pdf-images (un PDF dont les pages sont des images sans texte, un document
+    numérisé, avec son nombre de pages dans pages), pdf-password (un PDF qui ne s'ouvre qu'avec un
+    mot de passe), pdf-invalid (un PDF endommagé), pdf-reader (pdf.js ne peut pas s'exécuter dans
+    ce navigateur), zip-invalid (un fichier Office ou OpenDocument qui n'est pas une archive ZIP,
+    ou une archive endommagée), zip-compression (une entrée compressée par une autre méthode que
+    deflate), xml-invalid (une entrée qui n'est pas du XML bien formé).
 */
 export async function extractText(file) {
   if (file.size > maxFileBytes) throw new Error('too-large');
@@ -898,7 +904,7 @@ export async function extractText(file) {
   else if (ext === 'html' || ext === 'htm' || ext === 'xhtml') text = htmlText(decodeText(bytes));
   else if (textExtensions.has(ext) || (file.type || '').startsWith('text/') || !looksBinary(bytes)) {
     text = decodeText(bytes);
-    // A CSV keeps its rows; the separators other than the comma are read as they are.
+    // Un CSV garde ses lignes ; les séparateurs autres que la virgule sont lus tels quels.
     if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
     format = ext ? ext.toUpperCase() : 'TXT';
   } else {
@@ -909,8 +915,8 @@ export async function extractText(file) {
 }
 
 /*
-    The parts of a text: its "## " lines (pages, slides, sheets, sections), each with the
-    characters it covers.  A text without such lines is one part.
+    Les parties d'un texte : ses lignes "## " (pages, diapositives, feuilles, sections), chacune
+    avec les caractères qu'elle couvre.  Un texte sans de telles lignes forme une seule partie.
 */
 export function outline(text) {
   const parts = [];
@@ -925,8 +931,8 @@ export function outline(text) {
 }
 
 /*
-    The text of a part named as outline() names it: "Slide 3", "Page 12", "Sheet: Budget",
-    or the beginning of a section title; null when no part matches.
+    Le texte d'une partie nommée comme outline() la nomme : "Slide 3", "Page 12", "Sheet: Budget",
+    ou le début d'un titre de section ; null quand aucune partie ne correspond.
 */
 export function partText(text, name) {
   const wanted = String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -950,8 +956,8 @@ export function terms(s) {
 }
 
 /*
-    BM25 scores of a query over passages [{text}]: an array of scores, in their order.  The
-    statistics of the terms are computed over the passages given.
+    Scores BM25 d'une requête sur des passages [{text}] : un tableau de scores, dans leur ordre.
+    Les statistiques des termes sont calculées sur les passages donnés.
 */
 export function bm25Scores(passages, query) {
   const q = Array.from(new Set(terms(query)));
@@ -984,7 +990,7 @@ export function bm25Scores(passages, query) {
   return scores;
 }
 
-// Splits a text into overlapping passages for the search of the documents.
+// Découpe un texte en passages qui se chevauchent pour la recherche documentaire.
 export function passages(text, size = 1200, overlap = 200) {
   const out = [];
   for (let i = 0; i < text.length; i += size - overlap) {
@@ -995,9 +1001,9 @@ export function passages(text, size = 1200, overlap = 200) {
 }
 
 /*
-    The passages of a set of documents closest to a query, by the BM25 score of their
-    terms: [{name, start, text, score}], best first.  The search of the documents without
-    an embedding model.
+    Les passages d'un ensemble de documents les plus proches d'une requête, par le score BM25
+    de leurs termes : [{name, start, text, score}], le meilleur d'abord.  La recherche
+    documentaire sans modèle d'embedding.
 */
 export function searchPassages(documents, query, limit = 5) {
   const all = [];

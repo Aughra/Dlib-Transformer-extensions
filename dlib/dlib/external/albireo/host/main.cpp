@@ -2,25 +2,26 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    albireo-service: the Albireo service.
+    albireo-service : le service Albireo.
 
-        albireo-service                  as a Windows service, started by the service manager;
-                                         in the console elsewhere, or when started by hand
-        albireo-service --console        in the console, stopped by Ctrl+C
+        albireo-service                  comme service Windows, démarré par le gestionnaire de
+                                         services ; dans la console ailleurs, ou lancé à la main
+        albireo-service --console        dans la console, arrêté par Ctrl+C
         albireo-service --version
 
-    The service starts itself again with the arguments below, for the
-    work that must never take the service down with it.
+    Le service se relance lui-même avec les arguments ci-dessous, pour le
+    travail qui ne doit jamais entraîner le service dans sa chute.
 
-        --probe-engine <library>         prints the description of an engine library
+        --probe-engine <library>         affiche la description d'une bibliothèque de moteur
         --bench-engine <library> <model> <configuration>
-                                         measures an engine and prints the result
+                                         mesure un moteur et affiche le résultat
 
-    A restart normally happens within the process.  Once the engine of a device has run,
-    whose library stays loaded, the service restarts in a new process instead: as a
-    Windows service, through a copy of the program started with --restart-service, which
-    waits for the service to stop and starts it again.  A process that loaded the engine of
-    a device, the probes included, ends without unloading it (end_process()).
+    Un redémarrage a normalement lieu dans le processus.  Une fois que le moteur d'un
+    périphérique a tourné, et que sa bibliothèque reste chargée, le service redémarre plutôt
+    dans un nouveau processus : comme service Windows, par une copie du programme lancée avec
+    --restart-service, qui attend que le service s'arrête et le redémarre.  Un processus qui a
+    chargé le moteur d'un périphérique, sondes comprises, se termine sans le décharger
+    (end_process()).
 */
 
 
@@ -51,11 +52,11 @@ namespace
     albireo::service* current = nullptr;
     std::atomic<bool> stop_requested{false};
 
-    // Returned by serve() when the restart needs a new process.
+    // Renvoyé par serve() quand le redémarrage demande un nouveau processus.
     const int restart_process = 75;
 
-    // The exit code of the program, which ends without unloading the engine of a device
-    // once one has run (engine_host::pinned_engine_started()).
+    // Le code de sortie du programme, qui se termine sans décharger le moteur d'un périphérique
+    // une fois que l'un d'eux a tourné (engine_host::pinned_engine_started()).
     int finish(int code)
     {
         if (albireo::engine_host::pinned_engine_started()) albireo::end_process(code);
@@ -69,7 +70,7 @@ namespace
         if (current) current->stop();
     }
 
-    // Runs the service, again after each restart it asks for; returns the exit code.
+    // Exécute le service, à nouveau après chaque redémarrage qu'il demande ; renvoie le code de sortie.
     int serve(bool console)
     {
         int failures = 0;
@@ -88,7 +89,8 @@ namespace
             }
             catch (const std::exception& e)
             {
-                // An error run() did not report, a database failing under it say: a failed start, tried again.
+                // Une erreur que run() n'a pas signalée, une base de données qui lâche sous lui par exemple :
+                // un démarrage manqué, retenté.
                 error = std::string("unexpected error: ") + e.what();
             }
             catch (...)
@@ -104,8 +106,8 @@ namespace
             {
                 albireo::log_error("service: " + error);
                 if (console) std::cerr << "albireo-service: " << error << std::endl;
-                // A start that fails is tried again a few times, for a port released late
-                // by the previous run or a disk that mounts after the service.
+                // Un démarrage qui échoue est retenté quelques fois, pour un port libéré tard
+                // par l'exécution précédente ou un disque monté après le service.
                 if (++failures >= 3) return 1;
                 for (int i = 0; i < 100 && !stop_requested; ++i)
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -125,7 +127,7 @@ namespace
 
     int run_console(const std::vector<std::string>& args)
     {
-        // The signals are handled by a thread of their own, outside any signal handler.
+        // Les signaux sont traités par un thread dédié, hors de tout gestionnaire de signal.
         sigset_t set;
         sigemptyset(&set);
         sigaddset(&set, SIGINT);
@@ -140,11 +142,11 @@ namespace
         albireo::log_file::instance().set_console(true);
         const int code = serve(true);
         if (code != restart_process) return code;
-        // The same command line in a new process.
+        // La même ligne de commande dans un nouveau processus.
         std::vector<char*> argv;
         for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
         argv.push_back(nullptr);
-        // The path of the program (_NSGetExecutablePath on macOS, where /proc does not exist).
+        // Le chemin du programme (_NSGetExecutablePath sur macOS, où /proc n'existe pas).
         const std::string self = albireo::executable_path();
         if (!self.empty()) execv(self.c_str(), argv.data());
         execvp(argv[0], argv.data());
@@ -157,7 +159,7 @@ int main(int argc, char** argv)
     std::vector<std::string> args;
     for (int i = 0; i < argc; ++i) args.push_back(argv[i]);
 
-    // The probes end as soon as their result is written, the engine they loaded still in memory.
+    // Les sondes se terminent dès que leur résultat est écrit, le moteur qu'elles ont chargé encore en mémoire.
     if (args.size() >= 3 && args[1] == "--probe-engine") albireo::end_process(albireo::service::probe_engine(args[2]));
     if (args.size() >= 5 && args[1] == "--bench-engine")
         albireo::end_process(albireo::service::benchmark_engine(args[2], args[3], args[4]));

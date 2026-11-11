@@ -26,7 +26,8 @@ namespace pseudalis
             return true;
         }
 
-        // A TAR header: 512 bytes whose checksum adds up, the sum of its bytes with the checksum field as spaces.
+        // Un en-tête TAR : 512 octets dont la somme de contrôle tombe juste, la somme de ses octets avec
+        // le champ de la somme de contrôle compté comme des espaces.
         bool tar_header(const std::string& b, size_t at)
         {
             if (at + 512 > b.size()) return false;
@@ -50,7 +51,7 @@ namespace pseudalis
 
         uint64_t tar_number(const std::string& b, size_t at, size_t n)
         {
-            // Base 256 (GNU), the first byte marked with its high bit.
+            // Base 256 (GNU), le premier octet marqué par son bit de poids fort.
             if (static_cast<unsigned char>(b[at]) & 0x80)
             {
                 uint64_t v = static_cast<unsigned char>(b[at]) & 0x7F;
@@ -76,9 +77,9 @@ namespace pseudalis
         }
 
         /*
-            The records "<length> <key>=<value>\n" of a PAX header.  The length, decimal digits
-            alone, counts the whole record: a record that does not end where it says, or that
-            would not move forward, ends the reading.
+            Les enregistrements "<length> <key>=<value>\n" d'un en-tête PAX.  La longueur, faite
+            de chiffres décimaux seuls, compte l'enregistrement entier : un enregistrement qui ne
+            finit pas là où il le dit, ou qui ne ferait pas avancer, met fin à la lecture.
         */
         void pax_records(const std::string& data, std::string& path, uint64_t& size, bool& has_size)
         {
@@ -108,9 +109,9 @@ namespace pseudalis
         }
 
         /*
-            Whether the name of an entry stays inside the folder where the archive opens: no
-            absolute path, no drive, no backslash and no ".." among its components.  The
-            entries named otherwise are left out of the archive written.
+            Indique si le nom d'une entrée reste à l'intérieur du dossier où l'archive s'ouvre :
+            ni chemin absolu, ni lecteur, ni barre oblique inverse, ni ".." parmi ses composants.
+            Les entrées nommées autrement sont laissées hors de l'archive écrite.
         */
         bool safe_entry_name(const std::string& name)
         {
@@ -139,7 +140,7 @@ namespace pseudalis
             size_t at = 0;
             while (at + 512 <= b.size())
             {
-                // Two blocks of zeros end the archive; one is enough here.
+                // Deux blocs de zéros terminent l'archive ; un seul suffit ici.
                 bool zero = true;
                 for (size_t i = 0; i < 512 && zero; ++i) zero = b[at + i] == '\0';
                 if (zero) break;
@@ -153,7 +154,7 @@ namespace pseudalis
                 at = data_at + static_cast<size_t>((size + 511) / 512 * 512);
                 if (type == 'L' || type == 'x')
                 {
-                    // The headers of names are read here; a name of 64 KB is long enough.
+                    // Les en-têtes de noms sont lus ici ; un nom de 64 Ko est assez long.
                     if (size > (64u << 10)) throw archive_error("TAR: a header of names is too long");
                     const std::string data = b.substr(data_at, static_cast<size_t>(size));
                     if (type == 'L') long_name = tar_string(data, 0, data.size());
@@ -172,7 +173,7 @@ namespace pseudalis
                 pax_path.clear();
                 pax_has_size = false;
                 e.name = name;
-                // The permissions alone: no set-user or set-group identifier, no sticky bit.
+                // Les permissions seules : ni bit set-user ni set-group, ni sticky bit.
                 e.mode = static_cast<uint32_t>(tar_number(b, hdr + 100, 8)) & 0777u;
                 e.mtime = static_cast<int64_t>(tar_number(b, hdr + 136, 12));
                 e.directory = type == '5' || (!name.empty() && name.back() == '/');
@@ -189,7 +190,7 @@ namespace pseudalis
 
         void put_octal(std::string& h, size_t at, size_t n, uint64_t v)
         {
-            // n - 1 digits and a terminating NUL.
+            // n - 1 chiffres et un NUL final.
             std::string digits(n - 1, '0');
             for (size_t i = n - 1; i-- > 0 && v;)
             {
@@ -236,7 +237,7 @@ namespace pseudalis
                 const uint64_t size = e.directory ? 0 : e.data.size();
                 if (name.size() > 100)
                 {
-                    // A PAX header carries the whole name; the header that follows keeps its end.
+                    // Un en-tête PAX porte le nom entier ; l'en-tête qui suit en garde la fin.
                     std::string record = " path=" + name + "\n";
                     size_t len = record.size();
                     while (std::to_string(len).size() + record.size() != len)
@@ -319,7 +320,7 @@ namespace pseudalis
     {
         std::string out;
         size_t at = 0;
-        // Members follow one another; each is read where it lies, and their number is bounded.
+        // Les membres se suivent ; chacun est lu là où il se trouve, et leur nombre est borné.
         size_t members = 0;
         while (at + 18 <= data.size())
         {
@@ -328,7 +329,7 @@ namespace pseudalis
                 data[at + 2] != 8)
             {
                 if (out.empty()) throw archive_error("gzip: not a gzip stream");
-                break;   // trailing garbage after the last member
+                break;   // déchets en fin de fichier après le dernier membre
             }
             const unsigned char flags = static_cast<unsigned char>(data[at + 3]);
             size_t p = at + 10;

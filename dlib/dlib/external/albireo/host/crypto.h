@@ -16,13 +16,13 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                A SHA-256 computed over data given in pieces.
+                Un SHA-256 calculé sur des données fournies par morceaux.
         !*/
     public:
         sha256_stream();
         ~sha256_stream();
         void update(const void* data, size_t n);
-        std::string hex();   // ends the computation
+        std::string hex();   // termine le calcul
 
     private:
         struct impl;
@@ -33,29 +33,30 @@ namespace albireo
 
     /*!
         ensures
-            - Returns the stored form of a password: "pbkdf2-sha256$<iterations>$<salt>$<hash>",
-              PBKDF2 with HMAC-SHA-256 over a random salt, in hexadecimal.
+            - Renvoie la forme stockée d'un mot de passe : "pbkdf2-sha256$<iterations>$<salt>$<hash>",
+              PBKDF2 avec HMAC-SHA-256 sur un sel aléatoire, en hexadécimal.
     !*/
     std::string password_hash(const std::string& password);
 
     /*!
         ensures
-            - Whether password gives stored (password_hash()), compared in a time that does
-              not depend on where they differ.  False for a stored form that is not one.
+            - Indique si password donne stored (password_hash()), comparés en un temps qui ne
+              dépend pas de l'endroit où ils diffèrent.  False pour une forme stockée qui n'en
+              est pas une.
     !*/
     bool password_matches(const std::string& password, const std::string& stored);
 
-    // HMAC-SHA-256 of message under key, in lower case hexadecimal.
+    // HMAC-SHA-256 de message sous key, en hexadécimal minuscule.
     std::string hmac_sha256_hex(const std::string& key, const std::string& message);
 
-    // Compares two strings in a time that does not depend on where they differ.
+    // Compare deux chaînes en un temps qui ne dépend pas de l'endroit où elles diffèrent.
     bool same_secret(const std::string& a, const std::string& b);
 
     /*!
         ensures
-            - Returns the SHA-256 of a file in lower case hexadecimal, or an empty string
-              when it cannot be read or when cancel becomes true.
-            - progress, when given, receives the bytes read so far.
+            - Renvoie le SHA-256 d'un fichier en hexadécimal minuscule, ou une chaîne vide
+              quand il ne peut pas être lu ou quand cancel devient true.
+            - progress, quand il est fourni, reçoit les octets lus jusque-là.
     !*/
     std::string sha256_file(const std::string& path, const std::function<void(uint64_t)>& progress = nullptr,
         const std::atomic<bool>* cancel = nullptr);
@@ -64,37 +65,37 @@ namespace albireo
 
     /*!
         ensures
-            - Returns the SHA-256 of the size() bytes of an open file from its start, or an
-              empty string when they cannot be read or when cancel becomes true.
+            - Renvoie le SHA-256 des size() octets d'un fichier ouvert depuis son début, ou une
+              chaîne vide quand ils ne peuvent pas être lus ou quand cancel devient true.
     !*/
     std::string sha256_open_file(link_free_file& f, const std::atomic<bool>* cancel = nullptr);
 
     /*!
         ensures
-            - Copies the size() bytes of an open file from its start into to, a new file
-              (new_file), and returns the SHA-256 of what was written.
-            - Returns an empty string, and removes to, when the copy fails or is cancelled, or
-              when expected is given and differs from that hash.  A name to taken already is
-              left as it is.
+            - Copie les size() octets d'un fichier ouvert depuis son début dans to, un nouveau
+              fichier (new_file), et renvoie le SHA-256 de ce qui a été écrit.
+            - Renvoie une chaîne vide, et supprime to, quand la copie échoue ou est annulée, ou
+              quand expected est fourni et diffère de ce hash.  Un nom to déjà pris est laissé
+              tel quel.
     !*/
     std::string copy_open_file(link_free_file& from, const std::string& to, const std::string& expected,
         const std::atomic<bool>* cancel = nullptr);
 
     /*!
         ensures
-            - Checks an ECDSA P-256 signature with SHA-256 (DER encoded, given in base64)
-              of data against a public key in PEM form.
+            - Vérifie une signature ECDSA P-256 avec SHA-256 (encodée en DER, fournie en
+              base64) de data avec une clé publique au format PEM.
     !*/
     bool verify_signature(const std::string& data, const std::string& signature_base64,
         const std::string& public_key_pem);
 
-    // Signs data with a private key in PEM form; returns the DER signature in base64.
+    // Signe data avec une clé privée au format PEM ; renvoie la signature DER en base64.
     std::string sign_data(const std::string& data, const std::string& private_key_pem, std::string& error);
 
     std::string base64_encode(const std::string& data);
     std::string base64_decode(const std::string& text);
 
-    // The public key that signs the update feed and the model catalog.
+    // La clé publique qui signe le flux de mises à jour et le catalogue de modèles.
     extern const char* const feed_public_key_pem;
 
 }

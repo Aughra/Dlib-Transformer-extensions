@@ -1,15 +1,15 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
-    Measures the processor runtime on a model:
+    Mesure le runtime du processeur sur un modèle :
 
         bench_runtime model.gguf [threads] [prompt_tokens] [steps] [parallel] [f16|q8] [metal]
 
-    Reports the prompt throughput, the time of one generation step for a single
-    sequence, and the throughput of steps that advance several sequences together, with
-    the keys and values in half precision (by default) or in 8 bits.  With "metal", the
-    generation steps run on the GPU of the Mac (cpu_runtime::set_gpu()), its check made
-    before the measures (cpu_runtime::check_gpu()).
+    Indique le débit du prompt, le temps d'une étape de génération pour une seule séquence,
+    et le débit des étapes qui font avancer plusieurs séquences ensemble, avec les clés et
+    valeurs en demi-précision (par défaut) ou sur 8 bits.  Avec "metal", les étapes de
+    génération tournent sur le GPU du Mac (cpu_runtime::set_gpu()), sa vérification étant
+    faite avant les mesures (cpu_runtime::check_gpu()).
 */
 
 #include <algorithm>
@@ -48,7 +48,7 @@ int main(int argc, char** argv)
     auto file = std::make_shared<model_file>(argv[1]);
     const model_config cfg = read_model_config(*file);
     thread_pool pool(threads);
-    // The keys and values of the prompt and of the steps, and of the parallel sequences.
+    // Les clés et valeurs du prompt et des étapes, et des séquences parallèles.
     const size_t per_token = 2 * static_cast<size_t>(cfg.n_layers) * static_cast<size_t>(cfg.n_kv_heads)
         * kv_row_bytes(format, cfg.head_dim);
     const size_t budget = std::max<size_t>(size_t(1) << 30, per_token * static_cast<size_t>(prompt + 2 * steps + 64
@@ -66,7 +66,8 @@ int main(int argc, char** argv)
             return 1;
         }
         rt.set_gpu(*gpu, [](int, const std::string& m) { std::printf("%s\n", m.c_str()); });
-        // The check of the GPU before the measures, as the engine makes it at the loading of a model.
+        // La vérification du GPU avant les mesures, telle que le moteur la fait au chargement d'un
+        // modèle.
         rt.check_gpu();
     }
     file->warm_up(false);
@@ -86,7 +87,7 @@ int main(int argc, char** argv)
     const double pms = since(t);
     std::printf("prompt: %ld tokens in %.1f ms, %.1f tokens/s\n", prompt, pms, 1000.0 * prompt / pms);
 
-    // Single sequence steps.
+    // Étapes d'une seule séquence.
     t = clock_type::now();
     for (long s = 0; s < steps; ++s)
     {
@@ -100,7 +101,7 @@ int main(int argc, char** argv)
     std::printf("generation: %.2f ms per token, %.1f tokens/s\n", sms, 1000.0 / sms);
     rt.release_sequence(seq);
 
-    // Several sequences advancing together.
+    // Plusieurs séquences qui avancent ensemble.
     std::vector<int> seqs;
     for (long p = 0; p < parallel; ++p)
     {

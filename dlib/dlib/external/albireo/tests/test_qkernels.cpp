@@ -1,17 +1,17 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
-    Checks the quantized kernels of the engine against the reference dequantization of
+    Vérifie les noyaux quantifiés du moteur par rapport à la déquantification de référence de
     dlib (dlib/data_io/gguf_dequantize.h).
 
-    For every weight format, random blocks are generated, a row of activations is
-    quantized in the format the kernel expects, and the integer dot product is compared
-    with the double precision dot product of the dequantized weights and the
-    dequantized activations.  The two only differ by rounding, so the tolerance is tight:
-    any error in the bit layout of a format shows up as a gross mismatch.
+    Pour chaque format de poids, des blocs aléatoires sont générés, une ligne d'activations est
+    quantifiée dans le format qu'attend le noyau, et le produit scalaire entier est comparé au
+    produit scalaire en double précision des poids déquantifiés et des activations
+    déquantifiées.  Les deux ne diffèrent que par l'arrondi, la tolérance est donc serrée :
+    toute erreur dans la disposition des bits d'un format se voit comme un écart grossier.
 
-    The products, the conversions and the vector helpers of the attention are checked
-    the same way.  The program returns 0 when every check passes.
+    Les produits, les conversions et les fonctions vectorielles de l'attention sont vérifiés de
+    la même façon.  Le programme renvoie 0 quand chaque vérification réussit.
 */
 
 #include <algorithm>
@@ -52,7 +52,7 @@ namespace
         const char* name;
         long block;
         long bytes;
-        std::vector<long> half_offsets;   // scale fields that must hold finite halves
+        std::vector<long> half_offsets;   // champs d'échelle qui doivent contenir des demi-flottants finis
     };
 
     std::vector<fmt> formats()
@@ -121,7 +121,7 @@ namespace
         return row;
     }
 
-    // The activation values a quantized activation row stands for.
+    // Les valeurs d'activation que représente une ligne d'activations quantifiée.
     std::vector<double> activation_values(act_format f, const std::vector<uint8_t>& act, const std::vector<float>& x)
     {
         const long n = static_cast<long>(x.size());
@@ -169,8 +169,8 @@ namespace
             double worst = 0;
             for (int trial = 0; trial < 50; ++trial)
             {
-                // An odd number of blocks, or a length that no vector divides, every other
-                // trial: the kernels that take two blocks or 16 values at a time end alone.
+                // Un nombre impair de blocs, ou une longueur qu'aucun vecteur ne divise, un essai
+                // sur deux : les noyaux qui prennent deux blocs ou 16 valeurs à la fois terminent seuls.
                 const long n = trial % 2 == 0 ? 1024 : f.block == 256 ? 1280 : f.block == 32 ? 1056 : 1003;
                 const std::vector<uint8_t> w = random_row(f, n, rng);
                 std::vector<float> x(static_cast<size_t>(n));
@@ -199,7 +199,7 @@ namespace
         }
     }
 
-    // The expansion of the formats with a vector kernel of their own, bit for bit that of dlib.
+    // Le développement des formats qui ont un noyau vectoriel à eux, bit pour bit celui de dlib.
     void test_dequantization(std::mt19937& rng)
     {
         for (const fmt& f : formats())
@@ -235,12 +235,12 @@ namespace
             double worst = 0;
             for (long i = 0; i < n; ++i)
                 worst = std::max(worst, std::fabs(a[static_cast<size_t>(i)] - x[static_cast<size_t>(i)]));
-            // Half a quantum of a block whose largest value is 3.
+            // Un demi-quantum d'un bloc dont la plus grande valeur est 3.
             const double bound = 3.0 / 127.0 * 0.501;
             check(worst <= bound, "activation quantization error", worst, bound);
             if (af == act_format::q8_0)
             {
-                // The scaled sum of the quanta, used by the asymmetric formats.
+                // La somme mise à l'échelle des quanta, utilisée par les formats asymétriques.
                 for (long b = 0; b < n / 32; ++b)
                 {
                     float s;
@@ -295,7 +295,7 @@ namespace
             std::vector<float> Y2 = Y;
             qk_matmul(W, X.data(), tokens, xs, Y2.data(), ys, pool, scratch, true);
 
-            // Few tokens go through the integer kernels, many through floats.
+            // Peu de tokens passent par les noyaux entiers, beaucoup par les flottants.
             const bool floats = tokens >= qk_float_product_tokens;
             const act_format af = qk_activation_format(f.type);
             std::vector<uint8_t> act(qk_activation_row_bytes(af, cols));
@@ -306,8 +306,8 @@ namespace
                 for (long r = 0; r < rows; ++r)
                 {
                     float ref;
-                    // Single precision sums: their rounding follows the magnitude of
-                    // the terms rather than that of the result.
+                    // Sommes en simple précision : leur arrondi suit la grandeur des termes
+                    // plutôt que celle du résultat.
                     double mag = 0;
                     if (floats)
                     {
@@ -329,7 +329,8 @@ namespace
                     const float got = Y[static_cast<size_t>(t * ys + r)];
                     const double tol = 1e-5 * (std::fabs(ref) + 1) + 2e-6 * mag;
                     check(std::fabs(got - ref) <= tol, "matmul", got, ref);
-                    // Each token of a pass gets the result it gets alone, whatever the other tokens.
+                    // Chaque token d'une passe obtient le résultat qu'il obtient seul, quels que soient
+                    // les autres tokens.
                     if (!floats) check(got == ref, "integer product independent of the other tokens", got, ref);
                     check(std::fabs(Y2[static_cast<size_t>(t * ys + r)] - 2 * ref) <= 2 * tol,
                         "matmul accumulate", Y2[static_cast<size_t>(t * ys + r)], 2 * ref);
@@ -345,7 +346,7 @@ namespace
         for (const fmt& f : formats())
         {
             test_matmul_case(f, 512, rng, pool);
-            // The formats of single values also take a length that no vector divides.
+            // Les formats de valeurs simples prennent aussi une longueur qu'aucun vecteur ne divise.
             if (f.block == 1) test_matmul_case(f, 523, rng, pool);
         }
         std::printf("  matmul: every format, 1 to 300 tokens, integer, float and packed paths, strided, accumulated\n");
@@ -354,7 +355,7 @@ namespace
 
     void test_helpers(std::mt19937& rng)
     {
-        // Every finite half converts to float and back unchanged.
+        // Chaque demi-flottant fini se convertit en float et revient inchangé.
         int bad = 0;
         for (uint32_t h = 0; h < 65536; ++h)
         {
@@ -364,7 +365,7 @@ namespace
         }
         check(bad == 0, "half round trip", bad, 0);
 
-        // Rounding to nearest even, and the row versions against the scalar ones.
+        // L'arrondi au pair le plus proche, et les versions par ligne comparées aux versions scalaires.
         std::uniform_real_distribution<float> value(-70000.0f, 70000.0f);
         std::vector<float> f(1000);
         for (auto& e : f) e = value(rng) * (rng() % 2 ? 1e-6f : 1.0f);
@@ -426,13 +427,13 @@ namespace
             check(std::fabs(sum - rs) <= 1e-5 * rs, "exp sum", sum, rs);
         }
 
-        // Very negative arguments underflow to zero rather than to garbage.
+        // Les arguments très négatifs tombent à zéro plutôt qu'à n'importe quoi.
         std::vector<float> neg = { -1000.0f, -120.0f, -88.0f, -87.0f, 0.0f, -1e30f, -50.0f, -10.0f, -3.0f };
         const float s = qk_exp_shift_sum(neg.data(), 0.0f, static_cast<long>(neg.size()));
         check(neg[0] == 0.0f && neg[1] >= 0.0f && neg[1] < 1e-37f && neg[5] == 0.0f, "exp underflow", neg[0], neg[5]);
         check(std::fabs(s - (1.0 + std::exp(-3.0) + std::exp(-10.0) + std::exp(-50.0))) < 1e-6, "exp underflow sum", s);
 
-        // The gate of the SwiGLU blocks over the range of the activations, and beyond it.
+        // La porte des blocs SwiGLU sur la plage des activations, et au-delà.
         {
             std::uniform_real_distribution<float> wide(-30.0f, 30.0f), unit(-1.0f, 1.0f);
             const float edges[] = { -200.0f, 200.0f, 0.0f, -1e-20f };
@@ -457,8 +458,8 @@ namespace
 
     void test_attention_tiles(std::mt19937& rng)
     {
-        // Rows of queries against blocks of keys and values in half precision, with sizes
-        // around the groups and the vector widths of the kernels.
+        // Des lignes de requêtes comparées à des blocs de clés et valeurs en demi-précision, avec
+        // des tailles autour des groupes et des largeurs vectorielles des noyaux.
         std::uniform_real_distribution<float> value(-2.0f, 2.0f);
         const long cases[][3] = { { 1, 1, 64 }, { 2, 5, 128 }, { 3, 37, 80 }, { 64, 256, 128 }, { 5, 100, 256 },
             { 2, 33, 72 }, { 7, 70, 64 }, { 1, 256, 128 }, { 4, 9, 40 } };
@@ -521,20 +522,22 @@ namespace
 
     void test_attention_q8(std::mt19937& rng)
     {
-        // The rows of 8-bit keys and values: groups of 32 values with a scale in half precision.
+        // Les lignes de clés et valeurs sur 8 bits : des groupes de 32 valeurs avec une échelle en
+        // demi-précision.
         std::uniform_real_distribution<float> value(-3.0f, 3.0f);
         for (long n : { 32L, 64L, 128L, 256L })
         {
             std::vector<float> x(static_cast<size_t>(n));
             for (long i = 0; i < n; ++i)
             {
-                // Groups of different magnitudes, a group of zeros, and a group with one large value.
+                // Des groupes de grandeurs différentes, un groupe de zéros, et un groupe avec une
+                // grande valeur.
                 const long g = i / 32;
                 const float f = g % 4 == 1 ? 0.0f : g % 4 == 2 ? 1e-3f : 1.0f;
                 x[static_cast<size_t>(i)] = value(rng) * f;
             }
             if (n >= 128) x[100] = 50.0f;
-            // A group of tiny values, whose scale is a subnormal half.
+            // Un groupe de valeurs minuscules, dont l'échelle est un demi-flottant sous-normal.
             if (n >= 256)
                 for (long i = 192; i < 224; ++i) x[static_cast<size_t>(i)] = 1e-6f * static_cast<float>(i - 207);
             std::vector<int8_t> q(static_cast<size_t>(n));
@@ -562,7 +565,8 @@ namespace
             }
         }
 
-        // The attention kernels over 8-bit rows against the products of the dequantized rows.
+        // Les noyaux d'attention sur des lignes de 8 bits comparés aux produits des lignes
+        // déquantifiées.
         const long cases[][3] = { { 1, 1, 64 }, { 2, 5, 128 }, { 3, 37, 32 }, { 64, 256, 128 }, { 5, 100, 256 },
             { 7, 70, 64 }, { 1, 256, 128 }, { 4, 9, 96 } };
         std::uniform_real_distribution<float> unit(-2.0f, 2.0f);
@@ -636,7 +640,7 @@ namespace
 
     void test_pool(thread_pool& pool)
     {
-        // Many small sections in a row, the pattern of a generation step.
+        // Beaucoup de petites sections d'affilée, le motif d'une étape de génération.
         std::vector<long> hits(1000, 0);
         for (int rep = 0; rep < 2000; ++rep)
         {
@@ -652,7 +656,7 @@ namespace
         for (int rep = 0; rep < 2000; ++rep) expected += 1 + rep % 13;
         check(total == expected, "pool tasks", static_cast<double>(total), static_cast<double>(expected));
 
-        // Sections separated by pauses long enough for the workers to sleep.
+        // Des sections séparées par des pauses assez longues pour que les threads de travail s'endorment.
         pool.set_spin_time(std::chrono::microseconds(50));
         for (int rep = 0; rep < 20; ++rep)
         {
@@ -668,9 +672,10 @@ namespace
     void test_new_pools()
     {
         /*
-            A section opened as soon as the pool exists, before the system has run its
-            workers, in which every worker takes part.  A worker that missed it would leave
-            the section waiting for ever, which the watchdog reports.
+            Une section ouverte dès que le thread pool existe, avant que le système ait lancé ses
+            threads de travail, à laquelle chaque thread de travail prend part.  Un thread qui
+            l'aurait manquée laisserait la section attendre indéfiniment, ce que signale le chien
+            de garde.
         */
         std::atomic<bool> finished{false};
         std::thread watchdog([&]() {

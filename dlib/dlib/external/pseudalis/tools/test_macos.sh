@@ -2,22 +2,22 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Builds and tests Pseudalis on macOS (Apple Silicon), where the service carries its engine and its
-# drive works as a folder without letter, and prints a summary, one line per step.
+# Construit et teste Pseudalis sur macOS (Apple Silicon), où le service porte son moteur et où son
+# lecteur fonctionne comme un dossier sans lettre, et affiche un résumé, une ligne par étape.
 #
 #   bash dlib/dlib/external/pseudalis/tools/test_macos.sh [build folder]
 #
-# Default build folder: build/macos-pseudalis at the root of the repository.  The tests of the
-# engine and of the host run first; the service then runs in a data folder of its own, on port
-# 18444 (PSEUDALIS_TEST_PORT), anonymizes and restores through its interface a text, a CSV file,
-# a name and the archive of a folder as the web application sends it, then files and a folder
-# through its drive, whose originals come back through the interface, an archive extracted on the
-# drive, an archive whose original was forgotten coming back and the copies of a file, saves the
-# settings as the web application does, imposes terms, makes room for newer originals, restores from
-# their tags an archive whose picture was forgotten and a text written elsewhere from anonymized
-# values, protects files, a text and the drive without tags, restores files protected twice, and
-# stops.
-# The exit code is the number of failed steps.
+# Dossier de build par défaut : build/macos-pseudalis à la racine du dépôt.  Les tests du moteur et
+# de l'hôte passent d'abord ; le service tourne ensuite dans un dossier de données à lui, sur le port
+# 18444 (PSEUDALIS_TEST_PORT), anonymise et restaure par son interface un texte, un fichier CSV, un
+# nom et l'archive d'un dossier telle que l'application web l'envoie, puis des fichiers et un dossier
+# par son lecteur, dont les originaux reviennent par l'interface, une archive extraite sur le
+# lecteur, une archive dont l'original a été oublié qui revient et les copies d'un fichier,
+# enregistre les réglages comme le fait l'application web, impose des termes, fait de la place pour
+# des originaux plus récents, restaure à partir de leurs étiquettes une archive dont l'image a été
+# oubliée et un texte écrit ailleurs à partir de valeurs anonymisées, protège des fichiers, un texte
+# et le lecteur sans étiquettes, restaure des fichiers protégés deux fois, et s'arrête.
+# Le code de sortie est le nombre d'étapes en échec.
 
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -29,13 +29,13 @@ WORK=$(mktemp -d)
 RESULTS=()
 FAILED=0
 
-record() { # step result detail
+record() { # étape résultat détail
   RESULTS+=("$(printf '%-26s %-5s %s' "$1" "$2" "$3")")
   [ "$2" = FAIL ] && FAILED=$((FAILED + 1))
 }
 
-# Runs a command, then checks that its output holds a pattern.
-step() { # name pattern command...
+# Lance une commande, puis vérifie que sa sortie contient un motif.
+step() { # nom motif commande...
   local name=$1 pattern=$2
   shift 2
   local out rc
@@ -85,14 +85,15 @@ if [ $ready -eq 1 ]; then
   if cmp -s "$WORK/sample.csv" "$WORK/sample.back.csv"; then record "file restored" PASS "identical to the original"
   else record "file restored" FAIL "the restored file differs, in $WORK"
   fi
-  # The name of a file takes substitutes, without tags.
+  # Le nom d'un fichier prend des substituts, sans étiquettes.
   api -X POST --data-binary @"$WORK/sample.csv" -D "$WORK/name.headers" -o /dev/null \
     "$URL/v1/anonymize?name=jean.dupont%40exemple.fr.csv"
   if grep -i '^x-pseudalis-name:' "$WORK/name.headers" | grep -q -v -i -e dupont -e '\[\['; then
     record "name anonymized" PASS "$(grep -i '^x-pseudalis-name:' "$WORK/name.headers" | tr -d '\r')"
   else record "name anonymized" FAIL "$(grep -i '^x-pseudalis-name:' "$WORK/name.headers" | tr -d '\r')"
   fi
-  # A text of no kind is protected as a text; a binary file, or a text with encoded parts, is refused.
+  # Un texte sans type est protégé comme un texte ; un fichier binaire, ou un texte avec des parties
+  # encodées, est refusé.
   printf 'Journal de Jean Dupont, jean.dupont@exemple.fr\n' > "$WORK/journal.log2"
   step "text of no kind" '\[\[EMAIL:' api -X POST --data-binary @"$WORK/journal.log2" \
     "$URL/v1/anonymize?name=journal.log2"
@@ -102,8 +103,8 @@ if [ $ready -eq 1 ]; then
   printf 'From: Jean Dupont\r\nContent-Transfer-Encoding: base64\r\n\r\nSmVhbiBEdXBvbnQ=\r\n' > "$WORK/message.eml"
   step "encoded of no kind" '"code":"encoded_content"' api -X POST --data-binary @"$WORK/message.eml" \
     "$URL/v1/anonymize?name=message.eml"
-  # A name alone, the one of a folder, and its restoration.
-  name_call() { # route name
+  # Un nom seul, celui d'un dossier, et sa restauration.
+  name_call() { # route nom
     api -X POST -H "Content-Type: application/json" --data "$(python3 -c 'import json, sys
 print(json.dumps({"name": sys.argv[1]}))' "$2")" "$URL/v1/names/$1" |
       python3 -c 'import json, sys; print(json.load(sys.stdin).get("name", ""))'
@@ -115,8 +116,8 @@ print(json.dumps({"name": sys.argv[1]}))' "$2")" "$URL/v1/names/$1" |
   else record "folder name" FAIL "anonymized as '$NAMED'"
   fi
 
-  # A folder as the web application sends it, a ZIP archive stored without compression: its
-  # documents and its names protected, the file of another kind left out, the original given back.
+  # Un dossier tel que l'application web l'envoie, une archive ZIP stockée sans compression : ses
+  # documents et ses noms protégés, le fichier d'un autre type laissé de côté, l'original rendu.
   python3 - "$WORK/dossier.zip" <<'PY'
 import sys, zipfile
 z = zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_STORED)
@@ -148,11 +149,11 @@ PY
   else record "archive restored" FAIL "the restored archive differs, in $WORK"
   fi
 
-  # The drive: a document anonymized under a name without personal data, the files of another
-  # kind moved out at their place in the tree, a folder renamed once its files rest; then the
-  # originals of the file and of the name of the folder through the interface.
+  # Le lecteur : un document anonymisé sous un nom sans données personnelles, les fichiers d'un
+  # autre type sortis à leur place dans l'arborescence, un dossier renommé une fois ses fichiers au
+  # repos ; puis les originaux du fichier et du nom du dossier par l'interface.
   DRIVE=$HOME_DIR/drive
-  wait_for() { # seconds command...
+  wait_for() { # secondes commande...
     local n=$1
     shift
     for _ in $(seq 1 "$n"); do "$@" && return 0; sleep 1; done
@@ -176,8 +177,8 @@ PY
   if wait_for 60 drive_done; then record "drive anonymized" PASS "names, content, the files of another kind out"
   else record "drive anonymized" FAIL "$(find "$DRIVE" "$HOME_DIR/refused" | tr '\n' ' ')"
   fi
-  # An archive over 64 KB: anonymized, then renamed with an extension of no kind, it stays a protected
-  # file of the drive; without extension, it is taken by its signature.
+  # Une archive de plus de 64 Ko : anonymisée, puis renommée avec une extension sans type, elle reste
+  # un fichier protégé du lecteur ; sans extension, elle est reconnue à sa signature.
   python3 - "$WORK/grosse.zip" <<'PY'
 import random, sys, zipfile
 random.seed(5)
@@ -190,7 +191,7 @@ z.close()
 PY
   cp "$WORK/grosse.zip" "$DRIVE/grosse.zip"
   cp "$WORK/grosse.zip" "$DRIVE/archive_sans_extension"
-  # The name without extension may take substitutes too: the file is found by its end.
+  # Le nom sans extension peut aussi prendre des substituts : le fichier est trouvé par sa fin.
   bare() { find "$DRIVE" -maxdepth 1 -type f -name '*sans_extension' | head -1; }
   archive_done() {
     [ -f "$DRIVE/grosse.zip" ] && [ -n "$(bare)" ] && ! cmp -s "$WORK/grosse.zip" "$DRIVE/grosse.zip" &&
@@ -221,10 +222,11 @@ PY
   else record "drive restored" FAIL "name '$BACK_NAME', folder $(basename "$FOLDER")"
   fi
 
-  # The records of the originals, through the interface of the administrators.
+  # Les fiches des originaux, par l'interface des administrateurs.
   TOKEN=$(cat "$HOME_DIR/admin.token" 2>/dev/null)
   records() { api -H "X-Pseudalis-Admin: $TOKEN" "$URL/v1/records?limit=1000"; }
-  # The record of a protected file, by the SHA-256 of $1 or by its identifier $2: "<id>|<removed>|<original name>".
+  # La fiche d'un fichier protégé, par le SHA-256 de $1 ou par son identifiant $2 :
+  # "<id>|<removed>|<original name>".
   record_of() {
     records | python3 -c 'import json, sys
 sha, ident = sys.argv[1], sys.argv[2]
@@ -235,17 +237,18 @@ for r in json.load(sys.stdin)["records"]:
   }
   total() { records | python3 -c 'import json, sys; print(json.load(sys.stdin)["total"])'; }
   quoted() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$1"; }
-  restore_to() { # file output, the headers of the answer in output.headers
+  restore_to() { # fichier sortie, les en-têtes de la réponse dans output.headers
     api -X POST --data-binary @"$1" -D "$2.headers" -o "$2" "$URL/v1/restore?name=$(quoted "$(basename "$1")")"
   }
-  report_of() { # headers: the report they give, decoded
+  report_of() { # en-têtes : le rapport qu'ils donnent, décodé
     python3 -c 'import sys, urllib.parse
 for line in open(sys.argv[1], encoding="latin-1"):
     if line.lower().startswith("x-pseudalis-report:"):
         print(urllib.parse.unquote(line.split(":", 1)[1].strip()))' "$1"
   }
-  # An archive anonymized on the drive, then extracted on the drive: its files stay as they are, each
-  # recorded under its original name with the original of its entry, and restored and forgotten alone.
+  # Une archive anonymisée sur le lecteur, puis extraite sur le lecteur : ses fichiers restent tels
+  # quels, chacun enregistré sous son nom d'origine avec l'original de son entrée, et restauré et
+  # oublié seul.
   python3 - "$WORK/envoi.zip" <<'PY'
 import sys, zipfile
 z = zipfile.ZipFile(sys.argv[1], "w", zipfile.ZIP_DEFLATED)
@@ -259,7 +262,7 @@ PY
     [ -n "$(record_of "$DRIVE/envoi.zip")" ]; }
   wait_for 60 envoi_done
   cp "$DRIVE/envoi.zip" "$WORK/envoi.anon.zip"
-  # Two files extracted on the drive, the third elsewhere.
+  # Deux fichiers extraits sur le lecteur, le troisième ailleurs.
   python3 - "$WORK/envoi.anon.zip" "$WORK/extrait" "$WORK/ailleurs" <<'PY'
 import os, sys, zipfile
 z = zipfile.ZipFile(sys.argv[1])
@@ -309,7 +312,7 @@ PY
     record "extracted restored" PASS "from their originals once the archive forgotten, the file outside from its tags"
   else record "extracted restored" FAIL "see lettre.extrait.txt, reste.back.txt, lettre.apres.txt, reste.apres.txt"
   fi
-  # The archive forgotten comes back to the drive: it stays as it is, without a new original.
+  # L'archive oubliée revient sur le lecteur : elle reste telle quelle, sans nouvel original.
   COUNT=$(total)
   cp "$WORK/envoi.anon.zip" "$DRIVE/revenu.zip"
   sleep 8
@@ -317,14 +320,15 @@ PY
     record "forgotten comes back" PASS "kept as it is, no new original"
   else record "forgotten comes back" FAIL "$(ls "$DRIVE" | tr '\n' ' '), records $COUNT then $(total)"
   fi
-  # A protected file copied on the drive: its record stays while a copy remains, and goes with the last.
+  # Un fichier protégé copié sur le lecteur : sa fiche reste tant qu'il en reste une copie, et part avec
+  # la dernière.
   printf 'Copie pour Lucie Marchal, 3 place du Champ de Foire, 29000 Quimper.\n' > "$DRIVE/copies.txt"
   copies_done() { ! grep -q Marchal "$DRIVE/copies.txt" 2>/dev/null && [ -n "$(record_of "$DRIVE/copies.txt")" ]; }
   wait_for 60 copies_done
   COPIES_ID=$(record_of "$DRIVE/copies.txt" | cut -d'|' -f1)
   COUNT=$(total)
   cp "$DRIVE/copies.txt" "$DRIVE/copies (2).txt"
-  # The copy rests, then its record is the one of the file: no new original.
+  # La copie se pose, puis sa fiche est celle du fichier : pas de nouvel original.
   sleep 6
   rm -f "$DRIVE/copies.txt"
   sleep 4
@@ -338,8 +342,9 @@ PY
     record "copies on the drive" PASS "one record, kept with a copy, removed with the last"
   else record "copies on the drive" FAIL "record '$COPIES_ID', with the copy '$KEPT', after it '$GONE'"
   fi
-  # The settings as the web application saves them, without feed nor proxy; a value out of its range refused.
-  admin_json() { # method route body
+  # Les réglages tels que l'application web les enregistre, sans flux ni proxy ; une valeur hors de sa
+  # plage refusée.
+  admin_json() { # méthode route corps
     api -X "$1" -H "X-Pseudalis-Admin: $TOKEN" -H "Content-Type: application/json" --data "$3" "$URL$2"
   }
   SAVED=$(admin_json PUT /v1/settings '{"language": "auto", "drive_letter": "A", "date_order": "dmy",
@@ -350,7 +355,7 @@ PY
     record "settings saved" PASS "the body of the web application, 0 days, a value out of range refused"
   else record "settings saved" FAIL "$SAVED / $REFUSED"
   fi
-  # The imposed terms: kept, replaced before anything else, and refused with their reason.
+  # Les termes imposés : gardés, remplacés avant tout le reste, et refusés avec leur raison.
   SET=$(admin_json PUT /v1/terms '{"terms": [{"term": "Projet Alpha", "type": "ORG"},
     {"term": "KX-77", "type": "ID", "case_sensitive": true}]}')
   BAD=$(admin_json PUT /v1/terms '{"terms": [{"term": "Alpha", "type": "DATE"}]}')
@@ -365,8 +370,8 @@ PY
   else record "imposed terms" FAIL "$SET / $BAD / $TERMS_TEXT"
   fi
   admin_json PUT /v1/terms '{"terms": []}' > /dev/null
-  # The space of the originals: with 1 MB, the oldest originals make room for the newer ones; a space
-  # smaller than the largest file is refused.
+  # L'espace des originaux : avec 1 Mo, les originaux les plus anciens font de la place aux plus
+  # récents ; un espace plus petit que le plus gros fichier est refusé.
   SMALL=$(admin_json PUT /v1/settings '{"history_mb": 1}')
   admin_json PUT /v1/settings '{"max_file_mb": 1, "history_mb": 1}' > /dev/null
   for k in 1 2 3; do
@@ -387,8 +392,8 @@ print(h["bytes"] <= h["limit"])')
     record "room for originals" PASS "the oldest from its tags (space), the newest from its original, 1 MB refused"
   else record "room for originals" FAIL "$(head -c 200 "$WORK/gros1.back.txt"), within the limit: $SPACE / $SMALL"
   fi
-  # An archive with a picture, its original forgotten: restored from its tags, without its picture; the
-  # text file of a picture alone, forgotten, is refused.
+  # Une archive avec une image, son original oublié : restaurée à partir de ses étiquettes, sans son
+  # image ; le fichier texte d'une image seule, oubliée, est refusé.
   python3 - "$WORK/album.zip" "$WORK/photo.png" <<'PY'
 import base64, sys, zipfile
 png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAAB"
@@ -422,8 +427,9 @@ PY
     record "pictures forgotten" PASS "the archive from its tags without its picture, the picture alone refused (410)"
   else record "pictures forgotten" FAIL "$ALBUM / picture $PICTURE / $(head -c 200 "$WORK/photo.back.txt")"
   fi
-  # A text written elsewhere from anonymized values, which quotes a picture: restored from its tags without
-  # the marker; anonymized and recorded as an original, it comes back with its values and without it too.
+  # Un texte écrit ailleurs à partir de valeurs anonymisées, qui cite une image : restauré à partir de ses
+  # étiquettes sans le marqueur ; anonymisé et enregistré comme original, il revient avec ses valeurs et
+  # sans le marqueur, lui aussi.
   printf 'Lettre de Jeanne Marchand.\n' > "$WORK/source.txt"
   api -X POST --data-binary @"$WORK/source.txt" -o "$WORK/source.anon" \
     "$URL/v1/anonymize?name=source.txt&record=false"
@@ -440,7 +446,8 @@ PY
   else record "written elsewhere" FAIL \
     "$(head -c 120 "$WORK/reponse.back.txt") / $(head -c 120 "$WORK/reponse.again.txt")"
   fi
-  # Without tags: substitutes alone, the original from its record; once forgotten, nothing comes back (410).
+  # Sans étiquettes : des substituts seuls, l'original grâce à sa fiche ; une fois oublié, rien ne revient
+  # (410).
   printf 'nom;prenom;email\nMarchand;Jeanne;jeanne.marchand@exemple.fr\n' > "$WORK/bare.csv"
   api -X POST --data-binary @"$WORK/bare.csv" -D "$WORK/bare.headers" -o "$WORK/bare.anon.csv" \
     "$URL/v1/anonymize?name=bare.csv&tags=false&record=true"
@@ -457,7 +464,7 @@ print(next((r["tags"] for r in json.load(sys.stdin)["records"] if str(r["id"]) =
     record "files without tags" PASS "from the record, the record says so, forgotten: refused (410)"
   else record "files without tags" FAIL "$(head -c 100 "$WORK/bare.anon.csv") / tags $BARE_TAGS / $BARE_GONE"
   fi
-  # Without tags and without record: nothing can come back, which the report tells.
+  # Sans étiquettes et sans fiche : rien ne peut revenir, ce que dit le rapport.
   printf 'nom;prenom;email\nLemoine;Paul;paul.lemoine@exemple.fr\n' > "$WORK/bare2.csv"
   api -X POST --data-binary @"$WORK/bare2.csv" -D "$WORK/bare2.headers" -o "$WORK/bare2.anon.csv" \
     "$URL/v1/anonymize?name=bare2.csv&tags=false&record=false"
@@ -467,7 +474,7 @@ print(next((r["tags"] for r in json.load(sys.stdin)["records"] if str(r["id"]) =
     record "without tags nor record" PASS "nothing kept, not restorable (404)"
   else record "without tags nor record" FAIL "$BARE2 / $(report_of "$WORK/bare2.headers" | head -c 160)"
   fi
-  # A text without tags: its substitutes listed, which give it back when they come with it.
+  # Un texte sans étiquettes : ses substituts listés, qui le rendent quand ils l'accompagnent.
   BARE_TEXT=$(api -X POST -H "Content-Type: application/json" --data "{\"text\": \"$TEXT\", \"tags\": false}" \
     "$URL/v1/text/anonymize")
   BARE_BACK=$(printf '%s' "$BARE_TEXT" | python3 -c 'import json, sys
@@ -480,8 +487,9 @@ print(json.dumps({"text": j["text"], "substitutions": j.get("substitutions", [])
     record "text without tags" PASS "substitutes alone, given back with their list"
   else record "text without tags" FAIL "$(printf '%s' "$BARE_WRITTEN" | head -c 160) / $BARE_BACK"
   fi
-  # Protected twice, by a newer engine for instance: tagged with its record forgotten, then with or without
-  # tags; without tags with its record kept, then with or without; the values of both come back without warning.
+  # Protégé deux fois, par un moteur plus récent par exemple : avec étiquettes et sa fiche oubliée, puis avec
+  # ou sans étiquettes ; sans étiquettes avec sa fiche gardée, puis avec ou sans ; les valeurs des deux
+  # reviennent sans avertissement.
   printf 'Dossier de Paul Lemaire, paul.lemaire@exemple.fr.\n' > "$WORK/twice.txt"
   api -X POST --data-binary @"$WORK/twice.txt" -D "$WORK/twice1.headers" -o "$WORK/twice1.txt" \
     "$URL/v1/anonymize?name=twice.txt&tags=true"
@@ -506,7 +514,8 @@ print(json.dumps({"text": j["text"], "substitutions": j.get("substitutions", [])
     record "protected twice" PASS "tags then with or without, without tags then with or without: the values of both"
   else record "protected twice" FAIL "$(head -c 120 "$WORK/twice.back.txt") / $(head -c 80 "$WORK/bare2.back.txt")"
   fi
-  # The drive without tags, as the settings say: its file holds no tag, its original comes back.
+  # Le lecteur sans étiquettes, comme le disent les réglages : son fichier ne contient aucune étiquette,
+  # son original revient.
   admin_json PUT /v1/settings '{"tags": false}' > /dev/null
   printf 'Courrier de Paul Lemaire, 06 11 22 33 44.\n' > "$WORK/courrier.txt"
   cp "$WORK/courrier.txt" "$DRIVE/courrier.txt"
@@ -517,7 +526,8 @@ print(json.dumps({"text": j["text"], "substitutions": j.get("substitutions", [])
   cp "$DRIVE/courrier.txt" "$WORK/courrier.anon.txt"
   restore_to "$WORK/courrier.anon.txt" "$WORK/courrier.back.txt"
   DRIVE_TAGS=$(api "$URL/v1/info" | python3 -c 'import json, sys; print(json.load(sys.stdin)["tags"])')
-  # Edited on the drive, as an editor saves it: protected again, its values protected before come back too.
+  # Modifié sur le lecteur, comme un éditeur l'enregistre : protégé à nouveau, ses valeurs protégées
+  # auparavant reviennent aussi.
   { cat "$WORK/courrier.anon.txt"; printf 'Visa de Hélène Martin.\n'; } > "$WORK/courrier.edit.txt"
   cp "$WORK/courrier.edit.txt" "$DRIVE/courrier.txt"
   edited_done() {

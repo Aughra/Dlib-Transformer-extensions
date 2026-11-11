@@ -1,55 +1,58 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
-    Drives an engine library through its C interface, as the host does.
+    Pilote une bibliothèque de moteur par son interface C, comme le fait l'hôte.
 
         engine_chat engine_library model.gguf [options] "question" ["question"...]
         engine_chat engine_library --describe
 
-    The second form prints the description of the library and returns 0, and 3 when the
-    engine cannot run on this computer.  The first one refuses such an engine the same way,
-    before it runs any of its kernels.  The engine of a device, whose runtime the description
-    starts, stays loaded: the program then ends without unloading it, as the service does.
+    La seconde forme affiche la description de la bibliothèque et renvoie 0, et 3 quand le
+    moteur ne peut pas tourner sur cet ordinateur.  La première refuse un tel moteur de la même
+    manière, avant de lancer aucun de ses noyaux.  Le moteur d'un appareil, dont la description
+    démarre le runtime, reste chargé : le programme se termine alors sans le décharger, comme le
+    fait le service.
 
-    Options:
-        --reasoning on|off   reasoning of the models that can reason
-        --budget N           tokens of the reasoning after which the engine ends it (reasoning_budget):
-                             0 ends it at once, -1 lifts the limit
-        --max N              tokens generated at most per answer
-        --temperature T      0 for the most likely tokens; auto leaves the temperature, top-p,
-                             top-k and penalties to the values the authors of the model advise
-        --presence P         presence penalty over the whole answer
-        --parallel           submits every question at once instead of one after the other
-        --turns              chains the questions as the turns of one conversation
-        --pause SECONDS      waits between the turns, as a user reads the answer (the engine
-                             reads the history of the answer meanwhile)
-        --no-warm            does not read the histories ahead ("warm_history": false)
-        --no-metal           leaves every pass to the processor, the GPU of the Mac unused ("metal": false)
-        --tools              offers a weather tool to the model
-        --tool-result TEXT   with --tools, gives TEXT as the result of the calls of the weather tool
-                             and asks the model again with the calls and their results, as the agent
-                             mode of the web application does: the second answer shows whether the
-                             model reads the results of its tools
-        --system TEXT        system message of the conversations
-        --render FILE        prints the prompt the model receives for the conversation of FILE,
-                             a JSON object {"messages", "tools", "reasoning"}, and exits
-        --device NAME        device of the OpenVINO engine (NPU, GPU, NPU,GPU) or number of
-                             the card of the CUDA engine
-        --routing MODE       auto, device (every product on the device) or host
-        --projector FILE     image encoder of a model that reads images (mmproj GGUF)
-        --image FILE         a PNG or JPEG image given before each question, as a data URL;
-                             repeat it for several images
-        --detail LEVEL       low, auto or high: the tokens the images take at most
+    Options :
+        --reasoning on|off   raisonnement des modèles qui savent raisonner
+        --budget N           tokens de raisonnement après lesquels le moteur y met fin
+                             (reasoning_budget) : 0 y met fin aussitôt, -1 lève la limite
+        --max N              tokens générés au plus par réponse
+        --temperature T      0 pour les tokens les plus probables ; auto laisse la température,
+                             top-p, top-k et les pénalités aux valeurs que conseillent les
+                             auteurs du modèle
+        --presence P         pénalité de présence sur toute la réponse
+        --parallel           soumet toutes les questions d'un coup au lieu de l'une après l'autre
+        --turns              enchaîne les questions comme les tours d'une seule conversation
+        --pause SECONDS      attend entre les tours, comme un utilisateur lit la réponse (le
+                             moteur lit pendant ce temps l'historique de la réponse)
+        --no-warm            ne lit pas les historiques à l'avance ("warm_history": false)
+        --no-metal           laisse chaque passe au processeur, le GPU du Mac inutilisé
+                             ("metal": false)
+        --tools              propose un outil météo au modèle
+        --tool-result TEXT   avec --tools, donne TEXT comme résultat des appels de l'outil météo
+                             et redemande au modèle avec les appels et leurs résultats, comme le
+                             fait le mode agent de l'application web : la seconde réponse montre
+                             si le modèle lit les résultats de ses outils
+        --system TEXT        message système des conversations
+        --render FILE        affiche le prompt que reçoit le modèle pour la conversation de FILE,
+                             un objet JSON {"messages", "tools", "reasoning"}, et s'arrête
+        --device NAME        appareil du moteur OpenVINO (NPU, GPU, NPU,GPU) ou numéro de la
+                             carte du moteur CUDA
+        --routing MODE       auto, device (chaque produit sur l'appareil) ou host
+        --projector FILE     encodeur d'images d'un modèle qui lit des images (GGUF mmproj)
+        --image FILE         une image PNG ou JPEG donnée avant chaque question, sous forme d'URL
+                             data ; la répéter pour plusieurs images
+        --detail LEVEL       low, auto ou high : les tokens que prennent les images au plus
         --threads N, --context N
 
-    Prints the reasoning in brackets, the answer, the tool calls, then the statistics of
-    each request.  Returns 0 when every request ended normally.
+    Affiche le raisonnement entre crochets, la réponse, les appels d'outils, puis les
+    statistiques de chaque requête.  Renvoie 0 quand chaque requête s'est terminée normalement.
 
-    With an embedding model, the texts are embedded instead: in one request, or one request
-    each with --parallel, the engine batching them either way.  The program prints the
-    leading values of each vector and the cosine similarity of every pair, and with
-    --reference FILE compares the vectors with those of FILE, the JSON output of another
-    implementation ({"data": [{"embedding": [...]}, ...]}), in the same order.
+    Avec un modèle d'embeddings, les textes sont plongés en vecteurs à la place : en une
+    requête, ou une requête chacun avec --parallel, le moteur les regroupant dans les deux cas.
+    Le programme affiche les premières valeurs de chaque vecteur et la similarité cosinus de
+    chaque paire, et avec --reference FILE compare les vecteurs à ceux de FILE, la sortie JSON
+    d'une autre implémentation ({"data": [{"embedding": [...]}, ...]}), dans le même ordre.
 */
 
 #include <algorithm>
@@ -134,7 +137,7 @@ namespace
         std::fprintf(stderr, "[engine %d] %s\n", level, message);
     }
 
-    // The floats of the base64 form in which the engine returns the vectors.
+    // Les flottants de la forme base64 sous laquelle le moteur renvoie les vecteurs.
     std::vector<float> decode_floats(const std::string& text)
     {
         std::string bytes;
@@ -174,7 +177,8 @@ namespace
         return aa > 0 && bb > 0 ? ab / std::sqrt(aa * bb) : 0.0;
     }
 
-    // Embeds the texts and prints their vectors and similarities; 0 when everything worked.
+    // Plonge les textes en vecteurs et affiche ces vecteurs et leurs similarités ; 0 quand tout a
+    // marché.
     int embed(engine_library& lib, albireo_engine* e, const std::vector<std::string>& texts, bool parallel,
         const std::string& reference)
     {
@@ -197,7 +201,8 @@ namespace
             char err[1024] = { 0 };
             if (lib.submit(e, req.dump().c_str(), on_event, p.get(), &id, err, sizeof(err)) != ALBIREO_OK)
             {
-                // The requests already submitted report to their objects until they end: waited for below.
+                // Les requêtes déjà soumises rendent compte à leurs objets jusqu'à leur fin : attendues
+                // ci-dessous.
                 std::printf("submit: %s\n", err);
                 ++failures;
                 break;
@@ -273,7 +278,7 @@ namespace
     }
 }
 
-// The base64 form of bytes, for the data URLs of the images.
+// La forme base64 d'octets, pour les URL data des images.
 static std::string base64(const std::string& bytes)
 {
     static const char* const digits = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -360,8 +365,8 @@ int main(int argc, char** argv)
         else questions.push_back(a);
     }
 
-    // The OpenVINO engine reads its device from the environment when it first looks for the
-    // devices, which describe() below already does.
+    // Le moteur OpenVINO lit son appareil dans l'environnement quand il cherche les appareils
+    // pour la première fois, ce que fait déjà describe() ci-dessous.
     if (!device.empty())
     {
         setenv("DLIB_NPU_DEVICE", device.c_str(), 1);
@@ -377,9 +382,10 @@ int main(int argc, char** argv)
     bool render_mode = false;
     for (int i = 3; i < argc; ++i) render_mode = render_mode || std::string(argv[i]) == "--render";
     /*
-        The runtime of a device starts with the description, and its threads would be torn down
-        with the library: the library stays loaded, and once the description says the engine is
-        pinned, the program ends without unloading it, as the service does (host/main.cpp).
+        Le runtime d'un appareil démarre avec la description, et ses threads seraient démontés
+        avec la bibliothèque : la bibliothèque reste chargée, et dès que la description dit que
+        le moteur est épinglé, le programme se termine sans la décharger, comme le fait le
+        service (host/main.cpp).
     */
     lib.keep_loaded();
     const json description = lib.description();
@@ -396,7 +402,7 @@ int main(int argc, char** argv)
     }
     if (describe_only) return finish(0);
 
-    // The images given before each question, as data URLs.
+    // Les images données avant chaque question, sous forme d'URL data.
     json image_parts = json::array();
     for (const auto& path : images)
     {
@@ -423,8 +429,8 @@ int main(int argc, char** argv)
 
     json config = json::object();
     config["threads"] = threads;
-    // The device engines: the device (NPU, GPU, NPU,GPU, or the number of a CUDA card) and the
-    // routing of the products (auto, device, host).
+    // Les moteurs d'appareils : l'appareil (NPU, GPU, NPU,GPU, ou le numéro d'une carte CUDA) et
+    // l'aiguillage des produits (auto, device, host).
     if (!device.empty()) config["device"] = device;
     if (!routing.empty()) config["routing"] = routing;
     if (!warm) config["warm_history"] = false;
@@ -500,7 +506,7 @@ int main(int argc, char** argv)
         msg["content"] = questions[q];
         if (!images.empty())
         {
-            // The images first, then the question.
+            // Les images d'abord, puis la question.
             json parts = image_parts;
             json text = json::object();
             text["type"] = "text";
@@ -553,7 +559,8 @@ int main(int argc, char** argv)
             if (p->failed) ++failures;
             if (tools && with_result && !p->failed && !p->tools.empty())
             {
-                // The calls as the assistant message that made them, each followed by its result.
+                // Les appels sous forme du message de l'assistant qui les a faits, chacun suivi de son
+                // résultat.
                 json calls = json::array();
                 json results = json::array();
                 size_t from = 0;

@@ -44,9 +44,9 @@ namespace pseudalis
     }
 
     /*
-        A blob is "PSDV1", the IV (16 bytes), the data encrypted and the HMAC (32 bytes) of the
-        identifier and of all that precedes it.  It is built and read in one buffer, so that
-        the data never stands in memory more than twice.
+        Un blob est "PSDV1", l'IV (16 octets), les données chiffrées et le HMAC (32 octets) de
+        l'identifiant et de tout ce qui le précède.  Il est construit et lu dans un seul tampon,
+        pour que les données ne soient jamais en mémoire plus de deux fois.
     */
     std::string vault::put(const std::string& data)
     {
@@ -82,7 +82,7 @@ namespace pseudalis
         mac.update(file.data(), 21 + sealed);
         const std::array<unsigned char, 32> expected = mac.finalize();
         if (!dlib::constant_time_equal(expected.data(), file.data() + 21 + sealed, 32)) return false;
-        // Decrypted in place, then moved to the start of the buffer, which becomes the data.
+        // Déchiffré sur place, puis déplacé au début du tampon, qui devient les données.
         char iv[16];
         std::memcpy(iv, file.data() + 5, 16);
         if (sealed > 0) aes256_ctr_into(enc_, iv, file.data() + 21, &file[21], sealed);
@@ -114,7 +114,7 @@ namespace pseudalis
                 const std::string id = name.substr(0, 32);
                 if (name.size() == 36 && name.compare(32, 4, ".bin") == 0 && valid_id(id) && id.compare(0, 2, sub) == 0)
                     ids.push_back(id);
-                // A blob that write_file_atomic() did not finish: "<id>.bin.tmp-<random>".
+                // Un blob que write_file_atomic() n'a pas terminé : "<id>.bin.tmp-<random>".
                 else if (name.size() > 41 && name.compare(32, 9, ".bin.tmp-") == 0 && valid_id(id))
                     remove_file(join_path(folder, name));
             }

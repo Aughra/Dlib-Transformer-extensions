@@ -31,7 +31,7 @@ namespace pseudalis
             return s.substr(b, s.find_last_not_of(" \t\r\n") - b + 1);
         }
 
-        // The identifier of a text file that holds a picture marker alone: "[Image@<16 digits> ...]".
+        // L'identifiant d'un fichier texte qui ne contient qu'un marqueur d'image : "[Image@<16 digits> ...]".
         std::string marker_id(const std::string& bytes)
         {
             const std::string t = trim(bytes.size() > 4096 ? std::string() : bytes);
@@ -43,10 +43,10 @@ namespace pseudalis
         }
 
         /*
-            The code of a failure of the engine: "unsupported" for a file of a kind it does not
-            process, "kind_mismatch" for a file whose content is not the kind its name gives,
-            "encoded_content" for a text that holds encoded parts (attachments, base64, RTF...),
-            which the clients tell apart from a file that cannot be read.
+            Le code d'un échec du moteur : "unsupported" pour un fichier d'un type qu'il ne traite
+            pas, "kind_mismatch" pour un fichier dont le contenu n'est pas du type que donne son
+            nom, "encoded_content" pour un texte qui contient des parties encodées (pièces
+            jointes, base64, RTF...), que les clients distinguent d'un fichier illisible.
         */
         std::string engine_code(const std::string& e, const char* code)
         {
@@ -138,7 +138,7 @@ namespace pseudalis
         wipe(key);
         if (!engine_->ok()) return false;
         key_fingerprint_ = engine_->key_fingerprint();
-        // The imposed terms that the database keeps: a list it no longer takes is left aside.
+        // Les termes imposés que garde la base de données : une liste qu'elle ne prend plus est laissée de côté.
         {
             std::vector<imposed_term> kept;
             std::string message, code;
@@ -167,7 +167,7 @@ namespace pseudalis
     bool service::run(std::string& error)
     {
         started_ = now_unix();
-        // A previous run of this process cancelled the downloads as it stopped.
+        // Une exécution précédente de ce processus a annulé les téléchargements en s'arrêtant.
         http_restore();
         program_dir_ = executable_dir();
         data_dir_ = pseudalis::data_dir();
@@ -185,7 +185,7 @@ namespace pseudalis
         const host_settings st = settings_->get();
         port_ = st.port;
 
-        // The token of the administration interface, which the tray and the shell read.
+        // Le jeton de l'interface d'administration, que lisent la zone de notification et le shell.
         const std::string token_path = join_path(data_dir_, "admin.token");
         std::string token;
         if (!read_file(token_path, token, 4096) || trim(token).size() < 32)
@@ -199,7 +199,7 @@ namespace pseudalis
         }
         admin_token_ = trim(token);
 
-        // The keys, the vault and the database, in folders of SYSTEM and the administrators.
+        // Les clés, le coffre et la base de données, dans des dossiers de SYSTEM et des administrateurs.
         bool created = false;
         if (!load_master_key(join_path(data_dir_, "keys"), master_, created, error)) return false;
         if (created) log_info("keys: a new master key was made");
@@ -211,10 +211,11 @@ namespace pseudalis
         {
             db_.reset(new store(join_path(join_path(data_dir_, "db"), "pseudalis.db")));
             /*
-                The blobs that nothing names any more go before anything is written: a deletion
-                that failed or was cut short, a picture kept twice by two files at once.
+                Les blobs que plus rien ne nomme partent avant que quoi que ce soit soit écrit : une
+                suppression qui a échoué ou a été interrompue, une image gardée deux fois par deux
+                fichiers à la fois.
             */
-            // The pictures of a protection that failed, or of an entry left out, no file names.
+            // Les images d'une protection qui a échoué, ou d'une entrée laissée de côté, qu'aucun fichier ne nomme.
             const size_t unlinked = db_->remove_unlinked_pictures();
             if (unlinked) log_info("pictures: " + std::to_string(unlinked) + " that no record names removed");
             const std::set<std::string> named = db_->referenced_blobs();
@@ -230,8 +231,8 @@ namespace pseudalis
         }
         if (!start_engine(error)) return false;
         /*
-            The files of the interface processed at once: half the processors, from 2 to 8, and
-            no more than the memory holds, each file standing about six times in memory.
+            Les fichiers de l'interface traités en même temps : la moitié des processeurs, de 2 à 8,
+            et pas plus que ce que contient la mémoire, chaque fichier y étant environ six fois.
         */
         {
             const unsigned cores = std::max(2u, std::thread::hardware_concurrency());
@@ -240,7 +241,7 @@ namespace pseudalis
             work_.init(std::max(2, slots));
         }
 
-        // The certificates of the local server, and the trust of a new authority.
+        // Les certificats du serveur local, et la confiance accordée à une nouvelle autorité.
         const std::string cert_dir = join_path(data_dir_, "certificates");
         bool renewed = false;
         if (!ensure_certificates(cert_dir, renewed, error)) return false;
@@ -248,7 +249,7 @@ namespace pseudalis
         set_http_proxy(st.proxy);
         albireo_.set_enabled(st.albireo != "off");
 
-        // The drive.
+        // Le lecteur.
         drive_.reset(new drive_host(*this));
         if (!st.drive_letter.empty())
         {
@@ -257,7 +258,7 @@ namespace pseudalis
             else log_warning("drive: " + de);
         }
 
-        // The server.
+        // Le serveur.
         std::string cert_pem, key_pem;
         if (!read_file(certificate_paths(cert_dir).server_cert, cert_pem) || !read_server_key(cert_dir, key_pem))
         {
@@ -285,8 +286,9 @@ namespace pseudalis
             error = "the TLS configuration of the server failed";
             return false;
         }
-        // The bound of the files of the settings at most (the routes check the current one); a
-        // connection left idle a second goes, so that the polls of the icons hold no worker.
+        // Au plus la borne des fichiers des réglages (les routes vérifient la borne actuelle) ; une
+        // connexion inactive depuis une seconde part, pour que les sondages des icônes ne retiennent
+        // aucun worker.
         server_->set_payload_max_length(static_cast<size_t>(2048 + 1) << 20);
         server_->set_keep_alive_timeout(1);
         server_->set_keep_alive_max_count(20);
@@ -294,16 +296,17 @@ namespace pseudalis
         server_->set_write_timeout(60);
         server_->new_task_queue = []() { return new httplib::ThreadPool(8, 32, 64); };
         /*
-            On Windows the socket keeps its default options: a port bound to 127.0.0.1 that way
-            cannot be taken by a program of another account, and a restart binds it again at
-            once, where SO_EXCLUSIVEADDRUSE would refuse it while the connections of the previous
-            run end.  Elsewhere SO_REUSEADDR gives the same restart.
+            Sous Windows, le socket garde ses options par défaut : un port lié à 127.0.0.1 de cette
+            façon ne peut pas être pris par un programme d'un autre compte, et un redémarrage le
+            lie de nouveau aussitôt, là où SO_EXCLUSIVEADDRUSE le refuserait pendant que se
+            terminent les connexions de l'exécution précédente.  Ailleurs, SO_REUSEADDR permet le
+            même redémarrage.
         */
         server_->set_socket_options([](socket_t sock) {
             httplib::set_socket_opt(sock, SOL_SOCKET, SO_REUSEADDR, 1);
         });
-        // The previous run, or the previous process, may still release the port: tried again
-        // for ten seconds.
+        // L'exécution précédente, ou le processus précédent, peut encore être en train de libérer le
+        // port : retenté pendant dix secondes.
         bool bound = false;
         for (int attempt = 0; attempt < 40 && !bound && !stopping_; ++attempt)
         {
@@ -344,7 +347,7 @@ namespace pseudalis
 
     void service::background_loop()
     {
-        // The originals of the files removed from the drive long enough go every hour.
+        // Les originaux des fichiers retirés du lecteur depuis assez longtemps partent toutes les heures.
         int64_t next_purge = 0;
         while (!stopping_)
         {
@@ -386,7 +389,7 @@ namespace pseudalis
         engine["models"] = engine_ ? engine_->models() : json();
         j["engine"] = engine;
         j["key_fingerprint"] = key_fingerprint_;
-        // Whether the files take their tags unless a request says otherwise.
+        // Si les fichiers prennent leurs tags, sauf si une requête dit autre chose.
         j["tags"] = settings_ ? settings_->get().tags : true;
         {
             std::lock_guard<std::mutex> lock(counts_m_);
@@ -435,13 +438,13 @@ namespace pseudalis
         }
         const std::string lang = language();
         /*
-            Each picture: kept, described once.  The descriptions of a file take three minutes
-            at most, and none starts once the service stops: the pictures that follow keep
-            their marker alone, as every picture does while the setting albireo is off.  A
-            description may name what the picture shows: it is kept encrypted in the vault, as
-            the picture, and the engine protects it each time it writes it.  A picture kept
-            without description, or whose description can no longer be read, receives the one
-            Albireo gives now.
+            Chaque image : gardée, décrite une seule fois.  Les descriptions d'un fichier prennent
+            trois minutes au plus, et aucune ne commence une fois que le service s'arrête : les
+            images qui suivent gardent leur seul marqueur, comme toute image pendant que le
+            réglage albireo est sur off.  Une description peut nommer ce que montre l'image : elle
+            est gardée chiffrée dans le coffre, comme l'image, et le moteur la protège chaque fois
+            qu'il l'écrit.  Une image gardée sans description, ou dont la description ne peut plus
+            être lue, reçoit celle qu'Albireo donne maintenant.
         */
         const auto describe_until = std::chrono::steady_clock::now() + std::chrono::minutes(3);
         auto pictures = [&](const picture_request& p) -> std::string {
@@ -459,7 +462,7 @@ namespace pseudalis
             const std::string text = description.empty() ? std::string() : vault_->put(description);
             if (known)
             {
-                // The description the record lacked; the blob it named before leaves the vault.
+                // La description qui manquait à l'enregistrement ; le blob qu'il nommait avant quitte le coffre.
                 std::string before;
                 if (!text.empty() && db_->set_picture_description(rec.id, text, before) && !before.empty())
                     vault_->remove(before);
@@ -477,9 +480,9 @@ namespace pseudalis
         request["operation"] = "anonymize";
         request["name"] = name;
         request["tags"] = tags;
-        /* A file protected here without tags, protected again, by a newer engine for instance, or
-           edited on the drive: the substitutes that its record keeps stay as they are, and the new
-           record inherits them, which give back the values of its original. */
+        /* Un fichier protégé ici sans tags, protégé de nouveau, par un moteur plus récent par exemple, ou
+           modifié sur le lecteur : les substituts que garde son enregistrement restent tels quels, et le
+           nouvel enregistrement en hérite, ce qui rend les valeurs de son original. */
         std::vector<long long> sources;
         {
             file_record before;
@@ -507,8 +510,8 @@ namespace pseudalis
         out.report = result["report"];
         out.sha256 = sha256_hex(out.bytes);
         out.record = 0;
-        /* A protected file that holds nothing more to protect comes back as it is: the record that keeps
-           its original stays the only one of its content, so that its restoration still reaches it. */
+        /* Un fichier protégé qui ne contient plus rien à protéger revient tel quel : l'enregistrement qui
+           garde son original reste le seul de son contenu, pour que sa restauration l'atteigne toujours. */
         if (record && out.bytes == bytes)
         {
             file_record known;
@@ -518,14 +521,15 @@ namespace pseudalis
                 record = false;
             }
         }
-        // The substitutes of the names and the properties come back through their tags, kept here.
+        // Les substituts des noms et des propriétés reviennent par leurs tags, gardés ici.
         if (!record_substitutes(result, error)) return false;
-        // Without tags, the substitutes of the text, which the record of the file alone keeps.
+        // Sans tags, les substituts du texte, que seul garde l'enregistrement du fichier.
         std::vector<std::pair<std::string, std::string>> text_made;
         for (const json& one : result["substitutions"].elements())
             if (one["text"].as_bool(false))
                 text_made.push_back(std::make_pair(one["substitute"].str(), one["tag"].str()));
-        // An original larger than the space of the originals is not kept: the file is protected without record.
+        // Un original plus gros que l'espace des originaux n'est pas gardé : le fichier est protégé sans
+        // enregistrement.
         if (record && !make_room(bytes.size())) record = false;
         if (record)
         {
@@ -537,7 +541,7 @@ namespace pseudalis
             }
             file_record r;
             r.source = source;
-            // A protected file protected again, edited on the drive for instance: its name in clear.
+            // Un fichier protégé protégé de nouveau, modifié sur le lecteur par exemple : son nom en clair.
             r.original_name = restore_name(name);
             r.output_name = out.name;
             r.original_sha256 = sha256_hex(bytes);
@@ -575,7 +579,7 @@ namespace pseudalis
                 return false;
             }
         }
-        // Without tags and without record, nothing gives the values of the file back.
+        // Sans tags et sans enregistrement, rien ne rend les valeurs du fichier.
         out.report["tags"] = tags;
         out.report["restorable"] = tags || out.record > 0;
         return true;
@@ -606,9 +610,9 @@ namespace pseudalis
         out.how = "original";
         out.record = r.id;
         out.report = json::object();
-        /* The original of a file protected again, by a newer engine for instance, is a protected file
-           itself: the original that its own record keeps comes back in its place, so that the values
-           protected before come back with the others, with or without tags. */
+        /* L'original d'un fichier protégé de nouveau, par un moteur plus récent par exemple, est lui-même un
+           fichier protégé : l'original que garde son propre enregistrement revient à sa place, pour que les
+           valeurs protégées auparavant reviennent avec les autres, avec ou sans tags. */
         file_record before;
         if (depth < 8 && db_->find_by_output(sha256_hex(out.bytes), before) && before.id != r.id)
         {
@@ -623,14 +627,15 @@ namespace pseudalis
                 return true;
             }
         }
-        /* The original of a protected file edited on the drive, or of a file written elsewhere
-           from protected values, is that file: the tags it kept are restored too, with the
-           substitutes of its properties, and the markers of its pictures leave it, as from any
-           restoration without the original.  The parts of an Office document, of a PDF or of an
-           archive are compressed: only a text shows its tags to a search. */
+        /* L'original d'un fichier protégé modifié sur le lecteur, ou d'un fichier écrit ailleurs à
+           partir de valeurs protégées, est ce fichier : les tags qu'il a gardés sont restaurés aussi,
+           avec les substituts de ses propriétés, et les marqueurs de ses images le quittent, comme
+           pour toute restauration sans l'original.  Les parties d'un document Office, d'un PDF ou
+           d'une archive sont compressées : seul un texte montre ses tags à une recherche. */
         const bool text = r.kind == "txt" || r.kind == "csv" || r.kind == "xml" || r.kind == "text";
-        /* The substitutes that a protection without tags wrote in the original before, which the record
-           inherited: those of its own protection are not in its original, which they would change. */
+        /* Les substituts qu'une protection sans tags a écrits auparavant dans l'original, dont
+           l'enregistrement a hérité : ceux de sa propre protection ne sont pas dans son original, qu'ils
+           modifieraient. */
         const json inherited = text_substitutes_of_inherited(r.id);
         if (engine_ && r.kind != "image" &&
             (!text || !inherited.empty() || out.bytes.find("[[") != std::string::npos ||
@@ -699,7 +704,8 @@ namespace pseudalis
                                              " cannot be extracted from its original: " + error.text);
             return extracted == -1 ? -1 : 0;
         }
-        // An entry larger than the space of the originals: the file stays as it is, protected, without record.
+        // Une entrée plus grosse que l'espace des originaux : le fichier reste tel quel, protégé, sans
+        // enregistrement.
         if (!make_room(bytes.size()))
         {
             wipe(bytes);
@@ -727,9 +733,10 @@ namespace pseudalis
         try
         {
             record = db_->add_file(r);
-            // An archive extracted from the archive keeps the entries inside it, for the files extracted from it.
+            // Une archive extraite de l'archive garde les entrées qu'elle contient, pour les fichiers qui en sont
+            // extraits.
             db_->add_entries(record, db_->entries_inside(e));
-            // Without tags, the substitutes of the archive, which hold those of the entry.
+            // Sans tags, les substituts de l'archive, qui contiennent ceux de l'entrée.
             if (!archive.tags) db_->copy_text_substitutes(archive.id, record);
             counts_changed();
         }
@@ -752,11 +759,11 @@ namespace pseudalis
         file_record r;
         const std::string sha = sha256_hex(bytes);
         if (db_->find_by_output(sha, r, name)) return recorded_original(r, out, error);
-        /* The original was forgotten, at the request of a user, at the end of its time or to make
-           room: the file is restored from its tags, which the key still opens, as a file written
-           elsewhere from protected values is; what its protection removed, its pictures first,
-           does not come back.  Its object identifier tells it only while no live record holds it
-           since. */
+        /* L'original a été oublié, à la demande d'un utilisateur, au bout de son temps ou pour faire
+           de la place : le fichier est restauré à partir de ses tags, que la clé ouvre encore, comme
+           l'est un fichier écrit ailleurs à partir de valeurs protégées ; ce que sa protection a
+           retiré, ses images d'abord, ne revient pas.  Son identifiant d'objet ne le désigne que
+           tant qu'aucun enregistrement vivant ne le détient depuis. */
         int64_t when = 0;
         std::string reason;
         bool forgotten_tags = true;
@@ -764,7 +771,7 @@ namespace pseudalis
         const bool forgotten = db_->find_forgotten(sha, tracked ? std::string() : object_id, when, reason,
                                                    &forgotten_tags);
         const std::string day = forgotten ? iso_time(when).substr(0, 10) : std::string();
-        // A file extracted from a protected archive: the entry of the original archive.
+        // Un fichier extrait d'une archive protégée : l'entrée de l'archive originale.
         entry_record entry;
         if (db_->find_entry(sha, entry))
         {
@@ -780,7 +787,7 @@ namespace pseudalis
                 out.report = json::object();
                 return true;
             }
-            // An original that cannot be read: the tags of the file are restored rather.
+            // Un original qui ne peut pas être lu : ce sont plutôt les tags du fichier qui sont restaurés.
             if (extracted == -2) log_warning("records: an entry of record " + std::to_string(entry.record) +
                                              " cannot be extracted from its original: " + error.text);
             error = user_error();
@@ -800,7 +807,7 @@ namespace pseudalis
             out.report = json::object();
             return true;
         }
-        // The text file of a picture that the vault no longer holds: its tags give nothing back.
+        // Le fichier texte d'une image que le coffre ne contient plus : ses tags ne rendent rien.
         if (!id.empty())
         {
             if (forgotten)
@@ -818,7 +825,7 @@ namespace pseudalis
         json request = json::object();
         request["operation"] = "restore";
         request["name"] = name;
-        // A file protected without tags and edited since, known by its object identifier: its substitutes.
+        // Un fichier protégé sans tags et modifié depuis, reconnu par son identifiant d'objet : ses substituts.
         if (tracked && !r.tags) request["substitutions"] = text_substitutes_of(r.id);
         json result;
         std::string e;
@@ -830,8 +837,8 @@ namespace pseudalis
         out.report = result["report"];
         const bool values =
             out.report["tags_restored"].as_int(0) > 0 || out.report["substitutes_restored"].as_int(0) > 0;
-        /* Protected without tags, a file whose record was forgotten gives no value back: its substitutes
-           alone are left, which nothing reads any more. */
+        /* Protégé sans tags, un fichier dont l'enregistrement a été oublié ne rend aucune valeur : il ne
+           reste que ses substituts, que plus rien ne lit. */
         if (forgotten && !forgotten_tags && !values)
         {
             wipe(out.bytes);
@@ -844,7 +851,7 @@ namespace pseudalis
             error.set("this file holds no value that Pseudalis protected with this key", "not_protected");
             return false;
         }
-        // The day and the reason of the forgetting, which the clients tell with the restoration.
+        // Le jour et la raison de l'oubli, que les clients indiquent avec la restauration.
         if (forgotten)
         {
             json f = json::object();
@@ -852,7 +859,7 @@ namespace pseudalis
             f["reason"] = reason;
             out.report["original_forgotten"] = f;
         }
-        // The name with its substitutes given back.
+        // Le nom avec ses substituts rendus.
         out.name = result["name"].str(name);
         out.how = "tags";
         if (db_->find_by_object(object_id, r)) out.record = r.id;
@@ -861,8 +868,8 @@ namespace pseudalis
 
     std::function<std::vector<std::string>(const std::string&)> service::substitute_lookup()
     {
-        /* A candidate of four characters or fewer, a year for instance, is too common in a name or a
-           property edited since to be taken for a substitute. */
+        /* Un candidat de quatre caractères ou moins, une année par exemple, est trop courant dans un nom ou
+           une propriété modifiés depuis pour être pris pour un substitut. */
         return [this](const std::string& candidate) -> std::vector<std::string> {
             if (candidate.size() < 5 || !db_) return std::vector<std::string>();
             try
@@ -900,7 +907,7 @@ namespace pseudalis
     bool service::record_substitutes(const json& result, user_error& error)
     {
         std::vector<std::pair<std::string, std::string>> made;
-        // Those of the text, without tags, belong to the record of their file alone.
+        // Ceux du texte, sans tags, n'appartiennent qu'à l'enregistrement de leur fichier.
         for (const json& s : result["substitutions"].elements())
             if (!s["text"].as_bool(false)) made.push_back(std::make_pair(s["substitute"].str(), s["tag"].str()));
         try
@@ -1001,7 +1008,7 @@ namespace pseudalis
             return false;
         }
         counts_changed();
-        // A blob that cannot be deleted now goes at the next start, nothing naming it any more.
+        // Un blob qui ne peut pas être supprimé maintenant part au prochain démarrage, plus rien ne le nommant.
         for (const std::string& b : blobs)
             if (!vault_->remove(b) && vault_->exists(b)) log_warning("vault: a blob of record " +
                 std::to_string(record) + " cannot be deleted now, it goes at the next start");
@@ -1023,7 +1030,7 @@ namespace pseudalis
     void service::purge_removed()
     {
         const int days = settings_->get().removed_days;
-        // 0: the originals of the files removed from the drive stay, within the space of the history.
+        // 0 : les originaux des fichiers retirés du lecteur restent, dans l'espace de l'historique.
         if (days <= 0) return;
         std::vector<long long> records;
         try
@@ -1063,11 +1070,11 @@ namespace pseudalis
         std::lock_guard<std::mutex> lock(room_m_);
         const host_settings st = settings_->get();
         const unsigned long long limit = static_cast<unsigned long long>(st.history_mb) << 20;
-        // The free space the disk of the data folder keeps beyond a new original.
+        // L'espace libre que le disque du dossier de données garde au-delà d'un nouvel original.
         const unsigned long long reserve = 256ull << 20;
         unsigned long long used = 0, ignored = 0;
         history_space(used, ignored);
-        // An original larger than the space of all of them: forgetting the others would not make it fit.
+        // Un original plus gros que leur espace à tous : oublier les autres ne le ferait pas tenir.
         if (needed > limit)
         {
             log_warning("records: an original of " + std::to_string(needed >> 20) + " MB is larger than the space " +
@@ -1075,10 +1082,11 @@ namespace pseudalis
             return false;
         }
         /*
-            For a new original, the disk keeps 256 MB free once it is written: the originals make room
-            for it when forgetting them would reach that, and stay when other files fill the disk or
-            when its free space cannot be known (the vault then reports the lack of space).  The
-            free space counts what each original forgotten gives back, its blob deleted at once.
+            Pour un nouvel original, le disque garde 256 Mo libres une fois qu'il est écrit : les
+            originaux lui font de la place quand les oublier y suffirait, et restent quand d'autres
+            fichiers remplissent le disque ou quand son espace libre ne peut pas être connu (le coffre
+            signale alors le manque de place).  L'espace libre compte ce que rend chaque original
+            oublié, son blob supprimé aussitôt.
         */
         uint64_t free_at_start = 0;
         bool disk = false;
@@ -1164,7 +1172,7 @@ namespace pseudalis
         }
         catch (const std::exception& x)
         {
-            // The engine keeps the terms it had: those of the database, which the next start reads.
+            // Le moteur garde les termes qu'il avait : ceux de la base de données, que lit le prochain démarrage.
             std::string ignored;
             engine_->set_terms(imposed_terms_json(terms_), ignored);
             error.set(x.what(), "database");
@@ -1195,7 +1203,7 @@ namespace pseudalis
 
     bool service::import_key(const std::string& exported, const std::string& passphrase, user_error& error)
     {
-        // No protection runs from the check below to the restart (work_m_, key_replaced_).
+        // Aucune protection ne s'exécute de la vérification ci-dessous jusqu'au redémarrage (work_m_, key_replaced_).
         std::unique_lock<std::shared_timed_mutex> work(work_m_);
         if (key_replaced_)
         {

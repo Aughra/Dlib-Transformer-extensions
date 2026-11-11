@@ -2,11 +2,11 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    The tools of the agent mode, all executed in this page, without network: a calculator,
-    a JavaScript interpreter isolated in a sandboxed frame, the search, the outline and the
-    reading of the documents of the discussion and of its project (a presentation slide by
-    slide, a Word document page by page, a workbook sheet by sheet), the search of the
-    other discussions, the date, and the creation of files offered for download.
+    Les outils du mode agent, tous exécutés dans cette page, sans réseau : une calculatrice,
+    un interpréteur JavaScript isolé dans un cadre sandbox, la recherche, le plan et la lecture
+    des documents de la discussion et de son projet (une présentation diapositive par
+    diapositive, un document Word page par page, un classeur feuille par feuille), la recherche
+    dans les autres discussions, la date, et la création de fichiers proposés au téléchargement.
 */
 
 import { outline, partText } from './documents.js';
@@ -137,11 +137,11 @@ export const agentInstructions = 'You can call tools. Call a tool when it gives 
   'After the tool results, answer the user directly.';
 
 /*
-    An expression in the notation the calculator reads.  The signs of multiplication, division and
-    subtraction become *, / and -, the groups of thousands written with spaces join ("2 340"), a
-    comma between two digits outside of the arguments of a function is a decimal comma ("17,5"),
-    and the word that follows a percentage in the languages of the interface ("17.5% of 2340",
-    "17,5 % de 2 340") becomes a product.
+    Une expression dans la notation que lit la calculatrice.  Les signes de multiplication, de
+    division et de soustraction deviennent *, / et -, les groupes de milliers écrits avec des
+    espaces se rejoignent ("2 340"), une virgule entre deux chiffres hors des arguments d'une
+    fonction est une virgule décimale ("17,5"), et le mot qui suit un pourcentage dans les langues
+    de l'interface ("17.5% of 2340", "17,5 % de 2 340") devient un produit.
 */
 function normalizeExpression(text) {
   const s = String(text).replace(/\*\*/g, '^').replace(/[×·]/g, '*').replace(/÷/g, '/').replace(/[−–]/g, '-')
@@ -149,7 +149,7 @@ function normalizeExpression(text) {
     .replace(/%\s*(of|de|du|des|von|vom|der|di|del|della|dello|dei|delle)(?![\p{L}\p{N}_])/giu, '%*')
     .replace(/(\d) (?=\d{3}(?!\d))/g, '$1');
   let out = '';
-  // For each open parenthesis, true when it opens the arguments of a function.
+  // Pour chaque parenthèse ouverte, true quand elle ouvre les arguments d'une fonction.
   const calls = [];
   for (let k = 0; k < s.length; ++k) {
     const c = s[k];
@@ -165,8 +165,9 @@ function normalizeExpression(text) {
 }
 
 /*
-    Arithmetic without eval: a recursive descent over numbers, operators and functions.  A % after
-    a value is a percentage, unless a value follows it, which makes it the remainder of a division.
+    De l'arithmétique sans eval : une descente récursive sur les nombres, les opérateurs et les
+    fonctions.  Un % après une valeur est un pourcentage, sauf si une valeur le suit, ce qui en fait
+    le reste d'une division.
 */
 function calculate(expression) {
   const s = normalizeExpression(expression);
@@ -221,7 +222,7 @@ function calculate(expression) {
     fail('number expected');
     return NaN;
   }
-  // True when the % at the position is a percentage, followed by nothing, an operator or a parenthesis.
+  // Vrai quand le % à la position est un pourcentage, suivi de rien, d'un opérateur ou d'une parenthèse.
   function percentage() {
     if (s[i] !== '%') return false;
     let j = i + 1;
@@ -285,14 +286,14 @@ function calculate(expression) {
   return v;
 }
 
-// The sandboxed frame of run_javascript, created at its first use.
+// Le cadre sandbox de run_javascript, créé à sa première utilisation.
 let frame = null;
 let frameReady = null;
 let nextRun = 1;
 const runs = new Map();
 
-// The time limit of a run in the frame, and the one of the page, longer, which also ends the
-// runs of a frame that does not answer.
+// Le temps limite d'une exécution dans le cadre, et celui de la page, plus long, qui met aussi fin
+// aux exécutions d'un cadre qui ne répond pas.
 const runLimit = 15000;
 const pageLimit = runLimit + 5000;
 
@@ -304,10 +305,10 @@ function sandbox() {
     frame.className = 'sandbox-frame';
     frame.src = 'sandbox.html';
     window.addEventListener('message', (e) => {
-      // The frame has an opaque origin, which its messages carry as "null".
+      // Le cadre a une origine opaque, que ses messages portent sous la forme "null".
       if (!frame || e.source !== frame.contentWindow || e.origin !== 'null') return;
       const d = e.data !== null && typeof e.data === 'object' ? e.data : {};
-      // The frame says it is ready in a message of its own, without the id of a run.
+      // Le cadre annonce qu'il est prêt dans un message à part, sans l'id d'une exécution.
       if (d.id === undefined) {
         if (d.ready === true) resolve(frame);
         return;
@@ -320,7 +321,7 @@ function sandbox() {
   return frameReady;
 }
 
-// Runs code in the frame; the run ends with its result, the time limit of the page, or signal.
+// Exécute code dans le cadre ; l'exécution finit avec son résultat, le temps limite de la page, ou signal.
 async function runJavascript(code, signal) {
   const id = nextRun++;
   const result = await new Promise((resolve) => {
@@ -343,7 +344,7 @@ async function runJavascript(code, signal) {
       signal.addEventListener('abort', stopped);
     }
     sandbox().then((f) => {
-      // The frame has an opaque origin, which no target origin can name.
+      // Le cadre a une origine opaque, qu'aucune origine cible ne peut nommer.
       if (runs.has(id)) f.contentWindow.postMessage({ id, code: String(code), timeout: runLimit }, '*');
     });
   });
@@ -360,15 +361,15 @@ function documentByName(documents, name) {
   return documents.find((d) => d.name.toLowerCase() === n) || documents.find((d) => d.name.toLowerCase().includes(n));
 }
 
-// The extensions of the files that Windows runs when they are opened, which a file of the agent never keeps.
+// Les extensions des fichiers que Windows exécute à leur ouverture, qu'un fichier de l'agent ne garde jamais.
 const runnableExtensions = new Set(('bat cmd com exe scr pif cpl msi msp msc ps1 psm1 psd1 ps1xml vbs vbe js jse ' +
   'wsf wsh hta jar lnk url reg inf scf appref-ms application gadget').split(' '));
 
 /*
-    The name of a file the agent creates: without the characters a file name cannot hold, at most 120 of them, and
-    ending with ".txt" when its extension is one Windows runs, so that opening it shows its text.  The dots and the
-    spaces that end a name, which Windows drops, are dropped first, so that the extension checked is the one the file
-    keeps.
+    Le nom d'un fichier que crée l'agent : sans les caractères qu'un nom de fichier ne peut pas contenir, 120 au plus,
+    et terminé par ".txt" quand son extension est de celles que Windows exécute, pour que son ouverture montre son
+    texte.  Les points et les espaces qui terminent un nom, que Windows supprime, sont supprimés d'abord, pour que
+    l'extension vérifiée soit celle que le fichier garde.
 */
 export function fileNameOf(name) {
   let fileName = String(name || '').replace(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g, '_').slice(0, 120)
@@ -381,9 +382,9 @@ export function fileNameOf(name) {
 }
 
 /*
-    Runs a tool call.  context = { documents: [{name, text}], searchDocuments(query, limit),
-    searchDiscussions(query), createFile(name, content), signal }, signal stopping the run of
-    code with the answer.  Returns {ok, text, file?}.
+    Exécute un appel d'outil.  context = { documents: [{name, text}], searchDocuments(query, limit),
+    searchDiscussions(query), createFile(name, content), signal }, signal arrêtant l'exécution du
+    code avec la réponse.  Renvoie {ok, text, file?}.
 */
 export async function run(name, argumentsText, context) {
   let args = {};

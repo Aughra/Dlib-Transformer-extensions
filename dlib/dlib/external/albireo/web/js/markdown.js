@@ -2,11 +2,12 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    Markdown of the answers: GitHub flavoured markdown, code highlighted by highlight.js,
-    formulas typeset by KaTeX between $...$, $$...$$, \(...\) and \[...\].  The HTML a
-    model writes outside of code is shown as text, and the result is sanitized before it
-    reaches the page.  An answer loads nothing from another origin, and shows an image of
-    another origin as a link to it, which the browser follows only when the user does.
+    Markdown des réponses : markdown à la GitHub, code coloré par highlight.js, formules
+    composées par KaTeX entre $...$, $$...$$, \(...\) et \[...\].  Le HTML qu'un modèle
+    écrit hors du code est affiché comme du texte, et le résultat est assaini avant
+    d'atteindre la page.  Une réponse ne charge rien d'une autre origine, et affiche une image
+    d'une autre origine comme un lien vers elle, que le navigateur ne suit que si l'utilisateur
+    le fait.
 */
 
 import { Marked } from '../vendor/marked/marked.esm.js';
@@ -17,7 +18,7 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// Whether a URL names the origin of the application, or data the page holds (data:, blob:).
+// Si une URL désigne l'origine de l'application, ou des données que la page détient (data:, blob:).
 function localSource(url) {
   try {
     const u = new URL(String(url), document.baseURI);
@@ -63,7 +64,7 @@ const math = [
     tokenizer(src) {
       let m = /^\$\$([\s\S]+?)\$\$/.exec(src);
       if (m) return { type: 'inlineMath', raw: m[0], text: m[1].trim(), display: true };
-      // A dollar followed by a digit after its closing one is a price, not a formula.
+      // Un dollar suivi d'un chiffre après celui qui le ferme est un prix, pas une formule.
       m = /^\$(?![\s$])((?:\\.|[^\\$\n])+?)\$(?!\d)/.exec(src);
       if (m && !/\s$/.test(m[1])) return { type: 'inlineMath', raw: m[0], text: m[1], display: false };
       m = /^\\\(([\s\S]+?)\\\)/.exec(src);
@@ -76,12 +77,12 @@ const math = [
   }
 ];
 
-// True while renderMarkdown draws an answer that streams: the code without a language waits
-// for the end of the answer to have its language detected, and a code block whose closing
-// fence has not come yet is highlighted once it comes.
+// Vrai pendant que renderMarkdown dessine une réponse en flux : le code sans langage attend
+// la fin de la réponse pour que son langage soit détecté, et un bloc de code dont la clôture
+// n'est pas encore arrivée est coloré une fois qu'elle arrive.
 let streaming = false;
 
-// True for a fenced code block whose closing fence is missing, the block being written.
+// Vrai pour un bloc de code délimité dont la clôture manque, le bloc en cours d'écriture.
 function openFence(raw) {
   const text = String(raw || '').replace(/\s+$/, '');
   const open = /^ {0,3}(`{3,}|~{3,})/.exec(text);
@@ -100,7 +101,7 @@ marked.use({
       const language = String(lang || '').trim().split(/\s+/)[0].toLowerCase();
       let body = escapeHtml(text);
       const hl = window.hljs;
-      // A block marked as plain text or as the output of a program stays as it is.
+      // Un bloc marqué comme texte brut ou comme sortie d'un programme reste tel quel.
       const plain = /^(text|txt|plain|plaintext|output)$/.test(language) || (streaming && openFence(raw));
       if (hl && !plain) {
         try {
@@ -117,7 +118,7 @@ marked.use({
     html({ text }) {
       return escapeHtml(text);
     },
-    // An image of the application or of data keeps the default rendering; another one becomes a link.
+    // Une image de l'application ou de données garde le rendu par défaut ; une autre devient un lien.
     image({ href, title, text, tokens }) {
       if (localSource(href)) return false;
       const label = tokens ? this.parser.parseInline(tokens, this.parser.textRenderer) : text;
@@ -132,7 +133,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     node.setAttribute('target', '_blank');
     node.setAttribute('rel', 'noopener noreferrer');
   }
-  // The attributes that load a resource keep the origin of the application, whatever wrote them.
+  // Les attributs qui chargent une ressource gardent l'origine de l'application, quoi qui les ait écrits.
   if (!node.hasAttribute) return;
   if (node.hasAttribute('srcset')) node.removeAttribute('srcset');
   for (const name of ['src', 'poster', 'background']) {
@@ -146,7 +147,7 @@ const purifyOptions = {
   ADD_ATTR: ['data-action', 'aria-hidden']
 };
 
-// The HTML of a text; live for an answer that streams, drawn again at each of its pieces.
+// Le HTML d'un texte ; live pour une réponse en flux, redessinée à chacun de ses morceaux.
 export function renderMarkdown(text, live) {
   streaming = !!live;
   try {
@@ -156,8 +157,9 @@ export function renderMarkdown(text, live) {
   }
 }
 
-// The copy buttons of the code blocks of an element.
-// Outside of a secure page (the network access, in http), a selected text area is copied instead of the clipboard.
+// Les boutons de copie des blocs de code d'un élément.
+// Hors d'une page sécurisée (l'accès réseau, en http), une zone de texte sélectionnée est copiée au lieu du
+// presse-papiers.
 function copyBySelection(text) {
   const area = document.createElement('textarea');
   area.value = text;
@@ -169,7 +171,7 @@ function copyBySelection(text) {
   try {
     document.execCommand('copy');
   } catch (e) {
-    // Nothing more to try.
+    // Plus rien à essayer.
   }
   area.remove();
 }

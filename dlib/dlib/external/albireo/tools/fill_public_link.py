@@ -114,7 +114,7 @@ def download(url, partial, size, label):
             headers["Range"] = "bytes=%d-" % have
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=120) as r:
-                # A server that ignores the range sends the whole file again: the copy starts over.
+                # Un serveur qui ignore la plage renvoie tout le fichier : la copie recommence.
                 mode = "ab" if have and r.status == 206 else "wb"
                 if mode == "wb":
                     have = 0
@@ -227,13 +227,15 @@ def fill_dist(a):
     beside = "albireo-setup-complete-%s.models" % version
     if a.complete:
         copies.append((a.complete, "albireo-setup-complete-%s.exe" % version))
-        # The models of a complete installer that would reach the 4 GiB Windows runs lie beside it.
+        # Les modèles d'un installateur complet qui atteindrait les 4 Gio que Windows exécute se trouvent
+        # à côté de lui.
         models = os.path.splitext(a.complete)[0] + ".models"
         if os.path.isfile(models):
             copies.append((models, beside))
         elif os.path.isfile(os.path.join(a.output, beside)):
             os.remove(os.path.join(a.output, beside))
-    # The installers first and the feed last: the link never announces a file it does not hold yet.
+    # Les installateurs d'abord et le flux en dernier : le lien n'annonce jamais un fichier qu'il ne
+    # contient pas encore.
     copies.sort(key=lambda c: c[1].startswith("feed.json"))
     for source, name in copies:
         target = os.path.join(a.output, name)
@@ -288,7 +290,7 @@ def main():
     try:
         return {"dist": fill_dist, "models": fill_models, "check": check}[a.command](a)
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.CalledProcessError) as e:
-        # The errors of the requests to the public link name none of its addresses.
+        # Les erreurs des requêtes vers le lien public ne nomment aucune de ses adresses.
         print("error: %s" % public_link.hidden(e), file=sys.stderr)
         return 1
 

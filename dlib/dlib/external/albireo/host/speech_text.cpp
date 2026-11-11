@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// The voices and the text of the speech synthesis, shared by the service and albireo-speech.
+// Les voix et le texte de la synthèse vocale, partagés par le service et albireo-speech.
 
 #include "speech.h"
 
@@ -19,7 +19,7 @@ namespace albireo
             return s;
         }
 
-        // The next code point of UTF-8 text at i, advancing i; -1 for an invalid sequence.
+        // Le point de code suivant du texte UTF-8 à i, en avançant i ; -1 pour une séquence invalide.
         long next_code_point(const std::string& s, size_t& i)
         {
             const unsigned char c = static_cast<unsigned char>(s[i]);
@@ -40,7 +40,8 @@ namespace albireo
                 }
                 cp = (cp << 6) | (d & 0x3F);
             }
-            // Overlong forms and surrogates are refused as the decoders of the browsers refuse them.
+            // Les formes trop longues et les demi-codets sont refusés, comme les décodeurs des navigateurs les
+            // refusent.
             const long least[] = { 0, 0, 0x80, 0x800, 0x10000 };
             if (cp < least[n] || (cp >= 0xD800 && cp <= 0xDFFF) || cp > 0x10FFFF)
             {
@@ -67,7 +68,7 @@ namespace albireo
             }
         }
 
-        // A letter of the Latin scripts the voices read: Latin-1 and the Latin Extended blocks.
+        // Une lettre des écritures latines que lisent les voix : Latin-1 et les blocs Latin Extended.
         bool latin_letter(long cp)
         {
             if ((cp >= 'a' && cp <= 'z') || (cp >= 'A' && cp <= 'Z')) return true;
@@ -75,7 +76,7 @@ namespace albireo
             return false;
         }
 
-        // What a character becomes in the text a voice reads: itself, a replacement, or a space.
+        // Ce que devient un caractère dans le texte que lit une voix : lui-même, un remplaçant, ou une espace.
         std::string spoken(long cp)
         {
             if (latin_letter(cp) || (cp >= '0' && cp <= '9')) return std::string();
@@ -96,7 +97,7 @@ namespace albireo
 
     const std::vector<speech_voice>& speech_voices()
     {
-        // The fork for macOS speaks French only.
+        // Le fork pour macOS ne parle que français.
         static const std::vector<speech_voice> voices = {
             { "fr-FR", "fr", "fr-FR_ta.bin", "fr-FR_nk0_sg.bin" },
         };
@@ -134,7 +135,8 @@ namespace albireo
                 const long c = next_code_point(piece, k);
                 if (c == ' ' || c == '\n')
                 {
-                    // A line break stays, the spaces before it go; runs of spaces become one.
+                    // Un saut de ligne reste, les espaces qui le précèdent partent ; une suite d'espaces n'en fait
+                    // qu'une.
                     if (c == '\n')
                     {
                         while (!out.empty() && out.back() == ' ') out.pop_back();

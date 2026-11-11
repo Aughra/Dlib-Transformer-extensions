@@ -27,7 +27,7 @@ namespace albireo
             return 1.0f - std::min(1.0f, std::max(0.0f, y));
         }
 
-        // The rows [first, first + count) of a matrix, as a matrix of their own in its memory.
+        // Les lignes [first, first + count) d'une matrice, comme une matrice à part entière dans sa mémoire.
         weight_matrix row_slice(const weight_matrix& w, long first, long count)
         {
             weight_matrix s = w;
@@ -56,7 +56,7 @@ namespace albireo
             L.attn_norm = f.floats(p + "attn_norm.weight", static_cast<size_t>(d));
             if (cfg_.fused_qkv)
             {
-                // Three views of one matrix: every product still goes through product().
+                // Trois vues d'une même matrice : chaque produit passe toujours par product().
                 const weight_matrix qkv = f.matrix(p + "attn_qkv.weight", qd + 2 * kvd, d);
                 L.wq = row_slice(qkv, 0, qd);
                 L.wk = row_slice(qkv, qd, kvd);
@@ -74,7 +74,7 @@ namespace albireo
             f.optional_floats(p + "attn_v.bias", static_cast<size_t>(kvd), L.bv);
             f.optional_floats(p + "attn_q_norm.weight", static_cast<size_t>(hd), L.q_norm);
             f.optional_floats(p + "attn_k_norm.weight", static_cast<size_t>(hd), L.k_norm);
-            // The forward pass adds the three biases together and normalizes queries and keys together.
+            // La passe avant ajoute les trois biais ensemble et normalise les requêtes et les clés ensemble.
             if (L.bq.empty() != L.bk.empty() || L.bq.empty() != L.bv.empty())
                 throw std::runtime_error("layer " + std::to_string(i) + " holds some of the attn_q, attn_k and "
                     "attn_v biases without the others");
@@ -96,7 +96,7 @@ namespace albireo
             }
             else if (cfg_.fused_gate_up)
             {
-                // The rows of the gate, then those of the up projection.
+                // Les lignes de la porte, puis celles de la projection up.
                 const weight_matrix gate_up = f.matrix(p + "ffn_up.weight", 2 * cfg_.d_ffn, d);
                 L.w_gate = row_slice(gate_up, 0, cfg_.d_ffn);
                 L.w_up = row_slice(gate_up, cfg_.d_ffn, cfg_.d_ffn);
@@ -126,9 +126,9 @@ namespace albireo
             w.scratch.resize(static_cast<size_t>(qk_attention_scratch(hd)));
         }
 
-        // The position component of each rotary pair: the time, except the pairs of the row
-        // and column sections, interleaved as the reference implementation of Qwen3-VL lays
-        // them out.
+        // La composante de position de chaque paire rotative : le temps, sauf pour les paires des sections
+        // de ligne et de colonne, entrelacées comme les dispose l'implémentation de référence de
+        // Qwen3-VL.
         pair_component_.assign(static_cast<size_t>(cfg_.rope_dims / 2), 0);
         if (cfg_.multimodal_rope())
             for (long j = 0; j < cfg_.rope_dims / 2; ++j)
@@ -191,7 +191,7 @@ namespace albireo
         return o.str();
     }
 
-    // Sequences
+    // Séquences
 
     int cpu_runtime::create_sequence()
     {
@@ -233,11 +233,11 @@ namespace albireo
     {
         const kv_sequence& s = *sequences_.at(static_cast<size_t>(src));
         kv_sequence& d = *sequences_.at(static_cast<size_t>(dst));
-        // The full blocks are shared; each sequence copies a shared block before writing in it.
+        // Les blocs pleins sont partagés ; chaque séquence copie un bloc partagé avant d'y écrire.
         return d.share_prefix(kv_, s, length);
     }
 
-    // Building blocks
+    // Briques de base
 
     void cpu_runtime::rms_norm_rows(const float* x, const float* gamma, float* y, long rows, long width, float eps)
     {
@@ -259,7 +259,7 @@ namespace albireo
         if (positions <= rope_positions_) return;
         const long half = cfg_.rope_dims / 2;
         const long n_dims = cfg_.rope_dims;
-        // Grow in steps, to avoid recomputing for every new token.
+        // Croître par paliers, pour éviter de recalculer à chaque nouveau token.
         const long target = std::max<long>(positions, rope_positions_ + 1024);
         rope_cos_.resize(static_cast<size_t>(target * half));
         rope_sin_.resize(static_cast<size_t>(target * half));
@@ -404,7 +404,7 @@ namespace albireo
 
     void cpu_runtime::add_given_embeddings(const forward_batch& batch, long slice)
     {
-        // Slice 0 replaces the embedding of the token; slice k is added after layer k - 1.
+        // La tranche 0 remplace l'embedding du token ; la tranche k est ajoutée après la couche k - 1.
         const long d = cfg_.d_model;
         const long W = cfg_.input_width();
         for (size_t i = 0; i < batch.embedding_rows.size(); ++i)
@@ -472,7 +472,7 @@ namespace albireo
                 const float* v = v_.data() + t * kvd + h * hd;
                 if (q8)
                 {
-                    // The keys are stored rotated (qk_rotate_row), the queries being rotated alike.
+                    // Les clés sont stockées tournées (qk_rotate_row), les requêtes étant tournées de même.
                     std::copy(k, k + hd, rotated);
                     qk_rotate_row(rotated, hd);
                     qk_float_to_q8_row(rotated, reinterpret_cast<int8_t*>(kv_.keys(block, li, h)) + row * hd,
@@ -487,7 +487,7 @@ namespace albireo
                 }
             }
         };
-        // Each token writes rows of its own.
+        // Chaque token écrit ses propres lignes.
         if (T >= 32)
             pool_.parallel_for(T, [&](long t, int thread) { one(t, thread); });
         else
@@ -508,7 +508,7 @@ namespace albireo
             ? static_cast<float>(cfg_.attention_scale)
             : 1.0f / std::sqrt(static_cast<float>(hd));
 
-        // The tiles: consecutive tokens of one segment, whose positions are consecutive too.
+        // Les tuiles : des tokens consécutifs d'un segment, dont les positions sont consécutives aussi.
         const long per_tile = std::max<long>(1, tile_rows / rep);
         tiles_.clear();
         long span = 0;
@@ -520,12 +520,12 @@ namespace albireo
                 span = std::max(span, positions[static_cast<size_t>(s.start + j + count - 1)] + 1);
             }
         /*
-            The parts of a tile: when the tiles and their key/value heads are fewer than the
-            threads, as in the generation of a single answer, the positions of each tile are
-            split into ranges of part_positions at least, each range read by one task for all
-            the heads of the group, and the partial sums of the ranges are merged afterwards
-            (the split of FlashDecoding).  The keys and values are then read once for all the
-            heads that share them.
+            Les parties d'une tuile : quand les tuiles et leurs têtes de clés et valeurs sont moins
+            nombreuses que les threads, comme dans la génération d'une seule réponse, les positions
+            de chaque tuile sont découpées en plages d'au moins part_positions, chaque plage lue par
+            une tâche pour toutes les têtes du groupe, et les sommes partielles des plages sont
+            fusionnées ensuite (le découpage de FlashDecoding).  Les clés et valeurs sont alors lues
+            une seule fois pour toutes les têtes qui les partagent.
         */
         const long units = static_cast<long>(tiles_.size()) * KVH;
         long parts = 1;
@@ -548,7 +548,8 @@ namespace albireo
             const long begin = part * length;
             const long end = std::min(last + 1, begin + length);
 
-            // Row a * rep + i holds token tile.start + a and head h0 + i, scaled, and rotated as the 8-bit keys.
+            // La ligne a * rep + i contient le token tile.start + a et la tête h0 + i, mise à l'échelle, et
+            // tournée comme les clés 8 bits.
             for (long a = 0; a < tile.count; ++a)
             {
                 const float* src = q_.data() + (tile.start + a) * qd + h0 * hd;
@@ -577,7 +578,7 @@ namespace albireo
                         w.s.data(), B, w.scratch.data());
                 for (long a = 0; a < tile.count; ++a)
                 {
-                    // Each token sees the positions up to its own.
+                    // Chaque token voit les positions jusqu'à la sienne.
                     const long own = positions[static_cast<size_t>(tile.start + a)];
                     const long seen = std::max<long>(0, std::min(m, own + 1 - p));
                     for (long i = 0; i < rep; ++i)
@@ -591,7 +592,7 @@ namespace albireo
                         const float added = qk_exp_shift_sum(sr, mx, seen);
                         if (mx != old && w.sum[static_cast<size_t>(r)] > 0.0f)
                         {
-                            // A larger maximum: what the row gathered so far shrinks.
+                            // Un maximum plus grand : ce que la ligne a accumulé jusqu'ici diminue.
                             const float shrink = std::exp(old - mx);
                             w.sum[static_cast<size_t>(r)] *= shrink;
                             qk_scale(w.o.data() + r * hd, shrink, hd);
@@ -614,7 +615,7 @@ namespace albireo
 
             if (parts > 1)
             {
-                // The sums of the range, unnormalized, with the maximum and the sum of each row.
+                // Les sommes de la plage, non normalisées, avec le maximum et la somme de chaque ligne.
                 float* out = partial_.data() + item * rows_cap * (hd + 2);
                 std::copy(w.o.begin(), w.o.begin() + rows * hd, out);
                 std::copy(w.max.begin(), w.max.begin() + rows, out + rows_cap * hd);
@@ -633,7 +634,7 @@ namespace albireo
         });
         if (parts == 1) return;
 
-        // Each row takes the ranges of its tile with the largest maximum of them as reference.
+        // Chaque ligne prend les plages de sa tuile avec le plus grand de leurs maximums comme référence.
         pool_.parallel_for(units, [&](long unit, int) {
             const attention_tile& tile = tiles_[static_cast<size_t>(unit / KVH)];
             const long h0 = unit % KVH * rep;
@@ -664,7 +665,7 @@ namespace albireo
         });
     }
 
-    // Mixture of experts
+    // Mélange d'experts
 
     void cpu_runtime::moe_ffn(const layer& L, long T)
     {
@@ -676,7 +677,7 @@ namespace albireo
         router_logits_.resize(static_cast<size_t>(T * n_exp));
         product(L.router, xn_.data(), T, d, router_logits_.data(), n_exp);
 
-        // The lists of the experts keep their memory from one layer and one pass to the next.
+        // Les listes des experts gardent leur mémoire d'une couche et d'une passe à l'autre.
         std::vector<std::vector<std::pair<long, float>>>& routed = routed_;
         routed.resize(static_cast<size_t>(n_exp));
         for (auto& list : routed) list.clear();
@@ -740,11 +741,11 @@ namespace albireo
         }
     }
 
-    // Forward pass
+    // Passe avant
 
     bool cpu_runtime::takes_layer_pass(const forward_batch& batch) const
     {
-        // The DeepStack slices of the images are added to the hidden states between the first layers.
+        // Les tranches DeepStack des images sont ajoutées aux états cachés entre les premières couches.
         return !(cfg_.n_deepstack > 0 && !batch.embedding_rows.empty());
     }
 
@@ -755,10 +756,10 @@ namespace albireo
     }
 
     /*
-        Runs n tokens in a sequence of their own through the layers of the device, then through
-        the processor alone, and compares their logits: 1 when they agree, 0 when they differ, -1
-        when the keys and values or the device lack room for the probe.  detail describes the
-        comparison.
+        Fait passer n tokens, dans une séquence à part, par les couches du périphérique, puis par
+        le processeur seul, et compare leurs logits : 1 quand ils concordent, 0 quand ils diffèrent,
+        -1 quand les clés et valeurs ou le périphérique manquent de place pour la sonde.  detail
+        décrit la comparaison.
     */
     int cpu_runtime::probe_layer_pass(long n, std::string& detail)
     {
@@ -777,7 +778,7 @@ namespace albireo
         for (long i = 0; i < n; ++i) b.logit_rows.push_back(i);
         std::vector<float> reference, device;
         if (!run(b, device, true)) return -1;
-        // The truncation gives the blocks back.
+        // La troncature rend les blocs.
         truncate_sequence(seq, 0);
         if (!reserve_sequence(seq, n)) return -1;
         {
@@ -806,7 +807,7 @@ namespace albireo
                 if (d[v] > d[id]) id = v;
             }
             const double relative = std::sqrt(diff / std::max(norm, 1e-30));
-            // Written so that a value that is not a number sets the row apart.
+            // Écrit de sorte qu'une valeur qui n'est pas un nombre mette la ligne à part.
             if (!(relative <= 0.01)) apart = true;
             if (relative > worst) worst = relative;
             if (ia == id) ++same;
@@ -816,21 +817,22 @@ namespace albireo
             << (apart && worst <= 0.01 ? ", some not numbers" : "") << ", " << same << " of " << n
             << " most likely tokens the same";
         detail = o.str();
-        // Two candidates whose logits are nearly equal may change places: one row in sixteen may differ.
+        // Deux candidats dont les logits sont presque égaux peuvent échanger leurs places : une ligne sur seize
+        // peut différer.
         return !apart && same >= n - std::max<long>(1, n / 16) ? 1 : 0;
     }
 
     /*
-        Keeps the layer pass when passes of the device agree with the processor, a defect of the
-        device or of its kernels otherwise reaching every answer: a probe of probe_tokens tokens,
-        whose products read the blocks of the weights in place, and one of tiled_tokens() tokens,
-        whose products go through the tiles of the weights expanded.  The state stays unchecked
-        when the keys and values or the device lack room for a probe, so that a later pass checks
-        again.
+        Garde la layer pass quand des passes du périphérique concordent avec le processeur, un défaut
+        du périphérique ou de ses noyaux atteignant sinon chaque réponse : une sonde de probe_tokens
+        tokens, dont les produits lisent les blocs des poids en place, et une de tiled_tokens()
+        tokens, dont les produits passent par les tuiles des poids développés.  L'état reste non
+        vérifié quand les clés et valeurs ou le périphérique manquent de place pour une sonde, pour
+        qu'une passe ultérieure vérifie à nouveau.
     */
     void cpu_runtime::check_layer_pass()
     {
-        // A copy of the constant, which std::max() takes by reference.
+        // Une copie de la constante, que std::max() prend par référence.
         long first = probe_tokens;
         first = std::max(first, layer_pass_->min_tokens());
         if (cfg_.ctx_train > 0) first = std::min(first, cfg_.ctx_train);
@@ -856,8 +858,8 @@ namespace albireo
 
     void cpu_runtime::forward(const forward_batch& batch, std::vector<float>& logits)
     {
-        // A pass of fewer tokens than the products in floats take, as a step of the generation,
-        // runs on the performance cores alone (thread_pool_apple.inc).
+        // Une passe de moins de tokens que n'en prennent les produits en floats, comme une étape de la
+        // génération, s'exécute sur les seuls cœurs de performance (thread_pool_apple.inc).
         const thread_pool::fast_team_scope fast_team(static_cast<long>(batch.tokens.size()) < qk_float_product_tokens);
         if (gpu_ && takes_gpu(batch) && gpu_ready())
         {
@@ -868,7 +870,7 @@ namespace albireo
             }
             catch (const std::exception& e)
             {
-                // The pass is computed again below; its keys and values are written again.
+                // La passe est recalculée ci-dessous ; ses clés et valeurs sont réécrites.
                 drop_gpu(std::string("the GPU failed: ") + e.what());
             }
         }
@@ -876,7 +878,7 @@ namespace albireo
         {
             try
             {
-                // A check that the keys and values or the device put off waits for a few passes.
+                // Un contrôle que les clés et valeurs ou le périphérique ont reporté attend quelques passes.
                 if (!layer_pass_checked_ && layer_pass_wait_ > 0)
                     --layer_pass_wait_;
                 else if (!layer_pass_checked_)
@@ -892,7 +894,7 @@ namespace albireo
             }
             catch (const device_failure& e)
             {
-                // The pass is computed again below; its keys and values are written again.
+                // La passe est recalculée ci-dessous ; ses clés et valeurs sont réécrites.
                 if (!e.memory)
                     drop_layer_pass(std::string("the device failed: ") + e.what());
                 else if (++layer_pass_memory_failures_ >= max_layer_pass_memory_failures)
@@ -917,7 +919,7 @@ namespace albireo
         const float rs = static_cast<float>(cfg_.residual_scale);
         if (scratch_.empty()) scratch_.resize(1);
 
-        // Positions of the tokens, which continue their sequences.
+        // Positions des tokens, qui prolongent leurs séquences.
         positions_.assign(static_cast<size_t>(T), 0);
         long max_pos = 0;
         for (const auto& s : batch.segments)
@@ -933,7 +935,7 @@ namespace albireo
                 max_pos = std::max(max_pos, seq.length + j);
             }
         }
-        // The positions and the embeddings the batch gives, for the tokens of images.
+        // Les positions et les embeddings que donne le lot, pour les tokens des images.
         const bool given = !batch.positions.empty();
         if (given)
         {
@@ -962,7 +964,7 @@ namespace albireo
         {
             const layer& L = layers_[static_cast<size_t>(li)];
 
-            // Attention block.
+            // Bloc d'attention.
             if (on_device)
                 layer_pass_->attention_inputs(li, q_.data(), k_.data(), v_.data());
             else
@@ -1003,21 +1005,21 @@ namespace albireo
                     if (f != 1.0f) qk_scale(q_.data() + t * qd, f, qd);
                 }
 
-            // Keys and values of the batch go into the sequences before attention reads
-            // them, so that each token sees the earlier tokens of its own chunk.
+            // Les clés et valeurs du lot vont dans les séquences avant que l'attention ne les lise,
+            // pour que chaque token voie les tokens précédents de son propre morceau.
             store_keys_values(li, batch);
 
             attention(li, batch, positions_);
             if (on_device)
             {
-                // The projection, the feed-forward block and both residual sums.
+                // La projection, le bloc feed-forward et les deux sommes résiduelles.
                 layer_pass_->attention_output(li, ctx_.data());
                 continue;
             }
             product(L.wo, ctx_.data(), T, qd, tmp_.data(), d);
             for (size_t i = 0; i < x_.size(); ++i) x_[i] += rs * tmp_[i];
 
-            // Feed-forward block.
+            // Bloc feed-forward.
             rms_norm_rows(x_.data(), L.ffn_norm.data(), xn_.data(), T, d, eps);
             if (cfg_.is_moe())
             {
@@ -1048,7 +1050,7 @@ namespace albireo
         for (const auto& s : batch.segments)
             sequences_[static_cast<size_t>(s.sequence)]->length += s.count;
 
-        // Final normalization and logits of the requested rows only.
+        // Normalisation finale et logits des seules lignes demandées.
         const long R = static_cast<long>(batch.logit_rows.size());
         hidden_out_.resize(static_cast<size_t>(R * d));
         for (long r = 0; r < R; ++r)

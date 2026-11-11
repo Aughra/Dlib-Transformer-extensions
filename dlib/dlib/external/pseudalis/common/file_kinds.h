@@ -10,12 +10,12 @@
 #include <vector>
 
 /*
-    The kinds of files Pseudalis protects, from their names: the engine checks the content
-    against the kind of the name, an Office document, a PDF, a text, a picture or an archive.
-    A name whose extension gives no kind is taken for a text when its content is text through
-    and through, which the engine decides with dlib; the drive and the shell foresee it from the
-    start of the file (text_head()), and leave the other files at once.  A name without
-    extension goes to the engine, which takes its content for what it is.
+    Les types de fichiers que Pseudalis protège, d'après leurs noms : le moteur vérifie que le
+    contenu correspond au type du nom, un document Office, un PDF, un texte, une image ou une
+    archive.  Un nom dont l'extension ne donne aucun type est pris pour un texte quand son contenu
+    est du texte de bout en bout, ce que le moteur décide avec dlib ; le lecteur et le shell le
+    prévoient dès le début du fichier (text_head()), et écartent aussitôt les autres fichiers.  Un
+    nom sans extension va au moteur, qui prend son contenu pour ce qu'il est.
 */
 
 namespace pseudalis
@@ -23,9 +23,9 @@ namespace pseudalis
     enum class name_kind { unsupported, document, picture, archive };
 
     /*
-        The extension of a name in lower case: ".docx", ".tar.gz", or an empty string.  What follows
-        the last dot is an extension when it holds 1 to 16 letters, digits, '-' or '_': "Lettre à
-        M. Dupont" has none.
+        L'extension d'un nom en minuscules : ".docx", ".tar.gz", ou une chaîne vide.  Ce qui suit le
+        dernier point est une extension quand cela contient de 1 à 16 lettres, chiffres, '-' ou '_' :
+        "Lettre à M. Dupont" n'en a pas.
     */
     inline std::string name_extension(const std::string& name)
     {
@@ -44,7 +44,7 @@ namespace pseudalis
         return base.substr(dot);
     }
 
-    // The families of the documents: a text (plain, delimited or markup), an Office document, a PDF.
+    // Les familles de documents : un texte (brut, délimité ou balisé), un document Office, un PDF.
     enum class document_family { none, text, office, pdf };
 
     namespace file_kinds_impl
@@ -83,7 +83,7 @@ namespace pseudalis
         return name_kind::unsupported;
     }
 
-    // The extensions of the names Pseudalis protects, ".tar.gz" included.
+    // Les extensions des noms que Pseudalis protège, ".tar.gz" compris.
     inline std::vector<std::string> supported_extensions()
     {
         std::vector<std::string> all(1, ".pdf");
@@ -100,17 +100,17 @@ namespace pseudalis
     }
 
     /*
-        Whether the start of a file may be the start of a text: UTF-16, with its byte order mark or
-        its zero bytes, whose code units hold no control character but the tabulation, the ends of
-        lines and the form feed, no U+FFFE or U+FFFF and no unpaired surrogate, or else bytes with no
-        such control character, which the engine also requires through the whole content.  The
-        drive and the shell leave at once a file of an extension of no kind whose start is not a
-        text, without reading the rest of it.
+        Indique si le début d'un fichier peut être le début d'un texte : de l'UTF-16, avec sa marque
+        d'ordre des octets ou ses octets nuls, dont les unités de code ne contiennent aucun caractère
+        de contrôle hormis la tabulation, les fins de ligne et le saut de page, ni U+FFFE ou U+FFFF,
+        ni demi-code (surrogate) isolé, ou bien des octets sans un tel caractère de contrôle, ce que
+        le moteur exige aussi sur tout le contenu.  Le lecteur et le shell écartent aussitôt un
+        fichier d'extension sans type dont le début n'est pas un texte, sans en lire la suite.
     */
     inline bool text_head(const char* data, size_t size)
     {
         const unsigned char* d = reinterpret_cast<const unsigned char*>(data);
-        int order = 0;      // 1: UTF-16 little endian, 2: big endian
+        int order = 0;      // 1 : UTF-16 petit-boutiste, 2 : gros-boutiste
         const bool bom = size >= 2 && ((d[0] == 0xFF && d[1] == 0xFE) || (d[0] == 0xFE && d[1] == 0xFF));
         const size_t at = bom ? 2 : 0;
         if (bom)

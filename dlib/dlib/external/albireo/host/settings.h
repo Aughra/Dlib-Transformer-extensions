@@ -13,80 +13,82 @@
 namespace albireo
 {
 
-    // The roles a language model can be activated for: one model at most per role.
+    // Les rôles pour lesquels un modèle de langage peut être activé : un modèle au plus par rôle.
     extern const char* const model_roles[3];   // "general", "code", "security"
-    // The role of the embedding model, which computes the vectors of the document search
-    // of the web application; one is always active.
+    // Le rôle du modèle d'embedding, qui calcule les vecteurs de la recherche dans les documents
+    // de l'application web ; il y en a toujours un d'actif.
     extern const char* const embedding_role;   // "embedding"
 
-    // The text that stands for the password of the proxy in settings.json and in the answers
-    // of the administration interface; settings_store keeps the password itself apart.
+    // Le texte qui tient lieu du mot de passe du proxy dans settings.json et dans les réponses de
+    // l'interface d'administration ; settings_store garde le mot de passe lui-même à part.
     extern const char* const proxy_password_mask;   // "********"
-    // The proxy setting with its password, when it has one, replaced by proxy_password_mask.
+    // Le réglage du proxy avec son mot de passe, s'il en a un, remplacé par proxy_password_mask.
     std::string masked_proxy(const std::string& proxy);
-    // Whether the password of a proxy setting is proxy_password_mask.
+    // Indique si le mot de passe d'un réglage de proxy est proxy_password_mask.
     bool proxy_password_masked(const std::string& proxy);
 
     struct host_settings
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The settings of the service, kept in settings.json in the data folder.
-                The web application changes them (its Service tab), and the service
-                applies them, restarting itself when a change requires it (the ports, the
-                GPU, the memory settings).
+                Les réglages du service, gardés dans settings.json dans le dossier des
+                données.  L'application web les modifie (son onglet Service), et le service
+                les applique, en redémarrant quand un changement l'exige (les ports, le GPU,
+                les réglages de mémoire).
         !*/
         int port = 8443;
-        std::string models_dir;                 // empty: <data>/models
+        std::string models_dir;                 // vide : <data>/models
         std::string language = "auto";          // auto, en, fr, de, it, es
-        std::string engine = "auto";            // auto, best, or a variant: cpu, cpu-avx2, cpu-avxvnni, ...
-        std::string accelerator = "auto";       // auto: the GPU of the Mac (Metal), none: the processor alone
-        long long device_mb = 0;                // copies of the weights on the device, 0: automatic
-        int threads = 0;                        // 0: physical cores
-        long context = 0;                       // 0: automatic per model
-        int max_sequences = 4;                  // requests computed together per model
-        long long kv_mb = 0;                    // 0: automatic
-        std::string kv_type = "auto";           // keys and values: auto (8 bits), q8 or f16
-        bool warm_history = true;               // the history of an answer read ahead of the next question
-        int spin_us = 2000;                     // the wait of the threads between two passes, in microseconds
-        int gpu_prompt_tokens = 24;             // the prompts of so many tokens or more go to the GPU...
-        int gpu_prompt_context = 2048;          // ...while they end within so many positions (0: never)
-        std::map<std::string, std::string> active;   // role -> model identifier
-        bool default_model = true;              // download the default model of the catalog at the first start
-        // A machine without Internet access: no request leaves the machine, the catalog
-        // and the models come from files (import folder, removable media).
+        std::string engine = "auto";            // auto, best, ou une variante : cpu, cpu-avx2, cpu-avxvnni, ...
+        std::string accelerator = "auto";       // auto : le GPU du Mac (Metal), none : le processeur seul
+        long long device_mb = 0;                // copies des poids sur le périphérique, 0 : automatique
+        int threads = 0;                        // 0 : cœurs physiques
+        long context = 0;                       // 0 : automatique par modèle
+        int max_sequences = 4;                  // requêtes calculées ensemble par modèle
+        long long kv_mb = 0;                    // 0 : automatique
+        std::string kv_type = "auto";           // clés et valeurs : auto (8 bits), q8 ou f16
+        bool warm_history = true;               // l'historique d'une réponse lu avant la question suivante
+        int spin_us = 2000;                     // l'attente des threads entre deux passes, en microsecondes
+        int gpu_prompt_tokens = 24;             // les prompts d'autant de tokens ou plus vont au GPU...
+        int gpu_prompt_context = 2048;          // ...s'ils finissent en deçà d'autant de positions (0 : jamais)
+        std::map<std::string, std::string> active;   // rôle -> identifiant du modèle
+        bool default_model = true;              // télécharger le modèle par défaut du catalogue au premier démarrage
+        // Une machine sans accès à Internet : aucune requête ne quitte la machine, le catalogue
+        // et les modèles viennent de fichiers (dossier d'import, supports amovibles).
         bool offline = false;
-        std::string proxy;                      // "": the proxy of the system, "none", or http://host:port
+        std::string proxy;                      // "" : le proxy du système, "none", ou http://host:port
         /*
-            The web access of the Web button (web_access.h): the routes through which the web
-            application searches the web and reads its pages, turned off by web_access = false.
-            web_search names the provider of the search: "wikipedia" or "none".
+            L'accès au web du bouton Web (web_access.h) : les routes par lesquelles l'application
+            web cherche sur le web et lit ses pages, coupées par web_access = false.  web_search
+            nomme le fournisseur de la recherche : "wikipedia" ou "none".
         */
         bool web_access = true;
         std::string web_search = "wikipedia";
-        json engine_benchmarks = json::object();     // variant -> measured tokens per second
+        json engine_benchmarks = json::object();     // variante -> tokens par seconde mesurés
         /*
-            The choice of the installation for the local authority in the trusted roots of
-            the machine: 1 trusted, 0 not, -1 unknown (an installation before 1.0.8), where a
-            new authority follows the trust of the one it replaces (certificates.h).
+            Le choix de l'installation pour l'autorité locale dans les racines de confiance de
+            la machine : 1 approuvée, 0 non, -1 inconnu (une installation antérieure à 1.0.8),
+            où une nouvelle autorité suit la confiance de celle qu'elle remplace
+            (certificates.h).
         */
         int trust_authority = -1;
         /*
-            The access from the local network: a second server, in plain HTTP, on every address
-            of the Mac at lan_port, which asks for the password (lan_password_hash, the form of
-            password_hash()) before anything else when there is one, and is open to the network
-            otherwise.
+            L'accès depuis le réseau local : un second serveur, en HTTP simple, sur chaque adresse
+            du Mac au port lan_port, qui demande le mot de passe (lan_password_hash, sous la
+            forme de password_hash()) avant toute chose quand il y en a un, et qui est ouvert au
+            réseau sinon.
         */
         bool lan = false;
         int lan_port = 8444;
         std::string lan_password_hash;
 
         /*
-            The settings as settings.json and the administration interface give them, the
-            password of the proxy masked.  from_json() reads the documents of the earlier
-            versions without error: web_search "auto", "brave" or "searxng" becomes
-            "wikipedia", and the settings they had that this version lacks (public_link,
-            web_search_url, web_search_key, web_search_key_set) are left aside.
+            Les réglages tels que settings.json et l'interface d'administration les donnent, le
+            mot de passe du proxy masqué.  from_json() lit sans erreur les documents des
+            versions antérieures : web_search "auto", "brave" ou "searxng" devient
+            "wikipedia", et les réglages qu'elles avaient et que cette version n'a pas
+            (public_link, web_search_url, web_search_key, web_search_key_set) sont laissés de
+            côté.
         */
         json to_json() const;
         void from_json(const json& j);
@@ -97,21 +99,22 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The settings file, read at start and written atomically at each change,
-                with a copy, settings.json.bak, written with it and at each start that reads a
-                valid settings.json.  The copy is read in its place when settings.json is no
-                longer valid JSON (a disk that failed, an edit by hand), then written again.
+                Le fichier des réglages, lu au démarrage et écrit de façon atomique à chaque
+                changement, avec une copie, settings.json.bak, écrite avec lui et à chaque
+                démarrage qui lit un settings.json valide.  La copie est lue à sa place quand
+                settings.json n'est plus du JSON valide (un disque défaillant, une modification
+                à la main), puis réécrite.
 
-                settings.json is readable by the users of the machine, and gives the
-                password of the proxy as proxy_password_mask.  The proxy with its password
-                is kept in proxy.secret beside it, which only the service and the
-                administrators read.  A password found in settings.json, written by an
-                earlier version or by hand, moves to proxy.secret at once.
+                settings.json est lisible par les utilisateurs de la machine, et donne le mot
+                de passe du proxy sous la forme proxy_password_mask.  Le proxy avec son mot de
+                passe est gardé à côté, dans proxy.secret, que seuls le service et les
+                administrateurs lisent.  Un mot de passe trouvé dans settings.json, écrit par
+                une version antérieure ou à la main, passe aussitôt dans proxy.secret.
 
-                A settings.json of an earlier version that holds settings this version
-                lacks, or another provider of the search, is written again at the start
-                without them, and web_search.secret, the key of a search provider of those
-                versions, is deleted.
+                Un settings.json d'une version antérieure qui contient des réglages que cette
+                version n'a pas, ou un autre fournisseur de recherche, est réécrit au démarrage
+                sans eux, et web_search.secret, la clé d'un fournisseur de recherche de ces
+                versions, est supprimé.
         !*/
     public:
         explicit settings_store(const std::string& path);
@@ -120,16 +123,16 @@ namespace albireo
         bool set(const host_settings& s);
         /*!
             ensures
-                - Applies change to the current settings and writes them, in one step: two
-                  changes made at once, by a route and a background task for instance,
-                  both persist.
-                - Returns the settings written.
+                - Applique change aux réglages actuels et les écrit, en une seule étape : deux
+                  changements faits en même temps, par une route et une tâche de fond par
+                  exemple, sont conservés tous les deux.
+                - Renvoie les réglages écrits.
         !*/
         host_settings update(const std::function<void(host_settings&)>& change);
         const std::string& path() const { return path_; }
 
     private:
-        // Writes proxy.secret, then settings.json; m_ is held.
+        // Écrit proxy.secret, puis settings.json ; m_ est tenu.
         bool write();
 
         std::string path_;

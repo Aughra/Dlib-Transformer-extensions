@@ -43,8 +43,8 @@ namespace pseudalis
         std::mutex proxy_m;
         std::string proxy_setting;
 
-        // The cancellation of the downloads, its reason, and the clients of the requests
-        // in progress.
+        // L'annulation des téléchargements, sa raison, et les clients des requêtes
+        // en cours.
         std::atomic<bool> cancelled{false};
         std::mutex active_m;
         std::string cancel_reason = "stopped";
@@ -56,7 +56,7 @@ namespace pseudalis
             return cancel_reason;
         }
 
-        // Thrown from the socket of a client about to connect after a cancellation.
+        // Levée depuis le socket d'un client sur le point de se connecter après une annulation.
         struct connection_cancelled
         {
         };
@@ -147,7 +147,7 @@ namespace pseudalis
             return lower(h.substr(0, h.find(':')));
         }
 
-        // Whether NO_PROXY, or the nature of the address, sends a host around the proxy.
+        // Si NO_PROXY, ou la nature de l'adresse, fait contourner le proxy à un hôte.
         bool direct_host(const std::string& host)
         {
             if (host == "localhost" || host == "::1" || host.compare(0, 4, "127.") == 0) return true;
@@ -200,15 +200,16 @@ namespace pseudalis
                 c->set_proxy(p.host, p.port);
                 if (!p.user.empty()) c->set_proxy_basic_auth(p.user, p.password);
             }
-            // The redirections are followed here, one request at a time, so that each one
-            // is bounded and can be cancelled.
+            // Les redirections sont suivies ici, une requête à la fois, pour que chacune
+            // soit bornée et puisse être annulée.
             c->set_follow_location(false);
             /*
-                The last check before a connection opens.  A cancellation that comes after
-                the client is registered and before it connects finds no request in flight
-                to stop, so the socket checks it itself: no connection leaves the machine
-                once the downloads are cancelled.  The exception leaves httplib before it
-                connects, its locks released by their guards.
+                La dernière vérification avant qu'une connexion s'ouvre.  Une annulation qui
+                arrive après l'enregistrement du client et avant sa connexion ne trouve aucune
+                requête en vol à arrêter, si bien que le socket la vérifie lui-même : aucune
+                connexion ne quitte la machine une fois les téléchargements annulés.
+                L'exception sort d'httplib avant qu'il se connecte, ses verrous libérés par
+                leurs gardes.
             */
             c->set_socket_options([](socket_t sock) {
                 if (!cancelled) return;
@@ -225,12 +226,12 @@ namespace pseudalis
 
 
         /*
-            Resolves the name of a server and checks that it answers on its port, within
-            connect_seconds for each, giving up at once when the downloads are cancelled.
-            The answer of the resolution stays in the cache of the system, where the client
-            that follows finds it, and its connection, which cannot be interrupted, finds a
-            server that answers.  Elsewhere than on Windows, the client resolves and
-            connects by itself, bounded by connect_seconds.
+            Résout le nom d'un serveur et vérifie qu'il répond sur son port, en connect_seconds
+            au plus pour chacun, et abandonne aussitôt quand les téléchargements sont annulés.
+            La réponse de la résolution reste dans le cache du système, où la trouve le client
+            qui suit, et sa connexion, qui ne peut pas être interrompue, trouve un serveur qui
+            répond.  Ailleurs que sous Windows, le client résout et se connecte de lui-même,
+            borné par connect_seconds.
         */
         bool reach_bounded(const std::string& host, int port, std::string& error)
         {
@@ -240,7 +241,7 @@ namespace pseudalis
             return true;
         }
 
-        // The text of an IPv4 or IPv6 address of a resolution, empty for another family.
+        // Le texte d'une adresse IPv4 ou IPv6 d'une résolution, vide pour une autre famille.
         std::string numeric_address(const sockaddr* a)
         {
             char text[INET6_ADDRSTRLEN] = {};
@@ -251,7 +252,7 @@ namespace pseudalis
             return text;
         }
 
-        // Resolves host with getaddrinfo(), which answers in the time of the resolver of the system.
+        // Résout host avec getaddrinfo(), qui répond dans le temps du résolveur du système.
         bool resolve_unbounded(const std::string& host, std::vector<std::string>& addresses, std::string& error)
         {
             addrinfo hints = {};
@@ -273,7 +274,7 @@ namespace pseudalis
             return true;
         }
 
-        // The port of an origin, "https://host:port".
+        // Le port d'une origine, "https://host:port".
         int port_of(const std::string& origin)
         {
             const bool https = origin.compare(0, 8, "https://") == 0;
@@ -284,7 +285,7 @@ namespace pseudalis
             return port > 0 && port < 65536 ? port : https ? 443 : 80;
         }
 
-        // The client for one address, the server or the proxy reached first.
+        // Le client pour une adresse, le serveur ou le proxy joint en premier.
         std::shared_ptr<httplib::Client> open(const url_parts& u, int timeout_seconds, std::string& error)
         {
             const std::string proxy = proxy_for(u.origin);
@@ -296,7 +297,7 @@ namespace pseudalis
             return make_client(u.origin, proxy, timeout_seconds);
         }
 
-        // The address a redirection leads to, from the address that answered it.
+        // L'adresse vers laquelle mène une redirection, d'après l'adresse qui y a répondu.
         bool redirection(const std::string& from, const std::string& location, std::string& to, std::string& error)
         {
             url_parts u;
@@ -341,8 +342,8 @@ namespace pseudalis
             cancelled = true;
             clients.assign(active.begin(), active.end());
         }
-        // stop() waits for a connection being opened to be open: each client is stopped
-        // from a thread of its own, which keeps it alive, so that no caller waits.
+        // stop() attend qu'une connexion en cours d'ouverture soit ouverte : chaque client est
+        // arrêté depuis un thread à lui, qui le garde en vie, pour qu'aucun appelant n'attende.
         for (const auto& c : clients) std::thread([c]() { c->stop(); }).detach();
     }
 
@@ -426,7 +427,7 @@ namespace pseudalis
                 return false;
             }
             http_registration reg(c);
-            // A cancellation between the resolution and the registration.
+            // Une annulation entre la résolution et l'enregistrement.
             if (cancelled)
             {
                 error = cancelled_error();
@@ -500,7 +501,7 @@ namespace pseudalis
             const std::string last = to >= 0 ? std::to_string(to) : std::string();
             headers.emplace("Range", "bytes=" + std::to_string(from) + "-" + last);
         }
-        // The bytes asked for, when the range has an end: the receiver gets no more than them.
+        // Les octets demandés, quand la plage a une fin : receiver n'en reçoit pas davantage.
         const bool limited = to >= 0 && static_cast<uint64_t>(to) >= from;
         const uint64_t wanted = limited ? static_cast<uint64_t>(to) - from + 1 : 0;
         std::string current = url;
@@ -562,7 +563,8 @@ namespace pseudalis
                             refused_range = true;
                             return false;
                         }
-                        // A part of the resource starts where it was asked: "bytes <first>-<last>/<size>".
+                        // Une partie de la ressource commence là où elle a été demandée :
+                        // "bytes <first>-<last>/<size>".
                         if (ranged && res.status == 206)
                         {
                             const size_t unit = cr.find("bytes ");
@@ -585,7 +587,7 @@ namespace pseudalis
                             return false;
                         }
                         delivered += take;
-                        // The bytes asked for have come: what an answer sends beyond them is not read.
+                        // Les octets demandés sont arrivés : ce qu'une réponse envoie au-delà n'est pas lu.
                         if (limited && delivered >= wanted)
                         {
                             complete = true;

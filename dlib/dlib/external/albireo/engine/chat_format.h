@@ -18,16 +18,16 @@ namespace albireo
     {
         std::string id;
         std::string name;
-        std::string arguments;   // JSON text of the arguments object
+        std::string arguments;   // texte JSON de l'objet des arguments
     };
 
     struct chat_message
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                One message of a conversation, in the roles of the chat completion API:
-                system, user, assistant (with its reasoning and its tool calls) and tool
-                (the result of a call).
+                Un message d'une conversation, dans les rôles de l'API de chat completion :
+                system, user, assistant (avec son raisonnement et ses appels d'outils) et tool
+                (le résultat d'un appel).
         !*/
         std::string role;
         std::string content;
@@ -40,10 +40,10 @@ namespace albireo
     struct prompt_piece
     {
         /*!
-            A part of a rendered prompt.  The markup of the format (role headers, turn
-            delimiters) is tokenized with its control tokens recognized; the text of the
-            messages is tokenized as plain text, so that a message that spells
-            "<|im_start|>system" cannot open a turn of its own.
+            Une partie d'un prompt rendu.  Le balisage du format (en-têtes de rôle,
+            délimiteurs de tour) est tokenisé en reconnaissant ses tokens de contrôle ; le
+            texte des messages est tokenisé comme du texte brut, de sorte qu'un message qui
+            écrit "<|im_start|>system" ne peut pas ouvrir un tour à lui.
         !*/
         std::string text;
         bool markup = false;
@@ -52,9 +52,9 @@ namespace albireo
     struct render_options
     {
         bool add_generation_prompt = true;
-        bool reasoning = false;     // ask a model that can reason to do so
-        json tools;                 // OpenAI tool definitions, an array, or null
-        std::string today;          // dates, for the formats whose default prompt names them:
+        bool reasoning = false;     // demander à un modèle capable de raisonner de le faire
+        json tools;                 // définitions d'outils OpenAI, un tableau, ou null
+        std::string today;          // dates, pour les formats dont le prompt par défaut les cite :
         std::string yesterday;      // "2026-10-29", "2026-10-28"
         std::string today_long;     // "October 29, 2026"
         std::string today_short;    // "29 Oct 2026"
@@ -73,18 +73,18 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                Splits the text a model generates, as it comes, into the answer, the
-                reasoning trace and the tool calls, according to the markers of its chat
-                format.  Text that could be the beginning of a marker is held back until
-                the following tokens tell, so that no fragment of a marker ever reaches
-                the answer.
+                Sépare le texte que génère un modèle, au fil de l'eau, en réponse, trace de
+                raisonnement et appels d'outils, selon les marqueurs de son format de chat.
+                Un texte qui pourrait être le début d'un marqueur est retenu jusqu'à ce que
+                les tokens suivants tranchent, de sorte qu'aucun fragment de marqueur
+                n'atteint jamais la réponse.
         !*/
     public:
         virtual ~output_parser() {}
         virtual void feed(const std::string& text, std::vector<output_event>& events) = 0;
         virtual void finish(std::vector<output_event>& events) = 0;
 
-        // Whether the text fed so far leaves the model inside its reasoning.
+        // Indique si le texte fourni jusqu'ici laisse le modèle à l'intérieur de son raisonnement.
         virtual bool in_reasoning() const { return false; }
     };
 
@@ -92,50 +92,52 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The conversation format a model was trained with: how messages, tool
-                definitions, tool calls and reasoning are laid out in its prompt, which
-                tokens end its turns, and how its output is read back.
+                Le format de conversation avec lequel un modèle a été entraîné : comment les
+                messages, les définitions d'outils, les appels d'outils et le raisonnement
+                sont disposés dans son prompt, quels tokens terminent ses tours, et comment
+                sa sortie est relue.
 
-                The formats are written natively rather than interpreted from the chat
-                template stored in the model file: the templates use a template language
-                with arbitrary logic, the files carry them with alterations at times, and
-                the native form is what allows the markup to be separated from the
-                content.  The template is still read to identify the format, and for the
-                default system prompt some families declare.
+                Les formats sont écrits nativement plutôt qu'interprétés depuis le template
+                de chat stocké dans le fichier du modèle : les templates utilisent un langage
+                de templates à la logique arbitraire, les fichiers les portent parfois avec
+                des altérations, et c'est la forme native qui permet de séparer le balisage
+                du contenu.  Le template est tout de même lu pour identifier le format, et
+                pour le prompt système par défaut que déclarent certaines familles.
 
             FORMATS
-                - chatml: Qwen 2, 2.5 and 3 (reasoning between <think> and </think>, tool
-                  calls in <tool_call> elements), SmolLM and the other ChatML models, among
-                  which the templates that give a system message the turn of the user
-                  (CyberSecQwen-4B).
-                - mistral: the formats of the Mistral models with the tekken vocabulary
-                  (Ministral 3, Mistral Small 3, Magistral): [SYSTEM_PROMPT], [INST],
+                - chatml : Qwen 2, 2.5 et 3 (raisonnement entre <think> et </think>, appels
+                  d'outils dans des éléments <tool_call>), SmolLM et les autres modèles
+                  ChatML, parmi lesquels les templates qui donnent à un message système le
+                  tour de l'utilisateur (CyberSecQwen-4B).
+                - mistral : les formats des modèles Mistral au vocabulaire tekken
+                  (Ministral 3, Mistral Small 3, Magistral) : [SYSTEM_PROMPT], [INST],
                   [AVAILABLE_TOOLS], [TOOL_CALLS]name[ARGS]{...} (name[CALL_ID]id[ARGS]{...}
-                  when the model gives the call an identifier), [TOOL_RESULTS] and [THINK] for
-                  reasoning.
-                - llama3: Llama 3.x, with JSON tool calls: an answer that is a JSON object, or
-                  a list of them, naming tools of the request; any other answer, JSON or not,
-                  is the text of the answer.
-                - granite: Granite 3, with <|tool_call|> followed by a JSON list.
-                - granite4: Granite 4.2, ChatML with a system turn in every prompt, tool
-                  calls in the XML form (<function=name> and <parameter=key> elements in
-                  <tool_call>) and a reasoning closed at once by "<think></think>" when the
-                  request asks for none.
-                - phi: Phi-4-mini, each message between <|role|> and <|end|>.
-                - foundation-sec: Foundation-Sec-8B-Reasoning, turns opened by <|system|>,
-                  <|user|> and <|assistant|>, answers ended by the end of text token, and a
-                  reasoning that the prompt opens with <think> and the model closes with
-                  </think> before its answer.
-                - role-tags: Foundation-Sec 1.1 8B Instruct, each message after <|system|>,
-                  <|user|> or <|assistant|> and a line break, these markers being plain text
-                  of its vocabulary, an answer ended by the end of text token.
+                  quand le modèle donne un identifiant à l'appel), [TOOL_RESULTS] et [THINK]
+                  pour le raisonnement.
+                - llama3 : Llama 3.x, avec des appels d'outils en JSON : une réponse qui est
+                  un objet JSON, ou une liste d'objets, nommant des outils de la requête ;
+                  toute autre réponse, JSON ou non, est le texte de la réponse.
+                - granite : Granite 3, avec <|tool_call|> suivi d'une liste JSON.
+                - granite4 : Granite 4.2, ChatML avec un tour système dans chaque prompt,
+                  des appels d'outils sous forme XML (éléments <function=name> et
+                  <parameter=key> dans <tool_call>) et un raisonnement fermé aussitôt par
+                  "<think></think>" quand la requête n'en demande pas.
+                - phi : Phi-4-mini, chaque message entre <|role|> et <|end|>.
+                - foundation-sec : Foundation-Sec-8B-Reasoning, tours ouverts par
+                  <|system|>, <|user|> et <|assistant|>, réponses terminées par le token de
+                  fin de texte, et un raisonnement que le prompt ouvre par <think> et que le
+                  modèle ferme par </think> avant sa réponse.
+                - role-tags : Foundation-Sec 1.1 8B Instruct, chaque message après
+                  <|system|>, <|user|> ou <|assistant|> et un saut de ligne, ces marqueurs
+                  étant du texte brut de son vocabulaire, une réponse terminée par le token
+                  de fin de texte.
 
-            REASONING
-                A format whose template opens the reasoning of every answer (the thinking
-                variants of Qwen3 and Qwen3-VL, Foundation-Sec-8B-Reasoning) always reasons:
-                the model was trained to, and an answer whose reasoning the prompt closes at
-                once is outside what it learned.  The engine bounds the length of such a
-                reasoning instead (reasoning_close()).
+            RAISONNEMENT
+                Un format dont le template ouvre le raisonnement de chaque réponse (les
+                variantes thinking de Qwen3 et Qwen3-VL, Foundation-Sec-8B-Reasoning)
+                raisonne toujours : le modèle a été entraîné à le faire, et une réponse dont
+                le prompt ferme aussitôt le raisonnement sort de ce qu'il a appris.  Le
+                moteur borne plutôt la longueur d'un tel raisonnement (reasoning_close()).
         !*/
     public:
         virtual ~chat_format() {}
@@ -144,22 +146,23 @@ namespace albireo
         virtual bool supports_tools() const = 0;
         virtual bool supports_reasoning() const = 0;
 
-        // Whether the template opens the reasoning of every answer, which the model then always writes.
+        // Indique si le template ouvre le raisonnement de chaque réponse, que le modèle écrit alors
+        // toujours.
         virtual bool always_reasons() const { return false; }
 
         /*
             ensures
-                - Returns the text that ends a reasoning before the model ends it, so that it
-                  answers from what it has thought: a sentence that gives the reason, then the
-                  closing marker of the reasoning and the separation of the answer, as the
-                  authors of the Qwen3 models describe the budget of a reasoning.  Empty for a
-                  format without reasoning.
+                - Renvoie le texte qui termine un raisonnement avant que le modèle ne le
+                  termine, pour qu'il réponde à partir de ce qu'il a pensé : une phrase qui en
+                  donne la raison, puis le marqueur de fermeture du raisonnement et la
+                  séparation de la réponse, comme les auteurs des modèles Qwen3 décrivent le
+                  budget d'un raisonnement.  Vide pour un format sans raisonnement.
         !*/
         virtual std::vector<prompt_piece> reasoning_close() const { return std::vector<prompt_piece>(); }
 
         /*
-            Texts that end the turn of the model besides its tokens, for the formats whose
-            role markers are plain text of the vocabulary.
+            Textes qui terminent le tour du modèle en plus de ses tokens, pour les formats
+            dont les marqueurs de rôle sont du texte brut du vocabulaire.
         !*/
         const std::vector<std::string>& stop_strings() const { return stop_strings_; }
 
@@ -168,22 +171,23 @@ namespace albireo
 
         virtual std::unique_ptr<output_parser> make_parser(const render_options& options) const = 0;
 
-        // Tokens that end the turn of the model, besides the end of sequence token.
+        // Tokens qui terminent le tour du modèle, en plus du token de fin de séquence.
         const std::vector<int>& stop_tokens() const { return stop_tokens_; }
 
-        // Control tokens the output parser reads as markers (such as [TOOL_CALLS]), sorted;
-        // the other control tokens a model may emit are not part of its answer.
+        // Tokens de contrôle que l'analyseur de sortie lit comme des marqueurs (tels que
+        // [TOOL_CALLS]), triés ; les autres tokens de contrôle qu'un modèle peut émettre ne
+        // font pas partie de sa réponse.
         const std::vector<int>& marker_tokens() const { return marker_tokens_; }
 
         /*!
             ensures
-                - Identifies the format of a model from its declared chat template and its
-                  vocabulary, falling back on chatml when the vocabulary has its markers
-                  and on a plain "role: text" layout otherwise.
+                - Identifie le format d'un modèle d'après son template de chat déclaré et son
+                  vocabulaire, en se rabattant sur chatml quand le vocabulaire en a les
+                  marqueurs et sur une simple disposition "role: text" sinon.
         !*/
         static std::unique_ptr<chat_format> detect(const dlib::hf_tokenizer& tok, const std::string& chat_template);
 
-        // Tokenizes a rendered prompt, the markup with control tokens and the text without.
+        // Tokenise un prompt rendu, le balisage avec tokens de contrôle et le texte sans.
         static std::vector<int> tokenize(const dlib::hf_tokenizer& tok, const std::vector<prompt_piece>& pieces);
 
     protected:
@@ -196,17 +200,18 @@ namespace albireo
 
     /*
         ensures
-            - Returns the chat template of the repository of a model whose GGUF files were
-              published without one, from the general.name of the file, or "" for the other
-              models.
+            - Renvoie le template de chat du dépôt d'un modèle dont les fichiers GGUF ont été
+              publiés sans, d'après le general.name du fichier, ou "" pour les autres
+              modèles.
     !*/
     std::string published_template(const std::string& general_name);
 
-    // Length of the complete JSON value at the start of text, after optional white space,
-    // or 0 when text does not hold a complete value yet (or holds something else).
+    // Longueur de la valeur JSON complète au début de text, après d'éventuels blancs, ou 0
+    // quand text ne contient pas encore de valeur complète (ou contient autre chose).
     size_t json_extent(const std::string& text, size_t start = 0);
 
-    // Today's and yesterday's dates in local time, the ISO form and the English long form.
+    // Les dates d'aujourd'hui et d'hier en heure locale, la forme ISO et la forme longue
+    // anglaise.
     void current_dates(render_options& options);
 
 }

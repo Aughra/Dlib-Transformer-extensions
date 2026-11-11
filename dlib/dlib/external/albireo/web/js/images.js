@@ -2,39 +2,40 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    The images of the discussions and of the projects, prepared in this browser.  The browser
-    decodes the file (PNG, JPEG, WebP, the first frame of a GIF, BMP, AVIF and the other formats
-    it reads), the image is scaled so that its longest side is maxSide pixels at most, then
-    encoded as JPEG, or as PNG when it has transparency or when the PNG is smaller, with a
-    thumbnail.
+    Les images des discussions et des projets, préparées dans ce navigateur.  Le navigateur
+    décode le fichier (PNG, JPEG, WebP, la première image d'un GIF, BMP, AVIF et les autres
+    formats qu'il lit), l'image est mise à l'échelle pour que son plus grand côté fasse au plus
+    maxSide pixels, puis encodée en JPEG, ou en PNG quand elle a de la transparence ou quand le
+    PNG est plus petit, avec une vignette.
 
-    The discussions and the projects hold the description of each image only (id, name, type,
-    size, width, height); the images themselves are Blobs kept in the database of the browser
-    (store.js), by their owner, the discussion or the project, or in memory for an incognito
-    discussion.  The requests receive them as data URLs, built from these Blobs when they are
-    sent.  Nothing leaves the browser but these requests to the local service.
+    Les discussions et les projets ne gardent que la description de chaque image (id, name,
+    type, size, width, height) ; les images elles-mêmes sont des Blobs gardés dans la base de
+    données du navigateur (store.js), par leur propriétaire, la discussion ou le projet, ou en
+    mémoire pour une discussion incognito.  Les requêtes les reçoivent sous forme d'URL data,
+    construites à partir de ces Blobs au moment de l'envoi.  Rien ne quitte le navigateur, sauf
+    ces requêtes au service local.
 */
 
 import * as store from './store.js';
 
 export const maxSide = 1536;
-// The size of an image file at most, checked before the file is read.
+// La taille maximale d'un fichier image, vérifiée avant la lecture du fichier.
 export const maxImageBytes = 15 * 1024 * 1024;
 const thumbSide = 192;
 const jpegQuality = 0.9;
 const thumbQuality = 0.82;
 
 /*
-    The images this tab prepared and has not kept yet: id -> {blob, thumb, owner}.  An image leaves this map once it
-    is kept, in the database or in memory, which then gives it.
+    Les images que cet onglet a préparées et pas encore gardées : id -> {blob, thumb, owner}.  Une image quitte cette
+    table une fois gardée, dans la base de données ou en mémoire, qui la fournit ensuite.
 */
 const held = new Map();
-// The images kept in memory only, those of the incognito discussions: id -> record.
+// Les images gardées en mémoire seulement, celles des discussions incognito : id -> enregistrement.
 const memory = new Map();
-// The object URLs of the images shown: id -> {thumb, full}.
+// Les URL d'objet des images affichées : id -> {thumb, full}.
 const urls = new Map();
 
-// A canvas of width by height pixels, outside the page where the browser offers one.
+// Un canvas de width sur height pixels, hors de la page là où le navigateur en propose un.
 function surface(width, height) {
   if (typeof OffscreenCanvas === 'function') return new OffscreenCanvas(width, height);
   const c = document.createElement('canvas');
@@ -49,7 +50,7 @@ function encode(canvas, type, quality) {
     quality));
 }
 
-// True when a pixel of the canvas is not fully opaque.
+// Vrai quand un pixel du canvas n'est pas entièrement opaque.
 function transparent(ctx, width, height) {
   const data = ctx.getImageData(0, 0, width, height).data;
   for (let i = 3; i < data.length; i += 4) if (data[i] !== 255) return true;
@@ -57,9 +58,9 @@ function transparent(ctx, width, height) {
 }
 
 /*
-    The image drawn from source (an ImageBitmap or a canvas) of width by height pixels, scaled to
-    maxSide and encoded: {blob, thumb, width, height}.  opaque tells that the source has no
-    transparency, as a JPEG file or a page of a PDF.
+    L'image dessinée à partir de source (un ImageBitmap ou un canvas) de width sur height pixels,
+    mise à l'échelle de maxSide et encodée : {blob, thumb, width, height}.  opaque indique que la
+    source n'a pas de transparence, comme un fichier JPEG ou une page d'un PDF.
 */
 async function encodeImage(source, width, height, opaque) {
   const scale = Math.min(1, maxSide / Math.max(width, height));
@@ -73,7 +74,7 @@ async function encodeImage(source, width, height, opaque) {
   const alpha = !opaque && transparent(ctx, w, h);
   let blob = await encode(canvas, alpha ? 'image/png' : 'image/jpeg', jpegQuality);
   if (!alpha) {
-    // A screenshot or a drawing of few colors is often smaller as PNG, and keeps its edges sharp.
+    // Une capture d'écran ou un dessin de peu de couleurs est souvent plus petit en PNG, et garde ses bords nets.
     const png = await encode(canvas, 'image/png');
     if (png.size < blob.size) blob = png;
   }
@@ -89,7 +90,7 @@ async function encodeImage(source, width, height, opaque) {
   return { blob, thumb, width: w, height: h };
 }
 
-// The description of an image that the discussions and the projects keep.
+// La description d'une image que gardent les discussions et les projets.
 function metaOf(name, r, source) {
   return {
     id: store.uid(), name, type: r.blob.type, size: r.blob.size, width: r.width, height: r.height,
@@ -98,11 +99,12 @@ function metaOf(name, r, source) {
 }
 
 /*
-    Prepares an image file: decoded by the browser with its orientation, scaled, encoded, and
-    held by this tab until it is kept (keep) or dropped (drop).  Returns its description
-    {id, name, type, size, width, height, added, source: {type, size, width, height}}, or throws
-    "image-too-large" for a file of more than maxImageBytes, before it is read, and
-    "image-unreadable" when the browser cannot decode the file (HEIC or TIFF for instance).
+    Prépare un fichier image : décodé par le navigateur avec son orientation, mis à l'échelle,
+    encodé, et détenu par cet onglet jusqu'à ce qu'il soit gardé (keep) ou abandonné (drop).
+    Renvoie sa description {id, name, type, size, width, height, added, source: {type, size,
+    width, height}}, ou lève "image-too-large" pour un fichier de plus de maxImageBytes, avant de
+    le lire, et "image-unreadable" quand le navigateur ne sait pas décoder le fichier (HEIC ou
+    TIFF par exemple).
 */
 export async function prepare(file, name) {
   if (file.size > maxImageBytes) throw new Error('image-too-large');
@@ -124,7 +126,7 @@ export async function prepare(file, name) {
   }
 }
 
-// Prepares an image drawn in a canvas, such as a page of a PDF rendered by pdf.js, which is opaque.
+// Prépare une image dessinée dans un canvas, comme une page d'un PDF rendue par pdf.js, qui est opaque.
 export async function prepareCanvas(canvas, name) {
   const r = await encodeImage(canvas, canvas.width, canvas.height, true);
   const meta = metaOf(name, r, { type: 'application/pdf', size: 0, width: canvas.width, height: canvas.height });
@@ -133,10 +135,11 @@ export async function prepareCanvas(canvas, name) {
 }
 
 /*
-    Keeps the images of an owner (a discussion or a project) that this tab holds and has not kept
-    yet: in the database of the browser when persistent is true, in memory otherwise.  The
-    images already kept, such as those of a question asked again, are left as they are.  Throws
-    the error of the database, the images staying in memory for this visit.
+    Garde les images d'un propriétaire (une discussion ou un projet) que cet onglet détient et
+    n'a pas encore gardées : dans la base de données du navigateur quand persistent est vrai, en
+    mémoire sinon.  Les images déjà gardées, comme celles d'une question reposée, sont laissées
+    telles quelles.  Lève l'erreur de la base de données, les images restant en mémoire pour
+    cette visite.
 */
 export async function keep(owner, metas, persistent) {
   const records = [];
@@ -159,7 +162,7 @@ export async function keep(owner, metas, persistent) {
   for (const r of records) held.delete(r.id);
 }
 
-// The record of an image: {blob, thumb, ...}, from this tab, from memory or from the database; null when missing.
+// L'enregistrement d'une image : {blob, thumb, ...}, de cet onglet, de la mémoire ou de la base ; null s'il manque.
 async function recordOf(id) {
   const h = held.get(id);
   if (h) return h;
@@ -171,13 +174,13 @@ async function recordOf(id) {
   }
 }
 
-// The Blob of an image, null when it is missing from this browser.
+// Le Blob d'une image, null quand elle manque dans ce navigateur.
 export async function blobOf(id) {
   const r = await recordOf(id);
   return r && r.blob instanceof Blob ? r.blob : null;
 }
 
-// True when the image is available in this browser.
+// Vrai quand l'image est disponible dans ce navigateur.
 export async function available(id) {
   return !!(await blobOf(id));
 }
@@ -194,17 +197,17 @@ async function objectUrl(id, kind) {
   return entry[kind];
 }
 
-// The address of the thumbnail of an image, for the page; null when the image is missing.
+// L'adresse de la vignette d'une image, pour la page ; null quand l'image manque.
 export function thumbUrl(id) {
   return objectUrl(id, 'thumb');
 }
 
-// The address of the image itself, for the viewer; null when the image is missing.
+// L'adresse de l'image elle-même, pour la visionneuse ; null quand l'image manque.
 export function fullUrl(id) {
   return objectUrl(id, 'full');
 }
 
-// The image as a data URL, as a request carries it; null when the image is missing.
+// L'image sous forme d'URL data, comme une requête la transporte ; null quand l'image manque.
 export async function dataUrl(id) {
   const blob = await blobOf(id);
   return blob ? store.dataUrlOf(blob) : null;
@@ -219,7 +222,7 @@ function release(id) {
   }
 }
 
-// Forgets the images prepared and not kept, such as those removed from the composer; a kept image stays.
+// Oublie les images préparées et non gardées, comme celles retirées de la zone de saisie ; une image gardée reste.
 export function drop(ids) {
   for (const id of ids || []) {
     if (!held.has(id)) continue;
@@ -228,12 +231,12 @@ export function drop(ids) {
   }
 }
 
-// Revokes the object URLs of the images whose ids keep does not hold, which the page no longer shows.
+// Révoque les URL d'objet des images dont keep ne contient pas l'id, que la page n'affiche plus.
 export function releaseExcept(keep) {
   for (const id of Array.from(urls.keys())) if (!keep.has(id)) release(id);
 }
 
-// Deletes images, wherever they are kept.
+// Supprime des images, où qu'elles soient gardées.
 export async function remove(ids) {
   const list = Array.from(new Set(ids || []));
   if (!list.length) return;
@@ -245,7 +248,7 @@ export async function remove(ids) {
   await store.deleteImageIds(list).catch(() => {});
 }
 
-// Deletes the images of an owner, a discussion or a project.
+// Supprime les images d'un propriétaire, une discussion ou un projet.
 export async function removeOwner(owner) {
   const ids = [];
   for (const [id, h] of held) if (h.owner === owner) ids.push(id);
@@ -260,7 +263,8 @@ export async function removeOwner(owner) {
   await store.deleteImages(owner).catch(() => {});
 }
 
-// Forgets every image, after the database was emptied, but the images prepared and not kept whose ids keep holds.
+// Oublie toutes les images, après le vidage de la base, sauf les images préparées et non gardées dont keep contient
+// l'id.
 export function removeAll(keep) {
   const stays = (id) => !!keep && keep.has(id) && held.has(id);
   for (const id of Array.from(urls.keys())) if (!stays(id)) release(id);
@@ -269,10 +273,11 @@ export function removeAll(keep) {
 }
 
 /*
-    Deletes the stored images that no owner refers to any longer.  listed are the images of the
-    database {owner, id} read before the discussions and the projects were: an image is stored
-    after the description of its owner, so that one stored meanwhile is never taken for a
-    forgotten one.  references maps each owner to the ids it refers to.
+    Supprime les images stockées auxquelles plus aucun propriétaire ne renvoie.  listed sont les
+    images de la base {owner, id} lues avant les discussions et les projets : une image est
+    stockée après la description de son propriétaire, de sorte qu'une image stockée entre-temps
+    n'est jamais prise pour une image oubliée.  references associe chaque propriétaire aux id
+    auxquels il renvoie.
 */
 export async function prune(listed, references) {
   const gone = listed.filter((k) => !(references.get(k.owner) || new Set()).has(k.id)).map((k) => k.id);
@@ -280,7 +285,7 @@ export async function prune(listed, references) {
   return gone.length;
 }
 
-// The images stored in this browser: {count, bytes}.
+// Les images stockées dans ce navigateur : {count, bytes}.
 export function usage() {
   return store.imageUsage();
 }

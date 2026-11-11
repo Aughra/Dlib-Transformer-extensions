@@ -43,7 +43,7 @@ namespace albireo
             return static_cast<uint16_t>(p[0] << 8 | p[1]);
         }
 
-        // The name of a format the service does not read, from its signature.
+        // Le nom d'un format que le service ne lit pas, d'après sa signature.
         std::string other_format(const std::string& bytes)
         {
             auto starts = [&](const char* s, size_t at) {
@@ -59,8 +59,8 @@ namespace albireo
         }
 
         /*
-            The orientation of an EXIF block (a TIFF header and its first directory), 1 when
-            the block holds none or cannot be read.
+            L'orientation d'un bloc EXIF (un en-tête TIFF et son premier répertoire), 1 quand
+            le bloc n'en contient pas ou ne peut pas être lu.
         */
         int exif_orientation(const uint8_t* p, size_t n)
         {
@@ -118,7 +118,7 @@ namespace albireo
             h.format = image_format::png;
             h.width = static_cast<long>(std::min<uint32_t>(read_be32(p + 16), 0x7FFFFFFF));
             h.height = static_cast<long>(std::min<uint32_t>(read_be32(p + 20), 0x7FFFFFFF));
-            // An eXIf chunk before the pixels gives the orientation.
+            // Un chunk eXIf avant les pixels donne l'orientation.
             size_t at = 8;
             while (at + 12 <= n)
             {
@@ -147,9 +147,9 @@ namespace albireo
             {
                 if (p[at] != 0xFF) refuse("the JPEG image is damaged (invalid marker)");
                 const uint8_t marker = p[at + 1];
-                if (marker == 0xFF) { ++at; continue; }                   // fill byte
+                if (marker == 0xFF) { ++at; continue; }                   // octet de remplissage
                 if (marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) { at += 2; continue; }
-                if (marker == 0xD9 || marker == 0xDA) break;               // end of image, start of scan
+                if (marker == 0xD9 || marker == 0xDA) break;               // fin d'image, début de scan
                 const size_t len = read_be16(p + at + 2);
                 if (len < 2 || at + 2 + len > n) refuse("the JPEG image is damaged (truncated header)");
                 const uint8_t* seg = p + at + 4;
@@ -170,8 +170,8 @@ namespace albireo
             return h;
         }
 
-        // Transparent pixels composited onto white, with the integer arithmetic of
-        // Pillow's alpha_composite, which the reference preprocessing applies.
+        // Pixels transparents composés sur du blanc, avec l'arithmétique entière de
+        // l'alpha_composite de Pillow, qu'applique le prétraitement de référence.
         void composite_on_white(const uint8_t* rgba, uint8_t* rgb, size_t pixels)
         {
             for (size_t i = 0; i < pixels; ++i)
@@ -180,15 +180,15 @@ namespace albireo
                 for (int c = 0; c < 3; ++c)
                 {
                     if (a == 255) { rgb[3 * i + c] = rgba[4 * i + c]; continue; }
-                    // coef1 = a << 7, coef2 = (255 - a) << 7, rounded division by 255.
+                    // coef1 = a << 7, coef2 = (255 - a) << 7, division arrondie par 255.
                     const uint32_t t = rgba[4 * i + c] * (a << 7) + 255u * ((255u - a) << 7) + (0x80u << 7);
                     rgb[3 * i + c] = static_cast<uint8_t>((((t >> 8) + t) >> 8) >> 7);
                 }
             }
         }
 
-        // PNG through libpng.  The decoding functions create every C++ object they hold before
-        // their setjmp, which a failure of the library returns to.
+        // PNG par libpng.  Les fonctions de décodage créent chaque objet C++ qu'elles détiennent
+        // avant leur setjmp, auquel revient un échec de la bibliothèque.
         struct png_reader_state
         {
             const uint8_t* data;
@@ -216,7 +216,7 @@ namespace albireo
             s->at += n;
         }
 
-        // Returns 0, or 1 with the message of libpng in state.message, or 2 when memory is short.
+        // Renvoie 0, ou 1 avec le message de libpng dans state.message, ou 2 quand la mémoire manque.
         int decode_png_pixels(png_reader_state& state, const image_limits& limits, std::vector<uint8_t>& pixels,
             std::vector<png_bytep>& rows, long& width, long& height, int& channels)
         {
@@ -302,7 +302,7 @@ namespace albireo
             return out;
         }
 
-        // JPEG through libjpeg, with the same discipline.
+        // JPEG par libjpeg, avec la même discipline.
         struct jpeg_failure
         {
             jpeg_error_mgr mgr;
@@ -312,9 +312,9 @@ namespace albireo
         };
 
         /*
-            The scans a progressive file may hold.  Each scan reads every block of the image
-            again, so that a file of many small scans would occupy a processor for hours; the
-            encoders write about ten of them.
+            Les scans que peut contenir un fichier progressif.  Chaque scan relit chaque bloc de
+            l'image, de sorte qu'un fichier de nombreux petits scans occuperait un processeur
+            pendant des heures ; les encodeurs en écrivent une dizaine.
         */
         const int max_jpeg_scans = 1000;
 
@@ -325,7 +325,8 @@ namespace albireo
             std::longjmp(f->jump, 1);
         }
 
-        // Called by libjpeg as it reads the scans and the rows: stops a file beyond max_jpeg_scans.
+        // Appelée par libjpeg à mesure qu'elle lit les scans et les lignes : arrête un fichier
+        // au-delà de max_jpeg_scans.
         void albireo_jpeg_progress(j_common_ptr info)
         {
             if (!info->is_decompressor) return;
@@ -353,7 +354,7 @@ namespace albireo
                 return 1;
             }
             jpeg_create_decompress(&info);
-            // Set after jpeg_create_decompress(), which clears the structure.
+            // Positionné après jpeg_create_decompress(), qui efface la structure.
             std::memset(&failure.progress, 0, sizeof(failure.progress));
             failure.progress.progress_monitor = albireo_jpeg_progress;
             info.progress = &failure.progress;
@@ -411,7 +412,7 @@ namespace albireo
                 out.pixels.swap(pixels);
                 return out;
             }
-            // CMYK as Pillow converts it, the files of Adobe storing the inverted values.
+            // CMYK tel que Pillow le convertit, les fichiers d'Adobe stockant les valeurs inversées.
             const size_t n = static_cast<size_t>(w) * h;
             out.pixels.resize(n * 3);
             for (size_t i = 0; i < n; ++i)
@@ -429,7 +430,7 @@ namespace albireo
             return out;
         }
 
-        // The image as displayed for an EXIF orientation, as Pillow's exif_transpose makes it.
+        // L'image telle qu'affichée pour une orientation EXIF, comme la produit exif_transpose de Pillow.
         rgb_image orient(const rgb_image& src, int orientation)
         {
             if (orientation <= 1 || orientation > 8) return src;
@@ -444,13 +445,13 @@ namespace albireo
                     long sx = x, sy = y;
                     switch (orientation)
                     {
-                    case 2: sx = W - 1 - x; break;                              // mirrored
-                    case 3: sx = W - 1 - x; sy = H - 1 - y; break;              // rotated 180
-                    case 4: sy = H - 1 - y; break;                              // flipped
-                    case 5: sx = y; sy = x; break;                              // transposed
-                    case 6: sx = y; sy = H - 1 - x; break;                      // rotated 90 clockwise
-                    case 7: sx = W - 1 - y; sy = H - 1 - x; break;              // transversed
-                    default: sx = W - 1 - y; sy = x; break;                     // rotated 90 anticlockwise
+                    case 2: sx = W - 1 - x; break;                              // en miroir
+                    case 3: sx = W - 1 - x; sy = H - 1 - y; break;              // tournée de 180
+                    case 4: sy = H - 1 - y; break;                              // retournée
+                    case 5: sx = y; sy = x; break;                              // transposée
+                    case 6: sx = y; sy = H - 1 - x; break;                      // tournée de 90 en sens horaire
+                    case 7: sx = W - 1 - y; sy = H - 1 - x; break;              // transversée
+                    default: sx = W - 1 - y; sy = x; break;                     // tournée de 90 en sens antihoraire
                     }
                     const uint8_t* s = src.pixels.data() + 3 * (static_cast<size_t>(sy) * W + sx);
                     uint8_t* d = out.pixels.data() + 3 * (static_cast<size_t>(y) * out.width + x);
@@ -461,7 +462,7 @@ namespace albireo
             return out;
         }
 
-        // Pillow's resampling: the coefficients of one axis.
+        // Le rééchantillonnage de Pillow : les coefficients d'un axe.
         const int resample_bits = 22;
 
         double bicubic_filter(double x)
@@ -509,7 +510,7 @@ namespace albireo
                 for (long x = 0; x < xmax; ++x)
                 {
                     const double w = ww != 0.0 ? k[static_cast<size_t>(x)] / ww : k[static_cast<size_t>(x)];
-                    // Pillow adds or subtracts one half, then truncates toward zero.
+                    // Pillow ajoute ou retranche une moitié, puis tronque vers zéro.
                     weights[static_cast<size_t>(xx * ksize + x)] = static_cast<int32_t>(
                         w < 0.0 ? -0.5 + w * (1 << resample_bits) : 0.5 + w * (1 << resample_bits));
                 }
@@ -547,7 +548,7 @@ namespace albireo
         if (type.compare(0, 6, "image/") != 0) refuse("the data URL does not hold an image (" + type + ")");
         if (meta.size() < 7 || meta.compare(meta.size() - 7, 7, ";base64") != 0)
             refuse("the data URL of an image must be encoded in base64");
-        // The decoded size is checked before any decoding: three bytes per four characters.
+        // La taille décodée est vérifiée avant tout décodage : trois octets pour quatre caractères.
         const size_t text = url.size() - comma - 1;
         if (text / 4 * 3 > max_bytes + 3)
             refuse("the image takes more than " + std::to_string(max_bytes >> 20) + " MB");
@@ -612,7 +613,7 @@ namespace albireo
     {
         const image_header h = read_image_header(bytes, limits);
         rgb_image img = h.format == image_format::png ? decode_png(bytes, limits) : decode_jpeg(bytes, limits);
-        // The stored image is resized to the stored axes of the target, then oriented.
+        // L'image stockée est redimensionnée selon les axes stockés de la cible, puis orientée.
         if (fit_width > 0 && fit_height > 0)
         {
             const bool swap = swaps_axes(h.orientation);
@@ -632,7 +633,7 @@ namespace albireo
             refuse("the sides of the image differ by a ratio over 200");
         const double f = static_cast<double>(factor);
         const double h = static_cast<double>(height), w = static_cast<double>(width);
-        // Python's round(), halves to even, in the default rounding mode.
+        // Le round() de Python, moitiés au pair, dans le mode d'arrondi par défaut.
         long h_bar = static_cast<long>(std::nearbyint(h / f)) * factor;
         long w_bar = static_cast<long>(std::nearbyint(w / f)) * factor;
         if (static_cast<double>(h_bar) * w_bar > static_cast<double>(max_pixels))
@@ -668,7 +669,7 @@ namespace albireo
         if (width == src.width && height == src.height) return src;
         const int32_t round = 1 << (resample_bits - 1);
 
-        // Horizontal pass, into an image of the target width and the source height.
+        // Passe horizontale, dans une image de la largeur cible et de la hauteur source.
         rgb_image mid;
         const rgb_image* in = &src;
         if (width != src.width)
@@ -705,7 +706,7 @@ namespace albireo
         }
         if (height == in->height) return in == &mid ? mid : *in;
 
-        // Vertical pass, a whole row at a time.
+        // Passe verticale, une ligne entière à la fois.
         std::vector<long> bounds;
         std::vector<int32_t> k;
         const long ksize = resample_coefficients(in->height, height, bounds, k, bilinear);
@@ -740,7 +741,7 @@ namespace albireo
 
     std::array<uint8_t, 32> image_digest(const rgb_image& image)
     {
-        // The size first, so that two images of the same pixels in other shapes differ.
+        // La taille d'abord, pour que deux images aux mêmes pixels sous d'autres formes diffèrent.
         uint8_t size[16];
         for (int b = 0; b < 8; ++b)
         {

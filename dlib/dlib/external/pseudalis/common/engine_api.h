@@ -4,67 +4,67 @@
 #define PSEUDALIS_COMMON_ENGINE_API_H_
 
 /*
-    The interface of the engine libraries: pseudalis-engine.dll, built for every x64
-    processor, and pseudalis-engine-avx2.dll, built for the processors with AVX2 and FMA,
-    which the service loads when the processor and Windows offer them (engine_loader.h).
-    Both export the same C functions, so that the service never depends on the compiler or
-    on the options of the engine.
+    L'interface des bibliothèques du moteur : pseudalis-engine.dll, construite pour tout
+    processeur x64, et pseudalis-engine-avx2.dll, construite pour les processeurs dotés d'AVX2 et
+    de FMA, que le service charge quand le processeur et Windows les proposent (engine_loader.h).
+    Les deux exportent les mêmes fonctions C, pour que le service ne dépende jamais du compilateur
+    ni des options du moteur.
 
-    An engine holds the models of the detector and the key of the pseudonymization; it
-    processes several files at once, each call on the thread of its caller.
+    Un moteur détient les modèles du détecteur et la clé de la pseudonymisation ; il traite
+    plusieurs fichiers à la fois, chaque appel sur le thread de son appelant.
 
         psd_process(engine, request, data, size, picture, lookup, context, &result, &output, &error)
 
-    request is a JSON object:
+    request est un objet JSON :
         "operation"     "anonymize", "restore", "anonymize_text", "restore_text", "detect",
-                        "anonymize_name", "restore_name" or "extract"
-        "name"          the name of the file, whose extension tells its kind when its
-                        content does not
-        "entry"         "extract": the path of an entry in the archive given as data
-        "tags"          "anonymize" and "anonymize_text": false writes each value of the text
-                        as its substitute, without its tag (true by default)
-        "substitutions" [{"substitute", "tag"}]: the substitutes of the text of a file or of
-                        a text protected without tags, which "restore" and "restore_text" give
-                        back and "anonymize" leaves as they are
-    result receives a JSON object: "name" (the name of the output, protected or restored:
-    "photo.png.txt" for a picture), "kind" ("txt", "csv", "xml", "docx", "xlsx", "pptx",
-    "pdf", "image", "zip", "tar", "tar.gz" or "text"), "report" ({"values": {type: count},
-    "removed": [...], "notes": [...], "dropped": [entries of an archive left out],
+                        "anonymize_name", "restore_name" ou "extract"
+        "name"          le nom du fichier, dont l'extension indique le type quand son contenu
+                        ne l'indique pas
+        "entry"         "extract" : le chemin d'une entrée dans l'archive donnée en données
+        "tags"          "anonymize" et "anonymize_text" : false écrit chaque valeur du texte sous
+                        la forme de son substitut, sans son étiquette (true par défaut)
+        "substitutions" [{"substitute", "tag"}] : les substituts du texte d'un fichier ou d'un
+                        texte protégé sans étiquettes, que "restore" et "restore_text" rendent
+                        et que "anonymize" laisse tels quels
+    result reçoit un objet JSON : "name" (le nom de la sortie, protégée ou restaurée :
+    "photo.png.txt" pour une image), "kind" ("txt", "csv", "xml", "docx", "xlsx", "pptx",
+    "pdf", "image", "zip", "tar", "tar.gz" ou "text"), "report" ({"values": {type: nombre},
+    "removed": [...], "notes": [...], "dropped": [entrées d'une archive laissées de côté],
     "tags_restored", "tags_rejected", "substitutes", "substitutes_restored", "pictures_removed"
-    (the picture markers that "restore" removed, which no restoration gives back into a
+    (les marqueurs d'image que "restore" a retirés, qu'aucune restauration ne remet dans un
     document)}), "pictures"
-    (the identifiers of the pictures found) and, for "anonymize" and "anonymize_name",
-    "substitutions" ([{"substitute", "tag"}]: the values written without their tags in the
-    names and the properties, which the caller records for "restore", and, "text": true, in
-    the text without tags, once for each place); "substitutions" too for "anonymize_text"
-    without tags; "spans" for "detect".  output receives the bytes of the file written.  "anonymize_name" and
-    "restore_name" take a name alone as data, a folder for instance, and give the new name
-    as output and as "name".
-    "anonymize" of an archive also gives "entries", each entry written: [{"original" (its
-    path in the archive read), "name" (its path in the archive written), "sha256" (of the
-    bytes written), "kind"}], the entries of an archive inside the archive after it, their
-    paths after its own and '!' ("dossier/notes.tar.gz!a.txt").  The caller knows by them a
-    file extracted from a protected archive.  "extract" gives as output the bytes of the
-    entry "entry" of the archive given as data, read as "anonymize" read it: an "original"
-    of "entries", whose original archive the caller kept.
+    (les identifiants des images trouvées) et, pour "anonymize" et "anonymize_name",
+    "substitutions" ([{"substitute", "tag"}] : les valeurs écrites sans leurs étiquettes dans
+    les noms et les propriétés, que l'appelant enregistre pour "restore", et, avec "text": true,
+    dans le texte sans étiquettes, une fois par emplacement) ; "substitutions" aussi pour
+    "anonymize_text" sans étiquettes ; "spans" pour "detect".  output reçoit les octets du fichier
+    écrit.  "anonymize_name" et "restore_name" prennent un nom seul en données, un dossier par
+    exemple, et donnent le nouveau nom en sortie et dans "name".
+    "anonymize" d'une archive donne aussi "entries", chaque entrée écrite : [{"original" (son
+    chemin dans l'archive lue), "name" (son chemin dans l'archive écrite), "sha256" (des octets
+    écrits), "kind"}], les entrées d'une archive contenue dans l'archive venant après elle, leurs
+    chemins après le sien et '!' ("dossier/notes.tar.gz!a.txt").  Grâce à elles, l'appelant
+    reconnaît un fichier extrait d'une archive protégée.  "extract" donne en sortie les octets de
+    l'entrée "entry" de l'archive donnée en données, lue comme "anonymize" l'a lue : un
+    "original" de "entries", dont l'appelant a gardé l'archive d'origine.
 
-    lookup, when not null, receives each candidate substitute that "restore" and
-    "restore_name" meet in the names and the properties, and returns 1 with the tags
-    recorded for it in *tags, one per line, the most likely first (a buffer the engine
-    releases with psd_free(), allocated with psd_alloc()), or 0 when it knows none.
-    "anonymize" and "anonymize_name" ask it too, so that a substitute written before, in a
-    name or a property edited since, is not replaced again.
+    lookup, quand il n'est pas nul, reçoit chaque substitut candidat que "restore" et
+    "restore_name" rencontrent dans les noms et les propriétés, et renvoie 1 avec les étiquettes
+    enregistrées pour lui dans *tags, une par ligne, la plus probable d'abord (un tampon que le
+    moteur libère avec psd_free(), alloué avec psd_alloc()), ou 0 quand il n'en connaît aucune.
+    "anonymize" et "anonymize_name" l'interrogent aussi, pour qu'un substitut écrit auparavant,
+    dans un nom ou une propriété modifiés depuis, ne soit pas remplacé une seconde fois.
 
-    picture, when not null, receives each picture found: in a document (Word, PowerPoint,
-    PDF), in an archive, or the file itself, with its identifier (16 hexadecimal digits of a
-    digest of the picture keyed by the key of the engine), its SHA-256 and its media type, and
-    returns 1 with its description in clear in *description (a buffer the engine releases with
-    psd_free(), allocated with psd_alloc()), or 0 without description.  The engine protects the
-    description with the detector, with what the document taught it besides, and writes
-    "[Image@<identifier> : <description>]" in the place of the picture, or "[Image@<identifier>]"
-    without description.
+    picture, quand il n'est pas nul, reçoit chaque image trouvée : dans un document (Word,
+    PowerPoint, PDF), dans une archive, ou le fichier lui-même, avec son identifiant (16 chiffres
+    hexadécimaux d'une empreinte de l'image calculée avec la clé du moteur), son SHA-256 et son
+    type de média, et renvoie 1 avec sa description en clair dans *description (un tampon que le
+    moteur libère avec psd_free(), alloué avec psd_alloc()), ou 0 sans description.  Le moteur
+    protège la description avec le détecteur, en tenant compte en plus de ce que le document lui
+    a appris, et écrit "[Image@<identifier> : <description>]" à la place de l'image, ou
+    "[Image@<identifier>]" sans description.
 
-    Each function returns 1 on success, 0 on failure with the reason in error (UTF-8).
+    Chaque fonction renvoie 1 en cas de succès, 0 en cas d'échec avec la raison dans error (UTF-8).
 */
 
 #include <stddef.h>
@@ -100,32 +100,32 @@ typedef int (PSD_CALL* psd_lookup_fn)(void* context, const char* candidate, size
 typedef struct psd_engine psd_engine;
 
 PSD_API int PSD_CALL psd_api_version(void);
-// "avx2" or "baseline".
+// "avx2" ou "baseline".
 PSD_API const char* PSD_CALL psd_variant(void);
 /*
-    The version and the build of the engine, "1.0.0+20261103170000-0123abcd": the service loads
-    only the engine of its own build, which the installer placed beside it.
+    La version et le build du moteur, "1.0.0+20261103170000-0123abcd" : le service ne charge que
+    le moteur de son propre build, que l'installateur a placé à côté de lui.
 */
 PSD_API const char* PSD_CALL psd_build(void);
-// The models of the engine: {"tagger": source, "span_model": source, "size": "tiny"}.
+// Les modèles du moteur : {"tagger": source, "span_model": source, "size": "tiny"}.
 PSD_API int PSD_CALL psd_models(psd_buffer* description);
 
 /*
-    Creates an engine with a key of 32 bytes, and options as a JSON object: "date_order"
-    ("dmy" or "mdy"), "context" (the context of the pseudonymization, "default").
+    Crée un moteur avec une clé de 32 octets, et des options sous forme d'objet JSON :
+    "date_order" ("dmy" ou "mdy"), "context" (le contexte de la pseudonymisation, "default").
 */
 PSD_API psd_engine* PSD_CALL psd_create(const char* key, size_t key_size, const char* options, psd_buffer* error);
 PSD_API void PSD_CALL psd_destroy(psd_engine* engine);
 PSD_API int PSD_CALL psd_process(psd_engine* engine, const char* request, const char* data, size_t size,
     psd_picture_fn picture, psd_lookup_fn lookup, void* context, psd_buffer* result, psd_buffer* output,
     psd_buffer* error);
-// The fingerprint of the key, as the reports give it.
+// L'empreinte de la clé, telle que les rapports la donnent.
 PSD_API int PSD_CALL psd_key_fingerprint(psd_engine* engine, psd_buffer* fingerprint);
 /*
-    Replaces the imposed terms of the engine (common/imposed_terms.h): terms is a JSON list
-    [{"term", "type", "case_sensitive"}] of size bytes, which the calls that start afterwards
-    read before anything else of their texts.  0, with the reason in error, for a list the
-    service does not take, the terms of the engine then unchanged.
+    Remplace les termes imposés du moteur (common/imposed_terms.h) : terms est une liste JSON
+    [{"term", "type", "case_sensitive"}] de size octets, que les appels qui démarrent ensuite
+    lisent avant tout le reste de leurs textes.  0, avec la raison dans error, pour une liste que
+    le service n'accepte pas, les termes du moteur restant alors inchangés.
 */
 PSD_API int PSD_CALL psd_set_terms(psd_engine* engine, const char* terms, size_t size, psd_buffer* error);
 

@@ -15,7 +15,7 @@
 namespace albireo
 {
 
-    // Helpers
+    // Utilitaires
 
     size_t json_extent(const std::string& text, size_t start)
     {
@@ -25,7 +25,7 @@ namespace albireo
         const char first = text[i];
         if (first != '{' && first != '[')
         {
-            // A scalar is complete when a delimiter follows it; the parse decides.
+            // Un scalaire est complet quand un délimiteur le suit ; l'analyse tranche.
             size_t j = i;
             if (first == '"')
             {
@@ -137,9 +137,9 @@ namespace albireo
             }
         }
 
-        // The arguments of a call as JSON text: an object given as a string is kept as
-        // written, an empty one becomes {}, and an object is written as the templates write
-        // it (json.dumps), with a space after each separator.
+        // Les arguments d'un appel en texte JSON : un objet donné sous forme de chaîne est gardé
+        // tel qu'écrit, un objet vide devient {}, et un objet est écrit comme l'écrivent les
+        // templates (json.dumps), avec une espace après chaque séparateur.
         std::string arguments_text(const json& args)
         {
             if (args.is_string()) return args.as_string().empty() ? std::string("{}") : args.as_string();
@@ -148,10 +148,11 @@ namespace albireo
         }
 
         /*
-            Parses the JSON of a tool call as a model writes it.  The models write the code
-            and the texts they pass to a tool with raw line breaks and tabs in its strings,
-            which the grammar forbids.  When the text does not parse as it is, these characters
-            are escaped and the result parsed again, and repaired receives it.
+            Analyse le JSON d'un appel d'outil tel qu'un modèle l'écrit.  Les modèles écrivent le
+            code et les textes qu'ils passent à un outil avec des sauts de ligne et des
+            tabulations bruts dans ses chaînes, ce que la grammaire interdit.  Quand le texte ne
+            s'analyse pas tel quel, ces caractères sont échappés et le résultat analysé à
+            nouveau, et repaired le reçoit.
         */
         bool parse_call_json(const std::string& text, json& out, std::string& repaired)
         {
@@ -203,9 +204,10 @@ namespace albireo
         }
 
         /*
-            The text of the value of member key in the JSON object written in text, or of
-            the member of its "function" object, as written; empty when it has none.  A
-            model writes the arguments of a call as it was trained to, which this keeps.
+            Le texte de la valeur du membre key dans l'objet JSON écrit dans text, ou du
+            membre de son objet "function", tel qu'écrit ; vide quand il n'en a pas.  Un
+            modèle écrit les arguments d'un appel comme il a été entraîné à le faire, ce que
+            cette fonction conserve.
         */
         std::string member_text(const std::string& text, const std::string& key)
         {
@@ -240,9 +242,9 @@ namespace albireo
             return std::string();
         }
 
-        /*  The string literal a template assigns to a variable, as in
-            {%- set default_system_message = '...' %}, with its escapes resolved; empty
-            when the template has no such assignment.  */
+        /*  Le littéral de chaîne qu'un template affecte à une variable, comme dans
+            {%- set default_system_message = '...' %}, ses échappements résolus ; vide
+            quand le template n'a pas d'affectation de ce genre.  */
         std::string template_string(const std::string& tmpl, const std::string& variable)
         {
             size_t pos = tmpl.find("set " + variable);
@@ -287,9 +289,9 @@ namespace albireo
         };
 
         /*
-            The end of a reasoning that reached its budget (chat_format::reasoning_close()): the
-            sentence the authors of Qwen3 give for it, then the closing marker of the format and
-            the separation of the answer.
+            La fin d'un raisonnement qui a atteint son budget (chat_format::reasoning_close()) : la
+            phrase que donnent pour cela les auteurs de Qwen3, puis le marqueur de fermeture du
+            format et la séparation de la réponse.
         */
         std::vector<prompt_piece> closing(const std::string& marker, const std::string& after)
         {
@@ -303,7 +305,7 @@ namespace albireo
         }
     }
 
-    // Output parsing
+    // Analyse de la sortie
 
     namespace
     {
@@ -311,9 +313,9 @@ namespace albireo
         {
             none,
             tagged_object,   // <tool_call>{"name":..,"arguments":..}</tool_call>
-            mistral,         // [TOOL_CALLS]name[ARGS]{...}, name[CALL_ID]id[ARGS]{...} or [TOOL_CALLS][{...}]
+            mistral,         // [TOOL_CALLS]name[ARGS]{...}, name[CALL_ID]id[ARGS]{...} ou [TOOL_CALLS][{...}]
             json_list,       // <|tool_call|>[{"name":..,"arguments":..}]
-            whole_json,      // the whole answer is {"name":..,"parameters":..} naming a tool of the request
+            whole_json,      // la réponse entière est {"name":..,"parameters":..} nommant un outil de la requête
             xml_function     // <tool_call><function=name><parameter=key>value</parameter></function></tool_call>
         };
 
@@ -323,9 +325,9 @@ namespace albireo
             bool starts_in_reasoning = false;
             call_style calls = call_style::none;
             std::string call_open, call_close;
-            std::string call_open_alt;   // a second spelling of the opening marker
-            json tools;                  // the definitions of the tools: the types of the XML parameters, the
-                                         // names a whole JSON answer may call
+            std::string call_open_alt;   // une seconde graphie du marqueur d'ouverture
+            json tools;                  // les définitions des outils : les types des paramètres XML, les
+                                         // noms qu'une réponse JSON entière peut appeler
         };
 
         class tag_parser : public output_parser
@@ -334,8 +336,8 @@ namespace albireo
             explicit tag_parser(const parser_config& c) : c_(c)
             {
                 state_ = c_.starts_in_reasoning ? state::reasoning : state::content;
-                // A reasoning the prompt opens loses its leading line breaks, and the opening
-                // marker a model writes again.
+                // Un raisonnement qu'ouvre le prompt perd ses sauts de ligne initiaux, ainsi que le
+                // marqueur d'ouverture qu'un modèle écrit à nouveau.
                 strip_leading_ = c_.starts_in_reasoning;
                 reopen_ = c_.starts_in_reasoning;
                 if (!c_.think_open.empty()) opens_.push_back(c_.think_open);
@@ -356,7 +358,7 @@ namespace albireo
                 process(events, true);
                 if (c_.calls == call_style::whole_json && !held_.empty())
                 {
-                    // The held answer is a call, or the answer as the model wrote it.
+                    // La réponse retenue est un appel, ou la réponse telle que le modèle l'a écrite.
                     std::string held;
                     held.swap(held_);
                     decided_whole_ = true;
@@ -364,7 +366,7 @@ namespace albireo
                 }
                 if (!buffer_.empty())
                 {
-                    // A call left unfinished, or an unterminated reasoning block.
+                    // Un appel laissé inachevé, ou un bloc de raisonnement non terminé.
                     emit(state_ == state::reasoning ? output_kind::reasoning : output_kind::content,
                         state_ == state::call ? call_prefix_ + buffer_ : buffer_, events);
                     buffer_.clear();
@@ -379,8 +381,8 @@ namespace albireo
                 if (t.empty()) return;
                 if (k == output_kind::content && c_.calls == call_style::whole_json && !decided_whole_)
                 {
-                    // The answer is held until it is known not to be a call, the beginning of the
-                    // python tag included.
+                    // La réponse est retenue jusqu'à ce qu'on sache qu'elle n'est pas un appel, le début
+                    // de la balise python compris.
                     static const std::string tag = "<|python_tag|>";
                     held_ += t;
                     const size_t first = held_.find_first_not_of(" \n\r\t");
@@ -405,8 +407,9 @@ namespace albireo
             }
 
             /*
-                A call, with the identifier the model gave it when it is one of the identifiers
-                the formats use (letters, digits, '_' and '-', 64 at most), else a new one.
+                Un appel, avec l'identifiant que le modèle lui a donné quand c'est l'un des
+                identifiants qu'utilisent les formats (lettres, chiffres, '_' et '-', 64 au plus),
+                sinon un nouveau.
             */
             void emit_call(const std::string& name, const std::string& args, std::vector<output_event>& events,
                 const std::string& id = std::string())
@@ -422,7 +425,7 @@ namespace albireo
                 events.push_back(e);
             }
 
-            // Whether the definitions of the tools of the request name a function name.
+            // Indique si les définitions des outils de la requête nomment une fonction name.
             bool declared_tool(const std::string& name) const
             {
                 if (name.empty()) return false;
@@ -435,9 +438,9 @@ namespace albireo
             }
 
             /*
-                A call given as an object {"name", "arguments"} or {"function": {...}}; text,
-                when given, is the object as the model wrote it, whose arguments are then
-                passed on as written when they are an object.
+                Un appel donné sous forme d'objet {"name", "arguments"} ou {"function": {...}} ;
+                text, quand il est donné, est l'objet tel que le modèle l'a écrit, dont les
+                arguments sont alors transmis tels qu'écrits quand ils sont un objet.
             */
             bool emit_call_object(const json& j, std::vector<output_event>& events, const std::string& text = "")
             {
@@ -458,10 +461,11 @@ namespace albireo
             }
 
             /*
-                The calls of the text between two call markers, a JSON object or several in a
-                row, possibly in a fenced block.  The closing braces a model writes beyond its
-                last object, after code with braces of its own, are left aside.  False, emitting
-                nothing, when the text holds anything else.
+                Les appels du texte entre deux marqueurs d'appel, un objet JSON ou plusieurs à la
+                suite, éventuellement dans un bloc délimité.  Les accolades fermantes qu'un modèle
+                écrit au-delà de son dernier objet, après du code ayant ses propres accolades,
+                sont laissées de côté.  False, sans rien émettre, quand le texte contient autre
+                chose.
             */
             bool emit_calls(const std::string& body, std::vector<output_event>& events)
             {
@@ -494,7 +498,7 @@ namespace albireo
                 return true;
             }
 
-            // The type the definition of a tool gives to one of its parameters, or "".
+            // Le type que la définition d'un outil donne à l'un de ses paramètres, ou "".
             std::string parameter_type(const std::string& function, const std::string& key) const
             {
                 for (const auto& t : c_.tools.elements())
@@ -507,9 +511,9 @@ namespace albireo
             }
 
             /*
-                The value of a parameter of the XML form: a string when the definition of the
-                tool declares a string, else the JSON value the text spells, with True, False
-                and None as Python writes them, else the text as a string.
+                La valeur d'un paramètre de la forme XML : une chaîne quand la définition de
+                l'outil déclare une chaîne, sinon la valeur JSON qu'écrit le texte, avec True,
+                False et None tels que Python les écrit, sinon le texte sous forme de chaîne.
             */
             json xml_value(const std::string& function, const std::string& key, const std::string& text) const
             {
@@ -525,12 +529,12 @@ namespace albireo
             }
 
             /*
-                The calls of the text between two call markers in the XML form of Granite 4.2
-                and Qwen3-Coder: <function=name> elements that hold <parameter=key> elements,
-                whose value is the text between their markers, less the line break after the
-                opening marker and the one before the closing marker.  A model may stop before
-                the closing marker of its last function.  False, emitting nothing, when the text
-                holds anything else.
+                Les appels du texte entre deux marqueurs d'appel dans la forme XML de Granite 4.2
+                et Qwen3-Coder : des éléments <function=name> qui contiennent des éléments
+                <parameter=key>, dont la valeur est le texte entre leurs marqueurs, moins le saut
+                de ligne après le marqueur d'ouverture et celui avant le marqueur de fermeture.
+                Un modèle peut s'arrêter avant le marqueur de fermeture de sa dernière fonction.
+                False, sans rien émettre, quand le texte contient autre chose.
             */
             bool emit_xml_calls(const std::string& body, std::vector<output_event>& events)
             {
@@ -580,9 +584,9 @@ namespace albireo
             }
 
             /*
-                The calls of an answer that is a whole JSON value: an object, or a list of
-                objects, each naming one of the tools of the request.  False, emitting nothing,
-                for any other answer, which is then the text of the answer.
+                Les appels d'une réponse qui est une valeur JSON entière : un objet, ou une liste
+                d'objets, chacun nommant l'un des outils de la requête.  False, sans rien émettre,
+                pour toute autre réponse, qui est alors le texte de la réponse.
             */
             bool emit_whole_json(const std::string& text, std::vector<output_event>& events)
             {
@@ -609,7 +613,7 @@ namespace albireo
                 return true;
             }
 
-            // Length of the longest suffix of buffer_ that begins one of the markers.
+            // Longueur du plus long suffixe de buffer_ qui commence l'un des marqueurs.
             size_t partial_suffix(const std::vector<std::string>& markers) const
             {
                 size_t best = 0;
@@ -629,7 +633,7 @@ namespace albireo
                 {
                     if (state_ == state::content)
                     {
-                        // The blank lines that separate the reasoning from the answer.
+                        // Les lignes vides qui séparent le raisonnement de la réponse.
                         if (skip_content_newlines_)
                         {
                             const size_t a = buffer_.find_first_not_of('\n');
@@ -641,7 +645,7 @@ namespace albireo
                             buffer_.erase(0, a);
                             skip_content_newlines_ = false;
                         }
-                        // Earliest opening marker.
+                        // Marqueur d'ouverture le plus précoce.
                         size_t at = std::string::npos;
                         const std::string* which = nullptr;
                         for (const auto& m : opens_)
@@ -697,7 +701,7 @@ namespace albireo
                         const size_t p = buffer_.find(c_.think_close);
                         if (p == std::string::npos)
                         {
-                            // Trailing newlines may precede the closing marker: held too.
+                            // Des sauts de ligne finaux peuvent précéder le marqueur de fermeture : retenus aussi.
                             size_t keep = final ? 0 : partial_suffix({ c_.think_close });
                             if (!final)
                                 while (keep < buffer_.size() && buffer_[buffer_.size() - keep - 1] == '\n') ++keep;
@@ -719,7 +723,7 @@ namespace albireo
                 }
             }
 
-            // Consumes one call from buffer_; false when more text is needed.
+            // Consomme un appel de buffer_ ; false quand il faut davantage de texte.
             bool parse_call(std::vector<output_event>& events, bool final)
             {
                 if (c_.calls == call_style::tagged_object || c_.calls == call_style::xml_function)
@@ -728,7 +732,7 @@ namespace albireo
                     const size_t p = find_marker(c_.call_close);
                     if (p == std::string::npos)
                     {
-                        // A model may end its turn after the object, without the closing marker.
+                        // Un modèle peut terminer son tour après l'objet, sans le marqueur de fermeture.
                         if (final)
                         {
                             if (!(xml ? emit_xml_calls(buffer_, events) : emit_calls(buffer_, events)))
@@ -776,7 +780,7 @@ namespace albireo
                     reset_scans();
                     return true;
                 }
-                // mistral: name[ARGS]{...}, or name[CALL_ID]id[ARGS]{...} with the identifier of the call
+                // mistral : name[ARGS]{...}, ou name[CALL_ID]id[ARGS]{...} avec l'identifiant de l'appel
                 static const std::string args_marker = "[ARGS]", id_marker = "[CALL_ID]";
                 const size_t a = find_marker(args_marker);
                 if (a == std::string::npos)
@@ -827,8 +831,8 @@ namespace albireo
             }
 
             /*
-                Position of a marker in buffer_, the search starting where the previous one
-                ended without finding it, since a call grows by a token at a time.
+                Position d'un marqueur dans buffer_, la recherche partant de là où la précédente
+                s'est arrêtée sans le trouver, puisqu'un appel grandit d'un token à la fois.
             */
             size_t find_marker(const std::string& marker)
             {
@@ -839,8 +843,9 @@ namespace albireo
             }
 
             /*
-                Length of the complete JSON value at start in buffer_, as json_extent() gives
-                it.  The scan of an object or a list resumes where the previous call left it.
+                Longueur de la valeur JSON complète à start dans buffer_, telle que la donne
+                json_extent().  Le parcours d'un objet ou d'une liste reprend là où l'appel
+                précédent l'a laissé.
             */
             size_t value_extent(size_t start)
             {
@@ -883,15 +888,15 @@ namespace albireo
                 return 0;
             }
 
-            // Forgets the scans of buffer_, whose text changed at its start.
+            // Oublie les parcours de buffer_, dont le texte a changé à son début.
             void reset_scans()
             {
                 scanned_ = 0;
                 extent_ = extent_state();
             }
 
-            // Where the scan of a JSON value at start stopped: its depth, inside a string or after
-            // a backslash of one.
+            // Où s'est arrêté le parcours d'une valeur JSON à start : sa profondeur, à l'intérieur
+            // d'une chaîne ou après une barre oblique inverse de celle-ci.
             struct extent_state
             {
                 size_t start = std::string::npos;
@@ -912,7 +917,7 @@ namespace albireo
             bool strip_leading_ = false;
             bool reopen_ = false;
             bool skip_content_newlines_ = false;
-            // The bytes of buffer_ searched for a marker of the call without finding it.
+            // Les octets de buffer_ où l'on a cherché un marqueur de l'appel sans le trouver.
             size_t scanned_ = 0;
             extent_state extent_;
         };
@@ -934,21 +939,22 @@ namespace albireo
                 tools_ = tmpl.find("<tool_call>") != std::string::npos || tmpl.find("tools") != std::string::npos;
                 const bool think_tokens = tok.token_id("<think>") >= 0 && tok.token_id("</think>") >= 0;
                 switchable_ = think_tokens && tmpl.find("enable_thinking") != std::string::npos;
-                // A template whose switch opens the reasoning in one of its branches reasons on demand.
+                // Un template dont l'interrupteur ouvre le raisonnement dans l'une de ses branches raisonne
+                // à la demande.
                 opens_ = think_tokens && tmpl.find("<|im_start|>assistant\\n<think>\\n'") != std::string::npos;
                 always_thinks_ = opens_ && !switchable_;
                 const std::string qwen = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant.";
                 const std::string smollm = "You are a helpful AI assistant named SmolLM, trained by Hugging Face";
                 if (tmpl.find(qwen) != std::string::npos) default_system_ = qwen;
                 else if (tmpl.find(smollm) != std::string::npos) default_system_ = smollm;
-                // The templates that trim the text of the messages (EuroLLM).
+                // Les templates qui rognent le texte des messages (EuroLLM).
                 trims_ = tmpl.find("message['content'] | trim") != std::string::npos;
-                // The templates that give a system message the turn of the user (CyberSecQwen-4B).
+                // Les templates qui donnent à un message système le tour de l'utilisateur (CyberSecQwen-4B).
                 system_role_ = tmpl.find("!= 'system' else 'user'") != std::string::npos ? "user" : "system";
                 /*
-                    The template of Qwen2.5 writes the form of a call between double braces in a
-                    string of the template, which Jinja leaves as they are: the models of that
-                    family read "{{" and "}}" there.
+                    Le template de Qwen2.5 écrit la forme d'un appel entre doubles accolades dans
+                    une chaîne du template, que Jinja laisse telles quelles : les modèles de cette
+                    famille y lisent "{{" et "}}".
                 */
                 doubled_ = tmpl.find("{{\\\"name\\\": <function-name>") != std::string::npos;
                 add_markers(tok, { "<think>", "</think>", "<tool_call>", "</tool_call>" });
@@ -999,7 +1005,7 @@ namespace albireo
                     w.markup("<|im_start|>system\n" + default_system_ + "<|im_end|>\n");
                 }
 
-                // The last real query: reasoning is kept for the turns after it only.
+                // La dernière vraie question : le raisonnement n'est gardé que pour les tours qui la suivent.
                 long last_query = static_cast<long>(messages.size()) - 1;
                 for (long i = static_cast<long>(messages.size()) - 1; i >= 0; --i)
                 {
@@ -1027,9 +1033,9 @@ namespace albireo
                         std::string content = body(m.content);
                         std::string reasoning = m.reasoning;
                         /*
-                            The templates that reason split an answer at its </think> markers, the
-                            reasoning ending at the first and the answer following the last; the
-                            others keep the answer as written.
+                            Les templates qui raisonnent coupent une réponse à ses marqueurs </think>,
+                            le raisonnement finissant au premier et la réponse suivant le dernier ;
+                            les autres gardent la réponse telle qu'écrite.
                         */
                         if (reasoning.empty() && supports_reasoning())
                         {
@@ -1082,9 +1088,9 @@ namespace albireo
                 {
                     w.markup("<|im_start|>assistant\n");
                     /*
-                        A template that always opens the reasoning (the thinking variants) opens
-                        it whatever the request asks, the engine bounding its length; a
-                        switchable template closes it at once when the request asks for none.
+                        Un template qui ouvre toujours le raisonnement (les variantes thinking)
+                        l'ouvre quoi que demande la requête, le moteur en bornant la longueur ; un
+                        template commutable le ferme aussitôt quand la requête n'en demande pas.
                     */
                     if (opens(opt)) w.markup("<think>\n");
                     else if (switchable_ && !opt.reasoning) w.markup("<think>\n\n</think>\n\n");
@@ -1111,7 +1117,8 @@ namespace albireo
 
         private:
             bool tools_ = false;
-            // Whether the prompt opens the reasoning: always, or when asked for a switchable template that does.
+            // Indique si le prompt ouvre le raisonnement : toujours, ou sur demande pour un template
+            // commutable qui le fait.
             bool opens(const render_options& opt) const
             {
                 return always_thinks_ || (switchable_ && opens_ && opt.reasoning);
@@ -1266,7 +1273,7 @@ namespace albireo
                 size_t first = 0;
                 const bool tools = opt.tools.is_array() && !opt.tools.empty();
                 std::string system;
-                // The templates of the family trim the messages, the results of the tools aside.
+                // Les templates de la famille rognent les messages, hormis les résultats des outils.
                 if (!messages.empty() && messages[0].role == "system")
                 {
                     system = strip_spaces(messages[0].content);
@@ -1308,7 +1315,7 @@ namespace albireo
                     w.markup("<|start_header_id|>" + role + "<|end_header_id|>\n\n");
                     if (m.role == "user" && !tools_given)
                     {
-                        // Llama 3.1 puts the definitions in the first user message.
+                        // Llama 3.1 place les définitions dans le premier message de l'utilisateur.
                         w.markup("Given the following functions, please respond with a JSON for a function call with "
                             "its proper arguments that best answers the given prompt.\n\nRespond in the format "
                             "{\"name\": function name, \"parameters\": dictionary of argument name and its value}."
@@ -1331,7 +1338,7 @@ namespace albireo
                 parser_config c;
                 if (opt.tools.is_array() && !opt.tools.empty())
                 {
-                    // A whole answer in JSON is a call only when it names a tool of the request.
+                    // Une réponse entière en JSON n'est un appel que si elle nomme un outil de la requête.
                     c.calls = call_style::whole_json;
                     c.tools = opt.tools;
                 }
@@ -1372,7 +1379,7 @@ namespace albireo
                 }
                 else
                 {
-                    // The default system message of the current reference template.
+                    // Le message système par défaut du template de référence actuel.
                     w.markup("Knowledge Cutoff Date: April 2024.\nToday's Date: " + opt.today_long
                         + ".\nYou are Granite, developed by IBM." + (tools
                         ? " You are a helpful AI assistant with access to the following tools. When a tool is "
@@ -1393,8 +1400,8 @@ namespace albireo
                     const chat_message& m = messages[i];
                     w.markup("<|start_of_role|>" + m.role + "<|end_of_role|>");
                     w.text(m.content);
-                    // The reference template drops the calls of an assistant message; they are
-                    // written back as the model wrote them.
+                    // Le template de référence retire les appels d'un message de l'assistant ; ils
+                    // sont réécrits tels que le modèle les a écrits.
                     if (m.role == "assistant" && !m.tool_calls.empty())
                     {
                         json list = json::array();
@@ -1420,7 +1427,7 @@ namespace albireo
                 {
                     c.calls = call_style::json_list;
                     c.call_open = "<|tool_call|>";
-                    // The smaller models of the family write the marker as plain text.
+                    // Les plus petits modèles de la famille écrivent le marqueur en texte brut.
                     c.call_open_alt = "<tool_call>";
                 }
                 return std::unique_ptr<output_parser>(new tag_parser(c));
@@ -1431,11 +1438,11 @@ namespace albireo
         // Granite 4.2
 
         /*
-            The ChatML of Granite 4.2: a system turn in every prompt, the tools in a <tools>
-            element of it with calls in the XML form (<function=name> and <parameter=key>
-            elements in <tool_call>), and a reasoning that the prompt opens with "<think>\n"
-            or closes at once with "<think></think>".  The assistant turns before the last
-            query keep their answer only.
+            Le ChatML de Granite 4.2 : un tour système dans chaque prompt, les outils dans un
+            élément <tools> de celui-ci avec des appels sous forme XML (éléments <function=name>
+            et <parameter=key> dans <tool_call>), et un raisonnement que le prompt ouvre par
+            "<think>\n" ou ferme aussitôt par "<think></think>".  Les tours de l'assistant avant
+            la dernière question ne gardent que leur réponse.
         */
         class granite4_format : public chat_format
         {
@@ -1453,7 +1460,7 @@ namespace albireo
             const char* name() const override { return "granite4"; }
             bool supports_tools() const override { return true; }
             bool supports_reasoning() const override { return true; }
-            // The template writes a line break after </think>, before the answer.
+            // Le template écrit un saut de ligne après </think>, avant la réponse.
             std::vector<prompt_piece> reasoning_close() const override { return closing("</think>", "\n"); }
 
             void render(const std::vector<chat_message>& messages, const render_options& opt,
@@ -1510,7 +1517,7 @@ namespace albireo
                         {
                             if (earlier)
                             {
-                                // The text after the reasoning, or before a reasoning left open.
+                                // Le texte après le raisonnement, ou avant un raisonnement laissé ouvert.
                                 std::string c = m.content;
                                 if (!given && close != std::string::npos) c = c.substr(close + 8);
                                 else if (!given && open != std::string::npos) c = c.substr(0, open);
@@ -1545,7 +1552,7 @@ namespace albireo
                         const bool both = open != std::string::npos && close != std::string::npos;
                         if (earlier && (given || none || both))
                         {
-                            // The earlier answers keep the text after their reasoning.
+                            // Les réponses précédentes gardent le texte qui suit leur raisonnement.
                             std::string c = close != std::string::npos ? m.content.substr(close + 8)
                                 : given ? "\n" + m.content : m.content;
                             w.markup("<think></think>");
@@ -1594,8 +1601,8 @@ namespace albireo
             }
 
         private:
-            // A value as the string filter of the templates writes it: str() of Python for the
-            // strings, numbers and constants, JSON for the objects and the arrays.
+            // Une valeur telle que l'écrit le filtre string des templates : str() de Python pour les
+            // chaînes, les nombres et les constantes, JSON pour les objets et les tableaux.
             static std::string python_text(const json& v)
             {
                 if (v.is_string()) return v.as_string();
@@ -1611,9 +1618,9 @@ namespace albireo
             }
 
             /*
-                The answer of the turn being worked on, trimmed as the template trims it: the
-                reasoning given apart between its markers, an empty reasoning before an answer
-                that has none, or the content as the model wrote it.
+                La réponse du tour en cours de traitement, rognée comme le template la rogne : le
+                raisonnement donné à part entre ses marqueurs, un raisonnement vide avant une
+                réponse qui n'en a pas, ou le contenu tel que le modèle l'a écrit.
             */
             static void write_answer(piece_writer& w, const chat_message& m, bool given, size_t open, size_t close)
             {
@@ -1638,20 +1645,20 @@ namespace albireo
         };
 
         /*
-            The format of Foundation-Sec-8B-Reasoning, as its template lays it out once rendered
-            with the line breaks after the tags and the spaces before them removed, as the
-            libraries that apply chat templates render it: <|system|> and <|user|> followed by a
-            line break and their text, <|assistant|> followed at once by its answer and the end of
-            text token, each turn after the previous one without a line break between them.  The
-            template gives its own system prompt when the conversation has none, and keeps of the
-            earlier answers the text after their reasoning.  The other roles are left out, as the
-            template leaves them.  The prompt opens the reasoning with <think> after <|assistant|>
-            and a line break, as the template of the model does since its update of February 2026,
-            everything before </think> being the reasoning.  The template of the GGUF file of the
-            catalog, an earlier one, leaves that marker to the model, which then may answer
-            without reasoning, an answer read as a reasoning never closed.  The template opens the
-            reasoning of every answer: the model always reasons, the engine bounding the length of
-            the reasoning of a request that asks for none.
+            Le format de Foundation-Sec-8B-Reasoning, tel que son template le dispose une fois rendu
+            avec les sauts de ligne après les balises et les espaces avant elles retirés, comme le
+            rendent les bibliothèques qui appliquent les templates de chat : <|system|> et <|user|>
+            suivis d'un saut de ligne et de leur texte, <|assistant|> suivi aussitôt de sa réponse
+            et du token de fin de texte, chaque tour suivant le précédent sans saut de ligne entre
+            eux.  Le template donne son propre prompt système quand la conversation n'en a pas, et
+            garde des réponses précédentes le texte qui suit leur raisonnement.  Les autres rôles
+            sont omis, comme le template les omet.  Le prompt ouvre le raisonnement par <think>
+            après <|assistant|> et un saut de ligne, comme le fait le template du modèle depuis sa
+            mise à jour de février 2026, tout ce qui précède </think> étant le raisonnement.  Le
+            template du fichier GGUF du catalogue, plus ancien, laisse ce marqueur au modèle, qui
+            peut alors répondre sans raisonner, une réponse lue comme un raisonnement jamais fermé.
+            Le template ouvre le raisonnement de chaque réponse : le modèle raisonne toujours, le
+            moteur bornant la longueur du raisonnement d'une requête qui n'en demande pas.
         */
         class foundation_sec_format : public chat_format
         {
@@ -1665,7 +1672,7 @@ namespace albireo
                 }
                 bos_ = tok.bos_id() >= 0 ? tok.id_to_token(tok.bos_id()) : std::string();
                 eos_ = tok.eos_id() >= 0 ? tok.id_to_token(tok.eos_id()) : std::string("<|end_of_text|>");
-                // The system prompt of the template, in the branch without a system message.
+                // Le prompt système du template, dans la branche sans message système.
                 const size_t branch = tmpl.find("if not has_system");
                 const size_t open = branch == std::string::npos ? branch : tmpl.find("<|system|>", branch);
                 const size_t end = open == std::string::npos ? open : tmpl.find("{%", open);
@@ -1727,14 +1734,14 @@ namespace albireo
         };
 
         /*
-            The format of Foundation-Sec 1.1 8B Instruct, as the template of the repository of
-            the model lays it out (its GGUF files come without one, published_template()): each
-            message after <|system|>, <|user|> or <|assistant|> and a line break, followed by a
-            line break, an answer ended by the end of text token, and <|assistant|> with a line
-            break to let the model answer.  These markers are plain text of the Llama 3.1
-            vocabulary of the model, so that a model that goes on past its answer writes one of
-            them as text, which ends its turn (stop_strings()).  The other roles are left out, as
-            the template leaves them.
+            Le format de Foundation-Sec 1.1 8B Instruct, tel que le dispose le template du dépôt
+            du modèle (ses fichiers GGUF n'en ont pas, published_template()) : chaque message
+            après <|system|>, <|user|> ou <|assistant|> et un saut de ligne, suivi d'un saut de
+            ligne, une réponse terminée par le token de fin de texte, et <|assistant|> avec un
+            saut de ligne pour laisser le modèle répondre.  Ces marqueurs sont du texte brut du
+            vocabulaire Llama 3.1 du modèle, de sorte qu'un modèle qui continue au-delà de sa
+            réponse en écrit un sous forme de texte, ce qui termine son tour (stop_strings()).
+            Les autres rôles sont omis, comme le template les omet.
         */
         class role_tags_format : public chat_format
         {
@@ -1787,12 +1794,13 @@ namespace albireo
             std::string eos_;
         };
 
-        // Plain
+        // Brut
 
         /*
-            The format of Phi-4-mini: each message between <|role|> and <|end|>, with no line
-            break, and <|assistant|> to let the model answer.  The tool messages are given as
-            the user turns that carry their results; the tools themselves are not offered.
+            Le format de Phi-4-mini : chaque message entre <|role|> et <|end|>, sans saut de
+            ligne, et <|assistant|> pour laisser le modèle répondre.  Les messages d'outil sont
+            donnés comme les tours de l'utilisateur qui portent leurs résultats ; les outils
+            eux-mêmes ne sont pas proposés.
         */
         class phi_format : public chat_format
         {
@@ -1892,12 +1900,12 @@ namespace albireo
         if (has("<|system|>") && has("<|user|>") && has("<|assistant|>") && !has("<|end|>")
             && tok.token_id("<|system|>") >= 0 && tok.token_id("<|user|>") >= 0 && tok.token_id("<|assistant|>") >= 0)
             return std::unique_ptr<chat_format>(new foundation_sec_format(tok, tmpl));
-        // The same markers as plain text of the vocabulary (Foundation-Sec 1.1 8B Instruct).
+        // Les mêmes marqueurs en texte brut du vocabulaire (Foundation-Sec 1.1 8B Instruct).
         if (has("'<|system|>\n' + message['content']") && has("'<|assistant|>\n'") && !has("<|end|>")
             && tok.token_id("<|system|>") < 0)
             return std::unique_ptr<chat_format>(new role_tags_format(tok));
-        // A file published without its template: the control tokens of the vocabulary name
-        // the family of the model.
+        // Un fichier publié sans son template : les tokens de contrôle du vocabulaire désignent
+        // la famille du modèle.
         if (tmpl.empty())
         {
             if (tok.token_id("<|start_header_id|>") >= 0 && tok.token_id("<|eot_id|>") >= 0)
@@ -1913,12 +1921,13 @@ namespace albireo
     std::vector<int> chat_format::tokenize(const dlib::hf_tokenizer& tok, const std::vector<prompt_piece>& pieces)
     {
         /*
-            The markup is searched for control tokens; the text between two of them, markup
-            and messages together, is encoded in one go so that the pre-tokenizer sees it as
-            the reference tokenizer would see the whole prompt.  The text of the messages is
-            never searched for control tokens.  A SentencePiece vocabulary that adds a leading
-            space puts it before each of these stretches, as the reference tokenizers do when
-            they split a prompt on its control tokens (the Prepend normalizer of EuroLLM).
+            On cherche les tokens de contrôle dans le balisage ; le texte entre deux d'entre eux,
+            balisage et messages ensemble, est encodé d'un seul tenant pour que le pré-tokenizer
+            le voie comme le tokenizer de référence verrait le prompt entier.  On ne cherche
+            jamais de tokens de contrôle dans le texte des messages.  Un vocabulaire
+            SentencePiece qui ajoute une espace initiale la place avant chacun de ces segments,
+            comme le font les tokenizers de référence quand ils coupent un prompt sur ses tokens
+            de contrôle (le normaliseur Prepend d'EuroLLM).
         */
         std::vector<int> ids;
         std::string pending;
@@ -1935,11 +1944,11 @@ namespace albireo
                 pending += p.text;
                 continue;
             }
-            // Without the leading space of SentencePiece, so that the stretches spell the
-            // markup back as written.
+            // Sans l'espace initiale de SentencePiece, pour que les segments restituent le
+            // balisage tel qu'écrit.
             const std::vector<int> marked = tok.encode(p.text, false, false, true, false);
-            // Split the markup on its control tokens, by encoding it with them recognized
-            // and spelling the remaining stretches back.
+            // Couper le balisage sur ses tokens de contrôle, en l'encodant avec ceux-ci reconnus
+            // et en restituant les segments restants.
             std::string stretch;
             for (int id : marked)
             {
@@ -1965,8 +1974,8 @@ namespace albireo
     std::string published_template(const std::string& general_name)
     {
         /*
-            Foundation-Sec 1.1 8B Instruct: the chat_template.jinja of fdtn-ai/Foundation-Sec-1.1-8B-Instruct,
-            whose GGUF files carry none.
+            Foundation-Sec 1.1 8B Instruct : le chat_template.jinja de fdtn-ai/Foundation-Sec-1.1-8B-Instruct,
+            dont les fichiers GGUF n'en portent pas.
         */
         if (general_name.find("Foundation Sec 1.1") != std::string::npos
             && general_name.find("Instruct") != std::string::npos)

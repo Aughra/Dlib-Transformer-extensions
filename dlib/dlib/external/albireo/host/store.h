@@ -19,31 +19,31 @@ namespace albireo
 
     struct installed_model
     {
-        std::string id;              // identifier of the catalog, or of the import
+        std::string id;              // identifiant du catalogue, ou de l'import
         std::string name;
-        std::string file;            // absolute path of the GGUF file
+        std::string file;            // chemin absolu du fichier GGUF
         uint64_t size = 0;
-        std::string sha256;          // of the file as installed
-        std::string source;          // "catalog", "import" or "builtin"
+        std::string sha256;          // du fichier tel qu'installé
+        std::string source;          // "catalog", "import" ou "builtin"
         int64_t installed_at = 0;
-        int64_t verified_at = 0;     // last successful check of the hashes
-        json descriptor;             // the catalog entry, or what the import learned
-        // The projector of a model that reads images (an mmproj file, general.architecture
-        // "clip", which holds the vision encoder): its absolute path, its size and its SHA-256.
-        // Empty for a model that reads text only.
+        int64_t verified_at = 0;     // dernière vérification réussie des empreintes
+        json descriptor;             // l'entrée du catalogue, ou ce que l'import a appris
+        // Le projecteur d'un modèle qui lit les images (un fichier mmproj, general.architecture
+        // "clip", qui contient l'encodeur de vision) : son chemin absolu, sa taille et son
+        // SHA-256.  Vide pour un modèle qui ne lit que du texte.
         std::string projector;
         uint64_t projector_size = 0;
         std::string projector_sha256;
     };
 
-    // A projector that arrived without its decoder, kept in the models folder until a
-    // decoder it goes with is installed.
+    // Un projecteur arrivé sans son décodeur, gardé dans le dossier des modèles jusqu'à
+    // l'installation d'un décodeur qui va avec lui.
     struct pending_projector
     {
         std::string sha256;
-        std::string file;            // absolute path, in the models folder
+        std::string file;            // chemin absolu, dans le dossier des modèles
         uint64_t size = 0;
-        std::string name;            // the name of the file it came from
+        std::string name;            // le nom du fichier d'où il vient
         json descriptor;             // describe_gguf()
         int64_t received_at = 0;
     };
@@ -52,23 +52,24 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The database of the service (SQLite, in the data folder): the installed
-                models with their projectors, the projectors waiting for their decoders,
-                the state of the downloads, so that an interrupted one resumes where it
-                stopped, the daily usage figures and a few named values.
+                La base de données du service (SQLite, dans le dossier des données) : les
+                modèles installés avec leurs projecteurs, les projecteurs qui attendent leurs
+                décodeurs, l'état des téléchargements, pour qu'un téléchargement interrompu
+                reprenne là où il s'est arrêté, les chiffres d'utilisation quotidiens et
+                quelques valeurs nommées.
 
-                A database of an earlier version receives the columns of the projectors
-                when it opens.  The constructor checks every page of the database (PRAGMA
-                quick_check) and throws an error that names it "malformed" when one fails.
+                Une base d'une version antérieure reçoit les colonnes des projecteurs à son
+                ouverture.  Le constructeur vérifie chaque page de la base (PRAGMA
+                quick_check) et lève une erreur qui la dit "malformed" quand l'une échoue.
 
-                Every function locks the database for its duration, so that the threads
-                of the server, of the downloads and of the engine may share it.
+                Chaque fonction verrouille la base pendant sa durée, pour que les threads du
+                serveur, des téléchargements et du moteur puissent la partager.
 
-                A failure throws the error of SQLite, which the callers report.  The
-                database held by another program is waited for five seconds.  SQLite opens a
-                file it cannot write read-only, and its connection stays so: a write that
-                fails on it opens the connection again, so that the writes work again as
-                soon as the file can be written.
+                Un échec lève l'erreur de SQLite, que les appelants signalent.  Une base tenue
+                par un autre programme est attendue cinq secondes.  SQLite ouvre en lecture
+                seule un fichier qu'il ne peut pas écrire, et sa connexion le reste : une
+                écriture qui y échoue rouvre la connexion, pour que les écritures remarchent dès
+                que le fichier peut être écrit.
         !*/
     public:
         explicit store(const std::string& path);
@@ -80,12 +81,12 @@ namespace albireo
         void remove_model(const std::string& id);
         void set_verified(const std::string& id, int64_t when);
 
-        // The projectors waiting for their decoders, oldest first.
+        // Les projecteurs qui attendent leurs décodeurs, les plus anciens d'abord.
         std::vector<pending_projector> projectors();
         void put_projector(const pending_projector& p);
         void remove_projector(const std::string& sha256);
 
-        // Download jobs: the parts received so far are recorded by index.
+        // Téléchargements : les parties reçues jusqu'ici sont enregistrées par indice.
         json download_state(const std::string& id);
         void set_download_state(const std::string& id, const json& state);
         void remove_download_state(const std::string& id);
@@ -98,9 +99,10 @@ namespace albireo
         void set_value(const std::string& key, const std::string& v);
 
     private:
-        // Opens the connection and sets its options; m_ is held, or the store is being built.
+        // Ouvre la connexion et règle ses options ; m_ est tenu, ou le store est en construction.
         void connect();
-        // Runs a write; a connection that SQLite opened read-only is opened again once.  m_ is held.
+        // Exécute une écriture ; une connexion que SQLite a ouverte en lecture seule est rouverte une
+        // fois.  m_ est tenu.
         void writing(const std::function<void()>& work);
 
         std::mutex m_;

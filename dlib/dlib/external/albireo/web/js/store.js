@@ -2,11 +2,11 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    The data of the application, kept in the IndexedDB database of this browser for the
-    origin of the local server: the discussions with their messages, the projects with
-    their instructions and documents, the passages of the documents with their vectors for
-    the document search, the images of the discussions and of the projects, and the
-    preferences.  Nothing is sent anywhere; an incognito discussion never reaches this module.
+    Les données de l'application, gardées dans la base IndexedDB de ce navigateur pour
+    l'origine du serveur local : les discussions avec leurs messages, les projets avec leurs
+    instructions et leurs documents, les passages des documents avec leurs vecteurs pour la
+    recherche documentaire, les images des discussions et des projets, et les préférences.
+    Rien n'est envoyé nulle part ; une discussion incognito n'atteint jamais ce module.
 */
 
 const DB_NAME = 'albireo';
@@ -20,12 +20,13 @@ function request(r) {
   });
 }
 
-// The opening in progress, which the calls made meanwhile share.
+// L'ouverture en cours, que partagent les appels faits entre-temps.
 let opening = null;
 
 /*
-    The error of an opening that a tab of an earlier version blocked.  The browser queues every later opening behind
-    the blocked one, so that the calls of this visit fail at once with this error instead of waiting.
+    L'erreur d'une ouverture qu'un onglet d'une version antérieure a bloquée.  Le navigateur met en file toutes les
+    ouvertures suivantes derrière celle qui est bloquée, si bien que les appels de cette visite échouent aussitôt avec
+    cette erreur au lieu d'attendre.
 */
 let blocked = null;
 
@@ -35,8 +36,8 @@ export function open() {
   if (!opening) {
     opening = connect().then((d) => {
       /*
-          When a newer version of the application upgrades the database in another tab, this tab
-          lets it go and opens it again at its next access.
+          Quand une version plus récente de l'application met à niveau la base dans un autre onglet,
+          cet onglet la lâche et la rouvre à son prochain accès.
       */
       d.onversionchange = () => {
         d.close();
@@ -60,24 +61,25 @@ async function connect() {
     }
     if (!d.objectStoreNames.contains('projects')) d.createObjectStore('projects', { keyPath: 'id' });
     if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', { keyPath: 'key' });
-    // The passages of the documents: {id, owner (project or discussion), doc, ordinal, text,
+    // Les passages des documents : {id, owner (projet ou discussion), doc, ordinal, text,
     // where, model, vector}.
     if (!d.objectStoreNames.contains('chunks')) {
       const c = d.createObjectStore('chunks', { keyPath: 'id' });
       c.createIndex('owner', 'owner');
       c.createIndex('doc', 'doc');
     }
-    // The images of the discussions and of the projects (images.js): {id, owner, name, type, size, width,
-    // height, added, blob, thumb}, the image and its thumbnail as Blobs.
+    // Les images des discussions et des projets (images.js) : {id, owner, name, type, size, width,
+    // height, added, blob, thumb}, l'image et sa vignette sous forme de Blobs.
     if (!d.objectStoreNames.contains('images')) {
       const i = d.createObjectStore('images', { keyPath: 'id' });
       i.createIndex('owner', 'owner');
     }
   };
   /*
-      A tab of an earlier version that keeps the database open blocks its upgrade: the opening then fails with a
-      BlockedError, and so do the next calls of this visit (open).  The connection the browser opens once that tab
-      closed, with the database upgraded, is closed at once: the next visit reads the database.
+      Un onglet d'une version antérieure qui garde la base ouverte bloque sa mise à niveau : l'ouverture échoue alors
+      avec une BlockedError, de même que les appels suivants de cette visite (open).  La connexion que le navigateur
+      ouvre une fois cet onglet fermé, avec la base mise à niveau, est fermée aussitôt : la visite suivante lit la
+      base.
   */
   return new Promise((resolve, reject) => {
     r.onsuccess = () => {
@@ -98,7 +100,7 @@ function store(name, mode) {
   return db.transaction(name, mode).objectStore(name);
 }
 
-// The end of a transaction.
+// La fin d'une transaction.
 function completed(tx) {
   return new Promise((resolve, reject) => {
     tx.oncomplete = resolve;
@@ -131,9 +133,9 @@ export async function putConversation(c) {
 }
 
 /*
-    Changes stored discussions in place, in one transaction, so that the messages another tab
-    saved meanwhile stay: fn(record) changes the record read from the database and returns
-    true to save it.  The discussion of id only, when id is given.
+    Modifie sur place des discussions stockées, en une transaction, pour que les messages qu'un
+    autre onglet a enregistrés entre-temps restent : fn(record) modifie l'enregistrement lu dans
+    la base et renvoie true pour l'enregistrer.  Seulement la discussion de id, quand id est donné.
 */
 export async function updateConversations(fn, id) {
   await open();
@@ -149,9 +151,9 @@ export async function updateConversations(fn, id) {
 }
 
 /*
-    Deletes a discussion: its record first, in a transaction of its own, then its passages and its images.  The
-    passages and the images that a tab closed meanwhile leaves are pruned at the next start (app.js, pruneIndex and
-    pruneImages).
+    Supprime une discussion : son enregistrement d'abord, dans une transaction à part, puis ses passages et ses
+    images.  Les passages et les images que laisse un onglet fermé entre-temps sont élagués au démarrage suivant
+    (app.js, pruneIndex et pruneImages).
 */
 export async function deleteConversation(id) {
   await open();
@@ -182,8 +184,8 @@ export async function putProject(p) {
 export async function deleteProject(id) {
   await open();
   /*
-      The discussions of the project stay, outside of any project.  They change in place, in one
-      transaction with the deletion of the project, through the index of their projects.
+      Les discussions du projet restent, hors de tout projet.  Elles sont modifiées sur place, dans
+      une même transaction que la suppression du projet, par l'index de leurs projets.
   */
   const tx = db.transaction(['conversations', 'projects'], 'readwrite');
   const r = tx.objectStore('conversations').index('project').openCursor(IDBKeyRange.only(id));
@@ -201,8 +203,8 @@ export async function deleteProject(id) {
 }
 
 /*
-    Replaces the passages of the document docId with records, in one transaction: a tab closed meanwhile leaves
-    either the former passages or the new ones.
+    Remplace les passages du document docId par records, en une transaction : un onglet fermé entre-temps laisse
+    soit les anciens passages, soit les nouveaux.
 */
 export async function replaceChunks(docId, records) {
   await open();
@@ -216,7 +218,7 @@ export async function replaceChunks(docId, records) {
       c.continue();
       return;
     }
-    // The former passages deleted, the new ones are written by the same transaction.
+    // Les anciens passages supprimés, les nouveaux sont écrits par la même transaction.
     for (const r of records) s.put(r);
   };
   await completed(tx);
@@ -227,15 +229,15 @@ export async function chunksOf(owner) {
   return request(store('chunks', 'readonly').index('owner').getAll(owner));
 }
 
-// The passages of one document.
+// Les passages d'un document.
 export async function chunksOfDocument(docId) {
   await open();
   return request(store('chunks', 'readonly').index('doc').getAll(docId));
 }
 
 /*
-    The state of the documents of an owner, read passage by passage without keeping the passages: Map doc ->
-    {passages, vectors, model}, vectors counting the passages that hold a vector of model.
+    L'état des documents d'un propriétaire, lu passage par passage sans garder les passages : Map doc ->
+    {passages, vectors, model}, vectors comptant les passages qui contiennent un vecteur de model.
 */
 export async function chunkStatus(owner, model) {
   await open();
@@ -256,7 +258,7 @@ export async function chunkStatus(owner, model) {
   return out;
 }
 
-// The documents that have passages: one {owner, doc} per document, read from one passage of each.
+// Les documents qui ont des passages : un {owner, doc} par document, lu dans un passage de chacun.
 export async function chunkDocuments() {
   await open();
   const tx = db.transaction('chunks', 'readonly');
@@ -272,7 +274,7 @@ export async function chunkDocuments() {
   return out;
 }
 
-// Deletes the passages of an owner ('owner') or of a document ('doc').
+// Supprime les passages d'un propriétaire ('owner') ou d'un document ('doc').
 export async function deleteChunks(index, key) {
   await open();
   const tx = db.transaction('chunks', 'readwrite');
@@ -287,7 +289,7 @@ export async function deleteChunks(index, key) {
   await completed(tx);
 }
 
-// The images.
+// Les images.
 export async function putImages(records) {
   await open();
   if (!records.length) return;
@@ -302,7 +304,7 @@ export async function getImage(id) {
   return request(store('images', 'readonly').get(id));
 }
 
-// The images of an owner, or of every owner: [{owner, id}], read from the index without the images.
+// Les images d'un propriétaire, ou de tous : [{owner, id}], lues dans l'index sans les images.
 export async function imageKeys(owner) {
   await open();
   const tx = db.transaction('images', 'readonly');
@@ -318,7 +320,7 @@ export async function imageKeys(owner) {
   return out;
 }
 
-// Deletes the images of an owner.
+// Supprime les images d'un propriétaire.
 export async function deleteImages(owner) {
   await open();
   const tx = db.transaction('images', 'readwrite');
@@ -342,7 +344,7 @@ export async function deleteImageIds(ids) {
   await completed(tx);
 }
 
-// The images stored: {count, bytes}, the bytes of the images and of their thumbnails.
+// Les images stockées : {count, bytes}, les octets des images et de leurs vignettes.
 export async function imageUsage() {
   await open();
   const tx = db.transaction('images', 'readonly');
@@ -359,7 +361,7 @@ export async function imageUsage() {
   return { count, bytes };
 }
 
-// A Blob as a data URL ("data:image/jpeg;base64,...").
+// Un Blob sous forme d'URL data ("data:image/jpeg;base64,...").
 export function dataUrlOf(blob) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -369,8 +371,8 @@ export function dataUrlOf(blob) {
   });
 }
 
-// The Blob of a data URL of an image, decoded here, since the page reads no address outside its origin; null for
-// another text.
+// Le Blob d'une URL data d'une image, décodé ici, puisque la page ne lit aucune adresse hors de son origine ; null
+// pour un autre texte.
 function blobOfDataUrl(text) {
   const m = /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=]*)$/i.exec(String(text || ''));
   if (!m) return null;
@@ -394,8 +396,9 @@ export async function setSetting(key, value) {
 }
 
 /*
-    Takes the lease of key for owner until the time until, in one transaction, so that two tabs
-    never both take it.  Returns true when the lease was free, expired or already held by owner.
+    Prend le bail de key pour owner jusqu'à l'instant until, en une transaction, pour que deux
+    onglets ne le prennent jamais tous les deux.  Renvoie true quand le bail était libre, expiré
+    ou déjà détenu par owner.
 */
 export async function claimLease(key, owner, until) {
   await open();
@@ -413,7 +416,7 @@ export async function claimLease(key, owner, until) {
   return taken;
 }
 
-// Gives the lease of key back, when owner holds it.
+// Rend le bail de key, quand owner le détient.
 export async function releaseLease(key, owner) {
   await open();
   const tx = db.transaction('settings', 'readwrite');
@@ -427,8 +430,8 @@ export async function releaseLease(key, owner) {
 }
 
 /*
-    Everything stored, as a JSON file in a Blob built record by record, the images as data URLs, so that no single
-    string holds the whole export.
+    Tout ce qui est stocké, sous forme de fichier JSON dans un Blob construit enregistrement par enregistrement, les
+    images en URL data, pour qu'aucune chaîne ne contienne à elle seule tout l'export.
 */
 export async function exportAll() {
   await open();
@@ -452,10 +455,10 @@ export async function exportAll() {
   return new Blob(parts, { type: 'application/json' });
 }
 
-// The identifiers the application gives its records, which its addresses (#/c/..., #/p/...) take.
+// Les identifiants que l'application donne à ses enregistrements, que prennent ses adresses (#/c/..., #/p/...).
 const recordId = /^[0-9a-f]{1,64}$/;
 
-// The objects of a list, none for another value.
+// Les objets d'une liste, aucun pour une autre valeur.
 function objects(list) {
   return Array.isArray(list) ? list.filter((x) => x !== null && typeof x === 'object' && !Array.isArray(x)) : [];
 }
@@ -465,9 +468,9 @@ function text(value) {
 }
 
 /*
-    A discussion of an export as the application reads it: null without a valid identifier or messages; the
-    messages other than questions and answers are left out, and the lists and the texts the pages read take their
-    types.
+    Une discussion d'un export telle que l'application la lit : null sans identifiant valide ou sans messages ; les
+    messages autres que les questions et les réponses sont laissés de côté, et les listes et les textes que lisent
+    les pages prennent leurs types.
 */
 function cleanConversation(c) {
   if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !recordId.test(c.id) || !Array.isArray(c.messages)) {
@@ -500,7 +503,7 @@ function cleanConversation(c) {
   });
 }
 
-// A project of an export as the application reads it, null without a valid identifier or name.
+// Un projet d'un export tel que l'application le lit, null sans identifiant ou nom valide.
 function cleanProject(p) {
   if (!p || typeof p !== 'object' || typeof p.id !== 'string' || !recordId.test(p.id) || typeof p.name !== 'string') {
     return null;
@@ -515,8 +518,9 @@ function cleanProject(p) {
 }
 
 /*
-    Imports an export: {conversations, projects, images, ids}, the counts of the records kept and the identifiers
-    of the discussions imported.  The records the pages could not read are left out.
+    Importe un export : {conversations, projects, images, ids}, les nombres d'enregistrements gardés et les
+    identifiants des discussions importées.  Les enregistrements que les pages ne sauraient pas lire sont laissés
+    de côté.
 */
 export async function importAll(data) {
   if (!data || data.format !== 'albireo-export' || !Array.isArray(data.conversations)) throw new Error('format');
@@ -535,7 +539,8 @@ export async function importAll(data) {
     await putProject(pr);
     ++p;
   }
-  // The images, each with the owner it belongs to; an export without images (an earlier version) has none.
+  // Les images, chacune avec le propriétaire auquel elle appartient ; un export sans images (une version antérieure)
+  // n'en a aucune.
   const pictures = [];
   for (const x of Array.isArray(data.images) ? data.images : []) {
     if (!x || typeof x.id !== 'string' || typeof x.owner !== 'string') continue;
@@ -550,7 +555,7 @@ export async function importAll(data) {
   return { conversations: n, projects: p, images: pictures.length, ids };
 }
 
-// Deletes every discussion, project, passage and image, in one transaction; the settings stay.
+// Supprime toutes les discussions, projets, passages et images, en une transaction ; les réglages restent.
 export async function clearAll() {
   await open();
   const names = ['conversations', 'projects', 'chunks', 'images'];

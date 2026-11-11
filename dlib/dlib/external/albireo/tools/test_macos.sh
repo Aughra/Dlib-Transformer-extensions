@@ -2,16 +2,17 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Tests a macOS build of Albireo (Apple Silicon) and prints a summary, one line per step.
+# Teste un build macOS d'Albireo (Apple Silicon) et affiche un résumé, une ligne par étape.
 #
 #   bash dlib/dlib/external/albireo/tools/test_macos.sh [build folder] [model.gguf] [embedding model.gguf]
 #
-# Defaults: build/macos-albireo at the root of the repository, build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf
-# and build/albireo-home/models/qwen3-embedding-0.6b.gguf.  The steps whose model is missing are skipped.
-# The service runs offline in a data folder of its own, on port 18443 (ALBIREO_TEST_PORT, and
-# the next port for the local server of test_host), receives the model as the web application sends it,
-# refuses it by its path, answers a question through the OpenAI interface and stops.  The
-# first step checks the tools of these tests.  The exit code is the number of failed steps.
+# Par défaut : build/macos-albireo à la racine du dépôt, build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf
+# et build/albireo-home/models/qwen3-embedding-0.6b.gguf.  Les étapes dont le modèle manque sont
+# sautées.  Le service tourne hors ligne dans un dossier de données à lui, sur le port 18443
+# (ALBIREO_TEST_PORT, et le port suivant pour le serveur local de test_host), reçoit le modèle comme
+# l'application web l'envoie, le refuse par son chemin, répond à une question par l'interface
+# OpenAI et s'arrête.  La première étape vérifie les outils de ces tests.  Le code de sortie est
+# le nombre d'étapes échouées.
 
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -25,17 +26,17 @@ WORK=$(mktemp -d)
 RESULTS=()
 FAILED=0
 
-# Nanoseconds: the date of macOS has no %N.
+# Nanosecondes : la commande date de macOS n'a pas de %N.
 now() { perl -MTime::HiRes=time -e 'printf "%.0f\n", time * 1e9'; }
 elapsed() { awk -v a="$1" -v b="$(now)" 'BEGIN { printf "%.1f", (b - a) / 1e9 }'; }
 
-record() { # step result detail seconds
+record() { # étape résultat détail secondes
   RESULTS+=("$(printf '%-28s %-5s %6s s  %s' "$1" "$2" "$4" "$3")")
   [ "$2" = FAIL ] && FAILED=$((FAILED + 1))
 }
 
-# Runs a command, then checks that its output holds a pattern.
-step() { # name pattern command...
+# Lance une commande, puis vérifie que sa sortie contient un motif.
+step() { # nom motif commande...
   local name=$1 pattern=$2
   shift 2
   local start out rc seconds line
@@ -54,7 +55,7 @@ step() { # name pattern command...
 
 skip() { record "$1" SKIP "$2" 0.0; }
 
-# The tools of these tests.
+# Les outils de ces tests.
 START=$(now)
 missing=""
 for tool in curl perl awk; do command -v $tool > /dev/null 2>&1 || missing="$missing $tool"; done
@@ -67,21 +68,22 @@ fi
 ENGINES=$BUILD/bin/engines
 CHAT=$BUILD/tests/engine_chat
 
-# The quantized kernels (NEON, Accelerate).
+# Les noyaux quantifiés (NEON, Accelerate).
 if [ -x "$BUILD/tests/test_qkernels" ]; then
   step "quantized kernels" "all checks passed" "$BUILD/tests/test_qkernels"
 else skip "quantized kernels" "no $BUILD/tests/test_qkernels (ALBIREO_TESTS=ON)"
 fi
 
-# The attention of the steps split among the threads, against one task per key/value head, with
-# keys and values in half precision and in 8 bits, on a tiny model written in the work folder.
+# L'attention des étapes répartie entre les threads, comparée à une tâche par tête de clés et valeurs,
+# avec les clés et valeurs en demi-précision et sur 8 bits, sur un tout petit modèle écrit dans le
+# dossier de travail.
 if [ -x "$BUILD/tests/test_runtime" ]; then
   step "attention" "all checks passed" "$BUILD/tests/test_runtime" synthetic "$WORK"
 else skip "attention" "no $BUILD/tests/test_runtime"
 fi
 
-# Damaged model files, the chat format of the agents and the C interface of an engine under
-# concurrent requests, on tiny models the tests write in the work folder.
+# Fichiers de modèle abîmés, le format de chat des agents et l'interface C d'un moteur sous des
+# requêtes concurrentes, sur de tout petits modèles que les tests écrivent dans le dossier de travail.
 if [ -x "$BUILD/tests/test_model_file" ]; then
   step "damaged model files" "all checks passed" "$BUILD/tests/test_model_file" "$WORK"
 else skip "damaged model files" "no $BUILD/tests/test_model_file"
@@ -94,7 +96,7 @@ if [ -x "$BUILD/tests/test_engine_api" ] && [ -f "$ENGINE" ]; then
   step "engine interface" "all checks passed" "$BUILD/tests/test_engine_api" "$ENGINE" "$WORK"
 else skip "engine interface" "no $BUILD/tests/test_engine_api or no $ENGINE"
 fi
-# The files the service writes in its models folder and reads in its imports.
+# Les fichiers que le service écrit dans son dossier de modèles et lit dans ses imports.
 if [ -x "$BUILD/tests/test_host" ]; then
   step "models folder and imports" "all checks passed" "$BUILD/tests/test_host" "$WORK" $((PORT + 1))
 else skip "models folder and imports" "no $BUILD/tests/test_host"
@@ -112,7 +114,7 @@ else
   skip "embedding model" "no $EMBEDDING"
 fi
 
-# The program of the speech synthesis alone: a sentence read aloud in the folder of the voices.
+# Le programme de la synthèse vocale seul : une phrase lue à voix haute dans le dossier des voix.
 SPEAKER=$BUILD/bin/albireo-speech
 if [ -x "$SPEAKER" ] && [ -d "$BUILD/bin/speech" ]; then
   step "speech program" "RIFF" sh -c "cd '$BUILD/bin/speech' && printf '%s' 'Bonjour, Albireo lit à voix haute.' \
@@ -121,7 +123,7 @@ else
   skip "speech program" "no $SPEAKER or no $BUILD/bin/speech"
 fi
 
-# The service, offline, in a data folder of its own.
+# Le service, hors ligne, dans un dossier de données à lui.
 SERVICE=$BUILD/bin/albireo-service
 if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
   HOME_DIR=$WORK/home
@@ -137,11 +139,12 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
   done
   if curl -sk --max-time 2 https://localhost:$PORT/albireo/v1/status | grep -q '"offline":true'; then
     record "service start" PASS "offline, https://localhost:$PORT" "$(elapsed "$START")"
-    # The license texts of the installation, none in a build folder, and a name outside their folder refused.
+    # Les textes de licence de l'installation, aucun dans un dossier de build, et un nom hors de leur
+    # dossier refusé.
     step "service licenses" '^\[(\]|\{"file")' curl -sk --max-time 5 https://localhost:$PORT/albireo/v1/licenses
     step "service license refusal" '"code":"invalid_license"' curl -sk --max-time 5 --path-as-is \
       "https://localhost:$PORT/albireo/v1/licenses/../settings.json"
-    # A model of the user is not read by its path: the web application sends it.
+    # Un modèle de l'utilisateur n'est pas lu par son chemin : l'application web l'envoie.
     step "service import refusal" '"code":"import_use_upload"' curl -sk --max-time 30 -X POST \
       -H "Content-Type: application/json" -d "{\"path\": \"$MODEL\"}" \
       https://localhost:$PORT/albireo/v1/import
@@ -156,7 +159,8 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
     BODY="$BODY \"messages\": [{\"role\": \"user\", \"content\": \"$QUESTION\"}]}"
     step "service chat" "Paris" curl -sk --max-time 300 https://localhost:$PORT/v1/chat/completions \
       -H "Content-Type: application/json" -d "$BODY"
-    # The voices of the speech synthesis, then a sentence read aloud by the program the service starts.
+    # Les voix de la synthèse vocale, puis une phrase lue à voix haute par le programme que lance le
+    # service.
     step "service speech voices" '"id":"fr-FR"' curl -sk --max-time 5 \
       https://localhost:$PORT/albireo/v1/speech/voices
     SPEECH="{\"input\": \"Bonjour, Albireo lit ses réponses à voix haute.\", \"voice\": \"fr-FR\"}"
@@ -166,8 +170,8 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
   else
     record "service start" FAIL "no answer, log in $WORK/service.log" 0.0
   fi
-  # The service has 30 seconds to stop, then it is killed by its process number.  SIGTERM: macOS
-  # drops the SIGINT of a program that a script starts in the background, which ignores it.
+  # Le service a 30 secondes pour s'arrêter, puis il est tué par son numéro de processus.  SIGTERM :
+  # macOS laisse tomber le SIGINT d'un programme qu'un script lance en arrière-plan, qui l'ignore.
   START=$(now)
   kill -TERM $PID 2> /dev/null
   for i in $(seq 1 300); do

@@ -16,31 +16,35 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The drive of Pseudalis: the folder drive of the data folder, which the
-                service watches and shows under the letter of the settings for every session
-                of the computer, as the command subst would.  It works as any folder, from
-                the Explorer and from the prompt, with one difference: a file written to it
-                is anonymized once its writer closed it.  Its original goes to the encrypted
-                vault with a record, the anonymized file takes its place, under its name with
-                its values replaced (pictures: <name>.txt, holding their marker), and the file
-                written is deleted.  A folder that comes in takes a name without personal data
-                once the files under it rest.  A file of another kind, or that cannot be
-                anonymized, goes to the folder of the files not processed of the user who
-                wrote it (refused\<user> in the data folder), at the place it had in the tree
-                of the drive, with an event.
+                Le lecteur de Pseudalis : le dossier drive du dossier de données, que le
+                service surveille et montre sous la lettre des réglages pour chaque session
+                de l'ordinateur, comme le ferait la commande subst.  Il fonctionne comme
+                n'importe quel dossier, depuis l'Explorateur et depuis l'invite de commandes,
+                à une différence près : un fichier qui y est écrit est anonymisé une fois que
+                son auteur l'a fermé.  Son original part dans le coffre chiffré avec un
+                enregistrement, le fichier anonymisé prend sa place, sous son nom aux valeurs
+                remplacées (images : <name>.txt, qui contient leur marqueur), et le fichier
+                écrit est supprimé.  Un dossier qui arrive prend un nom sans donnée
+                personnelle une fois que les fichiers qu'il contient sont au repos.  Un
+                fichier d'un autre type, ou qui ne peut pas être anonymisé, part dans le
+                dossier des fichiers non traités de l'utilisateur qui l'a écrit
+                (refused\<user> dans le dossier de données), à la place qu'il avait dans
+                l'arborescence du lecteur, avec un événement.
 
-                No driver: the file written lies in its folder, in clear, from its last write
-                to its processing, a few seconds for most documents, during which the service
-                holds it alone (sharing violation).  Deleting the last file of the drive that
-                shows a record marks it (service::mark_removed()), its original staying for the
-                days of the setting removed_days; a file found again in the drive, renamed, moved
-                or copied there, keeps it.  A file extracted from a protected archive that the
-                database records stays as it is, recorded with the original of its entry
-                (service::adopt()); a protected file whose original was forgotten stays as it is,
-                unrecorded.  The files already processed are recorded in the database, so that a
-                restart processes only what changed.
+                Pas de pilote : le fichier écrit reste dans son dossier, en clair, de sa
+                dernière écriture à son traitement, quelques secondes pour la plupart des
+                documents, pendant lesquelles le service le détient seul (violation de
+                partage).  Supprimer le dernier fichier du lecteur qui montre un
+                enregistrement marque celui-ci (service::mark_removed()), son original restant
+                gardé pendant les jours du réglage removed_days ; un fichier retrouvé dans le
+                lecteur, renommé, déplacé ou copié là, le conserve.  Un fichier extrait d'une
+                archive protégée que la base de données enregistre reste tel quel, enregistré
+                avec l'original de son entrée (service::adopt()) ; un fichier protégé dont
+                l'original a été oublié reste tel quel, sans enregistrement.  Les fichiers
+                déjà traités sont enregistrés dans la base de données, pour qu'un redémarrage
+                ne traite que ce qui a changé.
 
-                Outside Windows, the folder works without letter.
+                Hors de Windows, le dossier fonctionne sans lettre.
         !*/
     public:
         explicit drive_host(service& svc);
@@ -48,12 +52,12 @@ namespace pseudalis
         drive_host(const drive_host&) = delete;
         drive_host& operator=(const drive_host&) = delete;
 
-        // letter: "A".."Z", or empty for no drive.
+        // letter : "A".."Z", ou vide pour aucun lecteur.
         bool start(const std::string& letter, std::string& error);
         void stop();
         /*!
             ensures
-                - Returns {"letter", "mounted", "folder", "files", "bytes", "error",
+                - Renvoie {"letter", "mounted", "folder", "files", "bytes", "error",
                   "refused_folder"}.
         !*/
         json status() const;

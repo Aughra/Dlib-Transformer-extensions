@@ -18,8 +18,8 @@ namespace albireo
 
     namespace
     {
-        // Rows of patches normalized and multiplied at a time: the products of a block take
-        // a few megabytes of work memory whatever the size of the image.
+        // Les lignes de patchs normalisées et multipliées à la fois : les produits d'un bloc prennent
+        // quelques mégaoctets de mémoire de travail quelle que soit la taille de l'image.
         const long chunk_rows = 512;
 
         std::string type_name(dlib::ggml_type t)
@@ -88,7 +88,7 @@ namespace albireo
         patch_ = metadata_int(g, "clip.vision.patch_size", 1, 64);
         merge_ = llava ? 1 : g.has("clip.vision.spatial_merge_size")
             ? metadata_int(g, "clip.vision.spatial_merge_size", 1, 8) : pixtral ? 1 : 2;
-        // The output width of Pixtral is that of its last layer: its projection_dim names another one.
+        // La largeur de sortie de Pixtral est celle de sa dernière couche : son projection_dim en nomme une autre.
         if (kind_ == family::qwen3vl) out_dim_ = metadata_int(g, "clip.vision.projection_dim", 1, 1 << 17);
         const double eps = g.get_double("clip.vision.attention.layer_norm_epsilon", 1e-6);
         if (!(eps >= 0.0 && eps < 1.0)) throw std::runtime_error("the image encoder holds an invalid epsilon");
@@ -96,12 +96,12 @@ namespace albireo
         if (hidden_ % heads_ != 0)
             throw std::runtime_error("the width of the image encoder is not a multiple of its heads");
         head_dim_ = hidden_ / heads_;
-        // The two axes take a quarter of the dimensions each, rotated by halves.
+        // Les deux axes prennent chacun un quart des dimensions, tournées par moitiés.
         if (!llava && head_dim_ % 4 != 0) throw std::runtime_error("unsupported head geometry of the image encoder");
         /*
-            The blocks a patch goes through: all of them, or for LLaVA-NeXT those up to the
-            feature layer of the file (the default of the reference, the one before the last,
-            when it names none).
+            Les blocs par lesquels passe un patch : tous, ou pour LLaVA-NeXT ceux jusqu'à la
+            couche de caractéristiques du fichier (la valeur par défaut de la référence,
+            l'avant-dernière, quand il n'en nomme aucune).
         */
         feature_blocks_ = layers;
         if (llava)
@@ -122,7 +122,7 @@ namespace albireo
             const std::vector<int64_t>& pins = g.at("clip.vision.image_grid_pinpoints").arr_int;
             if (pins.empty() || pins.size() % 2 != 0)
                 throw std::runtime_error("the pinpoints of the image encoder are not pairs");
-            // Pairs of height and width, as the configuration of the reference lists them.
+            // Des paires de hauteur et largeur, telles que la configuration de la référence les liste.
             for (size_t i = 0; i < pins.size(); i += 2)
             {
                 const long h = static_cast<long>(pins[i]), w = static_cast<long>(pins[i + 1]);
@@ -132,7 +132,7 @@ namespace albireo
                 pinpoints_.push_back(std::make_pair(w, h));
             }
         }
-        // The longest edge of an image read by Pixtral.
+        // Le plus long côté d'une image lue par Pixtral.
         if (pixtral) image_size_ = metadata_int(g, "clip.vision.image_size", factor(), 16384);
         for (int c = 0; c < 3; ++c)
         {
@@ -144,8 +144,8 @@ namespace albireo
                 throw std::runtime_error("the image encoder holds an invalid normalization of the pixels");
         }
 
-        // The patch embedding: the two temporal kernels of the convolution, summed, as one
-        // matrix of hidden rows of 3 x patch x patch values (channel, row, column).
+        // L'embedding des patchs : les deux noyaux temporels de la convolution, additionnés, en une seule
+        // matrice de hidden lignes de 3 x patch x patch valeurs (canal, ligne, colonne).
         const long K = 3 * patch_ * patch_;
         patch_w_.assign(static_cast<size_t>(hidden_ * K), 0.0f);
         std::vector<float> row(static_cast<size_t>(K));
@@ -170,12 +170,12 @@ namespace albireo
         patch_matrix_.rows = hidden_;
         patch_matrix_.cols = K;
         patch_matrix_.row_bytes = static_cast<size_t>(K) * sizeof(float);
-        // Pixtral convolves without a bias.
+        // Pixtral convolue sans biais.
         if (pixtral) f.optional_floats("v.patch_embd.bias", static_cast<size_t>(hidden_), patch_b_);
         else patch_b_ = f.floats("v.patch_embd.bias", static_cast<size_t>(hidden_));
 
-        // The learned positions, a square grid (Pixtral has none: its heads rotate by the rows
-        // and the columns alone).
+        // Les positions apprises, une grille carrée (Pixtral n'en a pas : ses têtes tournent selon les
+        // seules lignes et colonnes).
         if (!pixtral)
         {
             const tensor_view* pos = f.find("v.position_embd.weight");
@@ -195,7 +195,7 @@ namespace albireo
 
         if (kind_ == family::qwen3vl)
         {
-            // Frequencies of the rotary pairs: each axis takes head_dim / 4 of them.
+            // Fréquences des paires rotatives : chaque axe en prend head_dim / 4.
             const long quarter = head_dim_ / 4;
             for (long i = 0; i < quarter; ++i)
                 inv_freq_.push_back(static_cast<float>(1.0 / std::pow(10000.0, 2.0 * static_cast<double>(i)
@@ -204,9 +204,9 @@ namespace albireo
         else if (pixtral)
         {
             /*
-                Pair p of a head turns at theta^(-e / head_dim): the pairs of the first half,
-                rotated by the row of the patch, take the even exponents e = 4p, those of the
-                second half, rotated by its column, the odd ones e = 4(p - head_dim / 4) + 2.
+                La paire p d'une tête tourne à theta^(-e / head_dim) : les paires de la première moitié,
+                tournées selon la ligne du patch, prennent les exposants pairs e = 4p, celles de la
+                seconde moitié, tournées selon sa colonne, les impairs e = 4(p - head_dim / 4) + 2.
             */
             const double theta = g.get_double("clip.rope.freq_base", 10000.0);
             if (!(theta > 1.0 && theta < 1e12))
@@ -238,7 +238,7 @@ namespace albireo
         {
             const std::string p = "v.blk." + std::to_string(i) + ".";
             block b;
-            // Pixtral normalizes by the root mean square: its norms have no bias.
+            // Pixtral normalise par la moyenne quadratique : ses normes n'ont pas de biais.
             b.ln1_w = f.floats(p + "ln1.weight", static_cast<size_t>(D));
             if (!pixtral) b.ln1_b = f.floats(p + "ln1.bias", static_cast<size_t>(D));
             b.ln2_w = f.floats(p + "ln2.weight", static_cast<size_t>(D));
@@ -251,7 +251,7 @@ namespace albireo
             }
             else
             {
-                // The queries, keys and values apart (SigLIP, Pixtral), their biases end to end.
+                // Les requêtes, clés et valeurs séparées (SigLIP, Pixtral), leurs biais bout à bout.
                 b.fused = false;
                 b.q = readable(f.matrix(p + "attn_q.weight", D, D));
                 b.k = readable(f.matrix(p + "attn_k.weight", D, D));
@@ -281,7 +281,7 @@ namespace albireo
             else b.out_b = f.floats(p + "attn_out.bias", static_cast<size_t>(D));
             if (pixtral)
             {
-                // A SiLU gate: silu(gate x) * (up x), then the layer down.
+                // Une porte SiLU : silu(gate x) * (up x), puis la couche down.
                 b.gated = true;
                 b.gate = readable(f.matrix(p + "ffn_gate.weight", ffn_, D));
                 b.up = readable(f.matrix(p + "ffn_up.weight", ffn_, D));
@@ -295,8 +295,8 @@ namespace albireo
             }
             else
             {
-                // The files of the first conversion tools name the two layers of the feed-forward
-                // part the other way round: the layer that reads the width of the encoder comes first.
+                // Les fichiers des premiers outils de conversion nomment les deux couches de la partie
+                // feed-forward à l'envers : la couche qui lit la largeur de l'encodeur vient en premier.
                 const tensor_view* up = f.find(p + "ffn_up.weight");
                 const bool swapped = up && !up->dims.empty() && static_cast<long>(up->dims[0]) != D;
                 const std::string first = swapped ? "ffn_down" : "ffn_up", second = swapped ? "ffn_up" : "ffn_down";
@@ -327,8 +327,8 @@ namespace albireo
         }
         if (llava)
         {
-            // The projector: two linear layers, the width of their middle and of their output
-            // read from their tensors.
+            // Le projecteur : deux couches linéaires, la largeur de leur milieu et de leur sortie
+            // lue dans leurs tenseurs.
             const tensor_view* fc1 = f.find("mm.0.weight");
             const tensor_view* fc2 = f.find("mm.2.weight");
             if (!fc1 || !fc2 || fc1->dims.size() < 2 || fc2->dims.size() < 2)
@@ -347,7 +347,7 @@ namespace albireo
         }
         else if (pixtral)
         {
-            // The norm after the patch embedding, then the projector of the merged tokens.
+            // La norme après l'embedding des patchs, puis le projecteur des tokens fusionnés.
             f.optional_floats("v.pre_ln.weight", static_cast<size_t>(D), pre_ln_w_);
             const tensor_view* l1 = f.find("mm.1.weight");
             const tensor_view* l2 = f.find("mm.2.weight");
@@ -366,17 +366,18 @@ namespace albireo
             if (merge_ > 1)
             {
                 /*
-                    The merger reads the patches of a square, merge x merge of them, which the
-                    encoding keeps one after the other; the reference unfolds them channel by
-                    channel (column c * merge^2 + k for the channel c of the patch k of the
-                    square), so its columns are put in the order of the patches.
+                    Le fusionneur lit les patchs d'un carré, merge x merge d'entre eux, que
+                    l'encodage garde l'un après l'autre ; la référence les déplie canal par
+                    canal (colonne c * merge^2 + k pour le canal c du patch k du carré), si bien
+                    que ses colonnes sont mises dans l'ordre des patchs.
                 */
                 proj_norm_w_ = f.floats("mm.input_norm.weight", static_cast<size_t>(D));
                 const long m2 = merge_ * merge_;
                 const weight_matrix pm = f.matrix("mm.patch_merger.weight", D, M4);
                 owned_.emplace_back(static_cast<size_t>(D * M4));
                 uint16_t* half = owned_.back().data();
-                // On the loading thread: the threads of the pool may be computing the passes of other models.
+                // Sur le thread de chargement : les threads du thread pool peuvent être en train de calculer les
+                // passes d'autres modèles.
                 std::vector<float> row(static_cast<size_t>(M4)), order(static_cast<size_t>(M4));
                 for (long o = 0; o < D; ++o)
                 {
@@ -393,7 +394,7 @@ namespace albireo
                 patch_merger_.row_bytes = static_cast<size_t>(M4) * sizeof(uint16_t);
                 count(patch_merger_);
             }
-            // The decoder reads an [IMG_BREAK] after each row of tokens but the last.
+            // Le décodeur lit un [IMG_BREAK] après chaque ligne de tokens sauf la dernière.
             if (!f.has("v.token_embd.img_break"))
                 throw std::runtime_error("the image encoder lacks the [IMG_BREAK] embedding (v.token_embd.img_break)");
             img_break_ = f.floats("v.token_embd.img_break", static_cast<size_t>(out_dim_));
@@ -465,7 +466,7 @@ namespace albireo
                 [&]() { qk_matmul(w, x, n, x_stride, y, y_stride, pool_, scratch_, false, qk_path::automatic); });
             return;
         }
-        // The offload writes its products: those added to the rows of y go through sum_.
+        // L'offload écrit ses produits : ceux ajoutés aux lignes de y passent par sum_.
         const long rows = w.rows;
         sum_.resize(static_cast<size_t>(n) * static_cast<size_t>(rows));
         float* s = sum_.data();
@@ -479,7 +480,8 @@ namespace albireo
         if (m.type != dlib::ggml_type::BF16 || !m.valid()) return m;
         owned_.emplace_back(static_cast<size_t>(m.rows) * static_cast<size_t>(m.cols));
         uint16_t* half = owned_.back().data();
-        // On the loading thread: the threads of the pool may be computing the passes of other models.
+        // Sur le thread de chargement : les threads du thread pool peuvent être en train de calculer les
+        // passes d'autres modèles.
         std::vector<float> row(static_cast<size_t>(m.cols));
         for (long r = 0; r < m.rows; ++r)
         {
@@ -498,7 +500,7 @@ namespace albireo
     {
         if (b.empty())
         {
-            // The root mean square norm of Pixtral; x and y may be the same rows.
+            // La norme par moyenne quadratique de Pixtral ; x et y peuvent être les mêmes lignes.
             pool_.parallel_for(rows, [&](long r, int) {
                 const float* xr = x + r * width;
                 float* yr = y + r * width;
@@ -521,13 +523,13 @@ namespace albireo
 
     namespace
     {
-        // Python's round(x, 7): the products of the reference round there before they are truncated.
+        // Le round(x, 7) de Python : les produits de la référence y sont arrondis avant d'être tronqués.
         double round7(double x)
         {
             return std::nearbyint(x * 1e7) / 1e7;
         }
 
-        // The tiles a detail allows a LLaVA-NeXT image at most.
+        // Le nombre maximal de tuiles qu'un détail permet à une image LLaVA-NeXT.
         long max_tiles(const std::string& detail)
         {
             if (detail == "low") return 1;
@@ -540,9 +542,10 @@ namespace albireo
     vision_encoder::tile_layout vision_encoder::layout(long width, long height, long res_w, long res_h) const
     {
         /*
-            The grid of the features of the tiles loses the rows or the columns of the black
-            bands of the resized image, as unpad_image() of the reference computes them from the
-            size of the image; each row kept takes the newline embedding after it.
+            La grille des caractéristiques des tuiles perd les lignes ou les colonnes des bandes
+            noires de l'image redimensionnée, telles que unpad_image() de la référence les calcule
+            d'après la taille de l'image ; chaque ligne gardée prend l'embedding de retour à la
+            ligne après elle.
         */
         tile_layout t;
         t.res_w = res_w;
@@ -576,8 +579,8 @@ namespace albireo
 
     vision_encoder::tile_layout vision_encoder::best_layout(long width, long height, long tiles) const
     {
-        // select_best_resolution() of the reference: the pinpoint that keeps the most pixels of
-        // the image, then the one that wastes the fewest.
+        // select_best_resolution() de la référence : le pinpoint qui garde le plus de pixels de
+        // l'image, puis celui qui en gaspille le moins.
         long best_w = 0, best_h = 0;
         long long most = 0, waste = std::numeric_limits<long long>::max();
         const double W = static_cast<double>(width), H = static_cast<double>(height);
@@ -627,10 +630,10 @@ namespace albireo
             else if (!detail.empty() && detail != "auto")
                 throw std::invalid_argument("the detail of an image is \"low\", \"auto\" or \"high\"");
             /*
-                The reference brings the longest edge within image_size() pixels, the sides
-                floored, then rounds each side up to a multiple of factor() pixels; a grid of
-                more merged tokens than the detail allows shrinks by the same ratio on both
-                sides, floored.
+                La référence ramène le plus long côté dans la limite de image_size() pixels, les
+                côtés arrondis vers le bas, puis arrondit chaque côté au-dessus à un multiple de
+                factor() pixels ; une grille de plus de tokens fusionnés que le détail n'en permet
+                rétrécit du même rapport sur les deux côtés, arrondie vers le bas.
             */
             const long f = factor();
             double w = static_cast<double>(width), h = static_cast<double>(height);
@@ -657,7 +660,7 @@ namespace albireo
         const long tiles = max_tiles(detail);
         if (static_cast<double>(std::max(width, height)) / static_cast<double>(std::min(width, height)) > 200.0)
             throw std::invalid_argument("the sides of the image differ by a ratio over 200");
-        // The image is decoded at its size, within 4096 pixels per side.
+        // L'image est décodée à sa taille, dans la limite de 4096 pixels par côté.
         const long side = 4096;
         p.width = width;
         p.height = height;
@@ -684,7 +687,7 @@ namespace albireo
         {
             if (detail == "min") return 1;
             const long most = detail == "low" ? 256 : detail == "high" ? 1024 : 576;
-            // The merged tokens, and an [IMG_BREAK] after each row but the last.
+            // Les tokens fusionnés, et un [IMG_BREAK] après chaque ligne sauf la dernière.
             const long rows = std::min(most, image_size_ / factor());
             return most + rows - 1;
         }
@@ -710,14 +713,14 @@ namespace albireo
         const long grid_w = j.pw_ / merge_;
         const bool rotary = kind_ != family::llava_next;
 
-        // The row and column of patch i, the patches taken square by square of merge x merge.
+        // La ligne et la colonne du patch i, les patchs pris carré par carré de merge x merge.
         auto place = [&](long i, long& row, long& col) {
             const long square = i / m2, within = i % m2;
             row = square / grid_w * merge_ + within / merge_;
             col = square % grid_w * merge_ + within % merge_;
         };
 
-        // The pixels of each patch, normalized, in the order of the kernel.
+        // Les pixels de chaque patch, normalisés, dans l'ordre du noyau.
         xn_.resize(static_cast<size_t>(n * K));
         float scale[3], shift[3];
         for (int c = 0; c < 3; ++c)
@@ -741,7 +744,7 @@ namespace albireo
         j.x_.resize(static_cast<size_t>(n * D));
         product(patch_matrix_, xn_.data(), n, K, j.x_.data(), D);
 
-        // The bias, the interpolated positions and the angles of the rotary pairs.
+        // Le biais, les positions interpolées et les angles des paires rotatives.
         if (rotary)
         {
             j.cos_.resize(static_cast<size_t>(n * half));
@@ -756,13 +759,14 @@ namespace albireo
             if (!patch_b_.empty()) qk_add(x, patch_b_.data(), D);
             if (!rotary)
             {
-                // A view covers the table of the positions exactly.
+                // Une vue couvre exactement la table des positions.
                 qk_add(x, pos_.data() + (row * side_ + col) * D, D);
                 return;
             }
             if (kind_ == family::pixtral)
             {
-                // The pairs of the first half turn with the row, those of the second half with the column.
+                // Les paires de la première moitié tournent avec la ligne, celles de la seconde moitié avec la
+                // colonne.
                 float* c = j.cos_.data() + i * half;
                 float* s = j.sin_.data() + i * half;
                 for (long k = 0; k < half; ++k)
@@ -795,7 +799,7 @@ namespace albireo
                 s[quarter + k] = static_cast<float>(std::sin(static_cast<double>(ax)));
             }
         });
-        // Pixtral normalizes the patches before its first block.
+        // Pixtral normalise les patchs avant son premier bloc.
         if (kind_ == family::pixtral && !pre_ln_w_.empty())
             layer_norm_rows(j.x_.data(), pre_ln_w_, std::vector<float>(), j.x_.data(), n, D);
     }
@@ -803,7 +807,7 @@ namespace albireo
     std::unique_ptr<vision_encoder::job> vision_encoder::start(const rgb_image& image, const image_plan& plan)
     {
         const auto t0 = std::chrono::steady_clock::now();
-        // The copies of the weights stay on the device until release_work().
+        // Les copies des poids restent sur le périphérique jusqu'à release_work().
         if (offload_) offload_->set_busy(true);
         std::unique_ptr<job> j(new job());
         if (image.width <= 0 || image.height <= 0
@@ -831,11 +835,11 @@ namespace albireo
         const tile_layout t = layout(image.width, image.height, plan.tiles_w, plan.tiles_h);
         if (t.tokens != plan.tokens) throw std::invalid_argument("vision_encoder: the tiles of the image changed");
         const long S = image_size_;
-        // The whole image, resized to a view.
+        // L'image entière, redimensionnée en une vue.
         j->views_.push_back(resize_bilinear(image, S, S));
         /*
-            The image resized into the pinpoint, its aspect ratio kept (get_patch_output_size()
-            of the reference rounds the other side up), centered on black, then cut into views.
+            L'image redimensionnée dans le pinpoint, son rapport d'aspect gardé (get_patch_output_size()
+            de la référence arrondit l'autre côté au-dessus), centrée sur du noir, puis découpée en vues.
         */
         const double sw = static_cast<double>(t.res_w) / image.width, sh = static_cast<double>(t.res_h) / image.height;
         long fw = t.res_w, fh = t.res_h;
@@ -887,7 +891,8 @@ namespace albireo
         const long C = std::min(chunk_rows, n);
         const float scale = 1.0f / std::sqrt(static_cast<float>(hd));
         const bool rotary = kind_ != family::llava_next;
-        // Pixtral turns pairs of consecutive dimensions, Qwen3-VL the dimensions half a head apart.
+        // Pixtral fait tourner des paires de dimensions consécutives, Qwen3-VL des dimensions distantes d'une
+        // demi-tête.
         const bool pairs = kind_ == family::pixtral;
         xn_.resize(static_cast<size_t>(C * D));
         qkv_.resize(static_cast<size_t>(C * 3 * D));
@@ -897,9 +902,10 @@ namespace albireo
         ctx_.resize(static_cast<size_t>(n * D));
 
         /*
-            The queries, scaled, and the values of head h lie in rows of hd floats from h * n * hd;
-            its keys lie transposed, hd rows of n floats from h * hd * n, so that the scores of
-            a query against consecutive keys are vector products.
+            Les requêtes, mises à l'échelle, et les valeurs de la tête h se trouvent dans des lignes de hd
+            floats à partir de h * n * hd ; ses clés se trouvent transposées, hd lignes de n floats à partir
+            de h * hd * n, pour que les scores d'une requête contre des clés consécutives soient des
+            produits vectoriels.
         */
         for (long c0 = 0; c0 < n; c0 += C)
         {
@@ -960,9 +966,9 @@ namespace albireo
                 }
             };
             /*
-                Sixteen consecutive patches per task: the keys of a task fill the 64-byte lines
-                of the transposed rows together, instead of each line receiving the writes of
-                the tasks of several threads.
+                Seize patchs consécutifs par tâche : les clés d'une tâche remplissent ensemble les
+                lignes de 64 octets des lignes transposées, au lieu que chaque ligne reçoive les
+                écritures des tâches de plusieurs threads.
             */
             const long group = 16;
             pool_.parallel_for((rows + group - 1) / group, [&](long g, int) {
@@ -971,7 +977,7 @@ namespace albireo
             });
         }
 
-        // Every patch attends to every patch, by tiles of queries of one head.
+        // Chaque patch fait son attention sur chaque patch, par tuiles de requêtes d'une tête.
         const long tile = qk_encoder_tile_rows;
         const long tiles = (n + tile - 1) / tile;
         pool_.parallel_for(H * tiles, [&](long task, int thread) {
@@ -985,7 +991,7 @@ namespace albireo
         product(b.out, ctx_.data(), n, D, j.x_.data(), D, true);
         add_bias_rows(j.x_.data(), D, b.out_b, n);
 
-        // The feed-forward layer, a chunk of patches at a time.
+        // La couche feed-forward, un morceau de patchs à la fois.
         h_.resize(static_cast<size_t>(C * ffn_));
         if (b.gated) u_.resize(static_cast<size_t>(C * ffn_));
         for (long c0 = 0; c0 < n; c0 += C)
@@ -1019,7 +1025,7 @@ namespace albireo
 
     void vision_encoder::run_merger(job& j, const merger& m, bool merged_norm, long column)
     {
-        // A merged token is merge x merge consecutive patches, whose rows follow one another.
+        // Un token fusionné est fait de merge x merge patchs consécutifs, dont les lignes se suivent.
         const long T = j.tokens_, D = hidden_, M4 = hidden_ * merge_ * merge_, W = output_width();
         m_.resize(static_cast<size_t>(T * M4));
         if (merged_norm) layer_norm_rows(j.x_.data(), m.norm_w, m.norm_b, m_.data(), T, M4);
@@ -1038,8 +1044,8 @@ namespace albireo
 
     void vision_encoder::project_view(job& j)
     {
-        // The projector of LLaVA-NeXT on every patch of the view: a linear layer, an exact GELU,
-        // a linear layer.
+        // Le projecteur de LLaVA-NeXT sur chaque patch de la vue : une couche linéaire, une GELU exacte,
+        // une couche linéaire.
         const long n = j.n_, D = hidden_, X = final_.fc1.rows, O = out_dim_;
         h_.resize(static_cast<size_t>(n * X));
         product(final_.fc1, j.x_.data(), n, D, h_.data(), X);
@@ -1055,7 +1061,8 @@ namespace albireo
 
     void vision_encoder::pack_views(job& j)
     {
-        // The whole image, then the grid of the tiles kept, row by row, each row followed by the newline.
+        // L'image entière, puis la grille des tuiles gardées, ligne par ligne, chaque ligne suivie du retour
+        // à la ligne.
         const long S = side_, n = S * S, O = out_dim_;
         const size_t row_bytes = sizeof(float) * static_cast<size_t>(O);
         float* out = j.out_.data();
@@ -1080,9 +1087,9 @@ namespace albireo
     void vision_encoder::project_pixtral(job& j)
     {
         /*
-            Each patch normalized, the squares merged (their patches follow one another), then
-            a linear layer, an exact GELU and a linear layer; the rows of the merged grid go to
-            the output each followed, but the last, by the [IMG_BREAK] embedding.
+            Chaque patch normalisé, les carrés fusionnés (leurs patchs se suivent), puis une couche
+            linéaire, une GELU exacte et une couche linéaire ; les lignes de la grille fusionnée vont
+            à la sortie, chacune suivie, sauf la dernière, de l'embedding [IMG_BREAK].
         */
         const long n = j.n_, D = hidden_, m2 = merge_ * merge_, T = n / m2, X = proj1_.rows, O = out_dim_;
         const float* merged = j.x_.data();
@@ -1184,7 +1191,8 @@ namespace albireo
 
     void vision_encoder::release_work()
     {
-        // The copies of the weights on the device may leave it for the model until the next image.
+        // Les copies des poids sur le périphérique peuvent le quitter au profit du modèle jusqu'à l'image
+        // suivante.
         if (offload_) offload_->set_busy(false);
         aligned_floats().swap(sum_);
         aligned_floats().swap(xn_);

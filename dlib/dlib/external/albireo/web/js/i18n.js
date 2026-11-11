@@ -1,9 +1,9 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// Texts of the interface, in French only (the fork for macOS); a missing key shows as itself.
-// A text that agrees with a count it shows has one variant
-// per plural category of the language, key_one and key_other, from which tn chooses.
+// Textes de l'interface, en français seulement (le fork pour macOS) ; une clé manquante s'affiche telle quelle.
+// Un texte qui s'accorde avec un nombre qu'il affiche a une variante
+// par catégorie de pluriel de la langue, key_one et key_other, parmi lesquelles tn choisit.
 const texts = {
   fr: {
     newChat: 'Nouvelle discussion', incognito: 'Navigation privée', incognitoBanner: 'Discussion privée : rien n\'est enregistré dans ce navigateur.',
@@ -305,7 +305,7 @@ const texts = {
   }
 };
 
-// The fork for macOS speaks French only.
+// Le fork pour macOS ne parle que français.
 export const languages = [{ code: 'fr', name: 'Français' }];
 
 let current = 'fr';
@@ -314,7 +314,7 @@ export function detectLanguage() {
   return 'fr';
 }
 
-// The fork for macOS speaks French only: the interface is French whatever the language asked.
+// Le fork pour macOS ne parle que français : l'interface est en français quelle que soit la langue demandée.
 export function setLanguage(code) {
   current = 'fr';
   document.documentElement.lang = current;
@@ -322,7 +322,7 @@ export function setLanguage(code) {
 
 export function language() { return current; }
 
-// The text s with the value of each variable of vars in place of its name in braces.
+// Le texte s avec la valeur de chaque variable de vars à la place de son nom entre accolades.
 function fillIn(s, vars) {
   if (vars) for (const k of Object.keys(vars)) s = s.split('{' + k + '}').join(String(vars[k]));
   return s;
@@ -332,14 +332,14 @@ export function t(key, vars) {
   return fillIn(texts.fr[key] || key, vars);
 }
 
-// The plural rules of the languages, made at their first use.
+// Les règles de pluriel des langues, créées à leur première utilisation.
 const pluralRules = {};
 
 /*
-    The text of key that agrees with the count n, its variables filled in as t fills them, n as {n} unless vars
-    gives {n} itself, formatted for instance.  The text is the variant of key for the plural category of n in the
-    language of the interface (Intl.PluralRules): key_one, key_other, then key_other for a category the language
-    has no variant for (the "many" of the exact millions in French), then key itself.
+    Le texte de key qui s'accorde avec le nombre n, ses variables remplies comme t les remplit, n comme {n} sauf si
+    vars donne {n} lui-même, mis en forme par exemple.  Le texte est la variante de key pour la catégorie de pluriel
+    de n dans la langue de l'interface (Intl.PluralRules) : key_one, key_other, puis key_other pour une catégorie
+    pour laquelle la langue n'a pas de variante (le « many » des millions exacts en français), puis key lui-même.
 */
 export function tn(key, n, vars) {
   for (const code of ['fr']) {

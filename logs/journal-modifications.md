@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Albireo 2.0.2 : commentaires du code en français, fiche « Pas de serrure » retirée
+
+- **Quoi** : les commentaires du code d'Albireo et de Pseudalis traduits en français (173 fichiers, neuf lots traduits en parallèle par des agents ; lignes de licence, mots-clés `requires` / `ensures` / `WHAT THIS OBJECT REPRESENTS`, identifiants, chaînes et consignes au modèle laissés tels quels). Fiche « Pas de serrure sur ce Mac » retirée de l'onglet Service. Version 2.0.2, section des notes de version. Outils de contrôle rangés dans `macos/outils/` (commit précédent).
+- **Fichiers** : 161 fichiers sous `dlib/dlib/external/albireo/` et `dlib/dlib/external/pseudalis/` (commentaires seulement), `albireo/web/js/service.js`, `albireo/web/changelog.md`, `albireo/common/version.h`, `albireo/CMakeLists.txt`, `albireo/web/openapi.json` ; `logs/reprise.md`, ce journal.
+- **Pourquoi** : demandes de l'humain (commentaires en français ; fiche retirée).
+- **Étapes** : `macos/outils/comment_check.py --rev 6ece57d` sur les 173 fichiers : « 0 avec du code modifié » ; `node --check`, `bash -n`, `py_compile` passent ; build d'Albireo sans avertissement, de Pseudalis avec ses deux avertissements connus (dlib) ; `tools/test_macos.sh` : Albireo 19 sur 19, Pseudalis 34 sur 34. Remarques des agents : les commentaires traduits décrivent encore l'original quand il parlait de Windows, CUDA ou de la zone de notification (à corriger sur le fond plus tard) ; « THREAD SAFETY » gardé dans certains lots, traduit dans celui de Pseudalis.
+
 ## 2026-11-11 — Albireo 2.0.1 : le logo ramène à l'accueil, notes de version antichronologiques
 
 - **Quoi** : le logo d'Albireo (panneau latéral) devient un bouton : nouvelle discussion, saisie et pièces jointes en attente effacées, brouillon oublié (`goHome()` dans `app.js`). Notes de version de la plus récente à la plus ancienne, séparées par un trait (`---`), section 2.0.1. Version 2.0.1 (`bump_version.py patch`). CLAUDE.md : ordre et séparateur des notes.

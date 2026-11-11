@@ -2,8 +2,8 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    The C interface of common/engine_api.h over albireo::engine.  No exception crosses
-    it: each one becomes a return code and a message.
+    L'interface C de common/engine_api.h au-dessus d'albireo::engine.  Aucune exception ne la
+    traverse : chacune devient un code de retour et un message.
 */
 
 #ifndef ALBIREO_ENGINE_BUILD
@@ -32,7 +32,7 @@ namespace
     void copy_message(const std::string& message, char* buffer, size_t capacity)
     {
         if (!buffer || capacity == 0) return;
-        // Truncated on a character boundary, so that the message stays valid UTF-8.
+        // Tronqué sur une frontière de caractère, pour que le message reste de l'UTF-8 valide.
         size_t n = std::min(message.size(), capacity - 1);
         while (n > 0 && n < message.size() && (static_cast<unsigned char>(message[n]) & 0xC0) == 0x80) --n;
         std::memcpy(buffer, message.data(), n);
@@ -180,7 +180,7 @@ ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_query(albireo_engin
     }
     catch (...)
     {
-        // Out of memory while the answer or the error was written.
+        // Mémoire épuisée pendant l'écriture de la réponse ou de l'erreur.
         return ALBIREO_E_INTERNAL;
     }
 }

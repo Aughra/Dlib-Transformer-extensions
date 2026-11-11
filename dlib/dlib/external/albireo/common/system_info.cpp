@@ -48,7 +48,7 @@ namespace albireo
         c.physical_cores = std::max(1, sysctl_int("hw.physicalcpu", c.logical_cores));
         c.performance_cores = sysctl_int("hw.perflevel0.physicalcpu", 0);
         c.efficiency_cores = sysctl_int("hw.perflevel1.physicalcpu", 0);
-        // The name of the processor, "Apple M2" for instance.
+        // Le nom du processeur, "Apple M2" par exemple.
         char brand[128];
         size_t brand_size = sizeof(brand);
         if (sysctlbyname("machdep.cpu.brand_string", brand, &brand_size, nullptr, 0) == 0)
@@ -64,7 +64,7 @@ namespace albireo
     memory_info read_memory_info()
     {
         memory_info m;
-        // macOS has no /proc: the memory installed, and the pages free, inactive or purgeable.
+        // macOS n'a pas de /proc : la mémoire installée, et les pages libres, inactives ou purgeables.
         uint64_t total = 0;
         size_t size = sizeof(total);
         if (sysctlbyname("hw.memsize", &total, &size, nullptr, 0) == 0) m.total = total;
@@ -74,7 +74,7 @@ namespace albireo
             == KERN_SUCCESS)
             m.available = (static_cast<uint64_t>(vm.free_count) + vm.inactive_count + vm.purgeable_count)
                 * static_cast<uint64_t>(vm_kernel_page_size);
-        // What the system can commit: the physical memory.
+        // Ce que le système peut engager : la mémoire physique.
         m.commit_total = std::max(m.commit_total, m.total);
         m.commit_available = std::max(m.commit_available, m.available);
         return m;

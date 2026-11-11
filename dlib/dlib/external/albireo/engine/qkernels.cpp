@@ -14,13 +14,13 @@
 #include "thread_pool.h"
 
 
-// ARM64 with the dot product instructions (Apple Silicon): the NEON kernels of qkernels_neon.inc.
+// ARM64 avec les instructions de produit scalaire (Apple Silicon) : les noyaux NEON de qkernels_neon.inc.
 #if defined(__ARM_NEON) && defined(__ARM_FEATURE_DOTPROD)
 #define ALBIREO_QK_NEON 1
 #include <arm_neon.h>
 #endif
 
-// Apple: the products of the long passes through Accelerate (qkernels_accelerate.inc).
+// Apple : les produits des longues passes via Accelerate (qkernels_accelerate.inc).
 #if ALBIREO_QK_NEON && defined(__APPLE__)
 #define ALBIREO_QK_ACCELERATE 1
 #define ACCELERATE_NEW_LAPACK
@@ -28,23 +28,23 @@
 #endif
 
 /*
-    The instructions beyond AVX2, the kernels of the processor engine cpu-avxvnni:
-        ALBIREO_QK_VNNI     the dot products of bytes and of 16-bit integers in one
-                            instruction, on 256-bit vectors: AVX-VNNI (cpu-avxvnni), or its
-                            AVX-512 form (ALBIREO_QK_VNNI_EVEX, which tests these kernels on
-                            the processors that have AVX-512 VNNI and lack AVX-VNNI).
-    MSVC defines no macro for VNNI: the build names it (ALBIREO_AVX_VNNI).
+    Les instructions au-delà d'AVX2, les noyaux du moteur processeur cpu-avxvnni :
+        ALBIREO_QK_VNNI     les produits scalaires d'octets et d'entiers 16 bits en une seule
+                            instruction, sur des vecteurs de 256 bits : AVX-VNNI (cpu-avxvnni), ou
+                            sa forme AVX-512 (ALBIREO_QK_VNNI_EVEX, qui teste ces noyaux sur les
+                            processeurs qui ont AVX-512 VNNI mais pas AVX-VNNI).
+    MSVC ne définit aucune macro pour VNNI : le build la nomme (ALBIREO_AVX_VNNI).
 */
 
 namespace albireo
 {
     using dlib::ggml_type;
 
-    // Half precision
+    // Demi-précision
 
     namespace
     {
-        // Conversion table of the portable build, filled before main() runs.
+        // Table de conversion du build portable, remplie avant l'exécution de main().
         struct half_table
         {
             float v[65536];
@@ -120,7 +120,7 @@ namespace albireo
         for (; i < n; ++i) dst[i] = qk_float_to_half(src[i]);
     }
 
-    // 8-bit keys and values
+    // Clés et valeurs 8 bits
 
     void qk_float_to_q8_row(const float* src, int8_t* dst, uint16_t* scales, long n)
     {
@@ -131,9 +131,10 @@ namespace albireo
             float amax = 0.0f;
             for (long i = 0; i < 32; ++i) amax = std::max(amax, std::fabs(x[i]));
             /*
-                The values are quantized with the scale as stored, in half precision, raised to the next half
-                when its rounding brought it so far below amax / 127 that the largest value would round beyond
-                127 (the subnormal halves of the tiny groups), the values then kept within [-127, 127].
+                Les valeurs sont quantifiées avec l'échelle telle que stockée, en demi-précision, montée au
+                demi-flottant suivant quand son arrondi l'a portée si loin sous amax / 127 que la plus grande
+                valeur s'arrondirait au-delà de 127 (les demi-flottants sous-normaux des groupes minuscules), les
+                valeurs étant alors gardées dans [-127, 127].
             */
             uint16_t stored = qk_float_to_half(amax / 127.0f);
             if (h2f(stored) * 127.5f < amax) ++stored;
@@ -189,12 +190,12 @@ namespace albireo
 #endif
     }
 
-    // Activation formats
+    // Formats d'activation
 
     namespace
     {
-        // 32 activations with their scale and the scaled sum of their quanta, which the
-        // asymmetric weight formats (_1) need for their minimum.
+        // 32 activations avec leur échelle et la somme mise à l'échelle de leurs quanta, dont les
+        // formats de poids asymétriques (_1) ont besoin pour leur minimum.
         struct block_q8_0x
         {
             float d;
@@ -203,8 +204,8 @@ namespace albireo
         };
         static_assert(sizeof(block_q8_0x) == 40, "unexpected padding");
 
-        // 256 activations with their scale and the sums of each group of 16, which the
-        // k-quant kernels use for the minimums and the offsets of their weights.
+        // 256 activations avec leur échelle et les sommes de chaque groupe de 16, que les
+        // noyaux k-quant utilisent pour les minimums et les décalages de leurs poids.
         struct block_q8_K
         {
             float d;
@@ -257,8 +258,8 @@ namespace albireo
                     std::memset(y[b].bsums, 0, sizeof(y[b].bsums));
                     continue;
                 }
-                // The extreme value maps to -127, as in the reference implementation
-                // of the format, which keeps the quanta symmetric.
+                // La valeur extrême correspond à -127, comme dans l'implémentation de référence
+                // du format, ce qui garde les quanta symétriques.
                 const float iscale = -127.0f / max;
                 for (int j = 0; j < 256; ++j)
                 {
@@ -332,7 +333,7 @@ namespace albireo
         }
     }
 
-    // Portable dot products
+    // Produits scalaires portables
 
     namespace
     {
@@ -458,7 +459,7 @@ namespace albireo
                 const uint8_t* q = w + 16;
                 const float d = h2f(w + 80) * y[b].d;
                 const float dmin = h2f(w + 82) * y[b].d;
-                // Minimums against the group sums of the activations.
+                // Minimums contre les sommes de groupe des activations.
                 int summs = 0;
                 for (int j = 0; j < 16; ++j) summs += y[b].bsums[j] * (scales[j] >> 4);
                 const int8_t* q8 = y[b].qs;
@@ -687,11 +688,11 @@ namespace albireo
 #include "qkernels_neon.inc"
 #endif
 
-// AVX2 dot products
+// Produits scalaires AVX2
 
 
-// VNNI dot products: one instruction for the sums of four products of bytes, or of two
-// products of 16-bit integers, on 256-bit vectors
+// Produits scalaires VNNI : une seule instruction pour les sommes de quatre produits d'octets, ou de
+// deux produits d'entiers 16 bits, sur des vecteurs de 256 bits
 
 
     float qk_dot_portable(ggml_type t, const uint8_t* w, const void* act, long n)
@@ -734,11 +735,11 @@ namespace albireo
     namespace
     {
         /*
-            The dot products of one row of weights with the nt <= 4 rows of activations act,
-            written to out: the kernels of several rows for the k-quants of this build, which
-            unpack the weights once, and qk_dot() row by row for the other formats.  Each
-            result is the one of qk_dot(), bit for bit, so that an answer never depends on the
-            requests computed with it.
+            Les produits scalaires d'une ligne de poids avec les nt <= 4 lignes d'activations act,
+            écrits dans out : les noyaux à plusieurs lignes pour les k-quants de ce build, qui
+            décompressent les poids une seule fois, et qk_dot() ligne par ligne pour les autres
+            formats.  Chaque résultat est celui de qk_dot(), bit pour bit, si bien qu'une réponse
+            ne dépend jamais des requêtes calculées avec elle.
         */
         void dot_rows(ggml_type t, const uint8_t* w, const uint8_t* const* act, long nt, long n, float* out)
         {
@@ -786,7 +787,7 @@ namespace albireo
         for (long b = 0; b < n / qk; ++b) fn(w + b * bytes, dst + b * qk);
     }
 
-    // Products
+    // Produits
 
     namespace
     {
@@ -816,7 +817,7 @@ namespace albireo
 
     void qk_set_exact_products(bool on) { exact_products.store(on); }
 
-    // Products of several tokens on floats
+    // Produits de plusieurs tokens sur des floats
 
     namespace
     {
@@ -827,8 +828,8 @@ namespace albireo
 
 
 
-        // The products of n_rows contiguous float rows of W with n_tokens rows of X,
-        // written to the first n_rows columns of Y.
+        // Les produits de n_rows lignes de floats contiguës de W avec n_tokens lignes de X,
+        // écrits dans les n_rows premières colonnes de Y.
         void gemm_rows(const float* W, long n_rows, long K, const float* X, long n_tokens, long x_stride,
             float* Y, long y_stride, bool accumulate)
         {
@@ -844,8 +845,8 @@ namespace albireo
                     gemm_neon<1>(X + u * x_stride, x_stride, W + r * K, K, Y + u * y_stride + r, y_stride, accumulate);
             t = 0;
 #endif
-            // What the blocks above leave: every token against the last rows, or all of
-            // it in the portable build.
+            // Ce que laissent les blocs ci-dessus : chaque token contre les dernières lignes, ou
+            // tout dans le build portable.
             for (; t < n_tokens; ++t)
                 for (long r = r4; r < n_rows; ++r)
                     store_result(Y + t * y_stride + r, qk_dot_f32(W + r * K, X + t * x_stride, K), accumulate);
@@ -867,9 +868,9 @@ namespace albireo
             }
 #endif
             const long rows = W.rows, K = W.cols;
-            // A tile of rows is expanded once to floats and serves every token: its
-            // floats stay in the second level cache while the tokens go by, in groups
-            // small enough for their rows to stay in the first level.
+            // Une tuile de lignes est développée une fois en floats et sert chaque token : ses
+            // floats restent dans le cache de second niveau pendant que les tokens défilent, par
+            // groupes assez petits pour que leurs lignes restent dans le premier niveau.
             const long tile_rows = 16;
             const long token_group = 48;
             const long n_tiles = (rows + tile_rows - 1) / tile_rows;
@@ -915,7 +916,7 @@ namespace albireo
         const long n = W.cols;
         const size_t act_bytes = qk_activation_row_bytes(f, n);
 
-        // The activations, quantized once for all the rows of the matrix.
+        // Les activations, quantifiées une fois pour toutes les lignes de la matrice.
         const uint8_t* act = nullptr;
         if (f == act_format::f32 && x_stride == n)
         {
@@ -939,8 +940,8 @@ namespace albireo
             act = dst;
         }
 
-        // Groups of output rows, enough of them to balance the threads, few enough for
-        // each group to amortize its hand-over.
+        // Des groupes de lignes de sortie, assez nombreux pour équilibrer les threads, assez peu
+        // pour que chaque groupe amortisse sa passation.
         const long rows = W.rows;
         const long threads = pool.active();
         long group = std::max<long>(1, rows / (threads * 8));
@@ -951,8 +952,8 @@ namespace albireo
         const uint8_t* data = W.data;
         const size_t row_bytes = W.row_bytes;
 
-        // With several tokens, the tokens go by tiles: the rows of a group and the
-        // activations of a tile then stay in the caches while every pair is computed.
+        // Avec plusieurs tokens, les tokens défilent par tuiles : les lignes d'un groupe et les
+        // activations d'une tuile restent alors dans les caches pendant le calcul de chaque paire.
         const long tile = 16;
         pool.parallel_for(n_groups, [&](long g, int) {
             const long r0 = g * group;
@@ -963,8 +964,8 @@ namespace albireo
                 for (long r = r0; r < r1; ++r)
                 {
                     const uint8_t* wrow = data + static_cast<size_t>(r) * row_bytes;
-                    // Up to four tokens at a time, for which the weights of the row are unpacked
-                    // once; a token left alone goes to qk_dot() directly.
+                    // Jusqu'à quatre tokens à la fois, pour lesquels les poids de la ligne sont
+                    // décompressés une seule fois ; un token resté seul va directement à qk_dot().
                     long t = t0;
                     for (; t + 1 < t1; t += 4)
                     {
@@ -990,7 +991,7 @@ namespace albireo
         });
     }
 
-    // Vector helpers
+    // Fonctions vectorielles d'aide
 
     float qk_dot_f32(const float* a, const float* b, long n)
     {
@@ -1041,12 +1042,12 @@ namespace albireo
         for (; i < n; ++i) g[i] = g[i] / (1.0f + std::exp(-g[i])) * u[i];
     }
 
-    // Attention by tiles
+    // Attention par tuiles
 
     namespace
     {
-        // The keys or the values converted to floats at a time: a few kilobytes, which stay
-        // in the first level cache while every row of the tile reads them.
+        // Les clés ou les valeurs converties en floats à la fois : quelques kilo-octets, qui restent
+        // dans le cache de premier niveau pendant que chaque ligne de la tuile les lit.
         inline long attention_group(long hd)
         {
             return std::max<long>(4, std::min<long>(64, 4096 / std::max<long>(1, hd)) / 4 * 4);
@@ -1054,8 +1055,8 @@ namespace albireo
 
 
         /*
-            The dot products of R rows of queries (R being 1 or 2) with four consecutive keys
-            of hd floats: s[r][c] = dot(q[r], k + c * hd).
+            Les produits scalaires de R lignes de requêtes (R valant 1 ou 2) avec quatre clés
+            consécutives de hd floats : s[r][c] = dot(q[r], k + c * hd).
         */
         template <int R>
         void dot_rows_x4(const float* const* q, const float* k, long hd, float* const* s)
@@ -1071,8 +1072,8 @@ namespace albireo
         }
 
         /*
-            The values of g keys weighted for R rows (R being 1 or 2) and added to the rows of
-            the output: o[r][i] += sum over j < g of p[r][j] * v[j * hd + i].
+            Les valeurs de g clés pondérées pour R lignes (R valant 1 ou 2) et ajoutées aux lignes
+            de la sortie : o[r][i] += somme sur j < g de p[r][j] * v[j * hd + i].
         */
         template <int R>
         void add_weighted_rows(const float* const* p, const float* v, long g, long hd, float* const* o)
@@ -1095,7 +1096,7 @@ namespace albireo
 
     namespace
     {
-        // The scores of the rows of queries over m keys, which expand(j0, g, to) gives as floats g at a time.
+        // Les scores des lignes de requêtes sur m clés, que expand(j0, g, to) donne en floats g à la fois.
         template <typename Expand>
         void attention_scores(const float* Q, long rows, long m, long hd, float* S, long lds, float* scratch,
             const Expand& expand)
@@ -1132,7 +1133,8 @@ namespace albireo
             }
         }
 
-        // The values of m keys weighted and added to the rows of the output, expand giving them as above.
+        // Les valeurs de m clés pondérées et ajoutées aux lignes de la sortie, expand les donnant comme
+        // ci-dessus.
         template <typename Expand>
         void attention_values(const float* P, long lds, long rows, long m, long hd, float* O, float* scratch,
             const Expand& expand)
@@ -1205,7 +1207,7 @@ namespace albireo
         });
     }
 
-    // Encoders
+    // Encodeurs
 
     void qk_layer_norm(const float* x, const float* gamma, const float* beta, float* y, long n, float eps)
     {
@@ -1235,8 +1237,8 @@ namespace albireo
 
     namespace
     {
-        // erf(z) for z >= 0 after Abramowitz and Stegun 7.1.26: 1 - t P(t) exp(-z^2) with
-        // t = 1 / (1 + p z), within 1.5e-7.
+        // erf(z) pour z >= 0 d'après Abramowitz et Stegun 7.1.26 : 1 - t P(t) exp(-z^2) avec
+        // t = 1 / (1 + p z), à 1.5e-7 près.
         const float erf_p = 0.3275911f;
         const float erf_a1 = 0.254829592f, erf_a2 = -0.284496736f, erf_a3 = 1.421413741f;
         const float erf_a4 = -1.453152027f, erf_a5 = 1.061405429f;
@@ -1269,15 +1271,15 @@ namespace albireo
 
     namespace
     {
-        // The keys of the encoder attention read at a time: the scores of a tile of queries
-        // against them take 32 kilobytes.
+        // Les clés de l'attention de l'encodeur lues à la fois : les scores d'une tuile de requêtes
+        // contre elles prennent 32 kilo-octets.
         const long encoder_block_keys = 128;
 
 
         /*
-            S[r * lds + j] = sum over d < hd of Q[r * hd + d] * Kt[d * ldk + j], for R rows and the
-            n keys of a group: exactly 16 with AVX2, any number otherwise.
-            Each key of Kt is read once for the R rows, without any horizontal sum.
+            S[r * lds + j] = somme sur d < hd de Q[r * hd + d] * Kt[d * ldk + j], pour R lignes et
+            les n clés d'un groupe : exactement 16 avec AVX2, un nombre quelconque sinon.
+            Chaque clé de Kt est lue une fois pour les R lignes, sans aucune somme horizontale.
         */
         template <int R>
         void encoder_scores_group(const float* Q, long hd, const float* Kt, long ldk, long n, float* S, long lds)
@@ -1320,9 +1322,9 @@ namespace albireo
         }
 
         /*
-            O[r * ldo + i] += sum over j < n of P[r * lds + j] * V[j * ldv + i], for R rows and
-            the w dimensions of a group: exactly 32 with AVX2, any number otherwise.  Each row of
-            V is read once for the R rows.
+            O[r * ldo + i] += somme sur j < n de P[r * lds + j] * V[j * ldv + i], pour R lignes
+            et les w dimensions d'un groupe : exactement 32 avec AVX2, un nombre quelconque sinon.
+            Chaque ligne de V est lue une fois pour les R lignes.
         */
         template <int R>
         void encoder_values_group(const float* P, long lds, const float* V, long ldv, long n, long w, float* O,
@@ -1352,7 +1354,8 @@ namespace albireo
                     const long w = std::min(W, hd - i);
                     const float* p = P + r * lds;
                     float* o = O + r * ldo + i;
-                    // The portable build has no vector form for several rows: one row at a time.
+                    // Le build portable n'a pas de forme vectorielle pour plusieurs lignes : une ligne
+                    // à la fois.
                     (void)R;
                     encoder_values_group<1>(p, lds, V + i, ldv, n, w, o, ldo);
                 }
@@ -1388,7 +1391,7 @@ namespace albireo
                 const float mx = std::max(top[r], qk_max(s, b));
                 if (mx > top[r] && sum[r] > 0.0f)
                 {
-                    // A larger maximum: what the row gathered so far shrinks.
+                    // Un maximum plus grand : ce que la ligne a accumulé jusqu'ici diminue.
                     const float shrink = std::exp(top[r] - mx);
                     sum[r] *= shrink;
                     qk_scale(O + r * ldo, shrink, hd);

@@ -123,7 +123,7 @@ namespace albireo
         m.rows = rows;
         m.cols = cols;
         m.row_bytes = qk_row_bytes(t->type, cols);
-        // Whole rows of blocks, as for a matrix, since the kernels read row_bytes per row.
+        // Des lignes entières de blocs, comme pour une matrice, car les noyaux lisent row_bytes par ligne.
         if (expert < 0 || expert >= n_experts
             || m.row_bytes * static_cast<size_t>(rows) * static_cast<size_t>(n_experts) != t->nbytes)
             throw std::runtime_error("tensor " + name + " does not hold whole rows");

@@ -36,7 +36,7 @@ namespace albireo
         const int64_t certificate_period = 24 * 3600;
         const int64_t inbox_period = 60;
 
-        // The errors of the requests that the service ends.
+        // Les erreurs des requêtes auxquelles le service met fin.
         const char* const stopping_reason = "the service stops";
         const char* const offline_reason = "offline mode: no request leaves this computer";
 
@@ -52,7 +52,7 @@ namespace albireo
             return r == embedding_role;
         }
 
-        // True when the catalog entry of a model names the role among its uses.
+        // Vrai quand l'entrée du catalogue d'un modèle nomme le rôle parmi ses usages.
         bool has_role(const json& descriptor, const std::string& role)
         {
             for (const auto& r : descriptor["roles"].elements())
@@ -60,7 +60,7 @@ namespace albireo
             return false;
         }
 
-        // The names of a path between its separators.
+        // Les noms d'un chemin entre ses séparateurs.
         std::vector<std::string> path_names(const std::string& p)
         {
             const char* const separators = "/";
@@ -81,9 +81,9 @@ namespace albireo
         }
 
         /*
-            Whether path, as written, is folder or lies under it, the letters of the names
-            compared in either case on Windows; within receives folder followed by the names
-            of path beyond it.  The file system is not read.
+            Indique si path, tel qu'écrit, est folder ou se trouve sous lui, les lettres des noms
+            comparées sans tenir compte de la casse sous Windows ; within reçoit folder suivi des noms
+            de path au-delà de lui.  Le système de fichiers n'est pas lu.
         */
         bool path_under(const std::string& path, const std::string& folder, std::string& within)
         {
@@ -97,9 +97,9 @@ namespace albireo
         }
 
         /*
-            The code of a path that the imports by path refuse from its text alone, or an
-            empty string: relative, on a share, a device or a namespace of the system, or
-            invalid.  The file system is not read, so that nothing is revealed of it.
+            Le code d'un chemin que les imports par chemin refusent d'après son seul texte, ou une
+            chaîne vide : relatif, sur un partage, un périphérique ou un espace de noms du système, ou
+            invalide.  Le système de fichiers n'est pas lu, pour qu'il n'en soit rien révélé.
         */
         std::string path_problem(const std::string& p)
         {
@@ -117,9 +117,9 @@ namespace albireo
         }
 
         /*
-            The certificates of the local server (certificates.h), and on Windows the trust
-            of a new authority: it takes the place of the authority the machine trusted, or
-            follows the choice of the installation (host_settings::trust_authority).
+            Les certificats du serveur local (certificates.h), et sous Windows la confiance accordée à
+            une nouvelle autorité : elle prend la place de l'autorité à laquelle la machine se fiait, ou
+            suit le choix de l'installation (host_settings::trust_authority).
         */
         bool prepare_certificates(const std::string& dir, int trust_choice, bool& renewed, std::string& error)
         {
@@ -128,13 +128,14 @@ namespace albireo
             return true;
         }
 
-        // Whether an error of SQLite tells a damaged database, which never opens again by itself.
+        // Indique si une erreur de SQLite signale une base abîmée, qui ne se rouvre jamais d'elle-même.
         bool damaged_database(const std::string& what)
         {
             return what.find("not a database") != std::string::npos || what.find("malformed") != std::string::npos;
         }
 
-        // Keeps a damaged database aside under a name of its own, with its journal; false when it cannot be renamed.
+        // Garde de côté une base abîmée sous un nom à elle, avec son journal ; false quand elle ne peut pas
+        // être renommée.
         bool set_aside_database(const std::string& db_path, const std::string& what)
         {
             const std::string aside = db_path + ".corrupt-" + std::to_string(now_unix());
@@ -146,7 +147,7 @@ namespace albireo
             return true;
         }
 
-        // The options of the socket the server listens on.
+        // Les options de la socket sur laquelle le serveur écoute.
         void set_listen_options(httplib::Server& server)
         {
             server.set_socket_options([](socket_t sock) {
@@ -171,8 +172,8 @@ namespace albireo
 
     std::vector<engine_choice> engine_options(const std::vector<engine_candidate>& candidates)
     {
-        // The OpenVINO engine with the richest processor kernels that run here: its devices
-        // make the choices of the NPU and of the graphics processor.
+        // Le moteur OpenVINO aux noyaux du processeur les plus riches qui tournent ici : ses
+        // périphériques font les choix du NPU et du processeur graphique.
         const engine_candidate* openvino = nullptr;
         for (const char* v : { "openvino-avxvnni", "openvino" })
             for (const auto& c : candidates)
@@ -184,13 +185,12 @@ namespace albireo
             if (is_openvino_variant(c.variant))
             {
                 if (&c != openvino) continue;
-                // One choice per kind of device, and one for the NPU and the graphics
-                // processor together, where dlib routes each product to the faster of
-                // them.
+                // Un choix par genre de périphérique, et un pour le NPU et le processeur graphique
+                // ensemble, où dlib envoie chaque produit au plus rapide des deux.
                 std::string npu, gpu;
                 for (const auto& d : c.description["devices"].elements())
                 {
-                    // The processor plugin is listed only when DLIB_NPU_DEVICE names it.
+                    // Le plugin du processeur n'est listé que quand DLIB_NPU_DEVICE le nomme.
                     const std::string type = d["type"].as_string();
                     if (type != "npu" && type != "gpu" && !(type == "cpu" && d["id"].as_string() == "CPU")) continue;
                     const std::string key = "openvino:" + type;
@@ -250,9 +250,9 @@ namespace albireo
 
         if (s.engine != "auto" && s.engine != "best")
         {
-            // A variant named in the settings; for the engines with several devices, the
-            // accelerator setting picks the device.  "openvino" names the OpenVINO engine
-            // that engine_options() keeps.
+            // Une variante nommée dans les réglages ; pour les moteurs à plusieurs périphériques, le
+            // réglage accelerator choisit le périphérique.  "openvino" nomme le moteur OpenVINO que
+            // garde engine_options().
             const engine_choice* named = nullptr;
             for (const auto& e : options)
             {
@@ -265,7 +265,7 @@ namespace albireo
             if (named) return *named;
             log_warning("engines: the engine '" + s.engine + "' of the settings is not usable, automatic selection");
         }
-        // The processor engine: the fastest measured one, else the one of the richest kernels.
+        // Le moteur du processeur : le plus rapide mesuré, sinon celui des noyaux les plus riches.
         const engine_choice* processor = fastest(is_cpu);
         if (!processor) processor = first({ "cpu-avxvnni", "cpu-avx2", "cpu" });
         const engine_choice* e = nullptr;
@@ -290,13 +290,13 @@ namespace albireo
         }
         else
         {
-            // The engine "best": the fastest measured one.
+            // Le moteur "best" : le plus rapide mesuré.
             if (s.engine == "best") e = fastest([](const engine_choice&) { return true; });
             /*
-                The accelerator of the computer, the processor computing what its device does not:
-                the NVIDIA card, else the NPU and the graphics processor of Intel together, else
-                the one of them present.  A measure that found it slower than the processor engine
-                gives way to the processor engine.
+                L'accélérateur de l'ordinateur, le processeur calculant ce que son périphérique ne fait pas :
+                la carte NVIDIA, sinon le NPU et le processeur graphique d'Intel ensemble, sinon celui des
+                deux qui est présent.  Une mesure qui l'a trouvé plus lent que le moteur du processeur cède
+                la place au moteur du processeur.
             */
             if (!e) e = first({ "cuda", "openvino:both", "openvino:gpu", "openvino:npu" });
             if (e && processor && rate(*e) > 0 && rate(*processor) > rate(*e)) e = processor;
@@ -342,7 +342,7 @@ namespace albireo
         c["kv_mb"] = s.kv_mb;
         c["kv_type"] = s.kv_type;
         c["offload_mb"] = s.device_mb;
-        // The GPU of the Mac (Metal), unless the accelerator setting says none.
+        // Le GPU du Mac (Metal), sauf si le réglage accelerator dit none.
         c["metal"] = s.accelerator != "none";
         c["gpu_prompt_tokens"] = s.gpu_prompt_tokens;
         c["gpu_prompt_context"] = s.gpu_prompt_context;
@@ -374,7 +374,7 @@ namespace albireo
         if (first_run) settings_->set(st);
         port_ = st.port;
         apply_network_settings(st);
-        // The publication space, the only source of the downloads, is named without its link.
+        // L'espace de publication, seule source des téléchargements, est nommé sans son lien.
         log_info(std::string("publication space: ") + (public_link_enabled() ? "set" : "not set")
             + (public_link_has_password() ? ", with its password" : ", without password"));
         log_info("web search: " + web_search_provider(st));
@@ -387,11 +387,11 @@ namespace albireo
         catch (const std::exception& e)
         {
             /*
-                A file that is no database, or a damaged one, never opens again by itself: it is
-                kept aside under a name of its own, and a new database starts, in which the
-                models of the models folder are recorded again (background_loop()).  The other
-                failures, a file read-only, held by another program or on a full disk, may pass:
-                the start fails, and the next attempt tries again.
+                Un fichier qui n'est pas une base, ou une base abîmée, ne se rouvre jamais de lui-même : il
+                est gardé de côté sous un nom à lui, et une nouvelle base commence, dans laquelle les
+                modèles du dossier des modèles sont enregistrés de nouveau (background_loop()).  Les autres
+                échecs, un fichier en lecture seule, tenu par un autre programme ou sur un disque plein,
+                peuvent passer : le démarrage échoue, et la tentative suivante réessaie.
             */
             const std::string what = e.what();
             if (!damaged_database(what))
@@ -417,7 +417,7 @@ namespace albireo
         }
 
 
-        // The documents of the Mac that the web application attaches.
+        // Les documents du Mac que l'application web joint.
         if (!dir_exists(documents_dir()) && !make_dirs(documents_dir()))
             log_warning("documents: cannot create " + documents_dir());
 
@@ -426,9 +426,9 @@ namespace albireo
         if (!prepare_certificates(cert_dir, st.trust_authority, renewed, error)) return false;
 
         /*
-            The models and the models that come with Albireo read and write the database: a
-            database found damaged only now is set aside as at its opening, and the step runs
-            again once on a new database.  Any other failure fails the start, tried again.
+            Les modèles et les modèles livrés avec Albireo lisent et écrivent la base : une base
+            trouvée abîmée seulement maintenant est mise de côté comme à son ouverture, et l'étape se
+            refait une fois sur une nouvelle base.  Tout autre échec fait échouer le démarrage, retenté.
         */
         for (int attempt = 0;; ++attempt)
         {
@@ -478,8 +478,8 @@ namespace albireo
             }
         }
 
-        // The engines start in the background (start_engines()), once the server answers.
-        // The key of the server reaches the TLS server from memory, decrypted here only.
+        // Les moteurs démarrent en arrière-plan (start_engines()), une fois que le serveur répond.
+        // La clé du serveur parvient au serveur TLS depuis la mémoire, déchiffrée ici seulement.
         std::string cert_pem, key_pem;
         if (!read_file(certificate_paths(cert_dir).server_cert, cert_pem) || !read_server_key(cert_dir, key_pem))
         {
@@ -508,15 +508,15 @@ namespace albireo
             return false;
         }
         /*
-            The limits of the bodies are those of each route (server.cpp).  A wait for a client
-            lasts 30 seconds at most, during its TLS handshake, its request or the writing of an
-            answer: a client that stalls frees its thread and the place of its request in the
-            engine.  Eight threads serve the connections, up to 64 while they are busy, since a
-            streamed answer holds its thread; 128 connections at most wait for one, and the next
-            ones are closed at once, so that a flood of connections holds a bounded number of
-            sockets.  A connection kept between two requests holds its thread too: it is closed
-            after 5 seconds without a request, so that the idle connections of the browsers of
-            several users leave the threads to the requests.
+            Les limites des corps sont celles de chaque route (server.cpp).  Une attente d'un client
+            dure 30 secondes au plus, pendant sa poignée de main TLS, sa requête ou l'écriture d'une
+            réponse : un client qui cale libère son thread et la place de sa requête dans le moteur.
+            Huit threads servent les connexions, jusqu'à 64 quand ils sont occupés, car une réponse
+            en flux tient son thread ; 128 connexions au plus en attendent un, et les suivantes sont
+            fermées aussitôt, pour qu'un afflux de connexions tienne un nombre borné de sockets.  Une
+            connexion gardée entre deux requêtes tient aussi son thread : elle est fermée après
+            5 secondes sans requête, pour que les connexions inactives des navigateurs de plusieurs
+            utilisateurs laissent les threads aux requêtes.
         */
         server_->set_payload_max_length(0);
         server_->set_keep_alive_timeout(5);
@@ -527,9 +527,9 @@ namespace albireo
         if (!server_->bind_to_port("127.0.0.1", port_))
         {
             /*
-                The port of the settings is taken by another program, or reserved by the
-                system since it was chosen: the server opens the last port it served on, which
-                the settings take again so that the tray finds the service there.
+                Le port des réglages est pris par un autre programme, ou réservé par le système depuis
+                qu'il a été choisi : le serveur ouvre le dernier port sur lequel il a servi, que les
+                réglages reprennent pour que la barre des tâches y trouve le service.
             */
             int last = 0;
             try
@@ -540,7 +540,7 @@ namespace albireo
             {
                 log_warning(std::string("server: the last port served on cannot be read: ") + e.what());
             }
-            // A bind that failed leaves the server refusing the next one until stop().
+            // Un bind qui a échoué laisse le serveur refuser le suivant jusqu'à stop().
             if (last != port_ && last >= 1024 && last <= 65535) server_->stop();
             if (last == port_ || last < 1024 || last > 65535 || !server_->bind_to_port("127.0.0.1", last))
             {
@@ -563,8 +563,8 @@ namespace albireo
         install_routes(*server_, *this);
         start_lan_server(settings_->get());
         {
-            // A stop that came before the bind found no socket to close: the bound one is
-            // closed here, and listen_after_bind() returns at once.
+            // Un arrêt venu avant le bind n'a trouvé aucune socket à fermer : celle qui est liée est
+            // fermée ici, et listen_after_bind() rend la main aussitôt.
             std::lock_guard<std::mutex> lock(server_m_);
             if (stopping_)
             {
@@ -587,16 +587,15 @@ namespace albireo
             {
                 log_error("service: the background tasks stopped");
             }
-            // A start cut short by an error ends the starting state all the same.
+            // Un démarrage interrompu par une erreur met tout de même fin à l'état de démarrage.
             engines_ready_ = true;
             models_ready_ = true;
         });
         server_->listen_after_bind();
         const bool stopped = stopping_;
 
-        // Shutdown: the requests to the network end first, so that nothing waits for
-        // them, then the background tasks, the downloads (their progress is kept), the
-        // engine.
+        // Arrêt : les requêtes vers le réseau se terminent d'abord, pour que rien ne les attende,
+        // puis les tâches de fond, les téléchargements (leur progression est gardée), le moteur.
         stop();
         if (background_.joinable()) background_.join();
         if (lan_thread_.joinable()) lan_thread_.join();
@@ -610,7 +609,7 @@ namespace albireo
         models.reset();
         engine_.stop();
         {
-            // The unloadings end with the engine.
+            // Les déchargements se terminent avec le moteur.
             std::vector<std::thread> retirers;
             {
                 std::lock_guard<std::mutex> lock(retire_m_);
@@ -632,7 +631,7 @@ namespace albireo
     void service::stop()
     {
         {
-            // Under the lock of the waits, so that a wait about to start sees the flag.
+            // Sous le verrou des attentes, pour qu'une attente sur le point de commencer voie le drapeau.
             std::lock_guard<std::mutex> lock(m_);
             stopping_ = true;
         }
@@ -642,7 +641,7 @@ namespace albireo
         }
         retire_cv_.notify_all();
         std::lock_guard<std::mutex> lock(server_m_);
-        // The downloads, the imports and the checks end at once; their progress is kept.
+        // Les téléchargements, les imports et les vérifications s'arrêtent aussitôt ; leur progression est gardée.
         http_cancel_all(stopping_reason);
         if (models_) models_->stop();
         if (server_) server_->stop();
@@ -650,9 +649,9 @@ namespace albireo
     }
 
     /*
-        The server of the local network, in plain HTTP on every address of the Mac, with the same
-        routes, behind the password of the network access when there is one.  A failure leaves the service on the
-        Mac alone, with a warning.
+        Le serveur du réseau local, en HTTP simple sur chaque adresse du Mac, avec les mêmes routes,
+        derrière le mot de passe de l'accès réseau quand il y en a un.  Un échec laisse le service au
+        Mac seul, avec un avertissement.
     */
     void service::start_lan_server(const host_settings& st)
     {
@@ -690,7 +689,7 @@ namespace albireo
             if (s.offline) http_cancel_all(offline_reason);
             else http_restore();
         }
-        // The background tasks start or end their network work at once.
+        // Les tâches de fond commencent ou arrêtent aussitôt leur travail réseau.
         cv_.notify_all();
     }
 
@@ -698,7 +697,7 @@ namespace albireo
     {
         if (restart_.exchange(true)) return;
         log_info("service: restart requested");
-        // From a handler of the server: the response is written before the server stops.
+        // Depuis un gestionnaire du serveur : la réponse est écrite avant l'arrêt du serveur.
         restarter_ = std::thread([this]() {
             std::unique_lock<std::mutex> lock(m_);
             cv_.wait_for(lock, std::chrono::milliseconds(300), [this]() { return stopping_.load(); });
@@ -709,15 +708,15 @@ namespace albireo
 
     void service::start_engines()
     {
-        // The status reports the start until the end of this function, whatever happens.
+        // L'état signale le démarrage jusqu'à la fin de cette fonction, quoi qu'il arrive.
         struct ready_at_exit
         {
             std::atomic<bool>& flag;
             ~ready_at_exit() { flag = true; }
         } ready{ engines_ready_ };
-        // The engine of this machine; a processor engine when the chosen one fails.
+        // Le moteur de cette machine ; un moteur du processeur quand celui choisi échoue.
         const host_settings st = settings_->get();
-        // The descriptions end at once when the service stops.
+        // Les descriptions s'arrêtent aussitôt quand le service s'arrête.
         candidates_ = engine_.discover(engines_dir(), executable_path(), &stopping_);
         choice_ = choose_engine(candidates_, st);
         if (stopping_) return;
@@ -781,10 +780,10 @@ namespace albireo
     void service::background_loop()
     {
         /*
-            The network tasks run on threads of their own and start first; the local work
-            follows at once and never waits for them: the engines, while the server already
-            answers, the models of the roles, the files of the import folder, the default
-            model among those installed.
+            Les tâches réseau tournent sur des threads à elles et démarrent d'abord ; le travail local
+            suit aussitôt et ne les attend jamais : les moteurs, pendant que le serveur répond déjà,
+            les modèles des rôles, les fichiers du dossier d'import, le modèle par défaut parmi ceux
+            qui sont installés.
         */
         bool online = false;
         int64_t next_catalog = 0;
@@ -797,8 +796,8 @@ namespace albireo
             const int64_t now = now_unix();
             if (!online)
             {
-                // At the start, and back online: the interrupted downloads resume, the
-                // catalog is checked at once.
+                // Au démarrage, et au retour en ligne : les téléchargements interrompus reprennent, le
+                // catalogue est vérifié aussitôt.
                 online = true;
                 models_->resume_pending();
                 next_catalog = now;
@@ -809,8 +808,8 @@ namespace albireo
                 models_->refresh_catalog_async();
             }
         };
-        // A task that fails, on a database that cannot be written for instance, is logged and
-        // comes again at its next turn, and the other tasks go on.
+        // Une tâche qui échoue, sur une base qui ne peut pas être écrite par exemple, est journalisée
+        // et revient à son tour suivant, et les autres tâches continuent.
         auto attempt = [](const char* task, const std::function<void()>& work) {
             try
             {
@@ -827,7 +826,7 @@ namespace albireo
         };
         attempt("network", [&]() { network(settings_->get()); });
         attempt("engines", [&]() { start_engines(); });
-        // A database started anew records the models of the models folder again, before they load.
+        // Une base recommencée enregistre de nouveau les modèles du dossier des modèles, avant leur chargement.
         if (database_restarted_)
             attempt("models folder", [&]() {
                 const json r = models_->import_path(models_->models_dir(), models_->models_dir(), true);
@@ -852,8 +851,8 @@ namespace albireo
             lock.unlock();
             const bool was_online = online;
             attempt("network", [&]() { network(settings_->get()); });
-            // A new catalog, downloaded or imported, may name the default model, which
-            // can be downloaded once back online.
+            // Un nouveau catalogue, téléchargé ou importé, peut nommer le modèle par défaut, qui
+            // peut être téléchargé une fois de retour en ligne.
             if (models_->catalog_generation() != catalog_seen || (online && !was_online))
             {
                 catalog_seen = models_->catalog_generation();
@@ -886,11 +885,11 @@ namespace albireo
     void service::scan_inbox()
     {
         /*
-            What is left in the import folder of the data folder, by the installer from its
-            medium or by an administrator, with the layout of an offline bundle: a signed
-            catalog, models (also in a "models" subfolder), a signed update with its
-            installer.  What is installed leaves the folder; a file that cannot be installed
-            is renamed with the suffix ".rejected", so that it is read only once.
+            Ce qui est laissé dans le dossier d'import du dossier des données, par l'installateur depuis
+            son support ou par un administrateur, avec la disposition d'un paquet hors ligne : un
+            catalogue signé, des modèles (aussi dans un sous-dossier "models"), une mise à jour signée
+            avec son installateur.  Ce qui est installé quitte le dossier ; un fichier qui ne peut pas
+            être installé est renommé avec le suffixe ".rejected", pour qu'il ne soit lu qu'une fois.
         */
         const std::string inbox = join_path(data_dir_, "import");
         if (!dir_exists(inbox)) return;
@@ -901,18 +900,19 @@ namespace albireo
             log_error("models: import folder: " + insecure + "; nothing is imported from it");
             return;
         }
-        // The models subfolder is read when it is reached through no link; a link is never opened.
+        // Le sous-dossier models est lu quand il est atteint sans passer par aucun lien ; un lien n'est jamais
+        // ouvert.
         const std::string sub = join_path(inbox, "models");
         std::vector<std::string> dirs = { inbox };
         if (link_free_folder(sub, inbox)) dirs.push_back(sub);
-        // A copy in progress: the folder waits for the next pass.
+        // Une copie en cours : le dossier attend la passe suivante.
         for (const std::string& dir : dirs)
             for (const auto& n : list_dir(dir))
             {
                 const std::string p = join_path(dir, n);
                 if (!is_link(p) && file_being_written(p)) return;
             }
-        // What cannot be installed is renamed aside, a link as itself.
+        // Ce qui ne peut pas être installé est renommé à part, un lien en tant que tel.
         auto set_aside = [](const std::string& f) {
             if (file_exists(f) || is_link(f)) rename_file(f, f + ".rejected");
         };
@@ -935,10 +935,10 @@ namespace albireo
         }
 
         /*
-            The models of the folder and of its models subfolder in one import, so that each
-            projector goes with its decoder.  A file installed, installed already (a model that
-            comes with Albireo say) or kept as a pending projector left the folder; one that
-            could not be installed is set aside with its sidecar description.
+            Les modèles du dossier et de son sous-dossier models en un seul import, pour que chaque
+            projecteur aille avec son décodeur.  Un fichier installé, déjà installé (un modèle livré
+            avec Albireo par exemple) ou gardé comme projecteur en attente a quitté le dossier ; celui
+            qui n'a pas pu être installé est mis de côté avec sa description annexe.
         */
         bool models = false;
         for (const std::string& dir : dirs)
@@ -951,7 +951,7 @@ namespace albireo
             {
                 const std::string file = f["file"].as_string();
                 const std::string result = f["result"].as_string();
-                // A file the import did not reach, the service stopping, stays for the next start.
+                // Un fichier que l'import n'a pas atteint, le service s'arrêtant, reste pour le prochain démarrage.
                 if (!ends_with(file, ".gguf") || result.empty()) continue;
                 const std::string side = file.substr(0, file.size() - 5) + ".json";
                 if (result != "error") remove_file(side);
@@ -971,9 +971,9 @@ namespace albireo
         const std::string inbox = join_path(data_dir_, "import");
         if (folder_admin_only(inbox)) return true;
         /*
-            Another account may write in the import folder, which the service reads with the
-            rights of the system: the folder receives the permissions of the data folder,
-            and what other accounts placed in it is set aside (secure_folder()).
+            Un autre compte peut écrire dans le dossier d'import, que le service lit avec les droits
+            du système : le dossier reçoit les permissions du dossier des données, et ce que d'autres
+            comptes y ont placé est mis de côté (secure_folder()).
         */
         log_warning("models: the import folder " + inbox + " lets other accounts than the administrators write in "
             "it: it is secured, and what they placed is set aside");
@@ -988,7 +988,7 @@ namespace albireo
             log_warning("import: " + english);
             return json::object();
         };
-        // The refusals that the text of the path decides, before anything is read.
+        // Les refus que décide le texte du chemin, avant toute lecture.
         const std::string problem = path_problem(path);
         if (problem == "import_path_relative")
             return refuse(problem, "the path " + path + " is relative: an import names a folder by its full path");
@@ -1005,7 +1005,7 @@ namespace albireo
         std::string within;
         if (path_under(path, inbox, within))
         {
-            // The import folder, which only SYSTEM and the administrators fill.
+            // Le dossier d'import, que seuls SYSTEM et les administrateurs remplissent.
             std::string insecure;
             if (dir_exists(inbox) && !secure_inbox(insecure))
                 return refuse("import_folder_insecure", "the import folder lets other accounts than the administrators "
@@ -1035,15 +1035,16 @@ namespace albireo
             return result;
         }
 
-        // Elsewhere, a signed offline bundle only; a model file of a user comes through the upload route.
+        // Ailleurs, un paquet hors ligne signé seulement ; un fichier de modèle d'un utilisateur passe par la
+        // route d'envoi.
         if (path.size() > 5 && same_name(path.substr(path.size() - 5), ".gguf"))
             return refuse("import_use_upload", "a model file outside the import folder is sent to the service by its "
                 "user: Import..., then Model files (*.gguf), in the Models window, or the route "
                 "/albireo/v1/models/upload");
         /*
-            The signed files decide, read through no link from the root of the drive; the
-            answer is the same whether the folder is missing, unreadable, unsigned or reached
-            through a link, so that it reveals nothing of a folder of another account.
+            Les fichiers signés décident, lus sans passer par aucun lien depuis la racine du disque ; la
+            réponse est la même, que le dossier manque, soit illisible, non signé ou atteint par un lien,
+            pour qu'elle ne révèle rien d'un dossier d'un autre compte.
         */
         std::string catalog_body, catalog_sig;
         const bool catalog = read_file_link_free(join_path(path, "catalog.json"), std::string(), catalog_body,
@@ -1060,7 +1061,8 @@ namespace albireo
         if (catalog)
         {
             result["catalog"] = models_->import_catalog(path, std::string());
-            // The models the signed catalog lists, with their projectors, whatever catalog stays in use.
+            // Les modèles que liste le catalogue signé, avec leurs projecteurs, quel que soit le catalogue qui
+            // reste en usage.
             if (signed_catalog)
             {
                 const json r = models_->import_bundle(path, json::parse_or_null(catalog_body));
@@ -1085,10 +1087,10 @@ namespace albireo
         const std::vector<installed_model> added =
             models_->register_builtin(join_path(program_dir_, builtin_models_folder), removed);
         /*
-            A model that no longer comes with Albireo leaves its functions to the new model of
-            its kind, a language model to a language model and an embedding model to an
-            embedding model: an update that changes the model that comes with Albireo keeps the
-            functions where the user had them.
+            Un modèle qui n'est plus livré avec Albireo laisse ses fonctions au nouveau modèle de son
+            genre, un modèle de langage à un modèle de langage et un modèle d'embedding à un modèle
+            d'embedding : une mise à jour qui change le modèle livré avec Albireo garde les fonctions
+            là où l'utilisateur les avait.
         */
         std::map<std::string, std::string> successor;
         std::set<std::string> successors;
@@ -1125,11 +1127,11 @@ namespace albireo
                 }
             });
         }
-        // The engine is not started yet: the functions are given now, the models load with
-        // the others.
+        // Le moteur n'est pas encore démarré : les fonctions sont données maintenant, les modèles
+        // se chargent avec les autres.
         for (const auto& m : added)
             if (!successors.count(m.id)) on_installed(m);
-        // The language model that comes with Albireo serves the work in the background.
+        // Le modèle de langage livré avec Albireo sert le travail en arrière-plan.
         background_model_.clear();
         for (const auto& m : db_->models())
             if (m.source == "builtin" && !is_embedding(m) && file_exists(m.file) && background_model_.empty())
@@ -1149,9 +1151,9 @@ namespace albireo
         const std::vector<installed_model> installed = db_->models();
         const json catalog = models_->catalog();
 
-        // The document search always has its embedding model: an installed one, else the
-        // default one of the catalog, downloaded whatever the options of the installation
-        // (the computers without network receive it in their offline bundle).
+        // La recherche dans les documents a toujours son modèle d'embedding : un modèle installé,
+        // sinon celui par défaut du catalogue, téléchargé quelles que soient les options de
+        // l'installation (les ordinateurs sans réseau le reçoivent dans leur paquet hors ligne).
         if (!st.active.count(embedding_role))
         {
             const installed_model* pick = nullptr;
@@ -1180,7 +1182,7 @@ namespace albireo
         const installed_model* pick = nullptr;
         for (const auto& m : installed)
         {
-            // The model of the catalog meant for general use, else the first language model.
+            // Le modèle du catalogue destiné à l'usage général, sinon le premier modèle de langage.
             if (is_embedding(m)) continue;
             if (!pick || has_role(m.descriptor, "general") || m.descriptor["default"].as_bool(false)) pick = &m;
         }
@@ -1190,8 +1192,8 @@ namespace albireo
             if (!activate(pick->id, "general", error)) log_warning("models: " + pick->id + ": " + error.text);
             return;
         }
-        // No language model installed: the default model of the catalog is downloaded, once,
-        // unless the installation asked otherwise or the computer is offline.
+        // Aucun modèle de langage installé : le modèle par défaut du catalogue est téléchargé, une
+        // fois, sauf si l'installation a demandé autrement ou si l'ordinateur est hors ligne.
         if (!st.default_model || st.offline || db_->value("default_model_requested") == "1") return;
         for (const auto& e : catalog["models"].elements())
         {
@@ -1213,7 +1215,8 @@ namespace albireo
     void service::on_installed(const installed_model& m)
     {
         if (stopping_) return;
-        // A model of the engine whose files changed, a projector given to it say, loads again with them.
+        // Un modèle du moteur dont les fichiers ont changé, un projecteur qu'on lui a donné par exemple, se
+        // recharge avec eux.
         const std::vector<std::string> loaded = engine_.loaded_models();
         if (std::find(loaded.begin(), loaded.end(), m.id) != loaded.end())
         {
@@ -1222,19 +1225,21 @@ namespace albireo
         }
         else
         {
-            // A model whose files were replaced while it was out of the engine (replace_model_files()) loads again.
+            // Un modèle dont les fichiers ont été remplacés pendant qu'il était hors du moteur
+            // (replace_model_files()) se recharge.
             reload_model(m.id);
         }
         if (is_embedding(m))
         {
-            // The first embedding model serves the document search.
+            // Le premier modèle d'embedding sert la recherche dans les documents.
             user_error error;
             if (!settings_->get().active.count(embedding_role) && !activate(m.id, embedding_role, error))
                 log_warning("models: " + m.id + ": " + error.text);
             return;
         }
-        // A new model takes the functions its catalog entry names and no model holds yet,
-        // and the general one when it is free, so that every function has a model.
+        // Un nouveau modèle prend les fonctions que nomme son entrée du catalogue et qu'aucun modèle
+        // ne tient encore, et la fonction générale quand elle est libre, pour que chaque fonction ait
+        // un modèle.
         std::vector<std::string> roles;
         for (const auto& r : m.descriptor["roles"].elements())
         {
@@ -1257,10 +1262,10 @@ namespace albireo
             load_state_[m.id] = "loading";
         }
         /*
-            The engine parses the files of the model with the rights of the service: their folders must be
-            those that only SYSTEM and the administrators change (folder_admin_only()).  A folder another
-            account may write in, a drive without permissions, or a folder put in the place of the models
-            folder by an account that renamed one of its parents, leaves the model unloaded.
+            Le moteur analyse les fichiers du modèle avec les droits du service : leurs dossiers doivent être
+            ceux que seuls SYSTEM et les administrateurs modifient (folder_admin_only()).  Un dossier où un
+            autre compte peut écrire, un disque sans permissions, ou un dossier mis à la place du dossier des
+            modèles par un compte qui a renommé l'un de ses parents, laisse le modèle non chargé.
         */
         for (const std::string& file : { m.file, m.projector })
         {
@@ -1273,8 +1278,8 @@ namespace albireo
         }
         const host_settings st = settings_->get();
         json options = json::object();
-        // The settings of the conversations apply to the language models; an embedding
-        // model keeps the defaults of the engine for its short inputs.
+        // Les réglages des conversations s'appliquent aux modèles de langage ; un modèle
+        // d'embedding garde les valeurs par défaut du moteur pour ses entrées courtes.
         if (!is_embedding(m))
         {
             if (st.context > 0) options["context"] = st.context;
@@ -1282,7 +1287,7 @@ namespace albireo
             if (st.kv_mb > 0) options["kv_mb"] = st.kv_mb;
             options["kv_type"] = st.kv_type;
         }
-        // The vision encoder of a model that reads images.
+        // L'encodeur de vision d'un modèle qui lit les images.
         if (!m.projector.empty())
         {
             if (file_exists(m.projector)) options["projector"] = m.projector;
@@ -1319,7 +1324,7 @@ namespace albireo
             std::string error;
             load_model(m, error);
         }
-        // The model of the work in the background, loaded with or without functions.
+        // Le modèle du travail en arrière-plan, chargé avec ou sans fonctions.
         if (!background_model_.empty() && !stopping_
             && std::find(done.begin(), done.end(), background_model_) == done.end())
         {
@@ -1363,7 +1368,7 @@ namespace albireo
                     "conversation", "embedding_model_only").arg("m", name);
             return false;
         }
-        // A model waiting for its requests before it leaves stays.
+        // Un modèle qui attend ses requêtes avant de partir reste.
         if (engine_.keep_model(id)) log_info("models: " + id + " stays loaded");
         wait_retired(id);
         {
@@ -1379,8 +1384,8 @@ namespace albireo
             error.set(load_error, "load_failed").arg("m", name).arg("e", load_error);
             return false;
         }
-        // The settings may have changed while the model loaded: the function is set on
-        // the settings as they are now.
+        // Les réglages ont pu changer pendant le chargement du modèle : la fonction est fixée dans
+        // les réglages tels qu'ils sont maintenant.
         std::string previous;
         const host_settings st = settings_->update([&](host_settings& s) {
             const auto current = s.active.find(role);
@@ -1388,7 +1393,7 @@ namespace albireo
             s.active[role] = id;
         });
         log_info("models: " + id + " active for " + role);
-        // The model the role used before is released when no other role uses it.
+        // Le modèle qu'utilisait le rôle auparavant est libéré quand aucun autre rôle ne l'utilise.
         if (!previous.empty() && previous != id)
         {
             bool used = false;
@@ -1400,10 +1405,10 @@ namespace albireo
 
     void service::retire(const std::string& id, bool reload)
     {
-        // The model of the work in the background stays loaded without functions; it leaves to load again only.
+        // Le modèle du travail en arrière-plan reste chargé sans fonctions ; il ne part que pour se recharger.
         if (!reload && !background_model_.empty() && id == background_model_) return;
         std::lock_guard<std::mutex> lock(retire_m_);
-        // The threads of the retirements that ended, which take this lock no more.
+        // Les threads des retraits terminés, qui ne prennent plus ce verrou.
         for (const auto& ended : ended_retirers_)
         {
             const auto t = std::find_if(retirers_.begin(), retirers_.end(),
@@ -1414,14 +1419,14 @@ namespace albireo
         }
         ended_retirers_.clear();
         if (stopping_) return;
-        // A model leaving already loads again once it left, when it is still used then.
+        // Un modèle déjà en partance se recharge une fois parti, s'il est encore utilisé à ce moment-là.
         if (reload) reloading_.insert(id);
         if (!retiring_.insert(id).second) return;
         {
             std::lock_guard<std::mutex> state(m_);
             load_state_[id] = removing_.count(id) != 0 ? "removing" : "unloading";
         }
-        // No new request goes to the model; the thread waits for those it has.
+        // Aucune nouvelle requête ne va au modèle ; le thread attend celles qu'il a.
         engine_.begin_unload(id);
         retirers_.emplace_back([this, id]() {
             try
@@ -1432,8 +1437,8 @@ namespace albireo
                 {
                     bool remove = false;
                     {
-                        // The last check and the end of the retirement in one step, so that a
-                        // deletion asked meanwhile is either seen here or done by remove_model.
+                        // La dernière vérification et la fin du retrait en une seule étape, pour qu'une
+                        // suppression demandée entre-temps soit vue ici, soit faite par remove_model.
                         std::lock_guard<std::mutex> l(retire_m_);
                         if (removing_.count(id) == 0)
                         {
@@ -1448,7 +1453,7 @@ namespace albireo
                     }
                     if (!remove)
                     {
-                        // Kept by an activation, then deleted: it leaves after all.
+                        // Gardé par une activation, puis supprimé : il part finalement.
                         engine_.begin_unload(id);
                         unloaded = engine_.finish_unload(id);
                         if (unloaded) log_info("models: " + id + " unloaded");
@@ -1459,9 +1464,9 @@ namespace albireo
                     if (models_ && !models_->remove(id, error)) log_warning("models: " + error);
                 }
                 /*
-                    A model that left to load again with its files: the activations that wait for
-                    the end of its retirement go first, then it loads when a function or the work
-                    in the background still uses it.
+                    Un modèle parti pour se recharger avec ses fichiers : les activations qui attendent la
+                    fin de son retrait passent d'abord, puis il se charge quand une fonction ou le travail
+                    en arrière-plan l'utilise encore.
                 */
                 bool again = false;
                 {
@@ -1476,8 +1481,8 @@ namespace albireo
             }
             catch (const std::exception& e)
             {
-                // A database that cannot be written, for instance: the retirement ends all the
-                // same, so that no activation waits for it.
+                // Une base qui ne peut pas être écrite, par exemple : le retrait se termine tout de même,
+                // pour qu'aucune activation ne l'attende.
                 log_error("models: " + id + ": " + e.what());
                 std::lock_guard<std::mutex> l(retire_m_);
                 removing_.erase(id);
@@ -1496,11 +1501,11 @@ namespace albireo
 
     void service::reload_model(const std::string& id)
     {
-        // Serialized with the activations, which load the models too.
+        // Sérialisé avec les activations, qui chargent aussi les modèles.
         std::lock_guard<std::mutex> serial(models_m_);
         if (stopping_ || !engine_.running()) return;
         {
-            // A model still leaving the engine loads again once it left (retire()).
+            // Un modèle qui quitte encore le moteur se recharge une fois parti (retire()).
             std::lock_guard<std::mutex> l(retire_m_);
             if (retiring_.count(id) != 0)
             {
@@ -1522,19 +1527,21 @@ namespace albireo
 
     bool service::replace_model_files(const std::string& id, const std::function<bool()>& place)
     {
-        // The model of the work in the background stays loaded, and comes with Albireo: no file replaces its own.
+        // Le modèle du travail en arrière-plan reste chargé, et est livré avec Albireo : aucun fichier ne
+        // remplace le sien.
         if (!background_model_.empty() && id == background_model_) return false;
         bool retired = false;
         for (int attempt = 0; attempt < 3 && !stopping_; ++attempt)
         {
             bool placed = false, ok = false;
             {
-                // No activation and no load takes the model between the check and the renames.
+                // Aucune activation ni aucun chargement ne prend le modèle entre la vérification et les renommages.
                 std::lock_guard<std::mutex> serial(models_m_);
                 bool leaving = false;
                 {
                     std::lock_guard<std::mutex> l(retire_m_);
-                    // A model being deleted keeps no new file: its deletion takes the files it names.
+                    // Un modèle en cours de suppression ne garde aucun nouveau fichier : sa suppression prend les
+                    // fichiers qu'il nomme.
                     if (removing_.count(id) != 0) return false;
                     leaving = retiring_.count(id) != 0;
                 }
@@ -1547,7 +1554,7 @@ namespace albireo
             }
             if (placed)
             {
-                // A replacement that failed leaves the model with its files: it comes back as it was.
+                // Un remplacement qui a échoué laisse le modèle avec ses fichiers : il revient tel qu'il était.
                 if (!ok && retired) reload_model(id);
                 return ok;
             }
@@ -1652,7 +1659,7 @@ namespace albireo
             std::lock_guard<std::mutex> lock(retire_m_);
             if (in_engine || retiring_.count(id) != 0)
             {
-                // Deleted by its retirement, once its requests are served.
+                // Supprimé par son retrait, une fois ses requêtes servies.
                 removing_.insert(id);
                 pending = true;
             }
@@ -1694,8 +1701,8 @@ namespace albireo
         std::string role = requested;
         if (role.compare(0, 8, "albireo-") == 0) role = role.substr(8);
         if (requested.empty() || requested == "auto" || requested == "albireo") role = "general";
-        // The work in the background goes to the model that comes with Albireo, else to the
-        // general model.
+        // Le travail en arrière-plan va au modèle livré avec Albireo, sinon au modèle
+        // général.
         if (role == "background")
         {
             if (!background_model_.empty() && is_loaded(background_model_)) return background_model_;
@@ -1708,8 +1715,8 @@ namespace albireo
         {
             auto it = st.active.find(role);
             if (it != st.active.end() && is_loaded(it->second)) return it->second;
-            // A role without its own model is served by the general model, else by the model
-            // that comes with Albireo, else by the first language model loaded.
+            // Un rôle sans modèle à lui est servi par le modèle général, sinon par le modèle
+            // livré avec Albireo, sinon par le premier modèle de langage chargé.
             it = st.active.find("general");
             if (it != st.active.end() && is_loaded(it->second)) return it->second;
             if (!background_model_.empty() && is_loaded(background_model_)) return background_model_;
@@ -1745,7 +1752,7 @@ namespace albireo
         const json answer = engine_.running() ? engine_.query(query) : json();
         for (const auto& id : engine_.loaded_models())
         {
-            // The inputs the engine reads for the model: text alone unless its query says more.
+            // Les entrées que le moteur lit pour le modèle : le texte seul, sauf si son interrogation en dit plus.
             json inputs = json::array();
             inputs.push_back("text");
             for (const auto& m : answer["models"].elements())
@@ -1870,7 +1877,7 @@ namespace albireo
         const host_settings st = settings_->get();
         if (!engines_ready_)
         {
-            // The engines are being described: nothing to list yet.
+            // Les moteurs sont en cours de description : rien à lister encore.
             json out = json::object();
             out["starting"] = true;
             out["engines"] = json::array();
@@ -1912,7 +1919,7 @@ namespace albireo
             j["device"] = o.device;
             j["current"] = o.key == choice_.key;
             j["measure"] = st.engine_benchmarks[o.key];
-            // The kind of the choice and the names of its devices, which the menus show.
+            // Le genre du choix et les noms de ses périphériques, que montrent les menus.
             const std::string kind = o.key == "cuda" || o.key == "openvino:gpu" ? "gpu"
                 : o.key == "openvino:npu" ? "npu" : o.key == "openvino:both" ? "both" : "cpu";
             j["kind"] = kind;
@@ -1939,7 +1946,8 @@ namespace albireo
 
     json service::benchmark_engines()
     {
-        // One measure at a time: the engines of a second one would run beside those of the first and skew both.
+        // Une seule mesure à la fois : les moteurs d'une seconde tourneraient à côté de ceux de la première
+        // et fausseraient les deux.
         std::unique_lock<std::mutex> running(benchmark_m_, std::try_to_lock);
         if (!running.owns_lock())
         {
@@ -1948,7 +1956,7 @@ namespace albireo
             busy["code"] = "benchmark_running";
             return busy;
         }
-        // The model of the measure: the general model, else the smallest one installed.
+        // Le modèle de la mesure : le modèle général, sinon le plus petit installé.
         const host_settings st = settings_->get();
         installed_model model;
         bool found = st.active.count("general") && db_->find_model(st.active.at("general"), model);
@@ -1974,7 +1982,7 @@ namespace albireo
             return out;
         }
         json results = json::object();
-        // Waits until the engine of the service serves no request, two minutes at most.
+        // Attend que le moteur du service ne serve aucune requête, deux minutes au plus.
         auto wait_idle = [&]() {
             for (int i = 0; i < 240 && !stopping_; ++i)
             {
@@ -1989,8 +1997,8 @@ namespace albireo
             if (stopping_) break;
             json config = engine_config(st, o.device);
             config["context"] = 2048;
-            // The graphs of a device compile before the products they serve, so that the
-            // measure reflects the device.
+            // Les graphes d'un périphérique se compilent avant les produits qu'ils servent, pour que
+            // la mesure reflète le périphérique.
             config["benchmark"] = true;
             std::string output;
             int code = -1;
@@ -2002,9 +2010,9 @@ namespace albireo
                 const unsigned long long before = engine_.activity(active);
                 log_info("engines: measuring " + o.key + " with " + model.id);
                 output.clear();
-                // The measure ends with the service, which then waits for no child process.
+                // La mesure se termine avec le service, qui n'attend alors aucun processus enfant.
                 code = run_process(executable_path(), args, &output, 600000, &stopping_);
-                // A measure during which the service computed shared the processor with it.
+                // Une mesure pendant laquelle le service a calculé a partagé le processeur avec lui.
                 if (engine_.activity(active) == before && active == 0) break;
                 log_info("engines: the service served requests during the measure of " + o.key
                     + (attempt == 0 ? ", which is made again" : ", which is kept"));
@@ -2028,15 +2036,15 @@ namespace albireo
                 log_warning("engines: measure of " + o.key + " failed");
             }
         }
-        // The measures join the settings as they are now, which may have changed meanwhile.
+        // Les mesures rejoignent les réglages tels qu'ils sont maintenant, qui ont pu changer entre-temps.
         const host_settings updated = settings_->update([&](host_settings& s) {
             for (const auto& kv : results.items())
                 if (!kv.second.contains("error")) s.engine_benchmarks[kv.first] = kv.second;
         });
         out["model"] = model.id;
         out["results"] = results;
-        // The engine "best", or an accelerator choice among several devices, follows the
-        // new measures after a restart.
+        // Le moteur "best", ou un choix d'accélérateur parmi plusieurs périphériques, suit les
+        // nouvelles mesures après un redémarrage.
         const engine_choice next = choose_engine(candidates_, updated);
         out["restart"] = next.key != choice_.key;
         if (next.key != choice_.key) request_restart();
@@ -2056,8 +2064,8 @@ namespace albireo
             std::cout << d.dump() << std::endl;
             return 2;
         }
-        // The runtime of a device starts with the description; the process that ends after it
-        // (main.cpp) leaves the library loaded.
+        // L'environnement d'exécution d'un périphérique démarre avec la description ; le processus
+        // qui se termine après elle (main.cpp) laisse la bibliothèque chargée.
         lib.keep_loaded();
         d = lib.description();
         if (!d.is_object())
@@ -2135,11 +2143,11 @@ namespace albireo
             return done["usage"].is_object();
         };
         /*
-            A first request reads the model from the disk into the memory of the system, lets a
-            device compile its graphs and copy its matrices, and lets the engines of the devices
-            measure where each product runs faster.  Two requests are then measured: the faster
-            of the two is kept, so that a pause of the system during one of them does not set
-            the measure.
+            Une première requête lit le modèle du disque dans la mémoire du système, laisse un
+            périphérique compiler ses graphes et copier ses matrices, et laisse les moteurs des
+            périphériques mesurer où chaque produit tourne le plus vite.  Deux requêtes sont ensuite
+            mesurées : la plus rapide des deux est gardée, pour qu'une pause du système pendant l'une
+            d'elles ne fixe pas la mesure.
         */
         json warm, done, again;
         const bool ok = run(16, warm) && run(64, done) && run(64, again);

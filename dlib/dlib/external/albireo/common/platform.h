@@ -9,34 +9,35 @@
 #include <vector>
 
 /*
-    Files, folders and processes, with UTF-8 paths on every platform.  On Windows the
-    paths are converted to UTF-16 at the system calls, so that a user name or a folder
-    with accents, or in another script, works everywhere.
+    Fichiers, dossiers et processus, avec des chemins UTF-8 sur toutes les plateformes.  Sous
+    Windows, les chemins sont convertis en UTF-16 aux appels système, pour qu'un nom
+    d'utilisateur ou un dossier avec des accents, ou dans une autre écriture, marche partout.
 */
 
 namespace albireo
 {
 
 
-    // The program running, and its folder.
+    // Le programme en cours, et son dossier.
     std::string executable_path();
     std::string executable_dir();
 
     /*
-        The folder of the data shared by the programs: the settings, the certificates,
-        the database, the logs and, unless the settings say otherwise, the models.
-        $ALBIREO_HOME when it is set, otherwise %ProgramData%\Albireo on Windows and
-        ~/.local/share/albireo elsewhere.  On Windows the variable is read from the
-        environment of the machine, the one the services receive: the variable of a user
-        steers neither the installer nor the icon away from the service.  The folder the
-        installer records (DataDir of HKLM\Software\Albireo) comes first.
+        Le dossier des données partagées par les programmes : les réglages, les certificats,
+        la base de données, les journaux et, sauf si les réglages disent autre chose, les
+        modèles.  $ALBIREO_HOME quand elle est définie, sinon %ProgramData%\Albireo sous Windows
+        et ~/.local/share/albireo ailleurs.  Sous Windows, la variable est lue dans
+        l'environnement de la machine, celui que reçoivent les services : la variable d'un
+        utilisateur ne détourne ni l'installateur ni l'icône du service.  Le dossier que
+        l'installateur enregistre (DataDir de HKLM\Software\Albireo) passe en premier.
     */
     std::string data_dir();
 
     /*
-        Makes data_dir() return p in this process from then on.  The test programs call it, so
-        that they never write in the data folder of an installed service; the programs of
-        Albireo never do, and no variable of the environment of a user can do it.
+        Fait que data_dir() renvoie p dans ce processus à partir de là.  Les programmes de test
+        l'appellent, pour ne jamais écrire dans le dossier de données d'un service installé ;
+        les programmes d'Albireo ne le font jamais, et aucune variable de l'environnement d'un
+        utilisateur ne peut le faire.
     */
     void set_data_dir(const std::string& p);
 
@@ -48,76 +49,76 @@ namespace albireo
     bool dir_exists(const std::string& p);
     bool make_dirs(const std::string& p);
     uint64_t file_size(const std::string& p);
-    // Whether another program still writes a file: held open for writing on Windows,
-    // modified during the last 30 seconds elsewhere.
+    // Si un autre programme écrit encore un fichier : tenu ouvert en écriture sous Windows,
+    // modifié pendant les 30 dernières secondes ailleurs.
     bool file_being_written(const std::string& p);
     bool remove_file(const std::string& p);
-    // Moves a file, replacing the destination.
+    // Déplace un fichier, en remplaçant la destination.
     bool rename_file(const std::string& from, const std::string& to);
-    // Copies a file, replacing the destination; a copy that cancel ends leaves no
-    // destination behind.
+    // Copie un fichier, en remplaçant la destination ; une copie que cancel interrompt ne
+    // laisse aucune destination derrière elle.
     bool copy_file(const std::string& from, const std::string& to, const std::atomic<bool>* cancel = nullptr);
-    // Removes a folder and everything under it; a link goes alone, what it leads to stays.
+    // Supprime un dossier et tout ce qu'il contient ; un lien part seul, ce vers quoi il mène reste.
     bool remove_tree(const std::string& p);
     std::vector<std::string> list_dir(const std::string& p);
 
-    // Whether p itself is a link: a symbolic link, a junction or a mount point.
+    // Si p lui-même est un lien : un lien symbolique, une jonction ou un point de montage.
     bool is_link(const std::string& p);
 
     /*
-        The path of p with its links resolved, as the system opens it: a path on a drive
-        letter, or \\server\share\... on a network share, on Windows.  An empty string
-        when p cannot be opened.
+        Le chemin de p avec ses liens résolus, tel que le système l'ouvre : un chemin sur une
+        lettre de lecteur, ou \\server\share\... sur un partage réseau, sous Windows.  Une
+        chaîne vide quand p ne peut pas être ouvert.
     */
     std::string final_path(const std::string& p);
 
-    // Whether p reaches its file or folder through no link: its final path is p itself.
+    // Si p atteint son fichier ou son dossier sans aucun lien : son chemin final est p lui-même.
     bool direct_path(const std::string& p);
 
-    // Whether path, links resolved, is folder or lies under it; path may not exist yet.
+    // Si path, liens résolus, est folder ou se trouve dessous ; path peut ne pas exister encore.
     bool path_inside(const std::string& path, const std::string& folder);
 
     /*
-        Whether the owner of p itself, a link included, is SYSTEM, the administrators, the
-        installer of Windows (TrustedInstaller) or the account of this program, which has
-        their rights where the function serves (the installer, the service).  Always true
-        elsewhere than on Windows.
+        Si le propriétaire de p lui-même, lien compris, est SYSTEM, les administrateurs,
+        l'installateur de Windows (TrustedInstaller) ou le compte de ce programme, qui a leurs
+        droits là où la fonction sert (l'installateur, le service).  Toujours vrai ailleurs que
+        sous Windows.
     */
     bool owned_by_system(const std::string& p);
 
     /*
-        Whether the drive that holds p, or would hold it when p does not exist yet, keeps the
-        permissions of its files, as NTFS and ReFS do and exFAT and FAT32 do not.
-        file_system receives the name of its file system ("NTFS", "exFAT"...), empty when the
-        drive does not answer, which keeps no permission either.  Always true elsewhere than
-        on Windows, file_system then empty.
+        Si le lecteur qui contient p, ou le contiendrait quand p n'existe pas encore, garde les
+        permissions de ses fichiers, comme NTFS et ReFS et contrairement à exFAT et FAT32.
+        file_system reçoit le nom de son système de fichiers ("NTFS", "exFAT"...), vide quand le
+        lecteur ne répond pas, ce qui ne garde aucune permission non plus.  Toujours vrai
+        ailleurs que sous Windows, file_system étant alors vide.
     */
     bool drive_keeps_permissions(const std::string& p, std::string& file_system);
 
     /*
-        Makes p a folder that only SYSTEM and the administrators change, and that the
-        users read: the folders where the service and the installer write with their
-        rights.  On Windows:
-            - a missing folder is created so;
-            - the links on its path must belong to SYSTEM or the administrators, and the
-              folder they lead to must be on a local drive that keeps permissions
-              (drive_keeps_permissions());
-            - the folder must belong to them too, or be empty: it is then taken over;
-            - unless it has these permissions already, it receives them, and what other
-              accounts placed in it, links included, is renamed with the suffix
-              ".untrusted-<random>", which no program reads; with check_content, what it
-              holds is checked even when it had these permissions.
-        Returns false, with the reason in error, when the folder cannot be made so.
-        Elsewhere the folder is only created.
+        Fait de p un dossier que seuls SYSTEM et les administrateurs modifient, et que les
+        utilisateurs lisent : les dossiers où le service et l'installateur écrivent avec leurs
+        droits.  Sous Windows :
+            - un dossier absent est créé ainsi ;
+            - les liens sur son chemin doivent appartenir à SYSTEM ou aux administrateurs, et le
+              dossier vers lequel ils mènent doit être sur un lecteur local qui garde les
+              permissions (drive_keeps_permissions()) ;
+            - le dossier doit leur appartenir aussi, ou être vide : il est alors repris ;
+            - à moins d'avoir déjà ces permissions, il les reçoit, et ce que d'autres comptes y
+              ont placé, liens compris, est renommé avec le suffixe ".untrusted-<random>",
+              qu'aucun programme ne lit ; avec check_content, ce qu'il contient est vérifié même
+              quand il avait ces permissions.
+        Renvoie false, avec la raison dans error, quand le dossier ne peut pas être rendu tel.
+        Ailleurs, le dossier est seulement créé.
     */
     bool secure_folder(const std::string& p, std::string& error, bool check_content = false);
 
     /*
-        Whether only SYSTEM and the administrators can change what the folder p holds: p is
-        a folder and no link, its owner is one of the accounts of owned_by_system(), and no
-        entry of its permissions lets another account write in it, delete in it or change
-        its permissions, whether the entry applies to p or to what it holds.  Always true
-        elsewhere than on Windows.
+        Si seuls SYSTEM et les administrateurs peuvent modifier ce que contient le dossier p :
+        p est un dossier et pas un lien, son propriétaire est l'un des comptes de
+        owned_by_system(), et aucune entrée de ses permissions ne laisse un autre compte y
+        écrire, y supprimer ou changer ses permissions, que l'entrée s'applique à p ou à ce
+        qu'il contient.  Toujours vrai ailleurs que sous Windows.
     */
     bool folder_admin_only(const std::string& p);
 
@@ -125,12 +126,13 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                A file opened for reading through no link.  Each folder on the way from a
-                trusted folder to the file is opened within the folder before it, and the
-                file within the last one; a symbolic link, a junction or a mount point among
-                them, the file included, fails the opening, so that a link placed or swapped
-                while the file opens never leads elsewhere.  On Windows the file is shared
-                for reading only while it is open: what is read is what was checked.
+                Un fichier ouvert en lecture sans passer par aucun lien.  Chaque dossier sur le
+                chemin d'un dossier de confiance jusqu'au fichier est ouvert dans le dossier qui
+                le précède, et le fichier dans le dernier ; un lien symbolique, une jonction ou
+                un point de montage parmi eux, fichier compris, fait échouer l'ouverture, pour
+                qu'un lien posé ou échangé pendant l'ouverture du fichier ne mène jamais
+                ailleurs.  Sous Windows, le fichier n'est partagé qu'en lecture tant qu'il est
+                ouvert : ce qui est lu est ce qui a été vérifié.
         !*/
     public:
         link_free_file() {}
@@ -140,21 +142,21 @@ namespace albireo
 
         /*!
             ensures
-                - Opens path, which lies under folder.  folder itself is opened as its path
-                  leads, links included; an empty folder stands for the root of the drive of
+                - Ouvre path, qui se trouve sous folder.  folder lui-même est ouvert comme son
+                  chemin y mène, liens compris ; un folder vide désigne la racine du lecteur de
                   path.
-                - Returns false otherwise, with why: "link" (a link on the way, the file
-                  included), "missing", or "invalid" (path outside folder, a name "." or "..",
-                  an entry that is no regular file, or another error).
+                - Renvoie false sinon, avec la raison dans why : "link" (un lien en chemin,
+                  fichier compris), "missing", ou "invalid" (path hors de folder, un nom "." ou
+                  "..", une entrée qui n'est pas un fichier ordinaire, ou une autre erreur).
         !*/
         bool open(const std::string& path, const std::string& folder, std::string& why);
         bool is_open() const;
         uint64_t size() const { return size_; }
-        // The number of names of the file: more than one for a file with hard links.
+        // Le nombre de noms du fichier : plus d'un pour un fichier qui a des liens physiques.
         uint32_t links() const { return links_; }
-        // The volume and the index of the file, equal for two names of the same file.
+        // Le volume et l'index du fichier, égaux pour deux noms du même fichier.
         const std::string& identity() const { return identity_; }
-        // Reads up to n bytes; returns the bytes read, 0 at the end of the file, -1 on an error.
+        // Lit jusqu'à n octets ; renvoie les octets lus, 0 à la fin du fichier, -1 en cas d'erreur.
         long long read(char* data, size_t n);
         bool seek(uint64_t offset);
         void close();
@@ -166,29 +168,30 @@ namespace albireo
         std::string identity_;
     };
 
-    // Reads a file of at most max_bytes through no link, as link_free_file opens it.
+    // Lit un fichier d'au plus max_bytes sans passer par aucun lien, comme link_free_file l'ouvre.
     bool read_file_link_free(const std::string& path, const std::string& folder, std::string& data,
         uint64_t max_bytes);
 
-    // Whether the folder path, under folder, is reached through no link, as link_free_file opens a file.
+    // Si le dossier path, sous folder, est atteint sans aucun lien, comme link_free_file ouvre un
+    // fichier.
     bool link_free_folder(const std::string& path, const std::string& folder);
 
-    // The identity of the file p itself, a link not followed, as link_free_file::identity() gives it, or
-    // an empty string for a link, a folder or a missing entry.
+    // L'identité du fichier p lui-même, sans suivre de lien, telle que link_free_file::identity() la
+    // donne, ou une chaîne vide pour un lien, un dossier ou une entrée absente.
     std::string file_identity(const std::string& p);
 
-    // Whether an open file, a handle on Windows and a descriptor elsewhere, lies at path reached through
-    // no link: a folder of path replaced by a link after a check shows.
+    // Si un fichier ouvert, un handle sous Windows et un descripteur ailleurs, se trouve à path atteint
+    // sans aucun lien : un dossier de path remplacé par un lien après une vérification se voit.
     bool handle_at(int fd, const std::string& path);
 
     class new_file
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                A file created for writing that must not exist yet: a name taken meanwhile,
-                by a link for instance, fails the creation, so that the writes stay in the
-                file created.  A file that close() does not complete is left to the caller,
-                which removes it.
+                Un fichier créé en écriture qui ne doit pas encore exister : un nom pris entre-
+                temps, par un lien par exemple, fait échouer la création, pour que les écritures
+                restent dans le fichier créé.  Un fichier que close() ne termine pas est laissé
+                à l'appelant, qui le supprime.
         !*/
     public:
         new_file() {}
@@ -198,7 +201,8 @@ namespace albireo
 
         bool create(const std::string& path);
         bool write(const char* data, size_t n);
-        // Writes the data to the disk and closes the file; false when a write or the flush failed.
+        // Écrit les données sur le disque et ferme le fichier ; false quand une écriture ou le vidage a
+        // échoué.
         bool close();
 
     private:
@@ -208,65 +212,69 @@ namespace albireo
 
     bool read_file(const std::string& p, std::string& data, uint64_t max_bytes = 256u << 20);
     /*
-        Writes through a temporary file whose data reaches the disk before it is renamed over
-        the target, so that a crash or a power cut leaves the old file or the new one, never
-        an empty or half written one.
+        Écrit par un fichier temporaire dont les données atteignent le disque avant qu'il soit
+        renommé par-dessus la cible, pour qu'un plantage ou une coupure de courant laisse
+        l'ancien fichier ou le nouveau, jamais un fichier vide ou à moitié écrit.
     */
     bool write_file_atomic(const std::string& p, const std::string& data);
 
     /*
-        Writes a file that only the account of the program and the administrators can
-        read (mode 0600 elsewhere than on Windows), through a temporary file renamed over
-        the target.  With interactive_readers, the users of the console may read it too on
-        Windows: the token of the tray is written so.
+        Écrit un fichier que seuls le compte du programme et les administrateurs peuvent lire
+        (mode 0600 ailleurs que sous Windows), par un fichier temporaire renommé par-dessus la
+        cible.  Avec interactive_readers, les utilisateurs de la console peuvent aussi le lire
+        sous Windows : le jeton de la zone de notification est écrit ainsi.
     */
     bool write_file_restricted(const std::string& p, const std::string& data, bool interactive_readers = false);
 
-    // Bytes available to the user on the volume of a path.
+    // Octets disponibles pour l'utilisateur sur le volume d'un chemin.
     uint64_t free_disk_space(const std::string& p);
 
-    // Seconds since 1970, and the ISO 8601 form of a time in UTC.
+    // Secondes depuis 1970, et la forme ISO 8601 d'une heure en UTC.
     int64_t now_unix();
     std::string iso_time(int64_t t);
 
-    // A random hexadecimal string of n characters, from the generator of the system.
+    // Une chaîne hexadécimale aléatoire de n caractères, tirée du générateur du système.
     std::string random_hex(size_t n);
 
-    // Compares versions "1.2.3": negative, zero or positive as a is older, equal or newer.
+    // Compare des versions "1.2.3" : négatif, zéro ou positif selon que a est plus ancienne, égale
+    // ou plus récente.
     int compare_versions(const std::string& a, const std::string& b);
 
     struct process_options
     {
-        // Written to the standard input of the program, which closes once it is written.
+        // Écrit sur l'entrée standard du programme, qui se ferme une fois l'écriture faite.
         const std::string* input = nullptr;
         /*
-            On Windows, the program runs without console, with a copy of the token of this
-            process without its privileges and of low integrity, alone in a job that ends it
-            beyond memory_limit bytes and when the job closes, and that refuses it any child
-            process; it does not run when Windows refuses one of these steps.  Elsewhere its
-            address space is bounded by memory_limit, it writes no file and leaves no core
-            file, and on Linux it gains no privilege by running another program.
+            Sous Windows, le programme tourne sans console, avec une copie du jeton de ce
+            processus sans ses privilèges et de faible intégrité, seul dans un job qui l'arrête
+            au-delà de memory_limit octets et quand le job se ferme, et qui lui refuse tout
+            processus enfant ; il ne tourne pas quand Windows refuse l'une de ces étapes.
+            Ailleurs, son espace d'adressage est limité par memory_limit, il n'écrit aucun
+            fichier et ne laisse aucun fichier core, et sous Linux il n'acquiert aucun privilège
+            en lançant un autre programme.
         */
         bool restricted = false;
         size_t memory_limit = 0;
-        // The folder the program starts in, that of this process when empty.
+        // Le dossier où démarre le programme, celui de ce processus quand il est vide.
         std::string directory;
     };
 
     /*
-        Runs a program with arguments and waits for it; returns its exit code, or -1.  The
-        program is ended when it runs beyond timeout_ms, or as soon as stop becomes true.
-        output receives what the program writes to its standard output and error.
+        Lance un programme avec des arguments et l'attend ; renvoie son code de sortie, ou -1.
+        Le programme est arrêté quand il tourne au-delà de timeout_ms, ou dès que stop devient
+        vrai.  output reçoit ce que le programme écrit sur sa sortie standard et sa sortie
+        d'erreur.
     */
     int run_process(const std::string& program, const std::vector<std::string>& args, std::string* output = nullptr,
         unsigned timeout_ms = 60000, const std::atomic<bool>* stop = nullptr, const process_options* options = nullptr);
 
     /*
-        Ends the process with code once its standard outputs are flushed, without unloading
-        its libraries and without the destructors of its static objects.  A process that
-        loaded the engine of a device ends this way: the runtime of OpenVINO or of CUDA would
-        otherwise be torn down while its library unloads, which Windows does under its loader
-        lock, where the runtime waits for threads that cannot end.
+        Termine le processus avec code une fois ses sorties standard vidées, sans décharger ses
+        bibliothèques et sans les destructeurs de ses objets statiques.  Un processus qui a
+        chargé le moteur d'un appareil se termine ainsi : le runtime d'OpenVINO ou de CUDA
+        serait sinon démonté pendant le déchargement de sa bibliothèque, ce que Windows fait
+        sous son verrou du chargeur, où le runtime attend des threads qui ne peuvent pas se
+        terminer.
     */
     [[noreturn]] void end_process(int code);
 

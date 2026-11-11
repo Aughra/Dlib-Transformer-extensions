@@ -143,7 +143,7 @@ def main():
                                           latest=False)
             for path in paths:
                 repo.attach(release, path)
-            # The entry is printed only once the public address serves the first part.
+            # L'entrée n'est affichée qu'une fois que l'adresse publique sert la première partie.
             warning = github_release.verify_public(repo, files[0]["url"], paths[0])
             if warning:
                 print("WARNING: " + warning, file=sys.stderr)

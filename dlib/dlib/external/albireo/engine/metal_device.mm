@@ -1,6 +1,6 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-// The GPU of the Mac through Metal (macOS port).  Compiled with automatic reference counting.
+// Le GPU du Mac via Metal (portage macOS).  Compilé avec le comptage automatique des références.
 
 #include "metal_device.h"
 
@@ -19,14 +19,15 @@ namespace albireo
 
     namespace
     {
-        // The source of the kernels, embedded by CMakeLists.txt (metal_kernels.inc.in).
+        // Le source des noyaux, embarqué par CMakeLists.txt (metal_kernels.inc.in).
         const char* const metal_source =
 #include "metal_kernels.inc"
             ;
 
-        // The kernels, in the order of the enumeration below; each must compile into a pipeline.
-        // The attention comes in one variant for each grouping of the query heads (1, 2, 4, 8) and each
-        // width of a head (64, 128, 256 values: 2, 4, 8 a lane), whose loops the compiler unrolls.
+        // Les noyaux, dans l'ordre de l'énumération ci-dessous ; chacun doit se compiler en pipeline.
+        // L'attention existe en une variante pour chaque regroupement des têtes de requête (1, 2, 4, 8) et
+        // chaque largeur de tête (64, 128, 256 valeurs : 2, 4, 8 par voie), dont le compilateur déroule
+        // les boucles.
         const char* const kernel_names[] = { "mv_q4_K_1", "mv_q6_K_1", "mv_q4_K_n", "mv_q6_K_n", "rms_norm", "add_bias", "silu_mul", "rope",
             "kv_store", "prepare_queries", "merge_attention", "dequant_q4_K", "dequant_q6_K",
             "attention_part_1_2", "attention_part_1_4", "attention_part_1_8",
@@ -39,7 +40,8 @@ namespace albireo
             k_merge_attention, k_dequant_q4_K, k_dequant_q6_K, k_attention_part, k_count = k_attention_part + 12
         };
 
-        // The variant of the attention for rep query heads per key/value head and heads of hd values.
+        // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
+        // valeurs.
         int attention_kernel(unsigned rep, unsigned hd)
         {
             const int r = rep == 1 ? 0 : rep == 2 ? 1 : rep == 4 ? 2 : rep == 8 ? 3 : -1;
@@ -47,7 +49,7 @@ namespace albireo
             return r < 0 || p < 0 ? -1 : k_attention_part + 3 * r + p;
         }
 
-        // The arguments of the kernels, laid out as their structures in metal_kernels.metal.
+        // Les arguments des noyaux, disposés comme leurs structures dans metal_kernels.metal.
         struct mv_args
         {
             int64_t rows;
@@ -115,14 +117,14 @@ namespace albireo
             uint32_t parts;
             uint32_t q_stride;
             uint32_t table_stride;
-            uint32_t pad;          // the alignment of the 64-bit fields that follow, as in Metal
+            uint32_t pad;          // l'alignement des champs 64 bits qui suivent, comme dans Metal
             uint64_t block_stride;
             uint64_t k_slab;
             uint64_t v_slab;
             uint64_t head_stride;
         };
 
-        // The rows a threadgroup of the products computes: ROWS * SG_PER_TG of metal_kernels.metal.
+        // Les lignes que calcule un threadgroup des produits : ROWS * SG_PER_TG de metal_kernels.metal.
         const long mv_rows_per_group = 16;
         const unsigned mv_threads = 128;
         const unsigned attention_threads = 128;   // ATT_SG simdgroups
@@ -148,7 +150,7 @@ namespace albireo
         id<MTLCommandBuffer> buffer = nil;
         id<MTLComputeCommandEncoder> encoder = nil;
 
-        // The kernels go to a compute encoder, which a product of Metal Performance Shaders closes.
+        // Les noyaux vont à un encodeur de calcul, que ferme un produit de Metal Performance Shaders.
         void use(int k)
         {
             if (!encoder) encoder = [buffer computeCommandEncoder];
@@ -276,7 +278,7 @@ namespace albireo
 
     metal_device::commands::~commands()
     {
-        // Commands never finished are given up: their encoder must end before it goes.
+        // Les commandes jamais terminées sont abandonnées : leur encodeur doit se terminer avant de disparaître.
         impl_->close();
     }
 
@@ -346,7 +348,7 @@ namespace albireo
         else if (type == dlib::ggml_type::Q6_K) k = tokens > 1 ? k_mv_q6_K_n : k_mv_q6_K;
         else return false;
         if (tokens == 0) return true;
-        // The rows of a simdgroup (ROWS) never straddle the two matrices.
+        // Les lignes d'un simdgroup (ROWS) ne chevauchent jamais les deux matrices.
         if (tokens > max_tokens || cols % 256 != 0 || rows % 16 != 0)
             throw std::invalid_argument("metal_device: a double product of more tokens or other shapes than its kernel takes");
         impl_->use(k);
@@ -453,7 +455,7 @@ namespace albireo
         impl_->args(a, 5);
         impl_->bind(ctx, 6);
         impl_->groups(parts, l.heads, tokens, attention_threads);
-        // A single part wrote the outputs itself.
+        // Une seule partie a écrit elle-même les sorties.
         if (parts == 1) return;
         impl_->use(k_merge_attention);
         impl_->bind(partial, 0);

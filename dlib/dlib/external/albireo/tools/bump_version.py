@@ -1,14 +1,14 @@
-# Fork for macOS of Dlib-Transformer-extensions (Albireo for Apple Silicon).
+# Fork pour macOS de Dlib-Transformer-extensions (Albireo pour Apple Silicon).
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Sets the version of Albireo in the places the build compares (common/version.h, its numbers and
-# its text; project() of CMakeLists.txt; web/openapi.json, written again by make_openapi.py), and
-# checks that web/changelog.md has a section for it.
+# Fixe la version d'Albireo aux endroits que compare le build (common/version.h, ses numéros et
+# son texte ; project() de CMakeLists.txt ; web/openapi.json, réécrit par make_openapi.py), et
+# vérifie que web/changelog.md a une section pour elle.
 #
-#   python3 tools/bump_version.py patch        # 2.0.0 -> 2.0.1: a fix, a change of the documentation of the page
-#   python3 tools/bump_version.py minor        # 2.0.1 -> 2.1.0: a new function, a new setting
-#   python3 tools/bump_version.py major        # 2.1.0 -> 3.0.0: a change that breaks what worked
-#   python3 tools/bump_version.py 2.0.0        # an explicit version
+#   python3 tools/bump_version.py patch        # 2.0.0 -> 2.0.1 : une correction, une retouche de la doc de la page
+#   python3 tools/bump_version.py minor        # 2.0.1 -> 2.1.0 : une nouvelle fonction, un nouveau réglage
+#   python3 tools/bump_version.py major        # 2.1.0 -> 3.0.0 : un changement qui casse ce qui marchait
+#   python3 tools/bump_version.py 2.0.0        # une version explicite
 
 import os
 import re

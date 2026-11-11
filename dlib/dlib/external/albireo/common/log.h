@@ -18,46 +18,49 @@ namespace albireo
 
     /*!
         ensures
-            - Returns text with each word that names the publication space of Albireo replaced
-              by "the publication space of Albireo": the addresses and the names of the hosts of
-              the service that holds it (a word holding "pcloud" or "publink", whatever their
-              case), and the words holding a text given to hide_in_messages().  A word ends at a
-              space, a quote, a bracket, a comma or a semicolon, and the punctuation that ends a
-              sentence after it stays.
-            - The log (log_file), the errors the routes of the service return, the windows of
-              the tray and the log of the installer pass their texts through this function, the
-              last guard after the messages, which name the files of the publication space and
-              never its addresses.
+            - Renvoie text avec chaque mot qui nomme l'espace de publication d'Albireo remplacé
+              par "the publication space of Albireo" : les adresses et les noms des hôtes du
+              service qui l'héberge (un mot contenant "pcloud" ou "publink", quelle que soit leur
+              casse), et les mots contenant un texte donné à hide_in_messages().  Un mot se
+              termine à une espace, un guillemet, un crochet, une virgule ou un point-virgule, et
+              la ponctuation qui termine une phrase après lui reste.
+            - Le journal (log_file), les erreurs que renvoient les routes du service, les
+              fenêtres de la zone de notification et le journal de l'installateur font passer
+              leurs textes par cette fonction, dernier garde-fou après les messages, qui nomment
+              les fichiers de l'espace de publication et jamais ses adresses.
     !*/
     std::string without_publication_space(const std::string& text);
 
-    // Whether without_publication_space() changes text.
+    // Si without_publication_space() modifie text.
     bool names_publication_space(const std::string& text);
 
-    // Adds secret, the code or the password of the publication space, to what without_publication_space()
-    // hides; a text of fewer than 6 characters is left out, so that no common word is hidden.
+    // Ajoute secret, le code ou le mot de passe de l'espace de publication, à ce que
+    // without_publication_space() masque ; un texte de moins de 6 caractères est écarté, pour
+    // qu'aucun mot courant ne soit masqué.
     void hide_in_messages(const std::string& secret);
 
-    // Passes the lines of the text file at path through without_publication_space(), written again when one changes.
+    // Fait passer les lignes du fichier texte situé à path par without_publication_space(), le
+    // fichier étant réécrit quand l'une d'elles change.
     void hide_publication_space_in_file(const std::string& path);
 
-    // Whether a string of document under a member that tells an error ("error", "errors", "args"), at any
-    // depth, names the publication space.
+    // Si une chaîne de document sous un membre qui signale une erreur ("error", "errors", "args"), à
+    // n'importe quelle profondeur, nomme l'espace de publication.
     bool errors_name_publication_space(const json& document);
 
-    // Passes the strings of document under the members that tell an error through without_publication_space().
+    // Fait passer les chaînes de document sous les membres qui signalent une erreur par
+    // without_publication_space().
     void hide_publication_space_in_errors(json& document);
 
     class log_file
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The log of a program: lines with their time and severity, written to a
-                file that is renamed with a ".1" suffix when it reaches its size limit, so
-                that two files at most are kept.  The last lines also stay in memory, for
-                the windows that show them.  Each message passes through
-                without_publication_space(), and the files a version before this one wrote
-                pass through it when they are opened.
+                Le journal d'un programme : des lignes avec leur heure et leur gravité, écrites
+                dans un fichier renommé avec le suffixe ".1" quand il atteint sa taille limite,
+                si bien que deux fichiers au plus sont gardés.  Les dernières lignes restent
+                aussi en mémoire, pour les fenêtres qui les affichent.  Chaque message passe par
+                without_publication_space(), et les fichiers qu'une version antérieure à
+                celle-ci a écrits y passent quand ils sont ouverts.
         !*/
     public:
         static log_file& instance();

@@ -20,7 +20,7 @@ CLASSES = {
     "Zs": 10, "Zl": 10, "Zp": 10,
 }
 
-# The White_Space property of the Unicode Character Database.
+# La propriété White_Space de l'Unicode Character Database.
 WHITE_SPACE = [0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0x85, 0xA0, 0x1680] + list(range(0x2000, 0x200B)) \
     + [0x2028, 0x2029, 0x202F, 0x205F, 0x3000]
 

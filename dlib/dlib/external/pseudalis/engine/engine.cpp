@@ -21,9 +21,9 @@
 #include "archives.h"
 
 /*
-    The models compiled into the engine: the header the embed command of the example
-    slm_document_anonymizer_ex writes (examples/slm_document_anonymizer_ex.h), whose path
-    the build gives.
+    Les modèles compilés dans le moteur : l'en-tête qu'écrit la commande embed de l'exemple
+    slm_document_anonymizer_ex (examples/slm_document_anonymizer_ex.h), dont le build donne le
+    chemin.
 */
 #ifndef PSEUDALIS_MODELS_HEADER
 #define PSEUDALIS_MODELS_HEADER "slm_document_anonymizer_ex.h"
@@ -70,7 +70,7 @@ namespace pseudalis
             std::shared_ptr<const pii_span_recognizer> span;
         };
 
-        // The models compiled into the engine, read once for every engine of the process.
+        // Les modèles compilés dans le moteur, lus une seule fois pour tous les moteurs du processus.
         const model_set& shared_models()
         {
             static const model_set m = []() {
@@ -95,9 +95,9 @@ namespace pseudalis
         }
 
         /*
-            A name and its extension, ".docx" or ".tar.gz", which keeps its letters: the extension
-            of a kind Pseudalis processes, since the end of a folder or of an e-mail address
-            ("jean.dupont@example.fr") is no extension.
+            Un nom et son extension, ".docx" ou ".tar.gz", qui garde ses lettres : l'extension d'un
+            type que Pseudalis traite, puisque la fin d'un dossier ou d'une adresse e-mail
+            ("jean.dupont@example.fr") n'est pas une extension.
         */
         void split_extension(const std::string& base, std::string& stem, std::string& ext)
         {
@@ -107,7 +107,7 @@ namespace pseudalis
             stem = base.substr(0, base.size() - ext.size());
         }
 
-        // A substitute with the characters Windows refuses in a name replaced by '_'.
+        // Un substitut dont les caractères que Windows refuse dans un nom sont remplacés par '_'.
         std::string windows_safe(std::string s)
         {
             for (char& c : s)
@@ -115,7 +115,7 @@ namespace pseudalis
             return s;
         }
 
-        // The number of UTF-16 units of a UTF-8 text, which bounds a name of Windows.
+        // Le nombre d'unités UTF-16 d'un texte UTF-8, qui borne un nom sous Windows.
         std::size_t utf16_units(const std::string& s)
         {
             std::size_t n = 0;
@@ -128,9 +128,10 @@ namespace pseudalis
         }
 
         /*
-            A protected name that Windows takes: a stem that names a device (CON, NUL, COM1...)
-            gets '_', and a name past 255 UTF-16 units loses the end of its stem, its extension
-            kept.  The original name of a file, which the caller records, gives it back whole.
+            Un nom protégé que Windows accepte : un radical qui désigne un périphérique (CON, NUL,
+            COM1...) reçoit '_', et un nom de plus de 255 unités UTF-16 perd la fin de son radical,
+            son extension gardée.  Le nom d'origine d'un fichier, que l'appelant enregistre, le
+            rend en entier.
         */
         std::string windows_name(std::string stem, const std::string& ext)
         {
@@ -173,7 +174,7 @@ namespace pseudalis
             return j;
         }
 
-        // Adds the counts and the lists of part, an entry of an archive, to whole.
+        // Ajoute à whole les comptes et les listes de part, une entrée d'une archive.
         void merge_report(json& whole, const json& part, const std::string& entry)
         {
             for (const auto& kv : part["values"].items())
@@ -188,11 +189,11 @@ namespace pseudalis
         }
 
         /*
-            The picture markers of a text, as byte ranges: "[Image@<16 digits>]" and "[Image@<16
-            digits> : <description>]", whose description may hold tags, and a marker that a PDF
-            wrote short over its gray box, ending with "..." at the end of the text.  A space on
-            each side of a marker leaves with it once, so that "voir [Image@...] ci-dessous" gives
-            "voir ci-dessous".
+            Les marqueurs d'image d'un texte, sous forme de plages d'octets : "[Image@<16 digits>]"
+            et "[Image@<16 digits> : <description>]", dont la description peut contenir des
+            étiquettes, et un marqueur qu'un PDF a écrit abrégé par-dessus son cadre gris, finissant
+            par "..." à la fin du texte.  Une espace d'un côté ou de l'autre d'un marqueur part une
+            fois avec lui, pour que "voir [Image@...] ci-dessous" donne "voir ci-dessous".
         */
         std::vector<std::pair<std::size_t, std::size_t>> picture_markers(const std::string& text)
         {
@@ -214,7 +215,8 @@ namespace pseudalis
                 }
                 else if (digits == 16 && text.compare(q, 3, " : ") == 0)
                 {
-                    // The description, up to the bracket that closes the marker, its tags read whole.
+                    // La description, jusqu'au crochet qui ferme le marqueur, ses étiquettes lues
+                    // en entier.
                     for (q += 3; q < text.size() && q - p < 8192;)
                     {
                         if (text.compare(q, 2, "[[") == 0)
@@ -228,7 +230,7 @@ namespace pseudalis
                         if (text[q] == '[') break;
                         ++q;
                     }
-                    // Written short over the gray box of a PDF: "...", then the end of the text.
+                    // Écrit abrégé par-dessus le cadre gris d'un PDF : "...", puis la fin du texte.
                     if (end == std::string::npos)
                     {
                         std::size_t last = text.size();
@@ -244,7 +246,7 @@ namespace pseudalis
                     p += 7;
                     continue;
                 }
-                // One space leaves with the marker: the one after it, or the one before it at the end of a line.
+                // Une espace part avec le marqueur : celle d'après, ou celle d'avant en fin de ligne.
                 std::size_t b = p;
                 const bool space_before = b > 0 && text[b - 1] == ' ';
                 const bool line_before = b == 0 || text[b - 1] == '\n' || text[b - 1] == '\r';
@@ -258,7 +260,7 @@ namespace pseudalis
             return out;
         }
 
-        // Whether a text is a picture marker alone, the text file of a picture.
+        // Indique si un texte est un marqueur d'image seul, le fichier texte d'une image.
         bool marker_alone(const std::string& text)
         {
             std::size_t b = 0, e = text.size();
@@ -272,9 +274,9 @@ namespace pseudalis
         }
 
         /*
-            The name of an entry not taken yet among names: "a.png.txt", then "a.png (2).txt"...
-            next remembers, for each name, the number to try first, so that an archive that
-            repeats a name thousands of times is not walked again for each of them.
+            Le nom d'une entrée pas encore pris parmi names : "a.png.txt", puis "a.png (2).txt"...
+            next retient, pour chaque nom, le numéro à essayer d'abord, pour qu'une archive qui
+            répète un nom des milliers de fois ne soit pas reparcourue pour chacun d'eux.
         */
         std::string free_name(const std::string& name, std::set<std::string>& names, std::map<std::string, int>& next)
         {
@@ -291,10 +293,10 @@ namespace pseudalis
         }
 
         /*
-            The bytes that the archives and the Office documents of one file may decompress, all
-            levels together: 64 times the file, from 16 MB to 2 GB.  The memory and the time of
-            the processing grow with them: a small file that holds hundreds of megabytes of text
-            is refused rather than read for hours.
+            Les octets que les archives et les documents Office d'un même fichier peuvent
+            décompresser, tous niveaux confondus : 64 fois le fichier, de 16 Mo à 2 Go.  La mémoire
+            et le temps du traitement croissent avec eux : un petit fichier qui contient des
+            centaines de mégaoctets de texte est refusé plutôt que lu pendant des heures.
         */
         uint64_t decompression_budget(size_t file_size)
         {
@@ -302,7 +304,7 @@ namespace pseudalis
             return std::min<uint64_t>(2048ull << 20, std::max<uint64_t>(16ull << 20, wanted));
         }
 
-        // The family of a document from its content: a text, an Office document, a PDF, or none.
+        // La famille d'un document d'après son contenu : un texte, un document Office, un PDF, ou none.
         document_family family_of(document_format f)
         {
             switch (f)
@@ -318,7 +320,7 @@ namespace pseudalis
             }
         }
 
-        // The classes of the bytes for the encodings, which no locale changes.
+        // Les classes des octets pour les encodages, qu'aucune locale ne modifie.
         enum : unsigned char { base64_class = 1, base64url_class = 2, hex_class = 4, alnum_class = 8 };
 
         const unsigned char* char_classes()
@@ -344,7 +346,7 @@ namespace pseudalis
             return t.of;
         }
 
-        // A character of base64, which holds the hexadecimal digits too, or of base64url with url.
+        // Un caractère de base64, qui comprend aussi les chiffres hexadécimaux, ou de base64url avec url.
         bool base64_char(unsigned char c, bool url = true)
         {
             return (char_classes()[c] & (url ? base64_class | base64url_class : base64_class)) != 0;
@@ -360,7 +362,7 @@ namespace pseudalis
             return c >= 'A' && c <= 'Z' ? static_cast<unsigned char>(c + 32) : c;
         }
 
-        // Whether text holds needle, written in lower case, at i, its case aside.
+        // Indique si text contient needle, écrit en minuscules, en i, sans tenir compte de la casse.
         bool at_without_case(const std::string& text, size_t i, const char* needle)
         {
             for (; *needle; ++needle, ++i)
@@ -368,7 +370,7 @@ namespace pseudalis
             return true;
         }
 
-        // The end of the line of text that starts at b: its first '\r' or '\n', or the end of the text.
+        // La fin de la ligne de text qui commence en b : son premier '\r' ou '\n', ou la fin du texte.
         size_t line_end(const std::string& text, size_t b)
         {
             const char* const s = text.data();
@@ -377,7 +379,7 @@ namespace pseudalis
             return b;
         }
 
-        // The start of the line after the end of a line at e, "\r\n", '\n' or '\r', or the end of the text.
+        // Le début de la ligne qui suit une fin de ligne en e, "\r\n", '\n' ou '\r', ou la fin du texte.
         size_t after_end(const std::string& text, size_t e)
         {
             if (e >= text.size()) return text.size();
@@ -390,8 +392,9 @@ namespace pseudalis
         }
 
         /*
-            A variety of characters within one run: a block of base64 holds tens of them, a line of
-            dashes or of equal signs one.  begin() opens a run, add() counts a character.
+            Une variété de caractères au sein d'une même suite : un bloc de base64 en contient des
+            dizaines, une ligne de tirets ou de signes égal un seul.  begin() ouvre une suite, add()
+            compte un caractère.
         */
         class variety
         {
@@ -418,9 +421,9 @@ namespace pseudalis
         };
 
         /*
-            Whether the line [b, e) gives a value of LDIF in base64: "cn:: SMOpbMOobmUgRHVwcsOp", the
-            name of the attribute, two colons, spaces or none, then base64 to the end of the line,
-            where a long value folds.
+            Indique si la ligne [b, e) donne une valeur de LDIF en base64 : "cn:: SMOpbMOobmUgRHVwcsOp",
+            le nom de l'attribut, deux deux-points, des espaces ou aucune, puis du base64 jusqu'à la
+            fin de la ligne, là où une valeur longue se replie.
         */
         bool ldif_base64(const std::string& text, size_t b, size_t e)
         {
@@ -436,7 +439,8 @@ namespace pseudalis
             return i == e && e - value >= 4;
         }
 
-        // Whether the line that starts at b is a line of uuencode: its length character, then its groups.
+        // Indique si la ligne qui commence en b est une ligne de uuencode : son caractère de longueur,
+        // puis ses groupes.
         bool uuencode_body(const std::string& text, size_t b)
         {
             const size_t e = line_end(text, b);
@@ -445,7 +449,8 @@ namespace pseudalis
             return count >= 1 && count <= 45 && e - b >= 1 + static_cast<size_t>((count + 2) / 3 * 4);
         }
 
-        // The start of the content of the line [b, e), after its byte order marks, blanks, form feeds and '>'.
+        // Le début du contenu de la ligne [b, e), après ses marques d'ordre des octets, blancs, sauts de
+        // page et '>'.
         size_t line_content(const std::string& text, size_t b, size_t e)
         {
             for (;;)
@@ -457,9 +462,9 @@ namespace pseudalis
         }
 
         /*
-            Whether a run of 24 characters of base64 or more, mixing capitals, small letters and
-            digits, opens within the 512 bytes of text from i: the body of a block armored, which
-            follows its header.
+            Indique si une suite de 24 caractères de base64 ou plus, mêlant majuscules, minuscules
+            et chiffres, s'ouvre dans les 512 octets de text à partir de i : le corps d'un bloc
+            blindé, qui suit son en-tête.
         */
         bool base64_follows(const std::string& text, size_t i)
         {
@@ -484,7 +489,8 @@ namespace pseudalis
             return false;
         }
 
-        // Whether the line that starts at b, its content at c, opens a block of uuencode that a line of it follows.
+        // Indique si la ligne qui commence en b, son contenu en c, ouvre un bloc de uuencode suivi d'une de
+        // ses lignes.
         bool uuencode_begin(const std::string& text, size_t b, size_t c, size_t e)
         {
             if (e - c < 10 || text.compare(c, 6, "begin ") != 0) return false;
@@ -495,12 +501,13 @@ namespace pseudalis
         }
 
         /*
-            Whether text holds at i, in a line whose content starts at content and that ends at e,
-            an opening that hides what follows, in a string of a program too: the header of a block
-            armored by PEM or OpenPGP ("-----BEGIN CERTIFICATE-----", "-----BEGIN PGP MESSAGE, PART
-            1/2-----"), which inside a line its body must follow, an RTF document ("{\rtf", or
-            "{\\rtf" escaped), or a block of base64 for uudecode ("begin-base64 644 ").  A program
-            that only names the header of a block, as a constant, is no block.
+            Indique si text contient en i, dans une ligne dont le contenu commence en content et qui
+            finit en e, une ouverture qui cache ce qui suit, y compris dans une chaîne d'un
+            programme : l'en-tête d'un bloc blindé par PEM ou OpenPGP ("-----BEGIN CERTIFICATE-----",
+            "-----BEGIN PGP MESSAGE, PART 1/2-----"), que son corps doit suivre quand il est au milieu
+            d'une ligne, un document RTF ("{\rtf", ou "{\\rtf" échappé), ou un bloc de base64 pour
+            uudecode ("begin-base64 644 ").  Un programme qui ne fait que nommer l'en-tête d'un bloc,
+            sous forme de constante, n'est pas un bloc.
         */
         bool encoded_opening(const std::string& text, size_t i, size_t content, size_t e)
         {
@@ -509,7 +516,7 @@ namespace pseudalis
             if (c == '-')
             {
                 if (e - i < 17 || text.compare(i, 11, "-----BEGIN ") != 0) return false;
-                // The label: printable characters up to "-----".
+                // Le libellé : des caractères imprimables jusqu'à "-----".
                 size_t j = i + 11;
                 while (j < e && j - i < 100 && text.compare(j, 5, "-----") != 0 &&
                        static_cast<unsigned char>(text[j]) >= 0x20 && static_cast<unsigned char>(text[j]) < 0x7F)
@@ -528,9 +535,9 @@ namespace pseudalis
         }
 
         /*
-            Whether the name of the header Content-Transfer-Encoding, which ends at i, is followed by
-            a colon and a value that hides the text: base64, quoted-printable or uuencode.  The value
-            may stand on the next line, the header folded.
+            Indique si le nom de l'en-tête Content-Transfer-Encoding, qui finit en i, est suivi d'un
+            deux-points et d'une valeur qui cache le texte : base64, quoted-printable ou uuencode.  La
+            valeur peut se trouver sur la ligne suivante, l'en-tête étant replié.
         */
         bool transfer_encoding(const std::string& text, size_t i)
         {
@@ -544,9 +551,9 @@ namespace pseudalis
         }
 
         /*
-            Whether ';' at i, in a line that ends at e, gives the encoding of a value of a vCard or of
-            an iCalendar: ";ENCODING=b:", ";ENCODING=QUOTED-PRINTABLE;", or the bare parameter of
-            vCard 2.1, ";QUOTED-PRINTABLE:" or ";BASE64:".
+            Indique si le ';' en i, dans une ligne qui finit en e, donne l'encodage d'une valeur d'une
+            vCard ou d'un iCalendar : ";ENCODING=b:", ";ENCODING=QUOTED-PRINTABLE;", ou le paramètre nu
+            de vCard 2.1, ";QUOTED-PRINTABLE:" ou ";BASE64:".
         */
         bool value_encoding(const std::string& text, size_t i, size_t e)
         {
@@ -561,7 +568,7 @@ namespace pseudalis
             return false;
         }
 
-        // The end of the opening of an encoded word at i, "=?UTF-8?B?" or "=?utf-8*fr?q?", or npos.
+        // La fin de l'ouverture d'un mot encodé en i, "=?UTF-8?B?" ou "=?utf-8*fr?q?", ou npos.
         size_t encoded_word_opening(const std::string& text, size_t i, size_t e)
         {
             size_t j = i + 2;
@@ -575,14 +582,15 @@ namespace pseudalis
         }
 
         /*
-            Whether a text is, or holds, a format that writes its values encoded: an RTF document,
-            a part of a message in base64, quoted-printable or uuencode, an encoded word of a
-            header ("=?UTF-8?B?...?="), a vCard or an iCalendar, whose lines fold and whose values
-            may be encoded, the encoding of a value of a vCard elsewhere, LDIF with values in base64,
-            a block of uuencode or of ASCII85, a block armored by PEM or OpenPGP ("-----BEGIN"), in a
-            string of a program too, a program of PostScript or an export of the registry of
-            Windows.  Its values would stay readable once decoded.  Each line is read once, its byte
-            order marks, spaces and marks of quotation aside.
+            Indique si un texte est, ou contient, un format qui écrit ses valeurs encodées : un
+            document RTF, une partie d'un message en base64, quoted-printable ou uuencode, un mot
+            encodé d'un en-tête ("=?UTF-8?B?...?="), une vCard ou un iCalendar, dont les lignes se
+            replient et dont les valeurs peuvent être encodées, l'encodage d'une valeur de vCard
+            ailleurs, du LDIF avec des valeurs en base64, un bloc de uuencode ou d'ASCII85, un bloc
+            blindé par PEM ou OpenPGP ("-----BEGIN"), y compris dans une chaîne d'un programme, un
+            programme PostScript ou un export du registre de Windows.  Ses valeurs resteraient
+            lisibles une fois décodées.  Chaque ligne est lue une fois, sans tenir compte de ses
+            marques d'ordre des octets, de ses espaces et de ses marques de citation.
         */
         bool encoded_format(const std::string& text)
         {
@@ -594,25 +602,26 @@ namespace pseudalis
             for (const char* o : openings)
                 if (at_without_case(text, start, o)) return true;
             bool ldif_dn = false, ldif_value = false;
-            long ascii85 = -1;          // the characters of the block of ASCII85 that "<~" opened
+            long ascii85 = -1;          // les caractères du bloc d'ASCII85 que "<~" a ouvert
             for (size_t b = 0, e = 0; b < text.size(); b = after_end(text, e))
             {
                 e = line_end(text, b);
                 const size_t c = line_content(text, b, e);
-                // A vCard or an iCalendar, in a message too.
+                // Une vCard ou un iCalendar, y compris dans un message.
                 if (at_without_case(text, c, "begin:vcard") || at_without_case(text, c, "begin:vcalendar")) return true;
                 if (uuencode_begin(text, b, c, e)) return true;
-                // LDIF: a value in base64 in a file of entries, which open with "dn:".
+                // LDIF : une valeur en base64 dans un fichier d'entrées, qui s'ouvrent par "dn:".
                 ldif_dn = ldif_dn || at_without_case(text, c, "dn:");
                 ldif_value = ldif_value || ldif_base64(text, c, e);
                 if (ldif_dn && ldif_value) return true;
-                size_t opened = std::string::npos;      // the end of the opening of an encoded word on this line
-                bool base64_word = false;               // its encoding: base64, else quoted-printable
+                size_t opened = std::string::npos;      // la fin de l'ouverture d'un mot encodé sur cette ligne
+                bool base64_word = false;               // son encodage : base64, sinon quoted-printable
                 for (size_t i = b; i < e; ++i)
                 {
                     const char x = text[i];
                     if ((x == '-' || x == '{' || x == 'b') && encoded_opening(text, i, c, e)) return true;
-                    // The header of a transfer encoding, in a quoted line too, its value maybe on a folded line.
+                    // L'en-tête d'un encodage de transfert, y compris dans une ligne citée, sa valeur
+                    // peut-être sur une ligne repliée.
                     if ((x == 'c' || x == 'C') && e - i >= 25 &&
                         at_without_case(text, i, "content-transfer-encoding") && transfer_encoding(text, i + 25))
                         return true;
@@ -643,7 +652,7 @@ namespace pseudalis
                     }
                     else if (opened != std::string::npos)
                     {
-                        // The word ends with "?=" after two characters at least of its encoding.
+                        // Le mot finit par "?=" après au moins deux caractères de son encodage.
                         if (x == '?' && i + 1 < e && text[i + 1] == '=' && i - opened >= 2) return true;
                         const bool valid = base64_word ? base64_char(static_cast<unsigned char>(x), false)
                                                        : x != ' ' && x != '\t' && x != '?';
@@ -655,14 +664,15 @@ namespace pseudalis
         }
 
         /*
-            Whether a text holds bytes written in hexadecimal, a dump or an array: 64 in a row with 8
-            letters or marks among them, or 4 lines in a row of 8 bytes or more, in 4 tokens at
-            least each, with 4 letters or marks among them ("4d 5a 90 00", "0x41, 0x42",
-            "43,00,3a,00", "fffe 4a00 6500" of xxd, "\x4a\x65" in a string).  A byte is two digits;
-            in a line of a dump, which opens with its offset, a group of 4 or 8 between spaces
-            counts its bytes; a mark, "0x" or "\x", or the offset of xxd, counts as a letter.  The
-            fingerprint of a key, one line, and the lists of code points of Unicode pass; bytes
-            written with digits alone, no letter or mark among them, pass as a table of numbers.
+            Indique si un texte contient des octets écrits en hexadécimal, un vidage ou un tableau :
+            64 d'affilée avec 8 lettres ou marques au milieu, ou 4 lignes d'affilée de 8 octets ou
+            plus, en au moins 4 tokens chacune, avec 4 lettres ou marques au milieu ("4d 5a 90 00",
+            "0x41, 0x42", "43,00,3a,00", "fffe 4a00 6500" de xxd, "\x4a\x65" dans une chaîne).  Un
+            octet fait deux chiffres ; dans une ligne d'un vidage, qui s'ouvre par son décalage, un
+            groupe de 4 ou 8 entre des espaces compte ses octets ; une marque, "0x" ou "\x", ou le
+            décalage de xxd, compte comme une lettre.  L'empreinte d'une clé, sur une ligne, et les
+            listes de points de code Unicode passent ; les octets écrits avec des chiffres seuls, sans
+            lettre ni marque au milieu, passent pour un tableau de nombres.
         */
         bool hex_bytes(const std::string& text)
         {
@@ -670,27 +680,28 @@ namespace pseudalis
             const unsigned char* const d = reinterpret_cast<const unsigned char*>(text.data());
             auto hex = [&](size_t k) { return (cls[d[k]] & hex_class) != 0; };
             auto separator = [](unsigned char c) { return c == ' ' || c == ',' || c == ':' || c == '-' || c == '\t'; };
-            size_t rows = 0, rows_marked = 0;       // the lines in a row of 8 bytes or more, their marked bytes
+            size_t rows = 0, rows_marked = 0;       // les lignes d'affilée de 8 octets ou plus, leurs octets marqués
             for (size_t b = 0, e = 0; b < text.size(); b = after_end(text, e))
             {
                 e = line_end(text, b);
-                // Groups of 4 or 8 digits count in the lines of a dump alone, which open with an offset of 6 to 8.
+                // Les groupes de 4 ou 8 chiffres ne comptent que dans les lignes d'un vidage, qui s'ouvrent par
+                // un décalage de 6 à 8.
                 size_t k = b;
                 while (k < e && (d[k] == ' ' || d[k] == '\t')) ++k;
                 const size_t offset = k;
                 while (k < e && hex(k)) ++k;
                 const bool dump = k - offset >= 6 && k - offset <= 8 && k < e && (d[k] == ':' || d[k] == ' ');
-                // The offset of xxd, "00000010:", marks its line as a letter would.
+                // Le décalage de xxd, "00000010:", marque sa ligne comme le ferait une lettre.
                 const bool colon = dump && d[k] == ':';
                 size_t best = 0, best_tokens = 0, best_marked = 0, bytes = 0, tokens = 0, marked = 0, i = b;
-                // 8 bytes and their separators take 16 characters at least.
+                // 8 octets et leurs séparateurs occupent au moins 16 caractères.
                 while (e - b >= 16 && i < e)
                 {
                     size_t from = i, to = i;
                     bool mark = false;
                     if (d[i] == '\\' && e - i >= 4 && (d[i + 1] == 'x' || d[i + 1] == 'X') && hex(i + 2) && hex(i + 3))
                     {
-                        // An escaped byte, which needs no separator.
+                        // Un octet échappé, qui n'a pas besoin de séparateur.
                         from = i + 2;
                         to = i + 4;
                         mark = true;
@@ -743,7 +754,8 @@ namespace pseudalis
             return false;
         }
 
-        // The characters of [from, to) of d, the backslashes of escapes aside, as many different ones as kinds counts.
+        // Les caractères de [from, to) de d, hors barres obliques inverses des échappements, avec autant de
+        // caractères différents que kinds en compte.
         size_t run_variety(const unsigned char* d, size_t from, size_t to, variety& kinds)
         {
             kinds.begin();
@@ -754,10 +766,11 @@ namespace pseudalis
         }
 
         /*
-            Whether a run of base64 of length characters at [from, to) of d may be a line of an
-            encoded block: 60 characters or more, mixing capitals, small letters and digits, of 16
-            different ones at least, or hexadecimal digits alone, of 10 at least.  A line of dashes,
-            a word, a path without capitals or digits is none.
+            Indique si une suite de base64 de length caractères en [from, to) de d peut être une
+            ligne d'un bloc encodé : 60 caractères ou plus, mêlant majuscules, minuscules et
+            chiffres, dont au moins 16 différents, ou des chiffres hexadécimaux seuls, dont au moins
+            10 différents.  Une ligne de tirets, un mot, un chemin sans majuscules ni chiffres n'en
+            est pas une.
         */
         bool block_run(const unsigned char* d, size_t from, size_t to, size_t length, variety& kinds)
         {
@@ -778,12 +791,12 @@ namespace pseudalis
         }
 
         /*
-            Whether a text holds an encoded block: a run of base64 or base64url of 1024 characters
-            of 16 different ones at least, or 16 runs in a row that may each be a line of a block
-            (block_run()), whatever separates them, an end of line, a quote, or "\n" escaped in a
-            string of JSON or of a program, where "\/" stands for a slash; data in base64 after
-            ";base64,"; JSON in base64 ("eyJ...", the tokens of OpenID Connect among them); or bytes
-            in hexadecimal (hex_bytes()).
+            Indique si un texte contient un bloc encodé : une suite de base64 ou de base64url de 1024
+            caractères dont au moins 16 différents, ou 16 suites d'affilée qui peuvent chacune être
+            une ligne d'un bloc (block_run()), quel que soit ce qui les sépare, une fin de ligne, un
+            guillemet, ou "\n" échappé dans une chaîne de JSON ou d'un programme, où "\/" tient lieu
+            de barre oblique ; des données en base64 après ";base64," ; du JSON en base64 ("eyJ...",
+            dont les tokens d'OpenID Connect) ; ou des octets en hexadécimal (hex_bytes()).
         */
         bool encoded_block(const std::string& text)
         {
@@ -791,8 +804,8 @@ namespace pseudalis
             const unsigned char* const d = reinterpret_cast<const unsigned char*>(text.data());
             const size_t n = text.size();
             variety kinds;
-            size_t lines = 0;               // the runs in a row that may be lines of a block
-            size_t start = 0, run = 0;      // the run read: its first byte, its characters
+            size_t lines = 0;               // les suites d'affilée qui peuvent être des lignes d'un bloc
+            size_t start = 0, run = 0;      // la suite lue : son premier octet, ses caractères
             for (size_t i = 0; i < n; ++i)
             {
                 const unsigned char c = d[i];
@@ -803,7 +816,8 @@ namespace pseudalis
                     if (slash) ++i;
                     if (run >= 1024 && (run == 1024 ? run_variety(d, start, i + 1, kinds) : kinds.add(d[i])) >= 16)
                         return true;
-                    // JSON in base64 opens with "eyJ", the encoding of '{"', after "=" or a space for instance.
+                    // Le JSON en base64 s'ouvre par "eyJ", l'encodage de '{"', après "=" ou une espace par
+                    // exemple.
                     if (c == 'e' && n - i >= 16 && (i == 0 || !(cls[d[i - 1]] & alnum_class)) && d[i + 1] == 'y' &&
                         d[i + 2] == 'J')
                     {
@@ -819,7 +833,8 @@ namespace pseudalis
                     if (lines >= 16) return true;
                     run = 0;
                 }
-                // "\n", "\r" or "\t" escaped in a string separates two runs as the character itself does.
+                // "\n", "\r" ou "\t" échappé dans une chaîne sépare deux suites comme le fait le caractère
+                // lui-même.
                 if (c == '\\' && i + 1 < n && (d[i + 1] == 'n' || d[i + 1] == 'r' || d[i + 1] == 't'))
                     ++i;
                 else if (c == ',' && i >= 7 && at_without_case(text, i - 7, ";base64,"))
@@ -833,7 +848,8 @@ namespace pseudalis
             return hex_bytes(text);
         }
 
-        // The text of bytes in UTF-8: bytes themselves when they are UTF-8, else their decoding, in decoded.
+        // Le texte de bytes en UTF-8 : bytes eux-mêmes quand ils sont en UTF-8, sinon leur décodage, dans
+        // decoded.
         const std::string& utf8_of(const std::string& bytes, std::string& decoded)
         {
             const bool decode = bytes.compare(0, 2, "\xFF\xFE") == 0 || bytes.compare(0, 2, "\xFE\xFF") == 0 ||
@@ -844,7 +860,8 @@ namespace pseudalis
             return decoded;
         }
 
-        // A byte of a text: no control character but the tabulation, the ends of lines and the form feed.
+        // Un octet d'un texte : aucun caractère de contrôle hormis la tabulation, les fins de ligne et le
+        // saut de page.
         bool text_byte(unsigned char c)
         {
             return c >= 0x20 ? c != 0x7F : (c == '\t' || c == '\n' || c == '\r' || c == '\f');
@@ -853,21 +870,22 @@ namespace pseudalis
         enum class text_verdict { text, encoded, other };
 
         /*
-            Whether bytes are a text through and through, which a name of no kind requires: no
-            binary signature that dlib knows (dlib/data_io), a text by the measures of dlib, its
-            printable characters and its entropy below 6.5, over its start as over its whole
-            content, every character decoded (UTF-8, UTF-16, or Windows-1252 for other bytes) with
-            no control character but the tabulation, the ends of lines and the form feed, no
-            noncharacter U+FFFE or U+FFFF, no U+FFFD where the decoding of UTF-16 met a broken
-            character, and no encoded part (encoded_format(), encoded_block()), else encoded.
-            Valid UTF-8 is read in place, without a copy, U+FFFD written in it included.
+            Indique si bytes est du texte de bout en bout, ce qu'exige un nom sans type : aucune
+            signature binaire que dlib connaisse (dlib/data_io), un texte selon les mesures de dlib,
+            ses caractères imprimables et son entropie sous 6,5, sur son début comme sur tout son
+            contenu, chaque caractère décodé (UTF-8, UTF-16, ou Windows-1252 pour les autres octets)
+            sans caractère de contrôle hormis la tabulation, les fins de ligne et le saut de page,
+            ni non-caractère U+FFFE ou U+FFFF, ni U+FFFD là où le décodage de l'UTF-16 a rencontré
+            un caractère cassé, et aucune partie encodée (encoded_format(), encoded_block()), sinon
+            encoded.  L'UTF-8 valide est lu sur place, sans copie, U+FFFD qui y est écrit compris.
         */
         text_verdict through_and_through(const std::string& bytes, const std::string& base)
         {
             if (bytes.empty()) return text_verdict::text;
             for (const auto& sig : dlib::impl::signatures)
             {
-                // "BM" and "MZ" also open texts: a bitmap or a program fails the reading below.
+                // "BM" et "MZ" ouvrent aussi des textes : une image bitmap ou un programme échoue à la
+                // lecture ci-dessous.
                 if (sig.length < 3 && sig.bytes[0] >= 0x20 && sig.bytes[0] < 0x7F) continue;
                 if (bytes.size() >= sig.offset + sig.length &&
                     std::memcmp(bytes.data() + sig.offset, sig.bytes, sig.length) == 0)
@@ -876,19 +894,19 @@ namespace pseudalis
             if (family_of(detect_document_format(bytes, base)) != document_family::text) return text_verdict::other;
             std::string decoded;
             const std::string& text = utf8_of(bytes, decoded);
-            // A byte order mark of UTF-8 followed by other bytes leaves them undecoded.
+            // Une marque d'ordre des octets UTF-8 suivie d'autres octets les laisse non décodés.
             if (&text == &decoded && !privacy_impl::utf8_valid(text)) return text_verdict::other;
             const unsigned char* d = reinterpret_cast<const unsigned char*>(text.data());
             const size_t n = text.size();
             if (n == 0) return text_verdict::text;
             if (!dlib::impl::is_text_content(d, n) || dlib::impl::calculate_entropy(d, n) >= 6.5)
                 return text_verdict::other;
-            // U+FFFE and U+FFFF, and U+FFFD that the decoding wrote for a character it could not read.
+            // U+FFFE et U+FFFF, et U+FFFD que le décodage a écrit pour un caractère qu'il n'a pas pu lire.
             const unsigned char last = &text == &decoded ? 0xBD : 0xBE;
             for (size_t i = 0; i < n; ++i)
             {
                 if (!text_byte(d[i])) return text_verdict::other;
-                // A control of the range U+0080 to U+009F.
+                // Un caractère de contrôle de la plage U+0080 à U+009F.
                 if (d[i] == 0xC2 && i + 1 < n && d[i + 1] < 0xA0) return text_verdict::other;
                 if (d[i] == 0xEF && i + 2 < n && d[i + 1] == 0xBF && d[i + 2] >= last) return text_verdict::other;
             }
@@ -896,8 +914,8 @@ namespace pseudalis
         }
 
         /*
-            The kind of a file (engine::kind_of()) of base name base.  verdict receives the verdict
-            on its text when it was read for one, for a name of no kind or without extension, else
+            Le type d'un fichier (engine::kind_of()) de nom de base base.  verdict reçoit le verdict
+            sur son texte quand il a été lu pour cela, pour un nom sans type ou sans extension, sinon
             text_verdict::other.
         */
         file_kind kind_of_content(const std::string& bytes, const std::string& base, text_verdict& verdict)
@@ -905,7 +923,7 @@ namespace pseudalis
             verdict = text_verdict::other;
             if (name_extension(base).empty())
             {
-                // Without extension: a picture, an Office document, an archive or a PDF by its signature.
+                // Sans extension : une image, un document Office, une archive ou un PDF d'après sa signature.
                 if (!image_media_type(bytes).empty()) return file_kind::picture;
                 const document_family family = family_of(detect_document_format(bytes, base));
                 if (family == document_family::office) return file_kind::document;
@@ -919,7 +937,8 @@ namespace pseudalis
                     case name_kind::picture:
                         return image_media_type(bytes).empty() ? file_kind::unsupported : file_kind::picture;
                     case name_kind::archive:
-                        // An archive holds what it holds: an Office document renamed .zip is read as an archive.
+                        // Une archive contient ce qu'elle contient : un document Office renommé en .zip est
+                        // lu comme une archive.
                         return archive_kind_of(bytes) == archive_kind::none ? file_kind::unsupported
                                                                             : file_kind::archive;
                     case name_kind::document:
@@ -929,17 +948,18 @@ namespace pseudalis
                         break;
                 }
             }
-            // A name of no kind, or without extension, is a text when its content is text through and through.
+            // Un nom sans type, ou sans extension, est un texte quand son contenu est du texte de bout en bout.
             verdict = through_and_through(bytes, base);
             return verdict == text_verdict::text ? file_kind::document : file_kind::unsupported;
         }
 
         /*
-            The values of a name, without its known extension, written as substitutes: the name is
-            read whole, since the end of an e-mail address or of a telephone number looks like an
-            extension, and, when it ends with what looks like one, also without it, which can hide a
-            value from the detector ("jean.dupont@example.fr.log2"); the reading that finds more
-            values wins, the whole name on a tie.  r receives the substitutions of that reading.
+            Les valeurs d'un nom, sans son extension connue, écrites sous forme de substituts : le
+            nom est lu en entier, puisque la fin d'une adresse e-mail ou d'un numéro de téléphone
+            ressemble à une extension, et, quand il finit par ce qui ressemble à une extension,
+            aussi sans elle, ce qui peut cacher une valeur au détecteur
+            ("jean.dupont@example.fr.log2") ; la lecture qui trouve le plus de valeurs l'emporte, le
+            nom entier en cas d'égalité.  r reçoit les substitutions de cette lecture.
         */
         std::string name_values(document_anonymizer& a, document_report& r, const std::string& name)
         {
@@ -954,7 +974,8 @@ namespace pseudalis
             return without;
         }
 
-        // Whether bytes read as a text, which may hold tags whatever the name of its file.
+        // Indique si bytes se lit comme un texte, qui peut contenir des étiquettes quel que soit le nom
+        // de son fichier.
         bool text_content(const std::string& bytes, const std::string& base)
         {
             return archive_kind_of(bytes) == archive_kind::none &&
@@ -962,9 +983,9 @@ namespace pseudalis
         }
 
         /*
-            What one call asks besides its bytes: tags or substitutes for the values of the text,
-            and the substitutes of the text that a restoration gives back, or that a protection
-            leaves as they are, an untagged file protected again.
+            Ce qu'un appel demande en plus de ses octets : des étiquettes ou des substituts pour les
+            valeurs du texte, et les substituts du texte qu'une restauration rend, ou qu'une
+            protection laisse tels quels, pour un fichier sans étiquettes protégé à nouveau.
         */
         struct call_options
         {
@@ -972,7 +993,7 @@ namespace pseudalis
             pseudonymizer::substitute_resolver text;
         };
 
-        // The resolver of a list of substitutes: the tags of a substitute, in the order of the list.
+        // Le résolveur d'une liste de substituts : les étiquettes d'un substitut, dans l'ordre de la liste.
         pseudonymizer::substitute_resolver resolver_of_list(const std::vector<substitution>& list)
         {
             if (list.empty()) return pseudonymizer::substitute_resolver();
@@ -998,13 +1019,13 @@ namespace pseudalis
         std::unique_ptr<pseudonymizer> p;
         pii_detector_options dopt;
         model_set m;
-        // The key of the identifiers of the pictures, derived from the key of the engine.
+        // La clé des identifiants des images, dérivée de la clé du moteur.
         std::string picture_key;
-        // The imposed terms, which set_terms() replaces while files are processed.
+        // Les termes imposés, que set_terms() remplace pendant que des fichiers sont traités.
         mutable std::mutex terms_m;
         std::vector<pii_imposed_term> terms;
 
-        // The options of a detector: those of the engine, with the imposed terms of the moment.
+        // Les options d'un détecteur : celles du moteur, avec les termes imposés du moment.
         pii_detector_options options() const
         {
             pii_detector_options o = dopt;
@@ -1024,12 +1045,12 @@ namespace pseudalis
         }
 
         /*
-            The protected form of a description, which may name what the picture shows: one line,
-            without brackets, read by the detector as the text of a document, its values replaced
-            by tags before it reaches the file, then cut at 1000 bytes outside its tags.  known,
-            the detector of the document that holds the picture, adds what the document taught it:
-            a name, a place or an organisation of its text that the description repeats bare.
-            found counts the values.
+            La forme protégée d'une description, qui peut nommer ce que l'image montre : une ligne,
+            sans crochets, lue par le détecteur comme le texte d'un document, ses valeurs remplacées
+            par des étiquettes avant qu'elle atteigne le fichier, puis coupée à 1000 octets en dehors
+            de ses étiquettes.  known, le détecteur du document qui contient l'image, ajoute ce que
+            le document lui a appris : un nom, un lieu ou une organisation de son texte que la
+            description répète tel quel.  found compte les valeurs.
         */
         std::string protect_description(const std::string& description, const pii_detector* known,
                                         document_report& found, const call_options& c) const
@@ -1043,14 +1064,14 @@ namespace pseudalis
                 if (ch == ']') ch = ')';
                 if (ch == ' ' && (line.empty() || line.back() == ' ')) continue;
                 line.push_back(ch);
-                // The answers of Albireo stay far below; past 1000 bytes, nothing is written.
+                // Les réponses d'Albireo restent bien en dessous ; au-delà de 1000 octets, rien n'est écrit.
                 if (line.size() >= 16384)
                 {
                     bounded = true;
                     break;
                 }
             }
-            // The last character, which the bound may have cut, goes whole.
+            // Le dernier caractère, que la borne a pu couper, s'en va en entier.
             if (bounded)
             {
                 while (!line.empty() && (static_cast<unsigned char>(line.back()) & 0xC0) == 0x80) line.pop_back();
@@ -1068,7 +1089,7 @@ namespace pseudalis
             if (known)
                 for (const pii_entity& e : known->detect(line))
                     if (!p->keeps_in_clear(e.type)) values.push_back(e);
-            // The values that overlap become one, whose tag covers them all.
+            // Les valeurs qui se chevauchent n'en font plus qu'une, dont l'étiquette les couvre toutes.
             std::sort(values.begin(), values.end(), [](const pii_entity& a, const pii_entity& b) {
                 return a.begin < b.begin || (a.begin == b.begin && a.end > b.end);
             });
@@ -1086,7 +1107,8 @@ namespace pseudalis
             for (const pii_entity& e : joined) found.count(e.type);
             if (!c.tags)
             {
-                // Without tags, the values take their substitutes, which the caller keeps, all whole.
+                // Sans étiquettes, les valeurs prennent leurs substituts, que l'appelant garde, tous en
+                // entier.
                 std::vector<pseudonymizer::substitution> made;
                 std::string out = p->apply_substitutes(line, joined, &made);
                 size_t cut = out.size() > 1000 ? 1000 : out.size(), pos = 0;
@@ -1116,7 +1138,7 @@ namespace pseudalis
             if (out.size() > 1000)
             {
                 size_t cut = 1000;
-                // Never inside a tag, which a cut would break.
+                // Jamais à l'intérieur d'une étiquette, qu'une coupure casserait.
                 const size_t open = out.rfind("[[", cut);
                 if (open != std::string::npos)
                 {
@@ -1130,11 +1152,11 @@ namespace pseudalis
         }
 
         /*
-            The marker of a picture, its description protected (protect_description(), known and
-            found), which written receives by the SHA-256 of the picture when it is not null.  Its
-            identifier is a digest of the picture keyed by the key of the engine: it tells nothing
-            of the picture to whoever does not hold the key, and links no picture from one
-            installation to another.
+            Le marqueur d'une image, sa description protégée (protect_description(), known et
+            found), que written reçoit sous le SHA-256 de l'image quand il n'est pas nul.  Son
+            identifiant est une empreinte de l'image calculée avec la clé du moteur : il ne dit rien
+            de l'image à qui ne détient pas la clé, et ne relie aucune image d'une installation à
+            une autre.
         */
         std::string marker_of(const std::string& bytes, const std::string& media_type, const std::string& location,
                               const picture_handler& handler, std::vector<std::string>& ids,
@@ -1155,8 +1177,8 @@ namespace pseudalis
         }
 
         /*
-            The base name of a file, its values replaced by substitutes that Windows takes, its
-            extension kept: a, with the detector of the document it names, reads it.
+            Le nom de base d'un fichier, ses valeurs remplacées par des substituts que Windows
+            accepte, son extension gardée : a, avec le détecteur du document qu'il nomme, le lit.
         */
         std::string protect_base(document_anonymizer& a, document_report& r, const std::string& base,
                                  std::vector<substitution>& made) const
@@ -1178,7 +1200,8 @@ namespace pseudalis
                 made.push_back(substitution{ s.substitute, s.tag });
             }
             if (out == stem) return base;
-            // An extension of no kind that the reading left as it was keeps its place in a name cut short.
+            // Une extension sans type que la lecture a laissée telle quelle garde sa place dans un nom
+            // raccourci.
             const size_t kept = ext.empty() ? name_extension(stem).size() : 0;
             if (kept > 0 && kept < out.size() &&
                 out.compare(out.size() - kept, kept, stem, stem.size() - kept, kept) == 0)
@@ -1193,14 +1216,14 @@ namespace pseudalis
             return a.restore_name(stem, r) + ext;
         }
 
-        // The resolver of the document anonymizer, from the lookup of the caller.
+        // Le résolveur de l'anonymiseur de documents, à partir du lookup de l'appelant.
         static pseudonymizer::substitute_resolver resolver_of(const substitute_lookup& lookup)
         {
             if (!lookup) return pseudonymizer::substitute_resolver();
             return [lookup](const std::string& candidate) { return lookup(candidate); };
         }
 
-        // The protected name of a file read alone: a picture, an archive, a folder.
+        // Le nom protégé d'un fichier lu seul : une image, une archive, un dossier.
         std::string protect_alone(const std::string& base, const substitute_lookup& lookup,
                                   std::vector<substitution>& made, document_report& r) const
         {
@@ -1225,13 +1248,13 @@ namespace pseudalis
         }
 
         /*
-            A document, protected or restored.  An Office document asks for the descriptions of its
-            pictures while it is read, before its text taught the detector anything, a PDF once it
-            did: the description given for each picture is kept, Albireo asked once, and read again
-            with what the whole text taught; when that reveals a value that the first reading of a
-            description missed, a name of the text that it repeats bare, the document is protected
-            again, its pictures taking their descriptions read with the detector of the first
-            protection.
+            Un document, protégé ou restauré.  Un document Office demande les descriptions de ses
+            images pendant sa lecture, avant que son texte ait appris quoi que ce soit au détecteur,
+            un PDF une fois que c'est fait : la description donnée pour chaque image est gardée,
+            Albireo n'étant interrogé qu'une fois, et relue avec ce que le texte entier a appris ;
+            quand cela révèle une valeur que la première lecture d'une description avait manquée, un
+            nom du texte qu'elle répète tel quel, le document est protégé à nouveau, ses images
+            prenant leurs descriptions lues avec le détecteur de la première protection.
         */
         engine_result document(const std::string& bytes, const std::string& name, document_format f,
                                const picture_handler& handler, bool restoring, const substitute_lookup& lookup,
@@ -1268,9 +1291,9 @@ namespace pseudalis
         }
 
         /*
-            One reading of a document by the detector d, which learns its text.  known, when not
-            null, reads the descriptions of the pictures in its place (document()); written
-            receives the descriptions written, by the SHA-256 of their pictures.
+            Une lecture d'un document par le détecteur d, qui apprend son texte.  known, quand il
+            n'est pas nul, lit les descriptions des images à sa place (document()) ; written reçoit
+            les descriptions écrites, sous le SHA-256 de leurs images.
         */
         engine_result read_document(const std::string& bytes, const std::string& name, document_format f,
                                     const picture_handler& handler, bool restoring, const substitute_lookup& lookup,
@@ -1280,19 +1303,21 @@ namespace pseudalis
         {
             engine_result out;
             if (!restoring) attach(d);
-            // A PDF keeps its pages: its text is replaced in place (the default of the anonymizer).
+            // Un PDF garde ses pages : son texte est remplacé sur place (le défaut de l'anonymiseur).
             document_anonymizer a(*p, d);
-            // The properties of the document take substitutes, which a window of properties shows as they are.
+            // Les propriétés du document prennent des substituts, qu'une fenêtre de propriétés montre tels
+            // quels.
             a.set_untagged_properties(true);
             a.set_substitute_resolver(resolver_of(lookup));
-            // Without tags, the values of the text take substitutes too, which the caller keeps.
+            // Sans étiquettes, les valeurs du texte prennent aussi des substituts, que l'appelant garde.
             a.set_untagged_text(!restoring && !c.tags);
             a.set_text_substitute_resolver(c.text);
-            // A restoration cannot give a picture back into a document: its marker leaves.
+            // Une restauration ne peut pas remettre une image dans un document : son marqueur s'en va.
             if (restoring) a.set_picture_text_finder(picture_markers);
             /*
-                A part of an Office document takes about 26 bytes of memory for each of its bytes
-                while it is read: each part stays within 32 times the document, from 32 MB.
+                Une partie d'un document Office occupe environ 26 octets de mémoire pour chacun de
+                ses octets pendant sa lecture : chaque partie reste dans la limite de 32 fois le
+                document, à partir de 32 Mo.
             */
             zip_limits limits;
             limits.max_total_size = std::min<uint64_t>(limits.max_total_size, budget);
@@ -1309,18 +1334,18 @@ namespace pseudalis
             document_report report;
             out.bytes = restoring ? a.restore(bytes, f, report, base_name(name))
                                   : a.anonymize(bytes, f, report, base_name(name));
-            // The values of the descriptions count with those of the document.
+            // Les valeurs des descriptions comptent avec celles du document.
             for (const auto& e : described.entities) report.entities[e.first] += e.second;
             report.dates_shifted += described.dates_shifted;
             for (const document_substitution& s : described.substitutions) report.substitutions.push_back(s);
-            // The name is read with what the document taught the detector.
+            // Le nom est lu avec ce que le document a appris au détecteur.
             std::vector<substitution> named;
             out.name = folder_of(name) + (restoring ? restore_base(a, report, base_name(name))
                                                     : protect_base(a, report, base_name(name), named));
             out.kind = document_format_name(f);
             out.report = report_json(report);
             out.pictures = ids;
-            // The substitutes of the properties and of the name, as written.
+            // Les substituts des propriétés et du nom, tels qu'écrits.
             for (const document_substitution& s : report.substitutions)
                 out.substitutions.push_back(substitution{ s.substitute, s.tag, s.text });
             return out;
@@ -1335,7 +1360,7 @@ namespace pseudalis
             document_report report;
             out.bytes = marker_of(bytes, image_media_type(bytes), base_name(name), handler ? handler : none, ids,
                                   nullptr, report, c) + "\r\n";
-            // The substitutes of the description, without tags.
+            // Les substituts de la description, sans étiquettes.
             for (const document_substitution& s : report.substitutions)
                 out.substitutions.push_back(substitution{ s.substitute, s.tag, s.text });
             out.name = folder_of(name) + protect_alone(base_name(name), lookup, out.substitutions, report) + ".txt";
@@ -1345,7 +1370,7 @@ namespace pseudalis
             return out;
         }
 
-        // known: the kind of the file when the caller found it already.
+        // known : le type du fichier quand l'appelant l'a déjà trouvé.
         engine_result any(const std::string& bytes, const std::string& name, const picture_handler& handler,
                           bool restoring, const substitute_lookup& lookup, int depth, uint64_t& budget,
                           const call_options& c, const file_kind* known = nullptr) const
@@ -1353,7 +1378,7 @@ namespace pseudalis
             const std::string base = base_name(name);
             text_verdict verdict = text_verdict::other;
             file_kind k = known ? *known : kind_of_content(bytes, base, verdict);
-            // A text under another name may hold tags, which its restoration puts back.
+            // Un texte sous un autre nom peut contenir des étiquettes, que sa restauration remet.
             if (k == file_kind::unsupported && restoring && text_content(bytes, base)) k = file_kind::document;
             if (k == file_kind::picture)
             {
@@ -1379,8 +1404,8 @@ namespace pseudalis
         }
 
         /*
-            The folders of the path of an entry, each one protected, or restored, once for the
-            whole archive: "Clients/Jean Dupont/" gives the same folder to all its entries.
+            Les dossiers du chemin d'une entrée, chacun protégé, ou restauré, une seule fois pour
+            toute l'archive : "Clients/Jean Dupont/" donne le même dossier à toutes ses entrées.
         */
         std::string entry_folders(const std::string& folders, bool restoring, const substitute_lookup& lookup,
                                   std::map<std::string, std::string>& done, engine_result& out) const
@@ -1412,7 +1437,7 @@ namespace pseudalis
                             attach(d);
                             document_anonymizer a(*p, d);
                             a.set_substitute_resolver(resolver_of(lookup));
-                            // A folder has no extension: its whole name is read.
+                            // Un dossier n'a pas d'extension : son nom entier est lu.
                             const std::size_t first = r.substitutions.size();
                             changed = name_values(a, r, part);
                             for (std::size_t k = first; k < r.substitutions.size(); ++k)
@@ -1451,7 +1476,7 @@ namespace pseudalis
             if (depth > 3) throw std::runtime_error(base_name(name) + ": archives nested too deep");
             archive_kind ak = archive_kind_of(bytes);
             if (ak == archive_kind::none) ak = archive_kind_of_name(name);
-            // The entries come out of what is left of the budget of the file.
+            // Les entrées sont prises sur ce qui reste du budget du fichier.
             archive_limits limits;
             limits.max_total_size = std::min<uint64_t>(limits.max_total_size, budget);
             limits.max_entry_size = std::min<uint64_t>(limits.max_entry_size, budget);
@@ -1488,7 +1513,7 @@ namespace pseudalis
                     kept.push_back(std::move(e));
                     continue;
                 }
-                // An entry left out gives its memory back at once.
+                // Une entrée laissée de côté rend aussitôt sa mémoire.
                 const file_kind kind =
                     e.regular && !restoring ? engine::kind_of(e.data, e.name) : file_kind::unsupported;
                 if (!e.regular || (!restoring && kind == file_kind::unsupported))
@@ -1497,7 +1522,7 @@ namespace pseudalis
                     std::string().swap(e.data);
                     continue;
                 }
-                // The text file of a picture, whose picture a restoration cannot give back, leaves.
+                // Le fichier texte d'une image, image qu'une restauration ne peut pas rendre, s'en va.
                 if (restoring && e.data.size() <= 65536 + 3 && marker_alone(e.data))
                 {
                     out.report["pictures_removed"] =
@@ -1517,7 +1542,7 @@ namespace pseudalis
                         names.erase(lower(e.name));
                         e.name = free_name(renamed, names, next_number);
                     }
-                    // The entry written, by which a copy extracted from the archive is known again.
+                    // L'entrée écrite, grâce à laquelle une copie extraite de l'archive est reconnue.
                     if (!restoring)
                     {
                         entry_written w;
@@ -1543,9 +1568,10 @@ namespace pseudalis
                 catch (std::exception& x)
                 {
                     /*
-                        A restoration keeps an entry it cannot read, which holds no tag, as it is, in
-                        its folder restored with the others and under its name restored.  A protection
-                        leaves it out: it could hold personal data.
+                        Une restauration garde telle quelle une entrée qu'elle ne peut pas lire, qui ne
+                        contient aucune étiquette, dans son dossier restauré avec les autres et sous son
+                        nom restauré.  Une protection la laisse de côté : elle pourrait contenir des
+                        données personnelles.
                     */
                     if (restoring)
                     {
@@ -1571,9 +1597,9 @@ namespace pseudalis
         }
 
         /*
-            The entry at path of an archive (engine::extract()).  An archive inside it is entered by
-            its name and '!': the longest name of an entry that starts the path, so that a name that
-            holds '!' is read whole.
+            L'entrée située à path d'une archive (engine::extract()).  On entre dans une archive
+            contenue par son nom et '!' : le plus long nom d'entrée qui commence le chemin, pour
+            qu'un nom qui contient '!' soit lu en entier.
         */
         std::string extract(const std::string& bytes, const std::string& name, const std::string& path) const
         {
@@ -1718,8 +1744,8 @@ namespace pseudalis
         return out;
     }
 
-    /* The places of the spans of a text are given for UTF-8 only, the text the service sends back, and
-       up to 100000 of them, which the service reads in the result of the engine: beyond, none. */
+    /* Les emplacements des empans d'un texte ne sont donnés que pour l'UTF-8, le texte que le service
+       renvoie, et jusqu'à 100000, que le service lit dans le résultat du moteur : au-delà, aucun. */
     namespace
     {
         const std::size_t max_spans = 100000;
@@ -1727,7 +1753,7 @@ namespace pseudalis
 
     namespace
     {
-        // A value of a protected text: its byte range, its type and its original.
+        // Une valeur d'un texte protégé : sa plage d'octets, son type et son original.
         struct protected_value
         {
             std::size_t begin, end;
@@ -1735,8 +1761,8 @@ namespace pseudalis
             std::string original;
         };
 
-        /* The tags of a text, then the substitutes that resolve knows outside them, in their order:
-           the protected values as restore_text() puts them back. */
+        /* Les étiquettes d'un texte, puis les substituts que resolve connaît en dehors d'elles, dans
+           leur ordre : les valeurs protégées telles que restore_text() les remet. */
         std::vector<protected_value> protected_values(const pseudonymizer& p, const std::string& text,
                                                       const pseudonymizer::substitute_resolver& resolve)
         {
@@ -1796,7 +1822,7 @@ namespace pseudalis
             pos = o.end;
         }
         rebuilt.append(tagged, pos, std::string::npos);
-        // Tags that a link encodes are restored too: the places are then unknown.
+        // Les étiquettes qu'un lien encode sont restaurées aussi : les emplacements sont alors inconnus.
         if (rebuilt != restored) return json::array();
         return spans;
     }

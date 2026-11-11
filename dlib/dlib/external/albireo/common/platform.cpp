@@ -36,7 +36,7 @@ namespace albireo
 
     std::string executable_path()
     {
-        // macOS has no /proc: the path the program was started by, then without its links.
+        // macOS n'a pas de /proc : le chemin par lequel le programme a été lancé, puis sans ses liens.
         char buf[4096];
         uint32_t size = sizeof(buf);
         if (_NSGetExecutablePath(buf, &size) != 0) return std::string();
@@ -51,7 +51,7 @@ namespace albireo
 
     namespace
     {
-        // The folder set_data_dir() gives, empty when none.
+        // Le dossier que donne set_data_dir(), vide quand il n'y en a pas.
         std::mutex& data_dir_mutex()
         {
             static std::mutex m;
@@ -226,7 +226,7 @@ namespace albireo
         std::string p = final_path(path);
         if (p.empty())
         {
-            // A file to come: its folder, links resolved, and its name.
+            // Un fichier à venir : son dossier, liens résolus, et son nom.
             const std::string parent = final_path(parent_path(path));
             if (parent.empty()) return false;
             p = join_path(parent, file_name(path));
@@ -269,7 +269,7 @@ namespace albireo
 
     namespace
     {
-        // The entries of path below folder, opened one within the other without following a link.
+        // Les entrées de path sous folder, ouvertes l'une dans l'autre sans suivre de lien.
         int open_link_free(const std::string& path, const std::string& folder, bool want_folder, std::string& why)
         {
             std::string base = folder.empty() ? std::string("/") : folder;
@@ -305,7 +305,8 @@ namespace albireo
             for (size_t i = 0; i < names.size(); ++i)
             {
                 const bool file = !want_folder && i + 1 == names.size();
-                // A pipe or a device opens without waiting, then fails the check of a regular file.
+                // Un tube ou un périphérique s'ouvre sans attendre, puis échoue au test de fichier
+                // ordinaire.
                 const int flags = O_RDONLY | O_NOFOLLOW | O_CLOEXEC | (file ? O_NOCTTY | O_NONBLOCK : O_DIRECTORY);
                 const int next = ::openat(dir, names[i].c_str(), flags);
                 if (next < 0)
@@ -475,7 +476,8 @@ namespace albireo
     bool write_file_atomic(const std::string& p, const std::string& data)
     {
         const std::string tmp = p + ".tmp-" + random_hex(8);
-        // The data is written to the disk, not only to the cache of the system, before the rename.
+        // Les données sont écrites sur le disque, pas seulement dans le cache du système, avant le
+        // renommage.
         bool ok = true;
         size_t done = 0;
         const int fd = ::open(tmp.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
@@ -494,7 +496,7 @@ namespace albireo
             remove_file(tmp);
             return false;
         }
-        // The new name reaches the disk with its folder.
+        // Le nouveau nom atteint le disque avec son dossier.
         const std::string folder = parent_path(p);
         const int dir = ::open(folder.empty() ? "." : folder.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
         if (dir >= 0)
@@ -592,7 +594,8 @@ namespace albireo
         unsigned timeout_ms, const std::atomic<bool>* stop, const process_options* options)
     {
         const std::string* input = options ? options->input : nullptr;
-        // The waits last a tenth of a second at most, so that stop ends the program at once.
+        // Les attentes durent au plus un dixième de seconde, pour que stop termine le programme
+        // aussitôt.
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
         auto remaining_ms = [&]() {
             const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -611,9 +614,10 @@ namespace albireo
             return -1;
         }
         /*
-            What the child needs is made before the fork: between the fork and the start of
-            the program, the child of a process with threads may only make system calls, a
-            lock of the allocator possibly held by a thread that does not exist in it.
+            Ce dont l'enfant a besoin est préparé avant le fork : entre le fork et le démarrage
+            du programme, l'enfant d'un processus qui a des threads ne peut faire que des appels
+            système, un verrou de l'allocateur étant peut-être tenu par un thread qui n'existe
+            pas chez lui.
         */
         std::vector<char*> argv;
         argv.push_back(const_cast<char*>(program.c_str()));
@@ -640,7 +644,8 @@ namespace albireo
             }
             if (input) dup2(ins[0], 0);
             if (folder && chdir(folder) != 0) _exit(127);
-            // A restricted child is bounded in memory, writes no file and leaves no core file.
+            // Un enfant restreint est limité en mémoire, n'écrit aucun fichier et ne laisse aucun
+            // fichier core.
             if (restricted)
             {
                 rlimit limit;
@@ -653,12 +658,12 @@ namespace albireo
                 setrlimit(RLIMIT_FSIZE, &limit);
                 setrlimit(RLIMIT_CORE, &limit);
             }
-            // The child keeps its standard streams only.
+            // L'enfant ne garde que ses flux standard.
             for (long fd = 3; fd < max_fd; ++fd) close(static_cast<int>(fd));
             execv(program.c_str(), argv.data());
             _exit(127);
         }
-        // The input goes to the child from a thread, so that its output is read meanwhile.
+        // L'entrée part vers l'enfant depuis un thread, pour que sa sortie soit lue pendant ce temps.
         std::thread writer;
         if (input)
         {

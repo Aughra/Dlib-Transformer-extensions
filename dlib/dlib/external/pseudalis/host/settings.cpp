@@ -37,7 +37,7 @@ namespace pseudalis
         j["history_mb"] = history_mb;
         j["tags"] = tags;
         j["trust_authority"] = trust_authority;
-        // The place of the publication appears only when it differs from the one of the build.
+        // Le lieu de la publication n'apparaît que lorsqu'il diffère de celui du build.
         j["proxy"] = proxy;
         return j;
     }
@@ -48,7 +48,7 @@ namespace pseudalis
         const long long port = j["port"].as_int(d.port);
         s.port = port >= 1024 && port <= 65535 ? static_cast<int>(port) : d.port;
         s.language = known_language(j["language"].str(d.language)) ? j["language"].str(d.language) : d.language;
-        // The letter of the drive, in upper case.
+        // La lettre du lecteur, en majuscule.
         std::string letter = j["drive_letter"].str(d.drive_letter);
         if (!letter.empty() && !valid_drive_letter(letter)) letter = d.drive_letter;
         if (!letter.empty())
@@ -59,10 +59,11 @@ namespace pseudalis
         const long long mb = j["max_file_mb"].as_int(d.max_file_mb);
         s.max_file_mb = mb >= 1 && mb <= 2048 ? static_cast<int>(mb) : d.max_file_mb;
         /*
-            The originals lose nothing to a value the service cannot read: days out of their range
-            keep them without limit of time, a space out of its range takes the largest.  A file
-            written by a version before 1.0.2 holds no space: the originals take the largest, and
-            the 30 days that were the default become the 45 of this version.
+            Les originaux ne perdent rien à une valeur que le service ne peut pas lire : des jours hors
+            de leur plage les gardent sans limite de temps, un espace hors de sa plage prend le plus
+            grand.  Un fichier écrit par une version antérieure à 1.0.2 ne contient pas d'espace : les
+            originaux prennent le plus grand, et les 30 jours qui étaient la valeur par défaut
+            deviennent les 45 de cette version.
         */
         const bool earlier = !j.contains("history_mb");
         const long long days = j["removed_days"].as_int(d.removed_days);
@@ -70,7 +71,7 @@ namespace pseudalis
         if (earlier && s.removed_days == 30) s.removed_days = d.removed_days;
         const long long space = earlier ? max_history_mb : j["history_mb"].as_int(max_history_mb);
         s.history_mb = space >= 1 && space <= max_history_mb ? static_cast<int>(space) : max_history_mb;
-        // The space holds the largest file at least.
+        // L'espace contient au moins le plus gros fichier.
         if (s.history_mb < s.max_file_mb) s.history_mb = s.max_file_mb;
         s.tags = j["tags"].as_bool(d.tags);
         s.trust_authority = j["trust_authority"].as_bool(d.trust_authority);
@@ -90,9 +91,9 @@ namespace pseudalis
                 return;
             }
             /*
-                The defaults replace a damaged file, kept aside, except for the time and the space
-                of the originals: without limit of time and the largest space, so that none goes
-                before an administrator sets them again.
+                Les valeurs par défaut remplacent un fichier endommagé, mis de côté, sauf pour la durée
+                et l'espace des originaux : sans limite de temps et le plus grand espace, pour qu'aucun
+                ne parte avant qu'un administrateur les définisse de nouveau.
             */
             log_error("settings: " + path_ + " is not valid JSON, kept as settings.json.invalid; the defaults "
                       "replace it, the originals kept meanwhile");
@@ -102,7 +103,8 @@ namespace pseudalis
         }
         else if (file_exists(path_))
         {
-            // A file that cannot be read stays as it is: the defaults serve meanwhile, no original goes.
+            // Un fichier qui ne peut pas être lu reste tel quel : les valeurs par défaut servent entre-temps,
+            // aucun original ne part.
             log_error("settings: " + path_ + " cannot be read, the defaults serve meanwhile");
             s_.removed_days = 0;
             s_.history_mb = host_settings::max_history_mb;
@@ -119,7 +121,7 @@ namespace pseudalis
 
     bool settings_store::set(const host_settings& s)
     {
-        // The file is written outside the lock that get() takes, in the order of the changes.
+        // Le fichier est écrit hors du verrou que prend get(), dans l'ordre des changements.
         std::lock_guard<std::mutex> order(write_m_);
         {
             std::lock_guard<std::mutex> lock(m_);

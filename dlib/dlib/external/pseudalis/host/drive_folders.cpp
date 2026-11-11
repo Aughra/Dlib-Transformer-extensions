@@ -2,39 +2,41 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    The drive of Pseudalis without driver (drive.h): the folder drive of the data folder, which
-    a scan finds the changes of, every second while files rest and at each change that Windows
-    reports, and which a letter shows for every session of the computer.
+    Le lecteur de Pseudalis sans pilote (drive.h) : le dossier drive du dossier de données, dont
+    un parcours trouve les changements, chaque seconde tant que des fichiers sont au repos et à
+    chaque changement que Windows signale, et qu'une lettre montre pour chaque session de
+    l'ordinateur.
 
-    A file is processed once it rests, unchanged for two seconds, and once the service opens
-    it alone: a program that still holds it keeps it (sharing violation), and the service
-    holds it, sharing nothing, from its reading to its replacement.  Every file is opened
-    through no link, checked where its handle lies, and deleted or moved through that handle,
-    so that a junction placed in the drive by a user never leads the service elsewhere.  The
-    new file is written beside it under a hidden temporary name, then takes its name.
+    Un fichier est traité une fois au repos, inchangé depuis deux secondes, et une fois que le
+    service l'ouvre seul : un programme qui le tient encore le garde (violation de partage), et
+    le service le tient, sans rien partager, de sa lecture à son remplacement.  Chaque fichier
+    est ouvert sans passer par aucun lien, vérifié là où se trouve son handle, et supprimé ou
+    déplacé par ce handle, pour qu'une jonction placée dans le lecteur par un utilisateur ne
+    mène jamais le service ailleurs.  Le nouveau fichier est écrit à côté sous un nom
+    temporaire caché, puis prend son nom.
 
-    The files processed are recorded with their size and the time of their last write, in
-    memory and in the database: a scan passes them while they keep both.  A file whose content
-    is a protected file of the vault (a copy, a move, a rename) is recorded without being
-    processed again, and its record leaves the list of the removed ones; the record is marked
-    removed once the last file of the drive that shows it leaves.  A protected file whose
-    original was forgotten stays as it is, unrecorded: its restoration puts back the values of
-    its tags.  A file
-    extracted from a protected archive that the database records stays as it is too, recorded
-    with the original of its entry (service::adopt()).
+    Les fichiers traités sont enregistrés avec leur taille et l'heure de leur dernière écriture,
+    en mémoire et dans la base de données : un parcours les passe tant qu'ils gardent les deux.
+    Un fichier dont le contenu est un fichier protégé du coffre (une copie, un déplacement, un
+    renommage) est enregistré sans être traité de nouveau, et son enregistrement quitte la liste
+    des retirés ; l'enregistrement est marqué retiré une fois que part le dernier fichier du
+    lecteur qui le montre.  Un fichier protégé dont l'original a été oublié reste tel quel, sans
+    enregistrement : sa restauration remet les valeurs de ses tags.  Un fichier extrait d'une
+    archive protégée que la base de données enregistre reste tel quel lui aussi, enregistré avec
+    l'original de son entrée (service::adopt()).
 
-    A folder that comes in takes its name once nothing changed under it for six seconds and
-    nothing under it waits: a copy in progress keeps its folders.  Its name is protected like
-    the name of a file, then recorded so that it is not read again.  A file of another kind
-    leaves for the folder of the files not processed of its owner, at the same place of the
-    tree, so that a folder copied whole keeps its shape there.
+    Un dossier qui arrive prend son nom une fois que rien n'a changé dessous pendant six
+    secondes et que rien dessous n'attend : une copie en cours garde ses dossiers.  Son nom est
+    protégé comme le nom d'un fichier, puis enregistré pour ne pas être lu de nouveau.  Un
+    fichier d'un autre type part dans le dossier des fichiers non traités de son propriétaire, à
+    la même place de l'arborescence, pour qu'un dossier copié en entier y garde sa forme.
 */
 
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
-// macOS names st_mtimespec the modification time that Linux names st_mtim.
+// macOS nomme st_mtimespec l'heure de modification que Linux nomme st_mtim.
 #define st_mtim st_mtimespec
 
 #include "drive.h"
@@ -66,11 +68,11 @@ namespace pseudalis
 {
     namespace
     {
-        const int64_t file_rest_ms = 2000;      // a file unchanged this long is processed
-        const int64_t folder_rest_ms = 6000;    // a new folder whose tree rests this long is named
-        const int64_t busy_retry_ms = 3000;     // a file a program holds is tried again after this
-        const int64_t failure_retry_ms = 60000; // a file the service could not process yet (engine, vault)
-        const size_t max_entries = 500000;      // the entries a scan reads at most
+        const int64_t file_rest_ms = 2000;      // un fichier inchangé pendant cette durée est traité
+        const int64_t folder_rest_ms = 6000;    // un nouveau dossier dont l'arborescence repose cette durée est nommé
+        const int64_t busy_retry_ms = 3000;     // un fichier que tient un programme est retenté après ce délai
+        const int64_t failure_retry_ms = 60000; // un fichier que le service n'a pas encore pu traiter (moteur, coffre)
+        const size_t max_entries = 500000;      // les entrées qu'un parcours lit au plus
 
         int64_t now_ms()
         {
@@ -84,8 +86,8 @@ namespace pseudalis
             return s;
         }
 
-        // The files the drives leave alone: their temporary files, the lock and temporary files of
-        // the editors ("~$name.docx", "~WRL0001.tmp", ".~lock.name#"), the files of the Explorer.
+        // Les fichiers que les lecteurs laissent tranquilles : leurs fichiers temporaires, les fichiers de verrou et
+        // temporaires des éditeurs ("~$name.docx", "~WRL0001.tmp", ".~lock.name#"), les fichiers de l'Explorateur.
         bool ignored_name(const std::string& name)
         {
             const std::string l = lower_ascii(name);
@@ -112,13 +114,13 @@ namespace pseudalis
             return dir.empty() ? name : dir + "/" + name;
         }
 
-        // A path within a folder, '/' between its parts, with the separators of the system.
+        // Un chemin dans un dossier, '/' entre ses parties, avec les séparateurs du système.
         std::string os_path(std::string path)
         {
             return path;
         }
 
-        // The path of an event: "\folder\name", as the icon reads it.
+        // Le chemin d'un événement : "\folder\name", tel que l'icône le lit.
         std::string event_path(const std::string& path)
         {
             std::string p = "\\" + path;
@@ -126,7 +128,7 @@ namespace pseudalis
             return p;
         }
 
-        // "name (2).ext": the text file of a picture keeps the extension of the picture before its own.
+        // "name (2).ext" : le fichier texte d'une image garde l'extension de l'image avant la sienne.
         std::string numbered(const std::string& name, int k)
         {
             std::string ext = name_extension(name);
@@ -138,7 +140,7 @@ namespace pseudalis
 
         struct entry
         {
-            std::string path;       // within the folder, '/' between its parts
+            std::string path;       // dans le dossier, '/' entre ses parties
             bool dir = false;
             long long size = 0;
             int64_t written = 0;
@@ -193,7 +195,7 @@ namespace pseudalis
             h = no_handle;
         }
 
-        // Outside Windows a file is not held alone: the time it rests stands for it.
+        // Hors de Windows, un fichier n'est pas tenu seul : le temps qu'il reste au repos en tient lieu.
         int open_alone(const std::string& path, file_handle& h)
         {
             h = ::open(path.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
@@ -216,7 +218,7 @@ namespace pseudalis
             return true;
         }
 
-        // Reads size bytes more from h after the from bytes data holds.
+        // Lit size octets de plus depuis h après les from octets que contient data.
         bool read_all(file_handle h, std::string& data, uint64_t size, size_t from = 0)
         {
             data.resize(from + static_cast<size_t>(size));
@@ -249,30 +251,30 @@ namespace pseudalis
             return true;
         }
 
-        // The files of the drive as they rest, and what they wait for.
+        // Les fichiers du lecteur pendant qu'ils reposent, et ce qu'ils attendent.
         struct pending_file
         {
             long long size = 0;
             int64_t written = 0;
-            int64_t since = 0;          // when it was last seen changing
-            int64_t retry = 0;          // not before this time
+            int64_t since = 0;          // la dernière fois qu'on l'a vu changer
+            int64_t retry = 0;          // pas avant cette heure
         };
 
         struct folder_state
         {
-            std::string kind;           // "drive", the name of the folder in the database
-            std::string path;           // the folder
+            std::string kind;           // "drive", le nom du dossier dans la base de données
+            std::string path;           // le dossier
             std::string letter;
             bool mapped = false;
             bool active = false;
             std::string error;
-            std::map<std::string, folder_file> known;          // key -> as left
-            std::map<long long, int> shown;                     // record -> the protected files of known
-            std::map<std::string, pending_file> pending;       // key -> changing or waiting
-            std::set<std::string> busy;                         // keys in the queue or processed
-            std::map<std::string, int64_t> seen_folders;       // new folders: key -> first seen
-            int64_t last_change = 0;                            // of any file, for the folders
-            std::map<std::string, int64_t> changed_under;      // folder key -> last change under it
+            std::map<std::string, folder_file> known;          // clé -> tel que laissé
+            std::map<long long, int> shown;                     // enregistrement -> les fichiers protégés de known
+            std::map<std::string, pending_file> pending;       // clé -> en changement ou en attente
+            std::set<std::string> busy;                         // clés dans la file ou traitées
+            std::map<std::string, int64_t> seen_folders;       // nouveaux dossiers : clé -> première vue
+            int64_t last_change = 0;                            // de n'importe quel fichier, pour les dossiers
+            std::map<std::string, int64_t> changed_under;      // clé de dossier -> dernier changement dessous
         };
 
         struct job
@@ -302,7 +304,7 @@ namespace pseudalis
         std::condition_variable queue_cv;
 
         // ---------------------------------------------------------------------------
-        // Records.
+        // Enregistrements.
 
         void event(const std::string& kind, const std::string& path, const std::string& message)
         {
@@ -316,7 +318,7 @@ namespace pseudalis
             }
         }
 
-        // m held.  Counts the protected files of the drive that show each record.
+        // m tenu.  Compte les fichiers protégés du lecteur qui montrent chaque enregistrement.
         static void count(folder_state& f, const folder_file& r, int delta)
         {
             if (r.record <= 0 || r.state != "protected") return;
@@ -325,7 +327,7 @@ namespace pseudalis
             if (n <= 0) f.shown.erase(r.record);
         }
 
-        // m held.
+        // m tenu.
         void remember(folder_state& f, const folder_file& r)
         {
             const auto before = f.known.find(key_of(r.path));
@@ -342,7 +344,7 @@ namespace pseudalis
             }
         }
 
-        // m held.
+        // m tenu.
         void forget_path(folder_state& f, const std::string& key)
         {
             const auto it = f.known.find(key);
@@ -359,7 +361,8 @@ namespace pseudalis
             f.known.erase(it);
         }
 
-        // m not held.  A record that a file of the drive no longer shows: marked removed unless a copy shows it.
+        // m non tenu.  Un enregistrement qu'aucun fichier du lecteur ne montre plus : marqué retiré sauf si une copie
+        // le montre.
         void release(folder_state& f, long long record)
         {
             if (record <= 0) return;
@@ -378,7 +381,7 @@ namespace pseudalis
         }
 
         // ---------------------------------------------------------------------------
-        // The folders.
+        // Les dossiers.
 
         bool prepare(folder_state& f, std::string& error)
         {
@@ -390,7 +393,7 @@ namespace pseudalis
             return true;
         }
 
-        // The folder of the files not processed of a user, made for that user alone.
+        // Le dossier des fichiers non traités d'un utilisateur, créé pour ce seul utilisateur.
         std::string refused_folder(const std::string& owner)
         {
             const std::string dir = join_path(refused_root, owner.empty() ? std::string("files") : owner);
@@ -398,7 +401,7 @@ namespace pseudalis
             return dir;
         }
 
-        // A name free in the folder dir of f, the path of the file itself allowed.
+        // Un nom libre dans le dossier dir de f, le chemin du fichier lui-même étant permis.
         std::string free_path(const folder_state& f, const std::string& dir, const std::string& name,
                               const std::string& self)
         {
@@ -413,9 +416,9 @@ namespace pseudalis
         }
 
         // ---------------------------------------------------------------------------
-        // The scans.
+        // Les parcours.
 
-        // m held: marks the folders of path as changed now.
+        // m tenu : marque les dossiers de path comme changés maintenant.
         void touched(folder_state& f, const std::string& path, int64_t now)
         {
             f.last_change = now;
@@ -465,7 +468,7 @@ namespace pseudalis
                 j.path = e.path;
                 ready.push_back(j);
             }
-            // What left: a file of the drive deleted, moved out or renamed, a folder gone.
+            // Ce qui est parti : un fichier du lecteur supprimé, déplacé dehors ou renommé, un dossier disparu.
             for (auto it = f.known.begin(); it != f.known.end();)
             {
                 if (present.count(it->first) || f.busy.count(it->first))
@@ -476,7 +479,7 @@ namespace pseudalis
                 const folder_file gone = it->second;
                 ++it;
                 forget_path(f, key_of(gone.path));
-                // The record goes with the last file of the drive that shows it: a copy keeps it.
+                // L'enregistrement part avec le dernier fichier du lecteur qui le montre : une copie le garde.
                 if (gone.state == "protected" && gone.record > 0 && !f.shown.count(gone.record))
                     svc.mark_removed(gone.record);
             }
@@ -484,7 +487,8 @@ namespace pseudalis
                 it = present.count(it->first) ? std::next(it) : f.pending.erase(it);
             for (auto it = f.seen_folders.begin(); it != f.seen_folders.end();)
                 it = present.count(it->first) ? std::next(it) : f.seen_folders.erase(it);
-            // The new folders, the deepest first, once nothing under them waits or changed lately.
+            // Les nouveaux dossiers, les plus profonds d'abord, une fois que rien dessous n'attend ni n'a changé
+            // récemment.
             std::sort(new_folders.begin(), new_folders.end(), [](const entry* a, const entry* b) {
                 return std::count(a->path.begin(), a->path.end(), '/') >
                        std::count(b->path.begin(), b->path.end(), '/');
@@ -501,7 +505,7 @@ namespace pseudalis
                 const auto c = f.changed_under.find(k);
                 const int64_t last = std::max(f.seen_folders[k], c == f.changed_under.end() ? 0 : c->second);
                 if (waiting || now - last < folder_rest_ms) continue;
-                // A folder below waits for its name first.
+                // Un dossier plus bas attend d'abord son nom.
                 bool inner = false;
                 for (const job& j : ready)
                     if (j.dir && key_of(j.path).compare(0, prefix.size(), prefix) == 0) inner = true;
@@ -516,9 +520,10 @@ namespace pseudalis
         }
 
         // ---------------------------------------------------------------------------
-        // The processing of a file.
+        // Le traitement d'un fichier.
 
-        // m not held.  Ends the job of key: free for the next scans, retried after delay if not 0.
+        // m non tenu.  Termine la tâche de key : libre pour les parcours suivants, retentée après delay s'il n'est
+        // pas 0.
         void finish(folder_state& f, const std::string& path, int64_t retry_after_ms)
         {
             std::lock_guard<std::mutex> lock(m);
@@ -533,17 +538,17 @@ namespace pseudalis
             }
         }
 
-        // The size and the time of last write of the file at path now, for its record.
+        // La taille et l'heure de dernière écriture du fichier à path maintenant, pour son enregistrement.
         bool current(const folder_state& f, const std::string& path, long long& size, int64_t& written)
         {
             return stat_entry(join_path(f.path, path), size, written);
         }
 
         /*
-            Writes data beside the file held by source, as name, and deletes the file held.  A new
-            name is taken before the file held goes, which stays when it cannot; the name of the
-            file held is taken once it went.  Returns the path of the new file within the folder,
-            or an empty string.
+            Écrit data à côté du fichier tenu par source, sous le nom name, et supprime le fichier
+            tenu.  Un nouveau nom est pris avant que parte le fichier tenu, qui reste quand cela
+            échoue ; le nom du fichier tenu est pris une fois qu'il est parti.  Renvoie le chemin
+            du nouveau fichier dans le dossier, ou une chaîne vide.
         */
         std::string replace(folder_state& f, const std::string& path, file_handle& source, const std::string& data,
                             const std::string& name)
@@ -572,10 +577,10 @@ namespace pseudalis
         }
 
         /*
-            Moves the file held out of the drive, to the folder of the files not processed of its
-            owner, at the place it had in the tree of the drive, where it admits that owner,
-            SYSTEM and the administrators alone: it keeps the permissions of the drive otherwise,
-            which a move within a volume carries.
+            Déplace le fichier tenu hors du lecteur, vers le dossier des fichiers non traités de son
+            propriétaire, à la place qu'il avait dans l'arborescence du lecteur, où il n'admet que
+            ce propriétaire, SYSTEM et les administrateurs : il garderait sinon les permissions du
+            lecteur, qu'un déplacement au sein d'un volume emporte.
         */
         void refuse(folder_state& f, const std::string& path, file_handle& h, const std::string& why)
         {
@@ -601,7 +606,7 @@ namespace pseudalis
             close_file(h);
             if (moved.empty())
             {
-                // Left in place: the scans pass it until it changes.
+                // Laissé en place : les parcours le passent jusqu'à ce qu'il change.
                 long long size = 0;
                 int64_t written = 0;
                 if (current(f, path, size, written))
@@ -625,7 +630,8 @@ namespace pseudalis
             event("refused", path, why + "; moved to " + parent_path(moved));
         }
 
-        // Records the file at path as left: its state, and the name it takes when it holds personal data.
+        // Enregistre le fichier à path tel que laissé : son état, et le nom qu'il prend quand il contient des
+        // données personnelles.
         void keep(folder_state& f, const std::string& path, const std::string& sha, long long record,
                   const std::string& state, bool protect_name_of_file)
         {
@@ -661,13 +667,13 @@ namespace pseudalis
             remember(f, r);
         }
 
-        // Errors that pass: the file is tried again later rather than refused.
+        // Des erreurs passagères : le fichier est retenté plus tard plutôt que refusé.
         static bool transient(const user_error& e)
         {
             return e.code == "engine" || e.code == "stopping" || e.code == "vault" || e.code == "database";
         }
 
-        // Returns the delay before another try, 0 when the file is done with.
+        // Renvoie le délai avant un autre essai, 0 quand on en a fini avec le fichier.
         int64_t process_file(folder_state& f, const std::string& path)
         {
             const std::string full = join_path(f.path, path);
@@ -699,16 +705,16 @@ namespace pseudalis
                 return 0;
             }
             /*
-                A name whose extension gives no kind is processed when its content is text through
-                and through, which the engine decides: a start that is not a text leaves the drive
-                before the rest of the file is read, unless the file may be a protected file renamed,
-                of a size the database knows.  A name without extension goes to the engine, which
-                also takes a document, a picture or an archive by its signature.
+                Un nom dont l'extension ne donne aucun type est traité quand son contenu est du texte
+                de bout en bout, ce que décide le moteur : un début qui n'est pas du texte quitte le
+                lecteur avant que le reste du fichier soit lu, sauf si le fichier peut être un fichier
+                protégé renommé, d'une taille que connaît la base de données.  Un nom sans extension
+                va au moteur, qui prend aussi un document, une image ou une archive par sa signature.
             */
             const std::string base = base_of(path);
             const bool by_content = !supported_name(base) && !name_extension(base).empty();
             std::string data;
-            // Reserved whole, so that the rest read after the start moves no byte of it in memory.
+            // Réservé en entier, pour que le reste lu après le début ne déplace aucun de ses octets en mémoire.
             data.reserve(static_cast<size_t>(size));
             const uint64_t head = by_content ? std::min<uint64_t>(size, 65536) : static_cast<uint64_t>(size);
             bool read = read_all(h, data, head);
@@ -733,7 +739,7 @@ namespace pseudalis
             }
             const std::string sha = sha256_hex(data);
 
-            // A protected file come in again, copied, moved or renamed: kept as it is, under a protected name.
+            // Un fichier protégé revenu, copié, déplacé ou renommé : gardé tel quel, sous un nom protégé.
             file_record known_record;
             if (svc.db().find_by_output(sha, known_record, base_of(path)))
             {
@@ -742,7 +748,7 @@ namespace pseudalis
                 if (known_record.removed) svc.db().set_file_removed(known_record.id, 0);
                 keep(f, path, sha, known_record.id, "protected", true);
                 if (before.record != known_record.id) release(f, before.record);
-                // A file gone meanwhile shows its record no more.
+                // Un fichier disparu entre-temps ne montre plus son enregistrement.
                 release(f, known_record.id);
                 return 0;
             }
@@ -754,9 +760,9 @@ namespace pseudalis
                 return 0;
             }
             /*
-                A protected file whose original was forgotten, or kept its time after its file left
-                the drive: kept as it is and unrecorded, so that no new original stands for it; its
-                restoration puts back the values of its tags.
+                Un fichier protégé dont l'original a été oublié, ou a été gardé son temps après que son
+                fichier a quitté le lecteur : gardé tel quel et sans enregistrement, pour qu'aucun nouvel
+                original ne le représente ; sa restauration remet les valeurs de ses tags.
             */
             int64_t forgotten_at = 0;
             std::string forgotten_why;
@@ -769,7 +775,7 @@ namespace pseudalis
                 event("kept", path, "a protected file whose original is " + forgotten_why + ", kept as it is");
                 return 0;
             }
-            // A file extracted from a protected archive: kept as it is, recorded with the original of its entry.
+            // Un fichier extrait d'une archive protégée : gardé tel quel, enregistré avec l'original de son entrée.
             long long adopted = 0;
             const int entry = svc.adopt(sha, base_of(path), size, adopted);
             if (entry < 0)
@@ -787,7 +793,7 @@ namespace pseudalis
                 event("protected", path, "a file extracted from a protected archive, recorded with its original");
                 return 0;
             }
-            // A name of no kind whose content does not start as a text, and is no protected file.
+            // Un nom sans type dont le contenu ne commence pas comme un texte, et qui n'est pas un fichier protégé.
             if (by_content && !text_head(data.data(), std::min<size_t>(data.size(), 65536)))
             {
                 wipe(data);
@@ -800,8 +806,9 @@ namespace pseudalis
             bool ok = false;
             try
             {
-                // The files of the drive take their tags, or their substitutes alone, as the settings say.
-                // A version replacing another keeps the substitutes of its record, without tags.
+                // Les fichiers du lecteur prennent leurs tags, ou leurs seuls substituts, comme le disent les
+                // réglages.  Une version qui en remplace une autre garde les substituts de son enregistrement, sans
+                // tags.
                 ok = svc.protect(data, base_of(path), "drive", true, svc.settings().get().tags, r, e, before.record);
             }
             catch (const std::exception& x)
@@ -827,7 +834,7 @@ namespace pseudalis
                 if (target != path) forget_path(f, key_of(path));
             }
             keep(f, target, r.sha256, r.record, "protected", false);
-            // The record of the file before it changed, an edited protected file for instance.
+            // L'enregistrement du fichier avant qu'il change, un fichier protégé modifié par exemple.
             if (before.record != r.record) release(f, before.record);
             release(f, r.record);
             event("protected", target, std::to_string(r.report["total"].as_int(0)) + " values, " +
@@ -835,7 +842,7 @@ namespace pseudalis
             return 0;
         }
 
-        // A new folder: its name protected, then recorded.
+        // Un nouveau dossier : son nom protégé, puis enregistré.
         int64_t process_folder(folder_state& f, const std::string& path)
         {
             const std::string base = base_of(path);
@@ -848,11 +855,11 @@ namespace pseudalis
             {
                 const std::string target = free_path(f, dir_of(path), named, path);
                 if (target.empty()) return failure_retry_ms;
-                // A folder in use, a file under it open, keeps its name until it is free.
+                // Un dossier en usage, un fichier ouvert dessous, garde son nom jusqu'à ce qu'il soit libre.
                 if (!rename_folder(join_path(f.path, path), join_path(f.path, target))) return busy_retry_ms;
                 at = target;
                 std::lock_guard<std::mutex> lock(m);
-                // The files under it follow.
+                // Les fichiers dessous suivent.
                 const std::string prefix = key_of(path) + "/";
                 std::vector<folder_file> moved;
                 for (auto it = f.known.begin(); it != f.known.end();)
@@ -912,7 +919,7 @@ namespace pseudalis
         }
 
         // ---------------------------------------------------------------------------
-        // The threads.
+        // Les threads.
 
         void worker_loop()
         {
@@ -963,7 +970,7 @@ namespace pseudalis
                 woken = false;
                 if (waiting && !stopping)
                 {
-                    // Changes come in bursts: a short pause gathers them.
+                    // Les changements arrivent par rafales : une courte pause les regroupe.
                     lock.unlock();
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 }
@@ -1022,7 +1029,7 @@ namespace pseudalis
         p.drive.path = join_path(p.svc.data_dir(), "drive");
         p.refused_root = join_path(p.svc.data_dir(), "refused");
         p.stopping = false;
-        // A drive without letter is not run.
+        // Un lecteur sans lettre n'est pas lancé.
         error.clear();
         if (letter.empty()) return true;
         p.start_folder(p.drive, letter, error);

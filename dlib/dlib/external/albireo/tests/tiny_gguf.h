@@ -4,15 +4,15 @@
 #define ALBIREO_TESTS_TINY_GGUF_H_
 
 /*
-    A GGUF file of a tiny model of the qwen3 architecture, written in memory, for the tests
-    that load models: two layers of width 64, a byte-level vocabulary with the control
-    tokens of ChatML, a chat template naming them (by default that of a model whose
-    reasoning a request switches, or the one given to build()), and weights in single
-    precision drawn from a fixed sequence.  The file computes nothing meaningful, and loads
-    and runs as a published model does.
+    Un fichier GGUF d'un tout petit modèle d'architecture qwen3, écrit en mémoire, pour les tests
+    qui chargent des modèles : deux couches de largeur 64, un vocabulaire au niveau de l'octet
+    avec les tokens de contrôle de ChatML, un template de chat qui les nomme (par défaut celui
+    d'un modèle dont une requête commute le raisonnement, ou celui donné à build()), et des
+    poids en simple précision tirés d'une suite fixe.  Le fichier ne calcule rien de sensé, et
+    se charge et tourne comme le fait un modèle publié.
 
-    Every field of the header is recorded with its offset, its size and a label, so that a
-    test can damage one field at a time and check that the loader refuses the file.
+    Chaque champ de l'en-tête est enregistré avec son décalage, sa taille et une étiquette, pour
+    qu'un test puisse abîmer un champ à la fois et vérifier que le chargeur refuse le fichier.
 */
 
 #include <cstdint>
@@ -36,7 +36,7 @@ namespace albireo_test
     {
         std::vector<unsigned char> bytes;
         std::vector<gguf_field> fields;
-        size_t header_end = 0;   // first byte of the tensor data
+        size_t header_end = 0;   // premier octet des données des tenseurs
 
         const gguf_field* find(const std::string& label) const
         {
@@ -45,8 +45,8 @@ namespace albireo_test
             return nullptr;
         }
 
-        // A copy with the field of the given label set to value (little endian, truncated
-        // to the size of the field).
+        // Une copie avec le champ de l'étiquette donnée mis à value (petit-boutiste, tronqué
+        // à la taille du champ).
         std::vector<unsigned char> with(const std::string& label, uint64_t value) const
         {
             std::vector<unsigned char> b = bytes;
@@ -68,21 +68,23 @@ namespace albireo_test
     class tiny_gguf_writer
     {
     public:
-        // The width of the heads, 16 by default; 32 gives rows of whole groups of 8-bit keys and values.
+        // La largeur des têtes, 16 par défaut ; 32 donne des lignes de groupes entiers de clés et
+        // valeurs sur 8 bits.
         tiny_gguf_writer& head_dim(long hd)
         {
             head_dim_ = hd;
             return *this;
         }
 
-        // The chat template of a model whose reasoning a request switches.
+        // Le template de chat d'un modèle dont une requête commute le raisonnement.
         static std::string switchable_template()
         {
             return "{%- if tools %}<tool_call>{%- endif %}{{- '<|im_start|>' + message.role + '\\n' }}"
                 "{%- if enable_thinking is defined %}<think>{%- endif %}";
         }
 
-        // The chat template of a model that reasons before every answer, as the thinking variants of Qwen3-VL.
+        // Le template de chat d'un modèle qui raisonne avant chaque réponse, comme les variantes
+        // thinking de Qwen3-VL.
         static std::string thinking_template()
         {
             return "{%- for message in messages %}{{- '<|im_start|>' + message.role + '\\n' + message.content + "
@@ -209,8 +211,8 @@ namespace albireo_test
 
         static std::vector<std::string> byte_tokens()
         {
-            // The printable bytes stand for themselves; the others take the code points
-            // from 256 on, as in the byte-level vocabularies of GPT-2.
+            // Les octets imprimables se représentent eux-mêmes ; les autres prennent les points
+            // de code à partir de 256, comme dans les vocabulaires au niveau de l'octet de GPT-2.
             std::vector<std::string> t(256);
             int extra = 0;
             for (int b = 0; b < 256; ++b)

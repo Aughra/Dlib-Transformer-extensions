@@ -19,26 +19,27 @@ namespace albireo
     class thread_pool;
 
     /*!
-        Products of quantized weight matrices with activations, on the processor.
+        Produits de matrices de poids quantifiées avec des activations, sur le processeur.
 
-        A weight matrix is used in the layout a GGUF file stores it: one row per output
-        feature, each row a sequence of blocks covering the input features.  Its bytes are
-        read where they lie, in the memory mapping of the file, and never expanded to
-        floats.  The activations are quantized once per product to 8-bit blocks matching
-        the block structure of the weights (32 values for the legacy formats, 256 values
-        with partial sums for the k-quants), and every dot product is then computed in
-        integers, block by block, with one floating multiplication per block.  This is the
-        scheme that makes a 4-bit model run at the speed of memory: a token reads each
-        weight once, in its compact form.
+        Une matrice de poids est utilisée dans la disposition où un fichier GGUF la stocke : une
+        ligne par caractéristique de sortie, chaque ligne étant une suite de blocs couvrant les
+        caractéristiques d'entrée.  Ses octets sont lus là où ils se trouvent, dans le mappage
+        mémoire du fichier, et jamais développés en floats.  Les activations sont quantifiées une
+        fois par produit en blocs 8 bits correspondant à la structure en blocs des poids (32
+        valeurs pour les formats historiques, 256 valeurs avec des sommes partielles pour les
+        k-quants), et chaque produit scalaire est alors calculé en entiers, bloc par bloc, avec
+        une seule multiplication flottante par bloc.  C'est ce schéma qui fait tourner un modèle
+        4 bits à la vitesse de la mémoire : un token lit chaque poids une fois, sous sa forme
+        compacte.
 
-        Formats with a dedicated kernel: F32, F16, BF16, Q4_0, Q4_1, Q5_0, Q5_1, Q8_0,
-        IQ4_NL, Q2_K, Q3_K, Q4_K, Q5_K and Q6_K.  The AVX2 build carries vector versions
-        of the formats that the published models use most (Q4_0, Q8_0, Q4_K, Q5_K, Q6_K,
-        F16 and F32); the others run their portable version, which the compiler still
-        vectorizes in part.
+        Formats avec un noyau dédié : F32, F16, BF16, Q4_0, Q4_1, Q5_0, Q5_1, Q8_0, IQ4_NL,
+        Q2_K, Q3_K, Q4_K, Q5_K et Q6_K.  Le build AVX2 contient des versions vectorielles des
+        formats que les modèles publiés utilisent le plus (Q4_0, Q8_0, Q4_K, Q5_K, Q6_K, F16 et
+        F32) ; les autres exécutent leur version portable, que le compilateur vectorise tout de
+        même en partie.
 
-        Products are distributed over the threads of a thread_pool by groups of output
-        rows, so that each thread reads a disjoint part of the matrix.
+        Les produits sont répartis sur les threads d'un thread_pool par groupes de lignes de
+        sortie, si bien que chaque thread lit une partie disjointe de la matrice.
     !*/
 
     enum class act_format { f32, q8_0, q8_k };
@@ -46,42 +47,44 @@ namespace albireo
     struct weight_matrix
     {
         dlib::ggml_type type = dlib::ggml_type::F32;
-        const uint8_t* data = nullptr;   // rows * row_bytes bytes
-        long rows = 0;                   // output features
-        long cols = 0;                   // input features
+        const uint8_t* data = nullptr;   // rows * row_bytes octets
+        long rows = 0;                   // caractéristiques de sortie
+        long cols = 0;                   // caractéristiques d'entrée
         size_t row_bytes = 0;
 
         bool valid() const { return data != nullptr && rows > 0 && cols > 0; }
     };
 
-    // Whether the processor kernels support a tensor type, and the activation format they
-    // need for it.
+    // Indique si les noyaux du processeur prennent en charge un type de tenseur, et le format
+    // d'activation qu'il leur faut pour lui.
     bool qk_supported(dlib::ggml_type type);
     act_format qk_activation_format(dlib::ggml_type type);
     size_t qk_row_bytes(dlib::ggml_type type, long cols);
 
-    // Bytes of one activation row of n values quantized to format f.
+    // Octets d'une ligne d'activations de n valeurs quantifiée au format f.
     size_t qk_activation_row_bytes(act_format f, long n);
 
-    // Quantizes one row of n floats (n a multiple of the block size of f) into dst.
+    // Quantifie une ligne de n floats (n multiple de la taille de bloc de f) dans dst.
     void qk_quantize_row(act_format f, const float* src, void* dst, long n);
 
-    // Dot product of weight row w (type t, n values) with an activation row prepared in
-    // the matching format by qk_quantize_row(), or given as floats for F32, F16 and BF16.
+    // Produit scalaire de la ligne de poids w (type t, n valeurs) avec une ligne d'activations
+    // préparée dans le format correspondant par qk_quantize_row(), ou donnée en floats pour F32,
+    // F16 et BF16.
     float qk_dot(dlib::ggml_type t, const uint8_t* w, const void* act, long n);
 
-    // The portable version of qk_dot(), whatever the build: the reference against which
-    // the vector kernels are checked.
+    // La version portable de qk_dot(), quel que soit le build : la référence par rapport à
+    // laquelle les noyaux vectoriels sont vérifiés.
     float qk_dot_portable(dlib::ggml_type t, const uint8_t* w, const void* act, long n);
 
-    // Expands one weight row to floats (reference path and embedding lookup).
+    // Développe une ligne de poids en floats (chemin de référence et recherche d'embedding).
     void qk_dequantize_row(dlib::ggml_type t, const uint8_t* w, float* dst, long n);
 
     /*!
-        An allocator whose blocks start on 64 bytes, the size of a cache line and of a vector
-        of AVX-512.  The buffers of the activations and of the attention use it: a row whose
-        length is a multiple of 16 floats then starts on a line, and no vector load of the
-        kernels reads two lines at once, which costs up to twice the time of a load within one.
+        Un allocateur dont les blocs commencent sur 64 octets, la taille d'une ligne de cache et
+        d'un vecteur AVX-512.  Les tampons des activations et de l'attention l'utilisent : une
+        ligne dont la longueur est un multiple de 16 floats commence alors sur une ligne de
+        cache, et aucun chargement vectoriel des noyaux ne lit deux lignes à la fois, ce qui
+        coûte jusqu'à deux fois le temps d'un chargement à l'intérieur d'une seule.
     !*/
     template <typename T>
     struct aligned_allocator
@@ -94,7 +97,7 @@ namespace albireo
         T* allocate(size_t n)
         {
             if (n > (static_cast<size_t>(-1) - 128) / sizeof(T)) throw std::bad_alloc();
-            // The address returned by operator new is kept just before the aligned block.
+            // L'adresse renvoyée par operator new est gardée juste avant le bloc aligné.
             char* raw = static_cast<char*>(::operator new(n * sizeof(T) + 64 + sizeof(void*)));
             const uintptr_t first = reinterpret_cast<uintptr_t>(raw) + sizeof(void*);
             char* p = raw + sizeof(void*) + (64 - first % 64) % 64;
@@ -118,7 +121,8 @@ namespace albireo
     typedef std::vector<float, aligned_allocator<float>> aligned_floats;
 
     /*!
-        Scratch memory a thread reuses between products, so that a token allocates nothing.
+        Mémoire de travail qu'un thread réutilise d'un produit à l'autre, pour qu'un token
+        n'alloue rien.
     !*/
     struct qk_scratch
     {
@@ -127,16 +131,17 @@ namespace albireo
     };
 
     /*!
-        From this number of tokens on, qk_matmul() expands the weights to floats, a tile of
-        rows at a time, and multiplies them with the activations as they are: the expansion
-        is then shared by enough tokens to cost little, and the products run at the full
-        rate of the floating point units.  Below it, the activations are quantized and the
-        integer kernels compute each dot product from the compact weights, which is what a
-        generation step, bound by the reading of the weights, needs.
+        À partir de ce nombre de tokens, qk_matmul() développe les poids en floats, une tuile
+        de lignes à la fois, et les multiplie avec les activations telles quelles : le
+        développement est alors partagé par assez de tokens pour coûter peu, et les produits
+        tournent au plein débit des unités de calcul flottant.  En dessous, les activations
+        sont quantifiées et les noyaux entiers calculent chaque produit scalaire à partir des
+        poids compacts, ce dont a besoin une étape de génération, limitée par la lecture des
+        poids.
     !*/
 #if defined(__APPLE__) && defined(__ARM_FEATURE_DOTPROD)
-    // Apple Silicon: the integer kernels stay faster than the products of Accelerate up to
-    // about 24 tokens (qkernels_accelerate.inc).
+    // Apple Silicon : les noyaux entiers restent plus rapides que les produits d'Accelerate
+    // jusqu'à environ 24 tokens (qkernels_accelerate.inc).
     const long qk_float_product_tokens = 24;
 #else
     const long qk_float_product_tokens = 8;
@@ -144,57 +149,58 @@ namespace albireo
 
     /*!
         ensures
-            - Computes Y[t][o] = sum_i W[o][i] * X[t][i] for t < n_tokens and o < W.rows.
-            - X holds n_tokens rows of W.cols floats, x_stride floats apart; Y receives
-              n_tokens rows of W.rows floats, y_stride floats apart.
-            - When accumulate is true, the products are added to Y instead of replacing it.
-            - path selects the kernels.  The experts of a mixture receive a varying share
-              of the tokens of a pass; they follow the size of the whole pass, so that a
-              token is computed the same way whichever expert it reaches.
+            - Calcule Y[t][o] = sum_i W[o][i] * X[t][i] pour t < n_tokens et o < W.rows.
+            - X contient n_tokens lignes de W.cols floats, espacées de x_stride floats ; Y
+              reçoit n_tokens lignes de W.rows floats, espacées de y_stride floats.
+            - Quand accumulate vaut true, les produits sont ajoutés à Y au lieu de le remplacer.
+            - path choisit les noyaux.  Les experts d'un mélange reçoivent une part variable
+              des tokens d'une passe ; ils suivent la taille de la passe entière, pour qu'un
+              token soit calculé de la même façon quel que soit l'expert qu'il atteint.
     !*/
     enum class qk_path
     {
-        automatic,  // floats from qk_float_product_tokens tokens on, integers below
-        integer,    // quantized activations and integer kernels
-        floats      // weights expanded to floats
+        automatic,  // floats à partir de qk_float_product_tokens tokens, entiers en dessous
+        integer,    // activations quantifiées et noyaux entiers
+        floats      // poids développés en floats
     };
 
     void qk_matmul(const weight_matrix& W, const float* X, long n_tokens, long x_stride,
         float* Y, long y_stride, thread_pool& pool, qk_scratch& scratch, bool accumulate = false,
         qk_path path = qk_path::automatic);
 
-    // Name of the instruction set the kernels were compiled for.
+    // Nom du jeu d'instructions pour lequel les noyaux ont été compilés.
     const char* qk_isa();
 
 
     /*!
         ensures
-            - When on is true, qk_matmul() expands every weight row to floats and computes
-              single precision dot products with the activations as given, instead of
-              quantizing the activations.  It is slow and only meant for validation: the
-              results can then be compared with a floating point reference at the level of
-              rounding errors.
+            - Quand on vaut true, qk_matmul() développe chaque ligne de poids en floats et
+              calcule des produits scalaires en simple précision avec les activations telles
+              que données, au lieu de quantifier les activations.  C'est lent et uniquement
+              destiné à la validation : les résultats peuvent alors être comparés à une
+              référence en virgule flottante au niveau des erreurs d'arrondi.
     !*/
     void qk_set_exact_products(bool on);
 
-    // Half and bfloat16 conversions used throughout the engine.
+    // Conversions demi-précision et bfloat16 utilisées dans tout le moteur.
     float qk_half_to_float(uint16_t h);
     uint16_t qk_float_to_half(float f);
     void qk_half_to_float_row(const uint16_t* src, float* dst, long n);
     void qk_float_to_half_row(const float* src, uint16_t* dst, long n);
 
     /*!
-        The 8-bit keys and values of the cache: rows of n values, n a multiple of 32, each
-        group of 32 values stored as 8-bit integers with one scale in half precision, the
-        largest magnitude of the group over 127.
+        Les clés et valeurs 8 bits du cache : des lignes de n valeurs, n multiple de 32, chaque
+        groupe de 32 valeurs stocké en entiers 8 bits avec une échelle en demi-précision, la plus
+        grande magnitude du groupe divisée par 127.
 
         qk_float_to_q8_row() ensures:
-            - dst[i] == round(src[i] / d), within [-127, 127], for i < n, d being the scale of
-              the group of i as stored in scales[i / 32]: the largest magnitude of the group
-              over 127 in half precision, raised to the next half when the rounding of a
-              subnormal half would bring the largest value beyond 127.5 steps.
+            - dst[i] == round(src[i] / d), dans [-127, 127], pour i < n, d étant l'échelle du
+              groupe de i telle que stockée dans scales[i / 32] : la plus grande magnitude du
+              groupe divisée par 127 en demi-précision, montée au demi-flottant suivant quand
+              l'arrondi d'un demi-flottant sous-normal porterait la plus grande valeur au-delà de
+              127,5 pas.
         qk_q8_to_float_row() ensures:
-            - dst[i] == half_to_float(scales[i / 32]) * src[i] for i < n.
+            - dst[i] == half_to_float(scales[i / 32]) * src[i] pour i < n.
     !*/
     void qk_float_to_q8_row(const float* src, int8_t* dst, uint16_t* scales, long n);
     void qk_q8_to_float_row(const int8_t* src, const uint16_t* scales, float* dst, long n);
@@ -203,67 +209,70 @@ namespace albireo
         requires
             - n > 0
         ensures
-            - Rotates the row x of n values: the signs of a fixed pattern, then the normalized
-              Walsh-Hadamard transform on each block of the largest power of two dividing n.
-              The map is orthogonal, so that a key and a query rotated alike keep their dot
-              product.  The keys of the 8-bit cache are stored rotated, with the queries
-              rotated alike before the scores: a few channels of the keys of some models hold
-              values ten times larger than the others, which the rotation spreads over the
-              row, so that the groups of the 8-bit format round them with a finer step.
+            - Fait tourner la ligne x de n valeurs : les signes d'un motif fixe, puis la
+              transformée de Walsh-Hadamard normalisée sur chaque bloc de la plus grande
+              puissance de deux qui divise n.  L'application est orthogonale, si bien qu'une
+              clé et une requête tournées de la même façon gardent leur produit scalaire.  Les
+              clés du cache 8 bits sont stockées tournées, les requêtes étant tournées de la
+              même façon avant les scores : quelques canaux des clés de certains modèles
+              contiennent des valeurs dix fois plus grandes que les autres, que la rotation
+              répartit sur la ligne, pour que les groupes du format 8 bits les arrondissent avec
+              un pas plus fin.
     !*/
     void qk_rotate_row(float* x, long n);
 
-    // Vector helpers of the attention and normalization code.
+    // Fonctions vectorielles d'aide du code d'attention et de normalisation.
     float qk_dot_f32(const float* a, const float* b, long n);
     float qk_dot_f32_f16(const float* a, const uint16_t* b, long n);
     void qk_axpy_f16(float alpha, const uint16_t* x, float* y, long n);   // y += alpha * x
     void qk_scale(float* x, float s, long n);
     float qk_max(const float* x, long n);
-    // x[i] = exp(x[i] - m), returns the sum of the results.
+    // x[i] = exp(x[i] - m), renvoie la somme des résultats.
     float qk_exp_shift_sum(float* x, float m, long n);
-    // g[i] = silu(g[i]) * u[i], the gate of a SwiGLU block, silu(x) = x / (1 + exp(-x)).
+    // g[i] = silu(g[i]) * u[i], la porte d'un bloc SwiGLU, silu(x) = x / (1 + exp(-x)).
     void qk_silu_mul(float* g, const float* u, long n);
 
     /*!
-        The attention by tiles of the processor runtime.  A tile holds rows of queries, the
-        heads that share one key/value head for consecutive tokens of one sequence, and
-        reads the cache block after block: every key and every value taken from memory
-        serves all the rows of the tile.  K and V hold m rows of hd halves, Q and O rows of
-        hd floats, and scratch qk_attention_scratch(hd) floats private to the caller.
+        L'attention par tuiles du runtime du processeur.  Une tuile contient des lignes de
+        requêtes, les têtes qui partagent une tête de clés et valeurs pour des tokens consécutifs
+        d'une séquence, et lit le cache bloc après bloc : chaque clé et chaque valeur prise en
+        mémoire sert toutes les lignes de la tuile.  K et V contiennent m lignes de hd
+        demi-flottants, Q et O des lignes de hd floats, et scratch qk_attention_scratch(hd)
+        floats propres à l'appelant.
 
         qk_attention_scores() ensures:
-            - S[r * lds + j] == dot(Q + r * hd, K + j * hd), for r < rows and j < m.
+            - S[r * lds + j] == dot(Q + r * hd, K + j * hd), pour r < rows et j < m.
         qk_attention_values() ensures:
-            - O[r * hd + i] += sum over j < m of P[r * lds + j] * V[j * hd + i], for
-              r < rows and i < hd.
+            - O[r * hd + i] += somme sur j < m de P[r * lds + j] * V[j * hd + i], pour
+              r < rows et i < hd.
     !*/
     long qk_attention_scratch(long hd);
     void qk_attention_scores(const float* Q, long rows, const uint16_t* K, long m, long hd, float* S, long lds,
         float* scratch);
     void qk_attention_values(const float* P, long lds, long rows, const uint16_t* V, long m, long hd, float* O,
         float* scratch);
-    // The same over 8-bit keys and values (qk_float_to_q8_row), hd a multiple of 32.
+    // La même chose sur des clés et valeurs 8 bits (qk_float_to_q8_row), hd multiple de 32.
     void qk_attention_scores_q8(const float* Q, long rows, const int8_t* K, const uint16_t* K_scales, long m, long hd,
         float* S, long lds, float* scratch);
     void qk_attention_values_q8(const float* P, long lds, long rows, const int8_t* V, const uint16_t* V_scales, long m,
         long hd, float* O, float* scratch);
 
     /*!
-        The vector helpers of the image encoders, whose blocks normalize with a mean and a
-        bias and activate with GELU.
+        Les fonctions vectorielles d'aide des encodeurs d'images, dont les blocs normalisent
+        avec une moyenne et un biais et activent avec GELU.
 
         qk_layer_norm() ensures:
-            - y[i] == (x[i] - mean) / sqrt(var + eps) * gamma[i] + beta[i] for i < n, mean and
-              var being the mean of x and the mean of its squared deviations.  x and y may be
-              the same row.
+            - y[i] == (x[i] - mean) / sqrt(var + eps) * gamma[i] + beta[i] pour i < n, mean et
+              var étant la moyenne de x et la moyenne de ses écarts au carré.  x et y peuvent
+              être la même ligne.
         qk_gelu_tanh() ensures:
-            - x[i] == x[i] / (1 + exp(-2 u)) with u == sqrt(2 / pi) * (x[i] + 0.044715 x[i]^3),
-              which is 0.5 x[i] (1 + tanh(u)), the tanh approximation of GELU.
+            - x[i] == x[i] / (1 + exp(-2 u)) avec u == sqrt(2 / pi) * (x[i] + 0.044715 x[i]^3),
+              ce qui vaut 0.5 x[i] (1 + tanh(u)), l'approximation tanh de GELU.
         qk_gelu_erf() ensures:
-            - x[i] == 0.5 x[i] (1 + erf(x[i] / sqrt(2))), the exact GELU, with erf within 1.5e-7
-              (Abramowitz and Stegun 7.1.26).
+            - x[i] == 0.5 x[i] (1 + erf(x[i] / sqrt(2))), la GELU exacte, avec erf à 1.5e-7
+              près (Abramowitz et Stegun 7.1.26).
         qk_add() ensures:
-            - y[i] += x[i] for i < n.
+            - y[i] += x[i] pour i < n.
     !*/
     void qk_layer_norm(const float* x, const float* gamma, const float* beta, float* y, long n, float eps);
     void qk_gelu_tanh(float* x, long n);
@@ -271,18 +280,19 @@ namespace albireo
     void qk_add(float* y, const float* x, long n);
 
     /*!
-        The attention of an encoder, whose tokens all see each other, for a tile of query rows
-        of one head: O = softmax(Q K^T) V.
+        L'attention d'un encodeur, dont tous les tokens se voient les uns les autres, pour une
+        tuile de lignes de requêtes d'une tête : O = softmax(Q K^T) V.
 
-        Q holds rows rows of hd floats, already scaled; Kt holds the keys transposed, hd rows
-        of m floats, ldk floats apart, so that the scores of a row of queries against a run of
-        keys are vector products; V holds m rows of hd floats, ldv floats apart; O receives
-        rows rows of hd floats, ldo floats apart.  The keys are read by blocks with a running
-        maximum and sum, so that the work memory does not grow with m.
+        Q contient rows lignes de hd floats, déjà mises à l'échelle ; Kt contient les clés
+        transposées, hd lignes de m floats, espacées de ldk floats, pour que les scores d'une
+        ligne de requêtes contre une suite de clés soient des produits vectoriels ; V contient
+        m lignes de hd floats, espacées de ldv floats ; O reçoit rows lignes de hd floats,
+        espacées de ldo floats.  Les clés sont lues par blocs avec un maximum et une somme
+        courants, pour que la mémoire de travail ne grandisse pas avec m.
 
         requires
             - 0 < rows <= qk_encoder_tile_rows
-            - work holds qk_encoder_attention_work(hd) floats private to the caller
+            - work contient qk_encoder_attention_work(hd) floats propres à l'appelant
     !*/
     const long qk_encoder_tile_rows = 64;
     long qk_encoder_attention_work(long hd);

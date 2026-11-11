@@ -2,15 +2,16 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    pseudalis-service: the Pseudalis service.
+    pseudalis-service : le service Pseudalis.
 
-        pseudalis-service                 as a Windows service, started by the service manager;
-                                          in the console elsewhere, or when started by hand
-        pseudalis-service --console       in the console, stopped by Ctrl+C
+        pseudalis-service                 comme service Windows, démarré par le gestionnaire de
+                                          services ; dans la console ailleurs, ou quand il est
+                                          démarré à la main
+        pseudalis-service --console       dans la console, arrêté par Ctrl+C
         pseudalis-service --version
 
-    A restart happens within the process: the service stops its server and its drive, then
-    starts again with the settings of the data folder.
+    Un redémarrage a lieu dans le processus : le service arrête son serveur et son lecteur,
+    puis redémarre avec les réglages du dossier de données.
 */
 
 
@@ -40,14 +41,15 @@ namespace
     pseudalis::service* current = nullptr;
     std::atomic<bool> stop_requested{false};
 
-    // Returned by serve() when the restart needs a new process.
+    // Renvoyé par serve() quand le redémarrage demande un nouveau processus.
     const int restart_process = 75;
 
     /*
-        The end of the program, once the service closed what it opened and the log holds its
-        last line.  On Windows the process ends at once: the engine library stays loaded
-        (engine_loader.h), and its static destructors, run at the end of the process, would
-        join the threads of the pool of dlib that Windows ended first, and wait forever.
+        La fin du programme, une fois que le service a fermé ce qu'il avait ouvert et que le
+        journal contient sa dernière ligne.  Sous Windows, le processus se termine aussitôt : la
+        bibliothèque du moteur reste chargée (engine_loader.h), et ses destructeurs statiques,
+        exécutés à la fin du processus, rejoindraient les threads du thread pool de dlib que
+        Windows a terminés d'abord, et attendraient indéfiniment.
     */
     int finish(int code)
     {
@@ -61,7 +63,7 @@ namespace
         if (current) current->stop();
     }
 
-    // Runs the service, again after each restart it asks for; returns the exit code.
+    // Exécute le service, de nouveau après chaque redémarrage qu'il demande ; renvoie le code de sortie.
     int serve(bool console)
     {
         int failures = 0;
@@ -80,7 +82,8 @@ namespace
             }
             catch (const std::exception& e)
             {
-                // An error run() did not report, a database failing under it say: a failed start, tried again.
+                // Une erreur que run() n'a pas signalée, une base de données qui lâche par exemple : un démarrage
+                // raté, retenté.
                 error = std::string("unexpected error: ") + e.what();
             }
             catch (...)
@@ -96,8 +99,8 @@ namespace
             {
                 pseudalis::log_error("service: " + error);
                 if (console) std::cerr << "pseudalis-service: " << error << std::endl;
-                // A start that fails is tried again a few times, for a port released late
-                // by the previous run or a disk that mounts after the service.
+                // Un démarrage qui échoue est retenté quelques fois, pour un port libéré tard par
+                // l'exécution précédente ou un disque monté après le service.
                 if (++failures >= 3) return 1;
                 for (int i = 0; i < 100 && !stop_requested; ++i)
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -112,7 +115,7 @@ namespace
 
     int run_console(const std::vector<std::string>& args)
     {
-        // The signals are handled by a thread of their own, outside any signal handler.
+        // Les signaux sont traités par un thread à part, hors de tout gestionnaire de signal.
         sigset_t set;
         sigemptyset(&set);
         sigaddset(&set, SIGINT);
@@ -127,7 +130,7 @@ namespace
         pseudalis::log_file::instance().set_console(true);
         const int code = serve(true);
         if (code != restart_process) return code;
-        // The same command line in a new process.
+        // La même ligne de commande dans un nouveau processus.
         std::vector<char*> argv;
         for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
         argv.push_back(nullptr);

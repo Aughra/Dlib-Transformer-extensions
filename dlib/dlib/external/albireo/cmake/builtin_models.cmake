@@ -1,22 +1,24 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Downloads the files of the models that come with Albireo into the cache of the build,
-# each one named by its SHA-256 and checked against it (cmake -P, CMake 3.19 or later):
+# Télécharge les fichiers des modèles fournis avec Albireo dans le cache du build, chacun
+# nommé d'après son SHA-256 et vérifié avec lui (cmake -P, CMake 3.19 ou plus récent) :
 #
 #   cmake -DMANIFEST=<resources/builtin_models.json> -DCACHE=<folder> -P builtin_models.cmake
 #
-# A model gives the file it is converted from ("from") and, for a model that reads images,
-# its projector ("projector"), which Albireo ships as published.  A file already in the
-# cache is kept when its SHA-256 matches, and downloaded again otherwise; albireo-builtin
-# checks the hash again before it uses it.  The downloads go through the proxy of the
-# https_proxy variable, when set, and stop after two minutes without data.
+# Un modèle indique le fichier dont il est converti (« from ») et, pour un modèle qui lit des
+# images, son projecteur (« projector »), qu'Albireo livre tel qu'il est publié.  Un fichier déjà
+# dans le cache est gardé quand son SHA-256 correspond, et téléchargé à nouveau sinon ;
+# albireo-builtin revérifie l'empreinte avant de l'utiliser.  Les téléchargements passent par le
+# proxy de la variable https_proxy, quand elle est définie, et s'arrêtent après deux minutes sans
+# données.
 
 if (CMAKE_VERSION VERSION_LESS 3.19)
    message(FATAL_ERROR "the models that come with Albireo need CMake 3.19 or later")
 endif()
 
-# Downloads url into the cache as <sha>.gguf, unless a file of that size and hash is there already.
+# Télécharge url dans le cache sous <sha>.gguf, sauf si un fichier de cette taille et de cette
+# empreinte y est déjà.
 function(albireo_cache_file label url sha size)
    set(target "${CACHE}/${sha}.gguf")
    if (EXISTS "${target}")

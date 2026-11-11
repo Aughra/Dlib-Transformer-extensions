@@ -1,14 +1,14 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
-    Compares the tokenization of dlib::hf_tokenizer, loaded from GGUF files, with the
-    token identifiers produced by the reference tokenizers of the same models.
+    Compare la tokenisation de dlib::hf_tokenizer, chargé à partir de fichiers GGUF, avec les
+    identifiants de tokens produits par les tokenizers de référence des mêmes modèles.
 
         test_tokenizer texts.json expected.json name=model.gguf [name=model.gguf...]
 
-    texts.json is a list of strings; expected.json maps each name to the list of token
-    identifier lists of the texts, as the tokenizers library of the model hub returns
-    them without special tokens added.  Every text must also decode back to itself.
+    texts.json est une liste de chaînes ; expected.json associe à chaque nom la liste des listes
+    d'identifiants de tokens des textes, telles que la bibliothèque tokenizers du hub de modèles
+    les renvoie sans ajout de tokens spéciaux.  Chaque texte doit aussi se décoder en lui-même.
 */
 
 #include <cstdio>
@@ -77,8 +77,8 @@ int main(int argc, char** argv)
                     show(got).c_str());
                 continue;
             }
-            // Decoding gives the text back, special tokens included, in its canonical
-            // composition when the vocabulary normalizes it.
+            // Le décodage redonne le texte, tokens spéciaux compris, dans sa composition
+            // canonique quand le vocabulaire le normalise.
             const std::string back = tok.decode(got, false);
             const std::string original = dlib::hf_tok_impl::pre_normalizes_nfc(tok.pretokenizer())
                 ? dlib::hf_tok_impl::nfc_compose(text) : text;

@@ -15,23 +15,23 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The descriptions of the pictures by Albireo, the local inference service,
-                when it is installed on the same computer and one of its models reads
-                images.  Albireo is found through its interface: its data folder (DataDir
-                of HKLM\Software\Albireo, which its installer records), the port of its
-                settings.json (8443 by default) and its local authority
-                (certificates\albireo-authority.crt), which checks its certificate; then
-                GET /v1/models, whose "inputs" name the models that read images.  On
-                Windows, the folder, its certificates folder, the authority and the
-                settings must be those of SYSTEM or the administrators.  The result is
-                kept for a minute, checked again by one caller at a time, outside the lock
-                of the state.
+                Les descriptions des images par Albireo, le service d'inférence local,
+                quand il est installé sur le même ordinateur et que l'un de ses modèles lit
+                les images.  Albireo se trouve par son interface : son dossier de données
+                (DataDir de HKLM\Software\Albireo, que son installateur enregistre), le port
+                de son settings.json (8443 par défaut) et son autorité locale
+                (certificates\albireo-authority.crt), qui vérifie son certificat ; puis
+                GET /v1/models, dont les "inputs" désignent les modèles qui lisent les images.
+                Sous Windows, le dossier, son dossier de certificats, l'autorité et les
+                réglages doivent appartenir à SYSTEM ou aux administrateurs.  Le résultat est
+                gardé une minute, vérifié de nouveau par un seul appelant à la fois, hors du
+                verrou de l'état.
 
-                describe() sends the picture to POST /v1/chat/completions, one request at a
-                time, and asks for one or two factual sentences that name no person and
-                copy no name, address or number the picture shows; the engine protects the
-                answer as any text before writing it.  Only PNG and JPEG pictures of 15 MB
-                at most are sent.
+                describe() envoie l'image à POST /v1/chat/completions, une requête à la fois,
+                et demande une ou deux phrases factuelles qui ne nomment personne et ne
+                recopient aucun nom, aucune adresse ni aucun numéro que montre l'image ; le
+                moteur protège la réponse comme tout texte avant de l'écrire.  Seules les
+                images PNG et JPEG de 15 Mo au plus sont envoyées.
         !*/
     public:
         albireo_client();
@@ -40,19 +40,19 @@ namespace pseudalis
         json status();
         void set_enabled(bool on);
 
-        // The description, or an empty string with the reason in error.
+        // La description, ou une chaîne vide avec la raison dans error.
         std::string describe(const std::string& bytes, const std::string& media_type, const std::string& language,
             std::string& error);
 
-        // The data folder of Albireo on this computer, empty when it has none.
+        // Le dossier de données d'Albireo sur cet ordinateur, vide quand il n'en a pas.
         static std::string albireo_data_dir();
 
     private:
         bool refresh(std::string& reason);
-        // Finds Albireo and the model that reads images, without the lock of the state.
+        // Trouve Albireo et le modèle qui lit les images, sans le verrou de l'état.
         static bool probe(int& port, std::string& ca, std::string& model, std::string& reason);
-        std::mutex m_;              // the state
-        std::mutex request_m_;      // one description at a time
+        std::mutex m_;              // l'état
+        std::mutex request_m_;      // une description à la fois
         bool enabled_ = true;
         bool checking_ = false;
         int64_t checked_ = 0;

@@ -17,35 +17,38 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The tokens one forward pass computes, possibly from several sequences:
-                the next token of every sequence being generated, and a chunk of the
-                prompt of a sequence being read.  Every product of the pass then runs once
-                over all of them, which is what batching buys: the weights are read once
-                for the whole batch instead of once per sequence.
+                Les tokens que calcule une passe avant, éventuellement issus de plusieurs
+                séquences : le token suivant de chaque séquence en cours de génération, et
+                un morceau du prompt d'une séquence en cours de lecture.  Chaque produit de
+                la passe s'exécute alors une seule fois sur tous ces tokens, et c'est ce
+                qu'apporte le regroupement en lot : les poids sont lus une fois pour tout le
+                lot au lieu d'une fois par séquence.
 
-                segments lists, for each sequence present, the range of tokens that belong
-                to it.  The tokens of a segment are consecutive positions that extend the
-                sequence: the first one sits at the current length of the sequence.
+                segments liste, pour chaque séquence présente, la plage de tokens qui lui
+                appartient.  Les tokens d'un segment sont des positions consécutives qui
+                prolongent la séquence : le premier se place à la longueur actuelle de la
+                séquence.
 
-                logit_rows lists the tokens whose next-token distribution is needed, the
-                last token of each segment that ends a prompt or continues a generation.
-                With hidden_only, the pass stops at their normalized hidden states, which
-                is what an embedding model returns.
+                logit_rows liste les tokens dont la distribution du token suivant est
+                nécessaire : le dernier token de chaque segment qui termine un prompt ou
+                poursuit une génération.  Avec hidden_only, la passe s'arrête à leurs états
+                cachés normalisés, ce que renvoie un modèle d'embedding.
 
-                positions, when it is not empty, holds the rotary positions of the tokens,
-                position_components values per token: time, row and column.  When it is
-                empty, every component of a token is the slot it takes in its sequence.
-                The models with multimodal rotary positions (model_config::rope_sections)
-                give the tokens of an image the rows and columns of its grid, so that their
-                positions run apart from their slots; the slots stay consecutive, and the
-                attention lets a token see the slots up to its own.  The other models
-                rotate by the time component.
+                positions, quand il n'est pas vide, contient les positions rotatives des
+                tokens, position_components valeurs par token : temps, ligne et colonne.
+                Quand il est vide, chaque composante d'un token est l'emplacement qu'il
+                occupe dans sa séquence.  Les modèles à positions rotatives multimodales
+                (model_config::rope_sections) donnent aux tokens d'une image les lignes et
+                les colonnes de sa grille, de sorte que leurs positions s'écartent de leurs
+                emplacements ; les emplacements restent consécutifs, et l'attention laisse
+                un token voir les emplacements jusqu'au sien.  Les autres modèles tournent
+                selon la composante de temps.
 
-                embedding_rows lists the tokens whose input comes from an encoder instead
-                of the embedding table: the token at row embedding_rows[i] of the batch
-                reads config().input_width() floats from embeddings, starting at
-                i * config().input_width(), its embedding followed by the slices that a
-                model with DeepStack adds to its hidden state after its first layers.
+                embedding_rows liste les tokens dont l'entrée vient d'un encodeur au lieu
+                de la table d'embeddings : le token à la ligne embedding_rows[i] du lot lit
+                config().input_width() flottants dans embeddings, à partir de
+                i * config().input_width() : son embedding suivi des tranches qu'un modèle
+                avec DeepStack ajoute à son état caché après ses premières couches.
         !*/
         struct segment
         {
@@ -80,54 +83,58 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The forward pass of one loaded model and the storage of the keys and values
-                of its sequences.  The scheduler drives it through this interface, so that
-                the processor runtime, with its quantized kernels, and the tensor runtime,
-                with the devices of dlib, are interchangeable.
+                La passe avant d'un modèle chargé et le stockage des clés et valeurs de ses
+                séquences.  L'ordonnanceur la pilote par cette interface, de sorte que le
+                runtime processeur, avec ses noyaux quantifiés, et le runtime tenseur, avec
+                les périphériques de dlib, sont interchangeables.
 
-                Sequences are numbered by the runtime.  A sequence keeps its positions
-                between calls until it is truncated or released, which is how the
-                scheduler reuses the beginning of a conversation from one request to the
-                next.
+                Les séquences sont numérotées par le runtime.  Une séquence garde ses
+                positions d'un appel à l'autre jusqu'à ce qu'elle soit tronquée ou libérée,
+                et c'est ainsi que l'ordonnanceur réutilise le début d'une conversation
+                d'une requête à la suivante.
         !*/
     public:
         virtual ~model_runtime() {}
 
         virtual const model_config& config() const = 0;
 
-        // Sequences.
+        // Séquences.
         virtual int create_sequence() = 0;
         virtual void release_sequence(int seq) = 0;
         virtual long sequence_length(int seq) const = 0;
         virtual void truncate_sequence(int seq, long length) = 0;
-        // Makes room for the given total length; false when memory is exhausted.
+        // Fait de la place pour la longueur totale donnée ; false quand la mémoire est
+        // épuisée.
         virtual bool reserve_sequence(int seq, long length) = 0;
-        // Makes dst hold the first length positions of src, whatever it held before;
-        // false when memory is exhausted.  This is how several requests start from the
-        // same cached prefix, such as a long system prompt, without computing it again.
+        // Fait contenir à dst les length premières positions de src, quel que soit son
+        // contenu antérieur ; false quand la mémoire est épuisée.  C'est ainsi que
+        // plusieurs requêtes partent du même préfixe en cache, comme un long prompt
+        // système, sans le recalculer.
         virtual bool copy_sequence(int src, int dst, long length) = 0;
 
-        // Runs the batch, appends its keys and values to the sequences and writes, for each
-        // entry of logit_rows, a row of config().vocab logits into logits, unless the batch
-        // asks for the hidden states only.
+        // Exécute le lot, ajoute ses clés et valeurs aux séquences et écrit, pour chaque
+        // entrée de logit_rows, une ligne de config().vocab logits dans logits, sauf si le
+        // lot ne demande que les états cachés.
         virtual void forward(const forward_batch& batch, std::vector<float>& logits) = 0;
 
-        // The hidden states after the final normalization of the logit_rows of the last
-        // forward, config().d_model floats each.
+        // Les états cachés après la normalisation finale des logit_rows du dernier
+        // forward, config().d_model flottants chacun.
         virtual const std::vector<float>& hidden() const = 0;
 
-        // Memory held for keys and values, in bytes, and the most it may hold.
+        // Mémoire occupée par les clés et valeurs, en octets, et le maximum qu'elle peut
+        // occuper.
         virtual size_t kv_bytes_used() const = 0;
         virtual size_t kv_bytes_budget() const = 0;
         virtual size_t kv_bytes_per_token() const = 0;
 
-        // Returns to the system the memory of the keys and values no sequence holds.
+        // Rend au système la mémoire des clés et valeurs qu'aucune séquence ne détient.
         virtual void trim_memory() = 0;
 
-        // Whether the model has requests in progress or waiting (see matmul_offload).
+        // Indique si le modèle a des requêtes en cours ou en attente (voir matmul_offload).
         virtual void set_busy(bool busy) = 0;
 
-        // Bytes of weights the runtime keeps resident (mapped files count for their size).
+        // Octets de poids que le runtime garde résidents (les fichiers mappés comptent pour
+        // leur taille).
         virtual size_t weight_bytes() const = 0;
 
         virtual std::string description() const = 0;

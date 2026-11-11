@@ -1,21 +1,21 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
-    albireo-speech: reads a text aloud with the SVOX Pico synthesizer, for the service.
+    albireo-speech : lit un texte à voix haute avec le synthétiseur SVOX Pico, pour le service.
 
         albireo-speech <voice> <speed>
 
-    The program reads the text in UTF-8 on its standard input (at most 16 KiB), keeps what
-    speech_text() keeps of it, and writes a RIFF WAVE file of 16-bit mono samples at 16 kHz
-    on its standard output.  The two files of the voice ("fr-FR", "de-DE" ...) are read
-    from the current folder, where the service starts the program: the speech folder of the
-    installation.  speed goes from 0.5 to 2, 1 the speed of the voice.  A failure is told on
-    the standard error, with the exit code 2 (arguments), 4 (synthesis) or 5 (output).
+    Le programme lit le texte en UTF-8 sur son entrée standard (au plus 16 Kio), en garde ce
+    que speech_text() en garde, et écrit un fichier RIFF WAVE d'échantillons mono 16 bits à
+    16 kHz sur sa sortie standard.  Les deux fichiers de la voix ("fr-FR", "de-DE" ...) sont
+    lus dans le dossier courant, où le service démarre le programme : le dossier speech de
+    l'installation.  speed va de 0,5 à 2, 1 étant la vitesse de la voix.  Un échec est signalé
+    sur la sortie d'erreur, avec le code de sortie 2 (arguments), 4 (synthèse) ou 5 (sortie).
 
-    The program links the synthesizer, host/speech_text.cpp and the runtime of the
-    compiler, and nothing of the rest of Albireo: it loads no library of the windows of
-    Windows, so that it starts with the token of low integrity and in the job the service
-    gives it, without console and without access to a desktop.
+    Le programme lie le synthétiseur, host/speech_text.cpp et le runtime du compilateur, et
+    rien du reste d'Albireo : il ne charge aucune bibliothèque des fenêtres de Windows, pour
+    démarrer avec le jeton d'intégrité basse et dans le job que le service lui donne, sans
+    console et sans accès à un bureau.
 */
 
 #include <algorithm>
@@ -40,10 +40,10 @@ namespace
 {
     using albireo::speech_voice;
 
-    // The samples a text gives at most: ten minutes at 16 kHz.
+    // Le nombre maximal d'échantillons que donne un texte : dix minutes à 16 kHz.
     const size_t most_samples = size_t(16000) * 600;
 
-    // The bytes of the standard input the program reads at most.
+    // Le nombre maximal d'octets de l'entrée standard que lit le programme.
     const size_t most_input = albireo::speech_max_bytes * 2;
 
     void put_u32(std::string& s, uint32_t v)
@@ -57,7 +57,7 @@ namespace
         s += static_cast<char>((v >> 8) & 0xFF);
     }
 
-    // A RIFF WAVE file of 16-bit mono samples at 16 kHz.
+    // Un fichier RIFF WAVE d'échantillons mono 16 bits à 16 kHz.
     std::string wave_file(const std::vector<int16_t>& samples)
     {
         const uint32_t data = static_cast<uint32_t>(samples.size() * 2);
@@ -70,9 +70,9 @@ namespace
         put_u16(w, 1);          // PCM
         put_u16(w, 1);          // mono
         put_u32(w, 16000);
-        put_u32(w, 32000);      // bytes per second
-        put_u16(w, 2);          // bytes per frame
-        put_u16(w, 16);         // bits per sample
+        put_u32(w, 32000);      // octets par seconde
+        put_u16(w, 2);          // octets par trame
+        put_u16(w, 16);         // bits par échantillon
         w += "data";
         put_u32(w, data);
         for (int16_t v : samples) put_u16(w, static_cast<uint16_t>(v));
@@ -90,7 +90,7 @@ namespace
         return o.str();
     }
 
-    // The synthesizer and its voice, released in the reverse order of their making.
+    // Le synthétiseur et sa voix, libérés dans l'ordre inverse de leur création.
     struct pico_session
     {
         std::vector<char> memory;
@@ -110,8 +110,8 @@ namespace
     };
 
     /*
-        Synthesizes text, which speech_text() gives, with the files of voice in the current
-        folder, at speed, into wav.  Returns false with the reason in error.
+        Synthétise text, que donne speech_text(), avec les fichiers de voice dans le dossier
+        courant, à la vitesse speed, dans wav.  Renvoie false avec la raison dans error.
     */
     bool synthesize(const speech_voice& voice, const std::string& text, double speed, std::string& wav,
         std::string& error)
@@ -132,7 +132,7 @@ namespace
             error = "the voice " + voice.id + " cannot be read: " + status_text(p.sys, s);
             return false;
         }
-        // The names of the resources, in strings of the size the interface writes.
+        // Les noms des ressources, dans des chaînes de la taille qu'écrit l'interface.
         pico_Retstring text_name, sound_name;
         std::memset(text_name, 0, sizeof(text_name));
         std::memset(sound_name, 0, sizeof(sound_name));
@@ -154,7 +154,7 @@ namespace
             return false;
         }
 
-        // The speed through the markup of the synthesizer, the only markup of the text it reads.
+        // La vitesse passe par le balisage du synthétiseur, le seul balisage du texte qu'il lit.
         const double factor = std::isfinite(speed) ? std::min(2.0, std::max(0.5, speed)) : 1.0;
         std::string input = "<speed level=\"" + std::to_string(static_cast<int>(std::lround(factor * 100.0)))
             + "\">" + text + "</speed>";
@@ -199,7 +199,8 @@ namespace
                     return false;
                 }
             } while (step == PICO_STEP_BUSY);
-            // The synthesizer takes nothing more only when its input is full and it is idle: an error.
+            // Le synthétiseur ne prend plus rien seulement quand son entrée est pleine et qu'il est inactif :
+            // une erreur.
             stalls = sent > 0 ? 0 : stalls + 1;
             if (stalls > 3)
             {

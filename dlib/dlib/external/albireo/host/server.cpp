@@ -2,22 +2,23 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    The routes of the local HTTPS server:
+    Les routes du serveur HTTPS local :
 
-        /                         the web application (files of the web folder)
-        /docs/                    the interactive documentation of the interface
-        /openapi.json             its OpenAPI description
-        /v1/models                OpenAI compatible interface
+        /                         l'application web (fichiers du dossier web)
+        /docs/                    la documentation interactive de l'interface
+        /openapi.json             sa description OpenAPI
+        /v1/models                interface compatible OpenAI
         /v1/chat/completions
         /v1/completions
         /v1/embeddings
-        /albireo/v1/...           the interface of the web application and of the tray
+        /albireo/v1/...           l'interface de l'application web et de la zone de notification
 
-    A personal version: the service listens on 127.0.0.1 only, and any request it receives
-    may do anything, the web application changing the settings, the models and the
-    installation as the tray of the original did.  It no longer asks for an administration
-    token, nor checks the Host and Origin headers (a choice of the owner of this fork, who
-    knows that a web site open in the browser could then drive the service).
+    Une version personnelle : le service n'écoute que sur 127.0.0.1, et toute requête qu'il
+    reçoit peut tout faire, l'application web changeant les réglages, les modèles et
+    l'installation comme le faisait la zone de notification de l'original.  Il ne demande plus
+    de jeton d'administration, et ne vérifie plus les en-têtes Host et Origin (un choix du
+    propriétaire de ce fork, qui sait qu'un site web ouvert dans le navigateur pourrait alors
+    piloter le service).
 */
 
 
@@ -60,45 +61,48 @@ namespace albireo
 
     namespace
     {
-        // Bodies of the JSON routes; a model is sent to its own route without this limit.
+        // Corps des routes JSON ; un modèle est envoyé à sa propre route, sans cette limite.
         const uint64_t max_json_body = 64u << 20;
-        // The values of a body, each taking about a hundred bytes once read: more than the
-        // 300,000 tokens a request of embeddings may list.
+        // Les valeurs d'un corps, chacune occupant une centaine d'octets une fois lue : plus que les
+        // 300 000 tokens qu'une requête d'embeddings peut lister.
         const size_t max_body_values = size_t(1) << 19;
         /*
-            The bodies above large_body are read for max_large_bodies requests at once: a body
-            of 64 MB, held and parsed by each of the 64 threads of the server, would take more
-            memory than the computer has.  The count is taken before the body is read, by the
-            thread that reads it (holding_large_body), and given back once the answer is written
-            or given up, a streamed answer included: the request keeps its text in memory until
-            then (give_back_after_answer()).
+            Les corps au-delà de large_body sont lus pour max_large_bodies requêtes à la fois : un
+            corps de 64 Mo, gardé et analysé par chacun des 64 threads du serveur, prendrait plus de
+            mémoire que l'ordinateur n'en a.  Le compte est pris avant la lecture du corps, par le
+            thread qui le lit (holding_large_body), et rendu une fois la réponse écrite ou
+            abandonnée, réponse en flux comprise : la requête garde son texte en mémoire jusque-là
+            (give_back_after_answer()).
         */
         const uint64_t large_body = 8u << 20;
         const int max_large_bodies = 4;
         std::atomic<int> large_bodies{0};
         thread_local bool holding_large_body = false;
         /*
-            The values of the documents being built and held at once, each taking about a hundred
-            bytes whatever its length in the text: a body of one megabyte of small values builds
-            some 60 MB, which the threads of the server together would multiply.  A body reserves
-            the values its text may hold before it is parsed (parse_body()), and gives them back
-            once its document is released, by the same thread (holding_values).
+            Les valeurs des documents construits et gardés à la fois, chacune occupant une centaine
+            d'octets quelle que soit sa longueur dans le texte : un corps d'un mégaoctet de petites
+            valeurs en construit quelque 60 Mo, que les threads du serveur ensemble multiplieraient.
+            Un corps réserve les valeurs que son texte peut contenir avant d'être analysé
+            (parse_body()), et les rend une fois son document libéré, par le même thread
+            (holding_values).
         */
         const size_t max_held_values = 4 * (max_body_values + 1);
         std::atomic<size_t> held_values{0};
         thread_local size_t holding_values = 0;
-        // The events of a streamed answer waiting for a client that reads far slower than the engine writes.
+        // Les événements d'une réponse en flux qui attendent un client lisant bien plus lentement que le moteur
+        // n'écrit.
         const size_t max_backlog = 16384;
 
         const char* const upload_route = "/albireo/v1/models/upload";
-        // The documents of the Mac (documents_dir()), sent in their own bytes to this route.
+        // Les documents du Mac (documents_dir()), envoyés dans leurs propres octets à cette route.
         const char* const documents_route = "/albireo/v1/documents";
         const uint64_t max_document_bytes = 512ull << 20;
 
         void send_json(httplib::Response& res, int status, const json& j)
         {
             res.status = status;
-            // The last guard: the errors a route returns name the files of the publication space, never its addresses.
+            // Le dernier garde-fou : les erreurs que renvoie une route nomment les fichiers de l'espace de
+            // publication, jamais ses adresses.
             if (errors_name_publication_space(j))
             {
                 json hidden = j;
@@ -109,7 +113,7 @@ namespace albireo
             res.set_content(j.dump(), "application/json; charset=utf-8");
         }
 
-        // The error body of the OpenAI interface, param naming the member of the request it concerns.
+        // Le corps d'erreur de l'interface OpenAI, param nommant le membre de la requête qu'elle concerne.
         void send_error(httplib::Response& res, int status, const std::string& type, const std::string& message,
             const std::string& code = std::string(), const std::string& param = std::string())
         {
@@ -124,9 +128,9 @@ namespace albireo
         }
 
         /*
-            The answer to a request whose model is not in the engine yet, because the
-            service starts or the model loads: 503 with a code and the delay after which to
-            try again.  Returns false when the model is missing for good.
+            La réponse à une requête dont le modèle n'est pas encore dans le moteur, parce que
+            le service démarre ou que le modèle se charge : 503 avec un code et le délai après
+            lequel réessayer.  Renvoie false quand le modèle manque définitivement.
         */
         bool send_not_ready(service& svc, httplib::Response& res, const std::string& requested)
         {
@@ -155,7 +159,7 @@ namespace albireo
             return o;
         }
 
-        // The result of an operation of the windows, with the code of its error.
+        // Le résultat d'une opération des fenêtres, avec le code de son erreur.
         json ok_result(bool ok, const user_error& error)
         {
             json o = json::object();
@@ -164,7 +168,8 @@ namespace albireo
             return o;
         }
 
-        // At most the values a JSON text holds: one, and one per comma, bracket and brace outside its strings.
+        // Le maximum de valeurs que contient un texte JSON : une, plus une par virgule, crochet et accolade hors
+        // de ses chaînes.
         size_t value_bound(const std::string& text)
         {
             size_t n = 1;
@@ -190,11 +195,11 @@ namespace albireo
         }
 
         /*
-            Gives back the count of the large body of req once httplib has written its answer, which
-            follows the post-routing handler, or has given it up: the release of the content of
-            the answer, when res goes, gives it back.  The bytes of an answer that is not a content
-            become one; a streamed answer gives it back after its own release.  An answer to a
-            request of ranges of bytes gives it back at once.
+            Rend le compte du gros corps de req une fois qu'httplib a écrit sa réponse, ce qui suit
+            le gestionnaire post-routage, ou l'a abandonnée : la libération du contenu de la
+            réponse, quand res disparaît, le rend.  Les octets d'une réponse qui n'est pas un
+            contenu en deviennent un ; une réponse en flux le rend après sa propre libération.
+            Une réponse à une requête de plages d'octets le rend aussitôt.
         */
         void give_back_after_answer(const httplib::Request& req, httplib::Response& res)
         {
@@ -222,7 +227,7 @@ namespace albireo
             if (type.empty()) res.headers.erase("Content-Type");
         }
 
-        // Gives back the values the body of the request of this thread reserved.
+        // Rend les valeurs que le corps de la requête de ce thread a réservées.
         void release_values()
         {
             if (holding_values == 0) return;
@@ -230,7 +235,8 @@ namespace albireo
             holding_values = 0;
         }
 
-        // Reserves n values for the body of the request of this thread; false when the budget holds no room for them.
+        // Réserve n valeurs pour le corps de la requête de ce thread ; false quand le budget n'a pas de place pour
+        // elles.
         bool reserve_values(size_t n)
         {
             release_values();
@@ -251,7 +257,7 @@ namespace albireo
                 body = json::object();
                 return true;
             }
-            // The parser stops after max_body_values values: no document holds more.
+            // L'analyseur s'arrête après max_body_values valeurs : aucun document n'en contient plus.
             if (!reserve_values(std::min(value_bound(req.body), max_body_values + 1)))
             {
                 res.set_header("Retry-After", "2");
@@ -273,7 +279,8 @@ namespace albireo
             return s;
         }
 
-        // The settings a snapshot of /albireo/v1/settings/profiles holds: those the web application changes.
+        // Les réglages que contient un instantané de /albireo/v1/settings/profiles : ceux que change l'application
+        // web.
         const char* const profile_keys[] = { "accelerator", "threads", "max_sequences", "context", "kv_mb", "kv_type",
             "warm_history", "spin_us", "gpu_prompt_tokens", "gpu_prompt_context", "lan", "lan_port", "port",
             "models_dir", "offline", "web_access", "web_search", "proxy" };
@@ -289,7 +296,7 @@ namespace albireo
             return list;
         }
 
-        // A document of the documents folder: a plain file name, neither hidden nor a folder.
+        // Un document du dossier des documents : un simple nom de fichier, ni caché ni dossier.
         bool document_name(const std::string& name)
         {
             if (name.empty() || name.size() > 255 || name[0] == '.' || name == "..") return false;
@@ -298,7 +305,7 @@ namespace albireo
             return true;
         }
 
-        // The type of a document, from its extension, for the browser that reads it.
+        // Le type d'un document, d'après son extension, pour le navigateur qui le lit.
         std::string document_type(const std::string& name)
         {
             const size_t dot = name.rfind('.');
@@ -319,7 +326,7 @@ namespace albireo
             return "application/octet-stream";
         }
 
-        // The IPv4 addresses of the Mac on its networks, those of the loopback and of the links apart.
+        // Les adresses IPv4 du Mac sur ses réseaux, hormis celles de bouclage et de lien local.
         json lan_addresses()
         {
             json out = json::array();
@@ -343,8 +350,8 @@ namespace albireo
             return out;
         }
 
-        // The settings as the web application reads them: the hash of the password of the network
-        // access stays in the service, which tells whether there is one, and its addresses.
+        // Les réglages tels que les lit l'application web : le hash du mot de passe de l'accès réseau
+        // reste dans le service, qui dit s'il y en a un, et ses adresses.
         json public_settings(service& svc)
         {
             const host_settings st = svc.settings().get();
@@ -356,9 +363,9 @@ namespace albireo
         }
 
         /*
-            The session of a device of the network: the cookie albireo_lan, a random nonce and its
-            HMAC under the hash of the password, so that a new password ends every session, and a
-            restart none.
+            La session d'un appareil du réseau : le cookie albireo_lan, un nonce aléatoire et son
+            HMAC sous le hash du mot de passe, pour qu'un nouveau mot de passe termine toutes les
+            sessions, et un redémarrage aucune.
         */
         const char* const lan_cookie = "albireo_lan";
 
@@ -388,7 +395,7 @@ namespace albireo
             return !mac.empty() && same_secret(mac, value.substr(dot + 1));
         }
 
-        // The page that asks a device of the network for the password.
+        // La page qui demande le mot de passe à un appareil du réseau.
         const char* const lan_login_page = R"ALBIREO(<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Albireo</title><style>
@@ -450,10 +457,11 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         };
 
         /*
-            Whether the client of a request left: its connection closed, or ended by a TLS
-            close_notify, whose bytes wait on the socket where the check of httplib sees a live
-            client.  The TLS probe is the one httplib makes for the answers it streams, and
-            gives back to the next read the byte it takes from a request that follows.
+            Indique si le client d'une requête est parti : sa connexion fermée, ou terminée par un
+            close_notify TLS, dont les octets attendent sur la socket là où la vérification
+            d'httplib voit un client vivant.  La sonde TLS est celle qu'httplib fait pour les
+            réponses qu'il envoie en flux, et rend à la lecture suivante l'octet qu'elle prend
+            d'une requête qui suit.
         */
         bool client_left(const httplib::Request& req)
         {
@@ -468,9 +476,10 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         }
 
         /*
-            Ends the engine request id of an answer sent whole when the service stops, with
-            503, or when its client left.  Looks at them once a second at most, whether the
-            events of the engine flow or not; returns true when it ended the request.
+            Termine la requête moteur id d'une réponse envoyée en entier quand le service
+            s'arrête, avec 503, ou quand son client est parti.  Les examine au plus une fois par
+            seconde, que les événements du moteur arrivent ou non ; renvoie true quand elle a
+            terminé la requête.
         */
         bool end_abandoned(service& svc, const httplib::Request& req, httplib::Response& res, uint64_t id,
             std::chrono::steady_clock::time_point& next_look)
@@ -484,7 +493,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 send_error(res, 503, "server_error", "the service is stopping");
                 return true;
             }
-            // A client that left ends its request, whose place in the engine the others take.
+            // Un client parti termine sa requête, dont les autres prennent la place dans le moteur.
             if (client_left(req))
             {
                 svc.engine().cancel(id);
@@ -494,13 +503,14 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         }
 
         /*
-            The engine request of a completion of the OpenAI interface.  The members it takes are
-            moved out of source, the body of the request, so that the images and the conversations
-            of a large request stay in memory once; source keeps the members it does not take.
+            La requête moteur d'une complétion de l'interface OpenAI.  Les membres qu'elle prend
+            sont déplacés hors de source, le corps de la requête, pour que les images et les
+            conversations d'une grosse requête ne restent qu'une fois en mémoire ; source garde les
+            membres qu'elle ne prend pas.
         */
         bool engine_request(service& svc, json& source, json& out, std::string& error, std::string& model_name)
         {
-            // Read through a const reference, which adds no member to the body.
+            // Lu par une référence const, qui n'ajoute aucun membre au corps.
             const json& body = source;
             const std::string requested = body["model"].as_string();
             const std::string model = svc.resolve_model(requested);
@@ -516,8 +526,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 error = "only one choice per request (n = 1) is supported";
                 return false;
             }
-            // The range of top_k in the engine, which bounds the value it receives: a value outside it
-            // is refused here, so that the client learns it.
+            // La plage de top_k dans le moteur, qui borne la valeur qu'il reçoit : une valeur hors de cette
+            // plage est refusée ici, pour que le client l'apprenne.
             const json& top_k = body["top_k"];
             if (!top_k.is_null() && !(top_k.is_number() && top_k.as_double() >= 0 && top_k.as_double() <= 1024
                 && top_k.as_double() == std::floor(top_k.as_double())))
@@ -539,15 +549,15 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                         break;
                     }
             if (body["think"].is_bool()) out["reasoning"] = body["think"];
-            // The work in the background of the web application, whose answers leave the prompts their whole pass.
+            // Le travail de fond de l'application web, dont les réponses laissent aux prompts leur passe entière.
             if (requested == "albireo-background") out["priority"] = "background";
             return true;
         }
 
-        // The images of a request at most, which the engine reads into the prompt.
+        // Le maximum d'images d'une requête, que le moteur lit dans le prompt.
         const size_t max_images = 16;
 
-        // A request refused before it reaches the engine, in the form of the OpenAI interface.
+        // Une requête refusée avant d'atteindre le moteur, sous la forme de l'interface OpenAI.
         struct refusal
         {
             std::string message;
@@ -556,10 +566,10 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         };
 
         /*
-            The parts of the messages beyond text: "image_url", an image given as a data URL of a
-            PNG or JPEG file, since the service fetches nothing (a computer without network reads
-            the same requests), max_images at most, and "input_audio".  Counts them; returns false
-            with the refusal of the first part that cannot be read.
+            Les parties des messages au-delà du texte : "image_url", une image fournie comme URL
+            data d'un fichier PNG ou JPEG, puisque le service ne télécharge rien (un ordinateur sans
+            réseau lit les mêmes requêtes), max_images au plus, et "input_audio".  Les compte ;
+            renvoie false avec le refus de la première partie qui ne peut pas être lue.
         */
         bool check_media(const json& messages, size_t& images, size_t& sounds, refusal& r)
         {
@@ -586,7 +596,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                         r.param = at + ".image_url.url";
                         return false;
                     }
-                    // data:<media type>;base64,<data>, of a PNG or JPEG file by its first bytes.
+                    // data:<media type>;base64,<data>, d'un fichier PNG ou JPEG d'après ses premiers octets.
                     const size_t comma = url.find(',');
                     const std::string header = lower(url.substr(5, comma == std::string::npos ? 0 : comma - 5));
                     const std::string data = comma == std::string::npos ? std::string() : url.substr(comma + 1, 16);
@@ -656,7 +666,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             std::string error, model_name;
             if (!engine_request(svc, body, request, error, model_name))
             {
-                // A model resolved and an invalid option, or no model in the engine.
+                // Un modèle résolu et une option invalide, ou aucun modèle dans le moteur.
                 if (!model_name.empty()) send_error(res, 400, "invalid_request_error", error);
                 else if (!send_not_ready(svc, res, body["model"].as_string()))
                     send_error(res, 404, "invalid_request_error", error, "model_not_found");
@@ -669,7 +679,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             }
             if (chat)
             {
-                // The images and the sounds go to a model that reads them, as the engine loaded it.
+                // Les images et les sons vont à un modèle qui les lit, tel que le moteur l'a chargé.
                 const json& r = request;
                 size_t images = 0, sounds = 0;
                 refusal refused;
@@ -718,7 +728,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             {
                 if (code == ALBIREO_E_BUSY)
                 {
-                    // Refused for a while, the images queued for the model holding the memory kept for them.
+                    // Refusée pour un temps, les images en file d'attente pour le modèle occupant la mémoire qui
+                    // leur est réservée.
                     send_error(res, 503, "server_error", error, "engine_busy");
                     res.set_header("Retry-After", "5");
                     return;
@@ -727,7 +738,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 send_error(res, 400, "invalid_request_error", error, overflow ? "context_length_exceeded" : "");
                 return;
             }
-            // The engine holds its own copy of the request: the documents built here go, with their values.
+            // Le moteur garde sa propre copie de la requête : les documents construits ici disparaissent, avec leurs valeurs.
             body = json();
             request = json();
             release_values();
@@ -793,14 +804,14 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 out["choices"] = choices;
                 out["usage"] = usage_of(done);
                 out["timings"] = done["timings"];
-                // An answer the engine stopped because it repeated itself.
+                // Une réponse que le moteur a arrêtée parce qu'elle se répétait.
                 if (done["repetition"].as_bool(false)) out["repetition"] = true;
                 out["system_fingerprint"] = std::string("albireo-") + ALBIREO_VERSION;
                 send_json(res, 200, out);
                 return;
             }
 
-            // The post-routing handler marks the answers of the interface "no-store".
+            // Le gestionnaire post-routage marque les réponses de l'interface "no-store".
             res.set_header("X-Accel-Buffering", "no");
             auto first = std::make_shared<bool>(true);
             auto tool_index = std::make_shared<int>(0);
@@ -814,7 +825,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                         c["object"] = chat ? "chat.completion.chunk" : "text_completion";
                         c["created"] = created;
                         c["model"] = model_name;
-                        // The last chunk of an answer the engine stopped because it repeated itself.
+                        // Le dernier morceau d'une réponse que le moteur a arrêtée parce qu'elle se répétait.
                         if (repetition) c["repetition"] = true;
                         json choice = json::object();
                         choice["index"] = 0;
@@ -829,10 +840,10 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                         return sink.write(line.data(), line.size());
                     };
                     /*
-                        A service that stops ends the answers in progress, whose tokens may flow
-                        without pause, and a client that reads far slower than the engine writes
-                        ends its own: the events waiting for it stay bounded, and its place in
-                        the engine goes to the other requests.
+                        Un service qui s'arrête termine les réponses en cours, dont les tokens
+                        peuvent couler sans pause, et un client qui lit bien plus lentement que le
+                        moteur n'écrit termine la sienne : les événements qui l'attendent restent
+                        bornés, et sa place dans le moteur va aux autres requêtes.
                     */
                     if (s->stopping() || ch->pending() > max_backlog)
                     {
@@ -876,8 +887,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                     }
                     case ALBIREO_EVENT_PROGRESS:
                     {
-                        // The progress of a long prompt, as a comment line the clients of
-                        // the standard ignore and the web application shows.
+                        // La progression d'un long prompt, sous forme d'une ligne de commentaire que
+                        // les clients du standard ignorent et que l'application web affiche.
                         const std::string line = ": progress " + e.second + "\n\n";
                         return sink.write(line.data(), line.size());
                     }
@@ -928,8 +939,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 });
         }
 
-        // Checks a change of the settings sent by the web application; the keys outside this
-        // list are set by hand in settings.json only.
+        // Vérifie un changement des réglages envoyé par l'application web ; les clés hors de cette
+        // liste ne se règlent qu'à la main dans settings.json.
         bool validate_settings(const json& body, std::string& error)
         {
             static const char* const keys[] = { "port", "language", "engine", "accelerator",
@@ -996,7 +1007,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 && boolean("offline");
         }
 
-        // The floats of the base64 form of a vector.
+        // Les flottants de la forme base64 d'un vecteur.
         std::vector<float> floats_of(const std::string& text)
         {
             const std::string bytes = base64_decode(text);
@@ -1006,11 +1017,12 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         }
 
         /*
-            The text read aloud by the speech synthesis that comes with Albireo, as the speech
-            route of the OpenAI interface: input (at most 8192 bytes of UTF-8), voice (a voice
-            of Albireo or its language, else the language of the request or English), speed
-            (0.25 to 4 accepted, read from 0.5 to 2) and response_format (wav, or pcm for the
-            samples alone).  model is not checked: one synthesizer serves every model name.
+            Le texte lu à voix haute par la synthèse vocale fournie avec Albireo, comme la route
+            speech de l'interface OpenAI : input (au plus 8192 octets UTF-8), voice (une voix
+            d'Albireo ou sa langue, sinon la langue de la requête ou l'anglais), speed (0,25 à 4
+            accepté, lu de 0,5 à 2) et response_format (wav, ou pcm pour les seuls
+            échantillons).  model n'est pas vérifié : un seul synthétiseur sert tous les noms de
+            modèles.
         */
         void handle_speech(service& svc, const httplib::Request& req, httplib::Response& res)
         {
@@ -1045,8 +1057,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                     return;
                 }
             }
-            // A voice of Albireo by its name or its language; the voices of other services read
-            // with the voice of the language the request gives.
+            // Une voix d'Albireo par son nom ou sa langue ; les voix d'autres services lisent
+            // avec la voix de la langue que donne la requête.
             const speech_voice* voice = find_voice(body["voice"].as_string());
             if (!voice) voice = find_voice(body["language"].str("fr"));
             if (!voice)
@@ -1076,10 +1088,10 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         }
 
         /*
-            The vectors of texts, as the OpenAI interface computes them: "input" a text or a
-            list of texts (or of token lists), "encoding_format" float or base64, and
-            "dimensions" for the models that keep their meaning when shortened.  The
-            requests of every client share the passes of the embedding model.
+            Les vecteurs de textes, tels que les calcule l'interface OpenAI : "input" un texte ou
+            une liste de textes (ou de listes de tokens), "encoding_format" float ou base64, et
+            "dimensions" pour les modèles qui gardent leur sens une fois raccourcis.  Les
+            requêtes de tous les clients partagent les passes du modèle d'embeddings.
         */
         void handle_embeddings(service& svc, const httplib::Request& req, httplib::Response& res)
         {
@@ -1105,7 +1117,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             }
             json request = json::object();
             request["model"] = model;
-            // Moved, not copied: the texts of a large request stay in memory once.
+            // Déplacés, non copiés : les textes d'une grosse requête ne restent qu'une fois en mémoire.
             request["input"] = std::move(body["input"]);
             if (body.contains("dimensions")) request["dimensions"] = body["dimensions"];
             auto ch = std::make_shared<event_channel>();
@@ -1117,7 +1129,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 send_error(res, 400, "invalid_request_error", error);
                 return;
             }
-            // The engine holds its own copy of the request: the documents built here go, with their values.
+            // Le moteur garde sa propre copie de la requête : les documents construits ici disparaissent, avec leurs valeurs.
             body = json();
             request = json();
             release_values();
@@ -1170,7 +1182,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             return v.empty() ? 0 : std::strtoull(v.c_str(), nullptr, 10);
         }
 
-        // Refuses an operation that needs the network on a computer set offline.
+        // Refuse une opération qui a besoin du réseau sur un ordinateur réglé hors ligne.
         bool refuse_offline(service& svc, httplib::Response& res)
         {
             if (!svc.settings().get().offline) return false;
@@ -1179,7 +1191,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             return true;
         }
 
-        // The answer of a route of the web access (web_access.h): its body, or its error with its code.
+        // La réponse d'une route de l'accès au web (web_access.h) : son corps, ou son erreur avec son code.
         void send_web_reply(httplib::Response& res, const web_reply& r)
         {
             if (r.status == 200)
@@ -1193,9 +1205,10 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         }
 
         /*
-            The license texts of the installation lie in the licenses folder of the programs: those
-            of the components the programs hold (cmake/payload.cmake) and of the runtimes of the
-            engines.  A text is named by its file, an entry of that folder read through no link.
+            Les textes de licence de l'installation se trouvent dans le dossier licenses des
+            programmes : ceux des composants que contiennent les programmes (cmake/payload.cmake) et
+            des runtimes des moteurs.  Un texte est désigné par son fichier, une entrée de ce
+            dossier lue sans passer par aucun lien.
         */
         const uint64_t max_license_bytes = 1u << 20;
 
@@ -1203,7 +1216,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         {
             const char* file;
             const char* name;
-            const char* version;    // the version the service was built with, empty when it has none
+            const char* version;    // la version avec laquelle le service a été construit, vide s'il n'en a pas
         };
 
         const license_component license_components[] = {
@@ -1220,8 +1233,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             {"cudnn-license.txt", "cuDNN", ""}
         };
 
-        // Whether name can be an entry of the licenses folder: no separator, colon, control
-        // character or leading dot, which leaves out "." and "..".
+        // Indique si name peut être une entrée du dossier licenses : aucun séparateur, deux-points,
+        // caractère de contrôle ni point initial, ce qui exclut "." et "..".
         bool license_file_name(const std::string& name)
         {
             if (name.empty() || name.size() > 255 || name[0] == '.') return false;
@@ -1233,8 +1246,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             return true;
         }
 
-        // Opens the entry name of the licenses folder through no link: a file of one name only (no
-        // hard link) and of max_license_bytes at most.
+        // Ouvre l'entrée name du dossier licenses sans passer par aucun lien : un fichier d'un seul nom
+        // (aucun lien physique) et de max_license_bytes au plus.
         bool open_license(const std::string& folder, const std::string& name, link_free_file& f)
         {
             std::string why;
@@ -1242,7 +1255,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 && f.size() <= max_license_bytes;
         }
 
-        // The license texts of folder: [{"file", "name", "size", "version"}], "version" when known.
+        // Les textes de licence de folder : [{"file", "name", "size", "version"}], "version" quand elle est connue.
         json license_list(const std::string& folder)
         {
             std::vector<std::string> entries = list_dir(folder);
@@ -1267,7 +1280,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             return list;
         }
 
-        // Reads the whole text of a license opened by open_license().
+        // Lit le texte entier d'une licence ouverte par open_license().
         bool read_license(link_free_file& f, std::string& text)
         {
             text.resize(static_cast<size_t>(f.size()));
@@ -1286,7 +1299,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
     {
         service* s = &svc;
 
-        // The password of the network access, then the bodies the routes accept.
+        // Le mot de passe de l'accès réseau, puis les corps que les routes acceptent.
         srv.set_pre_routing_handler([s, lan](const httplib::Request& req, httplib::Response& res) {
             auto refuse = [&](int status, const char* message) {
                 res.status = status;
@@ -1294,12 +1307,12 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 res.set_content(message, "text/plain");
                 return httplib::Server::HandlerResponse::Handled;
             };
-            // Without a password, the network access is open to every device of the network.
+            // Sans mot de passe, l'accès réseau est ouvert à tous les appareils du réseau.
             const std::string lan_hash = lan ? s->settings().get().lan_password_hash : std::string();
             if (lan && !lan_hash.empty() && !(req.method == "POST" && req.path == "/albireo/v1/lan/login")
                 && !lan_authorized(req, lan_hash))
             {
-                // A page asks for the password; any other request is refused.
+                // Une page demande le mot de passe ; toute autre requête est refusée.
                 const bool page = req.method == "GET" && req.path.compare(0, 4, "/v1/") != 0
                     && req.path.compare(0, 9, "/albireo/") != 0;
                 res.status = page ? 200 : 401;
@@ -1309,9 +1322,9 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                     "lan_login");
                 return httplib::Server::HandlerResponse::Handled;
             }
-            // The methods that send no data take no body, which httplib would read whole before
-            // their handlers run.  Any other body is JSON of a known length, of 64 MB at most,
-            // apart from the models sent to their own route.
+            // Les méthodes qui n'envoient pas de données ne prennent aucun corps, qu'httplib lirait en
+            // entier avant que leurs gestionnaires tournent.  Tout autre corps est du JSON de longueur
+            // connue, de 64 Mo au plus, hormis les modèles envoyés à leur propre route.
             const bool no_body = req.method == "GET" || req.method == "HEAD" || req.method == "DELETE"
                 || req.method == "OPTIONS";
             if (no_body && (req.has_header("Transfer-Encoding") || content_length(req) > 0))
@@ -1322,7 +1335,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 if (content_length(req) > max_json_body) return refuse(413, "the body is too large");
                 if (content_length(req) > 0 && req.get_header_value("Content-Type").find("application/json") != 0)
                     return refuse(415, "the body must be application/json");
-                // A count this thread kept from a request whose answer was never written is given back.
+                // Un compte que ce thread a gardé d'une requête dont la réponse n'a jamais été écrite est rendu.
                 if (holding_large_body)
                 {
                     holding_large_body = false;
@@ -1343,7 +1356,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             return httplib::Server::HandlerResponse::Unhandled;
         });
         srv.set_post_routing_handler([](const httplib::Request& req, httplib::Response& res) {
-            // The body of the request is handled: the values of its document go back, its count after the answer.
+            // Le corps de la requête est traité : les valeurs de son document sont rendues, son compte après la
+            // réponse.
             release_values();
             if (holding_large_body)
             {
@@ -1356,10 +1370,10 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             if (req.path == "/sandbox.html")
             {
                 /*
-                    The page in which the web application runs the code of the agent: framed
-                    by the application only, in an iframe whose sandbox gives it an origin of
-                    its own, so that the code reaches neither the data of the application nor
-                    the network.  Its script and the workers it starts may evaluate code.
+                    La page dans laquelle l'application web exécute le code de l'agent : encadrée
+                    par l'application seule, dans une iframe dont le sandbox lui donne une origine
+                    propre, pour que le code n'atteigne ni les données de l'application ni le
+                    réseau.  Son script et les workers qu'il démarre peuvent évaluer du code.
                 */
                 res.set_header("X-Frame-Options", "SAMEORIGIN");
                 res.set_header("Cross-Origin-Resource-Policy", "same-origin");
@@ -1369,7 +1383,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 return;
             }
             res.set_header("X-Frame-Options", "DENY");
-            // The script of the sandbox is loaded by a page of another (opaque) origin.
+            // Le script du sandbox est chargé par une page d'une autre origine (opaque).
             const bool sandbox = req.path == "/js/sandbox.js";
             res.set_header("Cross-Origin-Resource-Policy", sandbox ? "cross-origin" : "same-origin");
             if (req.path.compare(0, 5, "/docs") == 0)
@@ -1400,12 +1414,12 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             send_error(res, 500, "server_error", what);
         });
 
-        // OpenAI compatible interface.
+        // Interface compatible OpenAI.
         srv.Get("/v1/models", [s](const httplib::Request&, httplib::Response& res) {
             json list = json::array();
             const host_settings st = s->settings().get();
             const long long now = static_cast<long long>(now_unix());
-            // What each model reads and the company that made it; an alias gives those of its model.
+            // Ce que lit chaque modèle et l'entreprise qui l'a fait ; un alias donne ceux de son modèle.
             const std::map<std::string, json> traits = s->loaded_traits();
             auto add_traits = [&traits](json& m, const std::string& id) {
                 const auto t = traits.find(id);
@@ -1482,7 +1496,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         srv.Post("/v1/audio/speech", [s](const httplib::Request& req, httplib::Response& res) {
             handle_speech(*s, req, res);
         });
-        // The voices of the speech synthesis whose files are installed, none without its program.
+        // Les voix de la synthèse vocale dont les fichiers sont installés, aucune sans son programme.
         srv.Get("/albireo/v1/speech/voices", [s](const httplib::Request&, httplib::Response& res) {
             json list = json::array();
             const std::vector<speech_voice> voices = file_exists(s->speech_program())
@@ -1501,8 +1515,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             send_json(res, 200, out);
         });
 
-        // Interface of the web application and of the tray.  The status tells the web application
-        // whether the web access is available and its provider of search (web_capability()).
+        // Interface de l'application web et de la zone de notification.  Le statut dit à l'application web
+        // si l'accès au web est disponible et quel est son fournisseur de recherche (web_capability()).
         srv.Get("/albireo/v1/status", [s](const httplib::Request&, httplib::Response& res) {
             json status = s->status();
             status["web"] = web_capability(s->settings().get());
@@ -1535,7 +1549,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         srv.Get("/albireo/v1/engines", [s](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, s->engines());
         });
-        // The license texts of the installation, read only: their list, and each text by its file.
+        // Les textes de licence de l'installation, en lecture seule : leur liste, et chaque texte par son fichier.
         const std::string licenses = join_path(svc.program_dir(), "licenses");
         srv.Get("/albireo/v1/licenses", [licenses](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, license_list(licenses));
@@ -1575,9 +1589,9 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             send_json(res, r.contains("error") ? 400 : 200, r);
         });
         /*
-            The web access of the agent mode (web_access.h): local routes of the web application,
-            of the origin of the rest of the interface, refused while the service works offline
-            or once the administrator turned the web access off.
+            L'accès au web du mode agent (web_access.h) : routes locales de l'application web, de
+            l'origine du reste de l'interface, refusées tant que le service travaille hors ligne
+            ou une fois que l'administrateur a désactivé l'accès au web.
         */
         srv.Post("/albireo/v1/web/search", [s](const httplib::Request& req, httplib::Response& res) {
             json body;
@@ -1590,7 +1604,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             send_web_reply(res, web_fetch(body, s->settings().get()));
         });
 
-        // The catalog is fetched in the background; its state is in /albireo/v1/models.
+        // Le catalogue est téléchargé en arrière-plan ; son état est dans /albireo/v1/models.
         srv.Post("/albireo/v1/models/refresh", [s](const httplib::Request& req, httplib::Response& res) {
             if (refuse_offline(*s, res)) return;
             s->models().refresh_catalog_async();
@@ -1639,8 +1653,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             send_json(res, ok ? 200 : 400, o);
         });
         /*
-            The signed offline bundles and the content of the import folder (service::import_folder()),
-            which the service reads with its own rights: a refusal comes with its code and the path.
+            Les paquets hors ligne signés et le contenu du dossier d'import (service::import_folder()),
+            que le service lit avec ses propres droits : un refus vient avec son code et le chemin.
         */
         auto import = [s](const httplib::Request& req, httplib::Response& res) {
             json body;
@@ -1658,7 +1672,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         };
         srv.Post("/albireo/v1/import", import);
         srv.Post("/albireo/v1/models/import", import);
-        // A model file sent by the tray, read with the rights of its user, for the files the service never reads.
+        // Un fichier de modèle envoyé par la zone de notification, lu avec les droits de son utilisateur, pour les
+        // fichiers que le service ne lit jamais.
         srv.Post(upload_route, [s](const httplib::Request& req, httplib::Response& res,
                                     const httplib::ContentReader& reader) {
             const std::string name = file_name(req.get_param_value("name"));
@@ -1676,7 +1691,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 send_error(res, 507, "server_error", "not enough free space in " + dir);
                 return;
             }
-            // A new file of the models folder reached through no link, as every file written there.
+            // Un nouveau fichier du dossier des modèles atteint sans passer par aucun lien, comme tout fichier
+            // qui y est écrit.
             const std::string tmp = join_path(dir, ".transfer-" + random_hex(16) + ".partial");
             new_file out;
             if (!direct_path(dir) || !out.create(tmp))
@@ -1701,16 +1717,16 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 send_error(res, 400, "invalid_request_error", "the transfer did not complete");
                 return;
             }
-            // A model installed already under another file is a success too ("already"), as a
-            // projector kept until its decoder comes ("pending").
+            // Un modèle déjà installé sous un autre fichier est aussi un succès ("already"), comme un
+            // projecteur gardé jusqu'à l'arrivée de son décodeur ("pending").
             const json r = s->models().import_received(tmp, name, hash.hex());
             send_json(res, r["imported"].empty() && r["already"].empty() && r["pending"].empty() ? 400 : 200, r);
         });
 
         /*
-            The documents of the Mac: the files of documents_dir(), its folders apart, which the web
-            application lists, reads to attach them, sends (every file attached in the page is copied
-            there) and deletes.  A name is a plain file name: no folder, no hidden file.
+            Les documents du Mac : les fichiers de documents_dir(), hormis ses dossiers, que l'application
+            web liste, lit pour les joindre, envoie (chaque fichier joint dans la page y est copié) et
+            supprime.  Un nom est un simple nom de fichier : aucun dossier, aucun fichier caché.
         */
         srv.Get(documents_route, [s](const httplib::Request& req, httplib::Response& res) {
             const std::string dir = s->documents_dir();
@@ -1791,8 +1807,9 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 return;
             }
             /*
-                The same bytes under the same name, or under a name it gave them before, are kept once
-                ("already"); another file of that name keeps it, and the new one takes "name (2).ext".
+                Les mêmes octets sous le même nom, ou sous un nom qu'il leur a donné auparavant, ne sont
+                gardés qu'une fois ("already") ; un autre fichier de ce nom le garde, et le nouveau prend
+                "name (2).ext".
             */
             const std::string digest = hash.hex();
             const size_t dot = name.rfind('.');
@@ -1826,10 +1843,11 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         });
 
         /*
-            The saved settings: snapshots of the settings the web application changes, under a label the
-            user gives, in settings-profiles.json of the data folder.  A snapshot holds neither the password
-            of the network access nor that of the proxy (its mask only).  Restoring one is a change of
-            the settings, which the web application sends to /albireo/v1/settings.
+            Les réglages enregistrés : des instantanés des réglages que change l'application web, sous une
+            étiquette que donne l'utilisateur, dans settings-profiles.json du dossier de données.  Un
+            instantané ne contient ni le mot de passe de l'accès réseau ni celui du proxy (seulement son
+            masque).  En restaurer un est un changement des réglages, que l'application web envoie à
+            /albireo/v1/settings.
         */
         srv.Get("/albireo/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
             json o = json::object();
@@ -1850,7 +1868,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             for (const char* k : profile_keys)
                 if (all.contains(k)) snapshot[k] = all[k];
             std::lock_guard<std::mutex> lock(profiles_m);
-            // A named list: elements() of a temporary would outlive it in the loop.
+            // Une liste nommée : elements() d'un temporaire lui survivrait dans la boucle.
             const json profiles = read_profiles(*s);
             json kept = json::array();
             for (const auto& p : profiles.elements())
@@ -1888,10 +1906,10 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             send_json(res, 200, ok_result(true));
         });
 
-        // The password of the proxy is given as proxy_password_mask (host_settings::to_json()).
+        // Le mot de passe du proxy est donné sous la forme proxy_password_mask (host_settings::to_json()).
         /*
-            The login of a device of the network: the password of the network access gives a cookie
-            for 30 days.  A wrong one waits a second, so that guessing it takes time.
+            La connexion d'un appareil du réseau : le mot de passe de l'accès réseau donne un cookie
+            pour 30 jours.  Un mauvais mot de passe attend une seconde, pour que le deviner prenne du temps.
         */
         srv.Post("/albireo/v1/lan/login", [s](const httplib::Request& req, httplib::Response& res) {
             json body;
@@ -1925,10 +1943,10 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 send_error(res, 400, "invalid_request_error", error);
                 return;
             }
-            // Read through a const reference, which adds no member to the body.
+            // Lu par une référence const, qui n'ajoute aucun membre au corps.
             const json& changes = body;
-            // A new port is opened once before it is saved, so that a port taken by another
-            // program or reserved by the system never leaves the service without an address.
+            // Un nouveau port est ouvert une fois avant d'être enregistré, pour qu'un port pris par un autre
+            // programme ou réservé par le système ne laisse jamais le service sans adresse.
             const long long port = changes["port"].as_int(s->port());
             if (port != s->port() && !port_available(static_cast<int>(port)))
             {
@@ -1936,7 +1954,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                     + " is in use or cannot be opened", "port_unavailable");
                 return;
             }
-            // The access from the network: its own port, and a password before it opens.
+            // L'accès depuis le réseau : son propre port, et un mot de passe avant qu'il s'ouvre.
             const host_settings now = s->settings().get();
             const long long lan_port = changes["lan_port"].as_int(now.lan_port);
             if (lan_port == port)
@@ -1951,8 +1969,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                     + " is in use or cannot be opened", "port_unavailable");
                 return;
             }
-            // The password is kept as its hash only, computed outside the lock of the settings; an empty one
-            // removes it.
+            // Le mot de passe n'est gardé que sous forme de hash, calculé hors du verrou des réglages ; un mot de
+            // passe vide le supprime.
             std::string lan_hash;
             const bool lan_password_removed = changes.contains("lan_password") && changes["lan_password"].as_string().empty();
             if (changes.contains("lan_password") && !lan_password_removed)
@@ -1968,8 +1986,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             bool masked_elsewhere = false;
             const host_settings after = s->settings().update([&](host_settings& current) {
                 before = current;
-                // The mask of the password stands for the stored password, with the address and
-                // the user it was given for only: it never sends the password to another server.
+                // Le masque du mot de passe tient lieu du mot de passe enregistré, seulement avec l'adresse et
+                // l'utilisateur pour lesquels il a été donné : il n'envoie jamais le mot de passe à un autre serveur.
                 const std::string proxy = changes["proxy"].as_string();
                 if (proxy_password_masked(proxy) && proxy != masked_proxy(current.proxy))
                 {
@@ -1991,7 +2009,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 return;
             }
             s->apply_network_settings(after);
-            // What the running engine or server cannot take without a restart.
+            // Ce que le moteur ou le serveur en marche ne peut pas prendre sans redémarrage.
             const bool restart = after.port != before.port || after.engine != before.engine
                 || after.accelerator != before.accelerator || after.device_mb != before.device_mb
                 || after.threads != before.threads
@@ -2013,7 +2031,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             s->request_restart();
         });
         srv.Post("/albireo/v1/engines/benchmark", [s](const httplib::Request& req, httplib::Response& res) {
-            // A measure already running refuses the second one with 409.
+            // Une mesure déjà en cours refuse la seconde avec 409.
             const json r = s->benchmark_engines();
             send_json(res, r["code"].as_string() == "benchmark_running" ? 409 : 200, r);
         });
@@ -2025,7 +2043,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             send_json(res, 200, o);
         });
 
-        // The web application, the documentation viewer and their assets.
+        // L'application web, la visionneuse de documentation et leurs ressources.
         const std::string web = join_path(svc.program_dir(), "web");
         if (!srv.set_mount_point("/", web)) log_warning("http: no web folder at " + web);
         srv.set_file_extension_and_mimetype_mapping("mjs", "text/javascript");
@@ -2033,10 +2051,11 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         srv.set_file_extension_and_mimetype_mapping("webmanifest", "application/manifest+json");
         srv.set_file_request_handler([](const httplib::Request&, httplib::Response& res) {
             /*
-                Every file of the application is checked at each load, its pages as well as its
-                scripts and styles, so that an update shows at once: without this header, a
-                browser may keep the scripts of the previous version for hours.  The check costs
-                a request answered by 304 Not Modified while the file is unchanged.
+                Chaque fichier de l'application est vérifié à chaque chargement, ses pages comme ses
+                scripts et ses styles, pour qu'une mise à jour apparaisse aussitôt : sans cet en-tête,
+                un navigateur peut garder les scripts de la version précédente pendant des heures.
+                La vérification coûte une requête à laquelle répond 304 Not Modified tant que le
+                fichier n'a pas changé.
             */
             res.set_header("Cache-Control", "no-cache");
         });

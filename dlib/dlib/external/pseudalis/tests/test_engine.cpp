@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// Tests of the engine through its C interface: documents, pictures and archives.
+// Tests du moteur par son interface C : documents, images et archives.
 
 #include <algorithm>
 #include <array>
@@ -36,13 +36,13 @@ namespace
     }
 
     std::vector<std::string> seen_pictures;
-    // The identifier and the SHA-256 of the last picture described.
+    // L'identifiant et le SHA-256 de la dernière image décrite.
     std::string last_id, last_sha256;
-    // The description that the callback gives, which names what a careless model could name.
+    // La description que donne le callback, qui nomme ce qu'un modèle imprudent pourrait nommer.
     const std::string careless = "Portrait of Jean Dupont [smiling], jean.dupont@example.fr, 06 12 34 56 78";
     std::string description_given = careless;
 
-    // The text of element i of the array key of j.
+    // Le texte de l'élément i du tableau key de j.
     std::string item(const json& j, const char* key, size_t i)
     {
         const json& a = j[key];
@@ -61,7 +61,7 @@ namespace
         return 1;
     }
 
-    // The substitutes written so far, with their tags, as the service records them.
+    // Les substituts écrits jusqu'ici, avec leurs étiquettes, tels que le service les enregistre.
     std::map<std::string, std::vector<std::string>> recorded;
 
     int PSD_CALL lookup(void*, const char* candidate, size_t size, psd_buffer* tags)
@@ -76,7 +76,7 @@ namespace
         return 1;
     }
 
-    // The error of the last call of process(), which it prints unless the call was meant to fail.
+    // L'erreur du dernier appel de process(), qu'il affiche sauf si l'appel devait échouer.
     std::string last_error;
 
     std::string sha256_of(const std::string& data)
@@ -85,7 +85,7 @@ namespace
         return dlib::to_hex(d.data(), d.size());
     }
 
-    // The entry path of the archive data named name, as the service asks the engine for it.
+    // L'entrée path de l'archive data nommée name, telle que le service la demande au moteur.
     bool extract(psd_engine* e, const std::string& name, const std::string& data, const std::string& path,
                  std::string& output)
     {
@@ -103,7 +103,7 @@ namespace
         return ok == 1;
     }
 
-    // The entry of the result res of an archive whose original path is original, or null.
+    // L'entrée du résultat res d'une archive dont le chemin d'origine est original, ou null.
     const json* entry_of(const json& res, const std::string& original)
     {
         for (const json& w : res["entries"].elements())
@@ -126,7 +126,8 @@ namespace
         psd_free(&r);
         psd_free(&o);
         psd_free(&err);
-        // The substitutes of the names and the properties, as the service records them for any file.
+        // Les substituts des noms et des propriétés, tels que le service les enregistre pour tout
+        // fichier.
         for (const json& s : result["substitutions"].elements())
         {
             if (s["text"].as_bool(false)) continue;
@@ -136,7 +137,7 @@ namespace
         return ok == 1;
     }
 
-    // The substitutes of the text of a result, without tags, as the record of a file keeps them.
+    // Les substituts du texte d'un résultat, sans étiquettes, tels que la fiche d'un fichier les garde.
     json text_substitutes(const json& result)
     {
         json list = json::array();
@@ -155,7 +156,7 @@ namespace
 int main()
 {
     CHECK(psd_api_version() == PSEUDALIS_ENGINE_API_VERSION);
-    // The version and the build, which the service requires equal to its own.
+    // La version et le build, que le service exige identiques aux siens.
     const std::string build = psd_build();
     CHECK(build.compare(0, std::strlen(PSEUDALIS_VERSION "+"), PSEUDALIS_VERSION "+") == 0 &&
           build.size() > std::strlen(PSEUDALIS_VERSION "+"));
@@ -169,7 +170,7 @@ int main()
 
     json res;
     std::string out;
-    // A text file.
+    // Un fichier texte.
     const std::string letter =
         "Bonjour,\nJe suis Jean Dupont, joignable au 06 12 34 56 78 ou jean.dupont@example.fr.\n";
     CHECK(process(e, "anonymize", "lettre.txt", letter, res, out));
@@ -180,7 +181,7 @@ int main()
     CHECK(process(e, "restore", "lettre.txt", out, res, back));
     CHECK(back == letter);
 
-    // A picture alone becomes a text file with its protected description.
+    // Une image seule devient un fichier texte avec sa description protégée.
     const std::string png = dlib::encode_png(std::string("\x10\x20\x30\x40\x50\x60", 6), 2, 1, 3);
     seen_pictures.clear();
     CHECK(process(e, "anonymize", "photo.png", png, res, out));
@@ -189,11 +190,11 @@ int main()
     const std::string head = "[Image@" + item(res, "pictures", 0) + " : ";
     CHECK(out.compare(0, head.size(), head) == 0);
     CHECK(out.find("Dupont") == std::string::npos && out.find("(smiling)") != std::string::npos);
-    // The values of the description become tags, counted in the report.
+    // Les valeurs de la description deviennent des étiquettes, comptées dans le rapport.
     CHECK(out.find("jean.dupont@") == std::string::npos && out.find("06 12 34 56 78") == std::string::npos);
     CHECK(out.find("[[EMAIL:") != std::string::npos && res["report"]["total"].as_int() >= 3);
-    /* Its identifier: a digest keyed by the key of the engine, which the SHA-256 alone does not
-       give, the same for the same picture and the same key, another under another key. */
+    /* Son identifiant : une empreinte calculée avec la clé du moteur, que le SHA-256 seul ne donne
+       pas, la même pour la même image et la même clé, une autre sous une autre clé. */
     const std::string id = item(res, "pictures", 0);
     CHECK(id == last_id && id.size() == 16 && id.find_first_not_of("0123456789abcdef") == std::string::npos);
     CHECK(last_sha256.size() == 64 && id != last_sha256.substr(0, 16));
@@ -210,7 +211,7 @@ int main()
         }
         psd_free(&err);
     }
-    // A picture inside a Word document: its protected description in its place.
+    // Une image dans un document Word : sa description protégée à sa place.
     {
         const std::string rels_type = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
         dlib::zip_archive_writer w;
@@ -245,9 +246,9 @@ int main()
         CHECK(xml.find("Dupont") == std::string::npos && xml.find("jean.dupont@") == std::string::npos &&
               xml.find("Curie") == std::string::npos);
         CHECK(res["report"]["total"].as_int() >= 4);
-        /* A description that names bare a person of the text, which its reading alone leaves: Word
-           asks for it before its text is read, and the document is protected again with what its
-           text taught the detector, Albireo asked once. */
+        /* Une description qui nomme telle quelle une personne du texte, que sa lecture seule laisse
+           passer : Word la demande avant que son texte soit lu, et le document est protégé à
+           nouveau avec ce que son texte a appris au détecteur, Albireo n'étant interrogé qu'une fois. */
         description_given = "Marchand in her garden, beside the bench";
         seen_pictures.clear();
         CHECK(process(e, "anonymize", "lettre.docx", docx, res, out));
@@ -256,7 +257,8 @@ int main()
         const std::string xml2 = again.contains("word/document.xml") ? again.read("word/document.xml") : "";
         CHECK(seen_pictures.size() == 1 && xml2.find("in her garden") != std::string::npos &&
               xml2.find("Marchand") == std::string::npos && xml2.find("[Image@" + id + " : ") != std::string::npos);
-        // Restored from its tags, its original forgotten: the marker leaves the document, the values come back.
+        // Restauré à partir de ses étiquettes, son original oublié : le marqueur quitte le document, les
+        // valeurs reviennent.
         std::string restored_docx;
         CHECK(process(e, "restore", "lettre.docx", out, res, restored_docx));
         const dlib::zip_archive_reader rz(restored_docx);
@@ -265,7 +267,8 @@ int main()
               rxml.find("Marie Curie") != std::string::npos && rxml.find("Jeanne Marchand") != std::string::npos);
         CHECK(res["report"]["pictures_removed"].as_int() == 1);
     }
-    // A text written elsewhere from protected values: its tags come back, the marker of a picture leaves.
+    // Un texte écrit ailleurs à partir de valeurs protégées : ses étiquettes reviennent, le marqueur
+    // d'une image s'en va.
     {
         std::string tagged, answered;
         CHECK(process(e, "anonymize", "note.txt", "Photo de Jean Dupont.\n", res, tagged));
@@ -274,18 +277,19 @@ int main()
         CHECK(process(e, "restore", "reponse.txt", answer, res, answered));
         CHECK(answered == "Voir puis Photo de Jean Dupont.\n" && res["report"]["pictures_removed"].as_int() == 1 &&
               res["report"]["tags_restored"].as_int() >= 1);
-        // At the end and at the start of a line, the space beside the marker leaves with it.
+        // En fin et en début de ligne, l'espace à côté du marqueur part avec lui.
         const std::string edges = "Voir " + tagged + " [Image@0123456789abcdef]\n[Image@0123456789abcdef] Fin\n";
         CHECK(process(e, "restore", "reponse.txt", edges, res, answered));
         CHECK(answered == "Voir Photo de Jean Dupont.\nFin\n" && res["report"]["pictures_removed"].as_int() == 2);
     }
-    // Without description.
+    // Sans description.
     CHECK(process(e, "anonymize", "photo.png", png, res, out, false));
     CHECK(out == "[Image@" + item(res, "pictures", 0) + "]\r\n");
 
-    // A ZIP archive: documents protected, pictures as text, other entries left out, a TAR.GZ inside.
+    // Une archive ZIP : documents protégés, images en texte, autres entrées laissées de côté, un TAR.GZ
+    // à l'intérieur.
     std::vector<pseudalis::archive_entry> inner(1);
-    inner[0].name = std::string(120, 'd') + "/note.txt";   // a name longer than a TAR header holds
+    inner[0].name = std::string(120, 'd') + "/note.txt";   // un nom plus long que ce que contient un en-tête TAR
     inner[0].data = "Note de Marie Curie, 12 rue des Lilas, 75005 Paris.\n";
     const std::string tgz = pseudalis::write_archive(pseudalis::archive_kind::tar_gz, inner);
     const std::vector<pseudalis::archive_entry> again = pseudalis::read_archive(pseudalis::archive_kind::tar_gz, tgz);
@@ -312,9 +316,9 @@ int main()
         const std::vector<pseudalis::archive_entry> t =
             pseudalis::read_archive(pseudalis::archive_kind::tar_gz, z.read("archive.tar.gz"));
         CHECK(t.size() == 1 && t[0].name == inner[0].name && t[0].data.find("Curie") == std::string::npos);
-        /* Each entry written, by which a copy extracted from the archive is known: its paths in
-           both archives, the SHA-256 of what was written and its kind, the entries of the TAR.GZ
-           after it; the entries left out have none. */
+        /* Chaque entrée écrite, grâce à laquelle une copie extraite de l'archive est reconnue : ses
+           chemins dans les deux archives, le SHA-256 de ce qui a été écrit et son type, les entrées
+           du TAR.GZ après lui ; les entrées laissées de côté n'en ont pas. */
         CHECK(res["entries"].size() == 5 && entry_of(res, "outil.exe") == nullptr);
         const json* l = entry_of(res, "dossier/lettre.txt");
         CHECK(l && (*l)["name"].str() == "dossier/lettre.txt" && (*l)["kind"].str() == "txt" &&
@@ -328,7 +332,8 @@ int main()
         CHECK(n && (*n)["name"].str() == "archive.tar.gz!" + inner[0].name &&
               (*n)["sha256"].str() == sha256_of(t[0].data));
     }
-    // The original of an entry, in the archive and in an archive inside it; none for an entry left out.
+    // L'original d'une entrée, dans l'archive et dans une archive qu'elle contient ; aucun pour une
+    // entrée laissée de côté.
     {
         std::string original;
         CHECK(extract(e, "envoi.zip", zip, "dossier/lettre.txt", original) && original == letter);
@@ -342,7 +347,7 @@ int main()
     {
         const dlib::zip_archive_reader z(back);
         CHECK(z.read("dossier/lettre.txt") == letter);
-        // The text file of the picture, which no restoration gives back, leaves the archive.
+        // Le fichier texte de l'image, qu'aucune restauration ne rend, quitte l'archive.
         CHECK(res["report"]["pictures_removed"].as_int() == 1 && z.read("dossier/photo.png.txt") == "already there");
         for (const pseudalis::archive_entry& x : pseudalis::read_archive(pseudalis::archive_kind::zip, back))
             CHECK(x.data.find("[Image@") == std::string::npos);
@@ -351,7 +356,8 @@ int main()
         CHECK(t.size() == 1 && t[0].data == inner[0].data);
     }
 
-    // A restoration keeps the entries of another kind as they are, and reads a text under any name.
+    // Une restauration garde telles quelles les entrées d'un autre type, et lit un texte sous
+    // n'importe quel nom.
     {
         std::vector<pseudalis::archive_entry> entries = pseudalis::read_archive(pseudalis::archive_kind::zip, out);
         std::string tagged;
@@ -375,7 +381,8 @@ int main()
         CHECK(back == "note = \"\"\"" + letter + "\"\"\"\n");
     }
 
-    // The kind of a file: its content must be the kind its name gives, and decides without extension.
+    // Le type d'un fichier : son contenu doit être du type que donne son nom, et décide en l'absence
+    // d'extension.
     {
         dlib::zip_archive_writer od;
         od.add("mimetype", "application/vnd.oasis.opendocument.text", false);
@@ -392,7 +399,7 @@ int main()
         CHECK(out.find("Dupont") == std::string::npos);
         CHECK(process(e, "anonymize", "Lettre à M. Dupont", letter, res, out));
         CHECK(res["kind"].str() == "txt" && out.find("Dupont") == std::string::npos);
-        // An Office document renamed .zip is read as an archive.
+        // Un document Office renommé en .zip est lu comme une archive.
         dlib::zip_archive_writer ox;
         ox.add("[Content_Types].xml", "<Types><Default ContentType=\"wordprocessingml\"/></Types>");
         ox.add("word/document.xml", "<w:document><w:t>Jean Dupont</w:t></w:document>");
@@ -400,20 +407,20 @@ int main()
         CHECK(res["kind"].str() == "zip");
     }
 
-    // A name of no kind: processed when its content is text through and through, as dlib reads it.
+    // Un nom sans type : traité quand son contenu est du texte de bout en bout, tel que dlib le lit.
     {
         CHECK(process(e, "anonymize", "journal.log2", letter, res, out));
         CHECK(res["kind"].str() == "txt" && out.find("Dupont") == std::string::npos);
         CHECK(process(e, "restore", res["name"].str(), out, res, back) && back == letter);
         CHECK(process(e, "anonymize", "BMW Jean Dupont.notes", "BMW de Jean Dupont, 06 12 34 56 78.\n", res, out));
         CHECK(out.find("Dupont") == std::string::npos);
-        // UTF-16 with its byte order mark, written back in UTF-16.
+        // De l'UTF-16 avec sa marque d'ordre des octets, réécrit en UTF-16.
         std::string utf16("\xFF\xFE", 2);
         for (char c : std::string("Jean Dupont habite 12 rue de la Paix, 75002 Paris.\r\n"))
             utf16 += std::string(1, c) + std::string(1, '\0');
         CHECK(process(e, "anonymize", "export.reg", utf16, res, out));
         CHECK(out.compare(0, 2, "\xFF\xFE") == 0 && out.find(std::string("D\0u\0p\0o\0n\0t", 11)) == std::string::npos);
-        // A message with a part in base64, a document of RTF, binary bytes: of another kind.
+        // Un message avec une partie en base64, un document RTF, des octets binaires : d'un autre type.
         std::string message = "From: Jean Dupont <jean.dupont@example.fr>\r\nSubject: Contrat\r\n"
                               "Content-Type: application/pdf\r\nContent-Transfer-Encoding: base64\r\n\r\n";
         for (int i = 0; i < 20; ++i) message += std::string(76, 'Q') + "\r\n";
@@ -431,7 +438,7 @@ int main()
                        true));
         CHECK(!process(e, "anonymize", "photo.jpeg2", png, res, out, true, true));
         CHECK(!process(e, "anonymize", "journal.log2", "Jean Dupont\x1b[31m rouge\n", res, out, true, true));
-        // In an archive, the text of no kind is protected, the binary file left out.
+        // Dans une archive, le texte sans type est protégé, le fichier binaire laissé de côté.
         dlib::zip_archive_writer zw;
         zw.add("notes/journal.log2", letter);
         zw.add("notes/donnees.bin", std::string("\0\x01\x02\x03", 4));
@@ -441,7 +448,7 @@ int main()
         CHECK(z.contains("notes/journal.log2") && z.read("notes/journal.log2").find("Dupont") == std::string::npos);
     }
 
-    // A text of a name of no kind that writes its values encoded is refused, with its reason.
+    // Un texte d'un nom sans type qui écrit ses valeurs encodées est refusé, avec sa raison.
     {
         auto encoded = [&](const char* name, const std::string& data) {
             const bool refused = !process(e, "anonymize", name, data, res, out, true, true);
@@ -480,7 +487,7 @@ int main()
         for (int i = 0; i < 4; ++i)
             dump += "00000010  4a 65 61 6e 20 44 75 70  6f 6e 74 2c 20 30 36 20  |Jean Dupont, 06 |\n";
         CHECK(encoded("dump.hex", dump));
-        // The bytes of a text in hexadecimal digits alone, 30 by line.
+        // Les octets d'un texte en chiffres hexadécimaux seuls, 30 par ligne.
         const std::string said = "Jean Dupont habite 12 rue de la Paix, 75002 Paris. ";
         std::string digits;
         for (int i = 0; i < 16 * 30; ++i)
@@ -491,7 +498,8 @@ int main()
             if (i % 30 == 29) digits += "\n";
         }
         CHECK(encoded("octets.hexa", digits));
-        // xxd with its groups of 4 digits, hexdump -C of UTF-16 rich in digits, the bytes of a string of Python.
+        // xxd avec ses groupes de 4 chiffres, hexdump -C d'un UTF-16 riche en chiffres, les octets d'une
+        // chaîne Python.
         std::string wide;
         for (char ch : std::string("Jean Dupont, tel 06 12 34 56 78 et 07 98 76 54 32, Rennes"))
             wide += std::string(1, ch) + std::string(1, '\0');
@@ -515,7 +523,8 @@ int main()
         CHECK(encoded("dump.xxd", xxd));
         CHECK(encoded("dump2.hex", canonical));
         CHECK(encoded("octets.py", "donnees = " + escaped + "\"\n"));
-        // A byte order mark before the first line, markers inside strings, a folded value of LDIF.
+        // Une marque d'ordre des octets avant la première ligne, des marqueurs dans des chaînes, une
+        // valeur de LDIF repliée.
         CHECK(encoded("piece2.uue", "\xEF\xBB\xBF" "begin 644 x\nM" + std::string(60, '5') + "\n`\nend\n"));
         CHECK(encoded("entree.ldif", "\xEF\xBB\xBF" "dn: uid=hdupre,dc=example\ncn:: SMOpbMOobmUgRHVwcsOp\n"));
         CHECK(encoded("annuaire2.ldif", "dn: uid=jdupont,dc=example\ncn: Jean Dupont\n"
@@ -537,22 +546,23 @@ int main()
         std::string json = "{\"photo\": \"";
         for (int i = 0; i < 20; ++i) json += "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJz\\/ejAx\\n";
         CHECK(encoded("fiche.json5", json + "\", \"nom\": \"Jean Dupont\"}\n"));
-        // A vCard or an iCalendar inside a message, the bare encoding of vCard 2.1.
+        // Une vCard ou un iCalendar dans un message, l'encodage nu de vCard 2.1.
         CHECK(encoded("invitation.eml", "From: x@example.fr\r\nContent-Type: text/calendar\r\n\r\nBEGIN:VCALENDAR\r\n"
                                         "ATTENDEE:mailto:jean.dupo\r\n nt@example.fr\r\nEND:VCALENDAR\r\n"));
         CHECK(encoded("nom.txt2", "Nom de famille\r\nN;CHARSET=UTF-8;QUOTED-PRINTABLE:=44=75=70=6F=6E=74\r\n"));
-        // Thousands of openings of encoded words without their end: read in one pass, then refused.
+        // Des milliers d'ouvertures de mots encodés sans leur fin : lues en un seul passage, puis
+        // refusées.
         std::string openings;
         while (openings.size() < (300u << 10)) openings += "=?a?b? ";
         CHECK(encoded("ouvertures.log2", openings + "\ntoken eyJhbGciOiJIUzI1NiJ9xx\n"));
-        // A byte order mark of UTF-8 before bytes of Windows-1252, or UTF-16 with an unpaired surrogate, is not
-        // text through and through; U+FFFD written in UTF-8 is a character of a text.
+        // Une marque d'ordre des octets UTF-8 avant des octets Windows-1252, ou de l'UTF-16 avec un demi-code
+        // isolé, n'est pas du texte de bout en bout ; U+FFFD écrit en UTF-8 est un caractère d'un texte.
         CHECK(!process(e, "anonymize", "journal.log2", "\xEF\xBB\xBF" "Fran\xE7ois Dupont, 06 12 34 56 78\n", res,
                        out, true, true));
         const std::string broken("\xFF\xFEJ\0e\0a\0n\0\x00\xD8 \0D\0u\0p\0o\0n\0t\0", 26);
         CHECK(!process(e, "anonymize", "export.reg", broken, res, out, true, true));
         CHECK(accepted("remplacement.py", "print('\xEF\xBF\xBD')  # Jean Dupont\n"));
-        // Code, tables of numbers and what only looks encoded stay texts.
+        // Le code, les tableaux de nombres et ce qui n'a que l'air encodé restent des textes.
         CHECK(accepted("main.cpp", "int main()\n{\n    std::move(x);\n    std::cout << \"Jean Dupont\";\n}\n"));
         std::string numbers;
         for (int i = 0; i < 40; ++i) numbers += std::to_string(10 + i) + ", ";
@@ -581,16 +591,17 @@ int main()
         CHECK(accepted("sequences.uni", points));
         CHECK(accepted("reseau.conf2", hosts));
         CHECK(accepted("export.csv2", "nom;encodage;taille\nJean Dupont;base64;12\n"));
-        // A program that only names the header of a block, as a constant, holds no block.
+        // Un programme qui ne fait que nommer l'en-tête d'un bloc, sous forme de constante, ne
+        // contient aucun bloc.
         CHECK(accepted("pem.c", "/* Jean Dupont */\n#define PEM_BEGIN_CRT \"-----BEGIN CERTIFICATE-----\\n\"\n"
                                 "#define PEM_END_CRT \"-----END CERTIFICATE-----\\n\"\n"));
-        // A text of an extension of the table keeps its rules: read as it lies.
+        // Un texte d'une extension de la table garde ses règles : lu tel quel.
         CHECK(accepted("cert.txt", "Certificat de Jean Dupont\n-----BEGIN CERTIFICATE-----\nMIIBszCCAVmgAwIBAgIU\n"
                                    "-----END CERTIFICATE-----\n"));
         CHECK(accepted("notes.md", "# Jean Dupont\n\ncollapsed:: true\nContent-Transfer-Encoding: base64\n"));
     }
 
-    // Names: their values become substitutes, which the lookup gives back.
+    // Les noms : leurs valeurs deviennent des substituts, que lookup rend.
     CHECK(process(e, "anonymize", "Lettre_jean.dupont@example.fr_2024-03-12.txt", letter, res, out));
     const std::string renamed = res["name"].str();
     CHECK(renamed.find("dupont") == std::string::npos && renamed.find("2024-03-12") == std::string::npos);
@@ -605,12 +616,12 @@ int main()
     std::string folder_back;
     CHECK(process(e, "restore_name", "", out, res, folder_back));
     CHECK(folder_back == "Dossier jean.dupont@example.fr");
-    // The common word that opens a name stays: it names the document, not the person.
+    // Le mot courant qui ouvre un nom reste : il nomme le document, pas la personne.
     CHECK(process(e, "anonymize_name", "", "Contrat Jean Dupont", res, out));
     CHECK(out.find("Jean") == std::string::npos && out.compare(0, 8, "Contrat ") == 0);
     CHECK(process(e, "restore_name", "", out, res, folder_back));
     CHECK(folder_back == "Contrat Jean Dupont");
-    // A value before an extension of no kind is found too, with or without the extension.
+    // Une valeur placée avant une extension sans type est trouvée aussi, avec ou sans l'extension.
     CHECK(process(e, "anonymize", "journal jean.dupont@example.fr.log2", letter, res, out));
     const std::string journal = res["name"].str();
     CHECK(journal.find("dupont") == std::string::npos && journal.find(".log2") != std::string::npos);
@@ -618,14 +629,14 @@ int main()
     CHECK(back == letter && res["name"].str() == "journal jean.dupont@example.fr.log2");
     CHECK(process(e, "anonymize_name", "", "Appeler 06.12.34.56.78", res, out));
     CHECK(out.find("34.56") == std::string::npos);
-    // A name of no kind that its substitutes lengthen past 255 characters keeps its extension.
+    // Un nom sans type que ses substituts allongent au-delà de 255 caractères garde son extension.
     std::string long_name;
     for (int i = 0; i < 18; ++i) long_name += "Jean Dupont ";
     CHECK(process(e, "anonymize", long_name + "jean.dupont@example.fr.log2", letter, res, out));
     const std::string cut = res["name"].str();
     CHECK(cut.size() <= 255 && cut.size() > 5 && cut.compare(cut.size() - 5, 5, ".log2") == 0);
     CHECK(cut.find("dupont") == std::string::npos && cut.find("Dupont") == std::string::npos);
-    // The folders of an archive, the same in all their entries.
+    // Les dossiers d'une archive, les mêmes dans toutes leurs entrées.
     {
         dlib::zip_archive_writer zw;
         zw.add("jean.dupont@example.fr/", "", false);
@@ -649,7 +660,7 @@ int main()
         CHECK(r.contains("jean.dupont@example.fr/lettre.txt") && r.read("jean.dupont@example.fr/copie.txt") == letter);
     }
 
-    // Unsupported content, refused with its reason, and text.
+    // Un contenu non pris en charge, refusé avec sa raison, et du texte.
     CHECK(!process(e, "anonymize", "outil.exe", std::string("MZ\x90\0\x03\0\0\0", 8) + std::string(64, '\0'),
                    res, out, true, true));
     CHECK(last_error.find("not supported") != std::string::npos);
@@ -658,7 +669,7 @@ int main()
     CHECK(process(e, "detect", "prompt", "Écrire à Jean Dupont", res, out));
     CHECK(res["spans"].size() >= 1 && res["spans"].elements()[0]["type"].str() == "PERSON");
 
-    // The places of the tags written and of the values restored, in bytes of the UTF-8 text.
+    // Les emplacements des étiquettes écrites et des valeurs restaurées, en octets du texte UTF-8.
     {
         const std::string text = "Écrire à Jean Dupont, jean.dupont@example.fr";
         CHECK(process(e, "anonymize_text", "prompt", text, res, out) && res["tags"].size() >= 2);
@@ -679,12 +690,13 @@ int main()
                                          static_cast<std::size_t>(s["end"].as_int() - s["begin"].as_int())));
         CHECK(std::find(values.begin(), values.end(), "Jean Dupont") != values.end() &&
               std::find(values.begin(), values.end(), "jean.dupont@example.fr") != values.end());
-        // A text in Windows-1252 gets no places, which the service could not keep in its answer.
+        // Un texte en Windows-1252 ne reçoit aucun emplacement, que le service ne pourrait pas garder
+        // dans sa réponse.
         CHECK(process(e, "anonymize_text", "prompt", "\xC9t\xE9 de Jean Dupont", res, out) &&
               out.find("Dupont") == std::string::npos && res["tags"].size() == 0);
     }
 
-    // The imposed terms: replaced before anything else, in the texts, the files and the names.
+    // Les termes imposés : remplacés avant tout le reste, dans les textes, les fichiers et les noms.
     {
         const std::string terms = "[{\"term\": \"Projet Alpha\", \"type\": \"ORG\"}, "
                                   "{\"term\": \"KX-77\", \"type\": \"ID\", \"case_sensitive\": true}]";
@@ -707,7 +719,7 @@ int main()
         CHECK(process(e, "restore", "note.txt", out, res, restored) && restored == text);
         CHECK(process(e, "anonymize_name", "", "Rapport Projet Alpha.docx", res, out));
         CHECK(out.find("Alpha") == std::string::npos);
-        // A list the engine does not take changes nothing; an empty one removes the terms.
+        // Une liste que le moteur n'accepte pas ne change rien ; une liste vide retire les termes.
         const std::string wrong = "[{\"term\": \"Alpha\", \"type\": \"DATE\"}]";
         CHECK(psd_set_terms(e, wrong.data(), wrong.size(), &err) == 0 && err.data);
         psd_free(&err);
@@ -718,7 +730,7 @@ int main()
         CHECK(process(e, "anonymize_text", "prompt", plain, res, out) && out == plain);
     }
 
-    // Without tags: substitutes alone, which the substitutes of the record alone give back.
+    // Sans étiquettes : des substituts seuls, que seuls les substituts de la fiche permettent de rendre.
     {
         json untagged = json::object();
         untagged["tags"] = false;
@@ -728,19 +740,20 @@ int main()
               bare.find("06 12 34 56 78") == std::string::npos);
         const json kept = text_substitutes(res);
         CHECK(kept.size() >= 3);
-        // Without its substitutes, nothing comes back; with them, the letter.
+        // Sans ses substituts, rien ne revient ; avec eux, la lettre.
         CHECK(process(e, "restore", "lettre.txt", bare, res, restored) && restored == bare &&
               res["report"]["tags_restored"].as_int() == 0 && res["report"]["substitutes_restored"].as_int() == 0);
         json known = json::object();
         known["substitutions"] = kept;
         CHECK(process(e, "restore", "lettre.txt", bare, res, restored, false, false, known) && restored == letter);
         CHECK(res["report"]["substitutes_restored"].as_int() == static_cast<long long>(kept.size()));
-        // Protected again with its substitutes known, it stays as it is.
+        // Protégée à nouveau avec ses substituts connus, elle reste telle quelle.
         json again = known;
         again["tags"] = false;
         std::string twice;
         CHECK(process(e, "anonymize", "lettre.txt", bare, res, twice, true, false, again) && twice == bare);
-        // Protected again with tags, by a newer engine for instance: its old substitutes stay, and come back.
+        // Protégée à nouveau avec des étiquettes, par un moteur plus récent par exemple : ses anciens
+        // substituts restent, et reviennent.
         json tagged_again = known;
         std::string mixed, mixed_back;
         CHECK(process(e, "anonymize", "lettre.txt", "Visa : Hélène Martin.\n" + bare, res, mixed, true, false,
@@ -748,7 +761,8 @@ int main()
         CHECK(mixed.find("Martin") == std::string::npos && mixed.find("[[PERSON:") != std::string::npos);
         CHECK(process(e, "restore", "lettre.txt", mixed, res, mixed_back, false, false, known));
         CHECK(mixed_back == "Visa : Hélène Martin.\n" + letter);
-        // Protected with tags, then again without them: its tags give way to substitutes, which come back.
+        // Protégée avec des étiquettes, puis à nouveau sans : ses étiquettes cèdent la place à des
+        // substituts, qui reviennent.
         std::string tagged_letter, converted, converted_back;
         CHECK(process(e, "anonymize", "lettre.txt", letter, res, tagged_letter));
         CHECK(process(e, "anonymize", "lettre.txt", tagged_letter, res, converted, true, false, untagged));
@@ -758,12 +772,13 @@ int main()
         CHECK(process(e, "restore", "lettre.txt", converted, res, converted_back, false, false, converted_known) &&
               converted_back == letter);
 
-        // A picture: its description takes substitutes too.
+        // Une image : sa description prend aussi des substituts.
         CHECK(process(e, "anonymize", "photo.png", png, res, bare, true, false, untagged));
         CHECK(bare.find("[[") == std::string::npos && bare.find("Dupont") == std::string::npos &&
               bare.find("[Image@") == 0 && text_substitutes(res).size() >= 3);
 
-        // A Word document: the runs of its text, its name with substitutes as with tags.
+        // Un document Word : les passages de son texte, son nom avec des substituts comme avec des
+        // étiquettes.
         dlib::zip_archive_writer w;
         w.add("[Content_Types].xml",
               "<?xml version=\"1.0\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
@@ -792,7 +807,7 @@ int main()
               rz.read("word/document.xml").find("Madame Jeanne Marchand habite à Quimper.") != std::string::npos &&
               res["name"].str() == "Jeanne Marchand.docx");
 
-        // A text: its substitutes listed, which the caller keeps to give it back.
+        // Un texte : ses substituts listés, que l'appelant garde pour le rendre.
         const std::string prompt = "Résumer le dossier de Jean Dupont, né le 12/03/1980 à Rennes.";
         CHECK(process(e, "anonymize_text", "text", prompt, res, bare, false, false, untagged));
         CHECK(bare.find("[[") == std::string::npos && bare.find("Dupont") == std::string::npos &&

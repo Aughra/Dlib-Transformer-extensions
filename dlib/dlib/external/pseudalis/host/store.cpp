@@ -14,11 +14,11 @@ namespace pseudalis
     {
         const char* const schema =
             "PRAGMA journal_mode=WAL;"
-            // Each commit reaches the disk, as the blobs of the vault it names do before it.
+            // Chaque commit atteint le disque, comme le font avant lui les blobs du coffre qu'il nomme.
             "PRAGMA synchronous=FULL;"
             "PRAGMA foreign_keys=ON;"
-            // AUTOINCREMENT: the identifier of a record deleted is never given again, since the drive
-            // and the copies of the files may still name it.
+            // AUTOINCREMENT : l'identifiant d'un enregistrement supprimé n'est jamais redonné, puisque le lecteur
+            // et les copies des fichiers peuvent encore le nommer.
             "CREATE TABLE IF NOT EXISTS files(id INTEGER PRIMARY KEY AUTOINCREMENT, created INTEGER NOT NULL,"
             " source TEXT NOT NULL, original_name TEXT NOT NULL, output_name TEXT NOT NULL,"
             " original_sha256 TEXT NOT NULL, output_sha256 TEXT NOT NULL, original_blob TEXT NOT NULL,"
@@ -32,12 +32,12 @@ namespace pseudalis
             "CREATE INDEX IF NOT EXISTS pictures_sha ON pictures(sha256);"
             "CREATE TABLE IF NOT EXISTS file_pictures(file INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,"
             " picture TEXT NOT NULL, PRIMARY KEY(file, picture));"
-            // The entries of the protected archives, by which a file extracted from one is known.
+            // Les entrées des archives protégées, par lesquelles on reconnaît un fichier extrait de l'une d'elles.
             "CREATE TABLE IF NOT EXISTS entries(record INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,"
             " name TEXT NOT NULL, original TEXT NOT NULL, sha256 TEXT NOT NULL, kind TEXT NOT NULL,"
             " PRIMARY KEY(record, name));"
             "CREATE INDEX IF NOT EXISTS entries_sha ON entries(sha256);"
-            // The originals forgotten, by the protected files that showed them: restored from their tags since.
+            // Les originaux oubliés, par les fichiers protégés qui les montraient : restaurés depuis par leurs tags.
             "CREATE TABLE IF NOT EXISTS forgotten(id INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL,"
             " reason TEXT NOT NULL, output_sha256 TEXT NOT NULL, object_id TEXT NOT NULL DEFAULT '');"
             "CREATE INDEX IF NOT EXISTS forgotten_output ON forgotten(output_sha256);"
@@ -45,22 +45,22 @@ namespace pseudalis
             "CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, time INTEGER NOT NULL, kind TEXT NOT NULL,"
             " path TEXT NOT NULL, message TEXT NOT NULL);"
             "CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL);"
-            /* The substitutes written in the names and the properties of the files, values without
-               their tags, with the tags they stand for: tags, never values in clear. */
+            /* Les substituts écrits dans les noms et les propriétés des fichiers, valeurs sans
+               leurs tags, avec les tags qu'ils représentent : des tags, jamais des valeurs en clair. */
             "CREATE TABLE IF NOT EXISTS substitutes(substitute TEXT NOT NULL, tag TEXT NOT NULL,"
             " created INTEGER NOT NULL, PRIMARY KEY(substitute, tag)) WITHOUT ROWID;"
-            /* The substitutes written in the text of a file protected without tags, with the tags
-               they stand for and the number of places that hold each, and those of its original that a
-               protection without tags wrote before (inherited): they leave with the record. */
+            /* Les substituts écrits dans le texte d'un fichier protégé sans tags, avec les tags qu'ils
+               représentent et le nombre d'endroits qui contiennent chacun, et ceux de son original qu'une
+               protection sans tags a écrits auparavant (hérités) : ils partent avec l'enregistrement. */
             "CREATE TABLE IF NOT EXISTS text_substitutes(record INTEGER NOT NULL REFERENCES files(id)"
             " ON DELETE CASCADE, substitute TEXT NOT NULL, tag TEXT NOT NULL, places INTEGER NOT NULL,"
             " inherited INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(record, substitute, tag)) WITHOUT ROWID;"
-            // The files of the folder of the drive as the service left them.
+            // Les fichiers du dossier du lecteur tels que le service les a laissés.
             "CREATE TABLE IF NOT EXISTS folder_files(folder TEXT NOT NULL, path TEXT NOT NULL COLLATE NOCASE,"
             " size INTEGER NOT NULL, written INTEGER NOT NULL, sha256 TEXT NOT NULL, record INTEGER NOT NULL,"
             " state TEXT NOT NULL, PRIMARY KEY(folder, path));";
 
-        // A prepared statement, finalized at the end of its scope.
+        // Une instruction préparée, finalisée à la fin de sa portée.
         class statement
         {
         public:
@@ -80,7 +80,7 @@ namespace pseudalis
                 sqlite3_bind_int64(s_, i, v);
                 return *this;
             }
-            // True with a row, false at the end.
+            // Vrai avec une ligne, faux à la fin.
             bool step()
             {
                 const int rc = sqlite3_step(s_);
@@ -96,7 +96,7 @@ namespace pseudalis
                          : std::string();
             }
             long long integer(int i) { return sqlite3_column_int64(s_, i); }
-            // Ready to run again with other values.
+            // Prête à s'exécuter de nouveau avec d'autres valeurs.
             void reset()
             {
                 sqlite3_reset(s_);
@@ -149,10 +149,10 @@ namespace pseudalis
         {
             exec(schema);
             /*
-                The version of the schema, from which the migrations start.  2: the description of
-                a picture names a blob of the vault (32 hexadecimal digits), where version 1 kept it
-                in clear under an identifier that the SHA-256 alone gave; nothing reads those any
-                more, the pictures of this version taking keyed identifiers, and they are erased.
+                La version du schéma, d'où partent les migrations.  2 : la description d'une image
+                nomme un blob du coffre (32 chiffres hexadécimaux), là où la version 1 la gardait en
+                clair sous un identifiant que donnait le seul SHA-256 ; plus rien ne lit celles-là,
+                les images de cette version prenant des identifiants à clé, et elles sont effacées.
             */
             long long version = 0;
             {
@@ -176,13 +176,14 @@ namespace pseudalis
                 }
             }
             /*
-                3: whether the protected file of a record, or of an original forgotten, holds the tags
-                of its values, false for a file protected without tags; every file of the versions
-                before held them.
+                3 : si le fichier protégé d'un enregistrement, ou d'un original oublié, contient les
+                tags de ses valeurs, false pour un fichier protégé sans tags ; tous les fichiers des
+                versions antérieures les contenaient.
             */
             if (version < 3)
             {
-                // A column already there, a database a later version wrote and then marked older, stays.
+                // Une colonne déjà présente, dans une base qu'une version ultérieure a écrite puis marquée plus
+                // ancienne, reste.
                 auto has_column = [this](const char* table, const char* column) {
                     statement c(db_, (std::string("PRAGMA table_info(") + table + ")").c_str());
                     while (c.step())
@@ -208,7 +209,7 @@ namespace pseudalis
         }
         catch (...)
         {
-            // The destructor of an object whose constructor failed never runs.
+            // Le destructeur d'un objet dont le constructeur a échoué ne s'exécute jamais.
             sqlite3_close(db_);
             db_ = nullptr;
             throw;
@@ -259,7 +260,7 @@ namespace pseudalis
     bool store::find_by_output(const std::string& sha256, file_record& r, const std::string& name)
     {
         std::lock_guard<std::mutex> lock(m_);
-        // Several files of the same content: the one that bears the name, else the last one.
+        // Plusieurs fichiers de même contenu : celui qui porte le nom, sinon le dernier.
         statement s(db_, (std::string("SELECT ") + file_columns +
                           " FROM files WHERE output_sha256 = ?1 ORDER BY output_name = ?2 COLLATE NOCASE DESC,"
                           " id DESC LIMIT 1").c_str());
@@ -632,7 +633,7 @@ namespace pseudalis
         statement s(db_, "INSERT INTO events(time, kind, path, message) VALUES(?1, ?2, ?3, ?4)");
         s.bind(1, static_cast<long long>(now_unix())).bind(2, kind).bind(3, path).bind(4, message);
         s.step();
-        // The last thousand events are kept.
+        // Les mille derniers événements sont gardés.
         exec("DELETE FROM events WHERE id <= (SELECT MAX(id) - 1000 FROM events)");
     }
 

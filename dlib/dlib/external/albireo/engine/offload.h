@@ -15,15 +15,15 @@ namespace albireo
 {
 
     /*!
-        The weights of a dense decoder whose layers a layer_pass computes: blocks normalized
-        before the attention and before the feed-forward block by RMS norms, with the four
-        projections of the attention and a SwiGLU feed-forward block.  The norms and the
-        matrices belong to the runtime, which keeps them while the layer_pass lives.
+        Les poids d'un décodeur dense dont un layer_pass calcule les couches : des blocs
+        normalisés avant l'attention et avant le bloc feed-forward par des normes RMS, avec les
+        quatre projections de l'attention et un bloc feed-forward SwiGLU.  Les normes et les
+        matrices appartiennent au runtime, qui les garde tant que le layer_pass existe.
     !*/
     struct dense_layer
     {
-        const float* attn_norm = nullptr;   // d_model values
-        const float* ffn_norm = nullptr;    // d_model values
+        const float* attn_norm = nullptr;   // d_model valeurs
+        const float* ffn_norm = nullptr;    // d_model valeurs
         weight_matrix wq, wk, wv, wo, w_gate, w_up, w_down;
     };
 
@@ -34,14 +34,14 @@ namespace albireo
         long kv_dim = 0;
         long d_ffn = 0;
         float rms_eps = 0;
-        // The factor of the outputs of the blocks added to the hidden states.
+        // Le facteur des sorties des blocs ajoutées aux états cachés.
         float residual_scale = 1;
         std::vector<dense_layer> layers;
     };
 
     /*!
-        The failure of a device during a layer_pass.  memory tells whether the device lacked
-        memory, which the end of another program may give back, rather than failed.
+        L'échec d'un périphérique pendant un layer_pass.  memory indique si le périphérique a
+        manqué de mémoire, que la fin d'un autre programme peut rendre, plutôt qu'échoué.
     !*/
     class device_failure : public std::runtime_error
     {
@@ -56,85 +56,85 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The layers of a dense decoder computed on a device, around the attention that
-                the processor runtime keeps.  The hidden states of the tokens of a pass stay on
-                the device from the first layer to the last: each layer sends the processor the
-                queries, keys and values of the tokens and receives the outputs of their
-                attention, one exchange per layer instead of one per product.  The device
-                computes the normalizations of the blocks, the products, the SwiGLU gates and
-                the residual sums; the processor the biases, the normalizations of queries and
-                keys, the rotary positions, the keys and values of the sequences and the
-                attention.
+                Les couches d'un décodeur dense calculées sur un périphérique, autour de
+                l'attention que garde le runtime du processeur.  Les états cachés des tokens
+                d'une passe restent sur le périphérique de la première couche à la dernière :
+                chaque couche envoie au processeur les requêtes, clés et valeurs des tokens et
+                reçoit les sorties de leur attention, un échange par couche au lieu d'un par
+                produit.  Le périphérique calcule les normalisations des blocs, les produits,
+                les portes SwiGLU et les sommes résiduelles ; le processeur les biais, les
+                normalisations des requêtes et des clés, les positions rotatives, les clés et
+                valeurs des séquences et l'attention.
 
-                A pass calls begin(), then attention_inputs() and attention_output() for each
-                layer in turn, then end().  The functions that compute throw device_failure
-                when the device fails, the pass then being lost: the runtime computes it again
-                with its products.
+                Une passe appelle begin(), puis attention_inputs() et attention_output() pour
+                chaque couche à tour de rôle, puis end().  Les fonctions qui calculent lèvent
+                device_failure quand le périphérique échoue, la passe étant alors perdue : le
+                runtime la recalcule avec ses produits.
 
             THREAD SAFETY
-                One thread uses an object at a time: the thread that runs the forward passes
-                of its model.
+                Un seul thread utilise un objet à la fois : le thread qui exécute les passes
+                avant de son modèle.
         !*/
     public:
         virtual ~layer_pass() {}
 
         /*!
             requires
-                - x holds n rows of d_model floats, the hidden states of the tokens of the pass
-                  before the first layer.
+                - x contient n lignes de d_model floats, les états cachés des tokens de la passe
+                  avant la première couche.
             ensures
-                - Starts a pass and returns true, or returns false when the device does not
-                  take the pass now: the copies of the weights lack room, or the pass is too
-                  small for the device.  The runtime then computes the pass with its products,
-                  of which the device may still take some.
+                - Démarre une passe et renvoie true, ou renvoie false quand le périphérique ne
+                  prend pas la passe maintenant : les copies des poids manquent de place, ou la
+                  passe est trop petite pour le périphérique.  Le runtime calcule alors la passe
+                  avec ses produits, dont le périphérique peut encore prendre certains.
         !*/
         virtual bool begin(const float* x, long n) = 0;
 
         /*!
             requires
-                - begin() returned true, and every layer before layer had its
+                - begin() a renvoyé true, et chaque couche avant layer a eu son
                   attention_output().
             ensures
-                - Writes the queries, keys and values of the n tokens of the pass for layer:
-                  n rows of q_dim floats into q, n rows of kv_dim floats into k and into v.
+                - Écrit les requêtes, clés et valeurs des n tokens de la passe pour layer :
+                  n lignes de q_dim floats dans q, n lignes de kv_dim floats dans k et dans v.
         !*/
         virtual void attention_inputs(long layer, float* q, float* k, float* v) = 0;
 
         /*!
             requires
-                - attention_inputs() was called for layer, and ctx holds the n rows of q_dim
-                  floats the attention of the layer gave.
+                - attention_inputs() a été appelé pour layer, et ctx contient les n lignes de
+                  q_dim floats qu'a données l'attention de la couche.
             ensures
-                - Adds the projection of ctx, then the output of the feed-forward block of
-                  layer, to the hidden states.
+                - Ajoute aux états cachés la projection de ctx, puis la sortie du bloc
+                  feed-forward de layer.
         !*/
         virtual void attention_output(long layer, const float* ctx) = 0;
 
         /*!
             requires
-                - every layer had its attention_output().
+                - chaque couche a eu son attention_output().
             ensures
-                - Writes the hidden states after the last layer of the given rows of the pass
-                  into x, row r at x + r * d_model, and ends the pass.
+                - Écrit dans x les états cachés après la dernière couche des lignes données de
+                  la passe, la ligne r à x + r * d_model, et termine la passe.
         !*/
         virtual void end(const std::vector<long>& rows, float* x) = 0;
 
-        // The tokens a pass needs at least for begin() to take it.
+        // Le nombre minimal de tokens d'une passe pour que begin() la prenne.
         virtual long min_tokens() const = 0;
 
         /*
-            The tokens from which a pass computes its products another way, from tiles of the
-            weights expanded rather than from their blocks in place, which the runtime checks
-            apart; 0 for a pass that computes them one way.
+            Le nombre de tokens à partir duquel une passe calcule ses produits d'une autre façon,
+            à partir de tuiles des poids développés plutôt que de leurs blocs en place, ce que le
+            runtime vérifie à part ; 0 pour une passe qui les calcule d'une seule façon.
         */
         virtual long tiled_tokens() const { return 0; }
 
         /*!
             ensures
-                - Writes in the log of the device the outcome of the comparison that the
-                  runtime makes between passes of this object and passes of the processor
-                  before it uses the object (ok tells whether they agreed), or why the runtime
-                  stops using the object (ok false).
+                - Écrit dans le journal du périphérique le résultat de la comparaison que le
+                  runtime fait entre des passes de cet objet et des passes du processeur avant
+                  d'utiliser l'objet (ok indique si elles concordaient), ou la raison pour
+                  laquelle le runtime cesse d'utiliser l'objet (ok à false).
         !*/
         virtual void report(bool ok, const std::string& detail) = 0;
     };
@@ -143,58 +143,61 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                A device that computes some of the products of a cpu_runtime with its weight
-                matrices: a graphics processor through CUDA, or the NPU and the integrated
-                graphics processor of an Intel processor through OpenVINO.
+                Un périphérique qui calcule certains des produits d'un cpu_runtime avec ses
+                matrices de poids : un processeur graphique via CUDA, ou le NPU et le processeur
+                graphique intégré d'un processeur Intel via OpenVINO.
 
-                The runtime keeps the rest of the forward pass on the processor (the
-                normalizations, the rotary positions, the attention over the paged keys and
-                values) and hands every product to this object together with the way to
-                compute it on the processor.  The object then decides where the product runs,
-                from the time each place took on products of the same shape: the device wins
-                the products over many tokens, which are bound by arithmetic, and the
-                processor often keeps those of a single token, which are bound by the reading
-                of the weights and which its quantized kernels serve well.
+                Le runtime garde le reste de la passe avant sur le processeur (les
+                normalisations, les positions rotatives, l'attention sur les clés et valeurs
+                paginées) et confie chaque produit à cet objet avec la façon de le calculer sur
+                le processeur.  L'objet décide alors où le produit s'exécute, d'après le temps
+                que chaque endroit a mis sur des produits de même forme : le périphérique
+                remporte les produits sur de nombreux tokens, limités par l'arithmétique, et le
+                processeur garde souvent ceux d'un seul token, limités par la lecture des poids
+                et que ses noyaux quantifiés servent bien.
 
-                A device that computes whole layers also gives a layer_pass
-                (make_layer_pass()), which takes the layers of a dense model, normalizations
-                included, and keeps the hidden states of a pass on the device; the products of
-                the other passes, and the final products of the logits, still come here.
+                Un périphérique qui calcule des couches entières fournit aussi un layer_pass
+                (make_layer_pass()), qui prend les couches d'un modèle dense, normalisations
+                comprises, et garde les états cachés d'une passe sur le périphérique ; les
+                produits des autres passes, et les produits finaux des logits, viennent
+                toujours ici.
 
             THREAD SAFETY
-                One thread uses an object at a time: the thread that runs the forward passes
-                of its model.
+                Un seul thread utilise un objet à la fois : le thread qui exécute les passes
+                avant de son modèle.
         !*/
     public:
         virtual ~matmul_offload() {}
 
         /*!
             requires
-                - host computes the product on the processor, as qk_matmul() does.
+                - host calcule le produit sur le processeur, comme le fait qk_matmul().
             ensures
-                - Computes Y[t][o] = sum_i W[o][i] * X[t][i] for t < n_tokens and o < W.rows,
-                  with the layout of qk_matmul(), either on the device or by calling host().
+                - Calcule Y[t][o] = sum_i W[o][i] * X[t][i] pour t < n_tokens et o < W.rows,
+                  avec la disposition de qk_matmul(), soit sur le périphérique, soit en appelant
+                  host().
         !*/
         virtual void matmul(const weight_matrix& W, const float* X, long n_tokens, long x_stride,
             float* Y, long y_stride, const std::function<void()>& host) = 0;
 
         /*!
             ensures
-                - Tells whether the model has requests in progress or waiting.  When the
-                  device lacks room, copies of the models without requests leave it, the
-                  least recently used model first, for those of a model that has some; the
-                  copies of a model with requests stay until its requests are served.
+                - Indique si le modèle a des requêtes en cours ou en attente.  Quand le
+                  périphérique manque de place, les copies des modèles sans requêtes le
+                  quittent, le modèle le moins récemment utilisé en premier, au profit de celles
+                  d'un modèle qui en a ; les copies d'un modèle avec des requêtes restent jusqu'à
+                  ce que ses requêtes soient servies.
         !*/
         virtual void set_busy(bool busy) = 0;
 
-        // A short description, such as "NVIDIA GeForce RTX 4070 through CUDA".
+        // Une courte description, comme "NVIDIA GeForce RTX 4070 through CUDA".
         virtual std::string description() const = 0;
 
         /*!
             ensures
-                - Returns an object that computes the layers of model on the device, or null
-                  when the device takes products only.  The object uses this one and the
-                  memory of the weights of model, and is destroyed before them.
+                - Renvoie un objet qui calcule les couches de model sur le périphérique, ou null
+                  quand le périphérique ne prend que des produits.  L'objet utilise celui-ci et
+                  la mémoire des poids de model, et il est détruit avant eux.
         !*/
         virtual std::unique_ptr<layer_pass> make_layer_pass(const dense_model& model)
         {

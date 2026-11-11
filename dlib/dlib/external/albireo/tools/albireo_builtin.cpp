@@ -2,55 +2,56 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    albireo-builtin: prepares the models that come with Albireo, for the build.
+    albireo-builtin : prépare les modèles fournis avec Albireo, pour le build.
 
         albireo-builtin --manifest <builtin_models.json> --cache <folder> [--models-out <folder>]
             [--setup <albireo-setup-online.exe> --setup-out <albireo-setup.exe>] [--threads <n>]
 
-    The manifest (resources/builtin_models.json) names each model, the file it comes from,
-    with its address, its size and its SHA-256, and the quantization Albireo ships; a model
-    that reads images also names its projector ("projector": the mmproj file that holds its
-    vision encoder, shipped as published).  The build downloads the files into the cache,
-    named by their hash (cmake/builtin_models.cmake); this program then works on them as the
-    import example of dlib does on a GGUF file (examples/slm_gguf_import_ex.cpp), with the
-    code the engine runs:
+    Le manifeste (resources/builtin_models.json) nomme chaque modèle, le fichier dont il vient,
+    avec son adresse, sa taille et son SHA-256, et la quantification qu'Albireo livre ; un modèle
+    qui lit des images nomme aussi son projecteur ("projector" : le fichier mmproj qui contient
+    son encodeur de vision, livré tel qu'il est publié).  Le build télécharge les fichiers dans le
+    cache, nommés d'après leur empreinte (cmake/builtin_models.cmake) ; ce programme les traite
+    ensuite comme l'exemple d'import de dlib le fait sur un fichier GGUF
+    (examples/slm_gguf_import_ex.cpp), avec le code que fait tourner le moteur :
 
-      - the file is read (gguf_reader) and its geometry resolved (model_config), which
-        rejects an architecture or a configuration the engine does not run;
-      - its tokenizer must give back a text it encoded, and a model that converses must
-        come with a chat template the engine recognizes;
-      - the projector, checked against its hash, must be a vision projector (general.
-        architecture "clip") whose output has the width the decoder takes:
-        clip.vision.projection_dim * (1 + its deepstack layers) equal to
-        embedding_length * (1 + n_deepstack_layers) of the decoder;
-      - the model is converted: its weights are quantized again when the manifest asks for
-        another quantization than the published one, and its metadata receive its identity
-        in Albireo (albireo.id, albireo.name, albireo.roles, albireo.inputs,
-        albireo.builtin, albireo.source_sha256), with which every copy of the file
-        describes itself;
-      - the converted file is read and checked again.
+      - le fichier est lu (gguf_reader) et sa géométrie résolue (model_config), ce qui rejette
+        une architecture ou une configuration que le moteur ne fait pas tourner ;
+      - son tokenizer doit redonner un texte qu'il a encodé, et un modèle qui converse doit
+        venir avec un template de chat que le moteur reconnaît ;
+      - le projecteur, vérifié avec son empreinte, doit être un projecteur de vision
+        (general.architecture "clip") dont la sortie a la largeur que prend le décodeur :
+        clip.vision.projection_dim * (1 + ses couches deepstack) égal à
+        embedding_length * (1 + n_deepstack_layers) du décodeur ;
+      - le modèle est converti : ses poids sont quantifiés à nouveau quand le manifeste demande
+        une autre quantification que celle publiée, et ses métadonnées reçoivent son identité
+        dans Albireo (albireo.id, albireo.name, albireo.roles, albireo.inputs,
+        albireo.builtin, albireo.source_sha256), par laquelle chaque copie du fichier se
+        décrit elle-même ;
+      - le fichier converti est relu et revérifié.
 
-    The converted files stay in the cache, named after the conversion, so that a new build
-    reuses them.  --models-out gives them to a folder with their manifest builtin.json (the
-    "models" folder of the programs of a build tree), <id>.gguf and the projector
-    <id>.mmproj.gguf, by hard links when the folder is on the volume of the cache; --setup
-    appends them to a copy of the installer without models, as the overlay of
-    common/builtin_models.h, the complete installer.  When the installer and its models would
-    reach the 4 GiB Windows runs (--installer-limit gives a smaller size, for the tests), the
-    complete installer is the installer without models and its models lie beside it, in a file
-    of the same name with the extension .models.  The overlay written is read back with the
-    reader of the installer before it takes its name.
+    Les fichiers convertis restent dans le cache, nommés d'après la conversion, pour qu'un
+    nouveau build les réutilise.  --models-out les remet à un dossier avec leur manifeste
+    builtin.json (le dossier "models" des programmes d'un arbre de build), <id>.gguf et le
+    projecteur <id>.mmproj.gguf, par des liens physiques quand le dossier est sur le volume du
+    cache ; --setup les ajoute à une copie de l'installateur sans modèles, sous forme de la
+    surcouche de common/builtin_models.h, ce qui donne l'installateur complet.  Quand
+    l'installateur et ses modèles atteindraient les 4 Gio que Windows exécute (--installer-limit
+    donne une taille plus petite, pour les tests), l'installateur complet est l'installateur sans
+    modèles et ses modèles se trouvent à côté de lui, dans un fichier du même nom avec
+    l'extension .models.  La surcouche écrite est relue avec le lecteur de l'installateur avant
+    de prendre son nom.
 
     QUANTIZATION
-        The Q4_K_M mix of the GGUF format: the matrices in Q4_K (blocks of 256 weights in 8
-        groups of 32, each group with a 6-bit scale and a 6-bit minimum, fitted by a
-        weighted least squares search), with Q6_K for the output matrix (the embeddings when
-        the model shares them with its output), for the values of the attention and the
-        down projections of the first and last eighths of the layers and of one layer in
-        three between them.  The search and the mix are those of the reference quantizer of
-        the format, so that the result matches the files published in Q4_K_M; a matrix whose
-        rows are not a multiple of 256 takes Q5_0 (Q8_0 instead of Q6_K).  The vectors (norms,
-        biases) keep their type.
+        Le mélange Q4_K_M du format GGUF : les matrices en Q4_K (blocs de 256 poids en 8
+        groupes de 32, chaque groupe avec une échelle sur 6 bits et un minimum sur 6 bits,
+        ajustés par une recherche aux moindres carrés pondérés), avec Q6_K pour la matrice de
+        sortie (les embeddings quand le modèle les partage avec sa sortie), pour les valeurs de
+        l'attention et les projections descendantes du premier et du dernier huitième des
+        couches et d'une couche sur trois entre les deux.  La recherche et le mélange sont ceux
+        du quantificateur de référence du format, pour que le résultat corresponde aux fichiers
+        publiés en Q4_K_M ; une matrice dont les lignes ne sont pas un multiple de 256 prend
+        Q5_0 (Q8_0 au lieu de Q6_K).  Les vecteurs (normes, biais) gardent leur type.
 */
 
 #include <algorithm>
@@ -96,7 +97,7 @@ namespace albireo
 namespace
 {
 
-    // The version of the conversion, part of the name of a converted file in the cache.
+    // La version de la conversion, qui fait partie du nom d'un fichier converti dans le cache.
     const char* const conversion_version = "albireo-builtin 1";
 
     std::FILE* open_file(const std::string& path, const char* mode)
@@ -109,9 +110,10 @@ namespace
         return s.size() >= tail.size() && s.compare(s.size() - tail.size(), tail.size(), tail) == 0;
     }
 
-    // ---- Half precision
+    // ---- Demi-précision
 
-    // The nearest half precision value, ties to even, as the scales of the blocks are stored.
+    // La valeur en demi-précision la plus proche, égalités au pair, telle que sont stockées les
+    // échelles des blocs.
     uint16_t to_half(float value)
     {
         uint32_t x;
@@ -123,7 +125,7 @@ namespace
         const int e = static_cast<int>(a >> 23);
         if (e < 113)
         {
-            // Below the smallest normal half: a multiple of 2^-24.
+            // Sous le plus petit demi-flottant normal : un multiple de 2^-24.
             const int shift = 126 - e;
             if (shift > 24) return static_cast<uint16_t>(sign);
             const uint32_t m = (a & 0x7fffffu) | 0x800000u;
@@ -150,7 +152,7 @@ namespace
         p[1] = static_cast<uint8_t>(h >> 8);
     }
 
-    // Rounds to the nearest integer, ties to even, through the addition of 1.5 * 2^23.
+    // Arrondit à l'entier le plus proche, égalités au pair, par l'addition de 1.5 * 2^23.
     int nearest_int(float v)
     {
         const float t = v + 12582912.f;
@@ -159,14 +161,14 @@ namespace
         return (i & 0x007fffff) - 0x00400000;
     }
 
-    // ---- Quantization
+    // ---- Quantification
 
     /*
-        The scale and the minimum of a group of n values on nmax + 1 levels that minimize
-        the error weighted by weights: the levels of the extremes first, then nstep + 1
-        scales around them, each one refined by a least squares fit of the scale and the
-        minimum.  L receives the levels; returns the scale and sets the_min to the
-        opposite of the minimum.
+        L'échelle et le minimum d'un groupe de n valeurs sur nmax + 1 niveaux qui minimisent
+        l'erreur pondérée par weights : les niveaux des extrêmes d'abord, puis nstep + 1
+        échelles autour, chacune affinée par un ajustement aux moindres carrés de l'échelle et
+        du minimum.  L reçoit les niveaux ; renvoie l'échelle et met dans the_min l'opposé du
+        minimum.
     */
     float fit_scale_min(int n, int nmax, const float* x, const float* weights, uint8_t* L, float& the_min,
         uint8_t* Laux, float rmin, float rdelta, int nstep)
@@ -248,9 +250,9 @@ namespace
     }
 
     /*
-        The scale of a group of n values on the symmetric levels -nmax .. nmax - 1, the
-        error weighted by the square of each value: the scale of the largest magnitude,
-        then 18 scales around it.  L receives the levels shifted by nmax.
+        L'échelle d'un groupe de n valeurs sur les niveaux symétriques -nmax .. nmax - 1,
+        l'erreur pondérée par le carré de chaque valeur : l'échelle de la plus grande valeur
+        absolue, puis 18 échelles autour.  L reçoit les niveaux décalés de nmax.
     */
     float fit_symmetric(int n, int nmax, const float* x, int8_t* L)
     {
@@ -311,7 +313,8 @@ namespace
         return scale;
     }
 
-    // Q4_K: d and dmin (half), 12 bytes of packed 6-bit scales and minimums, 128 bytes of levels.
+    // Q4_K : d et dmin (demi), 12 octets d'échelles et de minimums sur 6 bits tassés, 128 octets de
+    // niveaux.
     void quantize_q4_k(const float* x, uint64_t n, uint8_t* y)
     {
         for (uint64_t b = 0; b < n / 256; ++b, x += 256, y += 144)
@@ -377,7 +380,7 @@ namespace
         }
     }
 
-    // Q6_K: 128 bytes of low bits, 64 of high bits, 16 signed 8-bit scales, d (half).
+    // Q6_K : 128 octets de bits bas, 64 de bits hauts, 16 échelles signées sur 8 bits, d (demi).
     void quantize_q6_k(const float* x, uint64_t n, uint8_t* y)
     {
         for (uint64_t b = 0; b < n / 256; ++b, x += 256, y += 210)
@@ -438,7 +441,7 @@ namespace
         }
     }
 
-    // Q8_0: d (half) and 32 signed bytes.
+    // Q8_0 : d (demi) et 32 octets signés.
     void quantize_q8_0(const float* x, uint64_t n, uint8_t* y)
     {
         for (uint64_t b = 0; b < n / 32; ++b, x += 32, y += 34)
@@ -452,7 +455,7 @@ namespace
         }
     }
 
-    // Q5_0: d (half), the fifth bits of the 32 levels, their low 4 bits.
+    // Q5_0 : d (demi), les cinquièmes bits des 32 niveaux, leurs 4 bits bas.
     void quantize_q5_0(const float* x, uint64_t n, uint8_t* y)
     {
         for (uint64_t b = 0; b < n / 32; ++b, x += 32, y += 22)
@@ -524,7 +527,7 @@ namespace
         }
     }
 
-    // ---- The Q4_K_M mix
+    // ---- Le mélange Q4_K_M
 
     bool quantizable(const gguf_tensor_info& t)
     {
@@ -532,14 +535,14 @@ namespace
             && t.name.find("ffn_gate_inp.weight") == std::string::npos;
     }
 
-    // The first and last eighths of the layers, and one layer in three between them.
+    // Le premier et le dernier huitième des couches, et une couche sur trois entre les deux.
     bool more_bits(int i, int n)
     {
         return i < n / 8 || i >= 7 * n / 8 || (i - n / 8) % 3 == 2;
     }
 
-    // The order of the tensors: those outside the layers, then the layers in their order,
-    // by name in each.
+    // L'ordre des tenseurs : ceux hors des couches, puis les couches dans leur ordre,
+    // par nom dans chacune.
     int layer_of(const std::string& name)
     {
         int layer = -1;
@@ -568,7 +571,7 @@ namespace
         std::vector<const gguf_tensor_info*> order;
         for (const auto& t : r.tensors()) order.push_back(&t);
         std::sort(order.begin(), order.end(), tensor_before);
-        // A file published in the quantization Albireo ships keeps its tensors as they are.
+        // Un fichier publié dans la quantification qu'Albireo livre garde ses tenseurs tels quels.
         const bool requantize = quantization == "Q4_K_M" && published != quantization;
         bool tied = true;
         int n_attn_v = 0;
@@ -588,7 +591,8 @@ namespace
             p.type = t->type;
             if (requantize && quantizable(*t))
             {
-                // A tensor is converted row by row: it needs rows, of at least one value each.
+                // Un tenseur est converti ligne par ligne : il lui faut des lignes, d'au moins une
+                // valeur chacune.
                 for (uint64_t d : t->dims)
                     if (d == 0) throw std::runtime_error(t->name + ": a dimension of the tensor is zero");
                 const uint64_t ne0 = t->dims[0];
@@ -623,7 +627,7 @@ namespace
         return plan;
     }
 
-    // ---- Writing a GGUF file
+    // ---- Écriture d'un fichier GGUF
 
     class gguf_out
     {
@@ -738,17 +742,17 @@ namespace
 
     struct model_entry
     {
-        json desc;                 // the entry of the manifest
+        json desc;                 // l'entrée du manifeste
         std::string id;
-        std::string source;        // the downloaded file
+        std::string source;        // le fichier téléchargé
         std::string source_sha;
-        std::string quantization;  // the one shipped
-        std::string key;           // names the conversion
-        std::string converted;     // the converted file in the cache
-        std::string projector;     // the projector in the cache, shipped as published; empty without one
+        std::string quantization;  // celle qui est livrée
+        std::string key;           // nomme la conversion
+        std::string converted;     // le fichier converti dans le cache
+        std::string projector;     // le projecteur dans le cache, livré tel que publié ; vide sans projecteur
     };
 
-    // The rows of a tensor as floats, from its bytes.
+    // Les lignes d'un tenseur en flottants, à partir de ses octets.
     void rows_as_floats(const gguf_tensor_info& t, const uint8_t* raw, uint64_t row0, uint64_t nrows,
         std::vector<float>& out)
     {
@@ -762,7 +766,7 @@ namespace
         dlib::gguf_dequantize(part, bytes, out);
     }
 
-    // The relative error of a quantized row against its source.
+    // L'erreur relative d'une ligne quantifiée par rapport à sa source.
     double row_error(const gguf_tensor_info& src, const std::vector<uint8_t>& raw, ggml_type type,
         const std::vector<uint8_t>& out, uint64_t row)
     {
@@ -793,22 +797,23 @@ namespace
         }
     }
 
-    // The identifier of this process, which names its partial files in the cache.
+    // L'identifiant de ce processus, qui nomme ses fichiers partiels dans le cache.
     unsigned long process_id()
     {
         return static_cast<unsigned long>(::getpid());
     }
 
-    // Whether a process of this identifier runs; a process the system hides from this one counts as running.
+    // Si un processus de cet identifiant tourne ; un processus que le système cache à celui-ci compte
+    // comme tournant.
     bool process_running(unsigned long pid)
     {
         return ::kill(static_cast<pid_t>(pid), 0) == 0 || errno == EPERM;
     }
 
     /*
-        Removes the partial files of a converted file, <file>.<process>.partial, whose process
-        ended before renaming them, as an interrupted build does.  The partial file of a
-        conversion still running stays.
+        Supprime les fichiers partiels d'un fichier converti, <file>.<process>.partial, dont le
+        processus s'est terminé avant de les renommer, comme le fait un build interrompu.  Le
+        fichier partiel d'une conversion encore en cours reste.
     */
     void remove_stale_partials(const std::string& converted)
     {
@@ -826,7 +831,8 @@ namespace
         }
     }
 
-    // Removes the partial file at the end of its scope; a file renamed before then keeps its new name.
+    // Supprime le fichier partiel à la fin de sa portée ; un fichier renommé avant garde son nouveau
+    // nom.
     class partial_file
     {
     public:
@@ -842,7 +848,8 @@ namespace
     void convert(model_entry& m, unsigned threads, std::string& sha, uint64_t& size)
     {
         dlib::gguf_reader r(m.source);
-        // The tensors of both files start at multiples of the alignment, a power of two in the format.
+        // Les tenseurs des deux fichiers commencent à des multiples de l'alignement, une puissance de
+        // deux dans le format.
         const uint64_t alignment = r.alignment();
         if (alignment == 0 || alignment > 65536 || (alignment & (alignment - 1)) != 0)
             throw std::runtime_error("the alignment of " + m.source + ", " + std::to_string(alignment)
@@ -870,12 +877,13 @@ namespace
         meta["albireo.builtin"] = builtin;
         meta["albireo.source_sha256"] = string_value(m.source_sha);
 
-        // Each process writes a partial file of its own, so that two builds sharing the cache never mix their output.
+        // Chaque processus écrit un fichier partiel à lui, pour que deux builds qui partagent le cache ne
+        // mélangent jamais leur sortie.
         const std::string tmp = m.converted + "." + std::to_string(process_id()) + ".partial";
         remove_stale_partials(m.converted);
         /*
-            Destroyed in the reverse order of their declarations: the stream is closed while its
-            buffer exists, then the guard removes the partial file of a conversion that failed.
+            Détruits dans l'ordre inverse de leurs déclarations : le flux est fermé tant que son
+            tampon existe, puis la garde supprime le fichier partiel d'une conversion qui a échoué.
         */
         std::vector<char> buffer(4u << 20);
         const partial_file partial(tmp);
@@ -889,7 +897,7 @@ namespace
         o.raw<uint32_t>(3);
         o.raw<uint64_t>(plan.size());
         o.raw<uint64_t>(meta.size() + 1);
-        // The architecture first, as the converters of the format write it.
+        // L'architecture d'abord, comme l'écrivent les convertisseurs du format.
         o.str("general.architecture");
         put_value(o, meta.at("general.architecture"));
         for (const auto& kv : meta)
@@ -927,7 +935,7 @@ namespace
             const uint64_t nrows = p.src->n_elements() / ne0;
             const uint64_t out_row = row_bytes(p.type, ne0);
             out.assign(static_cast<size_t>(p.nbytes), 0);
-            // Rows in chunks, over the threads.
+            // Les lignes par morceaux, sur les threads.
             std::atomic<uint64_t> next(0);
             std::atomic<bool> failed(false);
             std::string failure;
@@ -956,7 +964,7 @@ namespace
             work();
             for (auto& t : pool) t.join();
             if (failed) throw std::runtime_error(p.src->name + ": " + failure);
-            // The first and the last rows against their source.
+            // La première et la dernière ligne comparées à leur source.
             for (uint64_t row : { uint64_t(0), nrows - 1 })
             {
                 const double e = row_error(*p.src, raw, p.type, out, row);
@@ -975,9 +983,9 @@ namespace
         if (!rename_file(tmp, m.converted)) throw std::runtime_error("cannot rename " + tmp);
     }
 
-    // ---- Checks of a file, as the engine reads it
+    // ---- Vérifications d'un fichier, tel que le moteur le lit
 
-    // Checks a file as the engine reads it; a converted file also carries its identity.
+    // Vérifie un fichier tel que le moteur le lit ; un fichier converti porte aussi son identité.
     json check_model(const std::string& path, const json& desc, bool converted)
     {
         model_file file(path);
@@ -1015,11 +1023,11 @@ namespace
     }
 
     /*
-        Checks a projector against the decoder it goes with: a vision projector (general.
-        architecture "clip" with a vision encoder) whose output, clip.vision.projection_dim
-        wide with as many more widths as it has deepstack layers, has the width of the vision
-        tokens the decoder takes, embedding_length * (1 + n_deepstack_layers).  Returns its
-        type and that width.
+        Vérifie un projecteur par rapport au décodeur auquel il est associé : un projecteur de
+        vision (general.architecture "clip" avec un encodeur de vision) dont la sortie, large de
+        clip.vision.projection_dim avec autant de largeurs de plus qu'il a de couches deepstack,
+        a la largeur des tokens de vision que prend le décodeur,
+        embedding_length * (1 + n_deepstack_layers).  Renvoie son type et cette largeur.
     */
     json check_projector(const std::string& projector, const std::string& decoder)
     {
@@ -1032,7 +1040,7 @@ namespace
         if (p.has("clip.vision.is_deepstack_layers"))
             for (int64_t v : p.at("clip.vision.is_deepstack_layers").arr_int) deepstack += v != 0 ? 1 : 0;
         int64_t width = p.get_int("clip.vision.projection_dim", 0) * (1 + deepstack);
-        // A LLaVA projector names no projection width: its last layer gives it.
+        // Un projecteur LLaVA ne nomme aucune largeur de projection : sa dernière couche la donne.
         const dlib::gguf_tensor_info* last = p.find_tensor("mm.2.weight");
         if (width <= 0 && last && last->dims.size() >= 2) width = static_cast<int64_t>(last->dims[1]);
         const dlib::gguf_reader d(decoder);
@@ -1049,7 +1057,7 @@ namespace
         return info;
     }
 
-    // ---- The manifest and the files
+    // ---- Le manifeste et les fichiers
 
     std::string conversion_key(const json& desc, const std::string& source_sha, const std::string& quantization)
     {
@@ -1078,7 +1086,8 @@ namespace
         return true;
     }
 
-    // The file of the models beside the complete installer output: its name with the extension .models.
+    // Le fichier des modèles à côté de l'installateur complet produit : son nom avec l'extension
+    // .models.
     std::string beside_installer(const std::string& output)
     {
         const std::string name = file_name(output);
@@ -1089,9 +1098,9 @@ namespace
     }
 
     /*
-        Reads back the overlay that ends file and checks that it names the files of models,
-        with their sizes, where they were written: the reader of the installer
-        (find_builtin_overlay()) finds them the same way.
+        Relit la surcouche qui termine file et vérifie qu'elle nomme les fichiers de modèles,
+        avec leurs tailles, là où ils ont été écrits : le lecteur de l'installateur
+        (find_builtin_overlay()) les trouve de la même manière.
     */
     void check_overlay(const std::string& file, uint64_t lower, const std::vector<model_entry>& models)
     {
@@ -1121,16 +1130,16 @@ namespace
     }
 
     /*
-        The complete installer: the installer without models setup, followed by the overlay of
-        the models (common/builtin_models.h).  When both would exceed limit, the size Windows
-        runs, output is the installer without models and the overlay lies in a file of its own
-        beside it (beside_installer()), from its first byte; a file of models left beside output
-        by an earlier build goes otherwise.
+        L'installateur complet : l'installateur sans modèles setup, suivi de la surcouche des
+        modèles (common/builtin_models.h).  Quand les deux dépasseraient limit, la taille que
+        Windows exécute, output est l'installateur sans modèles et la surcouche se trouve dans un
+        fichier à part à côté de lui (beside_installer()), dès son premier octet ; un fichier de
+        modèles laissé à côté de output par un build précédent disparaît dans le cas contraire.
     */
     void pack_setup(const std::string& setup, const std::string& output, const std::vector<model_entry>& models,
         json manifest, uint64_t limit)
     {
-        // The positions of the files in the overlay, then the manifest that gives them.
+        // Les positions des fichiers dans la surcouche, puis le manifeste qui les donne.
         uint64_t at = 0;
         for (size_t i = 0; i < models.size(); ++i)
         {
@@ -1153,7 +1162,7 @@ namespace
         std::FILE* out = open_file(tmp, "wb");
         if (!out) throw std::runtime_error("cannot create " + tmp);
         std::unique_ptr<std::FILE, int (*)(std::FILE*)> closer(out, std::fclose);
-        // Copies length bytes of file to out.
+        // Copie length octets de file dans out.
         auto append = [&](const std::string& file, uint64_t length) {
             std::FILE* m = open_file(file, "rb");
             if (!m) throw std::runtime_error("cannot read " + file);
@@ -1185,7 +1194,7 @@ namespace
 
         if (beside)
         {
-            // The installer is the one without models, under the name of the complete one.
+            // L'installateur est celui sans modèles, sous le nom de l'installateur complet.
             const std::string copy = output + ".partial";
             std::FILE* o = open_file(copy, "wb");
             if (!o) throw std::runtime_error("cannot create " + copy);
@@ -1203,7 +1212,7 @@ namespace
         }
         else
             remove_file(beside_installer(output));
-        // The rights of the program it extends.
+        // Les droits du programme qu'il prolonge.
         struct stat st;
         if (::stat(setup.c_str(), &st) == 0) ::chmod(output.c_str(), st.st_mode & 07777);
     }
@@ -1255,9 +1264,9 @@ namespace
             std::cout << m.id << "\n";
 
             /*
-                A converted file of the same conversion is reused when its size and its SHA-256
-                are those of its description, written once it was checked; it is converted
-                again otherwise.
+                Un fichier converti de la même conversion est réutilisé quand sa taille et son
+                SHA-256 sont ceux de sa description, écrite une fois qu'il a été vérifié ; il est
+                converti à nouveau sinon.
             */
             const std::string side = m.converted + ".json";
             std::string side_text;
@@ -1293,7 +1302,7 @@ namespace
             std::cout << "  " << file_name(m.converted) << ", " << info["size"].as_int(0) << " bytes, "
                       << info["format"].as_string() << "\n";
 
-            // The projector of a model that reads images, shipped as published.
+            // Le projecteur d'un modèle qui lit des images, livré tel qu'il est publié.
             json projector_entry;
             const json& pd = d["projector"];
             if (pd.is_object())
@@ -1350,7 +1359,8 @@ namespace
         }
         if (args.count("setup"))
         {
-            // The size of the largest complete installer, less than the 4 GiB Windows runs, or another for the tests.
+            // La taille du plus gros installateur complet, inférieure aux 4 Gio que Windows exécute, ou
+            // une autre pour les tests.
             const uint64_t limit = args.count("installer-limit")
                 ? std::strtoull(args["installer-limit"].c_str(), nullptr, 10) : max_installer_size;
             pack_setup(args["setup"], args["setup-out"], models, out, std::min(limit, max_installer_size));

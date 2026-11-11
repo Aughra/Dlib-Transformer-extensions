@@ -1,19 +1,19 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Albireo: the local inference service built on dlib, for macOS on Apple Silicon only.
+# Albireo : le service d'inférence local construit sur dlib, pour macOS sur Apple Silicon seulement.
 #
 #   cmake -S dlib/dlib/external/albireo -B build/macos-albireo -G Ninja -DCMAKE_BUILD_TYPE=Release
 #
-# Every program lands in <build>/bin and the engine in <build>/bin/engines; the web application
-# is copied to <build>/bin/web and the voices of the speech synthesis to <build>/bin/speech.
+# Chaque programme arrive dans <build>/bin et le moteur dans <build>/bin/engines ; l'application web
+# est copiée dans <build>/bin/web et les voix de la synthèse vocale dans <build>/bin/speech.
 
 cmake_minimum_required(VERSION 3.16)
-project(albireo VERSION 2.0.1 LANGUAGES C CXX OBJCXX)
+project(albireo VERSION 2.0.2 LANGUAGES C CXX OBJCXX)
 
-# The version is written in four places that must agree: project() above, the numbers and the
-# text of common/version.h, which the service and the engine give, and the description of the
-# interface.
+# La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
+# le texte de common/version.h, que donnent le service et le moteur, et la description de
+# l'interface.
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/common/version.h" version_lines REGEX "^#define ALBIREO_VERSION")
 set(version_numbers)
 foreach (part MAJOR MINOR PATCH)
@@ -54,13 +54,13 @@ get_filename_component(ALBIREO_INCLUDE_DIR "${ALBIREO_DLIB_DIR}/.." ABSOLUTE)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(ALBIREO_ENGINE_DIR ${CMAKE_BINARY_DIR}/bin/engines)
 
-# Puts the executables of a target in a folder of the build tree.
+# Place les exécutables d'une cible dans un dossier de l'arbre de build.
 function(albireo_output_dir target dir)
    set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${dir})
 endfunction()
 
-# dlib: the programs use its headers and its HTTPS target only.  The engine has its own
-# kernels, so dlib needs no BLAS.
+# dlib : les programmes n'utilisent que ses en-têtes et sa cible HTTPS.  Le moteur a ses propres
+# noyaux, donc dlib n'a besoin d'aucun BLAS.
 set(DLIB_NO_GUI_SUPPORT ON CACHE BOOL "" FORCE)
 set(DLIB_USE_CUDA OFF CACHE BOOL "" FORCE)
 set(DLIB_USE_NPU OFF CACHE BOOL "" FORCE)
@@ -79,27 +79,27 @@ add_subdirectory(${ALBIREO_DLIB_DIR} dlib_build EXCLUDE_FROM_ALL)
 
 set(ALBIREO_WARNINGS -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
 find_package(Threads REQUIRED)
-# The products of the long passes go through Accelerate (engine/qkernels_accelerate.inc); the
-# GPU through Metal (engine/metal_device.mm).
+# Les produits des longues passes passent par Accelerate (engine/qkernels_accelerate.inc) ; le
+# GPU par Metal (engine/metal_device.mm).
 link_libraries("-framework Accelerate" "-framework Metal" "-framework MetalPerformanceShaders" "-framework Foundation")
 
-# The source of the Metal kernels, embedded in the engine as a string that macOS compiles when
-# the engine opens the GPU: the build needs no Metal compiler.
+# La source des noyaux Metal, intégrée au moteur sous forme d'une chaîne que macOS compile quand
+# le moteur ouvre le GPU : le build n'a besoin d'aucun compilateur Metal.
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels.metal" ALBIREO_METAL_SOURCE)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels.metal")
 configure_file(engine/metal_kernels.inc.in ${CMAKE_BINARY_DIR}/generated/metal_kernels.inc @ONLY)
 set_source_files_properties(engine/metal_device.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
    INCLUDE_DIRECTORIES "${CMAKE_BINARY_DIR}/generated")
 
-# zlib from dlib/external, for the programs and the image decoders of the engine.
+# zlib, venu de dlib/external, pour les programmes et les décodeurs d'images du moteur.
 set(zlib_dir ${ALBIREO_DLIB_DIR}/external/zlib)
 add_library(albireo_zlib STATIC ${zlib_dir}/adler32.c ${zlib_dir}/compress.c ${zlib_dir}/crc32.c
    ${zlib_dir}/deflate.c ${zlib_dir}/infback.c ${zlib_dir}/inffast.c ${zlib_dir}/inflate.c ${zlib_dir}/inftrees.c
    ${zlib_dir}/trees.c ${zlib_dir}/uncompr.c ${zlib_dir}/zutil.c)
 target_include_directories(albireo_zlib PUBLIC ${zlib_dir})
 
-# The PNG and JPEG decoders of the engine, which read the images of the requests: the copies
-# of libpng and libjpeg that dlib bundles, compiled into the engine, whatever the system holds.
+# Les décodeurs PNG et JPEG du moteur, qui lisent les images des requêtes : les copies de libpng
+# et de libjpeg que dlib embarque, compilées dans le moteur, quoi que contienne le système.
 set(png_dir ${ALBIREO_DLIB_DIR}/external/libpng)
 set(jpeg_dir ${ALBIREO_DLIB_DIR}/external/libjpeg)
 add_library(albireo_image STATIC
@@ -115,11 +115,11 @@ add_library(albireo_image STATIC
    ${jpeg_dir}/jutils.c)
 target_include_directories(albireo_image PRIVATE ${png_dir} ${jpeg_dir})
 target_link_libraries(albireo_image PUBLIC albireo_zlib)
-# Compiled into the shared engine, whose own symbols alone are visible.
+# Compilé dans le moteur partagé, dont seuls les symboles propres sont visibles.
 set_target_properties(albireo_zlib albireo_image PROPERTIES POSITION_INDEPENDENT_CODE ON
    C_VISIBILITY_PRESET hidden)
 
-# The inference engine.
+# Le moteur d'inférence.
 set(ALBIREO_ENGINE_SOURCES
    engine/chat_format.cpp
    engine/cpu_runtime.cpp
@@ -134,14 +134,14 @@ set(ALBIREO_ENGINE_SOURCES
    engine/vision_encoder.cpp
    common/system_info.cpp)
 
-# The quantized kernels (NEON, Accelerate), shared by the engine, the tools and the tests.
+# Les noyaux quantifiés (NEON, Accelerate), partagés par le moteur, les outils et les tests.
 add_library(albireo-kernels OBJECT engine/qkernels.cpp)
 target_include_directories(albireo-kernels PRIVATE ${ALBIREO_INCLUDE_DIR})
 target_compile_options(albireo-kernels PRIVATE ${ALBIREO_WARNINGS})
 set_target_properties(albireo-kernels PROPERTIES POSITION_INDEPENDENT_CODE ON
    C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 
-# The engine library, which the service loads from its engines folder.
+# La bibliothèque du moteur, que le service charge depuis son dossier engines.
 function(albireo_engine variant)
    set(target albireo-engine-${variant})
    add_library(${target} SHARED ${ALBIREO_ENGINE_SOURCES} $<TARGET_OBJECTS:albireo-kernels> ${ARGN})
@@ -159,7 +159,7 @@ if (ALBIREO_PROGRAMS)
 endif()
 
 if (ALBIREO_PROGRAMS)
-   # Libraries compiled into the programs: SQLite and zlib (above) from dlib/external.
+   # Bibliothèques compilées dans les programmes : SQLite et zlib (ci-dessus), venus de dlib/external.
    add_library(albireo_sqlite STATIC ${ALBIREO_DLIB_DIR}/external/sqlite/sqlite3.c)
    target_include_directories(albireo_sqlite PUBLIC ${ALBIREO_DLIB_DIR}/external/sqlite)
    target_compile_definitions(albireo_sqlite PRIVATE SQLITE_THREADSAFE=1 SQLITE_DQS=0 SQLITE_DEFAULT_MEMSTATUS=0
@@ -167,34 +167,35 @@ if (ALBIREO_PROGRAMS)
       SQLITE_ENABLE_API_ARMOR SQLITE_ENABLE_FTS5 SQLITE_ENABLE_MATH_FUNCTIONS SQLITE_OMIT_LOAD_EXTENSION)
    target_link_libraries(albireo_sqlite PUBLIC ${CMAKE_DL_LIBS} m)
 
-   # Code shared by the service and the tools.
+   # Code partagé par le service et les outils.
    add_library(albireo_common STATIC common/log.cpp common/platform.cpp common/system_info.cpp
       common/engine_loader.cpp)
    target_include_directories(albireo_common PUBLIC ${ALBIREO_INCLUDE_DIR})
    target_compile_options(albireo_common PRIVATE ${ALBIREO_WARNINGS})
    target_link_libraries(albireo_common PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
 
-   # The speech synthesis that reads the answers aloud: SVOX Pico in its own program,
-   # albireo-speech, which the service starts for each reading, and its French voice (the fork
-   # for macOS speaks French only).
+   # La synthèse vocale qui lit les réponses à voix haute : SVOX Pico dans son propre programme,
+   # albireo-speech, que le service lance pour chaque lecture, et sa voix française (le fork
+   # pour macOS ne parle que français).
    set(pico_dir ${ALBIREO_DLIB_DIR}/external/svox_pico)
    file(GLOB pico_sources ${pico_dir}/lib/*.c)
    add_library(albireo_pico STATIC ${pico_sources})
    target_include_directories(albireo_pico PUBLIC ${pico_dir}/lib)
-   # Third-party code of 2009, compiled as it is published: its warnings are not ours to fix.
+   # Code tiers de 2009, compilé tel qu'il est publié : ce n'est pas à nous de corriger ses
+   # avertissements.
    target_compile_options(albireo_pico PRIVATE -w)
 
-   # The program of the speech synthesis: the synthesizer and the runtime of the compiler, no
-   # other library (host/speech.h).
+   # Le programme de la synthèse vocale : le synthétiseur et le runtime du compilateur, aucune
+   # autre bibliothèque (host/speech.h).
    add_executable(albireo-speech host/speech_worker.cpp host/speech_text.cpp)
    target_link_libraries(albireo-speech PRIVATE albireo_pico)
    target_include_directories(albireo-speech PRIVATE ${ALBIREO_INCLUDE_DIR})
    target_compile_options(albireo-speech PRIVATE ${ALBIREO_WARNINGS})
 
-   # The password of the public link of the published files (host/public_link.h), read from a
-   # file outside the repository at each configuration and built into the service, masked: the
-   # header generated lies in the build tree alone.  Without the file, the service reaches the
-   # link without password.
+   # Le mot de passe du lien public des fichiers publiés (host/public_link.h), lu à chaque
+   # configuration dans un fichier hors du dépôt et intégré au service, masqué : l'en-tête
+   # généré ne se trouve que dans l'arbre de build.  Sans ce fichier, le service atteint le
+   # lien sans mot de passe.
    set(public_link_default "$ENV{HOME}/keys/albireo-public-link.txt")
    set(ALBIREO_PUBLIC_LINK_PASSWORD_FILE "${public_link_default}" CACHE FILEPATH
       "File holding the password of the public link of the published files")
@@ -203,13 +204,13 @@ if (ALBIREO_PROGRAMS)
    if (EXISTS "${ALBIREO_PUBLIC_LINK_PASSWORD_FILE}")
       set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${ALBIREO_PUBLIC_LINK_PASSWORD_FILE}")
       file(READ "${ALBIREO_PUBLIC_LINK_PASSWORD_FILE}" public_link_hex HEX)
-      # A byte order mark before the password and the ends of line after it are not part of it.
+      # Une marque d'ordre des octets avant le mot de passe et les fins de ligne après n'en font pas partie.
       string(REGEX REPLACE "^efbbbf" "" public_link_hex "${public_link_hex}")
       string(REGEX REPLACE "(0d|0a)+$" "" public_link_hex "${public_link_hex}")
       string(LENGTH "${public_link_hex}" public_link_digits)
       math(EXPR public_link_size "${public_link_digits} / 2")
       if (public_link_size GREATER 0)
-         # Each byte masked by the generator that host/public_link.cpp runs again to unmask it.
+         # Chaque octet masqué par le générateur que host/public_link.cpp rejoue pour le démasquer.
          set(public_link_seed 20261101)
          set(public_link_list "")
          math(EXPR public_link_last "${public_link_size} - 1")
@@ -228,7 +229,7 @@ if (ALBIREO_PROGRAMS)
    endif()
    configure_file(cmake/public_link_secret.h.in ${CMAKE_BINARY_DIR}/generated/public_link_secret.h @ONLY)
 
-   # The service.
+   # Le service.
    add_executable(albireo-service host/main.cpp host/service.cpp host/server.cpp host/settings.cpp host/store.cpp
       host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/public_link.cpp host/crypto.cpp
       host/certificates.cpp host/speech.cpp host/speech_text.cpp host/web_access.cpp)
@@ -236,21 +237,21 @@ if (ALBIREO_PROGRAMS)
    target_link_libraries(albireo-service PRIVATE albireo_common albireo_sqlite albireo_zlib dlib::httplib)
    target_compile_options(albireo-service PRIVATE ${ALBIREO_WARNINGS})
 
-   # The signatures of the update feed and of the model catalog, for their publisher.
+   # Les signatures du flux de mises à jour et du catalogue de modèles, pour leur éditeur.
    add_executable(albireo-sign tools/albireo_sign.cpp host/crypto.cpp)
    target_link_libraries(albireo-sign PRIVATE albireo_common dlib::httplib)
    target_compile_options(albireo-sign PRIVATE ${ALBIREO_WARNINGS})
 
-   # The preparation of the models that come with Albireo: checked and converted with the
-   # code of the engine, then given to the programs of the tree.
+   # La préparation des modèles fournis avec Albireo : vérifiés et convertis avec le code
+   # du moteur, puis remis aux programmes de l'arbre.
    add_executable(albireo-builtin tools/albireo_builtin.cpp engine/chat_format.cpp engine/model_config.cpp
       engine/model_file.cpp $<TARGET_OBJECTS:albireo-kernels> host/crypto.cpp)
    target_link_libraries(albireo-builtin PRIVATE albireo_common dlib::httplib)
    target_compile_options(albireo-builtin PRIVATE ${ALBIREO_WARNINGS})
 
-   # The models that come with Albireo (resources/builtin_models.json): downloaded once into
-   # the cache (cmake/builtin_models.cmake), checked and converted by albireo-builtin, then
-   # given to the "models" folder of the programs of the tree.
+   # Les modèles fournis avec Albireo (resources/builtin_models.json) : téléchargés une fois dans
+   # le cache (cmake/builtin_models.cmake), vérifiés et convertis par albireo-builtin, puis
+   # remis au dossier « models » des programmes de l'arbre.
    option(ALBIREO_BUILTIN_MODELS "Prepare the models that come with Albireo" OFF)
    set(cache_default "$ENV{HOME}/Library/Caches/albireo")
    set(ALBIREO_MODEL_CACHE "${cache_default}" CACHE PATH
@@ -277,12 +278,12 @@ if (ALBIREO_PROGRAMS)
       add_custom_target(albireo-builtin-models ALL DEPENDS ${ALBIREO_BUILTIN_STAMP})
    endif()
 
-   # The web application and the documentation of the interface, next to the service.
+   # L'application web et la documentation de l'interface, à côté du service.
    add_custom_target(albireo-web ALL
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/web ${CMAKE_BINARY_DIR}/bin/web
       COMMENT "Copying the web application")
    add_dependencies(albireo-service albireo-web)
-   # The program and the voices of the speech synthesis, next to the service.
+   # Le programme et les voix de la synthèse vocale, à côté du service.
    add_custom_target(albireo-speech-voices ALL
       COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/bin/speech
       COMMAND ${CMAKE_COMMAND} -E copy_if_different ${pico_dir}/lang/fr-FR_ta.bin ${pico_dir}/lang/fr-FR_nk0_sg.bin
@@ -293,15 +294,16 @@ if (ALBIREO_PROGRAMS)
 endif()
 
 if (ALBIREO_TESTS AND ALBIREO_PROGRAMS)
-   # The files the service writes in its models folder and reads in its imports, the downloads and the
-   # updates from the public link, the settings and the web access, with a local server.
+   # Les fichiers que le service écrit dans son dossier de modèles et lit dans ses imports, les
+   # téléchargements et les mises à jour depuis le lien public, les réglages et l'accès web, avec
+   # un serveur local.
    add_executable(test_host tests/test_host.cpp host/models.cpp host/store.cpp host/http_fetch.cpp
       host/public_link.cpp host/crypto.cpp host/settings.cpp host/web_access.cpp)
    target_include_directories(test_host PRIVATE ${CMAKE_BINARY_DIR}/generated)
    target_link_libraries(test_host PRIVATE albireo_common albireo_sqlite albireo_zlib dlib::httplib)
    target_compile_options(test_host PRIVATE ${ALBIREO_WARNINGS})
    albireo_output_dir(test_host ${CMAKE_BINARY_DIR}/tests)
-   # test_model_file: damaged model files; test_engine_api: the C interface of an engine library.
+   # test_model_file : fichiers de modèle abîmés ; test_engine_api : l'interface C d'une bibliothèque de moteur.
    foreach (t test_qkernels test_runtime test_tokenizer engine_chat bench_runtime test_model_file test_engine_api)
       if (t STREQUAL "engine_chat" OR t STREQUAL "test_engine_api")
          add_executable(${t} tests/${t}.cpp)
@@ -314,14 +316,14 @@ if (ALBIREO_TESTS AND ALBIREO_PROGRAMS)
       endif()
       albireo_output_dir(${t} ${CMAKE_BINARY_DIR}/tests)
    endforeach()
-   # The Metal kernels against the processor, on random data (macOS port).
+   # Les noyaux Metal comparés au processeur, sur des données aléatoires (portage macOS).
    add_executable(test_metal tests/test_metal.cpp engine/metal_device.mm $<TARGET_OBJECTS:albireo-kernels>
       common/system_info.cpp)
    target_include_directories(test_metal PRIVATE ${ALBIREO_INCLUDE_DIR})
    target_compile_options(test_metal PRIVATE ${ALBIREO_WARNINGS})
    target_link_libraries(test_metal PRIVATE Threads::Threads)
    albireo_output_dir(test_metal ${CMAKE_BINARY_DIR}/tests)
-   # The chat format of the agents: the prompts with tools, and the tool calls read back.
+   # Le format de chat des agents : les prompts avec outils, et les appels d'outils relus.
    add_executable(test_chat_format tests/test_chat_format.cpp engine/chat_format.cpp)
    target_include_directories(test_chat_format PRIVATE ${ALBIREO_INCLUDE_DIR})
    albireo_output_dir(test_chat_format ${CMAKE_BINARY_DIR}/tests)

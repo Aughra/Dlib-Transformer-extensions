@@ -1,17 +1,18 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// The interface description of the local service, rendered by Swagger UI without network.  The
-// icon opens this page with the administration token in the fragment of its address, which the
-// browser never sends: the token authorizes the administration routes, and leaves the address.
+// La description de l'interface du service local, affichée par Swagger UI sans réseau.  L'icône
+// ouvre cette page avec le jeton d'administration dans le fragment de son adresse, que le
+// navigateur n'envoie jamais : le jeton autorise les routes d'administration, puis quitte l'adresse.
 window.addEventListener('load', function () {
-  // The link back, in the language of the application: the one chosen there, else the browser's.
+  // Le lien de retour, dans la langue de l'application : celle qui y a été choisie, sinon celle du
+  // navigateur.
   const back = {
     en: 'Back to the application', fr: "Retour à l'application", de: 'Zurück zur Anwendung',
     it: "Torna all'applicazione", es: 'Volver a la aplicación'
   };
   let language = null;
-  try { language = localStorage.getItem('pseudalis.language'); } catch (e) { /* storage unavailable */ }
+  try { language = localStorage.getItem('pseudalis.language'); } catch (e) { /* stockage indisponible */ }
   if (!back[language]) {
     language = 'en';
     const wanted = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];

@@ -176,7 +176,7 @@ class repository:
                                           headers={"Content-Type": "application/octet-stream",
                                                    "Content-Length": str(size)},
                                           timeout=600)
-            # A server that computes no SHA-256 gives none, and the size then checks the upload.
+            # Un serveur qui ne calcule aucun SHA-256 n'en donne pas, et la taille vérifie alors l'envoi.
             if status == 201 and j.get("size") == size and j.get("digest") in (digest, None):
                 return j
             error = "%d %s" % (status, (j or {}).get("message", "the size or the digest differs"))
@@ -197,8 +197,8 @@ def read_back(url, path, sha256=None, timeout=120):
     req = urllib.request.Request(url, headers={"User-Agent": "albireo-publisher"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            # An announced size other than the one of the file is another file; the same one
-            # tells a transfer cut before its end.
+            # Une taille annoncée autre que celle du fichier désigne un autre fichier ; la même
+            # signale un transfert coupé avant sa fin.
             length = r.headers.get("Content-Length", "").strip()
             if length.isdigit() and int(length) != size:
                 return False

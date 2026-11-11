@@ -3,8 +3,8 @@
 #ifndef PSEUDALIS_COMMON_VERSION_H_
 #define PSEUDALIS_COMMON_VERSION_H_
 
-// Version of the Pseudalis programs and engines, compared by the update feed and by the
-// installer over an installation.
+// Version des programmes et des moteurs Pseudalis, comparée par le flux de mises à jour et par
+// l'installateur lors d'une installation par-dessus une autre.
 #define PSEUDALIS_VERSION_MAJOR 1
 #define PSEUDALIS_VERSION_MINOR 0
 #define PSEUDALIS_VERSION_PATCH 5
@@ -12,15 +12,15 @@
 
 #define PSEUDALIS_PRODUCT_NAME "Pseudalis"
 /*
-    The edition: Community, free and open source under the Boost Software License (README.md,
-    Editions).  The installed programs, the About window, the web application and the files of
-    the programs name it.
+    L'édition : Community, libre et open source sous la Boost Software License (README.md,
+    Editions).  Les programmes installés, la fenêtre « À propos », l'application web et les
+    fichiers des programmes la nomment.
 */
 #ifndef PSEUDALIS_EDITION
 #define PSEUDALIS_EDITION "Community"
 #endif
-// The name and its edition in one literal, which an edition defines with PSEUDALIS_EDITION: the
-// resource compiler of Windows joins no adjacent literals.
+// Le nom et son édition en un seul littéral, qu'une édition définit avec PSEUDALIS_EDITION : le
+// compilateur de ressources de Windows ne concatène pas les littéraux adjacents.
 #ifndef PSEUDALIS_FULL_NAME
 #define PSEUDALIS_FULL_NAME "Pseudalis Community"
 #endif

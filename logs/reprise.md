@@ -39,18 +39,9 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 ## En cours
 
-### Traduction des commentaires en français (2026-11-11, peut être interrompue)
+### Fait : commentaires en français (Albireo 2.0.2)
 
-L'humain peut demander une pause (il va se coucher) : ce bloc dit exactement où reprendre.
-
-- **Quoi** : les commentaires du code d'Albireo et de Pseudalis passent en français (règle de CLAUDE.md, « Langue et communication »). Neuf lots, listés dans [macos/outils/lots-traduction.json](../macos/outils/lots-traduction.json), traduits par neuf agents en parallèle, **sans commit** (la base est le commit `6ece57d`, Albireo 2.0.1).
-- **Lots finis et contrôlés** : « 2-web », « 8-pseudalis-host ». Les autres étaient en cours au moment de cette note.
-- **Aussi en attente du commit** : retrait de la fiche « Pas de serrure sur ce Mac » (`web/js/service.js`), règle des commentaires dans CLAUDE.md.
-- **Pour reprendre** (depuis la racine du dépôt) :
-  1. `python3 macos/outils/comment_check.py --rev 6ece57d $(python3 -c "import json;print(' '.join(f for v in json.load(open('macos/outils/lots-traduction.json')).values() for f in v))")` : doit dire « 0 avec du code modifié » ; un fichier signalé se corrige ou se remet par `git show 6ece57d:<chemin> > <chemin>`.
-  2. Chercher les commentaires restés en anglais dans chaque lot inachevé, les traduire (mêmes règles : licences, mots-clés `requires`/`ensures`, identifiants, chaînes et consignes au modèle restent tels quels).
-  3. `cmake --build build/macos-albireo` et `build/macos-pseudalis` sans avertissement, `node --check` sur les `.js`, puis `tools/test_macos.sh` d'Albireo (service arrêté, port 18443) et de Pseudalis (`PSEUDALIS_TEST_PORT=18454`).
-  4. `python3 dlib/dlib/external/albireo/tools/bump_version.py patch` (→ 2.0.2), section 2.0.2 des notes de version (commentaires en français, fiche retirée), journal, commit, push, puis relancer le service : `(ALBIREO_HOME=$PWD/build/albireo-home nohup build/macos-albireo/bin/albireo-service --console > build/albireo-service.log 2>&1 &)`.
+Voir le journal. Reste, plus tard : corriger sur le fond les commentaires qui décrivent encore l'original (Windows, CUDA, zone de notification ; `settings.h` qui liste « auto, en, fr, de, it, es »).
 
 ### Ensuite : découper `web/js/app.js` (accord de l'humain, 2026-11-11)
 

@@ -33,33 +33,35 @@ namespace albireo
     {
         using clock_type = std::chrono::steady_clock;
 
-        // The bounds of a request: each wait for data and the whole request (connect_seconds bounds the connection).
+        // Les limites d'une requête : chaque attente de données et la requête entière (connect_seconds borne la
+        // connexion).
         const int read_seconds = 15;
         const int total_seconds = 30;
-        // The bytes read of a text, cut beyond, of a PDF file, refused beyond, and of the answer of a provider.
+        // Les octets lus d'un texte, coupé au-delà, d'un fichier PDF, refusé au-delà, et de la réponse d'un
+        // fournisseur.
         const size_t max_text_bytes = size_t(2) << 20;
         const size_t max_pdf_bytes = size_t(20) << 20;
         const size_t max_answer_bytes = size_t(2) << 20;
         const int max_redirections = 5;
         /*
-            The requests of the web access that run at once, three as the policy of Wikimedia asks
-            of its clients.  The answer of a PDF file of 20 MB holds its bytes, their base64 and the
-            text of its JSON document, about 75 MB, until the server has written it.
+            Les requêtes de l'accès au web qui tournent à la fois, trois comme la politique de Wikimedia
+            le demande à ses clients.  La réponse pour un fichier PDF de 20 Mo contient ses octets, leur
+            base64 et le texte de son document JSON, environ 75 Mo, jusqu'à ce que le serveur l'ait écrite.
         */
         const int max_requests = 3;
         std::atomic<int> running_requests{0};
 
-        // What the functions reserved for the tests set: the loopback addresses read, the origin of the provider.
+        // Ce que règlent les fonctions réservées aux tests : les adresses de bouclage lues, l'origine du fournisseur.
         std::atomic<bool> loopback_allowed{false};
         std::mutex provider_m;
         std::string provider_origin;
 
-        // Thrown from the socket of a client about to connect once the requests of the service are cancelled.
+        // Levée depuis la socket d'un client sur le point de se connecter une fois les requêtes du service annulées.
         struct connection_cancelled
         {
         };
 
-        // The 32 bits of the IPv4 address a.b.c.d.
+        // Les 32 bits de l'adresse IPv4 a.b.c.d.
         constexpr uint32_t ipv4(unsigned a, unsigned b, unsigned c, unsigned d)
         {
             return (uint32_t(a) << 24) | (uint32_t(b) << 16) | (uint32_t(c) << 8) | uint32_t(d);
@@ -71,7 +73,7 @@ namespace albireo
             int bits;
         };
 
-        // The IPv4 ranges that are not public.
+        // Les plages IPv4 qui ne sont pas publiques.
         const ipv4_range private_ipv4[] = {
             {ipv4(0, 0, 0, 0), 8}, {ipv4(10, 0, 0, 0), 8}, {ipv4(100, 64, 0, 0), 10}, {ipv4(127, 0, 0, 0), 8},
             {ipv4(169, 254, 0, 0), 16}, {ipv4(172, 16, 0, 0), 12}, {ipv4(192, 0, 0, 0), 24},
@@ -94,10 +96,10 @@ namespace albireo
         };
 
         /*
-            The IPv6 ranges that are not public: ::/96 (::, ::1 and the IPv4-compatible addresses, which
-            RFC 4291 deprecates), 64:ff9b:1::/48 (the prefix of RFC 8215 for the NAT64 of a network of
-            its own), 100::/64, 2001::/32 (Teredo), 2001:db8::/32, fc00::/7, fe80::/10, fec0::/10 and
-            ff00::/8.
+            Les plages IPv6 qui ne sont pas publiques : ::/96 (::, ::1 et les adresses compatibles IPv4,
+            que RFC 4291 déclare obsolètes), 64:ff9b:1::/48 (le préfixe de RFC 8215 pour le NAT64 d'un
+            réseau propre), 100::/64, 2001::/32 (Teredo), 2001:db8::/32, fc00::/7, fe80::/10, fec0::/10
+            et ff00::/8.
         */
         const ipv6_range private_ipv6[] = {
             {{0}, 96},
@@ -111,7 +113,8 @@ namespace albireo
             {{0xff}, 8}
         };
 
-        // The ranges that carry an IPv4 address: in their last 32 bits, or in the bits 16 to 47 for 2002::/16.
+        // Les plages qui portent une adresse IPv4 : dans leurs 32 derniers bits, ou dans les bits 16 à 47 pour
+        // 2002::/16.
         const ipv6_range mapped_ipv4 = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}, 96};
         const ipv6_range nat64 = {{0x00, 0x64, 0xff, 0x9b}, 96};
         const ipv6_range six_to_four = {{0x20, 0x02}, 16};
@@ -141,7 +144,7 @@ namespace albireo
             return true;
         }
 
-        // An IP address: its family, 4 or 6, its bytes, and the text the client of httplib connects to.
+        // Une adresse IP : sa famille, 4 ou 6, ses octets, et le texte auquel se connecte le client d'httplib.
         struct ip_address
         {
             int family = 0;
@@ -149,7 +152,7 @@ namespace albireo
             std::string text;
         };
 
-        // An IPv6 address as eight hexadecimal groups, without a dotted part, the form the client of httplib reads.
+        // Une adresse IPv6 en huit groupes hexadécimaux, sans partie pointée, la forme que lit le client d'httplib.
         std::string ipv6_text(const unsigned char* b)
         {
             std::string out;
@@ -163,7 +166,7 @@ namespace albireo
             return out;
         }
 
-        // The text of an IP address as the resolver of the system gives it.
+        // Le texte d'une adresse IP tel que le donne le résolveur du système.
         bool parse_ip(const std::string& text, ip_address& ip)
         {
             ip = ip_address();
@@ -182,7 +185,8 @@ namespace albireo
             return false;
         }
 
-        // Whether web_fetch() connects to ip: a public address, or a loopback address while the tests allow it.
+        // Indique si web_fetch() se connecte à ip : une adresse publique, ou une adresse de bouclage tant que les
+        // tests le permettent.
         bool readable_address(const ip_address& ip)
         {
             static const unsigned char loopback[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
@@ -219,38 +223,39 @@ namespace albireo
             return -1;
         }
 
-        // An address of the web, as this module reads it.
+        // Une adresse du web, telle que ce module la lit.
         struct web_address
         {
-            std::string scheme;     // "http" or "https"
-            std::string host;       // a name in lowercase, or the text of an IP address
+            std::string scheme;     // "http" ou "https"
+            std::string host;       // un nom en minuscules, ou le texte d'une adresse IP
             int port = 0;
-            std::string target;     // the path and the query, encoded for the request line
-            bool literal = false;   // the host is the IP address ip
+            std::string target;     // le chemin et la requête, encodés pour la ligne de requête
+            bool literal = false;   // l'hôte est l'adresse IP ip
             ip_address ip;
         };
 
-        // The host as an address writes it, an IPv6 address within brackets.
+        // L'hôte tel qu'une adresse l'écrit, une adresse IPv6 entre crochets.
         std::string host_part(const web_address& a)
         {
             return a.literal && a.ip.family == 6 ? "[" + a.host + "]" : a.host;
         }
 
-        // The origin of the client of httplib, "https://host:port".
+        // L'origine du client d'httplib, "https://host:port".
         std::string origin_of(const web_address& a)
         {
             const std::string host = a.literal && a.ip.family == 6 ? "[" + a.ip.text + "]" : a.host;
             return a.scheme + "://" + host + ":" + std::to_string(a.port);
         }
 
-        // The origin as an address writes it, without the port of its scheme.
+        // L'origine telle qu'une adresse l'écrit, sans le port de son schéma.
         std::string written_origin(const web_address& a)
         {
             const bool usual = a.port == (a.scheme == "https" ? 443 : 80);
             return a.scheme + "://" + host_part(a) + (usual ? std::string() : ":" + std::to_string(a.port));
         }
 
-        // The path and the query for the request line: the bytes an address cannot hold as %XX, the escapes kept.
+        // Le chemin et la requête pour la ligne de requête : les octets qu'une adresse ne peut pas contenir en %XX,
+        // les échappements gardés.
         std::string request_target(const std::string& s)
         {
             static const char digits[] = "0123456789ABCDEF";
@@ -275,7 +280,7 @@ namespace albireo
             return out;
         }
 
-        // A part of an IPv4 address in decimal, in octal after a 0, or in hexadecimal after 0x.
+        // Une partie d'une adresse IPv4 en décimal, en octal après un 0, ou en hexadécimal après 0x.
         bool ipv4_number(const std::string& p, uint64_t& v)
         {
             if (p.empty()) return false;
@@ -302,7 +307,8 @@ namespace albireo
             return true;
         }
 
-        // Whether the last label of a name is a number, which makes the name an IPv4 address (2130706433, 0x7f.1).
+        // Indique si le dernier label d'un nom est un nombre, ce qui fait du nom une adresse IPv4 (2130706433,
+        // 0x7f.1).
         bool ends_in_number(const std::string& name)
         {
             const std::string last = name.substr(name.rfind('.') + 1);
@@ -312,7 +318,8 @@ namespace albireo
                 && last.find_first_not_of("0123456789abcdefABCDEF", 2) == std::string::npos;
         }
 
-        // The IPv4 address of a name that ends in a number: one to four parts, the last one filling the bits left.
+        // L'adresse IPv4 d'un nom qui se termine par un nombre : une à quatre parties, la dernière remplissant les
+        // bits restants.
         bool parse_ipv4_name(const std::string& name, uint32_t& address)
         {
             std::vector<uint64_t> parts;
@@ -339,8 +346,8 @@ namespace albireo
             return true;
         }
 
-        // Whether a name is made of labels of letters, digits, hyphens and underscores, 63 characters each and
-        // 253 in all.
+        // Indique si un nom est fait de labels de lettres, chiffres, tirets et soulignés, de 63 caractères chacun
+        // et de 253 en tout.
         bool valid_name(const std::string& name)
         {
             if (name.empty() || name.size() > 253) return false;
@@ -359,8 +366,8 @@ namespace albireo
             return label > 0;
         }
 
-        // Whether a name designates this computer or a local network: a name of a single label, localhost
-        // included, and the names of the domains localhost, local, internal and home.arpa.
+        // Indique si un nom désigne cet ordinateur ou un réseau local : un nom d'un seul label, localhost
+        // compris, et les noms des domaines localhost, local, internal et home.arpa.
         bool local_name(const std::string& name)
         {
             if (name.find('.') == std::string::npos) return true;
@@ -373,11 +380,12 @@ namespace albireo
         }
 
         /*
-            Reads text as an address of the web: http or https, a host, a port when it is not the
-            one of the scheme, then the path and the query, the fragment left out.  The host is a
-            name of letters, digits, hyphens, underscores and dots, put in lowercase, an IPv6
-            address within brackets, or an IPv4 address in any of the forms a resolver reads
-            (8.8.8.8, 134744072, 0x8.0x8.0x8.0x8, 8.526344).  Returns false with why otherwise.
+            Lit text comme une adresse du web : http ou https, un hôte, un port quand ce n'est pas
+            celui du schéma, puis le chemin et la requête, le fragment laissé de côté.  L'hôte est
+            un nom de lettres, chiffres, tirets, soulignés et points, mis en minuscules, une
+            adresse IPv6 entre crochets, ou une adresse IPv4 sous l'une des formes que lit un
+            résolveur (8.8.8.8, 134744072, 0x8.0x8.0x8.0x8, 8.526344).  Renvoie false avec why
+            sinon.
         */
         bool parse_address(const std::string& text, web_address& a, std::string& why)
         {
@@ -458,7 +466,7 @@ namespace albireo
             return true;
         }
 
-        // The path of an address without its segments "." and ".." (RFC 3986, 5.2.4).
+        // Le chemin d'une adresse sans ses segments "." et ".." (RFC 3986, 5.2.4).
         std::string without_dot_segments(std::string in)
         {
             std::string out;
@@ -496,12 +504,13 @@ namespace albireo
             return out;
         }
 
-        // The address a redirection leads to: location, absolute or relative to the address from (RFC 3986, 5.2).
+        // L'adresse vers laquelle mène une redirection : location, absolue ou relative à l'adresse from
+        // (RFC 3986, 5.2).
         std::string resolve_location(const web_address& from, const std::string& value)
         {
             std::string location = trim(value);
             location = location.substr(0, location.find('#'));
-            // A scheme: a letter, then letters, digits, "+", "-" and ".", before a colon.
+            // Un schéma : une lettre, puis des lettres, chiffres, "+", "-" et ".", avant un deux-points.
             const size_t colon = location.find(':');
             if (colon != std::string::npos && colon > 0 && colon < location.find_first_of("/?")
                 && std::isalpha(static_cast<unsigned char>(location[0]))
@@ -520,7 +529,8 @@ namespace albireo
             return origin + without_dot_segments(path.substr(0, path.rfind('/') + 1) + own_path) + own_query;
         }
 
-        // A token of a header, a media type or a charset, empty when it holds other characters or more than 100.
+        // Un token d'un en-tête, un type de média ou un charset, vide quand il contient d'autres caractères ou
+        // plus de 100.
         std::string header_token(const std::string& s)
         {
             if (s.size() > 100) return std::string();
@@ -530,7 +540,7 @@ namespace albireo
             return s;
         }
 
-        // The media type of a Content-Type header in lowercase, and the value of its charset parameter.
+        // Le type de média d'un en-tête Content-Type en minuscules, et la valeur de son paramètre charset.
         void read_content_type(const std::string& header, std::string& type, std::string& charset)
         {
             type = header_token(lower(trim(header.substr(0, header.find(';')))));
@@ -553,9 +563,9 @@ namespace albireo
         }
 
         /*
-            Whether the web access reads a media type: text/<subtype>, application/xhtml+xml,
+            Indique si l'accès au web lit un type de média : text/<subtype>, application/xhtml+xml,
             application/xml, application/<name>+xml, application/json, application/<name>+json
-            and application/pdf.
+            et application/pdf.
         */
         bool readable_type(const std::string& type)
         {
@@ -569,7 +579,7 @@ namespace albireo
                 && (ends_with("+xml") || ends_with("+json"));
         }
 
-        // Appends the UTF-8 bytes of a code point, U+FFFD for a value that is no character.
+        // Ajoute les octets UTF-8 d'un point de code, U+FFFD pour une valeur qui n'est pas un caractère.
         void append_utf8(std::string& out, unsigned long cp)
         {
             if (cp == 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) cp = 0xfffd;
@@ -597,7 +607,7 @@ namespace albireo
             }
         }
 
-        // The text of an entity of HTML: the named entities of the markup and of the space, and the numeric ones.
+        // Le texte d'une entité HTML : les entités nommées du balisage et de l'espace, et les entités numériques.
         bool entity_text(const std::string& name, std::string& out)
         {
             static const char* const named[][2] = {
@@ -626,7 +636,7 @@ namespace albireo
             return true;
         }
 
-        // The text with its runs of spaces, tabs and ends of line made one space, and none at its ends.
+        // Le texte, ses suites d'espaces, tabulations et fins de ligne réduites à une espace, et aucune à ses bouts.
         std::string tidy(const std::string& s)
         {
             std::string out;
@@ -645,7 +655,7 @@ namespace albireo
             return out;
         }
 
-        // The text of a fragment of HTML that a provider gives: its tags removed, its entities decoded, tidy().
+        // Le texte d'un fragment HTML que donne un fournisseur : ses balises retirées, ses entités décodées, tidy().
         std::string plain_text(const std::string& html)
         {
             std::string text;
@@ -674,7 +684,7 @@ namespace albireo
             return tidy(text);
         }
 
-        // A value of a query: every byte but the unreserved characters of RFC 3986 as %XX.
+        // Une valeur d'une requête : chaque octet sauf les caractères non réservés de RFC 3986 en %XX.
         std::string query_component(const std::string& s)
         {
             static const char digits[] = "0123456789ABCDEF";
@@ -696,7 +706,7 @@ namespace albireo
             return out;
         }
 
-        // The path of an article of Wikipedia from its key: the characters of a path kept, the others as %XX.
+        // Le chemin d'un article de Wikipédia d'après sa clé : les caractères d'un chemin gardés, les autres en %XX.
         std::string article_path(const std::string& key)
         {
             static const char digits[] = "0123456789ABCDEF";
@@ -718,13 +728,13 @@ namespace albireo
             return out;
         }
 
-        // The User-Agent of the requests: the program, its version and the address of its project.
+        // Le User-Agent des requêtes : le programme, sa version et l'adresse de son projet.
         std::string user_agent()
         {
             return std::string(ALBIREO_PRODUCT_NAME) + "/" + ALBIREO_VERSION + " (+" + ALBIREO_PROJECT_URL + ")";
         }
 
-        // The User-Agent that the policy of Wikimedia asks for, with a contact.
+        // Le User-Agent que demande la politique de Wikimedia, avec un contact.
         std::string wikimedia_user_agent()
         {
             return std::string(ALBIREO_PRODUCT_NAME) + "/" + ALBIREO_VERSION + " (" + ALBIREO_PROJECT_URL + "; "
@@ -758,7 +768,7 @@ namespace albireo
             return failure(503, "cancelled", "the service stops or goes offline: the web access opens no connection");
         }
 
-        // Whether the web access is available with s; the refusal otherwise.
+        // Indique si l'accès au web est disponible avec s ; le refus sinon.
         bool available(const host_settings& s, web_reply& refusal)
         {
             if (s.offline)
@@ -768,7 +778,7 @@ namespace albireo
             return !s.offline && s.web_access;
         }
 
-        // A place among the requests of the web access that run at once, given back at its end.
+        // Une place parmi les requêtes de l'accès au web qui tournent à la fois, rendue à sa fin.
         class request_place
         {
         public:
@@ -796,7 +806,8 @@ namespace albireo
             return r;
         }
 
-        // A language of the requests: [a-z]{2,3}, then a region of two letters or three digits ("pt-BR", "es-419").
+        // Une langue des requêtes : [a-z]{2,3}, puis une région de deux lettres ou trois chiffres ("pt-BR",
+        // "es-419").
         bool read_language(const json& request, std::string& language, web_reply& refusal)
         {
             const json& value = request["language"];
@@ -823,20 +834,20 @@ namespace albireo
             return false;
         }
 
-        // What an answer gave: its status, its headers, its body.
+        // Ce qu'une réponse a donné : son statut, ses en-têtes, son corps.
         struct received
         {
             int status = 0;
-            std::string content_type;    // the media type, in lowercase
+            std::string content_type;    // le type de média, en minuscules
             std::string charset;
-            std::string location;        // the address a redirection gives
+            std::string location;        // l'adresse que donne une redirection
             long long content_length = -1;
             int retry_after = 0;
             std::string body;
             bool truncated = false;
         };
 
-        // The bytes of a body to read, and whether an answer beyond them is refused with beyond, or cut.
+        // Les octets d'un corps à lire, et si une réponse au-delà est refusée avec beyond, ou coupée.
         struct body_limit
         {
             size_t bytes = 0;
@@ -845,12 +856,12 @@ namespace albireo
         };
 
         /*
-            Decides from the status and the headers of an answer the bytes of its body to read,
-            or refuses the answer with its reply.
+            Décide d'après le statut et les en-têtes d'une réponse les octets de son corps à lire,
+            ou refuse la réponse avec sa réplique.
         */
         typedef std::function<bool(const received&, body_limit&, web_reply&)> answer_check;
 
-        // The status and the headers of an answer that the module reads.
+        // Le statut et les en-têtes d'une réponse que lit le module.
         void read_head(const httplib::Response& res, received& got)
         {
             got.status = res.status;
@@ -874,7 +885,7 @@ namespace albireo
             std::string password;
         };
 
-        // One connection of exchange(): to the address pin, or to the proxy when pin is null.
+        // Une connexion d'exchange() : à l'adresse pin, ou au proxy quand pin est nul.
         bool attempt(const web_address& a, const ip_address* pin, const proxy_route& proxy,
             const httplib::Headers& headers, clock_type::time_point deadline, const answer_check& accept,
             received& got, web_reply& fail, bool& unreachable)
@@ -906,15 +917,15 @@ namespace albireo
             }
             c->set_follow_location(false);
             c->set_keep_alive(false);
-            // The target is encoded already (request_target()) and goes to the request line as it is.
+            // La cible est déjà encodée (request_target()) et va telle quelle dans la ligne de requête.
             c->set_path_encode(false);
-            // The connection and the handshake of TLS, each within half of the time left and connect_seconds.
+            // La connexion et la négociation TLS, chacune dans la moitié du temps restant et connect_seconds.
             const long long connect_ms = std::min<long long>(connect_seconds * 1000LL, left / 2);
             c->set_connection_timeout(static_cast<time_t>(connect_ms / 1000),
                 static_cast<time_t>(connect_ms % 1000 * 1000));
             c->set_read_timeout(read_seconds, 0);
             c->set_write_timeout(read_seconds, 0);
-            // The waits for data end with the time left.
+            // Les attentes de données se terminent avec le temps restant.
             c->set_max_timeout(static_cast<time_t>(left));
             c->set_socket_options([](socket_t sock) {
                 if (!http_cancelled()) return;
@@ -997,7 +1008,8 @@ namespace albireo
             }
             if (result)
             {
-                // An answer without a body (204) reaches no handler: its status and its headers come from the result.
+                // Une réponse sans corps (204) n'atteint aucun gestionnaire : son statut et ses en-têtes viennent du
+                // résultat.
                 if (got.status == 0) read_head(*result, got);
                 return true;
             }
@@ -1039,12 +1051,12 @@ namespace albireo
         }
 
         /*
-            Sends a GET request for a and reads its answer before deadline.  With check, the
-            addresses of the host are refused unless readable_address() accepts them.  The
-            connection goes to the addresses of the host in their order, each one pinned, the
-            next one taken while one cannot be reached and time is left; behind a proxy, to the
-            proxy alone.  The body of a redirection is not read; any other answer goes through
-            accept().  Returns false with the reply of the failure.
+            Envoie une requête GET pour a et lit sa réponse avant deadline.  Avec check, les
+            adresses de l'hôte sont refusées sauf si readable_address() les accepte.  La
+            connexion va aux adresses de l'hôte dans leur ordre, chacune épinglée, la suivante
+            prise tant qu'une adresse est injoignable et qu'il reste du temps ; derrière un
+            proxy, au proxy seul.  Le corps d'une redirection n'est pas lu ; toute autre réponse
+            passe par accept().  Renvoie false avec la réplique de l'échec.
         */
         bool exchange(const web_address& a, const httplib::Headers& headers, bool check,
             clock_type::time_point deadline, const answer_check& accept, received& got, web_reply& fail)
@@ -1086,7 +1098,7 @@ namespace albireo
                     }
             if (via_proxy)
             {
-                // The name of the proxy is resolved within the bounds of http_resolve() before the client takes it.
+                // Le nom du proxy est résolu dans les limites de http_resolve() avant que le client le prenne.
                 std::vector<std::string> found;
                 std::string error;
                 ip_address literal;
@@ -1114,7 +1126,7 @@ namespace albireo
             return false;
         }
 
-        // Reads a page for web_fetch(), following its redirections.
+        // Lit une page pour web_fetch(), en suivant ses redirections.
         web_reply fetch(const std::string& url, web_address a, const std::string& language)
         {
             request_place place;
@@ -1124,10 +1136,11 @@ namespace albireo
             headers.emplace("User-Agent", user_agent());
             headers.emplace("Accept", "text/html, application/xhtml+xml, application/xml;q=0.9, text/*;q=0.8, "
                 "application/pdf;q=0.8, application/json;q=0.8, */*;q=0.1");
-            // httplib decompresses no answer here: the bodies come as they are.
+            // httplib ne décompresse aucune réponse ici : les corps arrivent tels quels.
             headers.emplace("Accept-Encoding", "identity");
             if (!language.empty()) headers.emplace("Accept-Language", language);
-            // A text is cut at max_text_bytes, a PDF file refused beyond max_pdf_bytes, any other type refused.
+            // Un texte est coupé à max_text_bytes, un fichier PDF refusé au-delà de max_pdf_bytes, tout autre type
+            // refusé.
             const answer_check accept = [&a](const received& got, body_limit& limit, web_reply& refusal) {
                 const std::string host = host_part(a);
                 const web_reply too_large = failure(413, "too_large", "the PDF file of " + host + " is larger than "
@@ -1184,7 +1197,7 @@ namespace albireo
             return reply;
         }
 
-        // The text searched: 1 to 400 characters, its spaces at both ends removed.
+        // Le texte recherché : 1 à 400 caractères, ses espaces aux deux bouts retirés.
         bool read_query(const json& request, std::string& query, web_reply& refusal)
         {
             query = trim(request["query"].as_string());
@@ -1196,7 +1209,7 @@ namespace albireo
             return false;
         }
 
-        // The number of results: 1 to 10, 5 when the request gives none.
+        // Le nombre de résultats : 1 à 10, 5 quand la requête n'en donne pas.
         bool read_count(const json& request, int& count, web_reply& refusal)
         {
             const json& value = request["count"];
@@ -1211,7 +1224,7 @@ namespace albireo
             return false;
         }
 
-        // The reply to an answer of Wikipedia whose status is not 200.
+        // La réplique à une réponse de Wikipédia dont le statut n'est pas 200.
         web_reply provider_refusal(const received& got)
         {
             if (got.status == 429)
@@ -1224,7 +1237,7 @@ namespace albireo
             return failure(502, "search_failed", "Wikipedia answers with the status " + std::to_string(got.status));
         }
 
-        // Searches query through the search of Wikipedia for web_search().
+        // Recherche query par la recherche de Wikipédia pour web_search().
         web_reply search(const std::string& query, int count, const std::string& language)
         {
             request_place place;
@@ -1238,7 +1251,7 @@ namespace albireo
             headers.emplace("Accept", "application/json");
             headers.emplace("Accept-Encoding", "identity");
             headers.emplace("User-Agent", wikimedia_user_agent());
-            // The language of Wikipedia, which names its site: the language of the request without its region.
+            // La langue de Wikipédia, qui nomme son site : la langue de la requête sans sa région.
             const std::string wiki = language.empty() ? std::string("en") : language.substr(0, language.find('-'));
             const std::string url = (origin.empty() ? "https://" + wiki + ".wikipedia.org" : origin)
                 + "/w/rest.php/v1/search/page?q=" + query_component(query) + "&limit=" + std::to_string(count);

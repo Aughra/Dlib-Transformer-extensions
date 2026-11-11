@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// The texts of the web application, in English and French (the fork for macOS keeps these two only).
+// Les textes de l'application web, en anglais et en français (le fork pour macOS ne garde que ces deux-là).
 window.PSEUDALIS_TEXTS = {
   en: {
     tagline: 'Personal data protection for your documents',

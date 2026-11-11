@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// The speech synthesis as the service uses it: the voices installed and the program that reads aloud.
+// La synthèse vocale telle que le service l'utilise : les voix installées et le programme qui lit à voix haute.
 
 #include "speech.h"
 
@@ -18,7 +18,7 @@ namespace albireo
 
     namespace
     {
-        // The programs of the speech synthesis that run at a time.
+        // Les programmes de synthèse vocale qui tournent à un instant donné.
         std::mutex workers_m;
         std::condition_variable workers_cv;
         int workers = 0;
@@ -77,7 +77,7 @@ namespace albireo
         else if (!output.empty() && code != 0) error = output;
         else
         {
-            // A code beyond a byte is a status of Windows, an access violation for instance.
+            // Un code au-delà d'un octet est un statut de Windows, une violation d'accès par exemple.
             std::ostringstream o;
             o << "the speech program ended with the code " << code;
             if (code < 0 || code > 255) o << " (0x" << std::hex << static_cast<unsigned>(code) << ")";

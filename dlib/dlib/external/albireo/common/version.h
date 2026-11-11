@@ -3,15 +3,15 @@
 #ifndef ALBIREO_COMMON_VERSION_H_
 #define ALBIREO_COMMON_VERSION_H_
 
-// Version of the Albireo programs and engines, compared by the update feed and by the
-// installer over an installation.
+// Version des programmes et des moteurs d'Albireo, comparée par le flux de mises à
+// jour et par l'installateur sur une installation existante.
 #define ALBIREO_VERSION_MAJOR 2
 #define ALBIREO_VERSION_MINOR 0
-#define ALBIREO_VERSION_PATCH 1
-#define ALBIREO_VERSION "2.0.1"
+#define ALBIREO_VERSION_PATCH 2
+#define ALBIREO_VERSION "2.0.2"
 
 #define ALBIREO_PRODUCT_NAME "Albireo"
-// The edition of this version, shown beside its name by every program.
+// L'édition de cette version, affichée à côté de son nom par chaque programme.
 #define ALBIREO_EDITION "Community Edition"
 #define ALBIREO_FULL_NAME "Albireo Community Edition"
 #define ALBIREO_AUTHOR_NAME "Aldric Pierrain"

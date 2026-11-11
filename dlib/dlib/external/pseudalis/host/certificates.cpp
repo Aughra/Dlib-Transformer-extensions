@@ -27,7 +27,7 @@ namespace pseudalis
 
     namespace
     {
-        // The validity of both certificates, and the time before their end when they are renewed.
+        // La validité des deux certificats, et le délai avant leur fin auquel ils sont renouvelés.
         const long validity_days = 397;
         const long long renewal_seconds = 86400LL * 30;
         const char* const authority_name = "CN=Pseudalis Local Authority,O=Cydral Technology,C=FR";
@@ -53,7 +53,7 @@ namespace pseudalis
             }
         };
 
-        // A key of mbedtls, freed with its secret erased (mbedtls_pk_free) on every path.
+        // Une clé de mbedtls, libérée avec son secret effacé (mbedtls_pk_free) sur tous les chemins.
         struct pk_key
         {
             mbedtls_pk_context ctx;
@@ -88,7 +88,7 @@ namespace pseudalis
             return ok;
         }
 
-        // Seconds until a certificate expires, negative when it cannot be read.
+        // Secondes avant l'expiration d'un certificat, négatives quand il ne peut pas être lu.
         long long seconds_left(const std::string& path)
         {
             mbedtls_x509_crt crt;
@@ -112,7 +112,7 @@ namespace pseudalis
             return left;
         }
 
-        // Whether a private key in PEM form is the one of the certificate of a PEM file.
+        // Si une clé privée sous forme PEM est celle du certificat d'un fichier PEM.
         bool key_matches(const std::string& key, const std::string& cert_path, random_source& rng)
         {
             std::string pem;
@@ -144,10 +144,10 @@ namespace pseudalis
             out.insert(out.end(), content.begin(), content.end());
         }
 
-        /*  The name constraints of the local authority (RFC 5280 4.2.1.10): it may only
-            certify localhost, the loopback addresses of IPv4 and ::1.  The authority is
-            trusted by the whole machine, and the constraint is what keeps a certificate it
-            signed from ever vouching for another site.  */
+        /*  Les contraintes de noms de l'autorité locale (RFC 5280 4.2.1.10) : elle ne peut
+            certifier que localhost, les adresses de bouclage d'IPv4 et ::1.  L'autorité a la
+            confiance de toute la machine, et c'est la contrainte qui empêche un certificat
+            qu'elle a signé de jamais se porter garant d'un autre site.  */
         std::vector<unsigned char> loopback_name_constraints()
         {
             std::vector<unsigned char> subtrees, subtree, name;
@@ -188,7 +188,7 @@ namespace pseudalis
                 if (mbedtls_x509write_crt_set_issuer_name(&crt, issuer.c_str()) != 0) break;
                 unsigned char serial[16];
                 mbedtls_ctr_drbg_random(&rng.drbg, serial, sizeof(serial));
-                serial[0] &= 0x7F;   // a positive integer
+                serial[0] &= 0x7F;   // un entier positif
                 serial[0] |= 0x01;
                 if (mbedtls_x509write_crt_set_serial_raw(&crt, serial, sizeof(serial)) != 0) break;
                 const std::time_t now = std::time(nullptr) - 3600;
@@ -202,17 +202,17 @@ namespace pseudalis
                     if (mbedtls_x509write_crt_set_key_usage(&crt,
                         MBEDTLS_X509_KU_KEY_CERT_SIGN | MBEDTLS_X509_KU_CRL_SIGN) != 0)
                         break;
-                    /* Marked non-critical, so that the verifiers that do not implement the
-                       extension, Mbed TLS among them, still accept the authority; those of
-                       the browsers and of the system apply it either way. */
+                    /* Marquée non critique, pour que les vérificateurs qui n'implémentent pas
+                       l'extension, Mbed TLS parmi eux, acceptent quand même l'autorité ; ceux
+                       des navigateurs et du système l'appliquent de toute façon. */
                     const std::vector<unsigned char> nc = loopback_name_constraints();
                     static const char oid_name_constraints[] = MBEDTLS_OID_NAME_CONSTRAINTS;
                     if (mbedtls_x509write_crt_set_extension(&crt, oid_name_constraints,
                             MBEDTLS_OID_SIZE(MBEDTLS_OID_NAME_CONSTRAINTS), 0, nc.data(), nc.size()) != 0)
                         break;
-                    /* The certificates it signs serve TLS servers alone: Windows, which applies the
-                       extended key usage of an authority to the certificates below it, refuses one
-                       of them for code or mail, whatever it declares. */
+                    /* Les certificats qu'elle signe ne servent qu'aux serveurs TLS : Windows, qui
+                       applique l'usage étendu de clé d'une autorité aux certificats placés sous
+                       elle, en refuse un pour du code ou du courrier, quoi qu'il déclare. */
                     mbedtls_asn1_sequence eku;
                     std::memset(&eku, 0, sizeof(eku));
                     eku.buf.tag = MBEDTLS_ASN1_OID;
@@ -261,7 +261,7 @@ namespace pseudalis
             return ok;
         }
 
-        // The form of the private key in its file: encrypted for this account on Windows.
+        // La forme de la clé privée dans son fichier : chiffrée pour ce compte sous Windows.
         bool seal_key(const std::string& pem, std::string& data)
         {
             data = pem;
@@ -283,10 +283,10 @@ namespace pseudalis
         }
 
         /*
-            The files of the versions before 1.0.8: the key of their authority, which is
-            never kept now, and on Windows the key of the server in clear, which moves into
-            its encrypted file.  Returns true when the key of the authority was found: a copy
-            of it may have left the computer, and the authority is replaced at once.
+            Les fichiers des versions antérieures à 1.0.8 : la clé de leur autorité, qui n'est
+            plus jamais gardée désormais, et sous Windows la clé du serveur en clair, qui passe
+            dans son fichier chiffré.  Renvoie true quand la clé de l'autorité a été trouvée :
+            une copie a pu quitter l'ordinateur, et l'autorité est remplacée aussitôt.
         */
         bool migrate(const certificate_files& f)
         {
@@ -351,7 +351,7 @@ namespace pseudalis
         const bool exposed = migrate(f);
         if (exposed) log_warning("certificates: the local authority kept its key on disk, a new authority replaces it");
 
-        // The certificates in place serve while they have time left and the key opens and matches.
+        // Les certificats en place servent tant qu'il leur reste du temps et que la clé s'ouvre et correspond.
         if (!exposed && file_exists(f.ca_cert) && file_exists(f.server_cert)
             && seconds_left(f.ca_cert) > renewal_seconds && seconds_left(f.server_cert) > renewal_seconds)
         {
@@ -362,7 +362,7 @@ namespace pseudalis
             log_warning("certificates: the key of the server cannot be read here, new certificates are made");
         }
 
-        // A new authority signs a new certificate of the server, then its key is gone.
+        // Une nouvelle autorité signe un nouveau certificat du serveur, puis sa clé disparaît.
         std::string ca_pem, server_pem, key_text;
         bool ok = false;
         {
@@ -374,7 +374,7 @@ namespace pseudalis
                     validity_days, rng, server_pem)
                 && key_pem(key.ctx, key_text);
         }
-        // The key first, then the certificate of the server, then the one of the authority.
+        // La clé d'abord, puis le certificat du serveur, puis celui de l'autorité.
         ok = ok && write_key(f.server_key, key_text) && write_file_atomic(f.server_cert, server_pem)
             && write_file_atomic(f.ca_cert, ca_pem);
         wipe_secret(key_text);

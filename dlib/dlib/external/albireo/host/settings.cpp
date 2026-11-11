@@ -17,8 +17,8 @@ namespace albireo
 
     namespace
     {
-        // Where the password of a proxy setting "http://user:password@host:port" lies, as
-        // http_fetch.cpp reads the setting; false when it has none.
+        // L'endroit où se trouve le mot de passe d'un réglage de proxy "http://user:password@host:port",
+        // tel que http_fetch.cpp lit le réglage ; false quand il n'en a pas.
         bool password_span(const std::string& proxy, size_t& from, size_t& length)
         {
             const size_t scheme = proxy.find("://");
@@ -32,7 +32,7 @@ namespace albireo
             return length > 0;
         }
 
-        // The setting without its password, ":password" removed.
+        // Le réglage sans son mot de passe, ":password" retiré.
         std::string without_password(const std::string& proxy)
         {
             size_t from = 0, length = 0;
@@ -40,19 +40,21 @@ namespace albireo
             return proxy.substr(0, from - 1) + proxy.substr(from + length);
         }
 
-        // The file of the proxy with its password, beside settings.json.
+        // Le fichier du proxy avec son mot de passe, à côté de settings.json.
         std::string secret_path(const std::string& settings_path)
         {
             return join_path(parent_path(settings_path), "proxy.secret");
         }
 
-        // The file of the key of a search provider that the earlier versions kept beside settings.json.
+        // Le fichier de la clé d'un fournisseur de recherche que les versions antérieures gardaient à côté
+        // de settings.json.
         std::string obsolete_key_path(const std::string& settings_path)
         {
             return join_path(parent_path(settings_path), "web_search.secret");
         }
 
-        // Whether a document of the settings holds a setting this version lacks, or another provider of the search.
+        // Indique si un document des réglages contient un réglage que cette version n'a pas, ou un autre
+        // fournisseur de recherche.
         bool obsolete_settings(const json& j)
         {
             for (const char* key : { "public_link", "web_search_url", "web_search_key", "web_search_key_set" })
@@ -61,7 +63,7 @@ namespace albireo
             return j.contains("web_search") && search != "wikipedia" && search != "none";
         }
 
-        // The text of a secret file without the ends of line and the spaces that follow it.
+        // Le texte d'un fichier secret sans les fins de ligne ni les espaces qui le suivent.
         std::string trimmed(std::string text)
         {
             while (!text.empty() && (text.back() == '\n' || text.back() == '\r' || text.back() == ' '))
@@ -69,7 +71,7 @@ namespace albireo
             return text;
         }
 
-        // The copy of the last settings written, read when settings.json is no longer valid.
+        // La copie des derniers réglages écrits, lue quand settings.json n'est plus valide.
         std::string backup_path(const std::string& settings_path)
         {
             return settings_path + ".bak";
@@ -168,7 +170,8 @@ namespace albireo
         offline = j["offline"].as_bool(d.offline);
         proxy = j["proxy"].str(d.proxy);
         web_access = j["web_access"].as_bool(d.web_access);
-        // The providers of the earlier versions, "auto", "brave" and "searxng", give way to Wikipedia.
+        // Les fournisseurs des versions antérieures, "auto", "brave" et "searxng", cèdent la place à
+        // Wikipédia.
         web_search = j["web_search"].as_string() == "none" ? "none" : d.web_search;
         engine_benchmarks = j["engine_benchmarks"].is_object() ? j["engine_benchmarks"] : json::object();
         trust_authority = j["trust_authority"].is_bool() ? (j["trust_authority"].as_bool() ? 1 : 0) : d.trust_authority;
@@ -186,7 +189,7 @@ namespace albireo
     settings_store::settings_store(const std::string& path) : path_(path)
     {
         bool restored = false;
-        // A document of an earlier version, written again without what this version lacks.
+        // Un document d'une version antérieure, réécrit sans ce que cette version n'a pas.
         bool obsolete = false;
         if (file_exists(path_))
         {
@@ -196,7 +199,7 @@ namespace albireo
             {
                 s_.from_json(j);
                 obsolete = obsolete_settings(j);
-                // The copy follows a valid file, the one the installer or a hand wrote included.
+                // La copie suit un fichier valide, y compris celui que l'installateur ou une main a écrit.
                 const std::string backup = backup_path(path_);
                 std::string copy;
                 if ((!read_file(backup, copy) || copy != text) && !write_file_atomic(backup, text))
@@ -205,9 +208,10 @@ namespace albireo
             else
             {
                 /*
-                    A file damaged on its disk, or by a hand: the copy of the last valid settings
-                    serves, so that the offline mode, the port, the functions of the models and
-                    the folders stay as they were, and settings.json is written again from it.
+                    Un fichier abîmé sur son disque, ou par une main : la copie des derniers réglages
+                    valides sert, pour que le mode hors ligne, le port, les fonctions des modèles et
+                    les dossiers restent comme ils étaient, et settings.json est réécrit à partir
+                    d'elle.
                 */
                 json saved;
                 std::string saved_text, unused;
@@ -220,7 +224,7 @@ namespace albireo
         std::lock_guard<std::mutex> lock(m_);
         if (proxy_password_masked(s_.proxy))
         {
-            // The password stored for this address and this user.
+            // Le mot de passe enregistré pour cette adresse et cet utilisateur.
             std::string stored;
             if (read_file(secret_path(path_), stored, 4096)) stored = trimmed(stored);
             if (!stored.empty() && masked_proxy(stored) == s_.proxy)
@@ -237,8 +241,8 @@ namespace albireo
         {
             log_warning("settings: the password of the proxy cannot move from " + path_ + " to proxy.secret");
         }
-        // Written again once the password of the proxy is back in the settings: from its copy, or without the
-        // settings of an earlier version and the key of its search provider.
+        // Réécrit une fois le mot de passe du proxy revenu dans les réglages : à partir de sa copie, ou sans les
+        // réglages d'une version antérieure ni la clé de son fournisseur de recherche.
         if ((restored || obsolete || file_exists(obsolete_key_path(path_))) && !write())
             log_warning("settings: " + path_ + " cannot be written again");
     }
@@ -246,13 +250,13 @@ namespace albireo
     bool settings_store::write()
     {
         make_dirs(parent_path(path_));
-        // The password first, so that settings.json masks no password that is not stored.
+        // Le mot de passe d'abord, pour que settings.json ne masque aucun mot de passe non enregistré.
         const std::string secret = secret_path(path_);
         const bool password = masked_proxy(s_.proxy) != s_.proxy;
         if (password && !write_file_restricted(secret, s_.proxy)) return false;
         const std::string text = s_.to_json().dump_formatted(2) + "\n";
         if (!write_file_atomic(path_, text)) return false;
-        // The copy read when settings.json is damaged, written once settings.json is in place.
+        // La copie lue quand settings.json est abîmé, écrite une fois settings.json en place.
         if (!write_file_atomic(backup_path(path_), text)) log_warning("settings: its copy cannot be written");
         if (!password && file_exists(secret)) remove_file(secret);
         if (file_exists(obsolete_key_path(path_))) remove_file(obsolete_key_path(path_));

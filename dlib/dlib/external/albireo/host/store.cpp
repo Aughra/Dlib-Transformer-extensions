@@ -17,7 +17,7 @@ namespace albireo
 
     namespace
     {
-        // The columns of a model, in the order model_of() reads them.
+        // Les colonnes d'un modèle, dans l'ordre où model_of() les lit.
         const char* const model_columns = "id, name, file, size, sha256, source, installed_at, verified_at, "
             "descriptor, projector, projector_size, projector_sha256";
 
@@ -45,9 +45,9 @@ namespace albireo
         make_dirs(parent_path(path));
         connect();
         /*
-            Every page of the database is checked once at the start: a database damaged beyond
-            its header fails here, with "malformed" in its error, where the service sets it
-            aside and starts a new one, rather than in the queries that follow.
+            Chaque page de la base est vérifiée une fois au démarrage : une base abîmée au-delà
+            de son en-tête échoue ici, avec "malformed" dans son erreur, là où le service la met
+            de côté et en commence une nouvelle, plutôt que dans les requêtes qui suivent.
         */
         {
             dlib::statement st(*db_, "PRAGMA quick_check");
@@ -62,7 +62,7 @@ namespace albireo
             " verified_at INTEGER NOT NULL DEFAULT 0, descriptor TEXT NOT NULL DEFAULT '{}',"
             " projector TEXT NOT NULL DEFAULT '', projector_size INTEGER NOT NULL DEFAULT 0,"
             " projector_sha256 TEXT NOT NULL DEFAULT '')");
-        // The columns of the projectors, which the databases of the earlier versions lack.
+        // Les colonnes des projecteurs, qui manquent aux bases des versions antérieures.
         std::vector<std::string> columns;
         {
             dlib::statement st(*db_, "PRAGMA table_info(models)");
@@ -97,9 +97,9 @@ namespace albireo
     {
         db_.reset(new dlib::database(path_));
         /*
-            A database that another program holds a moment, a backup or a copy of the file say,
-            is waited for up to five seconds before an operation fails, and the next
-            operations find it free again.
+            Une base qu'un autre programme tient un moment, une sauvegarde ou une copie du
+            fichier par exemple, est attendue jusqu'à cinq secondes avant qu'une opération
+            échoue, et les opérations suivantes la retrouvent libre.
         */
         db_->exec("PRAGMA busy_timeout=5000");
         db_->exec("PRAGMA journal_mode=WAL");
@@ -115,7 +115,8 @@ namespace albireo
         }
         catch (const std::exception& e)
         {
-            // A connection that SQLite opened read-only, once the file can be written again.
+            // Une connexion que SQLite a ouverte en lecture seule, une fois que le fichier peut de
+            // nouveau être écrit.
             if (std::string(e.what()).find("readonly") == std::string::npos) throw;
             connect();
             work();
@@ -135,7 +136,7 @@ namespace albireo
 
     bool store::find_model(const std::string& id, installed_model& m)
     {
-        // The row of the model alone, by its key, rather than every model with its description.
+        // La ligne du seul modèle, par sa clé, plutôt que tous les modèles avec leur description.
         std::lock_guard<std::mutex> lock(m_);
         dlib::statement st(*db_, std::string("SELECT ") + model_columns + " FROM models WHERE id = ?");
         st.bind(1, id);

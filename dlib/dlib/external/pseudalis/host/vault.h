@@ -12,31 +12,32 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The encrypted files of the service: the originals of the files it
-                protected, their pictures, and the content of the files of the drive.  Each
-                blob lies in <dir>/<two digits>/<identifier>.bin, its identifier 32 random
-                hexadecimal digits, encrypted with AES-256-CTR under a random counter block
-                and authenticated with HMAC-SHA-256 over its identifier, its counter block
-                and its ciphertext: a blob altered, or moved under another identifier, does
-                not open.  The folder is one of SYSTEM and the administrators.
+                Les fichiers chiffrés du service : les originaux des fichiers qu'il a
+                protégés, leurs images, et le contenu des fichiers du lecteur.  Chaque blob
+                se trouve dans <dir>/<two digits>/<identifier>.bin, son identifiant étant 32
+                chiffres hexadécimaux aléatoires, chiffré avec AES-256-CTR sous un bloc
+                compteur aléatoire et authentifié avec HMAC-SHA-256 sur son identifiant, son
+                bloc compteur et son texte chiffré : un blob altéré, ou déplacé sous un autre
+                identifiant, ne s'ouvre pas.  Le dossier appartient à SYSTEM et aux
+                administrateurs.
 
             THREAD SAFETY
-                The methods may be called from several threads at once.
+                Les méthodes peuvent être appelées depuis plusieurs threads à la fois.
         !*/
     public:
         vault(const std::string& dir, const std::string& encryption_key, const std::string& authentication_key);
         ~vault();
 
-        // Stores data; returns its identifier, or an empty string when it cannot be written.
+        // Stocke data ; renvoie son identifiant, ou une chaîne vide quand il ne peut pas être écrit.
         std::string put(const std::string& data);
-        // Reads a blob; false when it is missing, altered or unreadable.
+        // Lit un blob ; false quand il manque, est altéré ou illisible.
         bool get(const std::string& id, std::string& data) const;
         bool remove(const std::string& id);
         bool exists(const std::string& id) const;
         static bool valid_id(const std::string& id);
         /*!
-            Returns the identifiers of the blobs the vault holds, and removes the files of the
-            writes cut short.  For the start of the service, before any write.
+            Renvoie les identifiants des blobs que contient le coffre, et supprime les fichiers
+            des écritures interrompues.  Pour le démarrage du service, avant toute écriture.
         !*/
         std::vector<std::string> list_and_clean();
 

@@ -17,8 +17,8 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The engine of the service, compiled into the program (PSEUDALIS_ENGINE_STATIC):
-                the functions of engine_api.h, which load() takes, as the service calls them.
+                Le moteur du service, compilé dans le programme (PSEUDALIS_ENGINE_STATIC) : les
+                fonctions de engine_api.h, que load() récupère, telles que le service les appelle.
         !*/
     public:
         engine_library() {}
@@ -26,7 +26,7 @@ namespace pseudalis
         engine_library(const engine_library&) = delete;
         engine_library& operator=(const engine_library&) = delete;
 
-        // Takes the functions of the engine compiled into the program.
+        // Récupère les fonctions du moteur compilé dans le programme.
         bool load();
         bool loaded() const { return create != nullptr; }
         const std::string& path() const { return path_; }
@@ -57,8 +57,8 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                An engine of a loaded library, with its key: the calls of the service.
-                process() may be called from several threads at once.
+                Un moteur d'une bibliothèque chargée, avec sa clé : les appels du service.
+                process() peut être appelée depuis plusieurs threads à la fois.
         !*/
     public:
         engine_client(const std::shared_ptr<engine_library>& lib, const std::string& key, const json& options,
@@ -70,22 +70,22 @@ namespace pseudalis
         bool ok() const { return e_ != nullptr; }
         /*!
             ensures
-                - Runs request (engine_api.h) on data; result receives the result document
-                  and output the bytes written.  pictures, when given, receives each
-                  picture and returns its description, or an empty string; lookup, when
-                  given, receives each candidate substitute of a restoration and returns
-                  the tags recorded for it.
-                - Returns false with the reason in error.
+                - Exécute request (engine_api.h) sur data ; result reçoit le document de
+                  résultat et output les octets écrits.  pictures, quand il est fourni, reçoit
+                  chaque image et renvoie sa description, ou une chaîne vide ; lookup, quand il
+                  est fourni, reçoit chaque substitut candidat d'une restauration et renvoie
+                  les étiquettes enregistrées pour lui.
+                - Renvoie false avec la raison dans error.
         !*/
         bool process(const json& request, const std::string& data, json& result, std::string& output,
             const std::function<std::string(const picture_request&)>& pictures, std::string& error,
             const std::function<std::vector<std::string>(const std::string&)>& lookup =
                 std::function<std::vector<std::string>(const std::string&)>()) const;
         std::string key_fingerprint() const;
-        // Replaces the imposed terms of the engine ([{"term", "type", "case_sensitive"}]).
+        // Remplace les termes imposés du moteur ([{"term", "type", "case_sensitive"}]).
         bool set_terms(const json& terms, std::string& error) const;
         std::string variant() const;
-        // The version and the build of the engine (psd_build()).
+        // La version et le build du moteur (psd_build()).
         std::string build() const;
         json models() const;
 

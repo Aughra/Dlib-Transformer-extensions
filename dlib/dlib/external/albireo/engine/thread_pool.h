@@ -25,22 +25,23 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The threads that compute the products, the attention and the
-                normalizations of a forward pass.  A generation step runs a few hundred
-                parallel sections, one per product, so what matters is the cost of
-                starting one: the workers spin on an atomic counter for a short while
-                after each section and only then go to sleep, which keeps the hand-over
-                in the microsecond range while tokens are produced and lets the
-                processor rest when the engine is idle.
+                Les threads qui calculent les produits, l'attention et les normalisations
+                d'une passe avant.  Une étape de génération exécute quelques centaines de
+                sections parallèles, une par produit, si bien que ce qui compte est le coût
+                du démarrage de l'une d'elles : les workers tournent sur un compteur atomique
+                un court moment après chaque section et ne s'endorment qu'ensuite, ce qui
+                garde la passation de l'ordre de la microseconde pendant la production des
+                tokens et laisse le processeur se reposer quand le moteur est inactif.
 
-                parallel_for() splits a range of tasks among the workers and the calling
-                thread, hands them out one at a time through an atomic counter so that
-                uneven tasks balance themselves, and returns once every task is done.
-                The pool runs one section at a time: a thread that calls parallel_for()
-                while another thread's section runs waits until that section ends.  A task
-                must not open a section of its own pool.  An exception thrown by a task
-                skips the tasks not yet started and reaches the caller once every worker
-                has left the section.
+                parallel_for() répartit une plage de tâches entre les workers et le thread
+                appelant, les distribue une à une par un compteur atomique pour que les
+                tâches inégales s'équilibrent d'elles-mêmes, et revient une fois chaque
+                tâche terminée.  Le thread pool exécute une section à la fois : un thread qui
+                appelle parallel_for() pendant que la section d'un autre thread s'exécute
+                attend la fin de cette section.  Une tâche ne doit pas ouvrir de section dans
+                son propre thread pool.  Une exception levée par une tâche fait sauter les
+                tâches pas encore commencées et parvient à l'appelant une fois que chaque
+                worker a quitté la section.
         !*/
 
     public:
@@ -49,9 +50,10 @@ namespace albireo
         {
             const int n = threads > 0 ? threads : 1;
             /*
-                Every worker starts from generation 0, the generation of a pool without any
-                section, so that a worker takes part in a section opened before the system
-                first runs it.  A thread that cannot be started stops the others.
+                Chaque worker part de la génération 0, celle d'un thread pool sans aucune
+                section, pour qu'un worker prenne part à une section ouverte avant que le
+                système ne l'exécute pour la première fois.  Un thread qui ne peut pas être
+                démarré arrête les autres.
             */
             try
             {
@@ -87,16 +89,16 @@ namespace albireo
 
 #include "thread_pool_apple.inc"
 
-        // How long the workers spin after a section before sleeping.
+        // Durée pendant laquelle les workers tournent après une section avant de s'endormir.
         void set_spin_time(std::chrono::microseconds t) { spin_us_.store(t.count(), std::memory_order_relaxed); }
 
         /*!
             ensures
-                - Calls fn(task, thread_index) once for every task in [0, n_tasks),
-                  thread_index being in [0, size()), and returns when all calls returned.
-                - Runs everything on the calling thread when n_tasks == 1 or the pool
-                  has a single thread.
-                - Rethrows the first exception a task threw, after every worker is done.
+                - Appelle fn(task, thread_index) une fois pour chaque tâche de [0, n_tasks),
+                  thread_index étant dans [0, size()), et revient quand tous les appels sont revenus.
+                - Exécute tout sur le thread appelant quand n_tasks == 1 ou que le thread pool
+                  n'a qu'un seul thread.
+                - Relance la première exception levée par une tâche, une fois chaque worker terminé.
         !*/
         template <typename F>
         void parallel_for(long n_tasks, F&& fn)
@@ -108,15 +110,15 @@ namespace albireo
                 for (long t = 0; t < n_tasks; ++t) fn(t, 0);
                 return;
             }
-            // The fields of the section below belong to one caller at a time.
+            // Les champs de la section ci-dessous appartiennent à un seul appelant à la fois.
             std::lock_guard<std::mutex> serial(section_mutex_);
             job_ctx_ = static_cast<void*>(&fn);
             job_fn_ = &invoke<typename std::remove_reference<F>::type>;
             n_tasks_ = n_tasks;
             next_.value.store(0, std::memory_order_relaxed);
             pending_.value.store(static_cast<long>(workers_.size()), std::memory_order_relaxed);
-            // Sequentially consistent, as the sleeping count below: a worker that is
-            // about to sleep either sees the new generation or is seen sleeping.
+            // Séquentiellement cohérent, comme le compte des endormis ci-dessous : un worker sur
+            // le point de s'endormir soit voit la nouvelle génération, soit est vu endormi.
             generation_.fetch_add(1);
             if (sleeping_.load() > 0)
             {
@@ -124,8 +126,8 @@ namespace albireo
                 cv_.notify_all();
             }
             run_tasks(0);
-            // Spin while the workers finish, then give the processor away: a worker that
-            // the system preempted must be able to run on it.
+            // Tourner pendant que les workers finissent, puis céder le processeur : un worker que
+            // le système a préempté doit pouvoir s'y exécuter.
             unsigned spins = 0;
             while (pending_.value.load(std::memory_order_acquire) != 0)
             {
@@ -165,7 +167,8 @@ namespace albireo
                 }
                 catch (...)
                 {
-                    // The tasks not yet handed out are skipped; the first exception is kept for the caller.
+                    // Les tâches pas encore distribuées sont sautées ; la première exception est gardée
+                    // pour l'appelant.
                     std::lock_guard<std::mutex> lock(error_mutex_);
                     if (!error_) error_ = std::current_exception();
                     failed_.store(true, std::memory_order_release);
@@ -189,15 +192,15 @@ namespace albireo
         {
             for (;;)
             {
-                // Spin for a while, then sleep until the next section.
+                // Tourner un moment, puis dormir jusqu'à la section suivante.
                 const auto spin_until = std::chrono::steady_clock::now()
                     + std::chrono::microseconds(spin_us_.load(std::memory_order_relaxed));
                 uint64_t g = generation_.load(std::memory_order_acquire);
                 unsigned polls = 0;
                 while (g == seen)
                 {
-                    // After a short spin, yield now and then, so that a busy machine
-                    // still runs the thread that will start the next section.
+                    // Après une courte attente active, céder de temps en temps, pour qu'une machine
+                    // chargée exécute quand même le thread qui démarrera la section suivante.
                     if (polls > 2048 && (polls & 63) == 0) std::this_thread::yield();
                     else ALBIREO_CPU_RELAX();
                     g = generation_.load(std::memory_order_acquire);
@@ -222,9 +225,9 @@ namespace albireo
             }
         }
 
-        // A counter alone on its cache line: the counters below change with every task
-        // and every worker, while the spinning workers keep reading the fields of the
-        // section.
+        // Un compteur seul sur sa ligne de cache : les compteurs ci-dessous changent à chaque tâche
+        // et à chaque worker, tandis que les workers en attente active continuent de lire les champs
+        // de la section.
         struct counter_line
         {
             char before[64];
@@ -233,7 +236,7 @@ namespace albireo
         };
 
         std::vector<std::thread> workers_;
-        // Held by the thread whose section runs, for the whole section.
+        // Tenu par le thread dont la section s'exécute, pendant toute la section.
         std::mutex section_mutex_;
         std::mutex mutex_;
         std::condition_variable cv_;

@@ -795,8 +795,9 @@ def main():
         e = models[-1]
         total = e["size"] + e.get("projector", {}).get("size", 0)
         print("%-28s %-18s %6.2f GB  %s" % (e["id"], e["publisher"], total / 1e9, e["sha256"]))
-    # The time of publication, which the services compare as a string to keep the newer of
-    # two catalogs: the earlier catalogs gave the day alone, which sorts before any time of it.
+    # L'heure de publication, que les services comparent comme une chaîne pour garder le plus récent
+    # de deux catalogues : les catalogues antérieurs ne donnaient que le jour, qui se trie avant
+    # toute heure de ce jour.
     updated = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     catalog = {"format": 1, "updated": updated, "models": models}
     with open(sys.argv[1], "w", encoding="utf-8", newline="\n") as f:

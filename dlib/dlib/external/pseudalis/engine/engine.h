@@ -14,49 +14,51 @@
 namespace pseudalis
 {
     /*
-        The kinds of files the engine processes: the documents of dlib/privacy (plain text,
-        delimited values, markup, Word, Excel, PowerPoint and PDF), the pictures (PNG, JPEG,
-        GIF, BMP, TIFF, WebP), whose place takes a text that describes them, and the archives
-        (ZIP, TAR, TAR.GZ) that hold them.
+        Les types de fichiers que le moteur traite : les documents de dlib/privacy (texte brut,
+        valeurs délimitées, balisage, Word, Excel, PowerPoint et PDF), les images (PNG, JPEG,
+        GIF, BMP, TIFF, WebP), dont la place est prise par un texte qui les décrit, et les
+        archives (ZIP, TAR, TAR.GZ) qui les contiennent.
     */
     enum class file_kind { unsupported, document, picture, archive };
 
     struct picture_found
     {
-        std::string id;           // 16 hexadecimal digits of a digest of the bytes keyed by the key
+        std::string id;           // 16 chiffres hexadécimaux d'une empreinte des octets calculée avec la clé
         std::string sha256;
         std::string media_type;   // "image/png"...
-        std::string location;     // the file, the entry of an archive, the part or the page
+        std::string location;     // le fichier, l'entrée d'une archive, la partie ou la page
         const std::string* bytes = nullptr;
     };
 
-    // Receives each picture found and returns its description in clear, or an empty string.
+    // Reçoit chaque image trouvée et renvoie sa description en clair, ou une chaîne vide.
     typedef std::function<std::string(const picture_found&)> picture_handler;
 
     /*
-        Returns the tags recorded for a substitute equal to candidate, the most likely first: the
-        names and the properties of the documents hold substitutes, values written without
-        their tags, which the caller records when they are made (engine_result::substitutions).
+        Renvoie les étiquettes enregistrées pour un substitut égal à candidate, la plus probable
+        d'abord : les noms et les propriétés des documents contiennent des substituts, des valeurs
+        écrites sans leurs étiquettes, que l'appelant enregistre quand elles sont créées
+        (engine_result::substitutions).
     */
     typedef std::function<std::vector<std::string>(const std::string& candidate)> substitute_lookup;
 
     struct substitution
     {
-        std::string substitute;             // as written in a name, a property or a text without tags
-        std::string tag;                    // the tag it stands for
-        bool text = false;                  // written in the text of a document protected without tags
+        std::string substitute;             // tel qu'écrit dans un nom, une propriété, un texte sans étiquettes
+        std::string tag;                    // l'étiquette qu'il représente
+        bool text = false;                  // écrit dans le texte d'un document protégé sans étiquettes
     };
 
     struct engine_options
     {
-        std::string date_order = "dmy";     // or "mdy": the order of the numeric dates
-        std::string context = "default";    // the context of the pseudonymization
+        std::string date_order = "dmy";     // ou "mdy" : l'ordre des dates numériques
+        std::string context = "default";    // le contexte de la pseudonymisation
     };
 
     /*
-        An entry that anonymize() wrote in an archive: its path in the archive read, its path in the
-        archive written, the SHA-256 of the bytes written and its kind.  The entries of an archive
-        inside the archive follow it, their paths after its own and '!' ("dossier/notes.tar.gz!a.txt").
+        Une entrée qu'anonymize() a écrite dans une archive : son chemin dans l'archive lue, son
+        chemin dans l'archive écrite, le SHA-256 des octets écrits et son type.  Les entrées d'une
+        archive contenue dans l'archive la suivent, leurs chemins après le sien et '!'
+        ("dossier/notes.tar.gz!a.txt").
     */
     struct entry_written
     {
@@ -68,143 +70,150 @@ namespace pseudalis
 
     struct engine_result
     {
-        std::string bytes;                  // the file written
-        std::string name;                   // its name, protected: "photo.png.txt" for a picture
+        std::string bytes;                  // le fichier écrit
+        std::string name;                   // son nom, protégé : "photo.png.txt" pour une image
         std::string kind;                   // "txt", "csv", "xml", "docx", ..., "image", "zip", "tar", "tar.gz"
         json report = json::object();
-        std::vector<std::string> pictures;  // the identifiers of the pictures found, once each
-        std::vector<substitution> substitutions;   // anonymize(): the substitutes written
-        std::vector<entry_written> entries;        // anonymize() of an archive: its entries written
+        std::vector<std::string> pictures;  // les identifiants des images trouvées, une fois chacun
+        std::vector<substitution> substitutions;   // anonymize() : les substituts écrits
+        std::vector<entry_written> entries;        // anonymize() d'une archive : ses entrées écrites
     };
 
     class engine
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The anonymization and the restoration of files with the detector of
-                dlib/privacy, its rules and its two learned recognizers (the sequence
-                tagger and the span model compiled into the engine), and one key.
-                Each value found is replaced by its tag [[TYPE:body#CCC]], encrypted under
-                the key, so that restore() gives it back; the dates move by a secret shift.
+                L'anonymisation et la restauration de fichiers avec le détecteur de
+                dlib/privacy, ses règles et ses deux reconnaisseurs appris (l'étiqueteur de
+                séquences et le modèle d'empans compilés dans le moteur), et une clé.
+                Chaque valeur trouvée est remplacée par son étiquette [[TYPE:body#CCC]],
+                chiffrée sous la clé, pour que restore() la rende ; les dates se décalent d'un
+                écart secret.
 
-                A picture becomes "[Image@<id> : <description>]", the description
-                protected like any text, or "[Image@<id>]" without description: in its
-                place in a Word document or on a slide, over its gray box in a PDF, as the
-                text file <name>.txt for a picture alone or in an archive.  The archives
-                keep their documents, protected, and their pictures as text files; the
-                entries of another kind are left out and listed in report["dropped"], and a
-                restoration keeps them as they are.  A file is of the kind its name gives
-                when its content is of that kind, and a file of any other name is a text when
-                its content is text through and through (kind_of()); a restoration also reads
-                a text under any name, since it may hold tags.
+                Une image devient "[Image@<id> : <description>]", la description protégée
+                comme tout texte, ou "[Image@<id>]" sans description : à sa place dans un
+                document Word ou sur une diapositive, par-dessus son cadre gris dans un PDF,
+                sous la forme du fichier texte <name>.txt pour une image seule ou dans une
+                archive.  Les archives gardent leurs documents, protégés, et leurs images sous
+                forme de fichiers texte ; les entrées d'un autre type sont laissées de côté et
+                listées dans report["dropped"], et une restauration les garde telles quelles.
+                Un fichier est du type que donne son nom quand son contenu est de ce type, et
+                un fichier de tout autre nom est un texte quand son contenu est du texte de
+                bout en bout (kind_of()) ; une restauration lit aussi un texte sous n'importe
+                quel nom, puisqu'il peut contenir des étiquettes.
 
-                The names of the files, of the entries of the archives and of their
-                folders, and the properties of the documents (title, authors, subject,
-                keywords, company... of Word, Excel and PowerPoint, the document
-                information of a PDF) take substitutes rather than tags: each value is
-                written in its protected form without the brackets, the type and the
-                check of its tag, which a name cannot hold and a window of properties
-                would show as they are.  The name of a document is read with what its
-                content taught the detector.  A substitute holds no character that
-                Windows refuses in a name.  engine_result::substitutions lists each one
-                with its tag, which the caller records: restore() asks the lookup for
-                them.
+                Les noms des fichiers, des entrées des archives et de leurs dossiers, et les
+                propriétés des documents (titre, auteurs, sujet, mots-clés, société... de
+                Word, Excel et PowerPoint, les informations de document d'un PDF) prennent des
+                substituts plutôt que des étiquettes : chaque valeur est écrite sous sa forme
+                protégée sans les crochets, le type et le contrôle de son étiquette, qu'un nom
+                ne peut pas contenir et qu'une fenêtre de propriétés montrerait tels quels.  Le
+                nom d'un document est lu avec ce que son contenu a appris au détecteur.  Un
+                substitut ne contient aucun caractère que Windows refuse dans un nom.
+                engine_result::substitutions liste chacun avec son étiquette, que l'appelant
+                enregistre : restore() les demande à lookup.
 
-                Without tags (anonymize() and anonymize_text() with tags false), each value of
-                the text takes its substitute too: the file holds no tag, and its values come
-                back only from the substitutes that the caller keeps (engine_result::
-                substitutions, text true) and gives back to restore().
+                Sans étiquettes (anonymize() et anonymize_text() avec tags à false), chaque
+                valeur du texte prend aussi son substitut : le fichier ne contient aucune
+                étiquette, et ses valeurs ne reviennent que grâce aux substituts que l'appelant
+                garde (engine_result::substitutions, text à true) et rend à restore().
 
-            THREAD SAFETY
-                The methods may be called from several threads at once.
+            SÛRETÉ DES THREADS
+                Les méthodes peuvent être appelées depuis plusieurs threads à la fois.
         !*/
     public:
-        // key: 32 bytes.  Throws std::runtime_error when the models cannot be read.
+        // key : 32 octets.  Lève std::runtime_error quand les modèles ne peuvent pas être lus.
         engine(const std::string& key, const engine_options& options);
 
         static file_kind kind_of_name(const std::string& name);
         /*
-            The kind of a file: the kind its extension gives (common/file_kinds.h) when the content is
-            of that kind, an Office document, a PDF or a text for a document, any archive for an
-            archive.  A name whose extension gives no kind, or without extension, is a text when its
-            content is text through and through: dlib finds in it no binary signature and the measures
-            of a text (dlib/data_io), every character decodes with no control character but the
-            tabulation, the ends of lines and the form feed, nor U+FFFE or U+FFFF, and it holds no
-            encoded part.  An encoded part is a block of base64, base64url or hexadecimal digits (1024
-            characters in a row, or 16 runs in a row of 60, the lines of a block, in a string of JSON or
-            of a program too, which a line of dashes or a path does not make), data or JSON in base64,
-            bytes in hexadecimal, a dump or an array (64 in a row, or 4 lines of 8, with letters or
-            marks among them), or a format that writes its values encoded: a message with parts in
-            base64, quoted-printable or uuencode, or with encoded words, an RTF document, a vCard or an
-            iCalendar, LDIF in base64, a block armored by PEM or OpenPGP, its header and its body, in a
-            string too, a block of uuencode or of ASCII85, and, by its first line, a PostScript program
-            or an export of the registry.  Without extension, a picture, an Office document, an archive
-            or a PDF is also taken by its signature.  The other files are unsupported: an OpenDocument,
-            or an e-mail with attachments, would come out half protected.
+            Le type d'un fichier : le type que donne son extension (common/file_kinds.h) quand le
+            contenu est de ce type, un document Office, un PDF ou un texte pour un document, toute
+            archive pour une archive.  Un nom dont l'extension ne donne aucun type, ou sans extension,
+            est un texte quand son contenu est du texte de bout en bout : dlib n'y trouve aucune
+            signature binaire et y trouve les mesures d'un texte (dlib/data_io), chaque caractère se
+            décode sans caractère de contrôle hormis la tabulation, les fins de ligne et le saut de
+            page, ni U+FFFE ou U+FFFF, et il ne contient aucune partie encodée.  Une partie encodée est
+            un bloc de base64, de base64url ou de chiffres hexadécimaux (1024 caractères d'affilée, ou
+            16 suites d'affilée de 60, les lignes d'un bloc, y compris dans une chaîne de JSON ou d'un
+            programme, ce que ne forme pas une ligne de tirets ou un chemin), des données ou du JSON en
+            base64, des octets en hexadécimal, un vidage ou un tableau (64 d'affilée, ou 4 lignes de
+            8, avec des lettres ou des signes au milieu), ou un format qui écrit ses valeurs encodées :
+            un message avec des parties en base64, quoted-printable ou uuencode, ou avec des mots
+            encodés, un document RTF, une vCard ou un iCalendar, du LDIF en base64, un bloc blindé par
+            PEM ou OpenPGP, son en-tête et son corps, y compris dans une chaîne, un bloc de uuencode
+            ou d'ASCII85, et, d'après sa première ligne, un programme PostScript ou un export du
+            registre.  Sans extension, une image, un document Office, une archive ou un PDF est aussi
+            reconnu à sa signature.  Les autres fichiers ne sont pas pris en charge : un document
+            OpenDocument, ou un e-mail avec des pièces jointes, ressortirait à moitié protégé.
         */
         static file_kind kind_of(const std::string& bytes, const std::string& name);
         static std::string picture_marker(const std::string& id, const std::string& description);
 
         /*
-            Throws std::runtime_error for a file of no supported kind, or that cannot be read.  The
-            substitutes that lookup knows, in a name or a property protected before, are not
-            replaced again.  Without tags, each value of the text takes its substitute, as the names
-            and the properties do, the descriptions of the pictures included, and
-            engine_result::substitutions lists it with text true, once for each place it is
-            written in: its value comes back only from the substitutes the caller keeps.  The
-            substitutes of known, those of a file protected without tags before, stay as they are.
+            Lève std::runtime_error pour un fichier d'aucun type pris en charge, ou illisible.  Les
+            substituts que lookup connaît, dans un nom ou une propriété protégés auparavant, ne sont
+            pas remplacés une seconde fois.  Sans étiquettes, chaque valeur du texte prend son
+            substitut, comme le font les noms et les propriétés, descriptions des images comprises,
+            et engine_result::substitutions la liste avec text à true, une fois par emplacement où
+            elle est écrite : sa valeur ne revient que grâce aux substituts que l'appelant garde.
+            Les substituts de known, ceux d'un fichier protégé auparavant sans étiquettes, restent
+            tels quels.
         */
         engine_result anonymize(const std::string& bytes, const std::string& name,
             const picture_handler& pictures, const substitute_lookup& lookup = substitute_lookup(),
             bool tags = true, const std::vector<substitution>& known = std::vector<substitution>()) const;
         /*
-            Puts back the values of the tags, those of the substitutes that lookup knows in the
-            names and the properties, and those of the substitutes of text in the text, a file
-            protected without tags.  A picture cannot come back into a document: its marker leaves
-            with the tags of its description (from a run of Word, with the gray text box of a
-            slide, from over the gray box of a PDF, which stays), and so does the text file of a
-            picture from an archive, report["pictures_removed"] counting them; the service gives
-            back the picture of a text file alone from its vault.
+            Remet les valeurs des étiquettes, celles des substituts que lookup connaît dans les noms
+            et les propriétés, et celles des substituts de text dans le texte, pour un fichier
+            protégé sans étiquettes.  Une image ne peut pas revenir dans un document : son marqueur
+            s'en va avec les étiquettes de sa description (d'un passage de texte Word, avec la zone
+            de texte grise d'une diapositive, de par-dessus le cadre gris d'un PDF, qui reste), de
+            même que le fichier texte d'une image d'une archive, report["pictures_removed"] les
+            comptant ; le service rend l'image d'un fichier texte seul depuis son coffre.
         */
         engine_result restore(const std::string& bytes, const std::string& name,
             const substitute_lookup& lookup = substitute_lookup(),
             const std::vector<substitution>& text = std::vector<substitution>()) const;
         /*
-            The bytes of the entry at path in the archive bytes named name, read as anonymize()
-            reads it: path is entry_written::original, the archives inside joined by '!'.  Throws
-            std::runtime_error when the archive holds no such entry.
+            Les octets de l'entrée située à path dans l'archive bytes nommée name, lue comme
+            anonymize() la lit : path est entry_written::original, les archives contenues jointes
+            par '!'.  Lève std::runtime_error quand l'archive ne contient pas une telle entrée.
         */
         std::string extract(const std::string& bytes, const std::string& name, const std::string& path) const;
 
-        // A name alone, a folder for instance: its values become substitutes, its extension stays.
+        // Un nom seul, un dossier par exemple : ses valeurs deviennent des substituts, son extension
+        // reste.
         std::string anonymize_name(const std::string& name, const substitute_lookup& lookup,
             std::vector<substitution>& made, json& report) const;
         std::string restore_name(const std::string& name, const substitute_lookup& lookup, json& report) const;
 
-        // Without tags, the values take their substitutes, which made receives.
+        // Sans étiquettes, les valeurs prennent leurs substituts, que made reçoit.
         std::string anonymize_text(const std::string& text, json& report, bool tags = true,
             std::vector<substitution>* made = nullptr) const;
-        // A text keeps the picture markers it holds, which its reader sees; substitutes come back too.
+        // Un texte garde les marqueurs d'image qu'il contient, que son lecteur voit ; les substituts
+        // reviennent aussi.
         std::string restore_text(const std::string& text, json& report,
             const std::vector<substitution>& substitutes = std::vector<substitution>()) const;
         /*
-            [{"begin", "end", "type"}] of the tags of a protected text that this key restores and of
-            the substitutes of the list, and of the values that restore_text() wrote in restored in
-            their place in tagged: byte offsets of the text, for the colouring of the web
-            application. The values are given when the tags and the substitutes alone account for
-            the restoration (a tag written in a link, which the restoration also reads, gives none).
+            [{"begin", "end", "type"}] des étiquettes d'un texte protégé que cette clé restaure et
+            des substituts de la liste, et des valeurs que restore_text() a écrites dans restored à
+            leur place dans tagged : des décalages en octets dans le texte, pour la coloration de
+            l'application web. Les valeurs sont données quand les étiquettes et les substituts
+            suffisent à expliquer la restauration (une étiquette écrite dans un lien, que la
+            restauration lit aussi, n'en donne aucune).
         */
         json tag_spans(const std::string& text,
             const std::vector<substitution>& substitutes = std::vector<substitution>()) const;
         json restored_spans(const std::string& tagged, const std::string& restored,
             const std::vector<substitution>& substitutes = std::vector<substitution>()) const;
-        // [{"begin", "end", "type", "confidence", "text"}] of the values of a text.
+        // [{"begin", "end", "type", "confidence", "text"}] des valeurs d'un texte.
         json detect(const std::string& text) const;
 
         /*
-            Replaces the imposed terms (common/imposed_terms.h), which every file, text and name
-            processed afterwards reads before anything else; a call in progress keeps the terms
-            it started with for the detectors it already made.
+            Remplace les termes imposés (common/imposed_terms.h), que tout fichier, texte et nom
+            traité ensuite lit avant tout le reste ; un appel en cours garde les termes avec
+            lesquels il a commencé pour les détecteurs qu'il a déjà créés.
         */
         void set_terms(const std::vector<imposed_term>& terms);
         std::size_t term_count() const;

@@ -15,10 +15,10 @@ namespace albireo
 {
 
     /*!
-        A buffer of the GPU in the memory it shares with the processor: both read and write its
-        bytes (contents()).  It owns its memory, or wraps memory that another object owns (the
-        mapping of a model file, the region of a kv_pool), which must outlive it.  Copies share
-        the same buffer.
+        Un tampon du GPU dans la mémoire qu'il partage avec le processeur : tous deux lisent et
+        écrivent ses octets (contents()).  Il possède sa mémoire, ou enveloppe une mémoire qu'un
+        autre objet possède (le mappage d'un fichier de modèle, la région d'un kv_pool), qui doit
+        lui survivre.  Les copies partagent le même tampon.
     !*/
     class metal_buffer
     {
@@ -33,7 +33,7 @@ namespace albireo
         size_t bytes_ = 0;
     };
 
-    // Where in a buffer an operand of a kernel starts.
+    // L'endroit d'un tampon où commence un opérande d'un noyau.
     struct metal_view
     {
         const metal_buffer* buffer = nullptr;
@@ -46,18 +46,18 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The GPU of the Mac, through Metal (macOS port): its queue of commands and the
-                kernels of metal_kernels.metal, which macOS compiles when the device opens.
-                The GPU shares the memory of the processor: it reads the weights in the
-                mapping of the model file and the keys and values in the region of their pool,
-                where they lie, without copy.  The interface is plain C++, so that only
-                metal_device.mm sees Objective-C.
+                Le GPU du Mac, via Metal (portage macOS) : sa file de commandes et les noyaux
+                de metal_kernels.metal, que macOS compile à l'ouverture du périphérique.
+                Le GPU partage la mémoire du processeur : il lit les poids dans le mappage du
+                fichier de modèle et les clés et valeurs dans la région de leur pool, là où
+                ils se trouvent, sans copie.  L'interface est en C++ simple, pour que seul
+                metal_device.mm voie de l'Objective-C.
         !*/
     public:
         /*!
             ensures
-                - Opens the GPU and compiles its kernels, or returns null with why set: no GPU,
-                  or kernels that do not compile.
+                - Ouvre le GPU et compile ses noyaux, ou renvoie null avec why renseigné : pas de
+                  GPU, ou des noyaux qui ne compilent pas.
         !*/
         static std::unique_ptr<metal_device> open(std::string& why);
 
@@ -65,37 +65,37 @@ namespace albireo
         metal_device(const metal_device&) = delete;
         metal_device& operator=(const metal_device&) = delete;
 
-        // The name of the GPU, "Apple M2" for instance.
+        // Le nom du GPU, "Apple M2" par exemple.
         const std::string& name() const;
-        // The longest buffer the GPU takes, and the memory Metal advises it to use at most.
+        // Le plus long tampon que le GPU accepte, et la mémoire que Metal lui conseille d'utiliser au plus.
         uint64_t max_buffer_bytes() const;
         uint64_t working_set_bytes() const;
-        // The kernels compiled, by name.
+        // Les noyaux compilés, par nom.
         int kernel_count() const;
 
-        // A buffer of bytes in shared memory, zeroed; invalid when the GPU refuses it.
+        // Un tampon d'octets en mémoire partagée, mis à zéro ; invalide quand le GPU le refuse.
         metal_buffer allocate(size_t bytes);
 
         /*!
             ensures
-                - Returns a buffer over the whole pages that hold [data, data + bytes), without
-                  copy, and sets offset to where data lies in it; invalid when the GPU refuses
-                  it (longer than max_buffer_bytes(), for instance).  The memory must stay
-                  mapped while the buffer lives.
+                - Renvoie un tampon sur les pages entières qui contiennent [data, data + bytes),
+                  sans copie, et met dans offset l'endroit où data s'y trouve ; invalide quand le
+                  GPU le refuse (plus long que max_buffer_bytes(), par exemple).  La mémoire doit
+                  rester mappée tant que le tampon existe.
         !*/
         metal_buffer wrap(const void* data, size_t bytes, size_t& offset);
 
-        // The tokens of a pass at most (MAX_TOKENS of metal_kernels.metal).
+        // Le nombre maximal de tokens d'une passe (MAX_TOKENS de metal_kernels.metal).
         static const unsigned max_tokens = 8;
 
-        // The positions of a part of the attention (attention()).
+        // Les positions d'une partie de l'attention (attention()).
         static const unsigned attention_part = 256;
 
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The commands of one pass: the kernels encoded in order, each one seeing what the
-                previous ones wrote, then run by finish(), which waits for the GPU.  One thread
-                uses an object at a time.
+                Les commandes d'une passe : les noyaux encodés dans l'ordre, chacun voyant ce
+                que les précédents ont écrit, puis exécutés par finish(), qui attend le GPU.
+                Un seul thread utilise un objet à la fois.
         !*/
         class commands
         {
@@ -106,33 +106,33 @@ namespace albireo
 
             /*!
                 y[t * y_stride + r] = alpha * sum_i W[r][i] x[t * x_stride + i] + beta * y[...],
-                r < rows, t < tokens (at most max_tokens), W in the GGUF layout of type, rows of
-                cols values.  Returns false, encoding nothing, for a type without a kernel
-                (Q4_K and Q6_K have one).
+                r < rows, t < tokens (au plus max_tokens), W dans la disposition GGUF de type, des
+                lignes de cols valeurs.  Renvoie false, sans rien encoder, pour un type sans noyau
+                (Q4_K et Q6_K en ont un).
             !*/
             bool matvec(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view x, unsigned tokens,
                 unsigned x_stride, metal_view y, unsigned y_stride, float alpha = 1.0f, float beta = 0.0f);
 
-            // Two products of matrices of the same type and columns on the same activations, W into y
-            // and W2 into y2, in one dispatch (alpha 1, beta 0); rows a multiple of 16.
+            // Deux produits de matrices de même type et de mêmes colonnes sur les mêmes activations, W dans y
+            // et W2 dans y2, en un seul dispatch (alpha 1, beta 0) ; rows un multiple de 16.
             bool matvec2(dlib::ggml_type type, metal_view W, long rows, metal_view W2, long rows2, long cols,
                 metal_view x, unsigned tokens, unsigned x_stride, metal_view y, unsigned y_stride, metal_view y2,
                 unsigned y2_stride);
 
-            // Row r of W (rows rows of cols values, GGUF type Q4_K or Q6_K) expanded into out + r * out_stride
-            // floats, as qk_dequantize_row() does; false for another type.
+            // La ligne r de W (rows lignes de cols valeurs, type GGUF Q4_K ou Q6_K) développée en floats
+            // dans out + r * out_stride, comme le fait qk_dequantize_row() ; false pour un autre type.
             bool dequantize(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view out,
                 unsigned out_stride);
 
             /*!
                 Y[t * y_stride + n] = alpha * sum_k X[t * x_stride + k] Wf[n * w_stride + k] + beta * Y[...],
-                t < rows, n < cols, k < inner, in single precision floats, through Metal Performance
-                Shaders: the products of the prompts, Wf being the weights that dequantize() expanded.
+                t < rows, n < cols, k < inner, en floats simple précision, via Metal Performance
+                Shaders : les produits des prompts, Wf étant les poids que dequantize() a développés.
             !*/
             void gemm(metal_view X, unsigned rows, unsigned inner, unsigned x_stride, metal_view Wf, unsigned cols,
                 unsigned w_stride, metal_view Y, unsigned y_stride, float alpha = 1.0f, float beta = 0.0f);
 
-            // y[r] = x[r] * gamma / sqrt(mean of x[r]^2 + eps), rows of width values (x may be y).
+            // y[r] = x[r] * gamma / sqrt(moyenne de x[r]^2 + eps), des lignes de width valeurs (x peut être y).
             void rms_norm(metal_view x, metal_view gamma, metal_view y, unsigned rows, unsigned width,
                 unsigned x_stride, unsigned y_stride, float eps);
 
@@ -143,19 +143,19 @@ namespace albireo
             void silu_mul(metal_view gate, metal_view up, unsigned n);
 
             /*!
-                The rotary positions of tokens rows of heads heads of hd values (stride floats a
-                token): the first 2 * half values of each head turn by cs[t * cs_stride + i]
-                (cosines) and cs[t * cs_stride + half + i] (sines), in pairs (i, i + half) when
-                neox, (2i, 2i + 1) otherwise.
+                Les positions rotatives de tokens lignes de heads têtes de hd valeurs (stride floats
+                par token) : les 2 * half premières valeurs de chaque tête tournent de
+                cs[t * cs_stride + i] (cosinus) et cs[t * cs_stride + half + i] (sinus), par paires
+                (i, i + half) quand neox, (2i, 2i + 1) sinon.
             !*/
             void rope(metal_view x, metal_view cs, unsigned tokens, unsigned heads, unsigned hd, unsigned half,
                 bool neox, unsigned stride, unsigned cs_stride);
 
             /*!
-                The layout of the keys and values of one layer in the region of a kv_pool:
-                block b at b * block_stride, the keys of head h at k_slab + h * head_stride, the
-                values at v_slab + h * head_stride, in 8-bit integers with their scales (q8) or
-                in halves.
+                La disposition des clés et valeurs d'une couche dans la région d'un kv_pool :
+                le bloc b à b * block_stride, les clés de la tête h à k_slab + h * head_stride, les
+                valeurs à v_slab + h * head_stride, en entiers 8 bits avec leurs échelles (q8) ou
+                en demi-flottants.
             !*/
             struct kv_layout
             {
@@ -169,22 +169,23 @@ namespace albireo
                 uint64_t head_stride = 0;
             };
 
-            // The keys and values of tokens tokens (kv_stride floats a token) into row rows[t] of
-            // block blocks[t] (int32), the keys rotated in q8 (qk_rotate_row).
+            // Les clés et valeurs de tokens tokens (kv_stride floats par token) dans la ligne rows[t] du
+            // bloc blocks[t] (int32), les clés tournées en q8 (qk_rotate_row).
             void kv_store(metal_view k, metal_view v, unsigned kv_stride, metal_view region, metal_view blocks,
                 metal_view rows, unsigned tokens, const kv_layout& layout);
 
-            // The queries of tokens tokens, heads heads of hd values, scaled, and rotated in q8.
+            // Les requêtes de tokens tokens, heads têtes de hd valeurs, mises à l'échelle, et tournées en q8.
             void prepare_queries(metal_view q, unsigned tokens, unsigned heads, unsigned hd, unsigned q_stride,
                 float scale, bool q8);
 
             /*!
-                The attention of tokens tokens: token t, whose queries (prepared) lie at
-                q + t * q_stride, sees the first lengths[t] positions of its sequence, whose
-                blocks are blocks[t * table_stride + j]; rep query heads share each key/value
-                head.  Writes the outputs at ctx + t * q_stride.  partial holds
-                tokens * heads * parts * rep * (hd + 2) floats, parts covering the longest
-                length by part_len positions; with a single part, nothing goes to partial.
+                L'attention de tokens tokens : le token t, dont les requêtes (préparées) se trouvent à
+                q + t * q_stride, voit les lengths[t] premières positions de sa séquence, dont les
+                blocs sont blocks[t * table_stride + j] ; rep têtes de requête partagent chaque tête
+                de clés et valeurs.  Écrit les sorties à ctx + t * q_stride.  partial contient
+                tokens * heads * parts * rep * (hd + 2) floats, parts couvrant la plus grande
+                longueur par tranches de part_len positions ; avec une seule partie, rien ne va
+                dans partial.
             !*/
             void attention(metal_view q, metal_view region, metal_view blocks, metal_view lengths,
                 unsigned table_stride, unsigned tokens, unsigned rep, unsigned parts, unsigned q_stride,
@@ -192,12 +193,12 @@ namespace albireo
 
             /*!
                 ensures
-                    - Runs the commands and waits for them; throws std::runtime_error when the
-                      GPU fails them.
+                    - Exécute les commandes et les attend ; lève std::runtime_error quand le
+                      GPU les fait échouer.
             !*/
             void finish();
 
-            // The time the GPU took for the commands, in milliseconds, once finish() returned.
+            // Le temps que le GPU a mis pour les commandes, en millisecondes, une fois finish() revenu.
             double gpu_milliseconds() const;
 
         private:
@@ -207,7 +208,7 @@ namespace albireo
             std::unique_ptr<impl> impl_;
         };
 
-        // A new pass of commands.
+        // Une nouvelle passe de commandes.
         std::unique_ptr<commands> begin();
 
     private:
@@ -216,8 +217,8 @@ namespace albireo
         std::unique_ptr<impl> impl_;
     };
 
-    // The GPU as describe() lists it, {"type": "gpu", "name", "memory", "max_buffer"}, without
-    // compiling the kernels; null when the Mac has no GPU that Metal reaches.
+    // Le GPU tel que describe() le liste, {"type": "gpu", "name", "memory", "max_buffer"}, sans
+    // compiler les noyaux ; null quand le Mac n'a pas de GPU que Metal atteint.
     json metal_describe();
 
 }

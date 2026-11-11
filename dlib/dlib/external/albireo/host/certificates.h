@@ -10,59 +10,62 @@ namespace albireo
 
     struct certificate_files
     {
-        std::string ca_cert;       // PEM of the local authority
-        std::string server_cert;   // PEM of the certificate of the local server
-        std::string server_key;    // private key of the server: encrypted on Windows, PEM elsewhere
-        std::string plain_key;     // the key in clear of the versions before 1.0.8, on Windows
-        std::string ca_key;        // the key of the authority of the versions before 1.0.8
+        std::string ca_cert;       // PEM de l'autorité locale
+        std::string server_cert;   // PEM du certificat du serveur local
+        std::string server_key;    // clé privée du serveur : chiffrée sous Windows, PEM ailleurs
+        std::string plain_key;     // la clé en clair des versions antérieures à 1.0.8, sous Windows
+        std::string ca_key;        // la clé de l'autorité des versions antérieures à 1.0.8
     };
 
     certificate_files certificate_paths(const std::string& dir);
 
     /*!
         ensures
-            - Makes sure dir holds the certificate of a local certification authority, a
-              certificate of the local server signed by it, valid for localhost, 127.0.0.1
-              and ::1, and the private key of that server.
-            - The authority signs the certificate of the server once, when both are made,
-              and its private key is erased from memory then: it is never written.  Its
-              name constraints limit it to localhost and the loopback addresses, and its
-              extended key usage to the authentication of servers.  It is the certificate
-              the trusted roots of the machine receive (trust_authority()), so that the
-              browsers accept the local server without warning.
-            - Both certificates are valid for 397 days.  When less than 30 days remain, when
-              the key of the server does not read or does not match its certificate, or when
-              dir holds the key of an authority of a version before 1.0.8, which may have
-              been copied, a new authority and a new certificate of the server replace them,
-              and renewed is set to true.
-            - On Windows, the private key of the server is encrypted with DPAPI for the
-              account that runs this function, LocalSystem for the service, in a file that
-              SYSTEM and the administrators alone may open: a copy of that file serves no
-              other account and no other computer.  Elsewhere it is a PEM file that its
-              owner alone may read.  A key left in clear by an earlier version is encrypted
-              in place of its file, and the key of an earlier authority is deleted.
-            - Returns false, with the reason in error, when the files cannot be created.
+            - S'assure que dir contient le certificat d'une autorité de certification locale,
+              un certificat du serveur local signé par elle, valable pour localhost, 127.0.0.1
+              et ::1, et la clé privée de ce serveur.
+            - L'autorité signe le certificat du serveur une seule fois, quand les deux sont
+              créés, et sa clé privée est alors effacée de la mémoire : elle n'est jamais
+              écrite.  Ses contraintes de nom la limitent à localhost et aux adresses de
+              bouclage, et son usage étendu de clé à l'authentification des serveurs.  C'est
+              le certificat que reçoivent les racines de confiance de la machine
+              (trust_authority()), pour que les navigateurs acceptent le serveur local sans
+              avertissement.
+            - Les deux certificats sont valables 397 jours.  Quand il reste moins de 30 jours,
+              quand la clé du serveur ne se lit pas ou ne correspond pas à son certificat, ou
+              quand dir contient la clé d'une autorité d'une version antérieure à 1.0.8, qui a
+              pu être copiée, une nouvelle autorité et un nouveau certificat du serveur les
+              remplacent, et renewed passe à true.
+            - Sous Windows, la clé privée du serveur est chiffrée avec DPAPI pour le compte
+              qui exécute cette fonction, LocalSystem pour le service, dans un fichier que
+              seuls SYSTEM et les administrateurs peuvent ouvrir : une copie de ce fichier ne
+              sert à aucun autre compte ni à aucun autre ordinateur.  Ailleurs, c'est un
+              fichier PEM que seul son propriétaire peut lire.  Une clé laissée en clair par
+              une version antérieure est chiffrée à la place de son fichier, et la clé d'une
+              autorité antérieure est supprimée.
+            - Renvoie false, avec la raison dans error, quand les fichiers ne peuvent pas être
+              créés.
     !*/
     bool ensure_certificates(const std::string& dir, bool& renewed, std::string& error);
 
     /*!
         ensures
-            - Reads the private key of the server of dir in PEM form, decrypted in memory for
-              the TLS server.  Returns false when it cannot be read or decrypted, by another
-              account or on another computer for instance.
+            - Lit la clé privée du serveur de dir au format PEM, déchiffrée en mémoire pour le
+              serveur TLS.  Renvoie false quand elle ne peut être ni lue ni déchiffrée, par un
+              autre compte ou sur un autre ordinateur par exemple.
     !*/
     bool read_server_key(const std::string& dir, std::string& pem);
 
-    // Erases the characters of a secret, then empties it.
+    // Efface les caractères d'un secret, puis le vide.
     void wipe_secret(std::string& s);
 
-    // Deletes the certificates and the keys of dir; false when one of them remains.
+    // Supprime les certificats et les clés de dir ; false quand l'un d'eux subsiste.
     bool remove_certificate_files(const std::string& dir);
 
-    // SHA-256 of the DER form of a PEM certificate, in lower case hexadecimal.
+    // SHA-256 de la forme DER d'un certificat PEM, en hexadécimal minuscule.
     std::string certificate_thumbprint(const std::string& pem_path);
 
-    // DER bytes of the first certificate of a PEM file, empty on failure.
+    // Octets DER du premier certificat d'un fichier PEM, vide en cas d'échec.
     std::string certificate_der(const std::string& pem_path);
 
 

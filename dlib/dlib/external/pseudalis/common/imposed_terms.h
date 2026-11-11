@@ -15,16 +15,17 @@
 namespace pseudalis
 {
     /*
-        The terms the administrators impose: the name of a client, of a project, of a contract
-        or of an organisation that the detector does not know.  Each occurrence of a term is
-        replaced with the tag of its type before the detector reads anything else of the text
-        (dlib::pii_imposed_term): its words and numbers in the same order, as whole words,
-        separated by at most two characters of one line, matching their case and their accents
-        when case_sensitive is true, ignoring both otherwise.  The service keeps them in its
-        database, which only SYSTEM and the administrators read, and gives them to the engine.
+        Les termes que les administrateurs imposent : le nom d'un client, d'un projet, d'un
+        contrat ou d'une organisation que le détecteur ne connaît pas.  Chaque occurrence d'un
+        terme est remplacée par l'étiquette de son type avant que le détecteur ne lise quoi que ce
+        soit d'autre du texte (dlib::pii_imposed_term) : ses mots et ses nombres dans le même
+        ordre, en mots entiers, séparés par au plus deux caractères d'une même ligne, en
+        respectant leur casse et leurs accents quand case_sensitive vaut true, en ignorant les deux
+        sinon.  Le service les garde dans sa base de données, que seuls SYSTEM et les
+        administrateurs lisent, et les donne au moteur.
     */
     const std::size_t max_imposed_terms = 100;
-    // In characters (code points), once the spaces at both ends are left out.
+    // En caractères (points de code), une fois retirées les espaces aux deux bouts.
     const std::size_t max_imposed_term_length = 200;
 
     struct imposed_term
@@ -34,7 +35,7 @@ namespace pseudalis
         bool case_sensitive = false;
     };
 
-    // The types an imposed term may take, in the order the interface lists them.
+    // Les types qu'un terme imposé peut prendre, dans l'ordre où l'interface les liste.
     inline const std::vector<std::string>& imposed_term_types()
     {
         static const std::vector<std::string> types = { "ORG", "PERSON", "LOCATION", "ADDRESS", "ID", "EMAIL",
@@ -43,16 +44,17 @@ namespace pseudalis
     }
 
     /*
-        Reads a list [{"term", "type", "case_sensitive"}], each term trimmed of the spaces at its
-        ends.  Returns false with a message, a code and the position of the term at fault (-1 for
-        the list itself) when the list is not one the service takes:
-            terms_invalid    not a list, an entry without a term, a term empty, longer than
-                             max_imposed_term_length, on several lines, with a control character
-                             or invalid UTF-8, or without a letter or a digit;
-            terms_too_many   more than max_imposed_terms;
-            terms_type       a type out of imposed_term_types();
-            terms_duplicate  a term given twice with the same case sensitivity (without it, two
-                             terms that differ by their case or their accents are the same).
+        Lit une liste [{"term", "type", "case_sensitive"}], chaque terme débarrassé des espaces à
+        ses bouts.  Renvoie false avec un message, un code et la position du terme fautif (-1 pour
+        la liste elle-même) quand la liste n'est pas de celles que le service accepte :
+            terms_invalid    pas une liste, une entrée sans terme, un terme vide, plus long que
+                             max_imposed_term_length, sur plusieurs lignes, avec un caractère de
+                             contrôle ou de l'UTF-8 invalide, ou sans lettre ni chiffre ;
+            terms_too_many   plus de max_imposed_terms ;
+            terms_type       un type hors de imposed_term_types() ;
+            terms_duplicate  un terme donné deux fois avec la même sensibilité à la casse (sans
+                             elle, deux termes qui diffèrent par leur casse ou leurs accents sont
+                             identiques).
     */
     inline bool parse_imposed_terms(const json& list, std::vector<imposed_term>& terms, std::string& message,
                                     std::string& code, long long& index)
@@ -79,7 +81,7 @@ namespace pseudalis
             index = static_cast<long long>(i);
             imposed_term t;
             const std::string raw = item.is_object() ? item["term"].str() : std::string();
-            // The spaces at both ends go; what remains is the term.
+            // Les espaces aux deux bouts s'en vont ; ce qui reste est le terme.
             std::size_t b = 0, e = raw.size();
             while (b < e && (raw[b] == ' ' || raw[b] == '\t')) ++b;
             while (e > b && (raw[e - 1] == ' ' || raw[e - 1] == '\t')) --e;

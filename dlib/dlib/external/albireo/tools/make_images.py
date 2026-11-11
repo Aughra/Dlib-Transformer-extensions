@@ -1,15 +1,15 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Renders the artwork of Albireo (SVG sources in web/img and resources/art) into the files
-# the programs embed: the icons of the programs and of the notification area (ICO), the
-# images of the installer and of the windows of the tray (PNG), and the PNG icons of the
-# web application.  The outputs are kept in the repository, so that a build needs neither
-# a browser nor Python; run this script after a change of the artwork:
+# Produit les illustrations d'Albireo (sources SVG dans web/img et resources/art) dans les fichiers
+# que les programmes embarquent : les icônes des programmes et de la zone de notification (ICO),
+# les images de l'installateur et des fenêtres de la zone de notification (PNG), et les icônes PNG
+# de l'application web.  Les sorties sont gardées dans le dépôt, pour qu'un build n'ait besoin ni
+# d'un navigateur ni de Python ; lancer ce script après un changement des illustrations :
 #
 #   python3 tools/make_images.py
 #
-# It needs the Python packages playwright (with its Chromium) and Pillow.
+# Il a besoin des paquets Python playwright (avec son Chromium) et Pillow.
 
 import asyncio
 import io
@@ -51,7 +51,7 @@ async def main():
         await icon(page, os.path.join(WEB, 'albireo-icon.svg'), os.path.join(OUT, 'albireo.ico'), app_sizes)
         for name in ('tray', 'tray-busy', 'tray-off', 'tray-update'):
             await icon(page, os.path.join(ART, name + '.svg'), os.path.join(OUT, name + '.ico'), tray_sizes)
-        # Images of the installer and of the windows, at twice their size at 96 DPI.
+        # Images de l'installateur et des fenêtres, au double de leur taille à 96 DPI.
         (await render(page, os.path.join(ART, 'setup-side.svg'), 480, 1040)).save(os.path.join(OUT, 'setup-side.png'))
         (await render(page, os.path.join(WEB, 'about.svg'), 1440, 440)).save(os.path.join(OUT, 'about.png'))
         (await render(page, os.path.join(WEB, 'albireo-mark.svg'), 128, 128)).save(os.path.join(OUT, 'mark.png'))

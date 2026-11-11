@@ -2,25 +2,27 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    The document search of the web application, run in this browser.
+    La recherche documentaire de l'application web, exécutée dans ce navigateur.
 
-    The documents of a project, and the large documents attached to a discussion, are cut
-    into passages of a few hundred tokens, overlapping by a fifth so that no idea is lost
-    at a boundary, each named after its page, slide or sheet.  The embedding model of the
-    service computes the vector of each passage once (/v1/embeddings, the passages of
-    several requests sharing the passes of the engine), and the passages are kept with
-    their vectors in the database of the browser, or in memory for an incognito discussion.
+    Les documents d'un projet, et les gros documents joints à une discussion, sont découpés
+    en passages de quelques centaines de tokens, qui se chevauchent d'un cinquième pour
+    qu'aucune idée ne se perde à une frontière, chacun nommé d'après sa page, sa diapositive
+    ou sa feuille.  Le modèle d'embedding du service calcule une fois le vecteur de chaque
+    passage (/v1/embeddings, les passages de plusieurs requêtes partageant les passes du
+    moteur), et les passages sont gardés avec leurs vecteurs dans la base de données du
+    navigateur, ou en mémoire pour une discussion incognito.
 
-    A question is answered by the passages closest to it in meaning, by their vectors, and
-    in words, by the BM25 score of its terms, the two rankings fused, then chosen so that
-    they do not repeat each other (maximal marginal relevance) within a budget of
-    characters.  A passage far from the best ones in meaning, or whose words weigh little
-    beside the best ones, is left out, so that a question unrelated to the documents
-    receives no excerpt.  The passage that follows each of the best ones comes with it
-    when the budget allows, the consecutive passages of a document merge into one excerpt,
-    and the documents come in the order of their best excerpt.
+    Une question reçoit pour réponse les passages qui en sont le plus proches par le sens,
+    par leurs vecteurs, et par les mots, par le score BM25 de ses termes, les deux
+    classements fusionnés, puis choisis pour qu'ils ne se répètent pas les uns les autres
+    (pertinence marginale maximale) dans un budget de caractères.  Un passage loin des
+    meilleurs par le sens, ou dont les mots pèsent peu à côté des meilleurs, est laissé de
+    côté, pour qu'une question sans rapport avec les documents ne reçoive aucun extrait.  Le
+    passage qui suit chacun des meilleurs l'accompagne quand le budget le permet, les
+    passages consécutifs d'un document fusionnent en un seul extrait, et les documents
+    viennent dans l'ordre de leur meilleur extrait.
 
-    Without an embedding model, the search works on the words alone.
+    Sans modèle d'embedding, la recherche ne travaille que sur les mots.
 */
 
 import * as store from './store.js';
@@ -30,17 +32,18 @@ export const passageChars = 1200;
 export const overlapChars = 240;
 const embedBatch = 16;
 /*
-    The floors of the search: the cosine of a passage and a question below which they are unrelated, measured
-    with Qwen3-Embedding (0.2 to 0.3 for a question and passages that do not answer it, 0.6 and more for the passage
-    that answers it); the distance to the best cosine beyond which a passage is left out; the share of the best
-    score in words below which a passage is left out; and the best passages that the next one follows.
+    Les seuils de la recherche : le cosinus d'un passage et d'une question en dessous duquel ils sont sans rapport,
+    mesuré avec Qwen3-Embedding (0.2 à 0.3 pour une question et des passages qui n'y répondent pas, 0.6 et plus pour
+    le passage qui y répond) ; l'écart au meilleur cosinus au-delà duquel un passage est laissé de côté ; la part du
+    meilleur score par les mots en dessous de laquelle un passage est laissé de côté ; et les meilleurs passages que
+    le suivant accompagne.
 */
 const minMeaning = 0.35;
 const meaningSpread = 0.2;
 const wordsShare = 0.3;
 const followed = 3;
 
-// The embedding model of the service: {id, dimensions}, or null.
+// Le modèle d'embedding du service : {id, dimensions}, ou null.
 let model = null;
 
 export function setEmbeddingModel(info) {
@@ -57,8 +60,8 @@ export function embeddingModel() {
 }
 
 /*
-    The text a model receives for a question.  Qwen3-Embedding reads its questions with an
-    instruction, and its passages as they are; the other models read both as they are.
+    Le texte qu'un modèle reçoit pour une question.  Qwen3-Embedding lit ses questions avec une
+    consigne, et ses passages tels quels ; les autres modèles lisent les deux tels quels.
 */
 function questionText(id, question) {
   if (/qwen3-embedding/i.test(id)) {
@@ -78,7 +81,7 @@ function decodeVector(base64) {
   return new Float32Array(bytes.buffer);
 }
 
-// The vectors of texts, from the embedding model of the service.
+// Les vecteurs de textes, issus du modèle d'embedding du service.
 async function embed(texts, signal) {
   const r = await fetch('/v1/embeddings', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, signal,
@@ -90,7 +93,7 @@ async function embed(texts, signal) {
       const j = await r.json();
       if (j && j.error) message = j.error.message || message;
     } catch (e) {
-      // The body was not JSON.
+      // Le corps n'était pas du JSON.
     }
     throw new Error(message);
   }
@@ -101,9 +104,10 @@ async function embed(texts, signal) {
 }
 
 /*
-    Cuts a text into passages: [{start, end, where, text}].  The "## " lines of the text
-    name the places (pages, slides, sheets) and the sections of the passages; the rows of a
-    sheet repeat its first row, the names of its columns, at the head of each passage.
+    Découpe un texte en passages : [{start, end, where, text}].  Les lignes "## " du texte
+    nomment les emplacements (pages, diapositives, feuilles) et les sections des passages ; les
+    lignes d'une feuille répètent sa première ligne, les noms de ses colonnes, en tête de chaque
+    passage.
 */
 export function chunk(text) {
   const out = [];
@@ -119,7 +123,7 @@ export function chunk(text) {
       const prefix = header && !buffer.startsWith(header) ? header + '\n' : '';
       out.push({ start: bufferStart, end: pos, where: bufferWhere, text: prefix + body });
     }
-    // The end of the passage starts the next one, cut at a line or a sentence.
+    // La fin du passage commence le suivant, coupée à une ligne ou à une phrase.
     let tail = '';
     if (keepTail && buffer.length > overlapChars) {
       tail = buffer.slice(-overlapChars);
@@ -143,7 +147,7 @@ export function chunk(text) {
     const line = lines[li] + (li + 1 < lines.length ? '\n' : '');
     const m = line.trimEnd().match(place);
     if (m) {
-      // A new place: the passage in progress ends there, without overlap.
+      // Un nouvel emplacement : le passage en cours s'y termine, sans chevauchement.
       emit(false);
       location = m[1];
       section = '';
@@ -153,7 +157,7 @@ export function chunk(text) {
       bufferWhere = where();
       continue;
     }
-    // A section starts a passage of its own, without the overlap of the previous one, once that one is long enough.
+    // Une section commence son propre passage, sans le chevauchement du précédent, dès que celui-ci est assez long.
     const heading = line.trimEnd().match(/^#{1,6} (.+)$/);
     if (heading) {
       if (buffer.length > passageChars / 3) emit(false);
@@ -164,7 +168,7 @@ export function chunk(text) {
     let rest = line;
     while (rest.length) {
       const room = passageChars - buffer.length;
-      // A short line that does not fit, such as a row of a sheet, starts the next passage whole.
+      // Une ligne courte qui ne tient pas, comme une ligne d'une feuille, commence entière le passage suivant.
       if (rest.length > room && rest === line && line.length <= passageChars / 4 && buffer.trim()) {
         emit(true);
         continue;
@@ -174,7 +178,7 @@ export function chunk(text) {
         pos += rest.length;
         rest = '';
       } else {
-        // A long line is cut at the last sentence or space that fits.
+        // Une longue ligne est coupée à la dernière phrase ou au dernier espace qui tient.
         let cut = room;
         const slice = rest.slice(0, room);
         const sentence = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('! '), slice.lastIndexOf('? '));
@@ -198,13 +202,13 @@ export function chunk(text) {
   return out;
 }
 
-// Owners whose passages stay in memory: the incognito discussions.
+// Les propriétaires dont les passages restent en mémoire : les discussions incognito.
 const memory = new Map();
 
 /*
-    The passages of the owners searched last, read once: owner -> {records, sparse}, sparse (the terms of each
-    passage, for the search by words) built at the first search.  The cache keeps cachedOwners owners at most, the
-    one used least recently leaving first.
+    Les passages des derniers propriétaires cherchés, lus une fois : owner -> {records, sparse}, sparse (les termes de
+    chaque passage, pour la recherche par les mots) construit à la première recherche.  Le cache garde au plus
+    cachedOwners propriétaires, le moins récemment utilisé partant le premier.
 */
 const cache = new Map();
 const cachedOwners = 8;
@@ -233,7 +237,7 @@ async function load(owner) {
   return entry;
 }
 
-// The terms of each passage of a cache entry, computed at its first search by words.
+// Les termes de chaque passage d'une entrée du cache, calculés à sa première recherche par les mots.
 function sparseOf(entry) {
   if (!entry.sparse) {
     entry.sparse = entry.records.map((r) => {
@@ -246,7 +250,7 @@ function sparseOf(entry) {
   return entry.sparse;
 }
 
-// The passages of the document docId of owner, read without loading the other documents of owner.
+// Les passages du document docId de owner, lus sans charger les autres documents de owner.
 async function documentRecords(owner, docId, persistent) {
   if (!persistent) return (memory.get(owner) || []).filter((r) => r.doc === docId);
   const entry = cache.get(owner);
@@ -254,7 +258,7 @@ async function documentRecords(owner, docId, persistent) {
   return store.chunksOfDocument(docId).catch(() => []);
 }
 
-// The states of the documents read from the database (status), kept until the passages of their owner change.
+// Les états des documents lus dans la base (status), gardés jusqu'à ce que les passages de leur propriétaire changent.
 const statuses = new Map();
 
 function forget(owner) {
@@ -263,8 +267,8 @@ function forget(owner) {
 }
 
 /*
-    The removals of the documents and of their owners, counted: an indexing that started
-    before the removal of its document, of its owner or of everything writes no passage.
+    Les suppressions des documents et de leurs propriétaires, comptées : une indexation commencée
+    avant la suppression de son document, de son propriétaire ou de tout n'écrit aucun passage.
 */
 const removals = new Map();
 let removalsOfAll = 0;
@@ -278,9 +282,9 @@ function countRemoval(key) {
 }
 
 /*
-    The state of the documents of an owner: Map doc -> {passages, vectors, model}, vectors
-    counting the passages that hold a vector of the current model.  It is read from the
-    passages loaded for the search when they are, else from the database without loading them.
+    L'état des documents d'un propriétaire : Map doc -> {passages, vectors, model}, vectors
+    comptant les passages qui contiennent un vecteur du modèle courant.  Il est lu dans les
+    passages chargés pour la recherche quand ils le sont, sinon dans la base sans les charger.
 */
 export async function status(owner) {
   const entry = cache.get(owner);
@@ -305,13 +309,13 @@ export async function status(owner) {
 }
 
 /*
-    Indexes a document {id, name, text} for an owner: its passages, and their vectors when
-    the service has an embedding model.  A document already indexed with the current model
-    is left as it is.  onProgress(done, total) follows the vectors computed; signal stops the
-    vectors, as does deadline (a time of Date.now()), and the passages without a vector are
-    then searched by their words until an indexing completes them.  A document removed
-    (removeDocument, removeOwner, removeAll) once the indexing started keeps no passage.
-    Returns {passages, vectors}.
+    Indexe un document {id, name, text} pour un propriétaire : ses passages, et leurs vecteurs
+    quand le service a un modèle d'embedding.  Un document déjà indexé avec le modèle courant
+    est laissé tel quel.  onProgress(done, total) suit les vecteurs calculés ; signal arrête les
+    vecteurs, comme deadline (un instant de Date.now()), et les passages sans vecteur sont alors
+    cherchés par leurs mots jusqu'à ce qu'une indexation les complète.  Un document supprimé
+    (removeDocument, removeOwner, removeAll) une fois l'indexation commencée ne garde aucun
+    passage.  Renvoie {passages, vectors}.
 */
 export async function indexDocument(owner, doc, options = {}) {
   const { persistent = true, onProgress = null, signal = null, deadline = 0 } = options;
@@ -329,7 +333,7 @@ export async function indexDocument(owner, doc, options = {}) {
   }));
   let vectors = 0;
   if (current) {
-    // The passages already computed with the current model keep their vectors: an indexing that stopped goes on.
+    // Les passages déjà calculés avec le modèle courant gardent leurs vecteurs : une indexation arrêtée reprend.
     const known = new Map();
     for (const r of existing) {
       if (r.vector && r.model === current) known.set(r.where + '\n' + r.text, r.vector);
@@ -357,17 +361,17 @@ export async function indexDocument(owner, doc, options = {}) {
         vectors += batch.length;
       } catch (e) {
         if (e.name === 'AbortError') break;
-        // The service lost its model, or stopped: the passages are searched by their words.
+        // Le service a perdu son modèle, ou s'est arrêté : les passages sont cherchés par leurs mots.
         break;
       }
       if (onProgress) onProgress(vectors, records.length);
     }
   }
-  // The removals are checked right before the write, and after it for a removal that came
-  // while the passages were being written.
+  // Les suppressions sont vérifiées juste avant l'écriture, et après elle pour une suppression
+  // survenue pendant l'écriture des passages.
   if (removed()) return { passages: 0, vectors: 0 };
   if (persistent) {
-    // The former passages and the new ones are exchanged in one transaction.
+    // Les anciens passages et les nouveaux sont échangés en une transaction.
     const stored = records.map((r) => Object.assign({}, r, { vector: r.vector ? r.vector.buffer : null }));
     await store.replaceChunks(doc.id, stored);
     if (removed()) {
@@ -398,8 +402,8 @@ export async function removeOwner(owner) {
   forget(owner);
 }
 
-// Forgets every passage kept in memory when the database is emptied (store.clearAll); the
-// indexings in progress write none.
+// Oublie tous les passages gardés en mémoire quand la base est vidée (store.clearAll) ; les
+// indexations en cours n'en écrivent aucun.
 export function removeAll() {
   ++removalsOfAll;
   memory.clear();
@@ -407,7 +411,7 @@ export function removeAll() {
   statuses.clear();
 }
 
-// The longest end of a that begins b, for the merge of overlapping passages.
+// La plus longue fin de a qui commence b, pour la fusion des passages qui se chevauchent.
 function overlap(a, b) {
   const max = Math.min(a.length, b.length, overlapChars + 40);
   for (let k = max; k >= 16; --k) if (a.endsWith(b.slice(0, k))) return k;
@@ -415,19 +419,19 @@ function overlap(a, b) {
 }
 
 /*
-    The excerpts of the documents of owners closest to a question:
-    [{doc, name, where, text, score, passages}], the documents in the order of their best
-    excerpt, the excerpts of a document in its order, within budget characters, limit
-    passages at most, passages naming the identifiers of the passages of each excerpt.  skip,
-    a Set of documents, leaves them out of the search, such as the documents of a project the
-    model reads whole; exclude, a Set of passage identifiers, leaves out the passages the
-    context already holds.
+    Les extraits des documents de owners les plus proches d'une question :
+    [{doc, name, where, text, score, passages}], les documents dans l'ordre de leur meilleur
+    extrait, les extraits d'un document dans son ordre, dans budget caractères, limit passages
+    au plus, passages nommant les identifiants des passages de chaque extrait.  skip, un Set de
+    documents, les exclut de la recherche, comme les documents d'un projet que le modèle lit en
+    entier ; exclude, un Set d'identifiants de passages, exclut les passages que le contexte
+    contient déjà.
 */
 export async function search(owners, question, options = {}) {
   const { limit = 12, budget = 12000, signal = null, skip = null, exclude = null } = options;
   const all = [];
   const sparse = [];
-  // The index of each passage among all, for the passage that follows a chosen one.
+  // L'indice de chaque passage parmi tous, pour le passage qui suit un passage choisi.
   const at = new Map();
   for (const o of owners) {
     const entry = await load(o);
@@ -442,7 +446,7 @@ export async function search(owners, question, options = {}) {
   if (!all.length || !String(question).trim()) return [];
   const excluded = (i) => !!(exclude && exclude.has(all[i].id));
 
-  // By words: BM25 over the passages of the owners.
+  // Par les mots : BM25 sur les passages des propriétaires.
   const q = Array.from(new Set(terms(question)));
   const words = new Float64Array(all.length);
   if (q.length) {
@@ -462,7 +466,7 @@ export async function search(owners, question, options = {}) {
     }
   }
 
-  // By meaning: the cosine of the vectors, all of unit length.
+  // Par le sens : le cosinus des vecteurs, tous de longueur unité.
   const meaning = new Float64Array(all.length).fill(-2);
   let questionVector = null;
   if (model && all.some((r) => r.vector && r.model === model.id)) {
@@ -485,9 +489,10 @@ export async function search(owners, question, options = {}) {
   }
 
   /*
-      Reciprocal rank fusion of the two rankings, each over the passages near its best one: in meaning, a cosine
-      of minMeaning at least and within meaningSpread of the best; in words, a score of wordsShare of the best at
-      least.  A question that matches no passage in either way receives none.
+      Fusion par rang réciproque des deux classements, chacun sur les passages proches de son meilleur : par le sens,
+      un cosinus d'au moins minMeaning et à moins de meaningSpread du meilleur ; par les mots, un score d'au moins
+      wordsShare du meilleur.  Une question qui ne correspond à aucun passage d'aucune des deux façons n'en reçoit
+      aucun.
   */
   const fused = new Float64Array(all.length);
   const rank = (scores, floor) => {
@@ -506,8 +511,8 @@ export async function search(owners, question, options = {}) {
   const candidates = Array.from(fused.keys()).filter((i) => fused[i] > 0).sort((a, b) => fused[b] - fused[a]).slice(0, 60);
   if (!candidates.length) return [];
 
-  // Maximal marginal relevance: each passage chosen for its relevance, less its likeness to
-  // the passages already chosen.
+  // Pertinence marginale maximale : chaque passage choisi pour sa pertinence, moins sa ressemblance
+  // avec les passages déjà choisis.
   const top = fused[candidates[0]];
   const chosen = [];
   let used = 0;
@@ -539,7 +544,7 @@ export async function search(owners, question, options = {}) {
     used += all[i].text.length;
   }
 
-  // The passage that follows each of the best ones continues it, within the budget and the limit.
+  // Le passage qui suit chacun des meilleurs le prolonge, dans le budget et la limite.
   const taken = new Set(chosen);
   for (const i of chosen.slice(0, followed)) {
     const next = at.get(all[i].doc + ':' + (all[i].ordinal + 1));
@@ -551,7 +556,7 @@ export async function search(owners, question, options = {}) {
     fused[next] = Math.max(fused[next], fused[i] * 0.5);
   }
 
-  // The excerpts of each document in its order, the consecutive passages merged.
+  // Les extraits de chaque document dans son ordre, les passages consécutifs fusionnés.
   chosen.sort((a, b) => (all[a].doc < all[b].doc ? -1 : all[a].doc > all[b].doc ? 1 : all[a].ordinal - all[b].ordinal));
   const firstLine = (text) => text.slice(0, Math.max(0, text.indexOf('\n')));
   const out = [];
@@ -559,7 +564,7 @@ export async function search(owners, question, options = {}) {
     const r = all[i];
     const last = out[out.length - 1];
     if (last && last.doc === r.doc && last.lastOrdinal + 1 === r.ordinal) {
-      // The passages of a sheet start with the names of its columns, which the excerpt holds once.
+      // Les passages d'une feuille commencent par les noms de ses colonnes, que l'extrait contient une seule fois.
       let text = r.text;
       const head = firstLine(last.text);
       if (head && /^Sheet: /.test(r.where || '') && firstLine(text) === head) text = text.slice(head.length + 1);
@@ -573,7 +578,7 @@ export async function search(owners, question, options = {}) {
     out.push({ doc: r.doc, name: r.name, where: r.where, text: r.text, score: fused[i], lastOrdinal: r.ordinal,
       passages: [r.id] });
   }
-  // The documents in the order of their best excerpt.
+  // Les documents dans l'ordre de leur meilleur extrait.
   const bestOf = new Map();
   for (const x of out) bestOf.set(x.doc, Math.max(bestOf.get(x.doc) || 0, x.score));
   const order = Array.from(bestOf.keys()).sort((a, b) => bestOf.get(b) - bestOf.get(a));

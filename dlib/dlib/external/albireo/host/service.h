@@ -26,9 +26,9 @@ namespace httplib { class SSLServer; class Server; }
 namespace albireo
 {
 
-    // The engine a machine runs: a library and, for the engines with several devices,
-    // the device ("NPU", "GPU").  key names it in the measures: "cpu-avx2",
-    // "openvino:npu", "openvino:gpu", "cuda".
+    // Le moteur que fait tourner une machine : une bibliothèque et, pour les moteurs à
+    // plusieurs périphériques, le périphérique ("NPU", "GPU").  key le nomme dans les
+    // mesures : "cpu-avx2", "openvino:npu", "openvino:gpu", "cuda".
     struct engine_choice
     {
         const engine_candidate* candidate = nullptr;
@@ -38,31 +38,32 @@ namespace albireo
 
     /*!
         ensures
-            - Returns the engine to run for the settings s among the candidates found
-              next to the service:
-                - engine names a variant: that variant, when usable, with the device the
-                  accelerator names for the engines that have several;
-                - accelerator "npu", "gpu" or "both": the engine of that device, the
-                  fastest measured one for "both";
-                - accelerator "none": the processor engine, the fastest measured one,
-                  else the one of the richest kernels (cpu-avxvnni, cpu-avx2, cpu);
-                - engine "best": the fastest measured engine;
-                - otherwise, the automatic choice: the accelerator of the computer, the
-                  NVIDIA card (cuda), else the NPU and the graphics processor of Intel
-                  together (openvino:both), else the one of them present, each engine
-                  computing on the processor the products its device does not take; the
-                  processor engine when no accelerator is usable, or when a measure
-                  found the accelerator slower than the processor engine.
-            - The returned candidate is null when no engine is usable.
+            - Renvoie le moteur à faire tourner pour les réglages s parmi les candidats
+              trouvés à côté du service :
+                - engine nomme une variante : cette variante, si elle est utilisable, avec le
+                  périphérique que nomme accelerator pour les moteurs qui en ont plusieurs ;
+                - accelerator "npu", "gpu" ou "both" : le moteur de ce périphérique, le plus
+                  rapide mesuré pour "both" ;
+                - accelerator "none" : le moteur du processeur, le plus rapide mesuré, sinon
+                  celui des noyaux les plus riches (cpu-avxvnni, cpu-avx2, cpu) ;
+                - engine "best" : le moteur mesuré le plus rapide ;
+                - sinon, le choix automatique : l'accélérateur de l'ordinateur, la carte
+                  NVIDIA (cuda), sinon le NPU et le processeur graphique d'Intel ensemble
+                  (openvino:both), sinon celui des deux qui est présent, chaque moteur
+                  calculant sur le processeur les produits que son périphérique ne prend
+                  pas ; le moteur du processeur quand aucun accélérateur n'est utilisable,
+                  ou quand une mesure a trouvé l'accélérateur plus lent que le moteur du
+                  processeur.
+            - Le candidat renvoyé est nul quand aucun moteur n'est utilisable.
     !*/
     engine_choice choose_engine(const std::vector<engine_candidate>& candidates, const host_settings& s);
 
     /*!
         ensures
-            - Returns the engines a set of candidates offers, one per device: what the tray
-              lists.  Among the OpenVINO engines, one per family of processor kernels
-              (openvino-avxvnni, openvino), the richest usable one offers the NPU, the
-              graphics processor and both.
+            - Renvoie les moteurs qu'offre un ensemble de candidats, un par périphérique : ce
+              que liste la barre des tâches.  Parmi les moteurs OpenVINO, un par famille de
+              noyaux du processeur (openvino-avxvnni, openvino), le plus riche utilisable
+              offre le NPU, le processeur graphique et les deux.
     !*/
     std::vector<engine_choice> engine_options(const std::vector<engine_candidate>& candidates);
     bool is_openvino_variant(const std::string& variant);
@@ -71,242 +72,248 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The Albireo service: the engine and its models, the local HTTPS server
-                with the web application, the OpenAI compatible interface and the
-                administration interface of the tray, the catalog and the downloads of
-                the models.
+                Le service Albireo : le moteur et ses modèles, le serveur HTTPS local avec
+                l'application web, l'interface compatible OpenAI et l'interface
+                d'administration de la barre des tâches, le catalogue et les
+                téléchargements des modèles.
 
-                run() starts everything and blocks until stop() or a restart request; the
-                caller (the console) then starts a new service when restart_requested()
-                says so, which is how a change of port or of engine is applied.
+                run() démarre tout et bloque jusqu'à stop() ou une demande de redémarrage ;
+                l'appelant (la console) démarre alors un nouveau service quand
+                restart_requested() le dit, et c'est ainsi que s'applique un changement de
+                port ou de moteur.
 
-                The server answers as soon as its port is open.  The engines are described
-                and the chosen one starts in the background, then the active models load:
-                until then, starting_phase() names the step in progress, the status says
-                so, and the requests for a model answer 503 with the code "starting", so
-                that the tray and the clients tell a slow start from a failure.
+                Le serveur répond dès que son port est ouvert.  Les moteurs sont décrits et
+                celui choisi démarre en arrière-plan, puis les modèles actifs se chargent :
+                jusque-là, starting_phase() nomme l'étape en cours, l'état le dit, et les
+                requêtes pour un modèle répondent 503 avec le code "starting", pour que la
+                barre des tâches et les clients distinguent un démarrage lent d'un échec.
 
-            NETWORK
-                The catalog and the downloads run on threads of their own,
-                each request bounded in time, so that the local work (the models, the
-                imports, the requests of the users) never waits for the network.  With
-                the "offline" setting, no request leaves the machine: the catalog and the
-                models come from folders, the import folder of the data
-                folder or a folder named by the tray (import_folder()).
+            RÉSEAU
+                Le catalogue et les téléchargements tournent sur des threads à eux, chaque
+                requête bornée dans le temps, pour que le travail local (les modèles, les
+                imports, les requêtes des utilisateurs) n'attende jamais le réseau.  Avec le
+                réglage "offline", aucune requête ne quitte la machine : le catalogue et les
+                modèles viennent de dossiers, le dossier d'import du dossier des données ou
+                un dossier nommé par la barre des tâches (import_folder()).
         !*/
     public:
         service();
         ~service();
 
-        // Starts and serves until stopped; returns false when it could not start.
+        // Démarre et sert jusqu'à l'arrêt ; renvoie false quand il n'a pas pu démarrer.
         bool run(std::string& error);
         void stop();
         bool stopping() const { return stopping_; }
         bool restart_requested() const { return restart_; }
         void request_restart();
 
-        // The programs and the data.
+        // Les programmes et les données.
         std::string program_dir() const { return program_dir_; }
         std::string data_dir() const { return data_dir_; }
-        // The documents of the Mac that the web application attaches: <data>/documents.
+        // Les documents du Mac que l'application web joint : <data>/documents.
         std::string documents_dir() const { return join_path(data_dir_, "documents"); }
         int port() const { return port_; }
 
-        // What the interfaces need.
+        // Ce dont les interfaces ont besoin.
         settings_store& settings() { return *settings_; }
         store& db() { return *db_; }
         model_manager& models() { return *models_; }
-        // The folder of the voices of the speech synthesis and its program, beside the service.
+        // Le dossier des voix de la synthèse vocale et son programme, à côté du service.
         std::string speech_dir() const;
         std::string speech_program() const;
         engine_host& engine() { return engine_; }
 
         json status();
         json engines();
-        // The step of the start in progress: "engines" (described, then the chosen one
-        // starts), "models" (the active models load), or empty once the service is ready.
+        // L'étape du démarrage en cours : "engines" (décrits, puis celui choisi démarre),
+        // "models" (les modèles actifs se chargent), ou vide une fois le service prêt.
         std::string starting_phase() const;
-        // True while the model of a role, or the model named, loads into the engine.
+        // Vrai pendant que le modèle d'un rôle, ou le modèle nommé, se charge dans le moteur.
         bool model_loading(const std::string& requested);
-        // The engine model of a request: an identifier, a role or its alias, "background",
-        // or auto.
+        // Le modèle du moteur d'une requête : un identifiant, un rôle ou son alias,
+        // "background", ou auto.
         std::string resolve_model(const std::string& requested);
         /*!
             ensures
-                - Returns the model of the work the applications do in the background
-                  (titles, summaries, memory): the language model that comes with Albireo,
-                  which stays loaded whatever the functions, or empty without one, the
-                  requests for "background" then going to the general model.
+                - Renvoie le modèle du travail que les applications font en arrière-plan
+                  (titres, résumés, mémoire) : le modèle de langage livré avec Albireo, qui
+                  reste chargé quelles que soient les fonctions, ou vide s'il n'y en a pas,
+                  les requêtes pour "background" allant alors au modèle général.
         !*/
         const std::string& background_model() const { return background_model_; }
         /*!
             ensures
-                - Returns the model of each function: the one chosen for it, else the general
-                  model, else the language model that comes with Albireo, so that the three
-                  functions keep a model once every choice is undone; the embedding role keeps
-                  the model chosen for it.
+                - Renvoie le modèle de chaque fonction : celui choisi pour elle, sinon le modèle
+                  général, sinon le modèle de langage livré avec Albireo, pour que les trois
+                  fonctions gardent un modèle une fois chaque choix défait ; le rôle d'embedding
+                  garde le modèle choisi pour lui.
         !*/
         std::map<std::string, std::string> effective_models(const host_settings& st) const;
-        // The embedding model of a request: a loaded embedding model named by its
-        // identifier, otherwise the active one ("auto", "embedding", "albireo-embedding").
+        // Le modèle d'embedding d'une requête : un modèle d'embedding chargé nommé par son
+        // identifiant, sinon celui qui est actif ("auto", "embedding", "albireo-embedding").
         std::string resolve_embedding_model(const std::string& requested);
         /*!
             ensures
-                - Returns, for each model loaded in the engine, {"inputs", "publisher"}: the
-                  inputs the engine reads for it as its "models" query reports them ("text",
-                  and "image" for a model loaded with its projector), "text" alone when the
-                  engine does not say, and the company that made the model, from its entry,
-                  empty when unknown.
+                - Renvoie, pour chaque modèle chargé dans le moteur, {"inputs", "publisher"} :
+                  les entrées que le moteur lit pour lui telles que les rapporte son
+                  interrogation "models" ("text", et "image" pour un modèle chargé avec son
+                  projecteur), "text" seul quand le moteur ne le dit pas, et l'entreprise qui
+                  a fait le modèle, d'après son entrée, vide quand elle est inconnue.
         !*/
         std::map<std::string, json> loaded_traits();
         /*!
             ensures
-                - Gives the function role to the model id, loading it when needed.  The
-                  model the function used before leaves the engine once its requests are
-                  served, unless another function uses it.  A model activated while it
-                  waits to leave stays loaded.
+                - Donne la fonction role au modèle id, en le chargeant si besoin.  Le modèle
+                  qu'utilisait la fonction auparavant quitte le moteur une fois ses requêtes
+                  servies, sauf si une autre fonction l'utilise.  Un modèle activé pendant
+                  qu'il attend de partir reste chargé.
         !*/
         bool activate(const std::string& id, const std::string& role, user_error& error);
         /*!
             ensures
-                - Takes every function from the model id and unloads it once its requests
-                  are served.  The model of the document search keeps its function: the
-                  search always has its embedding model, which another embedding model
-                  replaces through activate().
+                - Retire toutes ses fonctions au modèle id et le décharge une fois ses
+                  requêtes servies.  Le modèle de la recherche dans les documents garde sa
+                  fonction : la recherche a toujours son modèle d'embedding, qu'un autre
+                  modèle d'embedding remplace par activate().
         !*/
         bool deactivate(const std::string& id, user_error& error);
         /*!
             ensures
-                - Takes every function from the model id, the document search included,
-                  and deletes its file.  A model in the engine is deleted once its requests
-                  are served and it left the engine: pending is then true, and the model
-                  stays listed, in the state "removing", until then.
-                - A model that comes with Albireo is refused (code "builtin_model"): it
-                  leaves its functions to other models and stays installed.
+                - Retire toutes ses fonctions au modèle id, la recherche dans les documents
+                  comprise, et supprime son fichier.  Un modèle dans le moteur est supprimé
+                  une fois ses requêtes servies et sorti du moteur : pending vaut alors true,
+                  et le modèle reste listé, à l'état "removing", jusque-là.
+                - Un modèle livré avec Albireo est refusé (code "builtin_model") : il laisse
+                  ses fonctions à d'autres modèles et reste installé.
         !*/
         bool remove_model(const std::string& id, user_error& error, bool& pending);
-        // The models waiting for their requests before they leave: id -> "unloading" or
+        // Les modèles qui attendent leurs requêtes avant de partir : id -> "unloading" ou
         // "removing".
         json leaving_models();
-        // Loads the models of the roles of the settings into the engine.
+        // Charge dans le moteur les modèles des rôles des réglages.
         void load_active_models();
 
         /*!
             ensures
-                - Installs what path holds, for the route of the imports by path.  The
-                  service reads with its own rights, those of the system on Windows, so that
-                  path is accepted in two cases only, a file of another account being never
-                  read, hashed, listed nor revealed:
-                    - a folder or a file of the import folder of the data folder, which only
-                      SYSTEM and the administrators fill: its signed catalog, its models
-                      (*.gguf, in the folder and in its "models" subfolder), as scan_inbox()
-                      installs them, the files staying in place;
-                    - a signed offline bundle on a local drive: a folder whose catalog.json
-                      bears the signature of Albireo.  Its catalog and the models that
-                      catalog lists (found by their names, sizes and hashes,
-                      model_manager::import_bundle()) are installed; no other file of the
-                      folder is read.
-                  Every file is read through no link.  A model file of the user goes to the
-                  service through the upload route, read with the rights of the user.
-                - Returns {"imported", "already", "pending", "errors"} as
-                  model_manager::import_path(), with "catalog" when the folder holds one.
-                - Refuses path, with refusal set and an empty result, when it is relative
-                  (code import_path_relative), on a network share or drive
-                  (import_path_network), a device or a path of the system namespaces
-                  (import_path_device), invalid (import_path_invalid: a stream, a wildcard, a
-                  control character, a name "." or ".."), a model file outside the import
-                  folder (import_use_upload), outside the import folder and no signed
-                  offline bundle reached through no link (import_not_bundle: the same code
-                  whether the folder is missing, unreadable, unsigned or reached through a
-                  link, so that the answer reveals nothing of a folder of another account),
-                  missing in the import folder (import_not_found), reached through a link
-                  in the import folder (import_path_link), or when the import folder lets
-                  other accounts than the administrators write in it and cannot be
-                  secured (import_folder_insecure).  Each refusal names the path in its
-                  arguments ("path").
+                - Installe ce que contient path, pour la route des imports par chemin.  Le
+                  service lit avec ses propres droits, ceux du système sous Windows, si bien
+                  que path n'est accepté que dans deux cas, un fichier d'un autre compte
+                  n'étant jamais lu, haché, listé ni révélé :
+                    - un dossier ou un fichier du dossier d'import du dossier des données, que
+                      seuls SYSTEM et les administrateurs remplissent : son catalogue signé,
+                      ses modèles (*.gguf, dans le dossier et dans son sous-dossier "models"),
+                      comme scan_inbox() les installe, les fichiers restant en place ;
+                    - un paquet hors ligne signé sur un disque local : un dossier dont le
+                      catalog.json porte la signature d'Albireo.  Son catalogue et les modèles
+                      que liste ce catalogue (trouvés par leurs noms, tailles et empreintes,
+                      model_manager::import_bundle()) sont installés ; aucun autre fichier du
+                      dossier n'est lu.
+                  Chaque fichier est lu sans passer par aucun lien.  Un fichier de modèle de
+                  l'utilisateur va au service par la route d'envoi, lu avec les droits de
+                  l'utilisateur.
+                - Renvoie {"imported", "already", "pending", "errors"} comme
+                  model_manager::import_path(), avec "catalog" quand le dossier en contient un.
+                - Refuse path, avec refusal rempli et un résultat vide, quand il est relatif
+                  (code import_path_relative), sur un partage ou un disque réseau
+                  (import_path_network), un périphérique ou un chemin des espaces de noms du
+                  système (import_path_device), invalide (import_path_invalid : un flux, un
+                  joker, un caractère de contrôle, un nom "." ou ".."), un fichier de modèle
+                  hors du dossier d'import (import_use_upload), hors du dossier d'import et
+                  qui n'est pas un paquet hors ligne signé atteint sans passer par aucun lien
+                  (import_not_bundle : le même code, que le dossier manque, soit illisible,
+                  non signé ou atteint par un lien, pour que la réponse ne révèle rien d'un
+                  dossier d'un autre compte), absent du dossier d'import (import_not_found),
+                  atteint par un lien dans le dossier d'import (import_path_link), ou quand le
+                  dossier d'import laisse d'autres comptes que les administrateurs y écrire et
+                  ne peut pas être sécurisé (import_folder_insecure).  Chaque refus nomme le
+                  chemin dans ses arguments ("path").
         !*/
         json import_folder(const std::string& path, user_error& refusal);
 
-        // Applies the network settings at once: the proxy, and the offline mode, which
-        // ends the requests in progress.
+        // Applique aussitôt les réglages du réseau : le proxy, et le mode hors ligne, qui
+        // met fin aux requêtes en cours.
         void apply_network_settings(const host_settings& s);
 
-        // Counts the usage of a finished request.
+        // Compte l'utilisation d'une requête terminée.
         void record_usage(long prompt_tokens, long generated_tokens);
 
         /*
-            Measures every usable engine on this machine with the active general model (or
-            the smallest installed one) and records the measures in the settings.  One
-            measure runs at a time: a call during another one returns at once with the code
-            "benchmark_running".  Each engine is measured while the engine of the service
-            serves no request: the measure waits for its requests to end, two minutes at
-            most, and is made again once when the service received requests meanwhile, so
-            that the engines measured do not share the processor with it.
+            Mesure chaque moteur utilisable sur cette machine avec le modèle général actif (ou
+            le plus petit installé) et enregistre les mesures dans les réglages.  Une seule
+            mesure tourne à la fois : un appel pendant une autre rend la main aussitôt avec le
+            code "benchmark_running".  Chaque moteur est mesuré pendant que le moteur du
+            service ne sert aucune requête : la mesure attend que ses requêtes se terminent,
+            deux minutes au plus, et est refaite une fois quand le service a reçu des requêtes
+            entre-temps, pour que les moteurs mesurés ne partagent pas le processeur avec lui.
         */
         json benchmark_engines();
 
-        // Entry points of the child processes started by the service itself.
+        // Points d'entrée des processus enfants lancés par le service lui-même.
         static int probe_engine(const std::string& path);
         static int benchmark_engine(const std::string& path, const std::string& model, const std::string& config);
 
     private:
         void background_loop();
-        // Describes the engines next to the service and starts the one of the settings, a
-        // processor engine when it fails; then engines_ready_ becomes true.
+        // Décrit les moteurs à côté du service et démarre celui des réglages, un moteur du
+        // processeur quand il échoue ; puis engines_ready_ devient vrai.
         void start_engines();
         /*!
             ensures
-                - Registers the models that come with Albireo, in the folder of the programs.
-                  A new one that takes the place of a model of its kind (a language model,
-                  or an embedding model) that no longer comes with Albireo receives the
-                  functions of that model, as an update that changes the model that comes
-                  with Albireo does; another new one takes the functions no model holds.  The
-                  functions of a model that left without a successor are freed.
-                - The first language model among them serves the work in the background.
+                - Enregistre les modèles livrés avec Albireo, dans le dossier des programmes.
+                  Un nouveau qui prend la place d'un modèle de son genre (un modèle de langage,
+                  ou un modèle d'embedding) qui n'est plus livré avec Albireo reçoit les
+                  fonctions de ce modèle, comme le fait une mise à jour qui change le modèle
+                  livré avec Albireo ; un autre nouveau prend les fonctions qu'aucun modèle ne
+                  tient.  Les fonctions d'un modèle parti sans successeur sont libérées.
+                - Le premier modèle de langage parmi eux sert le travail en arrière-plan.
         !*/
         void register_builtin_models();
         void ensure_default_model();
-        // Logs why a default model of the catalog could not be downloaded, which the Models
-        // window shows as the error of its download until a download starts.
+        // Journalise pourquoi un modèle par défaut du catalogue n'a pas pu être téléchargé, ce
+        // que la fenêtre Models affiche comme l'erreur de son téléchargement jusqu'à ce qu'un
+        // téléchargement démarre.
         void note_default_failure(const json& entry, const user_error& error, const std::string& what);
         void scan_inbox();
-        // Whether the import folder lets only the administrators write in it: secured again, its content
-        // checked, when it does not; false with error when it cannot be.
+        // Indique si le dossier d'import ne laisse écrire que les administrateurs : sécurisé de nouveau,
+        // son contenu vérifié, quand ce n'est pas le cas ; false avec error quand il ne peut pas l'être.
         bool secure_inbox(std::string& error);
         /*!
             ensures
-                - Gives a model that arrives the functions its entry names that no model
-                  holds, and the general one when it is free.  A model of the engine whose
-                  files changed, a projector given to it say, loads again once its requests
-                  are served (retire() with reload).
+                - Donne à un modèle qui arrive les fonctions que nomme son entrée et qu'aucun
+                  modèle ne tient, et la fonction générale quand elle est libre.  Un modèle du
+                  moteur dont les fichiers ont changé, un projecteur qu'on lui a donné par
+                  exemple, se recharge une fois ses requêtes servies (retire() avec reload).
         !*/
         void on_installed(const installed_model& m);
         static bool is_embedding(const installed_model& m);
-        // Loads a model into the engine, with its projector when it has one (options "projector").
+        // Charge un modèle dans le moteur, avec son projecteur quand il en a un (option "projector").
         bool load_model(const installed_model& m, std::string& error);
         /*!
             ensures
-                - Unloads the model id on a thread of its own once its requests are served
-                  (engine_host::unload_model), so that the function it held passes at once
-                  to the model that replaces it.
-                - With reload, the model loads again from its record once it left the engine,
-                  when a function or the work in the background still uses it; the model of
-                  the work in the background is then unloaded too.
+                - Décharge le modèle id sur un thread à lui une fois ses requêtes servies
+                  (engine_host::unload_model), pour que la fonction qu'il tenait passe aussitôt
+                  au modèle qui le remplace.
+                - Avec reload, le modèle se recharge depuis son enregistrement une fois sorti
+                  du moteur, quand une fonction ou le travail en arrière-plan l'utilise encore ;
+                  le modèle du travail en arrière-plan est alors déchargé lui aussi.
         !*/
         void retire(const std::string& id, bool reload = false);
-        // Loads the model id again after its reload, when a function or the work in the background uses it.
+        // Recharge le modèle id après son retrait pour rechargement, quand une fonction ou le travail en arrière-plan
+        // l'utilise.
         void reload_model(const std::string& id);
-        // Waits for the model id to finish unloading, when it is.
+        // Attend que le modèle id finisse de se décharger, s'il est en cours de déchargement.
         void wait_retired(const std::string& id);
         /*!
             ensures
-                - Runs place, which renames new files over those of the installed model id,
-                  while the engine holds no file of id, which Windows would refuse to replace:
-                  a model in the engine leaves it first, once its requests are served, and loads
-                  again from its new files once they are recorded (on_installed()), or from its
-                  files as they were when place fails.
-                - Returns what place returns; false without running it when the model is being
-                  deleted, serves the work in the background, or when the service stops.
+                - Exécute place, qui renomme de nouveaux fichiers par-dessus ceux du modèle
+                  installé id, pendant que le moteur ne tient aucun fichier de id, ce que
+                  Windows refuserait de remplacer : un modèle dans le moteur le quitte d'abord,
+                  une fois ses requêtes servies, et se recharge depuis ses nouveaux fichiers une
+                  fois ceux-ci enregistrés (on_installed()), ou depuis ses fichiers tels qu'ils
+                  étaient quand place échoue.
+                - Renvoie ce que renvoie place ; false sans l'exécuter quand le modèle est en
+                  cours de suppression, sert le travail en arrière-plan, ou quand le service
+                  s'arrête.
         !*/
         bool replace_model_files(const std::string& id, const std::function<bool()>& place);
         json engine_config(const host_settings& s, const std::string& device) const;
@@ -319,23 +326,23 @@ namespace albireo
         std::unique_ptr<store> db_;
         std::unique_ptr<model_manager> models_;
         engine_host engine_;
-        // Written once by start_engines(), then read by the routes once engines_ready_ is
-        // true.
+        // Écrit une fois par start_engines(), puis lu par les routes une fois engines_ready_
+        // vrai.
         std::vector<engine_candidate> candidates_;
         engine_choice choice_;
         std::string engine_error_;
-        // Set by register_builtin_models() before the server starts, then read only.
+        // Fixé par register_builtin_models() avant le démarrage du serveur, puis seulement lu.
         std::string background_model_;
         std::atomic<bool> engines_ready_{false};
         std::atomic<bool> models_ready_{false};
-        // Set by run() when a damaged database was set aside and a new one started.
+        // Fixé par run() quand une base abîmée a été mise de côté et qu'une nouvelle a commencé.
         bool database_restarted_ = false;
 
-        // Guards the server and the model manager while run() creates and
-        // releases them, for stop(), which a thread of the system may call at any time.
+        // Protège le serveur et le gestionnaire de modèles pendant que run() les crée et les
+        // libère, pour stop(), qu'un thread du système peut appeler à tout moment.
         std::mutex server_m_;
         std::unique_ptr<httplib::SSLServer> server_;
-        // The HTTP server of the local network (settings lan, lan_port), and its thread.
+        // Le serveur HTTP du réseau local (réglages lan, lan_port), et son thread.
         std::unique_ptr<httplib::Server> lan_server_;
         std::thread lan_thread_;
         void start_lan_server(const host_settings& st);
@@ -346,21 +353,21 @@ namespace albireo
         std::condition_variable cv_;
         std::thread background_;
         std::thread restarter_;
-        std::mutex models_m_;   // serializes the activations and the loads
-        std::mutex import_m_;   // serializes the imports of folders
-        std::mutex benchmark_m_;   // one measure of the engines at a time
-        // model -> "loading", "ready", "unloading", "removing" or the error
+        std::mutex models_m_;   // sérialise les activations et les chargements
+        std::mutex import_m_;   // sérialise les imports de dossiers
+        std::mutex benchmark_m_;   // une seule mesure des moteurs à la fois
+        // modèle -> "loading", "ready", "unloading", "removing" ou l'erreur
         std::map<std::string, std::string> load_state_;
-        // The models leaving the engine, each on a thread of retirers_, and those whose
-        // file is deleted once they left.
+        // Les modèles qui quittent le moteur, chacun sur un thread de retirers_, et ceux dont
+        // le fichier est supprimé une fois qu'ils sont partis.
         std::mutex retire_m_;
         std::condition_variable retire_cv_;
         std::set<std::string> retiring_;
         std::set<std::string> removing_;
-        // The models that load again once they left the engine (retire() with reload).
+        // Les modèles qui se rechargent une fois sortis du moteur (retire() avec reload).
         std::set<std::string> reloading_;
         std::vector<std::thread> retirers_;
-        // The retirers that ended, joined by the next retirement.
+        // Les retirers qui ont fini, rejoints par le prochain retrait.
         std::vector<std::thread::id> ended_retirers_;
         int64_t started_at_ = 0;
         std::atomic<long long> usage_prompt_{0};
@@ -369,14 +376,15 @@ namespace albireo
     };
 
     /*
-        Installs the routes on a server (server.cpp): the HTTPS server of the Mac, or, with lan,
-        the HTTP server of the local network, which asks for the password of the network access,
-        when there is one (a cookie its login route sets), before any other route.
+        Installe les routes sur un serveur (server.cpp) : le serveur HTTPS du Mac, ou, avec lan,
+        le serveur HTTP du réseau local, qui demande le mot de passe de l'accès réseau, quand il y
+        en a un (un cookie que pose sa route de connexion), avant toute autre route.
     */
     void install_routes(httplib::Server& server, service& svc, bool lan = false);
 
-    // Whether the server can open port on the loopback interface, or on every address with
-    // every_address, with the options of its own socket; the port is closed again at once.
+    // Indique si le serveur peut ouvrir port sur l'interface de bouclage, ou sur toutes les
+    // adresses avec every_address, avec les options de sa propre socket ; le port est refermé
+    // aussitôt.
     bool port_available(int port, bool every_address = false);
 
 }

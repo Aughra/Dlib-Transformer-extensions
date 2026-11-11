@@ -11,10 +11,11 @@ namespace albireo
 
     /*!
         ensures
-            - Returns the secret that the configuration built into the program masked (CMakeLists.txt),
-              the password of the public link: each of its size bytes xored with the bits 16 to 23 of
-              the next value of the generator x = (x * 1103515245 + 12345) mod 2^31 started at seed,
-              which the configuration runs the same way.
+            - Renvoie le secret que la configuration a masqué en l'intégrant au programme
+              (CMakeLists.txt), le mot de passe du lien public : chacun de ses size octets combiné par
+              xor avec les bits 16 à 23 de la valeur suivante du générateur
+              x = (x * 1103515245 + 12345) mod 2^31 démarré à seed, que la configuration fait tourner
+              de la même façon.
     !*/
     inline std::string unmask_secret(const unsigned char* bytes, size_t size, unsigned long long seed)
     {

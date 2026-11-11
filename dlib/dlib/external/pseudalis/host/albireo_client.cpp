@@ -17,11 +17,11 @@ namespace pseudalis
     {
         const char* language_name(const std::string& code)
         {
-            // The fork for macOS keeps English and French only.
+            // Le fork pour macOS ne garde que l'anglais et le français.
             return code == "fr" ? "French" : "English";
         }
 
-        // The answer without the reasoning that some models write before it.
+        // La réponse sans le raisonnement que certains modèles écrivent avant elle.
         std::string without_reasoning(std::string text)
         {
             for (size_t b = text.find("<think>"); b != std::string::npos; b = text.find("<think>"))
@@ -84,9 +84,9 @@ namespace pseudalis
             return false;
         }
         /*
-            A folder, an authority or settings that another account than SYSTEM or the
-            administrators could have written are not those of Albireo: the pictures would
-            reach whoever placed them.
+            Un dossier, une autorité ou des réglages qu'un autre compte que SYSTEM ou les
+            administrateurs aurait pu écrire ne sont pas ceux d'Albireo : les images
+            parviendraient à celui qui les a placés.
         */
         if (!folder_admin_only(dir) || !folder_admin_only(join_path(dir, "certificates")) || !owned_by_system(ca)
             || (file_exists(settings_path) && !owned_by_system(settings_path)))
@@ -131,9 +131,9 @@ namespace pseudalis
     bool albireo_client::refresh(std::string& reason)
     {
         /*
-            The state is checked again once a minute, by one caller at a time and outside the
-            lock, so that a slow Albireo never holds the callers of status(): the others get
-            the state in place meanwhile.
+            L'état est vérifié de nouveau une fois par minute, par un seul appelant à la fois et
+            hors du verrou, pour qu'un Albireo lent ne retienne jamais les appelants de status() :
+            les autres reçoivent entre-temps l'état en place.
         */
         {
             std::lock_guard<std::mutex> lock(m_);

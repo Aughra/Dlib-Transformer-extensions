@@ -71,7 +71,7 @@ a { color: var(--blue); }
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .hidden { display: none !important; }
 
-/* Layout */
+/* Mise en page */
 #app { display: flex; height: 100vh; width: 100vw; }
 .sidebar {
   width: var(--sidebar);
@@ -84,13 +84,13 @@ a { color: var(--blue); }
   transition: margin-left 0.2s ease;
 }
 .sidebar.collapsed { margin-left: calc(-1 * var(--sidebar)); }
-/* --composer-room: the height of the composer over the bottom of the thread, which the application measures. */
+/* --composer-room : la hauteur de la zone de saisie au-dessus du bas du fil, que l'application mesure. */
 .main {
   flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative;
   --composer-room: 140px;
 }
 
-/* Sidebar */
+/* Panneau latéral */
 .brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 10px; }
 .brand img { width: 34px; height: 34px; }
 .brand .name { font-family: var(--font-display); font-weight: 650; font-size: 20px; letter-spacing: 0.2px; }
@@ -150,7 +150,7 @@ a { color: var(--blue); }
 .status-line .led.busy { background: var(--gold); animation: pulse 1.2s infinite; }
 .status-line .led.error { background: var(--danger); }
 .status-line .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The buttons take the width of their labels and pass to a second line rather than cut them. */
+/* Les boutons prennent la largeur de leurs libellés et passent à la ligne plutôt que de les couper. */
 .footer-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 .footer-buttons button {
   flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 32px;
@@ -161,8 +161,8 @@ a { color: var(--blue); }
 .footer-buttons svg { width: 15px; height: 15px; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-/* Top bar.  It lies above the thread, over the plain background of the page: it takes that background without a
-   blur, which the compositor would compute again at each frame of an animation. */
+/* Barre du haut.  Elle se place au-dessus du fil, sur le fond uni de la page : elle reprend ce fond sans flou, que le
+   compositeur recalculerait à chaque image d'une animation. */
 .topbar {
   height: 56px; flex: 0 0 56px; display: flex; align-items: center; gap: 10px; padding: 0 16px;
   border-bottom: 1px solid var(--border); background: var(--bg);
@@ -186,7 +186,7 @@ a { color: var(--blue); }
 .role-picker > button { font-weight: 600; color: var(--text); }
 
 /* Conversation */
-/* An opaque scroller scrolls in the compositor of the browser, without painting its content again. */
+/* Une zone de défilement opaque défile dans le compositeur du navigateur, sans repeindre son contenu. */
 .scroller { flex: 1; overflow-y: auto; min-height: 0; scroll-behavior: auto; background: var(--bg); }
 .thread { max-width: 860px; margin: 0 auto; padding: 24px 24px calc(var(--composer-room) + 24px); }
 .message { margin: 0 0 22px; display: flex; flex-direction: column; }
@@ -217,7 +217,7 @@ a { color: var(--blue); }
 .attachment.file-out { cursor: pointer; }
 .attachment.file-out:hover { border-color: var(--blue); }
 .attachment button:hover { color: var(--text); }
-/* The badge of a document: its format on the color of its family. */
+/* Le badge d'un document : son format sur la couleur de sa famille. */
 .format-badge {
   display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; min-width: 34px; height: 22px;
   padding: 0 4px; border-radius: 5px; font-size: 10px; font-weight: 700; letter-spacing: 0.02em; color: #fff;
@@ -231,7 +231,7 @@ a { color: var(--blue); }
 .format-badge.code { background: #7d5bd6; }
 .index-state { font-size: 12px; white-space: nowrap; }
 
-/* Reasoning and agent steps */
+/* Raisonnement et étapes de l'agent */
 .thinking {
   border: 1px solid var(--border); border-radius: 12px; margin: 2px 0 12px; background: var(--bg-elevated);
   overflow: hidden;
@@ -249,7 +249,7 @@ a { color: var(--blue); }
   padding: 4px 14px 12px 38px; color: var(--text-soft); font-size: 13.5px; white-space: pre-wrap;
   border-top: 1px dashed var(--border); max-height: 420px; overflow-y: auto;
 }
-/* The texts that wait pulse in opacity, which the compositor animates without painting them at each frame. */
+/* Les textes en attente pulsent en opacité, que le compositeur anime sans les repeindre à chaque image. */
 .shimmer { color: var(--text-soft); animation: shimmer 1.8s ease-in-out infinite; }
 @keyframes shimmer { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -261,7 +261,7 @@ a { color: var(--blue); }
 .tool-call .tool-icon { width: 16px; height: 16px; color: var(--blue); }
 .tool-call .tool-name { font-weight: 600; white-space: nowrap; }
 .tool-call .tool-brief { color: var(--text-faint); flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12.5px; }
-/* The address a call of fetch_page read, which opens in a new tab. */
+/* L'adresse lue par un appel de fetch_page, qui s'ouvre dans un nouvel onglet. */
 .tool-call .tool-brief a { color: var(--blue); text-decoration: none; }
 .tool-call .tool-brief a:hover, .tool-call .tool-brief a:focus-visible { text-decoration: underline; }
 .tool-call .state { font-size: 12px; color: var(--text-faint); }
@@ -301,7 +301,7 @@ a { color: var(--blue); }
 .md .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
 .cursor::after { content: ""; display: inline-block; width: 8px; height: 16px; margin-left: 2px; vertical-align: -2px; background: var(--blue); border-radius: 2px; animation: pulse 1s infinite; }
 
-/* Welcome */
+/* Accueil */
 .welcome { max-width: 760px; margin: 0 auto; padding: 9vh 24px calc(var(--composer-room) + 24px); text-align: center; }
 .welcome .hero { width: 92px; height: 92px; margin: 0 auto 14px; filter: drop-shadow(0 10px 30px rgba(61, 107, 255, 0.35)); }
 .welcome h1 { font-family: var(--font-display); font-size: 30px; font-weight: 650; margin: 6px 0 4px; }
@@ -313,7 +313,7 @@ a { color: var(--blue); }
 .suggestion b { display: block; font-size: 14px; margin-bottom: 2px; }
 .suggestion span { color: var(--text-faint); font-size: 13px; }
 
-/* Composer */
+/* Zone de saisie */
 .composer-wrap { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 24px 18px; background: linear-gradient(to top, var(--bg) 70%, transparent); pointer-events: none; }
 .composer {
   pointer-events: auto; max-width: 860px; margin: 0 auto; border: 1px solid var(--border-strong); border-radius: 20px;
@@ -334,7 +334,8 @@ a { color: var(--blue); }
 .toggle.on { border-color: transparent; background: var(--bg-active); color: var(--blue); font-weight: 600; }
 .toggle.on.reason { background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--gold-strong); }
 .toggle:disabled { opacity: 0.45; cursor: not-allowed; }
-/* On a phone, the toggles of the composer show their icons alone; their names stay for the screen readers. */
+/* Sur un téléphone, les bascules de la zone de saisie n'affichent que leurs icônes ; leurs noms restent pour les
+   lecteurs d'écran. */
 @media (max-width: 480px) {
   .composer .row { gap: 4px; }
   .composer .row .toggle { position: relative; padding: 0 9px; }
@@ -355,12 +356,12 @@ a { color: var(--blue); }
 .composer-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .hint { text-align: center; font-size: 11.5px; color: var(--text-faint); margin-top: 6px; pointer-events: auto; }
 
-/* Project page */
+/* Page de projet */
 .page { max-width: 900px; margin: 0 auto; padding: 28px 24px 120px; }
 .page h2 { font-family: var(--font-display); margin: 0 0 4px; font-size: 24px; display: flex; align-items: center; gap: 10px; }
 .page .sub { color: var(--text-soft); margin: 0 0 20px; }
 .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elevated); padding: 16px; margin-bottom: 16px; }
-/* A card that takes files, while files are dragged over it, as the composer shows it. */
+/* Une carte qui accepte des fichiers, pendant qu'on les fait glisser dessus, comme la zone de saisie l'affiche. */
 .card.drag { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(61, 107, 255, 0.15); }
 .card h3 { margin: 0 0 4px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
 .card h3 svg, .dialog h2 svg, .page h2 svg { width: 17px; height: 17px; flex: 0 0 17px; color: var(--text-soft); }
@@ -396,7 +397,7 @@ a { color: var(--blue); }
 .colors button { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; }
 .colors button.on { border-color: var(--text); }
 
-/* Menus, dialogs, notices */
+/* Menus, boîtes de dialogue, avis */
 .menu {
   position: fixed; z-index: 50; min-width: 200px; max-width: 360px; background: var(--bg-elevated); border: 1px solid var(--border);
   border-radius: 12px; box-shadow: var(--shadow); padding: 6px; animation: pop 0.12s ease-out;
@@ -427,7 +428,7 @@ a { color: var(--blue); }
 .banner svg { width: 16px; height: 16px; }
 .kv { display: grid; grid-template-columns: 160px 1fr; gap: 6px 14px; font-size: 13.5px; }
 .kv div:nth-child(odd) { color: var(--text-faint); }
-/* The tokens of each day, those read under those generated, with the dates of the first and last days under them. */
+/* Les tokens de chaque jour, ceux lus sous ceux générés, avec les dates du premier et du dernier jour en dessous. */
 .usage-bars { display: flex; align-items: flex-end; gap: 3px; height: 80px; margin-top: 8px; }
 .usage-day {
   flex: 1; display: flex; flex-direction: column; min-height: 2px; border-radius: 3px 3px 0 0; overflow: hidden;
@@ -452,7 +453,7 @@ a { color: var(--blue); }
   .composer-wrap { padding: 0 10px 12px; }
 }
 
-/* The search of the projects and of the discussions. */
+/* La recherche des projets et des discussions. */
 .side-tools { display: inline-flex; gap: 2px; }
 .item.new-item, .item.more-item { color: var(--text-faint); }
 .item.new-item:hover, .item.more-item:hover { color: var(--text); }
@@ -478,7 +479,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 }
 .search-result .excerpt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* The buttons and the entries that wait for the end of an answer. */
+/* Les boutons et les entrées qui attendent la fin d'une réponse. */
 .message .meta button:disabled { cursor: not-allowed; }
 .message:hover .meta button:disabled, .message.last .meta button:disabled { opacity: 0.3; }
 .message .meta button:disabled:hover { background: transparent; color: var(--text-faint); }
@@ -487,7 +488,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .spinner.small { width: 11px; height: 11px; border-width: 2px; flex: 0 0 11px; }
 .item .spinner.small { margin-left: 2px; }
 
-/* The steps of the agent, with their number, tool, arguments, short result, state and duration. */
+/* Les étapes de l'agent, avec leur numéro, outil, arguments, résultat court, état et durée. */
 .tool-call .tool-number {
   flex: 0 0 auto; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--bg-active);
   color: var(--text-soft); font-size: 11.5px; font-weight: 650; display: inline-flex; align-items: center;
@@ -504,7 +505,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 }
 .tool-call[open] > summary .chev { transform: rotate(180deg); }
 
-/* The explanation of the agent mode and of the web access, with their tools, from the button beside them. */
+/* L'explication du mode agent et de l'accès web, avec leurs outils, depuis le bouton placé à côté. */
 .help-button {
   width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent; color: var(--text-faint);
   display: inline-flex; align-items: center; justify-content: center;
@@ -516,7 +517,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 }
 .menu.popover p { margin: 4px 0 10px; font-size: 13.5px; color: var(--text-soft); }
 .menu.popover .popover-tools + p { margin-top: 14px; }
-/* The help of the tools lists them in two columns where the window has room for them. */
+/* L'aide des outils les liste sur deux colonnes quand la fenêtre a la place. */
 .menu.popover:has(.popover-tools) { width: min(620px, calc(100vw - 16px)); max-width: none; }
 .popover-tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; }
 .popover-tool { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
@@ -530,7 +531,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .agent-note svg { width: 16px; height: 16px; margin-top: 2px; color: var(--blue); flex: 0 0 16px; }
 .welcome .error-box { margin: 0 auto 18px; max-width: 620px; }
 
-/* The page of a project, and the state of the storage of the browser. */
+/* La page d'un projet, et l'état du stockage du navigateur. */
 .page h2 .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; flex: 0 0 14px; }
 .storage-state p { margin: 0 0 8px; font-size: 13.5px; }
 .storage-state .storage-hint {
@@ -541,7 +542,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
   width: 15px; height: 15px; flex: 0 0 15px; margin-top: 1px; color: var(--gold-strong);
 }
 
-/* The time of a message, shown with its buttons: before them for a question, after them for an answer. */
+/* L'heure d'un message, affichée avec ses boutons : avant eux pour une question, après eux pour une réponse. */
 .message .msg-time {
   font-size: 11.5px; color: var(--text-faint); white-space: nowrap; opacity: 0; transition: opacity 0.15s;
 }
@@ -549,8 +550,8 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .message.user .msg-time { margin-right: 4px; }
 .message.assistant .msg-time { margin-left: 4px; }
 
-/* The stop button, while an answer is prepared or written, carries a ring that pulses gently.  The ring grows and
-   fades by transform and opacity, which the compositor animates without painting it at each frame. */
+/* Le bouton d'arrêt, pendant qu'une réponse se prépare ou s'écrit, porte un anneau qui pulse doucement.  L'anneau
+   grandit et s'efface par transform et opacity, que le compositeur anime sans le repeindre à chaque image. */
 .send.stop { position: relative; }
 .send.stop::after {
   content: ""; position: absolute; inset: -3px; border-radius: 15px; pointer-events: none;
@@ -566,7 +567,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
   .send.stop::after { animation: none; border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
 }
 
-/* The page of the components and of their licenses, whose texts open under their lines. */
+/* La page des composants et de leurs licences, dont les textes s'ouvrent sous leurs lignes. */
 .lic-table { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
 .lic-row {
   display: grid; align-items: center; gap: 4px 12px; padding: 8px 10px; border-radius: 10px;
@@ -600,8 +601,8 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
   .button.small svg { transition: none; }
 }
 
-/* The images: thumbnails in the questions, in the composer and on the page of a project, and the viewer that
-   shows an image whole. */
+/* Les images : vignettes dans les questions, dans la zone de saisie et sur la page d'un projet, et la visionneuse
+   qui montre une image en entier. */
 .image-thumb {
   position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
   width: 96px; height: 96px; padding: 0; border-radius: 12px; border: 1px solid var(--border);
@@ -669,11 +670,13 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 }
 .viewer-missing svg { width: 48px; height: 48px; }
 
-/* The button of an answer read aloud, while it reads: it shows without the pointer over the answer. */
+/* Le bouton d'une réponse lue à voix haute, pendant la lecture : il s'affiche sans que le pointeur survole la
+   réponse. */
 .message .meta .icon-button[aria-pressed="true"] { color: var(--blue-strong); opacity: 1; }
 
-/* The answers written in the background: a dot at the left of their discussion in the side panel, which blinks while
-   the answer is written, here or in another tab, and stays blue once it is written, until the discussion is opened. */
+/* Les réponses écrites en arrière-plan : un point à gauche de leur discussion dans le panneau latéral, qui clignote
+   pendant que la réponse s'écrit, ici ou dans un autre onglet, et reste bleu une fois qu'elle est écrite, jusqu'à
+   l'ouverture de la discussion. */
 .gen-dot {
   position: absolute; left: 2px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%;
   background: var(--blue); pointer-events: none;
@@ -683,12 +686,12 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
   .gen-dot.live { animation: none; opacity: 0.55; }
 }
 
-/* An answer being written is drawn by blocks: the blocks already written stay, the last one is drawn again. */
+/* Une réponse en cours d'écriture est dessinée par blocs : les blocs déjà écrits restent, le dernier est redessiné. */
 .md > .md-block:first-child > *:first-child { margin-top: 0; }
 .md > .md-block:last-child > *:last-child { margin-bottom: 0; }
 
-/* The buttons that go to the start and to the end of the thread, over its bottom right corner and above the composer,
-   shown while the user scrolls. */
+/* Les boutons qui mènent au début et à la fin du fil, sur son coin inférieur droit et au-dessus de la zone de saisie,
+   affichés pendant que l'utilisateur fait défiler. */
 .jump-buttons {
   position: absolute; right: 22px; bottom: calc(var(--composer-room) + 12px); z-index: 5;
   display: flex; flex-direction: column; gap: 6px; visibility: hidden; opacity: 0;
@@ -707,7 +710,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
   .jump-buttons, .jump-buttons.on { transition: none; }
 }
 
-/* The Service tab of the settings (fork for macOS): cards, switches, sheets in the manner of a glossary. */
+/* L'onglet Service des réglages (fork pour macOS) : cartes, interrupteurs, fiches à la manière d'un glossaire. */
 .svc-intro p { margin: 0 0 12px; color: var(--text-soft); font-size: 13.5px; line-height: 1.55; }
 .svc-group { margin-top: 18px; }
 .svc-group h4 { margin: 0 0 2px; }
@@ -727,7 +730,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .svc-effect { margin: 6px 0 0; color: var(--text-soft); font-size: 13px; line-height: 1.5; }
 .svc-where { margin: 6px 0 0; font-size: 13px; }
 .svc-where code { font-family: var(--mono); background: var(--bg-code); padding: 1px 6px; border-radius: 6px; }
-/* The bubble of the question mark, on a pointer that hovers it. */
+/* La bulle du point d'interrogation, quand le pointeur le survole. */
 .svc-bubble { display: none; position: absolute; z-index: 5; left: 14px; right: 14px; top: 42px; padding: 10px 12px;
   border-radius: var(--radius-small); background: var(--bg-elevated); border: 1px solid var(--border-strong);
   box-shadow: var(--shadow); font-size: 13px; line-height: 1.5; pointer-events: none; }
@@ -789,7 +792,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .svc-apply small { font-weight: 400; color: var(--text-faint); }
 .svc-apply[hidden] { display: none; }
 
-/* The documents of the Mac (fork for macOS). */
+/* Les documents du Mac (fork pour macOS). */
 .mac-docs { display: grid; gap: 4px; max-height: min(52vh, 420px); overflow-y: auto; margin: 8px 0; }
 .mac-doc { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px; padding: 6px 8px;
   border-radius: var(--radius-small); cursor: pointer; }
@@ -806,7 +809,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .svc-profile .meta { color: var(--text-faint); font-size: 12px; }
 @media (max-width: 520px) { .svc-profile { grid-template-columns: 1fr auto auto; } .svc-profile .meta { display: none; } }
 .changelog { max-height: min(70vh, 640px); overflow-y: auto; }
-/* The mark of Albireo, a button back to the welcome page (fork for macOS). */
+/* Le logo d'Albireo, un bouton qui ramène à la page d'accueil (fork pour macOS). */
 .brand-home { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; cursor: pointer;
   color: inherit; font: inherit; border-radius: var(--radius-small); }
 .brand-home:hover { opacity: .85; }

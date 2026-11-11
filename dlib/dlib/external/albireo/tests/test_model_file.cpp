@@ -1,24 +1,24 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
-    Checks the loading of damaged GGUF files.
+    Vérifie le chargement de fichiers GGUF abîmés.
 
         test_model_file [folder]
 
-    A tiny model is written to the folder (the current one by default), then copies of it
-    with one field of the header damaged: truncated files, counts and sizes beyond every
-    bound, dimensions whose products overflow, offsets outside the file, an absurd
-    vocabulary, a broken alignment, non-finite numbers.  Each copy goes through the loading
-    of the engine (model_file, read_model_config, the tokenizer and cpu_runtime) and must be
-    refused with an exception, without a crash and without any allocation of more than
-    256 MB; the intact file must load and compute a pass.
+    Un tout petit modèle est écrit dans le dossier (le dossier courant par défaut), puis des copies
+    de lui avec un champ de l'en-tête abîmé : fichiers tronqués, nombres et tailles au-delà de
+    toute borne, dimensions dont les produits débordent, décalages hors du fichier, vocabulaire
+    absurde, alignement cassé, nombres non finis.  Chaque copie passe par le chargement du moteur
+    (model_file, read_model_config, le tokenizer et cpu_runtime) et doit être refusée par une
+    exception, sans plantage et sans aucune allocation de plus de 256 Mo ; le fichier intact doit
+    se charger et calculer une passe.
 
-    A copy of more than 2 GiB, whose last tensor lies beyond 2 GiB, the rest a hole that
-    takes no room on the disk, must load as well, through the mapped file and through a
-    file stream: the standard library of Visual Studio counts a stream buffer in an int.
-    The values of that tensor are distinct from those of every other tensor, so that a read
-    at another offset shows: each value read is checked, and the engine must compute the
-    logits of the same model written in a small file.
+    Une copie de plus de 2 Gio, dont le dernier tenseur se trouve au-delà de 2 Gio, le reste étant
+    un trou qui ne prend pas de place sur le disque, doit se charger aussi, par le fichier mappé et
+    par un flux de fichier : la bibliothèque standard de Visual Studio compte un tampon de flux
+    dans un int.  Les valeurs de ce tenseur sont distinctes de celles de tous les autres tenseurs,
+    pour qu'une lecture à un autre décalage se voie : chaque valeur lue est vérifiée, et le moteur
+    doit calculer les logits du même modèle écrit dans un petit fichier.
 */
 
 #include <fcntl.h>
@@ -45,8 +45,8 @@
 
 namespace
 {
-    // The largest allocation a load may ask for; beyond, the allocator refuses it and the
-    // test counts it.
+    // La plus grande allocation qu'un chargement peut demander ; au-delà, l'allocateur la refuse et
+    // le test la compte.
     const size_t allocation_limit = size_t(256) << 20;
     std::atomic<long> large_allocations{0};
 
@@ -85,8 +85,8 @@ namespace
         }
     }
 
-    // The loading of the engine, then a pass over a few tokens, whose logits go to out when
-    // given; the reason of a refusal.
+    // Le chargement du moteur, puis une passe sur quelques tokens, dont les logits vont dans out
+    // quand il est donné ; la raison d'un refus.
     std::string load(const std::string& path, std::vector<float>* out = nullptr)
     {
         try
@@ -118,7 +118,7 @@ namespace
         }
     }
 
-    // Sets the field of the given label in bytes, as tiny_gguf::with() does in a copy.
+    // Fixe le champ de l'étiquette donnée en octets, comme le fait tiny_gguf::with() dans une copie.
     void set_field(const tiny_gguf& model, std::vector<unsigned char>& bytes, const std::string& label, uint64_t value)
     {
         const albireo_test::gguf_field* f = model.find(label);
@@ -128,8 +128,8 @@ namespace
     }
 
     /*
-        A copy of the file with one character of a string changed in place: the string whose
-        length field bears the label "length " + label, its character at index set to c.
+        Une copie du fichier avec un caractère d'une chaîne changé sur place : la chaîne dont le
+        champ de longueur porte l'étiquette "length " + label, son caractère d'indice index mis à c.
     */
     std::vector<unsigned char> renamed(const tiny_gguf& model, const std::string& label, size_t index, char c)
     {
@@ -150,8 +150,8 @@ namespace
         expect(large_allocations.load() == before, name + " asked for more than 256 MB");
     }
 
-    // Writes head at the start of a file and tail at offset at, the bytes between them a hole
-    // that takes no room on the disk (a sparse file on NTFS).
+    // Écrit head au début d'un fichier et tail au décalage at, les octets entre les deux formant un
+    // trou qui ne prend pas de place sur le disque (un fichier creux sur NTFS).
     bool write_sparse(const std::string& path, const std::vector<unsigned char>& head, uint64_t at,
         const std::vector<unsigned char>& tail)
     {
@@ -164,7 +164,7 @@ namespace
         return ::close(fd) == 0 && ok;
     }
 
-    // The bytes of a tensor read by r, or an empty vector with the reason in why.
+    // Les octets d'un tenseur lus par r, ou un vecteur vide avec la raison dans why.
     std::vector<uint8_t> tensor_bytes(dlib::gguf_reader& r, const std::string& name, std::string& why)
     {
         try
@@ -185,13 +185,14 @@ namespace
         return std::vector<uint8_t>();
     }
 
-    // The value at index k of output_norm.weight in the large file: no other tensor holds it.
+    // La valeur d'indice k de output_norm.weight dans le gros fichier : aucun autre tenseur ne la
+    // contient.
     float pattern(size_t k)
     {
         return 0.5f + static_cast<float>(k) / 64.0f;
     }
 
-    // Whether raw holds the floats pattern(0), pattern(1)... of a tensor of count values.
+    // Si raw contient les flottants pattern(0), pattern(1)... d'un tenseur de count valeurs.
     bool holds_pattern(const std::vector<uint8_t>& raw, size_t count)
     {
         if (raw.size() != count * sizeof(float)) return false;
@@ -205,9 +206,9 @@ namespace
     }
 
     /*
-        The tiny model with its last tensor, output_norm.weight, filled with the pattern and
-        moved 2 GiB further, read in every way the engine reads it.  The engine must compute
-        the logits of the same model written without the hole.
+        Le tout petit modèle avec son dernier tenseur, output_norm.weight, rempli du motif et
+        déplacé 2 Gio plus loin, lu de toutes les façons dont le moteur le lit.  Le moteur doit
+        calculer les logits du même modèle écrit sans le trou.
     */
     void large_file(const tiny_gguf& model, const std::string& folder)
     {
@@ -282,7 +283,7 @@ int main(int argc, char** argv)
     const std::string path = folder + "test_model_file.gguf";
     const tiny_gguf model = albireo_test::tiny_gguf_writer().build();
 
-    // The intact file.
+    // Le fichier intact.
     expect(model.save(path, model.bytes), "write the model");
     const std::string intact = load(path);
     expect(intact.empty(), "the intact model does not load: " + intact);
@@ -294,7 +295,7 @@ int main(int argc, char** argv)
         ++cases;
     };
 
-    // Truncated files.
+    // Fichiers tronqués.
     for (size_t cut : { size_t(0), size_t(3), size_t(8), size_t(20), size_t(100), model.header_end / 2,
         model.header_end - 1, model.header_end + 100, model.bytes.size() - 1 })
     {
@@ -302,7 +303,7 @@ int main(int argc, char** argv)
         damaged("a file truncated at " + std::to_string(cut) + " bytes", b);
     }
 
-    // Counts, lengths and dimensions beyond every bound.
+    // Nombres, longueurs et dimensions au-delà de toute borne.
     const uint64_t huge[] = { uint64_t(1) << 31, uint64_t(1) << 40, uint64_t(1) << 62, (uint64_t(1) << 62) + 2,
         ~uint64_t(0) };
     const char* fields[] = { "tensor_count", "kv_count", "count tokenizer.ggml.tokens", "count tokenizer.ggml.merges",
@@ -318,7 +319,7 @@ int main(int argc, char** argv)
         expect(model.find(f) != nullptr, std::string("no field ") + f);
         for (uint64_t v : huge) damaged(std::string(f) + " = " + std::to_string(v), model.with(f, v));
     }
-    // Values a sane file never holds.
+    // Des valeurs qu'un fichier sain ne contient jamais.
     damaged("no layer", model.with("kv qwen3.block_count", 0));
     damaged("more layers than tensors", model.with("kv qwen3.block_count", 1000));
     damaged("heads not a multiple of the key/value heads", model.with("kv qwen3.attention.head_count_kv", 3));
@@ -330,7 +331,7 @@ int main(int argc, char** argv)
     damaged("an unknown tensor type", model.with("type blk.0.attn_q.weight", 99));
     damaged("an unknown metadata type", model.with("vtype qwen3.block_count", 99));
     damaged("an unknown element type", model.with("element type tokenizer.ggml.token_type", 99));
-    // On the alignment, so that the bounds of the data, and not the alignment, refuse it.
+    // Sur l'alignement, pour que ce soient les bornes des données, et non l'alignement, qui le refusent.
     damaged("a tensor at the end of the file", model.with("offset blk.1.ffn_down.weight",
         (model.bytes.size() - model.header_end) / 32 * 32 - 32));
     damaged("an empty vocabulary", model.with("count tokenizer.ggml.tokens", 0));
@@ -338,13 +339,14 @@ int main(int argc, char** argv)
     damaged("a rotary base NaN", model.with("kv qwen3.rope.freq_base", nan));
     damaged("an infinite rotary base", model.with("kv qwen3.rope.freq_base", inf));
     damaged("an infinite epsilon", model.with("kv qwen3.attention.layer_norm_rms_epsilon", inf));
-    // Names given twice, which the readers of the file could take for different entries.
+    // Des noms donnés deux fois, que les lecteurs du fichier pourraient prendre pour des entrées
+    // différentes.
     damaged("a metadata key given twice", renamed(model, "key tokenizer.ggml.eos_token_id", 15, 'b'));
     damaged("a tensor name given twice", renamed(model, "name blk.0.attn_k.weight", 11, 'q'));
-    // Tensor data off the alignment, and rows that split the blocks of a quantized type.
+    // Des données de tenseur hors de l'alignement, et des lignes qui coupent les blocs d'un type quantifié.
     damaged("a tensor off the alignment", model.with("offset token_embd.weight", 4));
     {
-        std::vector<unsigned char> b = model.with("type blk.0.attn_q.weight", 8);   // Q8_0, blocks of 32
+        std::vector<unsigned char> b = model.with("type blk.0.attn_q.weight", 8);   // Q8_0, blocs de 32
         set_field(model, b, "dim0 blk.0.attn_q.weight", 80);
         set_field(model, b, "dim1 blk.0.attn_q.weight", 64);
         damaged("rows of 80 values in blocks of 32", b);

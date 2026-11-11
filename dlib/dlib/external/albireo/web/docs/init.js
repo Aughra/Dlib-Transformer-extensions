@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// The interface description of the local service, rendered by Swagger UI without network.
+// La description de l'interface du service local, affichée par Swagger UI sans réseau.
 window.addEventListener('load', function () {
   window.ui = SwaggerUIBundle({
     url: '../openapi.json',

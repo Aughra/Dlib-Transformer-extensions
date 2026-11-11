@@ -47,20 +47,20 @@ namespace albireo
             return std::chrono::duration<double>(clock_type::now().time_since_epoch()).count();
         }
 
-        // An integer of a request within [lo, hi], read before any narrowing to a smaller type.
+        // Un entier d'une requête compris dans [lo, hi], lu avant toute réduction vers un type plus petit.
         long long bounded(const json& v, long long def, long long lo, long long hi)
         {
             const long long x = v.as_int(def);
             return x < lo ? lo : x > hi ? hi : x;
         }
 
-        // Bytes of text that end on a complete UTF-8 character; an incomplete sequence at
-        // the end waits for the token that completes it.
+        // Octets de texte qui se terminent sur un caractère UTF-8 complet ; une séquence incomplète
+        // à la fin attend le token qui la complète.
         size_t complete_utf8(const std::string& s)
         {
             const size_t n = s.size();
             size_t i = n;
-            // Walk back over at most three continuation bytes to the lead byte.
+            // Revenir sur au plus trois octets de continuation jusqu'à l'octet de tête.
             size_t back = 0;
             while (i > 0 && back < 4 && (static_cast<unsigned char>(s[i - 1]) & 0xC0) == 0x80)
             {
@@ -73,11 +73,11 @@ namespace albireo
             if ((lead & 0xE0) == 0xC0) need = 2;
             else if ((lead & 0xF0) == 0xE0) need = 3;
             else if ((lead & 0xF8) == 0xF0) need = 4;
-            else return n;   // ASCII or an invalid byte: nothing to wait for
+            else return n;   // ASCII ou un octet invalide : rien à attendre
             return back + 1 >= need ? n : i - 1;
         }
 
-        // The base64 form of the bytes of an array of floats, as the embeddings travel.
+        // La forme base64 des octets d'un tableau de flottants, telle que voyagent les embeddings.
         std::string base64_floats(const std::vector<float>& v)
         {
             static const char table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -132,12 +132,13 @@ namespace albireo
         }
 
         /*
-            The images of a request, in the order of their parts: the content of a message
-            holds, at the place of each image, a mark made of two private-use characters around
-            the index of the image, which the prompt builder turns into the tokens of the image.
-            Every string of the request that a chat format can render (contents, reasoning,
-            names, identifiers and arguments of the tool calls, tool definitions) loses these
-            two characters beforehand, so that no text can pose as an image.
+            Les images d'une requête, dans l'ordre de leurs parties : le contenu d'un message
+            porte, à la place de chaque image, une marque faite de deux caractères à usage privé
+            entourant l'indice de l'image, que le constructeur de prompt transforme en tokens de
+            l'image.  Chaque chaîne de la requête qu'un format de chat peut rendre (contenus,
+            raisonnement, noms, identifiants et arguments des appels d'outils, définitions
+            d'outils) perd ces deux caractères au préalable, de sorte qu'aucun texte ne peut se
+            faire passer pour une image.
         */
         struct image_part
         {
@@ -166,7 +167,7 @@ namespace albireo
             return out;
         }
 
-        // The strings of a JSON value, the keys of its objects included, without the marks of images.
+        // Les chaînes d'une valeur JSON, clés de ses objets comprises, sans les marques d'images.
         void strip_marks(json& v)
         {
             if (v.is_string())
@@ -188,9 +189,10 @@ namespace albireo
         }
 
         /*
-            The text of a message content: a string, or the parts of a list, text parts as
-            they are and image parts as marks when images receives them; a model that reads
-            text only (images null) refuses the image and audio parts.
+            Le texte du contenu d'un message : une chaîne, ou les parties d'une liste, les
+            parties texte telles quelles et les parties image sous forme de marques quand
+            images les reçoit ; un modèle qui ne lit que du texte (images nul) refuse les
+            parties image et audio.
         */
         std::string content_text(const json& c, std::vector<image_part>* images)
         {
@@ -225,7 +227,7 @@ namespace albireo
         std::vector<chat_message> parse_messages(const json& list, std::vector<image_part>* images = nullptr)
         {
             if (!list.is_array() || list.empty()) throw std::invalid_argument("messages must be a non-empty array");
-            // The strings a format renders as text, without the marks of images for a model that reads them.
+            // Les chaînes qu'un format rend en texte, sans les marques d'images pour un modèle qui les lit.
             auto text = [&](const std::string& s) { return images ? without_marks(s) : s; };
             std::vector<chat_message> out;
             for (const auto& m : list.elements())
@@ -246,7 +248,7 @@ namespace albireo
                     d.id = text(t["id"].as_string());
                     const json& f = t["function"];
                     d.name = text(f["name"].as_string());
-                    // An object is written as the templates write it, with a space after each separator.
+                    // Un objet est écrit comme l'écrivent les templates, avec une espace après chaque séparateur.
                     d.arguments = text(f["arguments"].is_string() ? f["arguments"].as_string()
                         : f["arguments"].is_null() ? std::string("{}") : f["arguments"].dump_formatted());
                     c.tool_calls.push_back(d);
@@ -260,23 +262,23 @@ namespace albireo
     struct cache_entry
     {
         int seq = -1;
-        std::vector<int> tokens;    // the keys of the tokens of the sequence (request_state::keys)
+        std::vector<int> tokens;    // les clés des tokens de la séquence (request_state::keys)
         uint64_t stamp = 0;
     };
 
-    // The encoding of an image, kept by the digest of its pixels.
+    // L'encodage d'une image, conservé sous l'empreinte de ses pixels.
     struct image_encoding
     {
         std::array<uint8_t, 32> digest{};
         std::shared_ptr<const std::vector<float>> features;
     };
 
-    // An image of a request: its size in merged tokens, its pixels until they are encoded, then its encoding.
+    // Une image d'une requête : sa taille en tokens fusionnés, ses pixels jusqu'à leur encodage, puis son encodage.
     struct request_image
     {
         std::array<uint8_t, 32> digest{};
         long grid_w = 0, grid_h = 0, tokens = 0;
-        long start = 0;             // index of its first token in the prompt
+        long start = 0;             // indice de son premier token dans le prompt
         vision_encoder::image_plan plan;
         rgb_image pixels;
         std::shared_ptr<const std::vector<float>> features;
@@ -302,47 +304,50 @@ namespace albireo
         std::atomic<bool> unloading{false};
         uint64_t stamp = 0;
         /*
-            The speeds measured on the answers of the model, in tokens per second: its reading of
-            the prompts that computed 64 tokens or more, and its writing of the answers of 8
-            tokens or more, each an exponential average of the latest answers (model_info).
+            Les vitesses mesurées sur les réponses du modèle, en tokens par seconde : sa lecture
+            des prompts qui ont calculé 64 tokens ou plus, et son écriture des réponses de 8
+            tokens ou plus, chacune une moyenne exponentielle des dernières réponses (model_info).
         */
         std::atomic<double> prompt_rate{0.0};
         std::atomic<double> generation_rate{0.0};
-        // When the model last computed, and whether the memory of its free blocks went back
-        // to the system since (engine::trim_idle).
+        // Quand le modèle a calculé pour la dernière fois, et si la mémoire de ses blocs libres
+        // est retournée au système depuis (engine::trim_idle).
         clock_type::time_point last_step;
         bool trimmed = true;
-        // The steps run so far, which give the prompt being read that takes the budget of a pass first.
+        // Les étapes exécutées jusqu'ici, qui désignent le prompt en lecture qui prend en premier le
+        // budget d'une passe.
         size_t prefill_turn = 0;
         forward_batch batch;
         std::vector<float> logits;
         uint64_t parameters = 0;
         uint64_t bytes = 0;
         std::string quantization;
-        // The image encoder of a model that reads images, its tokens and its encodings.
+        // L'encodeur d'images d'un modèle qui lit des images, ses tokens et ses encodages.
         std::shared_ptr<model_file> projector;
         std::unique_ptr<vision_encoder> vision;
         int vision_start = -1, image_pad = -1, vision_end = -1;
-        std::list<image_encoding> encodings;            // most recently used first
+        std::list<image_encoding> encodings;            // les plus récemment utilisés d'abord
         size_t encoding_bytes = 0;
-        // The decoded pixels the images of the active and waiting requests hold, freed as each
-        // image is encoded or its request ends; submit refuses a request that would exceed the budget.
+        // Les pixels décodés que détiennent les images des requêtes actives et en attente, libérés à
+        // mesure que chaque image est encodée ou que sa requête se termine ; submit refuse une
+        // requête qui dépasserait le budget.
         std::atomic<size_t> queued_pixels{0};
         std::unique_ptr<vision_encoder::job> vision_job;
-        uint64_t vision_owner = 0;                      // the request whose image is being encoded
+        uint64_t vision_owner = 0;                      // la requête dont l'image est en cours d'encodage
         size_t vision_image = 0;
         std::atomic<long> n_active{0};
         std::atomic<long> n_idle{0};
         std::atomic<uint64_t> generated{0};
         std::atomic<uint64_t> prompted{0};
-        // The tokens the warm-ups of the histories read, a part of prompted, and the warm-ups
-        // active or waiting, which n_active and the waiting requests of the statistics leave out.
+        // Les tokens que lisent les préchauffages des historiques, une partie de prompted, et les
+        // préchauffages actifs ou en attente, que n_active et les requêtes en attente des
+        // statistiques laissent de côté.
         std::atomic<uint64_t> warmed{0};
         std::atomic<long> n_warming{0};
     };
 
-    // A request of an embedding model: one vector per input, every input computed as a
-    // part of its own, a request_state that holds the job.
+    // Une requête d'un modèle d'embedding : un vecteur par entrée, chaque entrée calculée comme
+    // une partie à part entière, un request_state qui détient la tâche.
     struct embedding_job
     {
         uint64_t id = 0;
@@ -350,7 +355,7 @@ namespace albireo
         std::vector<std::vector<float>> vectors;
         long remaining = 0;
         long tokens = 0;
-        long dimensions = 0;    // 0: the width of the model
+        long dimensions = 0;    // 0 : la largeur du modèle
         std::atomic<bool> cancelled{false};
         bool ended = false;
         clock_type::time_point submitted, started;
@@ -365,15 +370,16 @@ namespace albireo
         event_sink sink;
         std::vector<int> prompt;
         /*
-            keys holds the prompt with the tokens of each image made distinct by the digest of
-            the image, which the reuse of cached sequences compares; kv_tokens holds the keys of
-            the tokens in the keys and values of the sequence.
+            keys contient le prompt avec les tokens de chaque image rendus distincts par
+            l'empreinte de l'image, que compare la réutilisation des séquences en cache ;
+            kv_tokens contient les clés des tokens présents dans les clés et valeurs de la
+            séquence.
         */
         std::vector<int> keys;
         std::vector<int> kv_tokens;
         std::vector<request_image> images;
-        // Rotary positions of the prompt, three per token, for the models with multimodal positions,
-        // and the position of the first token after the prompt.
+        // Positions rotatives du prompt, trois par token, pour les modèles à positions multimodales,
+        // et la position du premier token après le prompt.
         std::vector<long> positions;
         long next_position = 0;
         int seq = -1;
@@ -381,7 +387,8 @@ namespace albireo
         std::unique_ptr<sampler> smp;
         std::unique_ptr<output_parser> parser;
         long max_tokens = 0;
-        // Work in the background (titles, memory, summaries): its answers never slow the prompts of the users.
+        // Travail en arrière-plan (titres, mémoire, résumés) : ses réponses ne ralentissent jamais les
+        // prompts des utilisateurs.
         bool background = false;
         std::vector<std::string> stops;
         std::string pending_bytes;
@@ -393,29 +400,29 @@ namespace albireo
         phase ph = phase::waiting;
         clock_type::time_point submitted, started, prompt_end, finished;
         bool prompt_done = false;
-        // The embedding job this request computes one input of, and the index of the input.
+        // La tâche d'embedding dont cette requête calcule une entrée, et l'indice de l'entrée.
         std::shared_ptr<embedding_job> job;
         long job_index = -1;
         /*
-            The messages and the options a chat request was rendered with, and the answer and the
-            reasoning it delivered: engine::warm_history() renders them again as the next request
-            of the conversation will.  warm marks a request that reads such a history ahead of
-            that request, without a client: it ends once its prompt is read, its keys and values
-            joining the cached sequences.
+            Les messages et les options avec lesquels une requête de chat a été rendue, et la
+            réponse et le raisonnement qu'elle a livrés : engine::warm_history() les rend à nouveau
+            comme le fera la requête suivante de la conversation.  warm marque une requête qui lit
+            un tel historique en avance sur cette requête, sans client : elle se termine une fois
+            son prompt lu, ses clés et valeurs rejoignant les séquences en cache.
         */
         std::vector<chat_message> messages;
         render_options options;
         std::string answer, thought;
         bool warm = false;
         /*
-            The reasoning of the answer: the tokens it may take before the engine ends it (-1
-            without bound), the tokens it took, the tokens of the end the engine writes in place
-            of the model (closing), those of that end still to write, one per step (forced), and
-            whether the token being handled is one of them (forcing), which the client does not
-            receive as reasoning.  brief marks the reasoning of a model that always reasons, for a
-            request that asked for none, which the engine ends at once unless the request gives
-            a budget; its answer then receives answer_tokens tokens once the reasoning ends (-1
-            without a limit of its own).
+            Le raisonnement de la réponse : les tokens qu'il peut prendre avant que le moteur n'y
+            mette fin (-1 sans borne), les tokens qu'il a pris, les tokens de la fin que le moteur
+            écrit à la place du modèle (closing), ceux de cette fin qui restent à écrire, un par
+            étape (forced), et si le token en cours de traitement en fait partie (forcing), ce que
+            le client ne reçoit pas comme raisonnement.  brief marque le raisonnement d'un modèle
+            qui raisonne toujours, pour une requête qui n'en a pas demandé, auquel le moteur met
+            fin aussitôt sauf si la requête donne un budget ; sa réponse reçoit alors
+            answer_tokens tokens une fois le raisonnement terminé (-1 sans limite propre).
         */
         long reasoning_budget = -1;
         long reasoning_tokens = 0;
@@ -425,10 +432,11 @@ namespace albireo
         bool brief = false;
         long answer_tokens = -1;
         /*
-            The repetition of the part being written, the reasoning or the answer (loops()): its
-            last tokens, the times each window of them was written, whether each of the last
-            tokens ended a window written twice before, and how many of them did; in_reasoning
-            tells which part it is.  repetition marks an answer stopped because it looped.
+            La répétition de la partie en cours d'écriture, le raisonnement ou la réponse
+            (loops()) : ses derniers tokens, le nombre de fois où chacune de leurs fenêtres a été
+            écrite, si chacun des derniers tokens a terminé une fenêtre déjà écrite deux fois, et
+            combien l'ont fait ; in_reasoning indique de quelle partie il s'agit.  repetition
+            marque une réponse arrêtée parce qu'elle tournait en boucle.
         */
         std::deque<int> written;
         std::unordered_map<uint64_t, unsigned char> windows;
@@ -448,38 +456,41 @@ namespace albireo
         }
 
         /*
-            The tokens of the short reasoning of a request that asks for a low effort: an answer of
-            a user, and a work in the background (titles, summaries, memory), which waits for less.
+            Les tokens du raisonnement court d'une requête qui demande un faible effort : une
+            réponse à un utilisateur, et un travail en arrière-plan (titres, résumés, mémoire), qui
+            attend moins.
         */
         const long low_effort_budget = 512;
         const long background_low_effort_budget = 256;
 
         /*
-            The sampling the authors of a family of models advise on the cards of their models,
-            for the requests that give none, reasoning telling whether the model reasons before
-            its answer and images whether the request holds images:
-                - Qwen3-VL Thinking: temperature 1, top-p 0.95, top-k 20, and a presence penalty
-                  of 1.5 over the whole answer for a request of text alone; the reasoning ended
-                  at once, the model answers as a model without reasoning, with the values the
-                  authors of Qwen3 advise for that mode, temperature 0.7, top-p 0.8 and top-k 20,
-                  and the presence penalty of 1.5 they give against repetitions;
-                - Qwen3-VL Instruct: temperature 0.7, top-p 0.8, top-k 20 and a presence penalty
-                  of 1.5 over the whole answer with images, temperature 1, top-p 1, top-k 40 and a
-                  presence penalty of 2 for text alone;
-                - CyberSecQwen-4B: temperature 0.3, that of the use and of the evaluations its
-                  card describes, top-p 0.8 and top-k 20;
-                - Qwen3: temperature 0.6, top-p 0.95, top-k 20 with reasoning, 0.7, 0.8 and 20
-                  without;
-                - Qwen2.5: temperature 0.7, top-p 0.8, top-k 20 and a repetition penalty of 1.05;
-                - Foundation-Sec-8B-Reasoning and Foundation-Sec 1.1 8B Instruct: temperature 0.3,
-                  the setting of the evaluations of their authors, top-p 0.95 and top-k 20;
-                - Granite 4.2: temperature 1 and top-p 0.95 for every task, with and without
-                  reasoning, without top-k;
-                - Ministral 3: temperature 0.1; Devstral and the other Mistral models without
-                  reasoning: temperature 0.15; without top-p or top-k;
-                - the other models: temperature 0.6, top-p 0.95 and top-k 20 when they reason,
-                  0.7, 0.9 and 40 otherwise.
-            None of them selects by min-p.
+            L'échantillonnage que conseillent les auteurs d'une famille de modèles sur les fiches
+            de leurs modèles, pour les requêtes qui n'en donnent pas, reasoning indiquant si le
+            modèle raisonne avant sa réponse et images si la requête contient des images :
+                - Qwen3-VL Thinking : température 1, top-p 0.95, top-k 20, et une pénalité de
+                  présence de 1.5 sur toute la réponse pour une requête de texte seul ; le
+                  raisonnement terminé aussitôt, le modèle répond comme un modèle sans
+                  raisonnement, avec les valeurs que conseillent les auteurs de Qwen3 pour ce
+                  mode, température 0.7, top-p 0.8 et top-k 20, et la pénalité de présence de 1.5
+                  qu'ils donnent contre les répétitions ;
+                - Qwen3-VL Instruct : température 0.7, top-p 0.8, top-k 20 et une pénalité de
+                  présence de 1.5 sur toute la réponse avec images, température 1, top-p 1,
+                  top-k 40 et une pénalité de présence de 2 pour du texte seul ;
+                - CyberSecQwen-4B : température 0.3, celle de l'usage et des évaluations que
+                  décrit sa fiche, top-p 0.8 et top-k 20 ;
+                - Qwen3 : température 0.6, top-p 0.95, top-k 20 avec raisonnement, 0.7, 0.8 et
+                  20 sans ;
+                - Qwen2.5 : température 0.7, top-p 0.8, top-k 20 et une pénalité de répétition
+                  de 1.05 ;
+                - Foundation-Sec-8B-Reasoning et Foundation-Sec 1.1 8B Instruct : température
+                  0.3, le réglage des évaluations de leurs auteurs, top-p 0.95 et top-k 20 ;
+                - Granite 4.2 : température 1 et top-p 0.95 pour toutes les tâches, avec et sans
+                  raisonnement, sans top-k ;
+                - Ministral 3 : température 0.1 ; Devstral et les autres modèles Mistral sans
+                  raisonnement : température 0.15 ; sans top-p ni top-k ;
+                - les autres modèles : température 0.6, top-p 0.95 et top-k 20 quand ils
+                  raisonnent, 0.7, 0.9 et 40 sinon.
+            Aucun d'eux ne sélectionne par min-p.
         */
         sampling_params advised_sampling(const loaded_model& m, bool reasoning, bool images)
         {
@@ -571,11 +582,12 @@ namespace albireo
             return p;
         }
 
-        // The tokens of a window whose repetition the guard against loops counts, and the last tokens it reads.
+        // Les tokens d'une fenêtre dont la garde contre les boucles compte la répétition, et les
+        // derniers tokens qu'elle lit.
         const size_t repeat_window = 16;
         const size_t repeat_span = 384;
 
-        // Forgets the repetitions of the part being written.
+        // Oublie les répétitions de la partie en cours d'écriture.
         void reset_loops(request_state& r)
         {
             r.written.clear();
@@ -585,13 +597,14 @@ namespace albireo
         }
 
         /*
-            Records a token of the reasoning or of the answer, in_reasoning telling which, and tells
-            whether that part loops: nine tenths of its last repeat_span tokens end a window of
-            repeat_window tokens that the part wrote twice before, which a reasoning or an answer
-            that goes on does not do.  A passage written again once, a code given before and after
-            its correction, does not count; nor do the windows of the prompt, so that an answer
-            that takes up a document or code given to it is not concerned, nor those of the
-            reasoning for the answer, which may take up its draft.
+            Enregistre un token du raisonnement ou de la réponse, in_reasoning indiquant lequel,
+            et indique si cette partie tourne en boucle : les neuf dixièmes de ses repeat_span
+            derniers tokens terminent une fenêtre de repeat_window tokens que la partie a déjà
+            écrite deux fois, ce que ne fait pas un raisonnement ou une réponse qui progresse.  Un
+            passage réécrit une fois, un code donné avant et après sa correction, ne compte pas ;
+            ni les fenêtres du prompt, de sorte qu'une réponse qui reprend un document ou un code
+            qu'on lui a donné n'est pas concernée, ni celles du raisonnement pour la réponse, qui
+            peut reprendre son brouillon.
         */
         bool loops(request_state& r, int token, bool in_reasoning)
         {
@@ -603,7 +616,7 @@ namespace albireo
             r.written.push_back(token);
             if (r.written.size() > repeat_window) r.written.pop_front();
             if (r.written.size() < repeat_window) return false;
-            // FNV-1a over the identifiers of the tokens of the window.
+            // FNV-1a sur les identifiants des tokens de la fenêtre.
             uint64_t h = 14695981039346656037ull;
             for (int t : r.written) h = (h ^ static_cast<uint32_t>(t)) * 1099511628211ull;
             unsigned char& times = r.windows[h];
@@ -620,18 +633,21 @@ namespace albireo
                 && static_cast<size_t>(r.repeated) * 10 >= static_cast<size_t>(repeat_span) * 9;
         }
 
-        // The images of one request, at most.
+        // Les images d'une requête, au plus.
         const size_t max_request_images = 16;
-        // The memory the encodings of the images a model keeps for the following requests may take.
+        // La mémoire que peuvent prendre les encodages des images qu'un modèle garde pour les
+        // requêtes suivantes.
         const size_t encoding_budget = size_t(256) << 20;
-        // The tokens of prompts a pass reads at most while answers are being written, in any model.
+        // Les tokens de prompts qu'une passe lit au plus tant que des réponses s'écrivent, dans
+        // n'importe quel modèle.
         const long prefill_while_answering = 64;
-        // The decoded image pixels the requests of one model may hold at once, waiting to be encoded.
+        // Les pixels d'images décodés que les requêtes d'un modèle peuvent détenir à la fois, en
+        // attente d'encodage.
         const size_t queued_pixels_budget = size_t(1) << 30;
-        // The tokens a history must leave to compute for a warm-up to read it ahead.
+        // Les tokens qu'un historique doit laisser à calculer pour qu'un préchauffage le lise en avance.
         const long min_warm_tokens = 16;
 
-        // Frees the decoded pixels of an image and takes them off the budget of its model.
+        // Libère les pixels décodés d'une image et les retire du budget de son modèle.
         void drop_pixels(loaded_model& m, request_image& im)
         {
             const size_t bytes = im.pixels.pixels.size();
@@ -640,7 +656,8 @@ namespace albireo
             im.pixels.clear();
         }
 
-        // Frees the pixels an ending request still holds, so that its budget returns to the model.
+        // Libère les pixels que détient encore une requête qui se termine, pour que son budget
+        // revienne au modèle.
         void drop_request_pixels(loaded_model& m, request_state& r)
         {
             for (request_image& im : r.images) drop_pixels(m, im);
@@ -654,11 +671,11 @@ namespace albireo
         }
 
         /*
-            The key of token j of an image in the cache of the prompts, a negative value apart
-            from the identifiers of the vocabulary.  The first nine tokens of an image carry the
-            256 bits of the digest of its pixels, 31 at a time, so that two images whose keys
-            agree on them hold the same pixels; the following tokens carry a hash of the whole
-            digest and of their index.
+            La clé du token j d'une image dans le cache des prompts, une valeur négative distincte
+            des identifiants du vocabulaire.  Les neuf premiers tokens d'une image portent les 256
+            bits de l'empreinte de ses pixels, 31 à la fois, de sorte que deux images dont les
+            clés concordent sur ces tokens contiennent les mêmes pixels ; les tokens suivants
+            portent un hachage de l'empreinte entière et de leur indice.
         */
         int image_key(const std::array<uint8_t, 32>& d, long j)
         {
@@ -683,7 +700,7 @@ namespace albireo
             return -1 - static_cast<int>(x & 0x7fffffffu);
         }
 
-        // The code and the message that end a request whose image could not be encoded.
+        // Le code et le message qui terminent une requête dont l'image n'a pas pu être encodée.
         void encoding_error(const std::exception& e, std::string& code, std::string& message)
         {
             if (dynamic_cast<const std::bad_alloc*>(&e))
@@ -699,10 +716,10 @@ namespace albireo
         }
 
         /*
-            Reads the images of parts for the encoder of m: their bytes, their size, how the
-            encoder reads them with the detail of the part (vision_encoder::plan()) and, with
-            decode, their pixels at the size of the plan and the digest of these pixels, which
-            for LLaVA-NeXT also names the tiles the image is read by.
+            Lit les images de parts pour l'encodeur de m : leurs octets, leur taille, la façon
+            dont l'encodeur les lit avec le détail de la partie (vision_encoder::plan()) et, avec
+            decode, leurs pixels à la taille du plan et l'empreinte de ces pixels, qui pour
+            LLaVA-NeXT désigne aussi les tuiles par lesquelles l'image est lue.
         */
         void prepare_images(const loaded_model& m, const std::vector<image_part>& parts, bool decode,
             std::vector<request_image>& out)
@@ -741,8 +758,8 @@ namespace albireo
         }
 
         /*
-            The messages of a LLaVA-NeXT model place their images before their text, each one
-            followed by a line break, as its chat template writes them.
+            Les messages d'un modèle LLaVA-NeXT placent leurs images avant leur texte, chacune
+            suivie d'un saut de ligne, comme les écrit son template de chat.
         */
         void images_first(std::vector<chat_message>& messages)
         {
@@ -769,9 +786,9 @@ namespace albireo
         }
 
         /*
-            The chat templates of the Mistral models sort the two parts of a message of one text
-            and one image by their type, which puts the image first; the other messages keep the
-            order of their parts.
+            Les templates de chat des modèles Mistral trient par type les deux parties d'un
+            message fait d'un texte et d'une image, ce qui place l'image en premier ; les autres
+            messages gardent l'ordre de leurs parties.
         */
         void mistral_images(std::vector<chat_message>& messages)
         {
@@ -787,12 +804,12 @@ namespace albireo
         }
 
         /*
-            The tokens of a rendered prompt.  A mark of image in the text of a message becomes
-            the markup <|vision_start|><|image_pad|><|vision_end|> (Qwen3-VL), <image>
-            (LLaVA-NeXT) or [IMG][IMG_END] (Pixtral), so that the text around it is encoded
-            apart, as the reference tokenizer splits on these tokens; the image token is then
-            repeated for each token of the image, and images[i].start receives the index of its
-            first token.
+            Les tokens d'un prompt rendu.  Une marque d'image dans le texte d'un message devient
+            le balisage <|vision_start|><|image_pad|><|vision_end|> (Qwen3-VL), <image>
+            (LLaVA-NeXT) ou [IMG][IMG_END] (Pixtral), de sorte que le texte qui l'entoure est
+            encodé à part, comme le tokenizer de référence coupe sur ces tokens ; le token
+            d'image est ensuite répété pour chaque token de l'image, et images[i].start reçoit
+            l'indice de son premier token.
         */
         std::vector<int> prompt_tokens(const loaded_model& m, const std::vector<prompt_piece>& pieces,
             std::vector<request_image>& images)
@@ -800,7 +817,7 @@ namespace albireo
             if (images.empty()) return chat_format::tokenize(m.tok, pieces);
             std::vector<prompt_piece> parts;
             std::vector<size_t> order;
-            // Each image takes one place: a second mark of an image is refused.
+            // Chaque image prend une seule place : une seconde marque d'une même image est refusée.
             std::vector<bool> placed(images.size(), false);
             for (const auto& p : pieces)
             {
@@ -865,11 +882,12 @@ namespace albireo
         }
 
         /*
-            The keys of the prompt of r, and, for a model with multimodal rotary positions, the
-            positions of its tokens (the rule of the reference implementation of Qwen3-VL): a
-            text token takes the next position in its three components; the token at row y and
-            column x of an image starting at position p takes (p, p + y, p + x), and the text
-            after the image starts at p plus the larger side of its grid.
+            Les clés du prompt de r et, pour un modèle à positions rotatives multimodales, les
+            positions de ses tokens (la règle de l'implémentation de référence de Qwen3-VL) : un
+            token de texte prend la position suivante dans ses trois composantes ; le token à la
+            ligne y et à la colonne x d'une image commençant à la position p prend
+            (p, p + y, p + x), et le texte après l'image commence à p plus le plus grand côté de
+            sa grille.
         */
         void finish_prompt(const loaded_model& m, request_state& r)
         {
@@ -877,7 +895,8 @@ namespace albireo
             const long n = static_cast<long>(r.prompt.size());
             for (const request_image& im : r.images)
             {
-                // The tokens of each image lie in the prompt, and the grid of its positions within them.
+                // Les tokens de chaque image se trouvent dans le prompt, et la grille de ses positions
+                // parmi eux.
                 if (im.start < 0 || im.tokens <= 0 || im.tokens > n - im.start || im.grid_w < 0 || im.grid_h < 0
                     || im.grid_w * im.grid_h > im.tokens)
                     throw std::invalid_argument("an image of the request lies outside its prompt");
@@ -918,7 +937,7 @@ namespace albireo
             r.next_position = p;
         }
 
-        // The encoding of the image of digest d that m keeps, made the most recently used, or null.
+        // L'encodage de l'image d'empreinte d que garde m, rendu le plus récemment utilisé, ou nul.
         std::shared_ptr<const std::vector<float>> kept_encoding(loaded_model& m, const std::array<uint8_t, 32>& d)
         {
             for (auto it = m.encodings.begin(); it != m.encodings.end(); ++it)
@@ -953,7 +972,8 @@ namespace albireo
         if (threads_ <= 0) threads_ = cpu.physical_cores;
         threads_ = std::max(1, std::min(threads_, cpu.logical_cores));
         pool_.reset(new thread_pool(threads_));
-        // A spin of a tenth of a second at most, since a longer one keeps the processor busy between passes.
+        // Une attente active d'un dixième de seconde au plus, car une plus longue occupe le processeur
+        // entre les passes.
         pool_->set_spin_time(std::chrono::microseconds(bounded(settings_["spin_us"], 2000, 0, 100000)));
         warm_history_ = settings_["warm_history"].as_bool(true);
         log(ALBIREO_LOG_INFO, std::string("engine ") + ALBIREO_ENGINE_VARIANT + " " + ALBIREO_VERSION + ", "
@@ -984,8 +1004,8 @@ namespace albireo
         }
         wake_.notify_all();
         if (worker_.joinable()) worker_.join();
-        // Requests the worker had no step left to finish.  The destructor throws nothing: an
-        // event that cannot be written for lack of memory is dropped.
+        // Les requêtes que le worker n'a plus eu d'étape pour terminer.  Le destructeur ne lève
+        // rien : un événement qui ne peut pas être écrit faute de mémoire est abandonné.
         try
         {
             std::vector<std::shared_ptr<request_state>> left;
@@ -1038,8 +1058,8 @@ namespace albireo
         if (gpu.is_object()) devices.push_back(gpu);
         bool usable = true;
         std::string reason;
-        // The reasons carry a code, with which the web application explains them in the
-        // language of the user.
+        // Les raisons portent un code, avec lequel l'application web les explique dans la
+        // langue de l'utilisateur.
         std::string reason_code;
         json reason_args = json::object();
         d["devices"] = devices;
@@ -1053,13 +1073,13 @@ namespace albireo
         return d;
     }
 
-    // Models
+    // Modèles
 
     void engine::load_model(const std::string& id, const std::string& path, const json& options)
     {
         if (id.empty()) throw std::invalid_argument("a model needs an identifier");
-        // One load at a time: two loads of the same identifier would otherwise both replace
-        // the model, the requests of the first one never ending.
+        // Un chargement à la fois : sinon deux chargements du même identifiant remplaceraient
+        // tous deux le modèle, les requêtes du premier ne se terminant jamais.
         std::lock_guard<std::mutex> serial(loading_);
         auto m = std::make_shared<loaded_model>();
         m->id = id;
@@ -1069,14 +1089,16 @@ namespace albireo
         m->tok.load_from_gguf(m->file->reader());
         if (static_cast<long>(m->tok.size()) != m->cfg.vocab)
             throw std::runtime_error("the vocabulary and the output layer of the model disagree");
-        // The tokens the engine adds or stops on must be tokens of the vocabulary.
+        // Les tokens que le moteur ajoute ou sur lesquels il s'arrête doivent être des tokens du
+        // vocabulaire.
         if (m->tok.bos_id() >= m->cfg.vocab || m->tok.eos_id() >= m->cfg.vocab)
             throw std::runtime_error("the tokenizer of the model names a special token outside its vocabulary");
-        // A file published without its template takes the template of the repository of its model.
+        // Un fichier publié sans son template prend le template du dépôt de son modèle.
         if (m->cfg.chat_template.empty()) m->cfg.chat_template = published_template(m->cfg.name);
         m->format = chat_format::detect(m->tok, m->cfg.chat_template);
 
-        // The image encoder: the projector file of the options, or the vision tensors of the model file.
+        // L'encodeur d'images : le fichier projecteur des options, ou les tenseurs de vision du
+        // fichier du modèle.
         const std::string projector = options["projector"].as_string();
         if (!projector.empty())
         {
@@ -1091,8 +1113,8 @@ namespace albireo
         if (m->projector)
         {
             m->vision.reset(new vision_encoder(m->projector, *pool_));
-            // Qwen3-VL places the tokens of an image by multimodal rotary positions, a LLaVA-NeXT
-            // or a Pixtral decoder by their order.
+            // Qwen3-VL place les tokens d'une image par positions rotatives multimodales, un
+            // décodeur LLaVA-NeXT ou Pixtral par leur ordre.
             const vision_encoder::family kind = m->vision->kind();
             const bool llava = kind == vision_encoder::family::llava_next;
             const bool pixtral = kind == vision_encoder::family::pixtral;
@@ -1112,7 +1134,7 @@ namespace albireo
             }
             else if (pixtral)
             {
-                // [IMG] stands for each token of the image, [IMG_END] follows them.
+                // [IMG] tient lieu de chaque token de l'image, [IMG_END] les suit.
                 m->image_pad = m->tok.token_id("[IMG]");
                 m->vision_end = m->tok.token_id("[IMG_END]");
                 if (m->image_pad < 0 || m->vision_end < 0)
@@ -1128,17 +1150,18 @@ namespace albireo
             }
         }
 
-        // An embedding model reads passages and questions of a few hundred tokens, many
-        // at a time, and keeps nothing of them: its defaults are its own, and its keys and
-        // values come in small blocks, given back as soon as each input is read.
+        // Un modèle d'embedding lit des passages et des questions de quelques centaines de
+        // tokens, beaucoup à la fois, et n'en garde rien : ses valeurs par défaut lui sont
+        // propres, et ses clés et valeurs viennent par petits blocs, rendus dès que chaque
+        // entrée est lue.
         const bool embedding = m->cfg.is_embedding();
         if (embedding && m->cfg.pooling != 3)
             throw std::runtime_error("this embedding model pools its hidden states by a method the engine does not "
                 "implement (the engine takes the state of the last token)");
         /*
-            The settings of the model, its options or those of the engine, within bounds read
-            before any narrowing (long has 32 bits on Windows), which are a context of 2^26
-            positions, 256 sequences, passes of 65536 tokens and 2^24 MB of keys and values.
+            Les réglages du modèle, ses options ou celles du moteur, dans des bornes lues avant
+            toute réduction (long fait 32 bits sous Windows), qui sont un contexte de 2^26
+            positions, 256 séquences, des passes de 65536 tokens et 2^24 Mo de clés et valeurs.
         */
         auto setting = [&](const char* key, long long def, long long lo, long long hi) {
             const json& v = options.contains(key) ? options[key] : settings_[key];
@@ -1154,8 +1177,9 @@ namespace albireo
             : static_cast<long>(setting("context", 0, 0, 1 << 26));
         const bool chosen_context = ctx > 0;
         /*
-            By default, the context the model was trained for, which the memory of the system
-            may reduce below; an embedding model reads inputs of 8192 tokens at most.
+            Par défaut, le contexte pour lequel le modèle a été entraîné, que la mémoire du
+            système peut réduire plus bas ; un modèle d'embedding lit des entrées de 8192 tokens
+            au plus.
         */
         if (ctx <= 0 && m->cfg.ctx_train > 0)
             ctx = embedding ? std::min<long>(m->cfg.ctx_train, 8192) : m->cfg.ctx_train;
@@ -1168,9 +1192,10 @@ namespace albireo
             : std::max<long>(16, static_cast<long>(setting("batch_tokens", 512, 0, 65536)));
 
         /*
-            The storage of the keys and values (kv_format): auto takes the 8-bit integers for a
-            language model whose heads hold whole groups of them, and half precision for an
-            embedding model, whose vectors then keep the values of its reference implementation.
+            Le stockage des clés et valeurs (kv_format) : auto prend les entiers sur 8 bits pour
+            un modèle de langage dont les têtes en contiennent des groupes entiers, et la
+            demi-précision pour un modèle d'embedding, dont les vecteurs gardent alors les
+            valeurs de son implémentation de référence.
         */
         const json none;
         const json& kv_type_value = options.contains("kv_type") ? options["kv_type"]
@@ -1190,17 +1215,17 @@ namespace albireo
             * kv_row_bytes(m->kv_type, m->cfg.head_dim);
         const memory_info mem = read_memory_info();
         /*
-            The memory the keys and values leave to the system and to the other programs, and to the
-            weights of the model, which a generation reads at every token and which have to stay
-            in the physical memory.
+            La mémoire que les clés et valeurs laissent au système et aux autres programmes, ainsi
+            qu'aux poids du modèle, qu'une génération lit à chaque token et qui doivent rester en
+            mémoire physique.
         */
         const uint64_t weights = static_cast<uint64_t>(m->file->size())
             + (m->projector && m->projector != m->file ? static_cast<uint64_t>(m->projector->size()) : 0);
         const uint64_t reserve = std::max<uint64_t>(uint64_t(1) << 30, mem.total / 8) + weights;
-        // The memory the keys and values can take, when the system tells it.
+        // La mémoire que peuvent prendre les clés et valeurs, quand le système l'indique.
         const bool known = mem.commit_total > 0;
         const uint64_t room_bytes = mem.commit_total > reserve ? mem.commit_total - reserve : 0;
-        // The bytes of the keys and values of positions, in whole blocks.
+        // Les octets des clés et valeurs de positions, en blocs entiers.
         const long block_positions = embedding ? 64 : 256;
         auto bytes_for = [&](long positions) {
             const long blocks = (positions + block_positions - 1) / block_positions;
@@ -1210,19 +1235,20 @@ namespace albireo
             : static_cast<size_t>(setting("kv_mb", 0, 0, 1 << 24))) << 20;
         if (kv == 0 && embedding)
         {
-            // One input of the whole context.
+            // Une entrée de la taille du contexte entier.
             kv = bytes_for(m->context);
         }
         else if (kv == 0)
         {
             /*
-                Two full contexts, within the memory the system can commit, its physical memory
-                and its paging file or swap together, less the reserve.  The blocks are
-                allocated as the sequences grow, and the guard below refuses a new block when
-                the memory the system has left comes down to the reserve: this budget is a
-                bound that only sequences of that length reach, the paging file or the swap
-                then holding what the physical memory does not.  The context of the model comes
-                down to what this memory can hold, unless a setting chose it.
+                Deux contextes complets, dans la limite de la mémoire que le système peut
+                engager, sa mémoire physique et son fichier d'échange ou swap ensemble, moins la
+                réserve.  Les blocs sont alloués à mesure que les séquences grandissent, et la
+                garde ci-dessous refuse un nouveau bloc quand la mémoire qui reste au système se
+                réduit à la réserve : ce budget est une borne que seules atteignent des séquences
+                de cette longueur, le fichier d'échange ou le swap contenant alors ce que la
+                mémoire physique ne contient pas.  Le contexte du modèle se réduit à ce que cette
+                mémoire peut contenir, sauf si un réglage l'a choisi.
             */
             kv = 2 * bytes_for(m->context);
             if (known) kv = std::min<size_t>(kv, static_cast<size_t>(room_bytes));
@@ -1236,8 +1262,8 @@ namespace albireo
         std::unique_ptr<cpu_runtime> runtime(new cpu_runtime(m->file, m->cfg, *pool_, kv, block_positions,
             m->kv_type));
         /*
-            A new block of keys and values leaves the reserve to the system, beyond the blocks of
-            the first 4096 positions, which the model always has.
+            Un nouveau bloc de clés et valeurs laisse la réserve au système, au-delà des blocs des
+            4096 premières positions, que le modèle a toujours.
         */
         const size_t floor_bytes = bytes_for(std::min<long>(m->context, 4096));
         runtime->set_kv_guard([reserve, floor_bytes](size_t bytes, size_t allocated) {
@@ -1245,23 +1271,24 @@ namespace albireo
             const memory_info now = read_memory_info();
             return now.commit_available == 0 || now.commit_available >= bytes + reserve;
         });
-        // The generation steps on the GPU of the Mac, when the engine opened it.
+        // Les étapes de génération sur le GPU du Mac, quand le moteur l'a ouvert.
         if (gpu_)
         {
-            // The prompts the GPU reads (settings gpu_prompt_tokens and gpu_prompt_context).
+            // Les prompts que lit le GPU (réglages gpu_prompt_tokens et gpu_prompt_context).
             runtime->set_gpu_prompts(bounded(settings_["gpu_prompt_tokens"], qk_float_product_tokens, 9, 1 << 20),
                 bounded(settings_["gpu_prompt_context"], 2048, 0, 1 << 20));
             runtime->set_gpu(*gpu_, [this, id](int level, const std::string& message) {
                 log(level, "model '" + id + "': " + message);
             });
-            // The check of the GPU at the loading, so that the first answer does not wait for it.
+            // La vérification du GPU au chargement, pour que la première réponse ne l'attende pas.
             runtime->check_gpu();
         }
         cpu_runtime* const processor = runtime.get();
         m->runtime = std::move(runtime);
 
-        // The context never exceeds what the keys and values can hold: a prompt the engine
-        // accepts can then always be read to its end, and a longer one is refused at once.
+        // Le contexte ne dépasse jamais ce que les clés et valeurs peuvent contenir : un prompt
+        // que le moteur accepte peut alors toujours être lu jusqu'au bout, et un plus long est
+        // refusé aussitôt.
         const long room = static_cast<long>(m->runtime->kv_bytes_budget() / m->runtime->kv_bytes_per_token());
         if (room < m->context)
         {
@@ -1270,7 +1297,7 @@ namespace albireo
                 "to them");
             m->context = room;
         }
-        // The rotary divisors of a model with LongRoPE follow the context of its sequences.
+        // Les diviseurs rotatifs d'un modèle avec LongRoPE suivent le contexte de ses séquences.
         processor->set_context(m->context);
         select_rope_factors(m->cfg, m->context);
 
@@ -1279,7 +1306,7 @@ namespace albireo
         std::sort(m->stops.begin(), m->stops.end());
         m->stops.erase(std::unique(m->stops.begin(), m->stops.end()), m->stops.end());
 
-        // Size and dominant storage type of the weights.
+        // Taille et type de stockage dominant des poids.
         std::map<std::string, uint64_t> by_type;
         for (const auto& t : m->file->reader().tensors())
         {
@@ -1329,14 +1356,15 @@ namespace albireo
         j["format"] = m.format->name();
         j["tools"] = !m.cfg.is_embedding() && m.format->supports_tools();
         j["reasoning"] = !m.cfg.is_embedding() && m.format->supports_reasoning();
-        // A model that reasons before every answer, the reasoning of a request that asks for none being short.
+        // Un modèle qui raisonne avant chaque réponse, le raisonnement d'une requête qui n'en
+        // demande pas étant court.
         j["reasoning_always"] = !m.cfg.is_embedding() && m.format->always_reasons();
         j["parameters"] = static_cast<unsigned long long>(m.parameters);
         j["quantization"] = m.quantization;
         j["bytes"] = static_cast<unsigned long long>(m.bytes);
         j["kv_bytes_per_token"] = static_cast<unsigned long long>(m.runtime->kv_bytes_per_token());
         j["kv_type"] = m.kv_type == kv_format::q8 ? "q8" : "f16";
-        // The measured speeds, 0 until the model answered (loaded_model::prompt_rate).
+        // Les vitesses mesurées, 0 tant que le modèle n'a pas répondu (loaded_model::prompt_rate).
         j["prompt_tokens_per_second"] = std::round(10.0 * m.prompt_rate.load(std::memory_order_relaxed)) / 10.0;
         j["generation_tokens_per_second"] = std::round(10.0 * m.generation_rate.load(std::memory_order_relaxed)) / 10.0;
         j["experts"] = m.cfg.n_experts;
@@ -1358,7 +1386,7 @@ namespace albireo
         return j;
     }
 
-    // Requests
+    // Requêtes
 
     uint64_t engine::submit(const json& req, event_sink sink)
     {
@@ -1397,13 +1425,14 @@ namespace albireo
             reasoning = req["chat_template_kwargs"]["enable_thinking"].as_bool(reasoning);
         opt.reasoning = reasoning && m->format->supports_reasoning();
         /*
-            The budget of the reasoning: the tokens it may take before the engine ends it.  The
-            template of a model that always reasons opens its reasoning whatever the request asks:
-            for a request that asks for no reasoning, the engine ends it at once with the sentence
-            its authors give for a budget, so that the model answers without reasoning and without
-            a prompt outside what it learned, the tokens of that end not taking from those of the
-            answer; a request that asks for a low effort receives a short reasoning, within its
-            max_tokens.  A budget given as null is no budget.
+            Le budget du raisonnement : les tokens qu'il peut prendre avant que le moteur n'y mette
+            fin.  Le template d'un modèle qui raisonne toujours ouvre son raisonnement quoi que
+            demande la requête : pour une requête qui ne demande pas de raisonnement, le moteur y
+            met fin aussitôt avec la phrase que ses auteurs donnent pour un budget, de sorte que
+            le modèle répond sans raisonnement et sans prompt hors de ce qu'il a appris, les
+            tokens de cette fin ne prenant rien à ceux de la réponse ; une requête qui demande un
+            faible effort reçoit un raisonnement court, dans la limite de son max_tokens.  Un
+            budget donné à null n'est pas un budget.
         */
         const bool budget_given = req["reasoning_budget"].is_number();
         long budget = budget_given ? static_cast<long>(bounded(req["reasoning_budget"], -1, -1, 1 << 24)) : -1;
@@ -1435,7 +1464,7 @@ namespace albireo
             if (!parts.empty()) prepare_images(*m, parts, true, r->images);
             r->prompt = prompt_tokens(*m, pieces, r->images);
             r->parser = m->format->make_parser(opt);
-            // The conversation of a client, whose history the end of its answer reads ahead.
+            // La conversation d'un client, dont la fin de sa réponse lit l'historique en avance.
             if (warm_history_ && req["priority"].as_string() != "background")
             {
                 r->messages.swap(messages);
@@ -1445,7 +1474,7 @@ namespace albireo
         else if (req["prompt"].is_string())
         {
             r->prompt = m->tok.encode(req["prompt"].as_string(), m->tok.add_bos_default(), false, true);
-            // A raw completion is plain text: no markers to interpret.
+            // Une complétion brute est du texte brut : pas de marqueurs à interpréter.
             struct passthrough : output_parser
             {
                 void feed(const std::string& t, std::vector<output_event>& e) override
@@ -1469,16 +1498,16 @@ namespace albireo
                 + " tokens, beyond the context of " + std::to_string(m->context) + " tokens of the model");
 
         /*
-            Sampling: the values of the request, or those the authors of the model advise for an
-            answer with or without a reasoning of the model, a reasoning ended at once counting as
-            none.
+            Échantillonnage : les valeurs de la requête, ou celles que conseillent les auteurs du
+            modèle pour une réponse avec ou sans raisonnement du modèle, un raisonnement terminé
+            aussitôt comptant comme aucun.
         */
         const sampling_params advised = advised_sampling(*m, opt.reasoning && budget != 0, !r->images.empty());
         sampling_params sp;
         sp.temperature = static_cast<float>(req["temperature"].as_double(advised.temperature));
         sp.top_p = static_cast<float>(req["top_p"].as_double(advised.top_p));
-        // The candidates are selected in a heap: more than 1024 of them would cost time at every
-        // token for a mass that temperature and top-p leave aside.
+        // Les candidats sont sélectionnés dans un tas : plus de 1024 coûteraient du temps à chaque
+        // token pour une masse que la température et top-p laissent de côté.
         sp.top_k = static_cast<int>(bounded(req["top_k"], advised.top_k, 0, 1024));
         sp.min_p = static_cast<float>(req["min_p"].as_double(advised.min_p));
         const double repeat_penalty = req["repeat_penalty"].as_double(req["repetition_penalty"].as_double(
@@ -1496,15 +1525,15 @@ namespace albireo
             const long long token = std::strtoll(b.first.c_str(), &end, 10);
             if (end == b.first.c_str() || *end != '\0' || token < 0 || token >= m->cfg.vocab)
                 throw std::invalid_argument("logit_bias holds an invalid token identifier");
-            // The range of the OpenAI interface, -100 (banned) to 100 (forced).
+            // La plage de l'interface OpenAI, de -100 (interdit) à 100 (forcé).
             const double bias = b.second.as_double(0.0);
             if (!b.second.is_number() || !(bias >= -100.0 && bias <= 100.0))
                 throw std::invalid_argument("logit_bias values must be numbers between -100 and 100");
             sp.logit_bias[static_cast<int>(token)] = static_cast<float>(bias);
         }
         /*
-            The JSON numbers may be infinite, so every parameter is checked against a finite
-            range, which keeps the logits finite.
+            Les nombres JSON peuvent être infinis, donc chaque paramètre est vérifié par rapport
+            à une plage finie, ce qui garde les logits finis.
         */
         if (!(sp.temperature >= 0 && sp.temperature <= 1e4) || !(sp.top_p >= 0 && sp.top_p <= 1)
             || !(sp.min_p >= 0 && sp.min_p <= 1) || !(repeat_penalty > 0 && repeat_penalty <= 100)
@@ -1513,13 +1542,13 @@ namespace albireo
         r->smp.reset(new sampler(sp));
 
         const long room = m->context - static_cast<long>(r->prompt.size());
-        // Compared before any narrowing: long has 32 bits on Windows.
+        // Comparé avant toute réduction : long fait 32 bits sous Windows.
         const long long asked = req["max_completion_tokens"].as_int(req["max_tokens"].as_int(0));
         r->max_tokens = asked <= 0 || asked > room ? room : static_cast<long>(asked);
         r->background = req["priority"].as_string() == "background";
         /*
-            The end of a reasoning the engine may write: at the budget, and in place of a reasoning
-            that goes round in circles (loops()).
+            La fin d'un raisonnement que le moteur peut écrire : au budget, et à la place d'un
+            raisonnement qui tourne en rond (loops()).
         */
         r->brief = brief;
         if (opt.reasoning && req.contains("messages"))
@@ -1528,14 +1557,14 @@ namespace albireo
             if (!r->closing.empty())
             {
                 r->reasoning_budget = budget;
-                // The short reasoning of a request that asked for none comes on top of its answer.
+                // Le raisonnement court d'une requête qui n'en a pas demandé s'ajoute à sa réponse.
                 if (brief && asked > 0 && budget >= 0)
                 {
                     r->max_tokens = static_cast<long>(std::min<long long>(room,
                         static_cast<long long>(r->max_tokens) + budget + static_cast<long long>(r->closing.size())));
                     r->answer_tokens = static_cast<long>(std::min<long long>(asked, room));
                 }
-                // A budget of 0 ends at once the reasoning the prompt opens.
+                // Un budget de 0 termine aussitôt le raisonnement qu'ouvre le prompt.
                 if (budget == 0 && r->parser->in_reasoning())
                 {
                     r->forced.assign(r->closing.begin(), r->closing.end());
@@ -1548,27 +1577,28 @@ namespace albireo
         for (const auto& s : req["stop"].elements())
             if (s.is_string() && !s.as_string().empty()) r->stops.push_back(s.as_string());
         if (r->stops.size() > 16) throw std::invalid_argument("at most 16 stop sequences");
-        // Each token compares the end of the answer with the stop sequences, whose length is bounded for that.
+        // Chaque token compare la fin de la réponse avec les séquences d'arrêt, dont la longueur est
+        // bornée pour cela.
         for (const auto& s : r->stops)
             if (s.size() > 1024) throw std::invalid_argument("a stop sequence holds 1024 bytes at most");
-        // The markers of a format written as plain text end the turn of the model too.
+        // Les marqueurs d'un format écrits en texte brut terminent aussi le tour du modèle.
         if (req.contains("messages"))
             for (const auto& s : m->format->stop_strings())
                 if (std::find(r->stops.begin(), r->stops.end(), s) == r->stops.end()) r->stops.push_back(s);
 
-        // The decoded pixels this request holds, counted against the budget of its model below.
+        // Les pixels décodés que détient cette requête, décomptés du budget de son modèle ci-dessous.
         size_t pixels = 0;
         for (const request_image& im : r->images) pixels += im.pixels.pixels.size();
 
         std::lock_guard<std::mutex> lock(mutex_);
         if (stop_) throw std::runtime_error("the engine is stopping");
-        // The model may have been unloaded while the prompt was prepared: its queue is no
-        // longer read.
+        // Le modèle a pu être déchargé pendant la préparation du prompt : sa file n'est plus
+        // lue.
         if (m->unloading) throw std::invalid_argument("the model '" + model_id + "' is not loaded");
         /*
-            The images of the queued requests hold their pixels until they are encoded.  A
-            request that would carry the model beyond its budget is refused, so that a burst
-            of large images cannot exhaust the memory of the host.
+            Les images des requêtes en file gardent leurs pixels jusqu'à leur encodage.  Une
+            requête qui porterait le modèle au-delà de son budget est refusée, de sorte qu'une
+            rafale de grandes images ne peut pas épuiser la mémoire de l'hôte.
         */
         if (pixels > 0 && m->queued_pixels.load(std::memory_order_relaxed) + pixels > queued_pixels_budget)
             throw engine_busy("the images already queued for the model '" + model_id
@@ -1584,10 +1614,10 @@ namespace albireo
 
     uint64_t engine::submit_embeddings(const std::shared_ptr<loaded_model>& m, const json& req, event_sink sink)
     {
-        // The inputs: a text, a list of texts, a list of token identifiers, or a list of
-        // such lists.  A text receives the tokens the model adds around its inputs (the
-        // final token whose state becomes the vector, for the decoders); token lists are
-        // taken as they are.
+        // Les entrées : un texte, une liste de textes, une liste d'identifiants de tokens, ou une
+        // liste de telles listes.  Un texte reçoit les tokens que le modèle ajoute autour de ses
+        // entrées (le token final dont l'état devient le vecteur, pour les décodeurs) ; les
+        // listes de tokens sont prises telles quelles.
         std::vector<std::vector<int>> inputs;
         const json& in = req["input"];
         auto text_tokens = [&](const std::string& text) {
@@ -1663,8 +1693,8 @@ namespace albireo
 
     void engine::complete_part(loaded_model& m, request_state& r, const float* hidden)
     {
-        // The state of the last token, cut to the dimensions asked (the leading ones, for
-        // the models trained to keep their meaning when shortened), at unit length.
+        // L'état du dernier token, réduit aux dimensions demandées (les premières, pour les
+        // modèles entraînés à garder leur sens une fois raccourcis), de longueur unité.
         embedding_job& job = *r.job;
         const long n = job.dimensions > 0 ? job.dimensions : m.cfg.d_model;
         std::vector<float> v(hidden, hidden + n);
@@ -1710,8 +1740,8 @@ namespace albireo
 
     void engine::end_job(embedding_job& job, const std::string& code, const std::string& message)
     {
-        // The first failure or cancellation of an input ends the whole request; its other
-        // inputs see the cancellation and stop.
+        // Le premier échec ou la première annulation d'une entrée termine toute la requête ; ses
+        // autres entrées voient l'annulation et s'arrêtent.
         job.cancelled = true;
         if (job.ended) return;
         job.ended = true;
@@ -1725,7 +1755,7 @@ namespace albireo
 
     void engine::cancel_job(embedding_job& job)
     {
-        // The parts of the request that remain see the cancellation and stop without an event.
+        // Les parties restantes de la requête voient l'annulation et s'arrêtent sans événement.
         job.cancelled = true;
         if (job.ended) return;
         job.ended = true;
@@ -1750,22 +1780,22 @@ namespace albireo
         wake_.notify_all();
     }
 
-    // Scheduler
+    // Ordonnanceur
 
     void engine::run()
     {
         for (;;)
         {
             std::vector<std::shared_ptr<loaded_model>> models;
-            // Whether a language model has requests: the embedding models then compute
-            // short passes, the answers being what the users wait for.
+            // Indique si un modèle de langage a des requêtes : les modèles d'embedding calculent
+            // alors des passes courtes, les réponses étant ce qu'attendent les utilisateurs.
             bool answering = false;
             std::vector<bool> busy;
             bool woken = false;
             {
                 std::unique_lock<std::mutex> lock(mutex_);
-                // Without requests, the thread still wakes now and then to give the memory of
-                // the idle models back (trim_idle).
+                // Sans requêtes, le thread se réveille tout de même de temps en temps pour rendre la
+                // mémoire des modèles inactifs (trim_idle).
                 woken = wake_.wait_for(lock, std::chrono::seconds(5), [&]() {
                     if (stop_) return true;
                     for (const auto& m : models_)
@@ -1778,7 +1808,7 @@ namespace albireo
                     models.push_back(m.second);
                     const bool has_requests = !m.second->waiting.empty() || !m.second->active.empty();
                     busy.push_back(has_requests);
-                    // The warm-ups of the histories leave the embedding models their whole passes.
+                    // Les préchauffages des historiques laissent aux modèles d'embedding leurs passes entières.
                     bool clients = false;
                     for (const auto& r : m.second->waiting) clients = clients || !r->warm;
                     for (const auto& r : m.second->active) clients = clients || !r->warm;
@@ -1791,22 +1821,22 @@ namespace albireo
                 continue;
             }
             /*
-                Whether an answer to a user is being written in any model: the passes then read
-                few tokens of prompts.  The answers of the work in the background leave the
-                prompts their whole budget.
+                Indique si une réponse à un utilisateur s'écrit dans un modèle quelconque : les
+                passes lisent alors peu de tokens de prompts.  Les réponses du travail en
+                arrière-plan laissent aux prompts leur budget entier.
             */
             bool decoding = false;
             for (const auto& m : models)
                 for (const auto& r : m->active)
                     if (r->ph == request_state::phase::decode && !r->background) decoding = true;
-            // The device keeps the copies of the models with requests, and may give the
-            // room of the others to them (tensor_backend.h).
+            // Le périphérique garde les copies des modèles qui ont des requêtes, et peut leur
+            // donner la place des autres (tensor_backend.h).
             for (size_t i = 0; i < models.size(); ++i) models[i]->runtime->set_busy(busy[i]);
             for (const auto& m : models)
             {
                 if (m->unloading)
                 {
-                    // Finish what the model still holds, then let it go.
+                    // Terminer ce que le modèle détient encore, puis le libérer.
                     std::deque<std::shared_ptr<request_state>> waiting;
                     {
                         std::lock_guard<std::mutex> lock(mutex_);
@@ -1820,7 +1850,7 @@ namespace albireo
                         }
                         catch (...)
                         {
-                            // Out of memory while the event was written: the request ends without it.
+                            // Mémoire épuisée pendant l'écriture de l'événement : la requête se termine sans lui.
                         }
                     }
                     abandon(*m, "unloaded", "the model was unloaded");
@@ -1833,8 +1863,8 @@ namespace albireo
                 {
                     const bool short_pass = m->cfg.is_embedding() && answering;
                     step(m, short_pass ? std::min<long>(m->batch_tokens, 16) : m->batch_tokens, decoding);
-                    // An embedding model keeps nothing between its requests: once idle, the
-                    // memory of the inputs it read goes back to the system.
+                    // Un modèle d'embedding ne garde rien entre ses requêtes : une fois inactif, la
+                    // mémoire des entrées qu'il a lues retourne au système.
                     if (m->cfg.is_embedding() && m->active.empty())
                     {
                         bool idle = false;
@@ -1848,9 +1878,9 @@ namespace albireo
                 catch (const std::bad_alloc&)
                 {
                     /*
-                        The system ran out of memory during the pass.  Its requests end with the
-                        code of a full memory of keys and values, and the free blocks go back to
-                        the system, so that the next requests find room.
+                        Le système a manqué de mémoire pendant la passe.  Ses requêtes se terminent
+                        avec le code d'une mémoire de clés et valeurs pleine, et les blocs libres
+                        retournent au système, pour que les requêtes suivantes trouvent de la place.
                     */
                     abandon(*m, "out_of_memory", "the system has no memory left for this request");
                     trim_after_failure(*m);
@@ -1871,7 +1901,8 @@ namespace albireo
                     abandon(*m, "internal", "unknown error");
                 }
             }
-            // The models without requests for a while give back their free blocks, whatever the others compute.
+            // Les modèles sans requêtes depuis un moment rendent leurs blocs libres, quoi que calculent
+            // les autres.
             trim_idle(models);
         }
     }
@@ -1890,9 +1921,9 @@ namespace albireo
     void engine::abandon(loaded_model& m, const std::string& code, const std::string& message)
     {
         /*
-            Ends every request the model computes with an error and gives their sequences
-            back.  Writing an event may run out of memory: that request then ends without
-            its event, and the others still end.
+            Termine sur une erreur chaque requête que calcule le modèle et rend leurs
+            séquences.  L'écriture d'un événement peut manquer de mémoire : cette requête se
+            termine alors sans son événement, et les autres se terminent quand même.
         */
         for (auto& r : m.active)
         {
@@ -1918,8 +1949,8 @@ namespace albireo
 
     void engine::trim_idle(const std::vector<std::shared_ptr<loaded_model>>& models)
     {
-        // The free blocks of a language model without requests for a while go back to the
-        // system; its cached conversations stay.
+        // Les blocs libres d'un modèle de langage sans requêtes depuis un moment retournent au
+        // système ; ses conversations en cache restent.
         const auto now = clock_type::now();
         for (const auto& m : models)
         {
@@ -1932,7 +1963,7 @@ namespace albireo
 
     void engine::drop_cancelled(loaded_model& m)
     {
-        // The cancelled requests leave the queue at once, whether a slot is free or not.
+        // Les requêtes annulées quittent la file aussitôt, qu'une place soit libre ou non.
         std::vector<std::shared_ptr<request_state>> dropped;
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -1955,11 +1986,11 @@ namespace albireo
     bool engine::preempt(loaded_model& m, const request_state* keep)
     {
         /*
-            Gives the memory of a request reading its prompt to the answers being written,
-            the request admitted last first: it goes back to the front of the queue
-            (requeue_preempted) and reads its prompt again once there is room.  A warm-up of a
-            history gives its memory first: it ends, its keys and values joining the cached
-            sequences, which reserve() gives back.
+            Donne la mémoire d'une requête qui lit son prompt aux réponses en cours d'écriture,
+            la dernière requête admise d'abord : elle retourne en tête de file
+            (requeue_preempted) et relit son prompt une fois qu'il y a de la place.  Un
+            préchauffage d'historique donne sa mémoire en premier : il se termine, ses clés et
+            valeurs rejoignant les séquences en cache, que reserve() rend.
         */
         for (const auto& w : m.active)
             if (w.get() != keep && w->warm && w->ph == request_state::phase::prefill)
@@ -1990,8 +2021,8 @@ namespace albireo
         for (const auto& r : m.active)
             if (r->ph == request_state::phase::waiting) back.push_back(r);
         if (back.empty()) return;
-        // Back in the queue before they leave the active requests, so that a failure of the
-        // insertion leaves them where abandon() finds them.
+        // De retour dans la file avant de quitter les requêtes actives, pour qu'un échec de
+        // l'insertion les laisse là où abandon() les trouve.
         {
             std::lock_guard<std::mutex> lock(mutex_);
             m.waiting.insert(m.waiting.begin(), back.begin(), back.end());
@@ -2010,10 +2041,10 @@ namespace albireo
             {
                 std::lock_guard<std::mutex> lock(mutex_);
                 if (m.waiting.empty() || static_cast<long>(m.active.size()) >= m.max_sequences) return;
-                // Room for the request among the active ones before it leaves the queue, so that
-                // an exception from here on ends it with the others (abandon).
+                // De la place pour la requête parmi les actives avant qu'elle quitte la file, pour
+                // qu'une exception à partir d'ici la termine avec les autres (abandon).
                 m.active.reserve(m.active.size() + 1);
-                // The requests of the clients in their order, the warm-ups of the histories after them.
+                // Les requêtes des clients dans leur ordre, les préchauffages des historiques après elles.
                 auto next = m.waiting.begin();
                 while (next != m.waiting.end() && (*next)->warm) ++next;
                 if (next == m.waiting.end()) next = m.waiting.begin();
@@ -2035,7 +2066,8 @@ namespace albireo
                 continue;
             }
             r->ph = request_state::phase::prefill;
-            // A warm-up whose answer left the cached sequences meanwhile would read its whole history: it ends.
+            // Un préchauffage dont la réponse a quitté entre-temps les séquences en cache lirait tout son
+            // historique : il se termine.
             if (r->warm && static_cast<long>(r->prompt.size()) - r->cached > 2 * r->max_tokens)
             {
                 finish(m, *r, "replaced");
@@ -2055,8 +2087,8 @@ namespace albireo
 
     bool engine::assign_sequence(loaded_model& m, request_state& r)
     {
-        // The cached sequence sharing the longest prefix with the prompt, one prompt token
-        // at least being left to compute: its logits begin the answer.
+        // La séquence en cache qui partage le plus long préfixe avec le prompt, un token de prompt
+        // au moins restant à calculer : ses logits commencent la réponse.
         const long limit = static_cast<long>(r.prompt.size()) - 1;
         long best_len = 0;
         size_t best = m.idle.size();
@@ -2075,19 +2107,19 @@ namespace albireo
             const bool take = best_len * 2 >= static_cast<long>(e.tokens.size());
             if (take)
             {
-                // The rest of the cached sequence is of no further use: take it over.
+                // Le reste de la séquence en cache ne sert plus : la reprendre.
                 r.seq = e.seq;
                 m.runtime->truncate_sequence(r.seq, best_len);
                 m.idle.erase(m.idle.begin() + static_cast<std::ptrdiff_t>(best));
             }
             else
             {
-                // Another conversation may still need it: copy the shared prefix.
+                // Une autre conversation peut encore en avoir besoin : copier le préfixe partagé.
                 const int s = m.runtime->create_sequence();
                 bool copied = m.runtime->copy_sequence(e.seq, s, best_len);
                 while (!copied && m.idle.size() > 1)
                 {
-                    // Free the least recently used other sequence and try again.
+                    // Libérer l'autre séquence la moins récemment utilisée et réessayer.
                     size_t lru = m.idle.size();
                     for (size_t i = 0; i < m.idle.size(); ++i)
                         if (i != best && (lru == m.idle.size() || m.idle[i].stamp < m.idle[lru].stamp)) lru = i;
@@ -2136,7 +2168,7 @@ namespace albireo
 
     void engine::advance_encoding(loaded_model& m)
     {
-        // The request whose image is being encoded: the encoding stops when it has left.
+        // La requête dont l'image est en cours d'encodage : l'encodage s'arrête quand elle est partie.
         request_state* owner = nullptr;
         bool answering = false;
         for (const auto& rp : m.active)
@@ -2154,7 +2186,8 @@ namespace albireo
         const std::array<uint8_t, 32> digest = image.digest;
         try
         {
-            // A short slice while answers are being written, so that their tokens keep coming.
+            // Une tranche courte tant que des réponses s'écrivent, pour que leurs tokens continuent
+            // d'arriver.
             if (!m.vision->advance(*m.vision_job, answering ? 0.1 : 0.5)) return;
             const std::shared_ptr<std::vector<float>> out = std::make_shared<std::vector<float>>();
             out->swap(m.vision_job->output());
@@ -2174,8 +2207,8 @@ namespace albireo
         catch (const std::exception& e)
         {
             /*
-                The requests that wait for this image end with the error of its encoding, before
-                this pass is built; the other requests of the model go on.
+                Les requêtes qui attendent cette image se terminent avec l'erreur de son encodage,
+                avant que cette passe soit construite ; les autres requêtes du modèle continuent.
             */
             std::string code, message;
             encoding_error(e, code, message);
@@ -2221,7 +2254,7 @@ namespace albireo
         }
         if (m.vision_job) advance_encoding(m);
 
-        // The next token of every request being generated, then slices of the prompts.
+        // Le token suivant de chaque requête en cours de génération, puis des tranches des prompts.
         struct row { request_state* r; long count; bool logits; };
         std::vector<row> rows;
         forward_batch& b = m.batch;
@@ -2243,7 +2276,7 @@ namespace albireo
             while (!reserved && preempt(m)) reserved = reserve(m, r.seq, len + 1);
             if (!reserved)
             {
-                // The answers being written hold the whole memory of the keys and values.
+                // Les réponses en cours d'écriture occupent toute la mémoire des clés et valeurs.
                 fail(r, "out_of_memory", "no memory left for the keys and values of this answer");
                 continue;
             }
@@ -2252,7 +2285,7 @@ namespace albireo
             b.tokens.push_back(r.next_token);
             if (multimodal)
             {
-                // A generated token follows the last position of the prompt.
+                // Un token généré suit la dernière position du prompt.
                 const long p = r.next_position + len - static_cast<long>(r.prompt.size());
                 b.positions.insert(b.positions.end(), { p, p, p });
             }
@@ -2260,16 +2293,18 @@ namespace albireo
             --budget;
         }
         requeue_preempted(m);
-        // While answers to users are being written, in this model or another, a pass reads few tokens of prompts.
+        // Tant que des réponses aux utilisateurs s'écrivent, dans ce modèle ou un autre, une passe lit
+        // peu de tokens de prompts.
         bool users = answering;
         for (const row& w : rows) users = users || !w.r->background;
         if (users) budget = std::min(budget, prefill_while_answering);
 
-        // The tokens of the prompt of r the pass can read, up to most: none while it waits for an image.
+        // Les tokens du prompt de r que la passe peut lire, jusqu'à most : aucun tant qu'il attend une
+        // image.
         auto slice = [&](request_state& r, long most) -> long {
             const long done = static_cast<long>(r.kv_tokens.size());
             long n = std::min<long>(static_cast<long>(r.prompt.size()) - done, most);
-            // The slice stops before the first image it reads that is not encoded yet.
+            // La tranche s'arrête avant la première image qu'elle lit qui n'est pas encore encodée.
             for (size_t i = 0; i < r.images.size(); ++i)
             {
                 request_image& im = r.images[i];
@@ -2288,7 +2323,7 @@ namespace albireo
                     }
                     catch (const std::exception& e)
                     {
-                        // This request ends with the error of its image; the others go on.
+                        // Cette requête se termine avec l'erreur de son image ; les autres continuent.
                         std::string code, message;
                         encoding_error(e, code, message);
                         m.vision->release_work();
@@ -2303,10 +2338,10 @@ namespace albireo
             }
             return n;
         };
-        // Adds n tokens of the prompt of r to the pass.
+        // Ajoute à la passe n tokens du prompt de r.
         auto read = [&](request_state& r, long n) {
             const long done = static_cast<long>(r.kv_tokens.size());
-            // A warm-up needs no logits: it ends with its prompt.
+            // Un préchauffage n'a pas besoin de logits : il se termine avec son prompt.
             const bool last = done + n == static_cast<long>(r.prompt.size()) && !r.warm;
             const long row0 = static_cast<long>(b.tokens.size());
             b.segments.push_back({ r.seq, row0, n });
@@ -2315,7 +2350,7 @@ namespace albireo
             if (multimodal)
                 b.positions.insert(b.positions.end(), r.positions.begin() + 3 * done,
                     r.positions.begin() + 3 * (done + n));
-            // The tokens of the images read their encodings: a row of input_width() values each.
+            // Les tokens des images lisent leurs encodages : une ligne de input_width() valeurs chacun.
             for (const request_image& im : r.images)
             {
                 const long from = std::max(im.start, done), to = std::min(im.start + im.tokens, done + n);
@@ -2333,15 +2368,16 @@ namespace albireo
         };
 
         /*
-            The prompts being read take the budget in turn, the first one changing at each step,
-            so that a short prompt does not wait for the whole of a long one.  A prompt without
-            room waits while another request computes in the pass.  When none does, the prompt
-            admitted first among those without room takes the memory of the prompts admitted
-            after it, or ends when that is not enough, so that two prompts never wait for each
-            other.  The warm-ups of the histories read with the budget the prompts of the requests
-            leave, and not while an answer to a user is being written; one without room ends.
+            Les prompts en cours de lecture prennent le budget à tour de rôle, le premier changeant
+            à chaque étape, de sorte qu'un prompt court n'attend pas la totalité d'un long.  Un
+            prompt sans place attend tant qu'une autre requête calcule dans la passe.  Quand
+            aucune ne le fait, le prompt admis en premier parmi ceux sans place prend la mémoire
+            des prompts admis après lui, ou se termine si cela ne suffit pas, de sorte que deux
+            prompts ne s'attendent jamais l'un l'autre.  Les préchauffages des historiques lisent
+            avec le budget que laissent les prompts des requêtes, et pas pendant qu'une réponse à
+            un utilisateur s'écrit ; un préchauffage sans place se termine.
         */
-        std::vector<request_state*> reading;    // in the order of admission, the warm-ups last
+        std::vector<request_state*> reading;    // dans l'ordre d'admission, les préchauffages en dernier
         for (auto& rp : m.active)
             if (rp->ph == request_state::phase::prefill && !rp->warm) reading.push_back(rp.get());
         const size_t requests = reading.size();
@@ -2399,8 +2435,8 @@ namespace albireo
         long prompt_tokens = 0, generated = 0;
         size_t logit_row = 0;
         const long V = m.cfg.vocab;
-        // The rows whose next token is drawn: each request has a sampler of its own, so the
-        // draws run in parallel and the tokens are then handled in order.
+        // Les lignes dont on tire le token suivant : chaque requête a son propre échantillonneur,
+        // donc les tirages s'exécutent en parallèle et les tokens sont ensuite traités dans l'ordre.
         struct draw { request_state* r; float* logits; int token; };
         std::vector<draw> draws;
         for (const row& w : rows)
@@ -2418,7 +2454,7 @@ namespace albireo
                 if (r.warm)
                 {
                     m.warmed += static_cast<uint64_t>(w.count);
-                    // The history read whole: its keys and values join the cached sequences.
+                    // L'historique lu en entier : ses clés et valeurs rejoignent les séquences en cache.
                     if (r.kv_tokens.size() == r.prompt.size()) finish(m, r, "read");
                     continue;
                 }
@@ -2435,7 +2471,7 @@ namespace albireo
             const long this_row = static_cast<long>(logit_row++);
             if (r.job)
             {
-                // An input of an embedding request, read to its end.
+                // Une entrée d'une requête d'embedding, lue jusqu'au bout.
                 complete_part(m, r, m.runtime->hidden().data() + this_row * m.cfg.d_model);
                 continue;
             }
@@ -2444,9 +2480,9 @@ namespace albireo
             {
                 r.prompt_end = clock_type::now();
                 /*
-                    The penalties over the last tokens see the end of the prompt as the reference
-                    servers do; those over the whole answer read the answer alone, as the servers
-                    whose values the authors of the models give.
+                    Les pénalités sur les derniers tokens voient la fin du prompt comme le font les
+                    serveurs de référence ; celles sur toute la réponse ne lisent que la réponse,
+                    comme les serveurs dont les auteurs des modèles donnent les valeurs.
                 */
                 if (r.smp->params().repeat_last_n >= 0)
                 {
@@ -2473,7 +2509,7 @@ namespace albireo
         {
             ++generated;
             int token = d.token;
-            // The end of a reasoning that reached its budget takes the place of the tokens drawn.
+            // La fin d'un raisonnement qui a atteint son budget prend la place des tokens tirés.
             d.r->forcing = !d.r->forced.empty();
             if (d.r->forcing)
             {
@@ -2513,9 +2549,9 @@ namespace albireo
             return;
         }
         ++r.generated;
-        // The end of a reasoning the engine writes is not a text of the model for its penalties.
+        // La fin d'un raisonnement qu'écrit le moteur n'est pas un texte du modèle pour ses pénalités.
         if (!r.forcing) r.smp->accept(token);
-        // Control tokens are not text, except the markers the output parser reads.
+        // Les tokens de contrôle ne sont pas du texte, sauf les marqueurs que lit l'analyseur de sortie.
         if (m.tok.token_type(token) != dlib::hf_tokenizer::TT_CONTROL
             || std::binary_search(m.format->marker_tokens().begin(), m.format->marker_tokens().end(), token))
             r.pending_bytes += m.tok.token_bytes(token);
@@ -2529,20 +2565,22 @@ namespace albireo
         }
         const bool reasoning = r.parser && r.parser->in_reasoning();
         /*
-            The end of a short reasoning: the answer receives the tokens the request gave it, after
-            the separation the engine still writes when it ends the reasoning itself.
+            La fin d'un raisonnement court : la réponse reçoit les tokens que la requête lui a
+            donnés, après la séparation que le moteur écrit encore quand il termine lui-même le
+            raisonnement.
         */
         if (r.in_reasoning && !reasoning && r.answer_tokens >= 0)
         {
             r.max_tokens = std::min(r.max_tokens, r.generated + static_cast<long>(r.forced.size()) + r.answer_tokens);
             r.answer_tokens = -1;
         }
-        // The end of a reasoning the engine writes takes no part in the repetitions of the model.
+        // La fin d'un raisonnement qu'écrit le moteur ne compte pas dans les répétitions du modèle.
         if (!r.forcing && loops(r, token, reasoning))
         {
             if (reasoning && !r.closing.empty())
             {
-                // A reasoning that goes round in circles ends as a reasoning that reached its budget.
+                // Un raisonnement qui tourne en rond se termine comme un raisonnement qui a atteint son
+                // budget.
                 r.forced.assign(r.closing.begin(), r.closing.end());
                 r.closing.clear();
                 reset_loops(r);
@@ -2558,7 +2596,7 @@ namespace albireo
                 return;
             }
         }
-        // A reasoning that reached its budget: the engine writes its end, one token per step.
+        // Un raisonnement qui a atteint son budget : le moteur écrit sa fin, un token par étape.
         if (r.reasoning_budget >= 0 && r.forced.empty() && !r.closing.empty() && r.parser->in_reasoning()
             && ++r.reasoning_tokens >= r.reasoning_budget)
         {
@@ -2577,7 +2615,7 @@ namespace albireo
     {
         void deliver(request_state& r, std::vector<output_event>& events)
         {
-            // The texts of an answer whose history will be read ahead (engine::warm_history()).
+            // Les textes d'une réponse dont l'historique sera lu en avance (engine::warm_history()).
             const bool kept = !r.messages.empty();
             for (auto& e : events)
             {
@@ -2609,15 +2647,16 @@ namespace albireo
     {
         std::vector<output_event> events;
         /*
-            The stop sequences apply to the text the model writes for the request: neither to the
-            end of a reasoning the engine writes, nor to the short reasoning of a request that
-            asked for none.
+            Les séquences d'arrêt s'appliquent au texte que le modèle écrit pour la requête : ni à
+            la fin d'un raisonnement qu'écrit le moteur, ni au raisonnement court d'une requête
+            qui n'en a pas demandé.
         */
         if (r.forcing)
         {
             /*
-                The end of a reasoning the engine writes in place of the model is not shown as its
-                reasoning; the text of the model held back for the stop sequences goes first.
+                La fin d'un raisonnement que le moteur écrit à la place du modèle n'est pas
+                montrée comme son raisonnement ; le texte du modèle retenu pour les séquences
+                d'arrêt passe d'abord.
             */
             if (!r.held.empty())
             {
@@ -2653,7 +2692,7 @@ namespace albireo
             finish(m, r, "stop");
             return;
         }
-        // Hold back what could begin a stop sequence.
+        // Retenir ce qui pourrait commencer une séquence d'arrêt.
         size_t keep = 0;
         for (const auto& s : r.stops)
             for (size_t len = std::min(s.size() - 1, r.held.size()); len > keep; --len)
@@ -2723,7 +2762,7 @@ namespace albireo
         done["timings"] = timings;
         r.sink(ALBIREO_EVENT_DONE, done.dump());
 
-        // Whether the sequence of the request joined the cached ones, as the last of them.
+        // Indique si la séquence de la requête a rejoint celles en cache, comme la dernière d'entre elles.
         bool cached = false;
         if (r.seq >= 0)
         {
@@ -2735,7 +2774,7 @@ namespace albireo
                 e.stamp = ++m.stamp;
                 m.idle.push_back(std::move(e));
                 cached = true;
-                // A bounded number of cached sequences, the least recently used dropped.
+                // Un nombre borné de séquences en cache, les moins récemment utilisées abandonnées.
                 const size_t limit = static_cast<size_t>(std::max<long>(4, 2 * m.max_sequences));
                 while (m.idle.size() > limit)
                 {
@@ -2757,9 +2796,9 @@ namespace albireo
             requests_.erase(r.id);
         }
         /*
-            An answer the client keeps, whole or cut at its length: its history is read ahead of
-            the next question.  The cached sequence is the last one, the least recently used
-            others leaving before it.
+            Une réponse que le client garde, entière ou coupée à sa longueur : son historique est
+            lu en avance sur la question suivante.  La séquence en cache est la dernière, les
+            autres moins récemment utilisées partant avant elle.
         */
         if (cached && (reason == "stop" || reason == "length") && !r.messages.empty() && r.tool_calls == 0)
             warm_history(m, r, m.idle.back().tokens);
@@ -2768,19 +2807,20 @@ namespace albireo
     void engine::warm_history(loaded_model& m, const request_state& r, const std::vector<int>& cached)
     {
         /*
-            The next request of the conversation renders this answer as a turn of its history,
-            which the formats write otherwise than the tokens the model generated: the templates
-            of the reasoning models drop the reasoning of the earlier turns, those of Qwen 3 the
-            empty reasoning that opens an answer without reasoning, and the text of the answer
-            is tokenized again.  The cached sequence of the request then matches the next prompt
-            up to the start of the answer only, and the next request would read the whole answer
-            again before its first token.  The history is rendered here as that request will
-            render it, with a question of one letter, twice, so that the tokens the two renderings
-            share end where the text of the question begins; a request of its own, in the
-            background and without a client, reads them now, while the user reads the answer.
-            Its keys and values then join the cached sequences, and the next request computes its
-            question only.  A request of a client that starts with this history takes over what
-            the warm-up has read when it arrives (yield_warm_ups()).
+            La requête suivante de la conversation rend cette réponse comme un tour de son
+            historique, que les formats écrivent autrement que les tokens générés par le modèle :
+            les templates des modèles de raisonnement retirent le raisonnement des tours
+            précédents, ceux de Qwen 3 le raisonnement vide qui ouvre une réponse sans
+            raisonnement, et le texte de la réponse est tokenisé à nouveau.  La séquence en cache
+            de la requête ne correspond alors au prompt suivant que jusqu'au début de la réponse,
+            et la requête suivante relirait toute la réponse avant son premier token.
+            L'historique est rendu ici comme cette requête le rendra, avec une question d'une
+            lettre, deux fois, de sorte que les tokens que partagent les deux rendus se terminent
+            là où commence le texte de la question ; une requête à part entière, en arrière-plan
+            et sans client, les lit maintenant, pendant que l'utilisateur lit la réponse.  Ses
+            clés et valeurs rejoignent alors les séquences en cache, et la requête suivante ne
+            calcule que sa question.  Une requête d'un client qui commence par cet historique
+            reprend ce que le préchauffage a lu quand elle arrive (yield_warm_ups()).
         */
         if (m.unloading) return;
         auto w = std::make_shared<request_state>();
@@ -2806,7 +2846,7 @@ namespace albireo
                 std::vector<request_image> images;
                 for (const request_image& im : r.images)
                 {
-                    // The encodings of the images, without their pixels, which the request gave back.
+                    // Les encodages des images, sans leurs pixels, que la requête a rendus.
                     if (!im.features) return;
                     request_image copy;
                     copy.digest = im.digest;
@@ -2832,13 +2872,15 @@ namespace albireo
         }
         catch (const std::exception&)
         {
-            // A history the format cannot render again: the next request reads it as it comes.
+            // Un historique que le format ne peut pas rendre à nouveau : la requête suivante le lit
+            // tel qu'il vient.
             return;
         }
         const long known = common_prefix(cached, w->keys);
         if (static_cast<long>(w->keys.size()) - known < min_warm_tokens) return;
         w->model_id = m.id;
-        // The tokens the warm-up expects to read, which admit() compares with those it finds cached.
+        // Les tokens que le préchauffage s'attend à lire, qu'admit() compare avec ceux qu'il trouve
+        // en cache.
         w->max_tokens = static_cast<long>(w->keys.size()) - known;
         w->warm = true;
         w->background = true;
@@ -2856,12 +2898,13 @@ namespace albireo
     void engine::yield_warm_ups(loaded_model& m)
     {
         /*
-            A warm-up gives way to a request of a client that starts with the history it reads,
-            the next question of its conversation: a warm-up being read ends where it is, its keys
-            and values joining the cached sequences, and a waiting one leaves the queue, so that
-            the request takes over the history at its admission.  The other requests, such as the
-            work in the background of the client, compute beside the warm-ups, which also give
-            their places among the active requests to the requests waiting for one.
+            Un préchauffage cède la place à une requête d'un client qui commence par l'historique
+            qu'il lit, la question suivante de sa conversation : un préchauffage en cours de
+            lecture se termine là où il en est, ses clés et valeurs rejoignant les séquences en
+            cache, et un préchauffage en attente quitte la file, de sorte que la requête reprend
+            l'historique à son admission.  Les autres requêtes, comme le travail en arrière-plan
+            du client, calculent à côté des préchauffages, qui cèdent aussi leurs places parmi
+            les requêtes actives aux requêtes qui en attendent une.
         */
         std::vector<std::shared_ptr<request_state>> dropped;
         {
@@ -2877,9 +2920,10 @@ namespace albireo
             if (!warming || clients == 0) return;
             long places = m.max_sequences - static_cast<long>(m.active.size());
             /*
-                A request takes over a warm-up when it starts with most of its history, or, once
-                the warm-up holds a sequence, with all the tokens the warm-up found cached, as a
-                request that writes the same answer again does.
+                Une requête reprend un préchauffage quand elle commence par la plus grande partie
+                de son historique, ou, une fois que le préchauffage détient une séquence, par tous
+                les tokens que le préchauffage a trouvés en cache, comme le fait une requête qui
+                réécrit la même réponse.
             */
             auto takes_over = [&](const request_state& warm) {
                 for (const auto& c : m.waiting)
@@ -2933,7 +2977,7 @@ namespace albireo
             auto it = models_.find(r.model_id);
             if (it != models_.end()) m = it->second;
         }
-        // The decoded pixels the request still holds return to the budget of its model.
+        // Les pixels décodés que la requête détient encore retournent au budget de son modèle.
         if (m) drop_request_pixels(*m, r);
         if (r.seq >= 0)
         {
@@ -2944,7 +2988,7 @@ namespace albireo
         requests_.erase(r.id);
     }
 
-    // Queries
+    // Interrogations
 
     json engine::stats()
     {
@@ -2952,7 +2996,7 @@ namespace albireo
         s["variant"] = ALBIREO_ENGINE_VARIANT;
         s["version"] = ALBIREO_VERSION;
         s["threads"] = threads_;
-        // The GPU of the Mac: its name, or why the engine does not use it.
+        // Le GPU du Mac : son nom, ou la raison pour laquelle le moteur ne l'utilise pas.
         json gpu = json::object();
         if (gpu_) gpu["name"] = gpu_->name();
         else if (!settings_["metal"].as_bool(true)) gpu["disabled"] = true;
@@ -2961,8 +3005,8 @@ namespace albireo
         {
             std::lock_guard<std::mutex> lock(stats_mutex_);
             const double t = now_seconds();
-            // The tokens of the last five seconds: none once the engine waits, rather than a
-            // rate that falls slowly after the last pass.
+            // Les tokens des cinq dernières secondes : aucun une fois que le moteur attend, plutôt
+            // qu'un débit qui retombe lentement après la dernière passe.
             auto rate = [&](const std::deque<std::pair<double, long>>& w) {
                 long total = 0;
                 double first = t;
@@ -2986,7 +3030,7 @@ namespace albireo
         for (const auto& kv : models_)
         {
             const loaded_model& m = *kv.second;
-            // The requests of the clients; the warm-ups of the histories apart.
+            // Les requêtes des clients ; les préchauffages des historiques à part.
             long queued = 0, warming = m.n_warming.load();
             for (const auto& r : m.waiting)
             {
@@ -3001,7 +3045,7 @@ namespace albireo
             j["cached_sequences"] = m.n_idle.load();
             j["kv_used"] = static_cast<unsigned long long>(m.runtime->kv_bytes_used());
             j["kv_budget"] = static_cast<unsigned long long>(m.runtime->kv_bytes_budget());
-            // The use of the GPU by its passes.
+            // L'utilisation du GPU par ses passes.
             if (const cpu_runtime* rt = dynamic_cast<const cpu_runtime*>(m.runtime.get()))
             {
                 const cpu_runtime::gpu_usage u = rt->gpu_use();
@@ -3074,7 +3118,8 @@ namespace albireo
         {
             render_options opt;
             current_dates(opt);
-            // As a request to answer renders it: a model that always reasons opens its reasoning.
+            // Comme le rend une requête de réponse : un modèle qui raisonne toujours ouvre son
+            // raisonnement.
             opt.reasoning = req["reasoning"].as_bool(m->format->supports_reasoning()) || m->format->always_reasons();
             if (req["tools"].is_array()) opt.tools = req["tools"];
             if (m->vision) strip_marks(opt.tools);
@@ -3084,7 +3129,7 @@ namespace albireo
             if (!parts.empty() && m->vision->kind() == vision_encoder::family::pixtral) mistral_images(messages);
             std::vector<prompt_piece> pieces;
             m->format->render(messages, opt, pieces);
-            // The images count by their size, read from their headers, without being decoded.
+            // Les images comptent selon leur taille, lue dans leurs en-têtes, sans être décodées.
             std::vector<request_image> images;
             if (!parts.empty()) prepare_images(*m, parts, false, images);
             const std::vector<int> ids = prompt_tokens(*m, pieces, images);

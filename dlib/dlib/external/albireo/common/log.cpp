@@ -18,7 +18,7 @@ namespace albireo
     {
         const char* const publication_space = "the publication space of Albireo";
 
-        // The texts hide_in_messages() was given, under hidden_m.
+        // Les textes donnés à hide_in_messages(), sous hidden_m.
         std::mutex hidden_m;
         std::vector<std::string>& hidden_texts()
         {
@@ -39,13 +39,15 @@ namespace albireo
             }
         }
 
-        // The punctuation that ends a sentence or a clause after a word, which stays after its replacement.
+        // La ponctuation qui termine une phrase ou une proposition après un mot, et qui reste après son
+        // remplacement.
         bool final_punctuation(char c)
         {
             return c == '.' || c == ':' || c == '!' || c == '?';
         }
 
-        // Whether text holds word, its ASCII letters compared whatever their case (word in lowercase).
+        // Si text contient word, ses lettres ASCII comparées sans tenir compte de la casse (word en
+        // minuscules).
         bool holds_folded(const std::string& text, size_t from, size_t to, const char* word)
         {
             const size_t n = std::char_traits<char>::length(word);
@@ -64,7 +66,7 @@ namespace albireo
             return false;
         }
 
-        // Whether the bytes [from, to) of text name the publication space; hidden_m is held.
+        // Si les octets [from, to) de text nomment l'espace de publication ; hidden_m est tenu.
         bool names_space(const std::string& text, size_t from, size_t to)
         {
             if (holds_folded(text, from, to, "pcloud") || holds_folded(text, from, to, "publink")) return true;
@@ -127,7 +129,7 @@ namespace albireo
 
     namespace
     {
-        // The members whose values tell an error.
+        // Les membres dont les valeurs signalent une erreur.
         bool error_member(const std::string& name)
         {
             return name == "error" || name == "errors" || name == "args";
@@ -175,7 +177,7 @@ namespace albireo
         path_ = path;
         max_bytes_ = max_bytes;
         make_dirs(parent_path(path));
-        // The lines a version before this one wrote may name the publication space.
+        // Les lignes qu'une version antérieure à celle-ci a écrites peuvent nommer l'espace de publication.
         hide_publication_space_in_file(path);
         hide_publication_space_in_file(path + ".1");
     }

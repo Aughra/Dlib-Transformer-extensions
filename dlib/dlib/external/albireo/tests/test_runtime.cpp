@@ -1,26 +1,26 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
-    Checks the processor runtime on a real model.
+    Vérifie le runtime du processeur sur un vrai modèle.
 
         test_runtime model.gguf reference.bin [exact] id id id ...
 
-    reference.bin holds the logits of every position of the token sequence computed by
-    tests/reference_forward.py.  The program compares them with the logits of the
-    runtime, then checks that the runtime gives the same results however the work is
-    cut: the whole sequence in one pass, a prompt followed by one token at a time, two
-    sequences sharing a batch, and a sequence truncated and extended again; the keys and
-    values in 8 bits then agree with those in half precision.
+    reference.bin contient les logits de chaque position de la suite de tokens calculés par
+    tests/reference_forward.py.  Le programme les compare aux logits du runtime, puis vérifie
+    que le runtime donne les mêmes résultats quelle que soit la découpe du travail : toute la
+    suite en une passe, un prompt suivi d'un token à la fois, deux séquences partageant un lot,
+    et une séquence tronquée puis prolongée à nouveau ; les clés et valeurs sur 8 bits
+    concordent ensuite avec celles en demi-précision.
 
-    With "exact", the products run on floats (qk_set_exact_products) and the comparison
-    with the reference is tight; otherwise the activations are quantized as in normal
-    operation and the comparison bears on the distributions.
+    Avec "exact", les produits tournent en flottants (qk_set_exact_products) et la comparaison
+    avec la référence est serrée ; sinon, les activations sont quantifiées comme en
+    fonctionnement normal et la comparaison porte sur les distributions.
 
         test_runtime synthetic [folder]
 
-    checks the attention on the tiny model of tiny_gguf.h, written in folder: the split of
-    the positions among the threads of a single step against the attention of one task per
-    key/value head, with keys and values in half precision and in 8 bits.
+    vérifie l'attention sur le tout petit modèle de tiny_gguf.h, écrit dans folder : la
+    répartition des positions entre les threads d'une seule étape comparée à l'attention d'une
+    tâche par tête de clés et valeurs, avec les clés et valeurs en demi-précision et sur 8 bits.
 */
 
 #include <algorithm>
@@ -46,10 +46,10 @@ namespace
 
     struct stats
     {
-        double max_abs = 0;     // largest logit difference
-        double scale = 0;       // largest reference logit magnitude
-        double mean_kl = 0;     // mean KL(reference || runtime) over positions
-        double top1 = 0;        // fraction of positions with the same argmax
+        double max_abs = 0;     // plus grand écart de logit
+        double scale = 0;       // plus grande valeur absolue de logit de référence
+        double mean_kl = 0;     // KL(reference || runtime) moyenne sur les positions
+        double top1 = 0;        // part des positions qui ont le même argmax
     };
 
     stats compare(const float* ref, const float* got, long rows, long vocab)
@@ -124,7 +124,8 @@ namespace
 
 namespace
 {
-    // The logits of the steps of one token that follow a prompt of the first prompt tokens, read in one pass.
+    // Les logits des étapes d'un token qui suivent un prompt formé des premiers tokens du prompt, lus
+    // en une passe.
     std::vector<float> run_steps(cpu_runtime& rt, const std::vector<int>& tokens, long prompt)
     {
         const long T = static_cast<long>(tokens.size());
@@ -176,9 +177,9 @@ namespace
             const long V = cfg.vocab;
 
             /*
-                Two threads take one task per key/value head of a step; twelve split the
-                positions of the step among them (cpu_runtime::attention).  Blocks of 16
-                positions, so that the ranges start inside blocks.
+                Deux threads prennent une tâche par tête de clés et valeurs d'une étape ; douze se
+                partagent les positions de l'étape (cpu_runtime::attention).  Des blocs de 16
+                positions, pour que les plages commencent à l'intérieur des blocs.
             */
             thread_pool narrow(2), wide(12);
             std::vector<float> results[4];
@@ -248,12 +249,12 @@ int main(int argc, char** argv)
     }
 
     thread_pool pool(2);
-    // Small blocks, so that every sequence spans several of them.
+    // De petits blocs, pour que chaque séquence en couvre plusieurs.
     cpu_runtime rt(file, cfg, pool, size_t(512) << 20, 16);
     std::printf("%s\n", rt.description().c_str());
     qk_set_exact_products(exact);
 
-    // 1. The whole sequence in one pass, against the reference.
+    // 1. Toute la suite en une passe, comparée à la référence.
     auto t0 = std::chrono::steady_clock::now();
     const std::vector<float> whole = run_whole(rt, tokens);
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
@@ -262,19 +263,19 @@ int main(int argc, char** argv)
     std::printf("  one pass of %ld tokens: %.1f ms\n", T, ms);
     if (exact)
     {
-        // Keys and values are stored in half precision, the only rounding left.
+        // Les clés et valeurs sont stockées en demi-précision, le seul arrondi qui reste.
         expect(s.mean_kl < 1e-4, "exact distribution");
         expect(s.max_abs <= 0.1 * std::max(1.0, s.scale / 10), "exact logits");
         expect(s.top1 >= 0.99, "exact argmax");
     }
     else
     {
-        // 8-bit activations, as every integer kernel of the GGUF ecosystem uses them.
+        // Activations sur 8 bits, comme les utilise chaque noyau entier de l'écosystème GGUF.
         expect(s.mean_kl < 0.05, "distribution against the reference");
         expect(s.top1 >= 0.85, "argmax against the reference");
     }
 
-    // 2. A prompt, then one token at a time.
+    // 2. Un prompt, puis un token à la fois.
     {
         const long k = std::max<long>(1, T / 3);
         const int seq = rt.create_sequence();
@@ -297,8 +298,8 @@ int main(int argc, char** argv)
             rt.forward(b, logits);
             std::copy(logits.begin(), logits.end(), got.begin() + i * V);
         }
-        // The prompt goes through the float products and the single steps through the
-        // integer kernels, so the two passes agree as distributions, not bit for bit.
+        // Le prompt passe par les produits en flottants et les étapes simples par les noyaux
+        // entiers, si bien que les deux passes concordent en distribution, pas bit pour bit.
         const stats d = compare(whole.data(), got.data(), T, V);
         report("prompt then single steps", d);
         if (exact)
@@ -306,11 +307,11 @@ int main(int argc, char** argv)
         else
             expect(d.mean_kl < 0.05 && d.top1 >= 0.85, "single steps against one pass");
 
-        // 4. Truncation: drop the last third and compute it again.
+        // 4. Troncature : retirer le dernier tiers et le recalculer.
         const long m = std::max<long>(1, 2 * T / 3);
         rt.truncate_sequence(seq, m);
         expect(rt.sequence_length(seq) == m, "length after truncation");
-        // The blocks beyond the kept positions went back to the pool.
+        // Les blocs au-delà des positions gardées sont retournés au pool.
         expect(rt.reserve_sequence(seq, T), "reserve after truncation");
         b.clear();
         b.tokens.assign(tokens.begin() + m, tokens.end());
@@ -326,8 +327,8 @@ int main(int argc, char** argv)
         rt.release_sequence(seq);
     }
 
-    // 3. Two sequences in one batch: the whole sequence, and its second half as a
-    //    sequence of its own that starts at position 0.
+    // 3. Deux séquences dans un lot : toute la suite, et sa seconde moitié comme une
+    //    séquence à part qui commence à la position 0.
     {
         const long h = T / 2;
         std::vector<int> second(tokens.begin() + h, tokens.end());
@@ -355,13 +356,13 @@ int main(int argc, char** argv)
         expect(rt.kv_bytes_used() == 0, "every block returned");
     }
 
-    // 5. A sequence that starts with the positions of another: the full blocks are shared,
-    //    the last one copied, and a sequence that writes in a shared block copies it first.
+    // 5. Une séquence qui commence par les positions d'une autre : les blocs pleins sont partagés,
+    //    le dernier copié, et une séquence qui écrit dans un bloc partagé le copie d'abord.
     {
         const long B = 16;
         const long h = std::min(T - 1, B + 1 + T / 4);
-        // Passes of fewer tokens go through the integer kernels: they agree with the whole
-        // pass as distributions.
+        // Les passes de moins de tokens passent par les noyaux entiers : elles concordent avec la
+        // passe entière en distribution.
         auto agree = [&](const stats& d, long batch_tokens) {
             if (exact || batch_tokens >= qk_float_product_tokens) return d.max_abs <= 1e-3 * std::max(1.0, d.scale);
             return d.mean_kl < 0.05 && d.top1 >= 0.85;
@@ -380,7 +381,7 @@ int main(int argc, char** argv)
         const size_t copied = static_cast<size_t>(h % B != 0 ? B : 0) * rt.kv_bytes_per_token();
         expect(rt.kv_bytes_used() - before == copied, "full blocks held once");
 
-        // Both sequences go on from the shared prefix, in one batch.
+        // Les deux séquences continuent à partir du préfixe partagé, en un lot.
         expect(rt.reserve_sequence(a, T) && rt.reserve_sequence(c, T), "reserve after sharing");
         b.clear();
         b.tokens.assign(tokens.begin() + h, tokens.end());
@@ -396,8 +397,8 @@ int main(int argc, char** argv)
         expect(agree(d1, 2 * (T - h)), "first sequence after sharing");
         expect(agree(d2, 2 * (T - h)), "second sequence after sharing");
 
-        // The first sequence rewrites a shared block with other tokens; the second one keeps
-        // its positions.
+        // La première séquence réécrit un bloc partagé avec d'autres tokens ; la seconde garde
+        // ses positions.
         const long cut = B / 2;
         rt.truncate_sequence(a, cut);
         expect(rt.reserve_sequence(a, T), "reserve a shared block for writing");
@@ -421,9 +422,9 @@ int main(int argc, char** argv)
     }
 
     /*
-        6. The keys and values in 8 bits against those in half precision, over the whole
-           sequence: their differences stay below those of the integer products of the single
-           steps (2), a few thousandths of KL on the models of the catalog.
+        6. Les clés et valeurs sur 8 bits comparées à celles en demi-précision, sur toute la
+           suite : leurs écarts restent sous ceux des produits entiers des étapes simples (2),
+           quelques millièmes de KL sur les modèles du catalogue.
     */
     if (cfg.head_dim % kv_q8_group == 0)
     {

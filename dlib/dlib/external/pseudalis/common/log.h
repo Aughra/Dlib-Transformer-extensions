@@ -18,10 +18,10 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The log of a program: lines with their time and severity, written to a
-                file that is renamed with a ".1" suffix when it reaches its size limit, so
-                that two files at most are kept.  The last lines also stay in memory, for
-                the windows that show them.
+                Le journal d'un programme : des lignes avec leur heure et leur gravité, écrites
+                dans un fichier renommé avec le suffixe ".1" quand il atteint sa taille limite,
+                de sorte que deux fichiers au plus sont conservés.  Les dernières lignes restent
+                aussi en mémoire, pour les fenêtres qui les affichent.
         !*/
     public:
         static log_file& instance();

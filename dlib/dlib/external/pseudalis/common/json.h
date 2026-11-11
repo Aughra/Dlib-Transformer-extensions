@@ -23,31 +23,33 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                A JSON value: null, boolean, number, string, array or object.  It is the
-                document type exchanged between the host, the inference engines, the web
-                interface and the GitHub feed.
+                Une valeur JSON : null, booléen, nombre, chaîne, tableau ou objet.  C'est le
+                type de document échangé entre l'hôte, les moteurs d'inférence, l'interface
+                web et le flux GitHub.
 
-                Objects keep their members in insertion order, so a document written by
-                dump() lists its members in the order the program set them.  Numbers
-                written without fraction or exponent and that fit in 64 bits are kept as
-                integers, so identifiers and sizes survive a round trip exactly.
+                Les objets gardent leurs membres dans l'ordre d'insertion, de sorte qu'un
+                document écrit par dump() liste ses membres dans l'ordre où le programme les a
+                posés.  Les nombres écrits sans partie fractionnaire ni exposant et qui tiennent
+                sur 64 bits sont gardés comme entiers, si bien que les identifiants et les
+                tailles survivent exactement à un aller-retour.
 
-                Reading a member or an element that does not exist from a const value
-                yields a shared null value rather than throwing, which keeps the code
-                that walks requests from untrusted clients free of existence checks.
+                Lire un membre ou un élément qui n'existe pas depuis une valeur const donne une
+                valeur nulle partagée plutôt que de lever une exception, ce qui épargne les
+                tests d'existence au code qui parcourt les requêtes de clients non fiables.
 
-            PARSING
-                parse() accepts the strict grammar of RFC 8259 and refuses documents
-                nested deeper than a given limit, so that a hostile body cannot exhaust
-                the stack, and documents holding more values than a given budget, each
-                value taking about a hundred bytes of memory whatever its length in the
-                text.  A member repeated in an object keeps the place of its first
-                occurrence and the value of its last one; the repetitions are found in a
-                time that grows as n log n with the number of members.
+            ANALYSE
+                parse() accepte la grammaire stricte de la RFC 8259 et refuse les documents
+                imbriqués plus profondément qu'une limite donnée, pour qu'un corps hostile ne
+                puisse pas épuiser la pile, ainsi que les documents contenant plus de valeurs
+                qu'un budget donné, chaque valeur occupant une centaine d'octets de mémoire
+                quelle que soit sa longueur dans le texte.  Un membre répété dans un objet garde
+                la place de sa première occurrence et la valeur de sa dernière ; les répétitions
+                sont trouvées en un temps qui croît comme n log n avec le nombre de membres.
 
-            SERIALIZATION
-                dump() produces compact UTF-8 text.  Invalid UTF-8 sequences found in
-                strings are replaced by U+FFFD, so the output is always valid JSON.
+            SÉRIALISATION
+                dump() produit un texte UTF-8 compact.  Les séquences UTF-8 invalides trouvées
+                dans les chaînes sont remplacées par U+FFFD, si bien que la sortie est toujours
+                du JSON valide.
         !*/
 
     public:
@@ -104,7 +106,7 @@ namespace pseudalis
             return kind_ == kind::string_value ? string_ : def;
         }
 
-        // Objects
+        // Objets
 
         bool contains(const std::string& key) const
         {
@@ -149,7 +151,7 @@ namespace pseudalis
             return object_;
         }
 
-        // Arrays
+        // Tableaux
 
         size_t size() const
         {
@@ -185,7 +187,7 @@ namespace pseudalis
             return array_;
         }
 
-        // Serialization
+        // Sérialisation
 
         std::string dump() const
         {
@@ -227,10 +229,10 @@ namespace pseudalis
 
         /*!
             ensures
-                - Returns the document in the layout of the json module of Python: ", "
-                  and ": " between the members of a single line when indent < 0, otherwise
-                  one member per line indented by indent spaces a level, "," at the ends of
-                  lines.
+                - Renvoie le document dans la mise en page du module json de Python : ", "
+                  et ": " entre les membres d'une seule ligne quand indent < 0, sinon un
+                  membre par ligne, indenté de indent espaces par niveau, "," en fin de
+                  ligne.
         !*/
         std::string dump_formatted(int indent = -1) const
         {
@@ -239,7 +241,7 @@ namespace pseudalis
             return out;
         }
 
-        // A JSON string literal, quotes included, with invalid UTF-8 replaced by U+FFFD.
+        // Un littéral de chaîne JSON, guillemets compris, l'UTF-8 invalide remplacé par U+FFFD.
         static std::string quote(const std::string& s)
         {
             std::string out;
@@ -296,8 +298,9 @@ namespace pseudalis
             out += '"';
         }
 
-        // Length of the valid UTF-8 sequence starting at p (at most n bytes available), or 0
-        // when the bytes do not form one.  Overlong forms and surrogates are refused.
+        // Longueur de la séquence UTF-8 valide qui commence en p (au plus n octets disponibles),
+        // ou 0 quand les octets n'en forment pas une.  Les formes trop longues et les demi-codes
+        // (surrogates) sont refusés.
         static size_t utf8_sequence_length(const unsigned char* p, size_t n)
         {
             const unsigned char c = p[0];
@@ -320,10 +323,10 @@ namespace pseudalis
             return len;
         }
 
-        // Parsing
+        // Analyse
 
-        // Reads at most max_depth levels of nesting and max_values values, each element, member
-        // value, array and object counting as one.
+        // Lit au plus max_depth niveaux d'imbrication et max_values valeurs, chaque élément,
+        // valeur de membre, tableau et objet comptant pour une.
         static bool parse(const std::string& text, json& out, std::string* error = nullptr,
             size_t max_depth = 128, size_t max_values = size_t(1) << 20)
         {
@@ -419,8 +422,8 @@ namespace pseudalis
             size_t values = 0;
             std::string error;
 
-            // The members of an object compared with each new member as it is read; a larger
-            // object is checked once, at its end.
+            // Les membres d'un objet, comparés à chaque nouveau membre au fil de la lecture ; un
+            // objet plus grand est vérifié une seule fois, à sa fin.
             static const size_t scanned_members = 16;
 
             void skip_ws()
@@ -474,7 +477,8 @@ namespace pseudalis
                     ++pos;
                     json member;
                     if (!value(member, depth + 1)) return false;
-                    // A repeated member replaces the earlier one, as most parsers do.
+                    // Un membre répété remplace le précédent, comme le font la plupart des
+                    // analyseurs.
                     bool replaced = false;
                     if (v.object_.size() < scanned_members)
                         for (auto& kv : v.object_)
@@ -493,9 +497,9 @@ namespace pseudalis
                 }
             }
 
-            // Keeps each name once, at the place of its first member and with the value of
-            // its last one: the members sorted by name, then by place, show the repetitions
-            // side by side.
+            // Garde chaque nom une seule fois, à la place de son premier membre et avec la
+            // valeur de son dernier : les membres triés par nom, puis par place, montrent les
+            // répétitions côte à côte.
             static void merge_repeated_members(object_type& members)
             {
                 const size_t n = members.size();
@@ -607,7 +611,7 @@ namespace pseudalis
                     if (c < 0x20) return fail("control character in string");
                     if (c != '\\')
                     {
-                        // Copy a run of plain characters at once.
+                        // Copier d'un coup une suite de caractères ordinaires.
                         size_t end = pos + 1;
                         while (end < s.size())
                         {
@@ -647,10 +651,10 @@ namespace pseudalis
                             if (lo >= 0xDC00 && lo <= 0xDFFF)
                                 cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
                             else
-                                cp = 0xFFFD;   // lone high surrogate
+                                cp = 0xFFFD;   // demi-code haut isolé
                         }
                         else if (cp >= 0xDC00 && cp <= 0xDFFF)
-                            cp = 0xFFFD;       // lone low surrogate
+                            cp = 0xFFFD;       // demi-code bas isolé
                         append_utf8(out, cp);
                         break;
                     }
@@ -737,8 +741,8 @@ namespace pseudalis
             }
         }
 
-        // The conversions assume the "C" numeric locale, which a program keeps as long as it
-        // never calls setlocale() for LC_NUMERIC; the Pseudalis programs never do.
+        // Les conversions supposent la locale numérique "C", qu'un programme garde tant qu'il
+        // n'appelle jamais setlocale() pour LC_NUMERIC ; les programmes Pseudalis ne le font jamais.
         void append_number(std::string& out) const
         {
             if (is_integer_)
@@ -748,10 +752,10 @@ namespace pseudalis
             }
             if (!std::isfinite(number_))
             {
-                out += "null";   // JSON has no representation for infinities and NaN
+                out += "null";   // JSON n'a pas de représentation pour les infinis et NaN
                 return;
             }
-            // Shortest of the precisions that read back to the same double.
+            // La plus courte des précisions qui, relue, redonne le même double.
             char buf[40];
             for (int precision = 15; precision <= 17; ++precision)
             {

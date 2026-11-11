@@ -43,18 +43,19 @@ namespace albireo
         std::mutex proxy_m;
         std::string proxy_setting;
 
-        // The cancellation of the downloads, its reason, and the clients of the requests
-        // in progress.
+        // L'annulation des téléchargements, sa raison, et les clients des requêtes
+        // en cours.
         std::atomic<bool> cancelled{false};
         std::mutex active_m;
         std::string cancel_reason = "stopped";
         std::set<std::shared_ptr<httplib::Client>> active;
 
-        // The bounds the tests shorten (http_bounds_for_tests()), 0 for those of the callers.
+        // Les limites que les tests raccourcissent (http_bounds_for_tests()), 0 pour celles des appelants.
         std::atomic<int> test_read_seconds{0};
         std::atomic<int> test_total_seconds{0};
 
-        // The bound of a wait for data, or of a whole request: the one of the caller, or the shorter one of the tests.
+        // La limite d'une attente de données, ou d'une requête entière : celle de l'appelant, ou la plus courte des
+        // tests.
         int bounded(int seconds, const std::atomic<int>& test_seconds)
         {
             const int t = test_seconds;
@@ -64,7 +65,8 @@ namespace albireo
         const char* const web_page_text = "a web page comes in place of the answer, as a proxy or a filter of the "
             "network sends one";
 
-        // Whether a Content-Type names a web page, which a server of files never sends for the files of Albireo.
+        // Indique si un Content-Type désigne une page web, ce qu'un serveur de fichiers n'envoie jamais pour les
+        // fichiers d'Albireo.
         bool web_page(const std::string& content_type)
         {
             std::string type = content_type.substr(0, content_type.find(';'));
@@ -73,14 +75,14 @@ namespace albireo
             return type == "text/html" || type == "application/xhtml+xml";
         }
 
-        // The failure of an answer whose status is not the one expected; neither the address nor its host.
+        // L'échec d'une réponse dont le statut n'est pas celui attendu ; ni l'adresse ni son hôte.
         std::string status_text(int status)
         {
             if (status == 407) return "the proxy asks for an authentication (status 407)";
             return "the request is answered with the status " + std::to_string(status);
         }
 
-        // The failure of a transfer that httplib reports, through a proxy or not; neither the address nor its host.
+        // L'échec d'un transfert que signale httplib, par un proxy ou non ; ni l'adresse ni son hôte.
         std::string transfer_text(httplib::Error e, int read_seconds, bool via_proxy)
         {
             const std::string peer = via_proxy ? "the proxy" : "the server";
@@ -115,7 +117,7 @@ namespace albireo
             return cancel_reason;
         }
 
-        // Thrown from the socket of a client about to connect after a cancellation.
+        // Levée depuis la socket d'un client sur le point de se connecter après une annulation.
         struct connection_cancelled
         {
         };
@@ -206,7 +208,7 @@ namespace albireo
             return lower(h.substr(0, h.find(':')));
         }
 
-        // Whether NO_PROXY, or the nature of the address, sends a host around the proxy.
+        // Indique si NO_PROXY, ou la nature de l'adresse, fait contourner le proxy à un hôte.
         bool direct_host(const std::string& host)
         {
             if (host == "localhost" || host == "::1" || host.compare(0, 4, "127.") == 0) return true;
@@ -259,15 +261,16 @@ namespace albireo
                 c->set_proxy(p.host, p.port);
                 if (!p.user.empty()) c->set_proxy_basic_auth(p.user, p.password);
             }
-            // The redirections are followed here, one request at a time, so that each one
-            // is bounded and can be cancelled.
+            // Les redirections sont suivies ici, une requête à la fois, pour que chacune
+            // soit bornée et puisse être annulée.
             c->set_follow_location(false);
             /*
-                The last check before a connection opens.  A cancellation that comes after
-                the client is registered and before it connects finds no request in flight
-                to stop, so the socket checks it itself: no connection leaves the machine
-                once the downloads are cancelled.  The exception leaves httplib before it
-                connects, its locks released by their guards.
+                La dernière vérification avant qu'une connexion s'ouvre.  Une annulation qui
+                arrive après l'enregistrement du client et avant sa connexion ne trouve aucune
+                requête en vol à arrêter, donc la socket la vérifie elle-même : aucune
+                connexion ne quitte la machine une fois les téléchargements annulés.
+                L'exception sort d'httplib avant qu'il se connecte, ses verrous libérés par
+                leurs gardes.
             */
             c->set_socket_options([](socket_t sock) {
                 if (!cancelled) return;
@@ -284,12 +287,12 @@ namespace albireo
 
 
         /*
-            Resolves the name of a server and checks that it answers on its port, within
-            connect_seconds for each, giving up at once when the downloads are cancelled.
-            The answer of the resolution stays in the cache of the system, where the client
-            that follows finds it, and its connection, which cannot be interrupted, finds a
-            server that answers.  Elsewhere than on Windows, the client resolves and
-            connects by itself, bounded by connect_seconds.
+            Résout le nom d'un serveur et vérifie qu'il répond sur son port, en
+            connect_seconds au plus pour chacun, en abandonnant aussitôt quand les
+            téléchargements sont annulés.  La réponse de la résolution reste dans le cache du
+            système, où la trouve le client qui suit, et sa connexion, qui ne peut pas être
+            interrompue, trouve un serveur qui répond.  Ailleurs que sous Windows, le client
+            résout et se connecte de lui-même, borné par connect_seconds.
         */
         bool reach_bounded(const std::string& host, int port, std::string& error)
         {
@@ -299,7 +302,7 @@ namespace albireo
             return true;
         }
 
-        // The text of an IPv4 or IPv6 address of a resolution, empty for another family.
+        // Le texte d'une adresse IPv4 ou IPv6 d'une résolution, vide pour une autre famille.
         std::string numeric_address(const sockaddr* a)
         {
             char text[INET6_ADDRSTRLEN] = {};
@@ -310,7 +313,7 @@ namespace albireo
             return text;
         }
 
-        // Resolves host with getaddrinfo(), which answers in the time of the resolver of the system.
+        // Résout host avec getaddrinfo(), qui répond dans le délai du résolveur du système.
         bool resolve_unbounded(const std::string& host, std::vector<std::string>& addresses, std::string& error)
         {
             addrinfo hints = {};
@@ -332,7 +335,7 @@ namespace albireo
             return true;
         }
 
-        // The port of an origin, "https://host:port": five digits at most, else the port of the scheme.
+        // Le port d'une origine, "https://host:port" : cinq chiffres au plus, sinon le port du schéma.
         int port_of(const std::string& origin)
         {
             const bool https = origin.compare(0, 8, "https://") == 0;
@@ -346,7 +349,7 @@ namespace albireo
             return port > 0 && port < 65536 ? port : https ? 443 : 80;
         }
 
-        // The client for one address, the server or the proxy reached first; via_proxy tells which.
+        // Le client pour une adresse, le serveur ou le proxy joint en premier ; via_proxy dit lequel.
         std::shared_ptr<httplib::Client> open(const url_parts& u, int timeout_seconds, std::string& error,
             bool& via_proxy)
         {
@@ -363,7 +366,7 @@ namespace albireo
             return make_client(u.origin, proxy, timeout_seconds);
         }
 
-        // The address a redirection leads to, from the address that answered it.
+        // L'adresse vers laquelle mène une redirection, d'après l'adresse qui l'a renvoyée.
         bool redirection(const std::string& from, const std::string& location, std::string& to, std::string& error)
         {
             url_parts u;
@@ -408,8 +411,8 @@ namespace albireo
             cancelled = true;
             clients.assign(active.begin(), active.end());
         }
-        // stop() waits for a connection being opened to be open: each client is stopped
-        // from a thread of its own, which keeps it alive, so that no caller waits.
+        // stop() attend qu'une connexion en cours d'ouverture soit ouverte : chaque client est
+        // arrêté depuis un thread dédié, qui le garde en vie, pour qu'aucun appelant n'attende.
         for (const auto& c : clients) std::thread([c]() { c->stop(); }).detach();
     }
 
@@ -475,9 +478,9 @@ namespace albireo
         using clock_type = std::chrono::steady_clock;
 
         /*
-            The failure of a transfer, told by its time as well: httplib reports a wait beyond the
-            bound of a read, or of the whole request, as a read that fails.  last_data is the time
-            the request left or the last data arrived.
+            L'échec d'un transfert, décrit aussi par sa durée : httplib signale une attente au-delà de
+            la limite d'une lecture, ou de la requête entière, comme une lecture qui échoue.
+            last_data est l'instant où la requête est partie ou où les dernières données sont arrivées.
         */
         std::string failure_of(httplib::Error e, clock_type::time_point last_data, clock_type::time_point deadline,
             int read_seconds, int total_seconds, bool via_proxy)
@@ -492,7 +495,8 @@ namespace albireo
             return transfer_text(e, read_seconds, via_proxy);
         }
 
-        // The address of the first request, or of a redirection, as a client reads it; false with the error otherwise.
+        // L'adresse de la première requête, ou d'une redirection, telle qu'un client la lit ; false avec l'erreur
+        // sinon.
         bool parse_hop(const std::string& current, int hop, url_parts& u, std::string& error)
         {
             if (parse_url(current, u)) return true;
@@ -500,7 +504,7 @@ namespace albireo
             return false;
         }
 
-        // http_get(), which may throw.
+        // http_get(), qui peut lever une exception.
         bool get_whole(const std::string& url, std::string& body, std::string& error, size_t max_bytes,
             int read_seconds, int total_seconds)
         {
@@ -519,7 +523,7 @@ namespace albireo
                 const std::shared_ptr<httplib::Client> c = open(u, read_seconds, error, via_proxy);
                 if (!c) return false;
                 http_registration reg(c);
-                // A cancellation between the resolution and the registration.
+                // Une annulation entre la résolution et l'enregistrement.
                 if (cancelled)
                 {
                     error = cancelled_error();
@@ -574,7 +578,7 @@ namespace albireo
                     if (!redirection(current, location, current, error)) return false;
                     continue;
                 }
-                // The status of the answer, or of the proxy that refused to open the tunnel (407).
+                // Le statut de la réponse, ou du proxy qui a refusé d'ouvrir le tunnel (407).
                 const int answered = status != 0 ? status : r ? r->status : 0;
                 if (too_big) error = "the answer is larger than expected";
                 else if (page) error = web_page_text;
@@ -589,7 +593,7 @@ namespace albireo
             return false;
         }
 
-        // http_get_range(), which may throw.
+        // http_get_range(), qui peut lever une exception.
         bool get_range(const std::string& url, uint64_t from, int64_t to,
             const std::function<bool(const char*, size_t)>& receiver, std::string& error, uint64_t* total)
         {
@@ -601,7 +605,7 @@ namespace albireo
                 const std::string last = to >= 0 ? std::to_string(to) : std::string();
                 headers.emplace("Range", "bytes=" + std::to_string(from) + "-" + last);
             }
-            // The bytes asked for, when the range has an end: the receiver gets no more than them.
+            // Les octets demandés, quand la plage a une fin : receiver n'en reçoit pas davantage.
             const bool limited = to >= 0 && static_cast<uint64_t>(to) >= from;
             const uint64_t wanted = limited ? static_cast<uint64_t>(to) - from + 1 : 0;
             std::string current = url;
@@ -654,7 +658,7 @@ namespace albireo
                                 else if (res.status == 200 && res.has_header("Content-Length"))
                                     *total = std::strtoull(res.get_header_value("Content-Length").c_str(), nullptr, 10);
                             }
-                            // A web page in place of the file, which writing it would corrupt.
+                            // Une page web à la place du fichier, que l'écrire corromprait.
                             const bool answers = res.status == 200 || res.status == 206;
                             if (answers && web_page(res.get_header_value("Content-Type")))
                             {
@@ -666,7 +670,8 @@ namespace albireo
                                 refused_range = true;
                                 return false;
                             }
-                            // A part of the resource starts where it was asked: "bytes <first>-<last>/<size>".
+                            // Une partie de la ressource commence là où elle a été demandée :
+                            // "bytes <first>-<last>/<size>".
                             if (ranged && res.status == 206)
                             {
                                 const size_t unit = cr.find("bytes ");
@@ -691,7 +696,7 @@ namespace albireo
                             }
                             delivered += take;
                             last_data = clock_type::now();
-                            // The bytes asked for have come: what an answer sends beyond them is not read.
+                            // Les octets demandés sont arrivés : ce qu'une réponse envoie au-delà n'est pas lu.
                             if (limited && delivered >= wanted)
                             {
                                 complete = true;
@@ -714,7 +719,7 @@ namespace albireo
                     if (!redirection(current, location, current, error)) return false;
                     continue;
                 }
-                // The status of the answer, or of the proxy that refused to open the tunnel (407).
+                // Le statut de la réponse, ou du proxy qui a refusé d'ouvrir le tunnel (407).
                 const int answered = status != 0 ? status : r ? r->status : 0;
                 if (page) error = web_page_text;
                 else if (refused_range) error = "the server does not resume downloads";
@@ -735,7 +740,7 @@ namespace albireo
     bool http_get(const std::string& url, std::string& body, std::string& error, size_t max_bytes, int timeout_seconds,
         int total_seconds)
     {
-        // An exception of httplib becomes the error of the request, which never leaves this function.
+        // Une exception d'httplib devient l'erreur de la requête, et ne sort jamais de cette fonction.
         try
         {
             return get_whole(url, body, error, max_bytes, bounded(timeout_seconds, test_read_seconds),
@@ -755,7 +760,7 @@ namespace albireo
     bool http_get_range(const std::string& url, uint64_t from, int64_t to,
         const std::function<bool(const char*, size_t)>& receiver, std::string& error, uint64_t* total)
     {
-        // An exception of httplib or of the receiver becomes the error of the request, which never leaves here.
+        // Une exception d'httplib ou de receiver devient l'erreur de la requête, et ne sort jamais d'ici.
         try
         {
             return get_range(url, from, to, receiver, error, total);

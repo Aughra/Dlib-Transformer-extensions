@@ -31,19 +31,19 @@ namespace pseudalis
 
     struct protect_result
     {
-        std::string bytes;      // the protected file
-        std::string name;       // its name: the name given, or <name>.txt for a picture
+        std::string bytes;      // le fichier protégé
+        std::string name;       // son nom : le nom donné, ou <name>.txt pour une image
         std::string kind;
         json report;
-        long long record = 0;   // the record of the original, 0 when none was kept
-        std::string sha256;     // of bytes
+        long long record = 0;   // l'enregistrement de l'original, 0 quand aucun n'a été gardé
+        std::string sha256;     // de bytes
     };
 
     struct restore_result
     {
         std::string bytes;
-        std::string name;       // the original name, when the original comes from the vault
-        std::string how;        // "original": the bytes kept; "picture": a picture from its marker; "tags"
+        std::string name;       // le nom original, quand l'original vient du coffre
+        std::string how;        // "original" : les octets gardés ; "picture" : une image d'après son marqueur ; "tags"
         json report;
         long long record = 0;
     };
@@ -52,14 +52,15 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The files and texts of the interface processed at once.  Each one stands in
-                memory several times while it is read, processed and answered, so their
-                number is bounded by the processors and the memory of the computer; a request
-                waits for a slot before its body is read.  The drive keeps its own bound.
+                Les fichiers et textes de l'interface traités en même temps.  Chacun est en
+                mémoire plusieurs fois pendant qu'il est lu, traité et renvoyé, si bien que
+                leur nombre est borné par les processeurs et la mémoire de l'ordinateur ; une
+                requête attend une place avant que son corps soit lu.  Le lecteur garde sa
+                propre borne.
         !*/
     public:
         void init(int slots);
-        // Waits for a slot, until wait; false when none came free in time.
+        // Attend une place, jusqu'à wait ; false quand aucune ne s'est libérée à temps.
         bool acquire(std::chrono::milliseconds wait);
         void release();
         int size() const { return size_; }
@@ -71,7 +72,7 @@ namespace pseudalis
         int size_ = 0;
     };
 
-    // A slot of work_slots held by its scope, after a wait of one minute at most.
+    // Une place de work_slots tenue par sa portée, après une attente d'une minute au plus.
     class work_slot
     {
     public:
@@ -90,33 +91,35 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The Pseudalis service: the engine and its key, the vault and the database of
-                the originals, the local HTTPS server (the web application, its interface and
-                its documentation), the drive and the descriptions of the pictures by
-                Albireo.  run() starts everything and blocks until stop() or a restart
-                request; the caller then starts a new service when restart_requested()
-                says so, which applies a change of port or of drive.
+                Le service Pseudalis : le moteur et sa clé, le coffre et la base de données
+                des originaux, le serveur HTTPS local (l'application web, son interface et sa
+                documentation), le lecteur et les descriptions des images par Albireo.  run()
+                démarre tout et bloque jusqu'à stop() ou une demande de redémarrage ;
+                l'appelant démarre alors un nouveau service quand restart_requested() le dit,
+                ce qui applique un changement de port ou de lecteur.
 
             PROTECTION
-                protect() runs the engine on a file: each picture is kept in the vault,
-                described by Albireo when it answers (the description is kept with it, for
-                the next files that show it), and with record, the original is kept in the
-                vault and recorded with the SHA-256 of the protected file, so that
-                restore() gives back the original itself, from any copy of the protected
-                file.  restore() of a file the database does not know, written elsewhere from
-                protected values or protected here before its original was forgotten, puts
-                back the values of its tags, its picture markers removed; a text file holding
-                the marker of a known picture gives that picture back.
+                protect() exécute le moteur sur un fichier : chaque image est gardée dans le
+                coffre, décrite par Albireo quand il répond (la description est gardée avec
+                elle, pour les fichiers suivants qui la montrent), et avec record, l'original
+                est gardé dans le coffre et enregistré avec le SHA-256 du fichier protégé,
+                pour que restore() rende l'original lui-même, à partir de n'importe quelle
+                copie du fichier protégé.  restore() d'un fichier que la base de données ne
+                connaît pas, écrit ailleurs à partir de valeurs protégées ou protégé ici
+                avant que son original soit oublié, remet les valeurs de ses tags, ses
+                marqueurs d'images retirés ; un fichier texte contenant le marqueur d'une
+                image connue rend cette image.
 
-                Without tags, the values of a file take their substitutes alone, and its
-                record keeps them with the tags they stand for: the copies of the file give
-                back their original, and a copy edited since, known by its NTFS identifier,
-                its values from those substitutes.  Once the record forgotten, its values
-                cannot come back, and a file protected without record never gives them back.
-                A protected file protected again, by a newer engine for instance, keeps the
-                values protected before as they are: its restoration gives back the original
-                of each record of the chain that still keeps it, and the values of the tags
-                of the others.
+                Sans tags, les valeurs d'un fichier prennent leurs seuls substituts, et son
+                enregistrement les garde avec les tags qu'ils représentent : les copies du
+                fichier rendent leur original, et une copie modifiée depuis, reconnue par son
+                identifiant NTFS, ses valeurs à partir de ces substituts.  Une fois
+                l'enregistrement oublié, ses valeurs ne peuvent plus revenir, et un fichier
+                protégé sans enregistrement ne les rend jamais.  Un fichier protégé protégé de
+                nouveau, par un moteur plus récent par exemple, garde tels quels les valeurs
+                protégées auparavant : sa restauration rend l'original de chaque
+                enregistrement de la chaîne qui le garde encore, et les valeurs des tags des
+                autres.
         !*/
     public:
         service();
@@ -140,111 +143,119 @@ namespace pseudalis
         work_slots& work() { return work_; }
 
         json status();
-        // The language of the descriptions and of the messages: the setting, else the one of the system.
+        // La langue des descriptions et des messages : le réglage, sinon celle du système.
         std::string language() const;
 
         /*
-            Protects a file; with record, keeps its original (out.record), unless it is larger than
-            history_mb; without tags, its values take their substitutes, which the record keeps.
-            out.report["tags"] tells which, out.report["restorable"] whether the file can be restored.
-            A file protected without tags and protected again, a copy of its protected file or, previous,
-            the record of the version it replaces on the drive, keeps the substitutes of that record as
-            they are, and its record inherits them, which give back the values of its original.
+            Protège un fichier ; avec record, garde son original (out.record), sauf s'il dépasse
+            history_mb ; sans tags, ses valeurs prennent leurs substituts, que l'enregistrement garde.
+            out.report["tags"] dit lequel, out.report["restorable"] si le fichier peut être restauré.
+            Un fichier protégé sans tags et protégé de nouveau, une copie de son fichier protégé ou,
+            avec previous, l'enregistrement de la version qu'il remplace sur le lecteur, garde tels
+            quels les substituts de cet enregistrement, et son enregistrement en hérite, ce qui rend
+            les valeurs de son original.
         */
         bool protect(const std::string& bytes, const std::string& name, const std::string& source, bool record,
             bool tags, protect_result& out, user_error& error, long long previous = 0);
         /*!
-            The original of a protected file: the original of its record, that of an entry of
-            a protected archive when it was extracted from one, a picture from its marker, else
-            the file with the values of its tags put back and its picture markers removed, the
-            day and the reason of a forgetting in out.report["original_forgotten"].
+            L'original d'un fichier protégé : l'original de son enregistrement, celui d'une
+            entrée d'une archive protégée quand il en a été extrait, une image d'après son
+            marqueur, sinon le fichier avec les valeurs de ses tags remises et ses marqueurs
+            d'images retirés, le jour et la raison d'un oubli dans
+            out.report["original_forgotten"].
         !*/
         bool restore(const std::string& bytes, const std::string& name, const std::string& object_id,
             restore_result& out, user_error& error);
         /*
-            The original of record r as restore() gives it: the original of its own record when it is
-            a protected file that a record keeps, eight records deep at most, else its tags and the
-            substitutes that r inherited restored when it holds some.
+            L'original de l'enregistrement r tel que restore() le donne : l'original de son propre
+            enregistrement quand c'est un fichier protégé qu'un enregistrement garde, sur huit
+            enregistrements de profondeur au plus, sinon ses tags et les substituts dont r a hérité,
+            restaurés quand il en contient.
         */
         bool recorded_original(const file_record& r, restore_result& out, user_error& error, int depth = 0);
         /*!
-            A file of the drive whose content is an entry of a protected archive that the
-            database records, extracted from it, is recorded with the original of that entry,
-            which the vault keeps apart from the original of the archive: each one is restored
-            and forgotten alone.  Returns 1 with its new record (0 for an entry larger than
-            history_mb, kept as it is without record), 0 when the content is no such entry or its
-            original cannot be read, -1 when the engine or the vault cannot do it now.
+            Un fichier du lecteur dont le contenu est une entrée d'une archive protégée que la
+            base de données enregistre, extraite de celle-ci, est enregistré avec l'original de
+            cette entrée, que le coffre garde à part de l'original de l'archive : chacun est
+            restauré et oublié seul.  Renvoie 1 avec son nouvel enregistrement (0 pour une
+            entrée qui dépasse history_mb, gardée telle quelle sans enregistrement), 0 quand le
+            contenu n'est pas une telle entrée ou que son original ne peut pas être lu, -1
+            quand le moteur ou le coffre ne peut pas le faire maintenant.
         !*/
         int adopt(const std::string& sha256, const std::string& name, long long size, long long& record);
-        // A name alone, a folder of the drive for instance: its values become substitutes, recorded.
+        // Un nom seul, un dossier du lecteur par exemple : ses valeurs deviennent des substituts, enregistrés.
         bool protect_name(const std::string& name, std::string& out, user_error& error);
-        // A name with the substitutes the database knows given back, or the name as it is.
+        // Un nom avec les substituts que connaît la base de données rendus, ou le nom tel quel.
         std::string restore_name(const std::string& name);
         /*
-            operation: "anonymize_text", "restore_text" or "detect".  Without tags, the text keeps no
-            tag and out["substitutions"] lists the substitutes written, which restore_text gives back
-            when substitutions holds them: nothing else keeps them.
+            operation : "anonymize_text", "restore_text" ou "detect".  Sans tags, le texte ne garde
+            aucun tag et out["substitutions"] liste les substituts écrits, que restore_text rend
+            quand substitutions les contient : rien d'autre ne les garde.
         */
         bool text(const std::string& operation, const std::string& text, json& out, user_error& error,
             bool tags = true, const json& substitutions = json());
         /*!
-            Deletes a record, its original and the pictures no other record shows.  With a
-            reason, "forgotten" when a user asked for it, "expired" when its time is over or
-            "space" when the oldest originals make room (make_room()), the protected file of
-            the record is remembered: its restoration puts back the values of its tags from
-            then on, and tells the day and the reason.
+            Supprime un enregistrement, son original et les images qu'aucun autre
+            enregistrement ne montre.  Avec une raison, "forgotten" quand un utilisateur l'a
+            demandé, "expired" quand son temps est écoulé ou "space" quand les plus anciens
+            originaux font de la place (make_room()), le fichier protégé de l'enregistrement
+            est mémorisé : sa restauration remet dès lors les valeurs de ses tags, et indique
+            le jour et la raison.
         !*/
         bool forget(long long record, const std::string& reason = std::string());
-        // Marks a record whose file left the drive, deleted or replaced.  A move out of the drive
-        // is a copy followed by a deletion: the original stays restorable from the copies of the
-        // file for removed_days days (settings, 0 for always), then purge_removed() forgets it.
+        // Marque un enregistrement dont le fichier a quitté le lecteur, supprimé ou remplacé.  Un
+        // déplacement hors du lecteur est une copie suivie d'une suppression : l'original reste
+        // restaurable à partir des copies du fichier pendant removed_days jours (réglages, 0 pour
+        // toujours), puis purge_removed() l'oublie.
         void mark_removed(long long record);
-        // Forgets the records whose file left the drive more than removed_days days ago, none for 0.
+        // Oublie les enregistrements dont le fichier a quitté le lecteur depuis plus de removed_days jours,
+        // aucun pour 0.
         void purge_removed();
         /*!
-            Makes room for an original of needed bytes: the originals first kept are forgotten,
-            the oldest first, while those kept with it would take more than history_mb
-            (settings), and, for a new original, while the disk of the data folder would keep
-            less than 256 MB free once it is written.  Forgetting starts only when it reaches its
-            end: the originals stay when other files fill the disk, or when its free space cannot
-            be known.  Returns false, forgetting none, for an original larger than history_mb,
-            which is not kept.
+            Fait de la place pour un original de needed octets : les originaux gardés en premier
+            sont oubliés, les plus anciens d'abord, tant que ceux gardés avec lui prendraient
+            plus que history_mb (réglages), et, pour un nouvel original, tant que le disque du
+            dossier de données garderait moins de 256 Mo libres une fois qu'il est écrit.
+            L'oubli ne commence que s'il atteint son but : les originaux restent quand
+            d'autres fichiers remplissent le disque, ou quand son espace libre ne peut pas être
+            connu.  Renvoie false, sans rien oublier, pour un original qui dépasse history_mb,
+            lequel n'est pas gardé.
         !*/
         bool make_room(unsigned long long needed);
-        // Runs purge_removed() and make_room(0) in the background, at once: the settings changed.
+        // Exécute purge_removed() et make_room(0) en arrière-plan, aussitôt : les réglages ont changé.
         void request_cleanup();
-        // The space the originals kept take, in bytes, and the one they may take.
+        // L'espace que prennent les originaux gardés, en octets, et celui qu'ils peuvent prendre.
         void history_space(unsigned long long& used, unsigned long long& limit);
 
         /*!
-            The imposed terms (common/imposed_terms.h), kept in the database and given to the
-            engine: set_terms() takes a list [{"term", "type", "case_sensitive"}] whole, or
-            refuses it with its reason (codes terms_invalid, terms_too_many, terms_type,
-            terms_duplicate, with the position of the term at fault in "index").
+            Les termes imposés (common/imposed_terms.h), gardés dans la base de données et
+            donnés au moteur : set_terms() prend une liste [{"term", "type", "case_sensitive"}]
+            entière, ou la refuse avec sa raison (codes terms_invalid, terms_too_many,
+            terms_type, terms_duplicate, avec la position du terme fautif dans "index").
         !*/
         json terms();
         bool set_terms(const json& list, user_error& error);
 
         bool export_key(const std::string& passphrase, std::string& exported, user_error& error);
-        // Allowed while the database records no file: the key of an earlier installation.
+        // Permis tant que la base de données n'enregistre aucun fichier : la clé d'une installation antérieure.
         bool import_key(const std::string& exported, const std::string& passphrase, user_error& error);
 
     private:
         bool start_engine(std::string& error);
         /*
-            The original of the entry e, from the original of its archive, in bytes: 1, 0 when the
-            record of the archive is gone, -1 when the engine cannot do it now, -2 when the original
-            cannot be read.
+            L'original de l'entrée e, à partir de l'original de son archive, dans bytes : 1, 0 quand
+            l'enregistrement de l'archive a disparu, -1 quand le moteur ne peut pas le faire
+            maintenant, -2 quand l'original ne peut pas être lu.
         */
         int extract_entry(const entry_record& e, file_record& archive, std::string& bytes, user_error& error);
-        // Removes a record half written, its original being removed by the caller.
+        // Supprime un enregistrement à moitié écrit, son original étant supprimé par l'appelant.
         void discard(long long record);
         void background_loop();
-        // The lookup of the engine: the tags recorded for a substitute.
+        // La recherche du moteur : les tags enregistrés pour un substitut.
         std::function<std::vector<std::string>(const std::string&)> substitute_lookup();
-        // Records the substitutes of the names and the properties of a result of the engine.
+        // Enregistre les substituts des noms et des propriétés d'un résultat du moteur.
         bool record_substitutes(const json& result, user_error& error);
-        // The substitutes of the text of record, or those it inherited alone, as the engine reads them.
+        // Les substituts du texte de record, ou seulement ceux dont il a hérité, tels que le moteur les lit.
         json text_substitutes_of(long long record, bool inherited_only = false);
         json text_substitutes_of_inherited(long long record) { return text_substitutes_of(record, true); }
 
@@ -264,7 +275,7 @@ namespace pseudalis
         std::mutex wake_m_;
         std::condition_variable wake_;
         std::atomic<bool> cleanup_{false};
-        // make_room() runs for one caller at a time.
+        // make_room() s'exécute pour un seul appelant à la fois.
         std::mutex room_m_;
         std::mutex terms_m_;
         std::vector<imposed_term> terms_;
@@ -275,14 +286,15 @@ namespace pseudalis
         int64_t started_ = 0;
         work_slots work_;
         /*
-            The protections hold work_m_ shared; the import of a key holds it alone from its
-            check to the save of the key, after which no protection starts until the restart
-            (key_replaced_): a protection made meanwhile would use the key that goes.
+            Les protections tiennent work_m_ en partage ; l'import d'une clé le tient seul de sa
+            vérification à l'enregistrement de la clé, après quoi aucune protection ne démarre
+            jusqu'au redémarrage (key_replaced_) : une protection faite entre-temps utiliserait la
+            clé qui s'en va.
         */
         std::shared_timed_mutex work_m_;
         std::atomic<bool> key_replaced_{false};
-        // The counts of status(), which every icon asks every few seconds, kept two seconds, or until
-        // a record is added or forgotten (counts_changed()).
+        // Les comptes de status(), que chaque icône demande toutes les quelques secondes, gardés deux
+        // secondes, ou jusqu'à ce qu'un enregistrement soit ajouté ou oublié (counts_changed()).
         void counts_changed();
         std::mutex counts_m_;
         std::chrono::steady_clock::time_point counts_at_;
@@ -293,7 +305,7 @@ namespace pseudalis
         friend class drive_host;
     };
 
-    // The routes of the server (server.cpp).
+    // Les routes du serveur (server.cpp).
     void install_routes(httplib::Server& srv, service& svc);
 }
 

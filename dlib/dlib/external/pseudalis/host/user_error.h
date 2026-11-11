@@ -14,11 +14,11 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The failure of an operation that a user asked for: its English text, for
-                the log and for the clients of the interface, and the code with which the
-                windows explain it in the language of the user (the texts err_<code> of
-                windows/strings.cpp), with its values and its sizes in bytes, which the
-                windows write in the units of that language.
+                L'échec d'une opération qu'un utilisateur a demandée : son texte en anglais,
+                pour le journal et pour les clients de l'interface, et le code avec lequel
+                les fenêtres l'expliquent dans la langue de l'utilisateur (les textes
+                err_<code> de windows/strings.cpp), avec ses valeurs et ses tailles en
+                octets, que les fenêtres écrivent dans les unités de cette langue.
         !*/
         std::string text;
         std::string code;
@@ -44,7 +44,7 @@ namespace pseudalis
             return *this;
         }
 
-        // Adds error, and code with its values when there is one, to the answer of a request.
+        // Ajoute error, et code avec ses valeurs quand il y en a un, à la réponse d'une requête.
         void add_to(json& answer) const
         {
             answer["error"] = text;

@@ -2,31 +2,32 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Replaces the third-party libraries of the web application with the given versions of
-# their npm packages, and writes the versions installed into web/vendor/components.json:
+# Remplace les bibliothèques tierces de l'application web par les versions données de leurs
+# paquets npm, et écrit les versions installées dans web/vendor/components.json :
 #
 #   tools/update_web_vendor.sh <marked> <dompurify> <highlight.js> <katex> <pdfjs-dist> <swagger-ui-dist>
 #   tools/update_web_vendor.sh 18.1.1 3.4.17 11.12.0 0.19.0 6.4.299 5.33.2
 #
-# The web application runs without network: the local service serves every library it uses
-# from web/vendor and web/docs, each folder with the license of its component.  The packages
-# are fetched with npm into a temporary folder; the files the application serves are copied
-# with their licenses, and the references to source maps, which the application does not
-# ship, are removed.
+# L'application web tourne sans réseau : le service local sert chaque bibliothèque qu'elle utilise
+# depuis web/vendor et web/docs, chaque dossier avec la licence de son composant.  Les paquets
+# sont récupérés avec npm dans un dossier temporaire ; les fichiers que sert l'application sont
+# copiés avec leurs licences, et les références aux source maps, que l'application ne livre pas,
+# sont retirées.
 #
-# web/vendor/components.json is the list of these components, which the page of the licenses
-# of the application shows: name, version, npm package, license, the files of its text, the
-# folder of the files and the source.  A component added here is added to that list by hand,
-# with its role in the five languages of web/js/i18n.js (component_<id>).
+# web/vendor/components.json est la liste de ces composants, que montre la page des licences de
+# l'application : nom, version, paquet npm, licence, les fichiers de son texte, le dossier des
+# fichiers et la source.  Un composant ajouté ici est ajouté à la main à cette liste, avec son
+# rôle dans les cinq langues de web/js/i18n.js (component_<id>).
 #
-# PDF.js comes from the legacy build of pdfjs-dist, which runs in Edge and Chrome from
-# version 125 on.  Its modern build needs version 147, and a computer kept off the network
-# may hold an older browser.  The CMaps of pdfjs-dist give the text of the CJK fonts that a
-# PDF names without embedding them.  The standard fonts and the WebAssembly image decoders
-# of pdfjs-dist only draw pages, which the application does not do, and are left out.
+# PDF.js vient du build legacy de pdfjs-dist, qui tourne dans Edge et Chrome à partir de la
+# version 125.  Son build moderne demande la version 147, et un ordinateur tenu hors du réseau
+# peut avoir un navigateur plus ancien.  Les CMaps de pdfjs-dist donnent le texte des polices CJK
+# qu'un PDF nomme sans les embarquer.  Les polices standard et les décodeurs d'images WebAssembly
+# de pdfjs-dist ne servent qu'à dessiner les pages, ce que l'application ne fait pas, et sont
+# laissés de côté.
 #
-# After an update, test the application (Markdown, code, formulas, PDF documents and the
-# documentation of the interface), then review the changes of components.json.
+# Après une mise à jour, tester l'application (Markdown, code, formules, documents PDF et la
+# documentation de l'interface), puis relire les changements de components.json.
 
 set -euo pipefail
 if [ $# -ne 6 ]; then
@@ -64,13 +65,14 @@ copy "$m/katex/LICENSE" "$web/vendor/katex/LICENSE"
 rm -rf "$web/vendor/katex/fonts"
 mkdir -p "$web/vendor/katex/fonts"
 cp "$m"/katex/dist/fonts/*.woff2 "$web/vendor/katex/fonts/"
-# PDF.js comes from its legacy build, which runs in Edge and Chrome from version 125 on.  The modern
-# build needs version 147 or later, and a computer kept off the network may hold an older browser.
+# PDF.js vient de son build legacy, qui tourne dans Edge et Chrome à partir de la version 125.  Le
+# build moderne demande la version 147 ou plus, et un ordinateur tenu hors du réseau peut avoir un
+# navigateur plus ancien.
 copy "$m/pdfjs-dist/legacy/build/pdf.min.mjs" "$web/vendor/pdfjs/pdf.min.mjs"
 copy "$m/pdfjs-dist/legacy/build/pdf.worker.min.mjs" "$web/vendor/pdfjs/pdf.worker.min.mjs"
 copy "$m/pdfjs-dist/LICENSE" "$web/vendor/pdfjs/LICENSE"
-# The CMaps of the CJK fonts that a PDF names without embedding them, which its text needs.  The
-# standard fonts and the WebAssembly decoders of images of PDF.js only draw pages.
+# Les CMaps des polices CJK qu'un PDF nomme sans les embarquer, dont son texte a besoin.  Les
+# polices standard et les décodeurs d'images WebAssembly de PDF.js ne servent qu'à dessiner les pages.
 rm -rf "$web/vendor/pdfjs/cmaps"
 mkdir -p "$web/vendor/pdfjs/cmaps"
 cp "$m"/pdfjs-dist/cmaps/*.bcmap "$m/pdfjs-dist/cmaps/LICENSE" "$web/vendor/pdfjs/cmaps/"
@@ -79,13 +81,13 @@ copy "$m/swagger-ui-dist/swagger-ui.css" "$web/docs/swagger-ui.css"
 copy "$m/swagger-ui-dist/LICENSE" "$web/docs/LICENSE"
 copy "$m/swagger-ui-dist/NOTICE" "$web/docs/NOTICE"
 
-# The source maps are not shipped: their references would only produce failed requests.
+# Les source maps ne sont pas livrées : leurs références ne produiraient que des requêtes échouées.
 for f in "$web"/vendor/*/*.js "$web"/vendor/*/*.mjs "$web"/vendor/*/*.css "$web"/docs/swagger-ui-bundle.js \
    "$web"/docs/swagger-ui.css; do
    sed -i -E -e '/^\/\/# sourceMappingURL=/d' -e 's|/\*# sourceMappingURL=[^*]*\*/||g' "$f"
 done
 
-# The versions installed, those of the packages npm resolved, in the list of the components.
+# Les versions installées, celles des paquets que npm a résolus, dans la liste des composants.
 node - "$web/vendor/components.json" "$m" <<'EOF'
 const fs = require('fs');
 const [file, modules] = process.argv.slice(2);

@@ -1,16 +1,17 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
-    test_metal: the Metal kernels of the macOS port against the processor, on random data.
+    test_metal : les noyaux Metal du portage macOS comparés au processeur, sur des données aléatoires.
 
         test_metal
 
-    Each kernel computes in floats, in another order than the processor: its results are
-    compared with a sum in double precision, relative to the sum of the magnitudes of the terms,
-    within 1e-5 (products, norms, rotary positions) or 1e-4 (attention).  The keys and values the
-    GPU writes are compared byte by byte with those qk_float_to_q8_row() writes, a value of an
-    integer allowed to differ by one where its rounding falls on a tie.  Exit code: the number
-    of failed checks; 0 with "skipped" when the Mac has no GPU that Metal reaches.
+    Chaque noyau calcule en flottants, dans un autre ordre que le processeur : ses résultats sont
+    comparés à une somme en double précision, relativement à la somme des valeurs absolues des
+    termes, à 1e-5 près (produits, normes, positions rotatives) ou à 1e-4 près (attention).  Les
+    clés et valeurs qu'écrit le GPU sont comparées octet par octet à celles qu'écrit
+    qk_float_to_q8_row(), une valeur entière pouvant différer de un là où son arrondi tombe sur une
+    égalité.  Code de sortie : le nombre de vérifications échouées ; 0 avec "skipped" quand le Mac
+    n'a pas de GPU que Metal atteint.
 */
 
 #include <cmath>
@@ -47,7 +48,8 @@ namespace
         return buf;
     }
 
-    // A matrix of rows x cols in Q4_K or Q6_K, its bytes random and its scales in a sane range.
+    // Une matrice de rows x cols en Q4_K ou Q6_K, ses octets aléatoires et ses échelles dans une plage
+    // raisonnable.
     std::vector<uint8_t> random_matrix(dlib::ggml_type type, long rows, long cols)
     {
         const size_t rb = qk_row_bytes(type, cols);
@@ -121,7 +123,7 @@ namespace
         }
     }
 
-    // The weights expanded to floats, then a product of a prompt through Metal Performance Shaders.
+    // Les poids développés en flottants, puis un produit d'un prompt par Metal Performance Shaders.
     void test_dequantize_gemm(metal_device& gpu, dlib::ggml_type type, const char* name)
     {
         const long rows = 300, cols = 1024;
@@ -168,7 +170,7 @@ namespace
 
     void test_norm_rope_gate(metal_device& gpu)
     {
-        // Rows of 2560 values, then heads of 128 normalized in place.
+        // Des lignes de 2560 valeurs, puis des têtes de 128 normalisées sur place.
         for (unsigned width : { 2560u, 128u })
         {
             const unsigned rows = 5, stride = width + 16;
@@ -196,7 +198,8 @@ namespace
             check(worst < 1e-5, "rms_norm of rows of " + std::to_string(width) + ", in place: largest error "
                 + sci(worst));
         }
-        // The rotary positions, neox and in pairs, on 3 tokens of 4 heads of 128 values, 48 pairs turned.
+        // Les positions rotatives, neox et par paires, sur 3 tokens de 4 têtes de 128 valeurs, 48 paires
+        // tournées.
         for (bool neox : { true, false })
         {
             const unsigned tokens = 3, heads = 4, hd = 128, half = 48, stride = heads * hd, cs_stride = 2 * half + 4;
@@ -231,7 +234,7 @@ namespace
             check(worst < 1e-6, std::string("rope ") + (neox ? "neox" : "in pairs") + ": largest error "
                 + sci(worst));
         }
-        // The gate of the feed-forward block, and a bias.
+        // La porte du bloc feed-forward, et un biais.
         {
             const unsigned n = 9728;
             metal_buffer A = gpu.allocate(sizeof(float) * n), B = gpu.allocate(sizeof(float) * n);
@@ -247,7 +250,8 @@ namespace
             qk_silu_mul(e.data(), b, n);
             auto c = gpu.begin();
             c->silu_mul(A, B, n);
-            // Then the gates added to the first 1000 values of up, as a bias of 1000 values on 1 row.
+            // Puis les portes ajoutées aux 1000 premières valeurs de up, comme un biais de 1000 valeurs
+            // sur 1 ligne.
             c->add_bias(B, A, 1000, 1000, 1);
             c->finish();
             double worst = 0;
@@ -260,10 +264,10 @@ namespace
     }
 
     /*
-        The keys and values of a sequence of L positions in a pool of blocks of 16 positions: the
-        processor writes the first L - T, the GPU the last T; then the attention of the T tokens,
-        each over the positions up to its own, against a sum in double precision over the keys
-        and values as the pool holds them.
+        Les clés et valeurs d'une séquence de L positions dans un pool de blocs de 16 positions : le
+        processeur écrit les L - T premières, le GPU les T dernières ; puis l'attention des T tokens,
+        chacun sur les positions jusqu'à la sienne, comparée à une somme en double précision sur les
+        clés et valeurs telles que le pool les contient.
     */
     void test_attention(metal_device& gpu, kv_format format)
     {
@@ -291,7 +295,7 @@ namespace
         std::vector<float> keys(L * heads * hd), values(L * heads * hd);
         for (auto& v : keys) v = uniform(-2.0f, 2.0f);
         for (auto& v : values) v = uniform(-1.0f, 1.0f);
-        // The processor writes the first positions as cpu_runtime::store_keys_values() does.
+        // Le processeur écrit les premières positions comme le fait cpu_runtime::store_keys_values().
         auto cpu_store = [&](long p, long h, int8_t* kq, uint16_t* ks, int8_t* vq, uint16_t* vs, uint16_t* kh,
                              uint16_t* vh) {
             const float* k = keys.data() + (p * heads + h) * hd;
@@ -321,7 +325,7 @@ namespace
                     reinterpret_cast<uint16_t*>(pool.keys(b, layer, h)) + r * hd,
                     reinterpret_cast<uint16_t*>(pool.values(b, layer, h)) + r * hd);
             }
-        // The GPU writes the last T, and the processor what it would have written, for the comparison.
+        // Le GPU écrit les T dernières, et le processeur ce qu'il aurait écrit, pour la comparaison.
         metal_buffer K = gpu.allocate(sizeof(float) * T * heads * hd), V = gpu.allocate(sizeof(float) * T * heads * hd);
         metal_buffer BL = gpu.allocate(sizeof(int) * T), RW = gpu.allocate(sizeof(int) * T);
         for (unsigned t = 0; t < T; ++t)
@@ -375,7 +379,7 @@ namespace
             + std::to_string(differ) + " of " + std::to_string(compared) + " values and " + std::to_string(scales_differ)
             + " scales apart from the processor");
 
-        // The attention of the T tokens, the queries prepared by the GPU.
+        // L'attention des T tokens, les requêtes préparées par le GPU.
         const unsigned q_stride = H * hd + 32;
         const float scale = 1.0f / std::sqrt(static_cast<float>(hd));
         metal_buffer Q = gpu.allocate(sizeof(float) * q_stride * T), C = gpu.allocate(sizeof(float) * q_stride * T);
@@ -397,7 +401,8 @@ namespace
             c->attention(Q, region, TABLE, LEN, table_stride, T, rep, parts, q_stride, PART, C, layout);
             c->finish();
         }
-        // The reference: the keys and values as the pool holds them, expanded, in double precision.
+        // La référence : les clés et valeurs telles que le pool les contient, développées, en double
+        // précision.
         double worst = 0;
         const float* ctx = static_cast<const float*>(C.contents());
         for (unsigned t = 0; t < T; ++t)

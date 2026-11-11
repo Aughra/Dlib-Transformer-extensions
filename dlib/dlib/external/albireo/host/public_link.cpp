@@ -19,17 +19,17 @@ namespace albireo
     {
         using clock_type = std::chrono::steady_clock;
 
-        // The link of the build, which no setting, route, document or message gives.
+        // Le lien du build, qu'aucun réglage, aucune route, aucun document ni aucun message ne donne.
         const char* const build_link = "https://u.pcloud.link/publink/show?code=kZeNhSJZpcMygkcCvGXmq1MTvkCfBuSsx2GV";
 
         const unsigned char masked_password[] = ALBIREO_PUBLIC_LINK_SECRET;
         const size_t masked_size = ALBIREO_PUBLIC_LINK_SECRET_SIZE;
 
-        // The bounds of a request to the interface: each wait for data, and the whole request.
+        // Les limites d'une requête à l'interface : chaque attente de données, et la requête entière.
         const int api_read_seconds = 20;
         const int api_total_seconds = 60;
 
-        // The password, unmasked by the generator the configuration masked it with.
+        // Le mot de passe, démasqué par le générateur avec lequel la configuration l'a masqué.
         std::string link_password()
         {
             return unmask_secret(masked_password, masked_size, 20261101);
@@ -47,7 +47,7 @@ namespace albireo
             return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
         }
 
-        // A value of a query: every byte but the unreserved characters of RFC 3986 as %XX.
+        // Une valeur d'une requête : chaque octet sauf les caractères non réservés de RFC 3986 en %XX.
         std::string query_value(const std::string& s)
         {
             static const char digits[] = "0123456789ABCDEF";
@@ -66,7 +66,7 @@ namespace albireo
             return out;
         }
 
-        // The path of an address of a content server, the characters an address cannot hold as %XX.
+        // Le chemin d'une adresse d'un serveur de contenu, les caractères qu'une adresse ne peut pas contenir en %XX.
         std::string address_path(const std::string& s)
         {
             static const char digits[] = "0123456789ABCDEF";
@@ -87,9 +87,9 @@ namespace albireo
         }
 
         /*
-            The origin of the interface of a link, and its code.  The links of the region of
-            Europe (e.pcloud.link, e.pcloud.com) answer on eapi.pcloud.com, the others on
-            api.pcloud.com; a loopback address is its own interface, for the tests.
+            L'origine de l'interface d'un lien, et son code.  Les liens de la région Europe
+            (e.pcloud.link, e.pcloud.com) répondent sur eapi.pcloud.com, les autres sur
+            api.pcloud.com ; une adresse de bouclage est sa propre interface, pour les tests.
         */
         bool parse_link(const std::string& link, std::string& api, std::string& code)
         {
@@ -120,7 +120,7 @@ namespace albireo
             return true;
         }
 
-        // A file of the listing: its identifier and size, or valid false for an entry without them.
+        // Un fichier de la liste : son identifiant et sa taille, ou valid à false pour une entrée qui n'en a pas.
         struct listed_file
         {
             long long id = 0;
@@ -138,8 +138,8 @@ namespace albireo
         const std::chrono::minutes address_life(30);
 
         std::mutex m;
-        bool configured = false;   // the link of the build read, until the tests replace it
-        std::string api_origin;    // empty: no space set
+        bool configured = false;   // le lien du build lu, jusqu'à ce que les tests le remplacent
+        std::string api_origin;    // vide : aucun espace défini
         std::string link_code;
         unsigned long long generation = 0;
         bool listed = false;
@@ -147,7 +147,7 @@ namespace albireo
         std::map<std::string, listed_file> listing;
         std::map<std::string, direct_address> addresses;
 
-        // Uses link, given to hide_in_messages() with the password; m is held.
+        // Utilise link, transmis à hide_in_messages() avec le mot de passe ; m est verrouillé.
         void use_link(const std::string& link)
         {
             std::string api, code;
@@ -163,13 +163,13 @@ namespace albireo
             hide_in_messages(link_password());
         }
 
-        // The link of the build, read at the first use; m is held.
+        // Le lien du build, lu à la première utilisation ; m est verrouillé.
         void configure()
         {
             if (!configured) use_link(build_link);
         }
 
-        // The files of folder, under the paths that prefix begins, its subfolders walked.
+        // Les fichiers de folder, sous les chemins qui commencent par prefix, ses sous-dossiers parcourus.
         void walk(const json& folder, const std::string& prefix, std::map<std::string, listed_file>& out, int depth)
         {
             if (depth > 8) return;
@@ -182,7 +182,8 @@ namespace albireo
                     walk(c, prefix + name + "/", out, depth + 1);
                     continue;
                 }
-                // An identifier and a size of another type, negative, or beyond the integers, make the entry invalid.
+                // Un identifiant et une taille d'un autre type, négatifs, ou hors des entiers, rendent l'entrée
+                // invalide.
                 listed_file f;
                 const json& id = c["fileid"];
                 const json& size = c["size"];
@@ -193,7 +194,7 @@ namespace albireo
             }
         }
 
-        // A text of an answer quoted in a message: 80 characters at most, its control characters left out.
+        // Un texte d'une réponse cité dans un message : 80 caractères au plus, sans ses caractères de contrôle.
         std::string quoted(const std::string& text)
         {
             std::string out;
@@ -211,9 +212,9 @@ namespace albireo
         }
 
         /*
-            A method of the interface with its parameters, the code of the link and its password,
-            for the file path of the space, which the messages name.  The answer is a JSON object
-            whose result is 0, else the request fails.
+            Une méthode de l'interface avec ses paramètres, le code du lien et son mot de passe,
+            pour le fichier path de l'espace, que nomment les messages.  La réponse est un objet
+            JSON dont result vaut 0, sinon la requête échoue.
         */
         bool call(const std::string& api, const std::string& code, const std::string& method, const std::string& params,
             const std::string& path, json& answer, std::string& error)
@@ -250,7 +251,8 @@ namespace albireo
             if (status) *status = value;
         }
 
-        // The entry of path in the listing, read again when it is older than its life or fresh asks.
+        // L'entrée de path dans la liste, relue quand elle est plus vieille que sa durée de vie ou que fresh le
+        // demande.
         bool find_listed(const std::string& path, bool fresh, listed_file& f, std::string& error, link_status* status)
         {
             std::string api, code;
@@ -290,7 +292,8 @@ namespace albireo
             json answer;
             set_status(status, link_status::failed);
             if (!call(api, code, "showpublink", "", path, answer, error)) return false;
-            // A listing whose folder is no object with its contents is no listing: it is not kept.
+            // Une liste dont le dossier n'est pas un objet avec son contenu n'est pas une liste : elle n'est pas
+            // gardée.
             const json& metadata = static_cast<const json&>(answer)["metadata"];
             if (!metadata.is_object() || !metadata["contents"].is_array())
             {
@@ -371,7 +374,8 @@ namespace albireo
         if (!call(api, code, "getpublinkdownload", "&fileid=" + std::to_string(f.id) + "&forcedownload=1", path,
                 answer, error))
             return false;
-        // The first content server, a name of letters, digits, dots and hyphens (a port for a local interface).
+        // Le premier serveur de contenu, un nom fait de lettres, chiffres, points et tirets (un port pour une
+        // interface locale).
         const json& a = answer;
         const json& first = a["hosts"][0];
         const std::string host = first.as_string();
@@ -403,8 +407,8 @@ namespace albireo
         link_status* status)
     {
         /*
-            A second attempt asks the listing and the address again: an address of the cache may
-            have expired, and a file the listing of the cache lacks may have been published since.
+            Une seconde tentative redemande la liste et l'adresse : une adresse du cache a pu
+            expirer, et un fichier absent de la liste du cache a pu être publié depuis.
         */
         for (int attempt = 0; attempt < 2; ++attempt)
         {
@@ -466,7 +470,7 @@ namespace albireo
             while (end < out.size() && out[end] != ' ' && out[end] != '\t' && out[end] != '\n' && out[end] != '"'
                 && out[end] != '\'')
                 ++end;
-            // The punctuation that follows an address in a message, "<address>: status 404", is not part of it.
+            // La ponctuation qui suit une adresse dans un message, "<address>: status 404", n'en fait pas partie.
             while (end > scheme + 3 && (out[end - 1] == ':' || out[end - 1] == ',' || out[end - 1] == ';'
                 || out[end - 1] == ')'))
                 --end;

@@ -2,20 +2,21 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    The routes of the local HTTPS server:
+    Les routes du serveur HTTPS local :
 
-        /                       the web application (files of the web folder)
-        /docs/                  the interactive documentation of the interface (Swagger UI)
-        /openapi.json           its OpenAPI description
-        /v1/...                 the interface, described by openapi.json
+        /                       l'application web (fichiers du dossier web)
+        /docs/                  la documentation interactive de l'interface (Swagger UI)
+        /openapi.json           sa description OpenAPI
+        /v1/...                 l'interface, décrite par openapi.json
 
-    The files go in the body of the requests as they are (application/octet-stream), and come
-    back so, their name and their report in headers, or as JSON with format=json.  The
-    operations that change the installation or reveal its records (settings, restart,
-    updates, records, key, logs) require the administration token of the data folder in the
-    X-Pseudalis-Admin header; the tray and the shell read it there.  Every request must name
-    the local server in its Host header, and a request that comes from a page must come from
-    the local server too, so that no web site can drive the service through the browser.
+    Les fichiers vont tels quels dans le corps des requêtes (application/octet-stream), et
+    reviennent de même, leur nom et leur rapport dans des en-têtes, ou en JSON avec
+    format=json.  Les opérations qui modifient l'installation ou révèlent ses enregistrements
+    (réglages, redémarrage, mises à jour, enregistrements, clé, journaux) exigent le jeton
+    d'administration du dossier de données dans l'en-tête X-Pseudalis-Admin ; la zone de
+    notification et le shell l'y lisent.  Chaque requête doit nommer le serveur local dans
+    son en-tête Host, et une requête qui vient d'une page doit venir aussi du serveur local,
+    pour qu'aucun site web ne puisse piloter le service par le navigateur.
 */
 
 #include <dlib/external/httplib/httplib.h>
@@ -83,7 +84,7 @@ namespace pseudalis
             return o == "https://localhost" + p || o == "https://127.0.0.1" + p || o == "https://[::1]" + p;
         }
 
-        // Percent-encoding of UTF-8 for a header: the name of a file, a report.
+        // Encodage en pourcentage de l'UTF-8 pour un en-tête : le nom d'un fichier, un rapport.
         std::string percent_encode(const std::string& s)
         {
             static const char hex[] = "0123456789ABCDEF";
@@ -102,7 +103,7 @@ namespace pseudalis
             return out;
         }
 
-        // A name of file sent by a client: its last component, without control characters.
+        // Un nom de fichier envoyé par un client : son dernier composant, sans caractères de contrôle.
         std::string clean_name(const std::string& name, const char* fallback)
         {
             std::string n = name;
@@ -117,7 +118,7 @@ namespace pseudalis
             return out.size() > 255 ? out.substr(0, 255) : out;
         }
 
-        // The counts of a report, small enough for a header.
+        // Les comptes d'un rapport, assez petits pour un en-tête.
         json report_summary(const json& report)
         {
             json s = json::object();
@@ -125,13 +126,13 @@ namespace pseudalis
             s["total"] = report["total"];
             s["dropped"] = static_cast<unsigned long long>(report["dropped"].size());
             s["tags_restored"] = report["tags_restored"];
-            // A protection: whether its values keep their tags, and whether anything can give them back.
+            // Une protection : si ses valeurs gardent leurs tags, et si quelque chose peut les rendre.
             if (report["tags"].is_bool()) s["tags"] = report["tags"];
             if (report["restorable"].is_bool()) s["restorable"] = report["restorable"];
-            // A restoration: the substitutes of a file protected without tags given back.
+            // Une restauration : les substituts d'un fichier protégé sans tags rendus.
             if (report["substitutes_restored"].as_int(0) > 0)
                 s["substitutes_restored"] = report["substitutes_restored"];
-            // A restoration from the tags: the pictures it removed, the day and the reason of a forgetting.
+            // Une restauration à partir des tags : les images qu'elle a retirées, le jour et la raison d'un oubli.
             if (report["pictures_removed"].as_int(0) > 0) s["pictures_removed"] = report["pictures_removed"];
             if (report["original_forgotten"].is_object()) s["original_forgotten"] = report["original_forgotten"];
             return s;
@@ -164,7 +165,7 @@ namespace pseudalis
             res.set_content(bytes, "application/octet-stream");
         }
 
-        // days: the days an original stays kept once its file left the drive.
+        // days : les jours pendant lesquels un original reste gardé une fois que son fichier a quitté le lecteur.
         json record_json(const file_record& r, int days)
         {
             json j = json::object();
@@ -179,9 +180,10 @@ namespace pseudalis
             j["output_sha256"] = r.output_sha256;
             j["object_id"] = r.object_id;
             j["path"] = r.path;
-            // Whether its protected file holds tags: without them, its values come back from this record alone.
+            // Si son fichier protégé contient des tags : sans eux, ses valeurs ne reviennent que de cet enregistrement.
             j["tags"] = r.tags;
-            // When its file left the drive, and the day its original goes: none when the originals stay (0).
+            // Quand son fichier a quitté le lecteur, et le jour où part son original : aucun quand les originaux
+            // restent (0).
             j["removed"] = r.removed ? iso_time(r.removed) : std::string();
             j["forgotten"] = r.removed && days > 0 ? iso_time(r.removed + static_cast<int64_t>(days) * 86400)
                                                    : std::string();
@@ -189,11 +191,11 @@ namespace pseudalis
         }
 
         /*
-            The file a request carries: its body as it comes, or the first file of a multipart
-            form with its name.  The routes of the files read it through their content reader,
-            so that httplib never parses it as a form (application/x-www-form-urlencoded, the
-            type curl gives a body by default), which would limit it to 8 KB and mix its bytes
-            with the parameters of the address.
+            Le fichier que porte une requête : son corps tel qu'il arrive, ou le premier fichier
+            d'un formulaire multipart avec son nom.  Les routes des fichiers le lisent par leur
+            lecteur de contenu, pour qu'httplib ne l'analyse jamais comme un formulaire
+            (application/x-www-form-urlencoded, le type que curl donne par défaut à un corps), ce
+            qui le limiterait à 8 Ko et mêlerait ses octets aux paramètres de l'adresse.
         */
         bool read_file_body(const httplib::Request& req, const httplib::ContentReader& reader, std::string& body,
                             std::string& filename)
@@ -218,7 +220,7 @@ namespace pseudalis
                 });
         }
 
-        // false, with 503, when no slot of work was free in time.
+        // false, avec 503, quand aucune place de travail ne s'est libérée à temps.
         bool busy_refused(const work_slot& slot, httplib::Response& res)
         {
             if (slot.held()) return true;
@@ -255,8 +257,8 @@ namespace pseudalis
             if (!origin.empty() && !is_local_origin(origin, port))
                 return refuse(403, "cross-origin requests are refused");
             /*
-                A body larger than its route takes is refused before it is read: the files up to
-                the size of the settings, a JSON body up to 16 MB.
+                Un corps plus gros que ce que prend sa route est refusé avant d'être lu : les
+                fichiers jusqu'à la taille des réglages, un corps JSON jusqu'à 16 Mo.
             */
             const unsigned long long length =
                 std::strtoull(req.get_header_value("Content-Length").c_str(), nullptr, 10);
@@ -302,7 +304,7 @@ namespace pseudalis
             catch (...)
             {
             }
-            // The detail goes to the log alone.
+            // Le détail ne va qu'au journal.
             log_error("http: " + req.method + " " + req.path + ": " + what);
             send_error(res, 500, "the service could not process the request", "server_error");
         });
@@ -327,7 +329,7 @@ namespace pseudalis
             send_json(res, 200, j);
         });
 
-        // Files.
+        // Fichiers.
         srv.Post("/v1/anonymize", [s](const httplib::Request& req, httplib::Response& res,
                                       const httplib::ContentReader& reader) {
             work_slot slot(s->work());
@@ -342,7 +344,7 @@ namespace pseudalis
             const std::string name = clean_name(given.empty() ? filename : given, "document");
             const std::string source = req.get_param_value("source");
             const bool record = req.get_param_value("record") != "false";
-            // Tags unless the request or, without its word, the settings say otherwise.
+            // Tags, sauf si la requête ou, sans son mot, les réglages disent autre chose.
             const std::string asked = req.get_param_value("tags");
             const bool tags = asked == "true" || (asked != "false" && s->settings().get().tags);
             protect_result r;
@@ -374,8 +376,8 @@ namespace pseudalis
             user_error e;
             if (!s->restore(body, name, lower(req.get_param_value("object_id")), r, e))
             {
-                /* The picture of a text file, forgotten, is gone for good, as the values of a file
-                   protected without tags whose original was forgotten: 410, not 404. */
+                /* L'image d'un fichier texte, oubliée, a disparu pour de bon, comme les valeurs d'un fichier
+                   protégé sans tags dont l'original a été oublié : 410, pas 404. */
                 send_error(res, e.code == "not_protected" || e.code == "picture_missing" ? 404 :
                                 e.code == "picture_forgotten" || e.code == "tagless_forgotten" ? 410 : 422, e);
                 return;
@@ -400,7 +402,7 @@ namespace pseudalis
             }
             else
             {
-                // A protected file whose original was forgotten: its restoration puts back its tags.
+                // Un fichier protégé dont l'original a été oublié : sa restauration remet ses tags.
                 int64_t when = 0;
                 std::string reason;
                 if (s->db().find_forgotten(lower(req.get_param_value("sha256")),
@@ -432,14 +434,14 @@ namespace pseudalis
             send_json(res, 200, json::object());
         });
 
-        // Texts.
+        // Textes.
         auto text_route = [s](const char* operation) {
             return [s, operation](const httplib::Request& req, httplib::Response& res) {
                 work_slot slot(s->work());
                 if (!busy_refused(slot, res)) return;
                 json body, out;
                 if (!parse_body(req, res, body)) return;
-                // Tags unless the body or, without "tags", the settings say otherwise.
+                // Tags, sauf si le corps ou, sans "tags", les réglages disent autre chose.
                 const bool tags = body["tags"].as_bool(s->settings().get().tags);
                 if (body.contains("substitutions") && !body["substitutions"].is_array())
                 {
@@ -460,8 +462,9 @@ namespace pseudalis
         srv.Post("/v1/text/detect", text_route("detect"));
 
         /*
-            Names: the name of a folder, or any name, its values written as substitutes that the
-            database keeps for their restoration, without tags, which a name cannot hold.
+            Noms : le nom d'un dossier, ou n'importe quel nom, ses valeurs écrites comme des
+            substituts que la base de données garde pour leur restauration, sans tags, qu'un nom
+            ne peut pas contenir.
         */
         auto name_route = [s](bool protect) {
             return [s, protect](const httplib::Request& req, httplib::Response& res) {
@@ -499,7 +502,7 @@ namespace pseudalis
         srv.Post("/v1/names/anonymize", name_route(true));
         srv.Post("/v1/names/restore", name_route(false));
 
-        // The drive, its events, Albireo.
+        // Le lecteur, ses événements, Albireo.
         srv.Get("/v1/drive", [s](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, s->status()["drive"]);
         });
@@ -533,7 +536,7 @@ namespace pseudalis
             file_record r;
             restore_result out;
             user_error e;
-            // The original as a restoration gives it: an edited protected file, its tags restored.
+            // L'original tel qu'une restauration le donne : un fichier protégé modifié, ses tags restaurés.
             if (!s->db().get_file(std::atoll(req.matches[1].str().c_str()), r) || !s->recorded_original(r, out, e))
             {
                 send_error(res, 404, "no such record", "not_found");
@@ -560,7 +563,7 @@ namespace pseudalis
             if (!admin(req, res)) return;
             json parsed;
             if (!parse_body(req, res, parsed)) return;
-            // Read without adding a member: a setting the request leaves out keeps its value.
+            // Lu sans ajouter de membre : un réglage que la requête omet garde sa valeur.
             const json& body = parsed;
             const std::string letter = body["drive_letter"].str();
             if (body.contains("drive_letter") && !letter.empty() && !valid_drive_letter(letter))
@@ -568,13 +571,13 @@ namespace pseudalis
                 send_error(res, 400, "the letter of the drive must be A, B or D to Z", "settings_drive");
                 return;
             }
-            // The proxy, in the forms the service reads only.
+            // Le proxy, seulement sous les formes que lit le service.
             if (body.contains("proxy") && (!body["proxy"].is_string() || !valid_proxy_setting(body["proxy"].str())))
             {
                 send_error(res, 400, "the proxy is not in a form the service reads", "settings_publication");
                 return;
             }
-            // The other settings, each in its range: a value out of it is refused, not replaced.
+            // Les autres réglages, chacun dans sa plage : une valeur hors de celle-ci est refusée, pas remplacée.
             struct range
             {
                 const char* name;
@@ -622,7 +625,7 @@ namespace pseudalis
                     send_error(res, 400, e);
                     return;
                 }
-            // The space of the originals holds the largest file.
+            // L'espace des originaux contient le plus gros fichier.
             {
                 const host_settings current = s->settings().get();
                 const long long space = body.contains("history_mb") ? body["history_mb"].as_int(0) : current.history_mb;
@@ -654,7 +657,7 @@ namespace pseudalis
             const bool restart = after.port != before.port || after.drive_letter != before.drive_letter ||
                                  after.date_order != before.date_order || after.proxy != before.proxy;
             s->albireo().set_enabled(after.albireo != "off");
-            // Fewer days or less space: the originals beyond them go now, in the background.
+            // Moins de jours ou moins d'espace : les originaux au-delà partent maintenant, en arrière-plan.
             if (after.removed_days != before.removed_days || after.history_mb != before.history_mb)
                 s->request_cleanup();
             json j = after.to_json();
@@ -662,12 +665,12 @@ namespace pseudalis
             send_json(res, 200, j);
             if (restart)
             {
-                // The listener closes now; the answer leaves before the service stops.
+                // L'écoute se ferme maintenant ; la réponse part avant que le service s'arrête.
                 log_info("settings: changed, the service restarts");
                 s->request_restart();
             }
         });
-        // The imposed terms, which the engine reads before anything else of a text.
+        // Les termes imposés, que le moteur lit avant toute autre chose d'un texte.
         srv.Get("/v1/terms", [s, admin](const httplib::Request& req, httplib::Response& res) {
             if (!admin(req, res)) return;
             json j = json::object();
@@ -735,7 +738,7 @@ namespace pseudalis
             send_json(res, 200, j);
         });
 
-        // The web application and the documentation.
+        // L'application web et la documentation.
         const std::string web = join_path(svc.program_dir(), "web");
         if (!srv.set_mount_point("/", web)) log_warning("http: no web folder at " + web);
         srv.set_file_request_handler([](const httplib::Request&, httplib::Response& res) {

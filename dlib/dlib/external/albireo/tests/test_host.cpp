@@ -1,53 +1,57 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
-    Checks the files the service writes in its models folder and reads in its imports, in a
-    folder of its own, with a local server for the downloads.
+    Vérifie les fichiers que le service écrit dans son dossier de modèles et lit dans ses imports,
+    dans un dossier à lui, avec un serveur local pour les téléchargements.
 
         test_host <scratch folder> [port]
 
-    The downloads create, open and rename their files in the models folder reached through
-    no link: a partial file or a final name that is a link, a partial file with a second
-    name, and a models folder replaced by a link are refused, and the files they lead to stay
-    as they were.  The imports read through no link and a single name, an offline bundle
-    gives only the files its catalog lists, and a file whose content is that of an installed
-    model, one that comes with Albireo included, is not copied again nor recorded over it.
-    The links need a system that lets every account make them: they are skipped on Windows.
+    Les téléchargements créent, ouvrent et renomment leurs fichiers dans le dossier de modèles
+    atteint sans aucun lien : un fichier partiel ou un nom final qui est un lien, un fichier partiel
+    qui a un second nom, et un dossier de modèles remplacé par un lien sont refusés, et les fichiers
+    vers lesquels ils mènent restent tels quels.  Les imports lisent sans aucun lien et par un seul
+    nom, un paquet hors ligne ne donne que les fichiers que liste son catalogue, et un fichier dont
+    le contenu est celui d'un modèle installé, y compris un modèle fourni avec Albireo, n'est ni
+    copié à nouveau ni enregistré par-dessus.  Les liens demandent un système qui laisse chaque
+    compte en créer : ils sont sautés sous Windows.
 
-    A file never takes the name of another installed model; a newer version of an installed
-    model takes its names through the function that keeps them from the engine, and a
-    replacement it refuses leaves the model as it was, the next one completing from the
-    files received.  The ranges of the downloads bring the bytes asked for and no more, a
-    damaged database fails its opening as malformed, and the files written atomically leave
-    no temporary file.  The downloads come from the publication space first, whose link of the
-    tests answers through a local interface of pCloud, and its listing and addresses are kept; a
-    model the space holds never reaches its official address.  The official addresses of the
-    catalogs lie on the local server, the official catalog included (official_catalog_for_tests()):
-    a part the space lacks, holds at another size or with other bytes, a space that is not set,
-    refuses the connections, answers 403 or a web page give way to them, the segments that follow
-    the failure of the space go there at once, the hashes check every file, and a cancellation
-    ends such a download.  The catalog comes from its official address, its signature checked,
-    when the space does not serve it, and the feed of the updates from the space alone.  When
-    neither source serves a file, the error names the file in the space, the official address and
-    the failure of each.  Each failure of the space fails its operation with its message, lets no
-    exception out, leaves the local server answering, and names neither pCloud, nor the link, nor
-    its code, nor an address of the space: a web page with 200 and with 403 and a proxy asking for
-    its authentication, from each method of the interface and from a content server, a
-    connection reset or refused, a JSON cut short or of other types, sizes of another type,
-    negative, beyond the integers or above the file read, and a server that stalls or sends its
-    answer byte by byte beyond the bounds the tests shorten.  The log passes its lines, and its
-    files of an earlier version, through the last guard (common/log.h), as the errors of the
-    routes.  The settings of an earlier version (public_link, the providers and the key of the
-    search) are read without error and leave settings.json at the start.  The test works in a
-    data folder of its own (set_data_dir()), never in the one of an installed service.
+    Un fichier ne prend jamais le nom d'un autre modèle installé ; une version plus récente d'un
+    modèle installé prend ses noms par la fonction qui les soustrait au moteur, et un remplacement
+    qu'elle refuse laisse le modèle tel quel, le suivant se complétant à partir des fichiers reçus.
+    Les plages des téléchargements apportent les octets demandés et pas plus, une base de données
+    abîmée échoue à l'ouverture comme malformée, et les fichiers écrits de façon atomique ne
+    laissent aucun fichier temporaire.  Les téléchargements viennent d'abord de l'espace de
+    publication, dont le lien des tests répond par une interface locale de pCloud, et sa liste et
+    ses adresses sont gardées ; un modèle que l'espace contient n'atteint jamais son adresse
+    officielle.  Les adresses officielles des catalogues se trouvent sur le serveur local, catalogue
+    officiel compris (official_catalog_for_tests()) : une partie que l'espace n'a pas, qu'il a à une
+    autre taille ou avec d'autres octets, un espace non défini, qui refuse les connexions, répond 403
+    ou une page web leur cèdent la place, les segments qui suivent l'échec de l'espace y vont
+    aussitôt, les empreintes vérifient chaque fichier, et une annulation met fin à un tel
+    téléchargement.  Le catalogue vient de son adresse officielle, sa signature vérifiée, quand
+    l'espace ne le sert pas, et le flux des mises à jour de l'espace seul.  Quand aucune des deux
+    sources ne sert un fichier, l'erreur nomme le fichier dans l'espace, l'adresse officielle et
+    l'échec de chacune.  Chaque échec de l'espace fait échouer son opération avec son message, ne
+    laisse sortir aucune exception, laisse le serveur local répondre, et ne nomme ni pCloud, ni le
+    lien, ni son code, ni une adresse de l'espace : une page web avec 200 et avec 403 et un proxy qui
+    demande son authentification, depuis chaque méthode de l'interface et depuis un serveur de
+    contenu, une connexion réinitialisée ou refusée, un JSON tronqué ou d'autres types, des tailles
+    d'un autre type, négatives, au-delà des entiers ou supérieures au fichier lu, et un serveur qui
+    cale ou envoie sa réponse octet par octet au-delà des bornes que les tests raccourcissent.  Le
+    journal fait passer ses lignes, et ses fichiers d'une version antérieure, par le dernier
+    garde-fou (common/log.h), comme les erreurs des routes.  Les réglages d'une version antérieure
+    (public_link, les fournisseurs et la clé de la recherche) sont lus sans erreur et laissent
+    settings.json au départ.  Le test travaille dans un dossier de données à lui (set_data_dir()),
+    jamais dans celui d'un service installé.
 
-    The web access reads public addresses only: the addresses on both sides of each range that
-    is not public, the addresses refused before any connection (user information, schemes, names
-    of a single label, the names and the numeric forms of the loopback), then, the loopback
-    allowed for the tests, the pages of the local server: a page, a text cut at 2 MB, a type
-    refused, the PDF files above 20 MB refused, a redirection to a private address refused.  The
-    search of Wikipedia answers from the same server with its documents.  Both routes refuse to
-    work offline or with the web access turned off, and a search without provider is refused.
+    L'accès web ne lit que des adresses publiques : les adresses des deux côtés de chaque plage qui
+    n'est pas publique, les adresses refusées avant toute connexion (informations d'utilisateur,
+    schémas, noms d'une seule étiquette, les noms et les formes numériques du loopback), puis, le
+    loopback étant permis pour les tests, les pages du serveur local : une page, un texte coupé à
+    2 Mo, un type refusé, les fichiers PDF de plus de 20 Mo refusés, une redirection vers une adresse
+    privée refusée.  La recherche de Wikipédia répond depuis le même serveur avec ses documents.  Les
+    deux routes refusent de travailler hors ligne ou avec l'accès web désactivé, et une recherche
+    sans fournisseur est refusée.
 */
 
 #include <algorithm>
@@ -112,7 +116,7 @@ namespace
         return data;
     }
 
-    // A content of size bytes that differs with seed.
+    // Un contenu de size octets qui varie avec seed.
     std::string blob(size_t size, char seed)
     {
         std::string b(size, '\0');
@@ -140,7 +144,7 @@ namespace
         return e;
     }
 
-    // The bytes of content compressed by zlib, as the address of a compressed part gives them.
+    // Les octets de content compressés par zlib, tels que les donne l'adresse d'une partie compressée.
     std::string deflated(const std::string& content)
     {
         uLongf size = compressBound(static_cast<uLong>(content.size()));
@@ -153,9 +157,9 @@ namespace
     }
 
     /*
-        A catalog entry of several parts, each at its address in urls: contents gives the bytes of each part,
-        and packed, when it is not empty for a part, the compressed bytes its address gives ("compression":
-        "gzip").
+        Une entrée de catalogue de plusieurs parties, chacune à son adresse dans urls : contents donne les
+        octets de chaque partie, et packed, quand il n'est pas vide pour une partie, les octets compressés
+        que donne son adresse ("compression": "gzip").
     */
     json parts_entry(const std::string& id, const std::vector<std::string>& contents,
         const std::vector<std::string>& urls, const std::vector<std::string>& packed)
@@ -182,8 +186,8 @@ namespace
     }
 
     /*
-        A file of dist/albireo in the repository the test is built from, which keeps the signed catalog: found
-        from the path of this source, empty when the sources are not there.
+        Un fichier de dist/albireo dans le dépôt à partir duquel le test est construit, qui garde le
+        catalogue signé : trouvé à partir du chemin de cette source, vide quand les sources ne sont pas là.
     */
     std::string repository_file(const std::string& name)
     {
@@ -195,7 +199,7 @@ namespace
         return data;
     }
 
-    // The number of lines of the recent log that hold text.
+    // Le nombre de lignes du journal récent qui contiennent du texte.
     int logged(const std::string& text)
     {
         int n = 0;
@@ -204,12 +208,12 @@ namespace
         return n;
     }
 
-    // Waits for the download of id to leave its running states; returns its last state.
+    // Attend que le téléchargement de id quitte ses états actifs ; renvoie son dernier état.
     json wait_download(albireo::model_manager& m, const std::string& id)
     {
         for (int i = 0; i < 1200; ++i)
         {
-            // The list held by a variable, which the loop reads after the call ends.
+            // La liste tenue par une variable, que la boucle lit une fois l'appel terminé.
             const json downloads = m.downloads();
             for (const auto& d : downloads.elements())
                 if (d["id"].as_string() == id)
@@ -238,8 +242,8 @@ namespace
     }
 
     /*
-        A server that accepts each connection, reads its request, and resets it (SO_LINGER at
-        0), as a filter of the network that cuts the connections to a site.
+        Un serveur qui accepte chaque connexion, lit sa requête et la réinitialise (SO_LINGER à
+        0), comme un filtre du réseau qui coupe les connexions vers un site.
     */
     class reset_server
     {
@@ -289,7 +293,7 @@ namespace
         }
 
     private:
-        // Whether a socket has data or a connection to give within a tenth of a second.
+        // Si une socket a des données ou une connexion à donner en un dixième de seconde.
         static bool readable(socket_t sock)
         {
             fd_set set;
@@ -304,7 +308,7 @@ namespace
         std::thread thread_;
     };
 
-    // Whether text holds word, its ASCII letters compared whatever their case (word in lowercase).
+    // Si text contient word, ses lettres ASCII comparées sans tenir compte de la casse (word en minuscules).
     bool holds_folded(const std::string& text, const std::string& word)
     {
         std::string folded = text;
@@ -313,9 +317,9 @@ namespace
     }
 
     /*
-        Whether a message names the publication space of the tests: pCloud, its link, its code, or an address
-        other than the official addresses of the catalogs, which begin with official and which the messages may
-        name.
+        Si un message nomme l'espace de publication des tests : pCloud, son lien, son code, ou une adresse
+        autre que les adresses officielles des catalogues, qui commencent par official et que les messages
+        peuvent nommer.
     */
     bool names_space(const std::string& text, const std::string& official)
     {
@@ -342,14 +346,16 @@ int main(int argc, char** argv)
     const std::string outside = albireo::join_path(work, "outside");
     albireo::make_dirs(models_dir);
     albireo::make_dirs(outside);
-    // A data folder of its own, on every system: the import folder of an installed service is never touched.
+    // Un dossier de données à lui, sur tous les systèmes : le dossier d'import d'un service installé n'est
+    // jamais touché.
     const std::string data = albireo::join_path(work, "data");
     albireo::set_data_dir(data);
     check(albireo::data_dir() == data, "the test works in a data folder of its own");
     const std::string inbox = albireo::join_path(albireo::data_dir(), "import");
     albireo::make_dirs(inbox);
 
-    // The files the local server gives, with ranges, and a file it gives whole whatever the range asked.
+    // Les fichiers que donne le serveur local, avec des plages, et un fichier qu'il donne en entier quelle
+    // que soit la plage demandée.
     const std::string served = blob(300000, 'a');
     const std::string other = blob(200000, 'k');
     const std::string newer_tiny = blob(300000, 'b');
@@ -368,18 +374,18 @@ int main(int argc, char** argv)
         });
     });
     /*
-        The publication space of the tests: the interface of pCloud on the local server
-        (showpublink, getpublinkdownload) and the files of its folder, each served at
-        /content/<identifier>: dist/feed.json without its signature, the copies of the models the
-        downloads take, models/linked/gone.bin, models/short/other.bin of another size than the
-        file of the catalog, models/mixed/first.bin, the first of two parts, and
-        models/stale/stale.bin, of the size of the file of the catalog and with other bytes.
-        space_catalog adds dist/catalog.json, the signed catalog of the repository, with its
-        signature (1) or with another one (2).  The official addresses of the catalogs lie under
-        /official/ (official_files below).  protected_link makes the interface answer as a link
-        whose password is refused, and the faults make a method or the content server answer as a
-        proxy, a filter of the network or a damaged server would; reset_port is the server that
-        resets its connections.
+        L'espace de publication des tests : l'interface de pCloud sur le serveur local
+        (showpublink, getpublinkdownload) et les fichiers de son dossier, chacun servi à
+        /content/<identifier> : dist/feed.json sans sa signature, les copies des modèles que
+        prennent les téléchargements, models/linked/gone.bin, models/short/other.bin d'une autre
+        taille que le fichier du catalogue, models/mixed/first.bin, la première de deux parties, et
+        models/stale/stale.bin, de la taille du fichier du catalogue et avec d'autres octets.
+        space_catalog ajoute dist/catalog.json, le catalogue signé du dépôt, avec sa signature (1)
+        ou avec une autre (2).  Les adresses officielles des catalogues se trouvent sous
+        /official/ (official_files ci-dessous).  protected_link fait répondre l'interface comme un
+        lien dont le mot de passe est refusé, et les pannes font répondre une méthode ou le serveur
+        de contenu comme le ferait un proxy, un filtre du réseau ou un serveur abîmé ; reset_port
+        est le serveur qui réinitialise ses connexions.
     */
     const std::string feed_copy = "{\"feed\": 1}";
     const std::string linked = blob(250000, 'l');
@@ -388,7 +394,7 @@ int main(int argc, char** argv)
     const std::string stale_copy = blob(150000, 's'), fresh = blob(150000, 'r');
     const std::string repository_catalog = repository_file("catalog.json");
     const std::string repository_signature = repository_file("catalog.json.sig");
-    // A signature of the form of the others that signs nothing of the tests.
+    // Une signature de la forme des autres qui ne signe rien des tests.
     const std::string other_signature = "MEQCIAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gAiABAgMEBQYHCAkKCwwNDg8QERIT"
         "FBUWFxgZGhscHR4fIA==";
     const std::map<std::string, const std::string*> link_content = {
@@ -406,7 +412,7 @@ int main(int argc, char** argv)
     };
     std::atomic<int> listing_fault{no_fault}, address_fault{no_fault}, content_fault{no_fault};
     std::atomic<int> reset_port{0};
-    // The answer of a fault that any method gives; false for the faults of the documents.
+    // La réponse d'une panne que donne n'importe quelle méthode ; false pour les pannes des documents.
     auto fault_answer = [](int f, httplib::Response& res) {
         const std::string blocked = "<html><body><h1>Access denied</h1><p>The filter of this network blocks the "
             "site.</p></body></html>";
@@ -433,7 +439,8 @@ int main(int argc, char** argv)
             res.set_content("{}", "application/json");
             return true;
         case trickle:
-            // A byte every 0.3 s, below the bound of each wait and beyond the bound of the whole request.
+            // Un octet toutes les 0,3 s, sous la borne de chaque attente et au-delà de la borne de toute
+            // la requête.
             res.set_chunked_content_provider("application/json", [](size_t offset, httplib::DataSink& sink) {
                 if (offset >= 20)
                 {
@@ -487,7 +494,8 @@ int main(int argc, char** argv)
         json dist = json::array(), models = json::array(), in_linked = json::array(), in_short = json::array();
         json in_tiny = json::array(), in_small = json::array(), in_mixed = json::array(), in_stale = json::array();
         auto size_of = [](const std::string& s) { return json(static_cast<unsigned long long>(s.size())); };
-        // The size of dist/feed.json: of another type, negative, beyond the integers, or above any file read.
+        // La taille de dist/feed.json : d'un autre type, négative, au-delà des entiers, ou supérieure à
+        // tout fichier lu.
         const int f = listing_fault;
         const json feed_size = f == size_string ? json("11") : f == size_negative ? json(-11)
             : f == size_beyond ? json(1e30) : f == size_huge ? json(9000000000000000000ll) : size_of(feed_copy);
@@ -532,7 +540,7 @@ int main(int argc, char** argv)
         }
         else
         {
-            // The content server, or the server that resets its connections.
+            // Le serveur de contenu, ou le serveur qui réinitialise ses connexions.
             json hosts = json::array();
             hosts.push_back("127.0.0.1:" + std::to_string(content_fault == reset ? reset_port.load() : port));
             answer["result"] = 0;
@@ -548,10 +556,10 @@ int main(int argc, char** argv)
         else res.set_content(*it->second, "application/octet-stream");
     });
     /*
-        The official addresses of the catalogs, under /official/: the files of official_files, given with their
-        ranges, those whose name begins with "slow" a kilobyte every 20 ms, the others answered with 404.
-        official_fault makes them answer as a proxy or a filter of the network would, and official_asked counts
-        the requests of each name.
+        Les adresses officielles des catalogues, sous /official/ : les fichiers de official_files, donnés
+        avec leurs plages, ceux dont le nom commence par "slow" à raison d'un kilo-octet toutes les 20 ms,
+        les autres répondus par 404.  official_fault les fait répondre comme le ferait un proxy ou un
+        filtre du réseau, et official_asked compte les requêtes de chaque nom.
     */
     std::mutex official_m;
     std::map<std::string, std::string> official_files;
@@ -596,11 +604,12 @@ int main(int argc, char** argv)
             });
     });
     /*
-        The pages of the web access: a page, a text of 3 MB, an image, a small PDF file, two PDF
-        files of 21 MB (one announced by its length, one sent in chunks), a page that answers
-        404, redirections to a private address, to a relative address and to themselves, and a
-        page that sends back the headers it received.  The search answers as the interface of
-        Wikipedia, and keeps what it received, which the checks read under seen_m.
+        Les pages de l'accès web : une page, un texte de 3 Mo, une image, un petit fichier PDF, deux
+        fichiers PDF de 21 Mo (l'un annoncé par sa longueur, l'autre envoyé par morceaux), une page
+        qui répond 404, des redirections vers une adresse privée, vers une adresse relative et vers
+        elles-mêmes, et une page qui renvoie les en-têtes qu'elle a reçus.  La recherche répond comme
+        l'interface de Wikipédia, et garde ce qu'elle a reçu, que les vérifications lisent sous
+        seen_m.
     */
     const std::string page = "<html><body><p>Albireo &amp; the web</p></body></html>";
     const std::string large_text = blob(3u << 20, 't');
@@ -681,8 +690,9 @@ int main(int argc, char** argv)
     std::thread listener([&]() { server.listen_after_bind(); });
     const std::string base_url = "http://127.0.0.1:" + std::to_string(port);
     /*
-        The link of the build sets the publication space; the downloads of the tests come from their own link, and
-        from the official addresses of their catalogs on the local server, the official catalog included.
+        Le lien du build définit l'espace de publication ; les téléchargements des tests viennent de leur
+        propre lien, et des adresses officielles de leurs catalogues sur le serveur local, catalogue
+        officiel compris.
     */
     check(albireo::public_link_enabled(), "the link of the build sets the publication space");
     albireo::public_link_for_tests(base_url + "/publink/show?code=TESTLINK1");
@@ -704,7 +714,7 @@ int main(int argc, char** argv)
         const std::string target = albireo::join_path(dir, "tiny.gguf");
         albireo::user_error error;
 
-        // The partial file a link to a file outside: refused, the file outside unchanged.
+        // Le fichier partiel, un lien vers un fichier extérieur : refusé, le fichier extérieur inchangé.
         const std::string victim = albireo::join_path(outside, "victim.txt");
         write_text(victim, "kept");
         make_symlink(victim, partial);
@@ -715,7 +725,7 @@ int main(int argc, char** argv)
         check(read_text(victim) == "kept", "the file the link leads to is unchanged");
         albireo::remove_file(partial);
 
-        // The partial file a second name of a file outside: refused, the file unchanged.
+        // Le fichier partiel, second nom d'un fichier extérieur : refusé, le fichier inchangé.
         make_hard_link(victim, partial);
         check(m.start_download("tiny", error), "a download starts again");
         d = wait_download(m, "tiny");
@@ -724,7 +734,7 @@ int main(int argc, char** argv)
         check(read_text(victim) == "kept", "the file of the second name is unchanged");
         albireo::remove_file(partial);
 
-        // The final name a link: the download replaces the link, never writes through it.
+        // Le nom final, un lien : le téléchargement remplace le lien, n'écrit jamais à travers lui.
         make_symlink(victim, target);
         check(m.start_download("tiny", error), "a download starts over a final name that is a link");
         d = wait_download(m, "tiny");
@@ -735,7 +745,7 @@ int main(int argc, char** argv)
         check(installed(db, "tiny", im) && im.file == target, "the model is recorded at its name");
         check(!albireo::file_exists(partial), "no partial file is left");
 
-        // The models folder replaced by a link: the download writes nothing where it leads.
+        // Le dossier de modèles remplacé par un lien : le téléchargement n'écrit rien là où il mène.
         const std::string moved = dir + ".moved";
         const std::string elsewhere = albireo::join_path(outside, "elsewhere");
         albireo::make_dirs(elsewhere);
@@ -748,7 +758,7 @@ int main(int argc, char** argv)
         albireo::remove_file(dir);
         albireo::rename_file(moved, dir);
 
-        // A cancelled download leaves no partial file and comes back whole afterwards.
+        // Un téléchargement annulé ne laisse aucun fichier partiel et revient ensuite en entier.
         albireo::installed_model small;
         check(m.start_download("small", error), "a download of small starts");
         m.cancel_download("small");
@@ -761,7 +771,8 @@ int main(int argc, char** argv)
         d = wait_download(m, "small");
         check(d["state"].as_string() == "done" && installed(db, "small", small), "the new download installs it");
 
-        // An unknown file named after an installed model: installed under a name of its own, the model unchanged.
+        // Un fichier inconnu nommé d'après un modèle installé : installé sous un nom à lui, le modèle
+        // inchangé.
         const albireo_test::tiny_gguf tiny_model = albireo_test::tiny_gguf_writer().build();
         const std::string unknown = albireo::join_path(inbox, "tiny.gguf");
         tiny_model.save(unknown, tiny_model.bytes);
@@ -771,7 +782,7 @@ int main(int argc, char** argv)
             "an unknown file named after an installed model takes the suffix -import (" + u.dump() + ")");
         check(read_text(target) == served && installed(db, "tiny", kept) && kept.sha256 == albireo::sha256_hex(served)
             && kept.source == "catalog", "the installed model keeps its file and its record");
-        // Another unknown file of that name takes the next free name.
+        // Un autre fichier inconnu de ce nom prend le nom libre suivant.
         std::vector<unsigned char> changed = tiny_model.bytes;
         changed.back() = static_cast<unsigned char>(changed.back() ^ 0x5a);
         tiny_model.save(unknown, changed);
@@ -784,10 +795,10 @@ int main(int argc, char** argv)
 
     {
         /*
-            A newer version of the installed model tiny: its file takes its name through the
-            function of on_replace(), which keeps the files from the engine.  A replacement it
-            refuses leaves the model as it was; the next download completes from the files
-            received, without a new transfer.
+            Une version plus récente du modèle installé tiny : son fichier prend son nom par la
+            fonction de on_replace(), qui soustrait les fichiers au moteur.  Un remplacement qu'elle
+            refuse laisse le modèle tel quel ; le téléchargement suivant se complète à partir des
+            fichiers reçus, sans nouveau transfert.
         */
         albireo::store db(albireo::join_path(work, "albireo.db"));
         json catalog = json::object();
@@ -824,7 +835,7 @@ int main(int argc, char** argv)
     }
 
     {
-        // The models that come with Albireo, and the imports of the same content.
+        // Les modèles fournis avec Albireo, et les imports du même contenu.
         albireo::store db(albireo::join_path(work, "albireo-2.db"));
         const std::string builtin = albireo::join_path(work, "builtin");
         albireo::make_dirs(builtin);
@@ -835,7 +846,7 @@ int main(int argc, char** argv)
         entry["name"] = "Base";
         entry["file"] = "base.gguf";
         entry["sha256"] = albireo::sha256_hex(own);
-        // The file of the catalog the build made it from.
+        // Le fichier du catalogue à partir duquel le build l'a fait.
         const std::string source = blob(140000, 'o');
         entry["source_sha256"] = albireo::sha256_hex(source);
         json listed = json::array();
@@ -843,7 +854,7 @@ int main(int argc, char** argv)
         json manifest = json::object();
         manifest["models"] = listed;
         write_text(albireo::join_path(builtin, albireo::builtin_manifest_name), manifest.dump());
-        // The catalog in use knows another content under the identifier of the model that comes with Albireo.
+        // Le catalogue en usage connaît un autre contenu sous l'identifiant du modèle fourni avec Albireo.
         const std::string newer = blob(160000, 'z');
         json catalog = json::object();
         catalog["updated"] = "2026-10-30T00:00:00Z";
@@ -857,7 +868,8 @@ int main(int argc, char** argv)
         std::vector<albireo::installed_model> removed;
         m.register_builtin(builtin, removed);
 
-        // The entry of the file the model of Albireo was made from: the model of Albireo stands for it.
+        // L'entrée du fichier à partir duquel le modèle d'Albireo a été fait : le modèle d'Albireo en
+        // tient lieu.
         const json view = m.overview("en");
         bool listed_source = false, listed_builtin = false;
         for (const auto& x : view["models"].elements())
@@ -870,7 +882,7 @@ int main(int argc, char** argv)
         check(!m.start_download("base", carried) && carried.code == "builtin_installed",
             "the download of the file a model of Albireo carries is refused");
 
-        // The same content in the import folder: not copied, not recorded again, removed from the folder.
+        // Le même contenu dans le dossier d'import : pas copié, pas enregistré à nouveau, retiré du dossier.
         const std::string copy = albireo::join_path(inbox, "base-albireo.gguf");
         write_text(copy, own);
         const json r = m.import_path(copy, inbox, true);
@@ -881,7 +893,7 @@ int main(int argc, char** argv)
         check(installed(db, "base-albireo", im) && im.source == "builtin", "the model stays the one of Albireo");
         check(!albireo::file_exists(copy), "the copy leaves the import folder");
 
-        // Another content under its identifier: installed under its own name, never over it.
+        // Un autre contenu sous son identifiant : installé sous son propre nom, jamais par-dessus.
         const std::string variant = albireo::join_path(inbox, "variant.gguf");
         write_text(variant, newer);
         const json v = m.import_path(variant, inbox, false);
@@ -893,12 +905,12 @@ int main(int argc, char** argv)
             "the other file has an entry of its own");
         check(albireo::file_exists(variant), "a file imported without move stays in place");
 
-        // A download of its identifier is refused.
+        // Un téléchargement de son identifiant est refusé.
         albireo::user_error error;
         check(!m.start_download("base-albireo", error) && error.code == "builtin_installed",
             "a download of a model that comes with Albireo is refused");
 
-        // The import folder reads through no link and a single name.
+        // Le dossier d'import se lit sans aucun lien et par un seul nom.
         const std::string secret = albireo::join_path(outside, "secret.gguf");
         write_text(secret, blob(1000, 's'));
         const std::string linked = albireo::join_path(inbox, "linked.gguf");
@@ -912,7 +924,7 @@ int main(int argc, char** argv)
         check(albireo::file_exists(secret), "the file they lead to stays");
         albireo::remove_file(linked);
         albireo::remove_file(hard);
-        // A folder of the import folder replaced by a link: nothing read through it.
+        // Un dossier du dossier d'import remplacé par un lien : rien n'est lu à travers lui.
         const std::string sub = albireo::join_path(inbox, "models");
         make_symlink(outside, sub);
         const json s = m.import_path(inbox, inbox, false);
@@ -926,7 +938,7 @@ int main(int argc, char** argv)
         check(!f.open(albireo::join_path(albireo::join_path(work, "via"), "secret.gguf"), work, why) && why == "link",
             "a folder that is a link stops a link-free opening");
 
-        // An offline bundle: only the files of its catalog, with their sizes and hashes.
+        // Un paquet hors ligne : seulement les fichiers de son catalogue, avec leurs tailles et empreintes.
         const std::string bundle = albireo::join_path(work, "bundle");
         albireo::make_dirs(albireo::join_path(bundle, "models"));
         const std::string listed_content = blob(120000, 'm');
@@ -951,7 +963,7 @@ int main(int argc, char** argv)
     }
 
     {
-        // The ranges of the downloads bring the bytes asked for and no more.
+        // Les plages des téléchargements apportent les octets demandés et pas plus.
         std::string got, error;
         auto keep = [&](const char* data, size_t n) {
             got.append(data, n);
@@ -968,7 +980,8 @@ int main(int argc, char** argv)
     }
 
     {
-        // The publication space: the links the tests may give, its listing and addresses kept, the files it lacks.
+        // L'espace de publication : les liens que les tests peuvent donner, sa liste et ses adresses
+        // gardées, les fichiers qui lui manquent.
         const std::string link = base_url + "/publink/show?code=TESTLINK1";
         albireo::public_link_for_tests("https://example.org/publink/show?code=kZeNhSJZpcMygkcC");
         const bool other_site = albireo::public_link_enabled();
@@ -1003,8 +1016,9 @@ int main(int argc, char** argv)
             == "https://example.org/search: status 500", "the queries of the addresses stay out of the messages");
 
         /*
-            The downloads: the copy of the space first, its official address for a part the space lacks, holds at
-            another size or holds with other bytes, and a message that names both failures when neither serves it.
+            Les téléchargements : la copie de l'espace d'abord, son adresse officielle pour une partie que
+            l'espace n'a pas, a à une autre taille ou a avec d'autres octets, et un message qui nomme les
+            deux échecs quand aucune ne la sert.
         */
         albireo::store db(albireo::join_path(work, "albireo-3.db"));
         json catalog = json::object();
@@ -1064,7 +1078,8 @@ int main(int argc, char** argv)
             "the publication space of Albireo does not match the hash of the catalog)") == 1,
             "a copy whose bytes fail the hash is fetched again from the official address (" + d.dump() + ")");
 
-        // Neither source: the error names the file in the space, the official address and the failure of each.
+        // Aucune des deux sources : l'erreur nomme le fichier dans l'espace, l'adresse officielle et l'échec
+        // de chacune.
         check(m.start_download("absent", started), "the download of a model that neither source holds starts");
         d = wait_download(m, "absent");
         const std::string both = "the publication space of Albireo does not hold models/absent/absent.bin yet; its "
@@ -1080,7 +1095,8 @@ int main(int argc, char** argv)
             "catalog cannot be downloaded from its official address " + official + "catalog.json either: the request "
             "is answered with the status 404" && !names_space(refreshed, official),
             "a catalog that neither source holds fails with both failures (" + refreshed + ")");
-        // Without a space, the official addresses at once: one that gives another size fails, the right one completes.
+        // Sans espace, les adresses officielles aussitôt : celle qui donne une autre taille échoue, la bonne
+        // se complète.
         albireo::public_link_for_tests("");
         official_serve("absent.bin", blob(4000, 'n'));
         check(m.start_download("absent", started), "a download starts without a space");
@@ -1097,7 +1113,7 @@ int main(int argc, char** argv)
         check(complete(d, "absent", absent), "without a space, a model comes from its official address ("
             + d.dump() + ")");
         m.stop();
-        // A link that refuses the password: the message names the answer, never the query.
+        // Un lien qui refuse le mot de passe : le message nomme la réponse, jamais la requête.
         protected_link = true;
         albireo::public_link_for_tests(link);
         ok = albireo::public_link_get("dist/feed.json", body, error, 1u << 20);
@@ -1109,10 +1125,10 @@ int main(int argc, char** argv)
 
     {
         /*
-            The failures of the publication space, each with the bounds of the waits shortened to 1 s
-            and of a whole request to 2 s: the operation fails with its message, no exception leaves it,
-            the local server still answers, and the message names neither pCloud, nor the link, nor its
-            code, nor an address.
+            Les échecs de l'espace de publication, chacun avec les bornes des attentes raccourcies à 1 s
+            et celle d'une requête entière à 2 s : l'opération échoue avec son message, aucune exception
+            n'en sort, le serveur local répond encore, et le message ne nomme ni pCloud, ni le lien, ni
+            son code, ni une adresse.
         */
         reset_server resetting;
         check(resetting.start(port + 1), "a server that resets its connections listens on the port "
@@ -1143,7 +1159,7 @@ int main(int argc, char** argv)
             const char* what;
             std::atomic<int>* where;
             int f;
-            std::string expected;    // the message, or its beginning when prefix is true
+            std::string expected;    // le message, ou son début quand prefix vaut true
             bool prefix;
         };
         const failure_case cases[] = {
@@ -1205,7 +1221,7 @@ int main(int argc, char** argv)
             check(!ok && !escaped && told && clean(error) && seconds < 10 && answers(), std::string(c.what)
                 + " fails with its message, in " + std::to_string(static_cast<int>(seconds)) + " s (" + error + ")");
         }
-        // A space whose interface resets its connections, or does not listen.
+        // Un espace dont l'interface réinitialise ses connexions, ou n'écoute pas.
         for (int to : { port + 1, port + 2 })
         {
             albireo::public_link_for_tests("http://127.0.0.1:" + std::to_string(to) + "/publink/show?code=TESTLINK1");
@@ -1225,7 +1241,8 @@ int main(int argc, char** argv)
         }
         albireo::public_link_for_tests(link);
 
-        // The ranges of the downloads: a web page, a stall and a reset fail before any byte reaches the file.
+        // Les plages des téléchargements : une page web, un blocage et une réinitialisation échouent avant
+        // qu'aucun octet n'atteigne le fichier.
         std::string written, error;
         auto keep = [&](const char* data, size_t n) {
             written.append(data, n);
@@ -1241,7 +1258,7 @@ int main(int argc, char** argv)
         content_fault = no_fault;
         const bool from_reset = albireo::http_get_range("http://127.0.0.1:" + std::to_string(port + 1) + "/content/41",
             1000, 1999, keep, error);
-        // A receiver that throws: the exception becomes the error of the download.
+        // Un récepteur qui lève une exception : l'exception devient l'erreur du téléchargement.
         try
         {
             albireo::http_get_range(base_url + "/content/41", 0, 999, [](const char*, size_t) -> bool {
@@ -1259,8 +1276,8 @@ int main(int argc, char** argv)
             + "; " + error + ")");
 
         /*
-            A model whose copy is a web page, its official address a web page too, then the file; a catalog
-            from a stalled listing, its official address answering 404.
+            Un modèle dont la copie est une page web, son adresse officielle une page web aussi, puis le
+            fichier ; un catalogue venant d'une liste bloquée, son adresse officielle répondant 404.
         */
         albireo::store db(albireo::join_path(work, "albireo-4.db"));
         json catalog = json::object();
@@ -1309,7 +1326,7 @@ int main(int argc, char** argv)
         albireo::http_bounds_for_tests(0, 0);
         resetting.stop();
 
-        // The log of these failures names neither pCloud, nor the link, nor its code, nor a content server.
+        // Le journal de ces échecs ne nomme ni pCloud, ni le lien, ni son code, ni un serveur de contenu.
         bool named = false;
         for (const auto& line : albireo::log_file::instance().recent())
             named = named || holds_folded(line, "pcloud") || holds_folded(line, "publink")
@@ -1320,12 +1337,12 @@ int main(int argc, char** argv)
 
     {
         /*
-            The official addresses when the publication space fails: a space that refuses the connections, a
-            listing refused with 403 for a model of eight parts, one of them compressed, whose segments go to
-            their official addresses at once after the space failed for one of them, the last part resuming
-            alone when its official address serves it, the catalog when the space does not serve it, and a
-            download cancelled while it comes from its official address.  The log names the official addresses,
-            never the space, its link or its code.
+            Les adresses officielles quand l'espace de publication échoue : un espace qui refuse les
+            connexions, une liste refusée par 403 pour un modèle de huit parties, dont une compressée, dont
+            les segments vont aussitôt à leurs adresses officielles après l'échec de l'espace pour l'un
+            d'eux, la dernière partie reprenant seule quand son adresse officielle la sert, le catalogue
+            quand l'espace ne le sert pas, et un téléchargement annulé pendant qu'il vient de son adresse
+            officielle.  Le journal nomme les adresses officielles, jamais l'espace, son lien ou son code.
         */
         const std::string link = base_url + "/publink/show?code=TESTLINK1";
         albireo::store db(albireo::join_path(work, "albireo-5.db"));
@@ -1340,7 +1357,7 @@ int main(int argc, char** argv)
             contents.push_back(blob(20000 + 1000 * i, static_cast<char>('A' + i)));
             urls.push_back(official + name);
             packed.push_back(i == 3 ? deflated(contents.back()) : std::string());
-            // The last part reaches its official address later.
+            // La dernière partie atteint son adresse officielle plus tard.
             if (i < 7) official_serve(name, packed.back().empty() ? contents.back() : packed.back());
         }
         list.push_back(parts_entry("parts", contents, urls, packed));
@@ -1354,7 +1371,7 @@ int main(int argc, char** argv)
         albireo::user_error started;
         albireo::installed_model im;
 
-        // An interface that refuses the connections: the model comes from its official address.
+        // Une interface qui refuse les connexions : le modèle vient de son adresse officielle.
         albireo::public_link_for_tests("http://127.0.0.1:" + std::to_string(port + 2) + "/publink/show?code=TESTLINK1");
         check(m.start_download("tiny", started), "the download of a model from a space that refuses connections "
             "starts");
@@ -1367,9 +1384,10 @@ int main(int argc, char** argv)
             "a space that refuses the connections gives way to the official address (" + d.dump() + ")");
 
         /*
-            A listing refused with 403: the segments after the first failure no longer ask the space.  The official
-            address of the last part answers 404, so that the error names the failure of the space for another
-            part; once it serves the part, the download resumes with that part alone.
+            Une liste refusée par 403 : les segments après le premier échec ne demandent plus l'espace.
+            L'adresse officielle de la dernière partie répond 404, pour que l'erreur nomme l'échec de
+            l'espace pour une autre partie ; dès qu'elle sert la partie, le téléchargement reprend avec
+            cette seule partie.
         */
         albireo::public_link_for_tests(link);
         listing_fault = html_403;
@@ -1402,7 +1420,8 @@ int main(int argc, char** argv)
             whole += contents[static_cast<size_t>(i)];
             each_once = each_once && official_count("part-" + std::to_string(i) + ".bin") == (i < 7 ? 1 : 4);
         }
-        // One line for each download tells the change of source, by the segment whose failure of the space changed it.
+        // Une ligne pour chaque téléchargement indique le changement de source, par le segment dont
+        // l'échec de l'espace l'a provoqué.
         int told = 0;
         for (int i = 0; i < 8; ++i)
         {
@@ -1418,7 +1437,8 @@ int main(int argc, char** argv)
             "a model of eight parts, one compressed, comes from its official addresses, resumed with its last part, "
             "the log telling each change of source once (" + d.dump() + ")");
 
-        // The catalog: its official address serves the signed catalog of the repository when the space does not.
+        // Le catalogue : son adresse officielle sert le catalogue signé du dépôt quand l'espace ne le sert
+        // pas.
         if (repository_catalog.empty() || repository_signature.empty())
         {
             std::printf("skip the signed catalog, which the sources of this build do not give\n");
@@ -1445,7 +1465,7 @@ int main(int argc, char** argv)
                 "the request is answered with the status 403");
             listing_fault = no_fault;
             const bool after_missing = installs("the publication space of Albireo does not hold dist/catalog.json yet");
-            // The space holds the catalog with another signature; its listing and addresses are read again.
+            // L'espace contient le catalogue avec une autre signature ; sa liste et ses adresses sont relues.
             space_catalog = 2;
             albireo::public_link_for_tests(link);
             const bool after_refusal = installs("the catalog of the publication space of Albireo is refused: the "
@@ -1471,7 +1491,8 @@ int main(int argc, char** argv)
             cm.stop();
         }
 
-        // A download cancelled while it comes from its official address ends at once, its partial file removed.
+        // Un téléchargement annulé pendant qu'il vient de son adresse officielle se termine aussitôt, son
+        // fichier partiel supprimé.
         check(m.start_download("slow", started), "the download of a model the space lacks starts");
         long long received = 0;
         for (int i = 0; i < 300 && received == 0; ++i)
@@ -1494,7 +1515,8 @@ int main(int argc, char** argv)
             "removed (" + d.dump() + ")");
         m.stop();
 
-        // The log names the official addresses, never the space, its link, its code or a content server.
+        // Le journal nomme les adresses officielles, jamais l'espace, son lien, son code ou un serveur de
+        // contenu.
         bool named = false;
         for (const auto& line : albireo::log_file::instance().recent())
             named = named || holds_folded(line, "pcloud") || holds_folded(line, "publink")
@@ -1505,9 +1527,9 @@ int main(int argc, char** argv)
 
     {
         /*
-            The last guard: the words that name the publication space, whatever their case, and the
-            code given to hide_in_messages(), in a text, in the errors of a document, in the log and
-            in its files of an earlier version.
+            Le dernier garde-fou : les mots qui nomment l'espace de publication, quelle que soit leur
+            casse, et le code donné à hide_in_messages(), dans un texte, dans les erreurs d'un document,
+            dans le journal et dans ses fichiers d'une version antérieure.
         */
         const std::string space = "the publication space of Albireo";
         albireo::hide_in_messages("TESTLINK1");
@@ -1555,7 +1577,8 @@ int main(int argc, char** argv)
     }
 
     {
-        // The settings of an earlier version: read without error, written again without what this version lacks.
+        // Les réglages d'une version antérieure : lus sans erreur, réécrits sans ce qui manque à cette
+        // version.
         const std::string folder = albireo::join_path(work, "settings");
         albireo::make_dirs(folder);
         const std::string settings_file = albireo::join_path(folder, "settings.json");
@@ -1597,7 +1620,7 @@ int main(int argc, char** argv)
     }
 
     {
-        // A database damaged beyond its header fails its opening as malformed.
+        // Une base de données abîmée au-delà de son en-tête échoue à l'ouverture comme malformée.
         const std::string path = albireo::join_path(work, "damaged.db");
         {
             albireo::store db(path);
@@ -1606,7 +1629,7 @@ int main(int argc, char** argv)
         for (const char* part : { "-wal", "-shm" }) albireo::remove_file(path + part);
         std::string bytes = read_text(path);
         check(bytes.size() > 8 * 4096, "the database spans several pages");
-        // Its first page, the header and the schema, stays; the pages of its tables are erased.
+        // Sa première page, l'en-tête et le schéma, reste ; les pages de ses tables sont effacées.
         for (size_t i = 4096; i < bytes.size(); ++i) bytes[i] = 0;
         write_text(path, bytes);
         bool malformed = false;
@@ -1622,7 +1645,7 @@ int main(int argc, char** argv)
     }
 
     {
-        // A file written atomically replaces the one in place and leaves no temporary file.
+        // Un fichier écrit de façon atomique remplace celui en place et ne laisse aucun fichier temporaire.
         const std::string file = albireo::join_path(work, "atomic.txt");
         check(albireo::write_file_atomic(file, "first") && albireo::write_file_atomic(file, "second")
             && read_text(file) == "second", "a file written atomically replaces its content");
@@ -1632,7 +1655,8 @@ int main(int argc, char** argv)
     }
 
     {
-        // The public addresses: those that follow and precede each range that is not public, and its bounds.
+        // Les adresses publiques : celles qui suivent et précèdent chaque plage qui n'est pas publique, et
+        // ses bornes.
         const char* const public_addresses[] = {
             "1.0.0.0", "9.255.255.255", "11.0.0.0", "100.63.255.255", "100.128.0.0", "126.255.255.255",
             "128.0.0.0", "169.253.255.255", "169.255.0.0", "172.15.255.255", "172.32.0.0", "191.255.255.255",
@@ -1671,7 +1695,8 @@ int main(int argc, char** argv)
         check(!albireo::public_address("example.org") && !albireo::public_address("127.1")
             && !albireo::public_address(""), "a text that is no address is not public");
 
-        // The addresses refused before any connection: 400 for an invalid one, 403 for a local or private one.
+        // Les adresses refusées avant toute connexion : 400 pour une adresse invalide, 403 pour une
+        // adresse locale ou privée.
         albireo::host_settings web;
         auto fetch = [&](const std::string& url, const albireo::host_settings& s, const std::string& language) {
             json request = json::object();
@@ -1707,7 +1732,7 @@ int main(int argc, char** argv)
             "private, which the web access of Albireo does not read",
             "a refusal names the host (" + local.message + ")");
 
-        // The service offline and the web access turned off refuse both routes; the capability follows.
+        // Le service hors ligne et l'accès web désactivé refusent les deux routes ; la capacité suit.
         albireo::host_settings offline = web, off = web, none = web;
         offline.offline = true;
         off.web_access = false;
@@ -1733,7 +1758,7 @@ int main(int argc, char** argv)
             && albireo::web_search_provider(web) == "wikipedia" && albireo::web_search_provider(none) == "none",
             "the capability gives the web access and its provider of search, wikipedia or none");
 
-        // The pages of the local server, the loopback allowed for the tests.
+        // Les pages du serveur local, le loopback permis pour les tests.
         albireo::web_allow_loopback_for_tests(true);
         reply = fetch(base_url + "/web/page.html", web, "");
         const json& b = reply.body;
@@ -1782,7 +1807,7 @@ int main(int argc, char** argv)
         check(reply.status == 503 && reply.code == "cancelled", "a service that stops ends the reading of pages");
         albireo::http_restore();
 
-        // The search of Wikipedia, answered by the local server.
+        // La recherche de Wikipédia, servie par le serveur local.
         albireo::web_provider_origin_for_tests(base_url);
         search_request["count"] = 5;
         search_request["language"] = "fr";
@@ -1828,7 +1853,7 @@ int main(int argc, char** argv)
         albireo::web_provider_origin_for_tests("");
         albireo::web_allow_loopback_for_tests(false);
 
-        // The log names the hosts read and the provider, never a path or a query.
+        // Le journal nomme les hôtes lus et le fournisseur, jamais un chemin ni une requête.
         bool leaked = false, read_line = false, search_line = false;
         for (const auto& line : albireo::log_file::instance().recent())
         {

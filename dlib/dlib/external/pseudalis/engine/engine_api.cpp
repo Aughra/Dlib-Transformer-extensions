@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// The C interface of the engine libraries (common/engine_api.h).
+// L'interface C des bibliothèques du moteur (common/engine_api.h).
 
 #ifndef PSEUDALIS_ENGINE_BUILD
 #define PSEUDALIS_ENGINE_BUILD
@@ -64,7 +64,7 @@ namespace
         return list;
     }
 
-    // The substitutes of the text a request gives: [{"substitute", "tag"}].
+    // Les substituts du texte que donne une requête : [{"substitute", "tag"}].
     std::vector<pseudalis::substitution> substitutions_in(const pseudalis::json& list)
     {
         std::vector<pseudalis::substitution> out;
@@ -232,7 +232,8 @@ PSD_API int PSD_CALL psd_process(psd_engine* engine, const char* request, const 
             };
         pseudalis::json res = pseudalis::json::object();
         std::string out;
-        // Without tags, the values of the text take substitutes; the substitutes of the text known.
+        // Sans étiquettes, les valeurs du texte prennent des substituts ; les substituts du texte
+        // déjà connus.
         const bool tags = req["tags"].as_bool(true);
         const std::vector<pseudalis::substitution> known = substitutions_in(req["substitutions"]);
         if (op == "anonymize" || op == "restore")
@@ -265,7 +266,8 @@ PSD_API int PSD_CALL psd_process(psd_engine* engine, const char* request, const 
             res["kind"] = "text";
             res["report"] = report;
             res["pictures"] = pseudalis::json::array();
-            // The places of the tags or substitutes written, or of the values restored, for the colouring.
+            // Les emplacements des étiquettes ou des substituts écrits, ou des valeurs restaurées, pour
+            // la coloration.
             if (op == "anonymize_text")
             {
                 res["tags"] = engine->e->tag_spans(out, made);
@@ -323,7 +325,7 @@ PSD_API int PSD_CALL psd_key_fingerprint(psd_engine* engine, psd_buffer* fingerp
 {
     clear(fingerprint);
     if (!engine || !engine->e) return 0;
-    // No exception crosses the interface of the library.
+    // Aucune exception ne traverse l'interface de la bibliothèque.
     try
     {
         return put(fingerprint, engine->e->key_fingerprint()) ? 1 : 0;

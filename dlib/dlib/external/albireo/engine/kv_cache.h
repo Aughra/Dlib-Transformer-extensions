@@ -20,16 +20,16 @@ namespace albireo
 {
 
     /*!
-        The storage of the keys and values: half precision, or 8-bit integers by groups of
-        kv_q8_group values that share a scale in half precision (q8), 34 bytes for 32 values
-        against 64 in half precision, for the memory of a context and for the bytes the
-        attention reads.
+        Le stockage des clés et valeurs : demi-précision, ou entiers 8 bits par groupes de
+        kv_q8_group valeurs qui partagent une échelle en demi-précision (q8), 34 octets pour 32
+        valeurs contre 64 en demi-précision, pour la mémoire d'un contexte et pour les octets que
+        lit l'attention.
     !*/
     enum class kv_format { f16, q8 };
 
     const long kv_q8_group = 32;
 
-    // The bytes of a row of head_dim keys or values in a format, its scales included.
+    // Les octets d'une ligne de head_dim clés ou valeurs dans un format, ses échelles comprises.
     inline size_t kv_row_bytes(kv_format format, long head_dim)
     {
         return format == kv_format::q8
@@ -41,32 +41,34 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The memory that holds the keys and values of every sequence of one model,
-                as blocks of a fixed number of positions.  A sequence owns the blocks its
-                positions fall in and nothing more, so a short exchange takes a few blocks
-                and a long one takes many, and the memory the engine reserves follows the
-                text actually held rather than the longest context it could hold.
+                La mémoire qui contient les clés et valeurs de chaque séquence d'un modèle,
+                sous forme de blocs d'un nombre fixe de positions.  Une séquence possède les
+                blocs où tombent ses positions et rien de plus, si bien qu'un court échange
+                prend quelques blocs et un long en prend beaucoup, et la mémoire que réserve le
+                moteur suit le texte réellement contenu plutôt que le plus long contexte qu'il
+                pourrait contenir.
 
-                Keys and values are stored in the format of the pool (kv_format).  Inside a
-                block, the rows of one layer and one key/value head are contiguous, which is
-                the order in which attention reads them; in q8, the scales of these rows
-                follow them, kv_q8_group values to a scale.
+                Les clés et valeurs sont stockées dans le format du pool (kv_format).  Dans un
+                bloc, les lignes d'une couche et d'une tête de clés et valeurs sont contiguës,
+                ce qui est l'ordre dans lequel l'attention les lit ; en q8, les échelles de ces
+                lignes les suivent, kv_q8_group valeurs par échelle.
 
-                Blocks are allocated in groups as sequences grow, up to a budget in bytes;
-                a block given back is reused before any new memory is taken, and trim()
-                returns the memory of the blocks no sequence holds to the system.  All the
-                blocks lie in one region of addresses reserved for the budget at once, aligned
-                on the pages of the system, whose pages the system gives on first use only: a
-                graphics processor that shares the memory of the processor can take the whole
-                region as one buffer (region(), block_offset()).  A guard
-                (set_guard) may refuse a new block, from the memory the system has left:
-                the pool then acts as when its budget is exhausted.
+                Les blocs sont alloués par groupes à mesure que les séquences grandissent,
+                jusqu'à un budget en octets ; un bloc rendu est réutilisé avant que toute
+                nouvelle mémoire soit prise, et trim() rend au système la mémoire des blocs
+                qu'aucune séquence ne détient.  Tous les blocs se trouvent dans une seule
+                région d'adresses réservée d'un coup pour le budget, alignée sur les pages du
+                système, dont le système ne fournit les pages qu'à la première utilisation : un
+                processeur graphique qui partage la mémoire du processeur peut prendre toute la
+                région comme un seul tampon (region(), block_offset()).  Une garde
+                (set_guard) peut refuser un nouveau bloc, d'après la mémoire qui reste au
+                système : le pool agit alors comme quand son budget est épuisé.
 
-                Several sequences may hold the same block: a conversation that starts with
-                the text of a cached one holds the full blocks of that text along with it.
-                A block counts the sequences that hold it and returns to the pool when the
-                last one gives it back; a sequence copies a shared block before writing in
-                it (kv_sequence::reserve).
+                Plusieurs séquences peuvent détenir le même bloc : une conversation qui commence
+                par le texte d'une conversation en cache détient avec elle les blocs pleins de
+                ce texte.  Un bloc compte les séquences qui le détiennent et retourne au pool
+                quand la dernière le rend ; une séquence copie un bloc partagé avant d'y écrire
+                (kv_sequence::reserve).
         !*/
     public:
         kv_pool(long n_layers, long n_kv_heads, long head_dim, long block_positions, size_t budget_bytes,
@@ -77,17 +79,18 @@ namespace albireo
                 throw std::invalid_argument("kv_pool: invalid geometry");
             if (format == kv_format::q8 && head_dim % kv_q8_group != 0)
                 throw std::invalid_argument("kv_pool: the rows of 8-bit keys and values take whole groups");
-            // A block of 2^41 bytes at most, whose size stays far from overflowing.
+            // Un bloc de 2^41 octets au plus, dont la taille reste loin du débordement.
             const double bytes = 2.0 * n_layers * n_kv_heads * block_positions * static_cast<double>(head_dim);
             if (bytes > 2199023255552.0) throw std::invalid_argument("kv_pool: blocks too large");
-            // Keys then values, each layers x heads slabs of positions rows (and their scales in q8).
+            // Les clés puis les valeurs, chacune en layers x heads dalles de positions lignes (et leurs échelles
+            // en q8).
             slab_bytes_ = static_cast<size_t>(positions_) * kv_row_bytes(format_, head_dim_);
             bytes_per_kind_ = static_cast<size_t>(layers_) * heads_ * slab_bytes_;
             block_bytes_ = 2 * bytes_per_kind_;
             max_blocks_ = std::max<size_t>(1, budget_bytes / block_bytes_);
-            // The table of blocks never moves, so that the threads reading a block during
-            // a forward pass never see it relocated by an allocation, and the lists never
-            // grow, so that giving a block back cannot fail.
+            // La table des blocs ne bouge jamais, pour que les threads qui lisent un bloc pendant
+            // une passe avant ne le voient jamais déplacé par une allocation, et les listes ne
+            // grandissent jamais, pour que rendre un bloc ne puisse pas échouer.
             reserve_region();
             blocks_.reserve(max_blocks_);
             refs_.reserve(max_blocks_);
@@ -100,15 +103,15 @@ namespace albireo
         kv_pool(const kv_pool&) = delete;
         kv_pool& operator=(const kv_pool&) = delete;
 
-        // The region of all the blocks, and its length, a multiple of the page.
+        // La région de tous les blocs, et sa longueur, un multiple de la page.
         uint8_t* region() const { return region_; }
         size_t region_bytes() const { return region_bytes_; }
 
-        // Where block b starts in the region.
+        // L'endroit où commence le bloc b dans la région.
         size_t block_offset(int b) const { return static_cast<size_t>(b) * stride_; }
 
-        // Where the keys (values false) or the values (values true) of a layer and a head start
-        // in a block, and where their scales start (q8).
+        // L'endroit où commencent les clés (values à false) ou les valeurs (values à true) d'une couche et
+        // d'une tête dans un bloc, et où commencent leurs échelles (q8).
         size_t slab_offset(bool values, long layer, long head) const
         {
             return (values ? bytes_per_kind_ : 0) + offset(layer, head);
@@ -119,9 +122,9 @@ namespace albireo
         }
 
         /*
-            The check of a new block of memory: guard(bytes, allocated) returns false when the
-            system cannot give the bytes of the block, allocated being the bytes the blocks of
-            the pool already hold.  It runs with the pool locked.
+            Le contrôle d'un nouveau bloc de mémoire : guard(bytes, allocated) renvoie false quand
+            le système ne peut pas fournir les octets du bloc, allocated étant les octets que
+            détiennent déjà les blocs du pool.  Il s'exécute avec le pool verrouillé.
         */
         void set_guard(std::function<bool(size_t, size_t)> guard)
         {
@@ -150,8 +153,8 @@ namespace albireo
             return free_.size() + vacant_.size() + (max_blocks_ - blocks_.size());
         }
 
-        // Returns a block index, held once, or -1 when the budget is exhausted; throws
-        // std::bad_alloc when the system has no memory left.
+        // Renvoie un indice de bloc, détenu une fois, ou -1 quand le budget est épuisé ; lève
+        // std::bad_alloc quand le système n'a plus de mémoire.
         int allocate()
         {
             std::lock_guard<std::mutex> l(m_);
@@ -179,7 +182,7 @@ namespace albireo
             return b;
         }
 
-        // Gives a hold on a block back; the block returns to the pool with the last one.
+        // Rend une détention d'un bloc ; le bloc retourne au pool avec la dernière.
         void release(int b)
         {
             if (b < 0) return;
@@ -188,22 +191,22 @@ namespace albireo
             if (holders > 0 && --holders == 0) free_.push_back(b);
         }
 
-        // One more sequence holds block b.
+        // Une séquence de plus détient le bloc b.
         void share(int b)
         {
             std::lock_guard<std::mutex> l(m_);
             ++refs_[static_cast<size_t>(b)];
         }
 
-        // Whether more than one sequence holds block b.
+        // Indique si plus d'une séquence détient le bloc b.
         bool shared(int b) const
         {
             std::lock_guard<std::mutex> l(m_);
             return refs_[static_cast<size_t>(b)] > 1;
         }
 
-        // Frees the memory of the blocks no sequence holds; their slots in the table stay,
-        // so that the indices of the other blocks never change.
+        // Libère la mémoire des blocs qu'aucune séquence ne détient ; leurs emplacements dans la table
+        // restent, pour que les indices des autres blocs ne changent jamais.
         void trim()
         {
             std::lock_guard<std::mutex> l(m_);
@@ -215,7 +218,7 @@ namespace albireo
             free_.clear();
         }
 
-        // Copies the keys and values of block src into block dst.
+        // Copie les clés et valeurs du bloc src dans le bloc dst.
         void copy_block(int src, int dst)
         {
             if (src == dst) return;
@@ -224,9 +227,9 @@ namespace albireo
         }
 
         /*
-            The rows of positions x head_dim keys or values of one layer and one key/value
-            head: halves in f16, 8-bit integers in q8, whose scales, kv_q8_group values to a
-            scale, follow the rows (key_scales, value_scales).
+            Les lignes de positions x head_dim clés ou valeurs d'une couche et d'une tête de clés
+            et valeurs : des demi-flottants en f16, des entiers 8 bits en q8, dont les échelles,
+            kv_q8_group valeurs par échelle, suivent les lignes (key_scales, value_scales).
         */
         uint8_t* keys(int block, long layer, long head)
         {
@@ -255,10 +258,10 @@ namespace albireo
 
         static size_t page_bytes() { return static_cast<size_t>(sysconf(_SC_PAGESIZE)); }
 
-        // The addresses of max_blocks_ blocks, reserved without memory behind them.
+        // Les adresses de max_blocks_ blocs, réservées sans mémoire derrière elles.
         void reserve_region()
         {
-            // Each block starts on a page, so that its memory goes back to the system whole.
+            // Chaque bloc commence sur une page, pour que sa mémoire retourne entière au système.
             const size_t page = page_bytes();
             stride_ = (block_bytes_ + page - 1) / page * page;
             region_bytes_ = max_blocks_ * stride_;
@@ -274,10 +277,10 @@ namespace albireo
             region_ = nullptr;
         }
 
-        // Takes the pages of block b back after decommit(); the system gives them on first use.
+        // Reprend les pages du bloc b après decommit() ; le système les fournit à la première utilisation.
         void commit(int b) { madvise(region_ + block_offset(b), stride_, MADV_FREE_REUSE); }
 
-        // Gives the memory of block b back to the system, the addresses staying reserved.
+        // Rend au système la mémoire du bloc b, les adresses restant réservées.
         void decommit(int b)
         {
             madvise(region_ + block_offset(b), stride_, MADV_FREE_REUSABLE);
@@ -292,11 +295,11 @@ namespace albireo
         mutable std::mutex m_;
         uint8_t* region_ = nullptr;
         size_t region_bytes_ = 0;
-        size_t stride_ = 0;         // the distance between two blocks, whole pages
+        size_t stride_ = 0;         // la distance entre deux blocs, en pages entières
         std::vector<uint8_t*> blocks_;
-        std::vector<int> refs_;     // the number of sequences holding each block
-        std::vector<int> free_;     // blocks with memory, held by no sequence
-        std::vector<int> vacant_;   // slots whose memory trim() freed
+        std::vector<int> refs_;     // le nombre de séquences qui détiennent chaque bloc
+        std::vector<int> free_;     // les blocs avec de la mémoire, détenus par aucune séquence
+        std::vector<int> vacant_;   // les emplacements dont trim() a libéré la mémoire
         std::function<bool(size_t, size_t)> guard_;
     };
 
@@ -304,17 +307,18 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The positions of one sequence held in a kv_pool: the blocks it owns, in
-                position order, and how many positions they hold.
+                Les positions d'une séquence détenues dans un kv_pool : les blocs qu'elle
+                possède, dans l'ordre des positions, et combien de positions ils contiennent.
         !*/
         std::vector<int> blocks;
         long length = 0;
 
         /*
-            Makes room for positions [0, n), taking blocks from the pool, and copies the
-            block where the next position goes when other sequences hold it too, so that
-            the positions this sequence writes belong to it alone.  Returns false, leaving
-            the sequence unchanged, when the pool or the system cannot provide the blocks.
+            Fait de la place pour les positions [0, n), en prenant des blocs au pool, et copie
+            le bloc où va la position suivante quand d'autres séquences le détiennent aussi,
+            pour que les positions qu'écrit cette séquence n'appartiennent qu'à elle.  Renvoie
+            false, sans modifier la séquence, quand le pool ou le système ne peut pas fournir
+            les blocs.
         */
         bool reserve(kv_pool& pool, long n)
         {
@@ -338,7 +342,7 @@ namespace albireo
             }
             catch (const std::bad_alloc&)
             {
-                // Out of memory: as a full pool, the caller frees cached sequences or waits.
+                // Mémoire épuisée : comme pour un pool plein, l'appelant libère des séquences en cache ou attend.
             }
             if (taken.size() < extra)
             {
@@ -358,10 +362,10 @@ namespace albireo
         }
 
         /*
-            Holds positions [0, n) of another sequence: the full blocks of these positions
-            are shared with it, and the last block, partly filled, is copied.  Returns
-            false, leaving this sequence empty, when the pool or the system cannot provide
-            the copy.
+            Détient les positions [0, n) d'une autre séquence : les blocs pleins de ces positions
+            sont partagés avec elle, et le dernier bloc, en partie rempli, est copié.  Renvoie
+            false, en laissant cette séquence vide, quand le pool ou le système ne peut pas
+            fournir la copie.
         */
         bool share_prefix(kv_pool& pool, const kv_sequence& from, long n)
         {
@@ -394,7 +398,7 @@ namespace albireo
             return true;
         }
 
-        // Keeps positions [0, n) and gives the blocks beyond them back.
+        // Garde les positions [0, n) et rend les blocs au-delà.
         void truncate(kv_pool& pool, long n)
         {
             if (n < 0) n = 0;

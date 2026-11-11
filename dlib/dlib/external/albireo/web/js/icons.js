@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// Line icons of the application, drawn on a 24 unit grid.
+// Icônes au trait de l'application, dessinées sur une grille de 24 unités.
 const paths = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>',

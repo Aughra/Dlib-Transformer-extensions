@@ -20,51 +20,52 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                A file the service protected and keeps the original of: the protected
-                file is found again by the SHA-256 of its bytes, which every copy shares,
-                or by the NTFS object identifier its file received (a file replaced in
-                place, renamed or moved on its volume since), whatever its name.
+                Un fichier que le service a protégé et dont il garde l'original : le fichier
+                protégé se retrouve par le SHA-256 de ses octets, que partage chaque copie, ou
+                par l'identifiant d'objet NTFS qu'a reçu son fichier (un fichier remplacé sur
+                place, renommé ou déplacé sur son volume depuis), quel que soit son nom.
         !*/
         long long id = 0;
         int64_t created = 0;
-        std::string source;             // "drive", "shell", "web" or "api"
+        std::string source;             // "drive", "shell", "web" ou "api"
         std::string original_name;
         std::string output_name;
         std::string original_sha256;
         std::string output_sha256;
-        std::string original_blob;      // the original in the vault
+        std::string original_blob;      // l'original dans le coffre
         long long original_size = 0;
         long long output_size = 0;
         std::string kind;
-        std::string object_id;          // 32 hexadecimal digits, or empty
-        std::string path;               // where the protected file was written, when known
-        int64_t removed = 0;            // when its file left the drive (Unix time), else 0
-        bool tags = true;               // whether the protected file holds the tags of its values
+        std::string object_id;          // 32 chiffres hexadécimaux, ou vide
+        std::string path;               // où le fichier protégé a été écrit, quand on le sait
+        int64_t removed = 0;            // quand son fichier a quitté le lecteur (temps Unix), sinon 0
+        bool tags = true;               // si le fichier protégé contient les tags de ses valeurs
     };
 
     struct entry_record
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                An entry of a protected archive that the database records: a file extracted
-                from that archive is known by the SHA-256 of its bytes, and its original is the
-                entry original of the archive kept in the vault.  The paths of the entries of an
-                archive inside the archive follow its own and '!' (engine_api.h).
+                Une entrée d'une archive protégée que la base de données enregistre : un
+                fichier extrait de cette archive est reconnu par le SHA-256 de ses octets, et
+                son original est l'entrée originale de l'archive gardée dans le coffre.  Les
+                chemins des entrées d'une archive contenue dans l'archive suivent le sien et
+                '!' (engine_api.h).
         !*/
-        long long record = 0;           // the record of the archive
-        std::string name;               // its path in the protected archive
-        std::string original;           // its path in the original archive
-        std::string sha256;             // of the entry written
+        long long record = 0;           // l'enregistrement de l'archive
+        std::string name;               // son chemin dans l'archive protégée
+        std::string original;           // son chemin dans l'archive originale
+        std::string sha256;             // de l'entrée écrite
         std::string kind;
     };
 
     struct picture_record
     {
-        std::string id;                 // 16 hexadecimal digits of a keyed digest (picture_found)
+        std::string id;                 // 16 chiffres hexadécimaux d'un condensat à clé (picture_found)
         std::string sha256;
         std::string media_type;
-        std::string blob;               // the picture in the vault
-        std::string description;        // the description of Albireo encrypted in the vault, or empty
+        std::string blob;               // l'image dans le coffre
+        std::string description;        // la description d'Albireo chiffrée dans le coffre, ou vide
         int64_t created = 0;
     };
 
@@ -72,32 +73,32 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                A file of the folder of the drive (drive.h) as the service left it: processed or
-                left as it is, with the size and the time of last write that tell whether it
-                changed since.  A folder of the drive is recorded too, in the state "folder", once
-                its name is protected.
+                Un fichier du dossier du lecteur (drive.h) tel que le service l'a laissé :
+                traité ou laissé tel quel, avec la taille et l'heure de dernière écriture qui
+                disent s'il a changé depuis.  Un dossier du lecteur est enregistré aussi, dans
+                l'état "folder", une fois son nom protégé.
         !*/
         std::string folder;             // "drive"
-        std::string path;               // within the folder, '/' between its parts
+        std::string path;               // dans le dossier, '/' entre ses parties
         long long size = 0;
-        int64_t written = 0;            // the time of its last write, as the file system gives it
+        int64_t written = 0;            // l'heure de sa dernière écriture, telle que la donne le système de fichiers
         std::string sha256;
-        long long record = 0;           // the record of its original
-        std::string state;              // "protected", "kept" or "folder"
+        long long record = 0;           // l'enregistrement de son original
+        std::string state;              // "protected", "kept" ou "folder"
     };
 
     class store
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The database of the service, pseudalis.db in a folder of SYSTEM and the
-                administrators: the files protected and their originals, the entries of the
-                protected archives, the pictures and their descriptions, the protected files
-                whose original was forgotten, the files of the drive and the recent events.
-                Every method takes the lock of the connection, so that the threads of the
-                server and of the drive share it.
+                La base de données du service, pseudalis.db dans un dossier de SYSTEM et des
+                administrateurs : les fichiers protégés et leurs originaux, les entrées des
+                archives protégées, les images et leurs descriptions, les fichiers protégés
+                dont l'original a été oublié, les fichiers du lecteur et les événements
+                récents.  Chaque méthode prend le verrou de la connexion, pour que les threads
+                du serveur et du lecteur la partagent.
             THROWS
-                std::runtime_error when the database cannot be opened or written.
+                std::runtime_error quand la base de données ne peut être ni ouverte ni écrite.
         !*/
     public:
         explicit store(const std::string& path);
@@ -107,86 +108,89 @@ namespace pseudalis
 
         long long add_file(const file_record& r);
         bool get_file(long long id, file_record& r);
-        // The record of a protected file; among several of the same content, the one whose protected name is name.
+        // L'enregistrement d'un fichier protégé ; parmi plusieurs de même contenu, celui dont le nom protégé est name.
         bool find_by_output(const std::string& sha256, file_record& r, const std::string& name = std::string());
         bool find_by_object(const std::string& object_id, file_record& r);
-        // Whether a protected file of this size is recorded, which a file must be to be one.
+        // Si un fichier protégé de cette taille est enregistré, ce qu'un fichier doit être pour en être un.
         bool output_size_known(long long size);
         std::vector<file_record> list_files(long long limit, long long offset,
             const std::string& source = std::string());
-        // The records, those of one source when source is not empty ("web", "shell", "api", "drive").
+        // Les enregistrements, ceux d'une seule source quand source n'est pas vide ("web", "shell", "api", "drive").
         long long count_files(const std::string& source = std::string());
-        // The bytes of the originals the records keep.
+        // Les octets des originaux que gardent les enregistrements.
         long long originals_bytes();
-        // The records first created, the oldest first: their identifiers and the sizes of their originals.
+        // Les enregistrements créés en premier, les plus anciens d'abord : leurs identifiants et la taille de leurs
+        // originaux.
         std::vector<std::pair<long long, long long>> oldest_files(long long limit);
-        // The blobs the records and the pictures name.
+        // Les blobs que nomment les enregistrements et les images.
         std::set<std::string> referenced_blobs();
         void set_file_location(long long id, const std::string& object_id, const std::string& path);
-        // Records the time the file of a record left the drive, deleted or replaced.
+        // Enregistre l'heure à laquelle le fichier d'un enregistrement a quitté le lecteur, supprimé ou remplacé.
         void set_file_removed(long long id, int64_t when);
-        // The records whose file left the drive at when or before.
+        // Les enregistrements dont le fichier a quitté le lecteur à when ou avant.
         std::vector<long long> files_removed_before(int64_t when);
         /*!
             ensures
-                - Removes the record, its entries and its links to its pictures; blobs receives
-                  the blobs nothing refers to any more: its original, and the pictures no other
-                  file shows.
-                - With a reason ("forgotten", "expired"), the protected file of the record and
-                  the entries of a protected archive are remembered as forgotten
-                  (find_forgotten()), in the same transaction: a copy extracted from the archive
-                  is restored from its tags too, unless a record of its own holds it.
-                - The substitutes of the text of the record leave with it (add_text_substitutes()).
+                - Supprime l'enregistrement, ses entrées et ses liens vers ses images ; blobs
+                  reçoit les blobs auxquels plus rien ne renvoie : son original, et les images
+                  qu'aucun autre fichier ne montre.
+                - Avec une raison ("forgotten", "expired"), le fichier protégé de
+                  l'enregistrement et les entrées d'une archive protégée sont mémorisés comme
+                  oubliés (find_forgotten()), dans la même transaction : une copie extraite de
+                  l'archive est restaurée à partir de ses tags aussi, sauf si un enregistrement
+                  à elle la contient.
+                - Les substituts du texte de l'enregistrement partent avec lui
+                  (add_text_substitutes()).
         !*/
         bool remove_file(long long id, std::vector<std::string>& blobs, const std::string& reason = std::string());
-        // The last original forgotten of a protected file, by its SHA-256 or its object identifier.
+        // Le dernier original oublié d'un fichier protégé, par son SHA-256 ou son identifiant d'objet.
         bool find_forgotten(const std::string& sha256, const std::string& object_id, int64_t& time,
             std::string& reason, bool* tags = nullptr);
 
         /*!
             ensures
-                - Records the substitutes the engine wrote in the text of the protected file of
-                  record, a file protected without tags, each (substitute, tag) once with the
-                  number of places that hold it: they leave with the record (remove_file()),
-                  and with them the means to give its values back.
+                - Enregistre les substituts que le moteur a écrits dans le texte du fichier
+                  protégé de record, un fichier protégé sans tags, chaque (substitut, tag) une
+                  seule fois avec le nombre d'endroits qui le contiennent : ils partent avec
+                  l'enregistrement (remove_file()), et avec eux le moyen de rendre ses valeurs.
         !*/
         void add_text_substitutes(long long record, const std::vector<std::pair<std::string, std::string>>& made);
-        // The substitutes of the text of record, or those it inherited alone (copy_text_substitutes()).
+        // Les substituts du texte de record, ou seulement ceux dont il a hérité (copy_text_substitutes()).
         std::vector<std::pair<std::string, std::string>> text_substitutes(long long record,
             bool inherited_only = false);
         /*!
             ensures
-                - Gives record to the substitutes of the text of record from: those of the archive
-                  of an entry extracted from it, or, inherited, those that the original of record to
-                  holds, a file protected without tags and protected again, which its restoration
-                  gives back.
+                - Donne à record to les substituts du texte de record from : ceux de l'archive
+                  d'une entrée qui en est extraite, ou, hérités, ceux que contient l'original de
+                  record to, un fichier protégé sans tags et protégé de nouveau, que sa
+                  restauration rend.
         !*/
         void copy_text_substitutes(long long from, long long to, bool inherited = false);
 
-        // The entries of the protected archive of record (entry_record).
+        // Les entrées de l'archive protégée de record (entry_record).
         void add_entries(long long record, const std::vector<entry_record>& entries);
-        // The entry written with this SHA-256, of the latest record that holds one.
+        // L'entrée écrite avec ce SHA-256, du plus récent enregistrement qui en contient une.
         bool find_entry(const std::string& sha256, entry_record& e);
-        // The entries inside the entry e of its record, an archive, their paths taken from inside it.
+        // Les entrées contenues dans l'entrée e de son enregistrement, une archive, leurs chemins pris à l'intérieur.
         std::vector<entry_record> entries_inside(const entry_record& e);
 
         bool get_picture(const std::string& id, picture_record& r);
         void add_picture(const picture_record& r);
         /*
-            Gives the picture id the description blob description, before receiving the blob it
-            named; false when no picture has this identifier.
+            Donne à l'image id le blob de description description, avant de recevoir le blob qu'il
+            nommait ; false quand aucune image n'a cet identifiant.
         */
         bool set_picture_description(const std::string& id, const std::string& description, std::string& before);
-        // Removes the pictures that no file names, the blobs of which the vault then drops; their count.
+        // Supprime les images qu'aucun fichier ne nomme, dont le coffre abandonne alors les blobs ; leur nombre.
         size_t remove_unlinked_pictures();
         void link_picture(long long file, const std::string& picture);
         std::vector<std::string> pictures_of(long long file);
 
-        // The files of the folder of the drive as the service left them; their paths compare without case.
+        // Les fichiers du dossier du lecteur tels que le service les a laissés ; leurs chemins se comparent sans casse.
         std::vector<folder_file> folder_files(const std::string& folder);
         void set_folder_file(const folder_file& f);
         void remove_folder_file(const std::string& folder, const std::string& path);
-        // The files and the bytes of the drive, its folders left out.
+        // Les fichiers et les octets du lecteur, ses dossiers exclus.
         void drive_usage(long long& files, long long& bytes);
 
         void add_event(const std::string& kind, const std::string& path, const std::string& message);
@@ -197,12 +201,13 @@ namespace pseudalis
 
         /*!
             ensures
-                - Records the substitutes the engine wrote in the names and the properties of
-                  the files, each (substitute, tag), a tag and never a value in clear, so
-                  that their values come back at the restoration of any copy of the file.
+                - Enregistre les substituts que le moteur a écrits dans les noms et les
+                  propriétés des fichiers, chaque (substitut, tag), un tag et jamais une valeur
+                  en clair, pour que leurs valeurs reviennent à la restauration de n'importe
+                  quelle copie du fichier.
         !*/
         void add_substitutes(const std::vector<std::pair<std::string, std::string>>& made);
-        // The tags recorded for a substitute, the most recent first, eight at most.
+        // Les tags enregistrés pour un substitut, les plus récents d'abord, huit au plus.
         std::vector<std::string> tags_for(const std::string& substitute);
 
     private:

@@ -17,7 +17,7 @@ namespace albireo
     {
         const long scan_block = 16;
 
-        // Whether one of the scan_block values of x exceeds t; NaN exceeds nothing.
+        // Indique si l'une des scan_block valeurs de x dépasse t ; NaN ne dépasse rien.
         inline bool block_above(const float* x, float t)
         {
             bool above = false;
@@ -48,7 +48,7 @@ namespace albireo
         for (const auto& b : p_.logit_bias)
             if (b.first >= 0 && b.first < vocab) logits[b.first] += b.second;
 
-        // Penalties over the recent tokens, or over the whole history with the counts kept as it grew.
+        // Pénalités sur les tokens récents, ou sur tout l'historique avec les comptes tenus au fil de sa croissance.
         if (p_.repeat_penalty != 1.0f || p_.presence_penalty != 0.0f || p_.frequency_penalty != 0.0f)
         {
             std::unordered_map<int, int> recent;
@@ -69,7 +69,7 @@ namespace albireo
 
         if (p_.temperature <= 0.0f)
         {
-            // The first of the largest logits; a NaN is never selected.
+            // Le premier des plus grands logits ; un NaN n'est jamais choisi.
             long best = 0;
             float best_value = -std::numeric_limits<float>::infinity();
             for (long v = 0; v < vocab; ++v)
@@ -84,16 +84,16 @@ namespace albireo
             return static_cast<int>(best);
         }
 
-        // The k best candidates; without top-k, enough of them for the nucleus.
+        // Les k meilleurs candidats ; sans top-k, assez d'entre eux pour le noyau de probabilité (nucleus).
         const long k = p_.top_k > 0 ? std::min<long>(p_.top_k, vocab) : std::min<long>(1024, vocab);
         candidates_.clear();
         candidates_.reserve(static_cast<size_t>(k) + 1);
         {
             /*
-                A bounded selection keeps the k largest in a min-heap, whose smallest value is
-                the threshold a logit must exceed to enter.  Blocks of logits that hold none above
-                it are passed over at once, which leaves the heap as the full scan does.  NaN
-                values never enter.
+                Une sélection bornée garde les k plus grands dans un tas min, dont la plus petite valeur est
+                le seuil qu'un logit doit dépasser pour y entrer.  Les blocs de logits qui n'en contiennent aucun
+                au-dessus sont sautés d'un coup, ce qui laisse le tas tel que le ferait le parcours complet.  Les
+                valeurs NaN n'y entrent jamais.
             */
             auto cmp = [](const std::pair<float, int>& a, const std::pair<float, int>& b) { return a.first > b.first; };
             float threshold = -std::numeric_limits<float>::infinity();
@@ -121,7 +121,7 @@ namespace albireo
             for (; v < vocab; ++v) offer(v);
             if (candidates_.empty())
             {
-                // Every logit is NaN.
+                // Tous les logits sont NaN.
                 last_p_ = 1.0f;
                 return 0;
             }
@@ -129,19 +129,19 @@ namespace albireo
                 [](const std::pair<float, int>& a, const std::pair<float, int>& b) { return a.first > b.first; });
         }
 
-        // Temperature and softmax over the candidates.
+        // Température et softmax sur les candidats.
         const float inv_t = 1.0f / p_.temperature;
         const float top = candidates_.front().first;
         double sum = 0;
         for (auto& c : candidates_)
         {
-            // An infinite best logit takes the whole mass, shared with its equals.
+            // Un meilleur logit infini prend toute la masse, partagée avec ses égaux.
             c.first = std::isinf(top) ? (c.first == top ? 1.0f : 0.0f) : std::exp((c.first - top) * inv_t);
             sum += c.first;
         }
         for (auto& c : candidates_) c.first = static_cast<float>(c.first / sum);
 
-        // min-p: candidates far less likely than the best one.
+        // min-p : les candidats bien moins probables que le meilleur.
         size_t keep = candidates_.size();
         if (p_.min_p > 0.0f)
         {
@@ -150,7 +150,7 @@ namespace albireo
             while (m < keep && candidates_[m].first >= floor) ++m;
             keep = m;
         }
-        // top-p: the smallest prefix reaching the probability mass, the most likely candidate alone for 0.
+        // top-p : le plus petit préfixe qui atteint la masse de probabilité, le candidat le plus probable seul pour 0.
         if (p_.top_p < 1.0f)
         {
             double mass = 0;

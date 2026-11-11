@@ -9,8 +9,9 @@
 #include <vector>
 
 /*
-    The archives the engine opens: ZIP, TAR and TAR compressed with gzip.  They are read and
-    written in memory only, so that the content of an archive never reaches a disk in clear.
+    Les archives que le moteur ouvre : ZIP, TAR et TAR compressé avec gzip.  Elles ne sont lues
+    et écrites qu'en mémoire, pour que le contenu d'une archive n'atteigne jamais un disque en
+    clair.
 */
 
 namespace pseudalis
@@ -24,12 +25,12 @@ namespace pseudalis
 
     struct archive_entry
     {
-        std::string name;               // '/' separated, as the archive names it
+        std::string name;               // séparé par des '/', tel que l'archive le nomme
         std::string data;
         bool directory = false;
-        bool regular = true;            // false for the links and the devices of a TAR
+        bool regular = true;            // false pour les liens et les périphériques d'un TAR
         uint32_t mode = 0644;           // TAR
-        int64_t mtime = 0;              // seconds since 1970, TAR
+        int64_t mtime = 0;              // secondes depuis 1970, TAR
     };
 
     struct archive_limits
@@ -39,31 +40,34 @@ namespace pseudalis
         size_t max_entries = 20000;
     };
 
-    // The kind of an archive from its content: the signatures of ZIP, gzip and TAR, else none.
+    // Le type d'une archive d'après son contenu : les signatures de ZIP, gzip et TAR, sinon
+    // none.
     archive_kind archive_kind_of(const std::string& bytes);
-    // The kind its name gives: .zip, .tar, .tar.gz or .tgz, else none.
+    // Le type que donne son nom : .zip, .tar, .tar.gz ou .tgz, sinon none.
     archive_kind archive_kind_of_name(const std::string& name);
     const char* archive_kind_name(archive_kind k);
 
     /*!
         ensures
-            - Returns the entries of the archive, in their order.  A TAR entry named by a
-              GNU long name or a PAX header takes that name; its PAX and GNU headers are not
-              returned.  The entries of a ZIP whose name ends with '/' are directories.
+            - Renvoie les entrées de l'archive, dans leur ordre.  Une entrée TAR nommée par un
+              nom long GNU ou un en-tête PAX prend ce nom ; ses en-têtes PAX et GNU ne sont pas
+              renvoyés.  Les entrées d'un ZIP dont le nom finit par '/' sont des répertoires.
         throws
-            - archive_error when the archive is damaged, encrypted, or exceeds limits.
+            - archive_error quand l'archive est endommagée, chiffrée, ou dépasse les limites.
     !*/
     std::vector<archive_entry> read_archive(archive_kind k, const std::string& bytes,
         const archive_limits& limits = archive_limits());
 
     /*!
         ensures
-            - Returns an archive of the kind k holding the entries whose regular is true,
-              in their order: names longer than the TAR header allows get a PAX header.
+            - Renvoie une archive du type k contenant les entrées dont regular vaut true,
+              dans leur ordre : les noms plus longs que ce que permet l'en-tête TAR reçoivent
+              un en-tête PAX.
     !*/
     std::string write_archive(archive_kind k, const std::vector<archive_entry>& entries);
 
-    // gzip members, concatenated or not; decompression throws archive_error beyond max_size.
+    // Membres gzip, concaténés ou non ; la décompression lève archive_error au-delà de
+    // max_size.
     std::string gzip_compress(const std::string& data);
     std::string gzip_decompress(const std::string& data, uint64_t max_size);
 }

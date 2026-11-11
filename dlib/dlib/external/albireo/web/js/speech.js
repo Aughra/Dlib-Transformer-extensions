@@ -2,23 +2,23 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    Reading the answers aloud with the speech synthesis of the service, which needs no
-    network: the text of an answer without its markup, the language its words show, then
-    groups of sentences read by the service one after the other, the next one asked while
-    the current one plays.  One answer is read at a time.
+    Lecture des réponses à voix haute avec la synthèse vocale du service, qui n'a pas besoin
+    de réseau : le texte d'une réponse sans son balisage, la langue que montrent ses mots, puis
+    des groupes de phrases lus par le service l'un après l'autre, le suivant étant demandé
+    pendant que le courant joue.  Une seule réponse est lue à la fois.
 */
 
 import { getJSON, postAudio } from './api.js';
 
-// The fork for macOS reads French only.
+// Le fork pour macOS ne lit que le français.
 export function textLanguage() {
   return 'fr';
 }
 
 /*
-    The text of an answer as it is read: the code blocks and the reasoning left out, the
-    links and the images by their text, the headings and the items of the lists as
-    sentences, the marks of emphasis, of tables and of quotes removed.
+    Le texte d'une réponse tel qu'il est lu : les blocs de code et le raisonnement laissés de
+    côté, les liens et les images par leur texte, les titres et les éléments des listes comme
+    des phrases, les marques d'emphase, de tableaux et de citations retirées.
 */
 export function spokenText(markdown) {
   let t = String(markdown || '');
@@ -47,8 +47,8 @@ export function spokenText(markdown) {
 }
 
 /*
-    The text cut into groups of sentences of at most max characters, the first one shorter
-    so that the reading starts soon.
+    Le texte découpé en groupes de phrases d'au plus max caractères, le premier plus court
+    pour que la lecture commence vite.
 */
 export function speechParts(text, max = 700) {
   const sentences = text.match(/[^.!?…\n]+[.!?…]*[\s]*|\n+/g) || [];
@@ -60,7 +60,7 @@ export function speechParts(text, max = 700) {
       parts.push(part.trim());
       part = '';
     }
-    // A sentence longer than a group goes in pieces cut at its spaces.
+    // Une phrase plus longue qu'un groupe part en morceaux coupés à ses espaces.
     let rest = s;
     while (rest.length > max) {
       let cut = rest.lastIndexOf(' ', max);
@@ -77,8 +77,8 @@ export function speechParts(text, max = 700) {
 let voicesAsked = null;
 
 /*
-    The languages the service reads aloud, empty when it has no voice.  An empty list is asked again at the
-    next call, so that voices installed after the page opened show.
+    Les langues que le service lit à voix haute, vide quand il n'a pas de voix.  Une liste vide est redemandée à
+    l'appel suivant, pour que les voix installées après l'ouverture de la page apparaissent.
 */
 export function speechLanguages() {
   if (!voicesAsked) {
@@ -98,12 +98,12 @@ export function speechLanguages() {
 
 let current = null;
 
-// The key of the answer being read, or null.
+// La clé de la réponse en cours de lecture, ou null.
 export function readingKey() {
   return current ? current.key : null;
 }
 
-// Ends the reading in progress, if any.
+// Arrête la lecture en cours, s'il y en a une.
 export function stopReading() {
   if (!current) return;
   const c = current;
@@ -148,9 +148,9 @@ function play(audio, signal) {
 }
 
 /*
-    Reads text aloud in language; key names the answer for the buttons, events.start(key),
-    events.end(key) and events.error(key, error) follow the reading.  A reading in progress
-    ends first.
+    Lit text à voix haute dans language ; key désigne la réponse pour les boutons,
+    events.start(key), events.end(key) et events.error(key, error) suivent la lecture.  Une
+    lecture en cours s'arrête d'abord.
 */
 export async function readAloud(text, language, key, events) {
   stopReading();

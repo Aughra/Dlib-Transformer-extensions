@@ -10,18 +10,18 @@
 #include <vector>
 
 /*
-    The downloads of the service: the update feed, the catalog of the models, the
-    installers and the model files.  Every request runs on a thread of its own caller, a
-    background task of the service, and is bounded in time at each stage: the resolution
-    of the name of the server (on Windows), the connection, then each wait for data.  A
-    service that stops, or that the settings put offline, calls http_cancel_all(), which
-    ends the requests in progress at their next stage and makes the following ones fail at
-    once, so that an unreachable network, as on a machine without Internet access, never
-    delays the service.
+    Les téléchargements du service : le flux de mises à jour, le catalogue des modèles, les
+    installateurs et les fichiers de modèles.  Chaque requête tourne sur un thread de son
+    propre appelant, une tâche de fond du service, et est bornée dans le temps à chaque
+    étape : la résolution du nom du serveur (sous Windows), la connexion, puis chaque
+    attente de données.  Un service qui s'arrête, ou que les réglages mettent hors ligne,
+    appelle http_cancel_all(), qui termine les requêtes en cours à leur étape suivante et
+    fait échouer aussitôt les suivantes, pour qu'un réseau injoignable, comme sur une
+    machine sans accès à Internet, ne retarde jamais le service.
 
-    The web access of the agent mode (web_access.h) makes its own requests with the same
-    proxy (http_proxy_for()), the same bounded resolution (http_resolve()) and the same
-    cancellation (http_registration).
+    L'accès au web du mode agent (web_access.h) fait ses propres requêtes avec le même
+    proxy (http_proxy_for()), la même résolution bornée (http_resolve()) et la même
+    annulation (http_registration).
 */
 
 namespace httplib { class Client; }
@@ -39,100 +39,102 @@ namespace albireo
 
     /*!
         ensures
-            - Sets the proxy of the downloads that follow, from the "proxy" setting:
-                - "" uses the proxy of the system: the variables HTTPS_PROXY and HTTP_PROXY
-                  (with NO_PROXY), then, on Windows, the proxy of WinHTTP that
-                  "netsh winhttp set proxy" configures for the services;
-                - "none" connects directly;
-                - "http://[user:password@]host[:port]" names a proxy, reached with CONNECT.
-            - The local addresses are always reached directly.
+            - Fixe le proxy des téléchargements qui suivent, d'après le réglage "proxy" :
+                - "" utilise le proxy du système : les variables HTTPS_PROXY et HTTP_PROXY
+                  (avec NO_PROXY), puis, sous Windows, le proxy de WinHTTP que
+                  "netsh winhttp set proxy" configure pour les services ;
+                - "none" se connecte directement ;
+                - "http://[user:password@]host[:port]" désigne un proxy, joint avec CONNECT.
+            - Les adresses locales sont toujours jointes directement.
     !*/
     void set_http_proxy(const std::string& setting);
 
-    // Whether a value of the "proxy" setting is valid.
+    // Indique si une valeur du réglage "proxy" est valide.
     bool valid_proxy_setting(const std::string& setting);
 
     /*!
         ensures
-            - Ends the downloads in progress: a transfer stops at once, and on Windows a
-              name being resolved or a server being reached as well.  A connection that
-              httplib is opening, its TLS handshake or the answer of a proxy included,
-              ends within its bounds (connect_seconds, then the timeout of the request
-              for the proxy).  A request about to connect opens nothing: its client checks
-              the cancellation before its socket connects.
-            - Makes the downloads that follow fail at once, until http_restore().
-            - reason becomes the error of the downloads it ends or refuses.
+            - Termine les téléchargements en cours : un transfert s'arrête aussitôt, et sous
+              Windows un nom en cours de résolution ou un serveur en cours de connexion
+              aussi.  Une connexion qu'httplib est en train d'ouvrir, sa négociation TLS ou la
+              réponse d'un proxy comprises, se termine dans ses limites (connect_seconds, puis
+              le délai de la requête pour le proxy).  Une requête sur le point de se connecter
+              n'ouvre rien : son client vérifie l'annulation avant que sa socket se connecte.
+            - Fait échouer aussitôt les téléchargements qui suivent, jusqu'à http_restore().
+            - reason devient l'erreur des téléchargements qu'elle termine ou refuse.
     !*/
     void http_cancel_all(const std::string& reason);
     void http_restore();
     bool http_cancelled();
 
-    // Seconds allowed to resolve the name of a server, and to connect to it.
+    // Secondes accordées pour résoudre le nom d'un serveur, et pour s'y connecter.
     const int connect_seconds = 10;
 
     /*!
         ensures
-            - Downloads url into body, following up to five redirections, verifying the
-              certificates of https servers against those of the system.  Fails beyond
-              max_bytes, when no data arrives during timeout_seconds, when the whole request
-              takes more than total_seconds, and when a web page (text/html) answers in place
-              of the file, as a proxy or a filter of the network sends one.
-            - The errors tell the kind of failure ("the request is answered with the status
-              403") and never name the address or its host, which the callers name as they
-              need: the downloads of the publication space name its files alone.
-            - Never throws: an exception of the transfer becomes its error.
+            - Télécharge url dans body, en suivant jusqu'à cinq redirections, et en vérifiant
+              les certificats des serveurs https avec ceux du système.  Échoue au-delà de
+              max_bytes, quand aucune donnée n'arrive pendant timeout_seconds, quand la
+              requête entière prend plus de total_seconds, et quand une page web (text/html)
+              répond à la place du fichier, comme en envoie un proxy ou un filtre du réseau.
+            - Les erreurs disent le genre d'échec ("the request is answered with the status
+              403") et ne nomment jamais l'adresse ni son hôte, que les appelants nomment
+              selon leurs besoins : les téléchargements de l'espace de publication ne nomment
+              que ses fichiers.
+            - Ne lève jamais d'exception : une exception du transfert devient son erreur.
     !*/
     bool http_get(const std::string& url, std::string& body, std::string& error, size_t max_bytes = 16u << 20,
         int timeout_seconds = 20, int total_seconds = 120);
 
     /*!
         ensures
-            - Downloads the bytes [from, to] of url (to < 0: up to the end), handing them to
-              receiver as they arrive; receiver returns false to stop.  Redirections are
-              followed with the same range.
-            - total, when given, receives the size of the whole resource when the server
-              tells it (Content-Range or Content-Length), 0 otherwise.
-            - Fails when the server ignores the range of a request that does not start at
-              0, answers with a range that starts elsewhere, or answers with a web page
-              (text/html), since writing its answer would corrupt the file; fails when no
-              data arrives during 30 s.
-            - With to >= 0, the receiver gets the bytes [from, to] at most: the reading ends
-              once they have come, the answer of a server that ignores the range included,
-              and an answer that ends before them fails.
-            - The errors are those of http_get(), and the function never throws either: an
-              exception of the transfer or of receiver becomes its error.
+            - Télécharge les octets [from, to] de url (to < 0 : jusqu'à la fin), en les
+              passant à receiver à mesure qu'ils arrivent ; receiver renvoie false pour
+              arrêter.  Les redirections sont suivies avec la même plage.
+            - total, quand il est fourni, reçoit la taille de la ressource entière quand le
+              serveur la donne (Content-Range ou Content-Length), 0 sinon.
+            - Échoue quand le serveur ignore la plage d'une requête qui ne commence pas à 0,
+              répond avec une plage qui commence ailleurs, ou répond avec une page web
+              (text/html), puisque écrire sa réponse corromprait le fichier ; échoue quand
+              aucune donnée n'arrive pendant 30 s.
+            - Avec to >= 0, receiver reçoit au plus les octets [from, to] : la lecture
+              s'arrête une fois qu'ils sont arrivés, réponse d'un serveur qui ignore la plage
+              comprise, et une réponse qui se termine avant eux échoue.
+            - Les erreurs sont celles de http_get(), et la fonction ne lève jamais d'exception
+              non plus : une exception du transfert ou de receiver devient son erreur.
     !*/
     bool http_get_range(const std::string& url, uint64_t from, int64_t to,
         const std::function<bool(const char*, size_t)>& receiver, std::string& error, uint64_t* total = nullptr);
 
     /*!
-        Reserved for the tests (tests/test_host.cpp).  No setting and no route reaches it.
+        Réservé aux tests (tests/test_host.cpp).  Aucun réglage ni aucune route n'y mène.
         ensures
-            - Bounds each wait for data of http_get() and http_get_range() by read_seconds,
-              and each whole request of http_get() by total_seconds, when they are above 0
-              and below the bounds of the callers; 0 gives the callers their bounds back.
+            - Borne chaque attente de données de http_get() et de http_get_range() par
+              read_seconds, et chaque requête entière de http_get() par total_seconds, quand
+              ils sont supérieurs à 0 et inférieurs aux limites des appelants ; 0 rend aux
+              appelants leurs limites.
     !*/
     void http_bounds_for_tests(int read_seconds, int total_seconds);
 
     /*!
         ensures
-            - Gives in host and port the proxy through which the downloads reach origin
-              ("https://host:port"), as set_http_proxy() chooses it, with its user and its
-              password when it has them.
-            - Returns false when origin is reached directly: the setting "none", no proxy of
-              the system, a local address or a host of NO_PROXY.
+            - Donne dans host et port le proxy par lequel les téléchargements joignent origin
+              ("https://host:port"), tel que set_http_proxy() le choisit, avec son utilisateur
+              et son mot de passe quand il en a.
+            - Renvoie false quand origin est joint directement : le réglage "none", aucun proxy
+              du système, une adresse locale ou un hôte de NO_PROXY.
     !*/
     bool http_proxy_for(const std::string& origin, std::string& host, int& port, std::string& user,
         std::string& password);
 
     /*!
         ensures
-            - Gives in addresses the IPv4 and IPv6 addresses of the name host, as text
-              ("93.184.215.14", "2606:2800:21f:cb07:6820:80da:af6b:8b2c"), in the order of the
-              resolver of the system.  On Windows the resolution takes connect_seconds at most
-              and ends at once when the downloads are cancelled.
-            - Returns false with error when the name is not resolved or when the downloads are
-              cancelled.
+            - Donne dans addresses les adresses IPv4 et IPv6 du nom host, sous forme de texte
+              ("93.184.215.14", "2606:2800:21f:cb07:6820:80da:af6b:8b2c"), dans l'ordre du
+              résolveur du système.  Sous Windows, la résolution prend au plus connect_seconds
+              et se termine aussitôt quand les téléchargements sont annulés.
+            - Renvoie false avec error quand le nom n'est pas résolu ou quand les
+              téléchargements sont annulés.
     !*/
     bool http_resolve(const std::string& host, std::vector<std::string>& addresses, std::string& error);
 
@@ -140,9 +142,9 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The registration of the client of a request while the request runs, so that
-                http_cancel_all() stops it: the downloads of this module register their
-                clients, and so do the requests of the web access (web_access.h).
+                L'enregistrement du client d'une requête pendant que la requête tourne, pour
+                que http_cancel_all() l'arrête : les téléchargements de ce module enregistrent
+                leurs clients, et les requêtes de l'accès au web (web_access.h) aussi.
         !*/
     public:
         explicit http_registration(const std::shared_ptr<httplib::Client>& c);

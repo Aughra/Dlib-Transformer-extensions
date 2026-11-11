@@ -33,9 +33,10 @@ namespace albireo
     namespace
     {
         /*
-            A file written at given offsets by several threads: the partial file of a download,
-            created or opened again at its own name, never through a link there, with a single
-            name and lying at path reached through no link, so that no write goes elsewhere.
+            Un fichier écrit à des positions données par plusieurs threads : le fichier partiel d'un
+            téléchargement, créé ou rouvert à son propre nom, jamais par un lien à cet endroit, avec un
+            nom unique et situé à path atteint sans passer par aucun lien, pour qu'aucune écriture n'aille
+            ailleurs.
         */
         class random_access_file
         {
@@ -101,14 +102,14 @@ namespace albireo
             return id[0] != '.';
         }
 
-        // A name of a file within a folder: no separator, stream, wildcard or name "." and "..".
+        // Un nom de fichier dans un dossier : ni séparateur, ni flux, ni joker, ni nom "." et "..".
         bool plain_name(const std::string& name)
         {
             return !name.empty() && name.size() <= 255 && name != "." && name != ".."
                 && name.find_first_of("/\\:*?\"<>|") == std::string::npos;
         }
 
-        // Why a file could not be opened through no link (link_free_file::open()), in words.
+        // Pourquoi un fichier n'a pas pu être ouvert sans passer par aucun lien (link_free_file::open()), en mots.
         std::string unreadable_reason(const std::string& why)
         {
             if (why == "link") return "reached through a link, which imports never follow";
@@ -127,10 +128,10 @@ namespace albireo
             return s;
         }
 
-        // The name of a projector of the models folder: <identifier>.mmproj.gguf.
+        // Le nom d'un projecteur du dossier des modèles : <identifier>.mmproj.gguf.
         const char* const projector_suffix = ".mmproj.gguf";
 
-        // Whether a part of a file name names a quantization: Q4_K_M, IQ4_NL, Q8_0, F16, BF16...
+        // Indique si une partie d'un nom de fichier nomme une quantification : Q4_K_M, IQ4_NL, Q8_0, F16, BF16...
         bool quantization_name(const std::string& s)
         {
             if (s == "f16" || s == "f32" || s == "bf16" || s == "f64") return true;
@@ -142,10 +143,10 @@ namespace albireo
         }
 
         /*
-            The name a projector and its decoder share: the file name in lower case without its
-            extension, the prefix or the suffix "mmproj" and the quantization, its letters and
-            digits alone.  "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf" and
-            "Qwen3VL-2B-Instruct-Q4_K_M.gguf" both give "qwen3vl2binstruct".
+            Le nom que partagent un projecteur et son décodeur : le nom de fichier en minuscules sans son
+            extension, le préfixe ou le suffixe "mmproj" et la quantification, ses lettres et ses chiffres
+            seuls.  "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf" et "Qwen3VL-2B-Instruct-Q4_K_M.gguf" donnent
+            tous deux "qwen3vl2binstruct".
         */
         std::string name_stem(const std::string& file)
         {
@@ -167,7 +168,7 @@ namespace albireo
             return out;
         }
 
-        // The letters and digits of a name in lower case, which general.name compares by.
+        // Les lettres et les chiffres d'un nom en minuscules, par lesquels general.name est comparé.
         std::string plain_name_of(const std::string& name)
         {
             std::string out;
@@ -177,9 +178,9 @@ namespace albireo
         }
 
         /*
-            How close the names of a projector and of a decoder are: the same general.name in both
-            headers, then the same stem of their file names, then the length of the common
-            beginning of these stems.
+            La proximité des noms d'un projecteur et d'un décodeur : le même general.name dans les deux
+            en-têtes, puis la même racine de leurs noms de fichier, puis la longueur du début commun de
+            ces racines.
         */
         long name_closeness(const pairing_file& projector, const pairing_file& decoder)
         {
@@ -202,8 +203,8 @@ namespace albireo
         }
 
         /*
-            The inputs named by list, "text" first, with "image" when image is true and without it
-            otherwise; the other inputs (audio) as listed.
+            Les entrées nommées par list, "text" d'abord, avec "image" quand image est vrai et sans sinon ;
+            les autres entrées (audio) telles que listées.
         */
         json inputs_with(const json& list, bool image)
         {
@@ -221,9 +222,9 @@ namespace albireo
         }
 
         /*
-            The model that comes with Albireo whose file is that of the catalog entry, made from it by
-            the build of Albireo under another identifier: its manifest gives the hash of the file it
-            was made from (source_sha256).  Null when there is none.
+            Le modèle livré avec Albireo dont le fichier est celui de l'entrée du catalogue, fait à partir
+            d'elle par le build d'Albireo sous un autre identifiant : son manifeste donne l'empreinte du
+            fichier dont il a été fait (source_sha256).  Nul quand il n'y en a pas.
         */
         const installed_model* builtin_carrier(const std::vector<installed_model>& installed, const json& entry)
         {
@@ -257,7 +258,7 @@ namespace albireo
     {
         std::vector<int> pair(projectors.size(), -1);
         std::vector<bool> taken(decoders.size(), false);
-        // The hashes of the catalog first.
+        // Les empreintes du catalogue d'abord.
         for (size_t p = 0; p < projectors.size(); ++p)
             for (size_t d = 0; d < decoders.size() && pair[p] < 0; ++d)
                 if (!taken[d] && !projectors[p].sha256.empty()
@@ -266,7 +267,7 @@ namespace albireo
                     pair[p] = static_cast<int>(d);
                     taken[d] = true;
                 }
-        // Then the widths of the headers, and the names among several decoders.
+        // Puis les largeurs des en-têtes, et les noms parmi plusieurs décodeurs.
         for (size_t p = 0; p < projectors.size(); ++p)
         {
             if (pair[p] >= 0) continue;
@@ -311,7 +312,7 @@ namespace albireo
             d["name"] = g.get_str("general.name", file_name(path));
             d["gguf_name"] = g.get_str("general.name", "");
             d["arch"] = arch;
-            // The company that made the model, when its header names it.
+            // L'entreprise qui a fait le modèle, quand son en-tête la nomme.
             const std::string publisher = !g.get_str("general.organization", "").empty()
                 ? g.get_str("general.organization") : g.get_str("general.author", "");
             if (!publisher.empty()) d["publisher"] = publisher;
@@ -331,23 +332,23 @@ namespace albireo
             for (const auto& kv : by_type)
                 if (kv.second > most) { most = kv.second; q = kv.first; }
             d["quantization"] = names.count(q) ? names.at(q) : q;
-            // The widths of the vision tokens, bounded so that a damaged header gives no width.
+            // Les largeurs des tokens de vision, bornées pour qu'un en-tête abîmé ne donne aucune largeur.
             auto width_of = [](int64_t width, int64_t layers) -> long long {
                 if (width <= 0 || width > (int64_t(1) << 20) || layers < 0 || layers > 256) return 0;
                 return static_cast<long long>(width * (1 + layers));
             };
             if (arch == "clip")
             {
-                // A projector: the vision encoder of a model that reads images, and the
-                // projection of its output into the embeddings of the decoder.
+                // Un projecteur : l'encodeur de vision d'un modèle qui lit les images, et la projection
+                // de sa sortie dans les embeddings du décodeur.
                 d["projector"] = true;
                 d["projector_type"] = g.get_str("clip.projector_type", "");
                 d["vision"] = g.get_int("clip.has_vision_encoder", 1) != 0;
                 int64_t deepstack = 0;
                 if (g.has("clip.vision.is_deepstack_layers"))
                     for (int64_t v : g.at("clip.vision.is_deepstack_layers").arr_int) deepstack += v != 0 ? 1 : 0;
-                // A LLaVA projector names no projection width, and that of a Pixtral projector is
-                // another one: their last layer gives it.
+                // Un projecteur LLaVA ne nomme aucune largeur de projection, et celle d'un projecteur
+                // Pixtral en est une autre : leur dernière couche la donne.
                 const std::string type = d["projector_type"].as_string();
                 long long width = type == "pixtral" ? 0
                     : width_of(g.get_int("clip.vision.projection_dim", 0), deepstack);
@@ -363,8 +364,8 @@ namespace albireo
             d["context"] = static_cast<long long>(g.get_int(arch + ".context_length", 0));
             d["experts"] = static_cast<long long>(g.get_int(arch + ".expert_count", 0));
             /*
-                A decoder that reads images: Qwen3-VL, a LLaVA decoder, whose vocabulary holds
-                <image>, or a Mistral decoder, whose vocabulary holds [IMG] and [IMG_END].
+                Un décodeur qui lit les images : Qwen3-VL, un décodeur LLaVA, dont le vocabulaire contient
+                <image>, ou un décodeur Mistral, dont le vocabulaire contient [IMG] et [IMG_END].
             */
             bool images = reads_images(arch);
             if (!images && g.has("tokenizer.ggml.tokens"))
@@ -378,8 +379,8 @@ namespace albireo
                 d["projection_width"] = width_of(g.get_int(arch + ".embedding_length", 0),
                     g.get_int(arch + ".n_deepstack_layers", 0));
             const std::string tmpl = g.get_str("tokenizer.chat_template", "");
-            // An embedding model declares how it pools its states; it serves the document
-            // search and nothing else.
+            // Un modèle d'embedding déclare comment il regroupe ses états ; il sert la recherche
+            // dans les documents et rien d'autre.
             const bool embedding = g.get_int(arch + ".pooling_type", 0) != 0;
             d["embedding"] = embedding;
             if (embedding)
@@ -389,17 +390,17 @@ namespace albireo
                 d["roles"] = roles;
             }
             /*
-                The capabilities the formats of the engine give a model of this template, read from
-                the template alone (chat_format::detect() reads the vocabulary as well):
-                    - tools: the formats of Mistral, Llama 3, Granite 3 and Granite 4.2, and the
-                      ChatML templates that describe tools; Phi-4-mini, Foundation-Sec and the
-                      other formats call none;
-                    - reasoning: the ChatML templates that open the reasoning or switch it, Granite
-                      4.2, Foundation-Sec-8B-Reasoning and the templates with [THINK];
-                    - reasoning always: the thinking variants of Qwen3 and Qwen3-VL, whose template
-                      opens the reasoning without a switch, and Foundation-Sec-8B-Reasoning, whose
-                      files carry a template without <|end|> that takes the reasoning out of the
-                      earlier answers.
+                Les capacités que les formats du moteur donnent à un modèle de ce gabarit, lues dans le
+                gabarit seul (chat_format::detect() lit aussi le vocabulaire) :
+                    - outils : les formats de Mistral, Llama 3, Granite 3 et Granite 4.2, et les gabarits
+                      ChatML qui décrivent des outils ; Phi-4-mini, Foundation-Sec et les autres formats
+                      n'en appellent aucun ;
+                    - raisonnement : les gabarits ChatML qui ouvrent le raisonnement ou le commutent,
+                      Granite 4.2, Foundation-Sec-8B-Reasoning et les gabarits avec [THINK] ;
+                    - raisonnement toujours : les variantes thinking de Qwen3 et Qwen3-VL, dont le gabarit
+                      ouvre le raisonnement sans commutateur, et Foundation-Sec-8B-Reasoning, dont les
+                      fichiers portent un gabarit sans <|end|> qui retire le raisonnement des réponses
+                      précédentes.
             */
             const auto holds = [&](const char* s) { return tmpl.find(s) != std::string::npos; };
             const bool chatml = holds("<|im_start|>");
@@ -412,8 +413,8 @@ namespace albireo
             d["reasoning_always"] = !embedding && ((opens && !switchable) || foundation_sec);
             d["tools"] = !embedding && (holds("[INST]") || holds("<|start_header_id|>") || holds("<|start_of_role|>")
                 || granite4 || (chatml && (holds("<tool_call>") || holds("tools"))));
-            // The inputs the engine reads from the model, and the identity a file prepared
-            // by the build of Albireo carries (tools/albireo_builtin.cpp).
+            // Les entrées que le moteur lit dans le modèle, et l'identité que porte un fichier
+            // préparé par le build d'Albireo (tools/albireo_builtin.cpp).
             json inputs = json::array();
             if (g.has("albireo.inputs"))
                 for (const auto& s : g.at("albireo.inputs").arr_str) inputs.push_back(s);
@@ -442,26 +443,26 @@ namespace albireo
     {
         struct chunk
         {
-            std::string url;          // the official address of the resource, read when the space does not serve it
-            std::string link_path;    // the copy of the resource in the publication space (public_link.h)
-            uint64_t resource = 0;    // bytes of the resource
-            uint64_t from = 0;        // byte range in the resource
-            uint64_t length = 0;      // bytes of the resource (compressed size for gzip)
-            uint64_t offset = 0;      // where the bytes go in the file
-            std::atomic<uint64_t> done{0};   // bytes of the resource received
+            std::string url;          // l'adresse officielle de la ressource, lue quand l'espace ne la sert pas
+            std::string link_path;    // la copie de la ressource dans l'espace de publication (public_link.h)
+            uint64_t resource = 0;    // octets de la ressource
+            uint64_t from = 0;        // plage d'octets dans la ressource
+            uint64_t length = 0;      // octets de la ressource (taille compressée pour gzip)
+            uint64_t offset = 0;      // où vont les octets dans le fichier
+            std::atomic<uint64_t> done{0};   // octets reçus de la ressource
             bool gzip = false;
-            uint64_t output = 0;      // bytes the part produces (gzip: decompressed size)
-            size_t part = 0;          // the part of its file
-            size_t file = 0;          // 0: the decoder, 1: the projector
+            uint64_t output = 0;      // octets que produit la partie (gzip : taille décompressée)
+            size_t part = 0;          // la partie de son fichier
+            size_t file = 0;          // 0 : le décodeur, 1 : le projecteur
         };
 
-        // A file of the model: the decoder, and the projector of a model that reads images.
+        // Un fichier du modèle : le décodeur, et le projecteur d'un modèle qui lit les images.
         struct output_file
         {
             std::string target, partial;
             uint64_t size = 0;
             std::string sha256;
-            json parts;               // the "files" of the catalog: url, size, sha256
+            json parts;               // les "files" du catalogue : url, size, sha256
         };
 
         std::string id;
@@ -471,8 +472,8 @@ namespace albireo
         std::vector<std::unique_ptr<chunk>> chunks;
         std::atomic<uint64_t> received{0};
         std::atomic<bool> cancel{false};
-        // Cancelled by the user, set under m_: the progress and the partial file are dropped,
-        // where a stop of the service keeps them for the next start.
+        // Annulé par l'utilisateur, fixé sous m_ : la progression et le fichier partiel sont abandonnés,
+        // là où un arrêt du service les garde pour le prochain démarrage.
         std::atomic<bool> abandoned{false};
         std::string state = "queued";
         user_error error;
@@ -485,9 +486,9 @@ namespace albireo
         : db_(db), dir_(models_dir)
     {
         /*
-            The service writes, renames and deletes the model files with its rights: only
-            SYSTEM and the administrators may change the folder (secure_folder()).  A folder
-            that cannot be made so leaves the models to the folder of the data.
+            Le service écrit, renomme et supprime les fichiers des modèles avec ses droits : seuls
+            SYSTEM et les administrateurs peuvent modifier le dossier (secure_folder()).  Un dossier
+            qui ne peut pas être rendu tel laisse les modèles au dossier des données.
         */
         std::string error;
         if (!secure_folder(dir_, error))
@@ -501,7 +502,7 @@ namespace albireo
                 make_dirs(dir_);
             }
         }
-        // The folder by its own path: a link placed later on its way shows (direct_path()).
+        // Le dossier par son propre chemin : un lien placé plus tard sur son trajet se voit (direct_path()).
         const std::string resolved = final_path(dir_);
         if (!resolved.empty()) dir_ = resolved;
         catalog_ = json::parse_or_null(db_.value("catalog", "{}"));
@@ -546,9 +547,9 @@ namespace albireo
             std::lock_guard<std::mutex> lock(m_);
             catalog_state_ = "ok";
             catalog_error_.clear();
-            // The times of publication, "YYYY-MM-DDTHH:MM:SSZ" (the day alone in the first
-            // catalogs), compare as strings: an older catalog, replayed or brought on an old
-            // medium, never replaces a newer one.
+            // Les dates de publication, "YYYY-MM-DDTHH:MM:SSZ" (le jour seul dans les premiers
+            // catalogues), se comparent comme des chaînes : un catalogue plus ancien, rejoué ou apporté
+            // sur un vieux support, ne remplace jamais un plus récent.
             const json& current = catalog_;
             if (keep_newer && current["updated"].as_string() > c["updated"].as_string())
             {
@@ -556,10 +557,10 @@ namespace albireo
                 return true;
             }
             /*
-                Written under the lock, so that of two catalogs installed at once, from the
-                network and from a medium, the database keeps the one kept in memory, and
-                written first: a database that refuses it, on a full disk say, leaves the
-                catalog in use as it was.
+                Écrit sous le verrou, pour que de deux catalogues installés en même temps, depuis le
+                réseau et depuis un support, la base garde celui gardé en mémoire, et écrit d'abord :
+                une base qui le refuse, sur un disque plein par exemple, laisse le catalogue en usage
+                tel qu'il était.
             */
             db_.set_value("catalog", body);
             db_.set_value("catalog_time", std::to_string(now_unix()));
@@ -575,17 +576,17 @@ namespace albireo
     namespace
     {
         /*
-            The official address of the catalog: the repository of Albireo, which keeps the signed catalog the
-            publisher places in the publication space.  Its signature lies at the same address with ".sig".
+            L'adresse officielle du catalogue : le dépôt d'Albireo, qui garde le catalogue signé que l'éditeur
+            place dans l'espace de publication.  Sa signature se trouve à la même adresse avec ".sig".
         */
         const char* const official_catalog = "https://raw.githubusercontent.com/Cydral/Dlib-Transformer-extensions/"
             "main/dist/albireo/catalog.json";
 
-        // The address official_catalog_for_tests() gives in place of the official one, empty otherwise.
+        // L'adresse que official_catalog_for_tests() donne à la place de l'officielle, vide sinon.
         std::mutex catalog_address_m;
         std::string catalog_address_of_tests;
 
-        // The address the catalog is read from when the publication space does not serve it.
+        // L'adresse d'où le catalogue est lu quand l'espace de publication ne le sert pas.
         std::string catalog_address()
         {
             std::lock_guard<std::mutex> lock(catalog_address_m);
@@ -602,9 +603,10 @@ namespace albireo
     bool model_manager::refresh_catalog(std::string& error)
     {
         /*
-            The catalog and its signature come from the folder dist of the publication space, and from their
-            official address when the space does not serve them: a space that is not set, does not hold them,
-            does not answer, or gives a catalog whose signature fails.  The signature checks the catalog of either.
+            Le catalogue et sa signature viennent du dossier dist de l'espace de publication, et de leur
+            adresse officielle quand l'espace ne les sert pas : un espace qui n'est pas réglé, ne les a pas,
+            ne répond pas, ou donne un catalogue dont la signature échoue.  La signature vérifie le catalogue
+            de l'un ou de l'autre.
         */
         std::string body, sig, space;
         json result = json::object();
@@ -619,7 +621,7 @@ namespace albireo
             }
             space = "the catalog of the publication space of Albireo is refused: " + refused;
         }
-        // A service that stops or goes offline asks no other source.
+        // Un service qui s'arrête ou passe hors ligne ne demande à aucune autre source.
         if (http_cancelled())
         {
             error = space;
@@ -670,14 +672,14 @@ namespace albireo
             }
             catch (const std::exception& e)
             {
-                // A database that cannot be written, for instance a full disk.
+                // Une base qui ne peut pas être écrite, par exemple un disque plein.
                 error = e.what();
             }
             catch (...)
             {
                 error = "the catalog cannot be refreshed";
             }
-            // A refresh ended by the service, which stops or goes offline, is no error.
+            // Une mise à jour interrompue par le service, qui s'arrête ou passe hors ligne, n'est pas une erreur.
             const bool ended = stopped_ || http_cancelled();
             if (!ok)
             {
@@ -749,9 +751,9 @@ namespace albireo
             return false;
         };
         /*
-            What the installation of a model adds to its entry: its file, its projector, its
-            hashes, the inputs it reads (text, and image with its projector) and the bytes of
-            its files.
+            Ce que l'installation d'un modèle ajoute à son entrée : son fichier, son projecteur, ses
+            empreintes, les entrées qu'il lit (du texte, et des images avec son projecteur) et les
+            octets de ses fichiers.
         */
         auto installed_fields = [](json& m, const installed_model& im) {
             const json& d = im.descriptor;
@@ -775,7 +777,7 @@ namespace albireo
             }
             m["total_size"] = static_cast<unsigned long long>(im.size + im.projector_size);
         };
-        // The models that come with Albireo first, in the order of their manifest.
+        // Les modèles livrés avec Albireo d'abord, dans l'ordre de leur manifeste.
         for (const auto& im : installed)
         {
             if (im.source != "builtin" || embedding(im.descriptor)) continue;
@@ -791,7 +793,8 @@ namespace albireo
         for (const auto& e : cat["models"].elements())
         {
             if (embedding(e)) continue;
-            // The entry a model that comes with Albireo stands for, unless installed under its own identifier.
+            // L'entrée que remplace un modèle livré avec Albireo, sauf si elle est installée sous son propre
+            // identifiant.
             const std::string eid = e["id"].as_string();
             bool own = false;
             for (const auto& im : installed) own = own || im.id == eid;
@@ -806,7 +809,7 @@ namespace albireo
                 if (im.id == id)
                 {
                     installed_fields(m, im);
-                    // Up to date: the files of the entry, the projector it names included.
+                    // À jour : les fichiers de l'entrée, le projecteur qu'elle nomme compris.
                     const std::string wanted = e["projector"]["sha256"].as_string();
                     m["up_to_date"] = im.sha256 == e["sha256"].as_string()
                         && (wanted.empty() || im.projector_sha256 == wanted);
@@ -826,7 +829,7 @@ namespace albireo
             installed_fields(m, im);
             out.push_back(m);
         }
-        // The company that made each model, empty when neither its entry nor its header names it.
+        // L'entreprise qui a fait chaque modèle, vide quand ni son entrée ni son en-tête ne la nomme.
         for (auto& m : out.elements())
             if (!m["publisher"].is_string()) m["publisher"] = "";
         json embedders = json::array();
@@ -839,14 +842,14 @@ namespace albireo
             e["source"] = im.source;
             e["size"] = static_cast<unsigned long long>(im.size);
             e["inputs"] = text_inputs();
-            // The license and the publisher of its entry in the catalog or in the manifest, as for
-            // the language models.
+            // La licence et l'éditeur de son entrée dans le catalogue ou dans le manifeste, comme pour
+            // les modèles de langage.
             e["publisher"] = "";
             for (const char* k : {"license", "publisher"})
                 if (im.descriptor.contains(k)) e[k] = im.descriptor[k];
             embedders.push_back(e);
         }
-        // The projectors waiting for their decoders.
+        // Les projecteurs qui attendent leurs décodeurs.
         json pending = json::array();
         for (const auto& p : db_.projectors())
         {
@@ -907,7 +910,7 @@ namespace albireo
             error.set("invalid model identifier", "catalog_entry").arg("m", name);
             return false;
         }
-        // A model that comes with Albireo keeps its identifier: a download of it would replace its entry.
+        // Un modèle livré avec Albireo garde son identifiant : un téléchargement de celui-ci remplacerait son entrée.
         installed_model holder;
         if (db_.find_model(id, holder) && holder.source == "builtin")
         {
@@ -916,7 +919,7 @@ namespace albireo
                 .arg("m", name);
             return false;
         }
-        // The file of the entry is the one a model that comes with Albireo carries under another name.
+        // Le fichier de l'entrée est celui qu'un modèle livré avec Albireo porte sous un autre nom.
         const std::vector<installed_model> installed = db_.models();
         const installed_model* carrier = builtin_carrier(installed, entry);
         if (carrier)
@@ -929,7 +932,7 @@ namespace albireo
         std::shared_ptr<job> j(new job());
         j->id = id;
         j->entry = entry;
-        // The decoder, and the projector of a model that reads images, each in a partial file of its own.
+        // Le décodeur, et le projecteur d'un modèle qui lit les images, chacun dans son propre fichier partiel.
         const json& e = j->entry;
         job::output_file decoder;
         decoder.target = join_path(dir_, id + ".gguf");
@@ -953,7 +956,7 @@ namespace albireo
             j->files.push_back(projector);
         }
 
-        // Parts, then segments of the uncompressed parts.
+        // Les parties, puis les segments des parties non compressées.
         const uint64_t segment = 64ull << 20;
         for (size_t fi = 0; fi < j->files.size(); ++fi)
         {
@@ -963,11 +966,13 @@ namespace albireo
             for (const auto& f : static_cast<const json&>(out.parts).elements())
             {
                 const std::string url = f["url"].as_string();
-                // A size of a part above 1 TiB, or negative, would make billions of segments: the entry is invalid.
+                // Une taille de partie au-delà de 1 Tio, ou négative, ferait des milliards de segments : l'entrée
+                // est invalide.
                 const long long given = f["size"].as_int(0);
                 const uint64_t size = given > 0 && given <= (1ll << 40) ? static_cast<uint64_t>(given) : 0;
                 const bool gz = f["compression"].as_string() == "gzip";
-                // The copy of the part in the publication space, named after its official address, serves it first.
+                // La copie de la partie dans l'espace de publication, nommée d'après son adresse officielle, la sert
+                // d'abord.
                 const std::string link_path = public_link_model_path(id, url);
                 if (url.empty() || size == 0 || link_path.empty())
                 {
@@ -1016,7 +1021,7 @@ namespace albireo
                 offset += size;
                 ++part;
             }
-            // The size of the file, when the entry gives it, is that of its parts.
+            // La taille du fichier, quand l'entrée la donne, est celle de ses parties.
             const long long declared = fi == 0 ? e["size"].as_int(-1) : e["projector"]["size"].as_int(-1);
             if ((declared >= 0 && static_cast<uint64_t>(declared) != offset) || offset == 0)
             {
@@ -1027,7 +1032,7 @@ namespace albireo
             out.size = offset;
             j->total += offset;
         }
-        // The files of the model, and room kept free for the system and the other programs.
+        // Les fichiers du modèle, et la place gardée libre pour le système et les autres programmes.
         const uint64_t total = j->total;
         const uint64_t room = free_disk_space(dir_);
         const uint64_t reserve = total / 20 + (256ull << 20);
@@ -1041,7 +1046,7 @@ namespace albireo
             return false;
         }
 
-        // Resume what a previous run received, when the files of the catalog are the same.
+        // Reprendre ce qu'une exécution précédente a reçu, quand les fichiers du catalogue sont les mêmes.
         const json saved = db_.download_state(id);
         bool partials = true;
         for (const auto& f : j->files) partials = partials && file_exists(f.partial);
@@ -1054,15 +1059,15 @@ namespace albireo
             {
                 job::chunk& c = *j->chunks[i];
                 uint64_t d = static_cast<uint64_t>(saved["done"][i].as_int(0));
-                if (c.gzip && d < c.length) d = 0;   // a compressed stream restarts from its beginning
+                if (c.gzip && d < c.length) d = 0;   // un flux compressé recommence depuis son début
                 c.done = std::min(d, c.length);
                 j->received += c.gzip ? (c.done == c.length ? c.output : 0) : c.done.load();
             }
         }
 
         std::lock_guard<std::mutex> lock(m_);
-        // The worker of an earlier download of the model, which may still take m_ in its last
-        // steps, is joined by the new worker before it starts.
+        // Le worker d'un téléchargement antérieur du modèle, qui peut encore prendre m_ dans ses
+        // dernières étapes, est rejoint par le nouveau worker avant qu'il démarre.
         std::thread previous;
         auto it = jobs_.find(id);
         if (it != jobs_.end())
@@ -1081,13 +1086,15 @@ namespace albireo
             }
             log_error("models: download of " + j->id + ": " + why);
         };
-        // The earlier worker, kept by the job when no thread can take it, so that it is joined later all the same.
+        // Le worker précédent, gardé par le travail quand aucun thread ne peut le prendre, pour qu'il soit
+        // tout de même rejoint plus tard.
         const auto before = std::make_shared<std::thread>(std::move(previous));
         try
         {
             j->worker = std::thread([this, j, failed, before]() {
                 if (before->joinable()) before->join();
-                // No exception leaves the thread: a database or a disk that fails under the download ends it in error.
+                // Aucune exception ne sort du thread : une base ou un disque qui lâche pendant le téléchargement le
+                // termine en erreur.
                 try
                 {
                     run_job(j);
@@ -1104,7 +1111,7 @@ namespace albireo
         }
         catch (const std::exception& e)
         {
-            // A thread the system refuses leaves the download in error, never queued.
+            // Un thread que le système refuse laisse le téléchargement en erreur, jamais en file d'attente.
             j->worker = std::move(*before);
             const std::string why = std::string("the download cannot start: ") + e.what();
             j->state = "error";
@@ -1131,7 +1138,8 @@ namespace albireo
             }
             jobs_[id] = j;
         }
-        // The worker of the download that ended, joined outside m_, which its last steps may take.
+        // Le worker du téléchargement qui s'est terminé, rejoint hors de m_, que ses dernières étapes peuvent
+        // prendre.
         if (previous.joinable()) previous.join();
     }
 
@@ -1148,16 +1156,16 @@ namespace albireo
         db_.remove_download_state(id);
         if (state == "queued" || state == "downloading" || state == "verifying") return;
         /*
-            A download that ended with an error, or that a restart left, has no worker to drop
-            its partial file: the file goes here, and the entry of the download then tells the
-            cancellation.
+            Un téléchargement terminé par une erreur, ou laissé par un redémarrage, n'a pas de worker
+            pour abandonner son fichier partiel : le fichier part ici, et l'entrée du téléchargement
+            signale alors l'annulation.
         */
         if (state == "error")
         {
             it->second->state = "cancelled";
             it->second->error = user_error();
         }
-        // The partial files of the decoder and of the projector.
+        // Les fichiers partiels du décodeur et du projecteur.
         if (safe_id(id) && direct_path(dir_))
         {
             remove_file(join_path(dir_, id + ".gguf.partial"));
@@ -1176,7 +1184,7 @@ namespace albireo
 
     namespace
     {
-        // SHA-256 of the bytes [offset, offset + length) of a file.
+        // SHA-256 des octets [offset, offset + length) d'un fichier.
         std::string sha256_range(link_free_file& in, uint64_t offset, uint64_t length)
         {
             if (offset + length > in.size() || !in.seek(offset)) return std::string();
@@ -1192,14 +1200,14 @@ namespace albireo
             return s.hex();
         }
 
-        // How a transfer of a segment of a download ends (run_job()).
+        // Comment se termine le transfert d'un segment d'un téléchargement (run_job()).
         enum class transfer_end
         {
             complete,
-            failed,       // the request fails
-            corrupt,      // a compressed part that does not inflate to its size
-            other_size,   // the server announces the resource at another size than the catalog
-            local         // the partial file refuses the bytes, or the inflation cannot start
+            failed,       // la requête échoue
+            corrupt,      // une partie compressée qui ne se décompresse pas à sa taille
+            other_size,   // le serveur annonce la ressource à une autre taille que le catalogue
+            local         // le fichier partiel refuse les octets, ou la décompression ne peut pas démarrer
         };
     }
 
@@ -1208,7 +1216,8 @@ namespace albireo
         const std::string before = file_identity(from);
         if (before.empty() || parent_path(target) != dir_ || !direct_path(dir_) || !rename_file(from, target))
             return false;
-        // The folder replaced by a link between the check and the move shows here: target names another file.
+        // Le dossier remplacé par un lien entre la vérification et le déplacement se voit ici : target nomme
+        // un autre fichier.
         return file_identity(target) == before;
     }
 
@@ -1219,13 +1228,13 @@ namespace albireo
             j->state = s;
             j->error = e;
         };
-        // The partial files go only from the models folder reached through no link.
+        // Les fichiers partiels ne partent que du dossier des modèles atteint sans passer par aucun lien.
         auto drop_partials = [&]() {
             if (!direct_path(dir_)) return;
             for (const auto& f : j->files) remove_file(f.partial);
         };
-        // The progress is written under m_, where cancel_download() removes it, so that a
-        // download cancelled by the user never comes back at the next start.
+        // La progression est écrite sous m_, où cancel_download() la retire, pour qu'un téléchargement
+        // annulé par l'utilisateur ne revienne jamais au prochain démarrage.
         auto save = [&]() {
             const json& e = j->entry;
             json st = json::object();
@@ -1239,25 +1248,26 @@ namespace albireo
         };
         const bool with_projector = j->files.size() > 1;
         /*
-            The sources of the parts, which the transfers share under source_m.  The publication space serves
-            first.  space_down tells why it failed for the download, with the file of the space it names
-            (down_path), once it is not set, does not answer or refuses the requests for a segment: the next
-            segments go to their official addresses at once.  lacking tells why it does not serve a part, a part
-            it does not hold, holds at another size or whose bytes from it fail their hash, which goes to its
-            official address with all its segments.  The log tells each of these changes once.
+            Les sources des parties, que les transferts partagent sous source_m.  L'espace de publication sert
+            d'abord.  space_down dit pourquoi il a échoué pour le téléchargement, avec le fichier de l'espace
+            qu'il nomme (down_path), dès qu'il n'est pas réglé, ne répond pas ou refuse les requêtes d'un
+            segment : les segments suivants vont aussitôt à leurs adresses officielles.  lacking dit pourquoi il
+            ne sert pas une partie, une partie qu'il n'a pas, a à une autre taille ou dont les octets venus de
+            lui échouent à leur empreinte, qui va à son adresse officielle avec tous ses segments.  Le journal
+            signale chacun de ces changements une fois.
         */
-        typedef std::pair<size_t, size_t> part_key;   // the file of the model, and the part in it
+        typedef std::pair<size_t, size_t> part_key;   // le fichier du modèle, et la partie dans celui-ci
         const int by_space = 1, by_official = 2;
         std::mutex source_m;
         std::string space_down, down_path;
         std::map<part_key, std::string> lacking;
-        std::map<part_key, int> sources;              // the sources that gave bytes of each part in this run
-        // Records that the source gave bytes of the part.
+        std::map<part_key, int> sources;              // les sources ayant donné des octets de chaque partie ici
+        // Enregistre que la source a donné des octets de la partie.
         auto gave = [&](const part_key& part, int source) {
             std::lock_guard<std::mutex> lock(source_m);
             sources[part] |= source;
         };
-        // Tells that the download continues from the official address url, the space not serving path.
+        // Signale que le téléchargement continue depuis l'adresse officielle url, l'espace ne servant pas path.
         auto tell = [&](const std::string& url, const std::string& path, const std::string& why) {
             log_warning("models: download of " + j->id + " continues from its official address " + without_queries(url)
                 + ", the publication space of Albireo did not serve " + path + " (" + why + ")");
@@ -1268,8 +1278,8 @@ namespace albireo
         for (int round = 0; round < 2; ++round)
         {
             set_state("downloading");
-            // A partial file per file of the model, the models folder checked again right before each
-            // opens, which then checks its own path.
+            // Un fichier partiel par fichier du modèle, le dossier des modèles vérifié de nouveau juste
+            // avant l'ouverture de chacun, qui vérifie ensuite son propre chemin.
             std::vector<std::unique_ptr<random_access_file>> outputs;
             for (const auto& f : j->files)
             {
@@ -1289,27 +1299,27 @@ namespace albireo
             size_t next = 0;
             std::atomic<bool> failed{false};
             std::string failure;
-            // The first failure of the download; chunk_m is held.
+            // Le premier échec du téléchargement ; chunk_m est tenu.
             auto fail_with = [&](const std::string& why) {
                 if (!failed) failure = why;
                 failed = true;
             };
-            // The transfers end: the download is cancelled, or a segment failed it.
+            // Les transferts s'arrêtent : le téléchargement est annulé, ou un segment l'a fait échouer.
             auto ended = [&]() { return j->cancel || failed; };
-            // The pause before the attempt number attempt, 2 s for each attempt made, which an end of the
-            // transfers or of the downloads of the service ends.
+            // La pause avant la tentative numéro attempt, 2 s pour chaque tentative faite, qu'une fin des
+            // transferts ou des téléchargements du service interrompt.
             auto pause = [&](int attempt) {
                 for (int t = 0; t < 20 * attempt && !ended() && !http_cancelled(); ++t)
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
             };
 
             /*
-                One transfer of the segment c from address into its partial file: its range from where it
-                stopped, or the whole resource of a compressed part, inflated as it arrives.  With sized, a
-                resource the server announces at another size than the catalog stops before any of its bytes is
-                written.  wrote receives the bytes written; a compressed part that fails takes them back from the
-                progress, and restarts from its beginning.  reason tells why a transfer fails, or the local
-                failure (a partial file that refuses the bytes).
+                Un transfert du segment c depuis address dans son fichier partiel : sa plage depuis l'endroit où il
+                s'est arrêté, ou toute la ressource d'une partie compressée, décompressée à mesure qu'elle arrive.
+                Avec sized, une ressource que le serveur annonce à une autre taille que le catalogue s'arrête avant
+                qu'aucun de ses octets ne soit écrit.  wrote reçoit les octets écrits ; une partie compressée qui
+                échoue les retire de la progression, et recommence depuis son début.  reason dit pourquoi un
+                transfert échoue, ou l'échec local (un fichier partiel qui refuse les octets).
             */
             auto fetch = [&](job::chunk& c, const std::string& address, bool sized, std::string& reason,
                 uint64_t& wrote) {
@@ -1318,14 +1328,14 @@ namespace albireo
                 wrote = 0;
                 uint64_t total = 0;
                 bool ok = false, unwritten = false, corrupt = false, other_size = false;
-                // The size of the resource, which the server announces before its first bytes.
+                // La taille de la ressource, que le serveur annonce avant ses premiers octets.
                 auto resized = [&]() {
                     other_size = other_size || (sized && total != 0 && total != c.resource);
                     return other_size;
                 };
                 if (c.gzip)
                 {
-                    // Inflated as it arrives, written at the offsets of the part.
+                    // Décompressée à mesure qu'elle arrive, écrite aux positions de la partie.
                     z_stream zs;
                     std::memset(&zs, 0, sizeof(zs));
                     if (inflateInit2(&zs, 15 + 32) != Z_OK)
@@ -1415,9 +1425,11 @@ namespace albireo
                     std::string space_error, reason, error;
                     uint64_t wrote = 0;
                     transfer_end end = transfer_end::failed;
-                    // Whether space_error names the file of this segment, which a failure of another part may not.
+                    // Indique si space_error nomme le fichier de ce segment, ce qu'un échec d'une autre partie peut
+                    // ne pas faire.
                     bool here = true;
-                    // Whether the space failed for the download or does not serve the part; space_error tells why.
+                    // Indique si l'espace a échoué pour le téléchargement ou ne sert pas la partie ; space_error dit
+                    // pourquoi.
                     auto refused = [&]() {
                         std::lock_guard<std::mutex> lock(source_m);
                         const auto it = lacking.find(part);
@@ -1433,17 +1445,17 @@ namespace albireo
                         return true;
                     };
                     bool skipped = refused();
-                    // Whether the failure of the space concerns the whole download, or this part alone.
+                    // Indique si l'échec de l'espace concerne tout le téléchargement, ou cette partie seule.
                     bool whole = true;
                     /*
-                        The copy of the resource in the publication space, its address asked again after a failure.
-                        A space that does not hold the resource at its size ends the attempts, and so does another
-                        segment that finds the space failing.  The messages name the file in the space, never its
-                        address.
+                        La copie de la ressource dans l'espace de publication, son adresse redemandée après un échec.
+                        Un espace qui n'a pas la ressource à sa taille met fin aux tentatives, tout comme un autre
+                        segment qui trouve l'espace en échec.  Les messages nomment le fichier dans l'espace, jamais
+                        son adresse.
                     */
                     for (int attempt = 0; attempt < 4 && !skipped && !ended(); ++attempt)
                     {
-                        // A pause before each new attempt, which a cancellation ends.
+                        // Une pause avant chaque nouvelle tentative, qu'une annulation interrompt.
                         pause(attempt);
                         if (ended() || (attempt > 0 && (skipped = refused()))) break;
                         std::string address;
@@ -1452,7 +1464,7 @@ namespace albireo
                         if (!public_link_file(c.link_path, address, listed, space_error, attempt > 0, &status))
                         {
                             whole = status != link_status::missing;
-                            // A file the space lacks is looked for once more in a new listing.
+                            // Un fichier qui manque à l'espace est cherché une fois de plus dans une nouvelle liste.
                             if (status == link_status::unset || (!whole && attempt > 0) || http_cancelled()) break;
                             continue;
                         }
@@ -1471,17 +1483,17 @@ namespace albireo
                         space_error = end == transfer_end::corrupt ? "the compressed copy of " + c.link_path
                             + " in the publication space of Albireo is corrupt" : "the copy of " + c.link_path
                             + " in the publication space of Albireo cannot be downloaded: " + reason;
-                        // The downloads ended for the whole service (it stops, or goes offline) are not
-                        // attempted again; they resume later.
+                        // Les téléchargements arrêtés pour tout le service (il s'arrête, ou passe hors ligne) ne
+                        // sont pas retentés ; ils reprennent plus tard.
                         if (http_cancelled()) break;
                     }
                     bool ok = end == transfer_end::complete;
                     error = end == transfer_end::local ? reason : space_error;
                     /*
-                        The official address of the part, the "url" of the catalog, when the space does not serve
-                        the segment: the same ranges, in three attempts.  The failure of the space is kept for the
-                        next segments, of the download or of the part, which go there at once; the log tells it
-                        when it changes the source of the download or of the part.
+                        L'adresse officielle de la partie, l'"url" du catalogue, quand l'espace ne sert pas le
+                        segment : les mêmes plages, en trois tentatives.  L'échec de l'espace est gardé pour les
+                        segments suivants, du téléchargement ou de la partie, qui y vont aussitôt ; le journal le
+                        signale quand il change la source du téléchargement ou de la partie.
                     */
                     if (!ok && end != transfer_end::local && !ended() && !http_cancelled())
                     {
@@ -1517,7 +1529,8 @@ namespace albireo
                         }
                         else if (tried && !ok)
                         {
-                            // Both sources failed: the file in the space, its official address, the failure of each.
+                            // Les deux sources ont échoué : le fichier dans l'espace, son adresse officielle,
+                            // l'échec de chacune.
                             const std::string why = end == transfer_end::corrupt
                                 ? "the compressed file it gives is corrupt" : end == transfer_end::other_size
                                 ? "the file it gives does not have the size the catalog gives" : reason;
@@ -1534,7 +1547,8 @@ namespace albireo
                     }
                 }
             };
-            // An exception of a transfer, memory exhausted say, fails the download and never leaves its thread.
+            // Une exception d'un transfert, mémoire épuisée par exemple, fait échouer le téléchargement et ne sort
+            // jamais de son thread.
             auto worker = [&]() {
                 try
                 {
@@ -1559,14 +1573,14 @@ namespace albireo
             }
             catch (const std::exception& e)
             {
-                // A thread the system refuses: those started end with their chunk, joined below.
+                // Un thread que le système refuse : ceux qui ont démarré finissent avec leur chunk, rejoints plus bas.
                 std::lock_guard<std::mutex> lock(chunk_m);
                 fail_with(std::string("the download cannot start its transfers: ") + e.what());
             }
             auto last_save = std::chrono::steady_clock::now();
             auto speed_t = std::chrono::steady_clock::now();
             uint64_t speed_bytes = j->received;
-            // Progress, speed and periodic saving while the workers run.
+            // Progression, vitesse et enregistrement périodique pendant que les workers tournent.
             for (;;)
             {
                 bool running = false;
@@ -1604,17 +1618,19 @@ namespace albireo
             {
                 set_state("error", user_error().set(failure, "download_failed").arg("e", failure));
                 log_error("models: download of " + j->id + " failed: " + failure);
-                // A cancellation that came while the download failed drops its partial files all the same.
+                // Une annulation arrivée pendant l'échec du téléchargement abandonne tout de même ses fichiers
+                // partiels.
                 if (j->abandoned) drop_partials();
                 return;
             }
 
             set_state("verifying");
             /*
-                Each file written, read through no link from the models folder, is checked against
-                its own hash; it is closed before it is renamed or deleted, which its handle would
-                refuse on Windows.  The parts whose own hash fails are fetched again, once, from
-                their official addresses when the publication space gave bytes of them.
+                Chaque fichier écrit, lu sans passer par aucun lien depuis le dossier des modèles, est vérifié
+                avec sa propre empreinte ; il est fermé avant d'être renommé ou supprimé, ce que son handle
+                refuserait sous Windows.  Les parties dont l'empreinte propre échoue sont récupérées de
+                nouveau, une fois, depuis leurs adresses officielles quand l'espace de publication en a donné
+                des octets.
             */
             std::vector<std::string> shas(j->files.size());
             bool all_match = true;
@@ -1628,8 +1644,8 @@ namespace albireo
                 shas[fi] = readable ? sha256_open_file(written, &j->cancel) : std::string();
                 if (j->cancel)
                 {
-                    // Stopped during the check: the files are kept and checked again at the
-                    // next start, unless the download itself was cancelled.
+                    // Arrêté pendant la vérification : les fichiers sont gardés et vérifiés de nouveau au
+                    // prochain démarrage, sauf si le téléchargement lui-même a été annulé.
                     written.close();
                     set_state("cancelled");
                     if (j->abandoned) drop_partials();
@@ -1665,7 +1681,8 @@ namespace albireo
                         any = true;
                         log_warning("models: part " + std::to_string(part) + " of " + (fi == 0 ? std::string()
                             : std::string("the projector of ")) + j->id + " is corrupt, fetched again");
-                        // Bytes the space gave fail their hash: the part comes from its official address.
+                        // Des octets donnés par l'espace échouent à leur empreinte : la partie vient de son
+                        // adresse officielle.
                         const std::string why = "the copy of " + path + " in the publication space of Albireo does "
                             "not match the hash of the catalog";
                         bool changed = false;
@@ -1685,14 +1702,15 @@ namespace albireo
             if (all_match)
             {
                 /*
-                    The files take their names together, the decoder first.  When one cannot, or
-                    when the database cannot record the model, those placed take their partial
-                    names again: the next start finds the progress complete, checks the files and
-                    installs them.
+                    Les fichiers prennent leurs noms ensemble, le décodeur d'abord.  Quand l'un ne le peut pas,
+                    ou quand la base ne peut pas enregistrer le modèle, ceux déjà placés reprennent leurs noms
+                    partiels : le prochain démarrage trouve la progression complète, vérifie les fichiers et
+                    les installe.
                 */
                 std::string error;
                 size_t placed = 0;
-                // A newer version of an installed model takes its names while the engine holds no file of it.
+                // Une version plus récente d'un modèle installé prend ses noms pendant que le moteur ne tient aucun
+                // de ses fichiers.
                 replacing(j->id, [&]() {
                     placed = 0;
                     while (placed < j->files.size() && place(j->files[placed].partial, j->files[placed].target))
@@ -1713,7 +1731,7 @@ namespace albireo
                 db_.remove_download_state(j->id);
                 if (with_projector) drop_pending_copy(shas[1]);
                 set_state("done");
-                // The sources of the bytes of this run; a download resumed complete has none.
+                // Les sources des octets de cette exécution ; un téléchargement repris complet n'en a aucune.
                 int all = 0;
                 for (const auto& s : sources) all |= s.second;
                 const char* const from = all == (by_space | by_official) ? ", from the publication space of Albireo "
@@ -1760,7 +1778,7 @@ namespace albireo
         }
         try
         {
-            // The entry of a model that comes with Albireo is never replaced by another file.
+            // L'entrée d'un modèle livré avec Albireo n'est jamais remplacée par un autre fichier.
             installed_model existing;
             if (source != "builtin" && db_.find_model(id, existing) && existing.source == "builtin")
             {
@@ -1771,11 +1789,11 @@ namespace albireo
         }
         catch (const std::exception& e)
         {
-            // A database that cannot be written, on a full disk for instance.
+            // Une base qui ne peut pas être écrite, sur un disque plein par exemple.
             error = "the model cannot be recorded: " + std::string(e.what());
             return false;
         }
-        // The model is installed whatever the functions it receives.
+        // Le modèle est installé quelles que soient les fonctions qu'il reçoit.
         try
         {
             if (installed_cb_) installed_cb_(m);
@@ -1795,7 +1813,7 @@ namespace albireo
             error = "the model '" + id + "' is not installed";
             return false;
         }
-        // A file of the models folder is deleted only through the folder reached without a link.
+        // Un fichier du dossier des modèles n'est supprimé que par le dossier atteint sans lien.
         for (const std::string& f : { m.file, m.projector })
             if (!f.empty() && parent_path(f) == dir_ && !direct_path(dir_))
             {
@@ -1807,7 +1825,7 @@ namespace albireo
             error = "cannot delete " + m.file + " (in use?)";
             return false;
         }
-        // The projector goes with its decoder.
+        // Le projecteur va avec son décodeur.
         if (!m.projector.empty() && file_exists(m.projector) && !remove_file(m.projector))
             log_warning("models: the projector " + m.projector + " of " + id + " cannot be deleted");
         db_.remove_model(id);
@@ -1825,7 +1843,7 @@ namespace albireo
             r["error"] = "not installed";
             return r;
         }
-        // The check ends at once when the service stops.
+        // La vérification s'arrête aussitôt quand le service s'arrête.
         const std::string sha = sha256_file(m.file, nullptr, &stopped_);
         const std::string projector_sha = m.projector.empty() ? std::string()
             : sha256_file(m.projector, nullptr, &stopped_);
@@ -1967,15 +1985,15 @@ namespace albireo
 
     struct model_manager::import_item
     {
-        std::string path;           // where the file lies
-        std::string base;           // the trusted folder it is read from, empty for the root of its drive
-        std::string name;           // the name it came under
+        std::string path;           // où se trouve le fichier
+        std::string base;           // le dossier de confiance d'où il est lu, vide pour la racine de son disque
+        std::string name;           // le nom sous lequel il est arrivé
         std::string sha256;
         json description;           // describe_gguf()
         bool projector = false;
-        std::unique_ptr<link_free_file> file;   // open from inspect() until the file is placed
+        std::unique_ptr<link_free_file> file;   // ouvert depuis inspect() jusqu'à ce que le fichier soit placé
         std::string identity;
-        // The outcome: "imported", "already", "pending" or "error"; the model concerned; the error.
+        // Le résultat : "imported", "already", "pending" ou "error" ; le modèle concerné ; l'erreur.
         std::string result;
         std::string id;
         std::string error;
@@ -2000,9 +2018,9 @@ namespace albireo
     bool model_manager::inspect(import_item& item, const std::string& known_sha)
     {
         /*
-            The file itself, reached through no link from base and with a single name: a link
-            or a second name would lead the service, which reads with the rights of the
-            system, to the file of another account.
+            Le fichier lui-même, atteint sans passer par aucun lien depuis base et avec un nom unique :
+            un lien ou un second nom mènerait le service, qui lit avec les droits du système, au
+            fichier d'un autre compte.
         */
         item.file.reset(new link_free_file());
         std::string why;
@@ -2026,7 +2044,7 @@ namespace albireo
             return false;
         }
         item.description = describe_gguf(item.path);
-        // A projector by its header, or by the hash a catalog entry gives its projector.
+        // Un projecteur par son en-tête, ou par l'empreinte qu'une entrée du catalogue donne à son projecteur.
         bool listed = false;
         {
             std::lock_guard<std::mutex> lock(m_);
@@ -2066,7 +2084,7 @@ namespace albireo
             if (!it.projector) f.expected_projector = catalog_projector(it.sha256);
             return f;
         };
-        // The files that could not be read, the decoders and the projectors.
+        // Les fichiers qui n'ont pas pu être lus, les décodeurs et les projecteurs.
         std::vector<size_t> decoders, projectors;
         for (size_t i = 0; i < items.size(); ++i)
         {
@@ -2080,7 +2098,8 @@ namespace albireo
             else
                 decoders.push_back(i);
         }
-        // A projector installed already, or pending, is not copied again; with move, its file leaves the folder.
+        // Un projecteur déjà installé, ou en attente, n'est pas recopié ; avec move, son fichier quitte le
+        // dossier.
         std::vector<size_t> free_projectors;
         for (size_t i : projectors)
         {
@@ -2098,7 +2117,7 @@ namespace albireo
             log_info("models: " + p.name + " holds the projector " + (holder.empty() ? std::string("waiting for its "
                 "decoder") : "of " + holder) + ", installed already: not copied again");
         }
-        // The projectors of the files go with their decoders.
+        // Les projecteurs des fichiers vont avec leurs décodeurs.
         std::vector<pairing_file> dp, pp;
         for (size_t i : decoders) dp.push_back(pairing_of(items[i]));
         for (size_t i : free_projectors) pp.push_back(pairing_of(items[i]));
@@ -2114,7 +2133,7 @@ namespace albireo
             import_item& d = items[i];
             import_item* p = projector_of[i] >= 0 ? &items[static_cast<size_t>(projector_of[i])] : nullptr;
             std::string error;
-            // A file that repeats an installed model, one that comes with Albireo included, is not copied again.
+            // Un fichier qui répète un modèle installé, y compris un modèle livré avec Albireo, n'est pas recopié.
             installed_model same;
             if (installed_with_hash(d.sha256, same))
             {
@@ -2124,7 +2143,7 @@ namespace albireo
                 if (move && d.identity != file_identity(same.file)) remove_file(d.path);
                 log_info("models: " + d.name + " holds " + same.id + ", installed already: not copied again"
                     + (move ? ", removed from its folder" : ""));
-                // Its projector comes from the folder when the installed model lacks one.
+                // Son projecteur vient du dossier quand le modèle installé n'en a pas.
                 if (p && lacks_projector(same) && same.source != "builtin" && parent_path(same.file) == dir_)
                 {
                     if (attach_projector(*p, same, move, error))
@@ -2139,7 +2158,7 @@ namespace albireo
                 }
                 continue;
             }
-            // Without a projector among the files, a pending projector it goes with.
+            // Sans projecteur parmi les fichiers, un projecteur en attente qui va avec lui.
             pending_projector pending;
             bool with_pending = false;
             if (!p) with_pending = pending_for(d, pending);
@@ -2160,7 +2179,7 @@ namespace albireo
                 if (p) fail(*p, "its decoder " + file_name(d.name) + " cannot be installed: " + error);
             }
         }
-        // The other projectors go to an installed decoder that lacks one, or wait for theirs.
+        // Les autres projecteurs vont à un décodeur installé qui n'en a pas, ou attendent le leur.
         for (size_t i : free_projectors)
         {
             if (stopped_) break;
@@ -2214,7 +2233,7 @@ namespace albireo
             files.push_back(f);
             if (it.result == "imported") add(imported, it.id);
             else if (it.result == "already" && !it.id.empty()) add(already, it.id);
-            // A projector that waits, received again.
+            // Un projecteur qui attend, reçu de nouveau.
             else if (it.result == "already" || it.result == "pending") add(pending, file_name(it.name));
             else if (it.result == "error") errors.push_back(it.name + ": " + it.error);
         }
@@ -2239,16 +2258,17 @@ namespace albireo
         const std::string& id)
     {
         how = placement();
-        // A file of the models folder at its own name, recorded again where it lies (a database started anew).
+        // Un fichier du dossier des modèles à son propre nom, enregistré de nouveau là où il est (une base
+        // recommencée).
         how.in_place = !source.identity().empty() && file_identity(target) == source.identity();
-        // The renaming that gives the file its name, over the file of an installed model through replacing().
+        // Le renommage qui donne au fichier son nom, par-dessus le fichier d'un modèle installé via replacing().
         auto rename_to_target = [&](const std::string& from) {
             return replacing(id, [&]() { return place(from, target); });
         };
         /*
-            Moved when asked and when the models folder is on the same volume, as the file
-            checked above; copied otherwise from the file opened above, through a new
-            temporary name, and checked against the hash as it is written.
+            Déplacé quand c'est demandé et que le dossier des modèles est sur le même volume, comme
+            le fichier vérifié plus haut ; sinon copié depuis le fichier ouvert plus haut, par un
+            nouveau nom temporaire, et vérifié avec l'empreinte pendant l'écriture.
         */
         if (move && !how.in_place)
         {
@@ -2291,7 +2311,7 @@ namespace albireo
         for (const auto& p : db_.projectors())
             if (parent_path(p.file) == dir_ && file_size(p.file) == p.size) list.push_back(p);
         if (list.empty()) return false;
-        // The header of a file of a bundle, read here only, once pending projectors exist.
+        // L'en-tête d'un fichier d'un paquet, lu ici seulement, une fois qu'il existe des projecteurs en attente.
         if (!d.description.is_object()) d.description = describe_gguf(d.path);
         pairing_file f;
         f.name = file_name(d.name);
@@ -2312,7 +2332,7 @@ namespace albireo
 
     bool model_manager::installed_for(const import_item& p, installed_model& found)
     {
-        // The installed decoders of the models folder that lack a projector and may read images.
+        // Les décodeurs installés du dossier des modèles qui n'ont pas de projecteur et peuvent lire les images.
         std::vector<installed_model> candidates;
         std::vector<pairing_file> dp;
         for (const auto& m : db_.models())
@@ -2326,7 +2346,7 @@ namespace albireo
             const json& d = m.descriptor;
             f.expected_projector = d["projector"]["sha256"].as_string();
             if (f.expected_projector.empty()) f.expected_projector = catalog_projector(m.sha256);
-            // An entry that names neither a projector nor an architecture that reads images is left out unread.
+            // Une entrée qui ne nomme ni projecteur ni architecture qui lit les images est écartée sans être lue.
             if (f.expected_projector.empty() && d["arch"].is_string()
                 && !d["reads_images"].as_bool(reads_images(d["arch"].as_string())))
                 continue;
@@ -2348,7 +2368,7 @@ namespace albireo
     bool model_manager::import_decoder(import_item& d, import_item* p, const pending_projector* pending, bool move,
         std::string& error)
     {
-        // A catalog entry with this hash gives the identifier and the description.
+        // Une entrée du catalogue avec cette empreinte donne l'identifiant et la description.
         json entry;
         bool known = false;
         {
@@ -2378,16 +2398,16 @@ namespace albireo
             if (name.size() > 5 && name.substr(name.size() - 5) == ".gguf") name = name.substr(0, name.size() - 5);
             for (char& c : name)
                 if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == '.')) c = '-';
-            // A model of Albireo keeps its identifier.
+            // Un modèle d'Albireo garde son identifiant.
             const std::string own = static_cast<const json&>(entry)["albireo_id"].as_string();
             id = own.empty() ? name : own;
             entry.erase("albireo_id");
-            // The fields of the header that only the pairing reads.
+            // Les champs de l'en-tête que seul l'appariement lit.
             entry.erase("gguf_name");
             entry.erase("projection_width");
             /*
-                A sidecar description written next to the file, read in the import folder
-                only, where the administrators alone place files, and through no link.
+                Une description annexe écrite à côté du fichier, lue seulement dans le dossier d'import,
+                où seuls les administrateurs placent des fichiers, et sans passer par aucun lien.
             */
             std::string side;
             const std::string& f = d.path;
@@ -2401,8 +2421,8 @@ namespace albireo
             }
         }
         /*
-            A file never takes the identifier of another installed model, a model that comes with
-            Albireo included; a newer version from the catalog of a model of the catalog replaces it.
+            Un fichier ne prend jamais l'identifiant d'un autre modèle installé, y compris un modèle livré avec
+            Albireo ; une version plus récente, venue du catalogue, d'un modèle du catalogue le remplace.
         */
         id = free_identifier(id, known);
         entry["id"] = id;
@@ -2411,7 +2431,7 @@ namespace albireo
             error = "invalid identifier";
             return false;
         }
-        // The models folder must still be reached without a link before the service writes in it.
+        // Le dossier des modèles doit encore être atteint sans lien avant que le service y écrive.
         if (!direct_path(dir_))
         {
             error = "the models folder " + dir_ + " now leads elsewhere through a link";
@@ -2420,7 +2440,7 @@ namespace albireo
         const std::string target = join_path(dir_, id + ".gguf");
         placement dh;
         if (!put_file(*d.file, d.path, d.base, d.sha256, move, target, dh, error, id)) return false;
-        // The projector takes the name of the model: from the files, or from the pending projectors.
+        // Le projecteur prend le nom du modèle : depuis les fichiers, ou depuis les projecteurs en attente.
         std::string projector, projector_sha;
         placement ph;
         if (p)
@@ -2437,7 +2457,7 @@ namespace albireo
         {
             projector = join_path(dir_, id + projector_suffix);
             projector_sha = pending->sha256;
-            // A pending projector that cannot be taken stays pending: the model reads text only.
+            // Un projecteur en attente qui ne peut pas être pris reste en attente : le modèle ne lit que du texte.
             if (!take_pending(*pending, projector))
             {
                 projector.clear();
@@ -2447,15 +2467,16 @@ namespace albireo
         }
         if (!install_file(id, target, entry, d.sha256, known ? "catalog" : "import", projector, projector_sha, error))
         {
-            // A model the database cannot record leaves the models folder: the files moved go
-            // back where they came from, the copies are deleted, a pending projector waits again.
+            // Un modèle que la base ne peut pas enregistrer quitte le dossier des modèles : les fichiers
+            // déplacés retournent d'où ils venaient, les copies sont supprimées, un projecteur en attente
+            // attend de nouveau.
             undo_put(d.path, target, dh);
             if (p) undo_put(p->path, projector, ph);
             if (pending) return_pending(*pending, projector);
             return false;
         }
         d.id = id;
-        // The sources of the copies leave once the model is recorded.
+        // Les sources des copies partent une fois le modèle enregistré.
         if (move && dh.copied) remove_file(d.path);
         if (p && move && ph.copied) remove_file(p->path);
         return true;
@@ -2470,7 +2491,8 @@ namespace albireo
         }
         const std::string target = join_path(dir_, m.id + projector_suffix);
         placement how;
-        // The model lacks a projector: no program holds a file at that name, and the model stays in the engine.
+        // Le modèle n'a pas de projecteur : aucun programme ne tient de fichier à ce nom, et le modèle reste
+        // dans le moteur.
         if (!put_file(*p.file, p.path, p.base, p.sha256, move, target, how, error, std::string())) return false;
         installed_model updated = m;
         updated.projector = target;
@@ -2488,7 +2510,7 @@ namespace albireo
         }
         if (move && how.copied) remove_file(p.path);
         log_info("models: " + m.id + " receives the projector " + file_name(p.name) + " and reads images");
-        // The model, loaded already, loads again with its projector.
+        // Le modèle, déjà chargé, se recharge avec son projecteur.
         try
         {
             if (installed_cb_) installed_cb_(updated);
@@ -2563,7 +2585,8 @@ namespace albireo
             d.erase("file");
             d.erase("offset");
             d["builtin"] = true;
-            // The projector of a model that reads images lies beside it; without it, the model reads text only.
+            // Le projecteur d'un modèle qui lit les images se trouve à côté de lui ; sans lui, le modèle ne lit
+            // que du texte.
             std::string projector, projector_sha;
             const json& p = e["projector"];
             if (p.is_object())
@@ -2600,7 +2623,7 @@ namespace albireo
             m.projector = projector;
             m.projector_size = projector.empty() ? 0 : file_size(projector);
             m.projector_sha256 = projector_sha;
-            // The installer checked the hashes of the files it wrote.
+            // L'installateur a vérifié les empreintes des fichiers qu'il a écrits.
             m.verified_at = known && existing.sha256 == m.sha256 && existing.projector_sha256 == m.projector_sha256
                 ? existing.verified_at : now_unix();
             m.descriptor = d;
@@ -2622,11 +2645,11 @@ namespace albireo
     json model_manager::import_path(const std::string& path, const std::string& base, bool move)
     {
         std::vector<std::string> files;
-        // The import folder itself, or a folder under it reached through no link.
+        // Le dossier d'import lui-même, ou un dossier sous lui atteint sans passer par aucun lien.
         if (path == base ? dir_exists(path) : link_free_folder(path, base))
         {
-            // The folder and its models subfolder, the layout of an offline bundle; inspect()
-            // refuses the links among them.
+            // Le dossier et son sous-dossier models, la disposition d'un paquet hors ligne ; inspect()
+            // refuse les liens parmi eux.
             for (const std::string& dir : { path, join_path(path, "models") })
             {
                 if (dir != path && !link_free_folder(dir, base)) continue;
@@ -2656,7 +2679,7 @@ namespace albireo
     bool model_manager::bundle_file(const std::string& folder, const json& parts, const std::string& fallback,
         const std::string& sha, uint64_t size, import_item& out)
     {
-        // The names under which tools/make_offline_bundle.py places a file: no other file is read.
+        // Les noms sous lesquels tools/make_offline_bundle.py place un fichier : aucun autre fichier n'est lu.
         std::vector<std::string> names;
         if (parts.size() == 1) names.push_back(file_name(parts[0]["url"].as_string()));
         names.push_back(fallback);
@@ -2682,7 +2705,7 @@ namespace albireo
         out.name = out.path;
         out.base = std::string();
         out.identity = out.file->identity();
-        // Its size first, then its hash, before anything is copied.
+        // Sa taille d'abord, puis son empreinte, avant toute copie.
         if (out.file->size() != size || out.file->links() != 1 || sha256_open_file(*out.file, &stopped_) != sha)
         {
             out.file->close();
@@ -2714,7 +2737,7 @@ namespace albireo
                 }
                 continue;
             }
-            // The projector the entry names, when the bundle holds it.
+            // Le projecteur que nomme l'entrée, quand le paquet le contient.
             import_item p;
             bool with_projector = false;
             const json& pe = e["projector"];
@@ -2727,7 +2750,7 @@ namespace albireo
                 std::string holder, path;
                 if (with_projector && projector_with_hash(projector_sha, holder, path))
                 {
-                    // Installed already, or pending.
+                    // Déjà installé, ou en attente.
                     p.file->close();
                     p.result = "already";
                     p.id = holder;
@@ -2746,7 +2769,7 @@ namespace albireo
                 d.result = "already";
                 d.id = same.id;
                 log_info("models: " + d.path + " holds " + same.id + ", installed already: not copied again");
-                // The projector of the bundle goes to the installed decoder when it lacks one.
+                // Le projecteur du paquet va au décodeur installé quand il n'en a pas.
                 if (with_projector && lacks_projector(same) && same.source != "builtin"
                     && parent_path(same.file) == dir_)
                 {
@@ -2764,12 +2787,12 @@ namespace albireo
             }
             else
             {
-                // The entry of the catalog in use when it describes this file, else that of the bundle.
+                // L'entrée du catalogue en usage quand elle décrit ce fichier, sinon celle du paquet.
                 json found;
                 const bool current = catalog_entry(listed, found) && static_cast<const json&>(found)["sha256"]
                     .as_string() == sha;
                 json entry = current ? found : e;
-                // A newer version of a model of the catalog takes its place; another model keeps its own.
+                // Une version plus récente d'un modèle du catalogue prend sa place ; un autre modèle garde la sienne.
                 const std::string id = free_identifier(listed, true);
                 entry["id"] = id;
                 const std::string target = join_path(dir_, id + ".gguf");
@@ -2844,7 +2867,7 @@ namespace albireo
             it.result = "error";
             it.error = "the service stops";
         }
-        // A file that cannot be installed leaves the models folder.
+        // Un fichier qui ne peut pas être installé quitte le dossier des modèles.
         if (it.result == "error") remove_file(file);
         else if (it.result == "imported") log_info("models: the transfer of " + original_name + " installed " + it.id);
         json result = import_result(items);

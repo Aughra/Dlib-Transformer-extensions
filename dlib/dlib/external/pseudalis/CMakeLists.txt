@@ -1,13 +1,14 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Pseudalis: the protection of the personal data of documents, built on dlib/privacy, for
-# macOS on Apple Silicon only.
+# Pseudalis : la protection des données personnelles des documents, bâtie sur dlib/privacy, pour
+# macOS sur Apple Silicon seulement.
 #
 #   cmake -S dlib/dlib/external/pseudalis -B build/macos-pseudalis -G Ninja -DCMAKE_BUILD_TYPE=Release
 #
-# Every program lands in <build>/bin: the service, with its engine inside
-# (PSEUDALIS_ENGINE_STATIC) and its drives as folders of the data folder, and the web application.
+# Chaque programme arrive dans <build>/bin : le service, avec son moteur intégré
+# (PSEUDALIS_ENGINE_STATIC) et ses lecteurs sous forme de dossiers du dossier de données, et
+# l'application web.
 
 cmake_minimum_required(VERSION 3.16)
 project(pseudalis VERSION 1.0.5 LANGUAGES C CXX)
@@ -34,8 +35,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(PSEUDALIS_WARNINGS -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
 
-# dlib: its HTTPS target (cpp-httplib and Mbed TLS) for the programs; the engine compiles its
-# sources itself.
+# dlib : sa cible HTTPS (cpp-httplib et Mbed TLS) pour les programmes ; le moteur compile lui-même
+# ses sources.
 set(DLIB_NO_GUI_SUPPORT ON CACHE BOOL "" FORCE)
 set(DLIB_USE_CUDA OFF CACHE BOOL "" FORCE)
 set(DLIB_USE_NPU OFF CACHE BOOL "" FORCE)
@@ -52,33 +53,33 @@ set(DLIB_USE_MKL_FFT OFF CACHE BOOL "" FORCE)
 add_subdirectory(${PSEUDALIS_DLIB_DIR} dlib_build EXCLUDE_FROM_ALL)
 find_package(Threads REQUIRED)
 
-# The models of the detector: the header the example slm_document_anonymizer_ex embeds.
+# Les modèles du détecteur : l'en-tête qu'embarque l'exemple slm_document_anonymizer_ex.
 set(PSEUDALIS_MODELS_HEADER "${PSEUDALIS_INCLUDE_DIR}/examples/slm_document_anonymizer_ex.h" CACHE FILEPATH
    "Header of the models compiled into the engines (slm_document_anonymizer_ex embed)")
 if (NOT EXISTS "${PSEUDALIS_MODELS_HEADER}")
    message(FATAL_ERROR "No models header at ${PSEUDALIS_MODELS_HEADER}: set PSEUDALIS_MODELS_HEADER")
 endif()
 
-# The build of the programs and of the engines, new at each configuration of the build tree: the
-# service loads only an engine of its own build, never one that another installation or another
-# build left beside it (common/engine_loader.cpp).
+# Le build des programmes et des moteurs, nouveau à chaque configuration de l'arbre de build : le
+# service ne charge qu'un moteur de son propre build, jamais un moteur qu'une autre installation ou
+# un autre build aurait laissé à côté (common/engine_loader.cpp).
 string(TIMESTAMP PSEUDALIS_BUILD_TIME "%Y%m%d%H%M%S" UTC)
 string(RANDOM LENGTH 8 ALPHABET "0123456789abcdef" PSEUDALIS_BUILD_RANDOM)
 set(PSEUDALIS_BUILD_STAMP "${PSEUDALIS_BUILD_TIME}-${PSEUDALIS_BUILD_RANDOM}")
 configure_file(cmake/build_stamp.h.in ${CMAKE_BINARY_DIR}/generated/build_stamp.h @ONLY)
 
 # ---------------------------------------------------------------------------------------------
-# The engine, compiled into the service and into test_engine.
+# Le moteur, compilé dans le service et dans test_engine.
 
 set(PSEUDALIS_ENGINE_SOURCES engine/engine.cpp engine/archives.cpp engine/engine_api.cpp
    ${PSEUDALIS_DLIB_DIR}/all/source.cpp)
-# The sources of dlib keep the warnings of their own build.
+# Les sources de dlib gardent les avertissements de leur propre build.
 set_source_files_properties(${PSEUDALIS_DLIB_DIR}/all/source.cpp PROPERTIES COMPILE_OPTIONS "-w")
 set(PSEUDALIS_ENGINE_DEFINITIONS PSEUDALIS_ENGINE_BUILD DLIB_NO_GUI_SUPPORT DLIB_DISABLE_ASSERTS
    "PSEUDALIS_MODELS_HEADER=\"${PSEUDALIS_MODELS_HEADER}\"")
 
 # ---------------------------------------------------------------------------------------------
-# The programs.
+# Les programmes.
 
 add_library(pseudalis_sqlite STATIC ${PSEUDALIS_DLIB_DIR}/external/sqlite/sqlite3.c)
 target_include_directories(pseudalis_sqlite PUBLIC ${PSEUDALIS_DLIB_DIR}/external/sqlite)
@@ -94,14 +95,14 @@ add_library(pseudalis_zlib STATIC ${zlib_dir}/adler32.c ${zlib_dir}/compress.c $
 target_include_directories(pseudalis_zlib PUBLIC ${zlib_dir})
 target_compile_options(pseudalis_zlib PRIVATE -w)
 
-# Code shared by the service and the tools.
+# Code partagé par le service et les outils.
 add_library(pseudalis_common STATIC common/log.cpp common/platform.cpp)
 target_include_directories(pseudalis_common PUBLIC ${PSEUDALIS_INCLUDE_DIR})
 target_compile_options(pseudalis_common PRIVATE ${PSEUDALIS_WARNINGS})
 target_link_libraries(pseudalis_common PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
 
-# The public key of the update feed, which pseudalis-sign keygen writes once, beside the private
-# key that the publisher keeps outside the repository (README.md, Publishing a version).
+# La clé publique du flux de mises à jour, que pseudalis-sign keygen écrit une fois, à côté de la
+# clé privée que l'éditeur garde hors du dépôt (README.md, Publishing a version).
 set(PSEUDALIS_FEED_PUBLIC_KEY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/feed-public-key.pem" CACHE FILEPATH
    "Public key (PEM) of the update feed")
 set(PSEUDALIS_FEED_PUBLIC_KEY_TEXT "")
@@ -117,11 +118,11 @@ else()
 endif()
 configure_file(cmake/feed_public_key.h.in ${CMAKE_BINARY_DIR}/generated/feed_public_key.h @ONLY)
 
-# The service, with the engine inside.
+# Le service, avec le moteur intégré.
 set(PSEUDALIS_SERVICE_SOURCES common/engine_loader.cpp host/main.cpp host/service.cpp host/server.cpp
    host/settings.cpp host/store.cpp host/vault.cpp host/keys.cpp host/albireo_client.cpp
    host/http_fetch.cpp host/crypto.cpp host/certificates.cpp
-   # The drives: two folders of the data folder, watched by the service.
+   # Les lecteurs : deux dossiers du dossier de données, surveillés par le service.
    host/drive_folders.cpp ${PSEUDALIS_ENGINE_SOURCES})
 add_executable(pseudalis-service ${PSEUDALIS_SERVICE_SOURCES})
 target_include_directories(pseudalis-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
@@ -129,14 +130,14 @@ target_link_libraries(pseudalis-service PRIVATE pseudalis_common pseudalis_sqlit
 target_compile_definitions(pseudalis-service PRIVATE PSEUDALIS_ENGINE_STATIC ${PSEUDALIS_ENGINE_DEFINITIONS})
 target_compile_options(pseudalis-service PRIVATE ${PSEUDALIS_WARNINGS})
 
-# The signatures of the update feed, for its publisher.
+# Les signatures du flux de mises à jour, pour son éditeur.
 add_executable(pseudalis-sign tools/pseudalis_sign.cpp host/crypto.cpp)
 target_include_directories(pseudalis-sign PRIVATE ${CMAKE_BINARY_DIR}/generated)
 target_link_libraries(pseudalis-sign PRIVATE pseudalis_common dlib::httplib)
 target_compile_options(pseudalis-sign PRIVATE ${PSEUDALIS_WARNINGS})
 
-# The web application and the documentation of the interface, next to the service; Swagger UI
-# comes from the copy of Albireo in this repository.
+# L'application web et la documentation de l'interface, à côté du service ; Swagger UI provient
+# de la copie d'Albireo présente dans ce dépôt.
 set(swagger_dir ${PSEUDALIS_ALBIREO_DIR}/web/docs)
 add_custom_target(pseudalis-web ALL
    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/web ${CMAKE_BINARY_DIR}/bin/web
@@ -146,7 +147,7 @@ add_custom_target(pseudalis-web ALL
 add_dependencies(pseudalis-service pseudalis-web)
 
 # ---------------------------------------------------------------------------------------------
-# Tests.
+# Les tests.
 
 if (PSEUDALIS_TESTS)
    add_executable(test_engine tests/test_engine.cpp ${PSEUDALIS_ENGINE_SOURCES})

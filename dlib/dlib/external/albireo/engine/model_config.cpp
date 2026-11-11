@@ -17,10 +17,10 @@ namespace albireo
     namespace
     {
         /*
-            An integer of the metadata within [lo, hi], checked before any narrowing to long,
-            which has 32 bits on Windows.  The bounds leave a wide margin over the published
-            models; a value beyond them comes from a damaged file, whose sizes would overflow
-            the products that size the memory of the runtime.
+            Un entier des métadonnées compris dans [lo, hi], vérifié avant toute réduction en
+            long, qui fait 32 bits sous Windows.  Les bornes laissent une large marge au-delà
+            des modèles publiés ; une valeur qui les dépasse vient d'un fichier endommagé, dont
+            les tailles feraient déborder les produits qui dimensionnent la mémoire du runtime.
         */
         long bounded_int(const dlib::gguf_reader& g, const std::string& key, int64_t def, int64_t lo, int64_t hi)
         {
@@ -31,7 +31,7 @@ namespace albireo
             return static_cast<long>(v);
         }
 
-        // A real number of the metadata, which must be finite.
+        // Un nombre réel des métadonnées, qui doit être fini.
         double finite_double(const dlib::gguf_reader& g, const std::string& key, double def)
         {
             const double v = g.get_double(key, def);
@@ -67,7 +67,7 @@ namespace albireo
         if (!g.has(a + ".block_count") || !g.has(a + ".attention.head_count") || !g.has(a + ".embedding_length"))
             throw std::runtime_error("the model metadata is incomplete (missing dimensions)");
         c.n_layers = bounded_int(g, a + ".block_count", 0, 1, max_layers);
-        // Every layer holds tensors of its own.
+        // Chaque couche contient ses propres tenseurs.
         if (static_cast<size_t>(c.n_layers) > g.tensors().size())
             throw std::runtime_error("the model declares more layers than it holds tensors");
         c.n_heads = bounded_int(g, a + ".attention.head_count", 0, 1, max_heads);
@@ -98,7 +98,7 @@ namespace albireo
             throw std::runtime_error("unsupported head geometry");
         if (c.rms_eps < 0) throw std::runtime_error("the model metadata holds a negative normalization epsilon");
 
-        // Rotary embedding.
+        // Embedding rotatif.
         c.rope = qwen_like || a == "qwen3moe" || a == "qwen3vlmoe" || phi ? rope_style::neox : rope_style::norm;
         c.rope_dims = bounded_int(g, a + ".rope.dimension_count", c.head_dim, 0, max_head_dim);
         if (c.rope_dims <= 0 || c.rope_dims > c.head_dim || c.rope_dims % 2 != 0)
@@ -123,8 +123,8 @@ namespace albireo
             const double base_mscale = 1.0 + 0.1 * std::log(factor);
             if (g.has(a + ".rope.scaling.yarn_log_multiplier"))
             {
-                // The magnitude correction of the reference implementation when both
-                // mscale and mscale_all_dim are declared: their ratio.
+                // La correction d'amplitude de l'implémentation de référence quand mscale et
+                // mscale_all_dim sont tous deux déclarés : leur rapport.
                 const double mul = finite_double(g, a + ".rope.scaling.yarn_log_multiplier", 1.0);
                 c.yarn_attn_factor = base_mscale / (1.0 + 0.1 * mul * std::log(factor));
             }
@@ -136,9 +136,9 @@ namespace albireo
         f.optional_floats("rope_freqs.weight", static_cast<size_t>(c.rope_dims / 2), c.rope_freq_factors);
 
         /*
-            LongRoPE: the divisors of the original context and those of a longer one, which
-            rope_freqs.weight overrides when a file holds both, as in llama.cpp; and the
-            magnitude of cos and sin, which llama.cpp applies to every architecture.
+            LongRoPE : les diviseurs du contexte d'origine et ceux d'un contexte plus long, que
+            rope_freqs.weight remplace quand un fichier contient les deux, comme dans llama.cpp ;
+            et l'amplitude de cos et sin, que llama.cpp applique à toutes les architectures.
         */
         const size_t pairs = static_cast<size_t>(c.rope_dims / 2);
         const bool short_factors = f.optional_floats("rope_factors_short.weight", pairs, c.rope_factors_short);
@@ -166,8 +166,9 @@ namespace albireo
 
         if (a == "qwen3vl" || a == "qwen3vlmoe")
         {
-            // Time, row and column sections of the rotary pairs, a fourth one unused, which
-            // cover the pairs of a head as the interleaved layout of the reference expects.
+            // Sections temps, ligne et colonne des paires rotatives, plus une quatrième inutilisée,
+            // qui couvrent les paires d'une tête comme l'attend la disposition entrelacée de la
+            // référence.
             const std::string key = a + ".rope.dimension_sections";
             if (!g.has(key) || !g.at(key).is_array() || g.at(key).arr_int.size() < 3 || g.at(key).arr_int.size() > 4)
                 throw std::runtime_error("the model metadata lacks the sections of its multimodal rotary positions");

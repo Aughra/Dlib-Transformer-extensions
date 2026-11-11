@@ -1,8 +1,8 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Writes web/openapi.json, the description of the interface of the service shown by the
-# documentation page (/docs/).  Run it after a change of the routes of host/server.cpp:
+# Écrit web/openapi.json, la description de l'interface du service affichée par la page de
+# documentation (/docs/).  Le lancer après un changement des routes de host/server.cpp :
 #
 #   python3 tools/make_openapi.py
 
@@ -32,13 +32,13 @@ error_replies = {
                  "JSON bodies being read at once reach their budget (code busy, Retry-After: 2); the Retry-After "
                  "header gives the seconds to wait", ref("Error")),
 }
-# The routes whose request the engine computes, which may fail once it started; a stream ends with StreamError then.
+# Les routes dont le moteur calcule la requête, qui peuvent échouer une fois qu'il a commencé ; un flux se termine alors par StreamError.
 engine_replies = dict(error_replies, **{
     "500": reply("The engine failed the request, which was not streamed: type server_error, and code the reason "
                  "the engine gives, such as out_of_memory", ref("Error")),
 })
-# The routes that generate text, which the engine also refuses for a while when the images already queued for the
-# model hold the memory kept for them.
+# Les routes qui génèrent du texte, que le moteur refuse aussi pour un temps quand les images déjà en attente pour le
+# modèle occupent la mémoire qui leur est réservée.
 generation_replies = dict(engine_replies, **{
     "503": reply("The service starts (code starting), the model loads (code model_loading), the values of the JSON "
                  "bodies being read at once reach their budget (code busy, Retry-After: 2), or the engine refuses the "
@@ -50,7 +50,7 @@ offline_reply = {"409": reply("Refused in offline mode", {"type": "object", "pro
 model_id = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
             "description": "Identifier of the model, as listed by /albireo/v1/models."}
 ok = {"type": "object", "properties": {"ok": {"type": "boolean"}, "error": {"type": "string"}}}
-# The codes of the refusals of the imports by path (service::import_folder() in host/service.h).
+# Les codes des refus des imports par chemin (service::import_folder() dans host/service.h).
 import_codes = ["import_path_relative", "import_path_network", "import_path_device", "import_path_invalid",
                 "import_use_upload", "import_not_bundle", "import_not_found", "import_path_link",
                 "import_folder_insecure"]
@@ -853,7 +853,7 @@ paths = {
                                  "responses": {"200": reply("The lines", {"type": "object"})}}},
 }
 
-# On the server of the local network, every route but the login answers 401 without the cookie of the login.
+# Sur le serveur du réseau local, chaque route sauf la connexion répond 401 sans le cookie de la connexion.
 lan_unauthorized = reply("On the server of the local network, without the cookie of /albireo/v1/lan/login (code "
                          "lan_login)", ref("Error"))
 for path, operations in paths.items():

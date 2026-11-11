@@ -1,26 +1,27 @@
-// Products of the long passes through Accelerate, for the macOS port (Apple Silicon),
-// included by qkernels.cpp inside its anonymous namespace before matmul_float() when
-// ALBIREO_QK_ACCELERATE is set.
+// Produits des longues passes via Accelerate, pour le portage macOS (Apple Silicon),
+// inclus par qkernels.cpp dans son espace de noms anonyme avant matmul_float() quand
+// ALBIREO_QK_ACCELERATE est défini.
 
     /*
-        Apple: the products of the long passes through cblas_sgemm of Accelerate, which runs
-        them on the matrix unit of the processor, several times the rate of the NEON kernels.
-        One call is far faster than many small ones from the threads of the pool (the unit is
-        shared by the cores of a cluster): the weights are expanded to floats by slices of
-        accelerate_slice rows, and while one call multiplies a slice, the other threads expand
-        the next one.  Task 0 of each section, which the calling thread takes first, makes the
-        call; the other tasks expand groups of rows.  The sums are those of Accelerate: they
-        differ from qk_dot_f32() in the last bits, as the fused multiply-adds of the AVX2
-        kernels do.
+        Apple : les produits des longues passes via cblas_sgemm d'Accelerate, qui les exécute
+        sur l'unité matricielle du processeur, à plusieurs fois le débit des noyaux NEON.
+        Un appel est bien plus rapide que de nombreux petits appels depuis les threads du thread
+        pool (l'unité est partagée par les cœurs d'un cluster) : les poids sont développés en
+        floats par tranches de accelerate_slice lignes, et pendant qu'un appel multiplie une
+        tranche, les autres threads développent la suivante.  La tâche 0 de chaque section, que
+        le thread appelant prend en premier, fait l'appel ; les autres tâches développent des
+        groupes de lignes.  Les sommes sont celles d'Accelerate : elles diffèrent de qk_dot_f32()
+        dans les derniers bits, comme le font les multiplications-additions fusionnées des noyaux
+        AVX2.
     */
     const long accelerate_slice = 256;
     const long accelerate_group = 16;
     /*
-        Below this number of tokens, the expansion of the weights, whose cost does not depend
-        on the tokens, makes the call slower than the NEON kernels (6144 rows of 2048 columns,
-        Q4_K and Q8_0, Mac M2, 8 threads: 2.3 ms against 1.7 ms at 8 tokens, about even at 16,
-        2.6 against 3.4 ms at 24).  It serves the experts of a mixture, which can receive a few
-        tokens of a long pass.
+        En dessous de ce nombre de tokens, le développement des poids, dont le coût ne dépend
+        pas des tokens, rend l'appel plus lent que les noyaux NEON (6144 lignes de 2048 colonnes,
+        Q4_K et Q8_0, Mac M2, 8 threads : 2,3 ms contre 1,7 ms à 8 tokens, à peu près égal à 16,
+        2,6 contre 3,4 ms à 24).  Il sert les experts d'un mélange, qui peuvent recevoir quelques
+        tokens d'une longue passe.
     */
     const long accelerate_min_tokens = 16;
 
@@ -45,7 +46,7 @@
             if (b.size() < static_cast<size_t>(slice_floats)) b.resize(static_cast<size_t>(slice_floats));
         const long n_slices = (rows + accelerate_slice - 1) / accelerate_slice;
         const long groups = accelerate_slice / accelerate_group;
-        // Section s multiplies slice s - 1 and expands slice s.
+        // La section s multiplie la tranche s - 1 et développe la tranche s.
         for (long s = 0; s <= n_slices; ++s)
         {
             float* next = buffers[s % 2].data();
@@ -72,11 +73,12 @@
     }
 
     /*
-        The two products of a tile of the encoder attention (qk_encoder_attention), through
-        Accelerate as well: the scores S = Q Kt of rows queries against n keys, and the
-        weighted values O += P V.  The tiles are small (64 queries, 128 keys) and the threads
-        of the pool call them together, which costs Accelerate much of its rate, but it stays
-        far ahead of the portable loops, which read Kt across its rows one float at a time.
+        Les deux produits d'une tuile de l'attention de l'encodeur (qk_encoder_attention), via
+        Accelerate également : les scores S = Q Kt de rows requêtes contre n clés, et les
+        valeurs pondérées O += P V.  Les tuiles sont petites (64 requêtes, 128 clés) et les threads
+        du thread pool les appellent ensemble, ce qui coûte à Accelerate une bonne part de son
+        débit, mais il reste loin devant les boucles portables, qui lisent Kt en travers de ses
+        lignes un float à la fois.
     */
     void encoder_scores_accelerate(const float* Q, long rows, long hd, const float* Kt, long ldk, long n,
         float* S, long lds)

@@ -15,61 +15,64 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The settings of the service, kept in settings.json in the data folder,
-                which the users of the machine read (the tray takes the port there) and the
-                administrators change, through the administration interface or the
-                installer.  The service restarts itself when the port, the drive, the order
-                of the dates or the proxy change.
+                Les réglages du service, gardés dans settings.json dans le dossier de
+                données, que les utilisateurs de la machine lisent (la zone de notification y
+                prend le port) et que les administrateurs modifient, par l'interface
+                d'administration ou l'installateur.  Le service redémarre de lui-même quand
+                le port, le lecteur, l'ordre des dates ou le proxy changent.
         !*/
         int port = 8444;
-        std::string language = "auto";          // auto, en, fr, de, it, es: the tray, the shell, the descriptions
-        std::string drive_letter = "A";         // the letter of the drive, empty without drive
-        std::string date_order = "dmy";         // dmy or mdy: the numeric dates the detector reads
-        std::string albireo = "auto";           // auto: the pictures are described when Albireo answers; off
-        int max_file_mb = 150;                  // the largest file processed, in MB
+        std::string language = "auto";          // auto, en, fr, de, it, es : zone de notification, shell, descriptions
+        std::string drive_letter = "A";         // la lettre du lecteur, vide sans lecteur
+        std::string date_order = "dmy";         // dmy ou mdy : les dates numériques que lit le détecteur
+        std::string albireo = "auto";           // auto : les images sont décrites quand Albireo répond ; off
+        int max_file_mb = 150;                  // le plus gros fichier traité, en Mo
         /*
-            The days an original stays kept once its file left the drive, 0 for always; whatever
-            the days, the originals kept never take more than history_mb, nor leave the disk of
-            the data folder with less than 256 MB free: the oldest go first (service::make_room()).
+            Les jours pendant lesquels un original reste gardé une fois que son fichier a quitté le
+            lecteur, 0 pour toujours ; quels que soient les jours, les originaux gardés ne prennent
+            jamais plus que history_mb, ni ne laissent au disque du dossier de données moins de
+            256 Mo libres : les plus anciens partent d'abord (service::make_room()).
         */
         int removed_days = 45;
         static const int max_removed_days = 3650;
-        int history_mb = 10240;                 // the space the originals kept may take, in MB, max_file_mb at least
+        int history_mb = 10240;                 // l'espace permis aux originaux gardés, en Mo, max_file_mb au moins
         static const int max_history_mb = 1048576;
         /*
-            Whether the values of the files take their tags, which give them back from any copy with the
-            key; false writes their substitutes alone, which only the record of the file gives back while
-            it lasts: the drive, the web application and the interface take it unless a request says.
+            Si les valeurs des fichiers prennent leurs tags, qui les rendent à partir de n'importe quelle
+            copie avec la clé ; false écrit leurs seuls substituts, que seul l'enregistrement du fichier
+            rend tant qu'il dure : le lecteur, l'application web et l'interface le prennent sauf si une
+            requête le précise.
         */
         bool tags = true;
-        bool trust_authority = true;            // the local authority in the trusted roots (the installer)
-        std::string proxy;                      // "", "none" or http://host:port (http_fetch.h)
+        bool trust_authority = true;            // l'autorité locale dans les racines de confiance (l'installateur)
+        std::string proxy;                      // "", "none" ou http://host:port (http_fetch.h)
 
         json to_json() const;
         static host_settings from_json(const json& j);
     };
 
-    // Whether a drive letter is one the drive may take: D to Z, or A and B, without colon.
+    // Si une lettre de lecteur est de celles que le lecteur peut prendre : D à Z, ou A et B, sans deux-points.
     bool valid_drive_letter(const std::string& letter);
 
     class settings_store
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                settings.json, read at start and written atomically at each change, outside
-                the lock that get() takes.  A file that is no longer valid JSON is replaced by
-                the defaults, kept aside as settings.json.invalid; a file that cannot be read
-                stays as it is.  In both cases the originals of the files removed from the
-                drive are kept without limit of time (removed_days 0) until the settings are
-                set again, within the space of history_mb.
+                settings.json, lu au démarrage et écrit de façon atomique à chaque
+                changement, hors du verrou que prend get().  Un fichier qui n'est plus du JSON
+                valide est remplacé par les valeurs par défaut, et mis de côté sous le nom
+                settings.json.invalid ; un fichier qui ne peut pas être lu reste tel quel.
+                Dans les deux cas, les originaux des fichiers retirés du lecteur sont gardés
+                sans limite de temps (removed_days 0) jusqu'à ce que les réglages soient de
+                nouveau définis, dans l'espace de history_mb.
         !*/
     public:
         explicit settings_store(const std::string& path);
 
         host_settings get() const;
         bool set(const host_settings& s);
-        // Applies change to the current settings and writes them in one step: result receives
-        // them; false when they could not be written.
+        // Applique change aux réglages actuels et les écrit en une seule étape : result les
+        // reçoit ; false quand ils n'ont pas pu être écrits.
         bool update(const std::function<void(host_settings&)>& change, host_settings& result);
         const std::string& path() const { return path_; }
 

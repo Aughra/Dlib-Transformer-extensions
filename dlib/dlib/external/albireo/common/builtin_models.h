@@ -11,52 +11,52 @@ namespace albireo
 {
 
     /*!
-        The models that come with Albireo: a language model that serves the three functions
-        of the web application and the embedding model of the document search, prepared by
-        the build (tools/albireo_builtin.cpp, from resources/builtin_models.json) and named
-        with the suffix "-albireo".
+        Les modèles fournis avec Albireo : un modèle de langage qui sert les trois fonctions
+        de l'application web et le modèle d'embeddings de la recherche dans les documents,
+        préparés par le build (tools/albireo_builtin.cpp, à partir de resources/builtin_models.json)
+        et nommés avec le suffixe "-albireo".
 
-        In an installation they lie in the "models" folder of the programs, with their
-        manifest builtin.json, which the service reads at each start: builtin_manifest_name
-        in builtin_models_folder.  The manifest is {"format": 1, "version", "models": [...]},
-        each model with the fields of a catalog entry and "file", "size" and "sha256"; a model
-        that reads images has a "projector" with its own "file", "size" and "sha256", the file
-        of its image encoder.
+        Dans une installation, ils se trouvent dans le dossier "models" des programmes, avec leur
+        manifeste builtin.json, que le service lit à chaque démarrage : builtin_manifest_name
+        dans builtin_models_folder.  Le manifeste est {"format": 1, "version", "models": [...]},
+        chaque modèle avec les champs d'une entrée du catalogue et "file", "size" et "sha256" ; un
+        modèle qui lit des images a un "projector" avec ses propres "file", "size" et "sha256", le
+        fichier de son encodeur d'images.
 
-        The complete installer carries them after the sections of its program, as an overlay
-        that Windows does not map:
+        L'installateur complet les porte après les sections de son programme, sous forme d'une
+        surcouche (overlay) que Windows ne mappe pas :
 
-            the files of the models, one after the other, each followed by its projector
-            the manifest, each model and each projector with "offset", the position of its
-                file from the start of the overlay
-            zeros, so that the overlay ends on a multiple of 8 bytes
+            les fichiers des modèles, l'un après l'autre, chacun suivi de son projecteur
+            le manifeste, chaque modèle et chaque projecteur avec "offset", la position de son
+                fichier depuis le début de la surcouche
+            des zéros, pour que la surcouche se termine sur un multiple de 8 octets
             builtin_trailer
 
-        The overlay ends at the end of the file, or at the certificate table of a signed
-        installer, which follows the overlay and covers it; the reader skips up to 7 bytes
-        of zeros a signing tool may add before the table.
+        La surcouche se termine à la fin du fichier, ou à la table des certificats d'un
+        installateur signé, qui suit la surcouche et la couvre ; le lecteur saute jusqu'à 7 octets
+        de zéros qu'un outil de signature peut ajouter avant la table.
 
-        Windows runs no program of 4 GiB or more (max_installer_size): when the program and
-        its models would reach that size, the overlay lies in a file of its own beside the
-        installer, named after it with the extension builtin_overlay_extension
-        (albireo-setup.exe, albireo-setup.models), the overlay alone from its first byte, and
-        the installer is the program without models.  Its manifest names the version of the
-        installer it goes with; the installer reads it when it carries no overlay, and both
-        files travel together.
+        Windows n'exécute aucun programme de 4 Gio ou plus (max_installer_size) : quand le programme
+        et ses modèles atteindraient cette taille, la surcouche se trouve dans un fichier à part à
+        côté de l'installateur, nommé d'après lui avec l'extension builtin_overlay_extension
+        (albireo-setup.exe, albireo-setup.models), la surcouche seule dès son premier octet, et
+        l'installateur est le programme sans modèles.  Son manifeste nomme la version de
+        l'installateur auquel il est associé ; l'installateur le lit quand il ne porte pas de
+        surcouche, et les deux fichiers voyagent ensemble.
     !*/
 
     const char* const builtin_models_folder = "models";
     const char* const builtin_manifest_name = "builtin.json";
     const char* const builtin_overlay_extension = ".models";
-    // The largest program Windows runs: 4 GiB less one byte.
+    // Le plus gros programme que Windows exécute : 4 Gio moins un octet.
     const uint64_t max_installer_size = 0xFFFFFFFFull;
 
     struct builtin_trailer
     {
-        char magic[16];               // builtin_magic, without its terminating zero
-        uint64_t manifest_offset = 0; // from the start of the overlay
+        char magic[16];               // builtin_magic, sans son zéro terminal
+        uint64_t manifest_offset = 0; // depuis le début de la surcouche
         uint64_t manifest_size = 0;
-        uint64_t overlay_size = 0;    // the whole overlay, trailer included
+        uint64_t overlay_size = 0;    // toute la surcouche, trailer compris
         uint64_t reserved = 0;
 
         builtin_trailer() { std::memcpy(magic, "ALBIREO-MODELS-1", 16); }
@@ -67,12 +67,14 @@ namespace albireo
 
     /*!
         requires
-            - read(position, data, size) reads size bytes of the file at position, true when it can.
+            - read(position, data, size) lit size octets du fichier à la position position, et
+              renvoie true quand il le peut.
         ensures
-            - Finds the overlay that ends at end, or up to 7 bytes of zeros before it, and starts at
-              lower or after: start receives its position, trailer its trailer and manifest the
-              text of its manifest.
-            - Returns false when no valid trailer ends there, or when its sizes do not fit.
+            - Trouve la surcouche qui se termine à end, ou jusqu'à 7 octets de zéros avant, et
+              commence à lower ou après : start reçoit sa position, trailer son trailer et manifest
+              le texte de son manifeste.
+            - Renvoie false quand aucun trailer valide ne se termine là, ou quand ses tailles ne
+              tiennent pas.
     !*/
     template <typename reader>
     bool find_builtin_overlay(const reader& read, uint64_t lower, uint64_t end, uint64_t& start,

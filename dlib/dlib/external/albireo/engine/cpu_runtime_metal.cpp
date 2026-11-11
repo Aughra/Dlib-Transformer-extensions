@@ -1,13 +1,13 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 //
-// The passes of the generation on the GPU of the Mac (macOS port): cpu_runtime::set_gpu() and
-// the functions it adds.  A pass of up to metal_device::max_tokens tokens of a dense model runs
-// whole on the GPU, in one command: the processor writes the embeddings of its tokens, the
-// cosines and sines of their positions and the blocks of their sequences into buffers they
-// share, the GPU computes every layer, the keys and values going into the region of the pool,
-// where the processor reads them too, and the logits of the rows asked for.  A pass of more
-// tokens (a prompt), of a mixture of experts or of the images stays on the processor.
+// Les passes de la génération sur le GPU du Mac (portage macOS) : cpu_runtime::set_gpu() et les
+// fonctions qu'il ajoute.  Une passe d'au plus metal_device::max_tokens tokens d'un modèle dense
+// s'exécute entière sur le GPU, en une seule commande : le processeur écrit les embeddings de ses
+// tokens, les cosinus et sinus de leurs positions et les blocs de leurs séquences dans des tampons
+// qu'ils partagent, le GPU calcule chaque couche, les clés et valeurs allant dans la région du pool,
+// où le processeur les lit aussi, ainsi que les logits des lignes demandées.  Une passe de plus de
+// tokens (un prompt), d'un mélange d'experts ou des images reste sur le processeur.
 
 #include "cpu_runtime.h"
 
@@ -28,14 +28,14 @@ namespace albireo
         metal_device* device = nullptr;
         std::function<void(int, const std::string&)> log;
         enum { unchecked, ready, dropped } state = unchecked;
-        // The passes after a check put off for lack of room, before the next one.
+        // Les passes après un contrôle reporté par manque de place, avant le suivant.
         int wait = 0;
 
-        // The weights: the whole mapping of the file, without copy.
+        // Les poids : tout le mappage du fichier, sans copie.
         metal_buffer weights;
         size_t weights_offset = 0;
         const uint8_t* file_base = nullptr;
-        // The norms and the biases, copied once, and where each vector starts in them.
+        // Les normes et les biais, copiés une fois, et l'endroit où chaque vecteur y commence.
         metal_buffer vectors;
         struct layer_vectors
         {
@@ -43,13 +43,13 @@ namespace albireo
         };
         std::vector<layer_vectors> layers;
         size_t output_norm = 0;
-        // The region of the pool, taken again larger when a block lies beyond it.
+        // La région du pool, reprise plus grande quand un bloc se trouve au-delà.
         metal_buffer region;
         size_t region_covered = 0;
-        // The work buffers of a pass, for capacity tokens.
+        // Les tampons de travail d'une passe, pour capacity tokens.
         metal_buffer x, xn, q, k, v, ctx, gate, up, hidden, logits, cs, blocks, rows, lengths, table, partial;
         size_t capacity = 0, table_capacity = 0, partial_capacity = 0;
-        // The weights of a product of a prompt expanded to floats, two buffers in turn.
+        // Les poids d'un produit d'un prompt développés en floats, deux tampons à tour de rôle.
         metal_buffer expanded[2];
         size_t expanded_floats = 0;
         int turn = 0;
@@ -80,16 +80,17 @@ namespace albireo
     namespace
     {
         /*
-            The passes of more tokens than metal_device::max_tokens (prompts) go to the GPU from
-            qk_float_product_tokens tokens on, where the processor also turns to products in floats,
-            and while the context they end at holds gpu_prompt_context_ positions at most.  Measured on
-            the M2 (bench_runtime, keys and values in 8 bits): the GPU reads a prompt of 24 tokens
-            about twice as fast as the processor (it expands every weight once a pass, about 200 ms for
-            a model of 2B), of 1 024 tokens 1.7 to 2.1 times as fast, of 2 048 tokens 1.2 to 1.7
-            times; beyond, its attention, one simdgroup reading the keys after the others for each
-            token, falls behind on a model of 2B (4 096 tokens: 134 tokens/s against 173).
+            Les passes de plus de tokens que metal_device::max_tokens (les prompts) vont au GPU à partir de
+            qk_float_product_tokens tokens, là où le processeur passe lui aussi aux produits en floats, et
+            tant que le contexte où elles finissent contient au plus gpu_prompt_context_ positions.  Mesuré
+            sur le M2 (bench_runtime, clés et valeurs en 8 bits) : le GPU lit un prompt de 24 tokens environ
+            deux fois plus vite que le processeur (il développe chaque poids une fois par passe, environ
+            200 ms pour un modèle 2B), un prompt de 1 024 tokens 1,7 à 2,1 fois plus vite, de 2 048 tokens
+            1,2 à 1,7 fois ; au-delà, son attention, un simdgroup lisant les clés après les autres pour
+            chaque token, prend du retard sur un modèle 2B (4 096 tokens : 134 tokens/s contre 173).
         */
-        // The defaults of set_gpu_prompts(), which the settings gpu_prompt_tokens and gpu_prompt_context change.
+        // Les valeurs par défaut de set_gpu_prompts(), que changent les réglages gpu_prompt_tokens et
+        // gpu_prompt_context.
     }
 
     void cpu_runtime::set_gpu(metal_device& device, std::function<void(int, const std::string&)> log)
@@ -97,7 +98,8 @@ namespace albireo
         gpu_.reset();
         const long hd = cfg_.head_dim;
         const long rep = cfg_.n_kv_heads > 0 ? cfg_.n_heads / cfg_.n_kv_heads : 0;
-        // The models the kernels cover: dense, their heads of 64 to 256 values, every product in Q4_K or Q6_K.
+        // Les modèles que couvrent les noyaux : denses, leurs têtes de 64 à 256 valeurs, chaque produit en
+        // Q4_K ou Q6_K.
         std::string why;
         if (cfg_.is_moe()) why = "a mixture of experts";
         else if (hd != 64 && hd != 128 && hd != 256) why = "heads of " + std::to_string(hd) + " values";
@@ -128,12 +130,12 @@ namespace albireo
             note_gpu("the weights cannot be taken without copy");
             return;
         }
-        // The norms and the biases, one after the other.
+        // Les normes et les biais, l'un après l'autre.
         std::vector<float> all;
         auto add = [&](const std::vector<float>& v) {
             const size_t at = all.size() * sizeof(float);
             all.insert(all.end(), v.begin(), v.end());
-            // Each vector starts on 16 bytes.
+            // Chaque vecteur commence sur 16 octets.
             while (all.size() % 4) all.push_back(0.0f);
             return at;
         };
@@ -152,7 +154,7 @@ namespace albireo
         g->output_norm = add(output_norm_);
         g->vectors = need(device, all.size() * sizeof(float));
         std::memcpy(g->vectors.contents(), all.data(), all.size() * sizeof(float));
-        // The logits and the hidden states of the rows asked for, max_tokens at most.
+        // Les logits et les états cachés des lignes demandées, max_tokens au plus.
         const size_t R = metal_device::max_tokens;
         g->hidden = need(device, R * cfg_.d_model * sizeof(float));
         g->logits = need(device, R * cfg_.vocab * sizeof(float));
@@ -160,7 +162,7 @@ namespace albireo
         grow_gpu(metal_device::max_tokens);
     }
 
-    // The work buffers of the passes, grown to tokens tokens.
+    // Les tampons de travail des passes, agrandis à tokens tokens.
     void cpu_runtime::grow_gpu(size_t tokens)
     {
         gpu_state& g = *gpu_;
@@ -233,14 +235,14 @@ namespace albireo
     }
 
     /*
-        The check of the GPU, at its first pass: two sequences read the same prompt on the
-        processor, then take the same two steps, one on the GPU, the other on the processor.
-        The processor computes its products in single precision floats (float_products_), as the
-        GPU does: with the 8-bit activations of its own kernels, the logits of a model of 28
-        layers differ from exact ones by a few percent, which would hide a defect of the GPU or
-        refuse a sound one.  The logits of each step agree within 1 % and give the same most
-        likely token, or the passes stay on the processor.  A check that lacks room for its
-        sequences waits a few passes.
+        Le contrôle du GPU, à sa première passe : deux séquences lisent le même prompt sur le
+        processeur, puis font les deux mêmes étapes, l'une sur le GPU, l'autre sur le processeur.
+        Le processeur calcule ses produits en floats simple précision (float_products_), comme le
+        fait le GPU : avec les activations 8 bits de ses propres noyaux, les logits d'un modèle de
+        28 couches diffèrent des valeurs exactes de quelques pour cent, ce qui masquerait un défaut
+        du GPU ou en refuserait un sain.  Les logits de chaque étape concordent à 1 % près et donnent
+        le même token le plus probable, sinon les passes restent sur le processeur.  Un contrôle qui
+        manque de place pour ses séquences attend quelques passes.
     */
     bool cpu_runtime::gpu_ready()
     {
@@ -251,7 +253,7 @@ namespace albireo
             --gpu_->wait;
             return false;
         }
-        // A prompt long enough to take the path of the prompts on the GPU.
+        // Un prompt assez long pour prendre le chemin des prompts sur le GPU.
         const long n = std::max<long>(32, gpu_prompt_min_), V = cfg_.vocab;
         const int a = create_sequence(), b = create_sequence();
         struct release
@@ -280,7 +282,7 @@ namespace albireo
         float_products_ = true;
         std::ostringstream detail;
         bool agree = true;
-        // The logits of a pass on the GPU against those of the processor, into detail.
+        // Les logits d'une passe sur le GPU contre ceux du processeur, dans detail.
         auto compare = [&](const char* what, double limit) {
             double diff = 0, norm = 0;
             long ig = 0, ic = 0;
@@ -294,10 +296,11 @@ namespace albireo
             const double relative = std::sqrt(diff / std::max(norm, 1e-30));
             detail << (detail.tellp() > 0 ? "; " : "") << what << ": logits within " << relative * 100
                 << "% of those of the processor, most likely token " << (ig == ic ? "the same" : "different");
-            // Written so that a value that is not a number fails.
+            // Écrit de sorte qu'une valeur qui n'est pas un nombre échoue.
             if (!(relative <= limit) || ig != ic) agree = false;
         };
-        // The prompt: on the GPU for the first sequence when the prompts go to it, on the processor otherwise.
+        // Le prompt : sur le GPU pour la première séquence quand les prompts y vont, sur le processeur
+        // sinon.
         const bool gpu_prompt = n >= gpu_prompt_min_ && n <= gpu_prompt_context_;
         prompt.logit_rows.assign(1, n - 1);
         prompt.segments.assign(1, { a, 0, n });
@@ -314,12 +317,12 @@ namespace albireo
         prompt.segments.assign(1, { b, 0, n });
         run(prompt, on_cpu, false);
         /*
-            A prompt writes the keys and values of all its tokens: in 8 bits, a value that a difference
-            of rounding of 1e-7 moves across the middle of two integers takes the other one, a step of
-            about 1 % of its group, which the next layers carry and multiply.  Its logits then differ
-            from those of the processor by one or two percent with sound kernels (1.5 % on the 2B,
-            16 tokens; 0.04 % with the keys and values in half precision).  A defect gives far more,
-            and another most likely token.
+            Un prompt écrit les clés et valeurs de tous ses tokens : en 8 bits, une valeur qu'une différence
+            d'arrondi de 1e-7 fait passer de l'autre côté du milieu de deux entiers prend l'autre entier, un
+            pas d'environ 1 % de son groupe, que les couches suivantes portent et multiplient.  Ses logits
+            diffèrent alors de ceux du processeur d'un ou deux pour cent avec des noyaux sains (1,5 % sur
+            le 2B, 16 tokens ; 0,04 % avec les clés et valeurs en demi-précision).  Un défaut donne bien
+            plus, et un autre token le plus probable.
         */
         if (gpu_prompt) compare("prompt", kv_.format() == kv_format::q8 ? 0.05 : 0.01);
         for (int step = 0; step < 2; ++step)
@@ -367,7 +370,7 @@ namespace albireo
         const float eps = static_cast<float>(cfg_.rms_eps), rs = static_cast<float>(cfg_.residual_scale);
         const bool q8 = kv_.format() == kv_format::q8;
 
-        // The positions of the tokens, which continue their sequences, as run() checks them.
+        // Les positions des tokens, qui prolongent leurs séquences, telles que run() les vérifie.
         positions_.assign(static_cast<size_t>(T), 0);
         long max_pos = 0;
         std::vector<int> seq_of(static_cast<size_t>(T));
@@ -385,8 +388,8 @@ namespace albireo
                 max_pos = std::max(max_pos, seq.length + j);
             }
         }
-        // The rotary positions the batch gives (the multimodal models give them for every token, the
-        // same three components for a token of text), as run() takes them.
+        // Les positions rotatives que donne le lot (les modèles multimodaux les donnent pour chaque token,
+        // les trois mêmes composantes pour un token de texte), telles que run() les prend.
         const bool given = !batch.positions.empty();
         long max_rope = max_pos;
         if (given)
@@ -405,8 +408,8 @@ namespace albireo
         grow_gpu(static_cast<size_t>(T));
         std::memcpy(g.x.contents(), x_.data(), sizeof(float) * T * d);
 
-        // The cosines and sines of each token, the block and the row each one writes, the length it
-        // sees, and the blocks of its sequence.
+        // Les cosinus et sinus de chaque token, le bloc et la ligne que chacun écrit, la longueur qu'il
+        // voit, et les blocs de sa séquence.
         float* cs = static_cast<float*>(g.cs.contents());
         int* blk = static_cast<int*>(g.blocks.contents());
         int* row = static_cast<int*>(g.rows.contents());
@@ -439,7 +442,7 @@ namespace albireo
                 if (j < seq.blocks.size()) last_block = std::max(last_block, static_cast<size_t>(b));
             }
         }
-        // The region of the pool, covering every block of these sequences.
+        // La région du pool, couvrant chaque bloc de ces séquences.
         const size_t covered = kv_.block_offset(static_cast<int>(last_block) + 1);
         if (g.region_covered < covered)
         {
@@ -450,8 +453,8 @@ namespace albireo
             g.region = r;
             g.region_covered = want;
         }
-        // The attention of a step goes in parts of attention_part positions; a prompt has enough
-        // tokens to fill the GPU with one part each.
+        // L'attention d'une étape se fait par parties de attention_part positions ; un prompt a assez de
+        // tokens pour remplir le GPU avec une partie chacun.
         const bool step = T <= static_cast<long>(metal_device::max_tokens);
         const unsigned part_len = step ? metal_device::attention_part : static_cast<unsigned>(max_pos + 1);
         const unsigned parts = static_cast<unsigned>((max_pos + 1 + part_len - 1) / part_len);
@@ -462,7 +465,7 @@ namespace albireo
             g.partial = need(dev, g.partial_capacity * sizeof(float));
             note_gpu();
         }
-        // The weights of a prompt expanded to floats: the largest matrix of a layer, twice.
+        // Les poids d'un prompt développés en floats : la plus grande matrice d'une couche, deux fois.
         if (!step && g.expanded_floats == 0)
         {
             size_t largest = 0;
@@ -480,7 +483,7 @@ namespace albireo
         const unsigned uT = static_cast<unsigned>(T);
         auto c = dev.begin();
         auto at = [&](const metal_buffer& b, size_t offset) { return metal_view(b, offset); };
-        // A product of the pass: by blocks in place for a step, expanded then through MPS for a prompt.
+        // Un produit de la passe : par blocs en place pour une étape, développé puis via MPS pour un prompt.
         auto product = [&](const weight_matrix& M, const metal_buffer& x, long x_stride, const metal_buffer& y, long y_stride,
                            float alpha, float beta) {
             if (step)
@@ -507,7 +510,7 @@ namespace albireo
             kl.v_slab = kv_.slab_offset(true, li, 0);
             kl.head_stride = kv_.slab_offset(false, li, 1) - kv_.slab_offset(false, li, 0);
 
-            // Attention block.
+            // Bloc d'attention.
             c->rms_norm(g.x, at(g.vectors, lv.attn_norm), g.xn, uT, d, d, d, eps);
             if (step && L.wq.type == L.wk.type && qd % 16 == 0)
                 c->matvec2(L.wq.type, at(g.weights, g.weight(L.wq)), qd, at(g.weights, g.weight(L.wk)), kvd, d, g.xn, uT, d,
@@ -538,7 +541,7 @@ namespace albireo
                 g.partial, g.ctx, kl, part_len);
             product(L.wo, g.ctx, qd, g.x, d, rs, 1.0f);
 
-            // Feed-forward block.
+            // Bloc feed-forward.
             c->rms_norm(g.x, at(g.vectors, lv.ffn_norm), g.xn, uT, d, d, d, eps);
             if (step && L.w_gate.type == L.w_up.type && df % 16 == 0)
                 c->matvec2(L.w_gate.type, at(g.weights, g.weight(L.w_gate)), df, at(g.weights, g.weight(L.w_up)), df, d,
@@ -551,7 +554,7 @@ namespace albireo
             c->silu_mul(g.gate, g.up, static_cast<unsigned>(T * df));
             product(L.w_down, g.gate, df, g.x, d, rs, 1.0f);
         }
-        // Final normalization and logits of the requested rows only.
+        // Normalisation finale et logits des seules lignes demandées.
         const long R = static_cast<long>(batch.logit_rows.size());
         for (long r = 0; r < R; ++r)
             c->rms_norm(at(g.x, sizeof(float) * batch.logit_rows[static_cast<size_t>(r)] * d), at(g.vectors, g.output_norm),

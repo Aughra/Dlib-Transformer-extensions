@@ -1,10 +1,10 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// Calls to the local service: its OpenAI compatible interface and its own interface.
+// Appels au service local : son interface compatible OpenAI et sa propre interface.
 
-// An error of the service, with the code of its answer (model_not_found,
-// context_length_exceeded, unloaded...), which the interface explains in its language.
+// Une erreur du service, avec le code de sa réponse (model_not_found,
+// context_length_exceeded, unloaded...), que l'interface explique dans sa langue.
 function serviceError(message, code) {
   const e = new Error(message);
   if (code) e.code = code;
@@ -12,8 +12,8 @@ function serviceError(message, code) {
 }
 
 /*
-    The error of an answer of the service, with retryAfter, the seconds its Retry-After header asks to wait before the
-    request is sent again (busy, engine_busy, starting, model_loading), when it gives them.
+    L'erreur d'une réponse du service, avec retryAfter, les secondes que son en-tête Retry-After demande d'attendre
+    avant de renvoyer la requête (busy, engine_busy, starting, model_loading), quand il les donne.
 */
 async function errorOf(r) {
   let e = null;
@@ -24,7 +24,7 @@ async function errorOf(r) {
         j.error.code);
     }
   } catch (x) {
-    // The body was not JSON.
+    // Le corps n'était pas du JSON.
   }
   if (!e) e = serviceError(r.status + ' ' + r.statusText);
   const wait = Number(r.headers.get('Retry-After'));
@@ -38,14 +38,14 @@ export async function getJSON(url, signal) {
   return r.json();
 }
 
-// A signal that ends a request after ms milliseconds, where the browser offers one.
+// Un signal qui met fin à une requête après ms millisecondes, là où le navigateur en propose un.
 function timeout(ms) {
   return typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(ms) : undefined;
 }
 
 /*
-    A signal that ends a request after ms milliseconds (a TimeoutError), or as soon as signal ends it (its
-    reason): {signal, done}, done forgetting the timer and the listener once the request ended.
+    Un signal qui met fin à une requête après ms millisecondes (une TimeoutError), ou dès que signal y met fin (avec
+    sa raison) : {signal, done}, done oubliant le minuteur et l'écouteur une fois la requête terminée.
 */
 export function limitedSignal(signal, ms) {
   const controller = new AbortController();
@@ -67,7 +67,7 @@ export function limitedSignal(signal, ms) {
   };
 }
 
-// A sound of the service (the speech synthesis), as a Blob.
+// Un son du service (la synthèse vocale), sous forme de Blob.
 export async function postAudio(url, body, signal) {
   const r = await fetch(url, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal
@@ -93,9 +93,9 @@ export async function postJSON(url, body, signal) {
 }
 
 /*
-    Streams a chat completion.  Yields {type: 'chunk', data} for each chunk of the
-    interface, and {type: 'progress', data} for the progress of a long prompt, which the
-    service sends as comment lines.
+    Diffuse en flux une complétion de chat.  Produit {type: 'chunk', data} pour chaque morceau de
+    l'interface, et {type: 'progress', data} pour l'avancement d'un long prompt, que le
+    service envoie sous forme de lignes de commentaire.
 */
 export async function* streamChat(body, signal) {
   const r = await fetch('/v1/chat/completions', {
@@ -121,7 +121,7 @@ export async function* streamChat(body, signal) {
       for (const line of block.split('\n')) {
         if (line.startsWith('data: ')) {
           const payload = line.slice(6);
-          // The response is read to its end, so that the connection stays reusable.
+          // La réponse est lue jusqu'au bout, pour que la connexion reste réutilisable.
           if (payload === '[DONE]') { finished = true; break; }
           const data = JSON.parse(payload);
           if (data.error) throw serviceError(data.error.message || 'error', data.error.code);
@@ -130,7 +130,7 @@ export async function* streamChat(body, signal) {
           try {
             yield { type: 'progress', data: JSON.parse(line.slice(11)) };
           } catch (e) {
-            // A malformed progress line is ignored.
+            // Une ligne d'avancement mal formée est ignorée.
           }
         }
       }
@@ -138,7 +138,7 @@ export async function* streamChat(body, signal) {
   }
 }
 
-// The status of the service, which a service that no longer answers leaves unknown after a while.
+// L'état du service, qu'un service qui ne répond plus laisse inconnu au bout d'un moment.
 export function status() {
   return getJSON('/albireo/v1/status', timeout(8000));
 }
@@ -151,7 +151,7 @@ export function usage() {
   return getJSON('/albireo/v1/usage');
 }
 
-// Number of tokens of a list of messages for the model of a role, and its context.
+// Nombre de tokens d'une liste de messages pour le modèle d'un rôle, et son contexte.
 export function count(model, messages, tools) {
   const body = { model, messages };
   if (tools) body.tools = tools;
