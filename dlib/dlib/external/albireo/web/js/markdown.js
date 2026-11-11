@@ -157,6 +157,23 @@ export function renderMarkdown(text, live) {
 }
 
 // The copy buttons of the code blocks of an element.
+// Outside of a secure page (the network access, in http), a selected text area is copied instead of the clipboard.
+function copyBySelection(text) {
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.append(area);
+  area.select();
+  try {
+    document.execCommand('copy');
+  } catch (e) {
+    // Nothing more to try.
+  }
+  area.remove();
+}
+
 export function attachCodeButtons(root, label) {
   for (const b of root.querySelectorAll('button[data-action="copy-code"]')) {
     if (b.dataset.bound) continue;
@@ -164,7 +181,9 @@ export function attachCodeButtons(root, label) {
     if (label) b.lastChild.textContent = label;
     b.addEventListener('click', () => {
       const code = b.closest('pre').querySelector('code');
-      navigator.clipboard.writeText(code ? code.innerText : '').catch(() => {});
+      const text = code ? code.innerText : '';
+      if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+      else copyBySelection(text);
       const span = b.lastChild;
       const before = span.textContent;
       span.textContent = '✓';

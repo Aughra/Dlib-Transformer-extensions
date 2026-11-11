@@ -107,7 +107,6 @@ namespace albireo
         // The programs and the data.
         std::string program_dir() const { return program_dir_; }
         std::string data_dir() const { return data_dir_; }
-        std::string admin_token() const { return admin_token_; }
         int port() const { return port_; }
 
         // What the interfaces need.
@@ -312,7 +311,6 @@ namespace albireo
 
         std::string program_dir_;
         std::string data_dir_;
-        std::string admin_token_;
         int port_ = 0;
         std::unique_ptr<settings_store> settings_;
         std::unique_ptr<store> db_;
@@ -334,6 +332,10 @@ namespace albireo
         // releases them, for stop(), which a thread of the system may call at any time.
         std::mutex server_m_;
         std::unique_ptr<httplib::SSLServer> server_;
+        // The HTTP server of the local network (settings lan, lan_port), and its thread.
+        std::unique_ptr<httplib::Server> lan_server_;
+        std::thread lan_thread_;
+        void start_lan_server(const host_settings& st);
 
         std::atomic<bool> stopping_{false};
         std::atomic<bool> restart_{false};
@@ -363,12 +365,16 @@ namespace albireo
         std::atomic<long long> usage_requests_{0};
     };
 
-    // Installs the routes of the HTTPS server (server.cpp).
-    void install_routes(httplib::Server& server, service& svc);
+    /*
+        Installs the routes on a server (server.cpp): the HTTPS server of the Mac, or, with lan,
+        the HTTP server of the local network, which asks for the password of the network access
+        (a cookie its login route sets) before any other route.
+    */
+    void install_routes(httplib::Server& server, service& svc, bool lan = false);
 
-    // Whether the server can open port on the loopback interface, with the options of its
-    // own socket; the port is closed again at once.
-    bool port_available(int port);
+    // Whether the server can open port on the loopback interface, or on every address with
+    // every_address, with the options of its own socket; the port is closed again at once.
+    bool port_available(int port, bool every_address = false);
 
 }
 

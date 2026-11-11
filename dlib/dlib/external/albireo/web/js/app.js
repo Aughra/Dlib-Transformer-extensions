@@ -44,6 +44,7 @@ import * as tools from './tools.js';
 import * as web from './web.js';
 import * as images from './images.js';
 import * as speech from './speech.js';
+import { serviceTab } from './service.js';
 
 const roles = ['general', 'code', 'security'];
 const roleIcons = { general: 'compass', code: 'code', security: 'shield' };
@@ -305,12 +306,32 @@ function toast(message, error, ms) {
 // Copies a text to the clipboard, and tells whether it could.
 function copyText(text) {
   const failed = () => toast(t('copyFailed'), true);
+  // Outside of a secure page (the network access, in http), the clipboard of the browser is out of reach: a
+  // selected text area is copied instead.
+  if (!navigator.clipboard) return copyBySelection(String(text || '')) ? toast(t('copied')) : failed();
   try {
     navigator.clipboard.writeText(String(text || '')).then(() => toast(t('copied')), failed);
   } catch (e) {
-    // The clipboard is out of reach outside of a secure page.
     failed();
   }
+}
+
+function copyBySelection(text) {
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.append(area);
+  area.select();
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch (e) {
+    ok = false;
+  }
+  area.remove();
+  return ok;
 }
 
 /*
@@ -6440,7 +6461,7 @@ function promptDialog(title, value) {
 
 function settingsDialog(initialTab) {
   dialog((box, close) => {
-    const tabs = ['general', 'model', 'memoryTab', 'data', 'about'];
+    const tabs = ['general', 'model', 'memoryTab', 'data', 'serviceTab', 'about'];
     const tabBar = h('div', { class: 'tabs' });
     const body = h('div');
     const show = (tab) => {
@@ -6451,6 +6472,7 @@ function settingsDialog(initialTab) {
       else if (tab === 'model') modelTab(body);
       else if (tab === 'memoryTab') memoryTab(body);
       else if (tab === 'data') dataTab(body, close);
+      else if (tab === 'serviceTab') serviceTab(body, { h, toast, status: () => state.status, refreshStatus });
       else aboutTab(body, close);
     };
     for (const tab of tabs) tabBar.append(h('button', { type: 'button', 'data-tab': tab, onclick: () => show(tab) }, t(tab)));

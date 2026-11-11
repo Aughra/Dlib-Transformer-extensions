@@ -9,7 +9,7 @@
 # Defaults: build/macos-albireo at the root of the repository, build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf
 # and build/albireo-home/models/qwen3-embedding-0.6b.gguf.  The steps whose model is missing are skipped.
 # The service runs offline in a data folder of its own, on port 18443 (ALBIREO_TEST_PORT, and
-# the next port for the local server of test_host), receives the model as the tray sends it,
+# the next port for the local server of test_host), receives the model as the web application sends it,
 # refuses it by its path, answers a question through the OpenAI interface and stops.  The
 # first step checks the tools of these tests.  The exit code is the number of failed steps.
 
@@ -137,16 +137,15 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
   done
   if curl -sk --max-time 2 https://localhost:$PORT/albireo/v1/status | grep -q '"offline":true'; then
     record "service start" PASS "offline, https://localhost:$PORT" "$(elapsed "$START")"
-    TOKEN=$(cat "$HOME_DIR/admin.token")
     # The license texts of the installation, none in a build folder, and a name outside their folder refused.
     step "service licenses" '^\[(\]|\{"file")' curl -sk --max-time 5 https://localhost:$PORT/albireo/v1/licenses
     step "service license refusal" '"code":"invalid_license"' curl -sk --max-time 5 --path-as-is \
       "https://localhost:$PORT/albireo/v1/licenses/../settings.json"
-    # A model of the user is not read by its path: the tray sends it, read with the rights of the user.
+    # A model of the user is not read by its path: the web application sends it.
     step "service import refusal" '"code":"import_use_upload"' curl -sk --max-time 30 -X POST \
-      -H "X-Albireo-Admin: $TOKEN" -H "Content-Type: application/json" -d "{\"path\": \"$MODEL\"}" \
+      -H "Content-Type: application/json" -d "{\"path\": \"$MODEL\"}" \
       https://localhost:$PORT/albireo/v1/import
-    step "service import" '"imported":\["' curl -sk --max-time 600 -X POST -H "X-Albireo-Admin: $TOKEN" \
+    step "service import" '"imported":\["' curl -sk --max-time 600 -X POST \
       -H "Content-Type: application/octet-stream" -H "Expect:" -T "$MODEL" \
       "https://localhost:$PORT/albireo/v1/models/upload?name=$(basename "$MODEL")"
     for i in $(seq 1 300); do

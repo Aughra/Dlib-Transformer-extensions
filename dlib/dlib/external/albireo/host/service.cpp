@@ -40,14 +40,6 @@ namespace albireo
         const char* const stopping_reason = "the service stops";
         const char* const offline_reason = "offline mode: no request leaves this computer";
 
-        std::string trim(const std::string& s)
-        {
-            const size_t b = s.find_first_not_of(" \t\r\n");
-            if (b == std::string::npos) return std::string();
-            const size_t e = s.find_last_not_of(" \t\r\n");
-            return s.substr(b, e - b + 1);
-        }
-
         bool ends_with(const std::string& s, const std::string& suffix)
         {
             return s.size() >= suffix.size() && s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
@@ -163,11 +155,11 @@ namespace albireo
         }
     }
 
-    bool port_available(int port)
+    bool port_available(int port, bool every_address)
     {
         httplib::Server probe;
         set_listen_options(probe);
-        const bool ok = probe.bind_to_port("127.0.0.1", port);
+        const bool ok = probe.bind_to_port(every_address ? "0.0.0.0" : "127.0.0.1", port);
         probe.stop();
         return ok;
     }
@@ -420,19 +412,6 @@ namespace albireo
             }
         }
 
-        // The token of the administration interface, read by the tray.
-        const std::string token_path = join_path(data_dir_, "admin.token");
-        std::string token;
-        if (!read_file(token_path, token, 4096) || trim(token).size() < 32)
-        {
-            token = random_hex(48);
-            if (!write_file_restricted(token_path, token, true))
-            {
-                error = "cannot write " + token_path;
-                return false;
-            }
-        }
-        admin_token_ = trim(token);
 
         const std::string cert_dir = join_path(data_dir_, "certificates");
         bool renewed = false;
@@ -573,13 +552,17 @@ namespace albireo
         {
             log_warning(std::string("server: the port served on cannot be recorded: ") + e.what());
         }
-        // The routes compare the Host header with the port opened.
         install_routes(*server_, *this);
+        start_lan_server(settings_->get());
         {
             // A stop that came before the bind found no socket to close: the bound one is
             // closed here, and listen_after_bind() returns at once.
             std::lock_guard<std::mutex> lock(server_m_);
-            if (stopping_) server_->stop();
+            if (stopping_)
+            {
+                server_->stop();
+                if (lan_server_) lan_server_->stop();
+            }
         }
         log_info("server: https://localhost:" + std::to_string(port_) + "/");
 
@@ -608,10 +591,12 @@ namespace albireo
         // engine.
         stop();
         if (background_.joinable()) background_.join();
+        if (lan_thread_.joinable()) lan_thread_.join();
         std::unique_ptr<model_manager> models;
         {
             std::lock_guard<std::mutex> lock(server_m_);
             server_.reset();
+            lan_server_.reset();
             models = std::move(models_);
         }
         models.reset();
@@ -653,6 +638,42 @@ namespace albireo
         http_cancel_all(stopping_reason);
         if (models_) models_->stop();
         if (server_) server_->stop();
+        if (lan_server_) lan_server_->stop();
+    }
+
+    /*
+        The server of the local network, in plain HTTP on every address of the Mac, with the same
+        routes behind the password of the network access.  A failure leaves the service on the
+        Mac alone, with a warning.
+    */
+    void service::start_lan_server(const host_settings& st)
+    {
+        if (!st.lan) return;
+        if (st.lan_password_hash.empty())
+        {
+            log_warning("server: the network access has no password, it stays closed");
+            return;
+        }
+        std::unique_ptr<httplib::Server> lan(new httplib::Server);
+        lan->set_payload_max_length(0);
+        lan->set_keep_alive_timeout(5);
+        lan->set_read_timeout(30);
+        lan->set_write_timeout(30);
+        lan->new_task_queue = []() { return new httplib::ThreadPool(4, 32, 64); };
+        set_listen_options(*lan);
+        if (!lan->bind_to_port("0.0.0.0", st.lan_port))
+        {
+            log_warning("server: the network port " + std::to_string(st.lan_port) + " is in use or cannot be opened");
+            return;
+        }
+        install_routes(*lan, *this, true);
+        {
+            std::lock_guard<std::mutex> lock(server_m_);
+            lan_server_ = std::move(lan);
+        }
+        log_info("server: http://<address of the Mac>:" + std::to_string(st.lan_port) + "/ for the local network");
+        httplib::Server* const raw = lan_server_.get();
+        lan_thread_ = std::thread([raw]() { raw->listen_after_bind(); });
     }
 
     void service::apply_network_settings(const host_settings& s)
@@ -1852,7 +1873,6 @@ namespace albireo
             out["current"] = "";
             out["setting"] = st.engine;
             out["accelerator"] = st.accelerator;
-            out["accelerators_available"] = false;
             return out;
         }
         json list = json::array();
@@ -1909,20 +1929,6 @@ namespace albireo
         out["current"] = choice_.key;
         out["setting"] = st.engine;
         out["accelerator"] = st.accelerator;
-        // The tray offers the choice of the accelerator while a processor engine runs.
-        bool accelerators = false;
-        for (const auto& o : engine_options(candidates_))
-            accelerators = accelerators || o.key == "cuda" || o.key == "openvino:npu" || o.key == "openvino:gpu";
-        out["accelerators_available"] = accelerators;
-        if (!accelerators)
-        {
-            // Why none is offered: no engine of a device in the installation, or none that
-            // runs on this computer (the list of the engines gives the reasons).
-            bool installed = false;
-            for (const auto& c : candidates_)
-                installed = installed || c.variant == "cuda" || is_openvino_variant(c.variant);
-            out["accelerators_reason"] = installed ? "unusable" : "not_installed";
-        }
         return out;
     }
 

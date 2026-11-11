@@ -3,7 +3,7 @@
  "info": {
   "title": "Albireo Community Edition local interface",
   "version": "1.0.12",
-  "description": "The interface of the Albireo service, served on https://localhost (port 8443 unless changed in the tray). The routes under /v1 follow the OpenAI interface, so that its client libraries work with base_url https://localhost:8443/v1 and any API key. The functions albireo-general, albireo-code and albireo-security name the models activated in the tray, albireo-background the model that comes with Albireo, which the web application uses for its work in the background, and albireo-embedding the embedding model of the search in documents.\n\nThe administration routes require the token of the data folder of the service (admin.token) in the X-Albireo-Admin header.\n\nRequests carry JSON bodies of 64 MB and 524,288 values at most, with their length: a body without length is refused with 411, a longer one with 413, another type with 415. GET, HEAD, DELETE and OPTIONS take no body (400). While the JSON bodies being read at once hold the values of their budget, a route that reads one answers 503 with the code busy and a Retry-After of 2 seconds. An answer being written whose model has no memory left for its keys and values ends with the error code out_of_memory.\n\nBefore any route, the server refuses, as plain text: a request whose Host header names another server than this computer (421), a request whose Origin header names another origin than the local server (403), so that no web site drives the service through a browser, and a body of more than 8 MB while four such bodies are being read (503, with a Retry-After header).",
+  "description": "The interface of the Albireo service, served on https://localhost (port 8443 unless changed in the Service tab of the web application), and, once the network access is on, in plain HTTP on every address of the Mac at its network port (8444 by default). The routes under /v1 follow the OpenAI interface, so that its client libraries work with base_url https://localhost:8443/v1 and any API key. The functions albireo-general, albireo-code and albireo-security name the models activated for each function, albireo-background the model that comes with Albireo, which the web application uses for its work in the background, and albireo-embedding the embedding model of the search in documents.\n\nA personal version for macOS: on the Mac, every route is open, without a token. On the network port, every route but /albireo/v1/lan/login asks for the cookie albireo_lan that the login gives.\n\nRequests carry JSON bodies of 64 MB and 524,288 values at most, with their length: a body without length is refused with 411, a longer one with 413, another type with 415. GET, HEAD, DELETE and OPTIONS take no body (400). While the JSON bodies being read at once hold the values of their budget, a route that reads one answers 503 with the code busy and a Retry-After of 2 seconds. An answer being written whose model has no memory left for its keys and values ends with the error code out_of_memory.\n\nBefore any route, the server refuses, as plain text, a body of more than 8 MB while four such bodies are being read (503, with a Retry-After header).",
   "license": {
    "name": "Boost Software License 1.0",
    "url": "https://www.boost.org/LICENSE_1_0.txt"
@@ -34,7 +34,7 @@
   },
   {
    "name": "Administration",
-   "description": "Routes of the tray, protected by the administration token"
+   "description": "Settings, models, restart and the network access"
   }
  ],
  "paths": {
@@ -51,6 +51,16 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/ModelList"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -137,6 +147,16 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -201,6 +221,16 @@
      },
      "500": {
       "description": "The engine failed the request, which was not streamed: type server_error, and code the reason the engine gives, such as out_of_memory",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -279,6 +309,16 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -347,6 +387,16 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -401,6 +451,16 @@
            ]
           }
          }
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -703,6 +763,16 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -928,6 +998,16 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -973,6 +1053,16 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -990,6 +1080,16 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/Engines"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -1031,6 +1131,16 @@
            }
           }
          }
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -1079,6 +1189,16 @@
      },
      "404": {
       "description": "No such text (code license_not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -1156,6 +1276,16 @@
            "type": "string"
           }
          }
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -1243,6 +1373,16 @@
      },
      "504": {
       "description": "The provider did not answer in time (code timeout)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -1351,6 +1491,16 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -1359,11 +1509,6 @@
    "post": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Fetches the catalog again, in the background",
     "responses": {
@@ -1396,7 +1541,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -1412,11 +1557,6 @@
    "post": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Starts or resumes the download of a model",
     "parameters": [
@@ -1487,7 +1627,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -1501,11 +1641,6 @@
    "delete": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Cancels a download",
     "parameters": [
@@ -1540,7 +1675,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -1556,11 +1691,6 @@
    "post": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Activates a model for a function",
     "parameters": [
@@ -1636,7 +1766,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -1652,11 +1782,6 @@
    "post": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Deactivates a model for every function",
     "description": "The model leaves the engine once its requests in progress and waiting are served; an activation meanwhile keeps it loaded. The model of the document search is replaced by the activation of another embedding model.",
@@ -1710,7 +1835,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -1726,11 +1851,6 @@
    "post": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Recomputes the hash of an installed model",
     "parameters": [
@@ -1757,7 +1877,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -1773,11 +1893,6 @@
    "delete": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Deletes an installed model",
     "description": "A model of the engine is deleted once its requests are served and it left the engine: pending is then true, and the model is listed under leaving until then. A model that comes with Albireo is refused with the code builtin_model.",
@@ -1831,7 +1946,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -1847,11 +1962,6 @@
    "post": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Imports a signed offline bundle, or the content of the import folder",
     "description": "For a computer without network: a memory card or a disk brought to the machine. The service reads with its own rights, so that it accepts two kinds of paths: a signed offline bundle on a local drive (a folder whose catalog.json bears the signature of Albireo), of which it reads only the signed catalog and the models it lists, by their names, sizes and hashes; and a folder or a file of the import folder of the data folder. Every file is read through no link. A model file of the user is sent through /albireo/v1/models/upload. An older catalog never replaces a newer one, and a model installed already is listed under already.",
@@ -1942,7 +2052,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -1958,11 +2068,6 @@
    "post": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Same as /albireo/v1/import",
     "requestBody": {
@@ -2028,7 +2133,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -2044,11 +2149,6 @@
    "post": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Installs a GGUF file sent in the body",
     "description": "The body is the file, of the length its Content-Length header gives: a body without length, or sent in chunks (Transfer-Encoding), is refused (400). The size limit of the JSON bodies does not apply.",
@@ -2115,7 +2215,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -2132,15 +2232,10 @@
     "tags": [
      "Administration"
     ],
-    "security": [
-     {
-      "adminToken": []
-     }
-    ],
     "summary": "Settings of the service",
     "responses": {
      "200": {
-      "description": "The settings, the password of the proxy given as ********",
+      "description": "The settings, the password of the proxy given as ********, the password of the network access as lan_password_set only, and the IPv4 addresses of the Mac (lan_addresses)",
       "content": {
        "application/json": {
         "schema": {
@@ -2150,7 +2245,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -2164,11 +2259,6 @@
    "put": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Changes settings",
     "description": "A new port is opened once before it is saved.",
@@ -2194,7 +2284,7 @@
       }
      },
      "400": {
-      "description": "A value out of range, or the masked password of the proxy with another user, host or port (code proxy_password)",
+      "description": "A value out of range, the masked password of the proxy with another user, host or port (code proxy_password), the network port equal to the port of the Mac (code lan_port_same), or the network access turned on without a password (code lan_password_missing)",
       "content": {
        "application/json": {
         "schema": {
@@ -2214,7 +2304,102 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/albireo/v1/lan/login": {
+   "post": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "Opens the network access to a device",
+    "description": "The password of the network access (setting lan_password) gives the cookie albireo_lan for 30 days (HttpOnly, SameSite=Strict); a new password ends every session. A wrong password waits a second.",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "password"
+        ],
+        "properties": {
+         "password": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "The cookie is set",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Wrong password, or none chosen (code lan_password_wrong)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/albireo/v1/lan/logout": {
+   "post": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "Ends the session of this device",
+    "responses": {
+     "200": {
+      "description": "The cookie is removed",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -2230,11 +2415,6 @@
    "post": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Restarts the service",
     "responses": {
@@ -2257,7 +2437,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -2273,11 +2453,6 @@
    "post": {
     "tags": [
      "Administration"
-    ],
-    "security": [
-     {
-      "adminToken": []
-     }
     ],
     "summary": "Measures every usable engine on this machine",
     "description": "One measure runs at a time.",
@@ -2314,7 +2489,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -2331,11 +2506,6 @@
     "tags": [
      "Administration"
     ],
-    "security": [
-     {
-      "adminToken": []
-     }
-    ],
     "summary": "Last lines of the log",
     "responses": {
      "200": {
@@ -2349,7 +2519,7 @@
       }
      },
      "401": {
-      "description": "Without the administration token, or with another value (code authentication_error)",
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -3215,7 +3385,7 @@
    },
    "Settings": {
     "type": "object",
-    "description": "Settings the tray may change; a change of port, engine or memory restarts the service.",
+    "description": "Settings the web application may change (its Service tab); a change of port, of the GPU, of the network access or of memory restarts the service.",
     "properties": {
      "port": {
       "type": "integer",
@@ -3250,12 +3420,9 @@
       "type": "string",
       "enum": [
        "auto",
-       "none",
-       "npu",
-       "gpu",
-       "both"
+       "none"
       ],
-      "description": "none: every pass of the engine on the processor, the GPU of the Mac unused; the other values let the engine give the generation steps and the prompts to the GPU (Metal)."
+      "description": "none: every pass of the engine on the processor, the GPU of the Mac unused; auto lets the engine give the generation steps and the prompts to the GPU (Metal)."
      },
      "device_mb": {
       "type": "integer",
@@ -3299,6 +3466,25 @@
       "type": "boolean",
       "default": true,
       "description": "The web access of the Web button, /albireo/v1/web/search and /albireo/v1/web/fetch; false turns it off."
+     },
+     "lan": {
+      "type": "boolean",
+      "default": false,
+      "description": "The access from the local network: a server in plain HTTP on every address of the Mac at lan_port, behind the password of lan_password. Refused (code lan_password_missing) while no password is chosen."
+     },
+     "lan_port": {
+      "type": "integer",
+      "minimum": 1024,
+      "maximum": 65535,
+      "default": 8444,
+      "description": "The port of the network access, other than port."
+     },
+     "lan_password": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 128,
+      "writeOnly": true,
+      "description": "The password of the network access, kept as its PBKDF2 hash only; a new one ends the sessions of every device."
      },
      "web_search": {
       "type": "string",
@@ -3556,16 +3742,6 @@
      },
      "accelerator": {
       "type": "string"
-     },
-     "accelerators_available": {
-      "type": "boolean"
-     },
-     "accelerators_reason": {
-      "type": "string",
-      "enum": [
-       "not_installed",
-       "unusable"
-      ]
      }
     }
    },
@@ -3592,13 +3768,6 @@
       }
      }
     }
-   }
-  },
-  "securitySchemes": {
-   "adminToken": {
-    "type": "apiKey",
-    "in": "header",
-    "name": "X-Albireo-Admin"
    }
   }
  }

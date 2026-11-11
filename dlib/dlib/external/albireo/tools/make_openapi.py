@@ -45,7 +45,6 @@ generation_replies = dict(engine_replies, **{
                  "request for a while because the images already queued for the model hold the memory kept for them "
                  "(code engine_busy, Retry-After: 5); the Retry-After header gives the seconds to wait", ref("Error")),
 })
-admin = [{"adminToken": []}]
 offline_reply = {"409": reply("Refused in offline mode", {"type": "object", "properties": {
     "ok": {"type": "boolean"}, "error": {"type": "string"}}})}
 model_id = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
@@ -291,8 +290,8 @@ schemas = {
                                          "publisher": {"type": "string",
                                                        "description": "The company that made the model, empty when "
                                                                       "unknown."}}}}}},
-    "Settings": {"type": "object", "description": "Settings the tray may change; a change of port, engine or memory "
-                 "restarts the service.", "properties": {
+    "Settings": {"type": "object", "description": "Settings the web application may change (its Service tab); a "
+                 "change of port, of the GPU, of the network access or of memory restarts the service.", "properties": {
         "port": {"type": "integer", "minimum": 1024, "maximum": 65535},
         "language": {"type": "string", "enum": ["auto", "en", "fr", "de", "it", "es"]},
         "engine": {"type": "string", "enum": ["auto", "best", "cpu", "cpu-avx2", "cpu-avxvnni", "openvino", "cuda"],
@@ -301,10 +300,9 @@ schemas = {
                    "computing the products its device does not take; the processor engine when no accelerator is "
                    "usable or when a measure found the accelerator slower. best: the fastest measured engine. A "
                    "variant: that engine, with the device of accelerator for the engines that have several."},
-        "accelerator": {"type": "string", "enum": ["auto", "none", "npu", "gpu", "both"],
+        "accelerator": {"type": "string", "enum": ["auto", "none"],
                         "description": "none: every pass of the engine on the processor, the GPU of the Mac unused; "
-                        "the other values let the engine give the generation steps and the prompts to the GPU "
-                        "(Metal)."},
+                        "auto lets the engine give the generation steps and the prompts to the GPU (Metal)."},
         "device_mb": {"type": "integer", "description": "Memory of the device for the copies of the weights of "
                       "the models, in megabytes, 0 for automatic."},
         "threads": {"type": "integer"},
@@ -328,6 +326,14 @@ schemas = {
         "web_access": {"type": "boolean", "default": True,
                        "description": "The web access of the Web button, /albireo/v1/web/search and "
                                       "/albireo/v1/web/fetch; false turns it off."},
+        "lan": {"type": "boolean", "default": False, "description": "The access from the local network: a server in "
+                "plain HTTP on every address of the Mac at lan_port, behind the password of lan_password. Refused "
+                "(code lan_password_missing) while no password is chosen."},
+        "lan_port": {"type": "integer", "minimum": 1024, "maximum": 65535, "default": 8444,
+                     "description": "The port of the network access, other than port."},
+        "lan_password": {"type": "string", "minLength": 4, "maxLength": 128, "writeOnly": True,
+                         "description": "The password of the network access, kept as its PBKDF2 hash only; a new "
+                                        "one ends the sessions of every device."},
         "web_search": {"type": "string", "enum": ["wikipedia", "none"], "default": "wikipedia",
                        "description": "The provider of /albireo/v1/web/search: wikipedia, the REST interface of "
                                       "Wikipedia; or none, which turns the search off while /albireo/v1/web/fetch "
@@ -393,9 +399,7 @@ schemas = {
                           "description": "The names of the devices of the choice."},
                 "measure": {"type": "object", "description": "The last measure of the choice."}}}},
         "current": {"type": "string", "description": "The key of the choice in use."},
-        "setting": {"type": "string"}, "accelerator": {"type": "string"},
-        "accelerators_available": {"type": "boolean"},
-        "accelerators_reason": {"type": "string", "enum": ["not_installed", "unusable"]}}},
+        "setting": {"type": "string"}, "accelerator": {"type": "string"}}},
     "Refusal": {"type": "object", "description": "A refused operation, with the code of its reason and its values.",
                 "properties": {"ok": {"type": "boolean", "enum": [False]}, "error": {"type": "string"},
                                "code": {"type": "string"},
@@ -685,18 +689,17 @@ paths = {
             "503": reply("Three requests of the web access run already (code busy, Retry-After: 2), or the service "
                          "stops (cancelled)", ref("Error")),
             "504": reply("The site did not answer in time (code timeout)", ref("Error"))}}},
-    "/albireo/v1/models/refresh": {"post": {"tags": ["Administration"], "security": admin,
-                                            "summary": "Fetches the catalog again, in the background",
+    "/albireo/v1/models/refresh": {"post": {"tags": ["Administration"], "summary": "Fetches the catalog again, in the background",
                                             "responses": dict({"202": reply("Started", {"type": "object"})},
                                                               **offline_reply)}},
     "/albireo/v1/models/{id}/download": {
-        "post": {"tags": ["Administration"], "security": admin, "summary": "Starts or resumes the download of a model",
+        "post": {"tags": ["Administration"], "summary": "Starts or resumes the download of a model",
                  "parameters": [model_id],
                  "responses": dict({"202": reply("Started", ok), "400": reply("Refused", ok)}, **offline_reply)},
-        "delete": {"tags": ["Administration"], "security": admin, "summary": "Cancels a download",
+        "delete": {"tags": ["Administration"], "summary": "Cancels a download",
                    "parameters": [model_id], "responses": {"200": reply("Cancelled", ok)}}},
     "/albireo/v1/models/{id}/activate": {"post": {
-        "tags": ["Administration"], "security": admin, "summary": "Activates a model for a function",
+        "tags": ["Administration"], "summary": "Activates a model for a function",
         "parameters": [model_id],
         "requestBody": json_body({"type": "object", "properties": {
             "role": {"type": "string", "enum": ["general", "code", "security", "embedding"], "default": "general",
@@ -704,16 +707,16 @@ paths = {
                                     "model."}}}),
         "responses": {"200": reply("Activated", ok), "400": reply("Refused", ok)}}},
     "/albireo/v1/models/{id}/deactivate": {"post": {
-        "tags": ["Administration"], "security": admin, "summary": "Deactivates a model for every function",
+        "tags": ["Administration"], "summary": "Deactivates a model for every function",
         "description": "The model leaves the engine once its requests in progress and waiting are served; an "
                        "activation meanwhile keeps it loaded. The model of the document search is replaced by "
                        "the activation of another embedding model.",
         "parameters": [model_id], "responses": {"200": reply("Deactivated", ok), "400": reply("Refused", ok)}}},
     "/albireo/v1/models/{id}/verify": {"post": {
-        "tags": ["Administration"], "security": admin, "summary": "Recomputes the hash of an installed model",
+        "tags": ["Administration"], "summary": "Recomputes the hash of an installed model",
         "parameters": [model_id], "responses": {"200": reply("Result", {"type": "object"})}}},
     "/albireo/v1/models/{id}": {"delete": {
-        "tags": ["Administration"], "security": admin, "summary": "Deletes an installed model",
+        "tags": ["Administration"], "summary": "Deletes an installed model",
         "description": "A model of the engine is deleted once its requests are served and it left the engine: "
                        "pending is then true, and the model is listed under leaving until then. A model that "
                        "comes with Albireo is refused with the code builtin_model.",
@@ -721,8 +724,7 @@ paths = {
         "responses": {"200": reply("Deleted, or to be deleted", {"type": "object", "properties": {
             "ok": {"type": "boolean"}, "pending": {"type": "boolean"}}}), "400": reply("Refused", ok)}}},
     "/albireo/v1/import": {"post": {
-        "tags": ["Administration"], "security": admin,
-        "summary": "Imports a signed offline bundle, or the content of the import folder",
+        "tags": ["Administration"], "summary": "Imports a signed offline bundle, or the content of the import folder",
         "description": "For a computer without network: a memory card or a disk brought to the machine. The "
                        "service reads with its own rights, so that it accepts two kinds of paths: a signed offline "
                        "bundle on a local drive (a folder whose catalog.json bears the signature of Albireo), of "
@@ -742,12 +744,12 @@ paths = {
                                    "whether a folder outside the import folder is missing, unreadable, unsigned or "
                                    "reached through a link (import_not_bundle)", import_refusal)}}},
     "/albireo/v1/models/import": {"post": {
-        "tags": ["Administration"], "security": admin, "summary": "Same as /albireo/v1/import",
+        "tags": ["Administration"], "summary": "Same as /albireo/v1/import",
         "requestBody": json_body({"type": "object", "required": ["path"], "properties": {"path": {"type": "string"}}}),
         "responses": {"200": reply("Imported files and errors", {"type": "object"}),
                       "400": reply("Refused", import_refusal)}}},
     "/albireo/v1/models/upload": {"post": {
-        "tags": ["Administration"], "security": admin, "summary": "Installs a GGUF file sent in the body",
+        "tags": ["Administration"], "summary": "Installs a GGUF file sent in the body",
         "description": "The body is the file, of the length its Content-Length header gives: a body without length, "
                        "or sent in chunks (Transfer-Encoding), is refused (400). The size limit of the JSON bodies "
                        "does not apply.",
@@ -761,21 +763,33 @@ paths = {
                       "507": reply("The disk of the models folder lacks the size of the file and 256 MB",
                                    ref("Error"))}}},
     "/albireo/v1/settings": {
-        "get": {"tags": ["Administration"], "security": admin, "summary": "Settings of the service",
-                "responses": {"200": reply("The settings, the password of the proxy given as ********",
-                                           {"type": "object"})}},
-        "put": {"tags": ["Administration"], "security": admin, "summary": "Changes settings",
+        "get": {"tags": ["Administration"], "summary": "Settings of the service",
+                "responses": {"200": reply("The settings, the password of the proxy given as ********, the "
+                                           "password of the network access as lan_password_set only, and the IPv4 "
+                                           "addresses of the Mac (lan_addresses)", {"type": "object"})}},
+        "put": {"tags": ["Administration"], "summary": "Changes settings",
                 "description": "A new port is opened once before it is saved.",
                 "requestBody": json_body(ref("Settings")),
                 "responses": {"200": reply("Saved; restart tells whether the service restarts", {"type": "object"}),
-                              "400": reply("A value out of range, or the masked password of the proxy with another "
-                                           "user, host or port (code proxy_password)", ref("Error")),
+                              "400": reply("A value out of range, the masked password of the proxy with another "
+                                           "user, host or port (code proxy_password), the network port equal to the "
+                                           "port of the Mac (code lan_port_same), or the network access turned on "
+                                           "without a password (code lan_password_missing)", ref("Error")),
                               "409": reply("The new port is in use or cannot be opened (code port_unavailable)",
                                            ref("Error"))}}},
-    "/albireo/v1/restart": {"post": {"tags": ["Administration"], "security": admin, "summary": "Restarts the service",
+    "/albireo/v1/lan/login": {"post": {"tags": ["Administration"], "summary": "Opens the network access to a device",
+        "description": "The password of the network access (setting lan_password) gives the cookie albireo_lan for 30 "
+                       "days (HttpOnly, SameSite=Strict); a new password ends every session. A wrong password waits a "
+                       "second.",
+        "requestBody": json_body({"type": "object", "required": ["password"],
+                                  "properties": {"password": {"type": "string"}}}),
+        "responses": {"200": reply("The cookie is set", ok),
+                      "401": reply("Wrong password, or none chosen (code lan_password_wrong)", ref("Error"))}}},
+    "/albireo/v1/lan/logout": {"post": {"tags": ["Administration"], "summary": "Ends the session of this device",
+                                        "responses": {"200": reply("The cookie is removed", ok)}}},
+    "/albireo/v1/restart": {"post": {"tags": ["Administration"], "summary": "Restarts the service",
                                      "responses": {"202": reply("Restarting", ok)}}},
-    "/albireo/v1/engines/benchmark": {"post": {"tags": ["Administration"], "security": admin,
-                                               "summary": "Measures every usable engine on this machine",
+    "/albireo/v1/engines/benchmark": {"post": {"tags": ["Administration"], "summary": "Measures every usable engine on this machine",
                                                "description": "One measure runs at a time.",
                                                "responses": {
                                                    "200": reply("The measures", {"type": "object"}),
@@ -784,17 +798,17 @@ paths = {
                                                                     "error": {"type": "string"},
                                                                     "code": {"type": "string",
                                                                              "enum": ["benchmark_running"]}}})}}},
-    "/albireo/v1/logs": {"get": {"tags": ["Administration"], "security": admin, "summary": "Last lines of the log",
+    "/albireo/v1/logs": {"get": {"tags": ["Administration"], "summary": "Last lines of the log",
                                  "responses": {"200": reply("The lines", {"type": "object"})}}},
 }
 
-# Every administration route answers 401 without the administration token.
-unauthorized = reply("Without the administration token, or with another value (code authentication_error)",
-                     ref("Error"))
-for operations in paths.values():
+# On the server of the local network, every route but the login answers 401 without the cookie of the login.
+lan_unauthorized = reply("On the server of the local network, without the cookie of /albireo/v1/lan/login (code "
+                         "lan_login)", ref("Error"))
+for path, operations in paths.items():
     for operation in operations.values():
-        if operation.get("security") == admin:
-            operation["responses"].setdefault("401", unauthorized)
+        if path != "/albireo/v1/lan/login":
+            operation["responses"].setdefault("401", lan_unauthorized)
 
 here = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(here, "..", "common", "version.h"), encoding="utf-8") as f:
@@ -806,25 +820,24 @@ doc = {
         "title": "Albireo Community Edition local interface",
         "version": version,
         "description": "The interface of the Albireo service, served on https://localhost (port 8443 unless changed in "
-                       "the tray). The routes under /v1 follow the OpenAI interface, so that its client libraries "
+                       "the Service tab of the web application), and, once the network access is on, in plain HTTP "
+                       "on every address of the Mac at its network port (8444 by default). The routes under /v1 follow the OpenAI interface, so that its client libraries "
                        "work with base_url https://localhost:8443/v1 and any API key. The functions albireo-general, "
-                       "albireo-code and albireo-security name the models activated in the tray, "
+                       "albireo-code and albireo-security name the models activated for each function, "
                        "albireo-background the model that comes with Albireo, which the web application uses for its "
                        "work in the background, and albireo-embedding the embedding model of the search in "
                        "documents.\n\n"
-                       "The administration routes require the token of the data folder of the service "
-                       "(admin.token) in the X-Albireo-Admin header.\n\n"
+                       "A personal version for macOS: on the Mac, every route is open, without a token. On the "
+                       "network port, every route but /albireo/v1/lan/login asks for the cookie albireo_lan that "
+                       "the login gives.\n\n"
                        "Requests carry JSON bodies of 64 MB and 524,288 values at most, with their length: a body "
                        "without length is refused with 411, a longer one with 413, another type with 415. GET, HEAD, "
                        "DELETE and OPTIONS take no body (400). While the JSON bodies being read at once hold the "
                        "values of their budget, a route that reads one answers 503 with the code busy and a "
                        "Retry-After of 2 seconds. An answer being written whose model has no memory left "
                        "for its keys and values ends with the error code out_of_memory.\n\n"
-                       "Before any route, the server refuses, as plain text: a request whose Host header names "
-                       "another server than this computer (421), a request whose Origin header names another "
-                       "origin than the local server (403), so that no web site drives the service through a "
-                       "browser, and a body of more than 8 MB while four such bodies are being read (503, with a "
-                       "Retry-After header).",
+                       "Before any route, the server refuses, as plain text, a body of more than 8 MB while four "
+                       "such bodies are being read (503, with a Retry-After header).",
         "license": {"name": "Boost Software License 1.0", "url": "https://www.boost.org/LICENSE_1_0.txt"},
         "contact": {"name": "Aldric Pierrain", "email": "cydraltechnology@gmail.com",
                     "url": "https://github.com/Cydral/Dlib-Transformer-extensions"}},
@@ -832,10 +845,9 @@ doc = {
     "tags": [{"name": "OpenAI", "description": "Compatible with the OpenAI interface"},
              {"name": "Service", "description": "State of the service"},
              {"name": "Web access", "description": "The search and the pages of the web for the Web button"},
-             {"name": "Administration", "description": "Routes of the tray, protected by the administration token"}],
+             {"name": "Administration", "description": "Settings, models, restart and the network access"}],
     "paths": paths,
-    "components": {"schemas": schemas, "securitySchemes": {
-        "adminToken": {"type": "apiKey", "in": "header", "name": "X-Albireo-Admin"}}},
+    "components": {"schemas": schemas},
 }
 
 with open(os.path.join(here, "..", "web", "openapi.json"), "w", encoding="utf-8") as f:

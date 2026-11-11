@@ -706,3 +706,85 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 @media (prefers-reduced-motion: reduce) {
   .jump-buttons, .jump-buttons.on { transition: none; }
 }
+
+/* The Service tab of the settings (fork for macOS): cards, switches, sheets in the manner of a glossary. */
+.svc-intro p { margin: 0 0 12px; color: var(--text-soft); font-size: 13.5px; line-height: 1.55; }
+.svc-group { margin-top: 18px; }
+.svc-group h4 { margin: 0 0 2px; }
+.svc-group > .help { margin: 0 0 10px; color: var(--text-faint); font-size: 12.5px; }
+.svc-card { position: relative; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px;
+  margin-bottom: 10px; background: var(--bg-elevated); }
+.svc-card.open { border-color: color-mix(in srgb, var(--gold) 45%, var(--border)); }
+.svc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.svc-title { display: flex; align-items: center; gap: 8px; font-weight: 600; flex-wrap: wrap; }
+.svc-help { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--bg);
+  color: var(--text-soft); font-weight: 700; font-size: 12.5px; cursor: pointer; line-height: 1; padding: 0; }
+.svc-help:hover, .svc-help[aria-expanded="true"] { background: var(--gold); color: #1d1a17; border-color: transparent; }
+.svc-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; color: var(--success);
+  background: color-mix(in srgb, var(--success) 14%, transparent); }
+.svc-badge.restart { color: var(--gold-strong); background: color-mix(in srgb, var(--gold) 18%, transparent); }
+.svc-badge.changed { color: var(--blue); background: var(--bg-active); }
+.svc-effect { margin: 6px 0 0; color: var(--text-soft); font-size: 13px; line-height: 1.5; }
+.svc-where { margin: 6px 0 0; font-size: 13px; }
+.svc-where code { font-family: var(--mono); background: var(--bg-code); padding: 1px 6px; border-radius: 6px; }
+/* The bubble of the question mark, on a pointer that hovers it. */
+.svc-bubble { display: none; position: absolute; z-index: 5; left: 14px; right: 14px; top: 42px; padding: 10px 12px;
+  border-radius: var(--radius-small); background: var(--bg-elevated); border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow); font-size: 13px; line-height: 1.5; pointer-events: none; }
+@media (hover: hover) { .svc-card:not(.open):has(.svc-help:hover) .svc-bubble { display: block; } }
+.svc-switch { width: 46px; height: 26px; border-radius: 13px; border: 0; background: var(--border-strong); position: relative;
+  cursor: pointer; flex: none; transition: background .15s; }
+.svc-switch span { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 30%); transition: left .15s; }
+.svc-switch.on { background: var(--success); }
+.svc-switch.on span { left: 23px; }
+.svc-range { display: flex; align-items: center; gap: 10px; min-width: min(320px, 100%); }
+.svc-range input { flex: 1; accent-color: var(--blue); }
+.svc-range output { min-width: 120px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+.svc-choice { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; }
+.svc-choice button { border: 0; background: transparent; padding: 6px 12px; cursor: pointer; color: var(--text-soft); font: inherit; font-size: 13px; }
+.svc-choice button.on { background: var(--bg-active); color: var(--blue); font-weight: 600; }
+.svc-input { display: flex; gap: 8px; align-items: center; }
+.svc-input input { padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border-strong); background: var(--bg-input);
+  color: var(--text); font: inherit; font-size: 13.5px; width: 210px; max-width: 100%; }
+.svc-detail { margin-top: 12px; display: grid; gap: 12px; }
+.svc-detail[hidden] { display: none; }
+.svc-schema { margin: 0; }
+.svc-svg { width: 100%; height: auto; display: block; background: color-mix(in srgb, var(--gold) 6%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--gold-strong) 22%, transparent); border-radius: 10px; }
+.svc-svg .s-title { font-size: 14px; font-weight: 700; fill: var(--text); }
+.svc-svg .s-t { font-size: 12.5px; fill: var(--text); font-weight: 600; }
+.svc-svg .s-f { font-size: 11.5px; fill: var(--text-soft); }
+.svc-svg .s-box { fill: var(--bg-elevated); stroke: var(--border-strong); stroke-width: 1.2; }
+.svc-svg .s-gold { fill: color-mix(in srgb, var(--gold) 32%, var(--bg-elevated)); }
+.svc-svg .s-blue { fill: color-mix(in srgb, var(--blue) 26%, var(--bg-elevated)); }
+.svc-svg .s-soft { fill: var(--bg-code); }
+.svc-svg .s-zone { fill: none; stroke: var(--border-strong); stroke-dasharray: 5 4; }
+.svc-svg .s-window { fill: none; stroke: var(--blue-strong); stroke-width: 2.5; }
+.svc-svg .s-band { opacity: .9; }
+.svc-svg .s-line { stroke: var(--text-soft); stroke-width: 1.6; }
+.svc-svg .s-head { fill: var(--text-soft); }
+.svc-svg .s-cut { stroke-dasharray: 5 4; }
+.svc-svg .s-cross { stroke: var(--danger); stroke-width: 3; fill: none; }
+.svc-principle { margin: 0; font-size: 13.5px; line-height: 1.55; }
+.svc-pcs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 560px) { .svc-pcs { grid-template-columns: 1fr; } }
+.svc-pc { border-radius: 10px; padding: 8px 12px; font-size: 13px; line-height: 1.5; }
+.svc-pc ul { margin: 4px 0 0; padding-left: 18px; }
+.svc-pc.pros { background: color-mix(in srgb, var(--success) 10%, transparent); }
+.svc-pc.cons { background: color-mix(in srgb, var(--danger) 9%, transparent); }
+.svc-detail h5 { margin: 0; font-size: 13.5px; }
+.svc-normal p, .svc-voice p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.6; }
+.svc-voice { display: grid; grid-template-columns: 46px 1fr; gap: 12px; align-items: start; padding: 10px 12px;
+  border-radius: 10px; border-left: 4px solid; }
+.svc-portrait svg { width: 46px; height: 46px; display: block; }
+.svc-voice.owl { border-color: #2f6f73; background: color-mix(in srgb, #2f6f73 10%, transparent); }
+.svc-voice.marmot { border-color: #e56b3f; background: color-mix(in srgb, #e56b3f 9%, transparent); }
+.svc-voice.bee { border-color: #e8b52e; background: color-mix(in srgb, #f2b544 12%, transparent); }
+.svc-collapse { justify-self: start; border: 0; background: none; color: var(--text-soft); cursor: pointer; font: inherit; font-size: 13px; padding: 0; }
+.svc-apply { position: sticky; bottom: 0; display: flex; align-items: center; gap: 10px; justify-content: flex-end; flex-wrap: wrap;
+  padding: 10px 12px; margin-top: 10px; background: var(--bg-elevated); border: 1px solid var(--border-strong);
+  border-radius: var(--radius); box-shadow: var(--shadow); }
+.svc-apply span { margin-right: auto; font-weight: 600; font-size: 13.5px; }
+.svc-apply small { font-weight: 400; color: var(--text-faint); }
+.svc-apply[hidden] { display: none; }

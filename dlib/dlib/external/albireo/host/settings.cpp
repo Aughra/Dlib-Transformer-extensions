@@ -123,6 +123,9 @@ namespace albireo
         j["web_search"] = web_search;
         j["engine_benchmarks"] = engine_benchmarks;
         if (trust_authority >= 0) j["trust_authority"] = trust_authority > 0;
+        j["lan"] = lan;
+        j["lan_port"] = lan_port;
+        j["lan_password_hash"] = lan_password_hash;
         return j;
     }
 
@@ -159,6 +162,10 @@ namespace albireo
         web_search = j["web_search"].as_string() == "none" ? "none" : d.web_search;
         engine_benchmarks = j["engine_benchmarks"].is_object() ? j["engine_benchmarks"] : json::object();
         trust_authority = j["trust_authority"].is_bool() ? (j["trust_authority"].as_bool() ? 1 : 0) : d.trust_authority;
+        lan = j["lan"].as_bool(d.lan);
+        lan_port = static_cast<int>(j["lan_port"].as_int(d.lan_port));
+        if (lan_port < 1024 || lan_port > 65535) lan_port = d.lan_port;
+        lan_password_hash = j["lan_password_hash"].str(d.lan_password_hash);
     }
 
     std::string host_settings::effective_models_dir() const

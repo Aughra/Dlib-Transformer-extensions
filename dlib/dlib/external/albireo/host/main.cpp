@@ -144,13 +144,9 @@ namespace
         std::vector<char*> argv;
         for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
         argv.push_back(nullptr);
-        char self[PATH_MAX];
-        const ssize_t n = readlink("/proc/self/exe", self, sizeof(self) - 1);
-        if (n > 0)
-        {
-            self[n] = '\0';
-            execv(self, argv.data());
-        }
+        // The path of the program (_NSGetExecutablePath on macOS, where /proc does not exist).
+        const std::string self = albireo::executable_path();
+        if (!self.empty()) execv(self.c_str(), argv.data());
         execvp(argv[0], argv.data());
         return 1;
     }

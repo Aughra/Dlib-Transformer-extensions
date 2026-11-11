@@ -13,11 +13,11 @@
         /v1/embeddings
         /albireo/v1/...           the interface of the web application and of the tray
 
-    The operations that change the installation (downloads, activation, settings,
-    restart) require the administration token of the data folder in the
-    X-Albireo-Admin header; the tray reads it there.  Every request must name the local
-    server in its Host header, and a request coming from a page must come from the local
-    server too, so that no web site can drive the service through the browser.
+    A personal version: the service listens on 127.0.0.1 only, and any request it receives
+    may do anything, the web application changing the settings, the models and the
+    installation as the tray of the original did.  It no longer asks for an administration
+    token, nor checks the Host and Origin headers (a choice of the owner of this fork, who
+    knows that a web site open in the browser could then drive the service).
 */
 
 
@@ -35,6 +35,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <thread>
+
+#include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <netinet/in.h>
 #include <fstream>
 #include <mutex>
 
@@ -263,29 +269,104 @@ namespace albireo
             return s;
         }
 
-        // Compares a secret in a time that does not depend on where the strings differ.
-        bool same_secret(const std::string& a, const std::string& b)
+        // The IPv4 addresses of the Mac on its networks, those of the loopback and of the links apart.
+        json lan_addresses()
         {
-            if (a.size() != b.size()) return false;
-            unsigned char d = 0;
-            for (size_t i = 0; i < a.size(); ++i) d |= static_cast<unsigned char>(a[i] ^ b[i]);
-            return d == 0;
+            json out = json::array();
+            ifaddrs* list = nullptr;
+            if (getifaddrs(&list) != 0) return out;
+            for (ifaddrs* a = list; a; a = a->ifa_next)
+            {
+                if (!a->ifa_addr || a->ifa_addr->sa_family != AF_INET || (a->ifa_flags & IFF_LOOPBACK)
+                    || !(a->ifa_flags & IFF_UP))
+                    continue;
+                char text[INET_ADDRSTRLEN] = {};
+                const in_addr ip = reinterpret_cast<const sockaddr_in*>(a->ifa_addr)->sin_addr;
+                if (!inet_ntop(AF_INET, &ip, text, sizeof(text))) continue;
+                const std::string t = text;
+                if (t.compare(0, 8, "169.254.") == 0) continue;
+                bool seen = false;
+                for (const auto& e : out.elements()) seen = seen || e.as_string() == t;
+                if (!seen) out.push_back(t);
+            }
+            freeifaddrs(list);
+            return out;
         }
 
-        bool is_local_host(const std::string& host, int port)
+        // The settings as the web application reads them: the hash of the password of the network
+        // access stays in the service, which tells whether there is one, and its addresses.
+        json public_settings(service& svc)
         {
-            const std::string h = lower(host);
-            const std::string p = ":" + std::to_string(port);
-            return h == "localhost" || h == "127.0.0.1" || h == "[::1]" || h == "localhost" + p || h == "127.0.0.1" + p
-                || h == "[::1]" + p;
+            const host_settings st = svc.settings().get();
+            json j = st.to_json();
+            j.erase("lan_password_hash");
+            j["lan_password_set"] = !st.lan_password_hash.empty();
+            j["lan_addresses"] = lan_addresses();
+            return j;
         }
 
-        bool is_local_origin(const std::string& origin, int port)
+        /*
+            The session of a device of the network: the cookie albireo_lan, a random nonce and its
+            HMAC under the hash of the password, so that a new password ends every session, and a
+            restart none.
+        */
+        const char* const lan_cookie = "albireo_lan";
+
+        std::string lan_session(const std::string& hash)
         {
-            const std::string o = lower(origin);
-            const std::string p = ":" + std::to_string(port);
-            return o == "https://localhost" + p || o == "https://127.0.0.1" + p || o == "https://[::1]" + p;
+            const std::string nonce = random_hex(16);
+            return nonce + "." + hmac_sha256_hex(hash, nonce);
         }
+
+        bool lan_authorized(const httplib::Request& req, const std::string& hash)
+        {
+            if (hash.empty()) return false;
+            const std::string cookies = req.get_header_value("Cookie");
+            const std::string key = std::string(lan_cookie) + "=";
+            size_t at = 0;
+            while ((at = cookies.find(key, at)) != std::string::npos)
+            {
+                if (at == 0 || cookies[at - 1] == ' ' || cookies[at - 1] == ';') break;
+                at += key.size();
+            }
+            if (at == std::string::npos) return false;
+            const size_t from = at + key.size(), end = cookies.find(';', from);
+            const std::string value = cookies.substr(from, end == std::string::npos ? std::string::npos : end - from);
+            const size_t dot = value.find('.');
+            if (dot == std::string::npos) return false;
+            const std::string mac = hmac_sha256_hex(hash, value.substr(0, dot));
+            return !mac.empty() && same_secret(mac, value.substr(dot + 1));
+        }
+
+        // The page that asks a device of the network for the password.
+        const char* const lan_login_page = R"ALBIREO(<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Albireo</title><style>
+:root { color-scheme: light dark; --bg: #f6f4f0; --card: #fff; --text: #222; --accent: #e56b3f; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0f1424; --card: #18203a; --text: #eee; } }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--text);
+  font: 16px -apple-system, system-ui, sans-serif; }
+form { background: var(--card); padding: 28px 24px; border-radius: 16px; width: min(340px, calc(100vw - 32px));
+  box-shadow: 0 8px 30px rgb(0 0 0 / 15%); display: grid; gap: 14px; }
+h1 { margin: 0; font-size: 22px; } p { margin: 0; opacity: .8; font-size: 14px; }
+input, button { font: inherit; padding: 12px; border-radius: 10px; border: 1px solid rgb(128 128 128 / 40%); }
+button { background: var(--accent); color: #fff; border: 0; font-weight: 600; }
+.error { color: #d33; min-height: 1.2em; }
+</style></head><body><form id="f"><h1>Albireo</h1><p>Accès depuis le réseau : le mot de passe choisi dans
+l'onglet « Service » des paramètres, sur le Mac.</p>
+<input id="p" type="password" autocomplete="current-password" placeholder="Mot de passe" required autofocus>
+<button>Entrer</button><p class="error" id="e"></p></form><script>
+document.getElementById('f').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const e = document.getElementById('e');
+  e.textContent = '';
+  const r = await fetch('/albireo/v1/lan/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: document.getElementById('p').value }) });
+  if (r.ok) location.replace('/');
+  else e.textContent = r.status === 401 ? 'Mot de passe incorrect.' : 'Erreur ' + r.status + '.';
+});
+</script></body></html>
+)ALBIREO";
 
         struct event_channel
         {
@@ -797,13 +878,13 @@ namespace albireo
                 });
         }
 
-        // Checks a change of the settings sent by the tray; the keys outside this list are
-        // set by the installer only.
+        // Checks a change of the settings sent by the web application; the keys outside this
+        // list are set by hand in settings.json only.
         bool validate_settings(const json& body, std::string& error)
         {
             static const char* const keys[] = { "port", "language", "engine", "accelerator",
                 "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "offline",
-                "proxy", "web_access", "web_search" };
+                "proxy", "web_access", "web_search", "lan", "lan_port", "lan_password" };
             for (const auto& kv : body.items())
             {
                 if (std::find_if(std::begin(keys), std::end(keys), [&](const char* k) { return kv.first == k; })
@@ -837,11 +918,19 @@ namespace albireo
                 error = "invalid value for proxy: http://host:port, \"none\" or empty";
                 return false;
             }
-            return one_of("web_search", { "wikipedia", "none" }) && boolean("web_access")
+            const json& password = body["lan_password"];
+            if (body.contains("lan_password")
+                && !(password.is_string() && password.as_string().size() >= 4 && password.as_string().size() <= 128))
+            {
+                error = "invalid value for lan_password: 4 to 128 characters";
+                return false;
+            }
+            return one_of("web_search", { "wikipedia", "none" }) && boolean("web_access") && boolean("lan")
+                && in_range("lan_port", 1024, 65535)
                 && one_of("language", { "auto", "en", "fr", "de", "it", "es" })
                 && one_of("kv_type", { "auto", "q8", "f16" })
                 && one_of("engine", { "auto", "best", "cpu", "cpu-avx2", "cpu-avxvnni", "openvino", "cuda" })
-                && one_of("accelerator", { "auto", "none", "npu", "gpu", "both" })
+                && one_of("accelerator", { "auto", "none" })
                 && in_range("port", 1024, 65535) && in_range("threads", 0, 1024) && in_range("context", 0, 1 << 20)
                 && in_range("max_sequences", 1, 64) && in_range("kv_mb", 0, 1 << 24)
                 && in_range("device_mb", 0, 1 << 24)
@@ -1133,24 +1222,31 @@ namespace albireo
         }
     }
 
-    void install_routes(httplib::Server& srv, service& svc)
+    void install_routes(httplib::Server& srv, service& svc, bool lan)
     {
-        const int port = svc.port();
         service* s = &svc;
 
-        // Every request names the local server, and the pages that call the interfaces
-        // are those of the local server.
-        srv.set_pre_routing_handler([port](const httplib::Request& req, httplib::Response& res) {
+        // The password of the network access, then the bodies the routes accept.
+        srv.set_pre_routing_handler([s, lan](const httplib::Request& req, httplib::Response& res) {
             auto refuse = [&](int status, const char* message) {
                 res.status = status;
                 res.set_header("Connection", "close");
                 res.set_content(message, "text/plain");
                 return httplib::Server::HandlerResponse::Handled;
             };
-            if (!is_local_host(req.get_header_value("Host"), port)) return refuse(421, "misdirected request");
-            const std::string origin = req.get_header_value("Origin");
-            if (!origin.empty() && !is_local_origin(origin, port))
-                return refuse(403, "cross-origin requests are refused");
+            if (lan && !(req.method == "POST" && req.path == "/albireo/v1/lan/login")
+                && !lan_authorized(req, s->settings().get().lan_password_hash))
+            {
+                // A page asks for the password; any other request is refused.
+                const bool page = req.method == "GET" && req.path.compare(0, 4, "/v1/") != 0
+                    && req.path.compare(0, 9, "/albireo/") != 0;
+                res.status = page ? 200 : 401;
+                res.set_header("Cache-Control", "no-store");
+                if (page) res.set_content(lan_login_page, "text/html; charset=utf-8");
+                else send_error(res, 401, "authentication_error", "the network access asks for its password first",
+                    "lan_login");
+                return httplib::Server::HandlerResponse::Handled;
+            }
             // The methods that send no data take no body, which httplib would read whole before
             // their handlers run.  Any other body is JSON of a known length, of 64 MB at most,
             // apart from the models sent to their own route.
@@ -1241,14 +1337,6 @@ namespace albireo
             log_error("http: " + req.method + " " + req.path + ": " + what);
             send_error(res, 500, "server_error", what);
         });
-
-        auto admin = [s](const httplib::Request& req, httplib::Response& res) {
-            const std::string token = s->admin_token();
-            if (!token.empty() && same_secret(req.get_header_value("X-Albireo-Admin"), token)) return true;
-            res.set_header("Connection", "close");
-            send_error(res, 401, "authentication_error", "this operation requires the administration token");
-            return false;
-        };
 
         // OpenAI compatible interface.
         srv.Get("/v1/models", [s](const httplib::Request&, httplib::Response& res) {
@@ -1441,50 +1529,45 @@ namespace albireo
         });
 
         // The catalog is fetched in the background; its state is in /albireo/v1/models.
-        srv.Post("/albireo/v1/models/refresh", [s, admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res) || refuse_offline(*s, res)) return;
+        srv.Post("/albireo/v1/models/refresh", [s](const httplib::Request& req, httplib::Response& res) {
+            if (refuse_offline(*s, res)) return;
             s->models().refresh_catalog_async();
             json o = ok_result(true);
             o["catalog"] = s->models().catalog_status();
             send_json(res, 202, o);
         });
-        srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/download)", [s, admin](const httplib::Request& req,
+        srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,
                                                                                httplib::Response& res) {
-            if (!admin(req, res) || refuse_offline(*s, res)) return;
+            if (refuse_offline(*s, res)) return;
             user_error error;
             const bool ok = s->models().start_download(req.matches[1], error);
             send_json(res, ok ? 202 : 400, ok_result(ok, error));
         });
-        srv.Delete(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/download)", [s, admin](const httplib::Request& req,
+        srv.Delete(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,
                                                                                  httplib::Response& res) {
-            if (!admin(req, res)) return;
             s->models().cancel_download(req.matches[1]);
             send_json(res, 200, ok_result(true));
         });
-        srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/activate)", [s, admin](const httplib::Request& req,
+        srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/activate)", [s](const httplib::Request& req,
                                                                                httplib::Response& res) {
-            if (!admin(req, res)) return;
             json body;
             if (!parse_body(req, res, body)) return;
             user_error error;
             const bool ok = s->activate(req.matches[1], body["role"].str("general"), error);
             send_json(res, ok ? 200 : 400, ok_result(ok, error));
         });
-        srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/deactivate)", [s, admin](const httplib::Request& req,
+        srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/deactivate)", [s](const httplib::Request& req,
                                                                                  httplib::Response& res) {
-            if (!admin(req, res)) return;
             user_error error;
             const bool ok = s->deactivate(req.matches[1], error);
             send_json(res, ok ? 200 : 400, ok_result(ok, error));
         });
-        srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/verify)", [s, admin](const httplib::Request& req,
+        srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/verify)", [s](const httplib::Request& req,
                                                                              httplib::Response& res) {
-            if (!admin(req, res)) return;
             send_json(res, 200, s->models().verify(req.matches[1]));
         });
-        srv.Delete(R"(/albireo/v1/models/([A-Za-z0-9._-]+))", [s, admin](const httplib::Request& req,
+        srv.Delete(R"(/albireo/v1/models/([A-Za-z0-9._-]+))", [s](const httplib::Request& req,
                                                                         httplib::Response& res) {
-            if (!admin(req, res)) return;
             const std::string id = req.matches[1];
             user_error error;
             bool pending = false;
@@ -1497,8 +1580,7 @@ namespace albireo
             The signed offline bundles and the content of the import folder (service::import_folder()),
             which the service reads with its own rights: a refusal comes with its code and the path.
         */
-        auto import = [s, admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res)) return;
+        auto import = [s](const httplib::Request& req, httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;
             user_error refusal;
@@ -1515,9 +1597,8 @@ namespace albireo
         srv.Post("/albireo/v1/import", import);
         srv.Post("/albireo/v1/models/import", import);
         // A model file sent by the tray, read with the rights of its user, for the files the service never reads.
-        srv.Post(upload_route, [s, admin](const httplib::Request& req, httplib::Response& res,
+        srv.Post(upload_route, [s](const httplib::Request& req, httplib::Response& res,
                                     const httplib::ContentReader& reader) {
-            if (!admin(req, res)) return;
             const std::string name = file_name(req.get_param_value("name"));
             const uint64_t length = content_length(req);
             if (name.empty() || length == 0 || req.has_header("Transfer-Encoding"))
@@ -1565,12 +1646,34 @@ namespace albireo
         });
 
         // The password of the proxy is given as proxy_password_mask (host_settings::to_json()).
-        srv.Get("/albireo/v1/settings", [s, admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res)) return;
-            send_json(res, 200, s->settings().get().to_json());
+        /*
+            The login of a device of the network: the password of the network access gives a cookie
+            for 30 days.  A wrong one waits a second, so that guessing it takes time.
+        */
+        srv.Post("/albireo/v1/lan/login", [s](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string hash = s->settings().get().lan_password_hash;
+            if (hash.empty() || !password_matches(body["password"].as_string(), hash))
+            {
+                log_warning("server: a wrong password of the network access, from " + req.remote_addr);
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                send_error(res, 401, "authentication_error", "wrong password", "lan_password_wrong");
+                return;
+            }
+            log_info("server: the network access opened to " + req.remote_addr);
+            res.set_header("Set-Cookie", std::string(lan_cookie) + "=" + lan_session(hash)
+                + "; Path=/; Max-Age=2592000; HttpOnly; SameSite=Strict");
+            send_json(res, 200, ok_result(true));
         });
-        srv.Put("/albireo/v1/settings", [s, admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res)) return;
+        srv.Post("/albireo/v1/lan/logout", [](const httplib::Request& req, httplib::Response& res) {
+            res.set_header("Set-Cookie", std::string(lan_cookie) + "=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict");
+            send_json(res, 200, ok_result(true));
+        });
+        srv.Get("/albireo/v1/settings", [s](const httplib::Request& req, httplib::Response& res) {
+            send_json(res, 200, public_settings(*s));
+        });
+        srv.Put("/albireo/v1/settings", [s](const httplib::Request& req, httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;
             std::string error;
@@ -1590,6 +1693,38 @@ namespace albireo
                     + " is in use or cannot be opened", "port_unavailable");
                 return;
             }
+            // The access from the network: its own port, and a password before it opens.
+            const host_settings now = s->settings().get();
+            const long long lan_port = changes["lan_port"].as_int(now.lan_port);
+            if (lan_port == port)
+            {
+                send_error(res, 400, "invalid_request_error", "the network port must differ from the port of the "
+                    "service", "lan_port_same");
+                return;
+            }
+            if (lan_port != now.lan_port && !port_available(static_cast<int>(lan_port), true))
+            {
+                send_error(res, 409, "invalid_request_error", "the port " + std::to_string(lan_port)
+                    + " is in use or cannot be opened", "port_unavailable");
+                return;
+            }
+            if (changes["lan"].as_bool(now.lan) && now.lan_password_hash.empty() && !changes.contains("lan_password"))
+            {
+                send_error(res, 400, "invalid_request_error", "the network access needs a password first",
+                    "lan_password_missing");
+                return;
+            }
+            // The password is kept as its hash only, computed outside the lock of the settings.
+            std::string lan_hash;
+            if (changes.contains("lan_password"))
+            {
+                lan_hash = password_hash(changes["lan_password"].as_string());
+                if (lan_hash.empty())
+                {
+                    send_error(res, 500, "server_error", "the password cannot be hashed");
+                    return;
+                }
+            }
             host_settings before;
             bool masked_elsewhere = false;
             const host_settings after = s->settings().update([&](host_settings& current) {
@@ -1603,7 +1738,9 @@ namespace albireo
                     return;
                 }
                 json merged = current.to_json();
-                for (const auto& kv : body.items()) merged[kv.first] = kv.second;
+                for (const auto& kv : body.items())
+                    if (kv.first != "lan_password") merged[kv.first] = kv.second;
+                if (!lan_hash.empty()) merged["lan_password_hash"] = lan_hash;
                 current.from_json(merged);
                 if (current.proxy == masked_proxy(before.proxy)) current.proxy = before.proxy;
             });
@@ -1619,25 +1756,24 @@ namespace albireo
                 || after.accelerator != before.accelerator || after.device_mb != before.device_mb
                 || after.threads != before.threads
                 || after.context != before.context || after.max_sequences != before.max_sequences
-                || after.kv_mb != before.kv_mb || after.kv_type != before.kv_type;
+                || after.kv_mb != before.kv_mb || after.kv_type != before.kv_type
+                || after.lan != before.lan || after.lan_port != before.lan_port;
+            if (!lan_hash.empty()) log_info("server: the password of the network access changed");
             json o = ok_result(true);
             o["restart"] = restart;
             send_json(res, 200, o);
             if (restart) s->request_restart();
         });
-        srv.Post("/albireo/v1/restart", [s, admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res)) return;
+        srv.Post("/albireo/v1/restart", [s](const httplib::Request& req, httplib::Response& res) {
             send_json(res, 202, ok_result(true));
             s->request_restart();
         });
-        srv.Post("/albireo/v1/engines/benchmark", [s, admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res)) return;
+        srv.Post("/albireo/v1/engines/benchmark", [s](const httplib::Request& req, httplib::Response& res) {
             // A measure already running refuses the second one with 409.
             const json r = s->benchmark_engines();
             send_json(res, r["code"].as_string() == "benchmark_running" ? 409 : 200, r);
         });
-        srv.Get("/albireo/v1/logs", [admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res)) return;
+        srv.Get("/albireo/v1/logs", [](const httplib::Request& req, httplib::Response& res) {
             json lines = json::array();
             for (const auto& l : log_file::instance().recent()) lines.push_back(l);
             json o = json::object();

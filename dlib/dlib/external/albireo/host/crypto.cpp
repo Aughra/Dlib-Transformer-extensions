@@ -4,6 +4,7 @@
 #include "crypto.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <fstream>
 #include <vector>
 
@@ -12,6 +13,7 @@
 #include <mbedtls/entropy.h>
 #include <mbedtls/md.h>
 #include <mbedtls/pk.h>
+#include <mbedtls/pkcs5.h>
 #include <mbedtls/sha256.h>
 #include <psa/crypto.h>
 
@@ -158,6 +160,72 @@ namespace albireo
                 clean.size()) != 0)
             return std::string();
         return std::string(reinterpret_cast<const char*>(buf.data()), n);
+    }
+
+    namespace
+    {
+        std::string hex_of(const unsigned char* p, size_t n)
+        {
+            static const char digits[] = "0123456789abcdef";
+            std::string out;
+            for (size_t i = 0; i < n; ++i)
+            {
+                out += digits[p[i] >> 4];
+                out += digits[p[i] & 15];
+            }
+            return out;
+        }
+
+        const unsigned password_iterations = 200000;
+
+        std::string pbkdf2_hex(const std::string& password, const std::string& salt, unsigned iterations)
+        {
+            psa_crypto_init();
+            unsigned char key[32];
+            if (mbedtls_pkcs5_pbkdf2_hmac_ext(MBEDTLS_MD_SHA256, reinterpret_cast<const unsigned char*>(password.data()),
+                    password.size(), reinterpret_cast<const unsigned char*>(salt.data()), salt.size(), iterations,
+                    sizeof(key), key) != 0)
+                return std::string();
+            return hex_of(key, sizeof(key));
+        }
+    }
+
+    bool same_secret(const std::string& a, const std::string& b)
+    {
+        if (a.size() != b.size()) return false;
+        unsigned char d = 0;
+        for (size_t i = 0; i < a.size(); ++i) d |= static_cast<unsigned char>(a[i] ^ b[i]);
+        return d == 0;
+    }
+
+    std::string password_hash(const std::string& password)
+    {
+        const std::string salt = random_hex(16);
+        const std::string h = pbkdf2_hex(password, salt, password_iterations);
+        if (h.empty()) return std::string();
+        return "pbkdf2-sha256$" + std::to_string(password_iterations) + "$" + salt + "$" + h;
+    }
+
+    bool password_matches(const std::string& password, const std::string& stored)
+    {
+        const std::string head = "pbkdf2-sha256$";
+        if (stored.compare(0, head.size(), head) != 0) return false;
+        const size_t a = head.size(), b = stored.find('$', a), c = b == std::string::npos ? b : stored.find('$', b + 1);
+        if (c == std::string::npos) return false;
+        const unsigned long iterations = std::strtoul(stored.substr(a, b - a).c_str(), nullptr, 10);
+        if (iterations < 1000 || iterations > 10000000) return false;
+        const std::string h = pbkdf2_hex(password, stored.substr(b + 1, c - b - 1), static_cast<unsigned>(iterations));
+        return !h.empty() && same_secret(h, stored.substr(c + 1));
+    }
+
+    std::string hmac_sha256_hex(const std::string& key, const std::string& message)
+    {
+        psa_crypto_init();
+        unsigned char mac[32];
+        if (mbedtls_md_hmac(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), reinterpret_cast<const unsigned char*>(key.data()),
+                key.size(), reinterpret_cast<const unsigned char*>(message.data()), message.size(), mac) != 0)
+            return std::string();
+        return hex_of(mac, sizeof(mac));
     }
 
     bool verify_signature(const std::string& data, const std::string& signature_base64,

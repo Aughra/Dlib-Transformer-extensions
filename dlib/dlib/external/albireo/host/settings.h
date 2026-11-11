@@ -32,15 +32,15 @@ namespace albireo
         /*!
             WHAT THIS OBJECT REPRESENTS
                 The settings of the service, kept in settings.json in the data folder.
-                The tray application changes them through the administration interface,
-                and the service applies them, restarting itself when a change requires it
-                (the port, the engine, the memory settings).
+                The web application changes them (its Service tab), and the service
+                applies them, restarting itself when a change requires it (the ports, the
+                GPU, the memory settings).
         !*/
         int port = 8443;
         std::string models_dir;                 // empty: <data>/models
         std::string language = "auto";          // auto, en, fr, de, it, es
         std::string engine = "auto";            // auto, best, or a variant: cpu, cpu-avx2, cpu-avxvnni, ...
-        std::string accelerator = "auto";       // auto, none, npu, gpu, both (offloading engines)
+        std::string accelerator = "auto";       // auto: the GPU of the Mac (Metal), none: the processor alone
         long long device_mb = 0;                // copies of the weights on the device, 0: automatic
         int threads = 0;                        // 0: physical cores
         long context = 0;                       // 0: automatic per model
@@ -67,6 +67,14 @@ namespace albireo
             new authority follows the trust of the one it replaces (certificates.h).
         */
         int trust_authority = -1;
+        /*
+            The access from the local network: a second server, in plain HTTP, on every address
+            of the Mac at lan_port, which asks for a password (lan_password_hash, the form of
+            password_hash()) before anything else.  Without a password it does not start.
+        */
+        bool lan = false;
+        int lan_port = 8444;
+        std::string lan_password_hash;
 
         /*
             The settings as settings.json and the administration interface give them, the
