@@ -13,26 +13,12 @@
 
 namespace pseudalis
 {
-    // Whether the processor and the system run AVX2 and FMA code: the bits of CPUID and the
-    // AVX state that the system saves (XGETBV).
-    bool cpu_has_avx2();
-
     class engine_library
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                The engine library of this computer, loaded at run time: on Windows
-                pseudalis-engine-avx2.dll beside the program when the processor runs AVX2,
-                else pseudalis-engine.dll; elsewhere the engine compiled into the program
-                (PSEUDALIS_ENGINE_STATIC) or libpseudalis-engine.so beside it.  The library is
-                loaded by its full path, the libraries it imports from its folder and System32
-                alone, and is taken only when it is of the version and of the build of the
-                program (psd_build()): a library of the same name that another installation
-                or another build left is refused.  The library
-                stays loaded until the process ends, whatever becomes of the object: the pool
-                of threads its networks run on, the one of dlib, would be joined by its
-                unloading, which Windows runs under its loader lock that the ending threads
-                need, so that the unloading would wait forever and the service with it.
+                The engine of the service, compiled into the program (PSEUDALIS_ENGINE_STATIC):
+                the functions of engine_api.h, which load() takes, as the service calls them.
         !*/
     public:
         engine_library() {}
@@ -40,8 +26,8 @@ namespace pseudalis
         engine_library(const engine_library&) = delete;
         engine_library& operator=(const engine_library&) = delete;
 
-        // Loads the library of folder; force names a variant, "avx2" or "baseline", or is empty.
-        bool load(const std::string& folder, const std::string& force, std::string& error);
+        // Takes the functions of the engine compiled into the program.
+        bool load();
         bool loaded() const { return create != nullptr; }
         const std::string& path() const { return path_; }
 
@@ -59,7 +45,6 @@ namespace pseudalis
         void (PSD_CALL* free_buffer)(psd_buffer*) = nullptr;
 
     private:
-        void* handle_ = nullptr;
         std::string path_;
     };
 

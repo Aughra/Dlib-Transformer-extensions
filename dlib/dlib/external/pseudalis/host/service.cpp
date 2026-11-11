@@ -129,8 +129,7 @@ namespace pseudalis
     bool service::start_engine(std::string& error)
     {
         library_ = std::make_shared<engine_library>();
-        const char* force = std::getenv("PSEUDALIS_ENGINE");
-        if (!library_->load(program_dir_, force ? force : "", error)) return false;
+        if (!library_->load()) return false;
         json options = json::object();
         options["date_order"] = settings_->get().date_order;
         const key_set keys = derive_keys(master_);
@@ -385,7 +384,6 @@ namespace pseudalis
         engine["variant"] = engine_ ? engine_->variant() : std::string();
         engine["library"] = library_ ? file_name(library_->path()) : std::string();
         engine["models"] = engine_ ? engine_->models() : json();
-        engine["avx2"] = cpu_has_avx2();
         j["engine"] = engine;
         j["key_fingerprint"] = key_fingerprint_;
         // Whether the files take their tags unless a request says otherwise.

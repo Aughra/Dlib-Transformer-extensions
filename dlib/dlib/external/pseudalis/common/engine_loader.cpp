@@ -4,8 +4,6 @@
 
 #include <cstring>
 
-#include <dlfcn.h>
-
 #include "build_stamp.h"
 #include "platform.h"
 #include "version.h"
@@ -73,24 +71,10 @@ namespace pseudalis
         }
     }
 
+    engine_library::~engine_library() {}
 
-    bool cpu_has_avx2()
+    bool engine_library::load()
     {
-        return false;
-    }
-
-
-    engine_library::~engine_library()
-    {
-        // The library is never unloaded (see engine_loader.h): a restart of the service
-        // within its process loads it again, which only counts one more reference.
-    }
-
-    bool engine_library::load(const std::string& folder, const std::string& force, std::string& error)
-    {
-        (void)folder;
-        (void)force;
-        (void)error;
         api_version = psd_api_version;
         variant = psd_variant;
         build = psd_build;

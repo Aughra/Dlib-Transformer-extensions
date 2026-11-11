@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Réduire le chargeur de moteur de Pseudalis au moteur intégré (nettoyage, N4)
+
+- **Quoi** : `engine_library` ne charge plus de bibliothèque : `load()` prend les fonctions du moteur compilé dans le service ; retirés : `cpu_has_avx2()`, le choix d'une variante par `PSEUDALIS_ENGINE`, le champ `handle_` (l'avertissement `-Wunused-private-field` connu disparaît), `dlfcn.h`, l'état `engine.avx2` du service, et le commentaire sur le déchargement des DLL sous Windows.
+- **Fichiers** : `dlib/dlib/external/pseudalis/common/engine_loader.{h,cpp}`, `host/service.cpp` ; ce journal.
+- **Pourquoi** : « du pur Apple » ; sur Mac, le moteur est dans le service.
+- **Étapes** : build sans erreur, plus que les 2 avertissements de dlib ; `test_engine`, `test_host` passent ; `test_linux.sh` : 34 sur 34.
+
 ## 2026-11-11 — Décrire le processeur comme une puce Apple et retirer le réglage V²RAM (nettoyage, N4)
 
 - **Quoi** : `cpu_info` ne garde que le nom de la puce, ses cœurs (dont `performance_cores` et `efficiency_cores`, lus par `sysctl`) et les extensions ARM que macOS déclare (`hw.optional.arm.FEAT_DotProd`, `FEAT_I8MM`, `FEAT_BF16`, `FEAT_FP16`) ; les champs x86 (SSE4.2, AVX, AVX2, FMA, F16C, VNNI, AVX-512, AMX), `vendor` et la lecture de `/sys/devices` de Linux sont retirés, avec la mécanique des jeux d'instructions requis (`qk_isa_flags`, `qk_lacking_isa`, `qk_required_isa`, `qk_missing_isa`) et ses points d'appel dans le moteur, l'hôte (`engine_host.cpp`) et `test_qkernels`. Le réglage `v2ram` / `v2ram_max_mb` (mémoire étendue de CUDA) est retiré du service, du serveur et de l'API. Gardés pour le GPU du Mac : `accelerator`, `device_mb`, la barre de mémoire de la page ; gardés pour M3 : `offload.h` et `layer_pass`, où le chemin Metal se branchera.
