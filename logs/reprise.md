@@ -43,6 +43,10 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 Voir le journal. Reste, plus tard : corriger sur le fond les commentaires qui décrivent encore l'original (Windows, CUDA, zone de notification ; `settings.h` qui liste « auto, en, fr, de, it, es »).
 
+### Plus tard (pas maintenant, demande de l'humain) : retirer le code mort de la page
+
+Repérage du 2026-11-11 (script, rien modifié) : les 354 fonctions d'`app.js` sont toutes appelées. Le code mort vient surtout des retraits du fork : une vingtaine de textes de `i18n.js` (les 12 `suggest_*`, `roleHint_*`, `roleServedBy`, `roleShared`, `languageAuto`, à confirmer un par un, car les clés `_one` / `_other` et `component_*` sont appelées par leur préfixe), les règles CSS `.role-picker`, `.suggestion(s)` et peut-être `.context-meter`, et ce qui ne sert qu'aux fonctions (`roles`, `roleIcons`, `roleInputs` à revoir depuis la 3.1.0). À faire avec le découpage d'`app.js`, chaque retrait vérifié dans le navigateur.
+
 ### Ensuite : découper `web/js/app.js` (accord de l'humain, 2026-11-11)
 
 Environ 7 000 lignes en un fichier. Le découper en modules ES par thème (conversations, saisie et pièces jointes, mémoire, projets, paramètres, À propos et licences ; `app.js` gardant le démarrage et la navigation), état partagé (`state`, `ui`) dans un module commun, sans changer le comportement. Une étape par module, chacune vérifiée dans Chrome sans fenêtre (Mac et largeur de téléphone) puis commitée, pour qu'une pause ne laisse jamais la page cassée. Version 2.0.x (correctif) à chaque commit.
