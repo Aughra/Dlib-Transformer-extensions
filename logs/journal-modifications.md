@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Écrire les noyaux Metal du pas d'écriture et les tester (moteur Metal, M2)
+
+- **Quoi** : `metal_kernels.metal` porte les noyaux du pas complet : produits Q4_K et Q6_K pour 1 à 8 tokens avec somme résiduelle (`y = alpha W x + beta y`, tokens en boucle extérieure), `rms_norm` (lignes ou têtes, sur place), `add_bias`, `silu_mul`, `rope` (neox ou en paires), `kv_store` (q8 : signes et Hadamard de `qk_rotate_row` puis échelle en demi-précision et arrondi de `qk_float_to_q8_row` ; f16), `prepare_queries`, `attention_part` (morceaux de 256 positions, 4 simdgroups, têtes de requêtes groupées lisant chaque clé une fois, softmax en ligne) et `merge_attention`. `metal_device` gagne les tampons partagés (`allocate`), l'enveloppe sans copie (`wrap`) et une suite de commandes (`begin`, un appel par noyau, `finish`). Nouveau test `tests/test_metal.cpp` (données au hasard, sans modèle).
+- **Fichiers** : `dlib/dlib/external/albireo/engine/metal_kernels.metal`, `engine/metal_device.{h,mm}`, `tests/test_metal.cpp` (nouveau), `CMakeLists.txt` ; `logs/sieste-2026-11-11.md`, ce journal.
+- **Pourquoi** : moteur Metal, sous-étape M2.
+- **Étapes** : build sans avertissement ; `test_metal` : tout passe ; écarts au calcul en double : produits 1,4e-8 à 2,6e-8, normes 1,2e-7 à 1,8e-7, rope 1,2e-7, SiLU 5,4e-7, attention sur 300 positions en blocs de 16 : 8,2e-8 (q8) et 7,0e-8 (f16) ; clés et valeurs écrites par le GPU identiques octet par octet à celles du processeur (1 536 valeurs, toutes les échelles) ; la zone du cache prise par le GPU sans copie. `tools/test_macos.sh` : 19 étapes sur 19.
+
 ## 2026-11-11 — Ouvrir le GPU du Mac dans le moteur (moteur Metal, M1)
 
 - **Quoi** : module Metal du moteur, propre au fork : `engine/metal_device.h` (interface en C++ pur), `engine/metal_device.mm` (Objective-C++ avec comptage automatique des références : ouverture du GPU, file de commandes, compilation des noyaux par macOS, préparation de leurs pipelines), `engine/metal_kernels.metal` (les noyaux `mv_q4_K` et `mv_q6_K` de la sonde, version 3 pour Q4_K), `engine/metal_kernels.inc.in` (la source glissée dans le moteur sous forme de chaîne au moment de la configuration : pas de compilateur Metal pour construire). Le moteur ouvre le GPU au démarrage, sauf avec le réglage `metal` à faux, et l'écrit dans son journal ; sa description liste le GPU. CMake : langage `OBJCXX`, frameworks Metal et Foundation. Le GPU ne calcule encore rien. Correction : le test complet d'Albireo compte 19 étapes, pas 20 (mémo, journal, épisode 18 corrigés).

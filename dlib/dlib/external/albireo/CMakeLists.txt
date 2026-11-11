@@ -310,6 +310,13 @@ if (ALBIREO_TESTS AND ALBIREO_PROGRAMS)
       endif()
       albireo_output_dir(${t} ${CMAKE_BINARY_DIR}/tests)
    endforeach()
+   # The Metal kernels against the processor, on random data (macOS port).
+   add_executable(test_metal tests/test_metal.cpp engine/metal_device.mm $<TARGET_OBJECTS:albireo-kernels>
+      common/system_info.cpp)
+   target_include_directories(test_metal PRIVATE ${ALBIREO_INCLUDE_DIR})
+   target_compile_options(test_metal PRIVATE ${ALBIREO_WARNINGS})
+   target_link_libraries(test_metal PRIVATE Threads::Threads)
+   albireo_output_dir(test_metal ${CMAKE_BINARY_DIR}/tests)
    # The chat format of the agents: the prompts with tools, and the tool calls read back.
    add_executable(test_chat_format tests/test_chat_format.cpp engine/chat_format.cpp)
    target_include_directories(test_chat_format PRIVATE ${ALBIREO_INCLUDE_DIR})
