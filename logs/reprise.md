@@ -43,6 +43,14 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 Voir le journal. Reste, plus tard : corriger sur le fond les commentaires qui décrivent encore l'original (Windows, CUDA, zone de notification ; `settings.h` qui liste « auto, en, fr, de, it, es »).
 
+### Plus tard, pas à pas (accord de principe de l'humain, 2026-11-11) : déplacer la logique cachée de la page vers le service C++
+
+But : la page ne garde que les boutons et l'affichage ; le service garde les données et fait le travail. La vitesse n'est pas l'argument (le modèle est déjà en C++ et sur le GPU, la logique de la page coûte des millisecondes) : c'est la propreté, le partage entre appareils et la légèreté sur téléphone. Une étape = une version, testée et commitée seule ; ne commencer qu'à la demande de l'humain.
+
+1. Conversations, projets et documents gardés par le service (sa base sur le Mac), partagés entre le Mac, l'iPad et le téléphone ; la page les lit et les écrit par l'API.
+2. Lecture des PDF et documents, et recherche dans les documents, faites par le service.
+3. Si utile : assemblage de la question (contexte, tokens), mémoire de l'utilisateur et mode agent côté service.
+
 ### Plus tard (pas maintenant, demande de l'humain) : retirer le code mort de la page
 
 Repérage du 2026-11-11 (script, rien modifié) : les 354 fonctions d'`app.js` sont toutes appelées. Le code mort vient surtout des retraits du fork : une vingtaine de textes de `i18n.js` (les 12 `suggest_*`, `roleHint_*`, `roleServedBy`, `roleShared`, `languageAuto`, à confirmer un par un, car les clés `_one` / `_other` et `component_*` sont appelées par leur préfixe), les règles CSS `.role-picker`, `.suggestion(s)` et peut-être `.context-meter`, et ce qui ne sert qu'aux fonctions (`roles`, `roleIcons`, `roleInputs` à revoir depuis la 3.1.0). À faire avec le découpage d'`app.js`, chaque retrait vérifié dans le navigateur.
