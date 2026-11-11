@@ -49,6 +49,13 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 5. Pseudalis : clé publique du flux (`resources/feed-public-key.pem`, `feed_public_key.h.in`) et `pseudalis-sign`, s'ils ne servent plus à rien.
 6. Version (sans doute 4.0.0 : l'import de dossiers signés change de comportement), notes de version, journal, mémo, notes pour l'auteur si un défaut de l'original apparaît, CLAUDE.md (la règle « ne pas regénérer ni re-signer les `*.sig` » reste vraie : on ne signe plus rien).
 
+**Juste après les clés, demandé par l'humain : une réserve de modèles sur le Mac**, qui remplace l'espace de publication de l'original (contre une panne ou un blocage de Hugging Face) :
+- dossier `<données>/reserve` : chaque modèle téléchargé y reste ; supprimer un modèle le range en réserve au lieu de l'effacer ; le réinstaller est une copie locale, sans réseau ;
+- la dernière liste connue (catalogue, liste personnelle, recherches Hugging Face) enregistrée sur le Mac et affichée même hors ligne ;
+- deux boutons dans l'onglet Modèles : « Rafraîchir depuis le Mac » (réserve et liste enregistrée, sans réseau) et « Rafraîchir depuis Hugging Face » (GitHub pour le catalogue, Hugging Face pour la liste personnelle) ;
+- le téléchargement cherche d'abord dans la réserve, puis sur Hugging Face (même logique que l'espace de l'original, sans mot de passe) ;
+- à décider avec l'humain : taille maximale de la réserve (réglage de l'onglet Service) et bouton « Vider la réserve » ; place libre le 2026-11-11 : 783 Go.
+
 **Ensuite, dans l'ordre que choisira l'humain** (détails plus bas) : découper `app.js` ; retirer le code mort de la page ; déplacer la logique cachée de la page vers le service ; corriger sur le fond les commentaires périmés (Windows, CUDA) ; attention de prompt en tuiles (M7). **Nouveau constat** : beaucoup de modèles récents de Hugging Face (Qwen 3.5, 3.6, 3.8 en `qwen35`, `qwen35moe`, `qwen4exp`, Gemma, Granite hybride, DeepSeek) ont des architectures que le moteur ne lit pas ; les prendre en charge serait un chantier du moteur à part, à proposer à l'humain.
 
 ## En cours
