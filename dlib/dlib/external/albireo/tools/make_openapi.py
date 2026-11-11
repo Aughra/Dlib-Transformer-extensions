@@ -246,10 +246,10 @@ schemas = {
                                  "of the Latin scripts, the digits and the usual punctuation are read; any other "
                                  "character is a pause."},
         "voice": {"type": "string",
-                  "description": "A voice of Albireo, en-US, en-GB, fr-FR, de-DE, it-IT or es-ES, or its "
-                                 "language, en, fr, de, it or es; another name (the voices of other services) "
-                                 "takes the voice of language."},
-        "language": {"type": "string", "enum": ["en", "fr", "de", "it", "es"], "default": "en",
+                  "description": "The voice of Albireo, fr-FR, or its language, fr (the fork for macOS speaks "
+                                 "French only); another name (the voices of other services) takes the voice of "
+                                 "language."},
+        "language": {"type": "string", "enum": ["fr"], "default": "fr",
                      "description": "Albireo: the language of the voice when voice names none of Albireo."},
         "speed": {"type": "number", "minimum": 0.25, "maximum": 4, "default": 1,
                   "description": "The speed of the reading, applied from 0.5 to 2."},
@@ -293,7 +293,7 @@ schemas = {
     "Settings": {"type": "object", "description": "Settings the web application may change (its Service tab); a "
                  "change of port, of the GPU, of the network access or of memory restarts the service.", "properties": {
         "port": {"type": "integer", "minimum": 1024, "maximum": 65535},
-        "language": {"type": "string", "enum": ["auto", "en", "fr", "de", "it", "es"]},
+        "language": {"type": "string", "enum": ["auto", "fr"]},
         "engine": {"type": "string", "enum": ["auto", "best", "cpu", "cpu-avx2", "cpu-avxvnni", "openvino", "cuda"],
                    "description": "auto: the accelerator of the computer, the NVIDIA card (cuda), else the NPU and "
                    "the graphics processor of Intel together, else the one of them present, with the processor "
@@ -359,7 +359,7 @@ schemas = {
         "language": {"type": "string", "pattern": "^[a-z]{2,3}(-([A-Z]{2}|[0-9]{3}))?$", "example": "fr",
                      "description": "The language of the results: the site of Wikipedia of that language (en "
                                     "without one)."}},
-        "example": {"query": "Albireo double star", "count": 5, "language": "en"}},
+        "example": {"query": "Albireo étoile double", "count": 5, "language": "fr"}},
     "WebSearchResults": {"type": "object", "properties": {
         "provider": {"type": "string", "enum": ["wikipedia"]},
         "results": {"type": "array", "description": "The results whose address is http or https, count at most.",
@@ -468,8 +468,8 @@ paths = {
                        "when the speech program is missing.",
         "responses": {"200": reply("The voices", {"type": "object", "properties": {
             "voices": {"type": "array", "items": {"type": "object", "properties": {
-                "id": {"type": "string", "description": "en-US, en-GB, fr-FR, de-DE, it-IT or es-ES."},
-                "language": {"type": "string", "enum": ["en", "fr", "de", "it", "es"]}}}},
+                "id": {"type": "string", "description": "fr-FR."},
+                "language": {"type": "string", "enum": ["fr"]}}}},
             "format": {"type": "string", "enum": ["wav"]},
             "sample_rate": {"type": "integer", "enum": [16000]}}})}}},
     "/albireo/v1/status": {"get": {
@@ -484,7 +484,7 @@ paths = {
             "project": {"type": "string", "description": "The address of the source code of Albireo."},
             "settings": {"type": "object", "description": "The settings of the service that the web application "
                          "follows, such as the language of the interface.", "properties": {
-                             "language": {"type": "string", "enum": ["auto", "en", "fr", "de", "it", "es"]},
+                             "language": {"type": "string", "enum": ["auto", "fr"]},
                              "engine": {"type": "string"}, "accelerator": {"type": "string"},
                              "device_mb": {"type": "integer"},
                              "offline": {"type": "boolean"}}},
@@ -558,8 +558,8 @@ paths = {
         "description": "The language models: those that come with Albireo first (builtin), then the catalog and "
                        "the imports. The embedding models serve the document search and are given apart.",
         "parameters": [{"name": "lang", "in": "query",
-                        "schema": {"type": "string", "enum": ["auto", "en", "fr", "de", "it", "es"]},
-                        "description": "Language of the descriptions; auto, or no value, gives English."}],
+                        "schema": {"type": "string", "enum": ["auto", "fr"]},
+                        "description": "Language of the descriptions; auto, or no value, gives French (the fork for macOS speaks French only)."}],
         "responses": {"200": reply("The models", {"type": "object", "properties": {
             "free": {"type": "integer", "description": "The free bytes of the disk of the models folder."},
             "offline": {"type": "boolean", "description": "True when the service is set offline: the models come "

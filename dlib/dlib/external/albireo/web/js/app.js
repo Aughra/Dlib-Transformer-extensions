@@ -376,15 +376,9 @@ function applyTheme() {
   document.getElementById('hljs-dark').disabled = !dark;
 }
 
-/*
-    The language of the interface: the one chosen here, else the one of Albireo, chosen in
-    the window of the computer of its icon, else the one of the browser, as the windows of
-    Albireo follow the one of Windows.
-*/
+// The language of the interface: French, the only one of this fork.
 function applyLanguage() {
-  const own = state.settings.language;
-  const system = state.status && state.status.settings ? state.status.settings.language : 'auto';
-  setLanguage(own && own !== 'auto' ? own : system && system !== 'auto' ? system : null);
+  setLanguage('fr');
 }
 
 // Saves a setting and tells the other tabs; a setting the database refuses stays for this visit.
@@ -1031,57 +1025,12 @@ function queryTerms(query) {
   return fold(query).split(/\s+/).filter(Boolean);
 }
 
-// The languages of the interface, named in English for the instructions of the model.
-const languageNames = { en: 'English', fr: 'French', de: 'German', it: 'Italian', es: 'Spanish' };
+// The language of the interface, named in English for the instructions of the model: French, the only one of this fork.
+const languageNames = { fr: 'French' };
 
-// Frequent short words of each language, without accents, and letters that mostly belong to one.
-const languageWords = {
-  en: 'the a an and or but of to in on at for with from by about is are was were be been am it its this that these '
-    + 'those what how why which who when where can could would should will you your i my me we our they their he she '
-    + 'his her do does did not no please write explain tell give name list make show find use works prefers likes '
-    + 'uses wants as one line if than then also there',
-  fr: 'le la les un une des du de et ou mais est sont etait suis es que qui quoi comment pourquoi quel quelle quels '
-    + 'quelles quand dans pour avec sans sur sous par chez je tu il elle nous vous ils elles mon ma mes ton ta tes son '
-    + 'sa ses notre votre leur ce cet cette ces au aux en pas ne plus tres peux peut faire fais explique ecris calcule '
-    + 'donne dis resume liste c l d j qu n aime prefere utilise travaille veut souhaite comme ligne me se si non',
-  de: 'der die das den dem des ein eine einen einem einer und oder aber ist sind was war bin nicht kein keine ich du '
-    + 'er sie es wir ihr mein meine dein wie warum welche welcher welches wann wo mit fur auf von vom zu zum zur im '
-    + 'in bei aus nach uber kann konnen bitte erklare schreibe berechne gib zeige als also auch noch sehr arbeitet '
-    + 'bevorzugt mag nutzt verwendet mochte zeile',
-  it: 'il lo la gli le un una uno di del della dei delle degli e o ma che chi come cosa perche quale quali quando dove '
-    + 'per con su tra fra nel nella nei sono sei mi ti ci non piu molto puoi spiegami spiega scrivi calcola dammi '
-    + 'dimmi lavora preferisce usa vuole riga tu me se si',
-  es: 'el la los las un una unos unas de del y o pero que quien como cual cuales cuando donde por para con sin sobre '
-    + 'entre en es son soy estoy mi tu su no muy puedes explica explicame escribe calcula dame dime trabaja prefiere '
-    + 'usa quiere linea me se si'
-};
-const languageLetters = { fr: /[çœêâîôûë]/g, de: /[äöüß]/g, es: /[ñ¿¡áíóú]/g, it: /[ìò]/g };
-let languageIndex = null;
-
-/*
-    The language of a text among those of the interface, from its frequent short words and its
-    letters, or null when the text is too short or too mixed to tell.  strict asks for a clearer
-    lead of one language over the others.
-*/
-function textLanguage(text, strict) {
-  if (!languageIndex) {
-    languageIndex = new Map();
-    for (const [code, words] of Object.entries(languageWords)) {
-      for (const w of new Set(words.split(' '))) languageIndex.set(w, (languageIndex.get(w) || []).concat([code]));
-    }
-  }
-  const score = { en: 0, fr: 0, de: 0, it: 0, es: 0 };
-  const lower = String(text || '').toLowerCase();
-  for (const w of fold(lower).split(/[^a-z]+/)) {
-    const codes = languageIndex.get(w);
-    if (codes) for (const code of codes) score[code] += 1 / codes.length;
-  }
-  for (const [code, re] of Object.entries(languageLetters)) {
-    score[code] += Math.min(2, (lower.match(re) || []).length / 2);
-  }
-  const ranked = Object.entries(score).sort((a, b) => b[1] - a[1]);
-  const floor = strict ? 2 : 1.5;
-  return ranked[0][1] >= floor && ranked[0][1] >= floor * ranked[1][1] ? ranked[0][0] : null;
+// The language of a text: French, the only one of this fork.
+function textLanguage() {
+  return 'fr';
 }
 
 /*
@@ -3128,17 +3077,27 @@ function renderAll() {
   ui.banner.classList.toggle('hidden', !(state.view === 'chat' && state.current && state.current.incognito));
 }
 
+// The gear of the top bar: the settings, the settings of the service, the about tab and the notes of the versions.
+function gearButton() {
+  return iconButton('gear', t('settings'), (e) => showMenu(e.currentTarget, [
+    { icon: 'gear', label: t('settings'), action: () => settingsDialog('general') },
+    { icon: 'cpu', label: t('serviceTab'), action: () => settingsDialog('serviceTab') },
+    { icon: 'info', label: t('about'), action: () => settingsDialog('about') },
+    { icon: 'file', label: t('changelog'), action: () => changelogDialog() }
+  ]), 'icon-button topbar-gear');
+}
+
 function renderTopbar() {
   const bar = ui.topbar;
   bar.replaceChildren();
   bar.append(iconButton('sidebar', t('collapse'), toggleSidebar));
   if (state.view === 'project') {
     const p = projectById(state.projectId);
-    bar.append(h('div', { class: 'title' }, p ? p.name : ''));
+    bar.append(h('div', { class: 'title' }, p ? p.name : ''), gearButton());
     return;
   }
   if (state.view === 'licenses') {
-    bar.append(h('div', { class: 'title' }, t('licensesTitle')));
+    bar.append(h('div', { class: 'title' }, t('licensesTitle')), gearButton());
     return;
   }
   const c = state.current;
@@ -3183,6 +3142,7 @@ function renderTopbar() {
     }, h('span', { html: icon(roleIcons[c.role]) }), t('role_' + c.role), h('span', { html: icon('chevron') }))));
     if (c.messages.length) bar.append(iconButton('more', '…', (e) => conversationMenu(c, e.currentTarget)));
   }
+  bar.append(gearButton());
 }
 
 function roleMenu(anchor) {
@@ -5606,11 +5566,7 @@ function memoryLanguage() {
     whose subject, the user, is left out.
 */
 const memoryExamples = {
-  en: ['Works as a nurse in Lyon.', 'Prefers short answers.'],
-  fr: ['Travaille comme infirmière à Lyon.', 'Préfère les réponses courtes.'],
-  de: ['Arbeitet als Krankenpflegerin in Lyon.', 'Bevorzugt kurze Antworten.'],
-  it: ['Lavora come infermiera a Lione.', 'Preferisce risposte brevi.'],
-  es: ['Trabaja como enfermera en Lyon.', 'Prefiere respuestas cortas.']
+  fr: ['Travaille comme infirmière à Lyon.', 'Préfère les réponses courtes.']
 };
 
 /*
@@ -5620,7 +5576,7 @@ const memoryExamples = {
     examples show a message with two facts, and a request, which teaches none.
 */
 function memoryDeltaInstructions(words, sensitive) {
-  const code = memoryExamples[language()] ? language() : 'en';
+  const code = 'fr';
   const [a, b] = memoryExamples[code];
   const english = code === 'fr';
   const message = english ? 'I am a nurse in Lyon and I prefer short answers. What does triage mean?'
@@ -5663,54 +5619,32 @@ function evidenceText(text) {
 }
 
 /*
-    The first words of the requests in the languages of the interface, folded (fold): the verbs of the frequent
-    requests in the imperative, and the openings of a polite request.  A statement of the user that starts with one
-    of them asks for a task, which says nothing lasting about the user.
+    The first words of the requests, in French, folded (fold): the verbs of the frequent requests in the imperative,
+    and the openings of a polite request.  A statement of the user that starts with one of them asks for a task,
+    which says nothing lasting about the user.
 */
-const requestOpeners = new Set(('write create make build generate compute calculate explain describe give show '
-  + 'list summarize summarise translate convert fix correct rewrite draft compose draw find search tell help '
-  + 'implement add remove check review solve analyze analyse compare prepare design develop optimize optimise '
-  + 'refactor debug sort define recommend suggest propose estimate extract complete simplify improve update please '
-  + 'can could would '
-  + 'ecris ecrivez cree creez fais faites genere generez calcule calculez explique expliquez decris decrivez donne '
-  + 'donnez montre montrez liste listez resume resumez traduis traduisez convertis convertissez corrige corrigez '
-  + 'reecris reecrivez redige redigez dessine dessinez trouve trouvez cherche cherchez dis dites aide aidez '
-  + 'implemente implementez ajoute ajoutez supprime supprimez verifie verifiez resous resolvez analysez comparez '
-  + 'preparez concois concevez developpe developpez optimisez proposez suggere suggerez completez simplifie '
-  + 'simplifiez ameliore ameliorez peux pourrais pouvez pourriez '
-  + 'schreib schreibe erstelle erstellen mach mache generiere berechne berechnen erklar erklare erklaren beschreibe '
-  + 'gib zeig zeige fasse ubersetze ubersetzen konvertiere korrigiere finde suche sag sage hilf implementiere fuge '
-  + 'entferne prufe uberprufe analysiere vergleiche bereite programmiere entwickle optimiere schlage vereinfache '
-  + 'verbessere kannst konntest konnen bitte '
-  + 'scrivi scrivete crea calcola calcolate spiega spiegate descrivi dammi mostra mostrami elenca riassumi traduci '
-  + 'converti correggi riscrivi disegna trova cerca dimmi aiuta aiutami implementa aggiungi rimuovi togli verifica '
-  + 'controlla risolvi analizza confronta prepara progetta sviluppa ottimizza proponi suggerisci completa semplifica '
-  + 'migliora puoi potresti '
-  + 'escribe escriba haz haga genera calcula explica dame muestra enumera traduce traduzca convierte reescribe '
-  + 'redacta dibuja encuentra busca dime ayuda ayudame agrega anade elimina quita comprueba revisa resuelve analiza '
-  + 'compara disena desarrolla optimiza propon sugiere mejora puedes podrias puede podria').split(' '));
+const requestOpeners = new Set(('ecris ecrivez cree creez fais faites genere generez calcule calculez explique '
+  + 'expliquez decris decrivez donne donnez montre montrez liste listez resume resumez traduis traduisez convertis '
+  + 'convertissez corrige corrigez reecris reecrivez redige redigez dessine dessinez trouve trouvez cherche cherchez '
+  + 'dis dites aide aidez implemente implementez ajoute ajoutez supprime supprimez verifie verifiez resous resolvez '
+  + 'analysez comparez preparez concois concevez developpe developpez optimisez proposez suggere suggerez completez '
+  + 'simplifie simplifiez ameliore ameliorez peux pourrais pouvez pourriez').split(' '));
 
 // The pronouns that follow an imperative after a hyphen in French ("écris-moi", "donne-le-moi").
 const requestPronouns = new Set(['moi', 'toi', 'nous', 'vous', 'le', 'la', 'les', 'lui', 'leur', 'en', 'y']);
 
 /*
-    True when a clause asks for a task: its first word, after a polite opening, is a request opener, alone, before
-    the pronouns of a French imperative, or before the pronoun an Italian or Spanish imperative takes at its end
-    ("scrivimi", "explícame").
+    True when a clause asks for a task: its first word, after « s'il te plaît » or « s'il vous plaît », is a request
+    opener, alone or before the pronouns of a French imperative.
 */
 function asksForTask(clause) {
   const words = fold(clause).replace(/[^\p{L}\s'-]+/gu, ' ').trim().split(/\s+/);
   let k = 0;
-  if ((words[0] === 'por' && words[1] === 'favor') || (words[0] === 'per' && words[1] === 'favore')) k = 2;
   if (words[0] === 's\'il' && (words[1] === 'te' || words[1] === 'vous')) k = 3;
   const w = words[k] || '';
   if (requestOpeners.has(w)) return true;
   const parts = w.split('-');
-  if (parts.length > 1 && requestOpeners.has(parts[0]) && parts.slice(1).every((x) => requestPronouns.has(x))) {
-    return true;
-  }
-  const enclitic = /^(\p{L}{3,}?)(?:me|mi|ci|ti|te|lo|la|le|los|las|nos|gli)$/u.exec(w);
-  return !!enclitic && requestOpeners.has(enclitic[1]);
+  return parts.length > 1 && requestOpeners.has(parts[0]) && parts.slice(1).every((x) => requestPronouns.has(x));
 }
 
 /*
@@ -6262,11 +6196,11 @@ function needsTitle(c) {
     first words.
 */
 const titleExamples = [
-  ['English', 'I\'m a nurse in Leeds. In one line, what is triage?', 'Meaning of triage'],
+  ['French', 'Je suis infirmière à Lyon. En une ligne, c\'est quoi le triage ?', 'Définition du triage'],
   ['French', 'Peux-tu m\'expliquer comment fonctionne la photosynthèse ?', 'Fonctionnement de la photosynthèse'],
-  ['German', 'Berechne 15 % von 80 und erkläre den Rechenweg.', 'Prozentrechnung mit Rechenweg'],
-  ['Spanish', 'Escribe un poema corto sobre el mar.', 'Poema sobre el mar'],
-  ['Italian', 'Come faccio a invertire una lista collegata in Java?', 'Inversione di una lista in Java']
+  ['French', 'Calcule 15 % de 80 et explique le calcul.', 'Calcul de pourcentage'],
+  ['French', 'Écris un court poème sur la mer.', 'Poème sur la mer'],
+  ['French', 'Comment inverser une liste chaînée en Java ?', 'Inversion d\'une liste en Java']
 ];
 
 /*
@@ -6616,14 +6550,6 @@ function generalTab(body, close) {
   const theme = h('select', null, ['auto', 'light', 'dark'].map((v) =>
     h('option', { value: v, selected: state.settings.theme === v }, t('theme' + v[0].toUpperCase() + v.slice(1)))));
   theme.addEventListener('change', async () => { await saveSetting('theme', theme.value); applyTheme(); });
-  const lang = h('select', null, h('option', { value: 'auto', selected: state.settings.language === 'auto' }, t('languageAuto')),
-    languages.map((l) => h('option', { value: l.code, selected: state.settings.language === l.code }, l.name)));
-  lang.addEventListener('change', async () => {
-    await saveSetting('language', lang.value);
-    close(true);
-    await languageChanged(true);
-    settingsDialog('general');
-  });
   const name = h('input', { value: state.settings.userName || '' });
   name.addEventListener('change', async () => {
     await saveSetting('userName', name.value.trim());
@@ -6641,7 +6567,7 @@ function generalTab(body, close) {
   const sys = h('textarea', { rows: 4 });
   sys.value = state.settings.systemPrompt || '';
   sys.addEventListener('change', () => saveSetting('systemPrompt', sys.value));
-  body.append(field(t('theme'), theme), field(t('language'), lang), field(t('yourName'), name, t('yourNameHelp')),
+  body.append(field(t('theme'), theme), field(t('yourName'), name, t('yourNameHelp')),
     field(t('defaultRole'), role), h('div', { class: 'field' }, h('label', { class: 'inline' }, enter, ' ', t('sendOnEnter'))),
     field(t('systemPrompt'), sys, t('systemPromptHelp')));
 }
@@ -6985,7 +6911,22 @@ async function aboutTab(body, close) {
       'Aughra/Dlib-Transformer-extensions')),
   h('p', null, h('a', { href: s.project || 'https://github.com/Cydral/Dlib-Transformer-extensions', target: '_blank', rel: 'noopener' }, 'Dlib-Transformer-extensions'),
     ' · ', h('a', { href: '/docs/', target: '_blank' }, t('apiDocs')), ' · ',
+    h('a', { href: '#', onclick: (e) => { e.preventDefault(); changelogDialog(); } }, t('changelog')), ' · ',
     h('a', { href: '#/licenses', onclick: () => close(true) }, t('thirdParty'))));
+}
+
+// The notes of the versions of the fork for macOS (web/changelog.md).
+function changelogDialog() {
+  return dialog((box, close) => {
+    const body = h('div', { class: 'md changelog' }, h('p', { class: 'help' }, '…'));
+    box.append(body, h('div', { class: 'actions' },
+      h('button', { class: 'button primary', type: 'button', onclick: () => close(true) }, t('close'))));
+    fetch('/changelog.md', { cache: 'no-store' }).then((r) => {
+      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+      return r.text();
+    }).then((text) => { body.innerHTML = renderMarkdown(text); })
+      .catch((e) => body.replaceChildren(h('p', { class: 'help' }, e.message)));
+  });
 }
 
 /*

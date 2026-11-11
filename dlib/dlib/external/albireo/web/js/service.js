@@ -207,10 +207,6 @@ const schemas = {
     box(30, 76, 150, 56, 'Service', 's-blue') + arrow(180, 104, 300, 104, 'lit') +
     box(300, 60, 260, 88, 'Dossier des modèles', 's-gold', 'vide : dans les données') +
     text(300, 180, 'un disque externe convient, s’il reste branché', 's-f'), 200),
-  language: schema('La langue de l’interface',
-    box(30, 76, 160, 56, 'Page : auto', 's-soft') + arrow(190, 104, 310, 104, 'suit') +
-    box(310, 76, 160, 56, 'Langue du service', 's-blue') +
-    text(300, 170, 'choisie dans l’onglet Général, la langue de la page l’emporte', 's-f'), 190),
   security: schema('Sur le Mac, la porte est ouverte',
     box(30, 70, 150, 56, 'Page Albireo', 's-blue') + arrow(180, 98, 330, 98, 'tout permis') +
     box(330, 70, 150, 56, 'Service', 's-gold', '127.0.0.1') +
@@ -262,9 +258,9 @@ const groups = [
       'kv_mb', 'kv_type', 'warm_history']
   },
   {
-    title: 'Modèles et langue',
-    note: 'Le dossier des modèles demande un redémarrage ; la langue s’applique tout de suite.',
-    items: ['models_dir', 'language']
+    title: 'Modèles',
+    note: 'Le dossier des modèles demande un redémarrage.',
+    items: ['models_dir']
   },
   {
     title: 'Accès depuis le réseau',
@@ -685,21 +681,6 @@ const items = {
       "tu ouvres un placard vide.",
     bee: "Un dossier vide ou un disque débranché, et le service démarre sans modèle : plus de réponses jusqu’à ce que " +
       "les fichiers reviennent."
-  },
-  language: {
-    title: 'Langue du service',
-    control: { kind: 'choice', options: [['auto', 'Auto'], ['fr', 'FR'], ['en', 'EN'], ['de', 'DE'], ['it', 'IT'], ['es', 'ES']] },
-    restart: false,
-    effect: 'La langue de la page quand celle-ci est réglée sur « auto » (onglet Général).',
-    principle: 'La page suit d’abord son propre réglage ; en « auto », elle prend la langue du service, sinon celle du navigateur.',
-    pros: ['Tous les appareils de la maison en « auto » parlent la même langue.'],
-    cons: ['Sans effet sur un appareil dont la page a sa propre langue choisie.'],
-    normal: "Chaque appareil choisit la langue de la page dans l’onglet Général. Laissé sur « auto », il prend celle " +
-      "du service. Utile pour que le téléphone et la tablette s’affichent en français sans rien régler sur eux.",
-    owl: "settings.language du service (auto, en, fr, de, it, es) est renvoyé par /albireo/v1/status ; la page " +
-      "l’emploie quand son propre réglage language vaut auto, avant la langue du navigateur. Appliqué à chaud.",
-    marmot: "C’est la langue de la maison : si personne ne précise rien, tout le monde parle celle-là.",
-    bee: "Rien de grave : au pire, la page s’affiche dans une autre langue sur les appareils en « auto »."
   },
   proxy: {
     title: 'Proxy',

@@ -9,7 +9,7 @@
 # is copied to <build>/bin/web and the voices of the speech synthesis to <build>/bin/speech.
 
 cmake_minimum_required(VERSION 3.16)
-project(albireo VERSION 1.0.12 LANGUAGES C CXX OBJCXX)
+project(albireo VERSION 2.0.0 LANGUAGES C CXX OBJCXX)
 
 # The version is written in four places that must agree: project() above, the numbers and the
 # text of common/version.h, which the service and the engine give, and the description of the
@@ -175,7 +175,8 @@ if (ALBIREO_PROGRAMS)
    target_link_libraries(albireo_common PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
 
    # The speech synthesis that reads the answers aloud: SVOX Pico in its own program,
-   # albireo-speech, which the service starts for each reading, and its voices of six languages.
+   # albireo-speech, which the service starts for each reading, and its French voice (the fork
+   # for macOS speaks French only).
    set(pico_dir ${ALBIREO_DLIB_DIR}/external/svox_pico)
    file(GLOB pico_sources ${pico_dir}/lib/*.c)
    add_library(albireo_pico STATIC ${pico_sources})
@@ -283,7 +284,9 @@ if (ALBIREO_PROGRAMS)
    add_dependencies(albireo-service albireo-web)
    # The program and the voices of the speech synthesis, next to the service.
    add_custom_target(albireo-speech-voices ALL
-      COMMAND ${CMAKE_COMMAND} -E copy_directory ${pico_dir}/lang ${CMAKE_BINARY_DIR}/bin/speech
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/bin/speech
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${pico_dir}/lang/fr-FR_ta.bin ${pico_dir}/lang/fr-FR_nk0_sg.bin
+         ${CMAKE_BINARY_DIR}/bin/speech
       COMMENT "Copying the voices of the speech synthesis")
    add_dependencies(albireo-service albireo-speech albireo-speech-voices)
 

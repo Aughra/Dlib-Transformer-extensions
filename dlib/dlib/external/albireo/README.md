@@ -1,5 +1,9 @@
 # Albireo
 
+> **macOS fork** (TortueTech, version 2.0.0 and later): Albireo for Apple Silicon Macs only, its
+> interface and its speech synthesis in French only. See `web/changelog.md` for its changes; the rest
+> of this document describes the original, for Windows.
+
 Albireo runs language models on the computer where it is installed. It is a Windows 11
 program built on dlib and Dlib-Transformer-extensions: an inference engine for quantized GGUF
 models, a Windows service that serves it on a local HTTPS address with an interface compatible

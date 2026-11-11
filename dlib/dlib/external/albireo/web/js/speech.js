@@ -10,38 +10,9 @@
 
 import { getJSON, postAudio } from './api.js';
 
-const languages = ['en', 'fr', 'de', 'it', 'es'];
-
-// Frequent short words of each language, which tell the language of a text.
-const markers = {
-  en: ['the', 'and', 'is', 'are', 'of', 'to', 'in', 'that', 'it', 'for', 'with', 'this', 'you', 'not', 'be', 'was',
-    'have', 'can', 'or', 'which'],
-  fr: ['le', 'la', 'les', 'et', 'est', 'des', 'une', 'un', 'que', 'pour', 'dans', 'qui', 'pas', 'vous', 'sur', 'au',
-    'du', 'ce', 'il', 'sont'],
-  de: ['der', 'die', 'das', 'und', 'ist', 'nicht', 'ein', 'eine', 'zu', 'mit', 'den', 'sie', 'es', 'auf', 'für',
-    'von', 'dem', 'sind', 'auch', 'wird'],
-  it: ['il', 'di', 'che', 'e', 'la', 'per', 'non', 'un', 'una', 'sono', 'del', 'della', 'con', 'gli', 'è', 'le',
-    'si', 'nel', 'questo', 'anche'],
-  es: ['el', 'la', 'de', 'que', 'y', 'en', 'los', 'las', 'es', 'un', 'una', 'por', 'con', 'para', 'del', 'se', 'no',
-    'su', 'como', 'más']
-};
-const markerSets = {};
-for (const l of languages) markerSets[l] = new Set(markers[l]);
-
-// The language of a text by its frequent words, or fallback when the words do not tell.
-export function textLanguage(text, fallback) {
-  const words = (text.toLowerCase().match(/\p{L}+/gu) || []).slice(0, 600);
-  let best = null, top = 0, second = 0;
-  for (const l of languages) {
-    let score = 0;
-    for (const w of words) if (markerSets[l].has(w)) score++;
-    if (score > top) {
-      second = top;
-      top = score;
-      best = l;
-    } else if (score > second) second = score;
-  }
-  return best && top >= 3 && top >= second * 1.25 ? best : fallback;
+// The fork for macOS reads French only.
+export function textLanguage() {
+  return 'fr';
 }
 
 /*

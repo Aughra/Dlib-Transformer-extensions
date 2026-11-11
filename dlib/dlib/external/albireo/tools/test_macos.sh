@@ -115,8 +115,8 @@ fi
 # The program of the speech synthesis alone: a sentence read aloud in the folder of the voices.
 SPEAKER=$BUILD/bin/albireo-speech
 if [ -x "$SPEAKER" ] && [ -d "$BUILD/bin/speech" ]; then
-  step "speech program" "RIFF" sh -c "cd '$BUILD/bin/speech' && printf '%s' 'Guten Tag, Albireo liest vor.' \
-    | '$SPEAKER' de-DE 1 > '$WORK/program.wav' && head -c 4 '$WORK/program.wav' && echo && wc -c < '$WORK/program.wav'"
+  step "speech program" "RIFF" sh -c "cd '$BUILD/bin/speech' && printf '%s' 'Bonjour, Albireo lit à voix haute.' \
+    | '$SPEAKER' fr-FR 1 > '$WORK/program.wav' && head -c 4 '$WORK/program.wav' && echo && wc -c < '$WORK/program.wav'"
 else
   skip "speech program" "no $SPEAKER or no $BUILD/bin/speech"
 fi

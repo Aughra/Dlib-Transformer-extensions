@@ -96,13 +96,9 @@ namespace albireo
 
     const std::vector<speech_voice>& speech_voices()
     {
+        // The fork for macOS speaks French only.
         static const std::vector<speech_voice> voices = {
-            { "en-US", "en", "en-US_ta.bin", "en-US_lh0_sg.bin" },
-            { "en-GB", "en", "en-GB_ta.bin", "en-GB_kh0_sg.bin" },
             { "fr-FR", "fr", "fr-FR_ta.bin", "fr-FR_nk0_sg.bin" },
-            { "de-DE", "de", "de-DE_ta.bin", "de-DE_gl0_sg.bin" },
-            { "it-IT", "it", "it-IT_ta.bin", "it-IT_cm0_sg.bin" },
-            { "es-ES", "es", "es-ES_ta.bin", "es-ES_zl0_sg.bin" },
         };
         return voices;
     }

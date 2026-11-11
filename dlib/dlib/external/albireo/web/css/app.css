@@ -805,3 +805,4 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .svc-profile .name { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; }
 .svc-profile .meta { color: var(--text-faint); font-size: 12px; }
 @media (max-width: 520px) { .svc-profile { grid-template-columns: 1fr auto auto; } .svc-profile .meta { display: none; } }
+.changelog { max-height: min(70vh, 640px); overflow-y: auto; }

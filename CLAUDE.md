@@ -133,7 +133,7 @@ Les documents de l'original (`Readme.md`, `examples/Readme.md`, les README d'Alb
 Le blog raconte le portage **épisode par épisode**, comme un billet de carnet, pour un lecteur curieux qui n'est pas forcément développeur. Il vit dans [blog/](blog/), un dossier propre au fork (aucun conflit avec l'original). Les épisodes 1 à 3 ont d'abord paru sur le carnet TortueTech (`/carnet/dlib-transformer-extensions-macos*`) : ils fixent **le ton à suivre**. Claude ne publie rien en ligne : l'humain décide où et quand.
 
 - **Un épisode par grande étape, en français seulement** : `blog/NN-titre-court.md`, numéroté à la suite. Est une grande étape : un programme ou une application qui compile ou tourne pour la première fois sur Mac, une décision de portage importante, une fusion de l'original qui change la donne, un tournant. Un épisode publié ne se réécrit pas ; on ne le corrige que pour une erreur de fait.
-- **Écrit dans le même commit que la fin de l'étape**, avec l'entrée du journal, et ajouté au sommaire [blog/README.md](blog/README.md).
+- **Écrit dans le même commit que la fin de l'étape**, avec l'entrée du journal, et ajouté au sommaire [blog/README.md](blog/README.md), et avec la mise à jour des notes de version d'Albireo (voir « Version et notes de version d'Albireo »).
 - **Forme d'un épisode** :
   - titre `# Dlib Transformer Extensions sur macOS, épisode N : <sujet>` ;
   - juste sous le titre, une ligne en citation **« Repère de vitesse »** : les tokens/s d'écriture (2B, et 4B quand il est mesuré) et de lecture valables à la fin de l'épisode, tirés du journal ; « pas encore de mesure » avant que le moteur tourne (demande de l'humain, 2026-11-11) ;
@@ -147,6 +147,18 @@ Le blog raconte le portage **épisode par épisode**, comme un billet de carnet,
 - **Aucun secret ni donnée privée** : pas d'adresse e-mail, de chemin privé (`/Users/...`), de clé ni de jeton. Les noms des comptes GitHub du fork peuvent apparaître, comme dans l'épisode 1.
 - Critère vérifiable : chaque `blog/NN-*.md` figure au sommaire, commence par le titre « Dlib Transformer Extensions sur macOS, épisode N » suivi de sa ligne « Repère de vitesse », et ne contient ni adresse e-mail ni chemin `/Users/`.
 
+### Version et notes de version d'Albireo
+
+Le fork numérote Albireo à part de l'original, à partir de **2.0.0** (2026-11-11), en gestion sémantique des versions.
+
+- **Un incrément à chaque modification d'Albireo** (code, page, service, moteur) livrée par un commit : `python3 dlib/dlib/external/albireo/tools/bump_version.py patch|minor|major` met à jour `common/version.h`, `project()` du `CMakeLists.txt` et `web/openapi.json`, que le build compare. Correctif (`patch`) pour une correction ou un texte, mineur (`minor`) pour une fonction ou un réglage nouveau, majeur (`major`) pour une rupture. Les commits qui ne touchent que la doc du fork, le journal ou le blog ne changent pas la version.
+- **Les notes de version** ([web/changelog.md](dlib/dlib/external/albireo/web/changelog.md), en français, affichées par le lien « Notes de version » de l'onglet « À propos ») ont une section par version publiée. Elles sont **mises à jour à chaque fois que le blog l'est**, dans le même commit, et la version du fork y est alors arrêtée. Leur ton est **professionnel** : phrases neutres et factuelles, sans image ni humour, rubriques « Plateforme », « Performances », « Réglages », « Accès et documents », « Sécurité », « Corrections » selon le cas, chiffres tirés du journal.
+- Critère vérifiable : le numéro de `common/version.h` a sa section dans `web/changelog.md` dès qu'un épisode du blog le mentionne ou le suit.
+
+### Français seulement
+
+Le fork ne fait que du français (décision de l'humain, 2026-11-11) : l'interface d'Albireo et sa synthèse vocale sont en français seulement, sans choix de langue. Tout nouveau texte visible par l'utilisateur s'écrit en français, sans traduction. Les commentaires du code et les consignes internes envoyées au modèle restent en anglais, comme dans l'original.
+
 ### La page des réglages d'Albireo
 
 L'onglet « Service » des paramètres d'Albireo ([web/js/service.js](dlib/dlib/external/albireo/web/js/service.js), fichier du fork, en français) expose les réglages du service à l'humain, qui s'en sert depuis le Mac ou depuis son téléphone.
@@ -154,7 +166,7 @@ L'onglet « Service » des paramètres d'Albireo ([web/js/service.js](dlib/dlib/
 - **Tout réglage qui peut s'exposer y est** : quand le programme gagne ou change un réglage (service, moteur, GPU, réseau), l'ajouter à l'onglet dans la même sous-étape, s'il peut se changer depuis la page (en direct, ou par « Appliquer et redémarrer »), avec sa validation côté service (`validate_settings` dans `host/server.cpp`) et `tools/make_openapi.py`.
 - **Chaque réglage a sa fiche** : effet en une ligne, principe, avantages, inconvénients, au moins un schéma, puis l'explication normale, celle du hibou 🦉 (très technique), de la marmotte 🦫 (pour un ado) et de l'abeille 🐝 (ce qui arrive si on pousse trop ou qu'on s'en passe). Chaque fait d'une fiche est vérifié dans le code, le journal du service ou une mesure, comme pour le blog.
 - **Les réglages conseillés suivent les mesures** : l'objet `recommended` de `service.js` donne les valeurs que le bouton « Revenir aux réglages conseillés » remet. À chaque mesure qui change le meilleur choix, le mettre à jour, avec sa source en commentaire et dans le journal.
-- Critère vérifiable : chaque clé acceptée par `validate_settings` (sauf celles d'un autre usage, comme `engine` ou `device_mb`) a sa carte dans l'onglet.
+- Critère vérifiable : chaque clé acceptée par `validate_settings` (sauf celles d'un autre usage : `engine`, `device_mb`, et `language`, que le français seul rend sans objet) a sa carte dans l'onglet.
 
 ### Autorité
 

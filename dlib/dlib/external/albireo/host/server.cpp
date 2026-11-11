@@ -986,7 +986,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             return one_of("web_search", { "wikipedia", "none" }) && boolean("web_access") && boolean("lan")
                 && in_range("lan_port", 1024, 65535) && boolean("warm_history") && in_range("spin_us", 0, 100000)
                 && in_range("gpu_prompt_tokens", 9, 1 << 20) && in_range("gpu_prompt_context", 0, 1 << 20)
-                && one_of("language", { "auto", "en", "fr", "de", "it", "es" })
+                && one_of("language", { "auto", "fr" })
                 && one_of("kv_type", { "auto", "q8", "f16" })
                 && one_of("engine", { "auto", "best", "cpu", "cpu-avx2", "cpu-avxvnni", "openvino", "cuda" })
                 && one_of("accelerator", { "auto", "none" })
@@ -1048,10 +1048,11 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             // A voice of Albireo by its name or its language; the voices of other services read
             // with the voice of the language the request gives.
             const speech_voice* voice = find_voice(body["voice"].as_string());
-            if (!voice) voice = find_voice(body["language"].str("en"));
+            if (!voice) voice = find_voice(body["language"].str("fr"));
             if (!voice)
             {
-                send_error(res, 400, "invalid_request_error", "language must be en, fr, de, it or es", "", "language");
+                send_error(res, 400, "invalid_request_error", "the only voice is French: voice fr-FR, language fr", "",
+                    "language");
                 return;
             }
             const std::string dir = svc.speech_dir();
@@ -1509,7 +1510,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         });
         srv.Get("/albireo/v1/models", [s](const httplib::Request& req, httplib::Response& res) {
             std::string lang = req.get_param_value("lang");
-            if (lang.empty() || lang == "auto") lang = "en";
+            if (lang.empty() || lang == "auto") lang = "fr";
             json o = s->models().overview(lang);
             const host_settings st = s->settings().get();
             o["free"] = static_cast<unsigned long long>(free_disk_space(s->models().models_dir()));
