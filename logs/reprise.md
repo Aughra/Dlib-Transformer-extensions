@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-11 au soir, sur le Mac M2 (traduction des commentaires en cours).
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-11 au soir, sur le Mac M2 (Albireo 3.2.0).
 
 ## Objectif
 
@@ -36,6 +36,20 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-11 : **fork détaché de l'original** (plus de fusion) et **« du pur Apple »** dans Albireo et Pseudalis : fichiers Windows, `dist/`, moteur CUDA/OpenVINO, branches `_WIN32`/x86/CUDA/Linux (`unifdef`), mises à jour par installateur Windows retirés ; CMake pour macOS seulement. Tests d'Albireo et de Pseudalis passent, `test_linux.sh` 34 sur 34, service d'Albireo vérifié. Cache des clés et valeurs en une zone réservée (`c583d29`, M1). Repère de vitesse en tête de chaque épisode du blog. dlib reste ; on s'en éloignera plus tard.
 - 2026-11-11 (sieste de l'humain, choix consignés dans `logs/sieste-2026-11-11.md`) : **les pas d'écriture tournent sur le GPU** (M2, M3, M4 en partie) : 4B 21,3 à 21,7 tokens/s contre 18,3 à 19,0 sur le processeur, 2B 49,4 à 49,6 contre 35,7 à 40,8 ; mêmes réponses ; activé par défaut. Blog : épisode 19.
 - 2026-11-11 (sieste) : **les prompts aussi sur le GPU** (M5) : 4B 512 tokens 92 → 154 tokens/s, 2B 222 → 420 ; à partir de 24 tokens, jusqu'à 2 048 positions. Contrôle au chargement du modèle. Bug de débordement corrigé dans l'attention. Blog : épisode 20.
+
+## Pour reprendre demain (écrit le 2026-11-11 au soir)
+
+**État** : Albireo **3.2.0**, tout commité et poussé, tests complets passés (Albireo 17 sur 17, Pseudalis 34 sur 34 à la 2.0.2). Le service tourne (lancé par Claude, il peut s'arrêter avec la session : le relancer avec la commande du mémo). Accès réseau ouvert sans mot de passe sur `http://192.168.1.12:8444/`. Captures de toutes les pages dans [docs/captures/](../docs/captures/README.md).
+
+**Prochaine étape, demandée par l'humain : retirer les clés** (« je veux tout pouvoir faire sans utiliser de clé »). Le décider pas à pas, avec ses tests :
+1. Catalogue sans signature : `model_manager::install_catalog` ne vérifie plus `catalog.json.sig` (`verify_signature`, `feed_public_key_pem`) ; `refresh_catalog` ne télécharge plus le `.sig` ; `import_catalog` et l'import de dossier (`service.cpp`, « signed offline bundle ») acceptent un `catalog.json` seul.
+2. Plus d'espace de publication de l'original : retirer `host/public_link.*`, `cmake/public_link_secret.h.in` et la lecture de `~/keys/albireo-public-link.txt` dans le CMake ; les téléchargements vont directement aux adresses officielles (aujourd'hui 16 s perdues à essayer l'espace, qui répond « protégé par mot de passe ») ; le catalogue vient directement de GitHub.
+3. Retirer l'outil `albireo-sign` (`tools/albireo_sign.cpp`) et, si plus rien ne s'en sert, `sign_data` / `verify_signature` de `crypto.cpp`.
+4. **`tests/test_host.cpp`** vérifie justement l'espace de publication (faux serveur pCloud local) et les signatures : l'adapter, c'est le gros du travail. Puis `tools/test_macos.sh`.
+5. Pseudalis : clé publique du flux (`resources/feed-public-key.pem`, `feed_public_key.h.in`) et `pseudalis-sign`, s'ils ne servent plus à rien.
+6. Version (sans doute 4.0.0 : l'import de dossiers signés change de comportement), notes de version, journal, mémo, notes pour l'auteur si un défaut de l'original apparaît, CLAUDE.md (la règle « ne pas regénérer ni re-signer les `*.sig` » reste vraie : on ne signe plus rien).
+
+**Ensuite, dans l'ordre que choisira l'humain** (détails plus bas) : découper `app.js` ; retirer le code mort de la page ; déplacer la logique cachée de la page vers le service ; corriger sur le fond les commentaires périmés (Windows, CUDA) ; attention de prompt en tuiles (M7). **Nouveau constat** : beaucoup de modèles récents de Hugging Face (Qwen 3.5, 3.6, 3.8 en `qwen35`, `qwen35moe`, `qwen4exp`, Gemma, Granite hybride, DeepSeek) ont des architectures que le moteur ne lit pas ; les prendre en charge serait un chantier du moteur à part, à proposer à l'humain.
 
 ## En cours
 

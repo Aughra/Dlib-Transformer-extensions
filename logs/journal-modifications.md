@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Capturer toutes les pages et préparer la reprise de demain
+
+- **Quoi** : 37 captures d'écran (JPEG) de toutes les pages d'Albireo 3.2.0, en format ordinateur et téléphone, avec leur sommaire ; reprise réécrite pour demain (retrait des clés en tête, puis les chantiers en attente).
+- **Fichiers** : `docs/captures/` (nouveau, 37 images et `README.md`), `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain : « fais des copies d'écran de tout le site, mets-les dans le projet, stabilise, fais-toi un mémo pour continuer demain ».
+- **Étapes** : Chrome sans fenêtre piloté par un script : `https://localhost:18443/` en 1 280 × 860 (19 écrans, dont une vraie réponse écrite à 21,1 tokens/s sur le GPU), puis `http://192.168.1.12:8444/` en 390 × 844 (18 écrans) ; 2,3 Mo au total.
+
 ## 2026-11-11 — Albireo 3.2.0 : tous les modèles GGUF de Hugging Face
 
 - **Quoi** : `host/hub.cpp` et `hub.h` (nouveaux) : recherche de l'API de Hugging Face (modèles GGUF, `expand` gguf : architecture, paramètres, contexte), fichiers d'un dépôt (arbre Git LFS : taille et SHA-256), compatibilité avec le moteur (12 architectures de `model_config.cpp`, formats de `qkernels.cpp`, fichiers découpés refusés), « GPU possible » pour Q4_K / Q6_K d'un modèle dense, et entrée de catalogue d'un fichier choisi. `model_manager::add_custom()` : liste personnelle gardée dans la base (`custom_catalog`) et mêlée au catalogue à chaque chargement, donc téléchargée, vérifiée, installée et activée par la mécanique existante. Routes `GET /albireo/v1/hub/search`, `GET /albireo/v1/hub/files`, `POST /albireo/v1/hub/add` (refusées hors ligne), documentées dans `openapi.json`. Onglet « Modèles » : section « Tous les modèles de Hugging Face », incompatibles en gris à la fin (demande de l'humain), fichiers d'un dépôt, case « avec la lecture des images » quand le dépôt a un projecteur. Version 3.2.0.
