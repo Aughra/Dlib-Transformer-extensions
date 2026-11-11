@@ -34,7 +34,7 @@ Elles sont parties, avec leurs routes, leurs réglages et, pour Pseudalis, la ca
 
 Le bilan tient en deux nombres : 170 fichiers touchés, 37 566 lignes retirées pour 234 ajoutées, sans compter les installateurs du dossier `dist/`.
 
-Après chaque morceau, les deux applications ont été recompilées et leurs tests relancés. Les scripts de test complets, écrits pour Linux, réclamaient deux outils absents du Mac, qu'on leur fournissait jusqu'ici par un détour. Ils ont été réécrits pour macOS. Et pour la première fois, celui d'Albireo passe en entier sur le Mac : vingt étapes sur vingt, du test des noyaux jusqu'à l'arrêt du service, en passant par une conversation et une phrase lue à voix haute. Celui de Pseudalis passe ses trente-quatre étapes.
+Après chaque morceau, les deux applications ont été recompilées et leurs tests relancés. Les scripts de test complets, écrits pour Linux, réclamaient deux outils absents du Mac, qu'on leur fournissait jusqu'ici par un détour. Ils ont été réécrits pour macOS. Et pour la première fois, celui d'Albireo passe en entier sur le Mac : dix-neuf étapes sur dix-neuf, du test des noyaux jusqu'à l'arrêt du service, en passant par une conversation et une phrase lue à voix haute. Celui de Pseudalis passe ses trente-quatre étapes.
 
 La vitesse n'a pas bougé, ce qui était attendu : on a retiré du code qui ne servait pas, sans changer le calcul.
 

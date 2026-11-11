@@ -2,6 +2,7 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 #include "engine.h"
+#include "metal_device.h"
 
 #include <algorithm>
 #include <array>
@@ -957,6 +958,17 @@ namespace albireo
         warm_history_ = settings_["warm_history"].as_bool(true);
         log(ALBIREO_LOG_INFO, std::string("engine ") + ALBIREO_ENGINE_VARIANT + " " + ALBIREO_VERSION + ", "
             + std::to_string(threads_) + " threads, kernels " + qk_isa());
+        if (settings_["metal"].as_bool(true))
+        {
+            std::string why;
+            gpu_ = metal_device::open(why);
+            if (gpu_)
+                log(ALBIREO_LOG_INFO, "GPU " + gpu_->name() + " through Metal, " + std::to_string(gpu_->kernel_count())
+                    + " kernels compiled, " + std::to_string(gpu_->working_set_bytes() >> 20) + " MB advised, buffers of "
+                    + std::to_string(gpu_->max_buffer_bytes() >> 20) + " MB at most");
+            else
+                log(ALBIREO_LOG_WARNING, "GPU: " + why);
+        }
         worker_ = std::thread([this]() { run(); });
     }
 
@@ -1019,6 +1031,8 @@ namespace albireo
         dev["features"] = features;
         json devices = json::array();
         devices.push_back(dev);
+        const json gpu = metal_describe();
+        if (gpu.is_object()) devices.push_back(gpu);
         bool usable = true;
         std::string reason;
         // The reasons carry a code, with which the web application explains them in the

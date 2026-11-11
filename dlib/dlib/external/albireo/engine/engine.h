@@ -21,6 +21,7 @@
 namespace albireo
 {
     class thread_pool;
+    class metal_device;
     class tensor_device;
     struct loaded_model;
     struct request_state;
@@ -134,6 +135,8 @@ namespace albireo
         log_sink log_;
         std::unique_ptr<thread_pool> pool_;
         int threads_ = 1;
+        // The GPU of the Mac (Metal), null when the setting "metal" is false or Metal is missing.
+        std::unique_ptr<metal_device> gpu_;
         // Whether the histories of the answers are read ahead of the next questions.
         bool warm_history_ = true;
 

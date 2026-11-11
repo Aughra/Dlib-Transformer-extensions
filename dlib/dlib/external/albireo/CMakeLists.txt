@@ -9,7 +9,7 @@
 # is copied to <build>/bin/web and the voices of the speech synthesis to <build>/bin/speech.
 
 cmake_minimum_required(VERSION 3.16)
-project(albireo VERSION 1.0.12 LANGUAGES C CXX)
+project(albireo VERSION 1.0.12 LANGUAGES C CXX OBJCXX)
 
 # The version is written in four places that must agree: project() above, the numbers and the
 # text of common/version.h, which the service and the engine give, and the description of the
@@ -79,8 +79,17 @@ add_subdirectory(${ALBIREO_DLIB_DIR} dlib_build EXCLUDE_FROM_ALL)
 
 set(ALBIREO_WARNINGS -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
 find_package(Threads REQUIRED)
-# The products of the long passes go through Accelerate (engine/qkernels_accelerate.inc).
-link_libraries("-framework Accelerate")
+# The products of the long passes go through Accelerate (engine/qkernels_accelerate.inc); the
+# GPU through Metal (engine/metal_device.mm).
+link_libraries("-framework Accelerate" "-framework Metal" "-framework Foundation")
+
+# The source of the Metal kernels, embedded in the engine as a string that macOS compiles when
+# the engine opens the GPU: the build needs no Metal compiler.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels.metal" ALBIREO_METAL_SOURCE)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels.metal")
+configure_file(engine/metal_kernels.inc.in ${CMAKE_BINARY_DIR}/generated/metal_kernels.inc @ONLY)
+set_source_files_properties(engine/metal_device.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
+   INCLUDE_DIRECTORIES "${CMAKE_BINARY_DIR}/generated")
 
 # zlib from dlib/external, for the programs and the image decoders of the engine.
 set(zlib_dir ${ALBIREO_DLIB_DIR}/external/zlib)
@@ -117,6 +126,7 @@ set(ALBIREO_ENGINE_SOURCES
    engine/engine.cpp
    engine/engine_api.cpp
    engine/image_input.cpp
+   engine/metal_device.mm
    engine/model_config.cpp
    engine/model_file.cpp
    engine/sampler.cpp

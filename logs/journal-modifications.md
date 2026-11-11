@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Ouvrir le GPU du Mac dans le moteur (moteur Metal, M1)
+
+- **Quoi** : module Metal du moteur, propre au fork : `engine/metal_device.h` (interface en C++ pur), `engine/metal_device.mm` (Objective-C++ avec comptage automatique des références : ouverture du GPU, file de commandes, compilation des noyaux par macOS, préparation de leurs pipelines), `engine/metal_kernels.metal` (les noyaux `mv_q4_K` et `mv_q6_K` de la sonde, version 3 pour Q4_K), `engine/metal_kernels.inc.in` (la source glissée dans le moteur sous forme de chaîne au moment de la configuration : pas de compilateur Metal pour construire). Le moteur ouvre le GPU au démarrage, sauf avec le réglage `metal` à faux, et l'écrit dans son journal ; sa description liste le GPU. CMake : langage `OBJCXX`, frameworks Metal et Foundation. Le GPU ne calcule encore rien. Correction : le test complet d'Albireo compte 19 étapes, pas 20 (mémo, journal, épisode 18 corrigés).
+- **Fichiers** : `dlib/dlib/external/albireo/engine/metal_device.{h,mm}`, `engine/metal_kernels.metal`, `engine/metal_kernels.inc.in` (nouveaux), `engine/engine.{h,cpp}`, `CMakeLists.txt` ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, `blog/18-le-grand-menage.md`, ce journal.
+- **Pourquoi** : moteur Metal, sous-étape M1.
+- **Étapes** : build sans erreur ni avertissement ; `engine_chat` : « GPU Apple M2 through Metal, 2 kernels compiled, 18186 MB advised, buffers of 13639 MB at most », réponse « La capitale de la France est Paris. » ; description : `{"type": "gpu", "name": "Apple M2", "api": "Metal", ...}` ; `tools/test_macos.sh` : 19 étapes sur 19.
+
 ## 2026-11-11 — Raconter le grand ménage (blog, épisode 18)
 
 - **Quoi** : épisode 18 « Le grand ménage » : le détachement de l'original, la décision « du pur Apple », `unifdef`, les mises à jour Windows, les tests macOS, les chiffres (170 fichiers, 37 566 lignes retirées, 234 ajoutées, hors `dist/`).
@@ -14,7 +21,7 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Quoi** : `albireo/tools/test_linux.sh` et `pseudalis/tools/test_linux.sh` deviennent `tools/test_macos.sh` : chemins par défaut `build/macos-*` et modèles du dépôt, `perl` à la place de `date +%s%N`, `sysctl -n hw.ncpu` à la place de `nproc`, `stat -f %z` à la place de `stat -c %s`, moteur `.dylib` unique, plus d'étape `prerequisites_linux.sh` (remplacée par un contrôle de curl, perl et awk), arrêt du service par SIGTERM (macOS jette le SIGINT d'un programme lancé en arrière-plan par un script). Doc et commandes de reprise sans les cales `nproc` / `gstat`.
 - **Fichiers** : `dlib/dlib/external/albireo/tools/test_macos.sh`, `dlib/dlib/external/pseudalis/tools/test_macos.sh` (renommés) ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal.
 - **Pourquoi** : « du pur Apple ».
-- **Étapes** : Albireo : **20 étapes sur 20**, la première fois que ce test passe en entier sur Mac ; Pseudalis : 34 sur 34 avec le `PATH` du système (sans `gstat`). Vitesse demandée par l'humain (`bench_runtime ... q8`, 8 threads, `lowpowermode 0`, charge 3,5 à 7,1) : 2B écriture 39,5 / 40,5 tokens/s, lecture de 64 tokens 123 ; 4B écriture 18,3 / 18,4, lecture 47 à 50 ; 2B 4 096 tokens : lecture 158,2, écriture qui suit 22,5. Inchangé depuis l'épisode 16, comme attendu.
+- **Étapes** : Albireo : **19 étapes sur 19**, la première fois que ce test passe en entier sur Mac ; Pseudalis : 34 sur 34 avec le `PATH` du système (sans `gstat`). Vitesse demandée par l'humain (`bench_runtime ... q8`, 8 threads, `lowpowermode 0`, charge 3,5 à 7,1) : 2B écriture 39,5 / 40,5 tokens/s, lecture de 64 tokens 123 ; 4B écriture 18,3 / 18,4, lecture 47 à 50 ; 2B 4 096 tokens : lecture 158,2, écriture qui suit 22,5. Inchangé depuis l'épisode 16, comme attendu.
 
 ## 2026-11-11 — Réduire le chargeur de moteur de Pseudalis au moteur intégré (nettoyage, N4)
 
