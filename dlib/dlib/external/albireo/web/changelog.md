@@ -2,6 +2,16 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 3.1.1 — 11 novembre 2026
+
+### Interface
+
+- Page d'accueil : la zone de saisie est placée au milieu de l'écran, sous le message de bienvenue.
+- iPad et iPhone : les fenêtres (paramètres, fiches) tiennent dans la hauteur réellement visible, barres de Safari déduites, et défilent jusqu'en bas au toucher ; l'application occupe la même hauteur visible.
+- Le bouton « À propos » du panneau latéral a été retiré : l'onglet reste accessible par l'engrenage de la barre supérieure.
+
+---
+
 ## 3.1.0 — 11 novembre 2026
 
 ### Modèles

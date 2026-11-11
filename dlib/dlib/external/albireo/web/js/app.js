@@ -3208,6 +3208,8 @@ function releaseHiddenImages() {
 
 function drawMain() {
   stopClock();
+  // La page d'accueil met la zone de saisie au milieu de l'écran (welcome-mode) ; les autres vues la laissent en bas.
+  ui.main.classList.remove('welcome-mode');
   // Les boutons qui mènent aux extrémités du fil attendent le prochain défilement de l'utilisateur.
   if (ui.jump) ui.jump.classList.remove('on');
   if (state.view === 'project') {
@@ -3232,6 +3234,7 @@ function drawMain() {
   if (hidden) autoGrow();
   const c = state.current;
   if (!c.messages.length) {
+    ui.main.classList.add('welcome-mode');
     renderWelcome();
     return;
   }
@@ -7088,8 +7091,7 @@ function buildLayout() {
     ui.sideScroll,
     h('div', { class: 'sidebar-footer' }, ui.statusLine, h('div', { class: 'footer-buttons' },
       h('button', { type: 'button', onclick: () => settingsDialog('general'), html: icon('gear') + '<span>' + escapeHtml(t('settings')) + '</span>' }),
-      h('button', { type: 'button', onclick: () => window.open('/docs/', '_blank'), html: icon('book') + '<span>' + escapeHtml(t('api')) + '</span>' }),
-      h('button', { type: 'button', onclick: () => settingsDialog('about'), html: icon('info') + '<span>' + escapeHtml(t('about')) + '</span>' }))));
+      h('button', { type: 'button', onclick: () => window.open('/docs/', '_blank'), html: icon('book') + '<span>' + escapeHtml(t('api')) + '</span>' }))));
 
   ui.topbar = h('header', { class: 'topbar' });
   ui.banner = h('div', { class: 'banner hidden', html: icon('incognito') + '<span>' + escapeHtml(t('incognitoBanner')) + '</span>' });

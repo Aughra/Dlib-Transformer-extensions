@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Albireo 3.1.1 : la saisie au milieu de l'accueil, des fenêtres qui défilent sur iPad
+
+- **Quoi** : accueil en `welcome-mode` (classe posée par `drawMain`) : message de bienvenue au-dessus du milieu, zone de saisie juste en dessous ; hauteur visible réelle sur iPad et iPhone (`100dvh` pour la page, le voile et les fenêtres, défilement tactile contenu dans la fenêtre) ; bouton « À propos » du panneau latéral retiré (l'engrenage y mène). Version 3.1.1.
+- **Fichiers** : `dlib/dlib/external/albireo/web/js/app.js`, `web/css/app.css`, `web/changelog.md`, `common/version.h`, `CMakeLists.txt`, `web/openapi.json` ; ce journal.
+- **Pourquoi** : demandes de l'humain, depuis son iPad (fenêtres qu'on ne pouvait pas descendre, saisie trop basse, bouton en double).
+- **Étapes** : Chrome sans fenêtre en tactile, 1 180 × 820 : saisie de 410 à 507 px sous le titre (369 px) ; fenêtre des paramètres de 20 à 449 px dans une vue de 469 px, défilable, bouton « Fermer » atteint (428 px). Changements de la page seulement (HTML, CSS, JavaScript) : test complet non relancé.
+
 ## 2026-11-11 — Albireo 3.1.0 : choisir le modèle dans un onglet « Modèles », retirer le sélecteur de fonction
 
 - **Quoi** : onglet « Modèles » (`web/js/models.js`, nouveau, en français) : catalogue du service avec spécialités, mention Conseillé / Possible / Déconseillé (taille du modèle face à la mémoire du Mac, vitesse d'écriture estimée d'après les mesures du M2 : 21,5 tokens/s sur le GPU et 18,5 sur le processeur pour 2,5 Go de poids, à l'échelle de la taille ; mélange d'experts : processeur seul), téléchargement, annulation, suppression, rafraîchissement ; fiche par modèle (principe, avantages, inconvénients, schéma de la mémoire, hibou, marmotte, abeille) générée à partir du catalogue ; fiche des spécialités. Choisir un modèle l'active pour les fonctions général, code et cybersécurité. Retirés : sélecteur de fonction de la barre du haut, réglage « Fonction par défaut », quatre exemples de l'accueil (donc la suggestion « poste Windows 11 »). Le modèle utilisé s'affiche sous la zone de saisie avec un « ? » qui ouvre sa fiche ; le panneau latéral dit « GPU » ou « processeur » au lieu de « cpu ». Notes de version : sections 3.1.0 et historique du fork depuis son premier commit (1.0.8, 1.0.11, 1.0.12 de l'original). CLAUDE.md : format `x.y.z`, incréments au choix de Claude, historique des notes. Version 3.1.0.
