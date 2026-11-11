@@ -456,13 +456,28 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : propre au Mac (Metal, mémoire partagée).
 
+### Changement 10 : la lecture des prompts sur le GPU du Mac
+
+- **Pourquoi** : Accelerate multiplie un prompt sur le coprocesseur matriciel du processeur (0,84 à 0,98 TFLOPS mesurés sur un produit 512 × 2 560 × 9 728) ; le GPU du M2, par Metal Performance Shaders, en fait 2,3.
+- **Quoi** : dans `cpu_runtime_metal.cpp`, les passes de 24 tokens ou plus (`qk_float_product_tokens`) dont le contexte final tient en 2 048 positions passent entières sur le GPU ; chaque matrice est décompressée en floats sur le GPU (identique à `qk_dequantize_row`) puis multipliée en float32. Au-delà, l'attention de prompt du GPU, qui lit les clés un token à la fois, perd sur le 2B à 4 096 tokens : le processeur reprend.
+- **Exactitude** : contrôle au chargement sur un prompt de 32 tokens : logits à 0,23 % (2B) et 0,11 % (4B) du processeur en flottants. Avec les clés et valeurs en 8 bits, un écart de 1e-7 fait parfois arrondir une valeur à l'entier voisin, et ces sauts se propagent de couche en couche (relevé octet par octet : identiques à la couche 0) ; d'où une tolérance de 5 % pour un prompt en 8 bits dans le contrôle, le même token étant exigé.
+
+| `bench_runtime modele 8 <prompt> 32 1 q8 [metal]` (`lowpowermode 0`, charge 3,0 à 5,2) | Essai | Processeur (changements 1 à 9) | GPU |
+|---|---|---|---|
+| 4B Thinking, prompt de 64 tokens | 1 et 2 | 53,0 et 54,5 tokens/s | 92,7 et 100,0 tokens/s |
+| 4B Thinking, prompt de 512 tokens | 1 et 2 | 93,5 et 91,5 tokens/s | 153,3 et 155,5 tokens/s |
+| 2B, prompt de 64 tokens | 1 et 2 | 135,9 et 132,0 tokens/s | 263,5 et 262,0 tokens/s |
+| 2B, prompt de 512 tokens | 1 et 2 | 220,2 et 224,4 tokens/s | 421,8 et 417,6 tokens/s |
+
+**Mac ou Windows** : propre au Mac.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
 |---|---|---|
 | Génération, question courte | environ 7 à 11 tokens/s | 49,4 à 49,6 tokens/s sur le GPU (changement 9) ; 39,7 à 40,8 sur le processeur (37 à 39 avec les changements 1 à 7, 33 à 37 avec 1 à 5) |
-| Prompt de 64 tokens | environ 8 à 13 tokens/s | 114 à 134 tokens/s (38 à 50 avec les changements 1 à 3) |
-| Prompt de 512 tokens | pas mesuré | 217 tokens/s (64 à 72 avec les changements 1 à 3) |
+| Prompt de 64 tokens | environ 8 à 13 tokens/s | 262 à 264 tokens/s sur le GPU (changement 10) ; 114 à 136 sur le processeur (38 à 50 avec les changements 1 à 3) |
+| Prompt de 512 tokens | pas mesuré | 418 à 422 tokens/s sur le GPU ; 217 à 224 sur le processeur (64 à 72 avec les changements 1 à 3) |
 | Prompt de 4 096 tokens | pas mesuré | 156 à 166 tokens/s, en demi-précision ou, avec le changement 7, en 8 bits (36 à 38 en 8 bits sans lui ; 50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |
 | Génération après 4 096 tokens | pas mesuré | 26,5 à 28,5 tokens/s sur le GPU ; 20 à 23 sur le processeur (9 en 8 bits sans le changement 7 ; 7,5 à 9 avec les changements 1 et 2 seuls) |
 | Modèle de recherche (Q8_0), 512 tokens | pas mesuré | 573 à 601 tokens/s (184 à 213 avec les changements 1 à 3) |

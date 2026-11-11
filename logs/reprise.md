@@ -35,6 +35,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-11 : **sonde Metal** (`macos/metal-sonde/`) : sur le M2, le GPU lit tous les poids du 4B en 45 à 48 ms contre 51 à 55 pour le processeur (plafond 35 ms, 70 Go/s) ; aller-retour 186 µs, donc rien à gagner produit par produit ni couche par couche (57 à 60 ms) ; exactitude 2,8e-8. L'estimation « écriture doublée » était fausse : 5 à 22 % aujourd'hui (un tiers sur le 2B), 1,5 fois au mieux, et seulement avec tout le token sur le GPU. Blog : épisode 17. 16 commits de l'original en attente (Albireo 1.0.13 à 1.0.15, dont prompts en 8 bits et écriture de plusieurs tokens par pas).
 - 2026-11-11 : **fork détaché de l'original** (plus de fusion) et **« du pur Apple »** dans Albireo et Pseudalis : fichiers Windows, `dist/`, moteur CUDA/OpenVINO, branches `_WIN32`/x86/CUDA/Linux (`unifdef`), mises à jour par installateur Windows retirés ; CMake pour macOS seulement. Tests d'Albireo et de Pseudalis passent, `test_linux.sh` 34 sur 34, service d'Albireo vérifié. Cache des clés et valeurs en une zone réservée (`c583d29`, M1). Repère de vitesse en tête de chaque épisode du blog. dlib reste ; on s'en éloignera plus tard.
 - 2026-11-11 (sieste de l'humain, choix consignés dans `logs/sieste-2026-11-11.md`) : **les pas d'écriture tournent sur le GPU** (M2, M3, M4 en partie) : 4B 21,3 à 21,7 tokens/s contre 18,3 à 19,0 sur le processeur, 2B 49,4 à 49,6 contre 35,7 à 40,8 ; mêmes réponses ; activé par défaut. Blog : épisode 19.
+- 2026-11-11 (sieste) : **les prompts aussi sur le GPU** (M5) : 4B 512 tokens 92 → 154 tokens/s, 2B 222 → 420 ; à partir de 24 tokens, jusqu'à 2 048 positions. Contrôle au chargement du modèle. Bug de débordement corrigé dans l'attention. Blog : épisode 20.
 
 ## En cours
 
@@ -47,8 +48,9 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 | M2 (**fait**, `32312f6`) | Noyaux : produits Q4_K / Q6_K (1 à 8 tokens), normes RMS, rope, SiLU, écriture des clés et valeurs (q8 tournées, f16), attention en ligne sur les blocs, tête des logits | test `test_metal` : chaque noyau à 1e-4 près du processeur |
 | M3 (**fait**, `5f0b07f`) | Un pas de génération entier sur le GPU, une commande par passe ; contrôle au chargement (logits à 1 % près, même token le plus probable) ; repli sur le processeur sinon | `engine_chat` juste ; mesures alternées processeur / GPU |
 | M4 (en cours ; gabarits faits, `5f0b07f` : 4B 18,3-19,0 → 21,3-21,7 tokens/s) | Réglages : noyau Q4_K (54 Go/s contre 70 au plafond), tête des logits, contrôle au chargement du modèle (fait, `f199a04`), Q8_0 (modèle de recherche) | gain en mesures alternées |
-| M5 | Prompts sur le GPU (produits en tuiles, attention groupée) contre Accelerate | le plus rapide gardé, mesuré |
-| M6 | Service, réglage `metal`, doc, notes, blog | page web et API servies par le GPU |
+| M5 (**fait**, `cbefd5c` : lecture ×1,7 à ×2, jusqu'à 2 048 positions) | Prompts sur le GPU (produits en tuiles, attention groupée) contre Accelerate | le plus rapide gardé, mesuré |
+| M6 (en partie : service vérifié, doc) | Service, réglage `metal` dans les réglages du service (aujourd'hui seulement dans la configuration du moteur), barre de mémoire du GPU dans la page, doc, notes, blog | page web et API servies par le GPU |
+| M7 (proposé) | Attention de prompt en tuiles (instructions matricielles), pour lever la limite de 2 048 positions ; noyau Q4_K (54 Go/s contre 70) | gain en mesures alternées |
 
 **Conception du pas sur le GPU (M2-M3)**, une commande par passe de 1 à 8 tokens, tout dans un seul encodeur sériel :
 - tampons partagés par modèle : `x`, `xn`, `q`, `k`, `v`, `ctx`, `gate`, `up`, logits, morceaux de l'attention ; poids : la projection du fichier en un tampon sans copie (offsets des matrices) ; clés et valeurs : la zone de `kv_pool` en un tampon sans copie, budget du cache plafonné à `maxBufferLength` quand Metal est actif ;

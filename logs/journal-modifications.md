@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Raconter la lecture sur le GPU (blog, épisode 20) et mettre la doc à jour
+
+- **Quoi** : épisode 20 « La lecture aussi » ; mémo (section des prompts sur le GPU, empreinte du service), reprise (M5 fait, M6 en partie, M7 proposé), notes pour l'auteur (changement 10, bilan). Service vérifié avec les prompts sur le GPU : prompt de 619 tokens à 142 tokens/s, écriture 20 à 21,7 tokens/s, empreinte 2,8 Go dont 290 Mo de tampons GPU.
+- **Fichiers** : `blog/20-la-lecture-aussi.md`, `blog/README.md`, `docs/memo-portage-macos-arm64.md`, `docs/notes-pour-l-auteur.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : grande étape ; la doc suit le code.
+- **Étapes** : chiffres repris du journal ; contrôle des épisodes (titre, repère de vitesse, sommaire, pas de donnée privée).
+
 ## 2026-11-11 — Lire les prompts sur le GPU du Mac (moteur Metal, M5)
 
 - **Quoi** : les passes de 24 tokens ou plus (`qk_float_product_tokens`) dont le contexte final tient en 2 048 positions passent aussi entières sur le GPU : chaque produit décompresse sa matrice en floats (noyaux `dequant_q4_K`, `dequant_q6_K`, deux tampons de travail en alternance) puis la multiplie par Metal Performance Shaders (`commands::gemm`, float32) ; l'attention se fait en un morceau par token (assez de groupes avec un prompt). Le contrôle au chargement lit aussi un prompt de 32 tokens sur le GPU ; tolérance de 5 % pour un prompt en clés 8 bits (la quantification fait sauter d'un cran des valeurs que 1e-7 sépare du milieu de deux entiers, et ces sauts se propagent : relevé octet par octet identique à la couche 0), 1 % ailleurs, même token exigé. Bug corrigé dans `attention_part` : avec un seul morceau, il écrivait maximum et somme hors du tampon des morceaux. `bench_runtime` appelle `check_gpu()` avant les mesures. Nouveau framework lié : MetalPerformanceShaders (système, rien à installer).

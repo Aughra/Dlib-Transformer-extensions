@@ -293,6 +293,17 @@ Aller-retour avec le GPU : environ 186 µs. Exactitude du GPU : 2,8e-8 contre un
 
 Service : « the generation steps run on it » ; le contrôle se fait au chargement du modèle (3 s, `f199a04`), et la première question écrit à 21,1 tokens/s (21,2 la suivante). Profil du GPU (4B, 64 positions, 46 ms) : produits 43,4 ms (dont la tête des logits 5,5), attention 1,7, le reste 1 à 2.
 
+**Les prompts sur le GPU (2026-11-11, `cbefd5c`).** Les passes de 24 tokens ou plus (le seuil `qk_float_product_tokens`, où le processeur passe à Accelerate) dont le contexte final tient en 2 048 positions passent aussi sur le GPU : chaque matrice est décompressée en floats (`dequant_q4_K`, `dequant_q6_K`, identiques à `qk_dequantize_row`) puis multipliée par Metal Performance Shaders (float32). Au-delà de 2 048 positions, le processeur reprend : l'attention de prompt du GPU (un token à la fois) perd sur le 2B à 4 096 tokens (134 contre 173 tokens/s). Contrôle au chargement : un prompt de 32 tokens à 0,23 % (2B) et 0,11 % (4B) du processeur en flottants ; en clés 8 bits la tolérance d'un prompt est de 5 % (la quantification propage des sauts d'un cran ; en demi-précision, 0,04 %). Mesures alternées :
+
+| Lecture, clés en 8 bits | Processeur | GPU |
+|---|---|---|
+| 4B, 64 tokens | 53,0 à 54,5 tokens/s | 92,7 à 100,0 tokens/s |
+| 4B, 512 tokens | 91,5 à 93,5 tokens/s | 153,3 à 155,5 tokens/s |
+| 2B, 64 tokens | 132,0 à 135,9 tokens/s | 262,0 à 263,5 tokens/s |
+| 2B, 512 tokens | 220,2 à 224,4 tokens/s | 417,6 à 421,8 tokens/s |
+
+Service (4B) : un prompt de 619 tokens lu à 142 tokens/s ; empreinte du processus 2,8 Go, dont 290 Mo de tampons du GPU.
+
 ## Points à surveiller
 
 - Le code NEON dlib est le chemin SIMD attendu sur ARM64; vérifier les tests CPU et les résultats des exemples sur le Mac réel.
