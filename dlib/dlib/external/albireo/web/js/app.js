@@ -2338,7 +2338,7 @@ function renderProject(p) {
     h('p', { class: 'help' }, t('knowledgeHelp')), capacity, fileList, imagesBlock,
     h('div', { class: 'buttons', style: { marginTop: '10px' } },
       h('button', {
-        class: 'button', type: 'button', disabled: full, onclick: () => fileInput.click(),
+        class: 'button', type: 'button', disabled: full, onclick: (e) => attachMenu(e.currentTarget, fileInput, addFiles),
         title: full ? t('projectItemsFull', { max: maxProjectItems }) : null,
         html: icon('upload') + '<span>' + escapeHtml(t('addFiles')) + '</span>'
       }),
@@ -2375,6 +2375,130 @@ function renderProject(p) {
           go('#/');
         }
       }))));
+}
+
+// The documents of the Mac (fork for macOS).
+/*
+    Every file attached in the page goes to the documents folder of the Mac too, once: the files that come from
+    that folder are marked fromMac, and those already sent this session are remembered by their name, size and
+    date.  A failure is told, and the file stays attached all the same.
+*/
+const sentToMac = new Set();
+
+function copyToMac(f) {
+  if (!f || f.fromMac || typeof f.size !== 'number') return;
+  const key = [f.name, f.size, f.lastModified].join('|');
+  if (sentToMac.has(key)) return;
+  sentToMac.add(key);
+  fetch('/albireo/v1/documents?name=' + encodeURIComponent(f.name), {
+    method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f
+  }).then(async (r) => {
+    if (!r.ok) {
+      let message = r.status + ' ' + r.statusText;
+      try { message = (await r.json()).error.message || message; } catch (e) { /* not JSON */ }
+      throw new Error(message);
+    }
+  }).catch((e) => {
+    sentToMac.delete(key);
+    toast(t('macDocsCopyFailed', { name: f.name, error: e.message }), true, 8000);
+  });
+}
+
+// The menu of a button that attaches files: from this device (input), or from the documents of the Mac.
+function attachMenu(anchor, input, onFiles) {
+  showMenu(anchor, [
+    { icon: 'upload', label: t('fromDevice'), action: () => input.click() },
+    { icon: 'folder', label: t('macDocs'), action: () => macDocumentsDialog(onFiles) }
+  ]);
+}
+
+/*
+    The documents of the Mac: a list to tick, the files ticked given to onFiles as File objects marked fromMac, a
+    button that sends files of this device to the Mac, and the deletion of a document.
+*/
+function macDocumentsDialog(onFiles) {
+  return dialog((box, close) => {
+    const list = h('div', { class: 'mac-docs' }, h('p', { class: 'help' }, '…'));
+    const picked = new Set();
+    const add = h('button', { class: 'button primary', type: 'button', disabled: true }, t('macDocsAdd'));
+    const sendInput = h('input', { type: 'file', multiple: true, class: 'hidden' });
+    const date = (sec) => new Intl.DateTimeFormat(language(), { dateStyle: 'medium', timeStyle: 'short' })
+      .format(new Date(sec * 1000));
+    const refresh = async () => {
+      let r;
+      try {
+        r = await api.getJSON('/albireo/v1/documents');
+      } catch (e) {
+        list.replaceChildren(h('p', { class: 'help' }, e.message));
+        return;
+      }
+      const docs = (r.documents || []).sort((a, b) => b.modified - a.modified);
+      if (!docs.length) {
+        list.replaceChildren(h('p', { class: 'help' }, t('macDocsEmpty', { folder: r.folder })));
+        return;
+      }
+      list.replaceChildren(...docs.map((d) => {
+        const box = h('input', { type: 'checkbox', checked: picked.has(d.name) });
+        box.addEventListener('change', () => {
+          if (box.checked) picked.add(d.name);
+          else picked.delete(d.name);
+          add.disabled = !picked.size;
+        });
+        return h('label', { class: 'mac-doc' }, box,
+          h('span', { class: 'name' }, d.name),
+          h('span', { class: 'meta' }, formatSize(d.size) + ' · ' + date(d.modified)),
+          iconButton('trash', t('macDocsDelete'), async (e) => {
+            e.preventDefault();
+            if (!await confirmDialog(t('macDocsDelete'), d.name)) return;
+            await fetch('/albireo/v1/documents/' + encodeURIComponent(d.name), { method: 'DELETE' });
+            picked.delete(d.name);
+            add.disabled = !picked.size;
+            refresh();
+          }));
+      }));
+    };
+    sendInput.addEventListener('change', async () => {
+      const files = Array.from(sendInput.files);
+      sendInput.value = '';
+      for (const f of files) {
+        try {
+          const r = await fetch('/albireo/v1/documents?name=' + encodeURIComponent(f.name), {
+            method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f
+          });
+          if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+          sentToMac.add([f.name, f.size, f.lastModified].join('|'));
+          toast(t('macDocsSent', { name: (await r.json()).name || f.name }));
+        } catch (e) {
+          toast(t('macDocsCopyFailed', { name: f.name, error: e.message }), true, 8000);
+        }
+      }
+      refresh();
+    });
+    add.addEventListener('click', async () => {
+      const files = [];
+      for (const name of picked) {
+        try {
+          const r = await fetch('/albireo/v1/documents/' + encodeURIComponent(name), { cache: 'no-store' });
+          if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+          const blob = await r.blob();
+          const f = new File([blob], name, { type: blob.type });
+          f.fromMac = true;
+          files.push(f);
+        } catch (e) {
+          toast(name + ' : ' + e.message, true);
+        }
+      }
+      close(true);
+      if (files.length) onFiles(files);
+    });
+    box.append(h('h2', { html: icon('folder') + escapeHtml(t('macDocs')) }), h('p', { class: 'help' }, t('macDocsHelp')),
+      list, h('div', { class: 'actions' },
+        h('button', { class: 'button', type: 'button', onclick: () => sendInput.click(),
+          html: icon('upload') + '<span>' + escapeHtml(t('macDocsSend')) + '</span>' }), sendInput,
+        h('span', { class: 'grow' }),
+        h('button', { class: 'button', type: 'button', onclick: () => close(null) }, t('cancel')), add));
+    refresh();
+  });
 }
 
 // Files.
@@ -2415,6 +2539,8 @@ async function readFiles(files, role, room, most) {
         { name: f.name, size: formatSize(f.size), limit: formatLimit(limit) }), true, 9000);
       continue;
     }
+    // A copy in the documents of the Mac.
+    copyToMac(f);
     if (kind === 'image') {
       if (left <= 0) {
         refused.push(f.name);
@@ -3486,7 +3612,7 @@ function editMessage(c, m, index, el) {
     }
   });
   const box = h('div', { style: { width: '85%' } }, chips, area, h('div', { class: 'buttons', style: { justifyContent: 'flex-end', marginTop: '6px' } },
-    h('button', { class: 'button', type: 'button', onclick: () => fileInput.click(), html: icon('clip') + '<span>' + escapeHtml(t('attach')) + '</span>' }),
+    h('button', { class: 'button', type: 'button', onclick: (e) => attachMenu(e.currentTarget, fileInput, add), html: icon('clip') + '<span>' + escapeHtml(t('attach')) + '</span>' }),
     fileInput,
     h('span', { class: 'grow' }),
     h('button', {
@@ -7103,7 +7229,7 @@ function buildLayout() {
   });
   ui.sendButton = h('button', { class: 'send', type: 'button', onclick: onSend });
   ui.pendingBox = h('div', { class: 'composer-attachments hidden' });
-  ui.attachButton = iconButton('clip', t('attach'), () => fileInput.click());
+  ui.attachButton = iconButton('clip', t('attach'), (e) => attachMenu(e.currentTarget, fileInput, addPending));
   const composer = h('div', { class: 'composer' }, ui.pendingBox, ui.input, h('div', { class: 'row' },
     ui.attachButton, fileInput, ui.reasonButton, ui.agentButton, ui.webButton, ui.agentHelp,
     h('span', { class: 'grow' }), ui.sendButton));

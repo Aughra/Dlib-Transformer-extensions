@@ -3,6 +3,7 @@
 #ifndef ALBIREO_ENGINE_CPU_RUNTIME_H_
 #define ALBIREO_ENGINE_CPU_RUNTIME_H_
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -123,6 +124,17 @@ namespace albireo
         !*/
         void set_gpu(metal_device& device, std::function<void(int, const std::string&)> log);
 
+        /*
+            The prompts the GPU reads: passes of min_tokens tokens or more (9 at least, the steps of up
+            to metal_device::max_tokens tokens going to it anyway) whose context ends within max_positions
+            positions; max_positions 0 leaves every prompt to the processor.  Before set_gpu().
+        */
+        void set_gpu_prompts(long min_tokens, long max_positions)
+        {
+            gpu_prompt_min_ = std::max<long>(9, min_tokens);
+            gpu_prompt_context_ = std::max<long>(0, max_positions);
+        }
+
         // Makes the check of the GPU now, at the loading of the model, rather than at its first pass.
         void check_gpu() { if (gpu_) gpu_ready(); }
 
@@ -234,6 +246,10 @@ namespace albireo
         // The products in single precision floats, the activations as given (qk_path::floats): the
         // reference of the check of the GPU, against which the 8-bit activations would differ.
         bool float_products_ = false;
+        // The prompts on the GPU (set_gpu_prompts()): measured on the M2, the GPU reads a prompt from 24
+        // tokens on faster than the processor, and loses beyond 2 048 positions.
+        long gpu_prompt_min_ = qk_float_product_tokens;
+        long gpu_prompt_context_ = 2048;
 
         std::shared_ptr<model_file> file_;
         model_config cfg_;

@@ -3,7 +3,7 @@
  "info": {
   "title": "Albireo Community Edition local interface",
   "version": "1.0.12",
-  "description": "The interface of the Albireo service, served on https://localhost (port 8443 unless changed in the Service tab of the web application), and, once the network access is on, in plain HTTP on every address of the Mac at its network port (8444 by default). The routes under /v1 follow the OpenAI interface, so that its client libraries work with base_url https://localhost:8443/v1 and any API key. The functions albireo-general, albireo-code and albireo-security name the models activated for each function, albireo-background the model that comes with Albireo, which the web application uses for its work in the background, and albireo-embedding the embedding model of the search in documents.\n\nA personal version for macOS: on the Mac, every route is open, without a token. On the network port, every route but /albireo/v1/lan/login asks for the cookie albireo_lan that the login gives.\n\nRequests carry JSON bodies of 64 MB and 524,288 values at most, with their length: a body without length is refused with 411, a longer one with 413, another type with 415. GET, HEAD, DELETE and OPTIONS take no body (400). While the JSON bodies being read at once hold the values of their budget, a route that reads one answers 503 with the code busy and a Retry-After of 2 seconds. An answer being written whose model has no memory left for its keys and values ends with the error code out_of_memory.\n\nBefore any route, the server refuses, as plain text, a body of more than 8 MB while four such bodies are being read (503, with a Retry-After header).",
+  "description": "The interface of the Albireo service, served on https://localhost (port 8443 unless changed in the Service tab of the web application), and, once the network access is on, in plain HTTP on every address of the Mac at its network port (8444 by default). The routes under /v1 follow the OpenAI interface, so that its client libraries work with base_url https://localhost:8443/v1 and any API key. The functions albireo-general, albireo-code and albireo-security name the models activated for each function, albireo-background the model that comes with Albireo, which the web application uses for its work in the background, and albireo-embedding the embedding model of the search in documents.\n\nA personal version for macOS: on the Mac, every route is open, without a token. On the network port, when a password is chosen, every route but /albireo/v1/lan/login asks for the cookie albireo_lan that the login gives; without one, the network port is open too.\n\nRequests carry JSON bodies of 64 MB and 524,288 values at most, with their length: a body without length is refused with 411, a longer one with 413, another type with 415. GET, HEAD, DELETE and OPTIONS take no body (400). While the JSON bodies being read at once hold the values of their budget, a route that reads one answers 503 with the code busy and a Retry-After of 2 seconds. An answer being written whose model has no memory left for its keys and values ends with the error code out_of_memory.\n\nBefore any route, the server refuses, as plain text, a body of more than 8 MB while four such bodies are being read (503, with a Retry-After header).",
   "license": {
    "name": "Boost Software License 1.0",
    "url": "https://www.boost.org/LICENSE_1_0.txt"
@@ -31,6 +31,10 @@
   {
    "name": "Web access",
    "description": "The search and the pages of the web for the Web button"
+  },
+  {
+   "name": "Documents",
+   "description": "The documents folder of the Mac, which the web application attaches"
   },
   {
    "name": "Administration",
@@ -2284,7 +2288,7 @@
       }
      },
      "400": {
-      "description": "A value out of range, the masked password of the proxy with another user, host or port (code proxy_password), the network port equal to the port of the Mac (code lan_port_same), or the network access turned on without a password (code lan_password_missing)",
+      "description": "A value out of range, the masked password of the proxy with another user, host or port (code proxy_password), the network port equal to the port of the Mac (code lan_port_same)",
       "content": {
        "application/json": {
         "schema": {
@@ -2295,6 +2299,342 @@
      },
      "409": {
       "description": "The new port is in use or cannot be opened (code port_unavailable)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/albireo/v1/settings/profiles": {
+   "get": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "The saved settings",
+    "responses": {
+     "200": {
+      "description": "{profiles: [{label, saved, settings}]}",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "Saves the current settings under a label",
+    "description": "The settings the web application changes, without the password of the network access; a label saved again is replaced. Restoring them is a PUT of their settings to /albireo/v1/settings.",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "label"
+        ],
+        "properties": {
+         "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "The saved settings",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "No label, or a longer one (code label)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "Deletes saved settings",
+    "parameters": [
+     {
+      "name": "label",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Deleted",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "No saved settings of that label (code label)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/albireo/v1/documents": {
+   "get": {
+    "tags": [
+     "Documents"
+    ],
+    "summary": "The documents of the Mac",
+    "description": "The files of the documents folder of the data, its folders and hidden files apart.",
+    "responses": {
+     "200": {
+      "description": "{folder, documents: [{name, size, modified}]}",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Documents"
+    ],
+    "summary": "Sends a document to the Mac",
+    "description": "The bytes of the file, with their length, 512 MB at most. The same bytes under the same name are kept once (already); another file of that name takes \"name (2).ext\".",
+    "parameters": [
+     {
+      "name": "name",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "A plain file name: no folder, not hidden."
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/octet-stream": {
+       "schema": {
+        "type": "string",
+        "format": "binary"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "{ok, name, already}",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Another name, no length or a longer file (code document_name), or an incomplete transfer",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/albireo/v1/documents/{name}": {
+   "get": {
+    "tags": [
+     "Documents"
+    ],
+    "summary": "Reads a document of the Mac",
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Its bytes, with the type of its extension"
+     },
+     "404": {
+      "description": "No such document (code document_not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "Documents"
+    ],
+    "summary": "Deletes a document of the Mac",
+    "parameters": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Deleted",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "No such document (code document_not_found)",
       "content": {
        "application/json": {
         "schema": {
@@ -3470,7 +3810,7 @@
      "lan": {
       "type": "boolean",
       "default": false,
-      "description": "The access from the local network: a server in plain HTTP on every address of the Mac at lan_port, behind the password of lan_password. Refused (code lan_password_missing) while no password is chosen."
+      "description": "The access from the local network: a server in plain HTTP on every address of the Mac at lan_port, behind the password of lan_password when there is one, open to the network otherwise."
      },
      "lan_port": {
       "type": "integer",
@@ -3481,10 +3821,37 @@
      },
      "lan_password": {
       "type": "string",
-      "minLength": 4,
       "maxLength": 128,
       "writeOnly": true,
-      "description": "The password of the network access, kept as its PBKDF2 hash only; a new one ends the sessions of every device."
+      "description": "The password of the network access, 4 to 128 characters, kept as its PBKDF2 hash only; a new one ends the sessions of every device, an empty one removes it."
+     },
+     "warm_history": {
+      "type": "boolean",
+      "default": true,
+      "description": "The history of an answer read in the background, as the next request will render it, so that the next question computes its own tokens only."
+     },
+     "spin_us": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100000,
+      "default": 2000,
+      "description": "How long the threads of the engine wait awake after a pass, in microseconds."
+     },
+     "gpu_prompt_tokens": {
+      "type": "integer",
+      "minimum": 9,
+      "default": 24,
+      "description": "The prompts of so many tokens or more go to the GPU of the Mac."
+     },
+     "gpu_prompt_context": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 2048,
+      "description": "...while their context ends within so many positions; 0 leaves every prompt to the processor."
+     },
+     "models_dir": {
+      "type": "string",
+      "description": "The folder of the models, an existing one, or empty for the models folder of the data."
      },
      "web_search": {
       "type": "string",

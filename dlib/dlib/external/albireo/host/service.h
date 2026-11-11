@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "../common/json.h"
+#include "../common/platform.h"
 #include "engine_host.h"
 #include "models.h"
 #include "settings.h"
@@ -107,6 +108,8 @@ namespace albireo
         // The programs and the data.
         std::string program_dir() const { return program_dir_; }
         std::string data_dir() const { return data_dir_; }
+        // The documents of the Mac that the web application attaches: <data>/documents.
+        std::string documents_dir() const { return join_path(data_dir_, "documents"); }
         int port() const { return port_; }
 
         // What the interfaces need.
@@ -367,8 +370,8 @@ namespace albireo
 
     /*
         Installs the routes on a server (server.cpp): the HTTPS server of the Mac, or, with lan,
-        the HTTP server of the local network, which asks for the password of the network access
-        (a cookie its login route sets) before any other route.
+        the HTTP server of the local network, which asks for the password of the network access,
+        when there is one (a cookie its login route sets), before any other route.
     */
     void install_routes(httplib::Server& server, service& svc, bool lan = false);
 

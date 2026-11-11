@@ -147,6 +147,15 @@ Le blog raconte le portage **épisode par épisode**, comme un billet de carnet,
 - **Aucun secret ni donnée privée** : pas d'adresse e-mail, de chemin privé (`/Users/...`), de clé ni de jeton. Les noms des comptes GitHub du fork peuvent apparaître, comme dans l'épisode 1.
 - Critère vérifiable : chaque `blog/NN-*.md` figure au sommaire, commence par le titre « Dlib Transformer Extensions sur macOS, épisode N » suivi de sa ligne « Repère de vitesse », et ne contient ni adresse e-mail ni chemin `/Users/`.
 
+### La page des réglages d'Albireo
+
+L'onglet « Service » des paramètres d'Albireo ([web/js/service.js](dlib/dlib/external/albireo/web/js/service.js), fichier du fork, en français) expose les réglages du service à l'humain, qui s'en sert depuis le Mac ou depuis son téléphone.
+
+- **Tout réglage qui peut s'exposer y est** : quand le programme gagne ou change un réglage (service, moteur, GPU, réseau), l'ajouter à l'onglet dans la même sous-étape, s'il peut se changer depuis la page (en direct, ou par « Appliquer et redémarrer »), avec sa validation côté service (`validate_settings` dans `host/server.cpp`) et `tools/make_openapi.py`.
+- **Chaque réglage a sa fiche** : effet en une ligne, principe, avantages, inconvénients, au moins un schéma, puis l'explication normale, celle du hibou 🦉 (très technique), de la marmotte 🦫 (pour un ado) et de l'abeille 🐝 (ce qui arrive si on pousse trop ou qu'on s'en passe). Chaque fait d'une fiche est vérifié dans le code, le journal du service ou une mesure, comme pour le blog.
+- **Les réglages conseillés suivent les mesures** : l'objet `recommended` de `service.js` donne les valeurs que le bouton « Revenir aux réglages conseillés » remet. À chaque mesure qui change le meilleur choix, le mettre à jour, avec sa source en commentaire et dans le journal.
+- Critère vérifiable : chaque clé acceptée par `validate_settings` (sauf celles d'un autre usage, comme `engine` ou `device_mb`) a sa carte dans l'onglet.
+
 ### Autorité
 
 CLAUDE.md est le document d'autorité du fork. En cas de contradiction avec un autre document, la signaler puis la résoudre ici.

@@ -113,6 +113,10 @@ namespace albireo
         j["max_sequences"] = max_sequences;
         j["kv_mb"] = kv_mb;
         j["kv_type"] = kv_type;
+        j["warm_history"] = warm_history;
+        j["spin_us"] = spin_us;
+        j["gpu_prompt_tokens"] = gpu_prompt_tokens;
+        j["gpu_prompt_context"] = gpu_prompt_context;
         json a = json::object();
         for (const auto& kv : active) a[kv.first] = kv.second;
         j["active"] = a;
@@ -146,6 +150,12 @@ namespace albireo
         kv_mb = j["kv_mb"].as_int(d.kv_mb);
         kv_type = j["kv_type"].str(d.kv_type);
         if (kv_type != "auto" && kv_type != "q8" && kv_type != "f16") kv_type = d.kv_type;
+        warm_history = j["warm_history"].as_bool(d.warm_history);
+        spin_us = static_cast<int>(std::max<long long>(0, std::min<long long>(100000, j["spin_us"].as_int(d.spin_us))));
+        gpu_prompt_tokens = static_cast<int>(std::max<long long>(9, std::min<long long>(1 << 20,
+            j["gpu_prompt_tokens"].as_int(d.gpu_prompt_tokens))));
+        gpu_prompt_context = static_cast<int>(std::max<long long>(0, std::min<long long>(1 << 20,
+            j["gpu_prompt_context"].as_int(d.gpu_prompt_context))));
         active.clear();
         for (const auto& kv : j["active"].items())
         {

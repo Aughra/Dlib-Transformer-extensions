@@ -82,16 +82,14 @@ namespace albireo
         /*
             The passes of more tokens than metal_device::max_tokens (prompts) go to the GPU from
             qk_float_product_tokens tokens on, where the processor also turns to products in floats,
-            and while the context they end at holds gpu_prompt_context positions at most.  Measured on
+            and while the context they end at holds gpu_prompt_context_ positions at most.  Measured on
             the M2 (bench_runtime, keys and values in 8 bits): the GPU reads a prompt of 24 tokens
             about twice as fast as the processor (it expands every weight once a pass, about 200 ms for
             a model of 2B), of 1 024 tokens 1.7 to 2.1 times as fast, of 2 048 tokens 1.2 to 1.7
             times; beyond, its attention, one simdgroup reading the keys after the others for each
             token, falls behind on a model of 2B (4 096 tokens: 134 tokens/s against 173).
         */
-        long gpu_prompt_tokens() { return qk_float_product_tokens; }
-        const long gpu_prompt_context = 2048;
-        const long gpu_prompt_max = 2048;
+        // The defaults of set_gpu_prompts(), which the settings gpu_prompt_tokens and gpu_prompt_context change.
     }
 
     void cpu_runtime::set_gpu(metal_device& device, std::function<void(int, const std::string&)> log)
@@ -189,12 +187,12 @@ namespace albireo
     {
         const long T = static_cast<long>(batch.tokens.size());
         const bool step = T > 0 && T <= static_cast<long>(metal_device::max_tokens);
-        bool long_pass = T >= gpu_prompt_tokens() && T <= gpu_prompt_max;
+        bool long_pass = T >= gpu_prompt_min_ && T <= gpu_prompt_context_;
         if (long_pass)
             for (const auto& s : batch.segments)
             {
                 const size_t i = static_cast<size_t>(s.sequence);
-                if (i >= sequences_.size() || !sequences_[i] || sequences_[i]->length + s.count > gpu_prompt_context)
+                if (i >= sequences_.size() || !sequences_[i] || sequences_[i]->length + s.count > gpu_prompt_context_)
                     long_pass = false;
             }
         return gpu_ && gpu_->state != gpu_state::dropped && (step || long_pass)
@@ -254,7 +252,7 @@ namespace albireo
             return false;
         }
         // A prompt long enough to take the path of the prompts on the GPU.
-        const long n = std::max<long>(32, gpu_prompt_tokens()), V = cfg_.vocab;
+        const long n = std::max<long>(32, gpu_prompt_min_), V = cfg_.vocab;
         const int a = create_sequence(), b = create_sequence();
         struct release
         {
@@ -300,7 +298,7 @@ namespace albireo
             if (!(relative <= limit) || ig != ic) agree = false;
         };
         // The prompt: on the GPU for the first sequence when the prompts go to it, on the processor otherwise.
-        const bool gpu_prompt = n >= gpu_prompt_tokens() && n <= gpu_prompt_max;
+        const bool gpu_prompt = n >= gpu_prompt_min_ && n <= gpu_prompt_context_;
         prompt.logit_rows.assign(1, n - 1);
         prompt.segments.assign(1, { a, 0, n });
         try
@@ -352,8 +350,8 @@ namespace albireo
         note_gpu();
         if (gpu_->log)
             gpu_->log(ALBIREO_LOG_INFO, "GPU " + gpu_->device->name() + ": the generation steps"
-                + std::string(gpu_prompt ? " and the prompts of " + std::to_string(gpu_prompt_tokens())
-                    + " tokens or more, up to " + std::to_string(gpu_prompt_context) + " positions," : "")
+                + std::string(gpu_prompt ? " and the prompts of " + std::to_string(gpu_prompt_min_)
+                    + " tokens or more, up to " + std::to_string(gpu_prompt_context_) + " positions," : "")
                 + " run on it (" + detail.str() + ")");
         return true;
     }

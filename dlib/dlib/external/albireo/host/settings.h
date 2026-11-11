@@ -47,6 +47,10 @@ namespace albireo
         int max_sequences = 4;                  // requests computed together per model
         long long kv_mb = 0;                    // 0: automatic
         std::string kv_type = "auto";           // keys and values: auto (8 bits), q8 or f16
+        bool warm_history = true;               // the history of an answer read ahead of the next question
+        int spin_us = 2000;                     // the wait of the threads between two passes, in microseconds
+        int gpu_prompt_tokens = 24;             // the prompts of so many tokens or more go to the GPU...
+        int gpu_prompt_context = 2048;          // ...while they end within so many positions (0: never)
         std::map<std::string, std::string> active;   // role -> model identifier
         bool default_model = true;              // download the default model of the catalog at the first start
         // A machine without Internet access: no request leaves the machine, the catalog
@@ -69,8 +73,9 @@ namespace albireo
         int trust_authority = -1;
         /*
             The access from the local network: a second server, in plain HTTP, on every address
-            of the Mac at lan_port, which asks for a password (lan_password_hash, the form of
-            password_hash()) before anything else.  Without a password it does not start.
+            of the Mac at lan_port, which asks for the password (lan_password_hash, the form of
+            password_hash()) before anything else when there is one, and is open to the network
+            otherwise.
         */
         bool lan = false;
         int lan_port = 8444;

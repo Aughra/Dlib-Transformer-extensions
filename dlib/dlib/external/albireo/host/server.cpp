@@ -41,6 +41,7 @@
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <sys/stat.h>
 #include <fstream>
 #include <mutex>
 
@@ -90,6 +91,9 @@ namespace albireo
         const size_t max_backlog = 16384;
 
         const char* const upload_route = "/albireo/v1/models/upload";
+        // The documents of the Mac (documents_dir()), sent in their own bytes to this route.
+        const char* const documents_route = "/albireo/v1/documents";
+        const uint64_t max_document_bytes = 512ull << 20;
 
         void send_json(httplib::Response& res, int status, const json& j)
         {
@@ -267,6 +271,52 @@ namespace albireo
         {
             for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
             return s;
+        }
+
+        // The settings a snapshot of /albireo/v1/settings/profiles holds: those the web application changes.
+        const char* const profile_keys[] = { "accelerator", "threads", "max_sequences", "context", "kv_mb", "kv_type",
+            "warm_history", "spin_us", "gpu_prompt_tokens", "gpu_prompt_context", "lan", "lan_port", "port",
+            "models_dir", "offline", "web_access", "web_search", "proxy" };
+        std::mutex profiles_m;
+
+        json read_profiles(service& svc)
+        {
+            std::string text;
+            json list;
+            if (!read_file(join_path(svc.data_dir(), "settings-profiles.json"), text, 4u << 20)
+                || !json::parse(text, list) || !list.is_array())
+                return json::array();
+            return list;
+        }
+
+        // A document of the documents folder: a plain file name, neither hidden nor a folder.
+        bool document_name(const std::string& name)
+        {
+            if (name.empty() || name.size() > 255 || name[0] == '.' || name == "..") return false;
+            for (const unsigned char c : name)
+                if (c < 32 || c == '/' || c == '\\' || c == 127) return false;
+            return true;
+        }
+
+        // The type of a document, from its extension, for the browser that reads it.
+        std::string document_type(const std::string& name)
+        {
+            const size_t dot = name.rfind('.');
+            const std::string ext = dot == std::string::npos ? std::string() : lower(name.substr(dot + 1));
+            static const std::pair<const char*, const char*> types[] = {
+                { "pdf", "application/pdf" }, { "txt", "text/plain; charset=utf-8" }, { "md", "text/markdown; charset=utf-8" },
+                { "csv", "text/csv; charset=utf-8" }, { "json", "application/json" }, { "html", "text/html; charset=utf-8" },
+                { "htm", "text/html; charset=utf-8" }, { "xml", "application/xml" },
+                { "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+                { "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+                { "pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation" },
+                { "odt", "application/vnd.oasis.opendocument.text" }, { "rtf", "application/rtf" },
+                { "png", "image/png" }, { "jpg", "image/jpeg" }, { "jpeg", "image/jpeg" }, { "gif", "image/gif" },
+                { "webp", "image/webp" }, { "heic", "image/heic" }, { "wav", "audio/wav" }, { "mp3", "audio/mpeg" },
+                { "m4a", "audio/mp4" } };
+            for (const auto& t : types)
+                if (ext == t.first) return t.second;
+            return "application/octet-stream";
         }
 
         // The IPv4 addresses of the Mac on its networks, those of the loopback and of the links apart.
@@ -884,7 +934,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         {
             static const char* const keys[] = { "port", "language", "engine", "accelerator",
                 "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "offline",
-                "proxy", "web_access", "web_search", "lan", "lan_port", "lan_password" };
+                "proxy", "web_access", "web_search", "lan", "lan_port", "lan_password", "warm_history", "spin_us",
+                "gpu_prompt_tokens", "gpu_prompt_context", "models_dir" };
             for (const auto& kv : body.items())
             {
                 if (std::find_if(std::begin(keys), std::end(keys), [&](const char* k) { return kv.first == k; })
@@ -919,14 +970,22 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 return false;
             }
             const json& password = body["lan_password"];
-            if (body.contains("lan_password")
-                && !(password.is_string() && password.as_string().size() >= 4 && password.as_string().size() <= 128))
+            if (body.contains("lan_password") && !(password.is_string() && (password.as_string().empty()
+                || (password.as_string().size() >= 4 && password.as_string().size() <= 128))))
             {
-                error = "invalid value for lan_password: 4 to 128 characters";
+                error = "invalid value for lan_password: empty (no password), or 4 to 128 characters";
+                return false;
+            }
+            const json& models_dir = body["models_dir"];
+            if (body.contains("models_dir") && !(models_dir.is_string()
+                && (models_dir.as_string().empty() || dir_exists(models_dir.as_string()))))
+            {
+                error = "invalid value for models_dir: an existing folder, or empty for the folder of the data";
                 return false;
             }
             return one_of("web_search", { "wikipedia", "none" }) && boolean("web_access") && boolean("lan")
-                && in_range("lan_port", 1024, 65535)
+                && in_range("lan_port", 1024, 65535) && boolean("warm_history") && in_range("spin_us", 0, 100000)
+                && in_range("gpu_prompt_tokens", 9, 1 << 20) && in_range("gpu_prompt_context", 0, 1 << 20)
                 && one_of("language", { "auto", "en", "fr", "de", "it", "es" })
                 && one_of("kv_type", { "auto", "q8", "f16" })
                 && one_of("engine", { "auto", "best", "cpu", "cpu-avx2", "cpu-avxvnni", "openvino", "cuda" })
@@ -1234,8 +1293,10 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 res.set_content(message, "text/plain");
                 return httplib::Server::HandlerResponse::Handled;
             };
-            if (lan && !(req.method == "POST" && req.path == "/albireo/v1/lan/login")
-                && !lan_authorized(req, s->settings().get().lan_password_hash))
+            // Without a password, the network access is open to every device of the network.
+            const std::string lan_hash = lan ? s->settings().get().lan_password_hash : std::string();
+            if (lan && !lan_hash.empty() && !(req.method == "POST" && req.path == "/albireo/v1/lan/login")
+                && !lan_authorized(req, lan_hash))
             {
                 // A page asks for the password; any other request is refused.
                 const bool page = req.method == "GET" && req.path.compare(0, 4, "/v1/") != 0
@@ -1254,7 +1315,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 || req.method == "OPTIONS";
             if (no_body && (req.has_header("Transfer-Encoding") || content_length(req) > 0))
                 return refuse(400, "this method takes no body");
-            if (!(req.method == "POST" && req.path == upload_route))
+            if (!(req.method == "POST" && (req.path == upload_route || req.path == documents_route)))
             {
                 if (req.has_header("Transfer-Encoding")) return refuse(411, "the body must have a length");
                 if (content_length(req) > max_json_body) return refuse(413, "the body is too large");
@@ -1645,6 +1706,187 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             send_json(res, r["imported"].empty() && r["already"].empty() && r["pending"].empty() ? 400 : 200, r);
         });
 
+        /*
+            The documents of the Mac: the files of documents_dir(), its folders apart, which the web
+            application lists, reads to attach them, sends (every file attached in the page is copied
+            there) and deletes.  A name is a plain file name: no folder, no hidden file.
+        */
+        srv.Get(documents_route, [s](const httplib::Request& req, httplib::Response& res) {
+            const std::string dir = s->documents_dir();
+            json list = json::array();
+            for (const auto& name : list_dir(dir))
+            {
+                if (!document_name(name)) continue;
+                const std::string path = join_path(dir, name);
+                struct stat st;
+                if (stat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
+                json d = json::object();
+                d["name"] = name;
+                d["size"] = static_cast<unsigned long long>(st.st_size);
+                d["modified"] = static_cast<long long>(st.st_mtime);
+                list.push_back(d);
+            }
+            json o = json::object();
+            o["folder"] = dir;
+            o["documents"] = list;
+            send_json(res, 200, o);
+        });
+        srv.Get(R"(/albireo/v1/documents/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            const std::string name = req.matches[1];
+            std::string data;
+            if (!document_name(name) || !read_file(join_path(s->documents_dir(), name), data, max_document_bytes))
+            {
+                send_error(res, 404, "invalid_request_error", "no such document", "document_not_found");
+                return;
+            }
+            res.set_header("Cache-Control", "no-store");
+            res.set_content(data, document_type(name));
+        });
+        srv.Delete(R"(/albireo/v1/documents/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            const std::string name = req.matches[1];
+            const std::string path = join_path(s->documents_dir(), name);
+            if (!document_name(name) || !file_exists(path) || !remove_file(path))
+            {
+                send_error(res, 404, "invalid_request_error", "no such document", "document_not_found");
+                return;
+            }
+            log_info("documents: " + name + " deleted");
+            send_json(res, 200, ok_result(true));
+        });
+        srv.Post(documents_route, [s](const httplib::Request& req, httplib::Response& res,
+                                      const httplib::ContentReader& reader) {
+            const std::string name = req.get_param_value("name");
+            const uint64_t length = content_length(req);
+            if (!document_name(name) || req.has_header("Transfer-Encoding") || length > max_document_bytes)
+            {
+                res.set_header("Connection", "close");
+                send_error(res, 400, "invalid_request_error", "a plain file name and a length of 512 MB at most "
+                    "are required", "document_name");
+                return;
+            }
+            const std::string dir = s->documents_dir();
+            const std::string tmp = join_path(dir, ".transfer-" + random_hex(16) + ".partial");
+            new_file out;
+            if (!out.create(tmp))
+            {
+                res.set_header("Connection", "close");
+                send_error(res, 500, "server_error", "cannot create " + tmp);
+                return;
+            }
+            sha256_stream hash;
+            uint64_t received = 0;
+            bool ok = reader([&](const char* data, size_t n) {
+                received += n;
+                if (received > length || s->stopping() || !out.write(data, n)) return false;
+                hash.update(data, n);
+                return true;
+            });
+            ok = out.close() && ok;
+            if (!ok || received != length)
+            {
+                remove_file(tmp);
+                res.set_header("Connection", "close");
+                send_error(res, 400, "invalid_request_error", "the transfer did not complete");
+                return;
+            }
+            /*
+                The same bytes under the same name, or under a name it gave them before, are kept once
+                ("already"); another file of that name keeps it, and the new one takes "name (2).ext".
+            */
+            const std::string digest = hash.hex();
+            const size_t dot = name.rfind('.');
+            const std::string stem = dot == std::string::npos || dot == 0 ? name : name.substr(0, dot);
+            const std::string ext = dot == std::string::npos || dot == 0 ? std::string() : name.substr(dot);
+            std::string target = name;
+            for (int k = 2; file_exists(join_path(dir, target)); ++k)
+            {
+                if (file_size(join_path(dir, target)) == length && sha256_file(join_path(dir, target)) == digest)
+                {
+                    remove_file(tmp);
+                    json o = ok_result(true);
+                    o["name"] = target;
+                    o["already"] = true;
+                    send_json(res, 200, o);
+                    return;
+                }
+                target = stem + " (" + std::to_string(k) + ")" + ext;
+            }
+            if (!rename_file(tmp, join_path(dir, target)))
+            {
+                remove_file(tmp);
+                send_error(res, 500, "server_error", "cannot write " + target);
+                return;
+            }
+            log_info("documents: " + target + " received, " + std::to_string(length) + " bytes");
+            json o = ok_result(true);
+            o["name"] = target;
+            o["already"] = false;
+            send_json(res, 200, o);
+        });
+
+        /*
+            The saved settings: snapshots of the settings the web application changes, under a label the
+            user gives, in settings-profiles.json of the data folder.  A snapshot holds neither the password
+            of the network access nor that of the proxy (its mask only).  Restoring one is a change of
+            the settings, which the web application sends to /albireo/v1/settings.
+        */
+        srv.Get("/albireo/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
+            json o = json::object();
+            o["profiles"] = read_profiles(*s);
+            send_json(res, 200, o);
+        });
+        srv.Post("/albireo/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string label = body["label"].as_string();
+            if (label.empty() || label.size() > 120)
+            {
+                send_error(res, 400, "invalid_request_error", "a label of 1 to 120 characters is required", "label");
+                return;
+            }
+            const json all = public_settings(*s);
+            json snapshot = json::object();
+            for (const char* k : profile_keys)
+                if (all.contains(k)) snapshot[k] = all[k];
+            std::lock_guard<std::mutex> lock(profiles_m);
+            // A named list: elements() of a temporary would outlive it in the loop.
+            const json profiles = read_profiles(*s);
+            json kept = json::array();
+            for (const auto& p : profiles.elements())
+                if (p["label"].as_string() != label) kept.push_back(p);
+            json p = json::object();
+            p["label"] = label;
+            p["saved"] = static_cast<long long>(now_unix());
+            p["settings"] = snapshot;
+            kept.push_back(p);
+            if (!write_file_atomic(join_path(s->data_dir(), "settings-profiles.json"), kept.dump_formatted(1)))
+            {
+                send_error(res, 500, "server_error", "the saved settings cannot be written");
+                return;
+            }
+            log_info("settings: saved as " + label);
+            send_json(res, 200, p);
+        });
+        srv.Delete("/albireo/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
+            const std::string label = req.get_param_value("label");
+            std::lock_guard<std::mutex> lock(profiles_m);
+            const json profiles = read_profiles(*s);
+            json kept = json::array();
+            bool found = false;
+            for (const auto& p : profiles.elements())
+            {
+                if (p["label"].as_string() == label) found = true;
+                else kept.push_back(p);
+            }
+            if (!found)
+            {
+                send_error(res, 404, "invalid_request_error", "no saved settings of that label", "label");
+                return;
+            }
+            write_file_atomic(join_path(s->data_dir(), "settings-profiles.json"), kept.dump_formatted(1));
+            send_json(res, 200, ok_result(true));
+        });
+
         // The password of the proxy is given as proxy_password_mask (host_settings::to_json()).
         /*
             The login of a device of the network: the password of the network access gives a cookie
@@ -1708,15 +1950,11 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                     + " is in use or cannot be opened", "port_unavailable");
                 return;
             }
-            if (changes["lan"].as_bool(now.lan) && now.lan_password_hash.empty() && !changes.contains("lan_password"))
-            {
-                send_error(res, 400, "invalid_request_error", "the network access needs a password first",
-                    "lan_password_missing");
-                return;
-            }
-            // The password is kept as its hash only, computed outside the lock of the settings.
+            // The password is kept as its hash only, computed outside the lock of the settings; an empty one
+            // removes it.
             std::string lan_hash;
-            if (changes.contains("lan_password"))
+            const bool lan_password_removed = changes.contains("lan_password") && changes["lan_password"].as_string().empty();
+            if (changes.contains("lan_password") && !lan_password_removed)
             {
                 lan_hash = password_hash(changes["lan_password"].as_string());
                 if (lan_hash.empty())
@@ -1741,6 +1979,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 for (const auto& kv : body.items())
                     if (kv.first != "lan_password") merged[kv.first] = kv.second;
                 if (!lan_hash.empty()) merged["lan_password_hash"] = lan_hash;
+                if (lan_password_removed) merged["lan_password_hash"] = "";
                 current.from_json(merged);
                 if (current.proxy == masked_proxy(before.proxy)) current.proxy = before.proxy;
             });
@@ -1757,8 +1996,12 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 || after.threads != before.threads
                 || after.context != before.context || after.max_sequences != before.max_sequences
                 || after.kv_mb != before.kv_mb || after.kv_type != before.kv_type
-                || after.lan != before.lan || after.lan_port != before.lan_port;
+                || after.lan != before.lan || after.lan_port != before.lan_port
+                || after.warm_history != before.warm_history || after.spin_us != before.spin_us
+                || after.gpu_prompt_tokens != before.gpu_prompt_tokens
+                || after.gpu_prompt_context != before.gpu_prompt_context || after.models_dir != before.models_dir;
             if (!lan_hash.empty()) log_info("server: the password of the network access changed");
+            if (lan_password_removed) log_info("server: the network access has no password any more");
             json o = ok_result(true);
             o["restart"] = restart;
             send_json(res, 200, o);

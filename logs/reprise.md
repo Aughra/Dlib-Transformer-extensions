@@ -63,7 +63,7 @@ Formats couverts d'abord : Q4_K et Q6_K (les modèles du service) ; les autres m
 
 ## À faire, dans l'ordre proposé
 
-0. **Documents depuis un dossier du Mac, et envoi de documents par la page** (demande de l'humain, 2026-11-11, depuis le canapé) : les fichiers à analyser pris dans un dossier dédié du Mac, et la possibilité d'en téléverser par l'interface (utile depuis le téléphone). Conception à valider avec l'humain avant de coder (emplacement du dossier, lien avec les projets et la recherche dans les documents de la page, qui vivent aujourd'hui dans le navigateur).
+0. ~~Documents depuis un dossier du Mac, et envoi par la page~~ : fait le 2026-11-11 (dossier `<données>/documents`, trombone « Documents du Mac », copie automatique des pièces jointes). Plus tard, si l'humain le veut : rendre tout le dossier interrogeable par le modèle (index de recherche côté Mac), option écartée pour l'instant.
 
 1. ~~Décision de l'humain attendue~~ : prise le 2026-11-11, moteur Metal complet (voir « En cours »). Options qui étaient proposées : (a) fusionner d'abord les 16 commits de l'original (1.0.13 lit les prompts en entiers de 8 bits, ce qui touche le chemin Accelerate du fork, et écrit plusieurs tokens par pas à partir de brouillons : gain possible sans Metal), puis mesurer ; (b) moteur Metal complet, tout le token sur le GPU (`layer_pass` + `attend()`), gain estimé de 5 à 50 % en écriture sur M2 (sonde aujourd'hui, puis plafond), gros chantier, non exact au bit près ; (c) sonde n° 2 avant de décider : produits des prompts sur le GPU (MPS ou `simdgroup_matrix`) contre Accelerate. Relancer la sonde sur le Mac mini M5 Pro, où le rapport GPU / processeur sera différent.
 2. Plus tard, si utile : noyaux NEON de génération pour les autres formats de poids (Q8_0, Q5_K…) ; `qk_float_to_q8_row` et `qk_rotate_row` restent portables (peu de temps au profil).
@@ -86,7 +86,7 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 
 ## Problèmes ouverts
 
-- **Sécurité, choix assumé** (2026-11-11) : sur le Mac, le service n'a plus de jeton d'administration ni de contrôle `Host` / `Origin`. Un site piégé ouvert dans un navigateur du Mac pourrait piloter le service (DNS rebinding). L'accès réseau, lui, est derrière un mot de passe, mais en http : le trafic passe en clair sur le Wi-Fi. À remettre si l'usage change (fiche « Pas de serrure sur ce Mac » de l'onglet Service).
+- **Sécurité, choix assumé** (2026-11-11) : sur le Mac, le service n'a plus de jeton d'administration ni de contrôle `Host` / `Origin`. Un site piégé ouvert dans un navigateur du Mac pourrait piloter le service (DNS rebinding). L'accès réseau est ouvert (port 8444, http, **sans mot de passe** à la demande de l'humain, « je suis chez moi ») : tout appareil du Wi-Fi peut se servir d'Albireo, et le trafic passe en clair. À remettre si l'usage change (fiche « Pas de serrure sur ce Mac » de l'onglet Service).
 
 - L'ancien fork `PapyTortueTech/Dlib-Transformer-extensions` n'est plus utilisé ; l'humain s'occupe de l'arrêter. Ne plus jamais y pousser.
 - Noyaux NEON pour Q4_K, Q6_K et l'attention (clés en demi-précision et en 8 bits) ; prompts par Accelerate pour tous les formats. En génération, les autres formats (Q8_0, Q5_K…) restent portables.

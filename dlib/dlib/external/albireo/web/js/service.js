@@ -181,6 +181,36 @@ const schemas = {
     box(240, 80, 120, 56, 'Proxy', 's-gold', 'relais') + arrow(360, 108, 460, 108) +
     box(460, 80, 120, 56, 'Internet', 's-soft') +
     text(300, 170, 'vide : les variables HTTPS_PROXY ; « none » : en direct', 's-f'), 190),
+  warm_history: schema('Pendant que tu lis, le moteur prépare la suite',
+    box(20, 70, 130, 56, 'Réponse finie', 's-blue') + arrow(150, 98, 250, 98) +
+    box(250, 70, 150, 56, 'Relecture', 's-gold', 'en arrière-plan') + arrow(400, 98, 480, 98) +
+    box(480, 70, 100, 56, 'Prête', 's-soft') +
+    text(300, 160, 'question suivante : seule la question est encore à lire', 's-f'), 185),
+  spin_us: schema('Entre deux passes, les threads attendent',
+    `<rect x="40" y="80" width="200" height="40" rx="8" class="s-box s-gold"/>` + text(140, 105, 'attente active') +
+    `<rect x="240" y="80" width="320" height="40" rx="8" class="s-box s-soft"/>` + text(400, 105, 'sommeil') +
+    arrow(240, 150, 240, 124) + text(240, 168, 'spin_us : la limite', 's-f') +
+    text(300, 196, 'actif : repart tout de suite, mais le cœur reste occupé', 's-f'), 210),
+  gpu_prompt_tokens: schema('À partir de combien de tokens le GPU lit',
+    `<line x1="40" y1="110" x2="560" y2="110" class="s-line"/>` +
+    [8, 16, 24, 32, 64, 128].map((n, i) => `<line x1="${60 + i * 95}" y1="102" x2="${60 + i * 95}" y2="118" class="s-line"/>` +
+      text(60 + i * 95, 140, String(n), 's-f')).join('') +
+    `<rect x="60" y="66" width="190" height="28" rx="6" class="s-gold"/>` + text(155, 85, 'processeur') +
+    `<rect x="250" y="66" width="310" height="28" rx="6" class="s-blue"/>` + text(405, 85, 'GPU') +
+    text(300, 176, 'mesuré sur le M2 : le GPU perd à 16 tokens, gagne dès 24', 's-f'), 195),
+  gpu_prompt_context: schema('Jusqu’à quelle longueur le GPU lit',
+    `<rect x="40" y="70" width="320" height="40" rx="8" class="s-blue"/>` + text(200, 95, 'GPU') +
+    `<rect x="360" y="70" width="200" height="40" rx="8" class="s-gold"/>` + text(460, 95, 'processeur') +
+    arrow(360, 140, 360, 114) + text(360, 158, 'limite (2 048 positions)', 's-f') +
+    text(300, 190, 'au-delà, l’attention des prompts du GPU coûte plus qu’elle ne gagne', 's-f'), 205),
+  models_dir: schema('Où vivent les modèles',
+    box(30, 76, 150, 56, 'Service', 's-blue') + arrow(180, 104, 300, 104, 'lit') +
+    box(300, 60, 260, 88, 'Dossier des modèles', 's-gold', 'vide : dans les données') +
+    text(300, 180, 'un disque externe convient, s’il reste branché', 's-f'), 200),
+  language: schema('La langue de l’interface',
+    box(30, 76, 160, 56, 'Page : auto', 's-soft') + arrow(190, 104, 310, 104, 'suit') +
+    box(310, 76, 160, 56, 'Langue du service', 's-blue') +
+    text(300, 170, 'choisie dans l’onglet Général, la langue de la page l’emporte', 's-f'), 190),
   security: schema('Sur le Mac, la porte est ouverte',
     box(30, 70, 150, 56, 'Page Albireo', 's-blue') + arrow(180, 98, 330, 98, 'tout permis') +
     box(330, 70, 150, 56, 'Service', 's-gold', '127.0.0.1') +
@@ -201,11 +231,40 @@ function formatMb(n) {
   return n >= 1024 ? (n / 1024).toLocaleString('fr-FR') + ' Go' : n + ' Mo';
 }
 
+/*
+    Les réglages conseillés pour ce Mac, d'après les mesures du portage (MacBook Air M2, 24 Go, journal du fork) :
+    le bouton « Revenir aux réglages conseillés » les remet, et chaque carte dit sa valeur conseillée quand elle en
+    diffère.  À tenir à jour à chaque mesure qui change le meilleur choix (règle de CLAUDE.md).  Les réglages
+    personnels (ports, accès réseau, dossier des modèles, langue) n'y sont pas.
+*/
+const recommended = {
+  accelerator: 'auto',        // GPU : écriture 21-22 contre 18-19 tokens/s (4B), lecture x1,7 (épisodes 19, 20)
+  gpu_prompt_tokens: 24,      // le GPU perd à 16 tokens, gagne dès 24 (épisode 20)
+  gpu_prompt_context: 2048,   // le GPU perd à 4 096 sur le 2B (134 contre 173 tokens/s)
+  threads: 0,                 // tous les cœurs physiques ; les pas d'écriture prennent les cœurs P (épisode 16)
+  spin_us: 2000,
+  max_sequences: 4,
+  context: 0,
+  kv_mb: 0,
+  kv_type: 'auto',            // q8 : moitié moins de mémoire, mêmes réponses dans les essais (Albireo 1.0.12)
+  warm_history: true,
+  offline: false,
+  web_access: true,
+  web_search: 'wikipedia',
+  proxy: ''
+};
+
 const groups = [
   {
     title: 'Le moteur',
     note: 'Ces réglages demandent un redémarrage du service : quelques secondes, le temps de recharger les modèles.',
-    items: ['accelerator', 'threads', 'max_sequences', 'context', 'kv_mb', 'kv_type']
+    items: ['accelerator', 'gpu_prompt_tokens', 'gpu_prompt_context', 'threads', 'spin_us', 'max_sequences', 'context',
+      'kv_mb', 'kv_type', 'warm_history']
+  },
+  {
+    title: 'Modèles et langue',
+    note: 'Le dossier des modèles demande un redémarrage ; la langue s’applique tout de suite.',
+    items: ['models_dir', 'language']
   },
   {
     title: 'Accès depuis le réseau',
@@ -374,26 +433,29 @@ const items = {
     title: 'Accès depuis le réseau',
     control: { kind: 'switch', on: true, off: false },
     restart: true,
-    effect: 'Ouvre la page aux appareils de la maison (http, port réseau ci-dessous), derrière un mot de passe.',
-    principle: 'Le service ouvre une seconde porte, sur l’adresse du Mac dans ton réseau, qui demande un mot de passe avant tout.',
+    effect: 'Ouvre la page aux appareils de la maison (http, port réseau ci-dessous), avec un mot de passe facultatif.',
+    principle: 'Le service ouvre une seconde porte, sur l’adresse du Mac dans ton réseau, pour le téléphone ou la tablette.',
     pros: ['Albireo depuis le canapé, sur le téléphone ou la tablette, sans rien installer.',
       'Le Mac fait tout le calcul : le téléphone n’affiche que la page.'],
-    cons: ['En http : le trafic n’est pas chiffré sur le Wi-Fi (le mot de passe et les conversations y passent en clair).',
+    cons: ['Sans mot de passe, tout appareil de ton Wi-Fi peut s’en servir et tout régler.',
+      'En http : le trafic n’est pas chiffré sur le Wi-Fi.',
       'Chaque appareil garde ses propres conversations : celles du téléphone ne sont pas celles du Mac.',
       'Pas de dictée au micro sur le téléphone (elle exige https).'],
     normal: "Normalement, la page n’est visible que sur le Mac lui-même. Allumé, ce réglage ouvre une seconde entrée " +
-      "pour les autres appareils de ton réseau, avec un mot de passe. Les conversations sont rangées dans le navigateur " +
-      "de chaque appareil : le téléphone a donc les siennes. Le calcul, lui, se fait toujours sur le Mac.",
-    owl: "Un second serveur httplib (HTTP, sans TLS) écoute sur 0.0.0.0:lan_port avec les mêmes routes. Un gestionnaire " +
-      "de pré-routage exige le cookie albireo_lan = nonce.HMAC-SHA-256(empreinte, nonce), posé par POST " +
-      "/albireo/v1/lan/login pour 30 jours (HttpOnly, SameSite=Strict). L’empreinte est un PBKDF2-HMAC-SHA-256 salé à " +
-      "200 000 tours : changer le mot de passe invalide toutes les sessions, un redémarrage aucune. Un mot de passe faux " +
-      "coûte une seconde d’attente et une ligne de journal avec l’adresse de l’appareil. Sans mot de passe, la porte reste fermée.",
-    marmot: "C’est une deuxième porte d’entrée, côté jardin, avec un digicode. Tant que tu ne tapes pas le code, elle " +
-      "reste fermée. Une fois le code tapé, ton téléphone reçoit un badge valable un mois, et il n’a plus besoin du code.",
-    bee: "Ouvert, quiconque connaît le mot de passe et ton Wi-Fi peut utiliser Albireo, changer ses réglages ou effacer " +
-      "des modèles. Choisis un mot de passe que tes invités ne devinent pas, et coupe l’accès si tu prêtes ton Wi-Fi. " +
-      "Sur un Wi-Fi public, ne l’allume pas : le http n’y est pas protégé."
+      "pour les autres appareils de ton réseau. Avec un mot de passe, chaque appareil le donne une fois ; sans, la " +
+      "porte est ouverte à toute la maison. Les conversations sont rangées dans le navigateur de chaque appareil : le " +
+      "téléphone a donc les siennes. Le calcul, lui, se fait toujours sur le Mac.",
+    owl: "Un second serveur httplib (HTTP, sans TLS) écoute sur 0.0.0.0:lan_port avec les mêmes routes. Quand un mot " +
+      "de passe est choisi, un gestionnaire de pré-routage exige le cookie albireo_lan = nonce.HMAC-SHA-256(empreinte, " +
+      "nonce), posé par POST /albireo/v1/lan/login pour 30 jours (HttpOnly, SameSite=Strict) ; sans mot de passe, il " +
+      "laisse tout passer. Le serveur ne répond qu’aux appareils qui peuvent joindre le Mac : ceux du réseau local, " +
+      "sauf si la box redirige ce port depuis Internet (elle ne le fait pas d’elle-même).",
+    marmot: "C’est une deuxième porte d’entrée, côté jardin. Sans digicode, n’importe qui dans le jardin peut entrer : " +
+      "chez toi, ce sont ta famille et tes invités. Avec un digicode, il faut le taper une fois, puis le téléphone " +
+      "garde un badge pendant un mois.",
+    bee: "Sans mot de passe, un invité, une télé connectée ou un objet piraté de ton Wi-Fi peut utiliser Albireo, " +
+      "changer ses réglages ou effacer des modèles et des documents. Sur un Wi-Fi partagé ou public, ne l’allume pas, " +
+      "ou choisis un mot de passe juste en dessous."
   },
   lan_port: {
     title: 'Port réseau',
@@ -417,12 +479,13 @@ const items = {
     title: 'Mot de passe réseau',
     control: { kind: 'password' },
     restart: false,
-    effect: 'Demandé une fois par appareil, puis retenu 30 jours. Le changer déconnecte tous les appareils.',
+    effect: 'Facultatif. Vide : la porte réseau est ouverte. Choisi : demandé une fois par appareil, retenu 30 jours.',
     principle: 'Le service ne garde pas le mot de passe, seulement son empreinte, impossible à remonter.',
     pros: ['Protège l’accès réseau contre les appareils qui ne le connaissent pas.',
       'Même si quelqu’un lit le fichier des réglages, il n’y trouve pas le mot de passe.'],
-    cons: ['En http, il passe en clair sur le Wi-Fi au moment où on le tape.',
-      'Oublié, il suffit d’en choisir un nouveau ici, depuis le Mac.'],
+    cons: ['Il faut le taper une fois sur chaque appareil.',
+      'En http, il passe en clair sur le Wi-Fi au moment où on le tape.',
+      'Oublié, il suffit d’en choisir un nouveau, ou de le retirer, depuis le Mac.'],
     normal: "Le mot de passe protège la porte réseau. Le service en calcule une empreinte, une sorte de signature " +
       "impossible à retourner, et ne garde que celle-ci. Quand un appareil se présente, il refait le calcul et compare. " +
       "Au bon mot de passe, l’appareil reçoit un cookie pour un mois.",
@@ -511,6 +574,133 @@ const items = {
       "il n’y trouvera pas le prix du dernier jeu vidéo.",
     bee: "Coupée, le modèle ne trouve plus rien seul : il faut lui donner les adresses des pages à lire."
   },
+  gpu_prompt_tokens: {
+    title: 'GPU : prompts à partir de',
+    control: { kind: 'range', values: () => [16, 24, 32, 48, 64, 128, 256, 512], label: (v) => v + ' tokens' },
+    restart: true,
+    effect: 'La longueur à partir de laquelle un prompt est lu par le GPU plutôt que par le processeur.',
+    principle: 'Le GPU doit d’abord déplier les poids de chaque couche : cela ne vaut la peine que pour des passes assez longues.',
+    pros: ['24 : le seuil mesuré où le GPU devient plus rapide que le processeur sur le M2.',
+      'Plus haut : les petites questions restent sur le processeur, qui n’a rien à déplier.'],
+    cons: ['Plus bas que 24 : le GPU perd du temps à déplier les poids pour peu de tokens.',
+      'Plus haut : les prompts moyens perdent l’accélération du GPU.'],
+    normal: "Lire un prompt, c’est multiplier chaque token par tous les poids du modèle. Le GPU le fait très vite, mais il " +
+      "doit d’abord décompresser les poids, ce qui prend un temps fixe. Pour une petite question, ce temps fixe coûte " +
+      "plus que ce qu’il fait gagner. Ce réglage dit à partir de combien de tokens le GPU prend la main.",
+    owl: "Sur le chemin des prompts, chaque matrice Q4_K/Q6_K est décompressée en float32 (dequant_q4_K/q6_K) puis " +
+      "multipliée par MPSMatrixMultiplication : environ 200 ms de décompression par passe pour le 2B. Mesures (2B, une " +
+      "passe, clés q8) : 12 tokens 85,7 contre 59,5 tokens/s (processeur gagnant), 16 tokens 84,4 contre 77,7, 24 tokens " +
+      "63,2 contre 114,3 (GPU gagnant). Le seuil vaut 9 au moins : les passes de 1 à 8 tokens sont des pas d’écriture, " +
+      "toujours sur le GPU. 24 coïncide avec qk_float_product_tokens, où le processeur passe lui-même à Accelerate.",
+    marmot: "Sortir le grand robot de cuisine pour couper une seule carotte, c’est plus long que de la couper au " +
+      "couteau. Pour un sac entier, le robot gagne. Ce réglage dit à partir de combien de carottes on le sort.",
+    bee: "Trop bas, les petites questions démarrent plus lentement. Trop haut, les documents moyens sont lus deux fois " +
+      "moins vite qu’ils pourraient l’être."
+  },
+  gpu_prompt_context: {
+    title: 'GPU : prompts jusqu’à',
+    control: { kind: 'range', values: () => [0, 512, 1024, 2048, 4096, 8192, 16384],
+      label: (v) => v === 0 ? 'jamais (processeur)' : formatTokens(v) },
+    restart: true,
+    effect: 'La longueur de contexte jusqu’à laquelle le GPU lit les prompts. Au-delà, le processeur reprend.',
+    principle: 'L’attention des prompts du GPU traite un token à la fois : son coût croît comme le carré de la longueur.',
+    pros: ['2 048 : le GPU gagne partout où il lit, sur les modèles mesurés.',
+      'Plus haut : peut aider le modèle de 4B (mesuré plus rapide à 4 096 en une passe).'],
+    cons: ['Plus haut : sur le 2B, le GPU devient plus lent que le processeur à 4 096 positions.',
+      '0 : plus aucun prompt sur le GPU, la lecture redevient deux fois plus lente.'],
+    normal: "Pour chaque token d’un prompt, le modèle relit tous ceux qui le précèdent. Sur un long document, ce travail " +
+      "grossit vite. L’attention du GPU, écrite pour l’instant un token à la fois, finit par perdre sur ce terrain. Ce " +
+      "réglage fixe la frontière ; une attention en tuiles, prévue plus tard, devrait la repousser.",
+    owl: "Le chemin des prompts sur le GPU (takes_gpu) exige que la séquence finisse dans gpu_prompt_context positions. " +
+      "L’attention de prompt lance un simdgroup par token qui parcourt toutes les clés précédentes (parts = 1). Mesures " +
+      "(une passe, clés q8) : 2B 2 048 tokens 249,5 contre 208,0 tokens/s, 4 096 tokens 133,7 contre 172,8 (processeur " +
+      "gagnant) ; 4B 4 096 tokens 76,2 contre 61,1 (GPU gagnant). Le service lit un long document par morceaux : les " +
+      "morceaux qui finissent avant la limite vont au GPU, les suivants au processeur, sur la même mémoire.",
+    marmot: "C’est comme un livreur à vélo : imbattable en ville, mais pour aller à l’autre bout du pays, la voiture " +
+      "reprend l’avantage. Ce réglage dit jusqu’où on envoie le vélo.",
+    bee: "Trop haut, les longs documents sont lus plus lentement sur le petit modèle. À 0, le GPU ne lit plus aucun " +
+      "prompt : l’écriture reste rapide, mais la lecture redevient deux fois plus lente."
+  },
+  spin_us: {
+    title: 'Attente active des threads',
+    control: { kind: 'range', values: () => [0, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000],
+      label: (v) => v === 0 ? 'aucune' : v >= 1000 ? (v / 1000) + ' ms' : v + ' µs' },
+    restart: true,
+    effect: 'Combien de temps les threads restent éveillés entre deux passes avant de dormir. 2 ms par défaut.',
+    principle: 'Un thread qui dort met du temps à se réveiller ; un thread qui attend éveillé repart tout de suite, mais occupe son cœur.',
+    pros: ['Plus long : les passes s’enchaînent sans délai de réveil.',
+      'Plus court : moins de chaleur et de batterie quand le moteur attend.'],
+    cons: ['Plus long : les cœurs tournent à vide entre deux questions, le Mac chauffe un peu.',
+      'Aucune : chaque passe paie le réveil des threads, l’écriture ralentit sur le processeur.'],
+    normal: "Entre deux étapes de calcul, les threads du moteur peuvent soit attendre éveillés, soit s’endormir. " +
+      "Éveillés, ils repartent instantanément ; endormis, ils économisent l’énergie mais mettent un peu de temps à " +
+      "redémarrer. Avec le GPU, qui écrit les réponses, ce réglage compte surtout pour la lecture sur le processeur.",
+    owl: "thread_pool::set_spin_time : après une section parallèle, chaque worker boucle (ALBIREO_CPU_RELAX, soit " +
+      "std::this_thread::yield sur ARM64) jusqu’à spin_us microsecondes, puis attend sur une variable de condition. " +
+      "Défaut 2 000 µs, plafond 100 000 µs (au-delà, le processeur resterait occupé entre deux passes). Sur macOS, " +
+      "yield fait tomber la priorité du thread : l’attente active coûte peu aux autres programmes.",
+    marmot: "C’est la différence entre attendre le bus debout à l’arrêt, prêt à monter, et rentrer s’asseoir au café " +
+      "d’à côté. Au café, tu te reposes, mais tu rates parfois le départ.",
+    bee: "Trop long, le Mac sans ventilateur chauffe et la batterie descend même quand personne ne pose de question. " +
+      "À zéro, les réponses écrites par le processeur ralentissent."
+  },
+  warm_history: {
+    title: 'Préparer la question suivante',
+    control: { kind: 'switch', on: true, off: false },
+    restart: true,
+    effect: 'Après chaque réponse, relit la conversation en arrière-plan pour que la question suivante parte plus vite.',
+    principle: 'Pendant que tu lis la réponse, le moteur relit l’historique tel que la prochaine question le présentera.',
+    pros: ['La question suivante ne paie que sa propre lecture : réponse plus rapide.'],
+    cons: ['Du calcul après chaque réponse, même si tu ne poses plus de question.',
+      'Un peu de mémoire pour garder cette relecture.'],
+    normal: "À chaque tour, le modèle doit relire toute la conversation. Mais la réponse qu’il a écrite n’est pas " +
+      "rangée exactement comme il la relira (les modèles qui raisonnent effacent leur raisonnement des tours passés). " +
+      "Le moteur profite donc du temps où tu lis pour préparer cette relecture. Ta question suivante démarre alors " +
+      "presque tout de suite.",
+    owl: "Quand une réponse de chat finit, son historique est rendu comme la requête suivante le rendra (gabarit de chat, " +
+      "raisonnement des tours passés retiré, réponse retokenisée), puis lu en arrière-plan (warm-up, priorité basse). " +
+      "Les clés et valeurs restent en cache ; une requête qui commence par les mêmes tokens les reprend. Une requête " +
+      "d’un client qui attend interrompt les warm-ups (yield_warm_ups). warm_history = false les supprime.",
+    marmot: "C’est comme relire tes notes du cours pendant la pause, pour être prêt quand le prof repose une question. " +
+      "Si tu ne l’as pas fait, il faut tout relire au moment de répondre.",
+    bee: "Coupé, chaque nouvelle question d’une longue conversation commence par relire tout l’historique : plusieurs " +
+      "secondes d’attente avant le premier mot."
+  },
+  models_dir: {
+    title: 'Dossier des modèles',
+    control: { kind: 'text', placeholder: 'vide : dans les données du service' },
+    restart: true,
+    effect: 'Où le service range et cherche ses modèles. Vide : le dossier « models » de ses données.',
+    principle: 'Les modèles sont de gros fichiers (2 à 4 Go) : on peut les ranger ailleurs, sur un autre disque.',
+    pros: ['Libère le disque du Mac en mettant les modèles sur un disque externe.'],
+    cons: ['Les modèles de l’ancien dossier ne sont pas déplacés : il faut le faire dans le Finder.',
+      'Disque débranché : plus de modèle au démarrage.'],
+    normal: "Le service garde ses modèles dans un dossier. En changer, c’est lui dire de regarder ailleurs : il ne " +
+      "déplace rien lui-même. Déplace d’abord les fichiers .gguf dans le nouveau dossier, puis indique-le ici. Le " +
+      "dossier doit exister.",
+    owl: "models_dir vide : <données>/models (effective_models_dir). Le service vérifie que le dossier existe avant " +
+      "d’enregistrer. Les modèles installés sont reconnus par leurs fichiers dans ce dossier ; les poids sont ouverts " +
+      "par mmap et pris par le GPU sans copie, donc un disque lent ralentit surtout le chargement.",
+    marmot: "C’est le placard où tu ranges tes jeux. Si tu changes de placard, il faut porter les jeux dedans ; sinon " +
+      "tu ouvres un placard vide.",
+    bee: "Un dossier vide ou un disque débranché, et le service démarre sans modèle : plus de réponses jusqu’à ce que " +
+      "les fichiers reviennent."
+  },
+  language: {
+    title: 'Langue du service',
+    control: { kind: 'choice', options: [['auto', 'Auto'], ['fr', 'FR'], ['en', 'EN'], ['de', 'DE'], ['it', 'IT'], ['es', 'ES']] },
+    restart: false,
+    effect: 'La langue de la page quand celle-ci est réglée sur « auto » (onglet Général).',
+    principle: 'La page suit d’abord son propre réglage ; en « auto », elle prend la langue du service, sinon celle du navigateur.',
+    pros: ['Tous les appareils de la maison en « auto » parlent la même langue.'],
+    cons: ['Sans effet sur un appareil dont la page a sa propre langue choisie.'],
+    normal: "Chaque appareil choisit la langue de la page dans l’onglet Général. Laissé sur « auto », il prend celle " +
+      "du service. Utile pour que le téléphone et la tablette s’affichent en français sans rien régler sur eux.",
+    owl: "settings.language du service (auto, en, fr, de, it, es) est renvoyé par /albireo/v1/status ; la page " +
+      "l’emploie quand son propre réglage language vaut auto, avant la langue du navigateur. Appliqué à chaud.",
+    marmot: "C’est la langue de la maison : si personne ne précise rien, tout le monde parle celle-là.",
+    bee: "Rien de grave : au pire, la page s’affiche dans une autre langue sur les appareils en « auto »."
+  },
   proxy: {
     title: 'Proxy',
     control: { kind: 'text', placeholder: 'vide, none, ou http://hôte:port' },
@@ -534,14 +724,14 @@ const items = {
 
 const security = {
   title: 'Pas de serrure sur ce Mac',
-  effect: "Version personnelle : sur le Mac, la page peut tout régler sans mot de passe. L’accès réseau, lui, en demande un.",
+  effect: "Version personnelle : la page peut tout régler sans mot de passe, sur le Mac comme, si tu l’ouvres, depuis le réseau.",
   principle: "L’original protégeait ses réglages par un jeton que seule son icône Windows lisait, et refusait les " +
     "requêtes venues d’autres sites. Ce fork a retiré les deux.",
   pros: ['Tout se règle depuis la page, sans fichier à éditer ni clé à chercher.'],
   cons: ['Un site web piégé ouvert dans un navigateur du Mac pourrait, en théorie, piloter le service.'],
   normal: "Sur le Mac, Albireo fait confiance à tout ce qui lui parle depuis le Mac lui-même. C’est simple, et sans " +
     "danger tant qu’on ne visite pas de site malveillant pendant que le service tourne. Les autres appareils de la " +
-    "maison, eux, passent par la porte réseau, qui demande un mot de passe.",
+    "maison passent par la porte réseau, ouverte ou protégée selon le mot de passe choisi plus bas.",
   owl: "Le service n’écoute que 127.0.0.1 (port du Mac) ; le contrôle des en-têtes Host et Origin a été retiré, et avec " +
     "lui la protection contre le DNS rebinding : une page malveillante qui ferait résoudre son nom vers 127.0.0.1 " +
     "pourrait appeler l’API. Les navigateurs bloquent encore les requêtes JSON d’une autre origine par le CORS " +
@@ -645,10 +835,6 @@ export function serviceTab(body, env) {
   function change(key, value) {
     const item = items[key];
     if (!item.restart) return setLive(key, value);
-    if (key === 'lan' && value === true && !current.lan_password_set) {
-      toast('Choisis d’abord un mot de passe réseau.', true);
-      return render();
-    }
     if (value === current[key]) delete pending[key];
     else pending[key] = value;
     render();
@@ -690,14 +876,19 @@ export function serviceTab(body, env) {
     }
     // Le mot de passe réseau : tapé, puis enregistré par son bouton.
     const input = h('input', { type: 'password', autocomplete: 'new-password', 'aria-label': item.title,
-      placeholder: current.lan_password_set ? '•••••••• (déjà choisi)' : 'aucun pour l’instant' });
+      placeholder: current.lan_password_set ? '•••••••• (choisi)' : 'aucun : porte ouverte' });
     const save = h('button', { class: 'button', type: 'button', onclick: async () => {
       if (input.value.length < 4) return toast('Au moins 4 caractères.', true);
       await setLive('lan_password', input.value);
       current.lan_password_set = true;
       render();
     } }, 'Enregistrer');
-    return h('div', { class: 'svc-input' }, input, save);
+    const remove = current.lan_password_set ? h('button', { class: 'button', type: 'button', onclick: async () => {
+      await setLive('lan_password', '');
+      current.lan_password_set = false;
+      render();
+    } }, 'Retirer') : null;
+    return h('div', { class: 'svc-input' }, input, save, remove);
   }
 
   function sheet(item, key) {
@@ -738,10 +929,114 @@ export function serviceTab(body, env) {
         h('div', { class: 'svc-title' }, h('span', null, item.title), help, badge, changed),
         key === 'security' ? null : control(key)),
       h('p', { class: 'svc-effect' }, item.effect),
+      advice(key),
       key === 'lan' ? lanAddresses() : null,
       h('div', { class: 'svc-bubble', role: 'tooltip' }, item.principle),
       sheet(item, key));
     return el;
+  }
+
+  // La valeur conseillée d'un réglage, quand la valeur choisie en diffère.
+  function advice(key) {
+    if (!(key in recommended) || same(valueOf(key), recommended[key], key)) return null;
+    return h('p', { class: 'svc-advice' }, 'Conseillé : ' + describe(key, recommended[key]));
+  }
+
+  function same(a, b, key) {
+    if (key === 'accelerator') return (a === 'none') === (b === 'none');
+    return a === b || (a == null && b === '') || Number(a) === Number(b) && typeof b === 'number';
+  }
+
+  function describe(key, v) {
+    const c = items[key].control;
+    if (c.kind === 'switch') return (key === 'accelerator' ? v !== 'none' : v === c.on) ? 'allumé' : 'coupé';
+    if (c.kind === 'range') return c.label(v, machine);
+    if (c.kind === 'choice') return (c.options.find((o) => o[0] === v) || [v, v])[1];
+    return v === '' ? 'vide' : String(v);
+  }
+
+  // Envoie des réglages d'un coup (réglages conseillés, sauvegarde), puis attend le service s'il redémarre.
+  async function sendAll(changes, what) {
+    if (!Object.keys(changes).length) return toast('Rien à changer : ' + what + ' sont déjà en place.');
+    try {
+      const r = await api.putJSON('/albireo/v1/settings', changes);
+      for (const k of Object.keys(changes)) delete pending[k];
+      if (r.restart) await waitRestart(changes);
+      else toast('Appliqué.');
+      await load();
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
+
+  function differences() {
+    const out = {};
+    for (const [k, v] of Object.entries(recommended)) if (!same(current[k], v, k)) out[k] = v;
+    return out;
+  }
+
+  // Les réglages conseillés et les sauvegardes, en tête de l'onglet.
+  function tools() {
+    const diff = differences();
+    const n = Object.keys(diff).length;
+    const reset = h('button', { class: 'button', type: 'button', disabled: n === 0, onclick: async () => {
+      const list = Object.entries(diff).map(([k, v]) => items[k].title + ' : ' + describe(k, v)).join('\n');
+      if (!window.confirm('Revenir aux réglages conseillés ?\n\n' + list)) return;
+      await sendAll(diff, 'les réglages conseillés');
+    } }, 'Revenir aux réglages conseillés');
+    const label = h('input', { type: 'text', placeholder: 'Libellé, par exemple « avant essai GPU »', maxlength: 120,
+      'aria-label': 'Libellé de la sauvegarde' });
+    const save = h('button', { class: 'button', type: 'button', onclick: async () => {
+      const name = label.value.trim();
+      if (!name) return toast('Donne un libellé à la sauvegarde.', true);
+      try {
+        await api.postJSON('/albireo/v1/settings/profiles', { label: name });
+        toast('Réglages sauvés sous « ' + name + ' ».');
+        label.value = '';
+        loadProfiles();
+      } catch (e) {
+        toast(e.message, true);
+      }
+    } }, 'Sauver les réglages actuels');
+    return h('div', { class: 'svc-card svc-tools' },
+      h('div', { class: 'svc-head' }, h('div', { class: 'svc-title' }, h('span', null, 'Réglages conseillés')), reset),
+      h('p', { class: 'svc-effect' }, n === 0
+        ? 'Tous les réglages du moteur et d’Internet sont aux valeurs conseillées pour ce Mac (mesures du portage sur le M2).'
+        : n + (n === 1 ? ' réglage diffère' : ' réglages diffèrent') + ' des valeurs conseillées pour ce Mac ; chaque carte concernée le signale.'),
+      h('div', { class: 'svc-head', style: { marginTop: '12px' } }, h('div', { class: 'svc-title' }, h('span', null, 'Sauvegardes'))),
+      h('p', { class: 'svc-effect' }, 'Garde les réglages actuels sous un libellé, pour y revenir plus tard. Le mot de passe réseau n’est pas sauvé.'),
+      h('div', { class: 'svc-input', style: { marginTop: '8px', flexWrap: 'wrap' } }, label, save),
+      profilesBox);
+  }
+
+  const profilesBox = h('div', { class: 'svc-profiles' });
+
+  async function loadProfiles() {
+    let list = [];
+    try {
+      list = (await api.getJSON('/albireo/v1/settings/profiles')).profiles || [];
+    } catch (e) {
+      profilesBox.replaceChildren(h('p', { class: 'help' }, e.message));
+      return;
+    }
+    list.sort((a, b) => b.saved - a.saved);
+    const date = (sec) => new Date(sec * 1000).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+    profilesBox.replaceChildren(...(list.length ? list.map((p) => h('div', { class: 'svc-profile' },
+      h('span', { class: 'name' }, p.label), h('span', { class: 'meta' }, date(p.saved)),
+      h('button', { class: 'button', type: 'button', onclick: async () => {
+        const changes = {};
+        for (const [k, v] of Object.entries(p.settings || {})) {
+          if (k === 'proxy' && String(v).includes('********')) continue;
+          if (current[k] !== v) changes[k] = v;
+        }
+        if (!window.confirm('Restaurer « ' + p.label + ' » ?' + (Object.keys(changes).length ? '' : ' (rien ne change)'))) return;
+        await sendAll(changes, 'ces réglages');
+      } }, 'Restaurer'),
+      h('button', { class: 'button', type: 'button', onclick: async () => {
+        if (!window.confirm('Supprimer la sauvegarde « ' + p.label + ' » ?')) return;
+        await fetch('/albireo/v1/settings/profiles?label=' + encodeURIComponent(p.label), { method: 'DELETE' });
+        loadProfiles();
+      } }, 'Supprimer'))) : [h('p', { class: 'help' }, 'Aucune sauvegarde pour l’instant.')]));
   }
 
   function lanAddresses() {
@@ -756,6 +1051,7 @@ export function serviceTab(body, env) {
     const open = new Set(Array.from(list.querySelectorAll('.svc-card.open')).map((c) => c.dataset.key));
     list.replaceChildren(
       card('security', security),
+      tools(),
       ...groups.map((g) => h('section', { class: 'svc-group' }, h('h4', null, g.title), h('p', { class: 'help' }, g.note),
         g.items.map((k) => card(k, items[k])))));
     for (const k of open) {
@@ -769,6 +1065,7 @@ export function serviceTab(body, env) {
     try {
       current = await api.getJSON('/albireo/v1/settings');
       render();
+      loadProfiles();
     } catch (e) {
       list.replaceChildren(h('p', { class: 'help' }, 'Les réglages ne se lisent pas : ' + e.message));
     }

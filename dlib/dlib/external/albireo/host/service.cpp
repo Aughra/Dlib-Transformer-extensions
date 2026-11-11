@@ -344,6 +344,10 @@ namespace albireo
         c["offload_mb"] = s.device_mb;
         // The GPU of the Mac (Metal), unless the accelerator setting says none.
         c["metal"] = s.accelerator != "none";
+        c["gpu_prompt_tokens"] = s.gpu_prompt_tokens;
+        c["gpu_prompt_context"] = s.gpu_prompt_context;
+        c["warm_history"] = s.warm_history;
+        c["spin_us"] = s.spin_us;
         c["device"] = device;
         c["cache_dir"] = join_path(data_dir_, "engine-cache");
         return c;
@@ -412,6 +416,10 @@ namespace albireo
             }
         }
 
+
+        // The documents of the Mac that the web application attaches.
+        if (!dir_exists(documents_dir()) && !make_dirs(documents_dir()))
+            log_warning("documents: cannot create " + documents_dir());
 
         const std::string cert_dir = join_path(data_dir_, "certificates");
         bool renewed = false;
@@ -643,17 +651,14 @@ namespace albireo
 
     /*
         The server of the local network, in plain HTTP on every address of the Mac, with the same
-        routes behind the password of the network access.  A failure leaves the service on the
+        routes, behind the password of the network access when there is one.  A failure leaves the service on the
         Mac alone, with a warning.
     */
     void service::start_lan_server(const host_settings& st)
     {
         if (!st.lan) return;
         if (st.lan_password_hash.empty())
-        {
-            log_warning("server: the network access has no password, it stays closed");
-            return;
-        }
+            log_warning("server: the network access has no password: every device of the network may use the service");
         std::unique_ptr<httplib::Server> lan(new httplib::Server);
         lan->set_payload_max_length(0);
         lan->set_keep_alive_timeout(5);

@@ -1119,7 +1119,8 @@ and another provider of the search, read as `wikipedia`, leave it at the next st
 ## Interfaces
 
 The interface compatible with OpenAI takes no key: the service listens on the loopback interface
-(and, in the macOS fork, on the network port behind its password once the network access is on).
+(and, in the macOS fork, on the network port once the network access is on, behind a password when one
+is chosen).
 The `model` field takes
 the identifier of a loaded model, a function (`general`, `code`, `security`, or `albireo-code` and
 its siblings), `albireo-background` for the model that comes with Albireo, or `auto`; the `model`
@@ -1200,7 +1201,8 @@ The administration routes (`/albireo/v1/settings`, `/albireo/v1/models/<id>/down
 `/activate`, `/deactivate`, `DELETE /albireo/v1/models/<id>`, `/verify`, `/import`,
 `/models/upload`, `/updates/check`, `/updates/apply`, `/restart`, `/engines/benchmark`, `/logs`)
 take no token in the macOS fork, a personal version: on the Mac every route is open, and on the
-network port every route asks for the cookie of `/albireo/v1/lan/login` first. A measure of the
+network port, when a password is chosen, every route asks for the cookie of `/albireo/v1/lan/login`
+first. A measure of the
 engines runs alone: `/engines/benchmark` answers 409 `benchmark_running` meanwhile. A model
 deactivated, replaced or deleted while it answers leaves the engine once its requests are served:
 `/albireo/v1/models` lists it under `leaving` (`unloading` or `removing`) meanwhile, and the
@@ -1655,8 +1657,8 @@ size and its SHA-256, and run it in update mode at their next start.
 
 ## Security
 
-- The service listens on `127.0.0.1` only (the macOS fork adds the network port, in plain HTTP
-  behind a password, and no longer checks `Host` nor `Origin`), takes JSON bodies only, of 64 MB and
+- The service listens on `127.0.0.1` only (the macOS fork adds the network port, in plain HTTP,
+  behind an optional password, and no longer checks `Host` nor `Origin`), takes JSON bodies only, of 64 MB and
   524,288 values at most, and no body on `GET`, `HEAD`, `DELETE` and `OPTIONS`, and answers with
   `nosniff`, `no-referrer`, a content security policy and frame protections. It reads at most four
   bodies above 8 MB at once, each counted until its answer is written, and holds about 2 million

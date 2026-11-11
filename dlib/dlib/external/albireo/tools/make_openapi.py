@@ -327,13 +327,26 @@ schemas = {
                        "description": "The web access of the Web button, /albireo/v1/web/search and "
                                       "/albireo/v1/web/fetch; false turns it off."},
         "lan": {"type": "boolean", "default": False, "description": "The access from the local network: a server in "
-                "plain HTTP on every address of the Mac at lan_port, behind the password of lan_password. Refused "
-                "(code lan_password_missing) while no password is chosen."},
+                "plain HTTP on every address of the Mac at lan_port, behind the password of lan_password when "
+                "there is one, open to the network otherwise."},
         "lan_port": {"type": "integer", "minimum": 1024, "maximum": 65535, "default": 8444,
                      "description": "The port of the network access, other than port."},
-        "lan_password": {"type": "string", "minLength": 4, "maxLength": 128, "writeOnly": True,
-                         "description": "The password of the network access, kept as its PBKDF2 hash only; a new "
-                                        "one ends the sessions of every device."},
+        "lan_password": {"type": "string", "maxLength": 128, "writeOnly": True,
+                         "description": "The password of the network access, 4 to 128 characters, kept as its "
+                                        "PBKDF2 hash only; a new one ends the sessions of every device, an empty one "
+                                        "removes it."},
+        "warm_history": {"type": "boolean", "default": True, "description": "The history of an answer read in the "
+                         "background, as the next request will render it, so that the next question computes its "
+                         "own tokens only."},
+        "spin_us": {"type": "integer", "minimum": 0, "maximum": 100000, "default": 2000,
+                    "description": "How long the threads of the engine wait awake after a pass, in microseconds."},
+        "gpu_prompt_tokens": {"type": "integer", "minimum": 9, "default": 24,
+                              "description": "The prompts of so many tokens or more go to the GPU of the Mac."},
+        "gpu_prompt_context": {"type": "integer", "minimum": 0, "default": 2048,
+                               "description": "...while their context ends within so many positions; 0 leaves "
+                                              "every prompt to the processor."},
+        "models_dir": {"type": "string", "description": "The folder of the models, an existing one, or empty for "
+                       "the models folder of the data."},
         "web_search": {"type": "string", "enum": ["wikipedia", "none"], "default": "wikipedia",
                        "description": "The provider of /albireo/v1/web/search: wikipedia, the REST interface of "
                                       "Wikipedia; or none, which turns the search off while /albireo/v1/web/fetch "
@@ -773,10 +786,48 @@ paths = {
                 "responses": {"200": reply("Saved; restart tells whether the service restarts", {"type": "object"}),
                               "400": reply("A value out of range, the masked password of the proxy with another "
                                            "user, host or port (code proxy_password), the network port equal to the "
-                                           "port of the Mac (code lan_port_same), or the network access turned on "
-                                           "without a password (code lan_password_missing)", ref("Error")),
+                                           "port of the Mac (code lan_port_same)", ref("Error")),
                               "409": reply("The new port is in use or cannot be opened (code port_unavailable)",
                                            ref("Error"))}}},
+    "/albireo/v1/settings/profiles": {
+        "get": {"tags": ["Administration"], "summary": "The saved settings",
+                "responses": {"200": reply("{profiles: [{label, saved, settings}]}", {"type": "object"})}},
+        "post": {"tags": ["Administration"], "summary": "Saves the current settings under a label",
+                 "description": "The settings the web application changes, without the password of the network "
+                                "access; a label saved again is replaced. Restoring them is a PUT of their "
+                                "settings to /albireo/v1/settings.",
+                 "requestBody": json_body({"type": "object", "required": ["label"], "properties": {
+                     "label": {"type": "string", "minLength": 1, "maxLength": 120}}}),
+                 "responses": {"200": reply("The saved settings", {"type": "object"}),
+                               "400": reply("No label, or a longer one (code label)", ref("Error"))}},
+        "delete": {"tags": ["Administration"], "summary": "Deletes saved settings",
+                   "parameters": [{"name": "label", "in": "query", "required": True, "schema": {"type": "string"}}],
+                   "responses": {"200": reply("Deleted", ok),
+                                 "404": reply("No saved settings of that label (code label)", ref("Error"))}}},
+    "/albireo/v1/documents": {
+        "get": {"tags": ["Documents"], "summary": "The documents of the Mac",
+                "description": "The files of the documents folder of the data, its folders and hidden files apart.",
+                "responses": {"200": reply("{folder, documents: [{name, size, modified}]}", {"type": "object"})}},
+        "post": {"tags": ["Documents"], "summary": "Sends a document to the Mac",
+                 "description": "The bytes of the file, with their length, 512 MB at most. The same bytes under "
+                                "the same name are kept once (already); another file of that name takes "
+                                "\"name (2).ext\".",
+                 "parameters": [{"name": "name", "in": "query", "required": True, "schema": {"type": "string"},
+                                 "description": "A plain file name: no folder, not hidden."}],
+                 "requestBody": {"required": True, "content": {"application/octet-stream": {
+                     "schema": {"type": "string", "format": "binary"}}}},
+                 "responses": {"200": reply("{ok, name, already}", {"type": "object"}),
+                               "400": reply("Another name, no length or a longer file (code document_name), or "
+                                            "an incomplete transfer", ref("Error"))}}},
+    "/albireo/v1/documents/{name}": {
+        "get": {"tags": ["Documents"], "summary": "Reads a document of the Mac",
+                "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
+                "responses": {"200": {"description": "Its bytes, with the type of its extension"},
+                              "404": reply("No such document (code document_not_found)", ref("Error"))}},
+        "delete": {"tags": ["Documents"], "summary": "Deletes a document of the Mac",
+                   "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
+                   "responses": {"200": reply("Deleted", ok),
+                                 "404": reply("No such document (code document_not_found)", ref("Error"))}}},
     "/albireo/v1/lan/login": {"post": {"tags": ["Administration"], "summary": "Opens the network access to a device",
         "description": "The password of the network access (setting lan_password) gives the cookie albireo_lan for 30 "
                        "days (HttpOnly, SameSite=Strict); a new password ends every session. A wrong password waits a "
@@ -828,8 +879,8 @@ doc = {
                        "work in the background, and albireo-embedding the embedding model of the search in "
                        "documents.\n\n"
                        "A personal version for macOS: on the Mac, every route is open, without a token. On the "
-                       "network port, every route but /albireo/v1/lan/login asks for the cookie albireo_lan that "
-                       "the login gives.\n\n"
+                       "network port, when a password is chosen, every route but /albireo/v1/lan/login asks for the "
+                       "cookie albireo_lan that the login gives; without one, the network port is open too.\n\n"
                        "Requests carry JSON bodies of 64 MB and 524,288 values at most, with their length: a body "
                        "without length is refused with 411, a longer one with 413, another type with 415. GET, HEAD, "
                        "DELETE and OPTIONS take no body (400). While the JSON bodies being read at once hold the "
@@ -845,6 +896,7 @@ doc = {
     "tags": [{"name": "OpenAI", "description": "Compatible with the OpenAI interface"},
              {"name": "Service", "description": "State of the service"},
              {"name": "Web access", "description": "The search and the pages of the web for the Web button"},
+             {"name": "Documents", "description": "The documents folder of the Mac, which the web application attaches"},
              {"name": "Administration", "description": "Settings, models, restart and the network access"}],
     "paths": paths,
     "components": {"schemas": schemas},

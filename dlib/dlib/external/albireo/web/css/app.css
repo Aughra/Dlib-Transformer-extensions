@@ -788,3 +788,20 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .svc-apply span { margin-right: auto; font-weight: 600; font-size: 13.5px; }
 .svc-apply small { font-weight: 400; color: var(--text-faint); }
 .svc-apply[hidden] { display: none; }
+
+/* The documents of the Mac (fork for macOS). */
+.mac-docs { display: grid; gap: 4px; max-height: min(52vh, 420px); overflow-y: auto; margin: 8px 0; }
+.mac-doc { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px; padding: 6px 8px;
+  border-radius: var(--radius-small); cursor: pointer; }
+.mac-doc:hover { background: var(--bg-hover); }
+.mac-doc .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.mac-doc .meta { color: var(--text-faint); font-size: 12px; white-space: nowrap; }
+@media (max-width: 520px) { .mac-doc { grid-template-columns: auto 1fr auto; } .mac-doc .meta { display: none; } }
+.svc-advice { margin: 4px 0 0; font-size: 12.5px; color: var(--blue); }
+.svc-tools { background: color-mix(in srgb, var(--blue) 6%, var(--bg-elevated)); }
+.svc-profiles { display: grid; gap: 4px; margin-top: 8px; }
+.svc-profile { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; padding: 4px 0;
+  border-top: 1px solid var(--border); }
+.svc-profile .name { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; }
+.svc-profile .meta { color: var(--text-faint); font-size: 12px; }
+@media (max-width: 520px) { .svc-profile { grid-template-columns: 1fr auto auto; } .svc-profile .meta { display: none; } }
