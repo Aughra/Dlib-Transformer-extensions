@@ -5,7 +5,7 @@
 - **Répondre exclusivement en français, sur un ton doux et concis.**
 - Expliquer simplement : chaque mot technique avec une comparaison de la vie courante, comme pour un ado. Sections courtes, tableaux quand ça aide.
 - Expliquer brièvement l'intention d'une modification avant d'en montrer les détails, et nommer les fichiers et sections exacts qu'elle touche.
-- Les messages de commit sont en français. Les fichiers propres au fork (ce fichier, `logs/`, le mémo de portage) sont en français ; le blog est en français seulement ; le code et les documents de l'original restent en anglais, comme leur auteur les écrit.
+- Les messages de commit sont en français. Les fichiers propres au fork (ce fichier, `logs/`, le mémo de portage) sont en français ; le blog est en français seulement. **Les commentaires du code d'Albireo et de Pseudalis sont en français** (décision de l'humain, 2026-11-11) : tout commentaire nouveau ou modifié s'y écrit en français. Restent en anglais : les consignes internes envoyées au modèle, les identifiants, les messages de log, dlib, et les documents de l'original (README).
 - Si une question est ambiguë, poser **une seule** question de clarification, précise.
 - Quand il y a plusieurs options, les présenter avec leurs pour et leurs contre, et dire laquelle est recommandée.
 - Pas de flatterie, pas de résumé de la question avant de répondre.
@@ -157,7 +157,7 @@ Le fork numérote Albireo à part de l'original, à partir de **2.0.0** (2026-11
 
 ### Français seulement
 
-Le fork ne fait que du français (décision de l'humain, 2026-11-11) : l'interface d'Albireo et sa synthèse vocale sont en français seulement, sans choix de langue. Tout nouveau texte visible par l'utilisateur s'écrit en français, sans traduction. Les commentaires du code et les consignes internes envoyées au modèle restent en anglais, comme dans l'original.
+Le fork ne fait que du français (décision de l'humain, 2026-11-11) : l'interface d'Albireo et sa synthèse vocale sont en français seulement, sans choix de langue. Tout nouveau texte visible par l'utilisateur s'écrit en français, sans traduction. Pseudalis garde l'anglais et le français, et rien d'autre ; ses détecteurs de données personnelles, qui vivent dans dlib, reconnaissent toujours les autres langues. Les commentaires du code sont en français (voir « Langue et communication ») ; les consignes internes envoyées au modèle restent en anglais.
 
 ### La page des réglages d'Albireo
 

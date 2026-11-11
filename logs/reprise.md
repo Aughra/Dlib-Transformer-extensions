@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-11, sur le Mac M2.
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-11 au soir, sur le Mac M2 (traduction des commentaires en cours).
 
 ## Objectif
 
@@ -38,6 +38,24 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-11 (sieste) : **les prompts aussi sur le GPU** (M5) : 4B 512 tokens 92 → 154 tokens/s, 2B 222 → 420 ; à partir de 24 tokens, jusqu'à 2 048 positions. Contrôle au chargement du modèle. Bug de débordement corrigé dans l'attention. Blog : épisode 20.
 
 ## En cours
+
+### Traduction des commentaires en français (2026-11-11, peut être interrompue)
+
+L'humain peut demander une pause (il va se coucher) : ce bloc dit exactement où reprendre.
+
+- **Quoi** : les commentaires du code d'Albireo et de Pseudalis passent en français (règle de CLAUDE.md, « Langue et communication »). Neuf lots, listés dans [macos/outils/lots-traduction.json](../macos/outils/lots-traduction.json), traduits par neuf agents en parallèle, **sans commit** (la base est le commit `6ece57d`, Albireo 2.0.1).
+- **Lots finis et contrôlés** : « 2-web », « 8-pseudalis-host ». Les autres étaient en cours au moment de cette note.
+- **Aussi en attente du commit** : retrait de la fiche « Pas de serrure sur ce Mac » (`web/js/service.js`), règle des commentaires dans CLAUDE.md.
+- **Pour reprendre** (depuis la racine du dépôt) :
+  1. `python3 macos/outils/comment_check.py --rev 6ece57d $(python3 -c "import json;print(' '.join(f for v in json.load(open('macos/outils/lots-traduction.json')).values() for f in v))")` : doit dire « 0 avec du code modifié » ; un fichier signalé se corrige ou se remet par `git show 6ece57d:<chemin> > <chemin>`.
+  2. Chercher les commentaires restés en anglais dans chaque lot inachevé, les traduire (mêmes règles : licences, mots-clés `requires`/`ensures`, identifiants, chaînes et consignes au modèle restent tels quels).
+  3. `cmake --build build/macos-albireo` et `build/macos-pseudalis` sans avertissement, `node --check` sur les `.js`, puis `tools/test_macos.sh` d'Albireo (service arrêté, port 18443) et de Pseudalis (`PSEUDALIS_TEST_PORT=18454`).
+  4. `python3 dlib/dlib/external/albireo/tools/bump_version.py patch` (→ 2.0.2), section 2.0.2 des notes de version (commentaires en français, fiche retirée), journal, commit, push, puis relancer le service : `(ALBIREO_HOME=$PWD/build/albireo-home nohup build/macos-albireo/bin/albireo-service --console > build/albireo-service.log 2>&1 &)`.
+
+### Ensuite : découper `web/js/app.js` (accord de l'humain, 2026-11-11)
+
+Environ 7 000 lignes en un fichier. Le découper en modules ES par thème (conversations, saisie et pièces jointes, mémoire, projets, paramètres, À propos et licences ; `app.js` gardant le démarrage et la navigation), état partagé (`state`, `ui`) dans un module commun, sans changer le comportement. Une étape par module, chacune vérifiée dans Chrome sans fenêtre (Mac et largeur de téléphone) puis commitée, pour qu'une pause ne laisse jamais la page cassée. Version 2.0.x (correctif) à chaque commit.
+
 
 **Moteur Metal complet** (décision de l'humain, 2026-11-11 ; le fork est détaché de l'original). Plan :
 
@@ -86,7 +104,7 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 
 ## Problèmes ouverts
 
-- **Sécurité, choix assumé** (2026-11-11) : sur le Mac, le service n'a plus de jeton d'administration ni de contrôle `Host` / `Origin`. Un site piégé ouvert dans un navigateur du Mac pourrait piloter le service (DNS rebinding). L'accès réseau est ouvert (port 8444, http, **sans mot de passe** à la demande de l'humain, « je suis chez moi ») : tout appareil du Wi-Fi peut se servir d'Albireo, et le trafic passe en clair. À remettre si l'usage change (fiche « Pas de serrure sur ce Mac » de l'onglet Service).
+- **Sécurité, choix assumé** (2026-11-11) : sur le Mac, le service n'a plus de jeton d'administration ni de contrôle `Host` / `Origin`. Un site piégé ouvert dans un navigateur du Mac pourrait piloter le service (DNS rebinding). L'accès réseau est ouvert (port 8444, http, **sans mot de passe** à la demande de l'humain, « je suis chez moi ») : tout appareil du Wi-Fi peut se servir d'Albireo, et le trafic passe en clair. À remettre si l'usage change (la fiche « Pas de serrure sur ce Mac » a été retirée de l'onglet à la demande de l'humain ; le risque reste écrit dans les notes de version, section « Sécurité »).
 
 - L'ancien fork `PapyTortueTech/Dlib-Transformer-extensions` n'est plus utilisé ; l'humain s'occupe de l'arrêter. Ne plus jamais y pousser.
 - Noyaux NEON pour Q4_K, Q6_K et l'attention (clés en demi-précision et en 8 bits) ; prompts par Accelerate pour tous les formats. En génération, les autres formats (Q8_0, Q5_K…) restent portables.
