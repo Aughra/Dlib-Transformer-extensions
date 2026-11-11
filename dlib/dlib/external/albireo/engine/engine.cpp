@@ -1244,9 +1244,13 @@ namespace albireo
         });
         // The generation steps on the GPU of the Mac, when the engine opened it.
         if (gpu_)
+        {
             runtime->set_gpu(*gpu_, [this, id](int level, const std::string& message) {
                 log(level, "model '" + id + "': " + message);
             });
+            // The check of the GPU at the loading, so that the first answer does not wait for it.
+            runtime->check_gpu();
+        }
         cpu_runtime* const processor = runtime.get();
         m->runtime = std::move(runtime);
 

@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Contrôler le GPU au chargement du modèle
+
+- **Quoi** : `cpu_runtime::check_gpu()` (public) fait le contrôle du GPU tout de suite ; le moteur l'appelle juste après `set_gpu()`, au chargement de chaque modèle. Essais du noyau Q4_K consignés et non gardés : balayage des lignes par simdgroup et des simdgroups par groupe (4 lignes restent le meilleur) ; activations en mémoire locale (plus lent, 17,3 tokens/s).
+- **Fichiers** : `dlib/dlib/external/albireo/engine/cpu_runtime.h`, `engine/engine.cpp` ; `logs/sieste-2026-11-11.md`, ce journal.
+- **Pourquoi** : la première question payait le contrôle (14,5 tokens/s au lieu de 21,4 dans le service).
+- **Étapes** : build sans avertissement ; `test_engine_api`, `test_metal` passent ; `engine_chat` répond juste ; service : contrôle au chargement en 3 s, première question à 21,1 tokens/s, la deuxième à 21,2.
+
 ## 2026-11-11 — Raconter les pas d'écriture sur le GPU (blog, épisode 19) et mettre la doc à jour
 
 - **Quoi** : épisode 19 « Le GPU prend la plume » ; mémo (section des pas d'écriture sur le GPU, tableau « État constaté »), reprise (M2, M3 faits, M4 en cours), notes pour l'auteur (changement 9 et bilan).

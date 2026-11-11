@@ -122,6 +122,9 @@ namespace albireo
         !*/
         void set_gpu(metal_device& device, std::function<void(int, const std::string&)> log);
 
+        // Makes the check of the GPU now, at the loading of the model, rather than at its first pass.
+        void check_gpu() { if (gpu_) gpu_ready(); }
+
         /*!
             requires
                 - no forward pass has run, or the rotary divisors stay the same.
