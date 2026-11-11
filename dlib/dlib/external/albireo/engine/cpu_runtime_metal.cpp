@@ -46,9 +46,13 @@ namespace albireo
         // The region of the pool, taken again larger when a block lies beyond it.
         metal_buffer region;
         size_t region_covered = 0;
-        // The work buffers of a pass.
+        // The work buffers of a pass, for capacity tokens.
         metal_buffer x, xn, q, k, v, ctx, gate, up, hidden, logits, cs, blocks, rows, lengths, table, partial;
-        size_t table_capacity = 0, partial_capacity = 0;
+        size_t capacity = 0, table_capacity = 0, partial_capacity = 0;
+        // The weights of a product of a prompt expanded to floats, two buffers in turn.
+        metal_buffer expanded[2];
+        size_t expanded_floats = 0;
+        int turn = 0;
 
         size_t weight(const weight_matrix& W) const
         {
@@ -71,6 +75,23 @@ namespace albireo
             if (!b.valid()) throw std::runtime_error("the GPU refuses a buffer of " + std::to_string(bytes >> 20) + " MB");
             return b;
         }
+    }
+
+    namespace
+    {
+        /*
+            The passes of more tokens than metal_device::max_tokens (prompts) go to the GPU from
+            qk_float_product_tokens tokens on, where the processor also turns to products in floats,
+            and while the context they end at holds gpu_prompt_context positions at most.  Measured on
+            the M2 (bench_runtime, keys and values in 8 bits): the GPU reads a prompt of 24 tokens
+            about twice as fast as the processor (it expands every weight once a pass, about 200 ms for
+            a model of 2B), of 1 024 tokens 1.7 to 2.1 times as fast, of 2 048 tokens 1.2 to 1.7
+            times; beyond, its attention, one simdgroup reading the keys after the others for each
+            token, falls behind on a model of 2B (4 096 tokens: 134 tokens/s against 173).
+        */
+        long gpu_prompt_tokens() { return qk_float_product_tokens; }
+        const long gpu_prompt_context = 2048;
+        const long gpu_prompt_max = 2048;
     }
 
     void cpu_runtime::set_gpu(metal_device& device, std::function<void(int, const std::string&)> log)
@@ -131,29 +152,49 @@ namespace albireo
         g->output_norm = add(output_norm_);
         g->vectors = need(device, all.size() * sizeof(float));
         std::memcpy(g->vectors.contents(), all.data(), all.size() * sizeof(float));
-        const size_t T = metal_device::max_tokens;
-        const size_t f = sizeof(float);
-        g->x = need(device, T * cfg_.d_model * f);
-        g->xn = need(device, T * cfg_.d_model * f);
-        g->q = need(device, T * cfg_.q_dim() * f);
-        g->k = need(device, T * cfg_.kv_dim() * f);
-        g->v = need(device, T * cfg_.kv_dim() * f);
-        g->ctx = need(device, T * cfg_.q_dim() * f);
-        g->gate = need(device, T * cfg_.d_ffn * f);
-        g->up = need(device, T * cfg_.d_ffn * f);
-        g->hidden = need(device, T * cfg_.d_model * f);
-        g->logits = need(device, T * cfg_.vocab * f);
-        g->cs = need(device, T * std::max<long>(cfg_.rope_dims, 2) * f);
-        g->blocks = need(device, T * sizeof(int));
-        g->rows = need(device, T * sizeof(int));
-        g->lengths = need(device, T * sizeof(int));
+        // The logits and the hidden states of the rows asked for, max_tokens at most.
+        const size_t R = metal_device::max_tokens;
+        g->hidden = need(device, R * cfg_.d_model * sizeof(float));
+        g->logits = need(device, R * cfg_.vocab * sizeof(float));
         gpu_ = std::move(g);
+        grow_gpu(metal_device::max_tokens);
+    }
+
+    // The work buffers of the passes, grown to tokens tokens.
+    void cpu_runtime::grow_gpu(size_t tokens)
+    {
+        gpu_state& g = *gpu_;
+        if (g.capacity >= tokens) return;
+        metal_device& device = *g.device;
+        const size_t T = tokens, f = sizeof(float);
+        g.x = need(device, T * cfg_.d_model * f);
+        g.xn = need(device, T * cfg_.d_model * f);
+        g.q = need(device, T * cfg_.q_dim() * f);
+        g.k = need(device, T * cfg_.kv_dim() * f);
+        g.v = need(device, T * cfg_.kv_dim() * f);
+        g.ctx = need(device, T * cfg_.q_dim() * f);
+        g.gate = need(device, T * cfg_.d_ffn * f);
+        g.up = need(device, T * cfg_.d_ffn * f);
+        g.cs = need(device, T * std::max<long>(cfg_.rope_dims, 2) * f);
+        g.blocks = need(device, T * sizeof(int));
+        g.rows = need(device, T * sizeof(int));
+        g.lengths = need(device, T * sizeof(int));
+        g.capacity = T;
     }
 
     bool cpu_runtime::takes_gpu(const forward_batch& batch) const
     {
-        const size_t T = batch.tokens.size();
-        return gpu_ && gpu_->state != gpu_state::dropped && T > 0 && T <= metal_device::max_tokens
+        const long T = static_cast<long>(batch.tokens.size());
+        const bool step = T > 0 && T <= static_cast<long>(metal_device::max_tokens);
+        bool long_pass = T >= gpu_prompt_tokens() && T <= gpu_prompt_max;
+        if (long_pass)
+            for (const auto& s : batch.segments)
+            {
+                const size_t i = static_cast<size_t>(s.sequence);
+                if (i >= sequences_.size() || !sequences_[i] || sequences_[i]->length + s.count > gpu_prompt_context)
+                    long_pass = false;
+            }
+        return gpu_ && gpu_->state != gpu_state::dropped && (step || long_pass)
             && batch.embedding_rows.empty() && !batch.hidden_only
             && batch.logit_rows.size() <= metal_device::max_tokens;
     }
@@ -184,7 +225,8 @@ namespace albireo
             --gpu_->wait;
             return false;
         }
-        const long n = 16, V = cfg_.vocab;
+        // A prompt long enough to take the path of the prompts on the GPU.
+        const long n = std::max<long>(32, gpu_prompt_tokens()), V = cfg_.vocab;
         const int a = create_sequence(), b = create_sequence();
         struct release
         {
@@ -203,20 +245,57 @@ namespace albireo
         }
         forward_batch prompt;
         for (long i = 0; i < n; ++i) prompt.tokens.push_back(static_cast<int>((1009 + 7919 * i) % V));
-        std::vector<float> ignored, on_gpu, on_cpu;
+        std::vector<float> on_gpu, on_cpu;
         struct floats_scope
         {
             bool& flag;
             ~floats_scope() { flag = false; }
         } floats{ float_products_ };
         float_products_ = true;
-        for (int seq : { a, b })
-        {
-            prompt.segments.assign(1, { seq, 0, n });
-            run(prompt, ignored, false);
-        }
         std::ostringstream detail;
         bool agree = true;
+        // The logits of a pass on the GPU against those of the processor, into detail.
+        auto compare = [&](const char* what, double limit) {
+            double diff = 0, norm = 0;
+            long ig = 0, ic = 0;
+            for (long i = 0; i < V; ++i)
+            {
+                diff += (static_cast<double>(on_gpu[i]) - on_cpu[i]) * (static_cast<double>(on_gpu[i]) - on_cpu[i]);
+                norm += static_cast<double>(on_cpu[i]) * on_cpu[i];
+                if (on_gpu[i] > on_gpu[ig]) ig = i;
+                if (on_cpu[i] > on_cpu[ic]) ic = i;
+            }
+            const double relative = std::sqrt(diff / std::max(norm, 1e-30));
+            detail << (detail.tellp() > 0 ? "; " : "") << what << ": logits within " << relative * 100
+                << "% of those of the processor, most likely token " << (ig == ic ? "the same" : "different");
+            // Written so that a value that is not a number fails.
+            if (!(relative <= limit) || ig != ic) agree = false;
+        };
+        // The prompt: on the GPU for the first sequence when the prompts go to it, on the processor otherwise.
+        const bool gpu_prompt = n >= gpu_prompt_tokens() && n <= gpu_prompt_max;
+        prompt.logit_rows.assign(1, n - 1);
+        prompt.segments.assign(1, { a, 0, n });
+        try
+        {
+            if (gpu_prompt) run_gpu(prompt, on_gpu);
+            else run(prompt, on_gpu, false);
+        }
+        catch (const std::exception& e)
+        {
+            drop_gpu(std::string("the check failed on the GPU: ") + e.what());
+            return false;
+        }
+        prompt.segments.assign(1, { b, 0, n });
+        run(prompt, on_cpu, false);
+        /*
+            A prompt writes the keys and values of all its tokens: in 8 bits, a value that a difference
+            of rounding of 1e-7 moves across the middle of two integers takes the other one, a step of
+            about 1 % of its group, which the next layers carry and multiply.  Its logits then differ
+            from those of the processor by one or two percent with sound kernels (1.5 % on the 2B,
+            16 tokens; 0.04 % with the keys and values in half precision).  A defect gives far more,
+            and another most likely token.
+        */
+        if (gpu_prompt) compare("prompt", kv_.format() == kv_format::q8 ? 0.05 : 0.01);
         for (int step = 0; step < 2; ++step)
         {
             forward_batch one;
@@ -234,20 +313,7 @@ namespace albireo
             }
             one.segments.assign(1, { b, 0, 1 });
             run(one, on_cpu, false);
-            double diff = 0, norm = 0;
-            long ig = 0, ic = 0;
-            for (long i = 0; i < V; ++i)
-            {
-                diff += (static_cast<double>(on_gpu[i]) - on_cpu[i]) * (static_cast<double>(on_gpu[i]) - on_cpu[i]);
-                norm += static_cast<double>(on_cpu[i]) * on_cpu[i];
-                if (on_gpu[i] > on_gpu[ig]) ig = i;
-                if (on_cpu[i] > on_cpu[ic]) ic = i;
-            }
-            const double relative = std::sqrt(diff / std::max(norm, 1e-30));
-            detail << (step ? "; " : "") << "step " << step + 1 << ": logits within " << relative * 100
-                << "% of those of the processor, most likely token " << (ig == ic ? "the same" : "different");
-            // Written so that a value that is not a number fails.
-            if (!(relative <= 0.01) || ig != ic) agree = false;
+            compare(step == 0 ? "step 1" : "step 2", 0.01);
         }
         if (!agree)
         {
@@ -255,7 +321,11 @@ namespace albireo
             return false;
         }
         gpu_->state = gpu_state::ready;
-        if (gpu_->log) gpu_->log(ALBIREO_LOG_INFO, "GPU " + gpu_->device->name() + ": the generation steps run on it (" + detail.str() + ")");
+        if (gpu_->log)
+            gpu_->log(ALBIREO_LOG_INFO, "GPU " + gpu_->device->name() + ": the generation steps"
+                + std::string(gpu_prompt ? " and the prompts of " + std::to_string(gpu_prompt_tokens())
+                    + " tokens or more, up to " + std::to_string(gpu_prompt_context) + " positions," : "")
+                + " run on it (" + detail.str() + ")");
         return true;
     }
 
@@ -305,6 +375,7 @@ namespace albireo
         ensure_rope(max_rope + 1);
         if (given) prepare_given_positions(batch, T);
         embed(batch.tokens);
+        grow_gpu(static_cast<size_t>(T));
         std::memcpy(g.x.contents(), x_.data(), sizeof(float) * T * d);
 
         // The cosines and sines of each token, the block and the row each one writes, the length it
@@ -351,12 +422,27 @@ namespace albireo
             g.region = r;
             g.region_covered = want;
         }
-        const unsigned parts = static_cast<unsigned>((max_pos + 1 + metal_device::attention_part - 1) / metal_device::attention_part);
-        const size_t partial = static_cast<size_t>(T) * KVH * parts * rep * (hd + 2);
+        // The attention of a step goes in parts of attention_part positions; a prompt has enough
+        // tokens to fill the GPU with one part each.
+        const bool step = T <= static_cast<long>(metal_device::max_tokens);
+        const unsigned part_len = step ? metal_device::attention_part : static_cast<unsigned>(max_pos + 1);
+        const unsigned parts = static_cast<unsigned>((max_pos + 1 + part_len - 1) / part_len);
+        const size_t partial = parts > 1 ? static_cast<size_t>(T) * KVH * parts * rep * (hd + 2) : 1;
         if (g.partial_capacity < partial)
         {
             g.partial_capacity = partial * 2;
             g.partial = need(dev, g.partial_capacity * sizeof(float));
+        }
+        // The weights of a prompt expanded to floats: the largest matrix of a layer, twice.
+        if (!step && g.expanded_floats == 0)
+        {
+            size_t largest = 0;
+            for (const layer& L : layers_)
+                for (const weight_matrix* M : { &L.wq, &L.wk, &L.wv, &L.wo, &L.w_gate, &L.w_up, &L.w_down })
+                    largest = std::max(largest, static_cast<size_t>(M->rows) * static_cast<size_t>(M->cols));
+            g.expanded[0] = need(dev, largest * sizeof(float));
+            g.expanded[1] = need(dev, largest * sizeof(float));
+            g.expanded_floats = largest;
         }
 
         const float scale = cfg_.attention_scale > 0.0 ? static_cast<float>(cfg_.attention_scale)
@@ -364,6 +450,19 @@ namespace albireo
         const unsigned uT = static_cast<unsigned>(T);
         auto c = dev.begin();
         auto at = [&](const metal_buffer& b, size_t offset) { return metal_view(b, offset); };
+        // A product of the pass: by blocks in place for a step, expanded then through MPS for a prompt.
+        auto product = [&](const weight_matrix& M, const metal_buffer& x, long x_stride, const metal_buffer& y, long y_stride,
+                           float alpha, float beta) {
+            if (step)
+            {
+                c->matvec(M.type, at(g.weights, g.weight(M)), M.rows, M.cols, x, uT, x_stride, y, y_stride, alpha, beta);
+                return;
+            }
+            const metal_buffer& e = g.expanded[g.turn];
+            g.turn ^= 1;
+            c->dequantize(M.type, at(g.weights, g.weight(M)), M.rows, M.cols, e, M.cols);
+            c->gemm(x, uT, M.cols, x_stride, e, M.rows, M.cols, y, y_stride, alpha, beta);
+        };
         for (long li = 0; li < cfg_.n_layers; ++li)
         {
             const layer& L = layers_[static_cast<size_t>(li)];
@@ -380,15 +479,15 @@ namespace albireo
 
             // Attention block.
             c->rms_norm(g.x, at(g.vectors, lv.attn_norm), g.xn, uT, d, d, d, eps);
-            if (L.wq.type == L.wk.type && qd % 16 == 0)
+            if (step && L.wq.type == L.wk.type && qd % 16 == 0)
                 c->matvec2(L.wq.type, at(g.weights, g.weight(L.wq)), qd, at(g.weights, g.weight(L.wk)), kvd, d, g.xn, uT, d,
                     g.q, qd, g.k, kvd);
             else
             {
-                c->matvec(L.wq.type, at(g.weights, g.weight(L.wq)), qd, d, g.xn, uT, d, g.q, qd);
-                c->matvec(L.wk.type, at(g.weights, g.weight(L.wk)), kvd, d, g.xn, uT, d, g.k, kvd);
+                product(L.wq, g.xn, d, g.q, qd, 1.0f, 0.0f);
+                product(L.wk, g.xn, d, g.k, kvd, 1.0f, 0.0f);
             }
-            c->matvec(L.wv.type, at(g.weights, g.weight(L.wv)), kvd, d, g.xn, uT, d, g.v, kvd);
+            product(L.wv, g.xn, d, g.v, kvd, 1.0f, 0.0f);
             if (!L.bq.empty())
             {
                 c->add_bias(g.q, at(g.vectors, lv.bq), qd, qd, uT);
@@ -406,21 +505,21 @@ namespace albireo
             c->kv_store(g.k, g.v, kvd, g.region, g.blocks, g.rows, uT, kl);
             c->prepare_queries(g.q, uT, H, hd, qd, scale, q8);
             c->attention(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), uT, rep, parts, qd,
-                g.partial, g.ctx, kl);
-            c->matvec(L.wo.type, at(g.weights, g.weight(L.wo)), d, qd, g.ctx, uT, qd, g.x, d, rs, 1.0f);
+                g.partial, g.ctx, kl, part_len);
+            product(L.wo, g.ctx, qd, g.x, d, rs, 1.0f);
 
             // Feed-forward block.
             c->rms_norm(g.x, at(g.vectors, lv.ffn_norm), g.xn, uT, d, d, d, eps);
-            if (L.w_gate.type == L.w_up.type && df % 16 == 0)
+            if (step && L.w_gate.type == L.w_up.type && df % 16 == 0)
                 c->matvec2(L.w_gate.type, at(g.weights, g.weight(L.w_gate)), df, at(g.weights, g.weight(L.w_up)), df, d,
                     g.xn, uT, d, g.gate, df, g.up, df);
             else
             {
-                c->matvec(L.w_gate.type, at(g.weights, g.weight(L.w_gate)), df, d, g.xn, uT, d, g.gate, df);
-                c->matvec(L.w_up.type, at(g.weights, g.weight(L.w_up)), df, d, g.xn, uT, d, g.up, df);
+                product(L.w_gate, g.xn, d, g.gate, df, 1.0f, 0.0f);
+                product(L.w_up, g.xn, d, g.up, df, 1.0f, 0.0f);
             }
             c->silu_mul(g.gate, g.up, static_cast<unsigned>(T * df));
-            c->matvec(L.w_down.type, at(g.weights, g.weight(L.w_down)), d, df, g.gate, uT, df, g.x, d, rs, 1.0f);
+            product(L.w_down, g.gate, df, g.x, d, rs, 1.0f);
         }
         // Final normalization and logits of the requested rows only.
         const long R = static_cast<long>(batch.logit_rows.size());

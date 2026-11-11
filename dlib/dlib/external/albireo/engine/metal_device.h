@@ -119,6 +119,19 @@ namespace albireo
                 metal_view x, unsigned tokens, unsigned x_stride, metal_view y, unsigned y_stride, metal_view y2,
                 unsigned y2_stride);
 
+            // Row r of W (rows rows of cols values, GGUF type Q4_K or Q6_K) expanded into out + r * out_stride
+            // floats, as qk_dequantize_row() does; false for another type.
+            bool dequantize(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view out,
+                unsigned out_stride);
+
+            /*!
+                Y[t * y_stride + n] = alpha * sum_k X[t * x_stride + k] Wf[n * w_stride + k] + beta * Y[...],
+                t < rows, n < cols, k < inner, in single precision floats, through Metal Performance
+                Shaders: the products of the prompts, Wf being the weights that dequantize() expanded.
+            !*/
+            void gemm(metal_view X, unsigned rows, unsigned inner, unsigned x_stride, metal_view Wf, unsigned cols,
+                unsigned w_stride, metal_view Y, unsigned y_stride, float alpha = 1.0f, float beta = 0.0f);
+
             // y[r] = x[r] * gamma / sqrt(mean of x[r]^2 + eps), rows of width values (x may be y).
             void rms_norm(metal_view x, metal_view gamma, metal_view y, unsigned rows, unsigned width,
                 unsigned x_stride, unsigned y_stride, float eps);
@@ -171,11 +184,11 @@ namespace albireo
                 blocks are blocks[t * table_stride + j]; rep query heads share each key/value
                 head.  Writes the outputs at ctx + t * q_stride.  partial holds
                 tokens * heads * parts * rep * (hd + 2) floats, parts covering the longest
-                length by attention_part positions.
+                length by part_len positions; with a single part, nothing goes to partial.
             !*/
             void attention(metal_view q, metal_view region, metal_view blocks, metal_view lengths,
                 unsigned table_stride, unsigned tokens, unsigned rep, unsigned parts, unsigned q_stride,
-                metal_view partial, metal_view ctx, const kv_layout& layout);
+                metal_view partial, metal_view ctx, const kv_layout& layout, unsigned part_len = attention_part);
 
             /*!
                 ensures

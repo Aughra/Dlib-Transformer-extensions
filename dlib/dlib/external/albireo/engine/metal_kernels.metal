@@ -219,6 +219,72 @@ template [[host_name("mv_q6_K_n")]] kernel void mv_q6_K<8>(device const uchar*, 
     constant mv_args&, device const uchar*, device float*, uint, uint, uint);
 
 // ---------------------------------------------------------------------------------------------
+// The weights expanded to floats, for the products of the prompts (metal_device::gemm()): row r of
+// the matrix into out[r * out_stride], as qk_dequantize_row() expands it.  Each thread expands 8
+// consecutive values of a block of 256: grid (32 * blocks of a row, rows).
+
+struct dequant_args
+{
+    long cols;
+    uint out_stride;
+};
+
+kernel void dequant_q4_K(device const uchar* W [[buffer(0)]], device float* out [[buffer(1)]],
+    constant dequant_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+{
+    const long nb = a.cols / 256;
+    const long b = g.x / 32;
+    if (b >= nb) return;
+    const uint v0 = (g.x % 32) * 8;               // the first of the 8 values of the thread
+    device const uchar* blk = W + long(g.y) * nb * 144 + b * 144;
+    const uint j = v0 / 64, high = (v0 % 64) / 32, l0 = v0 % 32, sub = v0 / 32;
+    device const uchar* sc = blk + 4;
+    float scale, minimum;
+    if (sub < 4)
+    {
+        scale = sc[sub] & 63;
+        minimum = sc[sub + 4] & 63;
+    }
+    else
+    {
+        scale = (sc[sub + 4] & 0xF) | ((sc[sub - 4] >> 6) << 4);
+        minimum = (sc[sub + 4] >> 4) | ((sc[sub] >> 6) << 4);
+    }
+    const half2 dd = *(device const half2*)blk;
+    const float d = float(dd.x) * scale, m = float(dd.y) * minimum;
+    device const uchar* qs = blk + 16 + j * 32 + l0;
+    device float* y = out + long(g.y) * a.out_stride + b * 256 + v0;
+    for (uint i = 0; i < 8; ++i)
+    {
+        const uint q = high ? qs[i] >> 4 : qs[i] & 0xF;
+        y[i] = d * float(q) - m;
+    }
+}
+
+kernel void dequant_q6_K(device const uchar* W [[buffer(0)]], device float* out [[buffer(1)]],
+    constant dequant_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+{
+    const long nb = a.cols / 256;
+    const long b = g.x / 32;
+    if (b >= nb) return;
+    const uint v0 = (g.x % 32) * 8;
+    device const uchar* blk = W + long(g.y) * nb * 210 + b * 210;
+    const uint n = v0 / 128, w = v0 % 128, quarter = w / 32, l0 = w % 32;
+    device const uchar* ql = blk + n * 64 + (quarter & 1) * 32 + l0;
+    device const uchar* qh = blk + 128 + n * 32 + l0;
+    device const char* sc = (device const char*)(blk + 192) + n * 8;
+    const float d = float(*(device const half*)(blk + 208));
+    device float* y = out + long(g.y) * a.out_stride + b * 256 + v0;
+    for (uint i = 0; i < 8; ++i)
+    {
+        const uint l = l0 + i;
+        const uint low = quarter < 2 ? ql[i] & 0xF : ql[i] >> 4;
+        const uint up = (qh[i] >> (2 * quarter)) & 3;
+        y[i] = d * float(sc[l / 16 + 2 * quarter]) * float(int(low | (up << 4)) - 32);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Rows normalized by their root mean square (cpu_runtime::rms_norm_rows): one threadgroup per
 // row; x and y may be the same rows.
 
@@ -566,7 +632,9 @@ kernel void attention_part(device const float* q [[buffer(0)]], device const uch
                 }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
-    if (sg == 0 && lane == 0)
+    // The maximums and the sums of the part, for merge_attention(); a single part has none to give,
+    // and partial then holds nothing for it.
+    if (a.parts > 1 && sg == 0 && lane == 0)
         for (uint i = 0; i < REP; ++i)
         {
             out[REP * a.hd + i] = jm[i];

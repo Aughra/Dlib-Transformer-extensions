@@ -6,6 +6,7 @@
 
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
+#import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
 #include <algorithm>
 #include <cstring>
@@ -27,7 +28,7 @@ namespace albireo
         // The attention comes in one variant for each grouping of the query heads (1, 2, 4, 8) and each
         // width of a head (64, 128, 256 values: 2, 4, 8 a lane), whose loops the compiler unrolls.
         const char* const kernel_names[] = { "mv_q4_K_1", "mv_q6_K_1", "mv_q4_K_n", "mv_q6_K_n", "rms_norm", "add_bias", "silu_mul", "rope",
-            "kv_store", "prepare_queries", "merge_attention",
+            "kv_store", "prepare_queries", "merge_attention", "dequant_q4_K", "dequant_q6_K",
             "attention_part_1_2", "attention_part_1_4", "attention_part_1_8",
             "attention_part_2_2", "attention_part_2_4", "attention_part_2_8",
             "attention_part_4_2", "attention_part_4_4", "attention_part_4_8",
@@ -35,7 +36,7 @@ namespace albireo
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
-            k_merge_attention, k_attention_part, k_count = k_attention_part + 12
+            k_merge_attention, k_dequant_q4_K, k_dequant_q6_K, k_attention_part, k_count = k_attention_part + 12
         };
 
         // The variant of the attention for rep query heads per key/value head and heads of hd values.
@@ -65,6 +66,11 @@ namespace albireo
             uint32_t x_stride;
             uint32_t y_stride;
             float eps;
+        };
+        struct dequant_args
+        {
+            int64_t cols;
+            uint32_t out_stride;
         };
         struct bias_args
         {
@@ -142,7 +148,17 @@ namespace albireo
         id<MTLCommandBuffer> buffer = nil;
         id<MTLComputeCommandEncoder> encoder = nil;
 
-        void use(int k) { [encoder setComputePipelineState:device->pipelines[static_cast<size_t>(k)]]; }
+        // The kernels go to a compute encoder, which a product of Metal Performance Shaders closes.
+        void use(int k)
+        {
+            if (!encoder) encoder = [buffer computeCommandEncoder];
+            [encoder setComputePipelineState:device->pipelines[static_cast<size_t>(k)]];
+        }
+        void close()
+        {
+            if (encoder) [encoder endEncoding];
+            encoder = nil;
+        }
         void bind(metal_view v, unsigned index)
         {
             [encoder setBuffer:v.buffer->impl_->buffer offset:v.offset atIndex:index];
@@ -261,7 +277,42 @@ namespace albireo
     metal_device::commands::~commands()
     {
         // Commands never finished are given up: their encoder must end before it goes.
-        if (impl_->encoder) [impl_->encoder endEncoding];
+        impl_->close();
+    }
+
+    bool metal_device::commands::dequantize(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view out,
+        unsigned out_stride)
+    {
+        int k;
+        if (type == dlib::ggml_type::Q4_K) k = k_dequant_q4_K;
+        else if (type == dlib::ggml_type::Q6_K) k = k_dequant_q6_K;
+        else return false;
+        if (rows == 0) return true;
+        if (cols % 256 != 0) throw std::invalid_argument("metal_device: a matrix of other columns than its kernel takes");
+        impl_->use(k);
+        impl_->bind(W, 0);
+        impl_->bind(out, 1);
+        const dequant_args a = { cols, out_stride };
+        impl_->args(a, 2);
+        impl_->grid(static_cast<unsigned>(cols / 256 * 32), static_cast<unsigned>(rows), 1);
+        return true;
+    }
+
+    void metal_device::commands::gemm(metal_view X, unsigned rows, unsigned inner, unsigned x_stride, metal_view Wf,
+        unsigned cols, unsigned w_stride, metal_view Y, unsigned y_stride, float alpha, float beta)
+    {
+        if (rows == 0 || cols == 0) return;
+        impl_->close();
+        id<MTLDevice> device = impl_->device->device;
+        auto matrix = [](metal_view v, unsigned r, unsigned c, unsigned stride) {
+            MPSMatrixDescriptor* d = [MPSMatrixDescriptor matrixDescriptorWithRows:r columns:c
+                rowBytes:stride * sizeof(float) dataType:MPSDataTypeFloat32];
+            return [[MPSMatrix alloc] initWithBuffer:v.buffer->impl_->buffer offset:v.offset descriptor:d];
+        };
+        MPSMatrixMultiplication* mm = [[MPSMatrixMultiplication alloc] initWithDevice:device transposeLeft:NO
+            transposeRight:YES resultRows:rows resultColumns:cols interiorColumns:inner alpha:alpha beta:beta];
+        [mm encodeToCommandBuffer:impl_->buffer leftMatrix:matrix(X, rows, inner, x_stride)
+            rightMatrix:matrix(Wf, cols, inner, w_stride) resultMatrix:matrix(Y, rows, cols, y_stride)];
     }
 
     bool metal_device::commands::matvec(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view x,
@@ -386,12 +437,12 @@ namespace albireo
 
     void metal_device::commands::attention(metal_view q, metal_view region, metal_view blocks, metal_view lengths,
         unsigned table_stride, unsigned tokens, unsigned rep, unsigned parts, unsigned q_stride, metal_view partial,
-        metal_view ctx, const kv_layout& l)
+        metal_view ctx, const kv_layout& l, unsigned part_len)
     {
         if (tokens == 0) return;
         const int kernel = attention_kernel(rep, l.hd);
         if (kernel < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
-        const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, attention_part, parts, q_stride,
+        const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, part_len, parts, q_stride,
             table_stride, 0, l.block_stride, l.k_slab, l.v_slab, l.head_stride };
         impl_->use(kernel);
         impl_->bind(q, 0);
@@ -414,8 +465,7 @@ namespace albireo
 
     void metal_device::commands::finish()
     {
-        [impl_->encoder endEncoding];
-        impl_->encoder = nil;
+        impl_->close();
         [impl_->buffer commit];
         [impl_->buffer waitUntilCompleted];
         if (impl_->buffer.status == MTLCommandBufferStatusError)

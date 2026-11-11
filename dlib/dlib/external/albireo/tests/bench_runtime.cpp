@@ -8,8 +8,8 @@
     Reports the prompt throughput, the time of one generation step for a single
     sequence, and the throughput of steps that advance several sequences together, with
     the keys and values in half precision (by default) or in 8 bits.  With "metal", the
-    generation steps run on the GPU of the Mac (cpu_runtime::set_gpu()), its check made by
-    an untimed step before the measures.
+    generation steps run on the GPU of the Mac (cpu_runtime::set_gpu()), its check made
+    before the measures (cpu_runtime::check_gpu()).
 */
 
 #include <algorithm>
@@ -66,6 +66,8 @@ int main(int argc, char** argv)
             return 1;
         }
         rt.set_gpu(*gpu, [](int, const std::string& m) { std::printf("%s\n", m.c_str()); });
+        // The check of the GPU before the measures, as the engine makes it at the loading of a model.
+        rt.check_gpu();
     }
     file->warm_up(false);
 
@@ -73,7 +75,7 @@ int main(int argc, char** argv)
     std::vector<int> tokens(static_cast<size_t>(prompt));
     for (long i = 0; i < prompt; ++i) tokens[static_cast<size_t>(i)] = static_cast<int>((i * 7919 + 13) % cfg.vocab);
     const int seq = rt.create_sequence();
-    rt.reserve_sequence(seq, prompt + steps + 1);
+    rt.reserve_sequence(seq, prompt + steps);
     forward_batch b;
     b.tokens = tokens;
     b.segments.push_back({ seq, 0, prompt });
@@ -83,16 +85,6 @@ int main(int argc, char** argv)
     rt.forward(b, logits);
     const double pms = since(t);
     std::printf("prompt: %ld tokens in %.1f ms, %.1f tokens/s\n", prompt, pms, 1000.0 * prompt / pms);
-
-    // With the GPU, a step before the measures, which makes its check.
-    if (metal)
-    {
-        b.clear();
-        b.tokens.push_back(3);
-        b.segments.push_back({ seq, 0, 1 });
-        b.logit_rows.push_back(0);
-        rt.forward(b, logits);
-    }
 
     // Single sequence steps.
     t = clock_type::now();

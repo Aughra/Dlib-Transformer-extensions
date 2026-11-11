@@ -121,6 +121,51 @@ namespace
         }
     }
 
+    // The weights expanded to floats, then a product of a prompt through Metal Performance Shaders.
+    void test_dequantize_gemm(metal_device& gpu, dlib::ggml_type type, const char* name)
+    {
+        const long rows = 300, cols = 1024;
+        const unsigned tokens = 37, stride = cols + 32, y_stride = rows + 4;
+        const std::vector<uint8_t> w = random_matrix(type, rows, cols);
+        const size_t rb = qk_row_bytes(type, cols);
+        metal_buffer W = gpu.allocate(w.size()), F = gpu.allocate(sizeof(float) * rows * stride);
+        std::memcpy(W.contents(), w.data(), w.size());
+        metal_buffer X = gpu.allocate(sizeof(float) * tokens * stride), Y = gpu.allocate(sizeof(float) * tokens * y_stride);
+        float* x = static_cast<float*>(X.contents());
+        float* y = static_cast<float*>(Y.contents());
+        for (size_t i = 0; i < tokens * stride; ++i) x[i] = uniform(-1.0f, 1.0f);
+        for (size_t i = 0; i < tokens * y_stride; ++i) y[i] = uniform(-1.0f, 1.0f);
+        const std::vector<float> before(y, y + tokens * y_stride);
+        auto c = gpu.begin();
+        const bool encoded = c->dequantize(type, W, rows, cols, F, stride);
+        c->gemm(X, tokens, cols, stride, F, rows, stride, Y, y_stride, 0.5f, 1.0f);
+        c->finish();
+        const float* f = static_cast<const float*>(F.contents());
+        long apart = 0;
+        double worst = 0;
+        std::vector<float> row(cols);
+        for (long r = 0; r < rows; ++r)
+        {
+            qk_dequantize_row(type, w.data() + r * rb, row.data(), cols);
+            for (long i = 0; i < cols; ++i) apart += std::fabs(f[r * stride + i] - row[i]) > 1e-6f * (std::fabs(row[i]) + 1e-3f);
+            for (unsigned t = 0; t < tokens; ++t)
+            {
+                double ref = 0, mag = 0;
+                for (long i = 0; i < cols; ++i)
+                {
+                    ref += static_cast<double>(row[i]) * x[t * stride + i];
+                    mag += std::fabs(static_cast<double>(row[i]) * x[t * stride + i]);
+                }
+                const double e = 0.5 * ref + before[t * y_stride + r];
+                worst = std::max(worst, std::fabs(y[t * y_stride + r] - e) / (0.5 * mag + 1e-30));
+            }
+        }
+        check(encoded && apart == 0, std::string("dequant_") + name + ": " + std::to_string(apart) + " of "
+            + std::to_string(rows * cols) + " values apart from qk_dequantize_row");
+        check(worst < 1e-5, std::string("gemm after dequant_") + name + ", " + std::to_string(tokens)
+            + " tokens: largest error " + sci(worst));
+    }
+
     void test_norm_rope_gate(metal_device& gpu)
     {
         // Rows of 2560 values, then heads of 128 normalized in place.
@@ -421,6 +466,8 @@ int main()
     std::printf("test_metal: %s, %d kernels\n", gpu->name().c_str(), gpu->kernel_count());
     test_matvec(*gpu, dlib::ggml_type::Q4_K, "mv_q4_K");
     test_matvec(*gpu, dlib::ggml_type::Q6_K, "mv_q6_K");
+    test_dequantize_gemm(*gpu, dlib::ggml_type::Q4_K, "q4_K");
+    test_dequantize_gemm(*gpu, dlib::ggml_type::Q6_K, "q6_K");
     test_norm_rope_gate(*gpu);
     test_attention(*gpu, kv_format::q8);
     test_attention(*gpu, kv_format::f16);

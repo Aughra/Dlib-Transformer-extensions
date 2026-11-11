@@ -81,7 +81,7 @@ set(ALBIREO_WARNINGS -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-init
 find_package(Threads REQUIRED)
 # The products of the long passes go through Accelerate (engine/qkernels_accelerate.inc); the
 # GPU through Metal (engine/metal_device.mm).
-link_libraries("-framework Accelerate" "-framework Metal" "-framework Foundation")
+link_libraries("-framework Accelerate" "-framework Metal" "-framework MetalPerformanceShaders" "-framework Foundation")
 
 # The source of the Metal kernels, embedded in the engine as a string that macOS compiles when
 # the engine opens the GPU: the build needs no Metal compiler.

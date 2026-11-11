@@ -212,6 +212,7 @@ namespace albireo
         // Shared, not unique: the constructor and the destructor live where gpu_state is incomplete.
         std::shared_ptr<gpu_state> gpu_;
         bool takes_gpu(const forward_batch& batch) const;
+        void grow_gpu(size_t tokens);
         bool gpu_ready();
         void run_gpu(const forward_batch& batch, std::vector<float>& logits);
         void drop_gpu(const std::string& why);
