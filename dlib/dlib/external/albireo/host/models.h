@@ -178,6 +178,18 @@ namespace albireo
 
         /*!
             ensures
+                - Ajoute entry, une entrée de la forme de celles du catalogue (hub_entry(),
+                  host/hub.h), à la liste personnelle du fork, gardée dans la base à côté du
+                  catalogue et mêlée à lui : le modèle se télécharge, s'installe et s'active comme
+                  ceux du catalogue.  Une entrée du même identifiant est remplacée.
+                - Renvoie false avec error quand entry n'a pas d'identifiant valide.
+        !*/
+        bool add_custom(const json& entry, std::string& error);
+        // La liste personnelle (fork pour macOS) : les modèles ajoutés depuis Hugging Face.
+        json custom() const;
+
+        /*!
+            ensures
                 - Renvoie le catalogue fusionné avec les modèles installés et les
                   téléchargements, pour les fenêtres : "models" (les modèles de langage, chacun
                   avec "inputs", "publisher", vide quand il est inconnu, "total_size", les
@@ -412,6 +424,9 @@ namespace albireo
         std::string dir_;
         mutable std::mutex m_;
         json catalog_;
+        // La liste personnelle, mêlée à catalog_ à chaque chargement (merge_custom()).
+        json custom_;
+        void merge_custom();
         std::string catalog_state_ = "idle";
         std::string catalog_error_;
         std::atomic<unsigned> generation_{0};

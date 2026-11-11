@@ -747,6 +747,31 @@ paths = {
                                            "port of the Mac (code lan_port_same)", ref("Error")),
                               "409": reply("The new port is in use or cannot be opened (code port_unavailable)",
                                            ref("Error"))}}},
+    "/albireo/v1/hub/search": {"get": {"tags": ["Hugging Face"], "summary": "Searches the GGUF models of Hugging Face",
+        "parameters": [{"name": "q", "in": "query", "schema": {"type": "string"}, "description": "Words of the search; "
+                        "empty: the most downloaded models."}],
+        "responses": {"200": reply("{models: [{repo, architecture, parameters, context, downloads, likes, updated, "
+                                   "compatible, reason, moe}]}, at most 40, the most downloaded first",
+                                   {"type": "object"}),
+                      "409": reply("Refused in offline mode", ref("Error")),
+                      "502": reply("Hugging Face cannot be reached (code hub_unreachable)", ref("Error"))}}},
+    "/albireo/v1/hub/files": {"get": {"tags": ["Hugging Face"], "summary": "The GGUF files of a repository",
+        "parameters": [{"name": "repo", "in": "query", "required": True, "schema": {"type": "string"},
+                        "description": "owner/name"}],
+        "responses": {"200": reply("{repo, architecture, parameters, context, license, files: [{file, size, "
+                                   "quantization, compatible, reason, moe, gpu}], projectors: [{file, size, "
+                                   "quantization}]}", {"type": "object"}),
+                      "502": reply("Hugging Face cannot be reached, or the repository is invalid (code "
+                                   "hub_unreachable)", ref("Error"))}}},
+    "/albireo/v1/hub/add": {"post": {"tags": ["Hugging Face"],
+        "summary": "Adds a file to the personal list and starts its download",
+        "description": "The entry is made from the repository (size and SHA-256 of Git LFS, architecture, context, "
+                       "license) and kept beside the catalog; the model then installs and activates as the others.",
+        "requestBody": json_body({"type": "object", "required": ["repo", "file"], "properties": {
+            "repo": {"type": "string"}, "file": {"type": "string"},
+            "projector": {"type": "string", "description": "A mmproj file of the repository, for the images; empty: none."}}}),
+        "responses": {"200": reply("{ok, id, name}", {"type": "object"}),
+                      "400": reply("Invalid repository or file, unsupported architecture (code hub_entry)", ref("Error"))}}},
     "/albireo/v1/settings/profiles": {
         "get": {"tags": ["Administration"], "summary": "The saved settings",
                 "responses": {"200": reply("{profiles: [{label, saved, settings}]}", {"type": "object"})}},
@@ -855,6 +880,7 @@ doc = {
              {"name": "Service", "description": "State of the service"},
              {"name": "Web access", "description": "The search and the pages of the web for the Web button"},
              {"name": "Documents", "description": "The documents folder of the Mac, which the web application attaches"},
+             {"name": "Hugging Face", "description": "Every GGUF model of Hugging Face, beyond the catalog"},
              {"name": "Administration", "description": "Settings, models, restart and the network access"}],
     "paths": paths,
     "components": {"schemas": schemas},

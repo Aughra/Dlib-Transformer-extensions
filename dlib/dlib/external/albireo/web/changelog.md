@@ -2,6 +2,17 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 3.2.0 — 11 novembre 2026
+
+### Modèles
+
+- Recherche de tous les modèles GGUF publiés sur Hugging Face, depuis l'onglet « Modèles », les plus téléchargés d'abord. Les modèles que le moteur ne sait pas lire (architecture non prise en charge, format de poids non lu, fichier découpé en plusieurs parties) sont affichés en gris, à la fin de la liste, avec la raison.
+- Pour un dépôt compatible, liste de ses fichiers avec leur taille, l'unité de calcul attendue (GPU possible ou processeur) et une alerte quand un fichier dépasse la moitié de la mémoire du Mac ; lecture des images proposée quand le dépôt fournit un projecteur.
+- Un fichier choisi rejoint une liste personnelle, gardée par le service à côté du catalogue de l'original : il se télécharge, se vérifie par son empreinte SHA-256, s'installe et s'active comme les modèles du catalogue.
+- Routes ajoutées : `GET /albireo/v1/hub/search`, `GET /albireo/v1/hub/files`, `POST /albireo/v1/hub/add`.
+
+---
+
 ## 3.1.1 — 11 novembre 2026
 
 ### Interface

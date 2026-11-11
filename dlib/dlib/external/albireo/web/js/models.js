@@ -364,7 +364,91 @@ export function modelsTab(body, env) {
           ' modèles · place libre : ' + gb(data.free || 0) + (data.offline ? ' · hors ligne : pas de téléchargement' : ''))),
       sheetCard(h, specialtiesSheet),
       h('section', { class: 'svc-group' }, h('h4', null, 'Les modèles'),
-        h('p', { class: 'help' }, 'Installés d’abord, puis du plus conseillé au moins conseillé pour ce Mac.'), cards));
+        h('p', { class: 'help' }, 'Installés d’abord, puis du plus conseillé au moins conseillé pour ce Mac. Ceux ajoutés ' +
+          'depuis Hugging Face y figurent aussi.'), cards),
+      hub);
+  }
+
+  /*
+      Hugging Face : tous les modèles GGUF publiés, au-delà du catalogue.  Les compatibles d'abord ; ceux que le moteur
+      ne lit pas (architecture, format de poids, fichier découpé), en gris à la fin, avec la raison.
+  */
+  const hubResults = h('div', { class: 'hub-results' });
+  const hubInput = h('input', { type: 'search', placeholder: 'Rechercher un modèle (qwen3, mistral, granite…)',
+    'aria-label': 'Rechercher sur Hugging Face' });
+  const hub = h('section', { class: 'svc-group' }, h('h4', null, 'Tous les modèles de Hugging Face'),
+    h('p', { class: 'help' }, 'Les modèles GGUF publiés sur Hugging Face, les plus téléchargés d’abord. Ceux que le moteur ' +
+      'ne sait pas lire sont en gris, à la fin.'),
+    h('div', { class: 'svc-input hub-search' }, hubInput,
+      h('button', { class: 'button primary', type: 'button', onclick: () => search() }, 'Rechercher')), hubResults);
+  hubInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
+
+  const billionsOf = (n) => n ? billions(n) + ' de paramètres' : 'taille inconnue';
+  const byCompat = (a, b) => (b.compatible === true) - (a.compatible === true);
+
+  async function search() {
+    hubResults.replaceChildren(h('p', { class: 'help' }, 'Recherche sur Hugging Face…'));
+    let r;
+    try {
+      r = await api.getJSON('/albireo/v1/hub/search?q=' + encodeURIComponent(hubInput.value.trim()));
+    } catch (e) {
+      hubResults.replaceChildren(h('p', { class: 'help' }, e.message));
+      return;
+    }
+    const list = (r.models || []).slice().sort(byCompat);
+    if (!list.length) return hubResults.replaceChildren(h('p', { class: 'help' }, 'Aucun modèle GGUF trouvé.'));
+    hubResults.replaceChildren(...list.map((m) => {
+      const files = h('div', { class: 'hub-files' });
+      const card = h('div', { class: 'svc-card hub-card' + (m.compatible ? '' : ' incompatible') },
+        h('div', { class: 'svc-head' }, h('div', { class: 'svc-title' }, h('span', null, m.repo),
+          m.compatible ? h('span', { class: 'mdl-badge conseille' }, 'compatible')
+            : h('span', { class: 'mdl-badge inconnu' }, 'incompatible')),
+        m.compatible ? h('button', { class: 'button', type: 'button', onclick: () => showFiles(m.repo, files) }, 'Voir les fichiers')
+          : null),
+        h('p', { class: 'svc-where' }, (m.architecture || 'architecture inconnue') + ' · ' + billionsOf(m.parameters) +
+          ' · ' + (m.downloads || 0).toLocaleString('fr-FR') + ' téléchargements' + (m.reason ? ' · ' + m.reason : '')),
+        files);
+      return card;
+    }));
+  }
+
+  async function showFiles(repo, box) {
+    box.replaceChildren(h('p', { class: 'help' }, 'Lecture des fichiers…'));
+    let r;
+    try {
+      r = await api.getJSON('/albireo/v1/hub/files?repo=' + encodeURIComponent(repo));
+    } catch (e) {
+      box.replaceChildren(h('p', { class: 'help' }, e.message));
+      return;
+    }
+    // Le projecteur d'images proposé : le premier en Q8_0, sinon en F16, sinon le premier.
+    const proj = r.projectors || [];
+    const pick = proj.find((p) => p.quantization === 'Q8_0') || proj.find((p) => p.quantization === 'F16') || proj[0];
+    const vision = pick ? h('input', { type: 'checkbox', checked: true }) : null;
+    const ram = (env.status() && env.status().host && env.status().host.memory && env.status().host.memory.total) || 0;
+    const files = (r.files || []).slice().sort((a, b) => byCompat(a, b) || (b.gpu - a.gpu) || (a.size - b.size));
+    box.replaceChildren(...[
+      h('p', { class: 'svc-where' }, (r.license ? 'Licence ' + r.license + ' · ' : '') + 'contexte ' +
+        (r.context ? tokens(r.context) : 'inconnu')),
+      pick ? h('label', { class: 'inline hub-vision' }, vision, ' Avec la lecture des images (' + pick.file + ', ' +
+        gb(pick.size || 0) + ')') : null,
+      ...files.map((f) => {
+        const heavy = ram && f.size > ram * 0.5;
+        return h('div', { class: 'hub-file' + (f.compatible ? '' : ' incompatible') },
+          h('span', { class: 'name' }, f.file),
+          h('span', { class: 'meta' }, gb(f.size || 0) + (f.gpu ? ' · GPU possible' : f.compatible ? ' · processeur' : '') +
+            (heavy ? ' · trop gros pour ce Mac' : '') + (f.reason ? ' · ' + f.reason : '')),
+          f.compatible ? h('button', { class: 'button', type: 'button', onclick: async () => {
+            try {
+              const done = await api.postJSON('/albireo/v1/hub/add', { repo, file: f.file,
+                projector: vision && vision.checked ? pick.file : '' });
+              toast(done.name + ' ajouté ; son téléchargement commence.');
+              load();
+            } catch (e) {
+              toast(e.message, true);
+            }
+          } }, 'Ajouter') : null);
+      })].filter(Boolean));
   }
   load();
 }

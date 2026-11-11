@@ -507,6 +507,54 @@ namespace albireo
         if (!resolved.empty()) dir_ = resolved;
         catalog_ = json::parse_or_null(db_.value("catalog", "{}"));
         if (!catalog_.is_object()) catalog_ = json::object();
+        custom_ = json::parse_or_null(db_.value("custom_catalog", "[]"));
+        if (!custom_.is_array()) custom_ = json::array();
+        merge_custom();
+    }
+
+    // Mêle la liste personnelle au catalogue en mémoire (sous m_, ou avant que les threads ne démarrent).
+    void model_manager::merge_custom()
+    {
+        json models = json::array();
+        for (const auto& e : catalog_["models"].elements())
+        {
+            bool mine = false;
+            for (const auto& c : custom_.elements()) mine = mine || c["id"].as_string() == e["id"].as_string();
+            if (!mine) models.push_back(e);
+        }
+        for (const auto& c : custom_.elements()) models.push_back(c);
+        catalog_["models"] = models;
+    }
+
+    bool model_manager::add_custom(const json& entry, std::string& error)
+    {
+        const std::string id = entry["id"].as_string();
+        bool valid = !id.empty() && id.size() <= 120;
+        for (const char c : id) valid = valid && (std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '_' || c == '-');
+        if (!valid)
+        {
+            error = "invalid model identifier";
+            return false;
+        }
+        {
+            std::lock_guard<std::mutex> lock(m_);
+            json kept = json::array();
+            for (const auto& c : custom_.elements())
+                if (c["id"].as_string() != id) kept.push_back(c);
+            kept.push_back(entry);
+            db_.set_value("custom_catalog", kept.dump());
+            custom_ = kept;
+            merge_custom();
+        }
+        ++generation_;
+        log_info("models: " + id + " added to the personal list from " + entry["source"].as_string());
+        return true;
+    }
+
+    json model_manager::custom() const
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        return custom_;
     }
 
     model_manager::~model_manager()
@@ -565,6 +613,7 @@ namespace albireo
             db_.set_value("catalog", body);
             db_.set_value("catalog_time", std::to_string(now_unix()));
             catalog_ = c;
+            merge_custom();
         }
         ++generation_;
         result["models"] = static_cast<long long>(c["models"].size());

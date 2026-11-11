@@ -52,6 +52,7 @@
 #include "../common/version.h"
 #include "crypto.h"
 #include "http_fetch.h"
+#include "hub.h"
 #include "service.h"
 #include "web_access.h"
 
@@ -1518,6 +1519,55 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             json o = ok_result(true);
             o["catalog"] = s->models().catalog_status();
             send_json(res, 202, o);
+        });
+        /*
+            Hugging Face (fork pour macOS) : la recherche des modèles GGUF, les fichiers d'un dépôt, et l'ajout d'un
+            fichier à la liste personnelle, dont le téléchargement démarre aussitôt.
+        */
+        srv.Get("/albireo/v1/hub/search", [s](const httplib::Request& req, httplib::Response& res) {
+            if (refuse_offline(*s, res)) return;
+            json out;
+            std::string error;
+            if (!hub_search(req.get_param_value("q"), out, error))
+            {
+                send_error(res, 502, "server_error", "Hugging Face: " + error, "hub_unreachable");
+                return;
+            }
+            send_json(res, 200, out);
+        });
+        srv.Get("/albireo/v1/hub/files", [s](const httplib::Request& req, httplib::Response& res) {
+            if (refuse_offline(*s, res)) return;
+            json out;
+            std::string error;
+            if (!hub_files(req.get_param_value("repo"), out, error))
+            {
+                send_error(res, 502, "server_error", "Hugging Face: " + error, "hub_unreachable");
+                return;
+            }
+            send_json(res, 200, out);
+        });
+        srv.Post("/albireo/v1/hub/add", [s](const httplib::Request& req, httplib::Response& res) {
+            if (refuse_offline(*s, res)) return;
+            json body;
+            if (!parse_body(req, res, body)) return;
+            json entry;
+            std::string error;
+            if (!hub_entry(body["repo"].as_string(), body["file"].as_string(), body["projector"].as_string(), entry, error)
+                || !s->models().add_custom(entry, error))
+            {
+                send_error(res, 400, "invalid_request_error", error, "hub_entry");
+                return;
+            }
+            user_error started;
+            if (!s->models().start_download(entry["id"].as_string(), started))
+            {
+                send_json(res, 400, ok_result(false, started));
+                return;
+            }
+            json o = ok_result(true);
+            o["id"] = entry["id"];
+            o["name"] = entry["name"];
+            send_json(res, 200, o);
         });
         srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,
                                                                                httplib::Response& res) {
