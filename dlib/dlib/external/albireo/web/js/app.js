@@ -148,21 +148,18 @@ function estimateTokens(text) {
 /*
     The speeds of a model measured by the engine on its answers, in tokens per second: its reading of the prompts,
     rounded down to a power of two, so that the choices it sizes stay while it varies by less than half, and its
-    writing of the answers.  Until the model answered, the speeds of the engines of its kind.
+    writing of the answers.  Until the model answered, those of the processor of a Mac.
 */
 function readRate(id) {
   const loaded = loadedModel(id);
-  const variant = (state.status && state.status.engine && state.status.engine.variant) || '';
-  const rate = loaded && loaded.prompt_tokens_per_second > 0 ? loaded.prompt_tokens_per_second
-    : /cuda/.test(variant) ? 1024 : /openvino/.test(variant) ? 512 : 128;
+  const rate = loaded && loaded.prompt_tokens_per_second > 0 ? loaded.prompt_tokens_per_second : 128;
   return Math.pow(2, Math.floor(Math.log2(Math.max(1, rate))));
 }
 
 function writeRate(id) {
   const loaded = loadedModel(id);
   if (loaded && loaded.generation_tokens_per_second > 0) return loaded.generation_tokens_per_second;
-  const variant = (state.status && state.status.engine && state.status.engine.variant) || '';
-  return /cuda/.test(variant) ? 30 : 10;
+  return 10;
 }
 
 // The working context of a model of context tokens (see workingSeconds).
@@ -6752,19 +6749,23 @@ async function showStorage(el) {
     kept === true ? null : h('p', { class: 'help storage-hint' }, h('span', { html: icon('info') }), t('storageHint')));
 }
 
-function memoryBar(stats) {
-  const v = stats && stats.memory;
-  if (!v || !v.vram_budget) return null;
-  const total = Math.max(v.vram_budget, 1);
-  const pct = (x) => Math.min(100, 100 * x / total) + '%';
-  return h('div', null, h('div', { class: 'mem-bar' },
-    h('div', { style: { width: pct(v.device_bytes || 0), background: 'var(--blue)' }, title: t('vramResident') }),
-    h('div', { style: { width: pct(v.scratch_bytes || 0), background: 'var(--gold)' }, title: t('vramWorkspace') })),
-  h('div', { class: 'legend' },
-    h('span', { style: { '--c': 'var(--blue)' } }, t('vramResident') + ' ' + formatSize(v.device_bytes || 0)),
-    h('span', { style: { '--c': 'var(--gold)' } }, t('vramWorkspace') + ' ' + formatSize(v.scratch_bytes || 0)),
-    h('span', { style: { '--c': 'var(--text-faint)' } }, t('vramHost') + ' ' + formatSize(v.pinned_bytes || 0)),
-    h('span', { style: { '--c': 'var(--incognito)' } }, t('vramStore') + ' ' + formatSize(v.store_bytes || 0))));
+/*
+    The GPU of the Mac: its name, then what each loaded model does with it (its passes on the GPU with the
+    buffers it holds there, its check, or the processor, the reason of the engine in the tooltip).  The weights
+    and the keys and values stay in the memory the GPU shares with the processor, and are not counted.
+*/
+function gpuSummary(stats) {
+  const g = stats && stats.gpu;
+  if (!g) return '-';
+  if (!g.name) return h('span', { title: g.reason || '' }, t(g.disabled ? 'gpuDisabled' : 'gpuMissing'));
+  const uses = (stats.models || []).filter((m) => m.gpu).map((m) => {
+    const u = m.gpu;
+    const what = u.state === 'on' ? t('gpuOn', { size: formatSize(u.bytes || 0) })
+      : u.state === 'checking' ? t('gpuChecking') : t('gpuProcessor');
+    return h('span', { title: u.reason || '', style: { display: 'block' } }, modelName(m.id) + ': ' + what);
+  });
+  // Spans, not divs: the rule of the labels of .kv greys its odd divs, nested ones too.
+  return h('span', null, h('span', { style: { display: 'block' } }, g.name), uses);
 }
 
 async function aboutTab(body, close) {
@@ -6778,6 +6779,7 @@ async function aboutTab(body, close) {
     row(t('processor'), s.host.cpu.name + ' · ' + s.host.cpu.cores + ' / ' + s.host.cpu.threads);
     row(t('memory'), formatSize(s.host.memory.total));
   }
+  row(t('gpu'), gpuSummary(s.engine && s.engine.stats));
   // The functions of each model, in the order of the picker, the document search last.
   const byModel = new Map();
   for (const r of roles.concat(['embedding'])) {
@@ -6792,8 +6794,6 @@ async function aboutTab(body, close) {
   if (s.usage) row(t('requests'), formatNumber(s.usage.requests) + ' · ' + t('tokensIn') + ' ' + formatNumber(s.usage.prompt_tokens) +
     ' · ' + t('tokensOut') + ' ' + formatNumber(s.usage.completion_tokens));
   body.append(art, h('p', null, t('aboutText')), kv);
-  const mem = memoryBar(s.engine && s.engine.stats);
-  if (mem) body.append(h('h4', null, t('v2ram')), mem);
   try {
     const u = await api.usage();
     const byDay = new Map((u.days || []).map((d) => [d.day, d]));
@@ -6850,9 +6850,7 @@ const programTexts = {
   'mbedtls.txt': ['mbedtls', 'Apache License 2.0 or GPL 2.0 or later'], 'cpp-httplib.txt': ['httplib', 'MIT License'],
   'zlib.txt': ['zlib', 'zlib License'], 'sqlite.txt': ['sqlite', null],
   'libpng.txt': ['libpng', 'PNG Reference Library License 2'], 'libjpeg.txt': ['libjpeg', 'IJG License'],
-  'svox-pico.txt': ['pico', 'Apache License 2.0'],
-  'openvino-license.txt': ['openvino', 'Apache License 2.0'], 'cuda-eula.txt': ['cuda', 'NVIDIA CUDA EULA'],
-  'cudnn-license.txt': ['cudnn', 'NVIDIA cuDNN License Agreement']
+  'svox-pico.txt': ['pico', 'Apache License 2.0']
 };
 
 async function licenseText(url) {

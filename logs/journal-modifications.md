@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Montrer le GPU dans la page d'Albireo
+
+- **Quoi** : le moteur dit, dans ses statistiques, le nom du GPU (ou qu'il est coupé par le réglage, ou pourquoi Metal manque) et, pour chaque modèle chargé, s'il passe par le GPU (« on », « checking », « off » avec la raison) et ses tampons propres (`cpu_runtime::gpu_use()`, tenu à jour par `note_gpu()` à chaque allocation ou changement d'état, sous un verrou, car le statut est lu depuis un autre thread). L'onglet « À propos » de la page en fait une ligne « GPU », dans les cinq langues. Retirés de la page : la barre « Mémoire étendue (V²RAM) » de CUDA, que plus rien ne remplissait, les noms CUDA, cuDNN et OpenVINO des composants tiers, les vitesses par défaut propres à ces moteurs ; le texte « À propos » ne parle plus du processeur neuronal. `web/openapi.json` décrit les nouveaux champs. Reprise : une règle périmée (fusions avec l'original) corrigée.
+- **Fichiers** : `dlib/dlib/external/albireo/engine/cpu_runtime.h`, `engine/cpu_runtime_metal.cpp`, `engine/engine.h`, `engine/engine.cpp`, `web/js/app.js`, `web/js/i18n.js`, `web/css/app.css`, `tools/make_openapi.py`, `web/openapi.json` ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : M6, une page fidèle au moteur Metal. Couper le GPU depuis la page n'est pas fait : les réglages du service exigent le jeton d'administration, que la page n'a pas exprès ; décision laissée à l'humain (options dans la reprise).
+- **Étapes** : build sans avertissement ; `/albireo/v1/status` : `{"name": "Apple M2"}`, 4B `on` avec 209 431 176 octets, modèle de recherche `off` (« the kernels do not cover an output matrix in another format than Q4_K or Q6_K ») ; avec `accelerator` à `none` : `{"disabled": true}`, modèles `off`, page « Coupé (réglage accelerator : none) » ; réglage remis à `auto`. Page vérifiée par Chrome sans fenêtre (capture de l'onglet) : premier essai en gris (une `div` imbriquée prenait le style des intitulés de `.kv`), corrigé par des `span`. `tools/test_macos.sh` : 19 étapes sur 19 ; `test_metal` passe.
+
 ## 2026-11-11 — Couper le GPU par le réglage accelerator du service
 
 - **Quoi** : le service passe au moteur `metal = (accelerator != "none")` : le réglage `accelerator`, qui choisissait entre CUDA et OpenVINO, sert maintenant à couper le GPU du Mac (« none ») ou à le garder (« auto », par défaut, et les autres valeurs) ; son changement redémarre déjà le service. Description de l'API complétée. `engine_chat` gagne `--no-metal`.

@@ -49,7 +49,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 | M3 (**fait**, `5f0b07f`) | Un pas de génération entier sur le GPU, une commande par passe ; contrôle au chargement (logits à 1 % près, même token le plus probable) ; repli sur le processeur sinon | `engine_chat` juste ; mesures alternées processeur / GPU |
 | M4 (en cours ; gabarits faits, `5f0b07f` : 4B 18,3-19,0 → 21,3-21,7 tokens/s) | Réglages : noyau Q4_K (54 Go/s contre 70 au plafond), tête des logits, contrôle au chargement du modèle (fait, `f199a04`), Q8_0 (modèle de recherche) | gain en mesures alternées |
 | M5 (**fait**, `cbefd5c` : lecture ×1,7 à ×2, jusqu'à 2 048 positions) | Prompts sur le GPU (produits en tuiles, attention groupée) contre Accelerate | le plus rapide gardé, mesuré |
-| M6 (en partie : service vérifié, doc) | Service, réglage `metal` dans les réglages du service (aujourd'hui seulement dans la configuration du moteur), barre de mémoire du GPU dans la page, doc, notes, blog | page web et API servies par le GPU |
+| M6 (presque fait : `accelerator` à `none` coupe le GPU ; la page montre le GPU et ses tampons par modèle, onglet « À propos » ; la barre V²RAM et les restes CUDA / OpenVINO de la page sont retirés) | Reste : couper le GPU **depuis la page**. Les réglages du service exigent le jeton d'administration (`X-Albireo-Admin`), que seule l'icône de Windows lisait et que la page n'a pas, exprès (un site ne doit pas piloter le service). Options : une petite app de barre des menus macOS qui lit le jeton (sûr, plus long) ; donner le jeton à la page (plus simple, mais affaiblit la protection, surtout avec le lien public) ; garder le fichier de réglages (rien à faire). À décider par l'humain | page web et API servies par le GPU ; le réglage choisi marche |
 | M7 (proposé) | Attention de prompt en tuiles (instructions matricielles), pour lever la limite de 2 048 positions ; noyau Q4_K (54 Go/s contre 70) | gain en mesures alternées |
 
 **Conception du pas sur le GPU (M2-M3)**, une commande par passe de 1 à 8 tokens, tout dans un seul encodeur sériel :
@@ -79,14 +79,14 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 - 2026-11-08 : les produits des prompts passent par Accelerate (option C choisie par l'humain) ; ils ne sont plus identiques au bit près au code portable. Les noyaux de génération (`qk_dot`) et l'attention restent exacts au bit près.
 
 - Mac Apple Silicon uniquement ; Windows hors du périmètre.
-- Modifier le moins possible les fichiers de l'original, sous `if (APPLE)` / `#ifdef __APPLE__` ou un test d'ARM64 (`CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$"`), pour garder des fusions faciles avec upstream.
+- Depuis le 2026-11-11, le fork ne fusionne plus l'original : ses fichiers se modifient librement, proprement, sans la règle du plus petit changement sous `#ifdef __APPLE__` (voir CLAUDE.md, « Détaché de l'original »).
 - Les tests complets sont `tools/test_macos.sh` (Albireo, Pseudalis), écrits pour macOS : plus de `nproc` ni de `stat` de GNU à fournir.
 
 ## Problèmes ouverts
 
 - L'ancien fork `PapyTortueTech/Dlib-Transformer-extensions` n'est plus utilisé ; l'humain s'occupe de l'arrêter. Ne plus jamais y pousser.
 - Noyaux NEON pour Q4_K, Q6_K et l'attention (clés en demi-précision et en 8 bits) ; prompts par Accelerate pour tous les formats. En génération, les autres formats (Q8_0, Q5_K…) restent portables.
-- Lancé en arrière-plan par un script, le service ignore SIGINT (le shell le lui fait ignorer, et macOS jette alors le signal) : l'arrêter par `kill -TERM`. Dans un terminal, Ctrl-C marche. Même chose attendue pour `test_linux.sh` d'Albireo à l'étape « service stop ».
+- Lancé en arrière-plan par un script, le service ignore SIGINT (le shell le lui fait ignorer, et macOS jette alors le signal) : l'arrêter par `kill -TERM`. Dans un terminal, Ctrl-C marche. Même chose attendue pour `tools/test_macos.sh` d'Albireo à l'étape « service stop ».
 - Un service lancé en arrière-plan par Claude s'arrête avec la session de Claude (« service stopped » à 22 h 22 le 2026-11-07, pendant le second essai du PDF, dont les chiffres sont perdus) : le lancer détaché (commande ci-dessous).
 - Le modèle par défaut est un modèle « Thinking » : il raisonne longtemps (en anglais) avant de répondre ; prévoir un `max_tokens` large ou `"reasoning": false`.
 - `bench_runtime` exige un prompt d'au moins 64 tokens (sinon il lit hors de son tableau) : `bench_runtime <modèle> 4 64 16 2`. Il range les clés en demi-précision, sauf avec `q8` en 6ᵉ argument ; le service, lui, les range en 8 bits : mesurer avec `q8`.

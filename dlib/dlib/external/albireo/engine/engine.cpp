@@ -967,7 +967,10 @@ namespace albireo
                     + " kernels compiled, " + std::to_string(gpu_->working_set_bytes() >> 20) + " MB advised, buffers of "
                     + std::to_string(gpu_->max_buffer_bytes() >> 20) + " MB at most");
             else
+            {
                 log(ALBIREO_LOG_WARNING, "GPU: " + why);
+                gpu_off_ = why;
+            }
         }
         worker_ = std::thread([this]() { run(); });
     }
@@ -2946,6 +2949,12 @@ namespace albireo
         s["variant"] = ALBIREO_ENGINE_VARIANT;
         s["version"] = ALBIREO_VERSION;
         s["threads"] = threads_;
+        // The GPU of the Mac: its name, or why the engine does not use it.
+        json gpu = json::object();
+        if (gpu_) gpu["name"] = gpu_->name();
+        else if (!settings_["metal"].as_bool(true)) gpu["disabled"] = true;
+        else gpu["reason"] = gpu_off_;
+        s["gpu"] = gpu;
         {
             std::lock_guard<std::mutex> lock(stats_mutex_);
             const double t = now_seconds();
@@ -2989,6 +2998,16 @@ namespace albireo
             j["cached_sequences"] = m.n_idle.load();
             j["kv_used"] = static_cast<unsigned long long>(m.runtime->kv_bytes_used());
             j["kv_budget"] = static_cast<unsigned long long>(m.runtime->kv_bytes_budget());
+            // The use of the GPU by its passes.
+            if (const cpu_runtime* rt = dynamic_cast<const cpu_runtime*>(m.runtime.get()))
+            {
+                const cpu_runtime::gpu_usage u = rt->gpu_use();
+                json g = json::object();
+                g["state"] = u.state;
+                if (!u.reason.empty()) g["reason"] = u.reason;
+                g["bytes"] = static_cast<unsigned long long>(u.bytes);
+                j["gpu"] = g;
+            }
             j["generated_total"] = static_cast<unsigned long long>(m.generated.load());
             j["prompt_total"] = static_cast<unsigned long long>(m.prompted.load());
             j["warmed_total"] = static_cast<unsigned long long>(m.warmed.load());

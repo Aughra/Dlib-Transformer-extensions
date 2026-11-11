@@ -116,6 +116,7 @@ namespace albireo
         if (!why.empty())
         {
             if (log) log(ALBIREO_LOG_INFO, "GPU: the passes stay on the processor, the kernels do not cover " + why);
+            note_gpu("the kernels do not cover " + why);
             return;
         }
         std::unique_ptr<gpu_state> g(new gpu_state);
@@ -126,6 +127,7 @@ namespace albireo
         if (!g->weights.valid())
         {
             if (g->log) g->log(ALBIREO_LOG_WARNING, "GPU: the weights cannot be taken without copy, the passes stay on the processor");
+            note_gpu("the weights cannot be taken without copy");
             return;
         }
         // The norms and the biases, one after the other.
@@ -180,6 +182,7 @@ namespace albireo
         g.rows = need(device, T * sizeof(int));
         g.lengths = need(device, T * sizeof(int));
         g.capacity = T;
+        note_gpu();
     }
 
     bool cpu_runtime::takes_gpu(const forward_batch& batch) const
@@ -204,6 +207,31 @@ namespace albireo
         if (!gpu_ || gpu_->state == gpu_state::dropped) return;
         gpu_->state = gpu_state::dropped;
         if (gpu_->log) gpu_->log(ALBIREO_LOG_WARNING, "GPU: the passes go back to the processor: " + why);
+        note_gpu(why);
+    }
+
+    void cpu_runtime::note_gpu(const std::string& reason)
+    {
+        gpu_usage u;
+        if (gpu_ && gpu_->state != gpu_state::dropped)
+        {
+            const gpu_state& g = *gpu_;
+            u.state = g.state == gpu_state::ready ? "on" : "checking";
+            for (const metal_buffer* b : { &g.vectors, &g.x, &g.xn, &g.q, &g.k, &g.v, &g.ctx, &g.gate, &g.up,
+                     &g.hidden, &g.logits, &g.cs, &g.blocks, &g.rows, &g.lengths, &g.table, &g.partial,
+                     &g.expanded[0], &g.expanded[1] })
+                u.bytes += b->bytes();
+        }
+        else
+            u.reason = reason;
+        std::lock_guard<std::mutex> lock(gpu_report_m_);
+        gpu_report_ = u;
+    }
+
+    cpu_runtime::gpu_usage cpu_runtime::gpu_use() const
+    {
+        std::lock_guard<std::mutex> lock(gpu_report_m_);
+        return gpu_report_;
     }
 
     /*
@@ -321,6 +349,7 @@ namespace albireo
             return false;
         }
         gpu_->state = gpu_state::ready;
+        note_gpu();
         if (gpu_->log)
             gpu_->log(ALBIREO_LOG_INFO, "GPU " + gpu_->device->name() + ": the generation steps"
                 + std::string(gpu_prompt ? " and the prompts of " + std::to_string(gpu_prompt_tokens())
@@ -391,6 +420,7 @@ namespace albireo
         {
             g.table_capacity = table_stride * T * 2;
             g.table = need(dev, g.table_capacity * sizeof(int));
+            note_gpu();
         }
         int* table = static_cast<int*>(g.table.contents());
         for (long t = 0; t < T; ++t)
@@ -432,6 +462,7 @@ namespace albireo
         {
             g.partial_capacity = partial * 2;
             g.partial = need(dev, g.partial_capacity * sizeof(float));
+            note_gpu();
         }
         // The weights of a prompt expanded to floats: the largest matrix of a layer, twice.
         if (!step && g.expanded_floats == 0)
@@ -443,6 +474,7 @@ namespace albireo
             g.expanded[0] = need(dev, largest * sizeof(float));
             g.expanded[1] = need(dev, largest * sizeof(float));
             g.expanded_floats = largest;
+            note_gpu();
         }
 
         const float scale = cfg_.attention_scale > 0.0 ? static_cast<float>(cfg_.attention_scale)

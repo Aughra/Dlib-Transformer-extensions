@@ -472,7 +472,7 @@ paths = {
                              "device_mb": {"type": "integer"},
                              "offline": {"type": "boolean"}}},
             "engine": {"type": "object", "description": "The engine running.", "properties": {
-                "running": {"type": "boolean"}, "variant": {"type": "string", "example": "cpu-avx2"},
+                "running": {"type": "boolean"}, "variant": {"type": "string", "example": "cpu"},
                 "key": {"type": "string"}, "device": {"type": "string"}, "error": {"type": "string"},
                 "description": {"type": "string"},
                 "stats": {"type": "object", "nullable": True, "description": "Null while no engine runs.",
@@ -482,9 +482,22 @@ paths = {
                               "generation_tokens_per_second": {"type": "number",
                                                                "description": "Over the last five seconds."},
                               "prompt_tokens_per_second": {"type": "number"},
-                              "memory": {"type": "object", "description": "The memory of the graphics engines: "
-                                         "vram_budget, device_bytes, scratch_bytes, pinned_bytes, store_bytes.",
-                                         "additionalProperties": {"type": "integer"}}}}}},
+                              "gpu": {"type": "object", "description": "The GPU of the Mac: its name, or "
+                                      "disabled (accelerator setting none), or the reason Metal is missing.",
+                                      "properties": {"name": {"type": "string", "example": "Apple M2"},
+                                                     "disabled": {"type": "boolean"},
+                                                     "reason": {"type": "string"}}},
+                              "models": {"type": "array", "description": "The loaded models.", "items": {
+                                  "type": "object", "properties": {
+                                      "id": {"type": "string"},
+                                      "gpu": {"type": "object", "description": "What the passes of the model do "
+                                              "with the GPU.", "properties": {
+                                                  "state": {"type": "string", "enum": ["on", "checking", "off"]},
+                                                  "reason": {"type": "string", "description": "Why off, when "
+                                                             "the model or its check refused the GPU."},
+                                                  "bytes": {"type": "integer", "description": "Its own "
+                                                            "buffers; the weights and the keys and values, "
+                                                            "shared with the processor, are not counted."}}}}}}}}}},
             "host": {"type": "object", "description": "The computer.", "properties": {
                 "name": {"type": "string"}, "os": {"type": "string"},
                 "cpu": {"type": "object", "properties": {

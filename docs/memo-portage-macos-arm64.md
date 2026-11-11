@@ -304,6 +304,8 @@ Service : « the generation steps run on it » ; le contrôle se fait au chargem
 
 Service (4B) : un prompt de 619 tokens lu à 142 tokens/s ; empreinte du processus 2,8 Go, dont 290 Mo de tampons du GPU.
 
+**Le GPU dans la page (2026-11-11).** L'onglet « À propos » des paramètres a une ligne « GPU » : le nom de la puce, puis, pour chaque modèle chargé, « sur le GPU, N Mo de tampons », « GPU en cours de contrôle » ou « sur le processeur » (la raison du moteur en info-bulle) ; « Coupé (réglage accelerator : none) » quand le réglage le coupe. Le moteur la donne dans ses statistiques (`engine.stats.gpu` et `engine.stats.models[].gpu` de `/albireo/v1/status`, décrits dans `web/openapi.json`). Les tampons comptés sont ceux du moteur seulement (poids et clés et valeurs sont partagés avec le processeur, sans copie) : 199,7 Mo pour le 4B après son contrôle. La barre « Mémoire étendue (V²RAM) » de CUDA, que le moteur ne remplissait plus, est retirée, avec les noms CUDA et OpenVINO des composants tiers et les vitesses par défaut propres à ces moteurs. Vérifié dans Chrome sans fenêtre (capture de l'onglet), réglage `auto` puis `none`. Le GPU ne se coupe pas depuis la page : changer un réglage du service demande le jeton d'administration, que la page n'a pas (voir la reprise).
+
 ## Points à surveiller
 
 - Le code NEON dlib est le chemin SIMD attendu sur ARM64; vérifier les tests CPU et les résultats des exemples sur le Mac réel.

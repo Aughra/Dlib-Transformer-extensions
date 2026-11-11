@@ -137,6 +137,8 @@ namespace albireo
         int threads_ = 1;
         // The GPU of the Mac (Metal), null when the setting "metal" is false or Metal is missing.
         std::unique_ptr<metal_device> gpu_;
+        // What Metal lacks, when gpu_ is null although the setting "metal" is true.
+        std::string gpu_off_;
         // Whether the histories of the answers are read ahead of the next questions.
         bool warm_history_ = true;
 

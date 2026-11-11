@@ -5,6 +5,7 @@
 
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -125,6 +126,16 @@ namespace albireo
         // Makes the check of the GPU now, at the loading of the model, rather than at its first pass.
         void check_gpu() { if (gpu_) gpu_ready(); }
 
+        // What the passes of the model do with the GPU, for the status of the service.
+        struct gpu_usage
+        {
+            std::string state = "off";  // "on", "checking" (before its check) or "off"
+            std::string reason;         // why "off", when a model or a check refused it
+            size_t bytes = 0;           // its own buffers; the weights and the keys and values are shared, not counted
+        };
+        // Safe while the passes run on another thread.
+        gpu_usage gpu_use() const;
+
         /*!
             requires
                 - no forward pass has run, or the rotary divisors stay the same.
@@ -216,6 +227,10 @@ namespace albireo
         bool gpu_ready();
         void run_gpu(const forward_batch& batch, std::vector<float>& logits);
         void drop_gpu(const std::string& why);
+        // gpu_use() reads gpu_report_, which the thread of the passes sets after each change of gpu_ (note_gpu()).
+        void note_gpu(const std::string& reason = std::string());
+        mutable std::mutex gpu_report_m_;
+        gpu_usage gpu_report_;
         // The products in single precision floats, the activations as given (qk_path::floats): the
         // reference of the check of the GPU, against which the 8-bit activations would differ.
         bool float_products_ = false;
