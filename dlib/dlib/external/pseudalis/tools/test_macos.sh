@@ -2,12 +2,12 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Builds and tests Pseudalis on Linux, where the service carries its engine and its drive works
-# as a folder without letter, and prints a summary, one line per step.
+# Builds and tests Pseudalis on macOS (Apple Silicon), where the service carries its engine and its
+# drive works as a folder without letter, and prints a summary, one line per step.
 #
-#   bash dlib/dlib/external/pseudalis/tools/test_linux.sh [build folder]
+#   bash dlib/dlib/external/pseudalis/tools/test_macos.sh [build folder]
 #
-# Default build folder: build-pseudalis-linux at the root of the repository.  The tests of the
+# Default build folder: build/macos-pseudalis at the root of the repository.  The tests of the
 # engine and of the host run first; the service then runs in a data folder of its own, on port
 # 18444 (PSEUDALIS_TEST_PORT), anonymizes and restores through its interface a text, a CSV file,
 # a name and the archive of a folder as the web application sends it, then files and a folder
@@ -23,7 +23,7 @@ set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 SOURCE=$(cd "$HERE/.." && pwd)
 ROOT=$(cd "$HERE/../../../../.." && pwd)
-BUILD=${1:-$ROOT/build-pseudalis-linux}
+BUILD=${1:-$ROOT/build/macos-pseudalis}
 PORT=${PSEUDALIS_TEST_PORT:-18444}
 WORK=$(mktemp -d)
 RESULTS=()
@@ -50,7 +50,7 @@ step() { # name pattern command...
 }
 
 step "configuration" "Generating done|Build files" cmake -S "$SOURCE" -B "$BUILD" -DCMAKE_BUILD_TYPE=Release
-step "build" "." cmake --build "$BUILD" --parallel "$(nproc)"
+step "build" "." cmake --build "$BUILD" --parallel "$(sysctl -n hw.ncpu)"
 step "engine tests" "all tests passed" "$BUILD/bin/test_engine"
 step "host tests" "all tests passed" "$BUILD/bin/test_host"
 
@@ -197,7 +197,7 @@ PY
       ! cmp -s "$WORK/grosse.zip" "$(bare)"
   }
   wait_for 90 archive_done
-  BIG=$(stat -c %s "$DRIVE/grosse.zip" 2>/dev/null || echo 0)
+  BIG=$(stat -f %z "$DRIVE/grosse.zip" 2>/dev/null || echo 0)
   mv "$DRIVE/grosse.zip" "$DRIVE/grosse.zip.bak"
   sleep 8
   if [ -f "$DRIVE/grosse.zip.bak" ] && [ ! -e "$HOME_DIR/refused/files/grosse.zip.bak" ] &&

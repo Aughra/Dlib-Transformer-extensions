@@ -41,7 +41,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 | Sous-étape | Contenu | Critère vérifiable |
 |---|---|---|
-| N4 (avant M1, en cours) | Fin du nettoyage : `offload.h` et `layer_pass` dans `cpu_runtime`, champs x86 de `cpu_info`, réglages `v2ram` / `accelerator`, chargeur de Pseudalis, clé du flux et `pseudalis-sign`, commentaires ; `test_linux.sh` → `test_macos.sh` sans `nproc` ni `gstat` | build sans avertissement ; tous les tests ; services vérifiés |
+| N4 (avant M1, presque fait) | Fin du nettoyage (fait : `cpu_info`, `v2ram`, chargeur de Pseudalis, `test_macos.sh` ; reste : clé du flux et `pseudalis-sign`, commentaires ; `offload.h` / `layer_pass` remplacés en M3) : `offload.h` et `layer_pass` dans `cpu_runtime`, champs x86 de `cpu_info`, réglages `v2ram` / `accelerator`, chargeur de Pseudalis, clé du flux et `pseudalis-sign`, commentaires ; `test_linux.sh` → `test_macos.sh` sans `nproc` ni `gstat` | build sans avertissement ; tous les tests ; services vérifiés |
 | M1 | Cache des clés et valeurs dans une seule zone réservée, alignée sur les pages (**fait**, `c583d29` ; la zone du 4B réserve 18,7 Go d'adresses, plus qu'un tampon Metal : n'envelopper que les blocs utilisés) ; accès au début de la projection du modèle ; bibliothèque `albireo_metal` (Objective-C++, noyaux compilés au lancement) liée sous `APPLE` ; le moteur s'ouvre avec le GPU | build sans avertissement ; tous les tests passent ; `engine_chat` répond juste ; le journal du moteur nomme le GPU |
 | M2 | Noyaux : produits Q4_K / Q6_K (1 à 8 tokens), normes RMS, rope, SiLU, écriture des clés et valeurs (q8 tournées, f16), attention en ligne sur les blocs, tête des logits | test `test_metal` : chaque noyau à 1e-4 près du processeur |
 | M3 | Un pas de génération entier sur le GPU, une commande par passe ; contrôle au chargement (logits à 1 % près, même token le plus probable) ; repli sur le processeur sinon | `engine_chat` juste ; mesures alternées processeur / GPU |
@@ -70,7 +70,7 @@ Après chaque point : mettre à jour la section « État constaté » du mémo, 
 
 - Mac Apple Silicon uniquement ; Windows hors du périmètre.
 - Modifier le moins possible les fichiers de l'original, sous `if (APPLE)` / `#ifdef __APPLE__` ou un test d'ARM64 (`CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$"`), pour garder des fusions faciles avec upstream.
-- Ne pas modifier `pseudalis/tools/test_linux.sh` : sur Mac, on lui fournit `nproc` et `stat` de GNU par le `PATH` (voir les commandes ci-dessous).
+- Les tests complets sont `tools/test_macos.sh` (Albireo, Pseudalis), écrits pour macOS : plus de `nproc` ni de `stat` de GNU à fournir.
 
 ## Problèmes ouverts
 
@@ -89,11 +89,9 @@ git status -sb && git fetch upstream && git log --oneline main..upstream/main
 cmake --build build/macos-pseudalis -- -k 0
 cmake --build build/macos-albireo -- -k 0
 
-# Test complet de Pseudalis : nproc et stat de GNU fournis par un dossier du PATH
-mkdir -p /tmp/shim && printf '#!/bin/sh\nsysctl -n hw.ncpu\n' > /tmp/shim/nproc && chmod +x /tmp/shim/nproc
-ln -sf /opt/homebrew/bin/gstat /tmp/shim/stat
-PATH=/tmp/shim:$PATH bash dlib/dlib/external/pseudalis/tools/test_linux.sh $PWD/build/macos-pseudalis
-# Service de Pseudalis déjà lancé sur 18444 : PSEUDALIS_TEST_PORT=18454 devant la commande
+# Tests complets (scripts pour macOS, sans outil de plus) ; un service déjà lancé : changer de port
+bash dlib/dlib/external/albireo/tools/test_macos.sh      # ALBIREO_TEST_PORT=18453 si le service tourne
+bash dlib/dlib/external/pseudalis/tools/test_macos.sh    # PSEUDALIS_TEST_PORT=18454 si le service tourne
 
 # Service d'Albireo (page : https://localhost:18443/ ; arrêt : Ctrl-C, ou kill -TERM)
 ALBIREO_HOME=$PWD/build/albireo-home build/macos-albireo/bin/albireo-service --console

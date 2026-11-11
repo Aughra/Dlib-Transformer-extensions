@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Remplacer les tests Linux par des tests macOS et mesurer la vitesse après le nettoyage
+
+- **Quoi** : `albireo/tools/test_linux.sh` et `pseudalis/tools/test_linux.sh` deviennent `tools/test_macos.sh` : chemins par défaut `build/macos-*` et modèles du dépôt, `perl` à la place de `date +%s%N`, `sysctl -n hw.ncpu` à la place de `nproc`, `stat -f %z` à la place de `stat -c %s`, moteur `.dylib` unique, plus d'étape `prerequisites_linux.sh` (remplacée par un contrôle de curl, perl et awk), arrêt du service par SIGTERM (macOS jette le SIGINT d'un programme lancé en arrière-plan par un script). Doc et commandes de reprise sans les cales `nproc` / `gstat`.
+- **Fichiers** : `dlib/dlib/external/albireo/tools/test_macos.sh`, `dlib/dlib/external/pseudalis/tools/test_macos.sh` (renommés) ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : « du pur Apple ».
+- **Étapes** : Albireo : **20 étapes sur 20**, la première fois que ce test passe en entier sur Mac ; Pseudalis : 34 sur 34 avec le `PATH` du système (sans `gstat`). Vitesse demandée par l'humain (`bench_runtime ... q8`, 8 threads, `lowpowermode 0`, charge 3,5 à 7,1) : 2B écriture 39,5 / 40,5 tokens/s, lecture de 64 tokens 123 ; 4B écriture 18,3 / 18,4, lecture 47 à 50 ; 2B 4 096 tokens : lecture 158,2, écriture qui suit 22,5. Inchangé depuis l'épisode 16, comme attendu.
+
 ## 2026-11-11 — Réduire le chargeur de moteur de Pseudalis au moteur intégré (nettoyage, N4)
 
 - **Quoi** : `engine_library` ne charge plus de bibliothèque : `load()` prend les fonctions du moteur compilé dans le service ; retirés : `cpu_has_avx2()`, le choix d'une variante par `PSEUDALIS_ENGINE`, le champ `handle_` (l'avertissement `-Wunused-private-field` connu disparaît), `dlfcn.h`, l'état `engine.avx2` du service, et le commentaire sur le déchargement des DLL sous Windows.

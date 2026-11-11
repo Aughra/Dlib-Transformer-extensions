@@ -2,31 +2,31 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Tests a Linux build of Albireo and prints a summary, one line per step.
+# Tests a macOS build of Albireo (Apple Silicon) and prints a summary, one line per step.
 #
-#   bash dlib/dlib/external/albireo/tools/test_linux.sh [build folder] [model.gguf] [embedding model.gguf]
+#   bash dlib/dlib/external/albireo/tools/test_macos.sh [build folder] [model.gguf] [embedding model.gguf]
 #
-# Defaults: build-albireo at the root of the repository, ~/models/Qwen3-0.6B-Q4_K_M.gguf and
-# ~/models/Qwen3-Embedding-0.6B-Q8_0.gguf.  The steps whose model is missing are skipped.
+# Defaults: build/macos-albireo at the root of the repository, build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf
+# and build/albireo-home/models/qwen3-embedding-0.6b.gguf.  The steps whose model is missing are skipped.
 # The service runs offline in a data folder of its own, on port 18443 (ALBIREO_TEST_PORT, and
 # the next port for the local server of test_host), receives the model as the tray sends it,
 # refuses it by its path, answers a question through the OpenAI interface and stops.  The
-# first step checks the tools of the build with tools/prerequisites_linux.sh, which installs those
-# that are missing.  The exit code is the number of failed steps.
+# first step checks the tools of these tests.  The exit code is the number of failed steps.
 
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../../../.." && pwd)
-BUILD=${1:-$ROOT/build-albireo}
-MODEL=${2:-$HOME/models/Qwen3-0.6B-Q4_K_M.gguf}
-EMBEDDING=${3:-$HOME/models/Qwen3-Embedding-0.6B-Q8_0.gguf}
+BUILD=${1:-$ROOT/build/macos-albireo}
+MODEL=${2:-$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf}
+EMBEDDING=${3:-$ROOT/build/albireo-home/models/qwen3-embedding-0.6b.gguf}
 PORT=${ALBIREO_TEST_PORT:-18443}
 QUESTION="What is the capital of France? Answer in one sentence."
 WORK=$(mktemp -d)
 RESULTS=()
 FAILED=0
 
-now() { date +%s%N; }
+# Nanoseconds: the date of macOS has no %N.
+now() { perl -MTime::HiRes=time -e 'printf "%.0f\n", time * 1e9'; }
 elapsed() { awk -v a="$1" -v b="$(now)" 'BEGIN { printf "%.1f", (b - a) / 1e9 }'; }
 
 record() { # step result detail seconds
@@ -54,32 +54,24 @@ step() { # name pattern command...
 
 skip() { record "$1" SKIP "$2" 0.0; }
 
-# The tools of the build and of these tests, installed when missing; the run shows the prompt of sudo.
+# The tools of these tests.
 START=$(now)
-if bash "$HERE/prerequisites_linux.sh"; then
-  record "prerequisites" PASS "every tool is there" "$(elapsed "$START")"
+missing=""
+for tool in curl perl awk; do command -v $tool > /dev/null 2>&1 || missing="$missing $tool"; done
+if [ -z "$missing" ]; then
+  record "prerequisites" PASS "curl, perl and awk are there" "$(elapsed "$START")"
 else
-  record "prerequisites" FAIL "see the messages of tools/prerequisites_linux.sh above" "$(elapsed "$START")"
+  record "prerequisites" FAIL "missing:$missing" "$(elapsed "$START")"
 fi
 
 ENGINES=$BUILD/bin/engines
 CHAT=$BUILD/tests/engine_chat
 
-# The kernels of each family of processors, skipped by the processors without their instructions.
-for family in "" _avxvnni _vnni256; do
-  test=$BUILD/tests/test_qkernels$family
-  name="quantized kernels${family:+ ${family#_}}"
-  if [ ! -x "$test" ]; then
-    [ -z "$family" ] && skip "$name" "no $test (ALBIREO_TESTS=ON)"
-    continue
-  fi
-  out=$("$test" 2>&1)
-  if printf '%s\n' "$out" | grep -q "skipped, the processor lacks"; then
-    skip "$name" "$(printf '%s\n' "$out" | grep -o 'lacks [^(]*' | head -1)"
-  else
-    step "$name" "all checks passed" "$test"
-  fi
-done
+# The quantized kernels (NEON, Accelerate).
+if [ -x "$BUILD/tests/test_qkernels" ]; then
+  step "quantized kernels" "all checks passed" "$BUILD/tests/test_qkernels"
+else skip "quantized kernels" "no $BUILD/tests/test_qkernels (ALBIREO_TESTS=ON)"
+fi
 
 # The attention of the steps split among the threads, against one task per key/value head, with
 # keys and values in half precision and in 8 bits, on a tiny model written in the work folder.
@@ -97,9 +89,10 @@ fi
 if [ -x "$BUILD/tests/test_chat_format" ]; then step "chat format" "all checks passed" "$BUILD/tests/test_chat_format"
 else skip "chat format" "no $BUILD/tests/test_chat_format"
 fi
-if [ -x "$BUILD/tests/test_engine_api" ] && [ -f "$ENGINES/libalbireo-engine-cpu.so" ]; then
-  step "engine interface" "all checks passed" "$BUILD/tests/test_engine_api" "$ENGINES/libalbireo-engine-cpu.so" "$WORK"
-else skip "engine interface" "no $BUILD/tests/test_engine_api or no portable engine"
+ENGINE=$ENGINES/libalbireo-engine-cpu.dylib
+if [ -x "$BUILD/tests/test_engine_api" ] && [ -f "$ENGINE" ]; then
+  step "engine interface" "all checks passed" "$BUILD/tests/test_engine_api" "$ENGINE" "$WORK"
+else skip "engine interface" "no $BUILD/tests/test_engine_api or no $ENGINE"
 fi
 # The files the service writes in its models folder and reads in its imports.
 if [ -x "$BUILD/tests/test_host" ]; then
@@ -107,18 +100,13 @@ if [ -x "$BUILD/tests/test_host" ]; then
 else skip "models folder and imports" "no $BUILD/tests/test_host"
 fi
 
-for variant in cpu-avxvnni cpu-avx2 cpu; do
-  lib=$ENGINES/libalbireo-engine-$variant.so
-  if [ ! -f "$lib" ]; then skip "engine $variant" "no $lib"
-  elif [ ! -f "$MODEL" ]; then skip "engine $variant" "no $MODEL"
-  elif ! "$CHAT" "$lib" --describe > /dev/null 2>&1; then
-    skip "engine $variant" "$("$CHAT" "$lib" --describe 2>&1 | grep -o 'lacks [^(]*' | head -1)"
-  else step "engine $variant" "Paris" "$CHAT" "$lib" "$MODEL" --reasoning off --max 40 "$QUESTION"
-  fi
-done
+if [ ! -f "$ENGINE" ]; then skip "engine cpu" "no $ENGINE"
+elif [ ! -f "$MODEL" ]; then skip "engine cpu" "no $MODEL"
+else step "engine cpu" "Paris" "$CHAT" "$ENGINE" "$MODEL" --reasoning off --max 40 "$QUESTION"
+fi
 
-if [ -f "$EMBEDDING" ] && [ -f "$ENGINES/libalbireo-engine-cpu-avx2.so" ]; then
-  step "embedding model" "cosine" "$CHAT" "$ENGINES/libalbireo-engine-cpu-avx2.so" "$EMBEDDING" --parallel \
+if [ -f "$EMBEDDING" ] && [ -f "$ENGINE" ]; then
+  step "embedding model" "cosine" "$CHAT" "$ENGINE" "$EMBEDDING" --parallel \
     "The service runs on this computer." "Where does the service run?" "The quarterly revenue grew."
 else
   skip "embedding model" "no $EMBEDDING"
@@ -138,7 +126,7 @@ SERVICE=$BUILD/bin/albireo-service
 if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
   HOME_DIR=$WORK/home
   mkdir -p "$HOME_DIR"
-  echo "{\"port\": $PORT, \"offline\": true, \"check_updates\": false, \"default_model\": false}" \
+  echo "{\"port\": $PORT, \"offline\": true, \"default_model\": false}" \
     > "$HOME_DIR/settings.json"
   ALBIREO_HOME=$HOME_DIR "$SERVICE" --console > "$WORK/service.log" 2>&1 &
   PID=$!
@@ -179,9 +167,10 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
   else
     record "service start" FAIL "no answer, log in $WORK/service.log" 0.0
   fi
-  # The service has 30 seconds to stop, then it is killed by its process number.
+  # The service has 30 seconds to stop, then it is killed by its process number.  SIGTERM: macOS
+  # drops the SIGINT of a program that a script starts in the background, which ignores it.
   START=$(now)
-  kill -INT $PID 2> /dev/null
+  kill -TERM $PID 2> /dev/null
   for i in $(seq 1 300); do
     kill -0 $PID 2> /dev/null || break
     sleep 0.1
