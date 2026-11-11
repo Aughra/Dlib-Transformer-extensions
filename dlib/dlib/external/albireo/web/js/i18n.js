@@ -251,7 +251,7 @@ const texts = {
     scanPageName: '{name}, page {n}', scanRendering: 'Rendu des pages de {name}…',
     stepsCount_one: '{n} étape', stepsCount_other: '{n} étapes', agentLimit: 'L\'agent s\'est arrêté après {n} étapes.',
     aboutText: 'Albireo Community Edition exécute des modèles de langage localement, sur le processeur et le processeur graphique de ce Mac, en reposant sur la bibliothèque open source Dlib-Transformer-extensions.',
-    createdBy: 'Créé par {author}', changelog: 'Notes de version', forkedBy: 'Fork pour macOS (Apple Silicon), modifié par TortueTech', forkShort: 'fork macOS', license: 'Licence',
+    createdBy: 'Créé par {author}', changelog: 'Notes de version', home: 'Accueil : nouvelle discussion, saisie effacée', forkedBy: 'Fork pour macOS (Apple Silicon), modifié par TortueTech', forkShort: 'fork macOS', license: 'Licence',
     thirdParty: 'Composants tiers', apiDocs: 'Documentation de l\'interface', close: 'Fermer', confirm: 'Confirmer',
     licensesTitle: 'Composants et licences',
     licensesIntro: 'Albireo fonctionne sans réseau : les bibliothèques, les programmes et les modèles sur lesquels ' +

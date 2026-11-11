@@ -3014,6 +3014,21 @@ function newChat(projectId) {
   ui.input.focus();
 }
 
+// The mark of Albireo: the welcome page again, a new discussion with an empty composer, without its draft nor its
+// attachments.
+function goHome() {
+  state.incognito = false;
+  newChat(null);
+  clearTimeout(draftTimer);
+  images.drop(imageIdsOf(state.pending));
+  state.pending = [];
+  forgetDraft(draftKey(state.current));
+  ui.input.value = '';
+  autoGrow();
+  renderAll();
+  ui.input.focus();
+}
+
 function go(hash) {
   if (location.hash === hash) route();
   else location.hash = hash;
@@ -7091,8 +7106,10 @@ function buildLayout() {
     }
   });
   ui.sidebar.append(
-    h('div', { class: 'brand' }, h('img', { src: 'img/albireo-mark.svg', alt: '' }),
-      h('div', { class: 'name', html: '<span>Albireo</span>' }), h('div', { class: 'spacer' })),
+    h('div', { class: 'brand' },
+      h('button', { class: 'brand-home', type: 'button', title: t('home'), 'aria-label': t('home'), onclick: goHome },
+        h('img', { src: 'img/albireo-mark.svg', alt: '' }), h('div', { class: 'name', html: '<span>Albireo</span>' })),
+      h('div', { class: 'spacer' })),
     h('div', { class: 'sidebar-actions' },
       h('button', {
         class: 'new-chat', type: 'button', html: icon('plus') + '<span>' + escapeHtml(t('newChat')) + '</span>',

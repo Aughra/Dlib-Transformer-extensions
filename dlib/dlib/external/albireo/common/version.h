@@ -7,8 +7,8 @@
 // installer over an installation.
 #define ALBIREO_VERSION_MAJOR 2
 #define ALBIREO_VERSION_MINOR 0
-#define ALBIREO_VERSION_PATCH 0
-#define ALBIREO_VERSION "2.0.0"
+#define ALBIREO_VERSION_PATCH 1
+#define ALBIREO_VERSION "2.0.1"
 
 #define ALBIREO_PRODUCT_NAME "Albireo"
 // The edition of this version, shown beside its name by every program.

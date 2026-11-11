@@ -806,3 +806,7 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .svc-profile .meta { color: var(--text-faint); font-size: 12px; }
 @media (max-width: 520px) { .svc-profile { grid-template-columns: 1fr auto auto; } .svc-profile .meta { display: none; } }
 .changelog { max-height: min(70vh, 640px); overflow-y: auto; }
+/* The mark of Albireo, a button back to the welcome page (fork for macOS). */
+.brand-home { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; cursor: pointer;
+  color: inherit; font: inherit; border-radius: var(--radius-small); }
+.brand-home:hover { opacity: .85; }

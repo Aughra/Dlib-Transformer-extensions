@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Albireo 2.0.1 : le logo ramène à l'accueil, notes de version antichronologiques
+
+- **Quoi** : le logo d'Albireo (panneau latéral) devient un bouton : nouvelle discussion, saisie et pièces jointes en attente effacées, brouillon oublié (`goHome()` dans `app.js`). Notes de version de la plus récente à la plus ancienne, séparées par un trait (`---`), section 2.0.1. Version 2.0.1 (`bump_version.py patch`). CLAUDE.md : ordre et séparateur des notes.
+- **Fichiers** : `dlib/dlib/external/albireo/web/js/app.js`, `web/js/i18n.js`, `web/css/app.css`, `web/changelog.md`, `common/version.h`, `CMakeLists.txt`, `web/openapi.json` ; `CLAUDE.md`, ce journal.
+- **Pourquoi** : demandes de l'humain.
+- **Étapes** : build sans avertissement ; Chrome sans fenêtre par l'accès réseau : texte tapé « un brouillon à effacer », clic sur le logo → saisie vide, adresse `#/`.
+
 ## 2026-11-11 — Ne garder que l'anglais et le français dans Pseudalis
 
 - **Quoi** : la page de Pseudalis ne garde que ses textes anglais et français (dictionnaires allemand, italien et espagnol retirés, menus de langue réduits) ; le réglage `language` du service n'accepte plus que `auto`, `en` et `fr` ; la langue du système et le nom de langue donné à Albireo se limitent au français et à l'anglais ; `web/openapi.json` suit ; un encadré du fork en tête du README. Les détecteurs de données personnelles, qui vivent dans dlib (`dlib/privacy`) et reconnaissent aussi les noms, adresses et identifiants d'autres pays, restent tels quels (règle « dlib reste telle quelle »).

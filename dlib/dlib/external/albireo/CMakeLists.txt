@@ -9,7 +9,7 @@
 # is copied to <build>/bin/web and the voices of the speech synthesis to <build>/bin/speech.
 
 cmake_minimum_required(VERSION 3.16)
-project(albireo VERSION 2.0.0 LANGUAGES C CXX OBJCXX)
+project(albireo VERSION 2.0.1 LANGUAGES C CXX OBJCXX)
 
 # The version is written in four places that must agree: project() above, the numbers and the
 # text of common/version.h, which the service and the engine give, and the description of the
