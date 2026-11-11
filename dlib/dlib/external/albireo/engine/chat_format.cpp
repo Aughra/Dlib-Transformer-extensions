@@ -67,11 +67,7 @@ namespace albireo
         const std::time_t now = std::time(nullptr);
         char buf[64];
         std::tm t;
-#if defined(_WIN32)
-        localtime_s(&t, &now);
-#else
         localtime_r(&now, &t);
-#endif
         std::strftime(buf, sizeof(buf), "%Y-%m-%d", &t);
         options.today = buf;
         std::snprintf(buf, sizeof(buf), "%s %02d, %d", months[t.tm_mon], t.tm_mday, t.tm_year + 1900);
@@ -79,11 +75,7 @@ namespace albireo
         std::snprintf(buf, sizeof(buf), "%02d %.3s %d", t.tm_mday, months[t.tm_mon], t.tm_year + 1900);
         options.today_short = buf;
         const std::time_t before = now - 24 * 3600;
-#if defined(_WIN32)
-        localtime_s(&t, &before);
-#else
         localtime_r(&before, &t);
-#endif
         std::strftime(buf, sizeof(buf), "%Y-%m-%d", &t);
         options.yesterday = buf;
     }

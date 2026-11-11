@@ -8,93 +8,16 @@
 #include <stdexcept>
 #include <utility>
 
-#if defined(_WIN32)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#else
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#endif
 
 #include <dlib/data_io/gguf_dequantize.h>
 
 namespace albireo
 {
 
-#if defined(_WIN32)
-    namespace
-    {
-        std::wstring widen(const std::string& s)
-        {
-            if (s.empty()) return std::wstring();
-            const int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.data(),
-                static_cast<int>(s.size()), nullptr, 0);
-            if (n <= 0) throw std::runtime_error("invalid UTF-8 in path " + s);
-            std::wstring w(static_cast<size_t>(n), L'\0');
-            MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.data(), static_cast<int>(s.size()), &w[0], n);
-            return w;
-        }
-    }
-
-    mapped_file::mapped_file(const std::string& utf8_path)
-    {
-        const std::wstring w = widen(utf8_path);
-        HANDLE f = CreateFileW(w.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS, nullptr);
-        if (f == INVALID_HANDLE_VALUE)
-            throw std::runtime_error("cannot open " + utf8_path + " (error " + std::to_string(GetLastError()) + ")");
-        LARGE_INTEGER sz;
-        if (!GetFileSizeEx(f, &sz) || sz.QuadPart <= 0)
-        {
-            CloseHandle(f);
-            throw std::runtime_error("cannot read the size of " + utf8_path);
-        }
-        HANDLE m = CreateFileMappingW(f, nullptr, PAGE_READONLY, 0, 0, nullptr);
-        if (!m)
-        {
-            const DWORD e = GetLastError();
-            CloseHandle(f);
-            throw std::runtime_error("cannot map " + utf8_path + " (error " + std::to_string(e) + ")");
-        }
-        void* p = MapViewOfFile(m, FILE_MAP_READ, 0, 0, 0);
-        if (!p)
-        {
-            const DWORD e = GetLastError();
-            CloseHandle(m);
-            CloseHandle(f);
-            throw std::runtime_error("cannot map a view of " + utf8_path + " (error " + std::to_string(e) + ")");
-        }
-        file_ = f;
-        mapping_ = m;
-        data_ = static_cast<const uint8_t*>(p);
-        size_ = static_cast<uint64_t>(sz.QuadPart);
-    }
-
-    mapped_file::~mapped_file()
-    {
-        if (data_) UnmapViewOfFile(data_);
-        if (mapping_) CloseHandle(static_cast<HANDLE>(mapping_));
-        if (file_) CloseHandle(static_cast<HANDLE>(file_));
-    }
-
-    void mapped_file::prefetch(uint64_t offset, uint64_t length) const
-    {
-        if (!data_ || offset >= size_) return;
-        if (offset + length > size_) length = size_ - offset;
-        WIN32_MEMORY_RANGE_ENTRY range;
-        range.VirtualAddress = const_cast<uint8_t*>(data_ + offset);
-        range.NumberOfBytes = static_cast<SIZE_T>(length);
-        // Available from Windows 8; a failure only means the pages come in on first use.
-        PrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0);
-    }
-#else
     mapped_file::mapped_file(const std::string& utf8_path)
     {
         const int fd = ::open(utf8_path.c_str(), O_RDONLY | O_CLOEXEC);
@@ -125,7 +48,6 @@ namespace albireo
         const uint64_t start = offset / page * page;
         madvise(const_cast<uint8_t*>(data_) + start, static_cast<size_t>(offset + length - start), MADV_WILLNEED);
     }
-#endif
 
     model_file::model_file(const std::string& utf8_path) : path_(utf8_path)
     {

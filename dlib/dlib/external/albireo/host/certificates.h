@@ -65,21 +65,6 @@ namespace albireo
     // DER bytes of the first certificate of a PEM file, empty on failure.
     std::string certificate_der(const std::string& pem_path);
 
-#if defined(_WIN32)
-    /*!
-        The local authority in the trusted roots of the machine (LocalMachine\Root), which
-        only an administrator or LocalSystem may change.
-            - authority_trusted() tells whether an authority of Albireo is there.
-            - trust_authority() puts the authority of dir there, in place of any earlier
-              authority of Albireo, once it has checked that it is the one Albireo makes:
-              signed by its own key, named "Albireo Local Authority" and limited by its name
-              constraints to localhost and the loopback addresses.
-            - untrust_authority() removes every authority of Albireo.
-    !*/
-    bool authority_trusted();
-    bool trust_authority(const std::string& dir, std::string& error);
-    void untrust_authority();
-#endif
 
 }
 

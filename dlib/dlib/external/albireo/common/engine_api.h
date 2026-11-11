@@ -37,17 +37,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(_WIN32)
-#  if defined(ALBIREO_ENGINE_BUILD)
-#    define ALBIREO_ENGINE_EXPORT __declspec(dllexport)
-#  else
-#    define ALBIREO_ENGINE_EXPORT
-#  endif
-#  define ALBIREO_ENGINE_CALL __cdecl
-#else
 #  define ALBIREO_ENGINE_EXPORT __attribute__((visibility("default")))
 #  define ALBIREO_ENGINE_CALL
-#endif
 
 #define ALBIREO_ENGINE_ABI_VERSION 1u
 

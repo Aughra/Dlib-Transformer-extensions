@@ -35,10 +35,6 @@ extern "C"
 #include "picoapi.h"
 }
 
-#if defined(_WIN32)
-#include <fcntl.h>
-#include <io.h>
-#endif
 
 namespace
 {
@@ -218,10 +214,6 @@ namespace
 
 int main(int argc, char** argv)
 {
-#if defined(_WIN32)
-    _setmode(_fileno(stdin), _O_BINARY);
-    _setmode(_fileno(stdout), _O_BINARY);
-#endif
     if (argc != 3)
     {
         std::fprintf(stderr, "usage: albireo-speech <voice> <speed>, the text on the standard input\n");

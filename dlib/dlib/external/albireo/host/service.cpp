@@ -1,9 +1,6 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-#if defined(_WIN32) && !defined(_WIN32_WINNT)
-#define _WIN32_WINNT 0x0A00
-#endif
 
 #include <dlib/external/httplib/httplib.h>
 
@@ -75,11 +72,7 @@ namespace albireo
         // The names of a path between its separators.
         std::vector<std::string> path_names(const std::string& p)
         {
-#if defined(_WIN32)
-            const char* const separators = "\\/";
-#else
             const char* const separators = "/";
-#endif
             std::vector<std::string> names;
             for (size_t at = 0; at <= p.size();)
             {
@@ -93,13 +86,7 @@ namespace albireo
 
         bool same_name(const std::string& a, const std::string& b)
         {
-#if defined(_WIN32)
-            const std::wstring x = widen(a), y = widen(b);
-            return CompareStringOrdinal(x.c_str(), static_cast<int>(x.size()), y.c_str(), static_cast<int>(y.size()),
-                TRUE) == CSTR_EQUAL;
-#else
             return a == b;
-#endif
         }
 
         /*
@@ -128,36 +115,6 @@ namespace albireo
             if (p.empty() || p.size() > 4096) return "import_path_invalid";
             for (char c : p)
                 if (static_cast<unsigned char>(c) < 0x20) return "import_path_invalid";
-#if defined(_WIN32)
-            const bool separator = p[0] == '\\' || p[0] == '/';
-            if (p.size() >= 2 && separator && (p[1] == '\\' || p[1] == '/'))
-            {
-                // \\?\ and \\.\ name the namespaces of the system, \\server\share a share.
-                if (p.size() >= 3 && (p[2] == '?' || p[2] == '.')) return "import_path_device";
-                return "import_path_network";
-            }
-            if (p.compare(0, 4, "\\??\\") == 0) return "import_path_device";
-            const bool letter = (p[0] >= 'A' && p[0] <= 'Z') || (p[0] >= 'a' && p[0] <= 'z');
-            if (p.size() < 3 || !letter || p[1] != ':' || (p[2] != '\\' && p[2] != '/')) return "import_path_relative";
-            // A stream (file:stream) or a wildcard.
-            if (p.find_first_of(":*?\"<>|", 2) != std::string::npos) return "import_path_invalid";
-            const std::vector<std::string> names = path_names(p.substr(3));
-            for (const auto& n : names)
-            {
-                if (n == "." || n == "..") return "import_path_invalid";
-                // The names of devices, which Windows opens as devices in any folder: CON, NUL, COM1...
-                std::string stem = n.substr(0, n.find('.'));
-                while (!stem.empty() && stem.back() == ' ') stem.pop_back();
-                for (char& c : stem) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-                const bool numbered = stem.size() == 4
-                    && (stem.compare(0, 3, "COM") == 0 || stem.compare(0, 3, "LPT") == 0) && stem[3] >= '0'
-                    && stem[3] <= '9';
-                if (numbered || stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" || stem == "CONIN$"
-                    || stem == "CONOUT$")
-                    return "import_path_device";
-            }
-            if (GetDriveTypeW(widen(p.substr(0, 2) + "\\").c_str()) == DRIVE_REMOTE) return "import_path_network";
-#else
             if (p[0] != '/') return "import_path_relative";
             if (p.compare(0, 2, "//") == 0) return "import_path_network";
             for (const auto& n : path_names(p))
@@ -165,7 +122,6 @@ namespace albireo
             const std::vector<std::string> names = path_names(p);
             if (!names.empty() && (names[0] == "dev" || names[0] == "proc" || names[0] == "sys"))
                 return "import_path_device";
-#endif
             return std::string();
         }
 
@@ -176,27 +132,8 @@ namespace albireo
         */
         bool prepare_certificates(const std::string& dir, int trust_choice, bool& renewed, std::string& error)
         {
-#if defined(_WIN32)
-            const bool was_trusted = authority_trusted();
-#endif
             if (!ensure_certificates(dir, renewed, error)) return false;
-#if defined(_WIN32)
-            if (renewed && (trust_choice > 0 || (trust_choice < 0 && was_trusted)))
-            {
-                std::string e;
-                if (trust_authority(dir, e))
-                    log_info("certificates: the new local authority is trusted by this computer");
-                else
-                    log_warning("certificates: " + e);
-            }
-            else if (renewed && was_trusted)
-            {
-                // Not trusted by the choice of the installation: the earlier authority leaves.
-                untrust_authority();
-            }
-#else
             (void)trust_choice;
-#endif
             return true;
         }
 
@@ -222,12 +159,7 @@ namespace albireo
         void set_listen_options(httplib::Server& server)
         {
             server.set_socket_options([](socket_t sock) {
-#if defined(_WIN32)
-                // No other process may bind the port of the service.
-                httplib::set_socket_opt(sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, 1);
-#else
                 httplib::set_socket_opt(sock, SOL_SOCKET, SO_REUSEADDR, 1);
-#endif
             });
         }
     }
@@ -401,11 +333,7 @@ namespace albireo
 
     std::string service::speech_program() const
     {
-#if defined(_WIN32)
-        return join_path(program_dir_, "albireo-speech.exe");
-#else
         return join_path(program_dir_, "albireo-speech");
-#endif
     }
 
     std::string service::engines_dir() const
@@ -433,25 +361,11 @@ namespace albireo
     bool service::run(std::string& error)
     {
         started_at_ = now_unix();
-#if defined(_WIN32)
-        /*
-            The data folder holds the settings, the token, the keys, the logs and the import
-            folder, which the service reads and writes with the rights of the system: only
-            SYSTEM and the administrators may change it, whoever created it (secure_folder()).
-        */
-        std::string insecure;
-        if (!secure_folder(data_dir_, insecure))
-        {
-            error = "the data folder cannot be secured: " + insecure;
-            return false;
-        }
-#else
         if (!make_dirs(data_dir_))
         {
             error = "cannot create the data folder " + data_dir_;
             return false;
         }
-#endif
         const std::string logs = join_path(data_dir_, "logs");
         make_dirs(logs);
         log_file::instance().open(join_path(logs, "service.log"));

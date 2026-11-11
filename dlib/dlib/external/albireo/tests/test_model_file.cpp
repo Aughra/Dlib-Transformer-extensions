@@ -21,20 +21,9 @@
     logits of the same model written in a small file.
 */
 
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#include <winioctl.h>
-#else
 #include <fcntl.h>
 #include <sys/types.h>
 #include <unistd.h>
-#endif
 
 #include <algorithm>
 #include <atomic>
@@ -166,22 +155,6 @@ namespace
     bool write_sparse(const std::string& path, const std::vector<unsigned char>& head, uint64_t at,
         const std::vector<unsigned char>& tail)
     {
-#ifdef _WIN32
-        HANDLE h = CreateFileA(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (h == INVALID_HANDLE_VALUE) return false;
-        DWORD done = 0;
-        DeviceIoControl(h, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &done, nullptr);
-        auto put = [&](uint64_t offset, const std::vector<unsigned char>& b) {
-            LARGE_INTEGER p;
-            p.QuadPart = static_cast<LONGLONG>(offset);
-            DWORD written = 0;
-            return SetFilePointerEx(h, p, nullptr, FILE_BEGIN) != 0
-                && WriteFile(h, b.data(), static_cast<DWORD>(b.size()), &written, nullptr) != 0
-                && written == b.size();
-        };
-        const bool ok = put(0, head) && put(at, tail);
-        return CloseHandle(h) != 0 && ok;
-#else
         const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd < 0) return false;
         auto put = [&](uint64_t offset, const std::vector<unsigned char>& b) {
@@ -189,7 +162,6 @@ namespace
         };
         const bool ok = put(0, head) && put(at, tail);
         return ::close(fd) == 0 && ok;
-#endif
     }
 
     // The bytes of a tensor read by r, or an empty vector with the reason in why.

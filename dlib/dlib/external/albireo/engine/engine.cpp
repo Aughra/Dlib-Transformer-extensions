@@ -25,16 +25,9 @@
 #include "sampler.h"
 #include "thread_pool.h"
 #include "vision_encoder.h"
-#ifdef ALBIREO_TENSOR_BACKEND
-#include "tensor_backend.h"
-#endif
 
 #ifndef ALBIREO_ENGINE_VARIANT
-#if defined(__AVX2__)
-#define ALBIREO_ENGINE_VARIANT "cpu-avx2"
-#else
 #define ALBIREO_ENGINE_VARIANT "cpu"
-#endif
 #endif
 
 namespace albireo
@@ -964,9 +957,6 @@ namespace albireo
         warm_history_ = settings_["warm_history"].as_bool(true);
         log(ALBIREO_LOG_INFO, std::string("engine ") + ALBIREO_ENGINE_VARIANT + " " + ALBIREO_VERSION + ", "
             + std::to_string(threads_) + " threads, kernels " + qk_isa());
-#ifdef ALBIREO_TENSOR_BACKEND
-        device_.reset(new tensor_device(settings_, *pool_, [this](int level, const std::string& m) { log(level, m); }));
-#endif
         worker_ = std::thread([this]() { run(); });
     }
 
@@ -1012,9 +1002,7 @@ namespace albireo
         d["version"] = ALBIREO_VERSION;
         d["backend"] = "processor";
         d["abi"] = static_cast<long long>(ALBIREO_ENGINE_ABI_VERSION);
-#if defined(_MSC_VER)
-        d["build"] = "MSVC " + std::to_string(_MSC_VER) + ", " + __DATE__;
-#elif defined(__clang__)
+#if   defined(__clang__)
         d["build"] = std::string("Clang ") + __clang_version__ + ", " + __DATE__;
 #elif defined(__GNUC__)
         d["build"] = std::string("GCC ") + __VERSION__ + ", " + __DATE__;
@@ -1041,11 +1029,7 @@ namespace albireo
         std::string reason;
         // The kernels of the variant: the rest of the library uses AVX2 at most, so that
         // this description runs on the processors that lack the instructions of the kernels.
-#if defined(__AVX2__)
-        const unsigned lacks = qk_missing_isa(cpu, qk_isa_avx2);
-#else
         const unsigned lacks = qk_missing_isa(cpu);
-#endif
         // The reasons carry a code, with which the windows explain them in the language of
         // the user.
         std::string reason_code;
@@ -1056,33 +1040,6 @@ namespace albireo
             reason = std::string("the processor or the system lacks ") + qk_isa_text(lacks);
             reason_code = qk_isa_code(lacks);
         }
-#ifdef ALBIREO_TENSOR_BACKEND
-        // The devices of dlib take the products; the library stays loaded once started,
-        // since the runtimes of the devices keep threads in the process.  An engine whose
-        // kernels cannot run here leaves its devices alone: their runtimes take seconds to
-        // start.
-        d["backend"] = tensor_device::backend_name();
-        d["pinned"] = true;
-        if (usable)
-        {
-            std::string backend, runtime, why, why_code;
-            json why_args = json::object();
-            const json accelerators = tensor_device::describe(backend, runtime, why, why_code, why_args);
-            if (!runtime.empty()) d["runtime"] = runtime;
-            for (const auto& a : accelerators.elements()) devices.push_back(a);
-            if (accelerators.empty() && backend != "dlib")
-            {
-                usable = false;
-                reason = why;
-                reason_code = why_code;
-                reason_args = why_args;
-            }
-            else if (!why.empty())
-            {
-                d["missing"] = why;
-            }
-        }
-#endif
         d["devices"] = devices;
         d["usable"] = usable;
         if (!reason.empty()) d["reason"] = reason;
@@ -1132,10 +1089,6 @@ namespace albireo
         if (m->projector)
         {
             m->vision.reset(new vision_encoder(m->projector, *pool_));
-#ifdef ALBIREO_TENSOR_BACKEND
-            // The products of the encoder go to the device as those of the model do, by measure.
-            m->vision->set_offload(device_->make_offload(id + " (images)"));
-#endif
             // Qwen3-VL places the tokens of an image by multimodal rotary positions, a LLaVA-NeXT
             // or a Pixtral decoder by their order.
             const vision_encoder::family kind = m->vision->kind();
@@ -1290,9 +1243,6 @@ namespace albireo
             const memory_info now = read_memory_info();
             return now.commit_available == 0 || now.commit_available >= bytes + reserve;
         });
-#ifdef ALBIREO_TENSOR_BACKEND
-        runtime->set_offload(device_->make_offload(id));
-#endif
         cpu_runtime* const processor = runtime.get();
         m->runtime = std::move(runtime);
 
@@ -1790,11 +1740,6 @@ namespace albireo
 
     void engine::run()
     {
-#ifdef ALBIREO_TENSOR_BACKEND
-        // CUDA keeps one current device per thread: this thread computes on the card of the
-        // engine.
-        if (!device_->bind_thread()) log(ALBIREO_LOG_WARNING, "device: the card of the engine cannot be selected");
-#endif
         for (;;)
         {
             std::vector<std::shared_ptr<loaded_model>> models;
@@ -3046,11 +2991,6 @@ namespace albireo
         s["active"] = active;
         s["waiting"] = waiting;
         s["models"] = models;
-#ifdef ALBIREO_TENSOR_BACKEND
-        s["device"] = device_->stats();
-        const json memory = device_->memory();
-        if (!memory.is_null()) s["memory"] = memory;
-#endif
         return s;
     }
 

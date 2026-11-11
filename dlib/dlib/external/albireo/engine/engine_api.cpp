@@ -19,19 +19,6 @@
 #include <stdexcept>
 #include <string>
 
-#ifdef ALBIREO_TENSOR_BACKEND
-#if defined(_WIN32)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#else
-#include <dlfcn.h>
-#endif
-#endif
 
 #include "engine.h"
 
@@ -69,25 +56,6 @@ namespace
         return ALBIREO_E_INTERNAL;
     }
 
-#ifdef ALBIREO_TENSOR_BACKEND
-    /*
-        Keeps this library in the process until it ends, whatever the program releases.
-        The runtimes of the devices start threads and register handlers that run at the end
-        of the process, which must find the code of the library where it was.
-    */
-    void pin_library()
-    {
-#if defined(_WIN32)
-        HMODULE self = nullptr;
-        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
-            reinterpret_cast<LPCWSTR>(&pin_library), &self);
-#else
-        Dl_info info;
-        if (dladdr(reinterpret_cast<void*>(&pin_library), &info) && info.dli_fname)
-            dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_NODELETE);
-#endif
-    }
-#endif
 
     albireo::json parse_or_throw(const char* text)
     {
@@ -124,9 +92,6 @@ ALBIREO_ENGINE_EXPORT albireo_engine* ALBIREO_ENGINE_CALL albireo_engine_create(
 {
     try
     {
-#ifdef ALBIREO_TENSOR_BACKEND
-        pin_library();
-#endif
         std::unique_ptr<albireo_engine> e(new albireo_engine());
         albireo::log_sink sink;
         if (log)

@@ -43,10 +43,6 @@ namespace albireo
     private:
         const uint8_t* data_ = nullptr;
         uint64_t size_ = 0;
-#if defined(_WIN32)
-        void* file_ = nullptr;
-        void* mapping_ = nullptr;
-#endif
     };
 
     struct tensor_view

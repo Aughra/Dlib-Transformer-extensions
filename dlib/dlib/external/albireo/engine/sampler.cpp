@@ -9,9 +9,6 @@
 #include <unordered_map>
 #include <utility>
 
-#if defined(__AVX2__)
-#include <immintrin.h>
-#endif
 
 namespace albireo
 {
@@ -23,16 +20,9 @@ namespace albireo
         // Whether one of the scan_block values of x exceeds t; NaN exceeds nothing.
         inline bool block_above(const float* x, float t)
         {
-#if defined(__AVX2__)
-            const __m256 v = _mm256_set1_ps(t);
-            const __m256 a = _mm256_cmp_ps(_mm256_loadu_ps(x), v, _CMP_GT_OQ);
-            const __m256 b = _mm256_cmp_ps(_mm256_loadu_ps(x + 8), v, _CMP_GT_OQ);
-            return _mm256_movemask_ps(_mm256_or_ps(a, b)) != 0;
-#else
             bool above = false;
             for (long i = 0; i < scan_block; ++i) above |= x[i] > t;
             return above;
-#endif
         }
     }
 

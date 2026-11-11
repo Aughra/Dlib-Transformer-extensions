@@ -12,20 +12,9 @@
 #include <map>
 #include <set>
 
-#if defined(_WIN32)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#include <winioctl.h>
-#else
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#endif
 
 #include <zlib.h>
 
@@ -53,38 +42,6 @@ namespace albireo
         public:
             bool open(const std::string& path, uint64_t size)
             {
-#if defined(_WIN32)
-                // A reparse point at path is opened as itself, and refused below.
-                h_ = CreateFileW(widen(path).c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr,
-                    OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-                if (h_ == INVALID_HANDLE_VALUE) return false;
-                FILE_ATTRIBUTE_TAG_INFO tag = {};
-                BY_HANDLE_FILE_INFORMATION info = {};
-                if (!GetFileInformationByHandleEx(h_, FileAttributeTagInfo, &tag, sizeof(tag))
-                    || (tag.FileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)) != 0
-                    || !GetFileInformationByHandle(h_, &info) || info.nNumberOfLinks != 1 || !handle_at(h_, path))
-                {
-                    CloseHandle(h_);
-                    h_ = INVALID_HANDLE_VALUE;
-                    return false;
-                }
-                /*
-                    A sparse file: the segments written ahead of the others leave ranges not yet
-                    written, which the system would otherwise fill with zeros before each write
-                    beyond them.  A volume without sparse files refuses it, and the file stays plain.
-                */
-                DWORD unused = 0;
-                DeviceIoControl(h_, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &unused, nullptr);
-                LARGE_INTEGER s;
-                s.QuadPart = static_cast<LONGLONG>(size);
-                LARGE_INTEGER cur;
-                GetFileSizeEx(h_, &cur);
-                if (static_cast<uint64_t>(cur.QuadPart) != size)
-                {
-                    if (!SetFilePointerEx(h_, s, nullptr, FILE_BEGIN) || !SetEndOfFile(h_)) return false;
-                }
-                return true;
-#else
                 fd_ = ::open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0644);
                 if (fd_ < 0) return false;
                 struct stat st;
@@ -95,26 +52,10 @@ namespace albireo
                     return false;
                 }
                 return ftruncate(fd_, static_cast<off_t>(size)) == 0;
-#endif
             }
 
             bool write_at(uint64_t offset, const char* data, size_t n)
             {
-#if defined(_WIN32)
-                while (n > 0)
-                {
-                    OVERLAPPED ov = {};
-                    ov.Offset = static_cast<DWORD>(offset & 0xFFFFFFFFu);
-                    ov.OffsetHigh = static_cast<DWORD>(offset >> 32);
-                    DWORD w = 0;
-                    const DWORD chunk = static_cast<DWORD>(std::min<size_t>(n, 1u << 30));
-                    if (!WriteFile(h_, data, chunk, &w, &ov) || w == 0) return false;
-                    offset += w;
-                    data += w;
-                    n -= w;
-                }
-                return true;
-#else
                 while (n > 0)
                 {
                     const ssize_t w = pwrite(fd_, data, n, static_cast<off_t>(offset));
@@ -124,36 +65,22 @@ namespace albireo
                     n -= static_cast<size_t>(w);
                 }
                 return true;
-#endif
             }
 
             void close()
             {
-#if defined(_WIN32)
-                if (h_ != INVALID_HANDLE_VALUE)
-                {
-                    FlushFileBuffers(h_);
-                    CloseHandle(h_);
-                }
-                h_ = INVALID_HANDLE_VALUE;
-#else
                 if (fd_ >= 0)
                 {
                     fsync(fd_);
                     ::close(fd_);
                 }
                 fd_ = -1;
-#endif
             }
 
             ~random_access_file() { close(); }
 
         private:
-#if defined(_WIN32)
-            HANDLE h_ = INVALID_HANDLE_VALUE;
-#else
             int fd_ = -1;
-#endif
         };
 
         std::string localized(const json& text, const std::string& language)

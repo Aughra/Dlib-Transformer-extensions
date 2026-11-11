@@ -82,13 +82,9 @@
 #include "../engine/model_file.h"
 #include "../host/crypto.h"
 
-#if defined(_WIN32)
-#include <windows.h>
-#else
 #include <signal.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#endif
 
 using dlib::ggml_type;
 using dlib::gguf_type;
@@ -105,11 +101,7 @@ namespace
 
     std::FILE* open_file(const std::string& path, const char* mode)
     {
-#if defined(_WIN32)
-        return _wfopen(widen(path).c_str(), widen(mode).c_str());
-#else
         return std::fopen(path.c_str(), mode);
-#endif
     }
 
     bool ends_with(const std::string& s, const std::string& tail)
@@ -804,25 +796,13 @@ namespace
     // The identifier of this process, which names its partial files in the cache.
     unsigned long process_id()
     {
-#if defined(_WIN32)
-        return static_cast<unsigned long>(GetCurrentProcessId());
-#else
         return static_cast<unsigned long>(::getpid());
-#endif
     }
 
     // Whether a process of this identifier runs; a process the system hides from this one counts as running.
     bool process_running(unsigned long pid)
     {
-#if defined(_WIN32)
-        const HANDLE h = OpenProcess(SYNCHRONIZE, FALSE, static_cast<DWORD>(pid));
-        if (!h) return GetLastError() == ERROR_ACCESS_DENIED;
-        const bool running = WaitForSingleObject(h, 0) == WAIT_TIMEOUT;
-        CloseHandle(h);
-        return running;
-#else
         return ::kill(static_cast<pid_t>(pid), 0) == 0 || errno == EPERM;
-#endif
     }
 
     /*
@@ -1082,11 +1062,7 @@ namespace
     bool link_or_copy(const std::string& from, const std::string& to)
     {
         remove_file(to);
-#if defined(_WIN32)
-        if (CreateHardLinkW(widen(to).c_str(), widen(from).c_str(), nullptr)) return true;
-#else
         if (::link(from.c_str(), to.c_str()) == 0) return true;
-#endif
         return copy_file(from, to);
     }
 
@@ -1123,11 +1099,7 @@ namespace
         if (!f) throw std::runtime_error("cannot read " + file);
         std::unique_ptr<std::FILE, int (*)(std::FILE*)> closer(f, std::fclose);
         auto read = [&](uint64_t pos, void* data, size_t n) {
-#if defined(_WIN32)
-            if (_fseeki64(f, static_cast<__int64>(pos), SEEK_SET) != 0) return false;
-#else
             if (fseeko(f, static_cast<off_t>(pos), SEEK_SET) != 0) return false;
-#endif
             return std::fread(data, 1, n, f) == n;
         };
         uint64_t start = 0;
@@ -1231,11 +1203,9 @@ namespace
         }
         else
             remove_file(beside_installer(output));
-#if !defined(_WIN32)
         // The rights of the program it extends.
         struct stat st;
         if (::stat(setup.c_str(), &st) == 0) ::chmod(output.c_str(), st.st_mode & 07777);
-#endif
     }
 
     int usage()

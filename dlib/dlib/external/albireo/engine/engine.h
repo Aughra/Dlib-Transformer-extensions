@@ -133,10 +133,6 @@ namespace albireo
         const json settings_;
         log_sink log_;
         std::unique_ptr<thread_pool> pool_;
-#ifdef ALBIREO_TENSOR_BACKEND
-        // The device of the engines built on the tensors of dlib, shared by the models.
-        std::unique_ptr<tensor_device> device_;
-#endif
         int threads_ = 1;
         // Whether the histories of the answers are read ahead of the next questions.
         bool warm_history_ = true;

@@ -1,9 +1,6 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-#if defined(_WIN32) && !defined(_WIN32_WINNT)
-#define _WIN32_WINNT 0x0A00
-#endif
 
 #include "web_access.h"
 

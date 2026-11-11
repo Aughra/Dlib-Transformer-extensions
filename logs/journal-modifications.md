@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Retirer d'Albireo le code de Windows, de Linux, des x86 et de CUDA (nettoyage, N1 à N3)
+
+- **Quoi** : décision de l'humain, « du pur Apple », périmètre Albireo et Pseudalis (dlib reste tel quel, on s'en éloignera plus tard). Pour Albireo : fichiers supprimés (`dist/`, `windows/`, scripts `.ps1`, `prerequisites_linux.sh`, outils de publication des installateurs `make_feed.py`, `publish_release.py`, `make_offline_bundle.py`, ressources `.rc`, icônes `.ico` et images du tray et de l'installateur, `tensor_backend` CUDA/OpenVINO avec `test_device_ops` et `test_offload`, scripts CMake de CUDA, MinGW, de la charge utile et des bibliothèques de périphériques) ; `CMakeLists.txt` réécrit pour macOS sur Apple Silicon seulement (864 → 307 lignes, refus des autres plateformes, un seul moteur `cpu`, une seule famille de noyaux) ; `unifdef` sur 34 fichiers : branches `_WIN32`, x86 (AVX2, VNNI), CUDA, OpenVINO et Linux retirées, branches `__APPLE__` gardées seules (4 854 lignes de moins). Les sources SVG des dessins et `make_images.py` restent.
+- **Fichiers** : `dist/`, `dlib/dlib/external/albireo/` (CMakeLists.txt, common, engine, host, tests, tools, resources, cmake) ; `CLAUDE.md` (« Du pur Apple ») ; ce journal.
+- **Pourquoi** : le fork est détaché de l'original et ne vise que le Mac ; le moteur Metal à venir sera plus simple sans les autres chemins.
+- **Étapes** : reconfiguration à neuf de `build/macos-albireo` ; build sans erreur ni avertissement ; `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api`, `test_host` passent ; `engine_chat` (2B) : « La capitale de la France est Paris. » ; service `--console` : moteur `cpu` chargé, page en 200, `/v1/chat/completions` répond « Paris ». Restent des traces hors des blocs conditionnels (champs AVX de `cpu_info`, choix des moteurs x86 dans l'hôte, commentaires), à retirer ensuite ; Pseudalis à faire.
+
 ## 2026-11-11 — Ranger les clés et valeurs dans une seule zone réservée (moteur Metal, M1)
 
 - **Quoi** : `kv_pool` réserve d'un coup, par `mmap`, les adresses de tous ses blocs (une zone alignée sur les pages, chaque bloc commençant sur une page) ; macOS ne donne la mémoire qu'au premier usage. `trim()` rend les pages des blocs libres par `madvise(MADV_FREE_REUSABLE)`, `MADV_FREE_REUSE` les reprend. Accès pour le GPU : `region()`, `region_bytes()`, `block_offset()`, `slab_offset()`, `scales_offset()`. Code pour macOS seulement (demande de l'humain : du pur Apple).

@@ -16,9 +16,9 @@
 
 Ce dépôt est un **fork** de [`Cydral/Dlib-Transformer-extensions`](https://github.com/Cydral/Dlib-Transformer-extensions) : dlib, des extensions Transformer (modèles de langage, GGUF, LoRA, distillation, vision) et deux applications Windows 11 construites dessus, **Albireo** (moteur GGUF et service de chat) et **Pseudalis** (anonymisation de documents).
 
-**But du fork : faire tourner le projet sur Mac Apple Silicon (arm64), et seulement là.** Machine actuelle : Mac M2 (8 cœurs, 24 Go). Machine prévue : Mac mini M5 Pro, 64 Go. Windows, MSVC, les processeurs Intel/AMD et CUDA sont hors du périmètre : ne pas chercher à les garder en état de marche dans nos changements, sans pour autant les casser quand rien ne l'impose.
+**But du fork : faire tourner le projet sur Mac Apple Silicon (arm64), et seulement là.** Machine actuelle : Mac M2 (8 cœurs, 24 Go). Machine prévue : Mac mini M5 Pro, 64 Go. **Du pur Apple** (décision de l'humain, 2026-11-11) : dans Albireo et Pseudalis, le code propre à Windows, à Linux, aux processeurs x86 (AVX2, VNNI), à CUDA et à OpenVINO est retiré, ainsi que `dist/` (installateurs et flux signés Windows de l'original). La bibliothèque dlib reste telle quelle : elle est générique, et la nettoyer n'apporterait rien. Le code neuf n'écrit que pour macOS sur Apple Silicon.
 
-Les solutions propres au Mac sont permises (instructions NEON, `__fp16`, Accelerate, Metal, un standard C++ plus récent). Leur coût, c'est l'écart avec l'original : le signaler une fois quand on propose une telle solution.
+Les solutions propres au Mac sont la règle (instructions NEON, `__fp16`, Accelerate, Metal, Objective-C++, un standard C++ plus récent).
 
 ### Deux dépôts distants
 
@@ -34,7 +34,7 @@ Décision de l'humain : l'original avance trop vite pour être suivi (16 commits
 - Les fichiers de l'original peuvent être modifiés quand le travail le demande, sans la règle du plus petit changement sous `#ifdef __APPLE__`. Rester propre et lisible : ne pas reformater ni réorganiser sans raison.
 - Préférer encore un fichier neuf pour un module nouveau (le moteur Metal, par exemple).
 - `upstream` reste en lecture : on peut y reprendre une idée ou une correction **à la main**, en le disant dans le journal, jamais par `git merge`.
-- Ne pas toucher à `dist/` (installateurs et flux de mises à jour signés de l'original) ni aux scripts Windows (`*.ps1`, `windows/`).
+- Albireo et Pseudalis ne gardent que macOS (voir « Le projet ») ; ne jamais regénérer ni re-signer les flux ou clés de l'original.
 
 ---
 

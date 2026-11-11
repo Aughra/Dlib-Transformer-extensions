@@ -65,12 +65,10 @@
 #include <thread>
 #include <vector>
 
-#if !defined(_WIN32)
 #include <netinet/in.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#endif
 
 #include <zlib.h>
 
@@ -225,7 +223,6 @@ namespace
         return json();
     }
 
-#if !defined(_WIN32)
     bool make_symlink(const std::string& target, const std::string& link)
     {
         return symlink(target.c_str(), link.c_str()) == 0;
@@ -235,7 +232,6 @@ namespace
     {
         return ::link(target.c_str(), link.c_str()) == 0;
     }
-#endif
 
     bool installed(albireo::store& db, const std::string& id, albireo::installed_model& m)
     {
@@ -709,7 +705,6 @@ int main(int argc, char** argv)
         const std::string target = albireo::join_path(dir, "tiny.gguf");
         albireo::user_error error;
 
-#if !defined(_WIN32)
         // The partial file a link to a file outside: refused, the file outside unchanged.
         const std::string victim = albireo::join_path(outside, "victim.txt");
         write_text(victim, "kept");
@@ -753,12 +748,6 @@ int main(int argc, char** argv)
         check(albireo::list_dir(elsewhere).empty(), "nothing is written where the link leads");
         albireo::remove_file(dir);
         albireo::rename_file(moved, dir);
-#else
-        check(m.start_download("tiny", error), "a download starts");
-        json d = wait_download(m, "tiny");
-        check(d["state"].as_string() == "done", "the download completes");
-        std::printf("skip the links, which this system lets only some accounts make\n");
-#endif
 
         // A cancelled download leaves no partial file and comes back whole afterwards.
         albireo::installed_model small;
@@ -911,7 +900,6 @@ int main(int argc, char** argv)
             "a download of a model that comes with Albireo is refused");
 
         // The import folder reads through no link and a single name.
-#if !defined(_WIN32)
         const std::string secret = albireo::join_path(outside, "secret.gguf");
         write_text(secret, blob(1000, 's'));
         const std::string linked = albireo::join_path(inbox, "linked.gguf");
@@ -938,7 +926,6 @@ int main(int argc, char** argv)
         make_symlink(outside, albireo::join_path(work, "via"));
         check(!f.open(albireo::join_path(albireo::join_path(work, "via"), "secret.gguf"), work, why) && why == "link",
             "a folder that is a link stops a link-free opening");
-#endif
 
         // An offline bundle: only the files of its catalog, with their sizes and hashes.
         const std::string bundle = albireo::join_path(work, "bundle");

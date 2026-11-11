@@ -69,10 +69,6 @@
 #include "../common/engine_loader.h"
 #include "../common/platform.h"
 
-#if defined(_WIN32)
-#include <windows.h>
-#include <shellapi.h>
-#endif
 
 using namespace albireo;
 
@@ -306,22 +302,6 @@ static std::string base64(const std::string& bytes)
 
 int main(int argc, char** argv)
 {
-#if defined(_WIN32)
-    // The paths and the questions in UTF-8, as the engine reads them, and the answers shown
-    // as such, whatever the code page of the console.
-    std::vector<std::string> utf8_args;
-    int wargc = 0;
-    if (LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc))
-    {
-        for (int i = 0; i < wargc; ++i) utf8_args.push_back(narrow(wargv[i]));
-        LocalFree(wargv);
-    }
-    std::vector<char*> utf8_argv;
-    for (auto& a : utf8_args) utf8_argv.push_back(&a[0]);
-    utf8_argv.push_back(nullptr);
-    if (wargc == argc) argv = utf8_argv.data();
-    SetConsoleOutputCP(CP_UTF8);
-#endif
     const bool describe_only = argc == 3 && std::string(argv[2]) == "--describe";
     if (argc < 4 && !describe_only)
     {
@@ -382,11 +362,7 @@ int main(int argc, char** argv)
     // devices, which describe() below already does.
     if (!device.empty())
     {
-#if defined(_WIN32)
-        _putenv_s("DLIB_NPU_DEVICE", device.c_str());
-#else
         setenv("DLIB_NPU_DEVICE", device.c_str(), 1);
-#endif
     }
 
     engine_library lib;

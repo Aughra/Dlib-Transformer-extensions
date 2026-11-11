@@ -17,10 +17,6 @@
 namespace albireo
 {
 
-#if defined(_WIN32)
-    std::wstring widen(const std::string& utf8);
-    std::string narrow(const std::wstring& utf16);
-#endif
 
     // The program running, and its folder.
     std::string executable_path();
@@ -164,11 +160,7 @@ namespace albireo
         void close();
 
     private:
-#if defined(_WIN32)
-        void* h_ = nullptr;
-#else
         int fd_ = -1;
-#endif
         uint64_t size_ = 0;
         uint32_t links_ = 0;
         std::string identity_;
@@ -187,11 +179,7 @@ namespace albireo
 
     // Whether an open file, a handle on Windows and a descriptor elsewhere, lies at path reached through
     // no link: a folder of path replaced by a link after a check shows.
-#if defined(_WIN32)
-    bool handle_at(void* handle, const std::string& path);
-#else
     bool handle_at(int fd, const std::string& path);
-#endif
 
     class new_file
     {
@@ -214,11 +202,7 @@ namespace albireo
         bool close();
 
     private:
-#if defined(_WIN32)
-        void* h_ = nullptr;
-#else
         int fd_ = -1;
-#endif
         bool failed_ = false;
     };
 

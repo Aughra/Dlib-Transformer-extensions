@@ -855,11 +855,9 @@ namespace albireo
 
     void cpu_runtime::forward(const forward_batch& batch, std::vector<float>& logits)
     {
-#if defined(__APPLE__)
         // A pass of fewer tokens than the products in floats take, as a step of the generation,
         // runs on the performance cores alone (thread_pool_apple.inc).
         const thread_pool::fast_team_scope fast_team(static_cast<long>(batch.tokens.size()) < qk_float_product_tokens);
-#endif
         if (layer_pass_ && !batch.tokens.empty() && takes_layer_pass(batch))
         {
             try
