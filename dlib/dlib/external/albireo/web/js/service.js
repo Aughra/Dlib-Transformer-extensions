@@ -18,7 +18,7 @@ import * as api from './api.js';
 // ---------------------------------------------------------------------------------------------------
 // Les personnages, en petits portraits SVG.
 
-const portraits = {
+export const portraits = {
   // Le hibou : l'explication très technique (lunettes rondes, aigrettes, carnet).
   owl: `<svg viewBox="0 0 64 64" aria-hidden="true">
     <circle cx="32" cy="32" r="31" fill="#2f6f73"/>
@@ -65,14 +65,14 @@ const portraits = {
 // ---------------------------------------------------------------------------------------------------
 // De quoi dessiner les schémas : des boîtes, des flèches et du texte, aux couleurs du thème.
 
-function box(x, y, w, hgt, label, cls, sub) {
+export function box(x, y, w, hgt, label, cls, sub) {
   const cy = sub ? y + hgt / 2 - 4 : y + hgt / 2 + 5;
   return `<rect x="${x}" y="${y}" width="${w}" height="${hgt}" rx="9" class="s-box ${cls || ''}"/>` +
     `<text x="${x + w / 2}" y="${cy}" class="s-t" text-anchor="middle">${label}</text>` +
     (sub ? `<text x="${x + w / 2}" y="${cy + 17}" class="s-f" text-anchor="middle">${sub}</text>` : '');
 }
 
-function arrow(x1, y1, x2, y2, label, cls) {
+export function arrow(x1, y1, x2, y2, label, cls) {
   const a = Math.atan2(y2 - y1, x2 - x1), l = 9;
   const p1 = [x2 - l * Math.cos(a - 0.45), y2 - l * Math.sin(a - 0.45)];
   const p2 = [x2 - l * Math.cos(a + 0.45), y2 - l * Math.sin(a + 0.45)];
@@ -82,11 +82,11 @@ function arrow(x1, y1, x2, y2, label, cls) {
     (label ? `<text x="${mx}" y="${my}" class="s-f" text-anchor="middle">${label}</text>` : '');
 }
 
-function text(x, y, s, cls, anchor) {
+export function text(x, y, s, cls, anchor) {
   return `<text x="${x}" y="${y}" class="${cls || 's-t'}" text-anchor="${anchor || 'middle'}">${s}</text>`;
 }
 
-function schema(title, inner, height) {
+export function schema(title, inner, height) {
   return `<svg viewBox="0 0 600 ${height || 220}" role="img" aria-label="${title}" class="svc-svg">` +
     `<text x="16" y="26" class="s-title">${title}</text>${inner}</svg>`;
 }

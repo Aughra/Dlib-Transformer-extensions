@@ -168,7 +168,7 @@ const texts = {
     usageRead: 'Jetons lus', usageChart: 'Jetons générés et lus par jour sur les 30 derniers jours',
     tokensIn: 'Jetons lus', tokensOut: 'Jetons écrits',
     gpu: 'GPU', gpuOn: 'sur le GPU, {size} de tampons', gpuChecking: 'GPU en cours de contrôle', gpuProcessor: 'sur le processeur',
-    serviceTab: 'Service', gpuDisabled: 'Coupé (onglet Service)',
+    serviceTab: 'Service', modelsTab: 'Modèles', gpuDisabled: 'Coupé (onglet Service)',
     fromDevice: 'Depuis cet appareil', macDocs: 'Documents du Mac', macDocsHelp: 'Les fichiers du dossier des documents du Mac. Tout fichier joint dans la page y est aussi copié.', macDocsEmpty: 'Aucun document pour l\'instant : envoie-en un, ou dépose des fichiers dans {folder}.', macDocsAdd: 'Joindre', macDocsSend: 'Envoyer vers le Mac', macDocsDelete: 'Supprimer', macDocsCopyFailed: '{name} n\'a pas pu être copié sur le Mac : {error}', macDocsSent: '{name} est sur le Mac.', gpuMissing: 'Indisponible',
     tooLarge: '{name} est trop volumineux ({size}) ; la limite est de {limit}.', unsupported: '{name} : ce format ne peut pas être lu.',
     imageTooLarge: 'L\'image {name} est trop volumineuse ({size}) ; la limite d\'une image est de {limit}.',

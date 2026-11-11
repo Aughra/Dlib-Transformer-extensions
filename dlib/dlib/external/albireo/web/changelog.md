@@ -2,6 +2,22 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 3.1.0 — 11 novembre 2026
+
+### Modèles
+
+- Nouvel onglet « Modèles » dans les paramètres : catalogue des modèles avec leurs spécialités (général, code, cybersécurité, vision, raisonnement, outils), mention « Conseillé », « Possible » ou « Déconseillé » calculée d'après la mémoire du Mac et la vitesse d'écriture estimée, téléchargement et annulation depuis l'interface, suppression d'un modèle installé, rafraîchissement de la liste.
+- Chaque modèle dispose d'une fiche explicative (principe, avantages, inconvénients, schéma de la mémoire, explications à trois niveaux), également accessible depuis le bas de la page d'accueil.
+- Le modèle choisi est activé pour l'ensemble des fonctions du service ; le modèle de recherche dans les documents reste distinct.
+
+### Interface
+
+- Le sélecteur de fonction (Général, Code, Cybersécurité) de la barre supérieure et le réglage « Fonction par défaut » ont été retirés.
+- Les quatre exemples de questions de la page d'accueil ont été retirés.
+- Le modèle utilisé est affiché sous la zone de saisie et dans le panneau latéral ; ce dernier indique désormais l'unité de calcul (GPU ou processeur) au lieu du nom technique du moteur.
+
+---
+
 ## 3.0.0 — 11 novembre 2026
 
 Version majeure : une route de l'interface a été retirée.
@@ -74,3 +90,31 @@ Première version de la branche macOS. Elle repart d'Albireo Community Edition 1
 
 - Le redémarrage du service dans un nouveau processus utilise le chemin réel du programme sur macOS.
 - Correction d'un débordement d'écriture dans le noyau d'attention Metal (version de développement).
+
+---
+
+## 1.0.12 (base de l'original) — 9 au 11 novembre 2026
+
+Branche macOS en développement, avant sa numérotation propre. Les numéros de cette époque sont ceux de la version de l'original sur laquelle elle reposait.
+
+- Intégration d'Albireo 1.0.12 de l'original : clés et valeurs des modèles de langue rangées en entiers de 8 bits par défaut.
+- Attention NEON pour les clés et valeurs en 8 bits : lecture d'un prompt de 4 096 tokens de 36–38 à 158–162 tokens/s, écriture qui suit de 9 à 22,5 tokens/s (modèle de 2B).
+- Noyaux Q4_K et Q6_K : sommes conservées en registres vectoriels.
+- Écriture des réponses répartie sur les cœurs de performance, lecture des prompts sur tous les cœurs.
+
+---
+
+## 1.0.11 (base de l'original) — 6 au 9 novembre 2026
+
+- Première compilation complète d'Albireo et de Pseudalis sur macOS arm64 : moteurs AVX2 exclus, en-tête d'ordre des octets de macOS pour la synthèse vocale d'alors, sources NEON de libpng, frameworks CoreFoundation et Security liés au serveur HTTP, date de modification des fichiers lue au format de macOS.
+- Fonctionnement à l'exécution : chemin du programme lu par `_NSGetExecutablePath`, mémoire et processeur lus par les interfaces de macOS ; premier démarrage du service et première réponse sur Mac.
+- Noyaux NEON pour les formats Q4_K et Q6_K, exacts au bit près par rapport au code d'origine ; produit en flottants NEON pour les prompts ; attention NEON. Écriture du modèle de 2B de 7–11 à 33–37 tokens/s.
+- Produits des prompts par le framework Accelerate, et attention de l'encodeur d'images par Accelerate : encodage d'une image de 512 × 512 de 8,9–10,3 s à 1,8–2,2 s.
+- Pseudalis : test complet à 28 étapes sur 28.
+
+---
+
+## 1.0.8 (base de l'original) — 4 au 6 novembre 2026
+
+- Création de la branche macOS à partir d'Albireo 1.0.8 de l'original.
+- Première compilation de dlib et de ses exemples sur Mac Apple Silicon, sans erreur ; relevé des cinq causes d'échec de la compilation d'Albireo et de Pseudalis.

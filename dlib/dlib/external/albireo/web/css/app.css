@@ -813,3 +813,14 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .brand-home { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; cursor: pointer;
   color: inherit; font: inherit; border-radius: var(--radius-small); }
 .brand-home:hover { opacity: .85; }
+/* L'onglet Modèles et le modèle choisi (fork pour macOS). */
+.mdl-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.mdl-badge.conseille { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); }
+.mdl-badge.possible { color: var(--gold-strong); background: color-mix(in srgb, var(--gold) 18%, transparent); }
+.mdl-badge.deconseille { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.mdl-badge.inconnu { color: var(--text-faint); background: var(--bg-code); }
+.mdl-progress { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.mdl-progress .bar { width: 120px; height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.mdl-progress .bar div { height: 100%; background: var(--blue); }
+.hint .svc-help, .status-line .svc-help { width: 18px; height: 18px; font-size: 11px; vertical-align: middle; }
+.hint-model { font-weight: 600; color: var(--text-soft); }

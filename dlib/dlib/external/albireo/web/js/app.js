@@ -40,6 +40,7 @@ import * as tools from './tools.js';
 import * as web from './web.js';
 import * as images from './images.js';
 import { serviceTab } from './service.js';
+import { modelsTab, modelSheetDialog } from './models.js';
 
 const roles = ['general', 'code', 'security'];
 const roleIcons = { general: 'compass', code: 'code', security: 'shield' };
@@ -925,7 +926,7 @@ async function pollStatus() {
     if (changed) imageTokenCache.clear();
     // Une langue choisie entre-temps dans Albireo, que cette interface suit.
     await languageChanged();
-    if (ui.hint) ui.hint.textContent = hintText();
+    renderHint();
     // Le modèle d'embedding de la recherche dans les documents ; les documents qui n'ont pas encore
     // reçu de vecteurs sont indexés dès qu'il est là.
     const embedder = (s.loaded_models || []).find((m) => m.embedding && s.active && m.id === s.active.embedding);
@@ -976,11 +977,36 @@ function renderStatusLine() {
     } else {
       led = stats && stats.active > 0 ? 'busy' : 'ok';
       const tps = stats ? stats.generation_tokens_per_second : 0;
-      text = modelName(model) + ' · ' + (s.engine.variant || '?')
+      text = modelName(model) + ' · ' + computeUnit(model)
         + (tps > 0.05 ? ' · ' + t('tokensPerSecond', { n: formatDecimal(tps, 1) }) : '');
     }
   }
-  ui.statusLine.replaceChildren(h('span', { class: 'led ' + led }), h('span', { class: 'grow', title: text }, text));
+  const model = s && roleModel('general');
+  ui.statusLine.replaceChildren(h('span', { class: 'led ' + led }), h('span', { class: 'grow', title: text }, text),
+    model && modelInfo(model) ? modelHelp(model) : null);
+  renderHint();
+}
+
+// Où calcule le modèle : le GPU du Mac quand ses passes y vont, le processeur sinon (état du moteur).
+function computeUnit(id) {
+  const stats = state.status && state.status.engine && state.status.engine.stats;
+  const m = stats && (stats.models || []).find((x) => x.id === id);
+  return m && m.gpu && m.gpu.state === 'on' ? 'GPU' : 'processeur';
+}
+
+// Le « ? » du modèle choisi : sa fiche, comme celles des paramètres.
+function modelHelp(id) {
+  return h('button', { type: 'button', class: 'svc-help', title: 'Le modèle utilisé', 'aria-label': 'Le modèle utilisé',
+    onclick: () => modelSheetDialog(modelInfo(id), { h, dialog, status: () => state.status,
+      openModels: () => settingsDialog('modelsTab') }) }, '?');
+}
+
+// Sous la zone de saisie : le modèle qui répond, son « ? », et l'avertissement.
+function renderHint() {
+  if (!ui.hint) return;
+  const model = state.status && !state.statusError ? roleModel('general') : null;
+  fill(ui.hint, model ? [h('span', { class: 'hint-model' }, modelName(model)), ' ', modelInfo(model) ? modelHelp(model) : null,
+    ' · '] : null, hintText());
 }
 
 // Listes.
@@ -2996,7 +3022,7 @@ async function keepImages(c, list) {
 function newConversation(projectId) {
   return {
     id: store.uid(), title: '', projectId: projectId || null, created: Date.now(), updated: Date.now(), pinned: false,
-    role: state.settings.defaultRole || 'general', reasoning: false, agent: false, web: false, messages: [],
+    role: 'general', reasoning: false, agent: false, web: false, messages: [],
     incognito: state.incognito
   };
 }
@@ -3103,6 +3129,7 @@ function renderAll() {
 function gearButton() {
   return iconButton('gear', t('settings'), (e) => showMenu(e.currentTarget, [
     { icon: 'gear', label: t('settings'), action: () => settingsDialog('general') },
+    { icon: 'spark', label: t('modelsTab'), action: () => settingsDialog('modelsTab') },
     { icon: 'cpu', label: t('serviceTab'), action: () => settingsDialog('serviceTab') },
     { icon: 'info', label: t('about'), action: () => settingsDialog('about') },
     { icon: 'file', label: t('changelog'), action: () => changelogDialog() }
@@ -3156,40 +3183,9 @@ function renderTopbar() {
       }, h('span', { class: 'swatch', style: { background: p.color } }), p.name));
     }
   }
-  if (c) {
-    const model = roleModel(c.role);
-    bar.append(h('div', { class: 'role-picker' }, h('button', {
-      class: 'chip', type: 'button', title: model ? t('roleServedBy', { model: modelName(model) }) : t('noModel'),
-      onclick: (e) => roleMenu(e.currentTarget)
-    }, h('span', { html: icon(roleIcons[c.role]) }), t('role_' + c.role), h('span', { html: icon('chevron') }))));
-    if (c.messages.length) bar.append(iconButton('more', '…', (e) => conversationMenu(c, e.currentTarget)));
-  }
+  // Le fork n'a plus de sélecteur de fonction : le modèle se choisit dans les paramètres (onglet Modèles).
+  if (c && c.messages.length) bar.append(iconButton('more', '…', (e) => conversationMenu(c, e.currentTarget)));
   bar.append(gearButton());
-}
-
-function roleMenu(anchor) {
-  const c = state.current;
-  const entries = [];
-  // Les fonctions sans modèle propre partagent le modèle général, ou le modèle livré avec
-  // Albireo.
-  const chosen = state.status && (state.status.selected || state.status.active);
-  for (const r of roles) {
-    const own = chosen && chosen[r];
-    const model = roleModel(r);
-    entries.push({
-      label: t('role_' + r), icon: roleIcons[r], checked: c.role === r,
-      desc: t('roleHint_' + r) + (model ? ' · ' + (own ? modelName(model) : t('roleShared')) : ''),
-      // Une réponse en cours garde la fonction avec laquelle elle a démarré ; la question suivante prend celle-ci.
-      action: async () => {
-        const live = liveCopy(c);
-        live.role = r;
-        await saveSetting('defaultRole', r);
-        if (live.messages.length) await persist(live);
-        refreshViews();
-      }
-    });
-  }
-  showMenu(anchor, entries);
 }
 
 function toggleSidebar() {
@@ -3251,14 +3247,6 @@ function drawMain() {
 function renderWelcome() {
   const c = state.current;
   const name = state.settings.userName ? ', ' + state.settings.userName : '';
-  // La fonction vient du sélecteur de la barre du haut ; les suggestions la suivent.
-  const suggestions = h('div', { class: 'suggestions' });
-  for (let i = 1; i <= 4; ++i) {
-    const [title, prompt] = t('suggest_' + c.role + '_' + i).split('|');
-    suggestions.append(h('div', {
-      class: 'suggestion', onclick: () => { ui.input.value = prompt; autoGrow(); saveDraft(true); ui.input.focus(); }
-    }, h('b', null, title), h('span', null, prompt)));
-  }
   const p = c.projectId ? projectById(c.projectId) : null;
   let notice = null;
   if (state.statusError) notice = h('div', { class: 'error-box' }, t('serviceDown'));
@@ -3271,7 +3259,7 @@ function renderWelcome() {
     h('img', { class: 'hero', src: 'img/albireo-mark.svg', alt: '' }),
     h('h1', { html: escapeHtml(t('welcome', { name })).replace('Albireo', '<span>Albireo</span>') }),
     h('p', null, p ? t('newProjectDiscussion', { name: p.name }) : t('welcomeSub')),
-    notice, agent, suggestions));
+    notice, agent));
   ui.thread = null;
 }
 
@@ -6519,7 +6507,7 @@ function promptDialog(title, value) {
 
 function settingsDialog(initialTab) {
   dialog((box, close) => {
-    const tabs = ['general', 'model', 'memoryTab', 'data', 'serviceTab', 'about'];
+    const tabs = ['general', 'modelsTab', 'model', 'memoryTab', 'data', 'serviceTab', 'about'];
     const tabBar = h('div', { class: 'tabs' });
     const body = h('div');
     const show = (tab) => {
@@ -6531,6 +6519,7 @@ function settingsDialog(initialTab) {
       else if (tab === 'memoryTab') memoryTab(body);
       else if (tab === 'data') dataTab(body, close);
       else if (tab === 'serviceTab') serviceTab(body, { h, toast, status: () => state.status, refreshStatus });
+      else if (tab === 'modelsTab') modelsTab(body, { h, toast, status: () => state.status, refreshStatus });
       else aboutTab(body, close);
     };
     for (const tab of tabs) tabBar.append(h('button', { type: 'button', 'data-tab': tab, onclick: () => show(tab) }, t(tab)));
@@ -6553,20 +6542,13 @@ function generalTab(body, close) {
     await saveSetting('userName', name.value.trim());
     refreshViews();
   });
-  const role = h('select', null, roles.map((r) => h('option', { value: r, selected: state.settings.defaultRole === r }, t('role_' + r))));
-  // Une nouvelle discussion, encore sans messages, prend aussitôt la fonction par défaut.
-  role.addEventListener('change', async () => {
-    await saveSetting('defaultRole', role.value);
-    if (state.current && !state.current.messages.length) state.current.role = role.value;
-    refreshViews();
-  });
   const enter = h('input', { type: 'checkbox', checked: state.settings.sendOnEnter });
   enter.addEventListener('change', () => saveSetting('sendOnEnter', enter.checked));
   const sys = h('textarea', { rows: 4 });
   sys.value = state.settings.systemPrompt || '';
   sys.addEventListener('change', () => saveSetting('systemPrompt', sys.value));
   body.append(field(t('theme'), theme), field(t('yourName'), name, t('yourNameHelp')),
-    field(t('defaultRole'), role), h('div', { class: 'field' }, h('label', { class: 'inline' }, enter, ' ', t('sendOnEnter'))),
+    h('div', { class: 'field' }, h('label', { class: 'inline' }, enter, ' ', t('sendOnEnter'))),
     field(t('systemPrompt'), sys, t('systemPromptHelp')));
 }
 
