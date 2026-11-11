@@ -36,11 +36,7 @@ namespace pseudalis
         const long ms = static_cast<long>(
             std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000);
         std::tm tm;
-#if defined(_WIN32)
-        localtime_s(&tm, &t);
-#else
         localtime_r(&t, &tm);
-#endif
         char stamp[64];
         std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &tm);
         char ms_part[8];
@@ -57,19 +53,11 @@ namespace pseudalis
         }
         if (path_.empty()) return;
         if (file_size(path_) > max_bytes_) rename_file(path_, path_ + ".1");
-#if defined(_WIN32)
-        std::ofstream out(widen(path_).c_str(), std::ios::app | std::ios::binary);
-#else
         std::ofstream out(path_, std::ios::app | std::ios::binary);
-#endif
         if (out)
         {
             out << line;
-#if defined(_WIN32)
-            out << "\r\n";
-#else
             out << "\n";
-#endif
         }
     }
 

@@ -74,11 +74,7 @@ namespace pseudalis
     std::string sha256_file(const std::string& path, const std::function<void(uint64_t)>& progress,
         const std::atomic<bool>* cancel)
     {
-#if defined(_WIN32)
-        std::ifstream in(widen(path).c_str(), std::ios::binary);
-#else
         std::ifstream in(path, std::ios::binary);
-#endif
         if (!in) return std::string();
         sha256_stream s;
         std::vector<char> buf(1 << 20);

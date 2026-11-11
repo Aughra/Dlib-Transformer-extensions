@@ -1,17 +1,11 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#if defined(_WIN32) && !defined(_WIN32_WINNT)
-#define _WIN32_WINNT 0x0A00
-#endif
 #include <dlib/external/httplib/httplib.h>
 
 #include "albireo_client.h"
 
 #include <cstdlib>
 
-#if defined(_WIN32)
-#include <windows.h>
-#endif
 
 #include "../common/log.h"
 #include "../common/platform.h"
@@ -60,33 +54,11 @@ namespace pseudalis
 
     std::string albireo_client::albireo_data_dir()
     {
-#if defined(_WIN32)
-        HKEY key;
-        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"Software\\Albireo", 0, KEY_READ | KEY_WOW64_64KEY, &key)
-            == ERROR_SUCCESS)
-        {
-            wchar_t buf[1024];
-            DWORD size = sizeof(buf), type = 0;
-            const LONG rc = RegQueryValueExW(key, L"DataDir", nullptr, &type, reinterpret_cast<BYTE*>(buf), &size);
-            RegCloseKey(key);
-            if (rc == ERROR_SUCCESS && type == REG_SZ && size >= sizeof(wchar_t))
-            {
-                const std::string dir = narrow(std::wstring(buf, size / sizeof(wchar_t) - 1));
-                if (dir_exists(dir)) return dir;
-            }
-        }
-        /*
-            Only the folder that the installer of Albireo recorded, which only an administrator
-            can record: any user can create a folder Albireo in %ProgramData%.
-        */
-        return std::string();
-#else
         const char* home = std::getenv("ALBIREO_HOME");
         if (home && *home) return dir_exists(home) ? std::string(home) : std::string();
         const char* user = std::getenv("HOME");
         const std::string dir = user ? join_path(user, ".local/share/albireo") : std::string();
         return dir_exists(dir) ? dir : std::string();
-#endif
     }
 
     void albireo_client::set_enabled(bool on)

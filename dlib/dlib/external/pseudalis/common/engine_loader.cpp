@@ -4,20 +4,7 @@
 
 #include <cstring>
 
-#if defined(_WIN32)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#if defined(_MSC_VER)
-#include <intrin.h>
-#endif
-#else
 #include <dlfcn.h>
-#endif
-#if !defined(_MSC_VER) && (defined(__x86_64__) || defined(__i386__))
-#include <cpuid.h>
-#endif
 
 #include "build_stamp.h"
 #include "platform.h"
@@ -27,30 +14,6 @@ namespace pseudalis
 {
     namespace
     {
-#if defined(_M_X64) || defined(_M_IX86) || defined(__x86_64__) || defined(__i386__)
-        void cpuid(uint32_t leaf, uint32_t sub, uint32_t r[4])
-        {
-#if defined(_MSC_VER)
-            int regs[4];
-            __cpuidex(regs, static_cast<int>(leaf), static_cast<int>(sub));
-            for (int i = 0; i < 4; ++i) r[i] = static_cast<uint32_t>(regs[i]);
-#else
-            __cpuid_count(leaf, sub, r[0], r[1], r[2], r[3]);
-#endif
-        }
-
-        // Read without the intrinsic, which GCC only allows in code compiled for XSAVE.
-        uint64_t xgetbv0()
-        {
-#if defined(_MSC_VER)
-            return _xgetbv(0);
-#else
-            uint32_t eax, edx;
-            __asm__ volatile("xgetbv" : "=a"(eax), "=d"(edx) : "c"(0));
-            return (static_cast<uint64_t>(edx) << 32) | eax;
-#endif
-        }
-#endif
 
         struct callback_context
         {
@@ -113,43 +76,9 @@ namespace pseudalis
 
     bool cpu_has_avx2()
     {
-#if defined(_M_X64) || defined(__x86_64__)
-        uint32_t r[4];
-        cpuid(0, 0, r);
-        if (r[0] < 7) return false;
-        cpuid(1, 0, r);
-        const bool osxsave = (r[2] >> 27) & 1, avx = (r[2] >> 28) & 1, fma = (r[2] >> 12) & 1;
-        if (!osxsave || !avx || !fma) return false;
-        // The system saves the SSE and AVX registers.
-        if ((xgetbv0() & 6) != 6) return false;
-        cpuid(7, 0, r);
-        return (r[1] >> 5) & 1;
-#else
         return false;
-#endif
     }
 
-#if defined(_WIN32) && !defined(PSEUDALIS_ENGINE_STATIC)
-    namespace
-    {
-        // The build an engine library holds in its resources, read without running any of its code.
-        std::string resource_build(const std::string& path)
-        {
-            HMODULE m = LoadLibraryExW(widen(path).c_str(), nullptr,
-                                       LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE);
-            if (!m) return std::string();
-            std::string out;
-            HRSRC r = FindResourceW(m, L"PSEUDALIS_BUILD", MAKEINTRESOURCEW(10));
-            HGLOBAL g = r ? LoadResource(m, r) : nullptr;
-            const char* data = g ? static_cast<const char*>(LockResource(g)) : nullptr;
-            const DWORD size = r ? SizeofResource(m, r) : 0;
-            if (data && size > 0 && size < 256) out.assign(data, size);
-            FreeLibrary(m);
-            while (!out.empty() && out.back() == '\0') out.pop_back();
-            return out;
-        }
-    }
-#endif
 
     engine_library::~engine_library()
     {
@@ -159,7 +88,6 @@ namespace pseudalis
 
     bool engine_library::load(const std::string& folder, const std::string& force, std::string& error)
     {
-#if defined(PSEUDALIS_ENGINE_STATIC)
         (void)folder;
         (void)force;
         (void)error;
@@ -176,77 +104,6 @@ namespace pseudalis
         free_buffer = psd_free;
         path_ = "(built in)";
         return true;
-#else
-        const bool avx2 = force == "avx2" || (force != "baseline" && cpu_has_avx2());
-#if defined(_WIN32)
-        const char* names[] = { "pseudalis-engine-avx2.dll", "pseudalis-engine.dll" };
-#else
-        const char* names[] = { "libpseudalis-engine-avx2.so", "libpseudalis-engine.so" };
-#endif
-        for (int k = avx2 ? 0 : 1; k < 2 && !handle_; ++k)
-        {
-            const std::string path = join_path(folder, names[k]);
-            if (!file_exists(path)) continue;
-#if defined(_WIN32)
-            // The build first, in the resources: a library of another build never runs here.
-            const std::string stamp = resource_build(path);
-            if (stamp != PSEUDALIS_BUILD_STAMP)
-            {
-                error = path + " is the engine of another build of Pseudalis (" + (stamp.empty() ? "none" : stamp) +
-                        ", this program " + PSEUDALIS_BUILD_STAMP + ")";
-                return false;
-            }
-            handle_ = LoadLibraryExW(widen(path).c_str(), nullptr,
-                                     LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
-#else
-            handle_ = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
-#endif
-            if (handle_) path_ = path;
-        }
-        if (!handle_)
-        {
-            error = std::string("no engine library in ") + folder;
-            return false;
-        }
-        auto get = [this](const char* name) -> void* {
-#if defined(_WIN32)
-            return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(handle_), name));
-#else
-            return dlsym(handle_, name);
-#endif
-        };
-#define PSD_RESOLVE(member, name) member = reinterpret_cast<decltype(member)>(get(name))
-        PSD_RESOLVE(api_version, "psd_api_version");
-        PSD_RESOLVE(variant, "psd_variant");
-        PSD_RESOLVE(build, "psd_build");
-        PSD_RESOLVE(models, "psd_models");
-        PSD_RESOLVE(create, "psd_create");
-        PSD_RESOLVE(destroy, "psd_destroy");
-        PSD_RESOLVE(process, "psd_process");
-        PSD_RESOLVE(key_fingerprint, "psd_key_fingerprint");
-        PSD_RESOLVE(set_terms, "psd_set_terms");
-        PSD_RESOLVE(alloc, "psd_alloc");
-        PSD_RESOLVE(free_buffer, "psd_free");
-#undef PSD_RESOLVE
-        if (!api_version || !variant || !build || !models || !create || !destroy || !process || !key_fingerprint ||
-            !set_terms || !alloc || !free_buffer || api_version() != PSEUDALIS_ENGINE_API_VERSION)
-        {
-            error = path_ + " is not an engine of this version of Pseudalis";
-            create = nullptr;
-            return false;
-        }
-        // The engine of this build alone, which the installer placed beside the program.
-        const std::string own = PSEUDALIS_VERSION "+" PSEUDALIS_BUILD_STAMP;
-        const char* theirs = build();
-        if (!theirs || own != theirs)
-        {
-            error = path_ + " is the engine of another build of Pseudalis (" + (theirs ? theirs : "none") +
-                    ", this program " + own + ")";
-            create = nullptr;
-            return false;
-        }
-        return true;
-#endif
     }
 
     engine_client::engine_client(const std::shared_ptr<engine_library>& lib, const std::string& key,

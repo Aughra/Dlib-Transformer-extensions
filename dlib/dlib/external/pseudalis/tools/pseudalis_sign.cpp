@@ -31,14 +31,9 @@
 #include <mbedtls/pk.h>
 #include <psa/crypto.h>
 
-#if defined(_WIN32)
-#include <windows.h>
-#include <sddl.h>
-#else
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
-#endif
 
 #include "../common/platform.h"
 #include "../host/crypto.h"
@@ -59,27 +54,6 @@ namespace
         return 2;
     }
 
-#if defined(_WIN32)
-    // The security identifier of the account that runs this program, as text (S-1-5-21-...).
-    std::wstring current_user_sid()
-    {
-        HANDLE token = nullptr;
-        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return std::wstring();
-        DWORD size = 0;
-        GetTokenInformation(token, TokenUser, nullptr, 0, &size);
-        std::vector<unsigned char> buffer(size);
-        std::wstring sid;
-        LPWSTR text = nullptr;
-        if (size > 0 && GetTokenInformation(token, TokenUser, buffer.data(), size, &size)
-            && ConvertSidToStringSidW(reinterpret_cast<TOKEN_USER*>(buffer.data())->User.Sid, &text))
-        {
-            sid = text;
-            LocalFree(text);
-        }
-        CloseHandle(token);
-        return sid;
-    }
-#endif
 
     /*
         Creates the file path, which must not exist, with data.  With owner_only, the account
@@ -90,37 +64,6 @@ namespace
     bool create_new_file(const std::string& path, const std::string& data, bool owner_only, std::string& error)
     {
         const std::string exists = path + " exists already: a key in place is never replaced";
-#if defined(_WIN32)
-        SECURITY_ATTRIBUTES sa = { sizeof(sa), nullptr, FALSE };
-        PSECURITY_DESCRIPTOR sd = nullptr;
-        if (owner_only)
-        {
-            const std::wstring sid = current_user_sid();
-            const std::wstring sddl = L"D:P(A;;FA;;;" + sid + L")";
-            if (sid.empty()
-                || !ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(), SDDL_REVISION_1, &sd, nullptr))
-            {
-                error = "cannot make the access list of " + path + " for the account of this program";
-                return false;
-            }
-            sa.lpSecurityDescriptor = sd;
-        }
-        const std::wstring w = pseudalis::widen(path);
-        HANDLE h = CreateFileW(w.c_str(), GENERIC_WRITE, 0, &sa, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
-        const DWORD create_error = GetLastError();
-        if (sd) LocalFree(sd);
-        if (h == INVALID_HANDLE_VALUE)
-        {
-            error = create_error == ERROR_FILE_EXISTS || create_error == ERROR_ALREADY_EXISTS ? exists
-                : "cannot create " + path;
-            return false;
-        }
-        DWORD written = 0;
-        const bool ok = WriteFile(h, data.data(), static_cast<DWORD>(data.size()), &written, nullptr)
-            && written == data.size() && FlushFileBuffers(h);
-        CloseHandle(h);
-        if (!ok) DeleteFileW(w.c_str());
-#else
         // O_EXCL refuses any entry of that name, a link included.
         const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, owner_only ? 0600 : 0644);
         if (fd < 0)
@@ -139,7 +82,6 @@ namespace
         const bool ok = done == data.size() && fsync(fd) == 0;
         ::close(fd);
         if (!ok) ::unlink(path.c_str());
-#endif
         if (!ok) error = "cannot write " + path;
         return ok;
     }

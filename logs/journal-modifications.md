@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Retirer de Pseudalis le code de Windows, de Linux et des x86 (nettoyage, N1 à N3)
+
+- **Quoi** : fichiers supprimés (`windows/`, `build_windows.ps1`, le contrôle des imports de bibliothèques Windows `check_imports.cpp` et `check_imports.cmake`, scripts CMake de MinGW et de la charge utile, ressources `.rc`, icônes, images et licence de l'installateur, `make_feed.py`, `publish_release.py`) ; `CMakeLists.txt` réécrit pour macOS sur Apple Silicon (255 → 161 lignes) : le moteur n'existe plus qu'à l'intérieur du service et de `test_engine` (la bibliothèque `libpseudalis-engine.dylib`, inutile sur Mac, n'est plus construite) ; `unifdef` sur 19 fichiers (2 831 lignes de moins).
+- **Fichiers** : `dlib/dlib/external/pseudalis/` ; ce journal.
+- **Pourquoi** : décision « du pur Apple ».
+- **Étapes** : reconfiguration à neuf de `build/macos-pseudalis` ; build sans erreur, les 3 avertissements connus ; `test_engine`, `test_host` passent ; `test_linux.sh` (avec `nproc` et `gstat` fournis par le `PATH`) : 34 étapes sur 34. Restent des traces hors des blocs conditionnels (chargeur de moteur, commentaires), à retirer ensuite.
+
 ## 2026-11-11 — Retirer d'Albireo le code de Windows, de Linux, des x86 et de CUDA (nettoyage, N1 à N3)
 
 - **Quoi** : décision de l'humain, « du pur Apple », périmètre Albireo et Pseudalis (dlib reste tel quel, on s'en éloignera plus tard). Pour Albireo : fichiers supprimés (`dist/`, `windows/`, scripts `.ps1`, `prerequisites_linux.sh`, outils de publication des installateurs `make_feed.py`, `publish_release.py`, `make_offline_bundle.py`, ressources `.rc`, icônes `.ico` et images du tray et de l'installateur, `tensor_backend` CUDA/OpenVINO avec `test_device_ops` et `test_offload`, scripts CMake de CUDA, MinGW, de la charge utile et des bibliothèques de périphériques) ; `CMakeLists.txt` réécrit pour macOS sur Apple Silicon seulement (864 → 307 lignes, refus des autres plateformes, un seul moteur `cpu`, une seule famille de noyaux) ; `unifdef` sur 34 fichiers : branches `_WIN32`, x86 (AVX2, VNNI), CUDA, OpenVINO et Linux retirées, branches `__APPLE__` gardées seules (4 854 lignes de moins). Les sources SVG des dessins et `make_images.py` restent.

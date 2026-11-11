@@ -69,17 +69,8 @@
 
 #include <stddef.h>
 
-#if defined(_WIN32)
-#if defined(PSEUDALIS_ENGINE_BUILD)
-#define PSD_API __declspec(dllexport)
-#else
-#define PSD_API
-#endif
-#define PSD_CALL __cdecl
-#else
 #define PSD_API __attribute__((visibility("default")))
 #define PSD_CALL
-#endif
 
 #define PSEUDALIS_ENGINE_API_VERSION 4
 

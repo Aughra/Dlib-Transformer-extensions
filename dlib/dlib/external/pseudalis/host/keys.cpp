@@ -1,8 +1,5 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#if defined(_WIN32) && !defined(_WIN32_WINNT)
-#define _WIN32_WINNT 0x0A00
-#endif
 #include "keys.h"
 
 #include <algorithm>
@@ -13,14 +10,7 @@
 #include <dlib/crypto/secure_random.h>
 #include <dlib/crypto/sha256.h>
 
-#if defined(_WIN32)
-#include <windows.h>
-#include <aclapi.h>
-#include <sddl.h>
-#include <wincrypt.h>
-#else
 #include <sys/stat.h>
-#endif
 
 #include "../common/json.h"
 #include "../common/platform.h"
@@ -38,25 +28,6 @@ namespace pseudalis
             return join_path(dir, "master.key");
         }
 
-#if defined(_WIN32)
-        bool dpapi(const std::string& in, std::string& out, bool protect)
-        {
-            DATA_BLOB a, b;
-            a.pbData = reinterpret_cast<BYTE*>(const_cast<char*>(in.data()));
-            a.cbData = static_cast<DWORD>(in.size());
-            b.pbData = nullptr;
-            b.cbData = 0;
-            const BOOL ok = protect
-                ? CryptProtectData(&a, L"Pseudalis master key", nullptr, nullptr, nullptr,
-                                   CRYPTPROTECT_UI_FORBIDDEN, &b)
-                : CryptUnprotectData(&a, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &b);
-            if (!ok) return false;
-            out.assign(reinterpret_cast<const char*>(b.pbData), b.cbData);
-            SecureZeroMemory(b.pbData, b.cbData);
-            LocalFree(b.pbData);
-            return true;
-        }
-#endif
     }
 
     void wipe(std::string& s)
@@ -112,76 +83,19 @@ namespace pseudalis
 
     bool private_folder(const std::string& path, std::string& error)
     {
-#if defined(_WIN32)
-        const wchar_t* const wanted = L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)";
-        /*
-            A folder that has these permissions already keeps them as they are: setting them
-            again would write them on each file it holds, the blobs of the vault included.
-        */
-        if (dir_exists(path))
-        {
-            PSECURITY_DESCRIPTOR current = nullptr;
-            std::wstring w = widen(path);
-            if (GetNamedSecurityInfoW(&w[0], SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr, nullptr,
-                    nullptr, &current) == ERROR_SUCCESS)
-            {
-                LPWSTR text = nullptr;
-                const bool same = ConvertSecurityDescriptorToStringSecurityDescriptorW(current, SDDL_REVISION_1,
-                    DACL_SECURITY_INFORMATION, &text, nullptr) && text && std::wstring(text) == wanted;
-                if (text) LocalFree(text);
-                LocalFree(current);
-                if (same) return true;
-            }
-        }
-        PSECURITY_DESCRIPTOR sd = nullptr;
-        if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(wanted, SDDL_REVISION_1, &sd, nullptr))
-        {
-            error = "cannot build the permissions of " + path;
-            return false;
-        }
-        bool ok = true;
-        if (!dir_exists(path))
-        {
-            make_dirs(parent_path(path));
-            SECURITY_ATTRIBUTES sa = { sizeof(sa), sd, FALSE };
-            ok = CreateDirectoryW(widen(path).c_str(), &sa) != 0 || dir_exists(path);
-        }
-        if (ok)
-        {
-            BOOL present = FALSE, defaulted = FALSE;
-            PACL dacl = nullptr;
-            GetSecurityDescriptorDacl(sd, &present, &dacl, &defaulted);
-            std::wstring w = widen(path);
-            ok = SetNamedSecurityInfoW(&w[0], SE_FILE_OBJECT,
-                                       DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, nullptr,
-                                       nullptr, dacl, nullptr) == ERROR_SUCCESS;
-        }
-        LocalFree(sd);
-        if (!ok) error = "cannot make " + path + " a folder of SYSTEM and the administrators";
-        return ok;
-#else
         if (!make_dirs(path) || chmod(path.c_str(), 0700) != 0)
         {
             error = "cannot make the folder " + path;
             return false;
         }
         return true;
-#endif
     }
 
     bool save_master_key(const std::string& keys_dir, const std::string& master, std::string& error)
     {
         if (!private_folder(keys_dir, error)) return false;
         std::string stored;
-#if defined(_WIN32)
-        if (!dpapi(master, stored, true))
-        {
-            error = "DPAPI cannot protect the master key";
-            return false;
-        }
-#else
         stored = master;
-#endif
         const bool ok = write_file_restricted(key_path(keys_dir), "PSDK1" + stored);
         wipe(stored);
         if (!ok) error = "cannot write " + key_path(keys_dir);
@@ -206,18 +120,8 @@ namespace pseudalis
         }
         std::string stored = data.substr(5);
         wipe(data);
-#if defined(_WIN32)
-        const bool ok = dpapi(stored, master, false);
-        wipe(stored);
-        if (!ok)
-        {
-            error = "DPAPI cannot open the master key (another account or another computer made it)";
-            return false;
-        }
-#else
         master = stored;
         wipe(stored);
-#endif
         if (master.size() != 32)
         {
             wipe(master);

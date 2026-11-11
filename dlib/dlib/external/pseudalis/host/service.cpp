@@ -1,8 +1,5 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#if defined(_WIN32) && !defined(_WIN32_WINNT)
-#define _WIN32_WINNT 0x0A00
-#endif
 #include <dlib/external/httplib/httplib.h>
 
 #include "service.h"
@@ -13,9 +10,6 @@
 #include <cstdlib>
 #include <set>
 
-#if defined(_WIN32)
-#include <windows.h>
-#endif
 
 #include "../common/log.h"
 #include "../common/platform.h"
@@ -127,20 +121,9 @@ namespace pseudalis
     {
         const std::string l = settings_ ? settings_->get().language : std::string("auto");
         if (l != "auto") return l;
-#if defined(_WIN32)
-        switch (PRIMARYLANGID(GetSystemDefaultUILanguage()))
-        {
-            case LANG_FRENCH: return "fr";
-            case LANG_GERMAN: return "de";
-            case LANG_ITALIAN: return "it";
-            case LANG_SPANISH: return "es";
-            default: return "en";
-        }
-#else
         const char* lang = std::getenv("LANG");
         const std::string s = lang ? std::string(lang).substr(0, 2) : std::string();
         return s == "fr" || s == "de" || s == "it" || s == "es" ? s : "en";
-#endif
     }
 
     bool service::start_engine(std::string& error)
@@ -254,12 +237,6 @@ namespace pseudalis
         {
             const unsigned cores = std::max(2u, std::thread::hardware_concurrency());
             unsigned long long by_memory = 8;
-#if defined(_WIN32)
-            const unsigned long long file_bytes = static_cast<unsigned long long>(st.max_file_mb) << 20;
-            MEMORYSTATUSEX memory;
-            memory.dwLength = sizeof(memory);
-            if (GlobalMemoryStatusEx(&memory)) by_memory = memory.ullTotalPhys / (6 * std::max(file_bytes, 1ull));
-#endif
             const int slots = static_cast<int>(std::min<unsigned long long>(by_memory, std::min(8u, cores / 2)));
             work_.init(std::max(2, slots));
         }
@@ -267,20 +244,7 @@ namespace pseudalis
         // The certificates of the local server, and the trust of a new authority.
         const std::string cert_dir = join_path(data_dir_, "certificates");
         bool renewed = false;
-#if defined(_WIN32)
-        const bool was_trusted = authority_trusted();
-#endif
         if (!ensure_certificates(cert_dir, renewed, error)) return false;
-#if defined(_WIN32)
-        if (renewed && (st.trust_authority || was_trusted))
-        {
-            std::string te;
-            if (trust_authority(cert_dir, te))
-                log_info("certificates: the new local authority is trusted by this computer");
-            else
-                log_warning("certificates: " + te);
-        }
-#endif
 
         // The updates: one downloaded earlier is applied before anything is served.
         set_http_proxy(st.proxy);
@@ -350,11 +314,7 @@ namespace pseudalis
             run end.  Elsewhere SO_REUSEADDR gives the same restart.
         */
         server_->set_socket_options([](socket_t sock) {
-#if defined(_WIN32)
-            (void)sock;
-#else
             httplib::set_socket_opt(sock, SOL_SOCKET, SO_REUSEADDR, 1);
-#endif
         });
         // The previous run, or the previous process, may still release the port: tried again
         // for ten seconds.

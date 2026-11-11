@@ -30,29 +30,12 @@
     tree, so that a folder copied whole keeps its shape there.
 */
 
-#if defined(_WIN32)
-#if !defined(_WIN32_WINNT)
-#define _WIN32_WINNT 0x0A00
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#include <aclapi.h>
-#include <sddl.h>
-#else
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#if defined(__APPLE__)
 // macOS names st_mtimespec the modification time that Linux names st_mtim.
 #define st_mtim st_mtimespec
-#endif
-#endif
 
 #include "drive.h"
 
@@ -132,9 +115,6 @@ namespace pseudalis
         // A path within a folder, '/' between its parts, with the separators of the system.
         std::string os_path(std::string path)
         {
-#if defined(_WIN32)
-            std::replace(path.begin(), path.end(), '/', '\\');
-#endif
             return path;
         }
 
@@ -164,261 +144,6 @@ namespace pseudalis
             int64_t written = 0;
         };
 
-#if defined(_WIN32)
-        std::wstring native(const std::string& folder, const std::string& path)
-        {
-            std::string p = path;
-            std::replace(p.begin(), p.end(), '/', '\\');
-            return widen(p.empty() ? folder : join_path(folder, p));
-        }
-
-        // The key of a path: its upper case, independent of the language, as NTFS compares names.
-        std::string key_of(const std::string& path)
-        {
-            std::wstring w = widen(path);
-            if (w.empty()) return std::string();
-            // The source and the destination of LCMapStringEx are two buffers.
-            std::wstring up(w.size(), L'\0');
-            if (LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_UPPERCASE, w.c_str(), static_cast<int>(w.size()), &up[0],
-                              static_cast<int>(up.size()), nullptr, nullptr, 0) == static_cast<int>(up.size()))
-                return narrow(up);
-            CharUpperBuffW(&w[0], static_cast<DWORD>(w.size()));
-            return narrow(w);
-        }
-
-        int64_t filetime_value(const FILETIME& f)
-        {
-            return static_cast<int64_t>((static_cast<uint64_t>(f.dwHighDateTime) << 32) | f.dwLowDateTime);
-        }
-
-        // The entries under root, links left out with what they lead to.
-        void scan_tree(const std::string& root, std::vector<entry>& out)
-        {
-            std::vector<std::string> pending(1, std::string());
-            while (!pending.empty() && out.size() < max_entries)
-            {
-                const std::string rel = pending.back();
-                pending.pop_back();
-                WIN32_FIND_DATAW fd;
-                const std::wstring pattern = native(root, rel) + L"\\*";
-                HANDLE h = FindFirstFileExW(pattern.c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr,
-                                            FIND_FIRST_EX_LARGE_FETCH);
-                if (h == INVALID_HANDLE_VALUE) continue;
-                do
-                {
-                    const std::wstring n = fd.cFileName;
-                    if (n == L"." || n == L"..") continue;
-                    const std::string name = narrow(n);
-                    const bool dir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                    if ((fd.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) || (!dir && ignored_name(name))) continue;
-                    entry e;
-                    e.path = child_of(rel, name);
-                    e.dir = dir;
-                    e.size = static_cast<long long>((static_cast<uint64_t>(fd.nFileSizeHigh) << 32) | fd.nFileSizeLow);
-                    e.written = filetime_value(fd.ftLastWriteTime);
-                    out.push_back(e);
-                    if (e.dir) pending.push_back(e.path);
-                } while (out.size() < max_entries && FindNextFileW(h, &fd));
-                FindClose(h);
-            }
-        }
-
-        typedef HANDLE file_handle;
-        const file_handle no_handle = INVALID_HANDLE_VALUE;
-
-        void close_file(file_handle& h)
-        {
-            if (h != no_handle) CloseHandle(h);
-            h = no_handle;
-        }
-
-        // 0: opened alone; 1: a program holds it; 2: missing, a link or elsewhere than path.
-        int open_alone(const std::string& path, file_handle& h)
-        {
-            h = CreateFileW(widen(path).c_str(), GENERIC_READ | DELETE | READ_CONTROL | WRITE_DAC, 0, nullptr,
-                            OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT |
-                            FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
-            if (h == no_handle)
-            {
-                const DWORD e = GetLastError();
-                return e == ERROR_SHARING_VIOLATION || e == ERROR_LOCK_VIOLATION ? 1 : 2;
-            }
-            BY_HANDLE_FILE_INFORMATION info;
-            if (!GetFileInformationByHandle(h, &info) ||
-                (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) ||
-                !handle_at(h, path))
-            {
-                close_file(h);
-                return 2;
-            }
-            return 0;
-        }
-
-        bool stat_file(file_handle h, long long& size, int64_t& written)
-        {
-            BY_HANDLE_FILE_INFORMATION info;
-            if (!GetFileInformationByHandle(h, &info)) return false;
-            size = static_cast<long long>((static_cast<uint64_t>(info.nFileSizeHigh) << 32) | info.nFileSizeLow);
-            written = filetime_value(info.ftLastWriteTime);
-            return true;
-        }
-
-        // Reads size bytes more from h after the from bytes data holds.
-        bool read_all(file_handle h, std::string& data, uint64_t size, size_t from = 0)
-        {
-            data.resize(from + static_cast<size_t>(size));
-            size_t done = from;
-            while (done < data.size())
-            {
-                DWORD got = 0;
-                const DWORD want = static_cast<DWORD>(std::min<size_t>(data.size() - done, 1u << 24));
-                if (!ReadFile(h, &data[done], want, &got, nullptr) || got == 0) return false;
-                done += got;
-            }
-            return true;
-        }
-
-        bool delete_held(file_handle h)
-        {
-            FILE_DISPOSITION_INFO d;
-            d.DeleteFile = TRUE;
-            return SetFileInformationByHandle(h, FileDispositionInfo, &d, sizeof(d)) != 0;
-        }
-
-        // Moves the file of h to target, never over another file.
-        bool move_held(file_handle h, const std::string& target)
-        {
-            const std::wstring t = widen(target);
-            std::vector<char> buffer(sizeof(FILE_RENAME_INFO) + (t.size() + 1) * sizeof(wchar_t));
-            FILE_RENAME_INFO* r = reinterpret_cast<FILE_RENAME_INFO*>(buffer.data());
-            r->ReplaceIfExists = FALSE;
-            r->RootDirectory = nullptr;
-            r->FileNameLength = static_cast<DWORD>(t.size() * sizeof(wchar_t));
-            std::memcpy(r->FileName, t.c_str(), (t.size() + 1) * sizeof(wchar_t));
-            return SetFileInformationByHandle(h, FileRenameInfo, r, static_cast<DWORD>(buffer.size())) != 0;
-        }
-
-        // The owner of a file, as a SID in text, "S-1-5-21-...".
-        std::string owner_of(file_handle h)
-        {
-            PSID owner = nullptr;
-            PSECURITY_DESCRIPTOR sd = nullptr;
-            std::string out;
-            if (GetSecurityInfo(h, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION, &owner, nullptr, nullptr, nullptr,
-                                &sd) == ERROR_SUCCESS && owner)
-            {
-                LPWSTR text = nullptr;
-                if (ConvertSidToStringSidW(owner, &text))
-                {
-                    out = narrow(text);
-                    LocalFree(text);
-                }
-            }
-            if (sd) LocalFree(sd);
-            return out;
-        }
-
-        // Applies a security descriptor in SDDL to the object of h, or to the folder path.
-        bool apply_sddl(file_handle h, const std::string& path, const std::string& sddl)
-        {
-            PSECURITY_DESCRIPTOR sd = nullptr;
-            if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(widen(sddl).c_str(), SDDL_REVISION_1, &sd,
-                                                                      nullptr))
-                return false;
-            BOOL present = FALSE, defaulted = FALSE;
-            PACL dacl = nullptr;
-            bool ok = GetSecurityDescriptorDacl(sd, &present, &dacl, &defaulted) && present;
-            if (ok)
-            {
-                const SECURITY_INFORMATION what = DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION;
-                ok = h != no_handle
-                    ? SetSecurityInfo(h, SE_FILE_OBJECT, what, nullptr, nullptr, dacl, nullptr) == ERROR_SUCCESS
-                    : SetNamedSecurityInfoW(&widen(path)[0], SE_FILE_OBJECT, what, nullptr, nullptr, dacl, nullptr) ==
-                          ERROR_SUCCESS;
-            }
-            LocalFree(sd);
-            return ok;
-        }
-
-        // Writes data to a new hidden file at path, its handle kept open for its move.
-        bool write_new(const std::string& path, const std::string& data, file_handle& h)
-        {
-            h = CreateFileW(widen(path).c_str(), GENERIC_WRITE | DELETE | READ_CONTROL | WRITE_DAC, 0, nullptr,
-                            CREATE_NEW,
-                            FILE_ATTRIBUTE_HIDDEN | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-            if (h == no_handle) return false;
-            bool ok = handle_at(h, path);
-            size_t done = 0;
-            while (ok && done < data.size())
-            {
-                DWORD wrote = 0;
-                const DWORD want = static_cast<DWORD>(std::min<size_t>(data.size() - done, 1u << 24));
-                ok = WriteFile(h, data.data() + done, want, &wrote, nullptr) && wrote > 0;
-                done += wrote;
-            }
-            ok = ok && FlushFileBuffers(h);
-            // The file shows once it takes its name.
-            FILE_BASIC_INFO b;
-            if (ok && GetFileInformationByHandleEx(h, FileBasicInfo, &b, sizeof(b)))
-            {
-                b.FileAttributes = FILE_ATTRIBUTE_ARCHIVE;
-                ok = SetFileInformationByHandle(h, FileBasicInfo, &b, sizeof(b)) != 0;
-            }
-            if (!ok)
-            {
-                delete_held(h);
-                close_file(h);
-            }
-            return ok;
-        }
-
-        bool rename_folder(const std::string& from, const std::string& to)
-        {
-            return MoveFileExW(widen(from).c_str(), widen(to).c_str(), 0) != 0;
-        }
-
-        // The size and the time of last write of the entry path, as a scan reads them.
-        bool stat_entry(const std::string& path, long long& size, int64_t& written)
-        {
-            WIN32_FIND_DATAW fd;
-            HANDLE h = FindFirstFileExW(widen(path).c_str(), FindExInfoBasic, &fd, FindExSearchNameMatch, nullptr, 0);
-            if (h == INVALID_HANDLE_VALUE) return false;
-            FindClose(h);
-            if (fd.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) return false;
-            size = static_cast<long long>((static_cast<uint64_t>(fd.nFileSizeHigh) << 32) | fd.nFileSizeLow);
-            written = filetime_value(fd.ftLastWriteTime);
-            return true;
-        }
-
-        std::string error_text(DWORD e)
-        {
-            wchar_t* text = nullptr;
-            const DWORD n = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                                           FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, e, 0,
-                                           reinterpret_cast<wchar_t*>(&text), 0, nullptr);
-            std::wstring w = n && text ? std::wstring(text, n) : L"error " + std::to_wstring(e);
-            if (text) LocalFree(text);
-            while (!w.empty() && (w.back() == L'\r' || w.back() == L'\n' || w.back() == L' ' || w.back() == L'.'))
-                w.pop_back();
-            return narrow(w);
-        }
-
-        // The privileges of backup and restore, which read and replace a file whatever its permissions.
-        void enable_backup_privileges()
-        {
-            HANDLE token = nullptr;
-            if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token)) return;
-            for (const wchar_t* name : { L"SeBackupPrivilege", L"SeRestorePrivilege" })
-            {
-                TOKEN_PRIVILEGES tp;
-                tp.PrivilegeCount = 1;
-                tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-                if (LookupPrivilegeValueW(nullptr, name, &tp.Privileges[0].Luid))
-                    AdjustTokenPrivileges(token, FALSE, &tp, 0, nullptr, nullptr);
-            }
-            CloseHandle(token);
-        }
-#else
         std::string native_path(const std::string& folder, const std::string& path)
         {
             return path.empty() ? folder : join_path(folder, path);
@@ -523,7 +248,6 @@ namespace pseudalis
             written = static_cast<int64_t>(st.st_mtim.tv_sec) * 1000000000 + st.st_mtim.tv_nsec;
             return true;
         }
-#endif
 
         // The files of the drive as they rest, and what they wait for.
         struct pending_file
@@ -549,9 +273,6 @@ namespace pseudalis
             std::map<std::string, int64_t> seen_folders;       // new folders: key -> first seen
             int64_t last_change = 0;                            // of any file, for the folders
             std::map<std::string, int64_t> changed_under;      // folder key -> last change under it
-#if defined(_WIN32)
-            std::thread watcher;
-#endif
         };
 
         struct job
@@ -579,9 +300,6 @@ namespace pseudalis
         std::vector<std::thread> workers;
         std::deque<job> queue;
         std::condition_variable queue_cv;
-#if defined(_WIN32)
-        HANDLE stop_event = nullptr;
-#endif
 
         // ---------------------------------------------------------------------------
         // Records.
@@ -664,21 +382,11 @@ namespace pseudalis
 
         bool prepare(folder_state& f, std::string& error)
         {
-#if defined(_WIN32)
-            const bool created = !dir_exists(f.path);
-#endif
             if (!make_dirs(f.path))
             {
                 error = "the folder " + f.path + " cannot be created";
                 return false;
             }
-#if defined(_WIN32)
-            /* SYSTEM and the administrators, and the users of the sessions, who read, write and
-               delete but cannot change the permissions, the owners of the files included. */
-            if (created && !apply_sddl(no_handle, f.path,
-                    "D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;IU)(A;OICI;0x1301bf;;;OW)"))
-                log_warning("drive: the permissions of " + f.path + " cannot be set");
-#endif
             return true;
         }
 
@@ -686,15 +394,7 @@ namespace pseudalis
         std::string refused_folder(const std::string& owner)
         {
             const std::string dir = join_path(refused_root, owner.empty() ? std::string("files") : owner);
-#if defined(_WIN32)
-            const bool created = !dir_exists(dir);
             if (!make_dirs(dir)) return std::string();
-            if (created && owner.compare(0, 2, "S-") == 0 &&
-                !apply_sddl(no_handle, dir, "D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;" + owner + ")"))
-                log_warning("drive: the permissions of " + dir + " cannot be set");
-#else
-            if (!make_dirs(dir)) return std::string();
-#endif
             return dir;
         }
 
@@ -851,49 +551,6 @@ namespace pseudalis
             const std::string dir = dir_of(path);
             const std::string temp = join_path(join_path(f.path, dir), ".pseudalis-" + random_hex(8) + ".part");
             const bool same_name = key_of(child_of(dir, name)) == key_of(path);
-#if defined(_WIN32)
-            file_handle out = no_handle;
-            if (!write_new(temp, data, out)) return std::string();
-            // Moves out to a free name of dir, checked where it lands: a junction swapped meanwhile fails it.
-            auto place = [&](std::string& target) {
-                for (int attempt = 0; attempt < 3 && target.empty(); ++attempt)
-                {
-                    const std::string candidate = free_path(f, dir, name, std::string());
-                    if (candidate.empty()) return;
-                    const std::string full = join_path(f.path, candidate);
-                    if (!move_held(out, full)) continue;
-                    if (handle_at(out, full)) target = candidate;
-                    else return;
-                }
-            };
-            std::string target;
-            if (!same_name)
-            {
-                place(target);
-                if (target.empty() || !delete_held(source))
-                {
-                    delete_held(out);
-                    close_file(out);
-                    return std::string();
-                }
-                close_file(source);
-            }
-            else
-            {
-                if (!delete_held(source))
-                {
-                    delete_held(out);
-                    close_file(out);
-                    return std::string();
-                }
-                close_file(source);
-                place(target);
-                // The vault keeps the original: the new file goes rather than stay under a hidden name.
-                if (target.empty()) delete_held(out);
-            }
-            close_file(out);
-            return target;
-#else
             {
                 new_file out;
                 if (!out.create(temp) || !out.write(data.data(), data.size()) || !out.close())
@@ -912,7 +569,6 @@ namespace pseudalis
             }
             if (!same_name) remove_file(join_path(f.path, path));
             return candidate;
-#endif
         }
 
         /*
@@ -938,21 +594,10 @@ namespace pseudalis
                     const std::string candidate =
                         join_path(folder, k == 1 ? base_of(path) : numbered(base_of(path), k));
                     if (file_exists(candidate)) continue;
-#if defined(_WIN32)
-                    if (move_held(h, candidate)) moved = candidate;
-                    else if (GetLastError() != ERROR_ALREADY_EXISTS && GetLastError() != ERROR_FILE_EXISTS) break;
-#else
                     if (rename_file(join_path(f.path, path), candidate)) moved = candidate;
                     else break;
-#endif
                 }
             }
-#if defined(_WIN32)
-            // Still held alone: no other program opens it before its permissions change.
-            if (!moved.empty() && owner.compare(0, 2, "S-") == 0 &&
-                !apply_sddl(h, std::string(), "D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;" + owner + ")"))
-                log_warning("drive: the permissions of a file not processed cannot be set");
-#endif
             close_file(h);
             if (moved.empty())
             {
@@ -1313,12 +958,7 @@ namespace pseudalis
                 }
                 if (!ready.empty()) queue_cv.notify_all();
                 std::unique_lock<std::mutex> lock(m);
-#if defined(_WIN32)
-                // Windows reports the changes: without one, a scan every half minute catches what it missed.
-                const auto pause = waiting ? std::chrono::milliseconds(1000) : std::chrono::milliseconds(30000);
-#else
                 const auto pause = std::chrono::milliseconds(1000);
-#endif
                 wake_cv.wait_for(lock, pause, [&]() { return stopping.load() || woken; });
                 woken = false;
                 if (waiting && !stopping)
@@ -1330,105 +970,6 @@ namespace pseudalis
             }
         }
 
-#if defined(_WIN32)
-        void watch(folder_state& f)
-        {
-            HANDLE dir = CreateFileW(widen(f.path).c_str(), FILE_LIST_DIRECTORY,
-                                     FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
-                                     FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
-            if (dir == INVALID_HANDLE_VALUE)
-            {
-                log_warning("drive: the changes of " + f.path + " are not reported: a scan finds them");
-                return;
-            }
-            OVERLAPPED ov = {};
-            ov.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-            std::vector<DWORD> buffer(16384);
-            while (!stopping && ov.hEvent)
-            {
-                ResetEvent(ov.hEvent);
-                if (!ReadDirectoryChangesW(dir, buffer.data(), static_cast<DWORD>(buffer.size() * sizeof(DWORD)), TRUE,
-                                           FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
-                                           FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE, nullptr, &ov,
-                                           nullptr))
-                    break;
-                HANDLE waits[2] = { ov.hEvent, stop_event };
-                const DWORD w = WaitForMultipleObjects(2, waits, FALSE, INFINITE);
-                DWORD got = 0;
-                if (w != WAIT_OBJECT_0)
-                {
-                    CancelIoEx(dir, &ov);
-                    GetOverlappedResult(dir, &ov, &got, TRUE);
-                    break;
-                }
-                GetOverlappedResult(dir, &ov, &got, FALSE);
-                // What changed is read by the scan: an overflow of the buffer loses nothing.
-                wake();
-            }
-            if (ov.hEvent) CloseHandle(ov.hEvent);
-            CloseHandle(dir);
-        }
-
-        // The label and the icon of a letter in the Explorer.
-        void label_letter(const std::string& letter, const std::string& label, bool set)
-        {
-            const std::wstring base = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\DriveIcons\\" +
-                                      widen(letter);
-            if (!set)
-            {
-                RegDeleteTreeW(HKEY_LOCAL_MACHINE, base.c_str());
-                return;
-            }
-            const std::wstring values[2][2] = { { L"DefaultLabel", widen(label) },
-                { L"DefaultIcon", widen(join_path(svc.program_dir(), "pseudalis-tray.exe")) + L",0" } };
-            for (const auto& v : values)
-            {
-                HKEY k = nullptr;
-                if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, (base + L"\\" + v[0]).c_str(), 0, nullptr, 0, KEY_SET_VALUE,
-                                    nullptr, &k, nullptr) != ERROR_SUCCESS)
-                    continue;
-                RegSetValueExW(k, nullptr, 0, REG_SZ, reinterpret_cast<const BYTE*>(v[1].c_str()),
-                               static_cast<DWORD>((v[1].size() + 1) * sizeof(wchar_t)));
-                RegCloseKey(k);
-            }
-        }
-
-        bool map_letter(folder_state& f, const std::string& label)
-        {
-            const std::wstring device = widen(f.letter + ":");
-            const std::wstring target = L"\\??\\" + widen(f.path);
-            std::vector<wchar_t> now(4096);
-            if (QueryDosDeviceW(device.c_str(), now.data(), static_cast<DWORD>(now.size())))
-            {
-                // Left by a service that did not stop: kept; any other device keeps its letter.
-                if (_wcsicmp(now.data(), target.c_str()) != 0)
-                {
-                    f.error = "the letter " + f.letter + ": is taken by another drive";
-                    return false;
-                }
-            }
-            else if (!DefineDosDeviceW(DDD_RAW_TARGET_PATH, device.c_str(), target.c_str()))
-            {
-                f.error = "the letter " + f.letter + ": cannot be given to the drive: " + error_text(GetLastError());
-                return false;
-            }
-            f.mapped = true;
-            label_letter(f.letter, label, true);
-            return true;
-        }
-
-        void unmap_letter(folder_state& f)
-        {
-            if (!f.mapped) return;
-            const std::wstring device = widen(f.letter + ":");
-            const std::wstring target = L"\\??\\" + widen(f.path);
-            DefineDosDeviceW(DDD_RAW_TARGET_PATH | DDD_REMOVE_DEFINITION | DDD_EXACT_MATCH_ON_REMOVE, device.c_str(),
-                             target.c_str());
-            label_letter(f.letter, std::string(), false);
-            f.mapped = false;
-        }
-
-#endif
 
         // ---------------------------------------------------------------------------
 
@@ -1461,10 +1002,6 @@ namespace pseudalis
             }
             load(f);
             f.active = true;
-#if defined(_WIN32)
-            if (!letter.empty() && !map_letter(f, "Pseudalis")) error = f.error;
-            f.watcher = std::thread([this, &f]() { watch(f); });
-#endif
             return error.empty();
         }
     };
@@ -1485,10 +1022,6 @@ namespace pseudalis
         p.drive.path = join_path(p.svc.data_dir(), "drive");
         p.refused_root = join_path(p.svc.data_dir(), "refused");
         p.stopping = false;
-#if defined(_WIN32)
-        enable_backup_privileges();
-        p.stop_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-#endif
         // A drive without letter is not run.
         error.clear();
         if (letter.empty()) return true;
@@ -1504,9 +1037,6 @@ namespace pseudalis
     {
         impl& p = *p_;
         p.stopping = true;
-#if defined(_WIN32)
-        if (p.stop_event) SetEvent(p.stop_event);
-#endif
         {
             std::lock_guard<std::mutex> lock(p.m);
             p.woken = true;
@@ -1517,15 +1047,6 @@ namespace pseudalis
         for (std::thread& t : p.workers)
             if (t.joinable()) t.join();
         p.workers.clear();
-#if defined(_WIN32)
-        if (p.drive.watcher.joinable()) p.drive.watcher.join();
-        p.unmap_letter(p.drive);
-        if (p.stop_event)
-        {
-            CloseHandle(p.stop_event);
-            p.stop_event = nullptr;
-        }
-#endif
         p.drive.active = false;
     }
 
@@ -1543,11 +1064,7 @@ namespace pseudalis
             }
         json j = json::object();
         j["letter"] = f.letter;
-#if defined(_WIN32)
-        j["mounted"] = f.active && f.mapped;
-#else
         j["mounted"] = f.active;
-#endif
         j["folder"] = f.path;
         j["files"] = files;
         j["bytes"] = bytes;

@@ -1,9 +1,6 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-#if defined(_WIN32) && !defined(_WIN32_WINNT)
-#define _WIN32_WINNT 0x0A00
-#endif
 
 #include "http_fetch.h"
 
@@ -21,9 +18,6 @@
 
 #include <dlib/external/httplib/httplib.h>
 
-#if defined(_WIN32)
-#include <winhttp.h>
-#endif
 
 #include "../common/platform.h"
 #include "../common/version.h"
@@ -67,14 +61,6 @@ namespace pseudalis
         {
         };
 
-#if defined(_WIN32)
-        // Signalled while the downloads are cancelled, for the resolutions that wait.
-        HANDLE cancel_event()
-        {
-            static const HANDLE e = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-            return e;
-        }
-#endif
 
         struct proxy_address
         {
@@ -150,13 +136,8 @@ namespace pseudalis
 
         std::string environment(const char* name)
         {
-#if defined(_WIN32)
-            const wchar_t* v = _wgetenv(widen(name).c_str());
-            return v ? narrow(v) : std::string();
-#else
             const char* v = std::getenv(name);
             return v ? std::string(v) : std::string();
-#endif
         }
 
         std::string host_of(const std::string& origin)
@@ -191,36 +172,6 @@ namespace pseudalis
             return false;
         }
 
-#if defined(_WIN32)
-        // The proxy of WinHTTP for a scheme: "host:port", or "http=host:port;https=host:port".
-        std::string winhttp_proxy(bool https)
-        {
-            WINHTTP_PROXY_INFO info = {};
-            if (!WinHttpGetDefaultProxyConfiguration(&info)) return std::string();
-            std::string list;
-            if (info.dwAccessType == WINHTTP_ACCESS_TYPE_NAMED_PROXY && info.lpszProxy) list = narrow(info.lpszProxy);
-            if (info.lpszProxy) GlobalFree(info.lpszProxy);
-            if (info.lpszProxyBypass) GlobalFree(info.lpszProxyBypass);
-            std::string fallback;
-            size_t start = 0;
-            while (start < list.size())
-            {
-                size_t end = list.find_first_of("; ", start);
-                if (end == std::string::npos) end = list.size();
-                const std::string item = list.substr(start, end - start);
-                start = end + 1;
-                if (item.empty()) continue;
-                const size_t eq = item.find('=');
-                if (eq == std::string::npos)
-                {
-                    if (fallback.empty()) fallback = item;
-                    continue;
-                }
-                if (lower(item.substr(0, eq)) == (https ? "https" : "http")) return item.substr(eq + 1);
-            }
-            return fallback;
-        }
-#endif
 
         std::string proxy_for(const std::string& origin)
         {
@@ -236,9 +187,6 @@ namespace pseudalis
             std::string p = environment(https ? "HTTPS_PROXY" : "HTTP_PROXY");
             if (p.empty()) p = environment(https ? "https_proxy" : "http_proxy");
             if (p.empty()) p = environment("ALL_PROXY");
-#if defined(_WIN32)
-            if (p.empty()) p = winhttp_proxy(https);
-#endif
             return p;
         }
 
@@ -275,131 +223,6 @@ namespace pseudalis
             return c;
         }
 
-#if defined(_WIN32)
-        typedef INT (WSAAPI* addrinfo_cancel_function)(LPHANDLE);
-        typedef INT (WSAAPI* addrinfo_result_function)(LPOVERLAPPED);
-
-        // A resolution in progress.
-        struct lookup
-        {
-            OVERLAPPED overlapped = {};
-            PADDRINFOEXW result = nullptr;
-            HANDLE handle = nullptr;
-        };
-
-        /*
-            Opens and closes a connection to one of the addresses of a resolution, waiting
-            in slices of a tenth of a second so that a cancellation ends the wait at once;
-            true when an address answers.  select() reports the refused connections, which
-            WSAPoll misses on some versions of Windows.
-        */
-        bool probe(const ADDRINFOEXW* list, int port, std::string& error)
-        {
-            // One bound for every address of the name, so that a network that drops the
-            // packets costs connect_seconds whatever the number of its addresses.
-            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(connect_seconds);
-            for (const ADDRINFOEXW* a = list; a && std::chrono::steady_clock::now() < deadline; a = a->ai_next)
-            {
-                if ((a->ai_family != AF_INET && a->ai_family != AF_INET6) || !a->ai_addr) continue;
-                sockaddr_storage address = {};
-                std::memcpy(&address, a->ai_addr, std::min(sizeof(address), static_cast<size_t>(a->ai_addrlen)));
-                const u_short net_port = htons(static_cast<u_short>(port));
-                if (a->ai_family == AF_INET) reinterpret_cast<sockaddr_in*>(&address)->sin_port = net_port;
-                else reinterpret_cast<sockaddr_in6*>(&address)->sin6_port = net_port;
-                const SOCKET sock = socket(a->ai_family, SOCK_STREAM, IPPROTO_TCP);
-                if (sock == INVALID_SOCKET) continue;
-                u_long nonblocking = 1;
-                ioctlsocket(sock, FIONBIO, &nonblocking);
-                bool open = connect(sock, reinterpret_cast<const sockaddr*>(&address),
-                    static_cast<int>(a->ai_addrlen)) == 0;
-                if (!open && WSAGetLastError() == WSAEWOULDBLOCK)
-                {
-                    while (!cancelled && std::chrono::steady_clock::now() < deadline)
-                    {
-                        fd_set writable, failed;
-                        FD_ZERO(&writable);
-                        FD_ZERO(&failed);
-                        FD_SET(sock, &writable);
-                        FD_SET(sock, &failed);
-                        timeval slice = { 0, 100000 };
-                        const int r = select(0, nullptr, &writable, &failed, &slice);
-                        if (r == 0) continue;
-                        open = r > 0 && FD_ISSET(sock, &writable) && !FD_ISSET(sock, &failed);
-                        break;
-                    }
-                }
-                closesocket(sock);
-                if (open) return true;
-                if (cancelled)
-                {
-                    error = cancelled_error();
-                    return false;
-                }
-            }
-            error = "no answer within " + std::to_string(connect_seconds) + " s";
-            return false;
-        }
-
-        // Releases a resolution that the system ended, with its addresses.
-        void free_lookup(std::unique_ptr<lookup>& l)
-        {
-            if (!l) return;
-            if (l->result) FreeAddrInfoExW(l->result);
-            CloseHandle(l->overlapped.hEvent);
-            l.reset();
-        }
-
-        /*
-            Resolves host within connect_seconds, giving up at once when the downloads are
-            cancelled.  Returns the resolution with its addresses, or null: with error when the
-            name is not resolved, without error when the system lacks the functions of a
-            bounded resolution, the name being then left to the client.
-        */
-        std::unique_ptr<lookup> lookup_bounded(const std::string& host, std::string& error)
-        {
-            error.clear();
-            // Functions of Windows 8 and later, absent from the headers of MinGW.
-            const HMODULE ws2 = GetModuleHandleW(L"ws2_32.dll");
-            const auto cancel = ws2 ? reinterpret_cast<addrinfo_cancel_function>(
-                reinterpret_cast<void*>(GetProcAddress(ws2, "GetAddrInfoExCancel"))) : nullptr;
-            const auto overlapped_result = ws2 ? reinterpret_cast<addrinfo_result_function>(
-                reinterpret_cast<void*>(GetProcAddress(ws2, "GetAddrInfoExOverlappedResult"))) : nullptr;
-            if (!cancel || !overlapped_result) return nullptr;
-            std::unique_ptr<lookup> l(new lookup());
-            l->overlapped.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-            if (!l->overlapped.hEvent) return nullptr;
-            ADDRINFOEXW hints = {};
-            hints.ai_family = AF_UNSPEC;
-            hints.ai_socktype = SOCK_STREAM;
-            const std::wstring name = widen(host);
-            INT rc = GetAddrInfoExW(name.c_str(), nullptr, NS_DNS, nullptr, &hints, &l->result, nullptr,
-                &l->overlapped, nullptr, &l->handle);
-            if (rc == WSA_IO_PENDING)
-            {
-                const HANDLE waits[2] = { l->overlapped.hEvent, cancel_event() };
-                const DWORD w = WaitForMultipleObjects(2, waits, FALSE, static_cast<DWORD>(connect_seconds) * 1000);
-                if (w != WAIT_OBJECT_0)
-                {
-                    cancel(&l->handle);
-                    // The system releases the request once it ends it; a request it does not
-                    // end in time is left to it, with its memory.
-                    if (WaitForSingleObject(l->overlapped.hEvent, 2000) != WAIT_OBJECT_0) l.release();
-                    else free_lookup(l);
-                    error = w == WAIT_OBJECT_0 + 1 ? cancelled_error()
-                        : "the name of the server was not resolved within " + std::to_string(connect_seconds) + " s";
-                    return nullptr;
-                }
-                rc = overlapped_result(&l->overlapped);
-            }
-            if (rc != NO_ERROR)
-            {
-                error = "the name of the server cannot be resolved (error " + std::to_string(rc) + ")";
-                free_lookup(l);
-                return nullptr;
-            }
-            return l;
-        }
-#endif
 
         /*
             Resolves the name of a server and checks that it answers on its port, within
@@ -411,21 +234,10 @@ namespace pseudalis
         */
         bool reach_bounded(const std::string& host, int port, std::string& error)
         {
-#if defined(_WIN32)
-            if (host == "localhost") return true;
-            std::unique_ptr<lookup> l = lookup_bounded(host, error);
-            // Without the functions of a bounded resolution, the client resolves the name.
-            if (!l) return error.empty();
-            const bool ok = probe(l->result, port, error);
-            if (!ok) error = "the server does not answer: " + error;
-            free_lookup(l);
-            return ok;
-#else
             (void)host;
             (void)port;
             (void)error;
             return true;
-#endif
         }
 
         // The text of an IPv4 or IPv6 address of a resolution, empty for another family.
@@ -529,9 +341,6 @@ namespace pseudalis
             cancelled = true;
             clients.assign(active.begin(), active.end());
         }
-#if defined(_WIN32)
-        SetEvent(cancel_event());
-#endif
         // stop() waits for a connection being opened to be open: each client is stopped
         // from a thread of its own, which keeps it alive, so that no caller waits.
         for (const auto& c : clients) std::thread([c]() { c->stop(); }).detach();
@@ -540,9 +349,6 @@ namespace pseudalis
     void http_restore()
     {
         cancelled = false;
-#if defined(_WIN32)
-        ResetEvent(cancel_event());
-#endif
     }
 
     bool http_cancelled()
@@ -583,25 +389,7 @@ namespace pseudalis
             error = cancelled_error();
             return false;
         }
-#if defined(_WIN32)
-        std::unique_ptr<lookup> l = lookup_bounded(host, error);
-        if (l)
-        {
-            for (const ADDRINFOEXW* a = l->result; a; a = a->ai_next)
-            {
-                const std::string text = numeric_address(a->ai_addr);
-                if (!text.empty()) addresses.push_back(text);
-            }
-            free_lookup(l);
-        }
-        // Without the functions of a bounded resolution, the resolver of the system answers in its own time.
-        else if (!error.empty() || !resolve_unbounded(host, addresses, error))
-        {
-            return false;
-        }
-#else
         if (!resolve_unbounded(host, addresses, error)) return false;
-#endif
         if (cancelled)
         {
             error = cancelled_error();

@@ -18,9 +18,6 @@
     the local server too, so that no web site can drive the service through the browser.
 */
 
-#if defined(_WIN32) && !defined(_WIN32_WINNT)
-#define _WIN32_WINNT 0x0A00
-#endif
 #include <dlib/external/httplib/httplib.h>
 
 #include <algorithm>

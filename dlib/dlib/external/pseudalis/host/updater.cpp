@@ -8,15 +8,6 @@
 #include <sstream>
 #include <vector>
 
-#if defined(_WIN32)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
 
 #include "../common/log.h"
 #include "../common/platform.h"
@@ -144,11 +135,7 @@ namespace pseudalis
     std::string updater::installer_path(const std::string& version) const
     {
         return join_path(dir_, "pseudalis-setup-" + version +
-#if defined(_WIN32)
-            ".exe");
-#else
             ".bin");
-#endif
     }
 
     std::string updater::feed_path(const std::string& version) const
@@ -542,12 +529,8 @@ namespace pseudalis
             error.set("no update is ready", "update_not_ready");
             return false;
         }
-#if defined(_WIN32)
-        return true;
-#else
         error.set("updates are applied by the package manager on this system", "update_package_manager");
         return false;
-#endif
     }
 
     bool updater::launch_staged(user_error& error)
@@ -568,83 +551,9 @@ namespace pseudalis
             std::lock_guard<std::mutex> lock(m_);
             put_error(status_, error);
         };
-#if defined(_WIN32)
-        // The installer is checked against the signed feed beside it once more, held open and
-        // shared for reading only from the check to the start of its process.
-        const std::string file = installer_path(version);
-        uint64_t size = 0;
-        std::string sha;
-        if (!plain_version(version) || !staged_feed(version, size, sha, error))
-        {
-            if (error.text.empty())
-                error.set("the staged version " + version + " is not valid", "update_invalid").arg("version", version);
-            drop_staged(error);
-            return false;
-        }
-        const HANDLE h = CreateFileW(widen(file).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-            FILE_ATTRIBUTE_NORMAL, nullptr);
-        LARGE_INTEGER length = {};
-        bool same = h != INVALID_HANDLE_VALUE && GetFileSizeEx(h, &length) != 0
-            && static_cast<uint64_t>(length.QuadPart) == size;
-        if (same)
-        {
-            sha256_stream hash;
-            std::vector<char> buf(1u << 20);
-            for (;;)
-            {
-                DWORD n = 0;
-                if (cancelled_ || !ReadFile(h, buf.data(), static_cast<DWORD>(buf.size()), &n, nullptr))
-                {
-                    same = false;
-                    break;
-                }
-                if (n == 0) break;
-                hash.update(buf.data(), n);
-            }
-            same = same && hash.hex() == sha;
-        }
-        if (!same)
-        {
-            if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
-            if (cancelled_)
-            {
-                error = stopping_error();
-                return false;
-            }
-            error.set("the installer " + file + " does not match the signed feed of version " + version,
-                "update_installer_mismatch").arg("version", version);
-            drop_staged(error);
-            return false;
-        }
-        // Detached from the service, which the installer stops.
-        std::wstring cmd = L"\"" + widen(file) + L"\" /update /silent";
-        STARTUPINFOW si = {};
-        si.cb = sizeof(si);
-        PROCESS_INFORMATION pi = {};
-        const bool started = CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, FALSE,
-                DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB, nullptr, nullptr, &si, &pi)
-            || CreateProcessW(nullptr, &cmd[0], nullptr, nullptr, FALSE, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
-                nullptr, nullptr, &si, &pi);
-        const DWORD failure = started ? 0 : GetLastError();
-        CloseHandle(h);
-        if (!started)
-        {
-            error.set("cannot start the installer (error " + std::to_string(failure) + ")", "update_start")
-                .arg("code", std::to_string(failure));
-            keep();
-            return false;
-        }
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
-        // A failing installer must not be started at every restart.
-        remove_file(join_path(dir_, "staged.json"));
-        log_info("updates: installer started: " + file);
-        return true;
-#else
         error.set("updates are applied by the package manager on this system", "update_package_manager");
         keep();
         return false;
-#endif
     }
 
 }

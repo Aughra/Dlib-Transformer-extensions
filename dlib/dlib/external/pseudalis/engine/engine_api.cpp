@@ -116,11 +116,7 @@ PSD_API int PSD_CALL psd_api_version(void)
 
 PSD_API const char* PSD_CALL psd_variant(void)
 {
-#if defined(__AVX2__)
-    return "avx2";
-#else
     return "baseline";
-#endif
 }
 
 PSD_API const char* PSD_CALL psd_build(void)
