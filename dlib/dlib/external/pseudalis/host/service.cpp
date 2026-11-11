@@ -123,7 +123,7 @@ namespace pseudalis
         if (l != "auto") return l;
         const char* lang = std::getenv("LANG");
         const std::string s = lang ? std::string(lang).substr(0, 2) : std::string();
-        return s == "fr" || s == "de" || s == "it" || s == "es" ? s : "en";
+        return s == "fr" ? s : "en";
     }
 
     bool service::start_engine(std::string& error)

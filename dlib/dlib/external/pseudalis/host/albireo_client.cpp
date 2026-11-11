@@ -17,11 +17,8 @@ namespace pseudalis
     {
         const char* language_name(const std::string& code)
         {
-            if (code == "fr") return "French";
-            if (code == "de") return "German";
-            if (code == "it") return "Italian";
-            if (code == "es") return "Spanish";
-            return "English";
+            // The fork for macOS keeps English and French only.
+            return code == "fr" ? "French" : "English";
         }
 
         // The answer without the reasoning that some models write before it.

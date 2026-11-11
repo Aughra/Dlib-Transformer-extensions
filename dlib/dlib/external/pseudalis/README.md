@@ -1,5 +1,9 @@
 # Pseudalis
 
+> **macOS fork** (TortueTech): Pseudalis for Apple Silicon Macs only. Its web application speaks
+> English and French only; the recognizers of dlib still read the other languages listed below. The
+> rest of this document describes the original, for Windows.
+
 Pseudalis protects the personal data of documents on a Windows computer, on that computer alone.
 A service anonymizes the files and the folders it receives through a drive, through commands of the
 Explorer, through a web application and through a local interface, and keeps their originals encrypted,

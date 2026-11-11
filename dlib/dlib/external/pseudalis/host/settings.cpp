@@ -13,7 +13,7 @@ namespace pseudalis
     {
         bool known_language(const std::string& l)
         {
-            return l == "auto" || l == "en" || l == "fr" || l == "de" || l == "it" || l == "es";
+            return l == "auto" || l == "en" || l == "fr";
         }
     }
 

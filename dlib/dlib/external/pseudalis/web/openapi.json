@@ -441,7 +441,7 @@
         ]
        },
        "example": {
-        "text": "Jean Dupont habite 12 rue des Lilas \u00e0 Rennes."
+        "text": "Jean Dupont habite 12 rue des Lilas à Rennes."
        }
       }
      }
@@ -1443,10 +1443,7 @@
       "enum": [
        "auto",
        "en",
-       "fr",
-       "de",
-       "it",
-       "es"
+       "fr"
       ]
      },
      "drive_letter": {

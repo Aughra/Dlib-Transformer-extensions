@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Ne garder que l'anglais et le français dans Pseudalis
+
+- **Quoi** : la page de Pseudalis ne garde que ses textes anglais et français (dictionnaires allemand, italien et espagnol retirés, menus de langue réduits) ; le réglage `language` du service n'accepte plus que `auto`, `en` et `fr` ; la langue du système et le nom de langue donné à Albireo se limitent au français et à l'anglais ; `web/openapi.json` suit ; un encadré du fork en tête du README. Les détecteurs de données personnelles, qui vivent dans dlib (`dlib/privacy`) et reconnaissent aussi les noms, adresses et identifiants d'autres pays, restent tels quels (règle « dlib reste telle quelle »).
+- **Fichiers** : `dlib/dlib/external/pseudalis/web/js/i18n.js`, `web/index.html`, `web/openapi.json`, `host/settings.cpp`, `host/service.cpp`, `host/albireo_client.cpp`, `README.md` ; ce journal.
+- **Pourquoi** : demande de l'humain : dans Pseudalis, ne garder que l'anglais et le français.
+- **Étapes** : build sans erreur ; `tools/test_macos.sh` de Pseudalis (`PSEUDALIS_TEST_PORT=18454`) : 34 étapes passées, 0 échec.
+
 ## 2026-11-11 — Passer Albireo en 2.0.0, ajouter les notes de version, ne garder que le français
 
 - **Quoi** : (1) version **2.0.0** du fork (`tools/bump_version.py`, nouveau, met à jour `common/version.h`, `project()` du CMake et `web/openapi.json`). (2) Notes de version `web/changelog.md`, ton professionnel, section 2.0.0, ouvertes par le lien « Notes de version » de « À propos ». (3) Français seulement : dictionnaire de la page réduit au français (de 1 500 lignes environ à 355 ; les 427 clés françaises couvraient les 426 anglaises), plus de choix de langue (onglet Général, carte « Langue du service »), `setLanguage` toujours en français ; détection de langue (`textLanguage` de `app.js` et de `speech.js`), mots d'ouverture des demandes, exemples de titres et de mémoire réduits au français ; une seule voix `fr-FR` (service, build, test) ; réglage `language` limité à `auto` / `fr` ; catalogue décrit en français par défaut ; README d'Albireo : un encadré du fork en tête. Commentaires du code et consignes internes au modèle laissés en anglais. (4) CLAUDE.md : règles « Version et notes de version d'Albireo » et « Français seulement » ; le blog met à jour les notes de version.
