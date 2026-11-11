@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 8 : seize à la fois
 
+> **Repère de vitesse** (MacBook Air M2) : écriture **33 à 37 tokens/s** (2B), lecture environ 12 tokens/s.
+
 Suite de [l'épisode 7](07-le-mode-economie.md) : une fois le mode économie d'énergie coupé, Albireo écrit environ huit tokens par seconde sur le Mac. Mais son moteur calcule toujours un nombre à la fois. Cet épisode lui apprend à en calculer davantage d'un seul geste.
 
 ## Deux formats seulement

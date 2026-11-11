@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 7 : le mode économie
 
+> **Repère de vitesse** (MacBook Air M2) : écriture **6 à 8 tokens/s** (2B), lecture 7,7 à 9,2 tokens/s.
+
 Suite de [l'épisode 6](06-albireo-parle-lentement.md) : Albireo répond juste sur le Mac, mais à moins d'un token par seconde, et son moteur semble n'occuper qu'un cœur sur huit. On était parti chercher un défaut dans le code. On a trouvé un réglage.
 
 ## Les fils tout au bout de la file

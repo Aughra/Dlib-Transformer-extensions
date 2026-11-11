@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 13 : l'atelier d'à côté
 
+> **Repère de vitesse** (MacBook Air M2) : écriture **33 à 37 tokens/s** (2B), 14 tokens/s (4B) ; lecture **217 tokens/s** sur 512 tokens et 156 à 163 tokens/s sur 4 096 (2B).
+
 Suite de [l'épisode 12](12-le-chronometre-du-test.md) : les deux applications passent tous leurs tests sur le Mac. On avait annoncé les tests de dlib pour la suite. Ils attendront encore un peu : la priorité est restée la vitesse d'Albireo, et cette fois, il a fallu renoncer à une règle qu'on suivait depuis l'épisode 8.
 
 ## Le mauvais suspect

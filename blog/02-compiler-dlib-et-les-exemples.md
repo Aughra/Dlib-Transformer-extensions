@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 2 : compiler dlib et les exemples
 
+> **Repère de vitesse** : pas encore de mesure, Albireo ne tourne pas encore sur le Mac.
+
 *Publié sur le carnet TortueTech le 5 novembre 2026.*
 
 Suite de [l'épisode 1](01-le-fork-et-l-original.md) : le fork est à jour avec l'original de Cydral. Place à la compilation, sur un Mac à puce Apple.

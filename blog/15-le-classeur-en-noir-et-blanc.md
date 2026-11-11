@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 15 : le classeur en noir et blanc
 
+> **Repère de vitesse** (MacBook Air M2) : écriture **38 à 39 tokens/s** (2B), **18 tokens/s** (4B) ; lecture de 4 096 tokens 158 à 162 tokens/s (2B, clés en 8 bits).
+
 Suite de [l'épisode 14](14-le-zebre-et-le-perroquet.md) : le modèle du service décrit des images en deux secondes d'encodage. Cette fois, on est revenu à l'écriture elle-même, token après token, et on a fusionné six nouveaux commits de l'auteur. La fusion cachait un piège.
 
 ## Mesurer d'abord

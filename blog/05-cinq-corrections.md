@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 5 : cinq corrections et un premier démarrage
 
+> **Repère de vitesse** : pas encore de mesure, Albireo ne tourne pas encore sur le Mac.
+
 Suite de [l'épisode 4](04-le-fork-demenage.md) : le fork a trouvé son nouveau casier, et l'original y a versé dix commits de plus. Retour aux cinq obstacles de [l'épisode 3](03-albireo-pseudalis-et-cinq-obstacles.md), qui barraient la route d'Albireo et de Pseudalis.
 
 ## Même liste, après la fusion

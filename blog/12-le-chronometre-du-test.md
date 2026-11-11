@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 12 : le chronomètre du test
 
+> **Repère de vitesse** (MacBook Air M2, inchangé depuis l'épisode 11) : écriture **33 à 37 tokens/s** (2B), 14 tokens/s (4B) ; lecture de 4 096 tokens 50 à 53 tokens/s (2B).
+
 Suite de [l'épisode 11](11-deux-facons-d-arrondir.md) : Albireo est rapide et complet sur le Mac. Place à Pseudalis, l'autre application du projet, celle qui anonymise les documents. Elle attendait deux corrections. Elle n'en avait besoin que d'une, et pas pour la raison qu'on croyait.
 
 ## La même boîte aux lettres

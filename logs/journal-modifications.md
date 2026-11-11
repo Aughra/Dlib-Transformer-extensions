@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Donner à chaque épisode du blog son repère de vitesse
+
+- **Quoi** : demande de l'humain : sous le titre de chaque épisode, une ligne « Repère de vitesse » (tokens/s d'écriture et de lecture à la fin de l'épisode). Ajoutée aux épisodes 1 à 17, avec les chiffres de chaque épisode et du journal ; « pas encore de mesure » pour les épisodes 1 à 5. Règle ajoutée à CLAUDE.md (forme et critère vérifiable des épisodes).
+- **Fichiers** : `blog/01-*.md` à `blog/17-*.md`, `CLAUDE.md` ; ce journal.
+- **Pourquoi** : suivre d'un coup d'œil l'évolution de la vitesse d'un épisode à l'autre.
+- **Étapes** : chiffres relevés dans chaque épisode (tableaux « Pour les curieux ») ; contrôle : chaque épisode a la ligne en troisième ligne.
+
 ## 2026-11-11 — Retirer de Pseudalis le code de Windows, de Linux et des x86 (nettoyage, N1 à N3)
 
 - **Quoi** : fichiers supprimés (`windows/`, `build_windows.ps1`, le contrôle des imports de bibliothèques Windows `check_imports.cpp` et `check_imports.cmake`, scripts CMake de MinGW et de la charge utile, ressources `.rc`, icônes, images et licence de l'installateur, `make_feed.py`, `publish_release.py`) ; `CMakeLists.txt` réécrit pour macOS sur Apple Silicon (255 → 161 lignes) : le moteur n'existe plus qu'à l'intérieur du service et de `test_engine` (la bibliothèque `libpseudalis-engine.dylib`, inutile sur Mac, n'est plus construite) ; `unifdef` sur 19 fichiers (2 831 lignes de moins).

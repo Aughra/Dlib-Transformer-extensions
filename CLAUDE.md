@@ -135,6 +135,7 @@ Le blog raconte le portage **épisode par épisode**, comme un billet de carnet,
 - **Écrit dans le même commit que la fin de l'étape**, avec l'entrée du journal, et ajouté au sommaire [blog/README.md](blog/README.md).
 - **Forme d'un épisode** :
   - titre `# Dlib Transformer Extensions sur macOS, épisode N : <sujet>` ;
+  - juste sous le titre, une ligne en citation **« Repère de vitesse »** : les tokens/s d'écriture (2B, et 4B quand il est mesuré) et de lecture valables à la fin de l'épisode, tirés du journal ; « pas encore de mesure » avant que le moteur tourne (demande de l'humain, 2026-11-11) ;
   - une ouverture d'une ou deux phrases qui renvoie à l'épisode précédent (« Suite de l'épisode N : … ») ;
   - des sections `##` aux titres parlants, souvent imagés (« L'envoi refusé : bonne clé, mauvais casier », « Cinq obstacles, une seule famille ») ;
   - quand il y a de la technique précise, une section **« Pour les curieux : … »** en fin d'épisode, avec les commandes, les chiffres et les extraits de log, pour que le corps du texte reste lisible sans eux ;
@@ -143,7 +144,7 @@ Le blog raconte le portage **épisode par épisode**, comme un billet de carnet,
 - **Exactitude** : chaque chiffre vient du journal, des commits ou d'une sortie réelle ; un extrait de code, de log ou de commande est copié, jamais inventé. Distinguer ce qui est vérifié de ce qui ne l'est pas (« compilé, pas encore lancé »).
 - **Tableaux** pour comparer (applications, options, relevés de build), listes à puces pour énumérer des causes ou des choix.
 - **Aucun secret ni donnée privée** : pas d'adresse e-mail, de chemin privé (`/Users/...`), de clé ni de jeton. Les noms des comptes GitHub du fork peuvent apparaître, comme dans l'épisode 1.
-- Critère vérifiable : chaque `blog/NN-*.md` figure au sommaire, commence par le titre « Dlib Transformer Extensions sur macOS, épisode N », et ne contient ni adresse e-mail ni chemin `/Users/`.
+- Critère vérifiable : chaque `blog/NN-*.md` figure au sommaire, commence par le titre « Dlib Transformer Extensions sur macOS, épisode N » suivi de sa ligne « Repère de vitesse », et ne contient ni adresse e-mail ni chemin `/Users/`.
 
 ### Autorité
 

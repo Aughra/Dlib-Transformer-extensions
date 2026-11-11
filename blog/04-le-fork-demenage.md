@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 4 : le fork déménage
 
+> **Repère de vitesse** : pas encore de mesure, Albireo ne tourne pas encore sur le Mac.
+
 Suite de [l'épisode 3](03-albireo-pseudalis-et-cinq-obstacles.md) : cinq obstacles barrent la route d'Albireo et de Pseudalis sur le Mac. Avant de s'y attaquer, un détour s'imposait : le fork ne pouvait toujours rien recevoir.
 
 ## Dix commits de plus

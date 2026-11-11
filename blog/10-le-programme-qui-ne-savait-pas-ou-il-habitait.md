@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 10 : le programme qui ne savait pas où il habitait
 
+> **Repère de vitesse** (MacBook Air M2) : écriture **33 à 37 tokens/s** (2B), **14 tokens/s** (4B, le modèle du service) ; lecture 35 à 50 tokens/s (2B).
+
 Suite de [l'épisode 9](09-le-dernier-chiffre.md) : le moteur d'Albireo lit et écrit enfin à bonne vitesse sur le Mac. Restait à lancer ce qui l'entoure, le service, celui qui reçoit les questions, garde les modèles et sert la page web. Il a démarré du premier coup, et n'a rien trouvé.
 
 ## Un service qui répond, mais qui n'a rien

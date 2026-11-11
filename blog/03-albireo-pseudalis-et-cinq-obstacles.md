@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 3 : Albireo, Pseudalis et cinq obstacles
 
+> **Repère de vitesse** : pas encore de mesure, Albireo ne tourne pas encore sur le Mac.
+
 *Publié sur le carnet TortueTech le 5 novembre 2026.*
 
 Suite de [l'épisode 2](02-compiler-dlib-et-les-exemples.md) : dlib et les exemples compilent sur le Mac. Reste le plus gros du dépôt.

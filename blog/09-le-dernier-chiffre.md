@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 9 : le dernier chiffre
 
+> **Repère de vitesse** (MacBook Air M2) : écriture **33 à 37 tokens/s** (2B), lecture 35 à 50 tokens/s.
+
 Suite de [l'épisode 8](08-seize-a-la-fois.md) : Albireo écrit sa réponse trois fois plus vite, mais il lit encore la question à une douzaine de tokens par seconde. Cet épisode s'occupe de la lecture, et d'un dernier chiffre qui refusait de tomber juste.
 
 ## Lire n'est pas écrire

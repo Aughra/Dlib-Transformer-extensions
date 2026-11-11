@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 14 : le zèbre et le perroquet
 
+> **Repère de vitesse** (MacBook Air M2, inchangé depuis l'épisode 13) : écriture **33 à 37 tokens/s** (2B) ; lecture 217 tokens/s sur 512 tokens (2B) ; une image encodée en 1,8 à 2,2 s (4B).
+
 Suite de [l'épisode 13](13-l-atelier-d-a-cote.md) : les longues lectures d'Albireo passent par Accelerate, la bibliothèque de calcul d'Apple, et vont trois fois plus vite. Restait à voir ce que ça donne quand le modèle regarde une image, ce qu'aucun essai n'avait encore fait sur le Mac.
 
 ## Deux photos de macOS

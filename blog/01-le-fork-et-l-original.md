@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 1 : le fork et l'original
 
+> **Repère de vitesse** : pas encore de mesure, Albireo ne tourne pas encore sur le Mac.
+
 *Publié sur le carnet TortueTech le 5 novembre 2026.*
 
 Dlib Transformer Extensions promet de faire tourner des modèles de langage en C++, sur la base de dlib, sans Python dans la boucle. Le projet vit sous Windows et Linux ; on a voulu le voir tourner sur un Mac. Voici où en est le chantier.

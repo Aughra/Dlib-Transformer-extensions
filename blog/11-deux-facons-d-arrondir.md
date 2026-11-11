@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 11 : deux façons d'arrondir
 
+> **Repère de vitesse** (MacBook Air M2) : écriture **33 à 37 tokens/s** (2B), 14 tokens/s (4B), 20 à 22 tokens/s après un long document ; lecture de 4 096 tokens 50 à 53 tokens/s (2B).
+
 Suite de [l'épisode 10](10-le-programme-qui-ne-savait-pas-ou-il-habitait.md) : le service d'Albireo tourne sur le Mac, et la page web répond dans le navigateur. Le premier vrai document qu'on lui a donné, un PDF de 4,6 Mo, a fait apparaître la dernière partie lente du moteur.
 
 ## Le PDF qui ralentit tout

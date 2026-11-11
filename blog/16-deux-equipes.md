@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 16 : deux équipes
 
+> **Repère de vitesse** (MacBook Air M2) : écriture **39,7 à 40,8 tokens/s** (2B), **18,2 à 18,6 tokens/s** (4B) ; lecture de 4 096 tokens 162 à 167 tokens/s (2B).
+
 Suite de [l'épisode 15](15-le-classeur-en-noir-et-blanc.md) : on y avait constaté qu'Albireo écrit plus vite avec quatre threads qu'avec huit, mais lit plus vite les longs documents avec huit. Il fallait choisir. On a choisi de ne pas choisir.
 
 ## Un thread, ce n'est pas un agent

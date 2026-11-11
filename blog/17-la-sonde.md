@@ -1,5 +1,7 @@
 # Dlib Transformer Extensions sur macOS, épisode 17 : la sonde
 
+> **Repère de vitesse** (MacBook Air M2, moteur inchangé depuis l'épisode 16) : écriture **39,7 à 40,8 tokens/s** (2B), **18,2 à 18,6 tokens/s** (4B). Le GPU, sondé à part, lirait les poids du 4B en 45 à 48 ms par token contre 51 à 55 pour le processeur.
+
 Suite de [l'épisode 16](16-deux-equipes.md) : le moteur répartit son travail entre cœurs rapides et cœurs lents, et le modèle du service écrit à un peu plus de 18 tokens par seconde. Restait le GPU du Mac, qu'Albireo n'utilise pas. Avant de lui écrire un moteur, on a voulu savoir ce qu'il rapporterait vraiment.
 
 ## Un GPU dans la puce, mais pas de CUDA
