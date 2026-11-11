@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Retirer de Pseudalis les mises à jour par installateur Windows (nettoyage, N4)
+
+- **Quoi** : `host/updater.{h,cpp}` supprimés, avec les routes `/v1/updates`, `/updates/check` et `/updates/apply`, les réglages `check_updates` et `feed_url` (et sa validation), l'état `updates`, la case « Rechercher les mises à jour chaque jour » de la page web et ses textes dans les cinq langues, le contrôle de `feed_url` dans `test_host`, et leur description dans `web/openapi.json`. Le message `settings_publication` ne parle plus que du proxy. Restent, notés pour la suite : la clé publique du flux, `pseudalis-sign` et `verify_signature`, qui ne servaient qu'aux mises à jour.
+- **Fichiers** : `dlib/dlib/external/pseudalis/` (`CMakeLists.txt`, `host/main.cpp`, `host/server.cpp`, `host/service.{h,cpp}`, `host/settings.{h,cpp}`, `host/updater.{h,cpp}` supprimés, `tests/test_host.cpp`, `tools/test_linux.sh`, `web/index.html`, `web/js/app.js`, `web/js/i18n.js`, `web/openapi.json`) ; ce journal.
+- **Pourquoi** : « du pur Apple » ; le flux annonçait des installateurs Windows.
+- **Étapes** : build sans erreur ; `test_engine`, `test_host` passent ; `test_linux.sh` : 34 étapes sur 34.
+
 ## 2026-11-11 — Retirer d'Albireo les mises à jour par installateur Windows (nettoyage, N4)
 
 - **Quoi** : `host/updater.{h,cpp}` supprimés : ils téléchargeaient, depuis l'espace de publication de l'original, l'installateur Windows d'une nouvelle version et le lançaient au démarrage ; sur Mac, ils auraient téléchargé des centaines de Mo inutilisables. Retirés aussi : les routes `/albireo/v1/updates`, `/updates/check` et `/updates/apply`, le réglage `check_updates`, l'état `updates` du service, la mise à jour d'un dossier hors ligne signé (`feed.json` ; le catalogue signé et ses modèles restent importables), les deux contrôles de `test_host` qui les visaient, et leur description dans `tools/make_openapi.py` et `web/openapi.json` (régénéré).

@@ -799,14 +799,13 @@
     document.getElementById('set-removed').value = s.removed_days;
     document.getElementById('set-history').value = s.history_mb;
     document.getElementById('set-albireo').checked = s.albireo !== 'off';
-    document.getElementById('set-updates').checked = !!s.check_updates;
     document.getElementById('set-tags').checked = s.tags !== false;
   }
 
   // The settings that the card shows, by their name in the interface, with the key of their label.
   const settingLabels = {
     language: 'set_language', drive_letter: 'set_drive', date_order: 'set_dates', max_file_mb: 'set_max',
-    removed_days: 'set_removed', history_mb: 'set_history', albireo: 'set_albireo', check_updates: 'set_updates',
+    removed_days: 'set_removed', history_mb: 'set_history', albireo: 'set_albireo',
     tags: 'set_tags'
   };
 
@@ -825,7 +824,6 @@
       removed_days: wholeNumber('set-removed'),
       history_mb: wholeNumber('set-history'),
       albireo: document.getElementById('set-albireo').checked ? 'auto' : 'off',
-      check_updates: document.getElementById('set-updates').checked,
       tags: document.getElementById('set-tags').checked
     }, 'PUT');
     if (!r.ok) {

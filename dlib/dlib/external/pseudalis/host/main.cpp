@@ -104,7 +104,7 @@ namespace
                 continue;
             }
             failures = 0;
-            if (svc.update_started() || !svc.restart_requested()) break;
+            if (!svc.restart_requested()) break;
             pseudalis::log_info("service: restart");
         }
         return 0;

@@ -120,10 +120,6 @@ int main()
         s = host_settings::from_json(j);
         CHECK(s.removed_days == 90 && s.drive_letter == "P");
         CHECK(host_settings::from_json(s.to_json()).removed_days == 90);
-        // The place of the publication of the build stays out of the file and of the answers.
-        CHECK(!s.to_json().contains("feed_url") && host_settings::from_json(s.to_json()).feed_url == default_feed_url);
-        s.feed_url = "https://example.org/feed.json";
-        CHECK(host_settings::from_json(s.to_json()).feed_url == "https://example.org/feed.json");
         // The tags by default: written unless the setting says otherwise, a file of a version before keeping them.
         CHECK(host_settings().tags && host_settings::from_json(earlier).tags);
         s.tags = false;

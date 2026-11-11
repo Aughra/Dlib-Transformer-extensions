@@ -246,20 +246,7 @@ namespace pseudalis
         bool renewed = false;
         if (!ensure_certificates(cert_dir, renewed, error)) return false;
 
-        // The updates: one downloaded earlier is applied before anything is served.
         set_http_proxy(st.proxy);
-        updater_.reset(new updater(st.feed_url, join_path(data_dir_, "updates")));
-        if (!updater_->staged_installer().empty())
-        {
-            user_error ue;
-            if (updater_->can_apply(ue) && updater_->launch_staged(ue))
-            {
-                log_info("updates: the installer of the update starts");
-                update_started_ = true;
-                return true;
-            }
-            log_warning("updates: " + ue.text);
-        }
         albireo_.set_enabled(st.albireo != "off");
 
         // The drive.
@@ -349,7 +336,6 @@ namespace pseudalis
         server_->listen_after_bind();
 
         stop();
-        updater_->cancel();
         http_cancel_all("the service stops");
         if (background_.joinable()) background_.join();
         if (drive_) drive_->stop();
@@ -359,9 +345,7 @@ namespace pseudalis
 
     void service::background_loop()
     {
-        // The first check of the updates comes five minutes after the start, then every day;
-        // the originals of the files removed from the drive long enough go every hour.
-        int64_t next_check = now_unix() + 300;
+        // The originals of the files removed from the drive long enough go every hour.
         int64_t next_purge = 0;
         while (!stopping_)
         {
@@ -376,11 +360,6 @@ namespace pseudalis
                 purge_removed();
                 make_room(0);
                 next_purge = now_unix() + 3600;
-            }
-            if (settings_->get().check_updates && now_unix() >= next_check)
-            {
-                updater_->check_async();
-                next_check = now_unix() + 24 * 3600;
             }
         }
     }
@@ -432,7 +411,6 @@ namespace pseudalis
             j["history"] = history;
         }
         j["albireo"] = albireo_.status();
-        j["updates"] = updater_ ? updater_->status() : json::object();
         return j;
     }
 

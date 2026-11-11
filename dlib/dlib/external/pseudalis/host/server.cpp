@@ -568,14 +568,10 @@ namespace pseudalis
                 send_error(res, 400, "the letter of the drive must be A, B or D to Z", "settings_drive");
                 return;
             }
-            // The place of the publication and the proxy, in the forms the service reads only.
-            const std::string feed = body["feed_url"].str();
-            if ((body.contains("feed_url") && (!body["feed_url"].is_string() || feed.compare(0, 8, "https://") != 0 ||
-                 feed.size() > 1024 || feed.find_first_of(" \t\r\n\"<>") != std::string::npos)) ||
-                (body.contains("proxy") && (!body["proxy"].is_string() || !valid_proxy_setting(body["proxy"].str()))))
+            // The proxy, in the forms the service reads only.
+            if (body.contains("proxy") && (!body["proxy"].is_string() || !valid_proxy_setting(body["proxy"].str())))
             {
-                send_error(res, 400, "the feed or the proxy is not in a form the service reads",
-                           "settings_publication");
+                send_error(res, 400, "the proxy is not in a form the service reads", "settings_publication");
                 return;
             }
             // The other settings, each in its range: a value out of it is refused, not replaced.
@@ -617,7 +613,7 @@ namespace pseudalis
                     return;
                 }
             }
-            for (const char* flag : { "tags", "check_updates", "trust_authority" })
+            for (const char* flag : { "tags", "trust_authority" })
                 if (body.contains(flag) && !body[flag].is_bool())
                 {
                     user_error e;
@@ -656,8 +652,7 @@ namespace pseudalis
                 return;
             }
             const bool restart = after.port != before.port || after.drive_letter != before.drive_letter ||
-                                 after.date_order != before.date_order || after.proxy != before.proxy ||
-                                 after.feed_url != before.feed_url;
+                                 after.date_order != before.date_order || after.proxy != before.proxy;
             s->albireo().set_enabled(after.albireo != "off");
             // Fewer days or less space: the originals beyond them go now, in the background.
             if (after.removed_days != before.removed_days || after.history_mb != before.history_mb)
@@ -702,25 +697,6 @@ namespace pseudalis
         srv.Post("/v1/restart", [s, admin](const httplib::Request& req, httplib::Response& res) {
             if (!admin(req, res)) return;
             send_json(res, 200, json::object());
-            s->request_restart();
-        });
-        srv.Get("/v1/updates", [s](const httplib::Request&, httplib::Response& res) {
-            send_json(res, 200, s->updates().status());
-        });
-        srv.Post("/v1/updates/check", [s, admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res)) return;
-            s->updates().check_async();
-            send_json(res, 202, s->updates().status());
-        });
-        srv.Post("/v1/updates/apply", [s, admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res)) return;
-            user_error e;
-            if (!s->updates().can_apply(e))
-            {
-                send_error(res, 409, e);
-                return;
-            }
-            send_json(res, 202, json::object());
             s->request_restart();
         });
         srv.Post("/v1/key/export", [s, admin](const httplib::Request& req, httplib::Response& res) {

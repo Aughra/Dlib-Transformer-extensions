@@ -11,9 +11,6 @@
 
 namespace pseudalis
 {
-    // The update feed, in the folder dist/pseudalis of the repository on GitHub, beside the installer it names.
-    extern const char* const default_feed_url;
-
     struct host_settings
     {
         /*!
@@ -22,7 +19,7 @@ namespace pseudalis
                 which the users of the machine read (the tray takes the port there) and the
                 administrators change, through the administration interface or the
                 installer.  The service restarts itself when the port, the drive, the order
-                of the dates, the proxy or the address of the feed change.
+                of the dates or the proxy change.
         !*/
         int port = 8444;
         std::string language = "auto";          // auto, en, fr, de, it, es: the tray, the shell, the descriptions
@@ -45,9 +42,7 @@ namespace pseudalis
             it lasts: the drive, the web application and the interface take it unless a request says.
         */
         bool tags = true;
-        bool check_updates = true;              // a check every day
         bool trust_authority = true;            // the local authority in the trusted roots (the installer)
-        std::string feed_url = default_feed_url;
         std::string proxy;                      // "", "none" or http://host:port (http_fetch.h)
 
         json to_json() const;

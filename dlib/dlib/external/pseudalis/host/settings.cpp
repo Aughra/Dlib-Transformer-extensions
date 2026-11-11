@@ -9,9 +9,6 @@
 
 namespace pseudalis
 {
-    const char* const default_feed_url =
-        "https://raw.githubusercontent.com/Cydral/Dlib-Transformer-extensions/main/dist/pseudalis/feed.json";
-
     namespace
     {
         bool known_language(const std::string& l)
@@ -39,10 +36,8 @@ namespace pseudalis
         j["removed_days"] = removed_days;
         j["history_mb"] = history_mb;
         j["tags"] = tags;
-        j["check_updates"] = check_updates;
         j["trust_authority"] = trust_authority;
         // The place of the publication appears only when it differs from the one of the build.
-        if (feed_url != default_feed_url) j["feed_url"] = feed_url;
         j["proxy"] = proxy;
         return j;
     }
@@ -78,9 +73,7 @@ namespace pseudalis
         // The space holds the largest file at least.
         if (s.history_mb < s.max_file_mb) s.history_mb = s.max_file_mb;
         s.tags = j["tags"].as_bool(d.tags);
-        s.check_updates = j["check_updates"].as_bool(d.check_updates);
         s.trust_authority = j["trust_authority"].as_bool(d.trust_authority);
-        s.feed_url = j["feed_url"].str(d.feed_url);
         s.proxy = j["proxy"].str(d.proxy);
         return s;
     }

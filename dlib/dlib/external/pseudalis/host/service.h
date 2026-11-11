@@ -20,7 +20,6 @@
 #include "albireo_client.h"
 #include "settings.h"
 #include "store.h"
-#include "updater.h"
 #include "user_error.h"
 #include "vault.h"
 
@@ -93,12 +92,10 @@ namespace pseudalis
             WHAT THIS OBJECT REPRESENTS
                 The Pseudalis service: the engine and its key, the vault and the database of
                 the originals, the local HTTPS server (the web application, its interface and
-                its documentation), the drive, the descriptions of the pictures by Albireo,
-                and the updates.  run() starts everything and blocks until stop() or a
-                restart request; the caller then starts a new service when
-                restart_requested() says so, which applies a change of port or of drive.
-                When an update downloaded earlier is ready, run() starts its installer
-                instead and returns with update_started() true.
+                its documentation), the drive and the descriptions of the pictures by
+                Albireo.  run() starts everything and blocks until stop() or a restart
+                request; the caller then starts a new service when restart_requested()
+                says so, which applies a change of port or of drive.
 
             PROTECTION
                 protect() runs the engine on a file: each picture is kept in the vault,
@@ -129,7 +126,6 @@ namespace pseudalis
         void stop();
         bool stopping() const { return stopping_; }
         bool restart_requested() const { return restart_; }
-        bool update_started() const { return update_started_; }
         void request_restart();
 
         std::string program_dir() const { return program_dir_; }
@@ -140,7 +136,6 @@ namespace pseudalis
         settings_store& settings() { return *settings_; }
         store& db() { return *db_; }
         vault& blobs() { return *vault_; }
-        updater& updates() { return *updater_; }
         albireo_client& albireo() { return albireo_; }
         work_slots& work() { return work_; }
 
@@ -258,7 +253,6 @@ namespace pseudalis
         std::unique_ptr<settings_store> settings_;
         std::unique_ptr<store> db_;
         std::unique_ptr<vault> vault_;
-        std::unique_ptr<updater> updater_;
         std::shared_ptr<engine_library> library_;
         std::unique_ptr<engine_client> engine_;
         std::string key_fingerprint_;
@@ -276,7 +270,6 @@ namespace pseudalis
         std::vector<imposed_term> terms_;
         std::atomic<bool> stopping_{false};
         std::atomic<bool> restart_{false};
-        std::atomic<bool> update_started_{false};
         std::mutex key_m_;
         std::string master_;
         int64_t started_ = 0;

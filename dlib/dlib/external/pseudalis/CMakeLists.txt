@@ -119,7 +119,7 @@ configure_file(cmake/feed_public_key.h.in ${CMAKE_BINARY_DIR}/generated/feed_pub
 
 # The service, with the engine inside.
 set(PSEUDALIS_SERVICE_SOURCES common/engine_loader.cpp host/main.cpp host/service.cpp host/server.cpp
-   host/settings.cpp host/store.cpp host/vault.cpp host/keys.cpp host/albireo_client.cpp host/updater.cpp
+   host/settings.cpp host/store.cpp host/vault.cpp host/keys.cpp host/albireo_client.cpp
    host/http_fetch.cpp host/crypto.cpp host/certificates.cpp
    # The drives: two folders of the data folder, watched by the service.
    host/drive_folders.cpp ${PSEUDALIS_ENGINE_SOURCES})

@@ -57,7 +57,7 @@ step "host tests" "all tests passed" "$BUILD/bin/test_host"
 HOME_DIR=$WORK/home
 mkdir -p "$HOME_DIR"
 cat > "$HOME_DIR/settings.json" <<EOF
-{"port": $PORT, "drive_letter": "A", "check_updates": false, "albireo": "off"}
+{"port": $PORT, "drive_letter": "A", "albireo": "off"}
 EOF
 PSEUDALIS_HOME=$HOME_DIR "$BUILD/bin/pseudalis-service" --console > "$WORK/service.log" 2>&1 &
 SERVICE=$!
@@ -343,7 +343,7 @@ PY
     api -X "$1" -H "X-Pseudalis-Admin: $TOKEN" -H "Content-Type: application/json" --data "$3" "$URL$2"
   }
   SAVED=$(admin_json PUT /v1/settings '{"language": "auto", "drive_letter": "A", "date_order": "dmy",
-    "max_file_mb": 150, "removed_days": 0, "history_mb": 10240, "albireo": "off", "check_updates": false}')
+    "max_file_mb": 150, "removed_days": 0, "history_mb": 10240, "albireo": "off"}')
   REFUSED=$(admin_json PUT /v1/settings '{"removed_days": -1}')
   if printf '%s' "$SAVED" | grep -q '"removed_days":0' && printf '%s' "$SAVED" | grep -q '"restart":false' &&
      printf '%s' "$REFUSED" | grep -q '"code":"settings_value"'; then
