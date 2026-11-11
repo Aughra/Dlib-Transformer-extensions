@@ -239,7 +239,7 @@ const texts = {
     scanPageName: '{name}, page {n}', scanRendering: 'Drawing the pages of {name}…',
     stepsCount_one: '{n} step', stepsCount_other: '{n} steps', agentLimit: 'The agent stopped after {n} steps.',
     aboutText: 'Albireo Community Edition runs language models locally, on the processor and the graphics processor of this Mac, based on the open source Dlib-Transformer-extensions library.',
-    createdBy: 'Created by {author}', license: 'License',
+    createdBy: 'Created by {author}', forkedBy: 'Fork for macOS (Apple Silicon), modified by TortueTech', forkShort: 'macOS fork', license: 'License',
     thirdParty: 'Third-party components', apiDocs: 'Interface documentation', close: 'Close', confirm: 'Confirm',
     licensesTitle: 'Components and licenses',
     licensesIntro: 'Albireo works without network: the libraries, programs and models it relies on are installed ' +
@@ -536,7 +536,7 @@ const texts = {
     scanPageName: '{name}, page {n}', scanRendering: 'Rendu des pages de {name}…',
     stepsCount_one: '{n} étape', stepsCount_other: '{n} étapes', agentLimit: 'L\'agent s\'est arrêté après {n} étapes.',
     aboutText: 'Albireo Community Edition exécute des modèles de langage localement, sur le processeur et le processeur graphique de ce Mac, en reposant sur la bibliothèque open source Dlib-Transformer-extensions.',
-    createdBy: 'Créé par {author}', license: 'Licence',
+    createdBy: 'Créé par {author}', forkedBy: 'Fork pour macOS (Apple Silicon), modifié par TortueTech', forkShort: 'fork macOS', license: 'Licence',
     thirdParty: 'Composants tiers', apiDocs: 'Documentation de l\'interface', close: 'Fermer', confirm: 'Confirmer',
     licensesTitle: 'Composants et licences',
     licensesIntro: 'Albireo fonctionne sans réseau : les bibliothèques, les programmes et les modèles sur lesquels ' +
@@ -830,7 +830,7 @@ const texts = {
     scanPageName: '{name}, Seite {n}', scanRendering: 'Die Seiten von {name} werden gezeichnet…',
     stepsCount_one: '{n} Schritt', stepsCount_other: '{n} Schritte', agentLimit: 'Der Agent hat nach {n} Schritten angehalten.',
     aboutText: 'Albireo Community Edition führt Sprachmodelle lokal aus, auf dem Prozessor und dem Grafikprozessor dieses Mac, auf Basis der Open-Source-Bibliothek Dlib-Transformer-extensions.',
-    createdBy: 'Erstellt von {author}', license: 'Lizenz',
+    createdBy: 'Erstellt von {author}', forkedBy: 'Fork für macOS (Apple Silicon), geändert von TortueTech', forkShort: 'macOS-Fork', license: 'Lizenz',
     thirdParty: 'Komponenten von Drittanbietern', apiDocs: 'Dokumentation der Schnittstelle', close: 'Schließen', confirm: 'Bestätigen',
     licensesTitle: 'Komponenten und Lizenzen',
     licensesIntro: 'Albireo arbeitet ohne Netzwerk: Die Bibliotheken, Programme und Modelle, auf denen es beruht, ' +
@@ -1122,7 +1122,7 @@ const texts = {
     scanPageName: '{name}, pagina {n}', scanRendering: 'Disegno delle pagine di {name}…',
     stepsCount_one: '{n} passaggio', stepsCount_other: '{n} passaggi', agentLimit: 'L\'agente si è fermato dopo {n} passaggi.',
     aboutText: 'Albireo Community Edition esegue modelli linguistici in locale, sul processore e sul processore grafico di questo Mac, basandosi sulla libreria open source Dlib-Transformer-extensions.',
-    createdBy: 'Creato da {author}', license: 'Licenza',
+    createdBy: 'Creato da {author}', forkedBy: 'Fork per macOS (Apple Silicon), modificato da TortueTech', forkShort: 'fork macOS', license: 'Licenza',
     thirdParty: 'Componenti di terze parti', apiDocs: 'Documentazione dell\'interfaccia', close: 'Chiudi', confirm: 'Conferma',
     licensesTitle: 'Componenti e licenze',
     licensesIntro: 'Albireo funziona senza rete: le librerie, i programmi e i modelli su cui si basa sono installati ' +
@@ -1413,7 +1413,7 @@ const texts = {
     scanPageName: '{name}, página {n}', scanRendering: 'Dibujando las páginas de {name}…',
     stepsCount_one: '{n} paso', stepsCount_other: '{n} pasos', agentLimit: 'El agente se detuvo tras {n} pasos.',
     aboutText: 'Albireo Community Edition ejecuta modelos de lenguaje localmente, en el procesador y el procesador gráfico de este Mac, basándose en la biblioteca de código abierto Dlib-Transformer-extensions.',
-    createdBy: 'Creado por {author}', license: 'Licencia',
+    createdBy: 'Creado por {author}', forkedBy: 'Fork para macOS (Apple Silicon), modificado por TortueTech', forkShort: 'fork macOS', license: 'Licencia',
     thirdParty: 'Componentes de terceros', apiDocs: 'Documentación de la interfaz', close: 'Cerrar', confirm: 'Confirmar',
     licensesTitle: 'Componentes y licencias',
     licensesIntro: 'Albireo funciona sin red: las bibliotecas, los programas y los modelos en los que se basa se ' +

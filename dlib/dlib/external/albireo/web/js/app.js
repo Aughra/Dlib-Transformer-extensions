@@ -6921,7 +6921,7 @@ async function aboutTab(body, close) {
   const art = h('div', { class: 'about-art' }, h('img', { src: 'img/about.svg', alt: '' }));
   const kv = h('div', { class: 'kv' });
   const row = (k, v) => kv.append(h('div', null, k), h('div', null, v));
-  row(t('version'), [s.product || 'Albireo', s.edition, s.version].filter(Boolean).join(' '));
+  row(t('version'), [s.product || 'Albireo', s.edition, s.version].filter(Boolean).join(' ') + ' · ' + t('forkShort'));
   row(t('engine'), s.engine ? (s.engine.variant || '-') + (s.engine.device ? ' (' + s.engine.device + ')' : '') : '-');
   if (s.host) {
     row(t('processor'), s.host.cpu.name + ' · ' + s.host.cpu.cores + ' / ' + s.host.cpu.threads);
@@ -6979,6 +6979,10 @@ async function aboutTab(body, close) {
   body.append(h('p', { style: { marginTop: '14px' } }, t('createdBy', {
     author: (s.author || 'Aldric Pierrain') + ' (' + (s.email || 'cydraltechnology@gmail.com') + ')'
   }) + ' · ' + (s.copyright || 'Copyright (C) 2026 Cydral Technology')),
+  // The fork for macOS, and its repository.
+  h('p', { class: 'fork-line' }, t('forkedBy'), ' · ',
+    h('a', { href: 'https://github.com/Aughra/Dlib-Transformer-extensions', target: '_blank', rel: 'noopener' },
+      'Aughra/Dlib-Transformer-extensions')),
   h('p', null, h('a', { href: s.project || 'https://github.com/Cydral/Dlib-Transformer-extensions', target: '_blank', rel: 'noopener' }, 'Dlib-Transformer-extensions'),
     ' · ', h('a', { href: '/docs/', target: '_blank' }, t('apiDocs')), ' · ',
     h('a', { href: '#/licenses', onclick: () => close(true) }, t('thirdParty'))));

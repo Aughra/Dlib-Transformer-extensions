@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Signer le fork dans « À propos »
+
+- **Quoi** : l'onglet « À propos » de la page d'Albireo dit « Albireo Community Edition 1.0.12 · fork macOS » et, sous la ligne de l'auteur de l'original, « Fork pour macOS (Apple Silicon), modifié par TortueTech », avec le lien du dépôt du fork ; dans les cinq langues de la page. La mention de l'auteur original et son copyright restent tels quels.
+- **Fichiers** : `dlib/dlib/external/albireo/web/js/app.js`, `web/js/i18n.js` ; ce journal.
+- **Pourquoi** : demande de l'humain.
+- **Étapes** : page recopiée par le build, onglet vérifié dans Chrome sans fenêtre.
+
 ## 2026-11-11 — Prendre les documents dans un dossier du Mac, et régler davantage depuis la page
 
 - **Quoi** : (1) mot de passe réseau facultatif (vide : porte réseau ouverte ; bouton « Retirer ») ; accès réseau ouvert sur le Mac de l'humain, sans mot de passe. (2) Documents du Mac : dossier `<données>/documents`, routes `GET/POST /albireo/v1/documents` et `GET/DELETE /albireo/v1/documents/<nom>` ; dans la page, le trombone propose « Depuis cet appareil » ou « Documents du Mac » (liste à cocher, envoi vers le Mac, suppression), et toute pièce jointe est copiée dans le dossier. (3) Six réglages de plus dans l'onglet Service, avec leurs fiches et schémas : seuils des prompts sur le GPU (`gpu_prompt_tokens`, `gpu_prompt_context`, passés du code au réglage par `cpu_runtime::set_gpu_prompts`), `spin_us`, `warm_history`, `models_dir`, langue du service. (4) Réglages conseillés (`recommended` dans `service.js`, bouton de retour, « Conseillé : … » par carte). (5) Sauvegardes de réglages avec libellé (`settings-profiles.json`, routes `/albireo/v1/settings/profiles`). (6) CLAUDE.md : règle « La page des réglages d'Albireo » (tout réglage exposable y va, fiches vérifiées, conseillés tenus à jour par les mesures).
