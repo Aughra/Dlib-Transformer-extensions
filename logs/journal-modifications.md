@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Raconter le grand ménage (blog, épisode 18)
+
+- **Quoi** : épisode 18 « Le grand ménage » : le détachement de l'original, la décision « du pur Apple », `unifdef`, les mises à jour Windows, les tests macOS, les chiffres (170 fichiers, 37 566 lignes retirées, 234 ajoutées, hors `dist/`).
+- **Fichiers** : `blog/18-le-grand-menage.md`, `blog/README.md` ; ce journal (entrée du retrait de l'`updater` d'Albireo précisée : téléchargement une fois par version, refus d'appliquer hors de Windows).
+- **Pourquoi** : grande étape (décision de portage importante).
+- **Étapes** : chiffres tirés de `git show --shortstat` des sept commits ; comportement de l'ancien `updater` hors de Windows relu dans `5056eb5^` ; contrôle : titre, repère de vitesse, sommaire, ni adresse e-mail ni chemin privé.
+
 ## 2026-11-11 — Remplacer les tests Linux par des tests macOS et mesurer la vitesse après le nettoyage
 
 - **Quoi** : `albireo/tools/test_linux.sh` et `pseudalis/tools/test_linux.sh` deviennent `tools/test_macos.sh` : chemins par défaut `build/macos-*` et modèles du dépôt, `perl` à la place de `date +%s%N`, `sysctl -n hw.ncpu` à la place de `nproc`, `stat -f %z` à la place de `stat -c %s`, moteur `.dylib` unique, plus d'étape `prerequisites_linux.sh` (remplacée par un contrôle de curl, perl et awk), arrêt du service par SIGTERM (macOS jette le SIGINT d'un programme lancé en arrière-plan par un script). Doc et commandes de reprise sans les cales `nproc` / `gstat`.
@@ -32,7 +39,7 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 
 ## 2026-11-11 — Retirer d'Albireo les mises à jour par installateur Windows (nettoyage, N4)
 
-- **Quoi** : `host/updater.{h,cpp}` supprimés : ils téléchargeaient, depuis l'espace de publication de l'original, l'installateur Windows d'une nouvelle version et le lançaient au démarrage ; sur Mac, ils auraient téléchargé des centaines de Mo inutilisables. Retirés aussi : les routes `/albireo/v1/updates`, `/updates/check` et `/updates/apply`, le réglage `check_updates`, l'état `updates` du service, la mise à jour d'un dossier hors ligne signé (`feed.json` ; le catalogue signé et ses modèles restent importables), les deux contrôles de `test_host` qui les visaient, et leur description dans `tools/make_openapi.py` et `web/openapi.json` (régénéré).
+- **Quoi** : `host/updater.{h,cpp}` supprimés : ils téléchargeaient, depuis l'espace de publication de l'original, l'installateur Windows d'une nouvelle version et le lançaient au démarrage ; hors de Windows, ils le téléchargeaient aussi (une fois par version, sous le nom `.bin`) mais refusaient de l'appliquer (`update_package_manager`). Retirés aussi : les routes `/albireo/v1/updates`, `/updates/check` et `/updates/apply`, le réglage `check_updates`, l'état `updates` du service, la mise à jour d'un dossier hors ligne signé (`feed.json` ; le catalogue signé et ses modèles restent importables), les deux contrôles de `test_host` qui les visaient, et leur description dans `tools/make_openapi.py` et `web/openapi.json` (régénéré).
 - **Fichiers** : `dlib/dlib/external/albireo/` (`CMakeLists.txt`, `host/main.cpp`, `host/server.cpp`, `host/service.{h,cpp}`, `host/settings.{h,cpp}`, `host/updater.{h,cpp}` supprimés, `tests/test_host.cpp`, `tools/make_openapi.py`, `web/openapi.json`) ; ce journal.
 - **Pourquoi** : « du pur Apple » ; ces mises à jour n'existent que pour les installateurs Windows.
 - **Étapes** : build sans erreur ni avertissement ; `test_host`, `test_qkernels`, `test_model_file`, `test_chat_format`, `test_engine_api` passent ; service : page en 200, `/albireo/v1/status` sans `updates`, `/albireo/v1/updates` en 404, réponse « Paris ».

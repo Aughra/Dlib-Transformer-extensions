@@ -21,3 +21,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 15. [Le classeur en noir et blanc](15-le-classeur-en-noir-et-blanc.md)
 16. [Deux équipes](16-deux-equipes.md)
 17. [La sonde](17-la-sonde.md)
+18. [Le grand ménage](18-le-grand-menage.md)
