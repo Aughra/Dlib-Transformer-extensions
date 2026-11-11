@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Sonder le GPU du Mac avant un moteur Metal
+
+- **Quoi** : sonde hors moteur, propre au fork : noyaux Metal Q4_K et Q6_K (produit matrice-vecteur, poids lus en place sans copie), mesures d'exactitude, de débit, de plafond, d'aller-retour, et du processeur sur les mêmes produits.
+- **Fichiers** : `macos/metal-sonde/kernels.metal`, `macos/metal-sonde/probe.mm`, `macos/metal-sonde/README.md` (nouveaux) ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal, `blog/17-la-sonde.md`, `blog/README.md`.
+- **Pourquoi** : étape décidée par l'humain (moteur Metal) ; vérifier d'abord le gain possible, estimé « écriture doublée » le 2026-11-09 sans mesure.
+- **Étapes** : `git fetch upstream` : 16 commits de l'original non fusionnés. Lecture de `tensor_backend.h` et `offload.h` dans `upstream/main` : moteur GPU sur les tenseurs de dlib (CUDA, OpenVINO), interfaces `matmul_offload` et `layer_pass`. Pas de compilateur Metal hors ligne : noyaux compilés au lancement. Charge de 20 au départ (mises à jour de macOS, Spotlight, antivirus) : mesures faites après retour à 3 à 4. Noyaux : `mv_q4_K` (Q4_K 38,6 Go/s), `mv2_q4_K` (lectures de 4 octets, 26,9 Go/s, rejeté), `mv3_q4_K` (16 octets alignés par thread, 52,9 Go/s) ; `mv_q6_K` 57 à 60 Go/s, `mv2_q6_K` 56 Go/s ; plus de lignes par simdgroup : plus lent. Résultat (4B) : GPU 45 à 48 ms par token de poids contre 50,9 (4 threads) à 55,2 ms (8 threads) pour le processeur ; plafond 35 ms (70 Go/s) ; aller-retour 186 à 188 µs ; une commande par couche 57 à 60 ms, par produit 120 ms ; écart du GPU 2,8e-8, du processeur 8,8e-4. 2B : GPU 19,7 ms, processeur 26,2. Commande du README vérifiée depuis la racine.
+
 ## 2026-11-09 — Écrire sur les cœurs de performance du Mac, lire sur tous les cœurs
 
 - **Quoi** : sur Mac, le thread pool garde une petite équipe d'un thread par cœur de performance (`hw.perflevel0.physicalcpu`, 4 sur le M2) ; `cpu_runtime::forward` la demande (`fast_team_scope`) pour les passes de moins de `qk_float_product_tokens` tokens (24) : génération et questions très courtes. Les longs prompts restent sur les 8 threads. `active()` (nombre de threads de la section) remplace `size()` dans `qk_matmul` et le découpage de l'attention. Option B choisie par l'humain.

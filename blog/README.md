@@ -20,3 +20,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 14. [Le zèbre et le perroquet](14-le-zebre-et-le-perroquet.md)
 15. [Le classeur en noir et blanc](15-le-classeur-en-noir-et-blanc.md)
 16. [Deux équipes](16-deux-equipes.md)
+17. [La sonde](17-la-sonde.md)

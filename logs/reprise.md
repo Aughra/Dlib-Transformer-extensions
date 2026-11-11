@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-09, sur le Mac M2.
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-11, sur le Mac M2.
 
 ## Objectif
 
@@ -32,6 +32,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-09 : **6 commits de l'original fusionnés** (`535a6fb`, Albireo 1.0.12 : clés et valeurs en 8 bits par défaut, attention de la génération répartie entre les fils). Un conflit dans `qkernels.cpp` (corps de l'attention devenu un modèle commun), résolu en gardant le corps de l'original et nos 4 lignes NEON en tête. Tests d'Albireo et de Pseudalis (34 sur 34) passent.
 - 2026-11-09 : **attention NEON pour les clés et valeurs en 8 bits**, exacte au bit près (0 sur 351 780 valeurs) : sans elle, la fusion faisait tomber un prompt de 4 096 tokens de 163 à 37 tokens/s sur Mac ; avec, 158–162, génération après 4 096 tokens 9 → 22,5. Notes pour l'auteur : changement 7, remarque 20 (fils), numéros recalés sur `184ea00`. Blog : épisode 15.
 - 2026-11-09 : **génération sur les cœurs de performance** (option B de l'humain) : petite équipe de 4 threads dans le thread pool sur Mac (`thread_pool_apple.inc`), prise par `forward` sous 24 tokens ; longs prompts sur les 8 threads. 4B génération 17,6–18,1 → 18,2–18,6 tokens/s, 2B 37,4–37,9 → 39,7–40,8 ; long prompt inchangé. Notes : changement 8. Blog : épisode 16. Vocabulaire : dire « thread pool » et « threads » (demande de l'humain).
+- 2026-11-11 : **sonde Metal** (`macos/metal-sonde/`) : sur le M2, le GPU lit tous les poids du 4B en 45 à 48 ms contre 51 à 55 pour le processeur (plafond 35 ms, 70 Go/s) ; aller-retour 186 µs, donc rien à gagner produit par produit ni couche par couche (57 à 60 ms) ; exactitude 2,8e-8. L'estimation « écriture doublée » était fausse : 5 à 22 % aujourd'hui (un tiers sur le 2B), 1,5 fois au mieux, et seulement avec tout le token sur le GPU. Blog : épisode 17. 16 commits de l'original en attente (Albireo 1.0.13 à 1.0.15, dont prompts en 8 bits et écriture de plusieurs tokens par pas).
 
 ## En cours
 
@@ -39,7 +40,7 @@ Rien. Priorité de l'humain : **Albireo d'abord** (vitesse), Pseudalis ensuite.
 
 ## À faire, dans l'ordre proposé
 
-1. **Prochaine étape, décidée par l'humain pour le 2026-11-10 : moteur Metal (GPU du Mac).** Sur Mac, le GPU est intégré à la puce M2. Le moteur GPU d'Albireo est en CUDA, absent du Mac. Le GPU du M2 partage la mémoire et en tire presque tout le débit (environ 100 Go/s, contre 45 à 50 mesurés pour le processeur) : écriture peut-être doublée (déduit, non vérifié). Gros chantier : commencer par lire le moteur CUDA de l'original (`tensor_backend`, `offload.h`, `test_device_ops`) et proposer un plan par étapes, avec ses pour et ses contre et le critère vérifiable de chaque étape, avant d'écrire du code.
+1. **Décision de l'humain attendue** (sonde Metal faite, voir le mémo) : (a) fusionner d'abord les 16 commits de l'original (1.0.13 lit les prompts en entiers de 8 bits, ce qui touche le chemin Accelerate du fork, et écrit plusieurs tokens par pas à partir de brouillons : gain possible sans Metal), puis mesurer ; (b) moteur Metal complet, tout le token sur le GPU (`layer_pass` + `attend()`), gain estimé de 5 à 50 % en écriture sur M2 (sonde aujourd'hui, puis plafond), gros chantier, non exact au bit près ; (c) sonde n° 2 avant de décider : produits des prompts sur le GPU (MPS ou `simdgroup_matrix`) contre Accelerate. Relancer la sonde sur le Mac mini M5 Pro, où le rapport GPU / processeur sera différent.
 2. Plus tard, si utile : noyaux NEON de génération pour les autres formats de poids (Q8_0, Q5_K…) ; `qk_float_to_q8_row` et `qk_rotate_row` restent portables (peu de temps au profil).
 
 Ensuite :

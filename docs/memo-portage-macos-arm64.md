@@ -254,6 +254,20 @@ Ajouté ensuite pour la vitesse :
 
 10. `albireo/engine/qkernels_accelerate.inc` (fichier du fork) : les produits des prompts par `cblas_sgemm` d'Accelerate, à partir de 16 tokens. `qkernels.cpp` : `ALBIREO_QK_ACCELERATE` et `#include <vecLib/cblas_new.h>` sous NEON et `__APPLE__`, l'inclusion du fichier avant `matmul_float`, et un aiguillage en tête de `matmul_float`, puis en tête de `encoder_scores` et `encoder_values` (attention de l'encodeur d'images). `qkernels.h` : `qk_float_product_tokens` à 24 sous `__APPLE__` et `__ARM_FEATURE_DOTPROD` (8 ailleurs). `albireo/CMakeLists.txt` : `link_libraries("-framework Accelerate")` dans la branche ARM64, sous `if (APPLE)`.
 
+### GPU par Metal : la sonde (2026-11-11)
+
+Le moteur GPU de l'original passe par les tenseurs de dlib compilés pour CUDA (ou OpenVINO) : il ne tourne pas sur Mac. Un moteur Metal se brancherait sur les interfaces `matmul_offload` (un produit à la fois) et `layer_pass` (des couches entières, ou tout le token avec `attend()`) de `engine/offload.h`. Avant de l'écrire, une sonde hors du moteur (`macos/metal-sonde/`, commandes dans son README) mesure ce que le GPU du M2 peut gagner. Le compilateur Metal hors ligne n'est pas installé (composant optionnel de Xcode) : les noyaux sont compilés par macOS au lancement (`newLibraryWithSource`), sans outil de plus.
+
+| Un token, tous les poids Q4_K et Q6_K (charge 3 à 4) | 4B | 2B |
+|---|---|---|
+| Processeur, 8 / 4 threads | 55,2 / 50,9 ms | 26,2 ms (8 threads) |
+| GPU, une commande | 45 à 48 ms | 19,7 ms |
+| GPU, plafond (lecture pure) | 35 ms (70 Go/s) | 17,0 ms |
+| GPU, une commande attendue par couche | 57 à 60 ms | |
+| GPU, une commande attendue par produit | 120 ms | |
+
+Aller-retour avec le GPU : environ 186 µs. Exactitude du GPU : 2,8e-8 contre un calcul en double. Conclusion : sur le M2, le GPU lit les poids 5 à 22 % plus vite que le processeur avec les noyaux de la sonde (un tiers sur le 2B), 1,5 fois au mieux (plafond), et seulement si tout le token tient en une commande ; un produit ou une couche à la fois est plus lent que le processeur. L'estimation « écriture doublée » de la reprise du 2026-11-09 était fausse. Pas de moteur Metal pour l'instant : décision à prendre (reprise).
+
 ## Points à surveiller
 
 - Le code NEON dlib est le chemin SIMD attendu sur ARM64; vérifier les tests CPU et les résultats des exemples sur le Mac réel.

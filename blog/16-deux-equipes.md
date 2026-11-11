@@ -43,4 +43,4 @@ Dans le code de l'auteur, le changement tient en quelques lignes sous `#if defin
 
 ## À suivre
 
-Le processeur plafonne à environ 45 Go par seconde quand il relit les poids. Le GPU du M2, qui partage la même mémoire, sait en tirer presque le double. Le moteur GPU d'Albireo est écrit pour les cartes NVIDIA et ne tourne pas sur Mac : un moteur Metal serait un gros chantier, à peser avant de l'ouvrir.
+Le processeur plafonne à environ 45 Go par seconde quand il relit les poids. Le GPU du M2, qui partage la même mémoire, devrait en tirer davantage ([l'épisode 17](17-la-sonde.md) mesure combien : une fois et demie au mieux, pas le double qu'annonçait la première version de ce billet). Le moteur GPU d'Albireo est écrit pour les cartes NVIDIA et ne tourne pas sur Mac : un moteur Metal serait un gros chantier, à peser avant de l'ouvrir.
