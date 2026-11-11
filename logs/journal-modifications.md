@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Raconter les pas d'écriture sur le GPU (blog, épisode 19) et mettre la doc à jour
+
+- **Quoi** : épisode 19 « Le GPU prend la plume » ; mémo (section des pas d'écriture sur le GPU, tableau « État constaté »), reprise (M2, M3 faits, M4 en cours), notes pour l'auteur (changement 9 et bilan).
+- **Fichiers** : `blog/19-le-gpu-prend-la-plume.md`, `blog/README.md`, `docs/memo-portage-macos-arm64.md`, `docs/notes-pour-l-auteur.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : grande étape (le premier moteur GPU du portage) ; la doc suit le code.
+- **Étapes** : chiffres repris du journal (entrée précédente) ; contrôle : titre, repère de vitesse, sommaire, ni adresse e-mail ni chemin privé.
+
 ## 2026-11-11 — Écrire les tokens sur le GPU du Mac (moteur Metal, M3 et M4)
 
 - **Quoi** : `engine/cpu_runtime_metal.cpp` (nouveau) : `cpu_runtime::set_gpu()` donne au GPU les passes de 1 à 8 tokens d'un modèle dense en Q4_K / Q6_K (les pas d'écriture), entières, en une commande : le processeur écrit les plongements, les cosinus et sinus des positions (y compris les positions données des modèles multimodaux) et les tables de blocs ; le GPU calcule toutes les couches, écrit les clés et valeurs dans la zone du cache (sans copie, reprise plus grande quand un bloc la dépasse) et les logits. Contrôle au premier usage : deux pas sur le GPU contre deux pas sur le processeur en produits flottants (`float_products_`, chemin `qk_path::floats`), logits à 1 % près et même token, sinon repli ; une panne du GPU rend aussi les passes au processeur. Le moteur appelle `set_gpu` pour chaque modèle ; `bench_runtime` prend `metal` en 7ᵉ argument. Optimisations (M4) mesurées par profil : produits par paires de même format en un lancement (`matvec2`), attention sans fusion quand elle tient en un morceau, puis attention et produits en gabarits Metal instanciés par taille (têtes groupées par 1, 2, 4, 8 ; têtes de 64, 128, 256 ; 1 token ou plusieurs), pour que leurs tableaux tiennent dans les registres. `model_file::data()` ajouté. `metal_device::commands::gpu_milliseconds()`.

@@ -22,3 +22,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 16. [Deux équipes](16-deux-equipes.md)
 17. [La sonde](17-la-sonde.md)
 18. [Le grand ménage](18-le-grand-menage.md)
+19. [Le GPU prend la plume](19-le-gpu-prend-la-plume.md)

@@ -263,7 +263,7 @@ Le fork ajoute des noyaux NEON pour puce Apple, dans un fichier à lui, `albireo
 
 **Mac ou Windows** : ces changements sont propres au Mac. Ils ne corrigent rien sous Windows.
 
-**Changements 1 à 3 : les noyaux NEON donnent les mêmes résultats que le code portable du même build, au bit près**, et les réponses du modèle sont identiques, mot pour mot, à température 0. Les changements 6 et 7 le sont aussi ; le changement 8 donne les résultats d'un moteur à 4 threads en génération. **Changement 4 : ce n'est plus vrai** pour les produits des prompts, calculés par Accelerate. Les sommes diffèrent au dernier chiffre, comme celles des noyaux AVX2 avec leur FMA, et une réponse longue peut être formulée autrement.
+**Changements 1 à 3 : les noyaux NEON donnent les mêmes résultats que le code portable du même build, au bit près**, et les réponses du modèle sont identiques, mot pour mot, à température 0. Les changements 6 et 7 le sont aussi ; le changement 8 donne les résultats d'un moteur à 4 threads en génération ; le changement 9 (GPU) calcule en flottants, à 0,04 % à 0,13 % près des logits du processeur en flottants. **Changement 4 : ce n'est plus vrai** pour les produits des prompts, calculés par Accelerate. Les sommes diffèrent au dernier chiffre, comme celles des noyaux AVX2 avec leur FMA, et une réponse longue peut être formulée autrement.
 
 **Méthode de mesure** :
 - MacBook Air M2, mode économie d'énergie coupé, charge moyenne notée, 8 fils ;
@@ -439,18 +439,35 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : le changement est propre au Mac. L'idée vaudrait pour les processeurs hybrides des PC (remarque 20), avec la classe des cœurs que donne Windows ; non essayé.
 
+### Changement 9 : les pas d'écriture sur le GPU du Mac, par Metal
+
+- **Pourquoi** : le moteur GPU de l'original passe par CUDA, absent du Mac. Sur une puce Apple, le GPU partage la mémoire du processeur : il lit les poids et les clés et valeurs là où ils sont, sans copie. Une sonde a mesuré son plafond sur le M2 : lire les poids du 4B en 35 ms, contre 51 à 55 pour le processeur ; mais un aller-retour coûte 186 µs, si bien qu'il faut lui donner le token entier, pas un produit à la fois.
+- **Quoi** (fichiers propres au fork) : `engine/metal_device.{h,mm}` (le GPU, ses tampons, les commandes d'une passe), `engine/metal_kernels.metal` (produits Q4_K et Q6_K pour 1 à 8 tokens, normes, positions tournantes, écriture des clés et valeurs, attention en ligne par morceaux), `engine/cpu_runtime_metal.cpp` (la passe entière en une commande, le contrôle et le repli), `tests/test_metal.cpp`. La source Metal est compilée par macOS à l'ouverture du GPU : la construction ne demande pas de compilateur Metal. Le cache des clés et valeurs (`kv_cache.h`) range ses blocs dans une seule zone réservée, que le GPU prend sans copie.
+- **Exactitude** : le GPU calcule en flottants : ses logits diffèrent de ceux du processeur, qui arrondit ses activations en 8 bits, d'environ 5 % sur le 2B ; face au processeur en produits flottants (`qk_path::floats`), de 0,04 % à 0,13 %, avec le même token le plus probable. Le moteur fait ce contrôle au premier usage et rend les passes au processeur s'il échoue. Deux questions donnent les mêmes réponses mot pour mot.
+- **Une leçon de Metal** : des tableaux locaux indexés par des nombres connus à l'exécution seulement (le nombre de têtes groupées, de tokens) sortent des registres ; en gabarits instanciés par taille, l'attention d'un token passe de 9,2 à 1,7 ms et les produits de 48,8 à 43,4 ms.
+
+| `bench_runtime modele 8 64 64 1 q8 [metal]` (`lowpowermode 0`, charge 4,1 à 8,7) | Essai | Processeur (changements 1 à 8) | GPU |
+|---|---|---|---|
+| 4B Thinking, génération | 1 | 19,0 tokens/s (52,6 ms) | 21,3 tokens/s (47,0 ms) |
+| 4B Thinking, génération | 2 | 18,3 tokens/s (54,6 ms) | 21,7 tokens/s (46,0 ms) |
+| 2B, génération | 1 | 40,8 tokens/s | 49,4 tokens/s |
+| 2B, génération | 2 | 35,7 tokens/s | 49,6 tokens/s |
+| 2B, génération après 4 096 tokens | 1 et 2 | 23,1 et 22,0 tokens/s | 28,5 et 26,5 tokens/s |
+
+**Mac ou Windows** : propre au Mac (Metal, mémoire partagée).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
 |---|---|---|
-| Génération, question courte | environ 7 à 11 tokens/s | 39,7 à 40,8 tokens/s (37 à 39 avec les changements 1 à 7, 33 à 37 avec 1 à 5) |
+| Génération, question courte | environ 7 à 11 tokens/s | 49,4 à 49,6 tokens/s sur le GPU (changement 9) ; 39,7 à 40,8 sur le processeur (37 à 39 avec les changements 1 à 7, 33 à 37 avec 1 à 5) |
 | Prompt de 64 tokens | environ 8 à 13 tokens/s | 114 à 134 tokens/s (38 à 50 avec les changements 1 à 3) |
 | Prompt de 512 tokens | pas mesuré | 217 tokens/s (64 à 72 avec les changements 1 à 3) |
 | Prompt de 4 096 tokens | pas mesuré | 156 à 166 tokens/s, en demi-précision ou, avec le changement 7, en 8 bits (36 à 38 en 8 bits sans lui ; 50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |
-| Génération après 4 096 tokens | pas mesuré | 20 à 23 tokens/s (9 en 8 bits sans le changement 7 ; 7,5 à 9 avec les changements 1 et 2 seuls) |
+| Génération après 4 096 tokens | pas mesuré | 26,5 à 28,5 tokens/s sur le GPU ; 20 à 23 sur le processeur (9 en 8 bits sans le changement 7 ; 7,5 à 9 avec les changements 1 et 2 seuls) |
 | Modèle de recherche (Q8_0), 512 tokens | pas mesuré | 573 à 601 tokens/s (184 à 213 avec les changements 1 à 3) |
 | Encodage d'une image 512 × 512, projecteur du 4B | pas mesuré | 1,8 à 2,2 s (8,9 à 10,3 avec les changements 1 à 3) |
-| 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 18,2 à 18,6 tokens/s (17,6 à 18,1 sans le changement 8 ; 16,4 à 16,6 sans les changements 6 à 8) |
+| 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 21,3 à 21,7 tokens/s sur le GPU ; 18,2 à 18,6 sur le processeur (17,6 à 18,1 sans le changement 8 ; 16,4 à 16,6 sans les changements 6 à 8) |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
 
