@@ -350,6 +350,8 @@ namespace albireo
         c["kv_mb"] = s.kv_mb;
         c["kv_type"] = s.kv_type;
         c["offload_mb"] = s.device_mb;
+        // The GPU of the Mac (Metal), unless the accelerator setting says none.
+        c["metal"] = s.accelerator != "none";
         c["device"] = device;
         c["cache_dir"] = join_path(data_dir_, "engine-cache");
         return c;

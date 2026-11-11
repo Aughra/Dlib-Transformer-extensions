@@ -301,7 +301,10 @@ schemas = {
                    "computing the products its device does not take; the processor engine when no accelerator is "
                    "usable or when a measure found the accelerator slower. best: the fastest measured engine. A "
                    "variant: that engine, with the device of accelerator for the engines that have several."},
-        "accelerator": {"type": "string", "enum": ["auto", "none", "npu", "gpu", "both"]},
+        "accelerator": {"type": "string", "enum": ["auto", "none", "npu", "gpu", "both"],
+                        "description": "none: every pass of the engine on the processor, the GPU of the Mac unused; "
+                        "the other values let the engine give the generation steps and the prompts to the GPU "
+                        "(Metal)."},
         "device_mb": {"type": "integer", "description": "Memory of the device for the copies of the weights of "
                       "the models, in megabytes, 0 for automatic."},
         "threads": {"type": "integer"},

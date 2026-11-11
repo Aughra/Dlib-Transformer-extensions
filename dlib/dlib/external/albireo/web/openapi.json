@@ -3211,7 +3211,8 @@
        "npu",
        "gpu",
        "both"
-      ]
+      ],
+      "description": "none: every pass of the engine on the processor, the GPU of the Mac unused; the other values let the engine give the generation steps and the prompts to the GPU (Metal)."
      },
      "device_mb": {
       "type": "integer",

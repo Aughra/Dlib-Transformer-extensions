@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-11 — Couper le GPU par le réglage accelerator du service
+
+- **Quoi** : le service passe au moteur `metal = (accelerator != "none")` : le réglage `accelerator`, qui choisissait entre CUDA et OpenVINO, sert maintenant à couper le GPU du Mac (« none ») ou à le garder (« auto », par défaut, et les autres valeurs) ; son changement redémarre déjà le service. Description de l'API complétée. `engine_chat` gagne `--no-metal`.
+- **Fichiers** : `dlib/dlib/external/albireo/host/service.cpp`, `tests/engine_chat.cpp`, `tools/make_openapi.py`, `web/openapi.json` ; `logs/sieste-2026-11-11.md`, ce journal.
+- **Pourquoi** : M6, pouvoir se passer du GPU sans reconstruire.
+- **Étapes** : build sans avertissement ; `engine_chat` : avec le GPU, « the generation steps … run on it », sans (`--no-metal`), aucune ligne du GPU ; même réponse ; `test_host` passe.
+
 ## 2026-11-11 — Raconter la lecture sur le GPU (blog, épisode 20) et mettre la doc à jour
 
 - **Quoi** : épisode 20 « La lecture aussi » ; mémo (section des prompts sur le GPU, empreinte du service), reprise (M5 fait, M6 en partie, M7 proposé), notes pour l'auteur (changement 10, bilan). Service vérifié avec les prompts sur le GPU : prompt de 619 tokens à 142 tokens/s, écriture 20 à 21,7 tokens/s, empreinte 2,8 Go dont 290 Mo de tampons GPU.
