@@ -75,6 +75,8 @@ namespace albireo
         const dlib::gguf_reader& reader() const { return *reader_; }
         const std::string& path() const { return path_; }
         uint64_t size() const { return file_->size(); }
+        // The first byte of the mapping of the file, on a page: the GPU takes it whole (cpu_runtime_metal.cpp).
+        const uint8_t* data() const { return file_->data(); }
 
         const tensor_view* find(const std::string& name) const;
         bool has(const std::string& name) const { return find(name) != nullptr; }

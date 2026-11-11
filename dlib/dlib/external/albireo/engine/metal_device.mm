@@ -24,13 +24,27 @@ namespace albireo
             ;
 
         // The kernels, in the order of the enumeration below; each must compile into a pipeline.
-        const char* const kernel_names[] = { "mv_q4_K", "mv_q6_K", "rms_norm", "add_bias", "silu_mul", "rope",
-            "kv_store", "prepare_queries", "attention_part", "merge_attention" };
+        // The attention comes in one variant for each grouping of the query heads (1, 2, 4, 8) and each
+        // width of a head (64, 128, 256 values: 2, 4, 8 a lane), whose loops the compiler unrolls.
+        const char* const kernel_names[] = { "mv_q4_K_1", "mv_q6_K_1", "mv_q4_K_n", "mv_q6_K_n", "rms_norm", "add_bias", "silu_mul", "rope",
+            "kv_store", "prepare_queries", "merge_attention",
+            "attention_part_1_2", "attention_part_1_4", "attention_part_1_8",
+            "attention_part_2_2", "attention_part_2_4", "attention_part_2_8",
+            "attention_part_4_2", "attention_part_4_4", "attention_part_4_8",
+            "attention_part_8_2", "attention_part_8_4", "attention_part_8_8" };
         enum kernel_index
         {
-            k_mv_q4_K, k_mv_q6_K, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
-            k_attention_part, k_merge_attention, k_count
+            k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
+            k_merge_attention, k_attention_part, k_count = k_attention_part + 12
         };
+
+        // The variant of the attention for rep query heads per key/value head and heads of hd values.
+        int attention_kernel(unsigned rep, unsigned hd)
+        {
+            const int r = rep == 1 ? 0 : rep == 2 ? 1 : rep == 4 ? 2 : rep == 8 ? 3 : -1;
+            const int p = hd == 64 ? 0 : hd == 128 ? 1 : hd == 256 ? 2 : -1;
+            return r < 0 || p < 0 ? -1 : k_attention_part + 3 * r + p;
+        }
 
         // The arguments of the kernels, laid out as their structures in metal_kernels.metal.
         struct mv_args
@@ -42,6 +56,8 @@ namespace albireo
             uint32_t y_stride;
             float alpha;
             float beta;
+            uint32_t y2_stride;
+            int64_t rows2;
         };
         struct norm_args
         {
@@ -126,7 +142,7 @@ namespace albireo
         id<MTLCommandBuffer> buffer = nil;
         id<MTLComputeCommandEncoder> encoder = nil;
 
-        void use(kernel_index k) { [encoder setComputePipelineState:device->pipelines[k]]; }
+        void use(int k) { [encoder setComputePipelineState:device->pipelines[static_cast<size_t>(k)]]; }
         void bind(metal_view v, unsigned index)
         {
             [encoder setBuffer:v.buffer->impl_->buffer offset:v.offset atIndex:index];
@@ -252,8 +268,8 @@ namespace albireo
         unsigned tokens, unsigned x_stride, metal_view y, unsigned y_stride, float alpha, float beta)
     {
         kernel_index k;
-        if (type == dlib::ggml_type::Q4_K) k = k_mv_q4_K;
-        else if (type == dlib::ggml_type::Q6_K) k = k_mv_q6_K;
+        if (type == dlib::ggml_type::Q4_K) k = tokens > 1 ? k_mv_q4_K_n : k_mv_q4_K;
+        else if (type == dlib::ggml_type::Q6_K) k = tokens > 1 ? k_mv_q6_K_n : k_mv_q6_K;
         else return false;
         if (tokens == 0) return true;
         if (tokens > max_tokens || cols % 256 != 0)
@@ -262,9 +278,35 @@ namespace albireo
         impl_->bind(W, 0);
         impl_->bind(x, 1);
         impl_->bind(y, 2);
-        const mv_args a = { rows, cols, tokens, x_stride, y_stride, alpha, beta };
+        impl_->bind(W, 4);
+        impl_->bind(y, 5);
+        const mv_args a = { rows, cols, tokens, x_stride, y_stride, alpha, beta, y_stride, 0 };
         impl_->args(a, 3);
         impl_->groups(static_cast<unsigned>((rows + mv_rows_per_group - 1) / mv_rows_per_group), 1, 1, mv_threads);
+        return true;
+    }
+
+    bool metal_device::commands::matvec2(dlib::ggml_type type, metal_view W, long rows, metal_view W2, long rows2,
+        long cols, metal_view x, unsigned tokens, unsigned x_stride, metal_view y, unsigned y_stride, metal_view y2,
+        unsigned y2_stride)
+    {
+        kernel_index k;
+        if (type == dlib::ggml_type::Q4_K) k = tokens > 1 ? k_mv_q4_K_n : k_mv_q4_K;
+        else if (type == dlib::ggml_type::Q6_K) k = tokens > 1 ? k_mv_q6_K_n : k_mv_q6_K;
+        else return false;
+        if (tokens == 0) return true;
+        // The rows of a simdgroup (ROWS) never straddle the two matrices.
+        if (tokens > max_tokens || cols % 256 != 0 || rows % 16 != 0)
+            throw std::invalid_argument("metal_device: a double product of more tokens or other shapes than its kernel takes");
+        impl_->use(k);
+        impl_->bind(W, 0);
+        impl_->bind(x, 1);
+        impl_->bind(y, 2);
+        impl_->bind(W2, 4);
+        impl_->bind(y2, 5);
+        const mv_args a = { rows, cols, tokens, x_stride, y_stride, 1.0f, 0.0f, y2_stride, rows2 };
+        impl_->args(a, 3);
+        impl_->groups(static_cast<unsigned>((rows + rows2 + mv_rows_per_group - 1) / mv_rows_per_group), 1, 1, mv_threads);
         return true;
     }
 
@@ -347,18 +389,21 @@ namespace albireo
         metal_view ctx, const kv_layout& l)
     {
         if (tokens == 0) return;
-        if (rep > 8 || l.hd > 256 || l.hd % 64 != 0)
-            throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
+        const int kernel = attention_kernel(rep, l.hd);
+        if (kernel < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
         const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, attention_part, parts, q_stride,
             table_stride, 0, l.block_stride, l.k_slab, l.v_slab, l.head_stride };
-        impl_->use(k_attention_part);
+        impl_->use(kernel);
         impl_->bind(q, 0);
         impl_->bind(region, 1);
         impl_->bind(blocks, 2);
         impl_->bind(lengths, 3);
         impl_->bind(partial, 4);
         impl_->args(a, 5);
+        impl_->bind(ctx, 6);
         impl_->groups(parts, l.heads, tokens, attention_threads);
+        // A single part wrote the outputs itself.
+        if (parts == 1) return;
         impl_->use(k_merge_attention);
         impl_->bind(partial, 0);
         impl_->bind(lengths, 1);
@@ -376,6 +421,11 @@ namespace albireo
         if (impl_->buffer.status == MTLCommandBufferStatusError)
             throw std::runtime_error(std::string("the GPU failed the commands: ")
                 + (impl_->buffer.error ? impl_->buffer.error.localizedDescription.UTF8String : "unknown error"));
+    }
+
+    double metal_device::commands::gpu_milliseconds() const
+    {
+        return (impl_->buffer.GPUEndTime - impl_->buffer.GPUStartTime) * 1000.0;
     }
 
     json metal_describe()

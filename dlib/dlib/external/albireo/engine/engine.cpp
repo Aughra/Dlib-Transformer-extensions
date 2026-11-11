@@ -1242,6 +1242,11 @@ namespace albireo
             const memory_info now = read_memory_info();
             return now.commit_available == 0 || now.commit_available >= bytes + reserve;
         });
+        // The generation steps on the GPU of the Mac, when the engine opened it.
+        if (gpu_)
+            runtime->set_gpu(*gpu_, [this, id](int level, const std::string& message) {
+                log(level, "model '" + id + "': " + message);
+            });
         cpu_runtime* const processor = runtime.get();
         m->runtime = std::move(runtime);
 

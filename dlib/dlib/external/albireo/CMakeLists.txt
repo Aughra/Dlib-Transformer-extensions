@@ -123,6 +123,7 @@ set_target_properties(albireo_zlib albireo_image PROPERTIES POSITION_INDEPENDENT
 set(ALBIREO_ENGINE_SOURCES
    engine/chat_format.cpp
    engine/cpu_runtime.cpp
+   engine/cpu_runtime_metal.cpp
    engine/engine.cpp
    engine/engine_api.cpp
    engine/image_input.cpp
@@ -303,8 +304,8 @@ if (ALBIREO_TESTS AND ALBIREO_PROGRAMS)
          add_executable(${t} tests/${t}.cpp)
          target_link_libraries(${t} PRIVATE albireo_common)
       else()
-         add_executable(${t} tests/${t}.cpp engine/cpu_runtime.cpp engine/model_config.cpp engine/model_file.cpp
-            $<TARGET_OBJECTS:albireo-kernels> common/system_info.cpp)
+         add_executable(${t} tests/${t}.cpp engine/cpu_runtime.cpp engine/cpu_runtime_metal.cpp engine/metal_device.mm
+            engine/model_config.cpp engine/model_file.cpp $<TARGET_OBJECTS:albireo-kernels> common/system_info.cpp)
          target_include_directories(${t} PRIVATE ${ALBIREO_INCLUDE_DIR})
          target_link_libraries(${t} PRIVATE Threads::Threads)
       endif()

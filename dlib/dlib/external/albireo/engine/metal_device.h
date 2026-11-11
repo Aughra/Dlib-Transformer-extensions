@@ -113,6 +113,12 @@ namespace albireo
             bool matvec(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view x, unsigned tokens,
                 unsigned x_stride, metal_view y, unsigned y_stride, float alpha = 1.0f, float beta = 0.0f);
 
+            // Two products of matrices of the same type and columns on the same activations, W into y
+            // and W2 into y2, in one dispatch (alpha 1, beta 0); rows a multiple of 16.
+            bool matvec2(dlib::ggml_type type, metal_view W, long rows, metal_view W2, long rows2, long cols,
+                metal_view x, unsigned tokens, unsigned x_stride, metal_view y, unsigned y_stride, metal_view y2,
+                unsigned y2_stride);
+
             // y[r] = x[r] * gamma / sqrt(mean of x[r]^2 + eps), rows of width values (x may be y).
             void rms_norm(metal_view x, metal_view gamma, metal_view y, unsigned rows, unsigned width,
                 unsigned x_stride, unsigned y_stride, float eps);
@@ -177,6 +183,9 @@ namespace albireo
                       GPU fails them.
             !*/
             void finish();
+
+            // The time the GPU took for the commands, in milliseconds, once finish() returned.
+            double gpu_milliseconds() const;
 
         private:
             friend class metal_device;

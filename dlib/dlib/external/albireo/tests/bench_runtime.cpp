@@ -3,11 +3,13 @@
 /*
     Measures the processor runtime on a model:
 
-        bench_runtime model.gguf [threads] [prompt_tokens] [steps] [parallel] [f16|q8]
+        bench_runtime model.gguf [threads] [prompt_tokens] [steps] [parallel] [f16|q8] [metal]
 
     Reports the prompt throughput, the time of one generation step for a single
     sequence, and the throughput of steps that advance several sequences together, with
-    the keys and values in half precision (by default) or in 8 bits.
+    the keys and values in half precision (by default) or in 8 bits.  With "metal", the
+    generation steps run on the GPU of the Mac (cpu_runtime::set_gpu()), its check made by
+    an untimed step before the measures.
 */
 
 #include <algorithm>
@@ -19,6 +21,7 @@
 #include <vector>
 
 #include "../engine/cpu_runtime.h"
+#include "../engine/metal_device.h"
 
 using namespace albireo;
 using clock_type = std::chrono::steady_clock;
@@ -32,7 +35,7 @@ int main(int argc, char** argv)
 {
     if (argc < 2)
     {
-        std::printf("usage: bench_runtime model.gguf [threads] [prompt_tokens] [steps] [parallel] [f16|q8]\n");
+        std::printf("usage: bench_runtime model.gguf [threads] [prompt_tokens] [steps] [parallel] [f16|q8] [metal]\n");
         return 2;
     }
     const int threads = argc > 2 ? std::atoi(argv[2]) : static_cast<int>(std::thread::hardware_concurrency());
@@ -40,6 +43,7 @@ int main(int argc, char** argv)
     const long steps = argc > 4 ? std::atol(argv[4]) : 32;
     const long parallel = argc > 5 ? std::atol(argv[5]) : 4;
     const kv_format format = argc > 6 && std::string(argv[6]) == "q8" ? kv_format::q8 : kv_format::f16;
+    const bool metal = argc > 7 && std::string(argv[7]) == "metal";
 
     auto file = std::make_shared<model_file>(argv[1]);
     const model_config cfg = read_model_config(*file);
@@ -51,13 +55,25 @@ int main(int argc, char** argv)
         + parallel * (64 + steps) + 1024));
     cpu_runtime rt(file, cfg, pool, budget, 256, format);
     std::printf("%s\n", rt.description().c_str());
+    std::unique_ptr<metal_device> gpu;
+    if (metal)
+    {
+        std::string why;
+        gpu = metal_device::open(why);
+        if (!gpu)
+        {
+            std::printf("no GPU: %s\n", why.c_str());
+            return 1;
+        }
+        rt.set_gpu(*gpu, [](int, const std::string& m) { std::printf("%s\n", m.c_str()); });
+    }
     file->warm_up(false);
 
     // Prompt.
     std::vector<int> tokens(static_cast<size_t>(prompt));
     for (long i = 0; i < prompt; ++i) tokens[static_cast<size_t>(i)] = static_cast<int>((i * 7919 + 13) % cfg.vocab);
     const int seq = rt.create_sequence();
-    rt.reserve_sequence(seq, prompt + steps);
+    rt.reserve_sequence(seq, prompt + steps + 1);
     forward_batch b;
     b.tokens = tokens;
     b.segments.push_back({ seq, 0, prompt });
@@ -67,6 +83,16 @@ int main(int argc, char** argv)
     rt.forward(b, logits);
     const double pms = since(t);
     std::printf("prompt: %ld tokens in %.1f ms, %.1f tokens/s\n", prompt, pms, 1000.0 * prompt / pms);
+
+    // With the GPU, a step before the measures, which makes its check.
+    if (metal)
+    {
+        b.clear();
+        b.tokens.push_back(3);
+        b.segments.push_back({ seq, 0, 1 });
+        b.logit_rows.push_back(0);
+        rt.forward(b, logits);
+    }
 
     // Single sequence steps.
     t = clock_type::now();

@@ -12,6 +12,11 @@
 #include "kv_cache.h"
 #include "model_file.h"
 #include "offload.h"
+
+namespace albireo
+{
+    class metal_device;
+}
 #include "qkernels.h"
 #include "runtime.h"
 #include "thread_pool.h"
@@ -70,6 +75,7 @@ namespace albireo
     public:
         cpu_runtime(std::shared_ptr<model_file> file, const model_config& config, thread_pool& pool,
             size_t kv_budget_bytes, long kv_block_positions = 256, kv_format kv_type = kv_format::f16);
+        ~cpu_runtime() override;
 
         const model_config& config() const override { return cfg_; }
 
@@ -102,6 +108,19 @@ namespace albireo
 
         // Hands the products, or the layers, of the following passes to a device.
         void set_offload(std::unique_ptr<matmul_offload> offload);
+
+        /*!
+            requires
+                - device outlives this object.
+            ensures
+                - Hands the passes of up to metal_device::max_tokens tokens of a dense model (the
+                  generation steps) to the GPU of the Mac, whole: one command per pass
+                  (cpu_runtime_metal.cpp).  The first such pass checks the GPU against the
+                  processor on probe steps; log receives the outcome, and a GPU that disagrees,
+                  or fails later, leaves the passes to the processor.  Without effect for a
+                  model the GPU kernels do not cover.
+        !*/
+        void set_gpu(metal_device& device, std::function<void(int, const std::string&)> log);
 
         /*!
             requires
@@ -184,6 +203,18 @@ namespace albireo
         // otherwise.
         void product(const weight_matrix& W, const float* X, long n, long x_stride, float* Y, long y_stride,
             qk_path path = qk_path::automatic);
+
+        // The passes on the GPU of the Mac (cpu_runtime_metal.cpp).
+        struct gpu_state;
+        // Shared, not unique: the constructor and the destructor live where gpu_state is incomplete.
+        std::shared_ptr<gpu_state> gpu_;
+        bool takes_gpu(const forward_batch& batch) const;
+        bool gpu_ready();
+        void run_gpu(const forward_batch& batch, std::vector<float>& logits);
+        void drop_gpu(const std::string& why);
+        // The products in single precision floats, the activations as given (qk_path::floats): the
+        // reference of the check of the GPU, against which the 8-bit activations would differ.
+        bool float_products_ = false;
 
         std::shared_ptr<model_file> file_;
         model_config cfg_;

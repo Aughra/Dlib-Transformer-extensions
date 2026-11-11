@@ -419,6 +419,7 @@ namespace albireo
     void cpu_runtime::product(const weight_matrix& W, const float* X, long n, long x_stride, float* Y, long y_stride,
         qk_path path)
     {
+        if (float_products_) path = qk_path::floats;
         if (!offload_ || host_only_)
         {
             qk_matmul(W, X, n, x_stride, Y, y_stride, pool_, scratch_[0], false, path);
@@ -858,6 +859,19 @@ namespace albireo
         // A pass of fewer tokens than the products in floats take, as a step of the generation,
         // runs on the performance cores alone (thread_pool_apple.inc).
         const thread_pool::fast_team_scope fast_team(static_cast<long>(batch.tokens.size()) < qk_float_product_tokens);
+        if (gpu_ && takes_gpu(batch) && gpu_ready())
+        {
+            try
+            {
+                run_gpu(batch, logits);
+                return;
+            }
+            catch (const std::exception& e)
+            {
+                // The pass is computed again below; its keys and values are written again.
+                drop_gpu(std::string("the GPU failed: ") + e.what());
+            }
+        }
         if (layer_pass_ && !batch.tokens.empty() && takes_layer_pass(batch))
         {
             try
