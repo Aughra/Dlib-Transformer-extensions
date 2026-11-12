@@ -91,8 +91,8 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                La base de données du service, pseudalis.db dans un dossier de SYSTEM et des
-                administrateurs : les fichiers protégés et leurs originaux, les entrées des
+                La base de données du service, pseudalis.db dans un dossier privé au compte
+                qui exécute le service : les fichiers protégés et leurs originaux, les entrées des
                 archives protégées, les images et leurs descriptions, les fichiers protégés
                 dont l'original a été oublié, les fichiers du lecteur et les événements
                 récents.  Chaque méthode prend le verrou de la connexion, pour que les threads

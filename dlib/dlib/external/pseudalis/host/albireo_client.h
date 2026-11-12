@@ -17,15 +17,15 @@ namespace pseudalis
             WHAT THIS OBJECT REPRESENTS
                 Les descriptions des images par Albireo, le service d'inférence local,
                 quand il est installé sur le même ordinateur et que l'un de ses modèles lit
-                les images.  Albireo se trouve par son interface : son dossier de données
-                (DataDir de HKLM\Software\Albireo, que son installateur enregistre), le port
-                de son settings.json (8443 par défaut) et son autorité locale
-                (certificates\albireo-authority.crt), qui vérifie son certificat ; puis
-                GET /v1/models, dont les "inputs" désignent les modèles qui lisent les images.
-                Sous Windows, le dossier, son dossier de certificats, l'autorité et les
-                réglages doivent appartenir à SYSTEM ou aux administrateurs.  Le résultat est
-                gardé une minute, vérifié de nouveau par un seul appelant à la fois, hors du
-                verrou de l'état.
+                les images.  Albireo se trouve par son interface : ALBIREO_HOME ou, à défaut,
+                ~/.local/share/albireo, le port de son settings.json (8443 par défaut) et son
+                autorité locale (certificates/albireo-authority.crt), qui vérifie son
+                certificat ; puis GET /v1/models, dont les "inputs" désignent les modèles qui
+                lisent les images.  Sur macOS, les contrôles d'appartenance employés ici sont
+                actuellement des fonctions sans vérification : ils ne garantissent pas que
+                ces fichiers soient protégés contre leur modification par un autre compte.
+                Le résultat est gardé une minute, vérifié de nouveau par un seul appelant à la
+                fois, hors du verrou de l'état.
 
                 describe() envoie l'image à POST /v1/chat/completions, une requête à la fois,
                 et demande une ou deux phrases factuelles qui ne nomment personne et ne

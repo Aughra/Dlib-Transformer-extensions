@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-12, écrite sous Windows (branches `travail-windows` puis `bureau-2026-11-12`, Albireo 4.0.0 non compilé) ; le reste date du 2026-11-11 sur le Mac M2 (Albireo 3.2.0).
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-12, écrite sous Windows (branche `bureau-2026-11-12`, Albireo 4.0.1 non compilé) ; le reste date du 2026-11-11 sur le Mac M2 (Albireo 3.2.0).
 
 ## Objectif
 
@@ -39,16 +39,17 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 ## Pour reprendre (mis à jour le 2026-11-12, écrit sous Windows)
 
-**État** : `main` = Albireo **3.2.0**, testé. La branche **`travail-windows`** (poussée sur `origin`) porte le retrait des clés, **Albireo 4.0.0, écrite sans compiler ni lancer** sur un Windows. Rien n'y est vérifié. La branche **`bureau-2026-11-12`**, partie de `travail-windows`, ajoute la documentation et le nettoyage de commentaires/UI, ainsi qu'une correction du mémo. Les changements C++ de cette branche restent des commentaires seulement, vérifiés avec `comment_check.py` ; les textes Pseudalis de langue n'ont pas été essayés dans le navigateur.
+**État** : `main` = Albireo **3.2.0**, testé. La branche **`bureau-2026-11-12`** contient le retrait des clés, Albireo **4.0.1**, la documentation, le nettoyage des commentaires et la correction de la validation des langues Pseudalis. Les sources n'ont pas été compilées ni les tests d'intégration exécutés sur Mac. L'audit statique des chemins CMake n'a trouvé aucune source ou ressource manquante.
 
 **À faire en premier sur le Mac** (critère : tout passe) :
 1. `git fetch origin && git checkout bureau-2026-11-12` (elle contient `travail-windows`).
 2. `cmake --build build/macos-albireo -- -k 0` et `cmake --build build/macos-pseudalis -- -k 0` : corriger ce qui ne compile pas (fautes de frappe possibles, `-Werror` sur les avertissements).
-3. `bash dlib/dlib/external/albireo/tools/test_macos.sh` et celui de Pseudalis. Relecture statique faite pour la partie téléchargement/catalogue de `tests/test_host.cpp` : tentatives réseau, reprise d'une partie corrompue, import sans signature et erreurs correspondent au code lu ; les tests restent à exécuter sur Mac.
-4. Relancer le service, vérifier un téléchargement de modèle depuis la page (le catalogue vient de `raw.githubusercontent.com/Cydral/...`) et l'import d'un dossier avec `catalog.json` seul.
-5. Si tout passe : fusionner dans `main` (`git merge bureau-2026-11-12`, qui apporte aussi `travail-windows`), pousser. Sinon corriger sur la branche.
+3. `bash dlib/dlib/external/albireo/tools/test_macos.sh` et celui de Pseudalis. Le test Pseudalis couvre maintenant `auto/en/fr` et le refus de `de/it/es` ; ce test n'a pas encore tourné sur Mac. Relecture statique faite pour la partie téléchargement/catalogue d'Albireo : tentatives, reprise d'une partie corrompue, import sans signature et erreurs correspondent au code lu.
+4. **Avant de compter sur l'isolation des dossiers**, corriger ou accepter explicitement les stubs macOS `owned_by_system()` et `folder_admin_only()` (ils renvoient vrai) et `secure_folder()` (création seulement). Évaluer aussi `trust_authority`, sans effet sur macOS.
+5. Relancer les services ; vérifier téléchargement et import Albireo, puis la sécurité des clés/dossiers Pseudalis, le délai de résolution DNS et le comportement du dossier `drive` (pas de volume monté, pas de verrou exclusif).
+6. Si les builds, tests et limites de sécurité sont traités : fusionner dans `main` (`git merge bureau-2026-11-12`), puis pousser. Sinon corriger sur la branche.
 
-**Ce qui a été fait** (voir le journal du 2026-11-12) : catalogue sans signature, import de dossier sans `.sig`, espace de publication retiré (`public_link.*`, mot de passe du CMake, masquage du journal), `albireo-sign` et `pseudalis-sign` retirés, `verify_signature` / `sign_data` / clé publique retirées de `crypto` (Albireo et Pseudalis), `without_queries` déplacé dans `common/log`, version 4.0.0 et notes de version.
+**Ce qui a été fait** (voir le journal du 2026-11-12) : catalogue sans signature, import de dossier sans `.sig`, espace de publication et outils de signature retirés ; version 4.0.0. Puis correction des langues API Pseudalis avec test d'intégration et nettoyage des commentaires ; version Albireo 4.0.1 pour le message PEM. Vérifications statiques seulement.
 
 **Portage documentaire** : le README d'Albireo garde ses sections sur les signatures et les outils de publication comme documentation de l'original ; son introduction précise que le reste décrit la version Windows de l'original. Le README de Pseudalis a la même réserve. Les mentions de `pseudalis-sign` dans le mémo et de `check_updates` dans les notes pour l'auteur sont historiques et laissées telles quelles ; la commande de démarrage du mémo a été corrigée.
 
@@ -63,9 +64,9 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 ## En cours
 
-### Fait : commentaires en français (Albireo 2.0.2)
+### Fait : commentaires en français (Albireo 2.0.2) et corrections statiques du 2026-11-12
 
-Voir le journal. Sur `bureau-2026-11-12`, première passe statique : les commentaires de démarrage, d'interface web, de choix de moteur et de `offload.h` ne décrivent plus Windows, la barre des tâches ou des accélérateurs retirés ; le réglage de langue de Pseudalis et ses libellés parlent des descriptions d'images. D'autres commentaires de portage restent à revoir, notamment les certificats et les téléchargements HTTP. La validation de réglage Pseudalis accepte encore en entrée des langues que `from_json()` ne conserve pas (`de`, `it`, `es`) : constat statique, non corrigé ni testé.
+Voir le journal. Les commentaires des certificats, téléchargements HTTP, imports, dossiers et clés décrivent maintenant le comportement macOS observé dans le code. L'API Pseudalis limite les langues à `auto`, `en` et `fr`, et son test Mac couvre les valeurs acceptées et refusées. Ces changements restent à compiler et à tester sur Mac. Les autres commentaires des en-têtes communs `platform.h` et des modules moteur peuvent encore décrire les anciennes plateformes ; les mentions utiles à l'historique ne sont pas toutes supprimées.
 
 ### Plus tard, pas à pas (accord de principe de l'humain, 2026-11-11) : déplacer la logique cachée de la page vers le service C++
 

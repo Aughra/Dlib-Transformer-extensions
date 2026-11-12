@@ -350,10 +350,23 @@ PY
   SAVED=$(admin_json PUT /v1/settings '{"language": "auto", "drive_letter": "A", "date_order": "dmy",
     "max_file_mb": 150, "removed_days": 0, "history_mb": 10240, "albireo": "off"}')
   REFUSED=$(admin_json PUT /v1/settings '{"removed_days": -1}')
+  LANGUAGE_ACCEPTED=1
+  for language in en fr; do
+    GOOD_LANGUAGE=$(admin_json PUT /v1/settings "{\"language\": \"$language\"}")
+    if ! printf '%s' "$GOOD_LANGUAGE" | grep -q "\"language\":\"$language\""; then LANGUAGE_ACCEPTED=0; fi
+  done
+  RESET_LANGUAGE=$(admin_json PUT /v1/settings '{"language": "auto"}')
+  if ! printf '%s' "$RESET_LANGUAGE" | grep -q '"language":"auto"'; then LANGUAGE_ACCEPTED=0; fi
+  LANGUAGE_REFUSED=1
+  for language in de it es; do
+    BAD_LANGUAGE=$(admin_json PUT /v1/settings "{\"language\": \"$language\"}")
+    if ! printf '%s' "$BAD_LANGUAGE" | grep -q '"code":"settings_value"'; then LANGUAGE_REFUSED=0; fi
+  done
   if printf '%s' "$SAVED" | grep -q '"removed_days":0' && printf '%s' "$SAVED" | grep -q '"restart":false' &&
-     printf '%s' "$REFUSED" | grep -q '"code":"settings_value"'; then
-    record "settings saved" PASS "the body of the web application, 0 days, a value out of range refused"
-  else record "settings saved" FAIL "$SAVED / $REFUSED"
+     printf '%s' "$REFUSED" | grep -q '"code":"settings_value"' && [ "$LANGUAGE_ACCEPTED" = 1 ] &&
+     [ "$LANGUAGE_REFUSED" = 1 ]; then
+    record "settings saved" PASS "the body of the web application, 0 days, en/fr accepted and de/it/es refused"
+  else record "settings saved" FAIL "$SAVED / $REFUSED / $RESET_LANGUAGE / language values accepted: $LANGUAGE_ACCEPTED, refused: $LANGUAGE_REFUSED"
   fi
   # Les termes imposés : gardés, remplacés avant tout le reste, et refusés avec leur raison.
   SET=$(admin_json PUT /v1/terms '{"terms": [{"term": "Projet Alpha", "type": "ORG"},

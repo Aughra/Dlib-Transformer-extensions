@@ -238,6 +238,7 @@ namespace pseudalis
         return p.size() == f.size() || f.back() == '/' || p[f.size()] == '/';
     }
 
+    // Ces contrôles macOS sont des valeurs neutres : ils ne vérifient ni le propriétaire ni les permissions.
     bool owned_by_system(const std::string& p)
     {
         (void)p;

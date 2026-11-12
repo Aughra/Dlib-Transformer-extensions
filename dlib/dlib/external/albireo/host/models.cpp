@@ -483,11 +483,7 @@ namespace albireo
     model_manager::model_manager(store& db, const std::string& models_dir)
         : db_(db), dir_(models_dir)
     {
-        /*
-            Le service écrit, renomme et supprime les fichiers des modèles avec ses droits : seuls
-            SYSTEM et les administrateurs peuvent modifier le dossier (secure_folder()).  Un dossier
-            qui ne peut pas être rendu tel laisse les modèles au dossier des données.
-        */
+        // Le service écrit, renomme et supprime les fichiers des modèles avec les droits de son compte.
         std::string error;
         if (!secure_folder(dir_, error))
         {
@@ -1503,10 +1499,10 @@ namespace albireo
 
             set_state("verifying");
             /*
-                Chaque fichier écrit, lu sans passer par aucun lien depuis le dossier des modèles, est vérifié
-                avec sa propre empreinte ; il est fermé avant d'être renommé ou supprimé, ce que son handle
-                refuserait sous Windows.  Les parties dont l'empreinte propre échoue sont récupérées de
-                nouveau, une fois.
+                Chaque fichier écrit est lu sans suivre de lien depuis le dossier des modèles et vérifié
+                avec sa propre empreinte. Son descripteur est fermé avant de le renommer ou le supprimer,
+                pour ne pas garder de référence vers l'ancien fichier. Les parties dont l'empreinte propre
+                échoue sont récupérées de nouveau, une fois.
             */
             std::vector<std::string> shas(j->files.size());
             bool all_match = true;
@@ -2260,8 +2256,8 @@ namespace albireo
             entry.erase("gguf_name");
             entry.erase("projection_width");
             /*
-                Une description annexe écrite à côté du fichier, lue seulement dans le dossier d'import,
-                où seuls les administrateurs placent des fichiers, et sans passer par aucun lien.
+                Une description annexe écrite à côté du fichier, lue seulement dans le dossier d'import
+                et sans passer par aucun lien.
             */
             std::string side;
             const std::string& f = d.path;

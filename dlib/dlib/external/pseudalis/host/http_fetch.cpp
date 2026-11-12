@@ -225,14 +225,7 @@ namespace pseudalis
         }
 
 
-        /*
-            Résout le nom d'un serveur et vérifie qu'il répond sur son port, en connect_seconds
-            au plus pour chacun, et abandonne aussitôt quand les téléchargements sont annulés.
-            La réponse de la résolution reste dans le cache du système, où la trouve le client
-            qui suit, et sa connexion, qui ne peut pas être interrompue, trouve un serveur qui
-            répond.  Ailleurs que sous Windows, le client résout et se connecte de lui-même,
-            borné par connect_seconds.
-        */
+        // Sur macOS, aucun précontrôle séparé n'est fait : httplib résout le nom pendant la requête.
         bool reach_bounded(const std::string& host, int port, std::string& error)
         {
             (void)host;

@@ -18,8 +18,8 @@ namespace pseudalis
                 chiffres hexadécimaux aléatoires, chiffré avec AES-256-CTR sous un bloc
                 compteur aléatoire et authentifié avec HMAC-SHA-256 sur son identifiant, son
                 bloc compteur et son texte chiffré : un blob altéré, ou déplacé sous un autre
-                identifiant, ne s'ouvre pas.  Le dossier appartient à SYSTEM et aux
-                administrateurs.
+                identifiant, ne s'ouvre pas.  Le dossier est privé au compte qui exécute le
+                service.
 
             THREAD SAFETY
                 Les méthodes peuvent être appelées depuis plusieurs threads à la fois.

@@ -12,8 +12,8 @@ namespace pseudalis
     {
         std::string ca_cert;       // PEM de l'autorité locale
         std::string server_cert;   // PEM du certificat du serveur local
-        std::string server_key;    // clé privée du serveur : chiffrée sous Windows, PEM ailleurs
-        std::string plain_key;     // la clé en clair des versions antérieures à 1.0.8, sous Windows
+        std::string server_key;    // clé privée du serveur au format PEM
+        std::string plain_key;     // ancien chemin de la clé, consulté pendant la migration
         std::string ca_key;        // la clé de l'autorité des versions antérieures à 1.0.8
     };
 
@@ -36,13 +36,9 @@ namespace pseudalis
               quand dir contient la clé d'une autorité d'une version antérieure à 1.0.8, qui a
               pu être copiée, une nouvelle autorité et un nouveau certificat du serveur les
               remplacent, et renewed passe à true.
-            - Sous Windows, la clé privée du serveur est chiffrée avec DPAPI pour le compte
-              qui exécute cette fonction, LocalSystem pour le service, dans un fichier que
-              seuls SYSTEM et les administrateurs peuvent ouvrir : une copie de ce fichier ne
-              sert à aucun autre compte ni à aucun autre ordinateur.  Ailleurs, c'est un
-              fichier PEM que seul son propriétaire peut lire.  Une clé laissée en clair par
-              une version antérieure est chiffrée à la place de son fichier, et la clé d'une
-              autorité antérieure est supprimée.
+            - La clé privée du serveur reste au format PEM dans un fichier créé avec des
+              permissions restreintes.  Une ancienne clé d'autorité trouvée sur disque est
+              supprimée et entraîne le renouvellement des certificats.
             - Renvoie false, avec la raison dans error, quand les fichiers ne peuvent pas être
               créés.
     !*/
@@ -50,9 +46,8 @@ namespace pseudalis
 
     /*!
         ensures
-            - Lit la clé privée du serveur de dir sous forme PEM, déchiffrée en mémoire pour
-              le serveur TLS.  Renvoie false quand elle ne peut être ni lue ni déchiffrée, par
-              un autre compte ou sur un autre ordinateur par exemple.
+            - Lit la clé privée du serveur de dir au format PEM pour le serveur TLS.
+              Renvoie false quand le fichier ne peut pas être lu.
     !*/
     bool read_server_key(const std::string& dir, std::string& pem);
 

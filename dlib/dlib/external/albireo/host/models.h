@@ -84,8 +84,8 @@ namespace albireo
 
             INSTALLATION HORS LIGNE
                 import_path() installe les fichiers GGUF du dossier d'import du dossier des
-                données, que seuls SYSTEM et les administrateurs remplissent : les fichiers
-                d'un dossier (et de son sous-dossier "models") ou un fichier seul.  Un fichier
+                données : ceux d'un dossier (et de son sous-dossier "models") ou un fichier
+                seul. Un fichier
                 dont l'empreinte est dans le catalogue prend son entrée ; un autre est décrit
                 à partir de ses propres métadonnées, y compris l'identité d'un modèle
                 d'Albireo (albireo.id, albireo.name, albireo.roles, albireo.inputs).
@@ -117,7 +117,7 @@ namespace albireo
 
             LE DOSSIER DES MODÈLES
                 Chaque fichier que le service y écrit (un téléchargement, ses fichiers
-                partiels, un import, un projecteur, un transfert depuis la barre des tâches)
+                partiels, un import, un projecteur, un fichier reçu par une route)
                 est créé dans le dossier atteint sans passer par aucun lien (direct_path()),
                 vérifié de nouveau juste avant que le fichier soit créé, renommé ou supprimé,
                 et ouvert sans suivre de lien à son propre nom ; un fichier renommé est
@@ -283,10 +283,9 @@ namespace albireo
             ensures
                 - f(id, place) est appelé quand de nouveaux fichiers prennent les noms de ceux
                   du modèle installé id, une version plus récente téléchargée ou importée : f
-                  exécute place, qui les renomme, pendant qu'aucun programme ne tient ouverts
-                  les fichiers de id (le moteur tient ceux d'un modèle chargé, que Windows
-                  refuse de remplacer), et renvoie son résultat.  Sans f, place s'exécute
-                  directement.
+                  exécute place, qui les renomme après que ses requêtes sont servies et que le
+                  modèle est déchargé, afin que le moteur reprenne ses nouveaux fichiers, puis
+                  renvoie son résultat. Sans f, place s'exécute directement.
         !*/
         typedef std::function<bool(const std::string&, const std::function<bool()>&)> replace_function;
         void on_replace(replace_function f) { replace_cb_ = std::move(f); }

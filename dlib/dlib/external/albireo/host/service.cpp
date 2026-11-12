@@ -80,9 +80,9 @@ namespace albireo
         }
 
         /*
-            Indique si path, tel qu'écrit, est folder ou se trouve sous lui, les lettres des noms
-            comparées sans tenir compte de la casse sous Windows ; within reçoit folder suivi des noms
-            de path au-delà de lui.  Le système de fichiers n'est pas lu.
+            Indique si path, tel qu'écrit, est folder ou se trouve sous lui, en comparant exactement
+            les composants ; within reçoit folder suivi des noms de path au-delà de lui. Le système
+            de fichiers n'est pas lu.
         */
         bool path_under(const std::string& path, const std::string& folder, std::string& within)
         {
@@ -115,11 +115,7 @@ namespace albireo
             return std::string();
         }
 
-        /*
-            Les certificats du serveur local (certificates.h), et sous Windows la confiance accordée à
-            une nouvelle autorité : elle prend la place de l'autorité à laquelle la machine se fiait, ou
-            suit le choix de l'installation (host_settings::trust_authority).
-        */
+        // Prépare les certificats locaux ; le choix de confiance n'a pas d'effet sur macOS.
         bool prepare_certificates(const std::string& dir, int trust_choice, bool& renewed, std::string& error)
         {
             if (!ensure_certificates(dir, renewed, error)) return false;
@@ -954,11 +950,7 @@ namespace albireo
     {
         const std::string inbox = join_path(data_dir_, "import");
         if (folder_admin_only(inbox)) return true;
-        /*
-            Un autre compte peut écrire dans le dossier d'import, que le service lit avec les droits
-            du système : le dossier reçoit les permissions du dossier des données, et ce que d'autres
-            comptes y ont placé est mis de côté (secure_folder()).
-        */
+        // Sur macOS, folder_admin_only() ne vérifie pas les droits et ce chemin ne sécurise donc pas le dossier.
         log_warning("models: the import folder " + inbox + " lets other accounts than the administrators write in "
             "it: it is secured, and what they placed is set aside");
         return secure_folder(inbox, error, true);
@@ -989,7 +981,7 @@ namespace albireo
         std::string within;
         if (path_under(path, inbox, within))
         {
-            // Le dossier d'import, que seuls SYSTEM et les administrateurs remplissent.
+            // Le dossier d'import du service.
             std::string insecure;
             if (dir_exists(inbox) && !secure_inbox(insecure))
                 return refuse("import_folder_insecure", "the import folder lets other accounts than the administrators "
@@ -1242,9 +1234,8 @@ namespace albireo
         }
         /*
             Le moteur analyse les fichiers du modèle avec les droits du service : leurs dossiers doivent être
-            ceux que seuls SYSTEM et les administrateurs modifient (folder_admin_only()).  Un dossier où un
-            autre compte peut écrire, un disque sans permissions, ou un dossier mis à la place du dossier des
-            modèles par un compte qui a renommé l'un de ses parents, laisse le modèle non chargé.
+            ceux dont folder_admin_only() accepte le dossier parent. Sous macOS, ce contrôle est neutre et
+            ne vérifie pas les droits du propriétaire.
         */
         for (const std::string& file : { m.file, m.projector })
         {

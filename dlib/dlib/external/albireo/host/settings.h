@@ -106,9 +106,9 @@ namespace albireo
                 à la main), puis réécrite.
 
                 settings.json est lisible par les utilisateurs de la machine, et donne le mot
-                de passe du proxy sous la forme proxy_password_mask.  Le proxy avec son mot de
-                passe est gardé à côté, dans proxy.secret, que seuls le service et les
-                administrateurs lisent.  Un mot de passe trouvé dans settings.json, écrit par
+                de passe du proxy sous la forme proxy_password_mask. Le proxy avec son mot de
+                passe est gardé à côté, dans proxy.secret, lisible par le compte du service
+                seul. Un mot de passe trouvé dans settings.json, écrit par
                 une version antérieure ou à la main, passe aussitôt dans proxy.secret.
 
                 Un settings.json d'une version antérieure qui contient des réglages que cette

@@ -176,12 +176,11 @@ namespace albireo
 
         /*!
             ensures
-                - Installe ce que contient path, pour la route des imports par chemin.  Le
-                  service lit avec ses propres droits, ceux du système sous Windows, si bien
-                  que path n'est accepté que dans deux cas, un fichier d'un autre compte
-                  n'étant jamais lu, haché, listé ni révélé :
-                    - un dossier ou un fichier du dossier d'import du dossier des données, que
-                      seuls SYSTEM et les administrateurs remplissent : son catalogue,
+                - Installe ce que contient path, pour la route des imports par chemin. Le
+                  service lit avec les droits de son propre compte. path n'est accepté que
+                  dans deux cas :
+                    - un dossier ou un fichier du dossier d'import du dossier des données :
+                      son catalogue,
                       ses modèles (*.gguf, dans le dossier et dans son sous-dossier "models"),
                       comme scan_inbox() les installe, les fichiers restant en place ;
                     - un paquet hors ligne sur un disque local : un dossier qui contient un
@@ -202,12 +201,11 @@ namespace albireo
                   hors du dossier d'import (import_use_upload), hors du dossier d'import et
                   qui n'est pas un paquet hors ligne atteint sans passer par aucun lien
                   (import_not_bundle : le même code, que le dossier manque, soit illisible,
-                  sans catalog.json ou atteint par un lien, pour que la réponse ne révèle rien d'un
-                  dossier d'un autre compte), absent du dossier d'import (import_not_found),
+                  sans catalog.json ou atteint par un lien, pour que la réponse ne distingue pas
+                  ces cas), absent du dossier d'import (import_not_found),
                   atteint par un lien dans le dossier d'import (import_path_link), ou quand le
-                  dossier d'import laisse d'autres comptes que les administrateurs y écrire et
-                  ne peut pas être sécurisé (import_folder_insecure).  Chaque refus nomme le
-                  chemin dans ses arguments ("path").
+                  contrôle du dossier d'import échoue (import_folder_insecure). Chaque refus nomme
+                  le chemin dans ses arguments ("path").
         !*/
         json import_folder(const std::string& path, user_error& refusal);
 
@@ -255,8 +253,7 @@ namespace albireo
         // téléchargement démarre.
         void note_default_failure(const json& entry, const user_error& error, const std::string& what);
         void scan_inbox();
-        // Indique si le dossier d'import ne laisse écrire que les administrateurs : sécurisé de nouveau,
-        // son contenu vérifié, quand ce n'est pas le cas ; false avec error quand il ne peut pas l'être.
+        // Sur macOS, folder_admin_only() ne vérifie pas les droits et cette fonction ne sécurise pas le dossier.
         bool secure_inbox(std::string& error);
         /*!
             ensures
@@ -287,11 +284,9 @@ namespace albireo
         /*!
             ensures
                 - Exécute place, qui renomme de nouveaux fichiers par-dessus ceux du modèle
-                  installé id, pendant que le moteur ne tient aucun fichier de id, ce que
-                  Windows refuserait de remplacer : un modèle dans le moteur le quitte d'abord,
-                  une fois ses requêtes servies, et se recharge depuis ses nouveaux fichiers une
-                  fois ceux-ci enregistrés (on_installed()), ou depuis ses fichiers tels qu'ils
-                  étaient quand place échoue.
+                  installé id : le modèle est déchargé après ses requêtes pour que place puisse
+                  renommer les fichiers ; il se recharge depuis les nouveaux fichiers une fois
+                  ceux-ci enregistrés (on_installed()), ou depuis les anciens si place échoue.
                 - Renvoie ce que renvoie place ; false sans l'exécuter quand le modèle est en
                   cours de suppression, sert le travail en arrière-plan, ou quand le service
                   s'arrête.
