@@ -4,6 +4,7 @@
 #include "models.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cctype>
 #include <chrono>
 #include <cstring>
@@ -458,7 +459,7 @@ namespace albireo
         // Un fichier du modèle : le décodeur, et le projecteur d'un modèle qui lit les images.
         struct output_file
         {
-            std::string target, partial;
+            std::string target, partial, staged;
             uint64_t size = 0;
             std::string sha256;
             json parts;               // les "files" du catalogue : url, size, sha256
@@ -474,6 +475,7 @@ namespace albireo
         // Annulé par l'utilisateur, fixé sous m_ : la progression et le fichier partiel sont abandonnés,
         // là où un arrêt du service les garde pour le prochain démarrage.
         std::atomic<bool> abandoned{false};
+        bool local_only = false;
         std::string state = "queued";
         user_error error;
         double speed = 0;
@@ -892,7 +894,7 @@ namespace albireo
         return out;
     }
 
-    bool model_manager::start_download(const std::string& id, user_error& error)
+    bool model_manager::start_download(const std::string& id, user_error& error, bool local_only)
     {
         if (stopped_)
         {
@@ -933,6 +935,7 @@ namespace albireo
         std::shared_ptr<job> j(new job());
         j->id = id;
         j->entry = entry;
+        j->local_only = local_only;
         // Le décodeur, et le projecteur d'un modèle qui lit les images, chacun dans son propre fichier partiel.
         const json& e = j->entry;
         job::output_file decoder;
@@ -956,6 +959,7 @@ namespace albireo
             }
             j->files.push_back(projector);
         }
+        for (auto& f : j->files) f.staged = join_path(dir_, ".reserve-" + random_hex(16) + ".partial");
 
         // Les parties, puis les segments des parties non compressées.
         const uint64_t segment = 64ull << 20;
@@ -1043,7 +1047,7 @@ namespace albireo
         }
 
         // Reprendre ce qu'une exécution précédente a reçu, quand les fichiers du catalogue sont les mêmes.
-        const json saved = db_.download_state(id);
+        const json saved = local_only ? json() : db_.download_state(id);
         bool partials = true;
         for (const auto& f : j->files) partials = partials && file_exists(f.partial);
         const std::string saved_projector = j->files.size() > 1 ? j->files[1].sha256 : std::string();
@@ -1069,7 +1073,14 @@ namespace albireo
         if (it != jobs_.end())
         {
             if (it->second->state == "downloading" || it->second->state == "verifying" || it->second->state == "queued")
+            {
+                if (local_only && !it->second->local_only)
+                {
+                    error.set("a network download of " + id + " is still running", "download_busy").arg("m", name);
+                    return false;
+                }
                 return true;
+            }
             previous = std::move(it->second->worker);
         }
         jobs_[id] = j;
@@ -1308,8 +1319,8 @@ namespace albireo
 
     bool model_manager::save_in_reserve(const std::string& path, const std::string& sha, std::string& error)
     {
-        if (reserve_dir_.empty()) return true;
         std::lock_guard<std::mutex> lock(reserve_m_);
+        if (reserve_dir_.empty()) return true;
         std::string content_sha = sha;
         if (!valid_sha256(content_sha))
         {
@@ -1342,8 +1353,8 @@ namespace albireo
 
     bool model_manager::restore_from_reserve(const std::shared_ptr<job>& j)
     {
-        if (reserve_dir_.empty() || !dir_exists(reserve_dir_)) return false;
         std::lock_guard<std::mutex> lock(reserve_m_);
+        if (reserve_dir_.empty() || !dir_exists(reserve_dir_)) return false;
         std::string error;
         if (!secure_folder(reserve_dir_, error, true)) return false;
         const std::string actual = final_path(reserve_dir_);
@@ -1356,7 +1367,7 @@ namespace albireo
             const std::string source = join_path(reserve_dir_, f.sha256 + ".gguf");
             if (!restrict_reserve_file(source)) return false;
             error.clear();
-            if (!copy_verified_file(source, reserve_dir_, dir_, f.partial, f.sha256, f.size, false, error,
+            if (!copy_verified_file(source, reserve_dir_, dir_, f.staged, f.sha256, f.size, false, error,
                     &j->cancel))
             {
                 if (!j->cancel && file_exists(source))
@@ -1364,12 +1375,37 @@ namespace albireo
                 return false;
             }
         }
+        for (auto& f : j->files) f.partial = f.staged;
         return true;
     }
 
     void model_manager::run_job(std::shared_ptr<job> j)
     {
+        bool restored = false;
+        auto remove_partial = [&](const std::string& path) {
+            if (!remove_file(path) && errno != ENOENT)
+                log_warning("models: cannot remove temporary file " + path);
+        };
+        // Les copies de réserve restent séparées de la progression réseau, même si le service s'arrête.
+        auto clean_staged = [&]() {
+            if (!direct_path(dir_))
+            {
+                if (restored) log_warning("models: cannot clean reserved copies in the models folder");
+                return;
+            }
+            for (const auto& f : j->files)
+            {
+                remove_partial(f.staged);
+                if (restored && j->abandoned) remove_partial(f.target + ".partial");
+            }
+        };
+        struct cleanup_on_exit
+        {
+            std::function<void()> clean;
+            ~cleanup_on_exit() { clean(); }
+        } cleanup{clean_staged};
         auto set_state = [&](const std::string& s, const user_error& e = user_error()) {
+            if (s == "done" || s == "error" || s == "cancelled") clean_staged();
             std::lock_guard<std::mutex> lock(m_);
             j->state = s;
             j->error = e;
@@ -1382,6 +1418,7 @@ namespace albireo
         // La progression est écrite sous m_, où cancel_download() la retire, pour qu'un téléchargement
         // annulé par l'utilisateur ne revienne jamais au prochain démarrage.
         auto save = [&]() {
+            if (restored) return;
             const json& e = j->entry;
             json st = json::object();
             st["sha256"] = e["sha256"];
@@ -1393,20 +1430,30 @@ namespace albireo
             if (!j->abandoned) db_.set_download_state(j->id, st);
         };
         set_state("downloading");
-        if (restore_from_reserve(j))
+        restored = restore_from_reserve(j);
+        if (restored)
         {
             for (const auto& c : j->chunks) c->done = c->length;
             j->received = j->total;
             log_info("models: " + j->id + " restored from the local reserve");
         }
+        else clean_staged();
         if (j->cancel)
         {
             set_state("cancelled");
-            drop_partials();
+            if (j->abandoned) drop_partials();
+            return;
+        }
+        if (j->local_only && !restored)
+        {
+            set_state("error", user_error().set("the local reserve is missing or cannot provide verified files",
+                "reserve_unavailable").arg("m", j->entry["name"].str(j->id)));
+            log_warning("models: the local reserve cannot restore " + j->id);
             return;
         }
         const bool with_projector = j->files.size() > 1;
-        log_info("models: downloading " + j->id + " (" + std::to_string(j->total >> 20) + " MB, "
+        log_info("models: " + std::string(restored ? "restoring " : "downloading ") + j->id + " ("
+            + std::to_string(j->total >> 20) + " MB, "
             + std::to_string(j->chunks.size()) + " segments" + (with_projector ? ", with its projector)" : ")"));
         for (int round = 0; round < 2; ++round)
         {
@@ -1456,6 +1503,11 @@ namespace albireo
             */
             auto fetch = [&](job::chunk& c, const std::string& address, bool sized, std::string& reason,
                 uint64_t& wrote) {
+                if (j->local_only)
+                {
+                    reason = "a local restoration cannot use the network";
+                    return transfer_end::local;
+                }
                 random_access_file& file = *outputs[c.file];
                 reason.clear();
                 wrote = 0;
@@ -1703,7 +1755,8 @@ namespace albireo
                 {
                     const uint64_t size = static_cast<uint64_t>(p["size"].as_int(0));
                     const std::string expected = p["sha256"].as_string();
-                    if (round == 0 && !expected.empty() && sha256_range(written, offset, size) != expected)
+                    if (!j->local_only && round == 0 && !expected.empty()
+                        && sha256_range(written, offset, size) != expected)
                     {
                         for (auto& c : j->chunks)
                             if (c->file == fi && c->part == part)
@@ -1749,6 +1802,8 @@ namespace albireo
                     return;
                 }
                 db_.remove_download_state(j->id);
+                if (restored && direct_path(dir_))
+                    for (const auto& f : j->files) remove_partial(f.target + ".partial");
                 if (with_projector) drop_pending_copy(shas[1]);
                 set_state("done");
                 log_info("models: " + j->id + " installed" + (with_projector ? ", with its projector" : ""));
@@ -1759,8 +1814,11 @@ namespace albireo
         set_state("error", user_error().set("the downloaded file does not match the hash of the catalog",
             "download_hash"));
         log_error("models: " + j->id + " does not match its hash");
-        db_.remove_download_state(j->id);
-        drop_partials();
+        if (!restored)
+        {
+            db_.remove_download_state(j->id);
+            drop_partials();
+        }
     }
 
     bool model_manager::install_file(const std::string& id, const std::string& file, const json& descriptor,
@@ -1835,18 +1893,15 @@ namespace albireo
                 error = "the models folder " + dir_ + " now leads elsewhere through a link";
                 return false;
             }
-        if (!reserve_dir_.empty())
+        for (const auto& file : { std::make_pair(m.file, m.sha256),
+                std::make_pair(m.projector, m.projector_sha256) })
         {
-            for (const auto& file : { std::make_pair(m.file, m.sha256),
-                    std::make_pair(m.projector, m.projector_sha256) })
+            if (file.first.empty() || !file_exists(file.first)) continue;
+            std::string why;
+            if (!save_in_reserve(file.first, file.second, why))
             {
-                if (file.first.empty() || !file_exists(file.first)) continue;
-                std::string why;
-                if (!save_in_reserve(file.first, file.second, why))
-                {
-                    error = "cannot preserve " + file.first + " in the local reserve: " + why;
-                    return false;
-                }
+                error = "cannot preserve " + file.first + " in the local reserve: " + why;
+                return false;
             }
         }
         if (file_exists(m.file) && !remove_file(m.file))

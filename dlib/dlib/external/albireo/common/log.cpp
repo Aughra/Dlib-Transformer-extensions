@@ -22,9 +22,8 @@ namespace albireo
             const size_t scheme = out.find("://", from);
             if (scheme == std::string::npos) break;
             size_t end = scheme + 3;
-            while (end < out.size() && out[end] != ' ' && out[end] != '	' && out[end] != '
-' && out[end] != '"'
-                && out[end] != ''')
+            while (end < out.size() && out[end] != ' ' && out[end] != '\t' && out[end] != '\r'
+                && out[end] != '\n' && out[end] != '"' && out[end] != '\'')
                 ++end;
             // La ponctuation qui suit une adresse dans un message, "<adresse>: status 404", n'en fait pas partie.
             while (end > scheme + 3 && (out[end - 1] == ':' || out[end - 1] == ',' || out[end - 1] == ';'

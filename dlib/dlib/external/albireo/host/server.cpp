@@ -1560,9 +1560,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         });
         srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,
                                                                                httplib::Response& res) {
-            if (refuse_offline(*s, res)) return;
             user_error error;
-            const bool ok = s->models().start_download(req.matches[1], error);
+            const bool ok = s->models().start_download(req.matches[1], error, s->settings().get().offline);
             send_json(res, ok ? 202 : 400, ok_result(ok, error));
         });
         srv.Delete(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,

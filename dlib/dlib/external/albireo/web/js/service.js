@@ -166,7 +166,7 @@ const schemas = {
     box(40, 80, 150, 60, 'Mac', 's-blue', 'service') +
     `<ellipse cx="460" cy="108" rx="100" ry="44" class="s-box s-soft"/>` + text(460, 113, 'Internet') +
     arrow(190, 108, 355, 108, '', 's-cut') + `<path d="M262 92 l16 32 M278 92 l-16 32" class="s-cross"/>` +
-    box(40, 160, 150, 40, 'imports (fichiers)', 's-gold') + arrow(115, 160, 115, 140), 215),
+    box(40, 160, 150, 40, 'imports + réserve', 's-gold') + arrow(115, 160, 115, 140), 215),
   web_access: schema('Le bouton Web de la page',
     box(20, 80, 120, 56, 'Question', 's-soft') + arrow(140, 108, 230, 108) +
     box(230, 80, 130, 56, 'Service', 's-blue', 'recherche, lecture') + arrow(360, 108, 450, 108) +
@@ -514,22 +514,23 @@ const items = {
     title: 'Hors ligne',
     control: { kind: 'switch', on: true, off: false },
     restart: false,
-    effect: 'Plus aucune connexion vers Internet : ni catalogue, ni téléchargement, ni recherche web.',
-    principle: 'Le service coupe toutes ses connexions sortantes ; les modèles arrivent par import de fichiers.',
+    effect: 'Plus aucune connexion vers Internet : ni mise à jour du catalogue, ni téléchargement réseau, ni recherche web.',
+    principle: 'Le service coupe ses connexions sortantes ; les modèles viennent des imports ou de la réserve locale.',
     pros: ['Rien ne sort du Mac : confidentialité totale.', 'Aucun téléchargement surprise.'],
-    cons: ['Pas de nouveaux modèles par le catalogue, pas de bouton Web.',
+    cons: ['Pas de modèles qui ne sont pas déjà sur le Mac, pas de bouton Web.',
       'Un téléchargement en cours s’arrête (sa progression est gardée).'],
     normal: "Albireo calcule déjà tout sur le Mac. Il ne va sur Internet que pour trois choses : le catalogue des " +
       "modèles, leur téléchargement, et la recherche du bouton Web. Hors ligne, il n’y va plus du tout. On peut " +
-      "toujours ajouter un modèle en l’important comme fichier.",
+      "toujours importer un modèle comme fichier ou restaurer celui dont tous les fichiers sont vérifiés dans la réserve.",
     owl: "offline = true annule à l’instant les transferts en cours (http_cancel_all, raison « offline mode »), refuse " +
       "les routes qui ont besoin du réseau (refuse_offline : 409, code offline) et ferme " +
-      "l’accès web (403, code offline). Les tâches de fond (catalogue, téléchargements) sont réveillées et s’arrêtent. Le dossier d’import reste " +
-      "lu. Remis à faux, http_restore() rouvre les transferts.",
+      "l’accès web (403, code offline). Les restaurations de la réserve vérifient taille et SHA-256, sans aucun repli " +
+      "réseau, même si le réglage change pendant le travail. Le dossier d’import reste lu. Remis à faux, http_restore() " +
+      "rouvre les transferts.",
     marmot: "C’est le mode avion de ton téléphone, mais pour Albireo. Tout ce qui est déjà sur le Mac marche toujours ; " +
       "seulement, plus rien ne part vers Internet, et rien n’en vient.",
-    bee: "Oublié allumé, le catalogue ne se met plus à jour et le bouton Web répond « hors ligne ». Rien de grave : il " +
-      "suffit de l’éteindre."
+    bee: "Oublié allumé, le catalogue ne se met plus à jour et le bouton Web répond « hors ligne ». Si la réserve " +
+      "ne contient pas tous les fichiers vérifiés, il faut les importer ou revenir en ligne."
   },
   web_access: {
     title: 'Bouton Web',

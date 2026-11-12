@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Restaurer les modèles hors ligne et stabiliser la branche
+
+- **Quoi** : en mode hors ligne, l'API et la page proposent la restauration vérifiée d'un modèle et de son éventuel projecteur depuis la réserve, sans repli réseau. Les erreurs sont affichées ; une copie temporaire distincte préserve la progression réseau antérieure. La transcription de `without_queries` qui empêchait le journal de compiler est corrigée. Albireo passe à 4.1.0.
+- **Fichiers** : `dlib/dlib/external/albireo/host/models.cpp`, `host/models.h`, `host/server.cpp`, `common/log.cpp`, `tests/test_host.cpp`, `tools/test_macos.sh`, `tools/make_openapi.py`, `web/js/models.js`, `web/js/service.js`, `common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md` ; `docs/memo-portage-macos-arm64.md`, `docs/notes-pour-l-auteur.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : la première réserve était inutilisable avec le réglage « hors ligne » ; préserver les téléchargements interrompus et préparer une branche vérifiable sur le Mac.
+- **Étapes** : sous Debian local, compilation puis deux passages de `test_host` d'Albireo (187 contrôles réussis chacun), et compilation et passage de `test_host` de Pseudalis, avec un adaptateur temporaire pour le chemin d'exécutable macOS. Sous Windows : quatre tests Python réussis et page essayée dans un navigateur avec service simulé. Syntaxes C++14, JavaScript et Bash vérifiées ; OpenAPI régénéré sans divergence. **Aucun build ni essai de cette version sur Mac** : les scripts et les contrôles de réserve, permissions et ACL restent à faire avant fusion.
+
 ## 2026-11-12 — Étendre les tests hors ligne des outils de modèles
 
 - **Quoi** : l'outil `publish_model.py` transforme les fichiers GGUF invalides ou tronqués en erreur lisible, sans trace Python. Ses tests couvrent maintenant les morceaux compressés et non compressés, leurs empreintes, la reconstruction et les en-têtes invalides. Un test de `make_catalog.py` simule toutes les réponses du Hub, y compris les projecteurs, sans connexion réseau. Le test d'hôte C++ couvre aussi la mise en réserve et la restauration d'un modèle avec son projecteur. Albireo passe à 4.0.5.

@@ -296,8 +296,8 @@ schemas = {
                     "description": "Storage of the keys and values of the language models: q8, 8-bit integers by "
                                    "groups of 32 values with a scale, the keys rotated; f16, half precision. auto "
                                    "takes q8 for the models whose heads hold whole groups."},
-        "offline": {"type": "boolean", "description": "No access to the network: the catalog and the models "
-                    "come from imports, and the service opens no connection."},
+        "offline": {"type": "boolean", "description": "No access to the network: the catalog comes from its cache "
+                    "or imports, and models come from imports or the verified local reserve."},
         "proxy": {"type": "string",
                   "description": "Proxy of the downloads: empty for the proxy of the system, none for a direct "
                                  "connection, or http://[user:password@]host:port.  The settings give the password "
@@ -516,8 +516,8 @@ paths = {
                         "description": "Language of the descriptions; auto, or no value, gives French (the fork for macOS speaks French only)."}],
         "responses": {"200": reply("The models", {"type": "object", "properties": {
             "free": {"type": "integer", "description": "The free bytes of the disk of the models folder."},
-            "offline": {"type": "boolean", "description": "True when the service is set offline: the models come "
-                        "from imports."},
+            "offline": {"type": "boolean", "description": "True when the service is set offline: models come "
+                        "from imports or the verified local reserve."},
             "models": {"type": "array", "items": {"type": "object", "properties": {
                 "id": {"type": "string"}, "name": {"type": "string"},
                 "roles": {"type": "array", "items": {"type": "string"}},
@@ -544,7 +544,11 @@ paths = {
                 "size": {"type": "integer"}, "publisher": {"type": "string"},
                 "license": {"type": "string", "description": "As for the language models."}}},
                 "description": "The installed embedding models."},
-            "downloads": {"type": "array", "items": {"type": "object"}},
+            "downloads": {"type": "array", "description": "Asynchronous downloads and local restorations; "
+                          "an error includes its code and message.", "items": {"type": "object", "properties": {
+                              "id": {"type": "string"}, "state": {"type": "string"},
+                              "code": {"type": "string"}, "error": {"type": "string"},
+                              "received": {"type": "integer"}, "total": {"type": "integer"}}}},
             "pending_projectors": {"type": "array", "description": "The projectors imported without their decoder, "
                                    "which wait for it.", "items": {"type": "object", "properties": {
                                        "name": {"type": "string"}, "size": {"type": "integer"},
@@ -661,8 +665,13 @@ paths = {
                                                               **offline_reply)}},
     "/albireo/v1/models/{id}/download": {
         "post": {"tags": ["Administration"], "summary": "Starts or resumes the download of a model",
+                 "description": "In offline mode, starts a local-only restoration of all verified files from the "
+                                "reserve, with no network fallback even if the setting changes. If the reserve "
+                                "cannot supply them, the asynchronous job reports state error and code "
+                                "reserve_unavailable in GET /albireo/v1/models. A network job already running "
+                                "for this model is refused with code download_busy.",
                  "parameters": [model_id],
-                 "responses": dict({"202": reply("Started", ok), "400": reply("Refused", ok)}, **offline_reply)},
+                 "responses": {"202": reply("Started", ok), "400": reply("Refused", ok)}},
         "delete": {"tags": ["Administration"], "summary": "Cancels a download",
                    "parameters": [model_id], "responses": {"200": reply("Cancelled", ok)}}},
     "/albireo/v1/models/{id}/activate": {"post": {

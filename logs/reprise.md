@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-12, écrite sous Windows (branche `bureau-2026-11-12`, Albireo 4.0.5 non compilé) ; le reste date du 2026-11-11 sur le Mac M2 (Albireo 3.2.0).
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-12, écrite sous Windows (branche `bureau-2026-11-12`, Albireo 4.1.0 non construit sur Mac) ; le reste date du 2026-11-11 sur le Mac M2 (Albireo 3.2.0).
 
 ## Objectif
 
@@ -39,32 +39,35 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 ## Pour reprendre (mis à jour le 2026-11-12, écrit sous Windows)
 
-**État** : `main` = Albireo **3.2.0**, testé. La branche **`bureau-2026-11-12`** contient le retrait des clés, Albireo **4.0.5**, la documentation, le nettoyage des commentaires, la correction des langues API Pseudalis, les contrôles de propriétaires/permissions POSIX, le retrait des choix CUDA/OpenVINO/x86, les tests hors ligne de `publish_model.py` (3/3) et `make_catalog.py` (1/1 avec Hub simulé), ainsi que les premières opérations de réserve. Le build et les tests C++ restent à faire sur Mac. L'audit statique des chemins CMake n'a trouvé aucune source ou ressource manquante.
+**État** : `main` = Albireo **3.2.0**, testé. La branche **`bureau-2026-11-12`** contient le retrait des clés, Albireo **4.1.0**, la documentation, le nettoyage des commentaires, la correction des langues API Pseudalis, les contrôles de propriétaires/permissions POSIX, le retrait des choix CUDA/OpenVINO/x86, les tests hors ligne de `publish_model.py` (3/3) et `make_catalog.py` (1/1 avec Hub simulé), ainsi que la restauration depuis la réserve même en mode hors ligne. Le build et les tests C++ restent à faire sur Mac. L'audit statique des chemins CMake n'a trouvé aucune source ou ressource manquante.
 
 **À faire en premier sur le Mac** (critère : tout passe) :
 1. `git fetch origin && git checkout bureau-2026-11-12` (elle contient `travail-windows`).
 2. `cmake --build build/macos-albireo -- -k 0` et `cmake --build build/macos-pseudalis -- -k 0` : corriger ce qui ne compile pas (fautes de frappe possibles, `-Werror` sur les avertissements).
-3. `bash dlib/dlib/external/albireo/tools/test_macos.sh` et celui de Pseudalis. Ils couvrent les validations d'API, la migration des anciens réglages, les dossiers et les opérations de réserve ; aucun n'a encore tourné sur Mac.
+3. `bash dlib/dlib/external/albireo/tools/test_macos.sh` et `bash dlib/dlib/external/pseudalis/tools/test_macos.sh`. Ils couvrent les validations d'API, la migration des anciens réglages, les dossiers et les opérations de réserve ; aucun n'a encore tourné sur Mac. Vérifier que `models folder and imports` et `offline reserve` affichent **PASS**, pas **SKIP** : il faut le service construit et le modèle GGUF indiqué au début du script.
 4. Vérifier les permissions POSIX et les ACL étendues des dossiers utilisateur et d'import sur Mac ; les ACL ne sont pas examinées par les contrôles actuels. Évaluer aussi `trust_authority`, sans effet sur macOS.
-5. Relancer les services ; vérifier téléchargement, import et restauration sans réseau depuis la réserve Albireo (puis le repli si un fichier est altéré), les clés/dossiers Pseudalis, le délai DNS et le dossier `drive` (pas de volume monté, pas de verrou exclusif). Le test C++ couvre maintenant un modèle avec projecteur, mais reste à exécuter sur Mac.
-6. La réserve ne peut pas encore être utilisée avec le réglage « hors ligne » : l'API refuse la route de téléchargement avant d'essayer la copie locale, et la page désactive le bouton. Corriger ce point avant de présenter la réserve comme disponible dans ce mode.
-7. Si les builds, tests et limites de sécurité sont traités : fusionner dans `main` (`git merge bureau-2026-11-12`), puis pousser. Sinon corriger sur la branche.
+5. Dans un dossier de données de test isolé, vérifier la restauration hors ligne sans projecteur et avec projecteur, l'erreur si un fichier manque ou est altéré, la conservation d'une progression réseau, puis le repli en ligne. Vérifier aussi les clés/dossiers Pseudalis, le délai DNS et le dossier `drive` (pas de volume monté, pas de verrou exclusif). Le script teste la route hors ligne et le test C++ couvre le projecteur ; ils restent à exécuter sur Mac.
+6. Si les builds, tests et limites de sécurité sont traités : fusionner dans `main` (`git merge bureau-2026-11-12`), puis pousser vers `origin`. Sinon corriger sur la branche.
 
-**Ce qui a été fait** (voir le journal du 2026-11-12) : catalogue sans signature, import de dossier sans `.sig`, espace de publication et outils de signature retirés ; version 4.0.0. Puis correction des langues API Pseudalis, nettoyage des commentaires, contrôles POSIX, retrait des choix de moteur obsolètes et premières opérations de réserve ; versions Albireo 4.0.1 à 4.0.4. Albireo **4.0.5** signale proprement un GGUF invalide. Les tests Python de publication passent (3/3) ; le générateur du catalogue passe avec réponses simulées (1/1). Les tests C++ et le build complet restent à faire sur Mac.
+**Ce qui a été fait** (voir le journal du 2026-11-12) : catalogue sans signature, import de dossier sans `.sig`, espace de publication et outils de signature retirés ; version 4.0.0. Puis correction des langues API Pseudalis, nettoyage des commentaires, contrôles POSIX, retrait des choix de moteur obsolètes et premières opérations de réserve ; versions Albireo 4.0.1 à 4.0.4. Albireo **4.0.5** signale proprement un GGUF invalide ; **4.1.0** restaure depuis la réserve hors ligne et corrige une erreur de compilation introduite dans le journal du fork. Les tests Python de publication passent (3/3) ; le générateur du catalogue passe avec réponses simulées (1/1). Les tests C++ et le build complet restent à faire sur Mac.
 
 **Portage documentaire** : le README d'Albireo garde ses sections sur les signatures et les outils de publication comme documentation de l'original ; son introduction précise que le reste décrit la version Windows de l'original. Le README de Pseudalis a la même réserve. Les mentions de `pseudalis-sign` dans le mémo et de `check_updates` dans les notes pour l'auteur sont historiques et laissées telles quelles ; la commande de démarrage du mémo a été corrigée.
 
 **Juste après les clés, demandé par l'humain : une réserve de modèles sur le Mac**, qui remplace l'espace de publication de l'original (contre une panne ou un blocage de Hugging Face) :
-- **État constaté** : le catalogue reçu et la liste personnelle (modèles Hugging Face ajoutés) sont déjà conservés dans SQLite et rechargés au démarrage ; la page peut les afficher hors réseau. En revanche, les routes de recherche Hugging Face et de liste des fichiers ne gardent aucun cache. Le contenu de la réserve n'est pas présenté comme une liste de modèles ; le mode « hors ligne » bloque aussi la route de téléchargement, donc la restauration locale ne marche actuellement qu'avec le réglage désactivé.
-- dossier `<données>/reserve` : chaque modèle téléchargé y reste ; supprimer un modèle le range en réserve au lieu de l'effacer ; le réinstaller est une copie locale, sans réseau ;
-- la dernière liste connue (catalogue, liste personnelle, recherches Hugging Face) enregistrée sur le Mac et affichée même hors ligne ;
-- deux boutons dans l'onglet Modèles : « Rafraîchir depuis le Mac » (réserve et liste enregistrée, sans réseau) et « Rafraîchir depuis Hugging Face » (GitHub pour le catalogue, Hugging Face pour la liste personnelle) ;
-- le téléchargement cherche d'abord dans la réserve, puis sur Hugging Face (même logique que l'espace de l'original, sans mot de passe) ;
+- **État constaté** : le catalogue reçu et la liste personnelle (modèles Hugging Face ajoutés) sont déjà conservés dans SQLite et rechargés au démarrage ; la page peut les afficher hors réseau. En revanche, les routes de recherche Hugging Face et de liste des fichiers ne gardent aucun cache. Le contenu de la réserve n'est pas présenté comme une liste de modèles ; une entrée connue du catalogue peut être restaurée hors ligne si tous ses fichiers sont disponibles et vérifiés.
+- **À achever** : conserver automatiquement chaque modèle téléchargé dans `<données>/reserve` ; actuellement ses fichiers vérifiés y sont copiés à la suppression, puis peuvent être restaurés localement ;
+- enregistrer et afficher hors ligne aussi les dernières recherches Hugging Face, en plus du catalogue et de la liste personnelle déjà conservés ;
+- ajouter deux boutons dans l'onglet Modèles : « Rafraîchir depuis le Mac » (réserve et liste enregistrée, sans réseau) et « Rafraîchir depuis Hugging Face » (GitHub pour le catalogue, Hugging Face pour la liste personnelle) ;
+- le téléchargement cherche déjà d'abord dans la réserve, puis, seulement en ligne, à l'adresse indiquée par le catalogue ;
 - à décider avec l'humain : taille maximale de la réserve (réglage de l'onglet Service) et bouton « Vider la réserve » ; place libre le 2026-11-11 : 783 Go.
 
 **Ensuite, dans l'ordre que choisira l'humain** (détails plus bas) : découper `app.js` ; retirer le code mort de la page ; déplacer la logique cachée de la page vers le service ; corriger sur le fond les commentaires périmés (Windows, CUDA) ; attention de prompt en tuiles (M7). **Nouveau constat** : beaucoup de modèles récents de Hugging Face (Qwen 3.5, 3.6, 3.8 en `qwen35`, `qwen35moe`, `qwen4exp`, Gemma, Granite hybride, DeepSeek) ont des architectures que le moteur ne lit pas ; les prendre en charge serait un chantier du moteur à part, à proposer à l'humain.
 
 ## En cours
+
+### Restauration hors ligne de la réserve : validation Mac en attente
+
+L'API lance une restauration strictement locale en mode « hors ligne », la page propose cette action et affiche les erreurs, et les copies temporaires restent séparées d'une progression réseau précédente. Sous Debian local, `test_host` d'Albireo passe deux fois (187 contrôles à chaque passage) et celui de Pseudalis passe ; un adaptateur temporaire remplace l'appel macOS du chemin d'exécutable. Les syntaxes C++14, JavaScript et Bash vérifiées passent aussi. Le navigateur a vérifié la page avec un service simulé : restauration, réserve absente, téléchargement occupé, réponse illisible, téléchargement en ligne et refus de suppression. Ce ne sont pas des builds ni des tests macOS.
 
 ### Fait : contrôles de permissions POSIX ajoutés, validation Mac en attente
 

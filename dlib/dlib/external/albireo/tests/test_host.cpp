@@ -28,8 +28,10 @@
     fin à un téléchargement en cours.  Le catalogue, sans signature, vient de son adresse ou d'un
     dossier, et un catalogue plus ancien ne remplace jamais un plus récent.  Les réglages d'une version
     antérieure (public_link, les fournisseurs et la clé de la recherche) sont lus sans erreur et laissent
-    settings.json au départ.  Le test travaille dans un dossier de données à lui (set_data_dir()),
-    jamais dans celui d'un service installé.
+    settings.json au départ.  La réserve restaure un modèle et son projecteur hors ligne sans requête,
+    refuse les fichiers manquants ou altérés, préserve la progression réseau et laisse le repli en ligne
+    fonctionner.  Le test travaille dans un dossier de données à lui (set_data_dir()), jamais dans celui
+    d'un service installé.
 
     L'accès web ne lit que des adresses publiques : les adresses des deux côtés de chaque plage qui
     n'est pas publique, les adresses refusées avant toute connexion (informations d'utilisateur,
@@ -681,10 +683,23 @@ int main(int argc, char** argv)
             && official_count("other.bin") == network_before_restore,
             "a reserved model is restored without a network request");
         check(m.remove("small", remove_error), "a restored model can be reserved again");
+        check(!albireo::http_cancelled() && m.start_download("small", error, true),
+            "a local-only restoration of a model without projector starts while the network is available");
+        d = wait_download(m, "small");
+        check(d["state"].as_string() == "done" && read_text(small.file) == other
+            && official_count("other.bin") == network_before_restore,
+            "a model without projector is restored locally without a network request");
+        check(m.remove("small", remove_error), "the offline-restored model can be reserved again");
         std::string corrupt_reserve = other;
         corrupt_reserve[0] ^= 1;
         write_text(reserved, corrupt_reserve);
         const int network_before_corrupt_reserve = official_count("other.bin");
+        check(!albireo::http_cancelled() && m.start_download("small", error, true),
+            "a local-only restoration starts while network access is otherwise available");
+        d = wait_download(m, "small");
+        check(d["state"].as_string() == "error" && d["code"].as_string() == "reserve_unavailable"
+            && !installed(db, "small", small) && official_count("other.bin") == network_before_corrupt_reserve,
+            "a corrupt reserve is refused locally without a network request");
         check(m.start_download("small", error), "a corrupt reserved model falls back to its catalog address");
         d = wait_download(m, "small");
         check(d["state"].as_string() == "done" && read_text(small.file) == other
@@ -705,13 +720,78 @@ int main(int argc, char** argv)
         check(read_text(vision_reserved) == other && read_text(projector_reserved) == projector,
             "both model and projector are kept in the local reserve");
         const int network_before_vision_restore = official_count("other.bin") + official_count("projector.bin");
-        check(m.start_download("vision", error), "a model with its projector can be restored");
+        albireo::http_cancel_all("offline mode");
+        check(m.start_download("vision", error, true), "a model with its projector can be restored offline");
         d = wait_download(m, "vision");
+        albireo::http_restore();
         check(d["state"].as_string() == "done" && read_text(vision_model.file) == other
             && read_text(vision_model.projector) == projector
             && official_count("other.bin") + official_count("projector.bin") == network_before_vision_restore,
-            "a reserved model and projector are restored without a network request");
+            "a reserved model and projector are restored while network transfers are disabled");
+
+        check(m.remove("vision", remove_error), "the restored model and projector can be reserved again");
+        const std::string vision_partial = vision_model.file + ".partial";
+        const std::string projector_partial = vision_model.projector + ".partial";
+        const std::string decoder_prefix = other.substr(0, 1000), projector_prefix = projector.substr(0, 500);
+        write_text(vision_partial, decoder_prefix);
+        write_text(projector_partial, projector_prefix);
+        json progress = json::object(), done = json::array();
+        progress["sha256"] = albireo::sha256_hex(other);
+        progress["projector_sha256"] = albireo::sha256_hex(projector);
+        done.push_back(static_cast<unsigned long long>(decoder_prefix.size()));
+        done.push_back(static_cast<unsigned long long>(projector_prefix.size()));
+        progress["done"] = done;
+        db.set_download_state("vision", progress);
+        check(albireo::remove_file(projector_reserved), "the projector can be removed from the reserve for the test");
+        const int network_before_missing = official_count("other.bin") + official_count("projector.bin");
+        check(m.start_download("vision", error, true), "a local-only restoration with a missing projector starts");
+        d = wait_download(m, "vision");
+        const std::vector<std::string> after_missing = albireo::list_dir(dir);
+        check(d["state"].as_string() == "error" && d["code"].as_string() == "reserve_unavailable"
+            && !installed(db, "vision", vision_model)
+            && official_count("other.bin") + official_count("projector.bin") == network_before_missing
+            && read_text(vision_partial) == decoder_prefix && read_text(projector_partial) == projector_prefix
+            && db.download_state("vision").dump() == progress.dump()
+            && std::none_of(after_missing.begin(), after_missing.end(), [](const std::string& name) {
+                return name.compare(0, 9, ".reserve-") == 0;
+            }),
+            "a missing projector leaves previous progress intact and makes no network request");
+
+        std::string corrupt_projector = projector;
+        corrupt_projector[0] ^= 1;
+        write_text(projector_reserved, corrupt_projector);
+        check(m.start_download("vision", error, true), "a local-only restoration with a corrupt projector starts");
+        d = wait_download(m, "vision");
+        check(d["state"].as_string() == "error" && d["code"].as_string() == "reserve_unavailable"
+            && official_count("other.bin") + official_count("projector.bin") == network_before_missing
+            && read_text(vision_partial) == decoder_prefix && read_text(projector_partial) == projector_prefix
+            && db.download_state("vision").dump() == progress.dump(),
+            "a corrupt projector is refused without network access or loss of previous progress");
+
+        check(m.start_download("vision", error), "the same model can fall back to the network when online");
+        d = wait_download(m, "vision");
+        check(d["state"].as_string() == "done" && installed(db, "vision", vision_model)
+            && read_text(vision_model.file) == other && read_text(vision_model.projector) == projector
+            && official_count("other.bin") + official_count("projector.bin") > network_before_missing
+            && !db.download_state("vision").is_object(),
+            "the online fallback resumes and verifies both files");
+
+        check(m.remove("vision", remove_error), "the model can be reserved before a service stop");
+        write_text(vision_partial, decoder_prefix);
+        write_text(projector_partial, projector_prefix);
+        db.set_download_state("vision", progress);
+        const int network_before_stop = official_count("other.bin") + official_count("projector.bin");
+        check(m.start_download("vision", error, true), "a local restoration starts before the service stops");
         m.stop();
+        d = wait_download(m, "vision");
+        const bool kept_progress = d["state"].as_string() == "cancelled"
+            && read_text(vision_partial) == decoder_prefix && read_text(projector_partial) == projector_prefix
+            && db.download_state("vision").dump() == progress.dump();
+        const bool completed = d["state"].as_string() == "done" && installed(db, "vision", vision_model)
+            && read_text(vision_model.file) == other && read_text(vision_model.projector) == projector;
+        check((kept_progress || completed)
+            && official_count("other.bin") + official_count("projector.bin") == network_before_stop,
+            "a service stop preserves previous progress unless restoration has already completed");
     }
 
     {
@@ -904,6 +984,10 @@ int main(int argc, char** argv)
         // Les adresses des messages ne portent pas leur requête (une clé de recherche peut s'y trouver).
         check(albireo::without_queries("https://example.org/search?q=X&key=Y: status 500")
             == "https://example.org/search: status 500", "the queries of the addresses stay out of the messages");
+        check(albireo::without_queries("'https://example.org/a?x=1' \"https://example.org/b?y=2\"\r\n"
+                "https://example.org/c?z=3\tend")
+            == "'https://example.org/a' \"https://example.org/b\"\r\nhttps://example.org/c\tend",
+            "queries are removed from quoted addresses and lines without losing their delimiters");
         // Le journal écrit ses lignes telles qu'elles sont données.
         const std::string log_path = albireo::join_path(work, "logs/service.log");
         albireo::make_dirs(albireo::join_path(work, "logs"));
@@ -1186,6 +1270,9 @@ int main(int argc, char** argv)
             for (const auto& x : downloads.elements())
                 if (x["id"].as_string() == "slow") received = x["received"].as_int(0);
         }
+        albireo::user_error local_busy;
+        check(!m.start_download("slow", local_busy, true) && local_busy.code == "download_busy",
+            "a local-only request does not claim that a running network download is a local restoration");
         const auto cancelled_at = std::chrono::steady_clock::now();
         m.cancel_download("slow");
         d = wait_download(m, "slow");

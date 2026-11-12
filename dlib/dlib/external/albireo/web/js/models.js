@@ -90,6 +90,29 @@ export function assess(m, status) {
 // Les états d'un téléchargement en cours (models.cpp).
 const running = ['queued', 'downloading', 'verifying'];
 
+const modelErrors = {
+  reserve_unavailable: 'La réserve est absente, incomplète ou illisible. Vérifiez aussi l’espace libre, ou importez les fichiers.',
+  download_busy: 'Un téléchargement réseau de ce modèle se termine. Réessayez ensuite.',
+  download_hash: 'Les fichiers ne correspondent pas aux empreintes du catalogue.',
+  download_file: 'Un fichier de travail ne peut pas être créé ou lu. Consultez le journal du service.',
+  download_install: 'Le modèle vérifié ne peut pas être installé. Consultez le journal du service.',
+  download_failed: 'Le téléchargement a échoué. Consultez le journal du service.',
+  disk_space: 'L’espace libre est insuffisant pour préparer ce modèle.',
+  catalog_entry: 'L’entrée du catalogue est invalide pour ce modèle.',
+  not_in_catalog: 'Ce modèle ne figure plus dans le catalogue.',
+  builtin_installed: 'Ce modèle est déjà fourni avec Albireo.',
+  not_installed: 'Ce modèle n’est plus installé.',
+  builtin_model: 'Ce modèle fourni avec Albireo ne peut pas être supprimé.',
+  delete_failed: 'La suppression a échoué. Vérifiez la réserve et les fichiers du modèle.',
+  offline: 'Cette opération demande une connexion au réseau.',
+  stopping: 'Le service est en cours d’arrêt.'
+};
+
+function modelError(result) {
+  return modelErrors[result.code] || 'L’opération a échoué' + (result.code ? ' (code ' + result.code + ')' : '') +
+    '.';
+}
+
 const levelLabels = { conseille: 'Conseillé', possible: 'Possible', deconseille: 'Déconseillé', inconnu: 'À voir' };
 
 // Le schéma de la mémoire : macOS et les autres programmes, le modèle, la place qui reste aux conversations.
@@ -293,11 +316,17 @@ export function modelsTab(body, env) {
     try {
       const r = await fetch(url, method === 'POST' ? { method, headers: { 'Content-Type': 'application/json' }, body: '{}' }
         : { method });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || j.ok === false) throw new Error((j.error && (j.error.message || j.error)) || r.status + ' ' + r.statusText);
+      let j;
+      try { j = await r.json(); } catch (e) {
+        if (e instanceof SyntaxError) throw new Error('La réponse du service est illisible.');
+        throw e;
+      }
+      if (!j || typeof j !== 'object') throw new Error('La réponse du service est illisible.');
+      if (!r.ok || j.ok === false) throw new Error(modelError(j));
+      if (j.ok !== true) throw new Error('La réponse du service est illisible.');
       if (ok) toast(ok);
     } catch (e) {
-      toast(e.message, true);
+      toast(e instanceof TypeError ? 'Le service ne répond pas.' : e.message, true);
     }
     load();
   }
@@ -325,16 +354,19 @@ export function modelsTab(body, env) {
           }
         } }, 'Supprimer'));
     } else {
-      actions = h('button', { class: 'button', type: 'button', disabled: !!data.offline,
-        title: data.offline ? 'Le service est hors ligne' : null,
-        onclick: () => act('POST', '/albireo/v1/models/' + encodeURIComponent(m.id) + '/download', 'Téléchargement de ' + m.name + ' lancé.') },
-      'Télécharger (' + gb(m.total_size || m.size || 0) + ')');
+      actions = h('button', { class: 'button', type: 'button',
+        title: data.offline ? 'Restaure seulement les fichiers déjà présents et vérifiés dans la réserve' : null,
+        onclick: () => act('POST', '/albireo/v1/models/' + encodeURIComponent(m.id) + '/download',
+          (data.offline ? 'Restauration de ' + m.name + ' lancée.' : 'Téléchargement de ' + m.name + ' lancé.')) },
+      data.offline ? 'Restaurer depuis la réserve' : 'Télécharger (' + gb(m.total_size || m.size || 0) + ')');
     }
     const card = sheetCard(h, sheet, badge, actions);
     card.classList.add('mdl-card');
     card.insertBefore(h('p', { class: 'svc-where' }, (m.publisher || '') + ' · ' + billions(m.parameters || 0) +
       ' de paramètres · ' + gb(m.total_size || m.size || 0) + (a.speed ? ' · environ ' + Math.round(a.speed) + ' tokens/s' : '') +
       (m.installed ? ' · installé' : '')), card.querySelector('.svc-detail'));
+    if (dl && dl.state === 'error')
+      card.insertBefore(h('p', { class: 'error-box', role: 'alert' }, modelError(dl)), card.querySelector('.svc-detail'));
     return card;
   }
 
@@ -361,7 +393,7 @@ export function modelsTab(body, env) {
       h('div', { class: 'svc-card svc-tools' }, h('div', { class: 'svc-head' },
         h('div', { class: 'svc-title' }, h('span', null, 'Modèle utilisé : ' + (current ? current.name : 'aucun'))), refresh),
         h('p', { class: 'svc-effect' }, 'Catalogue mis à jour : ' + updated + ' · ' + (data.models || []).length +
-          ' modèles · place libre : ' + gb(data.free || 0) + (data.offline ? ' · hors ligne : pas de téléchargement' : ''))),
+          ' modèles · place libre : ' + gb(data.free || 0) + (data.offline ? ' · hors ligne : restauration locale seulement' : ''))),
       sheetCard(h, specialtiesSheet),
       h('section', { class: 'svc-group' }, h('h4', null, 'Les modèles'),
         h('p', { class: 'help' }, 'Installés d’abord, puis du plus conseillé au moins conseillé pour ce Mac. Ceux ajoutés ' +

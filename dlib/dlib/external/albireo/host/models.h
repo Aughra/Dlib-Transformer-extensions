@@ -60,8 +60,9 @@ namespace albireo
 
                 Le téléchargement vérifie d'abord la réserve locale : si le fichier complet du
                 décodeur et, le cas échéant, du projecteur y sont présents et conformes, il les
-                restaure sans réseau. Sinon, les segments viennent des adresses officielles
-                que donne le catalogue, avec trois tentatives séparées par des pauses qu'une
+                restaure sans réseau. En mode local seul, une réserve absente ou invalide met
+                fin au travail sans accès réseau. Sinon, les segments viennent des adresses
+                officielles que donne le catalogue, avec trois tentatives séparées par des pauses qu'une
                 annulation interrompt ; une réponse qui annonce une partie à une autre taille
                 que le catalogue met fin à sa tentative avant qu'aucun octet ne soit écrit.
                 Une partie dont l'empreinte échoue est récupérée de nouveau, une fois. Quand
@@ -187,11 +188,16 @@ namespace albireo
         /*!
             ensures
                 - Lance le téléchargement de l'entrée id du catalogue, son projecteur compris.
+                - Si local_only est vrai, restaure seulement les fichiers vérifiés de la
+                  réserve, sans jamais accéder au réseau. Une réserve inutilisable termine le
+                  travail avec le code reserve_unavailable.
                 - Refuse, avec error rempli, une entrée qui n'est pas dans le catalogue, un
                   modèle livré avec Albireo, et une entrée dont un tel modèle porte le fichier
                   (builtin_installed, qui nomme ce modèle).
+                - Refuse avec download_busy une demande locale alors qu'un téléchargement
+                  réseau du même modèle est encore en cours.
         !*/
-        bool start_download(const std::string& id, user_error& error);
+        bool start_download(const std::string& id, user_error& error, bool local_only = false);
         // Affiche un téléchargement de id qui n'a pas pu démarrer, avec son erreur, jusqu'à ce qu'un
         // téléchargement démarre.
         void note_failure(const std::string& id, const user_error& error);

@@ -114,6 +114,81 @@ else
   skip "embedding model" "no $EMBEDDING"
 fi
 
+# Une entrée de catalogue et une petite copie de réserve suffisent à tester la route sans réseau.
+offline_reserve_test() {
+  local folder="$HOME_DIR/import/offline-reserve-test" sample="$WORK/reserve-fixture.gguf"
+  local sha size payload reply code restored=0 removed=0 missing=0 path
+  mkdir -p "$folder" "$HOME_DIR/reserve" || return 1
+  chmod 700 "$folder" "$HOME_DIR/reserve" || return 1
+  printf 'albireo offline reserve test\n' > "$sample" || return 1
+  sha=$(perl -MDigest::SHA=sha256_hex -e 'local $/; print sha256_hex(<STDIN>)' < "$sample") || return 1
+  size=$(wc -c < "$sample" | tr -d '[:space:]') || return 1
+  cp "$sample" "$HOME_DIR/reserve/$sha.gguf" || return 1
+  chmod 600 "$HOME_DIR/reserve/$sha.gguf" || return 1
+  printf '{"updated":"2099-01-01T00:00:00Z","models":[{"id":"offline-reserve-test","name":"Réserve test","size":%s,"sha256":"%s","files":[{"url":"http://127.0.0.1:1/unreachable","size":%s,"sha256":"%s"}]}]}' \
+    "$size" "$sha" "$size" "$sha" > "$folder/catalog.json" || return 1
+  chmod 600 "$folder/catalog.json" || return 1
+  payload=$(perl -MJSON::PP -e 'print encode_json({path => shift})' "$folder") || return 1
+  reply=$(curl -sk --max-time 10 -H "Content-Type: application/json" -d "$payload" \
+    "https://localhost:$PORT/albireo/v1/import") || return 1
+  if ! printf '%s' "$reply" | perl -MJSON::PP -e '
+    my $j = decode_json(do { local $/; <STDIN> });
+    exit !(ref($j->{catalog}) eq "HASH" && ($j->{catalog}{models} || 0) == 1);
+  '; then echo "catalog import failed: $reply"; return 1; fi
+
+  code=$(curl -sk --max-time 10 -X POST -o "$WORK/reserve-start.json" -w '%{http_code}' \
+    "https://localhost:$PORT/albireo/v1/models/offline-reserve-test/download") || return 1
+  if [ "$code" != 202 ]; then echo "restoration refused ($code): $(cat "$WORK/reserve-start.json")"; return 1; fi
+  for i in $(seq 1 200); do
+    reply=$(curl -sk --max-time 5 "https://localhost:$PORT/albireo/v1/models") || return 1
+    if printf '%s' "$reply" | perl -MJSON::PP -e '
+      my $j = decode_json(do { local $/; <STDIN> });
+      my ($m) = grep { ($_->{id} || "") eq "offline-reserve-test" } @{$j->{models} || []};
+      my ($d) = grep { ($_->{id} || "") eq "offline-reserve-test" } @{$j->{downloads} || []};
+      exit !($m && $m->{installed} && $d && ($d->{state} || "") eq "done");
+    '; then restored=1; break; fi
+    sleep 0.1
+  done
+  if [ "$restored" != 1 ]; then echo "restoration did not finish: $reply"; return 1; fi
+  path=$(printf '%s' "$reply" | perl -MJSON::PP -e '
+    my $j = decode_json(do { local $/; <STDIN> });
+    my ($m) = grep { ($_->{id} || "") eq "offline-reserve-test" } @{$j->{models}};
+    print $m->{file};
+  ') || return 1
+  cmp -s "$sample" "$path" || { echo "restored bytes differ"; return 1; }
+
+  code=$(curl -sk --max-time 10 -X DELETE -o "$WORK/reserve-delete.json" -w '%{http_code}' \
+    "https://localhost:$PORT/albireo/v1/models/offline-reserve-test") || return 1
+  if [ "$code" != 200 ]; then echo "model removal failed ($code): $(cat "$WORK/reserve-delete.json")"; return 1; fi
+  for i in $(seq 1 200); do
+    reply=$(curl -sk --max-time 5 "https://localhost:$PORT/albireo/v1/models") || return 1
+    if printf '%s' "$reply" | perl -MJSON::PP -e '
+      my $j = decode_json(do { local $/; <STDIN> });
+      my ($m) = grep { ($_->{id} || "") eq "offline-reserve-test" } @{$j->{models} || []};
+      exit !($m && !$m->{installed});
+    '; then removed=1; break; fi
+    sleep 0.1
+  done
+  if [ "$removed" != 1 ]; then echo "model removal did not finish: $reply"; return 1; fi
+  rm -f "$HOME_DIR/reserve/$sha.gguf" || return 1
+  code=$(curl -sk --max-time 10 -X POST -o "$WORK/reserve-missing.json" -w '%{http_code}' \
+    "https://localhost:$PORT/albireo/v1/models/offline-reserve-test/download") || return 1
+  if [ "$code" != 202 ]; then echo "missing reserve refused synchronously ($code)"; return 1; fi
+  for i in $(seq 1 200); do
+    reply=$(curl -sk --max-time 5 "https://localhost:$PORT/albireo/v1/models") || return 1
+    if printf '%s' "$reply" | perl -MJSON::PP -e '
+      my $j = decode_json(do { local $/; <STDIN> });
+      my ($m) = grep { ($_->{id} || "") eq "offline-reserve-test" } @{$j->{models} || []};
+      my ($d) = grep { ($_->{id} || "") eq "offline-reserve-test" } @{$j->{downloads} || []};
+      exit !($m && !$m->{installed} && $d && ($d->{state} || "") eq "error"
+        && ($d->{code} || "") eq "reserve_unavailable");
+    '; then missing=1; break; fi
+    sleep 0.1
+  done
+  if [ "$missing" != 1 ]; then echo "missing reserve was not reported: $reply"; return 1; fi
+  echo "local restoration and missing reserve reported"
+}
+
 # Le service, hors ligne, dans un dossier de données à lui.
 SERVICE=$BUILD/bin/albireo-service
 if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
@@ -150,6 +225,7 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
     BODY="$BODY \"messages\": [{\"role\": \"user\", \"content\": \"$QUESTION\"}]}"
     step "service chat" "Paris" curl -sk --max-time 300 https://localhost:$PORT/v1/chat/completions \
       -H "Content-Type: application/json" -d "$BODY"
+    step "offline reserve" "local restoration and missing reserve reported" offline_reserve_test
     # Le fork n'a plus de lecture à voix haute : la route speech de l'interface OpenAI n'existe plus.
     step "service without speech" "404" curl -sk --max-time 5 -o /dev/null -w "%{http_code}" \
       -H "Content-Type: application/json" -d '{"input": "Bonjour"}' https://localhost:$PORT/v1/audio/speech
