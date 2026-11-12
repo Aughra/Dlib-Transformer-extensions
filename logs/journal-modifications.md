@@ -2,7 +2,7 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
-## 2026-11-13 — Attention des prompts en tuiles sur le GPU (Albireo 4.10.0)
+## 2026-11-12 — Attention des prompts en tuiles sur le GPU (Albireo 4.10.0)
 
 - **Quoi** : noyau `attention_tile` (12 variantes, tailles de tuile calculées pour tenir dans 32 Ko de mémoire de threadgroup) et commande `attention_tiles` ; `metal_device::tile_tokens()` ; la passe GPU découpe chaque segment d'un prompt en tuiles (tampon `tiles`) ; les étapes gardent `attention_part`. Limite par défaut des prompts GPU 2 048 → 4 096 positions (`settings.h`, `cpu_runtime.h`, `engine.cpp`, `make_openapi.py`, `service.js` : valeur conseillée, fiche, schéma). `bench_runtime` : variable `BENCH_GPU_CONTEXT` ; `bench_macos.sh` : taille 3 584 ajoutée. `test_macos.sh` : étape des points de reprise sur processeur en `--no-metal`, étape GPU qui vérifie la reprise et le sujet. Notes de version 4.10.0, notes pour l'auteur (changement 13), tableau des différences, mémo, reprise, journal de la nuit.
 - **Fichiers** : `albireo/engine/{metal_kernels.metal,metal_device.h,metal_device.mm,cpu_runtime.h,cpu_runtime_metal.cpp,engine.cpp}`, `albireo/host/settings.h`, `albireo/tests/bench_runtime.cpp`, `albireo/tools/{bench_macos.sh,make_openapi.py,test_macos.sh}`, `albireo/web/{js/service.js,openapi.json,changelog.md}`, `albireo/common/version.h`, `CMakeLists.txt` ; `docs/*`, `logs/*`.
