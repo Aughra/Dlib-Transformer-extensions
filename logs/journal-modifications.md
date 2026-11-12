@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Découper app.js : dialogs.js et settings.js (Albireo 4.11.3)
+
+- **Quoi** : `web/js/dialogs.js` (10 déclarations : `dialog`, `confirmDialog`, `promptDialog`, `field`, menus et panneaux) et `web/js/settings.js` (16 : `settingsDialog` et ses onglets, `requestPersistence`, `changelogDialog`, licences), mot pour mot. `settings.js` importe 28 fonctions d'`app.js` (import circulaire, sans usage au chargement du module) ; `dialogs.js` ne dépend pas d'`app.js`.
+- **Fichiers** : `albireo/web/js/{app.js,dialogs.js,settings.js}`, `albireo/web/changelog.md`, version.
+- **Pourquoi** : chantier D.
+- **Étapes** : ESLint 0 problème ; scénario de la page étendu (notes de version, page des licences, onglets Mémoire et Données) : 38 sur 38, aucune erreur.
+
 ## 2026-11-12 — Découper app.js, socle : state.js et dom.js (Albireo 4.11.2)
 
 - **Quoi** : `web/js/state.js` (`defaults`, `state`, `ui`) et `web/js/dom.js` (17 déclarations : `h`, `fill`, `iconButton`, formats de tailles, nombres et durées, `toast`, presse-papiers, `storageFailed`, `download`, `mimeOf`) sortis d'`app.js`, mot pour mot. Outils (hors dépôt, scratchpad) : `move.py` déplace des déclarations de haut niveau avec leurs commentaires et calcule les `import`/`export` ; `prune.py` retire les imports inutilisés ; ESLint 9 (`no-undef`, `no-import-assign`, `no-redeclare`) installé dans le scratchpad.

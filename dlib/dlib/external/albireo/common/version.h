@@ -7,8 +7,8 @@
 // jour et par l'installateur sur une installation existante.
 #define ALBIREO_VERSION_MAJOR 4
 #define ALBIREO_VERSION_MINOR 11
-#define ALBIREO_VERSION_PATCH 2
-#define ALBIREO_VERSION "4.11.2"
+#define ALBIREO_VERSION_PATCH 3
+#define ALBIREO_VERSION "4.11.3"
 
 #define ALBIREO_PRODUCT_NAME "Albireo"
 // L'édition de cette version, affichée à côté de son nom par chaque programme.

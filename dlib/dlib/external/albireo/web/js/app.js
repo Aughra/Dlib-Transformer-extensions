@@ -39,13 +39,15 @@ import * as rag from './rag.js';
 import * as tools from './tools.js';
 import * as web from './web.js';
 import * as images from './images.js';
-import { serviceTab } from './service.js';
-import { modelsTab, modelSheetDialog } from './models.js';
+
+import { modelSheetDialog } from './models.js';
 import { defaults, state, ui } from './state.js';
 import { copyText, download, fill, formatDecimal, formatDuration, formatLimit, formatNumber, formatShortDuration,
   formatSize, h, iconButton, mimeOf, storageFailed, toast } from './dom.js';
+import { closeMenu, confirmDialog, dialog, promptDialog, showMenu, showPopover } from './dialogs.js';
+import { changelogDialog, renderLicenses, requestPersistence, settingsDialog } from './settings.js';
 
-const roles = ['general', 'code', 'security'];
+export const roles = ['general', 'code', 'security'];
 const roleIcons = { general: 'compass', code: 'code', security: 'shield' };
 const projectColors = ['#5b8cff', '#f2b544', '#3fb68b', '#e5534b', '#a371f7', '#2fb9d4', '#e08a3c', '#8a90aa'];
 // Le nombre maximal d'étapes d'une réponse avec outils : chaque étape est une requête au modèle, puis les appels qu'il
@@ -191,12 +193,12 @@ function excerptBudget(caps) {
 const memoryWords = 400;
 const memoryShare = 0.04;
 
-function memoryLimitWords(contextTokens) {
+export function memoryLimitWords(contextTokens) {
   return Math.max(30, Math.min(memoryWords, Math.floor(memoryShare * (contextTokens || 8192) * 0.7)));
 }
 
 // Thème et langue.
-function applyTheme() {
+export function applyTheme() {
   const pref = state.settings.theme;
   const dark = pref === 'dark' || (pref === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
@@ -210,7 +212,7 @@ function applyLanguage() {
 }
 
 // Enregistre un réglage et prévient les autres onglets ; un réglage que la base refuse reste pour cette visite.
-async function saveSetting(key, value) {
+export async function saveSetting(key, value) {
   state.settings[key] = value;
   await store.setSetting(key, value).catch(storageFailed);
   broadcast({ type: 'setting', key, value });
@@ -239,7 +241,7 @@ try {
   });
 }
 
-function broadcast(message) {
+export function broadcast(message) {
   try {
     if (channel) channel.postMessage(message);
     else localStorage.setItem('albireo-message', JSON.stringify({ message, n: Math.random() }));
@@ -300,7 +302,7 @@ async function languageChanged(force) {
     montrent l'état des discussions et des projets.  Les messages de la discussion affichée restent
     tels quels.
 */
-function refreshViews() {
+export function refreshViews() {
   if (!ui.sideScroll) return;
   renderSidebar();
   if (!ui.topbar.contains(document.activeElement)) renderTopbar();
@@ -440,7 +442,7 @@ function syncProjects() {
 */
 let listsSync = null;
 
-function syncLists() {
+export function syncLists() {
   if (!listsSync) {
     listsSync = new Promise((resolve) => setTimeout(resolve, 50)).then(async () => {
       listsSync = null;
@@ -538,7 +540,7 @@ function modelInfo(id) {
   return (state.catalog.models || []).find(same) || (state.catalog.embedding_models || []).find(same) || null;
 }
 
-function modelName(id) {
+export function modelName(id) {
   const m = modelInfo(id);
   return m && m.name ? m.name : id;
 }
@@ -633,7 +635,7 @@ function webUnavailable(caps, reasoning) {
     est indisponible ou ne donne pas de recherche (web.search "none").  L'aide du mode agent et la fenêtre « À propos »
     le nomment.
 */
-function searchProvider() {
+export function searchProvider() {
   const w = state.status && state.status.web;
   if (!w || typeof w !== 'object' || !w.available || w.search !== 'wikipedia') return '';
   return t('provider_wikipedia');
@@ -663,7 +665,7 @@ function toolSet(c, caps) {
 const backgroundModel = 'albireo-background';
 
 // Le contexte de travail du modèle d'arrière-plan, et ses vitesses de lecture et d'écriture.
-function backgroundContext() {
+export function backgroundContext() {
   const s = state.status;
   const loaded = s && s.background ? loadedModel(s.background) : null;
   if (loaded && loaded.context) return workingContext(loaded.id, loaded.context);
@@ -722,7 +724,7 @@ async function backgroundChat(messages, maxTokens, signal, temperature) {
 // La lecture de l'état en cours, que partagent les appels faits entre-temps.
 let statusPoll = null;
 
-function refreshStatus() {
+export function refreshStatus() {
   if (!statusPoll) statusPoll = pollStatus().finally(() => { statusPoll = null; });
   return statusPoll;
 }
@@ -838,7 +840,7 @@ function renderHint() {
 }
 
 // Listes.
-async function reloadLists() {
+export async function reloadLists() {
   state.conversations = await store.allConversations();
   state.projects = await store.allProjects();
 }
@@ -1215,67 +1217,6 @@ function conversationItem(c) {
     }));
 }
 
-function showMenu(anchor, entries) {
-  closeMenu();
-  const menu = h('div', { class: 'menu', role: 'menu' });
-  for (const e of entries) {
-    if (e === '-') { menu.append(h('div', { class: 'sep' })); continue; }
-    if (e.head) { menu.append(h('div', { class: 'head' }, e.head)); continue; }
-    // Une entrée qui ne s'applique pas dans l'état actuel montre pourquoi, et ne fait rien.
-    menu.append(h('div', {
-      class: 'entry' + (e.danger ? ' danger' : '') + (e.checked ? ' checked' : '') + (e.disabled ? ' disabled' : ''),
-      role: 'menuitem', 'aria-disabled': e.disabled ? 'true' : null, title: e.disabled ? e.hint : null,
-      onclick: () => {
-        if (e.disabled) return;
-        closeMenu();
-        e.action();
-      }
-    }, e.icon ? h('span', { html: icon(e.icon) }) : null,
-    h('span', null, e.label, e.desc ? h('span', { class: 'desc' }, e.desc) : null)));
-  }
-  placeMenu(menu, anchor);
-}
-
-// Un panneau d'explications sous un bouton, qui se ferme comme un menu.
-function showPopover(anchor, children) {
-  closeMenu();
-  placeMenu(h('div', { class: 'menu popover', role: 'dialog' }, children), anchor);
-}
-
-// Affiche un menu ou un panneau sous son point d'ancrage, au-dessus quand la fenêtre manque de place en dessous.
-function placeMenu(menu, anchor) {
-  document.body.append(menu);
-  const r = anchor.getBoundingClientRect();
-  const mw = menu.offsetWidth, mh = menu.offsetHeight;
-  let x = Math.min(r.left, window.innerWidth - mw - 8);
-  let y = r.bottom + 6;
-  if (y + mh > window.innerHeight - 8) y = Math.max(8, r.top - mh - 6);
-  menu.style.left = Math.max(8, x) + 'px';
-  menu.style.top = y + 'px';
-  ui.menu = menu;
-  // Les écouteurs suivent le clic qui a ouvert le menu, sauf si le menu s'est fermé entre-temps.
-  setTimeout(() => {
-    if (ui.menu !== menu) return;
-    document.addEventListener('mousedown', outsideMenu);
-    document.addEventListener('keydown', escapeMenu);
-  }, 0);
-}
-
-function outsideMenu(e) {
-  if (ui.menu && !ui.menu.contains(e.target)) closeMenu();
-}
-
-function escapeMenu(e) {
-  if (e.key === 'Escape') closeMenu();
-}
-
-function closeMenu() {
-  if (ui.menu) ui.menu.remove();
-  ui.menu = null;
-  document.removeEventListener('mousedown', outsideMenu);
-  document.removeEventListener('keydown', escapeMenu);
-}
-
 /*
     Ce que font le mode agent et l'accès au web, et les outils que chacun d'eux donne au modèle, avec leur usage ; le
     fournisseur de la recherche web en dernier, tant que le service en propose un.
@@ -1346,7 +1287,7 @@ function moveMenu(c, anchor) {
 
 // Les discussions supprimées dans cet onglet : le travail qui se termine après leur suppression (une
 // réponse, un titre, un résumé, les marques de la mémoire) ne les enregistre pas de nouveau.
-const deleted = new Set();
+export const deleted = new Set();
 
 /*
     Enregistre une discussion et prévient les autres onglets.  Renvoie false quand il n'y a rien à
@@ -1580,7 +1521,7 @@ function queueIndex(owner, doc, persistent) {
 
 // Arrête l'indexation, en attente ou en cours, des documents d'un propriétaire, de l'un d'eux,
 // ou de tous.
-function cancelIndex(owner, docId) {
+export function cancelIndex(owner, docId) {
   for (const [id, run] of indexing) {
     if ((owner == null || run.owner === owner) && (docId == null || id === docId)) {
       run.abort.abort();
@@ -1664,7 +1605,7 @@ function showIndexing(docId) {
 
 // Indexe les documents des projets qui n'ont pas de passages, ou pas de vecteurs du modèle
 // d'embedding actuel.
-async function indexProjects() {
+export async function indexProjects() {
   for (const p of state.projects) {
     const st = await rag.status(p.id).catch(() => new Map());
     const model = rag.embeddingModel();
@@ -1684,7 +1625,7 @@ async function indexProjects() {
     Indexe les documents cherchés des questions d'une discussion qui n'ont pas de passages, comme ceux d'une discussion
     importée, puisqu'une exportation ne porte pas de passages, ou ceux qu'un onglet a fermés pendant leur écriture.
 */
-async function indexAttachments(c) {
+export async function indexAttachments(c) {
   if (!c || !Array.isArray(c.messages)) return;
   const docs = new Map();
   for (const m of c.messages) {
@@ -1737,7 +1678,7 @@ function cancelDescription(imageId) {
 }
 
 // Arrête le travail du modèle d'arrière-plan en cours dans cet onglet : les compressions et les descriptions.
-function cancelBackground() {
+export function cancelBackground() {
   for (const id of Array.from(compactions.keys())) cancelCompaction(id);
   for (const id of Array.from(describeJobs.keys())) cancelDescription(id);
   for (const id of Array.from(warmups.keys())) cancelWarmup(id);
@@ -1768,7 +1709,7 @@ async function retryDescription(projectId, imageId) {
     échoué, et celles qu'un onglet fermé a laissées en cours, dès que le service répond avec un
     modèle d'arrière-plan qui lit les images.
 */
-function describePending() {
+export function describePending() {
   if (!serviceReady() || !backgroundReadsImages()) return;
   for (const p of state.projects) {
     for (const img of p.images || []) if (img.state !== 'ready') queueDescription(p.id, img.id);
@@ -2748,7 +2689,7 @@ function imageIdsOf(list) {
 
 // Les images en attente dans les brouillons qui restent une fois tout supprimé : celles de la zone de saisie et de "New
 // chat".
-function waitingImages() {
+export function waitingImages() {
   const d = drafts.get(newDraft);
   return new Set(imageIdsOf(state.pending.concat(d ? d.files : [])));
 }
@@ -2763,7 +2704,7 @@ function forgetDraft(key) {
 }
 
 // Oublie les brouillons des discussions enregistrées, une fois tout supprimé ; celui de "New chat" reste.
-function forgetStoredDrafts() {
+export function forgetStoredDrafts() {
   for (const key of Array.from(drafts.keys())) if (key !== newDraft) forgetDraft(key);
   try {
     for (let i = localStorage.length - 1; i >= 0; --i) {
@@ -2891,7 +2832,7 @@ function goHome() {
   ui.input.focus();
 }
 
-function go(hash) {
+export function go(hash) {
   if (location.hash === hash) route();
   else location.hash = hash;
 }
@@ -3997,10 +3938,10 @@ async function addPending(files) {
     compression des échanges terminée depuis, appliquée une fois la réponse terminée, ou quand une étape de l'agent ne
     tient plus sans elle (fitContext).
 */
-const generations = new Map();
+export const generations = new Map();
 // Les discussions dont la réponse s'est terminée pendant qu'une autre était affichée, marquées dans le panneau latéral
 // jusqu'à ce qu'elles soient ouvertes.
-const unread = new Set();
+export const unread = new Set();
 
 // La réponse que cet onglet écrit dans la discussion c, ou null.
 function generationOf(c) {
@@ -4024,7 +3965,7 @@ function stopGeneration(id) {
   if (g) g.abort.abort();
 }
 
-function stopAllGenerations() {
+export function stopAllGenerations() {
   for (const g of generations.values()) g.abort.abort();
 }
 
@@ -5609,7 +5550,7 @@ function sentenceOf(text) {
     devenant une phrase, ou les phrases d'un paragraphe, sans les secrets sauf si les réglages gardent les informations
     sensibles.
 */
-function memorySentences(text, sensitive) {
+export function memorySentences(text, sensitive) {
   const out = [];
   for (const line of String(text || '').split('\n').map((l) => l.trim()).filter(Boolean)) {
     if (/^[-*\u2022]\s*\S/.test(line)) out.push(sentenceOf(line));
@@ -5630,7 +5571,7 @@ function learnedRoom(words, pinned) {
     La mémoire telle qu'elle est gardée : ses phrases l'une après l'autre, dans la limite de words mots, les plus
     anciennes partant d'abord, sauf les phrases que l'utilisateur a écrites (pinned, un Set).
 */
-function memoryParagraph(sentences, words, pinned) {
+export function memoryParagraph(sentences, words, pinned) {
   const list = sentences.slice();
   while (list.length > 1 && wordCount(list) > words) {
     const k = list.findIndex((x) => !(pinned && pinned.has(x)));
@@ -5764,7 +5705,7 @@ async function storedMemory() {
 }
 
 // Les copies des discussions dans cet onglet, après une remise à zéro de la mémoire dans cet onglet ou dans un autre.
-function forgetMemory() {
+export function forgetMemory() {
   const all = state.conversations.slice();
   if (state.current && !all.includes(state.current)) all.push(state.current);
   for (const c of all) {
@@ -6160,7 +6101,7 @@ async function nameConversation(c) {
 */
 let namingPending = false;
 
-async function namePending() {
+export async function namePending() {
   if (namingPending || state.incognito) return;
   namingPending = true;
   try {
@@ -6299,575 +6240,6 @@ async function warmBeginning(c) {
     if (limit) limit.done();
     if (warmups.get(c.id) === abort) warmups.delete(c.id);
   }
-}
-
-// Boîtes de dialogue.
-function dialog(content, small) {
-  return new Promise((resolve) => {
-    const box = h('div', { class: 'dialog' + (small ? ' small' : ''), role: 'dialog', 'aria-modal': 'true' });
-    const overlay = h('div', { class: 'overlay' }, box);
-    const close = (v) => { overlay.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
-    const onKey = (e) => { if (e.key === 'Escape') close(null); };
-    overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) close(null); });
-    document.addEventListener('keydown', onKey);
-    content(box, close);
-    document.body.append(overlay);
-    const f = box.querySelector('input, textarea, button.primary');
-    if (f) f.focus();
-  });
-}
-
-function confirmDialog(title, text) {
-  return dialog((box, close) => {
-    box.append(h('h2', null, title), h('p', null, text), h('div', { class: 'actions' },
-      h('button', { class: 'button', type: 'button', onclick: () => close(false) }, t('cancel')),
-      h('button', { class: 'button primary', type: 'button', onclick: () => close(true) }, t('confirm'))));
-  }, true);
-}
-
-function promptDialog(title, value) {
-  return dialog((box, close) => {
-    const input = h('input', { value: value || '', style: { width: '100%' } });
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') close(input.value); });
-    box.append(h('h2', null, title), h('div', { class: 'field' }, input), h('div', { class: 'actions' },
-      h('button', { class: 'button', type: 'button', onclick: () => close(null) }, t('cancel')),
-      h('button', { class: 'button primary', type: 'button', onclick: () => close(input.value) }, t('save'))));
-    setTimeout(() => input.select(), 0);
-  }, true);
-}
-
-function settingsDialog(initialTab) {
-  dialog((box, close) => {
-    const tabs = ['general', 'modelsTab', 'model', 'memoryTab', 'data', 'serviceTab', 'about'];
-    const tabBar = h('div', { class: 'tabs' });
-    const body = h('div');
-    const show = (tab) => {
-      for (const b of tabBar.children) b.classList.toggle('on', b.dataset.tab === tab);
-      ui.memoryView = null;
-      body.replaceChildren();
-      if (tab === 'general') generalTab(body, close);
-      else if (tab === 'model') modelTab(body);
-      else if (tab === 'memoryTab') memoryTab(body);
-      else if (tab === 'data') dataTab(body, close);
-      else if (tab === 'serviceTab') serviceTab(body, { h, toast, status: () => state.status, refreshStatus });
-      else if (tab === 'modelsTab') modelsTab(body, { h, toast, status: () => state.status, refreshStatus });
-      else aboutTab(body, close);
-    };
-    for (const tab of tabs) tabBar.append(h('button', { type: 'button', 'data-tab': tab, onclick: () => show(tab) }, t(tab)));
-    box.append(h('h2', { html: icon('gear') + escapeHtml(t('settings')) }), tabBar, body,
-      h('div', { class: 'actions' }, h('button', { class: 'button primary', type: 'button', onclick: () => close(true) }, t('close'))));
-    show(initialTab || 'general');
-  }).then(() => { ui.memoryView = null; });
-}
-
-function field(label, control, help) {
-  return h('div', { class: 'field' }, h('label', null, label), control, help ? h('p', { class: 'help', style: { margin: 0, color: 'var(--text-faint)', fontSize: '12.5px' } }, help) : null);
-}
-
-function generalTab(body, close) {
-  const theme = h('select', null, ['auto', 'light', 'dark'].map((v) =>
-    h('option', { value: v, selected: state.settings.theme === v }, t('theme' + v[0].toUpperCase() + v.slice(1)))));
-  theme.addEventListener('change', async () => { await saveSetting('theme', theme.value); applyTheme(); });
-  const name = h('input', { value: state.settings.userName || '' });
-  name.addEventListener('change', async () => {
-    await saveSetting('userName', name.value.trim());
-    refreshViews();
-  });
-  const enter = h('input', { type: 'checkbox', checked: state.settings.sendOnEnter });
-  enter.addEventListener('change', () => saveSetting('sendOnEnter', enter.checked));
-  const sys = h('textarea', { rows: 4 });
-  sys.value = state.settings.systemPrompt || '';
-  sys.addEventListener('change', () => saveSetting('systemPrompt', sys.value));
-  body.append(field(t('theme'), theme), field(t('yourName'), name, t('yourNameHelp')),
-    h('div', { class: 'field' }, h('label', { class: 'inline' }, enter, ' ', t('sendOnEnter'))),
-    field(t('systemPrompt'), sys, t('systemPromptHelp')));
-}
-
-function modelTab(body) {
-  const slider = (key, min, max, stepValue, def) => {
-    const value = state.settings[key];
-    const input = h('input', { type: 'range', min, max, step: stepValue, value: value == null ? def : value });
-    const out = h('span', { style: { minWidth: '64px', textAlign: 'right' } }, value == null ? t('maxTokensAuto') : String(value));
-    input.addEventListener('input', () => { out.textContent = input.value; });
-    input.addEventListener('change', () => saveSetting(key, parseFloat(input.value)));
-    const reset = h('button', {
-      class: 'button', type: 'button', onclick: async () => { await saveSetting(key, null); out.textContent = t('maxTokensAuto'); input.value = def; }
-    }, t('maxTokensAuto'));
-    return h('div', { class: 'inline' }, input, out, reset);
-  };
-  /*
-      top-k : un curseur et sa valeur, qui peut aussi être tapée, de 0 (pas de limite) à 1024, les bornes du service ;
-      vide, le service prend sa propre valeur.
-  */
-  const topK = () => {
-    const value = state.settings.topK;
-    const range = h('input', { type: 'range', min: 0, max: 1024, step: 1, value: value == null ? 40 : value,
-      'aria-label': t('topK') });
-    const number = h('input', { type: 'number', class: 'top-k', min: 0, max: 1024, step: 1, 'aria-label': t('topK'),
-      value: value == null ? '' : String(value), placeholder: t('maxTokensAuto') });
-    range.addEventListener('input', () => { number.value = range.value; });
-    range.addEventListener('change', () => saveSetting('topK', parseInt(range.value, 10)));
-    number.addEventListener('change', () => {
-      const typed = parseInt(number.value, 10);
-      const v = number.value.trim() === '' || Number.isNaN(typed) ? null : Math.max(0, Math.min(1024, typed));
-      number.value = v == null ? '' : String(v);
-      if (v != null) range.value = v;
-      saveSetting('topK', v);
-    });
-    const reset = h('button', {
-      class: 'button', type: 'button', onclick: async () => {
-        await saveSetting('topK', null);
-        number.value = '';
-        range.value = 40;
-      }
-    }, t('maxTokensAuto'));
-    return h('div', { class: 'inline' }, range, number, reset);
-  };
-  const max = h('input', { type: 'number', min: 0, max: 131072, step: 256, value: state.settings.maxTokens || 0 });
-  max.addEventListener('change', () => saveSetting('maxTokens', Math.max(0, parseInt(max.value, 10) || 0)));
-  body.append(field(t('temperature'), slider('temperature', 0, 2, 0.05, 0.7), t('temperatureHelp')),
-    field(t('topP'), slider('topP', 0.05, 1, 0.05, 0.95), t('topPHelp')), field(t('topK'), topK(), t('topKHelp')),
-    field(t('maxTokens'), max, '0 = ' + t('maxTokensAuto')));
-}
-
-// La mémoire des discussions : son usage, son contenu, que l'utilisateur peut modifier, et sa remise à zéro.
-function memoryTab(body) {
-  const words = memoryLimitWords(backgroundContext());
-  const enabled = h('input', { type: 'checkbox', checked: !!state.settings.memoryEnabled });
-  const sensitive = h('input', { type: 'checkbox', checked: !!state.settings.memorySensitive });
-  const text = h('textarea', { rows: 8, placeholder: t('memoryEmpty') });
-  text.value = state.settings.memory || '';
-  const size = h('p', { class: 'help', style: { margin: 0, color: 'var(--text-faint)', fontSize: '12.5px' } });
-  const showSize = () => {
-    const n = text.value.split(/\s+/).filter(Boolean).length;
-    size.textContent = tn('memorySize', n, { max: words })
-      + (state.settings.memoryUpdated ? ' · ' + t('memoryUpdated', { date: new Date(state.settings.memoryUpdated).toLocaleString(language()) }) : '');
-  };
-  showSize();
-  enabled.addEventListener('change', async () => {
-    await saveSetting('memoryEnabled', enabled.checked);
-    sensitive.disabled = text.disabled = !enabled.checked;
-  });
-  sensitive.addEventListener('change', () => saveSetting('memorySensitive', sensitive.checked));
-  text.addEventListener('input', showSize);
-  text.addEventListener('change', async () => {
-    /*
-        Ce que l'utilisateur écrit reste, sensible ou non, dans la limite de deux fois la taille de la mémoire, sous
-        forme de phrases l'une après l'autre : une ligne devient une phrase.  Les phrases que l'utilisateur ajoute ou
-        change restent quand les faits que le modèle apprend remplissent la mémoire ; celles que le modèle a apprises et
-        que l'utilisateur a laissées telles quelles peuvent partir.
-    */
-    const before = new Set(memorySentences(state.settings.memory, true));
-    const pinnedBefore = new Set(memorySentences(state.settings.memoryPinned, true));
-    await saveSetting('memory', memoryParagraph(memorySentences(text.value, true), words * 2));
-    // Les phrases que l'utilisateur a ajoutées ou changées, et celles qu'il a écrites auparavant, telles que la mémoire
-    // enregistrée les découpe.
-    const saved = memorySentences(state.settings.memory, true);
-    await saveSetting('memoryPinned', saved.filter((x) => pinnedBefore.has(x) || !before.has(x)).join(' '));
-    await saveSetting('memoryUpdated', Date.now());
-    text.value = state.settings.memory;
-    showSize();
-  });
-  sensitive.disabled = text.disabled = !enabled.checked;
-  // La mémoire telle qu'une mise à jour ou un autre onglet la change, sauf si l'utilisateur est en train d'y écrire.
-  ui.memoryView = () => {
-    if (!text.isConnected) return;
-    enabled.checked = !!state.settings.memoryEnabled;
-    sensitive.checked = !!state.settings.memorySensitive;
-    sensitive.disabled = text.disabled = !enabled.checked;
-    if (document.activeElement !== text) text.value = state.settings.memory || '';
-    showSize();
-  };
-  body.append(h('p', null, t('memoryIntro')),
-    h('div', { class: 'field' }, h('label', { class: 'inline' }, enabled, ' ', t('memoryEnabled'))),
-    h('div', { class: 'field' }, h('label', { class: 'inline' }, sensitive, ' ', t('memorySensitive')),
-      h('p', { class: 'help', style: { margin: 0, color: 'var(--text-faint)', fontSize: '12.5px' } }, t('memorySensitiveHelp'))),
-    field(t('memoryText'), text), size,
-    h('div', { class: 'buttons', style: { marginTop: '10px' } }, h('button', {
-      class: 'button danger', type: 'button', html: icon('trash') + '<span>' + escapeHtml(t('memoryReset')) + '</span>',
-      onclick: async () => {
-        if (!await confirmDialog(t('memoryReset'), t('memoryResetText'))) return;
-        await saveSetting('memory', '');
-        await saveSetting('memoryPinned', '');
-        await saveSetting('memoryUpdated', 0);
-        // Les discussions oublient la mémoire avec laquelle elles ont commencé, et ce qu'elles ont
-        // déjà dit reste hors des mises à jour suivantes : les discussions enregistrées changent sur
-        // place, relues depuis la base avec les messages que d'autres onglets ont enregistrés, et les
-        // copies des onglets suivent.
-        await store.updateConversations((x) => {
-          const mark = Array.isArray(x.messages) ? x.messages.length : 0;
-          if (x.memory === undefined && x.memoryMark === mark) return false;
-          delete x.memory;
-          x.memoryMark = mark;
-          return true;
-        }).catch(() => {});
-        forgetMemory();
-        broadcast({ type: 'memoryReset' });
-        text.value = '';
-        showSize();
-      }
-    })));
-}
-
-function dataTab(body, close) {
-  const input = h('input', { type: 'file', accept: '.json,application/json', class: 'hidden' });
-  input.addEventListener('change', async () => {
-    try {
-      const data = JSON.parse(await input.files[0].text());
-      const r = await store.importAll(data);
-      // Une discussion supprimée auparavant revient avec l'importation, et est enregistrée de nouveau.
-      for (const id of r.ids) deleted.delete(id);
-      broadcast({ type: 'lists' });
-      await syncLists();
-      toast(t('imported', {
-        discussions: tn('discussionsCount', r.conversations), projects: tn('projectsCount', r.projects)
-      }));
-      // Les documents des projets et les documents cherchés des discussions sont indexés, puisqu'une exportation ne
-      // porte pas de passages ; les images des projets sont décrites, et les discussions laissées en attente sont
-      // nommées.
-      indexProjects();
-      for (const id of r.ids) {
-        const c = state.conversations.find((x) => x.id === id);
-        if (c) indexAttachments(c).catch(() => {});
-      }
-      describePending();
-      namePending();
-    } catch (e) {
-      toast(t('importFailed'), true);
-    }
-    input.value = '';
-  });
-  const storage = h('div', { class: 'storage-state' });
-  // Les discussions, les projets et les images enregistrés, avec la place que prennent les images.
-  const stored = h('p', { class: 'storage-usage' });
-  const showUsage = (u) => {
-    stored.textContent = t('storageUsage', {
-      discussions: tn('discussionsCount', state.conversations.length),
-      projects: tn('projectsCount', state.projects.length),
-      images: tn('imagesCount', u.count), size: formatSize(u.bytes)
-    });
-  };
-  showUsage({ count: 0, bytes: 0 });
-  images.usage().then(showUsage).catch(() => {});
-  body.append(stored, storage,
-    h('div', { class: 'buttons' },
-      h('button', {
-        class: 'button', type: 'button', html: icon('download') + '<span>' + escapeHtml(t('exportAll')) + '</span>',
-        onclick: async () => {
-          try {
-            download('albireo-' + new Date().toISOString().slice(0, 10) + '.json', await store.exportAll(),
-              'application/json');
-          } catch (e) {
-            // L'exportation ne lit que la base du navigateur : l'erreur est celle du navigateur, telle quelle.
-            toast(t('exportFailed', { reason: (e && e.message) || String(e) }), true);
-          }
-        }
-      }),
-      h('button', { class: 'button', type: 'button', html: icon('upload') + '<span>' + escapeHtml(t('importAll')) + '</span>', onclick: () => input.click() }),
-      input,
-      h('button', {
-        class: 'button danger', type: 'button', html: icon('trash') + '<span>' + escapeHtml(t('clearAll')) + '</span>',
-        onclick: async () => {
-          if (!await confirmDialog(t('clearAll'), t('clearAllText'))) return;
-          // Les réponses en cours, affichées ou écrites en arrière-plan, et le travail du modèle
-          // d'arrière-plan s'arrêtent, les discussions enregistrées ne sont pas réenregistrées, et
-          // l'indexation en cours n'écrit aucun passage.  Une nouvelle discussion, pas encore
-          // enregistrée, reste avec son brouillon.
-          for (const c of state.conversations) deleted.add(c.id);
-          if (state.current && state.current.messages.length) deleted.add(state.current.id);
-          for (const g of generations.values()) deleted.add(g.c.id);
-          stopAllGenerations();
-          unread.clear();
-          cancelIndex();
-          cancelBackground();
-          rag.removeAll();
-          images.removeAll(waitingImages());
-          forgetStoredDrafts();
-          for (const id of deleted) web.forgetPages(id);
-          await store.clearAll().catch(storageFailed);
-          broadcast({ type: 'cleared' });
-          await reloadLists().catch(storageFailed);
-          close(true);
-          go('#/');
-        }
-      })));
-  showStorage(storage);
-}
-
-/*
-    Demande au navigateur de garder la base de l'application quand le disque vient à manquer de
-    place, une fois la base ouverte, quand elle n'est pas encore gardée.  La réponse, que le
-    navigateur donne sans demander à l'utilisateur, reste dans les réglages (storagePersisted) et
-    s'affiche dans l'onglet Data des réglages.
-*/
-async function requestPersistence() {
-  const s = navigator.storage;
-  if (!s || typeof s.persisted !== 'function' || typeof s.persist !== 'function') return;
-  try {
-    let kept = await s.persisted();
-    if (!kept) kept = await s.persist();
-    if (state.settings.storagePersisted !== kept) await saveSetting('storagePersisted', kept);
-  } catch (e) {
-    // Le navigateur garde sa réponse pour lui ; l'onglet Data montre alors ce qu'il dit.
-  }
-}
-
-/*
-    L'état du stockage de ce navigateur, gardé ou non, avec l'espace utilisé et l'espace disponible,
-    et le conseil d'exporter les données régulièrement quand le navigateur peut les supprimer.
-*/
-async function showStorage(el) {
-  const s = navigator.storage;
-  let kept = state.settings.storagePersisted;
-  let estimate = null;
-  try {
-    if (s && typeof s.persisted === 'function') kept = await s.persisted();
-  } catch (e) {
-    // La dernière réponse reste.
-  }
-  try {
-    if (s && typeof s.estimate === 'function') estimate = await s.estimate();
-  } catch (e) {
-    estimate = null;
-  }
-  if (typeof kept === 'boolean' && kept !== state.settings.storagePersisted) saveSetting('storagePersisted', kept);
-  const parts = [t(kept === true ? 'storagePersistent' : kept === false ? 'storageNotPersistent' : 'storageUnknown')];
-  if (estimate && estimate.quota) {
-    parts.push(t('storageEstimate', { used: formatSize(estimate.usage || 0), quota: formatSize(estimate.quota) }));
-  }
-  el.dataset.persistent = String(kept);
-  fill(el, h('p', null, h('b', null, t('storageState')), ' ', parts.join(' · ')),
-    kept === true ? null : h('p', { class: 'help storage-hint' }, h('span', { html: icon('info') }), t('storageHint')));
-}
-
-/*
-    Le GPU du Mac : son nom, puis ce que chaque modèle chargé en fait (ses passes sur le GPU avec les tampons qu'il y
-    garde, sa vérification, ou le processeur, la raison du moteur dans l'infobulle).  Les poids et les clés et valeurs
-    restent dans la mémoire que le GPU partage avec le processeur, et ne sont pas comptés.
-*/
-function gpuSummary(stats) {
-  const g = stats && stats.gpu;
-  if (!g) return '-';
-  if (!g.name) return h('span', { title: g.reason || '' }, t(g.disabled ? 'gpuDisabled' : 'gpuMissing'));
-  const uses = (stats.models || []).filter((m) => m.gpu).map((m) => {
-    const u = m.gpu;
-    const what = u.state === 'on' ? t('gpuOn', { size: formatSize(u.bytes || 0) })
-      : u.state === 'checking' ? t('gpuChecking') : t('gpuProcessor');
-    return h('span', { title: u.reason || '', style: { display: 'block' } }, modelName(m.id) + ': ' + what);
-  });
-  // Des span, pas des div : la règle des étiquettes de .kv grise ses div impairs, imbriqués compris.
-  return h('span', null, h('span', { style: { display: 'block' } }, g.name), uses);
-}
-
-async function aboutTab(body, close) {
-  const s = state.status || {};
-  const art = h('div', { class: 'about-art' }, h('img', { src: 'img/about.svg', alt: '' }));
-  const kv = h('div', { class: 'kv' });
-  const row = (k, v) => kv.append(h('div', null, k), h('div', null, v));
-  row(t('version'), [s.product || 'Albireo', s.edition, s.version].filter(Boolean).join(' ') + ' · ' + t('forkShort'));
-  row(t('engine'), s.engine ? (s.engine.variant || '-') + (s.engine.device ? ' (' + s.engine.device + ')' : '') : '-');
-  if (s.host) {
-    row(t('processor'), s.host.cpu.name + ' · ' + s.host.cpu.cores + ' / ' + s.host.cpu.threads);
-    row(t('memory'), formatSize(s.host.memory.total));
-  }
-  row(t('gpu'), gpuSummary(s.engine && s.engine.stats));
-  // Les fonctions de chaque modèle, dans l'ordre du sélecteur, la recherche dans les documents en dernier.
-  const byModel = new Map();
-  for (const r of roles.concat(['embedding'])) {
-    const id = (s.active || {})[r];
-    if (id) byModel.set(id, (byModel.get(id) || []).concat([t('role_' + r)]));
-  }
-  const models = Array.from(byModel, ([id, names]) => names.join(', ') + ': ' + modelName(id)).join(' · ');
-  row(t('models'), models || '-');
-  // Le fournisseur de la recherche web, Wikipédia, tant que le service le propose.
-  const provider = searchProvider();
-  if (provider) row(t('tool_web_search'), provider);
-  if (s.usage) row(t('requests'), formatNumber(s.usage.requests) + ' · ' + t('tokensIn') + ' ' + formatNumber(s.usage.prompt_tokens) +
-    ' · ' + t('tokensOut') + ' ' + formatNumber(s.usage.completion_tokens));
-  body.append(art, h('p', null, t('aboutText')), kv);
-  try {
-    const u = await api.usage();
-    const byDay = new Map((u.days || []).map((d) => [d.day, d]));
-    if (byDay.size) {
-      /*
-          Les trente derniers jours, y compris les jours sans usage, chacun une barre des tokens générés au-dessus des
-          tokens lus, dont l'infobulle donne la date et les chiffres dans la langue de l'interface.  Les jours du
-          service sont ceux de l'UTC.
-      */
-      const dateOf = (day) => new Intl.DateTimeFormat(language(), { dateStyle: 'medium', timeZone: 'UTC' })
-        .format(new Date(day + 'T00:00:00Z'));
-      const days = [];
-      for (let k = 29; k >= 0; --k) {
-        const day = new Date(Date.now() - k * 86400000).toISOString().slice(0, 10);
-        const d = byDay.get(day) || {};
-        days.push({ day, read: d.prompt_tokens || 0, generated: d.generated_tokens || 0 });
-      }
-      const max = Math.max(...days.map((d) => d.read + d.generated), 1);
-      body.append(h('h4', null, t('usage')),
-        h('div', { class: 'usage-bars', role: 'img', 'aria-label': t('usageChart') }, days.map((d) => h('div', {
-          class: 'usage-day', style: { height: Math.max(2, 80 * (d.read + d.generated) / max) + 'px' },
-          title: t('usageDay', {
-            date: dateOf(d.day), generated: tn('tokensGenerated', d.generated, { n: formatNumber(d.generated) }),
-            read: tn('tokensRead', d.read, { n: formatNumber(d.read) })
-          })
-        }, h('div', { class: 'generated', style: { flexGrow: String(d.generated) } }),
-        h('div', { class: 'read', style: { flexGrow: String(d.read) } })))),
-        h('div', { class: 'usage-axis' }, h('span', null, dateOf(days[0].day)), h('span', null, dateOf(days[29].day))),
-        h('div', { class: 'legend' }, h('span', { style: { '--c': 'var(--blue)' } }, t('usageGenerated')),
-          h('span', { style: { '--c': 'var(--gold)' } }, t('usageRead'))));
-    }
-  } catch (e) {
-    // Les chiffres d'usage sont facultatifs.
-  }
-  body.append(h('p', { style: { marginTop: '14px' } }, t('createdBy', {
-    author: (s.author || 'Aldric Pierrain') + ' (' + (s.email || 'cydraltechnology@gmail.com') + ')'
-  }) + ' · ' + (s.copyright || 'Copyright (C) 2026 Cydral Technology')),
-  // Le fork pour macOS, et son dépôt.
-  h('p', { class: 'fork-line' }, t('forkedBy'), ' · ',
-    h('a', { href: 'https://github.com/Aughra/Dlib-Transformer-extensions', target: '_blank', rel: 'noopener' },
-      'Aughra/Dlib-Transformer-extensions')),
-  h('p', null, h('a', { href: s.project || 'https://github.com/Cydral/Dlib-Transformer-extensions', target: '_blank', rel: 'noopener' }, 'Dlib-Transformer-extensions'),
-    ' · ', h('a', { href: '/docs/', target: '_blank' }, t('apiDocs')), ' · ',
-    h('a', { href: '#', onclick: (e) => { e.preventDefault(); changelogDialog(); } }, t('changelog')), ' · ',
-    h('a', { href: '#/licenses', onclick: () => close(true) }, t('thirdParty'))));
-}
-
-// Les notes de version du fork pour macOS (web/changelog.md).
-function changelogDialog() {
-  return dialog((box, close) => {
-    const body = h('div', { class: 'md changelog' }, h('p', { class: 'help' }, '…'));
-    box.append(body, h('div', { class: 'actions' },
-      h('button', { class: 'button primary', type: 'button', onclick: () => close(true) }, t('close'))));
-    fetch('/changelog.md', { cache: 'no-store' }).then((r) => {
-      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-      return r.text();
-    }).then((text) => { body.innerHTML = renderMarkdown(text); })
-      .catch((e) => body.replaceChildren(h('p', { class: 'help' }, e.message)));
-  });
-}
-
-/*
-    La page des composants et de leurs licences : ceux de l'application web, que liste
-    vendor/components.json ; ceux des programmes et des moteurs, dont l'installateur copie les
-    textes dans le dossier des licences des programmes ; et les modèles installés, avec la licence
-    de leur entrée dans le catalogue.  Un texte s'ouvre dans la page, sous sa ligne.
-*/
-let licensesSequence = 0;
-
-// Le rôle et la licence de chaque texte du dossier des licences, par son fichier.
-const programTexts = {
-  'albireo.txt': ['albireo', 'Boost Software License 1.0'], 'dlib.txt': ['dlib', 'Boost Software License 1.0'],
-  'mbedtls.txt': ['mbedtls', 'Apache License 2.0 or GPL 2.0 or later'], 'cpp-httplib.txt': ['httplib', 'MIT License'],
-  'zlib.txt': ['zlib', 'zlib License'], 'sqlite.txt': ['sqlite', null],
-  'libpng.txt': ['libpng', 'PNG Reference Library License 2'], 'libjpeg.txt': ['libjpeg', 'IJG License']
-};
-
-async function licenseText(url) {
-  const r = await fetch(url, { cache: 'no-store' });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r.text();
-}
-
-function licenseHead(columns) {
-  return h('div', { class: 'lic-row lic-head', 'aria-hidden': 'true' }, columns.map((c) => h('div', null, c)),
-    h('div'));
-}
-
-/*
-    Une ligne de la page des licences : ses cellules, puis un bouton qui ouvre ses textes en dessous
-    quand load est donné, load renvoyant [[file, text]...], ou l'élément action.
-*/
-function licenseRow(cells, load, action) {
-  const box = h('div', { class: 'lic-text hidden' });
-  let loaded = false;
-  let button = null;
-  if (load) {
-    button = h('button', {
-      class: 'button small', type: 'button', 'aria-expanded': 'false',
-      html: icon('chevron') + '<span>' + escapeHtml(t('licenseShow')) + '</span>'
-    });
-    button.addEventListener('click', async () => {
-      const open = box.classList.toggle('hidden') === false;
-      button.setAttribute('aria-expanded', String(open));
-      button.classList.toggle('open', open);
-      if (!open || loaded) return;
-      loaded = true;
-      box.replaceChildren(h('div', { class: 'empty-note' }, t('licenseLoading')));
-      try {
-        const parts = await load();
-        box.replaceChildren(...parts.flatMap(([file, text]) => [parts.length > 1 ? h('div', { class: 'lic-file' }, file)
-          : null, h('pre', null, text)]).filter(Boolean));
-      } catch (e) {
-        loaded = false;
-        box.replaceChildren(h('div', { class: 'error-box' }, t('licenseReadFailed')));
-      }
-    });
-  }
-  return [h('div', { class: 'lic-row' }, cells.map(([cls, v]) => h('div', { class: cls }, v)),
-    h('div', { class: 'lic-action' }, button || action)), box];
-}
-
-async function renderLicenses() {
-  const sequence = ++licensesSequence;
-  const head = [h('h2', { html: icon('book') + escapeHtml(t('licensesTitle')) }),
-    h('p', { class: 'sub' }, t('licensesIntro'))];
-  ui.content.replaceChildren(h('div', { class: 'page licenses' }, head,
-    h('div', { class: 'empty-note' }, t('licenseLoading'))));
-  const [web, programs, models] = await Promise.all([
-    api.getJSON('/vendor/components.json').catch(() => null),
-    api.getJSON('/albireo/v1/licenses').catch(() => null),
-    api.models(language()).catch(() => null)
-  ]);
-  if (sequence !== licensesSequence || state.view !== 'licenses') return;
-  const columns = [t('licenseComponent'), t('licenseVersion'), t('licenseRole'), t('licenseName')];
-  const card = (iconName, title, help, rows, empty) => h('div', { class: 'card' },
-    h('h3', { html: icon(iconName) + escapeHtml(title) }), help ? h('p', { class: 'help' }, help) : null,
-    rows.length ? h('div', { class: 'lic-table' }, rows) : h('div', { class: 'empty-note' }, empty));
-
-  // L'application web, d'après la liste que gardent ses mises à jour.
-  const webRows = [];
-  for (const c of (web && Array.isArray(web.components)) ? web.components : []) {
-    const key = 'component_' + c.id;
-    webRows.push(licenseRow([['lic-name', c.name], ['lic-version', c.version || '-'],
-      ['lic-role', t(key) === key ? c.role || '' : t(key)], ['lic-license', c.license_name || c.license || '-']],
-    () => Promise.all((c.license_files || []).map(async (f) => [f, await licenseText('/' + f)]))));
-  }
-  if (webRows.length) webRows.unshift(licenseHead(columns));
-
-  // Les programmes et les moteurs, d'après le dossier des licences de l'installation.
-  const programRows = [];
-  for (const p of Array.isArray(programs) ? programs : []) {
-    const [id, license] = programTexts[p.file] || ['runtime', '-'];
-    programRows.push(licenseRow([['lic-name', p.name || p.file], ['lic-version', p.version || '-'],
-      ['lic-role', t('program_' + id)], ['lic-license', license === null ? t('licensePublicDomain') : license]],
-    () => licenseText('/albireo/v1/licenses/' + encodeURIComponent(p.file)).then((text) => [[p.file, text]])));
-  }
-  if (programRows.length) programRows.unshift(licenseHead(columns));
-
-  // Les modèles installés, les modèles de langage puis les modèles d'embedding, avec les fonctions qu'ils servent.
-  const modelRows = [];
-  const active = (models && models.active) || {};
-  const installed = models
-    ? (models.models || []).filter((m) => m.installed).concat(models.embedding_models || []) : [];
-  for (const m of installed) {
-    const functions = roles.concat(['embedding']).filter((r) => active[r] === m.id).map((r) => t('role_' + r));
-    const source = /^https:\/\//.test(m.source || '') ? h('a', {
-      class: 'button small', href: m.source, target: '_blank', rel: 'noopener',
-      html: icon('external') + '<span>' + escapeHtml(t('licenseSource')) + '</span>'
-    }) : null;
-    modelRows.push(licenseRow([['lic-name', m.name || m.id], ['lic-version', m.publisher || '-'],
-      ['lic-role', functions.join(', ') || '-'], ['lic-license', m.license || t('licenseNotStated')]], null, source));
-  }
-  if (modelRows.length) {
-    modelRows.unshift(licenseHead([t('licenseModel'), t('licensePublisher'), t('licenseFunctions'), t('licenseName')]));
-  }
-
-  ui.content.replaceChildren(h('div', { class: 'page licenses' }, head,
-    card('code', t('licensesWeb'), t('licensesWebHelp'), webRows, t('licenseReadFailed')),
-    card('cpu', t('licensesPrograms'), programRows.length ? t('licensesProgramsHelp') : null, programRows,
-      programs ? t('licensesProgramsNone') : t('serviceDown')),
-    card('spark', t('licensesModels'), t('licensesModelsHelp'), modelRows,
-      models ? t('licensesModelsNone') : t('serviceDown'))));
 }
 
 // La ligne sous la zone de saisie : ce que sont les réponses ; la version et le copyright sont dans « À propos ».
