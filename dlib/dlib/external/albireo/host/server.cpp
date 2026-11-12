@@ -1601,7 +1601,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             send_json(res, ok ? 200 : 400, o);
         });
         /*
-            Les paquets hors ligne signés et le contenu du dossier d'import (service::import_folder()),
+            Les paquets hors ligne et le contenu du dossier d'import (service::import_folder()),
             que le service lit avec ses propres droits : un refus vient avec son code et le chemin.
         */
         auto import = [s](const httplib::Request& req, httplib::Response& res) {

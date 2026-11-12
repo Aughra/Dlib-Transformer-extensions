@@ -1,8 +1,10 @@
 # Albireo
 
 > **macOS fork** (TortueTech, version 2.0.0 and later): Albireo for Apple Silicon Macs only, its
-> interface in French only, without speech synthesis (removed in 3.0.0). See `web/changelog.md` for its
-> changes; the rest of this document describes the original, for Windows.
+> interface in French only, without speech synthesis (removed in 3.0.0). Since 4.0.0 it holds no key:
+> the catalog is not signed and comes from its address in the repository of the original or from a
+> folder, and the publication space, the signed feed, the updates and the signing tools are removed.
+> See `web/changelog.md` for its changes; the rest of this document describes the original, for Windows.
 
 Albireo runs language models on the computer where it is installed. It is a Windows 11
 program built on dlib and Dlib-Transformer-extensions: an inference engine for quantized GGUF
@@ -109,11 +111,11 @@ application, the description of the interface and the list of the programs of Wi
   runs the accelerator of the computer, the processor computing what its device does not take, and
   the Accelerator menu of the icon chooses it, the processor alone, or a device by its name, and
   measures the engines on the machine.
-- **Models from a signed catalog**, downloaded in parallel parts from the publication space of
-  Albireo, else from their official sources, checked against their hashes, or imported from a disk
-  or a memory card.
+- **Models from a catalog** (unsigned in the macOS fork), downloaded in parallel parts from their
+  official sources, checked against their hashes, or imported from a disk or a memory card.
 - **Updates** announced by a signed feed of the publication space, their installers published
-  there, downloaded in the background and installed when the service restarts.
+  there, downloaded in the background and installed when the service restarts (removed in the
+  macOS fork).
 - **An offline mode** for the computers without network: the service opens no connection, and
   the catalog, the models and the updates come from an offline bundle brought on a disk.
 - **Five languages** in every window: English, French, German, Italian and Spanish, the language
@@ -899,7 +901,6 @@ reported as unusable, with its compute capability, and the other engines serve t
 | `ALBIREO_MODEL_CACHE`     | user cache | downloaded and converted models that come with Albireo         |
 | `ALBIREO_BUILTIN_MANIFEST`| `resources/builtin_models.json` | the models that come with Albireo           |
 | `ALBIREO_BUILTIN_TOOL`    |         | `albireo-builtin` of the build machine, for a cross build         |
-| `ALBIREO_PUBLIC_LINK_PASSWORD_FILE` | `keys/albireo-public-link.txt` of the user's folder | password of the public link, built into the service (see [Publishing a version](#publishing-a-version)) |
 | `ALBIREO_RUNTIME_LICENSES`|         | more license files for the `licenses` folder                      |
 
 The programs link their C and C++ runtime statically and depend on system libraries only; the
@@ -1010,7 +1011,7 @@ tray restarted by the installer reports (`--setup-result`).
 
 The installer started from an offline bundle (see [Computers without network](#computers-without-network))
 copies into the import folder, which the service reads at its first start, the catalog of the
-bundle when it bears the signature of Albireo and the models this catalog lists, each checked
+bundle (unsigned in the macOS fork) and the models this catalog lists, each checked
 against its hash. The option "This computer has no Internet access" of the wizard, or `/offline`,
 sets the service offline from the start.
 
@@ -1081,7 +1082,7 @@ Two ways to update an installed computer:
 
 - by hand: start the new `albireo-setup.exe`, or `albireo-setup-online.exe`, and follow the
   update wizard;
-- automatically: once a version is published (see [Publishing a version](#publishing-a-version)),
+- automatically (removed in the macOS fork): once a version is published (see [Publishing a version](#publishing-a-version)),
   the service reads the signed feed at its start and every six hours in the public link,
   downloads the installer without models in the background from the link as well, checks
   its size, its SHA-256 and the signature of the feed,
@@ -1376,22 +1377,12 @@ qwen3, qwen3moe, qwen3vl, qwen3vlmoe, mixtral), with their functions, the compan
 consortium that made them, what they read, their descriptions in the five languages, their
 license, and the address, size and SHA-256 of each file, the projector of a model that reads
 images included. [`tools/make_catalog.py`](tools/make_catalog.py) writes it from the Hugging Face
-hub, the addresses pinned to a commit so that a file never changes under its hash. The service
-downloads each file first from its copy in the public link of the published files,
-`models/<identifier>/<file name of its address>`, then from the address of the catalog, the
-official source of the model, when the link is not set, does not answer, refuses the requests, does
-not hold the file, holds it at another size than the catalog, or gives bytes that fail its hash:
-the parts of the download continue there from where they stopped, the next segments go there at
-once when the link fails for the whole download, and the log tells each change of source once,
-with the official address and the failure of the link. A
-computer whose network blocks the storage service of the link, behind a proxy of a company for
-instance, downloads its models this way. A download that both sources fail ends with the code
-`download_failed`, whose message names the file in the link, the failure of the link, the official
-address and its failure. The catalog comes the same way from the link, else from its official
-address in the repository of Albireo, `dist/albireo/catalog.json` and its signature, and the log
-tells which source served it; the updates come from the link alone (see [Updates](#updates)). The
-signature and the hashes check the bytes, whatever their source. The sizes below count the decoder
-and its projector.
+hub, the addresses pinned to a commit so that a file never changes under its hash. In the macOS
+fork, the service downloads each file directly from the address of the catalog, the official
+source of the model, with three attempts per segment; a download that fails ends with the code
+`download_failed`, whose message names the address and its failure. The catalog, unsigned, comes
+from its address in the repository of the original, `dist/albireo/catalog.json`, or from a folder.
+The hashes check the bytes. The sizes below count the decoder and its projector.
 
 | Model                          | Publisher          | Functions               | Inputs        | Size     | License |
 |--------------------------------|--------------------|-------------------------|---------------|----------|---------|
@@ -1467,7 +1458,7 @@ except the newer version of a model of the catalog, which replaces it once the e
 loaded model go; the download of a model that comes with Albireo is refused (`builtin_installed`).
 
 The route `/albireo/v1/import` reads a folder given by its path only when it is the import folder,
-or a signed offline bundle, whose files are read by name, size and hash as its catalog lists them
+or an offline bundle (a folder with a `catalog.json`, unsigned in the macOS fork), whose files are read by name, size and hash as its catalog lists them
 before anything is copied. Every other path is refused with a code (`import_use_upload` for a
 plain file, `import_path_relative`, `import_path_network`, `import_path_device`,
 `import_path_invalid`), and a folder that is neither gives the same answer whatever it holds
@@ -1555,6 +1546,11 @@ the updates, the downloads and the web access are refused with the reason, and t
 icon greys "Check for updates". What the service needs then comes from an offline bundle,
 prepared on a computer with network:
 
+> In the macOS fork, `make_offline_bundle.py`, the installers and the feed are removed: a bundle is
+> a folder holding a `catalog.json`, unsigned, and the models it lists, in the folder or in its
+> `models` subfolder; each one is checked by its name, size and SHA-256. The rest of this section
+> describes the original.
+
 ```
 python3 dlib/dlib/external/albireo/tools/make_offline_bundle.py <folder> [--models qwen3-4b,qwen3-embedding-0.6b] [--from ~/models]
 ```
@@ -1587,6 +1583,12 @@ at once and no new connection opens; a connection that httplib is opening ends w
 while the service tells the Windows service manager that its stop goes on.
 
 ## Publishing a version
+
+> In the macOS fork (4.0.0 and later) none of this section applies: there is no key, no signed feed
+> or catalog, no publication space and no update. `albireo-sign`, `publish_release.py`,
+> `fill_public_link.py`, `public_link.py`, `host/public_link.h` and the CMake option of its
+> password are removed; the catalog is read unsigned from its address in the repository of the
+> original. The section is kept as the description of the original.
 
 The feed and the catalog live in [`dist/albireo`](../../../../dist/albireo) of the repository, each
 with a detached signature (ECDSA P-256 over its exact bytes) that the programs check with the public
@@ -1700,14 +1702,16 @@ size and its SHA-256, and run it in update mode at their next start.
 - A staged update keeps the signed feed that announced it beside its installer; the service checks
   the version, the path, the size and the SHA-256 of the installer against it again, the file held
   open, right before running it.
-- The feed, the catalog and every downloaded file are checked against signatures and hashes. The
+- The feed, the catalog and every downloaded file are checked against signatures and hashes (in
+  the macOS fork, against hashes only: the catalog is unsigned, so a folder to import must come
+  from a trusted source). The
   files of the models folder, of the import folder, of the downloads and of the updates are
   opened and created through no link, junction or mount point, their path checked again before
   each opening, renaming and deletion; the route of the paths reads only the import folder and
   the signed offline bundles (see [Models](#models)). Every error of the updates carries a code
   with its values (`update_signature`, `update_installer_mismatch`, `update_package_manager`...),
   which the tray explains in the language of the user.
-- The publication space, the only source of the updates and the first one of the catalog and of the
+- The publication space (removed in the macOS fork), the only source of the updates and the first one of the catalog and of the
   models, brings nothing the signed feed and catalog do not name, at the size and with the SHA-256
   they give: a file of the space that differs is refused, and only the official address of the
   catalog or of the model, checked the same way, takes its place. A web page that a proxy or a

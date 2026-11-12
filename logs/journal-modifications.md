@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Finir la doc et les commentaires du retrait des clés (branche `bureau-2026-11-12`)
+
+- **Quoi** : restes de l'étape 4.0.0 faisables sans Mac. README d'Albireo : bandeau du fork complété (plus de clé, de catalogue signé, d'espace de publication, de mises à jour), liste des fonctions, option CMake `ALBIREO_PUBLIC_LINK_PASSWORD_FILE` retirée du tableau, paragraphe « Models » réécrit (téléchargement direct à l'adresse du catalogue, trois tentatives par segment, `models.cpp:1403`), route d'import et paquet hors ligne (`catalog.json` non signé, `make_offline_bundle.py` absent), note en tête de « Publishing a version » et deux puces de « Security ». Commentaires d'Albireo qui parlaient encore de catalogue signé et d'espace de publication corrigés (`refresh_catalog`, `import_bundle`, `import_folder`, `scan_inbox`, route d'import). `lots-traduction.json` : 13 fichiers supprimés retirés de la liste. Mémo : deux phrases sur `pseudalis-sign` recalées.
+- **Fichiers** : `dlib/dlib/external/albireo/README.md`, `host/models.h`, `host/service.h`, `host/service.cpp`, `host/server.cpp`, `macos/outils/lots-traduction.json`, `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`.
+- **Pourquoi** : demande de l'humain, au travail sans Mac : avancer ce qui se vérifie sans compiler, sur une branche à fusionner le soir.
+- **Étapes** : écrit sous Windows, branche `bureau-2026-11-12` partie de `travail-windows`. Vérifié : `macos/outils/comment_check.py` (lancé avec `PYTHONUTF8=1`, sinon Windows lit les fichiers en cp1252 et signale un faux changement) : 4 fichiers, 0 avec du code modifié ; `lots-traduction.json` se relit en JSON et ne cite plus que des fichiers présents. Version gardée à 4.0.0 : étape non encore fusionnée ni compilée, commentaires et doc seulement. Pas d'erreur de l'original trouvée, donc rien pour les notes pour l'auteur ; pas d'épisode de blog (pas une grande étape).
+
 ## 2026-11-12 — Retirer les clés : catalogue sans signature, plus d'espace de publication (Albireo 4.0.0)
 
 - **Quoi** : plus aucune clé ni signature. Le catalogue se lit à son adresse (ou dans un dossier) sans `catalog.json.sig` ; l'espace de publication de l'original (lien pCloud protégé par mot de passe) est retiré : chaque modèle se télécharge à l'adresse du catalogue, trois tentatives par segment, une partie à l'empreinte fausse est récupérée une fois de plus. L'import d'un dossier de disque n'exige plus que `catalog.json`. `verify_signature`, `sign_data` et la clé publique du flux disparaissent de `crypto` (Albireo et Pseudalis), ainsi que le masquage de l'espace dans le journal et les erreurs (`without_queries` est gardé, déplacé dans `common/log`).

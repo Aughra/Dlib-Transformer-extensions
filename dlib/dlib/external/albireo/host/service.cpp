@@ -873,9 +873,9 @@ namespace albireo
         /*
             Ce qui est laissé dans le dossier d'import du dossier des données, par l'installateur depuis
             son support ou par un administrateur, avec la disposition d'un paquet hors ligne : un
-            catalogue signé, des modèles (aussi dans un sous-dossier "models"), une mise à jour signée
-            avec son installateur.  Ce qui est installé quitte le dossier ; un fichier qui ne peut pas
-            être installé est renommé avec le suffixe ".rejected", pour qu'il ne soit lu qu'une fois.
+            catalogue (non signé) et des modèles (aussi dans un sous-dossier "models").  Ce qui est
+            installé quitte le dossier ; un fichier qui ne peut pas être installé est renommé avec le
+            suffixe ".rejected", pour qu'il ne soit lu qu'une fois.
         */
         const std::string inbox = join_path(data_dir_, "import");
         if (!dir_exists(inbox)) return;

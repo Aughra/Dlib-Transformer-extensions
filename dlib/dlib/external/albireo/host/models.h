@@ -89,11 +89,11 @@ namespace albireo
                 dont l'empreinte est dans le catalogue prend son entrée ; un autre est décrit
                 à partir de ses propres métadonnées, y compris l'identité d'un modèle
                 d'Albireo (albireo.id, albireo.name, albireo.roles, albireo.inputs).
-                import_bundle() installe les modèles d'un paquet hors ligne signé, où qu'il se
-                trouve : seulement les fichiers que liste son catalogue signé, décodeurs et
-                projecteurs, trouvés par leurs noms et vérifiés par leurs tailles et leurs
-                empreintes avant toute copie.  import_catalog() installe un catalogue signé
-                apporté de la même façon.
+                import_bundle() installe les modèles d'un paquet hors ligne, où qu'il se
+                trouve : seulement les fichiers que liste son catalogue (non signé), décodeurs
+                et projecteurs, trouvés par leurs noms et vérifiés par leurs tailles et leurs
+                empreintes avant toute copie.  import_catalog() installe un catalogue apporté
+                de la même façon.
 
                 Les projecteurs d'un dossier vont avec ses décodeurs comme le dit
                 pair_projectors() : par les empreintes du catalogue, sinon par les largeurs de
@@ -141,17 +141,12 @@ namespace albireo
 
         /*!
             ensures
-                - Lit le catalogue et sa signature depuis le dossier dist de l'espace de
-                  publication, ou depuis leur adresse officielle dans le dépôt d'Albireo quand
-                  l'espace n'est pas réglé, ne les a pas, ne répond pas, ou donne un catalogue
-                  dont la signature échoue, et vérifie la signature de l'un ou de l'autre.  Le
-                  journal dit quelle source l'a servi.
+                - Lit le catalogue, sans signature, à son adresse unique : le dépôt de
+                  l'original (ou l'adresse que donne official_catalog_for_tests()).
                 - Garde le dernier catalogue valide, et celui en usage quand celui qui a été
                   récupéré a été publié avant lui.
-                - Renvoie false avec error quand aucune des deux sources ne donne un catalogue
-                  valide : error nomme l'échec de l'espace, l'adresse officielle et son échec.
-                  Un service qui s'arrête ou passe hors ligne ne demande à aucune autre
-                  source.
+                - Renvoie false avec error quand l'adresse ne répond pas ou donne un catalogue
+                  refusé : error nomme l'adresse et l'échec.
         !*/
         bool refresh_catalog(std::string& error);
         // La même chose sur un thread à elle, une mise à jour à la fois ; l'appelant n'attend jamais.
@@ -248,7 +243,7 @@ namespace albireo
         /*!
             ensures
                 - Installe les modèles du paquet hors ligne de folder que liste catalog, son
-                  catalogue signé : models/<name> ou <name>, le nom de son fichier unique ou
+                  catalogue : models/<name> ou <name>, le nom de son fichier unique ou
                   <identifier>.gguf, lu sans passer par aucun lien depuis la racine de son
                   disque, avec la taille et l'empreinte du catalogue, et de même pour le
                   projecteur d'une entrée qui en a un (<name> de son fichier unique ou

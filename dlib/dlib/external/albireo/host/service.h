@@ -197,11 +197,11 @@ namespace albireo
                   que path n'est accepté que dans deux cas, un fichier d'un autre compte
                   n'étant jamais lu, haché, listé ni révélé :
                     - un dossier ou un fichier du dossier d'import du dossier des données, que
-                      seuls SYSTEM et les administrateurs remplissent : son catalogue signé,
+                      seuls SYSTEM et les administrateurs remplissent : son catalogue,
                       ses modèles (*.gguf, dans le dossier et dans son sous-dossier "models"),
                       comme scan_inbox() les installe, les fichiers restant en place ;
-                    - un paquet hors ligne signé sur un disque local : un dossier dont le
-                      catalog.json porte la signature d'Albireo.  Son catalogue et les modèles
+                    - un paquet hors ligne sur un disque local : un dossier qui contient un
+                      catalog.json (non signé).  Son catalogue et les modèles
                       que liste ce catalogue (trouvés par leurs noms, tailles et empreintes,
                       model_manager::import_bundle()) sont installés ; aucun autre fichier du
                       dossier n'est lu.
@@ -216,9 +216,9 @@ namespace albireo
                   système (import_path_device), invalide (import_path_invalid : un flux, un
                   joker, un caractère de contrôle, un nom "." ou ".."), un fichier de modèle
                   hors du dossier d'import (import_use_upload), hors du dossier d'import et
-                  qui n'est pas un paquet hors ligne signé atteint sans passer par aucun lien
+                  qui n'est pas un paquet hors ligne atteint sans passer par aucun lien
                   (import_not_bundle : le même code, que le dossier manque, soit illisible,
-                  non signé ou atteint par un lien, pour que la réponse ne révèle rien d'un
+                  sans catalog.json ou atteint par un lien, pour que la réponse ne révèle rien d'un
                   dossier d'un autre compte), absent du dossier d'import (import_not_found),
                   atteint par un lien dans le dossier d'import (import_path_link), ou quand le
                   dossier d'import laisse d'autres comptes que les administrateurs y écrire et
