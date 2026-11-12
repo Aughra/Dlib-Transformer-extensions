@@ -40,7 +40,8 @@ namespace albireo
     cpu_runtime::cpu_runtime(std::shared_ptr<model_file> file, const model_config& config, thread_pool& pool,
         size_t kv_budget_bytes, long kv_block_positions, kv_format kv_type)
         : file_(std::move(file)), cfg_(config), pool_(pool),
-          kv_(config.n_layers, config.n_kv_heads, config.head_dim, kv_block_positions, kv_budget_bytes, kv_type)
+          kv_(config.n_attention_layers(), config.n_kv_heads, config.head_dim, kv_block_positions, kv_budget_bytes,
+              kv_type)
     {
         const model_file& f = *file_;
         const long d = cfg_.d_model;
@@ -49,12 +50,44 @@ namespace albireo
         const long hd = cfg_.head_dim;
 
         layers_.resize(static_cast<size_t>(cfg_.n_layers));
+        kv_slot_.assign(static_cast<size_t>(cfg_.n_layers), -1);
+        linear_slot_.assign(static_cast<size_t>(cfg_.n_layers), -1);
+        long n_attention = 0, n_linear = 0;
         for (long i = 0; i < cfg_.n_layers; ++i)
         {
             const std::string p = "blk." + std::to_string(i) + ".";
             layer& L = layers_[static_cast<size_t>(i)];
             L.attn_norm = f.floats(p + "attn_norm.weight", static_cast<size_t>(d));
-            if (cfg_.fused_qkv)
+            // qwen35 nomme post_attention_norm la norme d'avant le bloc feed-forward.
+            const std::string ffn_norm = cfg_.recurrent() ? "post_attention_norm.weight" : "ffn_norm.weight";
+            if (cfg_.linear_layer(i))
+            {
+                const long C = cfg_.ssm_conv_dim(), VD = cfg_.ssm_value_dim(), Hv = cfg_.ssm_v_heads;
+                linear_slot_[static_cast<size_t>(i)] = n_linear++;
+                L.w_mix = f.matrix(p + "attn_qkv.weight", C, d);
+                L.w_z = f.matrix(p + "attn_gate.weight", VD, d);
+                L.w_alpha = f.matrix(p + "ssm_alpha.weight", Hv, d);
+                L.w_beta = f.matrix(p + "ssm_beta.weight", Hv, d);
+                L.w_ssm_out = f.matrix(p + "ssm_out.weight", d, VD);
+                L.conv1d = f.floats(p + "ssm_conv1d.weight", static_cast<size_t>(C * cfg_.ssm_conv_kernel));
+                L.dt_bias = f.floats(p + "ssm_dt.bias", static_cast<size_t>(Hv));
+                L.ssm_a = f.floats(p + "ssm_a", static_cast<size_t>(Hv));
+                L.ssm_norm = f.floats(p + "ssm_norm.weight", static_cast<size_t>(cfg_.ssm_head_dim));
+                L.ffn_norm = f.floats(p + ffn_norm, static_cast<size_t>(d));
+                L.w_gate = f.matrix(p + "ffn_gate.weight", cfg_.d_ffn, d);
+                L.w_up = f.matrix(p + "ffn_up.weight", cfg_.d_ffn, d);
+                L.w_down = f.matrix(p + "ffn_down.weight", d, cfg_.d_ffn);
+                continue;
+            }
+            kv_slot_[static_cast<size_t>(i)] = n_attention++;
+            if (cfg_.attn_output_gate)
+            {
+                // Les lignes de la requête puis celles de sa porte, tête par tête.
+                L.wq = f.matrix(p + "attn_q.weight", 2 * qd, d);
+                L.wk = f.matrix(p + "attn_k.weight", kvd, d);
+                L.wv = f.matrix(p + "attn_v.weight", kvd, d);
+            }
+            else if (cfg_.fused_qkv)
             {
                 // Trois vues d'une même matrice : chaque produit passe toujours par product().
                 const weight_matrix qkv = f.matrix(p + "attn_qkv.weight", qd + 2 * kvd, d);
@@ -81,7 +114,7 @@ namespace albireo
             if (L.q_norm.empty() != L.k_norm.empty())
                 throw std::runtime_error("layer " + std::to_string(i) + " holds one of attn_q_norm and attn_k_norm "
                     "without the other");
-            L.ffn_norm = f.floats(p + "ffn_norm.weight", static_cast<size_t>(d));
+            L.ffn_norm = f.floats(p + ffn_norm, static_cast<size_t>(d));
             if (cfg_.is_moe())
             {
                 const long n_exp = cfg_.n_experts;
@@ -157,7 +190,7 @@ namespace albireo
         layer_pass_checked_ = false;
         layer_pass_memory_failures_ = 0;
         layer_pass_wait_ = 0;
-        if (!offload_ || cfg_.is_moe()) return;
+        if (!offload_ || cfg_.is_moe() || cfg_.recurrent()) return;
         dense_model m;
         m.d_model = cfg_.d_model;
         m.q_dim = cfg_.q_dim();
@@ -195,15 +228,26 @@ namespace albireo
 
     int cpu_runtime::create_sequence()
     {
+        int s;
         if (!free_sequences_.empty())
         {
-            const int s = free_sequences_.back();
+            s = free_sequences_.back();
             free_sequences_.pop_back();
             sequences_[static_cast<size_t>(s)].reset(new kv_sequence());
-            return s;
         }
-        sequences_.emplace_back(new kv_sequence());
-        return static_cast<int>(sequences_.size() - 1);
+        else
+        {
+            sequences_.emplace_back(new kv_sequence());
+            s = static_cast<int>(sequences_.size() - 1);
+        }
+        // L'état récurrent d'une nouvelle séquence part de zéro.
+        if (cfg_.recurrent())
+        {
+            if (states_.size() < sequences_.size()) states_.resize(sequences_.size());
+            const long n_linear = cfg_.n_layers - cfg_.n_attention_layers();
+            states_[static_cast<size_t>(s)].assign(static_cast<size_t>(n_linear * cfg_.ssm_state_floats()), 0.0f);
+        }
+        return s;
     }
 
     void cpu_runtime::release_sequence(int seq)
@@ -211,7 +255,13 @@ namespace albireo
         if (seq < 0 || static_cast<size_t>(seq) >= sequences_.size() || !sequences_[static_cast<size_t>(seq)]) return;
         sequences_[static_cast<size_t>(seq)]->clear(kv_);
         sequences_[static_cast<size_t>(seq)].reset();
+        if (static_cast<size_t>(seq) < states_.size()) std::vector<float>().swap(states_[static_cast<size_t>(seq)]);
         free_sequences_.push_back(seq);
+    }
+
+    bool cpu_runtime::resumable(int seq, long length) const
+    {
+        return !cfg_.recurrent() || length == 0 || length == sequence_length(seq);
     }
 
     long cpu_runtime::sequence_length(int seq) const
@@ -221,7 +271,16 @@ namespace albireo
 
     void cpu_runtime::truncate_sequence(int seq, long length)
     {
-        sequences_.at(static_cast<size_t>(seq))->truncate(kv_, length);
+        kv_sequence& s = *sequences_.at(static_cast<size_t>(seq));
+        if (cfg_.recurrent() && length < s.length)
+        {
+            // Un état récurrent ne revient pas en arrière : il ne repart que de zéro.
+            if (length != 0)
+                throw std::logic_error("cpu_runtime: the state of a linear attention model cannot go back to "
+                    "position " + std::to_string(length));
+            std::fill(states_[static_cast<size_t>(seq)].begin(), states_[static_cast<size_t>(seq)].end(), 0.0f);
+        }
+        s.truncate(kv_, length);
     }
 
     bool cpu_runtime::reserve_sequence(int seq, long length)
@@ -233,6 +292,14 @@ namespace albireo
     {
         const kv_sequence& s = *sequences_.at(static_cast<size_t>(src));
         kv_sequence& d = *sequences_.at(static_cast<size_t>(dst));
+        if (cfg_.recurrent())
+        {
+            // L'état de src ne vaut qu'à sa longueur ; à 0, celui de dst repart de zéro.
+            if (length != 0 && length != s.length) return false;
+            std::vector<float>& to = states_[static_cast<size_t>(dst)];
+            if (length == 0) std::fill(to.begin(), to.end(), 0.0f);
+            else to = states_[static_cast<size_t>(src)];
+        }
         // Les blocs pleins sont partagés ; chaque séquence copie un bloc partagé avant d'y écrire.
         return d.share_prefix(kv_, s, length);
     }
@@ -904,6 +971,125 @@ namespace albireo
         run(batch, logits, false);
     }
 
+    /*
+        Une couche Gated DeltaNet (qwen35), comme llama.cpp la calcule (src/models/qwen35.cpp,
+        delta-net-base.cpp) : projections, convolution causale par canal et SiLU, normes L2 des requêtes et
+        des clés, puis, par tête de valeurs, la règle delta sur l'état S (ssm_head_dim x ssm_head_dim) :
+            S *= exp(g),  delta = beta * (v - S k),  S += delta k^T,  o = S q / sqrt(ssm_head_dim),
+        avec g = softplus(alpha + dt_bias) * ssm_a et beta = sigmoid(beta) ; enfin la norme RMS de chaque
+        tête multipliée par SiLU(z), et la projection de sortie.  S est rangé par lignes de valeurs : la
+        ligne r ne dépend que de v[r], ce qui fait de chaque ligne un calcul indépendant.  Les tokens d'une
+        séquence passent dans l'ordre ; les séquences et les têtes se répartissent entre les threads.
+    */
+    void cpu_runtime::linear_attention(const layer& L, long linear, const forward_batch& batch)
+    {
+        const long T = static_cast<long>(batch.tokens.size());
+        const long d = cfg_.d_model;
+        const long Hk = cfg_.ssm_k_heads, Hv = cfg_.ssm_v_heads, S = cfg_.ssm_head_dim;
+        const long C = cfg_.ssm_conv_dim(), VD = cfg_.ssm_value_dim(), K = cfg_.ssm_conv_kernel;
+        const long window = K - 1;
+        const size_t per_sequence = static_cast<size_t>(cfg_.ssm_state_floats());
+        const size_t offset = static_cast<size_t>(linear) * per_sequence;
+        const float eps = static_cast<float>(cfg_.rms_eps);
+
+        mix_.resize(static_cast<size_t>(T * C));
+        z_.resize(static_cast<size_t>(T * VD));
+        alpha_.resize(static_cast<size_t>(T * Hv));
+        beta_.resize(static_cast<size_t>(T * Hv));
+        lin_out_.resize(static_cast<size_t>(T * VD));
+        product(L.w_mix, xn_.data(), T, d, mix_.data(), C);
+        product(L.w_z, xn_.data(), T, d, z_.data(), VD);
+        product(L.w_alpha, xn_.data(), T, d, alpha_.data(), Hv);
+        product(L.w_beta, xn_.data(), T, d, beta_.data(), Hv);
+
+        // Convolution causale de chaque canal sur la fenêtre de sa séquence, puis SiLU : les canaux sont
+        // indépendants, les tokens d'une séquence se suivent.
+        auto convolve = [&](long first, long last) {
+            for (long c = first; c < last; ++c)
+            {
+                const float* w = L.conv1d.data() + c * K;
+                for (const auto& s : batch.segments)
+                {
+                    float* win = states_[static_cast<size_t>(s.sequence)].data() + offset + c * window;
+                    for (long j = 0; j < s.count; ++j)
+                    {
+                        float* x = mix_.data() + (s.start + j) * C + c;
+                        const float in = *x;
+                        float sum = 0.0f;
+                        for (long i = 0; i < window; ++i) sum += win[i] * w[i];
+                        sum += in * w[window];
+                        for (long i = 0; i + 1 < window; ++i) win[i] = win[i + 1];
+                        if (window > 0) win[window - 1] = in;
+                        *x = sum / (1.0f + std::exp(-sum));
+                    }
+                }
+            }
+        };
+        const long blocks = (C + 63) / 64;
+        pool_.parallel_for(blocks, [&](long b, int) { convolve(b * 64, std::min(C, b * 64 + 64)); });
+
+        // Normes L2 des requêtes et des clés (x / sqrt(somme des carrés + eps)), oubli et force d'écriture.
+        for (long t = 0; t < T; ++t)
+        {
+            float* row = mix_.data() + t * C;
+            for (long h = 0; h < 2 * Hk; ++h)
+            {
+                float* x = row + h * S;
+                const float scale = 1.0f / std::sqrt(qk_dot_f32(x, x, S) + eps);
+                for (long i = 0; i < S; ++i) x[i] *= scale;
+            }
+            for (long h = 0; h < Hv; ++h)
+            {
+                float& a = alpha_[static_cast<size_t>(t * Hv + h)];
+                const float biased = a + L.dt_bias[static_cast<size_t>(h)];
+                const float softplus = biased > 20.0f ? biased : std::log1p(std::exp(biased));
+                a = softplus * L.ssm_a[static_cast<size_t>(h)];
+                float& b = beta_[static_cast<size_t>(t * Hv + h)];
+                b = 1.0f / (1.0f + std::exp(-b));
+            }
+        }
+
+        // La règle delta, par séquence et par tête de valeurs.
+        const float qscale = 1.0f / std::sqrt(static_cast<float>(S));
+        const long n_segments = static_cast<long>(batch.segments.size());
+        pool_.parallel_for(n_segments * Hv, [&](long job, int) {
+            const auto& s = batch.segments[static_cast<size_t>(job / Hv)];
+            const long h = job % Hv, kh = h % Hk;
+            float* state = states_[static_cast<size_t>(s.sequence)].data() + offset
+                + static_cast<size_t>(cfg_.ssm_conv_state()) + static_cast<size_t>(h * S * S);
+            for (long j = 0; j < s.count; ++j)
+            {
+                const long t = s.start + j;
+                const float* q = mix_.data() + t * C + kh * S;
+                const float* k = mix_.data() + t * C + (Hk + kh) * S;
+                const float* v = mix_.data() + t * C + 2 * Hk * S + h * S;
+                const float decay = std::exp(alpha_[static_cast<size_t>(t * Hv + h)]);
+                const float b = beta_[static_cast<size_t>(t * Hv + h)];
+                float* o = lin_out_.data() + t * VD + h * S;
+                for (long r = 0; r < S; ++r)
+                {
+                    float* row = state + r * S;
+                    for (long i = 0; i < S; ++i) row[i] *= decay;
+                    const float delta = (v[r] - qk_dot_f32(row, k, S)) * b;
+                    for (long i = 0; i < S; ++i) row[i] += k[i] * delta;
+                    o[r] = qk_dot_f32(row, q, S) * qscale;
+                }
+            }
+        });
+
+        // Norme RMS de chaque tête, multipliée par SiLU(z), puis la projection de sortie.
+        for (long t = 0; t < T; ++t)
+            for (long h = 0; h < Hv; ++h)
+            {
+                float* o = lin_out_.data() + t * VD + h * S;
+                const float* z = z_.data() + t * VD + h * S;
+                const float scale = 1.0f / std::sqrt(qk_dot_f32(o, o, S) / static_cast<float>(S) + eps);
+                for (long i = 0; i < S; ++i)
+                    o[i] = o[i] * scale * L.ssm_norm[static_cast<size_t>(i)] * (z[i] / (1.0f + std::exp(-z[i])));
+            }
+        product(L.w_ssm_out, lin_out_.data(), T, VD, tmp_.data(), d);
+    }
+
     bool cpu_runtime::run(const forward_batch& batch, std::vector<float>& logits, bool on_device)
     {
         const long T = static_cast<long>(batch.tokens.size());
@@ -963,14 +1149,39 @@ namespace albireo
         for (long li = 0; li < cfg_.n_layers; ++li)
         {
             const layer& L = layers_[static_cast<size_t>(li)];
+            const long slot = kv_slot_[static_cast<size_t>(li)];
 
+            if (slot < 0)
+            {
+                // Couche linéaire (qwen35) : Gated DeltaNet, puis la somme résiduelle.
+                rms_norm_rows(x_.data(), L.attn_norm.data(), xn_.data(), T, d, eps);
+                linear_attention(L, linear_slot_[static_cast<size_t>(li)], batch);
+                for (size_t i = 0; i < x_.size(); ++i) x_[i] += rs * tmp_[i];
+            }
+            else
+            {
             // Bloc d'attention.
             if (on_device)
                 layer_pass_->attention_inputs(li, q_.data(), k_.data(), v_.data());
             else
             {
                 rms_norm_rows(x_.data(), L.attn_norm.data(), xn_.data(), T, d, eps);
-                product(L.wq, xn_.data(), T, d, q_.data(), qd);
+                if (cfg_.attn_output_gate)
+                {
+                    // attn_q donne, tête par tête, la requête puis sa porte.
+                    qg_.resize(static_cast<size_t>(T * 2 * qd));
+                    attn_gate_.resize(static_cast<size_t>(T * qd));
+                    product(L.wq, xn_.data(), T, d, qg_.data(), 2 * qd);
+                    for (long t = 0; t < T; ++t)
+                        for (long h = 0; h < H; ++h)
+                        {
+                            const float* src = qg_.data() + t * 2 * qd + h * 2 * hd;
+                            std::copy(src, src + hd, q_.data() + t * qd + h * hd);
+                            std::copy(src + hd, src + 2 * hd, attn_gate_.data() + t * qd + h * hd);
+                        }
+                }
+                else
+                    product(L.wq, xn_.data(), T, d, q_.data(), qd);
                 product(L.wk, xn_.data(), T, d, k_.data(), kvd);
                 product(L.wv, xn_.data(), T, d, v_.data(), kvd);
             }
@@ -1007,9 +1218,12 @@ namespace albireo
 
             // Les clés et valeurs du lot vont dans les séquences avant que l'attention ne les lise,
             // pour que chaque token voie les tokens précédents de son propre morceau.
-            store_keys_values(li, batch);
+            store_keys_values(slot, batch);
 
-            attention(li, batch, positions_);
+            attention(slot, batch, positions_);
+            if (cfg_.attn_output_gate)
+                for (long i = 0; i < T * qd; ++i)
+                    ctx_[static_cast<size_t>(i)] *= 1.0f / (1.0f + std::exp(-attn_gate_[static_cast<size_t>(i)]));
             if (on_device)
             {
                 // La projection, le bloc feed-forward et les deux sommes résiduelles.
@@ -1018,6 +1232,7 @@ namespace albireo
             }
             product(L.wo, ctx_.data(), T, qd, tmp_.data(), d);
             for (size_t i = 0; i < x_.size(); ++i) x_[i] += rs * tmp_[i];
+            }
 
             // Bloc feed-forward.
             rms_norm_rows(x_.data(), L.ffn_norm.data(), xn_.data(), T, d, eps);

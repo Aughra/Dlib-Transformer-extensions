@@ -89,6 +89,7 @@ namespace albireo
         void truncate_sequence(int seq, long length) override;
         bool reserve_sequence(int seq, long length) override;
         bool copy_sequence(int src, int dst, long length) override;
+        bool resumable(int seq, long length) const override;
 
         void forward(const forward_batch& batch, std::vector<float>& logits) override;
 
@@ -96,7 +97,8 @@ namespace albireo
         size_t kv_bytes_budget() const override { return kv_.max_blocks() * kv_.block_bytes(); }
         size_t kv_bytes_per_token() const override
         {
-            return 2 * static_cast<size_t>(cfg_.n_layers) * cfg_.n_kv_heads * kv_row_bytes(kv_.format(), cfg_.head_dim);
+            return 2 * static_cast<size_t>(cfg_.n_attention_layers()) * cfg_.n_kv_heads
+                * kv_row_bytes(kv_.format(), cfg_.head_dim);
         }
         kv_format kv_type() const { return kv_.format(); }
         // Le contrôle de la mémoire du système avant chaque nouveau bloc de clés et valeurs (kv_pool::set_guard).
@@ -170,6 +172,12 @@ namespace albireo
             weight_matrix w_gate, w_up, w_down;
             weight_matrix router;
             std::vector<weight_matrix> e_gate, e_up, e_down;
+            // Une couche Gated DeltaNet (model_config::linear_layer()) : ses projections des requêtes, clés et
+            // valeurs (w_mix), de la porte de sortie (w_z), de l'oubli (w_alpha) et de la force d'écriture
+            // (w_beta), sa convolution (ssm_conv_kernel poids par canal), dt_bias, ssm_a (-exp(A_log)), la
+            // norme de ses têtes et sa projection de sortie.
+            weight_matrix w_mix, w_z, w_alpha, w_beta, w_ssm_out;
+            std::vector<float> conv1d, dt_bias, ssm_a, ssm_norm;
         };
 
         // Le nombre maximal de lignes de requêtes d'une tuile d'attention : les scores d'une tuile sur un
@@ -219,6 +227,9 @@ namespace albireo
         void store_keys_values(long layer, const forward_batch& batch);
         void attention(long layer, const forward_batch& batch, const std::vector<long>& positions);
         void moe_ffn(const layer& L, long n_tokens);
+        // Une couche Gated DeltaNet sur les lignes normalisées xn_, dans tmp_ ; linear est son rang parmi les
+        // couches linéaires, qui situe son état dans celui de chaque séquence.
+        void linear_attention(const layer& L, long linear, const forward_batch& batch);
         void embed(const std::vector<int>& tokens);
         /*
             La passe avant, avec les couches sur le périphérique via layer_pass_ quand on_device vaut
@@ -270,6 +281,14 @@ namespace albireo
         kv_pool kv_;
         std::vector<std::unique_ptr<kv_sequence>> sequences_;
         std::vector<int> free_sequences_;
+        /*
+            Les modèles à couches linéaires (qwen35) : l'état récurrent de chaque séquence (ssm_state_floats()
+            floats par couche linéaire), et, pour chaque couche, sa place parmi les couches d'attention, qui
+            seules ont des clés et valeurs (kv_slot_), ou parmi les couches linéaires (linear_slot_) ; -1
+            ailleurs.
+        */
+        std::vector<std::vector<float>> states_;
+        std::vector<long> kv_slot_, linear_slot_;
 
         std::vector<layer> layers_;
         weight_matrix token_embd_, output_;
@@ -286,6 +305,8 @@ namespace albireo
         // Tampons de travail, réutilisés d'une passe à l'autre.
         aligned_floats x_, xn_, q_, k_, v_, ctx_, tmp_, gate_, up_;
         aligned_floats router_logits_, expert_x_, expert_gate_, expert_up_, expert_y_;
+        // Les tampons des couches linéaires et de la porte de l'attention de qwen35.
+        aligned_floats mix_, z_, alpha_, beta_, lin_out_, qg_, attn_gate_;
         std::vector<float> hidden_out_, router_probs_;
         std::vector<long> router_order_;
         std::vector<std::vector<std::pair<long, float>>> routed_;

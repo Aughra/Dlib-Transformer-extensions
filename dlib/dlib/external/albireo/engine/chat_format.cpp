@@ -941,7 +941,9 @@ namespace albireo
                 switchable_ = think_tokens && tmpl.find("enable_thinking") != std::string::npos;
                 // Un template dont l'interrupteur ouvre le raisonnement dans l'une de ses branches raisonne
                 // à la demande.
-                opens_ = think_tokens && tmpl.find("<|im_start|>assistant\\n<think>\\n'") != std::string::npos;
+                opens_ = think_tokens && (tmpl.find("<|im_start|>assistant\\n<think>\\n'") != std::string::npos
+                    // Qwen 3.5 écrit l'ouverture en deux morceaux : '<|im_start|>assistant\n', puis '<think>\n'.
+                    || (switchable_ && tmpl.find("'<think>\\n'") != std::string::npos));
                 always_thinks_ = opens_ && !switchable_;
                 const std::string qwen = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant.";
                 const std::string smollm = "You are a helpful AI assistant named SmolLM, trained by Hugging Face";

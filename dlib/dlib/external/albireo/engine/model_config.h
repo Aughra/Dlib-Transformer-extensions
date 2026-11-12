@@ -133,6 +133,30 @@ namespace albireo
         // ajoutée à son état caché après la couche k.
         long n_deepstack = 0;
 
+        /*
+            Couches linéaires (qwen35, fork pour macOS).  Avec full_attention_interval > 0, la couche
+            li est une couche d'attention quand (li + 1) % full_attention_interval == 0, et une couche
+            « Gated DeltaNet » sinon : une attention linéaire qui garde, par séquence, un état de taille
+            fixe (la fenêtre de sa convolution causale et une matrice ssm_head_dim x ssm_head_dim par
+            tête de valeurs) au lieu de clés et valeurs.  Ses dimensions : une convolution de
+            ssm_conv_kernel positions, ssm_k_heads têtes de requêtes et de clés et ssm_v_heads têtes
+            de valeurs, toutes de ssm_head_dim.  La tête de valeurs h lit la tête de clés
+            h % ssm_k_heads.  Un état ne revient pas en arrière : une séquence ne se reprend qu'à sa
+            longueur, ou depuis le début (runtime::resumable()).
+            Les couches d'attention de ces modèles ont une porte de sortie (attn_output_gate) :
+            attn_q donne, tête par tête, la requête puis sa porte, et la sortie de l'attention est
+            multipliée par sigmoid(porte) avant attn_output.  La norme d'avant le bloc feed-forward
+            s'y appelle post_attention_norm.
+        */
+        long full_attention_interval = 0;
+        long ssm_conv_kernel = 0;
+        long ssm_k_heads = 0;
+        long ssm_v_heads = 0;
+        long ssm_head_dim = 0;
+        bool attn_output_gate = false;
+        // Les couches de prédiction de plusieurs tokens (MTP) rangées après les autres, non exécutées.
+        long n_nextn = 0;
+
         bool is_moe() const { return n_experts > 0; }
         bool multimodal_rope() const { return !rope_sections.empty(); }
         long input_width() const { return d_model * (1 + n_deepstack); }
@@ -140,6 +164,24 @@ namespace albireo
         long kv_dim() const { return n_kv_heads * head_dim; }
         long q_dim() const { return n_heads * head_dim; }
         long v_dim() const { return n_kv_heads * head_dim_v; }
+        bool recurrent() const { return full_attention_interval > 0; }
+        bool linear_layer(long li) const
+        {
+            return full_attention_interval > 0 && (li + 1) % full_attention_interval != 0;
+        }
+        long n_attention_layers() const
+        {
+            long n = 0;
+            for (long li = 0; li < n_layers; ++li) n += linear_layer(li) ? 0 : 1;
+            return n;
+        }
+        // Les canaux de la convolution d'une couche linéaire : requêtes, clés, puis valeurs.
+        long ssm_conv_dim() const { return (2 * ssm_k_heads + ssm_v_heads) * ssm_head_dim; }
+        long ssm_value_dim() const { return ssm_v_heads * ssm_head_dim; }
+        // Les floats de l'état d'une séquence pour une couche linéaire : la fenêtre de la convolution, puis
+        // une matrice par tête de valeurs.
+        long ssm_conv_state() const { return ssm_conv_dim() * (ssm_conv_kernel - 1); }
+        long ssm_state_floats() const { return ssm_conv_state() + ssm_v_heads * ssm_head_dim * ssm_head_dim; }
     };
 
     // Lit la configuration d'un modèle, ou lève une exception donnant la raison pour

@@ -111,6 +111,17 @@ namespace albireo
         // plusieurs requêtes partent du même préfixe en cache, comme un long prompt
         // système, sans le recalculer.
         virtual bool copy_sequence(int src, int dst, long length) = 0;
+        /*
+            Si la séquence peut reprendre à length positions, par truncate_sequence() ou copy_sequence() :
+            toujours pour un modèle à clés et valeurs ; pour un modèle à état récurrent (model_config::
+            recurrent()), seulement à 0 ou à sa longueur, son état ne revenant pas en arrière.
+        */
+        virtual bool resumable(int seq, long length) const
+        {
+            (void)seq;
+            (void)length;
+            return true;
+        }
 
         // Exécute le lot, ajoute ses clés et valeurs aux séquences et écrit, pour chaque
         // entrée de logit_rows, une ligne de config().vocab logits dans logits, sauf si le

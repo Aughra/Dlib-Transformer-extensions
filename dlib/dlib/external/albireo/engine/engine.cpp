@@ -1211,7 +1211,9 @@ namespace albireo
             log(ALBIREO_LOG_WARNING, "model '" + id + "': heads of " + std::to_string(m->cfg.head_dim) + " values "
                 "hold no whole groups of 8-bit keys and values, which stay in half precision");
 
-        const size_t per_token = 2 * static_cast<size_t>(m->cfg.n_layers) * static_cast<size_t>(m->cfg.n_kv_heads)
+        // Seules les couches d'attention gardent des clés et valeurs (les couches linéaires de qwen35 ont un état
+        // de taille fixe par séquence).
+        const size_t per_token = 2 * static_cast<size_t>(m->cfg.n_attention_layers()) * static_cast<size_t>(m->cfg.n_kv_heads)
             * kv_row_bytes(m->kv_type, m->cfg.head_dim);
         const memory_info mem = read_memory_info();
         /*
@@ -2095,7 +2097,8 @@ namespace albireo
         for (size_t i = 0; i < m.idle.size(); ++i)
         {
             const long n = std::min(limit, common_prefix(m.idle[i].tokens, r.keys));
-            if (n > best_len)
+            // Un modèle à état récurrent ne reprend une séquence qu'à sa longueur (runtime::resumable()).
+            if (n > best_len && m.runtime->resumable(m.idle[i].seq, n))
             {
                 best_len = n;
                 best = i;
@@ -2876,7 +2879,10 @@ namespace albireo
             // tel qu'il vient.
             return;
         }
-        const long known = common_prefix(cached, w->keys);
+        long known = common_prefix(cached, w->keys);
+        // Un modèle à état récurrent ne reprend la séquence de la requête qu'à sa fin : sinon, le préchauffage
+        // relit tout l'historique, et s'y attend (admit() abandonne un préchauffage qui lit bien plus qu'attendu).
+        if (m.cfg.recurrent() && known != static_cast<long>(cached.size())) known = 0;
         if (static_cast<long>(w->keys.size()) - known < min_warm_tokens) return;
         w->model_id = m.id;
         // Les tokens que le préchauffage s'attend à lire, qu'admit() compare avec ceux qu'il trouve

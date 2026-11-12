@@ -17,8 +17,12 @@ namespace albireo
 
         // Les architectures que le moteur lit (model_config.cpp).
         const std::set<std::string> engine_architectures = { "llama", "mistral", "mistral3", "granite", "qwen2",
-            "qwen3", "qwen3vl", "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "phi3" };
+            "qwen3", "qwen3vl", "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "phi3", "qwen35" };
         const std::set<std::string> moe_architectures = { "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe" };
+        // Les architectures dont le moteur lit les images (un projecteur), et celles qu'il garde sur le processeur
+        // (qwen35 : ses couches linéaires n'ont pas encore de noyaux Metal).
+        const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe" };
+        const std::set<std::string> cpu_only_architectures = { "qwen35" };
 
         std::string lower(std::string s)
         {
@@ -174,7 +178,8 @@ namespace albireo
             const bool split = std::regex_search(path, std::regex("-[0-9]{5}-of-[0-9]{5}\\.gguf$"));
             if (lower(path).find("mmproj") != std::string::npos)
             {
-                projectors.push_back(o);
+                // Un projecteur n'est proposé que pour une architecture dont le moteur lit les images.
+                if (vision_architectures.count(arch)) projectors.push_back(o);
                 continue;
             }
             json c = architecture_check(arch);
@@ -189,7 +194,8 @@ namespace albireo
                 c["reason"] = "format de poids " + (q.empty() ? std::string("inconnu") : q) + " non lu par le moteur";
             }
             for (const auto& kv : c.items()) o[kv.first] = kv.second;
-            o["gpu"] = c["compatible"].as_bool(false) && !c["moe"].as_bool(false) && quant_gpu(q);
+            o["gpu"] = c["compatible"].as_bool(false) && !c["moe"].as_bool(false) && quant_gpu(q)
+                && !cpu_only_architectures.count(arch);
             files.push_back(o);
         }
         out = json::object();
@@ -247,6 +253,11 @@ namespace albireo
         if (!engine_architectures.count(arch))
         {
             error = "the architecture " + (arch.empty() ? std::string("(unknown)") : arch) + " is not supported by the engine";
+            return false;
+        }
+        if (!projector.empty() && !vision_architectures.count(arch))
+        {
+            error = "the engine does not read the images of the architecture " + arch;
             return false;
         }
         const std::string q = quant_of(file);

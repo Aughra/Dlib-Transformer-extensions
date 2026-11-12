@@ -107,6 +107,26 @@ elif [ ! -f "$MODEL" ]; then skip "engine cpu" "no $MODEL"
 else step "engine cpu" "Paris" "$CHAT" "$ENGINE" "$MODEL" --reasoning off --max 40 "$QUESTION"
 fi
 
+# Qwen 3.5 (couches linéaires Gated DeltaNet) : une réponse, puis trois tours qui reprennent l'état récurrent de la
+# conversation, avec les mêmes réponses que sans reprise.
+QWEN35=${QWEN35_MODEL:-$ROOT/build/models/Qwen3.5-0.8B-Q8_0.gguf}
+qwen35_turns() {
+  local turns=("My name is Léa. Remember it." "What is my name?" "Spell my name backwards.") with without
+  with=$("$CHAT" "$ENGINE" "$QWEN35" --reasoning off --temperature 0 --max 40 --pause 2 --turns "${turns[@]}" 2>/dev/null) \
+    || return 1
+  without=$("$CHAT" "$ENGINE" "$QWEN35" --reasoning off --temperature 0 --max 40 --no-warm --turns "${turns[@]}" \
+    2>/dev/null) || return 1
+  printf '%s' "$with" | grep -q '"cached_tokens":[1-9]' || { echo "no state was resumed"; return 1; }
+  [ "$(printf '%s' "$with" | grep -v '^[-{]')" = "$(printf '%s' "$without" | grep -v '^[-{]')" ] \
+    || { echo "the answers differ with and without resumed states"; return 1; }
+  echo "same answers with resumed states"
+}
+if [ ! -f "$ENGINE" ] || [ ! -f "$QWEN35" ]; then skip "qwen 3.5" "no $QWEN35"
+else
+  step "qwen 3.5" "Paris" "$CHAT" "$ENGINE" "$QWEN35" --reasoning off --temperature 0 --max 40 "$QUESTION"
+  step "qwen 3.5 resumed state" "same answers with resumed states" qwen35_turns
+fi
+
 if [ -f "$EMBEDDING" ] && [ -f "$ENGINE" ]; then
   step "embedding model" "cosine" "$CHAT" "$ENGINE" "$EMBEDDING" --parallel \
     "The service runs on this computer." "Where does the service run?" "The quarterly revenue grew."

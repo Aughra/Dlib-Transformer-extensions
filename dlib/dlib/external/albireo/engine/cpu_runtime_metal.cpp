@@ -102,6 +102,8 @@ namespace albireo
         // Q4_K ou Q6_K.
         std::string why;
         if (cfg_.is_moe()) why = "a mixture of experts";
+        // Qwen 3.5 : ses couches linéaires et la porte de son attention n'ont pas encore de noyaux Metal.
+        else if (cfg_.recurrent() || cfg_.attn_output_gate) why = "linear attention layers (gated deltanet)";
         else if (hd != 64 && hd != 128 && hd != 256) why = "heads of " + std::to_string(hd) + " values";
         else if ((rep != 1 && rep != 2 && rep != 4 && rep != 8) || cfg_.n_heads % cfg_.n_kv_heads != 0)
             why = "query heads grouped otherwise";

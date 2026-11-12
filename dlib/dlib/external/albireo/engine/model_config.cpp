@@ -61,12 +61,17 @@ namespace albireo
         const bool qwen_like = a == "qwen2" || a == "qwen3" || a == "qwen3vl";
         const bool moe_arch = a == "mixtral" || a == "granitemoe" || a == "qwen3moe" || a == "qwen3vlmoe";
         const bool phi = a == "phi3";
-        if (!llama_like && !qwen_like && !moe_arch && !phi)
+        // Qwen 3.5 (fork pour macOS) : couches linéaires Gated DeltaNet et attention à porte de sortie.
+        const bool qwen35 = a == "qwen35";
+        if (!llama_like && !qwen_like && !moe_arch && !phi && !qwen35)
             throw std::runtime_error("the architecture '" + a + "' is not supported by this engine");
 
         if (!g.has(a + ".block_count") || !g.has(a + ".attention.head_count") || !g.has(a + ".embedding_length"))
             throw std::runtime_error("the model metadata is incomplete (missing dimensions)");
         c.n_layers = bounded_int(g, a + ".block_count", 0, 1, max_layers);
+        // Les couches MTP, après les autres, ne servent qu'à proposer des brouillons : le moteur ne les exécute pas.
+        c.n_nextn = bounded_int(g, a + ".nextn_predict_layers", 0, 0, c.n_layers - 1);
+        c.n_layers -= c.n_nextn;
         // Chaque couche contient ses propres tenseurs.
         if (static_cast<size_t>(c.n_layers) > g.tensors().size())
             throw std::runtime_error("the model declares more layers than it holds tensors");
@@ -99,7 +104,10 @@ namespace albireo
         if (c.rms_eps < 0) throw std::runtime_error("the model metadata holds a negative normalization epsilon");
 
         // Embedding rotatif.
-        c.rope = qwen_like || a == "qwen3moe" || a == "qwen3vlmoe" || phi ? rope_style::neox : rope_style::norm;
+        // Qwen 3.5 déclare des sections de positions multimodales ; pour du texte, ses trois composantes sont
+        // égales, et la rotation est celle de neox sur rope_dims dimensions.
+        c.rope = qwen_like || a == "qwen3moe" || a == "qwen3vlmoe" || phi || qwen35 ? rope_style::neox
+            : rope_style::norm;
         c.rope_dims = bounded_int(g, a + ".rope.dimension_count", c.head_dim, 0, max_head_dim);
         if (c.rope_dims <= 0 || c.rope_dims > c.head_dim || c.rope_dims % 2 != 0)
             throw std::runtime_error("unsupported rotary dimension count");
@@ -200,6 +208,24 @@ namespace albireo
         c.tied_embeddings = !f.has("output.weight");
         c.fused_qkv = f.has("blk.0.attn_qkv.weight");
         c.fused_gate_up = phi;
+        if (qwen35)
+        {
+            // blk.0 est une couche linéaire : son attn_qkv n'est pas celui de phi3, et les options des couches
+            // d'attention se lisent sur la première d'entre elles.
+            c.full_attention_interval = bounded_int(g, a + ".full_attention_interval", 4, 1, c.n_layers);
+            c.ssm_conv_kernel = bounded_int(g, a + ".ssm.conv_kernel", 0, 2, 64);
+            c.ssm_k_heads = bounded_int(g, a + ".ssm.group_count", 0, 1, max_heads);
+            c.ssm_v_heads = bounded_int(g, a + ".ssm.time_step_rank", 0, 1, max_heads);
+            c.ssm_head_dim = bounded_int(g, a + ".ssm.state_size", 0, 1, max_head_dim);
+            const long inner = bounded_int(g, a + ".ssm.inner_size", 0, 1, max_width);
+            if (inner != c.ssm_v_heads * c.ssm_head_dim || c.ssm_v_heads % c.ssm_k_heads != 0)
+                throw std::runtime_error("unsupported geometry of the linear attention layers");
+            const std::string first = "blk." + std::to_string(c.full_attention_interval - 1) + ".";
+            c.qkv_bias = false;
+            c.fused_qkv = false;
+            c.qk_norm = f.has(first + "attn_q_norm.weight");
+            c.attn_output_gate = true;
+        }
 
         if (a == "granite" || a == "granitemoe")
         {
@@ -249,6 +275,10 @@ namespace albireo
           << ", heads " << c.n_heads << "/" << c.n_kv_heads << " of " << c.head_dim
           << ", ffn " << c.d_ffn;
         if (c.is_moe()) o << ", " << c.n_experts << " experts top-" << c.n_experts_used;
+        if (c.recurrent())
+            o << ", " << c.n_layers - c.n_attention_layers() << " gated deltanet layers (heads " << c.ssm_k_heads
+              << "/" << c.ssm_v_heads << " of " << c.ssm_head_dim << ", conv " << c.ssm_conv_kernel
+              << ") and " << c.n_attention_layers() << " gated attention layers";
         o << ", vocabulary " << c.vocab << ", trained context " << c.ctx_train
           << ", rope " << (c.rope == rope_style::neox ? "neox" : "norm") << " base " << c.rope_base;
         if (c.yarn) o << " yarn x" << 1.0 / c.rope_freq_scale;
