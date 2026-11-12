@@ -35,3 +35,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 29. [Les marque-pages](29-les-marque-pages.md)
 30. [La table de multiplication](30-la-table-de-multiplication.md)
 31. [Le grand rangement](31-le-grand-rangement.md)
+32. [Le comité se réunit](32-le-comite-se-reunit.md)

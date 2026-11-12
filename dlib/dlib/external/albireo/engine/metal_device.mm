@@ -38,6 +38,7 @@ namespace albireo
             "mv_q4_K_id", "mv_q5_K_id", "mv_q6_K_id", "mv_q8_0_id", "mv_f32", "moe_route", "shared_gate", "moe_combine",
             "mv_q5_0_1", "mv_q5_0_n", "mv_q5_0_id",
             "dequant_q5_K", "dequant_q8_0", "dequant_q5_0",
+            "moe_group", "moe_tiles", "mm_id_q4_K", "mm_id_q5_K", "mm_id_q6_K", "mm_id_q8_0", "mm_id_q5_0",
             "attention_part_1_2", "attention_part_1_4", "attention_part_1_8",
             "attention_part_2_2", "attention_part_2_4", "attention_part_2_8",
             "attention_part_4_2", "attention_part_4_4", "attention_part_4_8",
@@ -55,6 +56,7 @@ namespace albireo
             k_mv_q4_K_id, k_mv_q5_K_id, k_mv_q6_K_id, k_mv_q8_0_id, k_mv_f32, k_moe_route, k_shared_gate, k_moe_combine,
             k_mv_q5_0, k_mv_q5_0_n, k_mv_q5_0_id,
             k_dequant_q5_K, k_dequant_q8_0, k_dequant_q5_0,
+            k_moe_group, k_moe_tiles, k_mm_id_q4_K, k_mm_id_q5_K, k_mm_id_q6_K, k_mm_id_q8_0, k_mm_id_q5_0,
             k_attention_part, k_attention_mtile = k_attention_part + 12, k_count = k_attention_mtile + 12
         };
 
@@ -188,6 +190,13 @@ namespace albireo
         void groups(unsigned x, unsigned y, unsigned z, unsigned threads)
         {
             [encoder dispatchThreadgroups:MTLSizeMake(x, y, z) threadsPerThreadgroup:MTLSizeMake(threads, 1, 1)];
+        }
+        // Un lancement dont les nombres de threadgroups sont dans indirect, à l'octet offset, écrits par un noyau
+        // précédent de la même commande.
+        void groups_indirect(metal_view indirect, size_t offset, unsigned threads)
+        {
+            [encoder dispatchThreadgroupsWithIndirectBuffer:indirect.buffer->impl_->buffer
+                indirectBufferOffset:indirect.offset + offset threadsPerThreadgroup:MTLSizeMake(threads, 1, 1)];
         }
         void grid(unsigned x, unsigned y, unsigned z)
         {
@@ -543,6 +552,21 @@ namespace albireo
             unsigned d, top_k, has_shared;
             float scale;
         };
+        struct group_args
+        {
+            unsigned slots, capacity;
+        };
+        struct tiles_args
+        {
+            unsigned experts, tiles_a, tiles_b;
+        };
+        struct mm_args
+        {
+            uint64_t expert_bytes;
+            unsigned row_bytes, cols, x_stride, x_div, y_stride, capacity;
+        };
+        // Les dimensions des tuiles de mm_id (MM_TT, MM_NR, MM_KC dans metal_kernels.metal).
+        const unsigned mm_tile_slots = 16, mm_tile_rows = 32, mm_tile_cols = 64;
     }
 
     bool metal_device::commands::matvec_id(dlib::ggml_type type, metal_view W, long rows, long cols,
@@ -569,6 +593,60 @@ namespace albireo
         const moe_args m = { expert_bytes, x_div };
         impl_->args(m, 5);
         impl_->groups(static_cast<unsigned>((rows + mv_rows_per_group - 1) / mv_rows_per_group), slots, 1, mv_threads);
+        return true;
+    }
+
+    void metal_device::commands::moe_group(metal_view ids, unsigned slots, unsigned experts, unsigned capacity,
+        metal_view list, metal_view counts, metal_view work, metal_view dispatch, unsigned rows_a, unsigned rows_b)
+    {
+        if (slots == 0) return;
+        if (rows_a % mm_tile_rows != 0 || rows_b % mm_tile_rows != 0)
+            throw std::invalid_argument("metal_device: grouped expert products of rows that are not multiples of 32");
+        impl_->use(k_moe_group);
+        impl_->bind(ids, 0);
+        impl_->bind(list, 1);
+        impl_->bind(counts, 2);
+        const group_args a = { slots, capacity };
+        impl_->args(a, 3);
+        impl_->groups(experts, 1, 1, 256);
+        impl_->use(k_moe_tiles);
+        impl_->bind(counts, 0);
+        impl_->bind(work, 1);
+        impl_->bind(dispatch, 2);
+        const tiles_args b = { experts, rows_a / mm_tile_rows, rows_b / mm_tile_rows };
+        impl_->args(b, 3);
+        impl_->groups(1, 1, 1, 256);
+    }
+
+    unsigned metal_device::commands::moe_tiles_most(unsigned slots, unsigned experts)
+    {
+        return (slots + mm_tile_slots - 1) / mm_tile_slots + experts;
+    }
+
+    bool metal_device::commands::matmul_id(dlib::ggml_type type, metal_view W, long rows, long cols, uint64_t expert_bytes,
+        uint64_t row_bytes, metal_view x, unsigned x_stride, unsigned x_div, metal_view list, metal_view counts,
+        metal_view work, unsigned capacity, metal_view dispatch, unsigned which, metal_view y, unsigned y_stride)
+    {
+        kernel_index k;
+        if (type == dlib::ggml_type::Q4_K) k = k_mm_id_q4_K;
+        else if (type == dlib::ggml_type::Q5_K) k = k_mm_id_q5_K;
+        else if (type == dlib::ggml_type::Q6_K) k = k_mm_id_q6_K;
+        else if (type == dlib::ggml_type::Q8_0) k = k_mm_id_q8_0;
+        else if (type == dlib::ggml_type::Q5_0) k = k_mm_id_q5_0;
+        else return false;
+        if (rows % mm_tile_rows != 0 || cols % mm_tile_cols != 0 || x_div == 0)
+            throw std::invalid_argument("metal_device: a grouped expert product of other sizes than its kernel takes");
+        impl_->use(k);
+        impl_->bind(W, 0);
+        impl_->bind(x, 1);
+        impl_->bind(y, 2);
+        impl_->bind(list, 3);
+        impl_->bind(counts, 4);
+        impl_->bind(work, 5);
+        const mm_args a = { expert_bytes, static_cast<unsigned>(row_bytes), static_cast<unsigned>(cols), x_stride, x_div,
+            y_stride, capacity };
+        impl_->args(a, 6);
+        impl_->groups_indirect(dispatch, which == 0 ? 0 : 3 * sizeof(uint32_t), 128);
         return true;
     }
 

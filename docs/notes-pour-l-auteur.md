@@ -562,6 +562,19 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : propre au Mac (noyau Metal).
 
+### Changement 15 : les prompts des mélanges d'experts sur le GPU, par produits groupés
+
+- **Pourquoi** : sur le GPU, les experts d'une étape sont calculés case par case (`matvec_id` : une ligne de sortie par token et par expert choisi). Pour un prompt, chaque token relirait ainsi les poids de ses 8 experts : les prompts des mélanges d'experts restaient sur le processeur.
+- **Quoi** (`metal_kernels.metal`, `metal_device.mm`, `cpu_runtime_metal.cpp`, Albireo 4.12.0) : trois noyaux. `moe_group` range, pour chaque expert, les cases (token × rang) qui l'ont choisi, dans l'ordre ; `moe_tiles` en fait des tuiles de 16 cases et écrit les arguments de deux lancements indirects (`dispatchThreadgroupsWithIndirectBuffer`), sans aller-retour avec le processeur ; `mm_id_<format>` multiplie une tuile de 16 cases par 32 lignes de poids de l'expert, les poids développés dans la mémoire du threadgroup 64 colonnes à la fois, en produits de matrices 8 × 8 (`simdgroup_multiply_accumulate`, en floats). Les sorties gardent la disposition par case de `matvec_id`, si bien que `silu_mul`, `moe_combine` et l'expert partagé ne changent pas ; le routeur, en floats dans le fichier, passe par MPS sans développement. Les fonctions qui développent 8 valeurs d'un bloc (Q4_K, Q5_K, Q6_K, Q8_0, Q5_0) sont maintenant communes aux noyaux `dequant_*` et `mm_id`. Seul `qwen35moe` en profite (ses passes de prompt font au plus 256 tokens, coupées aux points de reprise).
+- **Exactitude** : `test_metal` compare chaque format au développement du processeur (74 cases sur 5 experts : erreur relative 1,5 à 2,4 × 10⁻⁷) ; contrôle de chargement à 0,14 % ; même réponse gloutonne que le processeur sur un prompt de 4 005 tokens ; `test_macos.sh` : nouvelle étape « qwen 3.6 moe checkpoint » (reprise à un point de reprise, prompt lu sur le GPU).
+
+| Qwen 3.6 11B-A3B Q4_K_M, lecture d'un prompt (`bench_runtime`, clés q8, 8 threads), M2, mesures alternées | Processeur | GPU |
+|---|---|---|
+| 512 tokens (2 essais) | 111,7 et 107,0 | 195,6 et 197,6 |
+| 2 048 tokens (2 essais) | 122,1 et 120,8 | 175,3 et 175,8 |
+
+**Mac ou Windows** : propre au Mac (noyaux Metal) ; l'idée vaut pour tout GPU (llama.cpp fait de même avec `mul_mm_id`).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -580,6 +593,7 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | Qwen3-VL 2B, prompt de 8 192 tokens | pas mesuré | 295 tokens/s sur le GPU (changement 14) ; 115 à 117 sur le processeur |
 | Qwen3.5-4B Q4_K_M, lecture d'un prompt de 783 tokens | non lu par le moteur | 148 à 149 tokens/s sur le GPU ; 86 sur le processeur (changement 12) |
 | Qwen 3.6 11B-A3B Q4_K_M (mélange d'experts, fork seulement), génération | non lu par le moteur | 26,1 à 26,3 tokens/s sur le GPU ; 24,4 à 25,0 sur le processeur (changement 12) |
+| Qwen 3.6 11B-A3B Q4_K_M, lecture d'un prompt de 512 tokens | non lu par le moteur | 196 à 198 tokens/s sur le GPU (changement 15) ; 107 à 112 sur le processeur |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
 

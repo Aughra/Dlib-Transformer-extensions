@@ -33,6 +33,8 @@ namespace albireo
         enum { unchecked, ready, dropped } state = unchecked;
         // Les passes après un contrôle reporté par manque de place, avant le suivant.
         int wait = 0;
+        // Les prompts d'un mélange d'experts passent au GPU (produits groupés, matmul_id) : qwen35moe seulement.
+        bool moe_prompts = false;
 
         // Les poids : tout le mappage du fichier, sans copie.
         metal_buffer weights;
@@ -62,6 +64,9 @@ namespace albireo
         // Le mélange d'experts : logits du routeur, experts choisis et leurs poids, porte et branche up des experts,
         // leurs sorties ; l'expert partagé et sa porte.
         metal_buffer moe_logits, moe_ids, moe_w, moe_g, moe_u, moe_y, sh_g, sh_u, sh, sh_gate;
+        // Les produits groupés des prompts : les cases de chaque expert, leurs nombres, les tuiles de travail et les
+        // arguments des lancements indirects.
+        metal_buffer moe_list, moe_counts, moe_work, moe_dispatch;
         // Les tuiles de l'attention des prompts : (premier token, nombre de tokens).
         metal_buffer tiles;
         size_t capacity = 0, table_capacity = 0, partial_capacity = 0;
@@ -129,7 +134,8 @@ namespace albireo
         /*
             Les modèles à couches linéaires (qwen35) et les mélanges d'experts lisent aussi Q5_K, Q8_0 et Q5_0
             (step_format) : leurs étapes vont au GPU, et les prompts de qwen35 aussi, coupés aux points de reprise
-            (run_gpu_checkpointed) ; les prompts des mélanges d'experts restent sur le processeur.
+            (run_gpu_checkpointed).  Les prompts de qwen35moe y vont avec leurs experts en produits groupés (matmul_id) ;
+            ceux des autres mélanges d'experts, jamais essayés, restent sur le processeur.
         */
         const bool steps_only = cfg_.recurrent() || cfg_.is_moe();
         auto formats = [&](const weight_matrix& W) { return steps_only ? step_format(W) : gpu_format(W); };
@@ -178,6 +184,18 @@ namespace albireo
         }
         std::unique_ptr<gpu_state> g(new gpu_state);
         g->device = &device;
+        if (cfg_.is_moe() && cfg_.recurrent())
+        {
+            // Les tuiles de matmul_id : 32 lignes, 64 colonnes.
+            g->moe_prompts = cfg_.d_ffn_expert % 64 == 0 && cfg_.d_model % 64 == 0;
+            for (long li = 0; li < cfg_.n_layers && g->moe_prompts; ++li)
+            {
+                const layer& L = layers_[static_cast<size_t>(li)];
+                if (L.e_gate.empty() || L.e_up.empty() || L.e_down.empty() || L.e_down[0].rows % 32 != 0
+                    || L.e_gate[0].cols % 64 != 0 || L.e_down[0].cols % 64 != 0)
+                    g->moe_prompts = false;
+            }
+        }
         g->log = std::move(log);
         g->file_base = file_->data();
         g->weights = device.wrap(file_->data(), static_cast<size_t>(file_->size()), g->weights_offset);
@@ -277,6 +295,14 @@ namespace albireo
             g.moe_g = need(device, T * K * de * f);
             g.moe_u = need(device, T * K * de * f);
             g.moe_y = need(device, T * K * cfg_.d_model * f);
+            if (g.moe_prompts)
+            {
+                const unsigned E = static_cast<unsigned>(cfg_.n_experts);
+                g.moe_list = need(device, T * E * sizeof(int));
+                g.moe_counts = need(device, E * sizeof(int));
+                g.moe_work = need(device, metal_device::commands::moe_tiles_most(static_cast<unsigned>(T * K), E) * 2 * sizeof(int));
+                g.moe_dispatch = need(device, 6 * sizeof(uint32_t));
+            }
             if (cfg_.d_ffn_shared > 0)
             {
                 g.sh_g = need(device, T * cfg_.d_ffn_shared * f);
@@ -306,8 +332,8 @@ namespace albireo
                 if (i >= sequences_.size() || !sequences_[i] || sequences_[i]->length + s.count > gpu_prompt_context_)
                     long_pass = false;
             }
-        // Les prompts des mélanges d'experts restent sur le processeur (il faudrait des produits groupés par expert).
-        if (cfg_.is_moe()) long_pass = false;
+        // Les prompts des mélanges d'experts restent sur le processeur, sauf ceux de qwen35moe (produits groupés).
+        if (cfg_.is_moe() && !(gpu_ && gpu_->moe_prompts)) long_pass = false;
         return gpu_ && gpu_->state != gpu_state::dropped && (step || long_pass)
             && batch.embedding_rows.empty() && !batch.hidden_only
             && batch.logit_rows.size() <= metal_device::max_tokens;
@@ -415,7 +441,7 @@ namespace albireo
         };
         // Le prompt : sur le GPU pour la première séquence quand les prompts y vont, sur le processeur
         // sinon.
-        const bool gpu_prompt = !cfg_.is_moe() && n >= gpu_prompt_min_ && n <= gpu_prompt_context_;
+        const bool gpu_prompt = (!cfg_.is_moe() || gpu_->moe_prompts) && n >= gpu_prompt_min_ && n <= gpu_prompt_context_;
         prompt.logit_rows.assign(1, n - 1);
         prompt.segments.assign(1, { a, 0, n });
         try
@@ -740,18 +766,36 @@ namespace albireo
                 const long E = cfg_.n_experts, K = cfg_.n_experts_used, de = cfg_.d_ffn_expert;
                 const unsigned slots = uT * static_cast<unsigned>(K);
                 if (L.router.type == dlib::ggml_type::F32)
-                    c->matvec_f32(at(g.weights, g.weight(L.router)), static_cast<unsigned>(E), static_cast<unsigned>(d),
-                        g.xn, uT, static_cast<unsigned>(d), g.moe_logits, static_cast<unsigned>(E));
+                {
+                    // Le routeur, en floats dans le fichier : par MPS pour un prompt, sans développement.
+                    if (step)
+                        c->matvec_f32(at(g.weights, g.weight(L.router)), static_cast<unsigned>(E), static_cast<unsigned>(d),
+                            g.xn, uT, static_cast<unsigned>(d), g.moe_logits, static_cast<unsigned>(E));
+                    else
+                        c->gemm(g.xn, static_cast<unsigned>((T + 31) / 32 * 32), static_cast<unsigned>(d),
+                            static_cast<unsigned>(d), at(g.weights, g.weight(L.router)), static_cast<unsigned>(E),
+                            static_cast<unsigned>(d), g.moe_logits, static_cast<unsigned>(E));
+                }
                 else
                     product(L.router, g.xn, d, g.moe_logits, E, 1.0f, 0.0f);
                 c->moe_route(g.moe_logits, static_cast<unsigned>(E), static_cast<unsigned>(K), cfg_.expert_weights_norm,
                     g.moe_ids, g.moe_w, uT);
+                // Un prompt range d'abord les cases de chaque expert, que ses produits groupés multiplient d'un coup.
+                if (!step)
+                    c->moe_group(g.moe_ids, slots, static_cast<unsigned>(E), uT, g.moe_list, g.moe_counts, g.moe_work,
+                        g.moe_dispatch, static_cast<unsigned>(de), static_cast<unsigned>(d));
                 auto experts = [&](const std::vector<weight_matrix>& M, const metal_buffer& x, long x_stride, unsigned x_div,
                                    const metal_buffer& y, long y_stride) {
                     const weight_matrix& W = M[0];
-                    c->matvec_id(W.type, at(g.weights, g.weight(W)), W.rows, W.cols,
-                        static_cast<uint64_t>(W.row_bytes) * static_cast<uint64_t>(W.rows), x,
-                        static_cast<unsigned>(x_stride), x_div, g.moe_ids, slots, y, static_cast<unsigned>(y_stride));
+                    const uint64_t expert_bytes = static_cast<uint64_t>(W.row_bytes) * static_cast<uint64_t>(W.rows);
+                    if (step)
+                        c->matvec_id(W.type, at(g.weights, g.weight(W)), W.rows, W.cols, expert_bytes, x,
+                            static_cast<unsigned>(x_stride), x_div, g.moe_ids, slots, y, static_cast<unsigned>(y_stride));
+                    else
+                        c->matmul_id(W.type, at(g.weights, g.weight(W)), W.rows, W.cols, expert_bytes,
+                            static_cast<uint64_t>(W.row_bytes), x, static_cast<unsigned>(x_stride), x_div, g.moe_list,
+                            g.moe_counts, g.moe_work, uT, g.moe_dispatch, W.rows == de ? 0 : 1, y,
+                            static_cast<unsigned>(y_stride));
                 };
                 experts(L.e_gate, g.xn, d, static_cast<unsigned>(K), g.moe_g, de);
                 experts(L.e_up, g.xn, d, static_cast<unsigned>(K), g.moe_u, de);

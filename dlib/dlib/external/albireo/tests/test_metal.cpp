@@ -123,6 +123,78 @@ namespace
         }
     }
 
+    /*
+        Les produits groupés des experts d'un prompt (fork pour macOS) : moe_group range les cases par expert,
+        matmul_id les multiplie ; chaque case comparée à son expert développé par qk_dequantize_row().  Des
+        octets aléatoires, l'échelle de chaque bloc remise dans une plage raisonnable.
+    */
+    void test_matmul_id(metal_device& gpu, dlib::ggml_type type, const char* name)
+    {
+        const long E = 6, rows = 64, cols = 512;
+        const unsigned tokens = 37, top_k = 2, slots = tokens * top_k, x_stride = cols + 64, y_stride = rows + 8;
+        const bool small = type == dlib::ggml_type::Q8_0 || type == dlib::ggml_type::Q5_0;
+        const long values = small ? 32 : 256;
+        const size_t block = type == dlib::ggml_type::Q4_K ? 144 : type == dlib::ggml_type::Q5_K ? 176
+            : type == dlib::ggml_type::Q6_K ? 210 : type == dlib::ggml_type::Q8_0 ? 34 : 22;
+        const size_t rb = qk_row_bytes(type, cols), expert_bytes = rb * rows;
+        std::vector<uint8_t> w(expert_bytes * E);
+        for (auto& b : w) b = static_cast<uint8_t>(rng());
+        for (long r = 0; r < E * rows; ++r)
+            for (long b = 0; b < cols / values; ++b)
+            {
+                uint8_t* blk = w.data() + r * rb + b * block;
+                const uint16_t d = qk_float_to_half(uniform(0.001f, 0.02f)), m = qk_float_to_half(uniform(0.0f, 0.02f));
+                if (type == dlib::ggml_type::Q6_K) std::memcpy(blk + 208, &d, 2);
+                else std::memcpy(blk, &d, 2);
+                if (type == dlib::ggml_type::Q4_K || type == dlib::ggml_type::Q5_K) std::memcpy(blk + 2, &m, 2);
+            }
+        // Les experts de chaque token, distincts ; l'expert 5 n'est jamais choisi.
+        std::vector<int> ids(slots);
+        for (unsigned t = 0; t < tokens; ++t)
+        {
+            ids[t * top_k] = static_cast<int>(rng() % 5);
+            ids[t * top_k + 1] = (ids[t * top_k] + 1 + static_cast<int>(rng() % 4)) % 5;
+        }
+        metal_buffer W = gpu.allocate(w.size()), X = gpu.allocate(sizeof(float) * x_stride * tokens),
+            Y = gpu.allocate(sizeof(float) * y_stride * slots), I = gpu.allocate(sizeof(int) * slots),
+            list = gpu.allocate(sizeof(int) * E * tokens), counts = gpu.allocate(sizeof(int) * E),
+            work = gpu.allocate(sizeof(int) * 2 * metal_device::commands::moe_tiles_most(slots, E)),
+            dispatch = gpu.allocate(6 * sizeof(uint32_t));
+        std::memcpy(W.contents(), w.data(), w.size());
+        std::memcpy(I.contents(), ids.data(), sizeof(int) * slots);
+        float* x = static_cast<float*>(X.contents());
+        float* y = static_cast<float*>(Y.contents());
+        for (size_t i = 0; i < x_stride * tokens; ++i) x[i] = uniform(-1.0f, 1.0f);
+        for (size_t i = 0; i < y_stride * slots; ++i) y[i] = 7.0f;
+        auto c = gpu.begin();
+        c->moe_group(I, slots, E, tokens, list, counts, work, dispatch, rows, rows);
+        const bool encoded = c->matmul_id(type, W, rows, cols, expert_bytes, rb, X, x_stride, top_k, list, counts, work,
+            tokens, dispatch, 0, Y, y_stride);
+        c->finish();
+        double worst = 0;
+        bool untouched = true;
+        std::vector<float> row(cols);
+        for (unsigned s = 0; s < slots; ++s)
+        {
+            const float* xt = x + (s / top_k) * x_stride;
+            for (long r = 0; r < rows; ++r)
+            {
+                qk_dequantize_row(type, w.data() + ids[s] * expert_bytes + r * rb, row.data(), cols);
+                double ref = 0, mag = 0;
+                for (long i = 0; i < cols; ++i)
+                {
+                    ref += static_cast<double>(row[i]) * xt[i];
+                    mag += std::fabs(static_cast<double>(row[i]) * xt[i]);
+                }
+                worst = std::max(worst, std::fabs(y[s * y_stride + r] - ref) / (mag + 1e-30));
+            }
+            for (unsigned r = rows; r < y_stride; ++r) untouched = untouched && y[s * y_stride + r] == 7.0f;
+        }
+        const int* n = static_cast<const int*>(counts.contents());
+        check(encoded && worst < 1e-5 && untouched && n[5] == 0, std::string("mm_id_") + name + ", " + std::to_string(slots)
+            + " cases over 5 of 6 experts: largest error " + sci(worst) + ", the rows beyond the matrix untouched");
+    }
+
     // Les poids développés en flottants, puis un produit d'un prompt par Metal Performance Shaders.
     void test_dequantize_gemm(metal_device& gpu, dlib::ggml_type type, const char* name)
     {
@@ -473,6 +545,11 @@ int main()
     test_matvec(*gpu, dlib::ggml_type::Q6_K, "mv_q6_K");
     test_dequantize_gemm(*gpu, dlib::ggml_type::Q4_K, "q4_K");
     test_dequantize_gemm(*gpu, dlib::ggml_type::Q6_K, "q6_K");
+    test_matmul_id(*gpu, dlib::ggml_type::Q4_K, "q4_K");
+    test_matmul_id(*gpu, dlib::ggml_type::Q5_K, "q5_K");
+    test_matmul_id(*gpu, dlib::ggml_type::Q6_K, "q6_K");
+    test_matmul_id(*gpu, dlib::ggml_type::Q8_0, "q8_0");
+    test_matmul_id(*gpu, dlib::ggml_type::Q5_0, "q5_0");
     test_norm_rope_gate(*gpu);
     test_attention(*gpu, kv_format::q8);
     test_attention(*gpu, kv_format::f16);

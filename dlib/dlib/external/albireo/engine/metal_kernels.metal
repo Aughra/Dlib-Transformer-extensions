@@ -497,14 +497,11 @@ struct dequant_args
     uint out_stride;
 };
 
-kernel void dequant_q4_K(device const uchar* W [[buffer(0)]], device float* out [[buffer(1)]],
-    constant dequant_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+// Les valeurs v0 à v0 + 7 du bloc blk développées dans y (fork pour macOS) : les noyaux dequant_* et les
+// produits groupés des experts (mm_id) les partagent.  Blocs de 256 valeurs pour Q4_K, Q5_K et Q6_K, de 32 pour
+// Q8_0 et Q5_0 ; v0 est un multiple de 8.
+static inline void dq8_q4_K(device const uchar* blk, uint v0, thread float* y)
 {
-    const long nb = a.cols / 256;
-    const long b = g.x / 32;
-    if (b >= nb) return;
-    const uint v0 = (g.x % 32) * 8;               // la première des 8 valeurs du thread
-    device const uchar* blk = W + long(g.y) * nb * 144 + b * 144;
     const uint j = v0 / 64, high = (v0 % 64) / 32, l0 = v0 % 32, sub = v0 / 32;
     device const uchar* sc = blk + 4;
     float scale, minimum;
@@ -521,7 +518,6 @@ kernel void dequant_q4_K(device const uchar* W [[buffer(0)]], device float* out 
     const half2 dd = *(device const half2*)blk;
     const float d = float(dd.x) * scale, m = float(dd.y) * minimum;
     device const uchar* qs = blk + 16 + j * 32 + l0;
-    device float* y = out + long(g.y) * a.out_stride + b * 256 + v0;
     for (uint i = 0; i < 8; ++i)
     {
         const uint q = high ? qs[i] >> 4 : qs[i] & 0xF;
@@ -529,20 +525,13 @@ kernel void dequant_q4_K(device const uchar* W [[buffer(0)]], device float* out 
     }
 }
 
-kernel void dequant_q6_K(device const uchar* W [[buffer(0)]], device float* out [[buffer(1)]],
-    constant dequant_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+static inline void dq8_q6_K(device const uchar* blk, uint v0, thread float* y)
 {
-    const long nb = a.cols / 256;
-    const long b = g.x / 32;
-    if (b >= nb) return;
-    const uint v0 = (g.x % 32) * 8;
-    device const uchar* blk = W + long(g.y) * nb * 210 + b * 210;
     const uint n = v0 / 128, w = v0 % 128, quarter = w / 32, l0 = w % 32;
     device const uchar* ql = blk + n * 64 + (quarter & 1) * 32 + l0;
     device const uchar* qh = blk + 128 + n * 32 + l0;
     device const char* sc = (device const char*)(blk + 192) + n * 8;
     const float d = float(*(device const half*)(blk + 208));
-    device float* y = out + long(g.y) * a.out_stride + b * 256 + v0;
     for (uint i = 0; i < 8; ++i)
     {
         const uint l = l0 + i;
@@ -552,15 +541,9 @@ kernel void dequant_q6_K(device const uchar* W [[buffer(0)]], device float* out 
     }
 }
 
-// Q5_K (fork pour macOS) : comme Q4_K, avec le cinquième bit de qh ; blocs de 176 octets.
-kernel void dequant_q5_K(device const uchar* W [[buffer(0)]], device float* out [[buffer(1)]],
-    constant dequant_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+// Q5_K : comme Q4_K, avec le cinquième bit de qh ; blocs de 176 octets.
+static inline void dq8_q5_K(device const uchar* blk, uint v0, thread float* y)
 {
-    const long nb = a.cols / 256;
-    const long b = g.x / 32;
-    if (b >= nb) return;
-    const uint v0 = (g.x % 32) * 8;
-    device const uchar* blk = W + long(g.y) * nb * 176 + b * 176;
     const uint j = v0 / 64, high = (v0 % 64) / 32, l0 = v0 % 32, sub = v0 / 32;
     device const uchar* sc = blk + 4;
     float scale, minimum;
@@ -579,7 +562,6 @@ kernel void dequant_q5_K(device const uchar* W [[buffer(0)]], device float* out 
     device const uchar* qh = blk + 16 + l0;
     device const uchar* qs = blk + 48 + j * 32 + l0;
     const uint bit = 2 * j + high;
-    device float* y = out + long(g.y) * a.out_stride + b * 256 + v0;
     for (uint i = 0; i < 8; ++i)
     {
         const uint q = (high ? qs[i] >> 4 : qs[i] & 0xF) | (((qh[i] >> bit) & 1) << 4);
@@ -587,33 +569,18 @@ kernel void dequant_q5_K(device const uchar* W [[buffer(0)]], device float* out 
     }
 }
 
-// Q8_0 et Q5_0 (fork pour macOS) : blocs de 32 valeurs, 8 par thread, grille (colonnes / 8, lignes).
-kernel void dequant_q8_0(device const uchar* W [[buffer(0)]], device float* out [[buffer(1)]],
-    constant dequant_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+static inline void dq8_q8_0(device const uchar* blk, uint v0, thread float* y)
 {
-    const long nb = a.cols / 32;
-    const long b = g.x / 4;
-    if (b >= nb) return;
-    const uint v0 = (g.x % 4) * 8;
-    device const uchar* blk = W + long(g.y) * nb * 34 + b * 34;
     const float d = float(*(device const half*)blk);
     device const char* q = (device const char*)(blk + 2) + v0;
-    device float* y = out + long(g.y) * a.out_stride + b * 32 + v0;
     for (uint i = 0; i < 8; ++i) y[i] = d * float(q[i]);
 }
 
-kernel void dequant_q5_0(device const uchar* W [[buffer(0)]], device float* out [[buffer(1)]],
-    constant dequant_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+static inline void dq8_q5_0(device const uchar* blk, uint v0, thread float* y)
 {
-    const long nb = a.cols / 32;
-    const long b = g.x / 4;
-    if (b >= nb) return;
-    const uint v0 = (g.x % 4) * 8;
-    device const uchar* blk = W + long(g.y) * nb * 22 + b * 22;
     const float d = float(*(device const half*)blk);
     const uint qh = uint(blk[2]) | (uint(blk[3]) << 8) | (uint(blk[4]) << 16) | (uint(blk[5]) << 24);
     device const uchar* qs = blk + 6;
-    device float* y = out + long(g.y) * a.out_stride + b * 32 + v0;
     for (uint i = 0; i < 8; ++i)
     {
         const uint j = v0 + i;
@@ -621,6 +588,39 @@ kernel void dequant_q5_0(device const uchar* W [[buffer(0)]], device float* out 
         y[i] = d * float(int(nib | (((qh >> j) & 1) << 4)) - 16);
     }
 }
+
+// Les formats, pour les noyaux écrits une fois pour tous (values : valeurs d'un bloc, bytes : sa taille).
+struct fmt_q4_K { enum { values = 256, bytes = 144 }; static void dq8(device const uchar* b, uint v0, thread float* y) { dq8_q4_K(b, v0, y); } };
+struct fmt_q5_K { enum { values = 256, bytes = 176 }; static void dq8(device const uchar* b, uint v0, thread float* y) { dq8_q5_K(b, v0, y); } };
+struct fmt_q6_K { enum { values = 256, bytes = 210 }; static void dq8(device const uchar* b, uint v0, thread float* y) { dq8_q6_K(b, v0, y); } };
+struct fmt_q8_0 { enum { values = 32, bytes = 34 }; static void dq8(device const uchar* b, uint v0, thread float* y) { dq8_q8_0(b, v0, y); } };
+struct fmt_q5_0 { enum { values = 32, bytes = 22 }; static void dq8(device const uchar* b, uint v0, thread float* y) { dq8_q5_0(b, v0, y); } };
+
+// Chaque thread développe 8 valeurs consécutives d'une ligne : grille (colonnes / 8, lignes).
+template <typename F>
+kernel void dequant(device const uchar* W [[buffer(0)]], device float* out [[buffer(1)]],
+    constant dequant_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+{
+    const long nb = a.cols / F::values;
+    const long b = g.x / (F::values / 8);
+    if (b >= nb) return;
+    const uint v0 = (g.x % (F::values / 8)) * 8;
+    float v[8];
+    F::dq8(W + long(g.y) * nb * F::bytes + b * F::bytes, v0, v);
+    device float* y = out + long(g.y) * a.out_stride + b * F::values + v0;
+    for (uint i = 0; i < 8; ++i) y[i] = v[i];
+}
+
+template [[host_name("dequant_q4_K")]] kernel void dequant<fmt_q4_K>(device const uchar*, device float*,
+    constant dequant_args&, uint2);
+template [[host_name("dequant_q6_K")]] kernel void dequant<fmt_q6_K>(device const uchar*, device float*,
+    constant dequant_args&, uint2);
+template [[host_name("dequant_q5_K")]] kernel void dequant<fmt_q5_K>(device const uchar*, device float*,
+    constant dequant_args&, uint2);
+template [[host_name("dequant_q8_0")]] kernel void dequant<fmt_q8_0>(device const uchar*, device float*,
+    constant dequant_args&, uint2);
+template [[host_name("dequant_q5_0")]] kernel void dequant<fmt_q5_0>(device const uchar*, device float*,
+    constant dequant_args&, uint2);
 
 // ---------------------------------------------------------------------------------------------
 // Lignes normalisées par leur moyenne quadratique (cpu_runtime::rms_norm_rows) : un threadgroup par
@@ -1452,3 +1452,165 @@ kernel void moe_combine(device float* x [[buffer(0)]], device const float* y [[b
     if (a.has_shared != 0) s += g[t] * shared[ulong(t) * a.d + gid.x];
     x[ulong(t) * a.d + gid.x] += a.scale * s;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Les experts des prompts (fork pour macOS) : au lieu d'un produit par case (matvec_id), chaque expert
+// multiplie d'un coup les cases (token * top_k + rang) qui l'ont choisi.  moe_group range ces cases par
+// expert, moe_tiles en fait des tuiles de MM_TT cases et prépare deux lancements indirects, mm_id calcule
+// une tuile de MM_TT cases sur MM_NR lignes de poids, en produits de matrices 8 x 8.
+
+#define MM_TT 16    // les cases d'une tuile
+#define MM_NR 32    // les lignes de poids d'une tuile
+#define MM_KC 64    // les colonnes lues à la fois
+
+// Les cases de l'expert e, dans l'ordre, dans list[e * capacity...], leur nombre dans counts[e] : un
+// threadgroup de 256 threads par expert, chacun parcourant une part contiguë des cases.
+struct group_args
+{
+    uint slots;
+    uint capacity;
+};
+kernel void moe_group(device const int* ids [[buffer(0)]], device int* list [[buffer(1)]],
+    device int* counts [[buffer(2)]], constant group_args& a [[buffer(3)]],
+    uint e [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    threadgroup uint sums[8];
+    const uint per = (a.slots + 255) / 256, s0 = min(a.slots, tid * per), s1 = min(a.slots, s0 + per);
+    uint c = 0;
+    for (uint s = s0; s < s1; ++s) c += ids[s] == int(e) ? 1 : 0;
+    const uint inclusive = simd_prefix_inclusive_sum(c);
+    if (lane == 31) sums[sg] = inclusive;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    uint w = inclusive - c;
+    for (uint j = 0; j < sg; ++j) w += sums[j];
+    device int* out = list + ulong(e) * a.capacity;
+    for (uint s = s0; s < s1; ++s)
+        if (ids[s] == int(e)) out[w++] = int(s);
+    if (tid == 255) counts[e] = int(w);
+}
+
+// Les tuiles de travail (expert, premier rang dans sa liste), dans l'ordre des experts, et deux jeux
+// d'arguments de lancement indirect (MTLDispatchThreadgroupsIndirectArguments) : (tiles_a, tuiles, 1)
+// puis (tiles_b, tuiles, 1).  Un seul threadgroup de 256 threads.
+struct tiles_args
+{
+    uint experts;
+    uint tiles_a;
+    uint tiles_b;
+};
+kernel void moe_tiles(device const int* counts [[buffer(0)]], device int2* work [[buffer(1)]],
+    device uint* dispatch [[buffer(2)]], constant tiles_args& a [[buffer(3)]],
+    uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]])
+{
+    threadgroup uint sums[8];
+    const uint per = (a.experts + 255) / 256, e0 = min(a.experts, tid * per), e1 = min(a.experts, e0 + per);
+    uint c = 0;
+    for (uint e = e0; e < e1; ++e) c += (uint(counts[e]) + MM_TT - 1) / MM_TT;
+    const uint inclusive = simd_prefix_inclusive_sum(c);
+    if (lane == 31) sums[sg] = inclusive;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    uint w = inclusive - c;
+    for (uint j = 0; j < sg; ++j) w += sums[j];
+    for (uint e = e0; e < e1; ++e)
+        for (uint first = 0; first < uint(counts[e]); first += MM_TT) work[w++] = int2(int(e), int(first));
+    if (tid == 255)
+    {
+        dispatch[0] = a.tiles_a;
+        dispatch[1] = w;
+        dispatch[2] = 1;
+        dispatch[3] = a.tiles_b;
+        dispatch[4] = w;
+        dispatch[5] = 1;
+    }
+}
+
+// y[s][r] = sum_i W_e[r][i] x[s / x_div][i] pour les cases s de la tuile, e leur expert : grille
+// (lignes / MM_NR, tuiles), 4 simdgroups de 8 lignes chacun.  Les poids sont développés en floats dans la
+// mémoire du threadgroup, MM_KC colonnes à la fois.
+struct mm_args
+{
+    ulong expert_bytes;
+    uint row_bytes;
+    uint cols;
+    uint x_stride;
+    uint x_div;
+    uint y_stride;
+    uint capacity;
+};
+template <typename F>
+kernel void mm_id(device const uchar* W [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y [[buffer(2)]], device const int* list [[buffer(3)]], device const int* counts [[buffer(4)]],
+    device const int2* work [[buffer(5)]], constant mm_args& a [[buffer(6)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]])
+{
+    threadgroup float xs[MM_TT * MM_KC];
+    threadgroup float ws[MM_NR * MM_KC];
+    threadgroup float out[MM_TT * MM_NR];
+    threadgroup int src[MM_TT];
+    const int2 job = work[tg.y];
+    const uint e = uint(job.x), first = uint(job.y);
+    const uint n = min(uint(MM_TT), uint(counts[e]) - first);
+    if (tid < MM_TT) src[tid] = tid < n ? list[ulong(e) * a.capacity + first + tid] : -1;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    const uint row0 = tg.x * MM_NR;
+    device const uchar* We = W + ulong(e) * a.expert_bytes;
+    simdgroup_float8x8 acc0 = make_filled_simdgroup_matrix<float, 8, 8>(0.0f);
+    simdgroup_float8x8 acc1 = make_filled_simdgroup_matrix<float, 8, 8>(0.0f);
+    // Les 16 cases sur 64 colonnes : 8 valeurs par thread ; les 32 lignes de poids : deux fois 8 valeurs.
+    const uint xt = tid / 8, xc = (tid % 8) * 8;
+    const int xs_row = src[xt];
+    device const float* xrow = xs_row >= 0 ? x + ulong(uint(xs_row) / a.x_div) * a.x_stride : x;
+    for (uint k0 = 0; k0 < a.cols; k0 += MM_KC)
+    {
+        threadgroup float* dx = xs + xt * MM_KC + xc;
+        if (xs_row >= 0)
+        {
+            const float4 u = *(device const float4*)(xrow + k0 + xc), v = *(device const float4*)(xrow + k0 + xc + 4);
+            dx[0] = u.x; dx[1] = u.y; dx[2] = u.z; dx[3] = u.w;
+            dx[4] = v.x; dx[5] = v.y; dx[6] = v.z; dx[7] = v.w;
+        }
+        else
+            for (uint i = 0; i < 8; ++i) dx[i] = 0.0f;
+        for (uint h = 0; h < 2; ++h)
+        {
+            const uint g = tid + 128 * h, r = g / 8, c = k0 + (g % 8) * 8;
+            float v[8];
+            F::dq8(We + ulong(row0 + r) * a.row_bytes + (c / F::values) * F::bytes, c % F::values, v);
+            threadgroup float* dw = ws + r * MM_KC + (g % 8) * 8;
+            for (uint i = 0; i < 8; ++i) dw[i] = v[i];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (uint kk = 0; kk < MM_KC; kk += 8)
+        {
+            simdgroup_float8x8 a0, a1, b;
+            simdgroup_load(a0, xs + kk, MM_KC);
+            simdgroup_load(a1, xs + 8 * MM_KC + kk, MM_KC);
+            simdgroup_load(b, ws + (sg * 8) * MM_KC + kk, MM_KC, ulong2(0, 0), true);
+            simdgroup_multiply_accumulate(acc0, a0, b, acc0);
+            simdgroup_multiply_accumulate(acc1, a1, b, acc1);
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+    simdgroup_store(acc0, out + sg * 8, MM_NR);
+    simdgroup_store(acc1, out + 8 * MM_NR + sg * 8, MM_NR);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    const uint ot = tid / 8, orow = (tid % 8) * 4;
+    const int s = src[ot];
+    if (s >= 0)
+    {
+        device float* yo = y + ulong(uint(s)) * a.y_stride + row0 + orow;
+        for (uint i = 0; i < 4; ++i) yo[i] = out[ot * MM_NR + orow + i];
+    }
+}
+
+#define MM_ID(N, F) template [[host_name("mm_id_" #N)]] kernel void mm_id<F>(device const uchar*, \
+    device const float*, device float*, device const int*, device const int*, device const int2*, constant mm_args&, \
+    uint2, uint, uint)
+MM_ID(q4_K, fmt_q4_K);
+MM_ID(q5_K, fmt_q5_K);
+MM_ID(q6_K, fmt_q6_K);
+MM_ID(q8_0, fmt_q8_0);
+MM_ID(q5_0, fmt_q5_0);

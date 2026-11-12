@@ -157,8 +157,10 @@ QWEN36=${QWEN36_MODEL:-$ROOT/build/models/Qwen3.6-11B-A3B-Niwaki-Q4_K_M.gguf}
 if [ ! -f "$ENGINE" ] || [ ! -f "$QWEN36" ]; then skip "qwen 3.6 moe" "no $QWEN36"
 else
   step "qwen 3.6 moe" "Paris" "$CHAT" "$ENGINE" "$QWEN36" --reasoning off --temperature 0 --max 40 --no-metal "$QUESTION"
-  step "qwen 3.6 moe on the GPU" "the generation steps run on it" "$CHAT" "$ENGINE" "$QWEN36" --reasoning off \
+  # Depuis Albireo 4.12.0, ses prompts aussi (produits groupés des experts), coupés aux points de reprise.
+  step "qwen 3.6 moe on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$QWEN36" --reasoning off \
     --temperature 0 --max 20 "$QUESTION"
+  step "qwen 3.6 moe checkpoint" "resumed at a checkpoint" qwen35_checkpoint "$QWEN36" gpu
 fi
 
 # Qwen 3.5 sur le GPU : ses étapes de génération, quand un modèle en Q4_K / Q5_K / Q6_K est là (le 4B qu'installe

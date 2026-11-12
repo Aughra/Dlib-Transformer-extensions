@@ -233,6 +233,21 @@ namespace albireo
             bool matvec_id(dlib::ggml_type type, metal_view W, long rows, long cols, uint64_t expert_bytes,
                 metal_view x, unsigned x_stride, unsigned x_div, metal_view ids, unsigned slots, metal_view y,
                 unsigned y_stride);
+            /*!
+                Les experts des prompts, par produits groupés (fork pour macOS).  moe_group range les cases
+                (token * top_k + rang) de chaque expert dans list (capacity entiers par expert, capacity >= tokens),
+                leurs nombres dans counts (experts entiers), les tuiles de travail dans work (moe_tiles_most()
+                paires d'entiers au plus) et deux jeux d'arguments de lancement dans dispatch (6 entiers) : pour des
+                produits de rows_a lignes (which 0) et de rows_b lignes (which 1), multiples de 32.  matmul_id
+                calcule ensuite, pour chaque case s de chaque expert e, y[s] = W_e . x[s / x_div], comme
+                matvec_id ; les colonnes sont un multiple de 64.  false pour un type sans noyau.
+            !*/
+            void moe_group(metal_view ids, unsigned slots, unsigned experts, unsigned capacity, metal_view list,
+                metal_view counts, metal_view work, metal_view dispatch, unsigned rows_a, unsigned rows_b);
+            static unsigned moe_tiles_most(unsigned slots, unsigned experts);
+            bool matmul_id(dlib::ggml_type type, metal_view W, long rows, long cols, uint64_t expert_bytes,
+                uint64_t row_bytes, metal_view x, unsigned x_stride, unsigned x_div, metal_view list, metal_view counts,
+                metal_view work, unsigned capacity, metal_view dispatch, unsigned which, metal_view y, unsigned y_stride);
             // y[t * y_stride + r] = sum_i W[r][i] x[t * x_stride + i], W en floats (le routeur).
             void matvec_f32(metal_view W, unsigned rows, unsigned cols, metal_view x, unsigned tokens,
                 unsigned x_stride, metal_view y, unsigned y_stride);

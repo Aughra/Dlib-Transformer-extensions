@@ -2,6 +2,15 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.12.0 — 13 novembre 2026
+
+### Performances
+
+- Les prompts des modèles Qwen 3.5 et 3.6 à mélange d'experts (`qwen35moe`) sont lus sur le GPU. Au lieu d'un produit par token et par expert, chaque expert multiplie d'un coup tous les tokens qui l'ont choisi : produits groupés, poids développés dans la mémoire du GPU par tuiles de 32 lignes sur 64 colonnes, produits de matrices 8 × 8. Qwen 3.6 11B-A3B Q4_K_M sur MacBook Air M2, mesures alternées : prompt de 512 tokens 107 à 112 → 196 à 198 tokens/s, de 2 048 tokens 121 à 122 → 175 à 176 tokens/s. Prompt de 4 005 tokens, même réponse que sur le processeur : 150 contre 94 tokens/s. Contrôle au chargement : logits à 0,14 % de ceux du processeur.
+- Les autres mélanges d'experts (Qwen3 MoE, Mixtral, Granite MoE), jamais essayés sur le GPU, gardent leurs prompts sur le processeur.
+
+---
+
 ## 4.11.12 — 13 novembre 2026
 
 ### Corrections
