@@ -30,3 +30,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 24. [Sans clé](24-sans-cle.md)
 25. [Le grenier](25-le-grenier.md)
 26. [Le carnet de notes](26-le-carnet-de-notes.md)
+27. [Le carnet sur le GPU](27-le-carnet-sur-le-gpu.md)

@@ -2,6 +2,24 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.5.0 — 12 novembre 2026
+
+### Performances
+
+- Les étapes d'écriture des modèles Qwen 3.5 s'exécutent sur le GPU par Metal : couches Gated DeltaNet (convolution, normes, règle delta, norme à porte) et attention à porte. Qwen3.5-4B Q4_K_M sur MacBook Air M2, mesures alternées sur 200 tokens : 11,7 à 12,2 tokens/s sur le processeur, 19,5 tokens/s sur le GPU. La lecture des prompts de ces modèles reste sur le processeur.
+- Le GPU calcule aussi les produits des poids aux formats Q5_K et Q8_0, présents dans les fichiers Qwen 3.5 en Q4_K_M.
+- Le contrôle au chargement compare le GPU au processeur : logits à 0,03 à 0,04 % près pour Qwen3.5-4B, même token le plus probable. Réponses identiques sur le GPU et sur le processeur, pour une question, trois questions traitées ensemble et une conversation à trois tours.
+
+### Plateforme
+
+- L'état des conversations des modèles Qwen 3.5 est rangé dans une zone réservée, que le GPU lit et écrit sans copie. Au plus 16 requêtes simultanées et 32 conversations en cache pour ces modèles.
+
+### Accès et documents
+
+- La recherche Hugging Face annonce « GPU possible » pour les fichiers Qwen 3.5 en Q4_K et Q6_K.
+
+---
+
 ## 4.4.0 — 12 novembre 2026
 
 ### Plateforme

@@ -514,6 +514,19 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : le clone est **propre au Mac** (APFS). L'empreinte lente est **probablement aussi sous Windows** : mbedtls n'y a pas non plus d'instructions SHA (il ne sait utiliser que celles d'ARMv8), et chaque modèle téléchargé y est haché en logiciel. Suggestion **non testée** : `BCryptHash` de Windows (CNG), qui se sert des instructions SHA des processeurs x86 récents. Déduit du code ; rien n'a été mesuré sous Windows.
 
+### Changement 12 : Qwen 3.5 (architecture `qwen35`), sur le processeur puis sur le GPU
+
+- **Pourquoi** : Qwen 3.5 est l'architecture GGUF la plus téléchargée que le moteur refusait (relevé de 527 dépôts populaires de Hugging Face : 69 dépôts, 58,8 millions de téléchargements). Ce n'est pas un défaut de l'original, qui ne la lit pas : c'est un ajout du fork, consigné ici parce qu'il ajoute des noyaux.
+- **Quoi** : trois couches sur quatre sont des couches « Gated DeltaNet » (attention linéaire à état récurrent de taille fixe par séquence), la quatrième une attention à porte de sortie. Formule reprise de llama.cpp (`src/models/qwen35.cpp`, `delta-net-base.cpp`, `ggml-cpu/ops.cpp`, commit `cd959bae9`). Sur le processeur : `cpu_runtime::linear_attention()` ; sur le GPU : noyaux `gdn_conv`, `gdn_l2norm`, `gdn_gates`, `gdn_delta`, `gdn_norm`, `split_gate`, `sigmoid_mul`, et produits `mv_q5_K`, `mv_q8_0` (`metal_kernels.metal`). Les clés et valeurs ne sont gardées que pour les couches d'attention ; une séquence ne se reprend qu'à 0 ou à sa longueur (`runtime::resumable()`), l'état ne revenant pas en arrière. Commits [df56d5c](https://github.com/Aughra/Dlib-Transformer-extensions/commit/df56d5c) (processeur) et [780e69e](https://github.com/Aughra/Dlib-Transformer-extensions/commit/780e69e) (GPU).
+- **Exactitude** : comparé à llama.cpp 0.9.0 sur processeur, en choix glouton sur 150 tokens : texte identique pour Qwen3.5-4B Q4_K_M ; pour Qwen3.5-0.8B Q8_0, divergences seulement sur des candidats à égalité au centième (par exemple 0,464 contre 0,446). GPU contre processeur : logits à 0,03 à 0,04 % au contrôle de chargement, mêmes réponses.
+
+| Qwen3.5-4B Q4_K_M, écriture, 200 tokens (`lowpowermode 0`, charge 4,1 à 4,9), mesures alternées | Essai | Processeur | GPU |
+|---|---|---|---|
+| `engine_chat --reasoning off --temperature 0 --max 200` | 1 | 12,2 tokens/s | 19,5 tokens/s |
+| | 2 | 11,7 tokens/s | 19,5 tokens/s |
+
+**Mac ou Windows** : propre au fork (une architecture que l'original ne lit pas) ; le code du processeur est commun, celui du GPU propre au Mac.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -527,6 +540,7 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | Encodage d'une image 512 × 512, projecteur du 4B | pas mesuré | 1,8 à 2,2 s (8,9 à 10,3 avec les changements 1 à 3) |
 | 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 21,3 à 21,7 tokens/s sur le GPU ; 18,2 à 18,6 sur le processeur (17,6 à 18,1 sans le changement 8 ; 16,4 à 16,6 sans les changements 6 à 8) |
 | SHA-256 d'un fichier de modèle (vérification, import, restauration) | 283 à 288 Mo/s (mbedtls) | 2 059 à 2 141 Mo/s (changement 11) |
+| Qwen3.5-4B Q4_K_M (architecture lue par le fork seulement), génération | non lu par le moteur | 19,5 tokens/s sur le GPU ; 11,7 à 12,2 sur le processeur (changement 12) |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
 
