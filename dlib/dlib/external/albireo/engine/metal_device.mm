@@ -35,6 +35,7 @@ namespace albireo
             "gdn_norm", "split_gate", "sigmoid_mul",
             "mv_q4_K_id", "mv_q5_K_id", "mv_q6_K_id", "mv_q8_0_id", "mv_f32", "moe_route", "shared_gate", "moe_combine",
             "mv_q5_0_1", "mv_q5_0_n", "mv_q5_0_id",
+            "dequant_q5_K", "dequant_q8_0", "dequant_q5_0",
             "attention_part_1_2", "attention_part_1_4", "attention_part_1_8",
             "attention_part_2_2", "attention_part_2_4", "attention_part_2_8",
             "attention_part_4_2", "attention_part_4_4", "attention_part_4_8",
@@ -47,6 +48,7 @@ namespace albireo
             k_gdn_norm, k_split_gate, k_sigmoid_mul,
             k_mv_q4_K_id, k_mv_q5_K_id, k_mv_q6_K_id, k_mv_q8_0_id, k_mv_f32, k_moe_route, k_shared_gate, k_moe_combine,
             k_mv_q5_0, k_mv_q5_0_n, k_mv_q5_0_id,
+            k_dequant_q5_K, k_dequant_q8_0, k_dequant_q5_0,
             k_attention_part, k_count = k_attention_part + 12
         };
 
@@ -298,15 +300,21 @@ namespace albireo
         int k;
         if (type == dlib::ggml_type::Q4_K) k = k_dequant_q4_K;
         else if (type == dlib::ggml_type::Q6_K) k = k_dequant_q6_K;
+        else if (type == dlib::ggml_type::Q5_K) k = k_dequant_q5_K;
+        else if (type == dlib::ggml_type::Q8_0) k = k_dequant_q8_0;
+        else if (type == dlib::ggml_type::Q5_0) k = k_dequant_q5_0;
         else return false;
         if (rows == 0) return true;
-        if (cols % 256 != 0) throw std::invalid_argument("metal_device: a matrix of other columns than its kernel takes");
+        const bool small_blocks = type == dlib::ggml_type::Q8_0 || type == dlib::ggml_type::Q5_0;
+        if (cols % (small_blocks ? 32 : 256) != 0)
+            throw std::invalid_argument("metal_device: a matrix of other columns than its kernel takes");
         impl_->use(k);
         impl_->bind(W, 0);
         impl_->bind(out, 1);
         const dequant_args a = { cols, out_stride };
         impl_->args(a, 2);
-        impl_->grid(static_cast<unsigned>(cols / 256 * 32), static_cast<unsigned>(rows), 1);
+        // Huit valeurs par thread.
+        impl_->grid(static_cast<unsigned>(cols / 8), static_cast<unsigned>(rows), 1);
         return true;
     }
 

@@ -552,6 +552,76 @@ kernel void dequant_q6_K(device const uchar* W [[buffer(0)]], device float* out 
     }
 }
 
+// Q5_K (fork pour macOS) : comme Q4_K, avec le cinquième bit de qh ; blocs de 176 octets.
+kernel void dequant_q5_K(device const uchar* W [[buffer(0)]], device float* out [[buffer(1)]],
+    constant dequant_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+{
+    const long nb = a.cols / 256;
+    const long b = g.x / 32;
+    if (b >= nb) return;
+    const uint v0 = (g.x % 32) * 8;
+    device const uchar* blk = W + long(g.y) * nb * 176 + b * 176;
+    const uint j = v0 / 64, high = (v0 % 64) / 32, l0 = v0 % 32, sub = v0 / 32;
+    device const uchar* sc = blk + 4;
+    float scale, minimum;
+    if (sub < 4)
+    {
+        scale = sc[sub] & 63;
+        minimum = sc[sub + 4] & 63;
+    }
+    else
+    {
+        scale = (sc[sub + 4] & 0xF) | ((sc[sub - 4] >> 6) << 4);
+        minimum = (sc[sub + 4] >> 4) | ((sc[sub] >> 6) << 4);
+    }
+    const half2 dd = *(device const half2*)blk;
+    const float d = float(dd.x) * scale, m = float(dd.y) * minimum;
+    device const uchar* qh = blk + 16 + l0;
+    device const uchar* qs = blk + 48 + j * 32 + l0;
+    const uint bit = 2 * j + high;
+    device float* y = out + long(g.y) * a.out_stride + b * 256 + v0;
+    for (uint i = 0; i < 8; ++i)
+    {
+        const uint q = (high ? qs[i] >> 4 : qs[i] & 0xF) | (((qh[i] >> bit) & 1) << 4);
+        y[i] = d * float(q) - m;
+    }
+}
+
+// Q8_0 et Q5_0 (fork pour macOS) : blocs de 32 valeurs, 8 par thread, grille (colonnes / 8, lignes).
+kernel void dequant_q8_0(device const uchar* W [[buffer(0)]], device float* out [[buffer(1)]],
+    constant dequant_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+{
+    const long nb = a.cols / 32;
+    const long b = g.x / 4;
+    if (b >= nb) return;
+    const uint v0 = (g.x % 4) * 8;
+    device const uchar* blk = W + long(g.y) * nb * 34 + b * 34;
+    const float d = float(*(device const half*)blk);
+    device const char* q = (device const char*)(blk + 2) + v0;
+    device float* y = out + long(g.y) * a.out_stride + b * 32 + v0;
+    for (uint i = 0; i < 8; ++i) y[i] = d * float(q[i]);
+}
+
+kernel void dequant_q5_0(device const uchar* W [[buffer(0)]], device float* out [[buffer(1)]],
+    constant dequant_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+{
+    const long nb = a.cols / 32;
+    const long b = g.x / 4;
+    if (b >= nb) return;
+    const uint v0 = (g.x % 4) * 8;
+    device const uchar* blk = W + long(g.y) * nb * 22 + b * 22;
+    const float d = float(*(device const half*)blk);
+    const uint qh = uint(blk[2]) | (uint(blk[3]) << 8) | (uint(blk[4]) << 16) | (uint(blk[5]) << 24);
+    device const uchar* qs = blk + 6;
+    device float* y = out + long(g.y) * a.out_stride + b * 32 + v0;
+    for (uint i = 0; i < 8; ++i)
+    {
+        const uint j = v0 + i;
+        const uint nib = j < 16 ? qs[j] & 0xF : qs[j - 16] >> 4;
+        y[i] = d * float(int(nib | (((qh >> j) & 1) << 4)) - 16);
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Lignes normalisées par leur moyenne quadratique (cpu_runtime::rms_norm_rows) : un threadgroup par
 // ligne ; x et y peuvent être les mêmes lignes.

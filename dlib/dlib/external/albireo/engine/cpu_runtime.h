@@ -256,6 +256,9 @@ namespace albireo
         void grow_gpu(size_t tokens);
         bool gpu_ready();
         void run_gpu(const forward_batch& batch, std::vector<float>& logits);
+        // Un prompt d'un modèle à état récurrent sur le GPU, coupé aux points de reprise, dont l'état est copié
+        // entre deux morceaux.
+        void run_gpu_checkpointed(const forward_batch& batch, std::vector<float>& logits);
         void drop_gpu(const std::string& why);
         // gpu_use() lit gpu_report_, que le thread des passes met à jour après chaque changement de gpu_
         // (note_gpu()).

@@ -156,8 +156,9 @@ fi
 QWEN35_GPU=${QWEN35_GPU_MODEL:-$ROOT/build/albireo-home/models/hf-unsloth-qwen3.5-4b-q4_k_m.gguf}
 if [ ! -f "$ENGINE" ] || [ ! -f "$QWEN35_GPU" ]; then skip "qwen 3.5 on the GPU" "no $QWEN35_GPU"
 else
-  step "qwen 3.5 on the GPU" "the generation steps run on it" "$CHAT" "$ENGINE" "$QWEN35_GPU" --reasoning off \
+  step "qwen 3.5 on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$QWEN35_GPU" --reasoning off \
     --temperature 0 --max 20 "$QUESTION"
+  step "qwen 3.5 checkpoint on the GPU" "same answer resumed at a checkpoint" qwen35_checkpoint "$QWEN35_GPU"
 fi
 
 if [ -f "$EMBEDDING" ] && [ -f "$ENGINE" ]; then

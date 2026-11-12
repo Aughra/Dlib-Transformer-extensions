@@ -13,6 +13,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
@@ -236,7 +238,9 @@ namespace albireo
         gpu_state& g = *gpu_;
         if (g.capacity >= tokens) return;
         metal_device& device = *g.device;
-        const size_t T = tokens, f = sizeof(float);
+        // Au-delà d'une étape, un multiple de 32 lignes : les produits des prompts se font sur ce nombre de
+        // lignes (voir product() dans run_gpu()).
+        const size_t T = tokens <= metal_device::max_tokens ? tokens : (tokens + 31) / 32 * 32, f = sizeof(float);
         g.x = need(device, T * cfg_.d_model * f);
         g.xn = need(device, T * cfg_.d_model * f);
         g.q = need(device, T * cfg_.q_dim() * f);
@@ -297,7 +301,8 @@ namespace albireo
                     long_pass = false;
             }
         // qwen35 : les étapes seulement ; ses prompts restent sur le processeur.
-        if (cfg_.recurrent() || cfg_.is_moe()) long_pass = false;
+        // Les prompts des mélanges d'experts restent sur le processeur.
+        if (cfg_.is_moe()) long_pass = false;
         return gpu_ && gpu_->state != gpu_state::dropped && (step || long_pass)
             && batch.embedding_rows.empty() && !batch.hidden_only
             && batch.logit_rows.size() <= metal_device::max_tokens;
@@ -356,8 +361,9 @@ namespace albireo
             --gpu_->wait;
             return false;
         }
-        // Un prompt assez long pour prendre le chemin des prompts sur le GPU.
-        const long n = std::max<long>(32, gpu_prompt_min_), V = cfg_.vocab;
+        // Un prompt assez long pour le chemin des prompts sur le GPU, et dont la longueur n'est pas un multiple de
+        // 32 : les produits des prompts arrondissent leurs lignes (voir product() dans run_gpu()).
+        const long n = std::max<long>(29, gpu_prompt_min_), V = cfg_.vocab;
         const int a = create_sequence(), b = create_sequence();
         struct release
         {
@@ -404,7 +410,7 @@ namespace albireo
         };
         // Le prompt : sur le GPU pour la première séquence quand les prompts y vont, sur le processeur
         // sinon.
-        const bool gpu_prompt = !cfg_.recurrent() && !cfg_.is_moe() && n >= gpu_prompt_min_ && n <= gpu_prompt_context_;
+        const bool gpu_prompt = !cfg_.is_moe() && n >= gpu_prompt_min_ && n <= gpu_prompt_context_;
         prompt.logit_rows.assign(1, n - 1);
         prompt.segments.assign(1, { a, 0, n });
         try
@@ -573,7 +579,8 @@ namespace albireo
         {
             size_t largest = 0;
             for (const layer& L : layers_)
-                for (const weight_matrix* M : { &L.wq, &L.wk, &L.wv, &L.wo, &L.w_gate, &L.w_up, &L.w_down })
+                for (const weight_matrix* M : { &L.wq, &L.wk, &L.wv, &L.wo, &L.w_gate, &L.w_up, &L.w_down, &L.w_mix,
+                         &L.w_z, &L.w_alpha, &L.w_beta, &L.w_ssm_out })
                     largest = std::max(largest, static_cast<size_t>(M->rows) * static_cast<size_t>(M->cols));
             g.expanded[0] = need(dev, largest * sizeof(float));
             g.expanded[1] = need(dev, largest * sizeof(float));
@@ -618,7 +625,12 @@ namespace albireo
             const metal_buffer& e = g.expanded[g.turn];
             g.turn ^= 1;
             c->dequantize(M.type, at(g.weights, g.weight(M)), M.rows, M.cols, e, M.cols);
-            c->gemm(x, uT, M.cols, x_stride, e, M.rows, M.cols, y, y_stride, alpha, beta);
+            /*
+                Metal Performance Shaders calcule sur un nombre de lignes multiple de 32, que les tampons contiennent
+                (grow_gpu()) : avec 24 à 31 lignes, ou 40, un produit de Qwen3.5-0.8B (attn_qkv, 6 144 x 1 024 en
+                floats) rendait des NaN.  Les lignes au-delà des tokens sont calculées pour rien.
+            */
+            c->gemm(x, static_cast<unsigned>((T + 31) / 32 * 32), M.cols, x_stride, e, M.rows, M.cols, y, y_stride, alpha, beta);
         };
         for (long li = 0; li < cfg_.n_layers; ++li)
         {
@@ -765,6 +777,68 @@ namespace albireo
         if (R > 0) std::memcpy(logits.data(), g.logits.contents(), sizeof(float) * R * cfg_.vocab);
         hidden_out_.resize(static_cast<size_t>(R * d));
         if (R > 0) std::memcpy(hidden_out_.data(), g.hidden.contents(), sizeof(float) * R * d);
+    }
+
+    void cpu_runtime::run_gpu_checkpointed(const forward_batch& batch, std::vector<float>& logits)
+    {
+        const long T = static_cast<long>(batch.tokens.size());
+        const long d = cfg_.d_model, V = cfg_.vocab;
+        // La position de chaque token, et sa séquence.
+        std::vector<long> pos(static_cast<size_t>(T), 0);
+        std::vector<int> seq_of(static_cast<size_t>(T), 0);
+        for (const auto& s : batch.segments)
+            for (long j = 0; j < s.count; ++j)
+            {
+                pos[static_cast<size_t>(s.start + j)] = sequences_.at(static_cast<size_t>(s.sequence))->length + j;
+                seq_of[static_cast<size_t>(s.start + j)] = s.sequence;
+            }
+        auto cut = [&](long t) { return (pos[static_cast<size_t>(t)] + 1) % checkpoint_interval == 0; };
+        std::vector<long> row_of(static_cast<size_t>(T), -1);
+        for (size_t r = 0; r < batch.logit_rows.size(); ++r) row_of[static_cast<size_t>(batch.logit_rows[r])] = static_cast<long>(r);
+        const long R = static_cast<long>(batch.logit_rows.size());
+        std::vector<float> all_logits(batch.hidden_only ? 0 : static_cast<size_t>(R * V)), all_hidden(static_cast<size_t>(R * d));
+        std::vector<float> part;
+        const size_t floats = static_cast<size_t>(cfg_.n_layers - cfg_.n_attention_layers())
+            * static_cast<size_t>(cfg_.ssm_state_floats());
+        for (long start = 0; start < T;)
+        {
+            long end = start;
+            while (end + 1 < T && !cut(end)) ++end;
+            forward_batch sub;
+            sub.hidden_only = batch.hidden_only;
+            sub.tokens.assign(batch.tokens.begin() + start, batch.tokens.begin() + end + 1);
+            for (const auto& s : batch.segments)
+            {
+                const long a = std::max(s.start, start), b = std::min(s.start + s.count, end + 1);
+                if (a < b) sub.segments.push_back({ s.sequence, a - start, b - a });
+            }
+            for (long t = start; t <= end; ++t)
+                if (row_of[static_cast<size_t>(t)] >= 0) sub.logit_rows.push_back(t - start);
+            run_gpu(sub, part);
+            for (size_t k = 0; k < sub.logit_rows.size(); ++k)
+            {
+                const long r = row_of[static_cast<size_t>(sub.logit_rows[k] + start)];
+                if (!batch.hidden_only)
+                    std::copy(part.begin() + static_cast<long>(k) * V, part.begin() + static_cast<long>(k + 1) * V,
+                        all_logits.begin() + r * V);
+                std::copy(hidden_out_.begin() + static_cast<long>(k) * d, hidden_out_.begin() + static_cast<long>(k + 1) * d,
+                    all_hidden.begin() + r * d);
+            }
+            // Le point de reprise que ce morceau atteint : l'état de sa séquence, que le GPU vient d'écrire.
+            if (cut(end))
+            {
+                checkpoint c;
+                c.position = pos[static_cast<size_t>(end)] + 1;
+                c.stamp = ++checkpoint_stamp_;
+                c.state.assign(state_of(seq_of[static_cast<size_t>(end)]), state_of(seq_of[static_cast<size_t>(end)]) + floats);
+                pending_checkpoints_.clear();
+                pending_checkpoints_.emplace_back(seq_of[static_cast<size_t>(end)], std::move(c));
+                keep_checkpoints();
+            }
+            start = end + 1;
+        }
+        logits.swap(all_logits);
+        hidden_out_.swap(all_hidden);
     }
 
 }

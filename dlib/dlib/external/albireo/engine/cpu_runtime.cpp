@@ -2,11 +2,14 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 #include "cpu_runtime.h"
+#include "metal_device.h"
 
 #include <sys/mman.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
@@ -1050,7 +1053,8 @@ namespace albireo
         {
             try
             {
-                run_gpu(batch, logits);
+                if (cfg_.recurrent() && batch.tokens.size() > metal_device::max_tokens) run_gpu_checkpointed(batch, logits);
+                else run_gpu(batch, logits);
                 return;
             }
             catch (const std::exception& e)
