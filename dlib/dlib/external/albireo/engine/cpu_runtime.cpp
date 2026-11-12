@@ -280,6 +280,8 @@ namespace albireo
                     + " sequences of a linear attention model at once");
             }
             std::memset(state_of(s), 0, state_slot_bytes_);
+            if (checkpoints_.size() < sequences_.size()) checkpoints_.resize(sequences_.size());
+            drop_checkpoints(s, -1);
         }
         return s;
     }
@@ -291,12 +293,62 @@ namespace albireo
         sequences_[static_cast<size_t>(seq)].reset();
         // La mémoire de son état revient au système.
         if (cfg_.recurrent() && seq < max_state_slots) madvise(state_of(seq), state_slot_bytes_, MADV_FREE);
+        if (cfg_.recurrent()) drop_checkpoints(seq, -1);
         free_sequences_.push_back(seq);
     }
 
-    bool cpu_runtime::resumable(int seq, long length) const
+    long cpu_runtime::resume_point(int seq, long length) const
     {
-        return !cfg_.recurrent() || length == 0 || length == sequence_length(seq);
+        const long n = sequence_length(seq);
+        if (!cfg_.recurrent() || length <= 0 || length >= n) return std::min(length, n);
+        long best = 0;
+        if (static_cast<size_t>(seq) < checkpoints_.size())
+            for (const checkpoint& c : checkpoints_[static_cast<size_t>(seq)])
+                if (c.position <= length && c.position > best) best = c.position;
+        return best;
+    }
+
+    void cpu_runtime::drop_checkpoints(int seq, long after)
+    {
+        if (static_cast<size_t>(seq) >= checkpoints_.size()) return;
+        auto& list = checkpoints_[static_cast<size_t>(seq)];
+        for (auto it = list.begin(); it != list.end();)
+            if (it->position > after)
+            {
+                checkpoint_bytes_ -= it->state.size() * sizeof(float);
+                it = list.erase(it);
+            }
+            else
+                ++it;
+    }
+
+    // Les points de reprise de la passe rejoignent leurs séquences, dans les limites du nombre et de la mémoire.
+    void cpu_runtime::keep_checkpoints()
+    {
+        for (auto& p : pending_checkpoints_)
+        {
+            const size_t s = static_cast<size_t>(p.first);
+            if (s >= checkpoints_.size()) continue;
+            auto& list = checkpoints_[s];
+            checkpoint_bytes_ += p.second.state.size() * sizeof(float);
+            list.push_back(std::move(p.second));
+            while (list.size() > checkpoints_per_sequence)
+            {
+                checkpoint_bytes_ -= list.front().state.size() * sizeof(float);
+                list.erase(list.begin());
+            }
+        }
+        pending_checkpoints_.clear();
+        while (checkpoint_bytes_ > checkpoint_budget)
+        {
+            // Le plus ancien de toutes les séquences.
+            std::vector<checkpoint>* oldest = nullptr;
+            for (auto& list : checkpoints_)
+                if (!list.empty() && (!oldest || list.front().stamp < oldest->front().stamp)) oldest = &list;
+            if (!oldest) break;
+            checkpoint_bytes_ -= oldest->front().state.size() * sizeof(float);
+            oldest->erase(oldest->begin());
+        }
     }
 
     long cpu_runtime::sequence_length(int seq) const
@@ -309,11 +361,17 @@ namespace albireo
         kv_sequence& s = *sequences_.at(static_cast<size_t>(seq));
         if (cfg_.recurrent() && length < s.length)
         {
-            // Un état récurrent ne revient pas en arrière : il ne repart que de zéro.
-            if (length != 0)
+            // Un état récurrent ne revient pas en arrière : il repart de zéro, ou d'un point de reprise.
+            const checkpoint* from = nullptr;
+            if (static_cast<size_t>(seq) < checkpoints_.size())
+                for (const checkpoint& c : checkpoints_[static_cast<size_t>(seq)])
+                    if (c.position == length) from = &c;
+            if (length != 0 && !from)
                 throw std::logic_error("cpu_runtime: the state of a linear attention model cannot go back to "
                     "position " + std::to_string(length));
-            std::memset(state_of(seq), 0, state_slot_bytes_);
+            if (from) std::memcpy(state_of(seq), from->state.data(), from->state.size() * sizeof(float));
+            else std::memset(state_of(seq), 0, state_slot_bytes_);
+            drop_checkpoints(seq, length);
         }
         s.truncate(kv_, length);
     }
@@ -329,10 +387,16 @@ namespace albireo
         kv_sequence& d = *sequences_.at(static_cast<size_t>(dst));
         if (cfg_.recurrent())
         {
-            // L'état de src ne vaut qu'à sa longueur ; à 0, celui de dst repart de zéro.
-            if (length != 0 && length != s.length) return false;
+            // L'état de src vaut à sa longueur et à ses points de reprise ; à 0, celui de dst repart de zéro.
+            const checkpoint* from = nullptr;
+            if (static_cast<size_t>(src) < checkpoints_.size())
+                for (const checkpoint& c : checkpoints_[static_cast<size_t>(src)])
+                    if (c.position == length) from = &c;
+            if (length != 0 && length != s.length && !from) return false;
+            drop_checkpoints(dst, -1);
             if (length == 0) std::memset(state_of(dst), 0, state_slot_bytes_);
-            else std::memcpy(state_of(dst), state_of(src), state_slot_bytes_);
+            else if (length == s.length) std::memcpy(state_of(dst), state_of(src), state_slot_bytes_);
+            else std::memcpy(state_of(dst), from->state.data(), from->state.size() * sizeof(float));
         }
         // Les blocs pleins sont partagés ; chaque séquence copie un bloc partagé avant d'y écrire.
         return d.share_prefix(kv_, s, length);
@@ -1075,6 +1139,8 @@ namespace albireo
                         for (long i = 0; i + 1 < window; ++i) win[i] = win[i + 1];
                         if (window > 0) win[window - 1] = in;
                         *x = sum / (1.0f + std::exp(-sum));
+                        if (float* ck = token_checkpoint_[static_cast<size_t>(s.start + j)])
+                            std::memcpy(ck + offset + c * window, win, sizeof(float) * static_cast<size_t>(window));
                     }
                 }
             }
@@ -1147,6 +1213,9 @@ namespace albireo
                     }
                 }
                 for (long r = 0; r < S; ++r) o[r] *= qscale;
+                if (float* ck = token_checkpoint_[static_cast<size_t>(t)])
+                    std::memcpy(ck + offset + static_cast<size_t>(cfg_.ssm_conv_state()) + static_cast<size_t>(h * S * S),
+                        state, sizeof(float) * static_cast<size_t>(S * S));
             }
         });
 
@@ -1218,6 +1287,30 @@ namespace albireo
         v_.resize(static_cast<size_t>(T * kvd));
         tmp_.resize(static_cast<size_t>(T * d));
         if (on_device && !layer_pass_->begin(x_.data(), T)) return false;
+
+        // Les points de reprise que cette passe atteint (modèles à état récurrent).
+        pending_checkpoints_.clear();
+        token_checkpoint_.assign(static_cast<size_t>(T), nullptr);
+        if (cfg_.recurrent())
+        {
+            const size_t floats = static_cast<size_t>(cfg_.n_layers - cfg_.n_attention_layers())
+                * static_cast<size_t>(cfg_.ssm_state_floats());
+            for (const auto& s : batch.segments)
+                for (long j = 0; j < s.count; ++j)
+                    if ((positions_[static_cast<size_t>(s.start + j)] + 1) % checkpoint_interval == 0)
+                    {
+                        checkpoint c;
+                        c.position = positions_[static_cast<size_t>(s.start + j)] + 1;
+                        c.stamp = ++checkpoint_stamp_;
+                        c.state.resize(floats);
+                        pending_checkpoints_.emplace_back(s.sequence, std::move(c));
+                    }
+            size_t k = 0;
+            for (const auto& s : batch.segments)
+                for (long j = 0; j < s.count; ++j)
+                    if ((positions_[static_cast<size_t>(s.start + j)] + 1) % checkpoint_interval == 0)
+                        token_checkpoint_[static_cast<size_t>(s.start + j)] = pending_checkpoints_[k++].second.state.data();
+        }
 
         for (long li = 0; li < cfg_.n_layers; ++li)
         {
@@ -1337,6 +1430,7 @@ namespace albireo
         if (on_device) layer_pass_->end(batch.logit_rows, x_.data());
         for (const auto& s : batch.segments)
             sequences_[static_cast<size_t>(s.sequence)]->length += s.count;
+        if (!pending_checkpoints_.empty()) keep_checkpoints();
 
         // Normalisation finale et logits des seules lignes demandées.
         const long R = static_cast<long>(batch.logit_rows.size());

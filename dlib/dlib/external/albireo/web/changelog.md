@@ -2,6 +2,14 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.8.0 — 12 novembre 2026
+
+### Performances
+
+- Points de reprise pour les modèles Qwen 3.5 et 3.6 : pendant la lecture d'un prompt, l'état des couches linéaires est copié toutes les 256 positions (les 4 plus récents par conversation, 1 Go au plus en tout). Une conversation qui ne partage qu'un début avec une précédente (même prompt système, message modifié ou relancé) reprend au point le plus proche au lieu de tout relire. Essai avec un prompt système de 794 tokens partagé par deux questions : la seconde reprend 768 tokens, avec la même réponse que posée seule (Qwen3.5-0.8B et Qwen3.5-4B).
+
+---
+
 ## 4.7.0 — 12 novembre 2026
 
 ### Performances

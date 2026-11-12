@@ -121,10 +121,26 @@ qwen35_turns() {
     || { echo "the answers differ with and without resumed states"; return 1; }
   echo "same answers with resumed states"
 }
+# Un point de reprise : deux questions qui partagent un long prompt système ; la seconde reprend l'état au dernier
+# multiple de 256 positions, avec la même réponse que posée seule.
+qwen35_checkpoint() {
+  local model=$1 sys both alone
+  sys=$(for i in $(seq 1 24); do printf 'Rule %s: always answer politely, mention the opening hours (7am to 7pm) only when asked, and keep answers under three sentences. ' "$i"; done)
+  both=$("$CHAT" "$ENGINE" "$model" --reasoning off --temperature 0 --max 30 --no-warm --system "$sys" \
+    "What are your opening hours?" "Do you sell croissants?" 2>/dev/null) || return 1
+  alone=$("$CHAT" "$ENGINE" "$model" --reasoning off --temperature 0 --max 30 --no-warm --system "$sys" \
+    "Do you sell croissants?" 2>/dev/null) || return 1
+  printf '%s' "$both" | grep -q '"cached_tokens":[1-9][0-9][0-9]' || { echo "no checkpoint was resumed"; return 1; }
+  [ "$(printf '%s\n' "$both" | sed -n '/^=== Do you sell/,/^---/p' | grep -v '^---')" = \
+    "$(printf '%s\n' "$alone" | sed -n '/^=== /,/^---/p' | grep -v '^---')" ] \
+    || { echo "the answer differs when resumed at a checkpoint"; return 1; }
+  echo "same answer resumed at a checkpoint"
+}
 if [ ! -f "$ENGINE" ] || [ ! -f "$QWEN35" ]; then skip "qwen 3.5" "no $QWEN35"
 else
   step "qwen 3.5" "Paris" "$CHAT" "$ENGINE" "$QWEN35" --reasoning off --temperature 0 --max 40 "$QUESTION"
   step "qwen 3.5 resumed state" "same answers with resumed states" qwen35_turns
+  step "qwen 3.5 checkpoint" "same answer resumed at a checkpoint" qwen35_checkpoint "$QWEN35"
 fi
 # Qwen 3.6 MoE (qwen35moe : couches linéaires, 256 experts et un expert partagé), quand le petit modèle de test est là.
 QWEN36=${QWEN36_MODEL:-$ROOT/build/models/Qwen3.6-11B-A3B-Niwaki-Q4_K_M.gguf}

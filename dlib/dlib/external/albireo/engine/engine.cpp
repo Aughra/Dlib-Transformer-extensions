@@ -2099,9 +2099,10 @@ namespace albireo
         size_t best = m.idle.size();
         for (size_t i = 0; i < m.idle.size(); ++i)
         {
-            const long n = std::min(limit, common_prefix(m.idle[i].tokens, r.keys));
-            // Un modèle à état récurrent ne reprend une séquence qu'à sa longueur (runtime::resumable()).
-            if (n > best_len && m.runtime->resumable(m.idle[i].seq, n))
+            // Un modèle à état récurrent ne reprend une séquence qu'à sa longueur ou à un point de reprise
+            // (runtime::resume_point()).
+            const long n = m.runtime->resume_point(m.idle[i].seq, std::min(limit, common_prefix(m.idle[i].tokens, r.keys)));
+            if (n > best_len)
             {
                 best_len = n;
                 best = i;

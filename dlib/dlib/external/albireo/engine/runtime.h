@@ -112,15 +112,15 @@ namespace albireo
         // système, sans le recalculer.
         virtual bool copy_sequence(int src, int dst, long length) = 0;
         /*
-            Si la séquence peut reprendre à length positions, par truncate_sequence() ou copy_sequence() :
-            toujours pour un modèle à clés et valeurs ; pour un modèle à état récurrent (model_config::
-            recurrent()), seulement à 0 ou à sa longueur, son état ne revenant pas en arrière.
+            La plus grande position, au plus length, à laquelle la séquence peut reprendre par
+            truncate_sequence() ou copy_sequence() : length pour un modèle à clés et valeurs ; pour un
+            modèle à état récurrent (model_config::recurrent()), dont l'état ne revient pas en arrière, 0,
+            sa longueur, ou l'un de ses points de reprise.
         */
-        virtual bool resumable(int seq, long length) const
+        virtual long resume_point(int seq, long length) const
         {
             (void)seq;
-            (void)length;
-            return true;
+            return length;
         }
 
         // Exécute le lot, ajoute ses clés et valeurs aux séquences et écrit, pour chaque

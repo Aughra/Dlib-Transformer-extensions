@@ -89,7 +89,7 @@ namespace albireo
         void truncate_sequence(int seq, long length) override;
         bool reserve_sequence(int seq, long length) override;
         bool copy_sequence(int src, int dst, long length) override;
-        bool resumable(int seq, long length) const override;
+        long resume_point(int seq, long length) const override;
 
         void forward(const forward_batch& batch, std::vector<float>& logits) override;
 
@@ -309,6 +309,30 @@ namespace albireo
             ~state_region();
         };
         static const int max_state_slots = 64;
+        /*
+            Les points de reprise de l'état récurrent : pendant une passe sur le processeur, l'état de
+            chaque séquence est copié au token qui la mène à un multiple de checkpoint_interval positions.
+            Une séquence en garde les checkpoints_per_sequence plus récents, et toutes ensemble au plus
+            checkpoint_budget octets, les plus anciens partant d'abord.  Une séquence reprend alors à son
+            point de reprise le plus proche (resume_point()) au lieu de tout relire.
+        */
+        struct checkpoint
+        {
+            long position = 0;
+            uint64_t stamp = 0;
+            std::vector<float> state;
+        };
+        static const long checkpoint_interval = 256;
+        static const size_t checkpoints_per_sequence = 4;
+        static const size_t checkpoint_budget = size_t(1) << 30;
+        std::vector<std::vector<checkpoint>> checkpoints_;
+        size_t checkpoint_bytes_ = 0;
+        uint64_t checkpoint_stamp_ = 0;
+        // Pendant une passe : l'état à remplir après le token t (nullptr sinon), et les points en cours.
+        std::vector<float*> token_checkpoint_;
+        std::vector<std::pair<int, checkpoint>> pending_checkpoints_;
+        void drop_checkpoints(int seq, long after);
+        void keep_checkpoints();
         state_region states_;
         size_t state_slot_bytes_ = 0;
         float* state_of(int seq) const
