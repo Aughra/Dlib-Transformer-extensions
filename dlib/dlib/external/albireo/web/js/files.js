@@ -9,7 +9,8 @@ import * as api from './api.js';
 import * as images from './images.js';
 import * as store from './store.js';
 import { closeMenu, confirmDialog, dialog, showMenu } from './dialogs.js';
-import { errorText } from './app.js';
+
+import { errorText } from './background.js';
 import { inputsLabel, modelName, roleInputs, roleModel } from './status.js';
 import { escapeHtml } from './markdown.js';
 import { extractText, fileKind, maxFileBytes, pdfPages } from './documents.js';

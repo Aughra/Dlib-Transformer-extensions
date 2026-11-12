@@ -13,8 +13,9 @@ import { describePending, indexProjects,
   showIndexState } from './indexing.js';
 import { dialog } from './dialogs.js';
 import { documentAccept } from './documents.js';
-import { expireBusy,
-  hintText, languageChanged, namePending, refreshViews, serviceReady } from './app.js';
+
+import { hintText, namePending, serviceReady } from './background.js';
+import { expireBusy, languageChanged, refreshViews } from './tabs.js';
 import { lockThread } from './thread.js';
 import { fill, formatDecimal, h } from './dom.js';
 import { imageTokenCache, readRate, workingContext, writeRate } from './context.js';

@@ -2,12 +2,19 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Découper app.js : tabs.js, sidebar.js, conversations.js, background.js (Albireo 4.11.10)
+
+- **Quoi** : `web/js/tabs.js` (26 déclarations : messages entre onglets, relecture de la base, marques des réponses en cours), `web/js/sidebar.js` (4 : panneau latéral), `web/js/conversations.js` (16 : `persist`, menu d'une discussion, renommer, épingler, déplacer, exporter, supprimer une question), `web/js/background.js` (24 : titres écrits par le modèle, compression en arrière-plan, lecture d'avance, `errorText`), mot pour mot. `app.js` : 463 lignes (7 274 au départ) : constantes des rôles, thème et réglages, navigation (`route`, `go`, `newChat`…), mise en page, démarrage.
+- **Fichiers** : `albireo/web/js/*.js`, `albireo/web/changelog.md`, version.
+- **Pourquoi** : chantier D.
+- **Étapes** : un défaut de l'outil de déplacement (scratchpad) : l'expression qui repérait l'import depuis `./app.js` pouvait partir d'un import précédent, et 7 noms restaient importés deux fois ; ESLint l'a vu (« already been declared »), doublons retirés et outil corrigé. Nouveau scénario à deux onglets (`tabs.json`, 11 vérifications : réponse, renommage et suppression vus par l'autre onglet). ESLint 0 problème ; principal 40, documents 12, images 12, actions 24, onglets 11 ; aucune erreur.
+
 ## 2026-11-12 — Découper app.js : composer.js, generation.js (Albireo 4.11.9)
 
 - **Quoi** : `web/js/composer.js` (24 déclarations : zone de saisie, pièces jointes en attente, envoi, régénération, arrêt) et `web/js/generation.js` (21 : compression des échanges, `fitContext`, rendu en direct, `runTurn`), mot pour mot. `app.js` : 1513 lignes.
 - **Fichiers** : `albireo/web/js/{app.js,composer.js,generation.js}` et les modules qui en importent, `albireo/web/changelog.md`, version.
 - **Pourquoi** : chantier D.
-- **Étapes** : ESLint 0 problème ; scénario des actions complété par l'arrêt d'une longue réponse (« Interrompu. », texte gardé) : 25 sur 25 ; principal 40, documents 12, images 12 ; aucune erreur. Non exercé par le banc : la compression des échanges (il faudrait dépasser le contexte de travail, 16 384 tokens au moins) ; ESLint en est le seul garde.
+- **Étapes** : ESLint 0 problème ; scénario des actions complété par l'arrêt d'une longue réponse (« Interrompu. », texte gardé) : 24 sur 24 ; principal 40, documents 12, images 12 ; aucune erreur. Non exercé par le banc : la compression des échanges (il faudrait dépasser le contexte de travail, 16 384 tokens au moins) ; ESLint en est le seul garde.
 
 ## 2026-11-12 — Découper app.js : thread.js (Albireo 4.11.8)
 

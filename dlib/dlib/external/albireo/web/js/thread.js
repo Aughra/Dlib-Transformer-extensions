@@ -10,8 +10,10 @@ import * as images from './images.js';
 import * as web from './web.js';
 import { acceptFor, modelName, renderStatusLine, roleCapabilities, roleModel,
   toolsAvailable } from './status.js';
-import { answeredElsewhere, attachmentIds, conversationMenu, deleteQuestion,
-  exportAnswer, go, liveCopy, maxAgentSteps, moveMenu, persist, refreshViews, renderSidebar, saveSetting } from './app.js';
+import { go, maxAgentSteps, saveSetting } from './app.js';
+import { attachmentIds, conversationMenu, deleteQuestion, exportAnswer, liveCopy, moveMenu, persist } from './conversations.js';
+import { renderSidebar } from './sidebar.js';
+import { answeredElsewhere, refreshViews } from './tabs.js';
 import { compactions } from './generation.js';
 import { autoGrow, busyHere, liveMessage, regenerate, renderComposerState, sendMessage } from './composer.js';
 import { attachCodeButtons, escapeHtml, renderMarkdown } from './markdown.js';

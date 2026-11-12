@@ -9,8 +9,10 @@ import * as api from './api.js';
 import * as store from './store.js';
 import * as tools from './tools.js';
 import * as web from './web.js';
-import { announceBusy, cancelWarmup, compactLater, deleted, errorText, maxAgentSteps, nameConversation, needsTitle,
-  persist, refreshViews, warmBeginning } from './app.js';
+import { maxAgentSteps } from './app.js';
+import { cancelWarmup, compactLater, errorText, nameConversation, needsTitle, warmBeginning } from './background.js';
+import { deleted, persist } from './conversations.js';
+import { announceBusy, refreshViews } from './tabs.js';
 import { answerReserve, apiMessages, compact, documentsOf, keptShare, measureImages, requestMedia, systemPrompt,
   tokenEstimate } from './context.js';
 import { contextImages } from './files.js';

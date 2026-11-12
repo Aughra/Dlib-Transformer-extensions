@@ -9,8 +9,11 @@ import * as rag from './rag.js';
 import * as store from './store.js';
 import { acceptFor, inputsLabel, readsImages, roleCapabilities, roleInputs, roleModel, toolsAvailable,
   webUnavailable } from './status.js';
-import { announceBusy, answeredElsewhere, cancelWarmup, keepImages, persist,
-  provisionalTitle, refreshViews, renderSidebar, titleQuestionOf } from './app.js';
+import { keepImages } from './app.js';
+import { cancelWarmup, provisionalTitle, titleQuestionOf } from './background.js';
+import { persist } from './conversations.js';
+import { renderSidebar } from './sidebar.js';
+import { announceBusy, answeredElsewhere, refreshViews } from './tabs.js';
 import { runTurn } from './generation.js';
 import { attachmentChip, lockThread, renderMain } from './thread.js';
 import { attachmentSeconds, attachmentShare, estimateTokens, excerptBudget, keepStart, maxContextImages,

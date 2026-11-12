@@ -5,7 +5,7 @@
 // gardé dans localStorage une fois que l'utilisateur cesse de taper, et les images en attente qu'ils retiennent.
 
 import * as images from './images.js';
-import { deleted } from './app.js';
+import { deleted } from './conversations.js';
 import { state, ui } from './state.js';
 
 /*
