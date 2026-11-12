@@ -383,9 +383,23 @@ export function modelsTab(body, env) {
     models.sort((x, y) => (y.installed - x.installed) || (order[assess(x, env.status()).level] -
       order[assess(y, env.status()).level]) || ((x.total_size || x.size) - (y.total_size || y.size)));
     const current = models.find((m) => m.id === activeId);
-    const refresh = h('button', { class: 'button', type: 'button', onclick: async () => {
-      await act('POST', '/albireo/v1/models/refresh', 'Liste des modèles rafraîchie.');
-    } }, 'Rafraîchir la liste');
+    offlineNow = !!data.offline;
+    // Deux sources : le Mac (la liste, la réserve et les réponses gardées, sans réseau), ou Internet (le catalogue
+    // depuis GitHub, la dernière recherche depuis Hugging Face).
+    const refresh = h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+      h('button', { class: 'button', type: 'button',
+        title: 'Relit la liste, la réserve et la dernière recherche gardées sur le Mac, sans réseau',
+        onclick: async () => {
+          await load();
+          if (lastQuery !== null) search(true);
+          toast('Liste relue depuis le Mac.');
+        } }, 'Rafraîchir depuis le Mac'),
+      h('button', { class: 'button', type: 'button', disabled: offlineNow,
+        title: offlineNow ? 'Le service est hors ligne' : 'Le catalogue depuis GitHub, la dernière recherche depuis Hugging Face',
+        onclick: async () => {
+          await act('POST', '/albireo/v1/models/refresh', 'Catalogue demandé à GitHub.');
+          if (lastQuery !== null) search();
+        } }, 'Rafraîchir depuis Hugging Face'));
     const updated = data.catalog && data.catalog.updated ? new Date(data.catalog.updated).toLocaleString('fr-FR',
       { dateStyle: 'medium', timeStyle: 'short' }) : 'jamais';
     const cards = models.map((m) => {
@@ -410,31 +424,59 @@ export function modelsTab(body, env) {
       Hugging Face : tous les modèles GGUF publiés, au-delà du catalogue.  Les compatibles d'abord ; ceux que le moteur
       ne lit pas (architecture, format de poids, fichier découpé), en gris à la fin, avec la raison.
   */
+  let offlineNow = false;
+  let lastQuery = null;
   const hubResults = h('div', { class: 'hub-results' });
+  // Les recherches gardées sur le Mac, à relancer d'un clic, même hors ligne.
+  const hubRecent = h('p', { class: 'help' });
+  async function loadRecent() {
+    let r;
+    try {
+      r = await api.getJSON('/albireo/v1/hub/recent');
+    } catch (e) {
+      return;
+    }
+    const list = (r.searches || []).slice(0, 8);
+    hubRecent.replaceChildren(...(list.length ? ['Recherches gardées sur le Mac : ', ...list.map((s, i) => [i ? ' · ' : '',
+      h('a', { href: '#', onclick: (e) => {
+        e.preventDefault();
+        hubInput.value = s.query;
+        search();
+      } }, s.query || '(les plus téléchargés)')]).flat()] : []));
+  }
+  const keptOn = (sec) => new Date(sec * 1000).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
   const hubInput = h('input', { type: 'search', placeholder: 'Rechercher un modèle (qwen3, mistral, granite…)',
     'aria-label': 'Rechercher sur Hugging Face' });
   const hub = h('section', { class: 'svc-group' }, h('h4', null, 'Tous les modèles de Hugging Face'),
     h('p', { class: 'help' }, 'Les modèles GGUF publiés sur Hugging Face, les plus téléchargés d’abord. Ceux que le moteur ' +
       'ne sait pas lire sont en gris, à la fin.'),
     h('div', { class: 'svc-input hub-search' }, hubInput,
-      h('button', { class: 'button primary', type: 'button', onclick: () => search() }, 'Rechercher')), hubResults);
+      h('button', { class: 'button primary', type: 'button', onclick: () => search() }, 'Rechercher')), hubRecent, hubResults);
+  loadRecent();
   hubInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
 
   const billionsOf = (n) => n ? billions(n) + ' de paramètres' : 'taille inconnue';
   const byCompat = (a, b) => (b.compatible === true) - (a.compatible === true);
 
-  async function search() {
-    hubResults.replaceChildren(h('p', { class: 'help' }, 'Recherche sur Hugging Face…'));
+  // local : la réponse gardée sur le Mac, sans réseau.  Hors ligne, le service la donne de lui-même.
+  async function search(local) {
+    lastQuery = hubInput.value.trim();
+    hubResults.replaceChildren(h('p', { class: 'help' }, local || offlineNow ? 'Lecture de la recherche gardée sur le Mac…'
+      : 'Recherche sur Hugging Face…'));
     let r;
     try {
-      r = await api.getJSON('/albireo/v1/hub/search?q=' + encodeURIComponent(hubInput.value.trim()));
+      r = await api.getJSON('/albireo/v1/hub/search?q=' + encodeURIComponent(lastQuery) + (local ? '&local=1' : ''));
     } catch (e) {
-      hubResults.replaceChildren(h('p', { class: 'help' }, e.message));
+      hubResults.replaceChildren(h('p', { class: 'help' }, e.code === 'hub_not_cached' || /never kept/.test(e.message)
+        ? 'Cette recherche n’a jamais été faite sur ce Mac : il faut Internet pour la lancer.' : e.message));
       return;
     }
+    loadRecent();
+    const kept = r.cached_at ? h('p', { class: 'help' }, 'Résultats gardés sur le Mac le ' + keptOn(r.cached_at) +
+      (local || offlineNow ? '.' : ' : Hugging Face ne répond pas.')) : null;
     const list = (r.models || []).slice().sort(byCompat);
-    if (!list.length) return hubResults.replaceChildren(h('p', { class: 'help' }, 'Aucun modèle GGUF trouvé.'));
-    hubResults.replaceChildren(...list.map((m) => {
+    if (!list.length) return hubResults.replaceChildren(...[kept, h('p', { class: 'help' }, 'Aucun modèle GGUF trouvé.')].filter(Boolean));
+    hubResults.replaceChildren(...(kept ? [kept] : []), ...list.map((m) => {
       const files = h('div', { class: 'hub-files' });
       const card = h('div', { class: 'svc-card hub-card' + (m.compatible ? '' : ' incompatible') },
         h('div', { class: 'svc-head' }, h('div', { class: 'svc-title' }, h('span', null, m.repo),
@@ -466,7 +508,7 @@ export function modelsTab(body, env) {
     const files = (r.files || []).slice().sort((a, b) => byCompat(a, b) || (b.gpu - a.gpu) || (a.size - b.size));
     box.replaceChildren(...[
       h('p', { class: 'svc-where' }, (r.license ? 'Licence ' + r.license + ' · ' : '') + 'contexte ' +
-        (r.context ? tokens(r.context) : 'inconnu')),
+        (r.context ? tokens(r.context) : 'inconnu') + (r.cached_at ? ' · liste gardée sur le Mac le ' + keptOn(r.cached_at) : '')),
       pick ? h('label', { class: 'inline hub-vision' }, vision, ' Avec la lecture des images (' + pick.file + ', ' +
         gb(pick.size || 0) + ')') : null,
       ...files.map((f) => {

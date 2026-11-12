@@ -31,6 +31,8 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <functional>
+#include <ctime>
 #include <cmath>
 #include <condition_variable>
 #include <cstdlib>
@@ -140,6 +142,67 @@ namespace albireo
             }
             res.set_header("Retry-After", "5");
             return true;
+        }
+
+        /*
+            Les réponses de Hugging Face gardées dans la base (fork pour macOS), pour les montrer hors ligne ou
+            quand Hugging Face ne répond pas : les 30 dernières recherches ("search", par texte cherché) et
+            listes de fichiers ("files", par dépôt), chacune avec sa date ("at", en secondes Unix).
+        */
+        std::mutex hub_cache_m;
+
+        void hub_cache_put(store& db, const char* kind, const std::string& key, const json& value)
+        {
+            std::lock_guard<std::mutex> lock(hub_cache_m);
+            json all;
+            if (!json::parse(db.value("hub_cache", "{}"), all) || !all.is_object()) all = json::object();
+            if (!all[kind].is_object()) all[kind] = json::object();
+            json entry = json::object();
+            entry["at"] = static_cast<long long>(std::time(nullptr));
+            entry["value"] = value;
+            all[kind][key] = entry;
+            while (all[kind].size() > 30)
+            {
+                std::string oldest;
+                long long at = 0;
+                for (const auto& kv : all[kind].items())
+                    if (oldest.empty() || kv.second["at"].as_int(0) < at)
+                    {
+                        oldest = kv.first;
+                        at = kv.second["at"].as_int(0);
+                    }
+                all[kind].erase(oldest);
+            }
+            db.set_value("hub_cache", all.dump());
+        }
+
+        bool hub_cache_get(store& db, const char* kind, const std::string& key, json& value)
+        {
+            std::lock_guard<std::mutex> lock(hub_cache_m);
+            json all;
+            if (!json::parse(db.value("hub_cache", "{}"), all) || !all[kind][key].is_object()) return false;
+            value = all[kind][key]["value"];
+            value["cached_at"] = all[kind][key]["at"].as_int(0);
+            return true;
+        }
+
+        // Les recherches gardées, la plus récente d'abord : {"query", "at"}.
+        json hub_cache_recent(store& db)
+        {
+            std::lock_guard<std::mutex> lock(hub_cache_m);
+            json all, out = json::array();
+            if (!json::parse(db.value("hub_cache", "{}"), all)) return out;
+            std::vector<std::pair<long long, std::string>> list;
+            for (const auto& kv : all["search"].items()) list.emplace_back(kv.second["at"].as_int(0), kv.first);
+            std::sort(list.rbegin(), list.rend());
+            for (const auto& e : list)
+            {
+                json o = json::object();
+                o["query"] = e.second;
+                o["at"] = e.first;
+                out.push_back(o);
+            }
+            return out;
         }
 
         json ok_result(bool ok, const std::string& error = std::string())
@@ -1526,27 +1589,45 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             Hugging Face (fork pour macOS) : la recherche des modèles GGUF, les fichiers d'un dépôt, et l'ajout d'un
             fichier à la liste personnelle, dont le téléchargement démarre aussitôt.
         */
-        srv.Get("/albireo/v1/hub/search", [s](const httplib::Request& req, httplib::Response& res) {
-            if (refuse_offline(*s, res)) return;
+        /*
+            Chaque réponse est gardée sur le Mac.  Hors ligne, avec local=1, ou quand Hugging Face ne répond pas,
+            la dernière réponse gardée est rendue, avec sa date dans "cached_at" ; sans elle : 404 hub_not_cached
+            (hors ligne ou local=1), 502 hub_unreachable sinon.
+        */
+        const auto hub_route = [s](const char* kind, const std::string& key, const httplib::Request& req,
+            httplib::Response& res, const std::function<bool(json&, std::string&)>& ask) {
+            const bool local = req.get_param_value("local") == "1" || s->settings().get().offline;
             json out;
             std::string error;
-            if (!hub_search(req.get_param_value("q"), out, error))
+            if (!local && ask(out, error))
             {
-                send_error(res, 502, "server_error", "Hugging Face: " + error, "hub_unreachable");
+                hub_cache_put(s->db(), kind, key, out);
+                send_json(res, 200, out);
                 return;
             }
-            send_json(res, 200, out);
+            if (hub_cache_get(s->db(), kind, key, out))
+            {
+                send_json(res, 200, out);
+                return;
+            }
+            if (local)
+                send_error(res, 404, "invalid_request_error", "this answer of Hugging Face was never kept on this Mac",
+                    "hub_not_cached");
+            else
+                send_error(res, 502, "server_error", "Hugging Face: " + error, "hub_unreachable");
+        };
+        srv.Get("/albireo/v1/hub/search", [hub_route](const httplib::Request& req, httplib::Response& res) {
+            const std::string q = req.get_param_value("q");
+            hub_route("search", q, req, res, [&](json& out, std::string& error) { return hub_search(q, out, error); });
         });
-        srv.Get("/albireo/v1/hub/files", [s](const httplib::Request& req, httplib::Response& res) {
-            if (refuse_offline(*s, res)) return;
-            json out;
-            std::string error;
-            if (!hub_files(req.get_param_value("repo"), out, error))
-            {
-                send_error(res, 502, "server_error", "Hugging Face: " + error, "hub_unreachable");
-                return;
-            }
-            send_json(res, 200, out);
+        srv.Get("/albireo/v1/hub/files", [hub_route](const httplib::Request& req, httplib::Response& res) {
+            const std::string repo = req.get_param_value("repo");
+            hub_route("files", repo, req, res, [&](json& out, std::string& error) { return hub_files(repo, out, error); });
+        });
+        srv.Get("/albireo/v1/hub/recent", [s](const httplib::Request&, httplib::Response& res) {
+            json o = json::object();
+            o["searches"] = hub_cache_recent(s->db());
+            send_json(res, 200, o);
         });
         srv.Post("/albireo/v1/hub/add", [s](const httplib::Request& req, httplib::Response& res) {
             if (refuse_offline(*s, res)) return;

@@ -777,21 +777,36 @@ paths = {
                               "409": reply("The new port is in use or cannot be opened (code port_unavailable)",
                                            ref("Error"))}}},
     "/albireo/v1/hub/search": {"get": {"tags": ["Hugging Face"], "summary": "Searches the GGUF models of Hugging Face",
+        "description": "Every answer is kept on the Mac (the 30 latest searches). In offline mode, with local=1, or "
+                       "when Hugging Face does not answer, the kept answer of the same words is given, with its date "
+                       "in cached_at.",
         "parameters": [{"name": "q", "in": "query", "schema": {"type": "string"}, "description": "Words of the search; "
-                        "empty: the most downloaded models."}],
+                        "empty: the most downloaded models."},
+                       {"name": "local", "in": "query", "schema": {"type": "string", "enum": ["1"]},
+                        "description": "1: the answer kept on the Mac, without the network."}],
         "responses": {"200": reply("{models: [{repo, architecture, parameters, context, downloads, likes, updated, "
-                                   "compatible, reason, moe}]}, at most 40, the most downloaded first",
+                                   "compatible, reason, moe}], cached_at}, at most 40, the most downloaded first; "
+                                   "cached_at (Unix seconds) when the answer comes from the Mac",
                                    {"type": "object"}),
-                      "409": reply("Refused in offline mode", ref("Error")),
-                      "502": reply("Hugging Face cannot be reached (code hub_unreachable)", ref("Error"))}}},
+                      "404": reply("Offline or local=1, and this search was never kept (code hub_not_cached)",
+                                   ref("Error")),
+                      "502": reply("Hugging Face cannot be reached and nothing is kept (code hub_unreachable)",
+                                   ref("Error"))}}},
     "/albireo/v1/hub/files": {"get": {"tags": ["Hugging Face"], "summary": "The GGUF files of a repository",
+        "description": "Kept on the Mac like the searches (the 30 latest repositories).",
         "parameters": [{"name": "repo", "in": "query", "required": True, "schema": {"type": "string"},
-                        "description": "owner/name"}],
+                        "description": "owner/name"},
+                       {"name": "local", "in": "query", "schema": {"type": "string", "enum": ["1"]},
+                        "description": "1: the answer kept on the Mac, without the network."}],
         "responses": {"200": reply("{repo, architecture, parameters, context, license, files: [{file, size, "
                                    "quantization, compatible, reason, moe, gpu}], projectors: [{file, size, "
-                                   "quantization}]}", {"type": "object"}),
-                      "502": reply("Hugging Face cannot be reached, or the repository is invalid (code "
-                                   "hub_unreachable)", ref("Error"))}}},
+                                   "quantization}], cached_at}", {"type": "object"}),
+                      "404": reply("Offline or local=1, and this repository was never kept (code hub_not_cached)",
+                                   ref("Error")),
+                      "502": reply("Hugging Face cannot be reached, or the repository is invalid, and nothing is "
+                                   "kept (code hub_unreachable)", ref("Error"))}}},
+    "/albireo/v1/hub/recent": {"get": {"tags": ["Hugging Face"], "summary": "The searches kept on the Mac",
+        "responses": {"200": reply("{searches: [{query, at}]}, the most recent first", {"type": "object"})}}},
     "/albireo/v1/hub/add": {"post": {"tags": ["Hugging Face"],
         "summary": "Adds a file to the personal list and starts its download",
         "description": "The entry is made from the repository (size and SHA-256 of Git LFS, architecture, context, "

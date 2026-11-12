@@ -48,6 +48,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstdio>
+#include <ctime>
 #include <cstdlib>
 #include <fstream>
 #include <functional>
@@ -801,8 +802,10 @@ int main(int argc, char** argv)
         check(official_count("other.bin") == other_before_fallback
             && official_count("projector.bin") > projector_before_fallback,
             "online, the sound file of the reserve is reused and only the damaged projector is downloaded");
-        check(read_text(projector_reserved) == projector,
-            "the end of a download keeps a sound copy of each file in the reserve");
+        struct stat kept_stat = {};
+        check(read_text(projector_reserved) == projector && ::stat(projector_reserved.c_str(), &kept_stat) == 0
+            && kept_stat.st_mtime >= std::time(nullptr) - 60,
+            "the end of a download keeps a sound copy of each file in the reserve, dated when it is kept");
 
         check(m.remove("vision", remove_error), "the model can be reserved before a service stop");
         write_text(vision_partial, decoder_prefix);

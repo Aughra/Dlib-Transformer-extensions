@@ -220,6 +220,9 @@ namespace albireo
         json reserve_status() const;
         // Vide la réserve ; renvoie le nombre de fichiers retirés, et dans freed les octets qu'ils comptaient.
         size_t clear_reserve(uint64_t& freed);
+        // Range dans la réserve, sur un thread à lui, les fichiers des modèles installés qui n'y sont pas
+        // encore (ceux installés avant la 4.2.0 du fork) : des clones, vérifiés ; une fois par démarrage.
+        void fill_reserve_async();
         // Affiche un téléchargement de id qui n'a pas pu démarrer, avec son erreur, jusqu'à ce qu'un
         // téléchargement démarre.
         void note_failure(const std::string& id, const user_error& error);
@@ -455,6 +458,7 @@ namespace albireo
         std::string catalog_error_;
         std::atomic<unsigned> generation_{0};
         std::thread refresher_;
+        std::thread filler_;
         std::mutex refresher_m_;            // le lancement d'une mise à jour, par une route ou le service
         std::atomic<bool> refreshing_{false};
         std::atomic<bool> stopped_{false};

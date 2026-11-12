@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Albireo Community Edition local interface",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "description": "The interface of the Albireo service, served on https://localhost (port 8443 unless changed in the Service tab of the web application), and, once the network access is on, in plain HTTP on every address of the Mac at its network port (8444 by default). The routes under /v1 follow the OpenAI interface, so that its client libraries work with base_url https://localhost:8443/v1 and any API key. The functions albireo-general, albireo-code and albireo-security name the models activated for each function, albireo-background the model that comes with Albireo, which the web application uses for its work in the background, and albireo-embedding the embedding model of the search in documents.\n\nA personal version for macOS: on the Mac, every route is open, without a token. On the network port, when a password is chosen, every route but /albireo/v1/lan/login asks for the cookie albireo_lan that the login gives; without one, the network port is open too.\n\nRequests carry JSON bodies of 64 MB and 524,288 values at most, with their length: a body without length is refused with 411, a longer one with 413, another type with 415. GET, HEAD, DELETE and OPTIONS take no body (400). While the JSON bodies being read at once hold the values of their budget, a route that reads one answers 503 with the code busy and a Retry-After of 2 seconds. An answer being written whose model has no memory left for its keys and values ends with the error code out_of_memory.\n\nBefore any route, the server refuses, as plain text, a body of more than 8 MB while four such bodies are being read (503, with a Retry-After header).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -2296,6 +2296,7 @@
      "Hugging Face"
     ],
     "summary": "Searches the GGUF models of Hugging Face",
+    "description": "Every answer is kept on the Mac (the 30 latest searches). In offline mode, with local=1, or when Hugging Face does not answer, the kept answer of the same words is given, with its date in cached_at.",
     "parameters": [
      {
       "name": "q",
@@ -2304,11 +2305,22 @@
        "type": "string"
       },
       "description": "Words of the search; empty: the most downloaded models."
+     },
+     {
+      "name": "local",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "enum": [
+        "1"
+       ]
+      },
+      "description": "1: the answer kept on the Mac, without the network."
      }
     ],
     "responses": {
      "200": {
-      "description": "{models: [{repo, architecture, parameters, context, downloads, likes, updated, compatible, reason, moe}]}, at most 40, the most downloaded first",
+      "description": "{models: [{repo, architecture, parameters, context, downloads, likes, updated, compatible, reason, moe}], cached_at}, at most 40, the most downloaded first; cached_at (Unix seconds) when the answer comes from the Mac",
       "content": {
        "application/json": {
         "schema": {
@@ -2317,8 +2329,8 @@
        }
       }
      },
-     "409": {
-      "description": "Refused in offline mode",
+     "404": {
+      "description": "Offline or local=1, and this search was never kept (code hub_not_cached)",
       "content": {
        "application/json": {
         "schema": {
@@ -2328,7 +2340,7 @@
       }
      },
      "502": {
-      "description": "Hugging Face cannot be reached (code hub_unreachable)",
+      "description": "Hugging Face cannot be reached and nothing is kept (code hub_unreachable)",
       "content": {
        "application/json": {
         "schema": {
@@ -2356,6 +2368,7 @@
      "Hugging Face"
     ],
     "summary": "The GGUF files of a repository",
+    "description": "Kept on the Mac like the searches (the 30 latest repositories).",
     "parameters": [
      {
       "name": "repo",
@@ -2365,11 +2378,22 @@
        "type": "string"
       },
       "description": "owner/name"
+     },
+     {
+      "name": "local",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "enum": [
+        "1"
+       ]
+      },
+      "description": "1: the answer kept on the Mac, without the network."
      }
     ],
     "responses": {
      "200": {
-      "description": "{repo, architecture, parameters, context, license, files: [{file, size, quantization, compatible, reason, moe, gpu}], projectors: [{file, size, quantization}]}",
+      "description": "{repo, architecture, parameters, context, license, files: [{file, size, quantization, compatible, reason, moe, gpu}], projectors: [{file, size, quantization}], cached_at}",
       "content": {
        "application/json": {
         "schema": {
@@ -2378,12 +2402,52 @@
        }
       }
      },
-     "502": {
-      "description": "Hugging Face cannot be reached, or the repository is invalid (code hub_unreachable)",
+     "404": {
+      "description": "Offline or local=1, and this repository was never kept (code hub_not_cached)",
       "content": {
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "502": {
+      "description": "Hugging Face cannot be reached, or the repository is invalid, and nothing is kept (code hub_unreachable)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "On the server of the local network, without the cookie of /albireo/v1/lan/login (code lan_login)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/albireo/v1/hub/recent": {
+   "get": {
+    "tags": [
+     "Hugging Face"
+    ],
+    "summary": "The searches kept on the Mac",
+    "responses": {
+     "200": {
+      "description": "{searches: [{query, at}]}, the most recent first",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
         }
        }
       }

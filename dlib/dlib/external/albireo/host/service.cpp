@@ -301,6 +301,7 @@ namespace albireo
                     return static_cast<uint64_t>(settings_->get().reserve_gb) << 30;
                 });
                 m->trim_reserve();
+                m->fill_reserve_async();
                 m->on_installed([this](const installed_model& im) { on_installed(im); });
                 m->on_replace([this](const std::string& id, const std::function<bool()>& place) {
                     return replace_model_files(id, place);

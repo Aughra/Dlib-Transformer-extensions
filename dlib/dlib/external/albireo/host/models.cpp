@@ -560,6 +560,7 @@ namespace albireo
     {
         stop();
         if (refresher_.joinable()) refresher_.join();
+        if (filler_.joinable()) filler_.join();
         std::map<std::string, std::shared_ptr<job>> jobs;
         {
             std::lock_guard<std::mutex> lock(m_);
@@ -1327,8 +1328,12 @@ namespace albireo
         }
         reserve_dir_ = actual;
         const std::string target = join_path(reserve_dir_, content_sha + ".gguf");
-        if (matches_sha256(target, reserve_dir_, content_sha) && restrict_reserve_file(target)) return true;
-        return copy_verified_file(path, dir_, reserve_dir_, target, content_sha, 0, true, error);
+        const bool kept = (matches_sha256(target, reserve_dir_, content_sha) && restrict_reserve_file(target))
+            || copy_verified_file(path, dir_, reserve_dir_, target, content_sha, 0, true, error);
+        // Un clone garde la date de son original : la copie prend la date où elle entre dans la réserve, que le
+        // plafond compare.
+        if (kept) utimes(target.c_str(), nullptr);
+        return kept;
     }
 
     size_t model_manager::restore_from_reserve(const std::shared_ptr<job>& j, std::vector<bool>& restored)
@@ -1490,6 +1495,33 @@ namespace albireo
         out["shared"] = static_cast<unsigned long long>(shared);
         out["files"] = files;
         return out;
+    }
+
+    void model_manager::fill_reserve_async()
+    {
+        if (filler_.joinable() || reserve_dir_.empty()) return;
+        filler_ = std::thread([this]() {
+            size_t kept = 0;
+            for (const auto& im : db_.models())
+                for (const auto& f : { std::make_pair(im.file, im.sha256),
+                        std::make_pair(im.projector, im.projector_sha256) })
+                {
+                    if (stopped_) return;
+                    if (f.first.empty() || !valid_sha256(f.second) || parent_path(f.first) != dir_
+                        || !file_exists(f.first))
+                        continue;
+                    {
+                        std::lock_guard<std::mutex> lock(reserve_m_);
+                        if (file_exists(join_path(reserve_dir_, f.second + ".gguf"))) continue;
+                    }
+                    std::string why;
+                    if (save_in_reserve(f.first, f.second, why)) ++kept;
+                    else log_warning("models: " + im.id + " is not kept in the local reserve: " + why);
+                }
+            if (kept)
+                log_info("models: " + std::to_string(kept) + " files of the installed models are kept in the local "
+                    "reserve");
+        });
     }
 
     size_t model_manager::clear_reserve(uint64_t& freed)

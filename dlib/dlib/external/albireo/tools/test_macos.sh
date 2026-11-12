@@ -226,6 +226,9 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
     step "service chat" "Paris" curl -sk --max-time 300 https://localhost:$PORT/v1/chat/completions \
       -H "Content-Type: application/json" -d "$BODY"
     step "offline reserve" "local restoration and missing reserve reported" offline_reserve_test
+    # Hors ligne, une recherche Hugging Face jamais gardée sur le Mac ne sort pas : 404 hub_not_cached.
+    step "hub search kept on the Mac" '"code":"hub_not_cached"' curl -sk --max-time 5 \
+      "https://localhost:$PORT/albireo/v1/hub/search?q=never-searched-$$"
     # Le fork n'a plus de lecture à voix haute : la route speech de l'interface OpenAI n'existe plus.
     step "service without speech" "404" curl -sk --max-time 5 -o /dev/null -w "%{http_code}" \
       -H "Content-Type: application/json" -d '{"input": "Bonjour"}' https://localhost:$PORT/v1/audio/speech
