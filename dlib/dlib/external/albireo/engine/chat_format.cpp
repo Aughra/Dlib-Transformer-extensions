@@ -927,6 +927,31 @@ namespace albireo
 
     namespace
     {
+        /*
+            Les consignes des appels d'outils sous forme XML, que Granite 4.2 et Qwen 3.5 écrivent à
+            l'identique après la liste des outils.
+        */
+        const char* const xml_call_instructions = "\n\nIf you choose to call a function ONLY reply in the following format "
+            "with NO suffix:\n\n<tool_call>\n<function=example_function_name>\n"
+            "<parameter=example_parameter_1>\nvalue_1\n</parameter>\n<parameter=example_parameter_2>\n"
+            "This is the value for the second "
+            "parameter\nthat can span\nmultiple lines\n</parameter>\n</function>\n</tool_call>\n\n"
+            "<IMPORTANT>\nReminder:\n- Function calls MUST follow the specified format: an inner "
+            "<function=...></function> block must be nested within <tool_call></tool_call> XML tags\n"
+            "- Required parameters MUST be specified\n- You may provide optional reasoning for your "
+            "function call in natural language BEFORE the function call, but NOT after\n- If there is no "
+            "function call available, answer the question like normal with your current knowledge and do "
+            "not tell the user about function calls\n</IMPORTANT>";
+
+        // Une valeur d'un paramètre XML comme Jinja l'écrit : une chaîne telle quelle, True, False, None, ou du JSON.
+        std::string python_value(const json& v)
+        {
+            if (v.is_string()) return v.as_string();
+            if (v.is_bool()) return v.as_bool() ? "True" : "False";
+            if (v.is_null()) return "None";
+            return v.dump_formatted();
+        }
+
         class chatml_format : public chat_format
         {
         public:
@@ -959,6 +984,9 @@ namespace albireo
                     famille y lisent "{{" et "}}".
                 */
                 doubled_ = tmpl.find("{{\\\"name\\\": <function-name>") != std::string::npos;
+                // Qwen 3.5 (fork pour macOS) : ses appels d'outils sont des éléments <function=name> et <parameter=key>
+                // dans <tool_call>, et le message système suit la liste des outils.
+                xml_calls_ = tmpl.find("<function=example_function_name>") != std::string::npos;
                 add_markers(tok, { "<think>", "</think>", "<tool_call>", "</tool_call>" });
             }
 
@@ -979,7 +1007,25 @@ namespace albireo
                 const bool has_system = !messages.empty() && messages[0].role == "system";
                 const bool tools = tools_ && opt.tools.is_array() && !opt.tools.empty();
                 auto body = [this](const std::string& s) { return trims_ ? strip_spaces(s) : s; };
-                if (tools)
+                if (tools && xml_calls_)
+                {
+                    w.markup("<|im_start|>system\n# Tools\n\nYou have access to the following functions:\n\n<tools>");
+                    for (const auto& t : opt.tools.elements())
+                    {
+                        w.markup("\n");
+                        w.text(t.dump_formatted());
+                    }
+                    w.markup("\n</tools>");
+                    w.markup(xml_call_instructions);
+                    const std::string system = has_system ? strip_spaces(messages[0].content) : std::string();
+                    if (!system.empty())
+                    {
+                        w.markup("\n\n");
+                        w.text(system);
+                    }
+                    w.markup("<|im_end|>\n");
+                }
+                else if (tools)
                 {
                     w.markup("<|im_start|>system\n");
                     if (has_system) { w.text(body(messages[0].content)); w.markup("\n\n"); }
@@ -1066,7 +1112,24 @@ namespace albireo
                         {
                             w.text(content);
                         }
-                        for (size_t k = 0; k < m.tool_calls.size(); ++k)
+                        for (size_t k = 0; k < m.tool_calls.size() && xml_calls_; ++k)
+                        {
+                            w.markup(k > 0 ? "\n" : strip_spaces(content).empty() ? "" : "\n\n");
+                            w.markup("<tool_call>\n<function=");
+                            w.text(m.tool_calls[k].name);
+                            w.markup(">\n");
+                            const json args = json::parse_or_null(m.tool_calls[k].arguments);
+                            for (const auto& kv : args.items())
+                            {
+                                w.markup("<parameter=");
+                                w.text(kv.first);
+                                w.markup(">\n");
+                                w.text(python_value(kv.second));
+                                w.markup("\n</parameter>\n");
+                            }
+                            w.markup("</function>\n</tool_call>");
+                        }
+                        for (size_t k = 0; k < m.tool_calls.size() && !xml_calls_; ++k)
                         {
                             if (k > 0 || !content.empty()) w.markup("\n");
                             w.markup("<tool_call>\n{\"name\": \"");
@@ -1110,15 +1173,17 @@ namespace albireo
                 }
                 if (tools_ && opt.tools.is_array() && !opt.tools.empty())
                 {
-                    c.calls = call_style::tagged_object;
+                    c.calls = xml_calls_ ? call_style::xml_function : call_style::tagged_object;
                     c.call_open = "<tool_call>";
                     c.call_close = "</tool_call>";
+                    if (xml_calls_) c.tools = opt.tools;
                 }
                 return std::unique_ptr<output_parser>(new tag_parser(c));
             }
 
         private:
             bool tools_ = false;
+            bool xml_calls_ = false;
             // Indique si le prompt ouvre le raisonnement : toujours, ou sur demande pour un template
             // commutable qui le fait.
             bool opens(const render_options& opt) const
@@ -1487,17 +1552,8 @@ namespace albireo
                         w.markup("\n");
                         w.text(fn.dump_formatted());
                     }
-                    w.markup("\n</tools>\n\nIf you choose to call a function ONLY reply in the following format "
-                        "with NO suffix:\n\n<tool_call>\n<function=example_function_name>\n"
-                        "<parameter=example_parameter_1>\nvalue_1\n</parameter>\n<parameter=example_parameter_2>\n"
-                        "This is the value for the second "
-                        "parameter\nthat can span\nmultiple lines\n</parameter>\n</function>\n</tool_call>\n\n"
-                        "<IMPORTANT>\nReminder:\n- Function calls MUST follow the specified format: an inner "
-                        "<function=...></function> block must be nested within <tool_call></tool_call> XML tags\n"
-                        "- Required parameters MUST be specified\n- You may provide optional reasoning for your "
-                        "function call in natural language BEFORE the function call, but NOT after\n- If there is no "
-                        "function call available, answer the question like normal with your current knowledge and do "
-                        "not tell the user about function calls\n</IMPORTANT>");
+                    w.markup("\n</tools>");
+                    w.markup(xml_call_instructions);
                 }
                 w.markup("<|im_end|>\n");
 
@@ -1542,7 +1598,7 @@ namespace albireo
                                     w.markup("<parameter=");
                                     w.text(kv.first);
                                     w.markup(">\n");
-                                    w.text(python_text(kv.second));
+                                    w.text(python_value(kv.second));
                                     w.markup("\n</parameter>\n");
                                 }
                                 w.markup("</function>\n</tool_call>\n");
@@ -1605,14 +1661,6 @@ namespace albireo
         private:
             // Une valeur telle que l'écrit le filtre string des templates : str() de Python pour les
             // chaînes, les nombres et les constantes, JSON pour les objets et les tableaux.
-            static std::string python_text(const json& v)
-            {
-                if (v.is_string()) return v.as_string();
-                if (v.is_bool()) return v.as_bool() ? "True" : "False";
-                if (v.is_null()) return "None";
-                return v.dump_formatted();
-            }
-
             static std::string rstrip(std::string s)
             {
                 while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) s.pop_back();

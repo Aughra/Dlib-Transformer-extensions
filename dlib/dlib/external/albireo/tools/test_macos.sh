@@ -171,6 +171,9 @@ else
   step "qwen 3.5 on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$QWEN35_GPU" --reasoning off \
     --temperature 0 --max 20 "$QUESTION"
   step "qwen 3.5 checkpoint on the GPU" "resumed at a checkpoint, answer on its subject" qwen35_checkpoint "$QWEN35_GPU" gpu
+  # Ses appels d'outils, sous forme XML (<function=…>, <parameter=…>), lus par le moteur (Albireo 4.12.1).
+  step "qwen 3.5 tool call" '"name":"get_weather","arguments":".*Paris' "$CHAT" "$ENGINE" "$QWEN35_GPU" \
+    --tools --reasoning off --temperature 0 --max 120 "What is the weather in Paris right now?"
 fi
 
 if [ -f "$EMBEDDING" ] && [ -f "$ENGINE" ]; then

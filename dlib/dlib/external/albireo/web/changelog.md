@@ -2,6 +2,14 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.12.1 — 13 novembre 2026
+
+### Corrections
+
+- Les modèles Qwen 3.5 et 3.6 appellent de nouveau leurs outils (mode agent) : leurs appels s'écrivent sous forme XML (`<tool_call>`, `<function=nom>`, `<parameter=clé>`), que le moteur ne lisait pas pour ce format de conversation. Le prompt avec outils suit désormais leur gabarit à l'octet près (vérifié sur trois conversations, dont deux appels dans une réponse) ; Qwen3.5-4B appelle l'outil, reçoit son résultat et s'en sert dans sa réponse.
+
+---
+
 ## 4.12.0 — 13 novembre 2026
 
 ### Performances
