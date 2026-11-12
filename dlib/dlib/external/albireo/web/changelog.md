@@ -6,7 +6,7 @@ Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition
 
 ### Interface
 
-- Fin de la réorganisation du code de la page, sans changement visible : les réglages d'affichage (`preferences.js`), la navigation (`navigation.js`) et la mise en page (`layout.js`) quittent `app.js`, qui ne garde que le démarrage (136 lignes au lieu de plus de 7 000) et la carte des 22 modules de la page.
+- Fin de la réorganisation du code de la page, sans changement visible : les réglages d'affichage (`preferences.js`), la navigation (`navigation.js`) et la mise en page (`layout.js`) quittent `app.js`, qui ne garde que le démarrage (156 lignes au lieu de plus de 7 000) et la carte des 22 modules de la page.
 
 ---
 

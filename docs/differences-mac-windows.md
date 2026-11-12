@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version d'Albireo](../dlib/dlib/external/albireo/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.11.1, 12 novembre 2026.
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.11.11, 12 novembre 2026.
 
 ## 1. Vitesse du moteur
 
@@ -65,6 +65,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Réglages du service | Fichier `settings.json` et icône Windows | Onglet « Service » : chaque réglage avec sa fiche (normale, hibou, marmotte, abeille) et ses valeurs conseillées mesurées | Tout régler depuis la page, y compris depuis le téléphone | v. 2.0.0 |
 | Choix du modèle | Sélecteur de fonction (Général, Code, Cybersécurité) | Onglet « Modèles » : un modèle pour tout, avec un avis calculé pour ce Mac | Plus simple ; l'avis tient compte de la mémoire du Mac | v. 3.1.0 |
 | Documents | Pièces jointes | Plus un dossier de documents sur le Mac, où chaque pièce jointe est copiée | Retrouver ses documents d'un appareil à l'autre | v. 2.0.0 |
+| Code de la page | Un fichier `app.js` de plus de 7 000 lignes | 22 modules (`app.js` : 156 lignes), sans changement visible ; banc d'essai `tools/page_test` (ESLint et 106 vérifications dans Chrome sans fenêtre) | Lire, corriger et vérifier la page sans tout parcourir | v. 4.11.2 à 4.11.11 |
 | Numéro de version | Celui de l'original (1.0.x) | Numérotation propre au fork, à partir de 2.0.0 | Le programme n'a plus grand-chose de la version Windows | v. 2.0.0 |
 
 ## Ce qui reste comme dans l'original

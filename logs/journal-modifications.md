@@ -11,7 +11,7 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 
 ## 2026-11-12 — Finir le découpage d'app.js : preferences.js, navigation.js, layout.js (Albireo 4.11.11)
 
-- **Quoi** : constantes des rôles, des projets et `maxAgentSteps` rangées dans `state.js` ; `web/js/preferences.js` (thème, langue, `saveSetting`), `web/js/navigation.js` (10 déclarations : `route`, `go`, `newChat`, `goHome`, passage d'une discussion à l'autre), `web/js/layout.js` (`buildLayout`), mot pour mot. `app.js` : 136 lignes, le grand commentaire d'origine, une carte des modules (« LES MODULES ») et `init()` ; plus aucun module n'importe `app.js`. En-têtes d'import normalisés dans les 23 modules du découpage (espaces de noms d'abord, puis par fichier, noms triés, lignes de 120 colonnes au plus).
+- **Quoi** : constantes des rôles, des projets et `maxAgentSteps` rangées dans `state.js` ; `web/js/preferences.js` (thème, langue, `saveSetting`), `web/js/navigation.js` (10 déclarations : `route`, `go`, `newChat`, `goHome`, passage d'une discussion à l'autre), `web/js/layout.js` (`buildLayout`), mot pour mot. `app.js` : 156 lignes, le grand commentaire d'origine, une carte des modules (« LES MODULES ») et `init()` ; plus aucun module n'importe `app.js`. En-têtes d'import normalisés dans les 23 modules du découpage (espaces de noms d'abord, puis par fichier, noms triés, lignes de 120 colonnes au plus).
 - **Fichiers** : `albireo/web/js/*.js`, `albireo/web/changelog.md`, version.
 - **Pourquoi** : fin du chantier D (« découper `app.js`, retirer le code mort »).
 - **Étapes** : ESLint 0 problème ; scénarios de la page : principal 40, documents 12, images 12, actions 24, onglets 11, aucune erreur.
