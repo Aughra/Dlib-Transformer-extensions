@@ -344,6 +344,7 @@ int main(int argc, char** argv)
     // que soit la plage demandée.
     const std::string served = blob(300000, 'a');
     const std::string other = blob(200000, 'k');
+    const std::string projector = blob(90000, 'p');
     const std::string newer_tiny = blob(300000, 'b');
     httplib::Server server;
     server.Get("/model.bin", [&](const httplib::Request&, httplib::Response& res) {
@@ -557,6 +558,7 @@ int main(int argc, char** argv)
     albireo::official_catalog_for_tests(official + "catalog.json");
     official_serve("model.bin", served);
     official_serve("other.bin", other);
+    official_serve("projector.bin", projector);
     official_serve("model-2.bin", newer_tiny);
 
     {
@@ -566,6 +568,19 @@ int main(int argc, char** argv)
         json list = json::array();
         list.push_back(catalog_entry("tiny", served, base_url + "/official/model.bin"));
         list.push_back(catalog_entry("small", other, base_url + "/official/other.bin"));
+        json vision = catalog_entry("vision", other, base_url + "/official/other.bin");
+        json projector_file = json::object();
+        projector_file["url"] = base_url + "/official/projector.bin";
+        projector_file["size"] = static_cast<unsigned long long>(projector.size());
+        projector_file["sha256"] = albireo::sha256_hex(projector);
+        json projector_files = json::array();
+        projector_files.push_back(projector_file);
+        json projector_entry = json::object();
+        projector_entry["size"] = static_cast<unsigned long long>(projector.size());
+        projector_entry["sha256"] = albireo::sha256_hex(projector);
+        projector_entry["files"] = projector_files;
+        vision["projector"] = projector_entry;
+        list.push_back(vision);
         catalog["models"] = list;
         db.set_value("catalog", catalog.dump());
         const std::string reserve_dir = albireo::join_path(work, "reserve");
@@ -675,6 +690,27 @@ int main(int argc, char** argv)
         check(d["state"].as_string() == "done" && read_text(small.file) == other
             && official_count("other.bin") > network_before_corrupt_reserve,
             "a corrupt reserve file is not installed and the network copy is checked");
+
+        check(m.start_download("vision", error), "a model with an image projector downloads");
+        d = wait_download(m, "vision");
+        albireo::installed_model vision_model;
+        check(d["state"].as_string() == "done" && installed(db, "vision", vision_model)
+            && read_text(vision_model.file) == other && read_text(vision_model.projector) == projector,
+            "the model and projector are installed together");
+        check(m.remove("vision", remove_error), "a model and projector can be moved to reserve");
+        const std::string vision_reserved = albireo::join_path(reserve_dir,
+            albireo::sha256_hex(other) + ".gguf");
+        const std::string projector_reserved = albireo::join_path(reserve_dir,
+            albireo::sha256_hex(projector) + ".gguf");
+        check(read_text(vision_reserved) == other && read_text(projector_reserved) == projector,
+            "both model and projector are kept in the local reserve");
+        const int network_before_vision_restore = official_count("other.bin") + official_count("projector.bin");
+        check(m.start_download("vision", error), "a model with its projector can be restored");
+        d = wait_download(m, "vision");
+        check(d["state"].as_string() == "done" && read_text(vision_model.file) == other
+            && read_text(vision_model.projector) == projector
+            && official_count("other.bin") + official_count("projector.bin") == network_before_vision_restore,
+            "a reserved model and projector are restored without a network request");
         m.stop();
     }
 

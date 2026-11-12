@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Étendre les tests hors ligne des outils de modèles
+
+- **Quoi** : l'outil `publish_model.py` transforme les fichiers GGUF invalides ou tronqués en erreur lisible, sans trace Python. Ses tests couvrent maintenant les morceaux compressés et non compressés, leurs empreintes, la reconstruction et les en-têtes invalides. Un test de `make_catalog.py` simule toutes les réponses du Hub, y compris les projecteurs, sans connexion réseau. Le test d'hôte C++ couvre aussi la mise en réserve et la restauration d'un modèle avec son projecteur. Albireo passe à 4.0.5.
+- **Fichiers** : `dlib/dlib/external/albireo/tools/publish_model.py`, `tools/test_publish_model.py`, `tools/test_make_catalog.py`, `tests/test_host.cpp`, `common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md` ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`.
+- **Pourquoi** : mieux vérifier les outils sans publier ni appeler Hugging Face, et contrôler le chemin de réserve pour les modèles multimodaux.
+- **Étapes** : `test_publish_model.py` : 3 tests réussis ; `test_make_catalog.py` : 1 test réussi, toutes les réponses du Hub étant simulées ; `node --check web/js/models.js` passe. L'interface charge hors ligne le catalogue mis en cache et les modèles personnels enregistrés, mais la recherche et la liste de fichiers Hugging Face ne sont pas mises en cache. En mode « hors ligne », l'API refuse même une restauration depuis la réserve et le bouton est désactivé : la réserve actuelle aide donc sans réseau uniquement si ce mode reste désactivé. Les tests C++ restent à exécuter sur Mac.
+
 ## 2026-11-12 — Enregistrer les travaux sans Mac sur la branche de préparation
 
 - **Quoi** : regroupement des contrôles de dossiers, du retrait des choix de moteur non Apple, du test de publication hors réseau et des premières opérations de réserve locale, détaillés ci-dessous. L'en-tête de reprise indique désormais la version effective, Albireo 4.0.4.

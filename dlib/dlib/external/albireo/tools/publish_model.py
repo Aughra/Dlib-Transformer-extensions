@@ -100,7 +100,11 @@ def main():
         print("--part-mb lies between 1 and 2000")
         return 2
 
-    meta, parameters = gguf_info(a.model)
+    try:
+        meta, parameters = gguf_info(a.model)
+    except (OSError, ValueError, struct.error, KeyError) as e:
+        print("error: %s" % e, file=sys.stderr)
+        return 1
     arch = meta.get("general.architecture", "")
     if a.release:
         base = "https://github.com/%s/releases/download/%s" % (a.repo, a.release)
