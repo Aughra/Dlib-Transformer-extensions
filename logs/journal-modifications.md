@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Supprimer la branche bureau-2026-11-12
+
+- **Quoi** : branche `bureau-2026-11-12` supprimée d'`origin` et du Mac ; il ne reste que `main`.
+- **Fichiers** : `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain ; son dernier commit (`f339951`) est dans `main` par la fusion `e7aa5f1`.
+- **Étapes** : `git merge-base --is-ancestor origin/bureau-2026-11-12 main` vérifié avant la suppression.
+
 ## 2026-11-12 — Supprimer la branche travail-windows de GitHub
 
 - **Quoi** : branche `travail-windows` supprimée d'`origin` (`git push origin --delete`).
