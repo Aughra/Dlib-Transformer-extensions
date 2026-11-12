@@ -497,6 +497,23 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : propre au Mac.
 
+### Changement 11 : l'empreinte SHA-256 par CommonCrypto, et les copies de modèles par clone APFS
+
+- **Pourquoi** : chaque téléchargement, vérification, import ou restauration de modèle relit tout le fichier pour son SHA-256. `sha256_stream` (`albireo/host/crypto.cpp`, lignes 29-53 au commit `184ea00`) passe par `mbedtls_sha256_*`, en logiciel : la configuration de mbedtls n'active pas les instructions SHA du processeur (`MBEDTLS_SHA256_USE_ARMV8_A_CRYPTO_IF_PRESENT` est commentée dans `mbedtls_config.h`).
+- **Quoi** : sur Mac, `sha256_stream` passe par CommonCrypto (`CC_SHA256_Init/Update/Final`), qui se sert des instructions SHA de la puce Apple ; même interface, même résultat. Les copies de modèles (`copy_open_file`, et la réserve du fork) deviennent des clones APFS (`fclonefileat` depuis le fichier déjà ouvert) : instantanés, sans place prise tant qu'aucun des deux fichiers ne change ; le clone est relu et haché comme une copie (commit [6af1326](https://github.com/Aughra/Dlib-Transformer-extensions/commit/6af1326)).
+- **Exactitude** : même empreinte au bit près (`474ecaf1…` pour le décodeur du 4B, identique à celle du catalogue) ; tests `test_host` d'Albireo et de Pseudalis passés.
+
+| Sur le M2 (`lowpowermode 0`, charge 2,3 à 3,6), fichier de 2 497 281 472 octets en cache, mesures alternées | mbedtls | CommonCrypto |
+|---|---|---|
+| Essais 1 à 4 | 8,66 à 8,81 s (283 à 288 Mo/s) | 1,17 à 1,21 s (2 059 à 2 141 Mo/s) |
+
+| Service, Qwen3-VL 4B Thinking et son projecteur (2,8 Go), restauration hors ligne depuis la réserve | Copie + mbedtls (4.1.0) | Clone + CommonCrypto |
+|---|---|---|
+| Durée | 23 s | 6,1 et 6,8 s |
+| Place disque prise | 2,8 Go | 0 |
+
+**Mac ou Windows** : le clone est **propre au Mac** (APFS). L'empreinte lente est **probablement aussi sous Windows** : mbedtls n'y a pas non plus d'instructions SHA (il ne sait utiliser que celles d'ARMv8), et chaque modèle téléchargé y est haché en logiciel. Suggestion **non testée** : `BCryptHash` de Windows (CNG), qui se sert des instructions SHA des processeurs x86 récents. Déduit du code ; rien n'a été mesuré sous Windows.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -509,6 +526,7 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | Modèle de recherche (Q8_0), 512 tokens | pas mesuré | 573 à 601 tokens/s (184 à 213 avec les changements 1 à 3) |
 | Encodage d'une image 512 × 512, projecteur du 4B | pas mesuré | 1,8 à 2,2 s (8,9 à 10,3 avec les changements 1 à 3) |
 | 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 21,3 à 21,7 tokens/s sur le GPU ; 18,2 à 18,6 sur le processeur (17,6 à 18,1 sans le changement 8 ; 16,4 à 16,6 sans les changements 6 à 8) |
+| SHA-256 d'un fichier de modèle (vérification, import, restauration) | 283 à 288 Mo/s (mbedtls) | 2 059 à 2 141 Mo/s (changement 11) |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
 

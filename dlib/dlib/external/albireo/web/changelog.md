@@ -2,6 +2,26 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.2.0 — 12 novembre 2026
+
+### Accès et documents
+
+- Chaque modèle téléchargé est gardé dans la réserve du Mac dès la fin de son téléchargement, et non plus seulement à sa suppression.
+- L'onglet Modèles propose « Restaurer depuis le Mac » pour un modèle dont tous les fichiers sont dans la réserve, en ligne comme hors ligne.
+- En ligne, une restauration reprend les fichiers sains de la réserve et ne télécharge que les fichiers absents ou altérés. Une copie altérée est retirée de la réserve.
+
+### Réglages
+
+- Nouveau réglage « Réserve des modèles » (onglet Service, groupe Modèles) : plafond de 0 à 1 000 Go, 200 Go par défaut. Il ne compte que les copies des modèles supprimés ; au-delà, les moins récemment utilisées sont retirées en premier. La carte affiche la place utilisée et propose « Vider la réserve ».
+- API : `GET /albireo/v1/reserve` (contenu et place) et `DELETE /albireo/v1/reserve` (vidage) ; champ `in_reserve` dans la liste des modèles.
+
+### Performances
+
+- Les copies de modèles (réserve, restauration, import) sont des clones APFS : instantanées, sans place disque supplémentaire tant que le fichier ne change pas.
+- L'empreinte SHA-256 utilise CommonCrypto et les instructions SHA de la puce : 2,1 Go/s contre 0,29 Go/s auparavant (M2). Restauration de Qwen3-VL 4B Thinking et de son projecteur (2,8 Go) : 6,1 à 6,8 s contre 23 s, sans place prise.
+
+---
+
 ## 4.1.1 — 12 novembre 2026
 
 ### Plateforme

@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-12 au soir, sur le Mac M2 : branche écrite sous Windows fusionnée, Albireo 4.1.1 (ACL), réserve essayée, épisode 24.
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-12 au soir, sur le Mac M2 : Albireo 4.2.0 (réserve, partie 1) ; plan A, B, C, D en cours (A).
 
 ## Objectif
 
@@ -40,9 +40,15 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 ## Pour reprendre (mis à jour le 2026-11-12 au soir, sur le Mac)
 
-**État** : `main` = Albireo **4.1.1**. La branche `bureau-2026-11-12`, écrite sous Windows (retrait des clés, réserve hors ligne, contrôles POSIX des dossiers), est fusionnée dans `main` (`e7aa5f1`) ; elle et `travail-windows` sont supprimées de GitHub et du Mac (demande de l'humain, 2026-11-12) : il ne reste que `main`. En 4.1.1 (`0d4946d`), les contrôles de dossiers lisent aussi les ACL de macOS. Sur le Mac : 0 erreur ; `tools/test_macos.sh` Albireo **18 sur 18**, Pseudalis **34 sur 34**. La réserve a été essayée avec le vrai service sur une copie des données (détail dans le mémo) : restauration hors ligne, refus d'une copie altérée et repli en ligne marchent. Blog : épisode 24 « Sans clé ». Le service d'Albireo est relancé en 4.1.1 (port 18443, réseau 8444).
+**État** : `main` = Albireo **4.2.0** (réserve, partie 1 : `6af1326`). La branche `bureau-2026-11-12`, écrite sous Windows (retrait des clés, réserve hors ligne, contrôles POSIX des dossiers), est fusionnée dans `main` (`e7aa5f1`) ; elle et `travail-windows` sont supprimées de GitHub et du Mac (demande de l'humain, 2026-11-12) : il ne reste que `main`. En 4.1.1 (`0d4946d`), les contrôles de dossiers lisent aussi les ACL de macOS. Sur le Mac : 0 erreur ; `tools/test_macos.sh` Albireo **18 sur 18**, Pseudalis **34 sur 34**. La réserve a été essayée avec le vrai service sur une copie des données (détail dans le mémo) : restauration hors ligne, refus d'une copie altérée et repli en ligne marchent. Blog : épisode 24 « Sans clé ». Le service d'Albireo est relancé en 4.2.0 (port 18443, réseau 8444).
 
-**Constats de l'essai, à reprendre avec le chantier de la réserve** : en ligne, une seule copie altérée fait retélécharger tout le modèle (2,8 Go) au lieu du seul fichier abîmé ; la copie altérée reste dans la réserve jusqu'à la suppression suivante (après un téléchargement réussi, il faudrait la remplacer) ; une restauration copie les fichiers (un clone APFS, `clonefile`, ne prendrait pas de place).
+**Plan décidé par l'humain (2026-11-12 au soir) : A, B, C, D dans l'ordre**, une sous-étape = une version testée, commitée et poussée :
+- **A. Finir la réserve** : garder chaque modèle dès son téléchargement ; plafond réglable dans l'onglet Service (**200 Go par défaut**, les plus anciens partent d'abord) ; bouton « Vider la réserve » ; recherches Hugging Face gardées et affichées hors ligne ; boutons « Rafraîchir depuis le Mac » / « depuis Hugging Face » dans l'onglet Modèles ; corriger les constats ci-dessous.
+- **B. Nouvelles architectures** dans le moteur (Qwen 3.5 et suivants, Gemma, DeepSeek… : à inventorier et prioriser d'abord).
+- **C. Attention de prompt en tuiles sur le GPU** (M7), pour lever la limite de 2 048 positions.
+- **D. Ranger la page** : découper `app.js`, retirer le code mort.
+
+**Réserve, partie 1 faite (4.2.0, `6af1326`)** : garde dès le téléchargement, clones APFS, SHA-256 par CommonCrypto (×7,3), restauration fichier par fichier (les trois constats de l'essai sont corrigés), plafond `reserve_gb` 200 Go, `GET`/`DELETE /albireo/v1/reserve`, carte de l'onglet Service (vue dans Chrome sans fenêtre), « Restaurer depuis le Mac ». **Partie 2, à faire** : ranger au démarrage dans la réserve les modèles installés avant la 4.2.0 (des clones) ; garder les recherches et fichiers Hugging Face (base) et les montrer hors ligne ; boutons « Rafraîchir depuis le Mac » / « Rafraîchir depuis Hugging Face » dans l'onglet Modèles ; un épisode du blog à la fin de A.
 
 **Ce qui a été fait** (voir le journal du 2026-11-12) : catalogue sans signature, import de dossier sans `.sig`, espace de publication et outils de signature retirés ; version 4.0.0. Puis correction des langues API Pseudalis, nettoyage des commentaires, contrôles POSIX, retrait des choix de moteur obsolètes et premières opérations de réserve ; versions Albireo 4.0.1 à 4.0.4. Albireo **4.0.5** signale proprement un GGUF invalide ; **4.1.0** restaure depuis la réserve hors ligne et corrige une erreur de compilation introduite dans le journal du fork. Les tests Python de publication passent (3/3) ; le générateur du catalogue passe avec réponses simulées (1/1). Les tests C++ et le build complet restent à faire sur Mac.
 
