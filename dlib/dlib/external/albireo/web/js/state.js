@@ -27,3 +27,11 @@ export const state = {
 };
 
 export const ui = {};
+
+// Les fonctions du service, leurs icônes, les couleurs des projets, et le nombre maximal d'étapes de l'agent.
+export const roles = ['general', 'code', 'security'];
+export const roleIcons = { general: 'compass', code: 'code', security: 'shield' };
+export const projectColors = ['#5b8cff', '#f2b544', '#3fb68b', '#e5534b', '#a371f7', '#2fb9d4', '#e08a3c', '#8a90aa'];
+// Le nombre maximal d'étapes d'une réponse avec outils : chaque étape est une requête au modèle, puis les appels qu'il
+// demande.
+export const maxAgentSteps = 100;

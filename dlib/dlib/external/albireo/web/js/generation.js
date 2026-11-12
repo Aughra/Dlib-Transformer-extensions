@@ -9,22 +9,21 @@ import * as api from './api.js';
 import * as store from './store.js';
 import * as tools from './tools.js';
 import * as web from './web.js';
-import { maxAgentSteps } from './app.js';
 import { cancelWarmup, compactLater, errorText, nameConversation, needsTitle, warmBeginning } from './background.js';
-import { deleted, persist } from './conversations.js';
-import { announceBusy, refreshViews } from './tabs.js';
+import { generationOf, generations, prepareQuestion, searchDocumentsOf, unread } from './composer.js';
 import { answerReserve, apiMessages, compact, documentsOf, keptShare, measureImages, requestMedia, systemPrompt,
   tokenEstimate } from './context.js';
+import { deleted, persist } from './conversations.js';
+import { toast } from './dom.js';
 import { contextImages } from './files.js';
-import { fillAssistant, lockThread, renderMain, scrollToEnd } from './thread.js';
-import { generationOf, generations, prepareQuestion, searchDocumentsOf, unread } from './composer.js';
-import { knowledgeMode, queueIndex } from './indexing.js';
 import { language, t } from './i18n.js';
-import { modelName, roleCapabilities, roleModel, toolSet } from './status.js';
+import { knowledgeMode, queueIndex } from './indexing.js';
 import { projectById, searchConversations } from './lists.js';
 import { rememberLater } from './memory.js';
-import { state, ui } from './state.js';
-import { toast } from './dom.js';
+import { maxAgentSteps, state, ui } from './state.js';
+import { modelName, roleCapabilities, roleModel, toolSet } from './status.js';
+import { announceBusy, refreshViews } from './tabs.js';
+import { fillAssistant, lockThread, renderMain, scrollToEnd } from './thread.js';
 
 // Donne une compression à la discussion c.
 export function applyCompaction(c, r) {

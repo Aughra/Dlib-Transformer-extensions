@@ -9,16 +9,16 @@ import * as images from './images.js';
 import * as rag from './rag.js';
 import * as store from './store.js';
 import { cancelWarmup, exclusive, serviceReady, warmups } from './background.js';
-import { broadcast } from './tabs.js';
-import { cancelCompaction, compactions } from './generation.js';
-import { languageNames, projectById } from './lists.js';
-import { backgroundChat, backgroundReadsImages } from './status.js';
-import { imageIds, imageThumb } from './files.js';
 import { distinctLines, estimateTokens, keepStart, knowledgeSeconds, knowledgeShare, wholeTokens } from './context.js';
 import { formatNumber, formatSize, h, iconButton, storageFailed } from './dom.js';
-import { icon } from './icons.js';
+import { imageIds, imageThumb } from './files.js';
+import { cancelCompaction, compactions } from './generation.js';
 import { language, t, tn } from './i18n.js';
+import { icon } from './icons.js';
+import { languageNames, projectById } from './lists.js';
 import { state, ui } from './state.js';
+import { backgroundChat, backgroundReadsImages } from './status.js';
+import { broadcast } from './tabs.js';
 
 // La recherche dans les documents : les documents en cours d'indexation, un à la fois en arrière-plan.
 const indexing = new Map();   // document -> {owner, done, total, abort}

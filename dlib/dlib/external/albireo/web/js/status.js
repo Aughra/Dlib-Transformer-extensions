@@ -9,21 +9,19 @@ import * as api from './api.js';
 import * as rag from './rag.js';
 import * as tools from './tools.js';
 import * as web from './web.js';
-import { describePending, indexProjects,
-  showIndexState } from './indexing.js';
+import { hintText, namePending, serviceReady } from './background.js';
+import { imageTokenCache, readRate, workingContext, writeRate } from './context.js';
 import { dialog } from './dialogs.js';
 import { documentAccept } from './documents.js';
-
-import { hintText, namePending, serviceReady } from './background.js';
-import { expireBusy, languageChanged, refreshViews } from './tabs.js';
-import { lockThread } from './thread.js';
 import { fill, formatDecimal, h } from './dom.js';
-import { imageTokenCache, readRate, workingContext, writeRate } from './context.js';
 import { language, t } from './i18n.js';
-import { modelSheetDialog } from './models.js';
+import { describePending, indexProjects, showIndexState } from './indexing.js';
 import { rememberLater } from './memory.js';
+import { modelSheetDialog } from './models.js';
 import { settingsDialog } from './settings.js';
 import { state, ui } from './state.js';
+import { expireBusy, languageChanged, refreshViews } from './tabs.js';
+import { lockThread } from './thread.js';
 
 // État du service et modèles.
 export function roleModel(role) {

@@ -10,21 +10,23 @@ import * as images from './images.js';
 import * as rag from './rag.js';
 import * as store from './store.js';
 import * as web from './web.js';
-import { applyLanguage, applyTheme, buildLayout, go } from './app.js';
 import { cancelWarmup } from './background.js';
-import { deleted } from './conversations.js';
-import { renderSidebar } from './sidebar.js';
-import { cancelBackground, cancelIndex } from './indexing.js';
-import { cancelCompaction } from './generation.js';
-import { defaults, state, ui } from './state.js';
-import { forgetDraft, forgetStoredDrafts, waitingImages } from './drafts.js';
-import { forgetMemory, rememberLater, tabId } from './memory.js';
 import { generations, renderComposerState, stopAllGenerations, stopGeneration, unread } from './composer.js';
-import { language } from './i18n.js';
-import { lockThread, renderAll, renderMain, renderTopbar } from './thread.js';
-import { projectById, reloadLists } from './lists.js';
-import { renderStatusLine } from './status.js';
+import { deleted } from './conversations.js';
 import { storageFailed } from './dom.js';
+import { forgetDraft, forgetStoredDrafts, waitingImages } from './drafts.js';
+import { cancelCompaction } from './generation.js';
+import { language } from './i18n.js';
+import { cancelBackground, cancelIndex } from './indexing.js';
+import { buildLayout } from './layout.js';
+import { projectById, reloadLists } from './lists.js';
+import { forgetMemory, rememberLater, tabId } from './memory.js';
+import { go } from './navigation.js';
+import { applyLanguage, applyTheme } from './preferences.js';
+import { renderSidebar } from './sidebar.js';
+import { defaults, state, ui } from './state.js';
+import { renderStatusLine } from './status.js';
+import { lockThread, renderAll, renderMain, renderTopbar } from './thread.js';
 
 /*
     Les onglets de l'application se communiquent les réglages qu'ils changent, la remise à zéro de

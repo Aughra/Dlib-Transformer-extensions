@@ -6,16 +6,16 @@
 // un seul onglet la mettre à jour, et l'identifiant de cet onglet (tabId).
 
 import * as store from './store.js';
-import { saveSetting } from './app.js';
-import { deleted } from './conversations.js';
-import { broadcast } from './tabs.js';
 import { generations } from './composer.js';
-import { fold, languageNames, textLanguage } from './lists.js';
-import { backgroundContext, backgroundRates, backgroundText } from './status.js';
 import { keepStart, memoryLimitWords } from './context.js';
-import { defaults, state } from './state.js';
-import { language, t, tn } from './i18n.js';
+import { deleted } from './conversations.js';
 import { toast } from './dom.js';
+import { language, t, tn } from './i18n.js';
+import { fold, languageNames, textLanguage } from './lists.js';
+import { saveSetting } from './preferences.js';
+import { defaults, state } from './state.js';
+import { backgroundContext, backgroundRates, backgroundText } from './status.js';
+import { broadcast } from './tabs.js';
 
 /*
     La mémoire lit les questions des discussions qu'elle n'a pas encore lues, chaque discussion à

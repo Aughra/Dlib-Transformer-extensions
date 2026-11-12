@@ -10,11 +10,11 @@ import * as images from './images.js';
 import * as tools from './tools.js';
 import * as web from './web.js';
 import { dayText, today } from './composer.js';
-import { projectById } from './lists.js';
-import { backgroundContext, backgroundRates, backgroundText, loadedModel, readsImages } from './status.js';
 import { imageIds } from './files.js';
 import { imageDocument, knowledgeMode } from './indexing.js';
+import { projectById } from './lists.js';
 import { state } from './state.js';
+import { backgroundContext, backgroundRates, backgroundText, loadedModel, readsImages } from './status.js';
 
 /*
     Le contexte de travail d'une discussion (workingContext) : le contexte que le moteur donne au modèle, déjà ramené

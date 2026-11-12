@@ -7,27 +7,27 @@
 import * as images from './images.js';
 import * as rag from './rag.js';
 import * as store from './store.js';
-import { acceptFor, inputsLabel, readsImages, roleCapabilities, roleInputs, roleModel, toolsAvailable,
-  webUnavailable } from './status.js';
-import { keepImages } from './app.js';
 import { cancelWarmup, provisionalTitle, titleQuestionOf } from './background.js';
-import { persist } from './conversations.js';
-import { renderSidebar } from './sidebar.js';
-import { announceBusy, answeredElsewhere, refreshViews } from './tabs.js';
-import { runTurn } from './generation.js';
-import { attachmentChip, lockThread, renderMain } from './thread.js';
 import { attachmentSeconds, attachmentShare, estimateTokens, excerptBudget, keepStart, maxContextImages,
   maxQuestionProjectImages, wholeTokens } from './context.js';
+import { persist } from './conversations.js';
+import { searchPassages, terms } from './documents.js';
+import { fill, h, toast } from './dom.js';
 import { cancelDraftSave, draftKey, drafts, forgetDraft, imageIdsOf, storedDraft } from './drafts.js';
 import { contextImages, imageLimitText, imageRecord, imageRoom, imageThumb, readFiles } from './files.js';
-import { fill, h, toast } from './dom.js';
+import { runTurn } from './generation.js';
+import { t } from './i18n.js';
 import { icon } from './icons.js';
 import { knowledgeMode, queueIndex } from './indexing.js';
-import { memoryAbort } from './memory.js';
 import { projectById } from './lists.js';
-import { searchPassages, terms } from './documents.js';
+import { memoryAbort } from './memory.js';
+import { keepImages } from './navigation.js';
+import { renderSidebar } from './sidebar.js';
 import { state, ui } from './state.js';
-import { t } from './i18n.js';
+import { acceptFor, inputsLabel, readsImages, roleCapabilities, roleInputs, roleModel, toolsAvailable,
+  webUnavailable } from './status.js';
+import { announceBusy, answeredElsewhere, refreshViews } from './tabs.js';
+import { attachmentChip, lockThread, renderMain } from './thread.js';
 
 // Zone de saisie.
 export function renderComposerState() {

@@ -6,20 +6,20 @@
 
 import * as tools from './tools.js';
 import * as web from './web.js';
-import { answeredElsewhere } from './tabs.js';
-import { go, projectColors, roleIcons } from './app.js';
-import { conversationMenu } from './conversations.js';
-import { dateGroup, excerptHtml, markTerms, projectActivity, projectById, queryTerms, searchConversations,
-  searchDialog, sideLimit } from './lists.js';
-import { escapeHtml } from './markdown.js';
 import { generations, unread } from './composer.js';
-import { h } from './dom.js';
-import { icon } from './icons.js';
-import { newProject } from './projects.js';
-import { searchProvider } from './status.js';
+import { conversationMenu } from './conversations.js';
 import { showPopover } from './dialogs.js';
-import { state, ui } from './state.js';
+import { h } from './dom.js';
 import { t } from './i18n.js';
+import { icon } from './icons.js';
+import { dateGroup, excerptHtml, markTerms, projectActivity, projectById, queryTerms, searchConversations, searchDialog,
+  sideLimit } from './lists.js';
+import { escapeHtml } from './markdown.js';
+import { go } from './navigation.js';
+import { newProject } from './projects.js';
+import { projectColors, roleIcons, state, ui } from './state.js';
+import { searchProvider } from './status.js';
+import { answeredElsewhere } from './tabs.js';
 import { toolIcons, toolLabel } from './thread.js';
 
 // Panneau latéral.

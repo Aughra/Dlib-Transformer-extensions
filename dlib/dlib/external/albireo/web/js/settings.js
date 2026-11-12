@@ -9,25 +9,26 @@ import * as images from './images.js';
 import * as rag from './rag.js';
 import * as store from './store.js';
 import * as web from './web.js';
-import { applyTheme, go, roles, saveSetting } from './app.js';
 import { namePending } from './background.js';
-import { deleted } from './conversations.js';
-import { broadcast, refreshViews, syncLists } from './tabs.js';
 import { generations, stopAllGenerations, unread } from './composer.js';
-import { forgetStoredDrafts, waitingImages } from './drafts.js';
-import { reloadLists } from './lists.js';
-import { backgroundContext, modelName, refreshStatus, searchProvider } from './status.js';
-import { forgetMemory, memoryParagraph, memorySentences } from './memory.js';
-import { cancelBackground, cancelIndex, describePending, indexAttachments, indexProjects } from './indexing.js';
 import { memoryLimitWords } from './context.js';
+import { deleted } from './conversations.js';
 import { confirmDialog, dialog, field } from './dialogs.js';
 import { download, fill, formatNumber, formatSize, h, storageFailed, toast } from './dom.js';
-import { escapeHtml, renderMarkdown } from './markdown.js';
-import { icon } from './icons.js';
+import { forgetStoredDrafts, waitingImages } from './drafts.js';
 import { language, t, tn } from './i18n.js';
+import { icon } from './icons.js';
+import { cancelBackground, cancelIndex, describePending, indexAttachments, indexProjects } from './indexing.js';
+import { reloadLists } from './lists.js';
+import { escapeHtml, renderMarkdown } from './markdown.js';
+import { forgetMemory, memoryParagraph, memorySentences } from './memory.js';
 import { modelsTab } from './models.js';
+import { go } from './navigation.js';
+import { applyTheme, saveSetting } from './preferences.js';
 import { serviceTab } from './service.js';
-import { state, ui } from './state.js';
+import { roles, state, ui } from './state.js';
+import { backgroundContext, modelName, refreshStatus, searchProvider } from './status.js';
+import { broadcast, refreshViews, syncLists } from './tabs.js';
 
 export function settingsDialog(initialTab) {
   dialog((box, close) => {

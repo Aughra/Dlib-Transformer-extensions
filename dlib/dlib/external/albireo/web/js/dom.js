@@ -4,8 +4,8 @@
 // Les outils de la page que partagent ses modules (fork pour macOS) : la création des éléments (h), les tailles, nombres
 // et durées écrits en français, les messages passagers (toast), le presse-papiers et les fichiers à enregistrer.
 
-import { icon } from './icons.js';
 import { language, t } from './i18n.js';
+import { icon } from './icons.js';
 import { ui } from './state.js';
 
 // Fonctions utilitaires.

@@ -6,18 +6,18 @@
 // et le texte des erreurs du service.
 
 import * as api from './api.js';
+import { generations, renderComposerState } from './composer.js';
 import { answerReserve, apiMessages, compact, compactShare, estimateMedia, keepStart, requestMedia, systemPrompt,
   tokenEstimate } from './context.js';
-import { answeredElsewhere, refreshViews } from './tabs.js';
-import { backgroundChat, backgroundModel, backgroundTimeout, roleCapabilities, roleModel, toolSet } from './status.js';
-import { compactions, currentVersion, keptTokens, nextStart, settleCompaction } from './generation.js';
 import { deleted, persist } from './conversations.js';
-import { fold, languageNames, textLanguage } from './lists.js';
-import { generations, renderComposerState } from './composer.js';
-import { lockThread } from './thread.js';
 import { markOutside } from './files.js';
-import { state } from './state.js';
+import { compactions, currentVersion, keptTokens, nextStart, settleCompaction } from './generation.js';
 import { t } from './i18n.js';
+import { fold, languageNames, textLanguage } from './lists.js';
+import { state } from './state.js';
+import { backgroundChat, backgroundModel, backgroundTimeout, roleCapabilities, roleModel, toolSet } from './status.js';
+import { answeredElsewhere, refreshViews } from './tabs.js';
+import { lockThread } from './thread.js';
 
 /*
     Une erreur dans la langue de l'interface : une erreur du service par son code, une erreur de la lecture d'un

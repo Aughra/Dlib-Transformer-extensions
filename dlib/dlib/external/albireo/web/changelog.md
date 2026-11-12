@@ -2,6 +2,14 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.11.11 — 12 novembre 2026
+
+### Interface
+
+- Fin de la réorganisation du code de la page, sans changement visible : les réglages d'affichage (`preferences.js`), la navigation (`navigation.js`) et la mise en page (`layout.js`) quittent `app.js`, qui ne garde que le démarrage (136 lignes au lieu de plus de 7 000) et la carte des 22 modules de la page.
+
+---
+
 ## 4.11.10 — 12 novembre 2026
 
 ### Interface

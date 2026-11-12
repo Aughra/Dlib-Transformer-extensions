@@ -6,31 +6,31 @@
 // défilement du fil et l'affichage d'une réponse au fil de son écriture.
 
 import * as images from './images.js';
-
 import * as web from './web.js';
-import { acceptFor, modelName, renderStatusLine, roleCapabilities, roleModel,
-  toolsAvailable } from './status.js';
-import { go, maxAgentSteps, saveSetting } from './app.js';
-import { attachmentIds, conversationMenu, deleteQuestion, exportAnswer, liveCopy, moveMenu, persist } from './conversations.js';
-import { renderSidebar } from './sidebar.js';
-import { answeredElsewhere, refreshViews } from './tabs.js';
-import { compactions } from './generation.js';
 import { autoGrow, busyHere, liveMessage, regenerate, renderComposerState, sendMessage } from './composer.js';
-import { attachCodeButtons, escapeHtml, renderMarkdown } from './markdown.js';
-import { attachMenu, contextImages, imageIds, imageLimitText, imageRoom, imageThumb, pastedFiles, pendingImageCount,
-  readFiles } from './files.js';
-import { changelogDialog, renderLicenses, settingsDialog } from './settings.js';
+import { maxContextImages } from './context.js';
+import { attachmentIds, conversationMenu, deleteQuestion, exportAnswer, liveCopy, moveMenu,
+  persist } from './conversations.js';
+import { showMenu } from './dialogs.js';
+import { extension } from './documents.js';
 import { copyText, download, formatDecimal, formatDuration, formatNumber, formatShortDuration, formatSize, h,
   iconButton, mimeOf, toast } from './dom.js';
-import { extension } from './documents.js';
-import { forgetDocument } from './indexing.js';
-import { icon } from './icons.js';
+import { attachMenu, contextImages, imageIds, imageLimitText, imageRoom, imageThumb, pastedFiles, pendingImageCount,
+  readFiles } from './files.js';
+import { compactions } from './generation.js';
 import { language, t, tn } from './i18n.js';
-import { maxContextImages } from './context.js';
+import { icon } from './icons.js';
+import { forgetDocument } from './indexing.js';
 import { projectById } from './lists.js';
+import { attachCodeButtons, escapeHtml, renderMarkdown } from './markdown.js';
+import { go } from './navigation.js';
+import { saveSetting } from './preferences.js';
 import { renderProject } from './projects.js';
-import { showMenu } from './dialogs.js';
-import { state, ui } from './state.js';
+import { changelogDialog, renderLicenses, settingsDialog } from './settings.js';
+import { renderSidebar } from './sidebar.js';
+import { maxAgentSteps, state, ui } from './state.js';
+import { acceptFor, modelName, renderStatusLine, roleCapabilities, roleModel, toolsAvailable } from './status.js';
+import { answeredElsewhere, refreshViews } from './tabs.js';
 
 // Zone principale.
 export function renderAll() {

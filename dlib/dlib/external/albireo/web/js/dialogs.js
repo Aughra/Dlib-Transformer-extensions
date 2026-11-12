@@ -5,8 +5,8 @@
 // d'explications qui s'ouvrent sous un bouton (fork pour macOS : sortis d'app.js).
 
 import { h } from './dom.js';
-import { icon } from './icons.js';
 import { t } from './i18n.js';
+import { icon } from './icons.js';
 import { ui } from './state.js';
 
 export function showMenu(anchor, entries) {

@@ -7,25 +7,24 @@
 import * as images from './images.js';
 import * as rag from './rag.js';
 import * as store from './store.js';
-import { attachMenu, dropFiles, imageLimitText, imageRecord, itemLimitText,
-  readFiles } from './files.js';
-import { go, newChat, projectColors } from './app.js';
-import { renderSidebar } from './sidebar.js';
-import { broadcast, keepOwnCopies, refreshViews } from './tabs.js';
 import { generations } from './composer.js';
-import { formatBadge, renderTopbar } from './thread.js';
-import { reloadLists } from './lists.js';
-import { roleCapabilities } from './status.js';
-import { cancelDescription, forgetDocument, forgetOwner, knowledgeMode, projectImageRow, queueDescription, queueIndex,
-  showIndexState } from './indexing.js';
+import { estimateTokens, maxProjectImages, maxProjectItems } from './context.js';
 import { confirmDialog, promptDialog } from './dialogs.js';
 import { documentAccept } from './documents.js';
-import { escapeHtml } from './markdown.js';
-import { estimateTokens, maxProjectImages, maxProjectItems } from './context.js';
 import { formatNumber, h, iconButton, storageFailed, toast } from './dom.js';
-import { icon } from './icons.js';
+import { attachMenu, dropFiles, imageLimitText, imageRecord, itemLimitText, readFiles } from './files.js';
 import { language, t, tn } from './i18n.js';
-import { state, ui } from './state.js';
+import { icon } from './icons.js';
+import { cancelDescription, forgetDocument, forgetOwner, knowledgeMode, projectImageRow, queueDescription, queueIndex,
+  showIndexState } from './indexing.js';
+import { reloadLists } from './lists.js';
+import { escapeHtml } from './markdown.js';
+import { go, newChat } from './navigation.js';
+import { renderSidebar } from './sidebar.js';
+import { projectColors, state, ui } from './state.js';
+import { roleCapabilities } from './status.js';
+import { broadcast, keepOwnCopies, refreshViews } from './tabs.js';
+import { formatBadge, renderTopbar } from './thread.js';
 
 // Projets.
 export async function newProject(silent) {

@@ -8,17 +8,16 @@
 import * as api from './api.js';
 import * as images from './images.js';
 import * as store from './store.js';
-import { closeMenu, confirmDialog, dialog, showMenu } from './dialogs.js';
-
 import { errorText } from './background.js';
-import { inputsLabel, modelName, roleInputs, roleModel } from './status.js';
-import { escapeHtml } from './markdown.js';
+import { maxContextImages, maxProjectImages, maxProjectItems } from './context.js';
+import { closeMenu, confirmDialog, dialog, showMenu } from './dialogs.js';
 import { extractText, fileKind, maxFileBytes, pdfPages } from './documents.js';
 import { formatLimit, formatNumber, formatSize, h, iconButton, toast } from './dom.js';
-import { icon } from './icons.js';
 import { language, t, tn } from './i18n.js';
-import { maxContextImages, maxProjectImages, maxProjectItems } from './context.js';
+import { icon } from './icons.js';
+import { escapeHtml } from './markdown.js';
 import { state, ui } from './state.js';
+import { inputsLabel, modelName, roleInputs, roleModel } from './status.js';
 
 // Les documents du Mac (fork pour macOS).
 /*

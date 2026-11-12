@@ -8,26 +8,23 @@
 import * as images from './images.js';
 import * as store from './store.js';
 import * as web from './web.js';
-import { answerReserve,
-  compact } from './context.js';
-import { answering } from './sidebar.js';
-import { applyCompaction, cancelCompaction,
-  compactions } from './generation.js';
-import { broadcast, refreshViews } from './tabs.js';
-import { go } from './app.js';
 import { cancelWarmup, warmBeginning } from './background.js';
+import { generations, stopGeneration, unread } from './composer.js';
+import { answerReserve, compact } from './context.js';
 import { confirmDialog, promptDialog, showMenu } from './dialogs.js';
 import { download, formatSize, storageFailed, toast } from './dom.js';
-import { forgetDocument, forgetOwner } from './indexing.js';
 import { forgetDraft } from './drafts.js';
-import { generations, stopGeneration, unread } from './composer.js';
-
 import { imageIds } from './files.js';
-import { newProject } from './projects.js';
-import { renderMain, threadLocked } from './thread.js';
-import { roleCapabilities, roleModel } from './status.js';
-import { state } from './state.js';
+import { applyCompaction, cancelCompaction, compactions } from './generation.js';
 import { t } from './i18n.js';
+import { forgetDocument, forgetOwner } from './indexing.js';
+import { go } from './navigation.js';
+import { newProject } from './projects.js';
+import { answering } from './sidebar.js';
+import { state } from './state.js';
+import { roleCapabilities, roleModel } from './status.js';
+import { broadcast, refreshViews } from './tabs.js';
+import { renderMain, threadLocked } from './thread.js';
 
 /*
     La discussion à laquelle cet onglet répond, affichée ou non, et la discussion ouverte sont les copies qui répondent

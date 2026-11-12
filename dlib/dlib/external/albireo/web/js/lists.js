@@ -7,12 +7,12 @@
 
 import * as store from './store.js';
 import { dialog } from './dialogs.js';
-import { escapeHtml } from './markdown.js';
-import { go, projectColors, roleIcons } from './app.js';
 import { h } from './dom.js';
-import { icon } from './icons.js';
 import { language, t, tn } from './i18n.js';
-import { state } from './state.js';
+import { icon } from './icons.js';
+import { escapeHtml } from './markdown.js';
+import { go } from './navigation.js';
+import { projectColors, roleIcons, state } from './state.js';
 
 // Listes.
 export async function reloadLists() {
