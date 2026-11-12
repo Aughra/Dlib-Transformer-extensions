@@ -2,6 +2,19 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.13.0 — 13 novembre 2026
+
+### Plateforme
+
+- Les modèles Qwen 3.5 lisent les images, avec leur projecteur (du même type que celui de Qwen3-VL) et les mêmes positions rotatives entrelacées. Vérification par rapport à llama.cpp 0.9.0, sur le processeur et en choix glouton, avec Qwen3.5-4B Q4_K_M et son projecteur F16 : la description d'un perroquet est identique mot pour mot, celle d'un zèbre jusqu'à une quasi-égalité (« grass » contre « grasses ») ; même nombre de tokens de prompt (277, dont 256 pour l'image). Encodage d'une image de 512 × 512 points : 1,7 s sur un MacBook Air M2.
+- La recherche Hugging Face propose le projecteur des dépôts Qwen 3.5 (Q8_0, sinon F16). Un modèle installé avant cette version n'a pas de projecteur. Les projecteurs de Qwen 3.6 à mélange d'experts, pas encore essayés, ne sont pas proposés.
+
+### Corrections
+
+- Les positions rotatives que le moteur donne pour chaque token (modèles qui lisent les images) sont transmises à chaque morceau d'un prompt coupé aux points de reprise, pour les modèles Qwen 3.5 et 3.6.
+
+---
+
 ## 4.12.1 — 13 novembre 2026
 
 ### Corrections

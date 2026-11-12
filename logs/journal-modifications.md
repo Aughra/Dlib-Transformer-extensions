@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-13 — Faire lire les images à Qwen 3.5 (Albireo 4.13.0), épisode 33
+
+- **Quoi** : `model_config.cpp` : les sections de la rope multimodale (`rope.dimension_sections`) sont lues pour `qwen35` et `qwen35moe` quand le fichier les déclare (llama.cpp : `LLAMA_ROPE_TYPE_IMROPE` pour ces architectures, comme Qwen3-VL) ; le moteur accepte alors leur projecteur `qwen3vl_merger` (sans DeepStack). `cpu_runtime_metal.cpp` : `run_gpu_checkpointed` recopie dans chaque morceau les positions rotatives données par le lot. `hub.cpp` : la recherche propose le projecteur des dépôts `qwen35`. `test_macos.sh` : étape « qwen 3.5 image ». Projecteur de test : `build/models/Qwen3.5-4B-mmproj-F16.gguf` (unsloth/Qwen3.5-4B-GGUF, SHA-256 conforme à Hugging Face).
+- **Fichiers** : `albireo/engine/{model_config.cpp,cpu_runtime_metal.cpp}`, `albireo/host/hub.cpp`, `albireo/tools/test_macos.sh`, `albireo/web/changelog.md`, version ; `docs/*`, `logs/*`, `blog/33-*`, `blog/README.md`.
+- **Pourquoi** : point (4) de B1 ; le Qwen3.5-4B du service est un modèle « image-text-to-text ».
+- **Étapes** : texte seul inchangé (28 sur 28 avant l'étape d'image). Comparaison à llama.cpp 0.9.0 (`llama-server --mmproj`, `-ngl 0`, `enable_thinking` faux, glouton) : perroquet identique mot pour mot, zèbre identique jusqu'à « grass » / « grasses » ; 277 tokens de prompt des deux côtés. Deux tours avec image sur le GPU et sur le processeur : réponses justes au second tour (bec jaune à pointe noire, fond vert). Moteur sans la correction des positions : même réponse au second tour sur cet essai (défaut invisible ici, correction gardée car nécessaire en principe). `test_macos.sh` 29 sur 29, `test_metal` et `test_host` passent.
+
 ## 2026-11-13 — Lire les appels d'outils de Qwen 3.5 sous forme XML (Albireo 4.12.1)
 
 - **Quoi** : `chat_format.cpp`, format ChatML : un gabarit qui contient `<function=example_function_name>` (Qwen 3.5 / 3.6) rend ses outils comme lui (« You have access to the following functions », consignes XML, message système après la liste), les appels d'une réponse en XML (`<function=…>`, `<parameter=…>`, valeurs écrites comme Jinja : chaînes telles quelles, True / False / None, JSON pour les objets et les listes), et lit les appels du modèle par le lecteur XML déjà écrit pour Granite 4.2 (`call_style::xml_function`, types des paramètres tirés des définitions). Les consignes XML et l'écriture des valeurs (`xml_call_instructions`, `python_value`) sont mises en commun avec Granite 4.2. `test_macos.sh` : étape « qwen 3.5 tool call ».

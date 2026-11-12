@@ -20,7 +20,9 @@ namespace albireo
             "qwen3", "qwen3vl", "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "phi3", "qwen35", "qwen35moe" };
         const std::set<std::string> moe_architectures = { "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "qwen35moe" };
         // Les architectures dont le moteur lit les images (un projecteur).
-        const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe" };
+        // Les architectures dont le moteur lit les images avec un projecteur qwen3vl_merger ; qwen35 depuis Albireo
+        // 4.13.0 du fork (qwen35moe, dont aucun projecteur n'a encore été essayé, attend).
+        const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe", "qwen35" };
 
         std::string lower(std::string s)
         {

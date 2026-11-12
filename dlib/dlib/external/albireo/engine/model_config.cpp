@@ -173,7 +173,13 @@ namespace albireo
         if (!(c.rope_attn_factor > 0.0))
             throw std::runtime_error("the model metadata holds an invalid rotary attention factor");
 
-        if (a == "qwen3vl" || a == "qwen3vlmoe")
+        /*
+            Qwen 3.5 et 3.6 (fork pour macOS) lisent aussi des images, avec les mêmes positions rotatives
+            entrelacées que Qwen3-VL (LLAMA_ROPE_TYPE_IMROPE dans llama.cpp) et sans entrées DeepStack ; un
+            fichier qui ne déclare pas de sections reste un modèle de texte.
+        */
+        const bool qwen35_sections = (a == "qwen35" || a == "qwen35moe") && g.has(a + ".rope.dimension_sections");
+        if (a == "qwen3vl" || a == "qwen3vlmoe" || qwen35_sections)
         {
             // Sections temps, ligne et colonne des paires rotatives, plus une quatrième inutilisée,
             // qui couvrent les paires d'une tête comme l'attend la disposition entrelacée de la

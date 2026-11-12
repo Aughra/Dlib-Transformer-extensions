@@ -171,6 +171,15 @@ else
   step "qwen 3.5 on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$QWEN35_GPU" --reasoning off \
     --temperature 0 --max 20 "$QUESTION"
   step "qwen 3.5 checkpoint on the GPU" "resumed at a checkpoint, answer on its subject" qwen35_checkpoint "$QWEN35_GPU" gpu
+  # Ses images (Albireo 4.13.0), quand son projecteur est là : le perroquet des images de compte de macOS.
+  QWEN35_PROJECTOR=${QWEN35_PROJECTOR:-$ROOT/build/models/Qwen3.5-4B-mmproj-F16.gguf}
+  PARROT="/Library/User Pictures/Animals/Parrot.heic"
+  if [ -f "$QWEN35_PROJECTOR" ] && [ -f "$PARROT" ] && sips -s format jpeg -Z 512 "$PARROT" --out "$WORK/parrot.jpg" > /dev/null 2>&1
+  then
+    step "qwen 3.5 image" "macaw" "$CHAT" "$ENGINE" "$QWEN35_GPU" --projector "$QWEN35_PROJECTOR" --image "$WORK/parrot.jpg" \
+      --reasoning off --temperature 0 --max 60 "Describe this image in two sentences."
+  else skip "qwen 3.5 image" "no $QWEN35_PROJECTOR"
+  fi
   # Ses appels d'outils, sous forme XML (<function=…>, <parameter=…>), lus par le moteur (Albireo 4.12.1).
   step "qwen 3.5 tool call" '"name":"get_weather","arguments":".*Paris' "$CHAT" "$ENGINE" "$QWEN35_GPU" \
     --tools --reasoning off --temperature 0 --max 120 "What is the weather in Paris right now?"

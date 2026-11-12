@@ -573,6 +573,8 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | 512 tokens (2 essais) | 111,7 et 107,0 | 195,6 et 197,6 |
 | 2 048 tokens (2 essais) | 122,1 et 120,8 | 175,3 et 175,8 |
 
+- **Rejeté** : les tuiles en demi-précision (poids et entrées en `half`, sommes en floats) : 199 → 208 tokens/s sur 512 tokens (+5 %, mesures alternées), pour une erreur relative de 8 × 10⁻⁵ au lieu de 2 × 10⁻⁷.
+
 **Mac ou Windows** : propre au Mac (noyaux Metal) ; l'idée vaut pour tout GPU (llama.cpp fait de même avec `mul_mm_id`).
 
 ### Bilan

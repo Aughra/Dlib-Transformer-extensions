@@ -876,6 +876,13 @@ namespace albireo
             forward_batch sub;
             sub.hidden_only = batch.hidden_only;
             sub.tokens.assign(batch.tokens.begin() + start, batch.tokens.begin() + end + 1);
+            // Les positions rotatives données (modèles multimodaux) : celles des tokens du morceau, qui diffèrent
+            // de la longueur du cache après une image.
+            if (!batch.positions.empty())
+            {
+                const long C = forward_batch::position_components;
+                sub.positions.assign(batch.positions.begin() + start * C, batch.positions.begin() + (end + 1) * C);
+            }
             for (const auto& s : batch.segments)
             {
                 const long a = std::max(s.start, start), b = std::min(s.start + s.count, end + 1);
