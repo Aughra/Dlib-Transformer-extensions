@@ -2,6 +2,18 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.9.0 — 12 novembre 2026
+
+### Performances
+
+- La lecture des prompts des modèles Qwen 3.5 s'exécute sur le GPU, à partir de 24 tokens. Les poids aux formats Q5_K, Q8_0 et Q5_0 sont développés sur le GPU. Qwen3.5-4B Q4_K_M sur MacBook Air M2, prompt de 783 tokens, mesures alternées : 86 tokens/s sur le processeur, 148 à 149 tokens/s sur le GPU. Les points de reprise sont conservés : un prompt est coupé tous les 256 positions et l'état est copié entre deux morceaux.
+
+### Corrections
+
+- Les produits des prompts sur le GPU portent sur un nombre de lignes multiple de 32. Avec 24 à 31 tokens, ou 40, Metal Performance Shaders rendait des valeurs non numériques pour une matrice de Qwen3.5-0.8B, et la réponse était remplacée par une suite de points d'exclamation. Le contrôle au chargement utilise désormais un prompt de 29 tokens, qui fait apparaître ce cas.
+
+---
+
 ## 4.8.0 — 12 novembre 2026
 
 ### Performances

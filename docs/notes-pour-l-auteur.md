@@ -529,6 +529,8 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 - **Mélanges d'experts sur le GPU (Albireo 4.7.0, commit [69ed2df](https://github.com/Aughra/Dlib-Transformer-extensions/commit/69ed2df))** : routeur en floats (`mv_f32`, un simdgroup par ligne), choix des experts (`moe_route`, un simdgroup par token), produits des experts choisis par indirection (variantes `_id` des noyaux Q4_K, Q5_K, Q6_K, Q8_0 et du nouveau `mv_q5_0`), expert partagé (`shared_gate`), somme pondérée (`moe_combine`). Qwen 3.6 11B-A3B, 200 tokens, mesures alternées : processeur 25,0 et 24,4, GPU 26,3 et 26,1 tokens/s ; les deux premières versions des noyaux faisaient 9,2 puis 13,1 tokens/s (un thread par ligne du routeur, puis un thread par token pour le choix des experts). Vérifié sur `qwen35moe` seulement.
 
+- **Points de reprise et prompts sur le GPU (Albireo 4.8.0 et 4.9.0, commits `0e419c1` et [995a4c9](https://github.com/Aughra/Dlib-Transformer-extensions/commit/995a4c9))** : l'état est copié toutes les 256 positions pendant la lecture d'un prompt (4 par séquence, 1 Go en tout), et une séquence reprend au point le plus proche ; les prompts de Qwen 3.5 sont lus sur le GPU, coupés à ces points. Qwen3.5-4B, prompt de 783 tokens, mesures alternées : processeur 86,2 et 86,1, GPU 149,4 et 148,3 tokens/s. Au passage, un défaut du fork (pas de l'original, qui n'a pas de GPU Apple) : les produits de Metal Performance Shaders rendaient des NaN pour certaines formes de matrices quand le nombre de lignes n'était pas un multiple de 32 ; corrigé en arrondissant les lignes.
+
 **Mac ou Windows** : propre au fork (une architecture que l'original ne lit pas) ; le code du processeur est commun, celui du GPU propre au Mac.
 
 ### Bilan
@@ -545,6 +547,7 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 21,3 à 21,7 tokens/s sur le GPU ; 18,2 à 18,6 sur le processeur (17,6 à 18,1 sans le changement 8 ; 16,4 à 16,6 sans les changements 6 à 8) |
 | SHA-256 d'un fichier de modèle (vérification, import, restauration) | 283 à 288 Mo/s (mbedtls) | 2 059 à 2 141 Mo/s (changement 11) |
 | Qwen3.5-4B Q4_K_M (architecture lue par le fork seulement), génération | non lu par le moteur | 19,5 tokens/s sur le GPU ; 11,7 à 12,2 sur le processeur (changement 12) |
+| Qwen3.5-4B Q4_K_M, lecture d'un prompt de 783 tokens | non lu par le moteur | 148 à 149 tokens/s sur le GPU ; 86 sur le processeur (changement 12) |
 | Qwen 3.6 11B-A3B Q4_K_M (mélange d'experts, fork seulement), génération | non lu par le moteur | 26,1 à 26,3 tokens/s sur le GPU ; 24,4 à 25,0 sur le processeur (changement 12) |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
