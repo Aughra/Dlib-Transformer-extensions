@@ -327,6 +327,10 @@ schemas = {
                                               "every prompt to the processor."},
         "models_dir": {"type": "string", "description": "The folder of the models, an existing one, or empty for "
                        "the models folder of the data."},
+        "reserve_gb": {"type": "integer", "minimum": 0, "maximum": 100000, "default": 200,
+                       "description": "The limit of the reserve, in GB: the copies of the models that are no longer "
+                                      "installed; beyond it, the least recently kept or restored copies leave first. "
+                                      "0 keeps nothing beyond the clones of the installed models."},
         "web_search": {"type": "string", "enum": ["wikipedia", "none"], "default": "wikipedia",
                        "description": "The provider of /albireo/v1/web/search: wikipedia, the REST interface of "
                                       "Wikipedia; or none, which turns the search off while /albireo/v1/web/fetch "
@@ -562,6 +566,26 @@ paths = {
             "leaving": {"type": "object", "additionalProperties": {"type": "string", "enum": ["unloading",
                                                                                             "removing"]},
                         "description": "Models waiting for their requests before they leave the engine."}}})}}},
+    "/albireo/v1/reserve": {
+        "get": {"tags": ["Service"], "summary": "The reserve of the models on the Mac",
+                "description": "Every verified file of a model is kept under its hash when its download ends and "
+                               "when the model is removed; on APFS the copy is a clone, which takes no room while "
+                               "the model stays installed. A model whose files are all in the reserve is restored "
+                               "without the network (in_reserve in /albireo/v1/models).",
+                "responses": {"200": reply("The reserve", {"type": "object", "properties": {
+                    "limit": {"type": "integer", "description": "The limit in bytes (reserve_gb)."},
+                    "used": {"type": "integer", "description": "Bytes of the copies of models no longer installed."},
+                    "shared": {"type": "integer", "description": "Bytes of the clones of installed models."},
+                    "files": {"type": "array", "items": {"type": "object", "properties": {
+                        "sha256": {"type": "string"}, "size": {"type": "integer"},
+                        "saved": {"type": "integer", "description": "When it was kept or last restored, in Unix "
+                                                                     "seconds."},
+                        "installed": {"type": "boolean"}, "model": {"type": "string"}, "name": {"type": "string"},
+                        "projector": {"type": "boolean"}}}}}})}},
+        "delete": {"tags": ["Administration"], "summary": "Empties the reserve",
+                   "responses": {"200": reply("Result", {"type": "object", "properties": {
+                       "ok": {"type": "boolean"}, "removed": {"type": "integer"},
+                       "freed": {"type": "integer", "description": "Bytes the removed copies counted."}}})}}},
     "/albireo/v1/usage": {"get": {"tags": ["Service"], "summary": "Usage per day over 30 days",
                                   "responses": {"200": reply("The figures", {"type": "object", "properties": {
                                       "days": {"type": "array", "description": "The days with a use, 30 at most, the "

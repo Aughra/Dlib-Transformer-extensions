@@ -63,6 +63,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <zlib.h>
@@ -786,6 +787,8 @@ int main(int argc, char** argv)
             && db.download_state("vision").dump() == progress.dump(),
             "a corrupt projector is refused without network access or loss of previous progress");
 
+        const int other_before_fallback = official_count("other.bin");
+        const int projector_before_fallback = official_count("projector.bin");
         check(m.start_download("vision", error), "the same model can fall back to the network when online");
         d = wait_download(m, "vision");
         check(d["state"].as_string() == "done" && installed(db, "vision", vision_model)
@@ -793,6 +796,13 @@ int main(int argc, char** argv)
             && official_count("other.bin") + official_count("projector.bin") > network_before_missing
             && !db.download_state("vision").is_object(),
             "the online fallback resumes and verifies both files");
+        // Fork pour macOS : le fichier sain de la réserve est repris, seul le projecteur abîmé se télécharge, et
+        // la fin du téléchargement remet une copie saine dans la réserve.
+        check(official_count("other.bin") == other_before_fallback
+            && official_count("projector.bin") > projector_before_fallback,
+            "online, the sound file of the reserve is reused and only the damaged projector is downloaded");
+        check(read_text(projector_reserved) == projector,
+            "the end of a download keeps a sound copy of each file in the reserve");
 
         check(m.remove("vision", remove_error), "the model can be reserved before a service stop");
         write_text(vision_partial, decoder_prefix);
@@ -810,6 +820,30 @@ int main(int argc, char** argv)
         check((kept_progress || completed)
             && official_count("other.bin") + official_count("projector.bin") == network_before_stop,
             "a service stop preserves previous progress unless restoration has already completed");
+
+        // Fork pour macOS : le plafond de la réserve, son état et son vidage.
+        json reserve = m.reserve_status();
+        check(reserve["files"].size() >= 1 && reserve["limit"].as_int() == (200ll << 30),
+            "the reserve lists its copies under the default limit of 200 GB (" + reserve.dump() + ")");
+        m.reserve_limit([]() { return static_cast<uint64_t>(0); });
+        m.trim_reserve();
+        reserve = m.reserve_status();
+        check(reserve["used"].as_int() == 0 && albireo::file_exists(vision_reserved) && reserve["shared"].as_int() > 0,
+            "a limit of 0 removes the copies of removed models and keeps those of installed ones");
+        const std::string old_copy = albireo::join_path(reserve_dir, albireo::sha256_hex("old reserve copy") + ".gguf");
+        const std::string new_copy = albireo::join_path(reserve_dir, albireo::sha256_hex("new reserve copy") + ".gguf");
+        write_text(old_copy, "old reserve copy");
+        write_text(new_copy, "new reserve copy");
+        struct timeval long_ago[2] = { { 1000000, 0 }, { 1000000, 0 } };
+        utimes(old_copy.c_str(), long_ago);
+        m.reserve_limit([]() { return static_cast<uint64_t>(16); });
+        m.trim_reserve();
+        check(!albireo::file_exists(old_copy) && albireo::file_exists(new_copy),
+            "beyond its limit, the reserve removes its oldest copy first");
+        uint64_t freed = 0;
+        const size_t emptied = m.clear_reserve(freed);
+        check(emptied >= 2 && freed >= 16 && m.reserve_status()["files"].size() == 0,
+            "emptying the reserve removes every copy");
     }
 
     {

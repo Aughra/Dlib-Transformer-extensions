@@ -14,8 +14,10 @@
 #include <set>
 #include <utility>
 
+#include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <zlib.h>
@@ -747,6 +749,11 @@ namespace albireo
         json out = json::array();
         std::map<std::string, bool> seen;
         json cat = catalog();
+        std::set<std::string> reserved;
+        {
+            std::lock_guard<std::mutex> lock(reserve_m_);
+            for (const auto& f : reserve_files()) reserved.insert(f.sha256);
+        }
         auto embedding = [](const json& d) {
             if (d["embedding"].as_bool(false)) return true;
             for (const auto& r : d["roles"].elements())
@@ -807,6 +814,10 @@ namespace albireo
             m["installed"] = false;
             m["inputs"] = entry_inputs(e);
             m["total_size"] = static_cast<unsigned long long>(e["size"].as_int(0) + e["projector"]["size"].as_int(0));
+            // Tous ses fichiers sont dans la réserve : il se restaure sans réseau.
+            const std::string psha = e["projector"]["sha256"].as_string();
+            m["in_reserve"] = reserved.count(e["sha256"].as_string()) > 0
+                && (!e["projector"].is_object() || psha.empty() || reserved.count(psha) > 0);
             const std::string id = e["id"].as_string();
             for (const auto& im : installed)
                 if (im.id == id)
@@ -1248,40 +1259,9 @@ namespace albireo
                 return false;
             }
             const std::string temporary = join_path(target_folder, ".reserve-" + random_hex(16) + ".partial");
-            new_file output;
-            if (!output.create(temporary))
-            {
-                error = "cannot create " + temporary;
-                return false;
-            }
-            sha256_stream hash;
-            std::vector<char> buffer(1 << 20);
-            bool copied = true;
-            for (;;)
-            {
-                if (cancel && *cancel)
-                {
-                    copied = false;
-                    break;
-                }
-                const long long n = input.read(buffer.data(), buffer.size());
-                if (n < 0)
-                {
-                    copied = false;
-                    break;
-                }
-                if (n == 0) break;
-                const size_t count = static_cast<size_t>(n);
-                if (!output.write(buffer.data(), count))
-                {
-                    copied = false;
-                    break;
-                }
-                hash.update(buffer.data(), count);
-            }
-            copied = output.close() && copied;
-            if (!copied || hash.hex() != expected_sha
-                || (private_file && chmod(temporary.c_str(), 0600) != 0))
+            // Un clone APFS quand c'est possible, une copie sinon ; relu et haché dans les deux cas.
+            const bool copied = !copy_open_file(input, temporary, expected_sha, cancel).empty();
+            if (!copied || (private_file && chmod(temporary.c_str(), 0600) != 0))
             {
                 remove_file(temporary);
                 error = "the copy of " + source + " failed its integrity or write check";
@@ -1351,32 +1331,182 @@ namespace albireo
         return copy_verified_file(path, dir_, reserve_dir_, target, content_sha, 0, true, error);
     }
 
-    bool model_manager::restore_from_reserve(const std::shared_ptr<job>& j)
+    size_t model_manager::restore_from_reserve(const std::shared_ptr<job>& j, std::vector<bool>& restored)
     {
+        restored.assign(j->files.size(), false);
         std::lock_guard<std::mutex> lock(reserve_m_);
-        if (reserve_dir_.empty() || !dir_exists(reserve_dir_)) return false;
+        if (reserve_dir_.empty() || !dir_exists(reserve_dir_)) return 0;
         std::string error;
-        if (!secure_folder(reserve_dir_, error, true)) return false;
+        if (!secure_folder(reserve_dir_, error, true)) return 0;
         const std::string actual = final_path(reserve_dir_);
-        if (actual.empty()) return false;
+        if (actual.empty()) return 0;
         reserve_dir_ = actual;
-        if (!direct_path(reserve_dir_) || !folder_admin_only(reserve_dir_)) return false;
-        for (const auto& f : j->files)
+        if (!direct_path(reserve_dir_) || !folder_admin_only(reserve_dir_)) return 0;
+        size_t count = 0;
+        for (size_t i = 0; i < j->files.size() && !j->cancel; ++i)
         {
-            if (!valid_sha256(f.sha256)) return false;
+            const auto& f = j->files[i];
+            if (!valid_sha256(f.sha256)) continue;
             const std::string source = join_path(reserve_dir_, f.sha256 + ".gguf");
-            if (!restrict_reserve_file(source)) return false;
+            if (!file_exists(source) || !restrict_reserve_file(source)) continue;
             error.clear();
             if (!copy_verified_file(source, reserve_dir_, dir_, f.staged, f.sha256, f.size, false, error,
                     &j->cancel))
             {
-                if (!j->cancel && file_exists(source))
-                    log_warning("models: the reserved copy of " + j->id + " cannot be used: " + error);
-                return false;
+                if (j->cancel) break;
+                log_warning("models: the reserved copy of " + j->id + " cannot be used: " + error);
+                // Une copie dont les octets ne donnent plus leur empreinte est retirée : un nouveau
+                // téléchargement la remplacera par une copie saine.
+                if (!matches_sha256(source, reserve_dir_, f.sha256) && direct_path(reserve_dir_)
+                    && remove_file(source))
+                    log_warning("models: the damaged reserved copy " + f.sha256.substr(0, 12) + " is removed");
+                continue;
             }
+            // Restaurée, la copie compte comme gardée à l'instant : le plafond retire d'abord les autres.
+            utimes(source.c_str(), nullptr);
+            restored[i] = true;
+            ++count;
         }
-        for (auto& f : j->files) f.partial = f.staged;
-        return true;
+        return count;
+    }
+
+    std::vector<model_manager::reserve_file> model_manager::reserve_files() const
+    {
+        std::vector<reserve_file> out;
+        if (reserve_dir_.empty()) return out;
+        DIR* dir = opendir(reserve_dir_.c_str());
+        if (!dir) return out;
+        while (dirent* entry = readdir(dir))
+        {
+            const std::string name = entry->d_name;
+            if (name.size() != 64 + 5 || name.compare(64, 5, ".gguf") != 0 || !valid_sha256(name.substr(0, 64)))
+                continue;
+            reserve_file f;
+            f.path = join_path(reserve_dir_, name);
+            struct stat st;
+            if (lstat(f.path.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
+            f.sha256 = name.substr(0, 64);
+            f.size = static_cast<uint64_t>(st.st_size);
+            f.saved = static_cast<int64_t>(st.st_mtime);
+            out.push_back(f);
+        }
+        closedir(dir);
+        return out;
+    }
+
+    std::set<std::string> model_manager::installed_hashes() const
+    {
+        std::set<std::string> out;
+        for (const auto& im : db_.models())
+        {
+            if (!im.sha256.empty()) out.insert(im.sha256);
+            if (!im.projector_sha256.empty()) out.insert(im.projector_sha256);
+        }
+        return out;
+    }
+
+    void model_manager::reserve_limit(std::function<uint64_t()> limit)
+    {
+        std::lock_guard<std::mutex> lock(reserve_m_);
+        reserve_limit_ = std::move(limit);
+    }
+
+    void model_manager::trim_reserve()
+    {
+        const std::set<std::string> installed = installed_hashes();
+        std::lock_guard<std::mutex> lock(reserve_m_);
+        const uint64_t limit = reserve_limit_ ? reserve_limit_() : (200ull << 30);
+        std::vector<reserve_file> spare;
+        uint64_t used = 0;
+        for (const auto& f : reserve_files())
+            if (!installed.count(f.sha256))
+            {
+                used += f.size;
+                spare.push_back(f);
+            }
+        if (used <= limit) return;
+        std::sort(spare.begin(), spare.end(), [](const reserve_file& a, const reserve_file& b) {
+            return a.saved < b.saved;
+        });
+        for (const auto& f : spare)
+        {
+            if (used <= limit) break;
+            if (!direct_path(reserve_dir_) || !remove_file(f.path))
+            {
+                log_warning("models: cannot remove " + f.path + " from the local reserve");
+                continue;
+            }
+            used -= f.size;
+            log_info("models: the reserved copy " + f.sha256.substr(0, 12) + " (" + std::to_string(f.size >> 20)
+                + " MB) leaves the local reserve, beyond its limit of " + std::to_string(limit >> 30) + " GB");
+        }
+    }
+
+    json model_manager::reserve_status() const
+    {
+        const std::vector<installed_model> installed = db_.models();
+        const json cat = catalog();
+        std::lock_guard<std::mutex> lock(reserve_m_);
+        json out = json::object();
+        const uint64_t limit = reserve_limit_ ? reserve_limit_() : (200ull << 30);
+        uint64_t used = 0, shared = 0;
+        json files = json::array();
+        for (const auto& f : reserve_files())
+        {
+            json o = json::object();
+            o["sha256"] = f.sha256;
+            o["size"] = static_cast<unsigned long long>(f.size);
+            o["saved"] = static_cast<long long>(f.saved);
+            bool is_installed = false, projector = false;
+            std::string model, name;
+            for (const auto& im : installed)
+                if (im.sha256 == f.sha256 || im.projector_sha256 == f.sha256)
+                {
+                    is_installed = true;
+                    projector = im.projector_sha256 == f.sha256;
+                    model = im.id;
+                    name = im.name;
+                }
+            for (const auto& e : cat["models"].elements())
+            {
+                if (!model.empty()) break;
+                const bool decoder = e["sha256"].as_string() == f.sha256;
+                if (decoder || e["projector"]["sha256"].as_string() == f.sha256)
+                {
+                    projector = !decoder;
+                    model = e["id"].as_string();
+                    name = e["name"].str(model);
+                }
+            }
+            (is_installed ? shared : used) += f.size;
+            o["installed"] = is_installed;
+            o["model"] = model;
+            o["name"] = name;
+            o["projector"] = projector;
+            files.push_back(o);
+        }
+        out["limit"] = static_cast<unsigned long long>(limit);
+        out["used"] = static_cast<unsigned long long>(used);
+        out["shared"] = static_cast<unsigned long long>(shared);
+        out["files"] = files;
+        return out;
+    }
+
+    size_t model_manager::clear_reserve(uint64_t& freed)
+    {
+        std::lock_guard<std::mutex> lock(reserve_m_);
+        freed = 0;
+        size_t removed = 0;
+        if (reserve_dir_.empty() || !dir_exists(reserve_dir_) || !direct_path(reserve_dir_)) return 0;
+        for (const auto& f : reserve_files())
+            if (remove_file(f.path))
+            {
+                ++removed;
+                freed += f.size;
+            }
+        log_info("models: the local reserve is emptied: " + std::to_string(removed) + " files, "
+            + std::to_string(freed >> 20) + " MB");
+        return removed;
     }
 
     void model_manager::run_job(std::shared_ptr<job> j)
@@ -1430,12 +1560,40 @@ namespace albireo
             if (!j->abandoned) db_.set_download_state(j->id, st);
         };
         set_state("downloading");
-        restored = restore_from_reserve(j);
+        std::vector<bool> from_reserve;
+        const size_t reserved = restore_from_reserve(j, from_reserve);
+        restored = reserved == j->files.size();
         if (restored)
         {
+            for (auto& f : j->files) f.partial = f.staged;
             for (const auto& c : j->chunks) c->done = c->length;
             j->received = j->total;
             log_info("models: " + j->id + " restored from the local reserve");
+        }
+        else if (reserved > 0 && !j->local_only && !j->cancel)
+        {
+            // Les fichiers sains de la réserve prennent la place de leur fichier partiel : seul le reste
+            // se télécharge.
+            for (size_t i = 0; i < j->files.size(); ++i)
+            {
+                if (!from_reserve[i]) continue;
+                auto& f = j->files[i];
+                if (!direct_path(dir_) || !rename_file(f.staged, f.partial))
+                {
+                    remove_partial(f.staged);
+                    continue;
+                }
+                for (const auto& c : j->chunks)
+                {
+                    if (c->file != i) continue;
+                    const uint64_t before = c->gzip ? (c->done == c->length ? c->output : 0) : c->done.load();
+                    c->done = c->length;
+                    j->received += (c->gzip ? c->output : c->length) - before;
+                }
+                log_info("models: " + std::string(i == 0 ? "the file" : "the projector") + " of " + j->id
+                    + " is restored from the local reserve, the rest is downloaded");
+            }
+            save();
         }
         else clean_staged();
         if (j->cancel)
@@ -1805,6 +1963,16 @@ namespace albireo
                 if (restored && direct_path(dir_))
                     for (const auto& f : j->files) remove_partial(f.target + ".partial");
                 if (with_projector) drop_pending_copy(shas[1]);
+                // Chaque fichier téléchargé est gardé dans la réserve (un clone sur APFS), ce qui remplace
+                // aussi une copie abîmée ; un échec n'empêche pas l'installation.
+                if (!restored)
+                    for (size_t i = 0; i < j->files.size(); ++i)
+                    {
+                        std::string why;
+                        if (!save_in_reserve(j->files[i].target, shas[i], why))
+                            log_warning("models: " + j->id + " is not kept in the local reserve: " + why);
+                    }
+                trim_reserve();
                 set_state("done");
                 log_info("models: " + j->id + " installed" + (with_projector ? ", with its projector" : ""));
                 return;
@@ -1914,6 +2082,8 @@ namespace albireo
             log_warning("models: the projector " + m.projector + " of " + id + " cannot be deleted");
         db_.remove_model(id);
         log_info("models: " + id + " removed");
+        // Sa copie de réserve compte maintenant dans le plafond.
+        trim_reserve();
         return true;
     }
 

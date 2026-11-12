@@ -354,17 +354,22 @@ export function modelsTab(body, env) {
           }
         } }, 'Supprimer'));
     } else {
-      actions = h('button', { class: 'button', type: 'button',
-        title: data.offline ? 'Restaure seulement les fichiers déjà présents et vérifiés dans la réserve' : null,
+      // Un modèle dont la réserve garde tous les fichiers revient du Mac, sans réseau ; hors ligne, les autres
+      // ne peuvent pas venir.
+      const local = !!m.in_reserve;
+      actions = h('button', { class: 'button', type: 'button', disabled: !!data.offline && !local,
+        title: local ? 'Copie locale depuis la réserve du Mac, vérifiée, sans réseau'
+          : data.offline ? 'Ce modèle n’est pas dans la réserve du Mac' : null,
         onclick: () => act('POST', '/albireo/v1/models/' + encodeURIComponent(m.id) + '/download',
-          (data.offline ? 'Restauration de ' + m.name + ' lancée.' : 'Téléchargement de ' + m.name + ' lancé.')) },
-      data.offline ? 'Restaurer depuis la réserve' : 'Télécharger (' + gb(m.total_size || m.size || 0) + ')');
+          (local ? 'Restauration de ' + m.name + ' lancée.' : 'Téléchargement de ' + m.name + ' lancé.')) },
+      local ? 'Restaurer depuis le Mac' : data.offline ? 'Pas dans la réserve'
+        : 'Télécharger (' + gb(m.total_size || m.size || 0) + ')');
     }
     const card = sheetCard(h, sheet, badge, actions);
     card.classList.add('mdl-card');
     card.insertBefore(h('p', { class: 'svc-where' }, (m.publisher || '') + ' · ' + billions(m.parameters || 0) +
       ' de paramètres · ' + gb(m.total_size || m.size || 0) + (a.speed ? ' · environ ' + Math.round(a.speed) + ' tokens/s' : '') +
-      (m.installed ? ' · installé' : '')), card.querySelector('.svc-detail'));
+      (m.installed ? ' · installé' : m.in_reserve ? ' · dans la réserve du Mac' : '')), card.querySelector('.svc-detail'));
     if (dl && dl.state === 'error')
       card.insertBefore(h('p', { class: 'error-box', role: 'alert' }, modelError(dl)), card.querySelector('.svc-detail'));
     return card;

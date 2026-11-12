@@ -53,6 +53,7 @@ namespace albireo
         int gpu_prompt_context = 2048;          // ...s'ils finissent en deçà d'autant de positions (0 : jamais)
         std::map<std::string, std::string> active;   // rôle -> identifiant du modèle
         bool default_model = true;              // télécharger le modèle par défaut du catalogue au premier démarrage
+        int reserve_gb = 200;                   // la réserve des modèles non installés, en Go (0 : rien de plus)
         // Une machine sans accès à Internet : aucune requête ne quitte la machine, le catalogue
         // et les modèles viennent de fichiers (dossier d'import, supports amovibles).
         bool offline = false;

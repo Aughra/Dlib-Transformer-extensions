@@ -937,7 +937,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             static const char* const keys[] = { "port", "language", "engine", "accelerator",
                 "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "offline",
                 "proxy", "web_access", "web_search", "lan", "lan_port", "lan_password", "warm_history", "spin_us",
-                "gpu_prompt_tokens", "gpu_prompt_context", "models_dir" };
+                "gpu_prompt_tokens", "gpu_prompt_context", "models_dir", "reserve_gb" };
             for (const auto& kv : body.items())
             {
                 if (std::find_if(std::begin(keys), std::end(keys), [&](const char* k) { return kv.first == k; })
@@ -995,6 +995,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 && in_range("port", 1024, 65535) && in_range("threads", 0, 1024) && in_range("context", 0, 1 << 20)
                 && in_range("max_sequences", 1, 64) && in_range("kv_mb", 0, 1 << 24)
                 && in_range("device_mb", 0, 1 << 24)
+                && in_range("reserve_gb", 0, 100000)
                 && boolean("offline");
         }
 
@@ -1436,6 +1437,18 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             o["loaded"] = loaded;
             o["leaving"] = s->leaving_models();
             o["background"] = s->background_model();
+            send_json(res, 200, o);
+        });
+        // La réserve des modèles (fork pour macOS) : ce qu'elle garde, et son vidage.
+        srv.Get("/albireo/v1/reserve", [s](const httplib::Request&, httplib::Response& res) {
+            send_json(res, 200, s->models().reserve_status());
+        });
+        srv.Delete("/albireo/v1/reserve", [s](const httplib::Request&, httplib::Response& res) {
+            uint64_t freed = 0;
+            const size_t removed = s->models().clear_reserve(freed);
+            json o = ok_result(true);
+            o["removed"] = static_cast<unsigned long long>(removed);
+            o["freed"] = static_cast<unsigned long long>(freed);
             send_json(res, 200, o);
         });
         srv.Get("/albireo/v1/usage", [s](const httplib::Request&, httplib::Response& res) {
@@ -1969,6 +1982,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             json o = ok_result(true);
             o["restart"] = restart;
             send_json(res, 200, o);
+            // Un plafond plus bas s'applique tout de suite.
+            if (after.reserve_gb < before.reserve_gb) s->models().trim_reserve();
             if (restart) s->request_restart();
         });
         srv.Post("/albireo/v1/restart", [s](const httplib::Request& req, httplib::Response& res) {

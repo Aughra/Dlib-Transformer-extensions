@@ -123,6 +123,7 @@ namespace albireo
         for (const auto& kv : active) a[kv.first] = kv.second;
         j["active"] = a;
         j["default_model"] = default_model;
+        j["reserve_gb"] = reserve_gb;
         j["offline"] = offline;
         j["proxy"] = masked_proxy(proxy);
         j["web_access"] = web_access;
@@ -169,6 +170,8 @@ namespace albireo
             if (kv.first == embedding_role) active[kv.first] = kv.second.as_string();
         }
         default_model = j["default_model"].as_bool(d.default_model);
+        reserve_gb = static_cast<int>(std::max<long long>(0, std::min<long long>(100000,
+            j["reserve_gb"].as_int(d.reserve_gb))));
         offline = j["offline"].as_bool(d.offline);
         proxy = j["proxy"].str(d.proxy);
         web_access = j["web_access"].as_bool(d.web_access);

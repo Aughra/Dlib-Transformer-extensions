@@ -297,6 +297,10 @@ namespace albireo
             {
                 std::unique_ptr<model_manager> m(new model_manager(*db_, st.effective_models_dir(),
                     join_path(data_dir_, "reserve")));
+                m->reserve_limit([this]() {
+                    return static_cast<uint64_t>(settings_->get().reserve_gb) << 30;
+                });
+                m->trim_reserve();
                 m->on_installed([this](const installed_model& im) { on_installed(im); });
                 m->on_replace([this](const std::string& id, const std::function<bool()>& place) {
                     return replace_model_files(id, place);

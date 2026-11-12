@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -198,6 +199,27 @@ namespace albireo
                   réseau du même modèle est encore en cours.
         !*/
         bool start_download(const std::string& id, user_error& error, bool local_only = false);
+
+        /*!
+            LA RÉSERVE (fork pour macOS)
+                Un dossier où chaque fichier de modèle vérifié est gardé sous son empreinte
+                (<sha256>.gguf, mode 0600) : à la fin d'un téléchargement et à la suppression du
+                modèle.  Sur APFS, la copie est un clone, sans place prise tant que le modèle reste
+                installé.  Le plafond ne compte que les copies des modèles qui ne sont plus
+                installés ; au-delà, les moins récemment gardées ou restaurées partent d'abord.
+                Une restauration reprend chaque fichier sain de la réserve ; en ligne, seuls les
+                autres se téléchargent.
+        !*/
+        // Le plafond de la réserve en octets, demandé à chaque passage (le réglage reserve_gb).
+        void reserve_limit(std::function<uint64_t()> limit);
+        // Retire les copies les plus anciennes au-delà du plafond ; celles des modèles installés restent.
+        void trim_reserve();
+        // "limit", "used" (les copies des modèles non installés), "shared" (les clones des modèles
+        // installés), "files" : {"sha256", "size", "saved" (secondes Unix), "installed", "model",
+        // "name", "projector"}.
+        json reserve_status() const;
+        // Vide la réserve ; renvoie le nombre de fichiers retirés, et dans freed les octets qu'ils comptaient.
+        size_t clear_reserve(uint64_t& freed);
         // Affiche un téléchargement de id qui n'a pas pu démarrer, avec son erreur, jusqu'à ce qu'un
         // téléchargement démarre.
         void note_failure(const std::string& id, const user_error& error);
@@ -296,7 +318,20 @@ namespace albireo
         // Un fichier GGUF d'un import, ouvert sans passer par aucun lien, haché et décrit.
         struct import_item;
         bool save_in_reserve(const std::string& path, const std::string& sha, std::string& error);
-        bool restore_from_reserve(const std::shared_ptr<job>& j);
+        // Restaure chaque fichier de j dont la réserve a une copie vérifiée, à son nom staged ;
+        // restored[i] dit lesquels, et le nombre est renvoyé.  Une copie abîmée est retirée.
+        size_t restore_from_reserve(const std::shared_ptr<job>& j, std::vector<bool>& restored);
+        // Une copie de la réserve : son chemin, son empreinte, sa taille et sa date (mtime).
+        struct reserve_file
+        {
+            std::string path, sha256;
+            uint64_t size = 0;
+            int64_t saved = 0;
+        };
+        // Les copies de la réserve, lues sous reserve_m_.
+        std::vector<reserve_file> reserve_files() const;
+        // Les empreintes des fichiers des modèles installés, projecteurs compris.
+        std::set<std::string> installed_hashes() const;
         // Comment put_file() a placé un fichier : déplacé, copié, ou déjà trouvé à son nom.
         struct placement
         {
@@ -409,7 +444,8 @@ namespace albireo
         store& db_;
         std::string dir_;
         std::string reserve_dir_;
-        std::mutex reserve_m_;
+        mutable std::mutex reserve_m_;
+        std::function<uint64_t()> reserve_limit_;
         mutable std::mutex m_;
         json catalog_;
         // La liste personnelle, mêlée à catalog_ à chaque chargement (merge_custom()).

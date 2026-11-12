@@ -161,6 +161,12 @@ namespace albireo
         // Lit jusqu'à n octets ; renvoie les octets lus, 0 à la fin du fichier, -1 en cas d'erreur.
         long long read(char* data, size_t n);
         bool seek(uint64_t offset);
+        /*
+            Clone le fichier ouvert vers to, un nom libre du même volume APFS (fclonefileat) :
+            instantané, et sans place prise tant qu'aucun des deux fichiers ne change.  false, sans
+            rien créer, quand le volume ne sait pas cloner ou que to est déjà pris.
+        */
+        bool clone_to(const std::string& to) const;
         void close();
 
     private:

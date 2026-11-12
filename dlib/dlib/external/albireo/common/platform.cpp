@@ -31,6 +31,7 @@
 #include <mach-o/dyld.h>
 #include <membership.h>
 #include <sys/acl.h>
+#include <sys/clonefile.h>
 
 namespace albireo
 {
@@ -509,6 +510,11 @@ namespace albireo
     {
         if (!is_open()) return false;
         return lseek(fd_, static_cast<off_t>(offset), SEEK_SET) == static_cast<off_t>(offset);
+    }
+
+    bool link_free_file::clone_to(const std::string& to) const
+    {
+        return is_open() && fclonefileat(fd_, AT_FDCWD, to.c_str(), 0) == 0;
     }
 
     void link_free_file::close()
