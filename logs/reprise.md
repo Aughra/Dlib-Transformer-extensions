@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-12, écrite sous Windows (branche `bureau-2026-11-12`, Albireo 4.1.0 non construit sur Mac) ; le reste date du 2026-11-11 sur le Mac M2 (Albireo 3.2.0).
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-12 au soir, sur le Mac M2 : branche `bureau-2026-11-12` (écrite sous Windows) fusionnée dans `main`, Albireo 4.1.0 compilé et testé.
 
 ## Objectif
 
@@ -37,17 +37,14 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-11 (sieste de l'humain, choix consignés dans `logs/sieste-2026-11-11.md`) : **les pas d'écriture tournent sur le GPU** (M2, M3, M4 en partie) : 4B 21,3 à 21,7 tokens/s contre 18,3 à 19,0 sur le processeur, 2B 49,4 à 49,6 contre 35,7 à 40,8 ; mêmes réponses ; activé par défaut. Blog : épisode 19.
 - 2026-11-11 (sieste) : **les prompts aussi sur le GPU** (M5) : 4B 512 tokens 92 → 154 tokens/s, 2B 222 → 420 ; à partir de 24 tokens, jusqu'à 2 048 positions. Contrôle au chargement du modèle. Bug de débordement corrigé dans l'attention. Blog : épisode 20.
 
-## Pour reprendre (mis à jour le 2026-11-12, écrit sous Windows)
+## Pour reprendre (mis à jour le 2026-11-12 au soir, sur le Mac)
 
-**État** : `main` = Albireo **3.2.0**, testé. La branche **`bureau-2026-11-12`** contient le retrait des clés, Albireo **4.1.0**, la documentation, le nettoyage des commentaires, la correction des langues API Pseudalis, les contrôles de propriétaires/permissions POSIX, le retrait des choix CUDA/OpenVINO/x86, les tests hors ligne de `publish_model.py` (3/3) et `make_catalog.py` (1/1 avec Hub simulé), ainsi que la restauration depuis la réserve même en mode hors ligne. Le build et les tests C++ restent à faire sur Mac. L'audit statique des chemins CMake n'a trouvé aucune source ou ressource manquante.
+**État** : `main` = Albireo **4.1.0**. La branche **`bureau-2026-11-12`**, écrite sous Windows (retrait des clés, réserve hors ligne, contrôles POSIX des dossiers), est fusionnée dans `main` (`e7aa5f1`). Sur le Mac : Albireo et Pseudalis compilent sans erreur (2 avertissements de dlib déjà connus) ; `tools/test_macos.sh` d'Albireo **18 sur 18** (« models folder and imports » et « offline reserve » en PASS), de Pseudalis **34 sur 34**. Les vraies données (`build/albireo-home`, `build/pseudalis-home`) passent les nouveaux contrôles de permissions. La branche `travail-windows` est entièrement contenue dans `bureau-2026-11-12` : on peut l'ignorer (la supprimer de GitHub seulement avec l'accord de l'humain).
 
-**À faire en premier sur le Mac** (critère : tout passe) :
-1. `git fetch origin && git checkout bureau-2026-11-12` (elle contient `travail-windows`).
-2. `cmake --build build/macos-albireo -- -k 0` et `cmake --build build/macos-pseudalis -- -k 0` : corriger ce qui ne compile pas (fautes de frappe possibles, `-Werror` sur les avertissements).
-3. `bash dlib/dlib/external/albireo/tools/test_macos.sh` et `bash dlib/dlib/external/pseudalis/tools/test_macos.sh`. Ils couvrent les validations d'API, la migration des anciens réglages, les dossiers et les opérations de réserve ; aucun n'a encore tourné sur Mac. Vérifier que `models folder and imports` et `offline reserve` affichent **PASS**, pas **SKIP** : il faut le service construit et le modèle GGUF indiqué au début du script.
-4. Vérifier les permissions POSIX et les ACL étendues des dossiers utilisateur et d'import sur Mac ; les ACL ne sont pas examinées par les contrôles actuels. Évaluer aussi `trust_authority`, sans effet sur macOS.
-5. Dans un dossier de données de test isolé, vérifier la restauration hors ligne sans projecteur et avec projecteur, l'erreur si un fichier manque ou est altéré, la conservation d'une progression réseau, puis le repli en ligne. Vérifier aussi les clés/dossiers Pseudalis, le délai DNS et le dossier `drive` (pas de volume monté, pas de verrou exclusif). Le script teste la route hors ligne et le test C++ couvre le projecteur ; ils restent à exécuter sur Mac.
-6. Si les builds, tests et limites de sécurité sont traités : fusionner dans `main` (`git merge bureau-2026-11-12`), puis pousser vers `origin`. Sinon corriger sur la branche.
+**Reste de la liste laissée par la session Windows** (non fait le 2026-11-12) :
+1. Les ACL étendues de macOS ne sont pas examinées par `secure_folder` / `folder_admin_only` ; à évaluer (`ls -le`, `acl_get_file`). `trust_authority` est sans effet sur macOS : à évaluer aussi.
+2. Essai à la main, dans un dossier de données isolé, de la restauration hors ligne avec un projecteur, d'un fichier altéré et du repli en ligne (le test C++ `test_host` les couvre ; le service réel ne les a pas faits). Pseudalis : délai DNS, dossier `drive` sur un volume monté.
+3. Le service d'Albireo ne tourne pas (aucun port en écoute le 2026-11-12 au soir) : le relancer avec la commande ci-dessous, il démarrera en 4.1.0.
 
 **Ce qui a été fait** (voir le journal du 2026-11-12) : catalogue sans signature, import de dossier sans `.sig`, espace de publication et outils de signature retirés ; version 4.0.0. Puis correction des langues API Pseudalis, nettoyage des commentaires, contrôles POSIX, retrait des choix de moteur obsolètes et premières opérations de réserve ; versions Albireo 4.0.1 à 4.0.4. Albireo **4.0.5** signale proprement un GGUF invalide ; **4.1.0** restaure depuis la réserve hors ligne et corrige une erreur de compilation introduite dans le journal du fork. Les tests Python de publication passent (3/3) ; le générateur du catalogue passe avec réponses simulées (1/1). Les tests C++ et le build complet restent à faire sur Mac.
 
@@ -65,11 +62,11 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 ## En cours
 
-### Restauration hors ligne de la réserve : validation Mac en attente
+### Fait : restauration hors ligne de la réserve (validée sur le Mac le 2026-11-12, étape « offline reserve »)
 
 L'API lance une restauration strictement locale en mode « hors ligne », la page propose cette action et affiche les erreurs, et les copies temporaires restent séparées d'une progression réseau précédente. Sous Debian local, `test_host` d'Albireo passe deux fois (187 contrôles à chaque passage) et celui de Pseudalis passe ; un adaptateur temporaire remplace l'appel macOS du chemin d'exécutable. Les syntaxes C++14, JavaScript et Bash vérifiées passent aussi. Le navigateur a vérifié la page avec un service simulé : restauration, réserve absente, téléchargement occupé, réponse illisible, téléchargement en ligne et refus de suppression. Ce ne sont pas des builds ni des tests macOS.
 
-### Fait : contrôles de permissions POSIX ajoutés, validation Mac en attente
+### Fait : contrôles de permissions POSIX (compilés et testés sur le Mac le 2026-11-12 ; ACL étendues non examinées)
 
 Voir le journal. Albireo et Pseudalis vérifient maintenant le propriétaire et les permissions POSIX ; les dossiers sécurisés passent en mode 0700 et les tests couvrent les liens et les entrées modifiables. Albireo ne sonde plus que son moteur CPU ; les anciennes valeurs de moteur et d'accélérateur sont normalisées à `auto`. La réserve conserve les fichiers par SHA-256, sans limite de taille ni commande de vidage pour l'instant. Ces changements restent à compiler et tester sur Mac ; les ACL étendues ne sont pas vérifiées. L'API Pseudalis limite les langues à `auto`, `en` et `fr`.
 

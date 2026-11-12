@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Fusionner dans main la branche écrite sous Windows, après build et tests sur le Mac
+
+- **Quoi** : la branche `bureau-2026-11-12` (7 commits écrits sous Windows : retrait des clés, Albireo 4.0.0 à 4.1.0, réserve hors ligne, contrôles POSIX des dossiers, langues de Pseudalis) est fusionnée dans `main` (`e7aa5f1`, sans conflit). Relecture de la fusion : les contrôles `owned_by_system`, `secure_folder` et `folder_admin_only`, qui répondaient toujours vrai sur Mac, vérifient maintenant propriétaires et permissions ; les vraies données (`build/albireo-home`, `build/pseudalis-home`) et leurs dossiers parents les passent ; le masquage des adresses de `common/log.cpp` est juste. Les entrées 21 et 22 des notes pour l'auteur sont retirées : ce ne sont pas des défauts de l'original (une fonction du fork et une erreur du fork, déjà décrites dans ce journal). `travail-windows` est entièrement contenue dans `bureau-2026-11-12`.
+- **Fichiers** : fusion (77 fichiers) ; `docs/notes-pour-l-auteur.md`, `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : la session Windows ne pouvait ni compiler ni tester sur le Mac ; sa liste demandait de le faire avant toute fusion.
+- **Étapes** : `cmake --build` d'Albireo et de Pseudalis : 0 erreur (2 avertissements de dlib déjà connus). `tools/test_macos.sh` : Albireo 18 sur 18 (dont « models folder and imports » et « offline reserve »), Pseudalis 34 sur 34 ; `lowpowermode 0`. Restent : ACL étendues non examinées, essais à la main de la réserve avec projecteur (voir la reprise).
+
 ## 2026-11-12 — Restaurer les modèles hors ligne et stabiliser la branche
 
 - **Quoi** : en mode hors ligne, l'API et la page proposent la restauration vérifiée d'un modèle et de son éventuel projecteur depuis la réserve, sans repli réseau. Les erreurs sont affichées ; une copie temporaire distincte préserve la progression réseau antérieure. La transcription de `without_queries` qui empêchait le journal de compiler est corrigée. Albireo passe à 4.1.0.

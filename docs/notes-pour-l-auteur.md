@@ -34,8 +34,6 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 5 | Avertissements | exemples de dlib, Pseudalis | Cinq avertissements du compilateur et un de l'éditeur de liens avec Apple clang. | Code commun, avertissements propres à clang ; voir l'entrée |
 | 6 à 15 | Portabilité macOS | CMake, `platform.cpp`, `system_info.cpp`, `picopltf.h`, `drive_folders.cpp`, scripts de test | Erreurs de compilation, et chemins propres à Linux (`/proc`, `/sys`, `endian.h`, `st_mtim`, options x86). | Propre au Mac |
 | 16 à 20 | Remarques | noyaux, pool de fils, mode économie d'énergie, seuil des produits en flottants, nombre de fils sur un processeur hybride | Pas de défaut, mais bon à savoir. | Voir chaque remarque |
-| 21 | Remarque, fonction du fork | `albireo/host/server.cpp:1029, 1458` | La réserve locale du fork doit contourner le refus hors ligne de la route, sans autoriser de réseau. | Code commun ; pas un défaut de l'original |
-| 22 | Correction propre au fork | `albireo/host/public_link.cpp:457` dans l'original ; `common/log.cpp` dans le fork | Une transcription du fork empêchait de compiler le masquage des paramètres d'adresse. | Code commun ; erreur introduite par le fork |
 
 ---
 
@@ -256,24 +254,6 @@ Mode économie actif (`pmset -g` affiche `lowpowermode 1`), le moteur tournait e
   Avec 4 fils, les questions courtes et la génération vont plus vite ; avec 8, les longs prompts, où le calcul domine, gardent l'avantage (12 à 18 %).
 - **Ce que le fork a fait** : sur Mac, tous les cœurs pour les prompts et les cœurs de performance seuls pour la génération (changement 8, partie 4). L'autre piste, prendre par défaut le nombre de cœurs de performance (`hw.perflevel0.physicalcpu`), aurait coûté 12 à 18 % sur les longs prompts.
 - **Mac ou Windows** : **probablement aussi sous Windows** sur les processeurs hybrides (Intel de 12ᵉ génération et suivants) : `GetLogicalProcessorInformationEx(RelationProcessorCore)` compte tous les cœurs, rapides et lents, alors que la structure renvoyée donne leur classe (`EfficiencyClass`). Déduit du code, non vérifié sur une machine Windows.
-
-### 21. La réserve locale du fork peut être utilisée hors ligne
-
-- **Où dans l'original** : `dlib/dlib/external/albireo/host/server.cpp:1029-1034` et `1458-1463`, au commit `184ea00`.
-- **Comportement** : quand `offline` vaut vrai, `POST /albireo/v1/models/{id}/download` appelle `refuse_offline` et répond `409`, code `offline`, avec « offline mode: the catalog, the updates and the models come from files (import) ». C'est cohérent dans l'original, qui ne possède pas la réserve locale ajoutée au fork.
-- **Reproduire dans l'original** : activer `offline`, puis appeler cette route avec l'authentification d'administration de l'original. Le refus ci-dessus est déduit du code ; il n'a pas été exécuté pour cette comparaison.
-- **Ce que le fork fait** : depuis Albireo 4.1.0, la même route lance une restauration strictement locale de tous les fichiers vérifiés de la réserve, sans repli réseau. Si un fichier manque ou est altéré, le travail asynchrone signale `reserve_unavailable`. Cette modification appartient au commit portant cette entrée.
-- **Vérifié** : le test du gestionnaire passe sous Debian, avec et sans projecteur et avec des fichiers absents ou altérés ; la page a été essayée avec des réponses de service simulées. Le service et la route restent à tester sur Mac. Le comportement de l'original n'a pas été exécuté sous Windows.
-- **Mac ou Windows** : code de service commun, mais **pas un défaut de l'original**. Ce changement est nécessaire à la réserve propre au fork.
-
-### 22. Une erreur de transcription du fork empêchait de compiler le journal
-
-- **Où dans l'original** : `dlib/dlib/external/albireo/host/public_link.cpp:457-481`, au commit `184ea00`. La fonction `without_queries` y retire les paramètres des adresses avant leur journalisation.
-- **Ce qui se passe dans le fork** : lors du déplacement de cette fonction vers `albireo/common/log.cpp` en 4.0.0, des caractères de tabulation, de fin de ligne et de guillemet ont été mal transcrits. La compilation sous Debian s'arrêtait notamment sur `missing terminating ' character`. L'original ne présente pas cette faute de transcription.
-- **Reproduire sur la branche avant correction** : compiler `common/log.cpp` en C++14 ; le compilateur refuse les constantes de caractères mal formées.
-- **Ce que le fork fait** : les caractères sont à nouveau correctement écrits ; le retour chariot est aussi conservé comme séparateur. Un test couvre plusieurs adresses entre guillemets, sur plusieurs lignes et séparées par une tabulation. La correction est dans le commit portant cette entrée.
-- **Vérifié** : la syntaxe C++14 corrigée et les tests du masquage passent sous Debian ; compilation et test sur Mac restent à faire.
-- **Mac ou Windows** : code commun, **erreur introduite par le fork**, pas un défaut de l'original ; non testé sous Windows ni sur Mac.
 
 ---
 
