@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Supprimer la branche travail-windows de GitHub
+
+- **Quoi** : branche `travail-windows` supprimée d'`origin` (`git push origin --delete`).
+- **Fichiers** : `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain ; son seul commit (`d451756`, retrait des clés) est dans `main` par la fusion `e7aa5f1`.
+- **Étapes** : `git merge-base --is-ancestor origin/travail-windows main` vérifié avant la suppression.
+
 ## 2026-11-12 — Lire les ACL de macOS, essayer la réserve avec le vrai service, épisode 24 (Albireo 4.1.1)
 
 - **Quoi** : `owned_by_system`, `secure_folder` et `folder_admin_only` (Albireo et Pseudalis) lisent les ACL étendues (`acl_get_link_np`, `mbr_uuid_to_id`) : une entrée « allow » qui donne écriture, ajout, suppression, attributs, droits ou propriétaire à un autre compte que celui du service ou root fait refuser l'entrée ; une entrée « deny » est acceptée ; `secure_folder` remplace une ACL dangereuse par une ACL vide. Commentaires des `platform.h` réécrits sans Windows. Essai de la réserve sur une copie clonée des données (`cp -c`), service sur le port 18473 : suppression du 4B (rangé avec son projecteur), restauration hors ligne en 23 s (empreintes conformes), copie du projecteur altérée d'un octet refusée (`reserve_unavailable`), repli en ligne en 56 s (2 951 255 648 octets, réponse « Paris est la capitale de la France. »). Notes pour l'auteur : remarque 21 (hors de Windows, l'original ne vérifie aucun dossier). Blog : épisode 24 « Sans clé » ; notes de version 4.1.1.
