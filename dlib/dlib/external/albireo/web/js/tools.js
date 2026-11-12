@@ -361,14 +361,19 @@ function documentByName(documents, name) {
   return documents.find((d) => d.name.toLowerCase() === n) || documents.find((d) => d.name.toLowerCase().includes(n));
 }
 
-// Les extensions des fichiers que Windows exécute à leur ouverture, qu'un fichier de l'agent ne garde jamais.
+/*
+    Les extensions des fichiers que Windows ou macOS exécutent ou ouvrent comme un programme, qu'un fichier de l'agent
+    ne garde jamais : la page s'ouvre sur le Mac, mais aussi depuis les autres appareils de la maison.
+*/
 const runnableExtensions = new Set(('bat cmd com exe scr pif cpl msi msp msc ps1 psm1 psd1 ps1xml vbs vbe js jse ' +
-  'wsf wsh hta jar lnk url reg inf scf appref-ms application gadget').split(' '));
+  'wsf wsh hta jar lnk url reg inf scf appref-ms application gadget ' +
+  'command tool sh zsh csh bash app pkg mpkg dmg scpt scptd applescript workflow terminal webloc inetloc fileloc ' +
+  'prefpane osax kext plugin').split(' '));
 
 /*
     Le nom d'un fichier que crée l'agent : sans les caractères qu'un nom de fichier ne peut pas contenir, 120 au plus,
-    et terminé par ".txt" quand son extension est de celles que Windows exécute, pour que son ouverture montre son
-    texte.  Les points et les espaces qui terminent un nom, que Windows supprime, sont supprimés d'abord, pour que
+    et terminé par ".txt" quand son extension est de celles que Windows ou macOS exécutent, pour que son ouverture
+    montre son texte.  Les points et les espaces qui terminent un nom, que Windows supprime, sont supprimés d'abord, pour que
     l'extension vérifiée soit celle que le fichier garde.
 */
 export function fileNameOf(name) {

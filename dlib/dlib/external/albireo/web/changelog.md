@@ -2,6 +2,20 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.11.1 — 12 novembre 2026
+
+### Sécurité
+
+- Un fichier créé par l'agent dont l'extension est de celles que macOS exécute ou ouvre comme un programme (`.command`, `.app`, `.pkg`, `.dmg`, `.sh`, `.scpt`, `.workflow`, `.webloc`, etc.) reçoit l'extension `.txt` en plus, comme le faisaient déjà les extensions exécutables de Windows, conservées pour les autres appareils du réseau.
+
+### Corrections
+
+- Le message affiché quand aucun modèle n'est actif renvoie à l'onglet Modèles des paramètres, et non plus au menu de la zone de notification de Windows.
+- La liste des licences ne mentionne plus cuDNN ni SVOX Pico, qui ne font pas partie de cette version.
+- Interface : 31 textes et 5 règles de style qui n'étaient plus utilisés sont retirés.
+
+---
+
 ## 4.11.0 — 12 novembre 2026
 
 ### Performances

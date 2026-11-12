@@ -10,12 +10,11 @@ const texts = {
     incognitoStart: 'Démarrer une discussion privée', search: 'Rechercher dans les discussions', projects: 'Projets',
     newProject: 'Nouveau projet', discussions: 'Discussions', pinned: 'Épinglées', today: 'Aujourd\'hui', yesterday: 'Hier',
     week: '7 derniers jours', month: '30 derniers jours', older: 'Plus anciennes', noDiscussions: 'Aucune discussion',
-    noProjects: 'Aucun projet', noResults: 'Aucun résultat', settings: 'Paramètres', api: 'API', about: 'À propos',
+    noResults: 'Aucun résultat', settings: 'Paramètres', api: 'API', about: 'À propos',
     collapse: 'Masquer le panneau latéral',
     role_general: 'Général', role_code: 'Code', role_security: 'Cybersécurité', role_embedding: 'RAG',
-    roleHint_general: 'Questions, rédaction, analyse, traduction', roleHint_code: 'Programmation, revue, débogage, tests',
-    roleHint_security: 'Analyse de sécurité, audits, durcissement, incidents',
-    roleServedBy: 'Modèle : {model}', roleShared: 'Assuré par le modèle général',
+
+
     reasoning: 'Raisonnement approfondi', reasoningHint: 'Le modèle réfléchit étape par étape avant de répondre',
     answerRepeated: 'Réponse arrêtée : le modèle se répétait.',
     agent: 'Agent', agentHint: 'Le modèle peut utiliser des outils : calcul, code, documents, fichiers',
@@ -114,8 +113,8 @@ const texts = {
     deleteQuestionTitle: 'Supprimer cette question ?',
     deleteQuestionText: 'La question et sa réponse quittent la discussion, avec les documents joints à la question.',
     welcome: 'Bonjour{name}', welcomeSub: 'Votre assistant privé. Tout s\'exécute sur cet ordinateur, rien n\'en sort.',
-    contextUsage: '{used} / {total} jetons de contexte', contextTrimmed: 'Les messages les plus anciens ont été écartés pour tenir dans le contexte du modèle.',
-    noModel: 'Aucun modèle n\'est actif. Ouvrez le menu Albireo de la zone de notification pour en télécharger ou en activer un.',
+    contextTrimmed: 'Les messages les plus anciens ont été écartés pour tenir dans le contexte du modèle.',
+    noModel: 'Aucun modèle n\'est actif. Ouvrez Paramètres, onglet Modèles, pour en télécharger ou en activer un.',
     serviceDown: 'Le service Albireo ne répond pas.', modelLoading: 'Chargement du modèle…',
     serviceStarting: 'Démarrage d\'Albireo…',
     instructions: 'Instructions', instructionsHelp: 'Données au modèle au début de chaque discussion de ce projet.',
@@ -124,9 +123,9 @@ const texts = {
     deleteProject: 'Supprimer le projet',
     deleteProjectText: 'Le projet « {name} » et ses documents seront supprimés ; ses discussions sont conservées hors projet.',
     projectDiscussions: 'Discussions du projet', startInProject: 'Nouvelle discussion dans ce projet',
-    untitledProject: 'Nouveau projet', untitled: 'Nouvelle discussion', open: 'Ouvrir',
+    untitled: 'Nouvelle discussion', open: 'Ouvrir',
     general: 'Général', model: 'Génération', data: 'Données', theme: 'Thème', themeAuto: 'Système', themeLight: 'Clair',
-    themeDark: 'Sombre', language: 'Langue', languageAuto: 'Automatique', yourName: 'Votre nom',
+    themeDark: 'Sombre', language: 'Langue', yourName: 'Votre nom',
     yourNameHelp: 'L\'assistant l\'utilise pour s\'adresser à vous.', defaultRole: 'Fonction par défaut',
     temperature: 'Température',
     temperatureHelp: 'Une valeur basse donne des réponses plus ciblées, une valeur haute des réponses plus ' +
@@ -160,7 +159,7 @@ const texts = {
     errZipInvalid: 'le fichier est endommagé, ou n\'est pas le document qu\'indique son nom',
     errZipCompression: 'il utilise une méthode de compression que le navigateur ne lit pas',
     errXmlInvalid: 'son contenu est endommagé (XML non valide)',
-    engine: 'Moteur', speed: 'Vitesse', tokensPerSecond: '{n} jetons/s', version: 'Version', service: 'Service',
+    engine: 'Moteur', tokensPerSecond: '{n} jetons/s', version: 'Version', service: 'Service',
     memory: 'Mémoire', processor: 'Processeur', models: 'Modèles', usage: 'Utilisation sur 30 jours', requests: 'Requêtes',
     usageDay: '{date} : {generated}, {read}', tokensGenerated_one: '{n} jeton généré',
     tokensGenerated_other: '{n} jetons générés', tokensRead_one: '{n} jeton lu', tokensRead_other: '{n} jetons lus',
@@ -245,9 +244,9 @@ const texts = {
       'comme images, mais le contexte de cette discussion n\'a plus de place d\'image ({max} au plus). Les images ' +
       'des échanges les plus anciens quittent le contexte une fois que la discussion les résume.',
     scanPageName: '{name}, page {n}', scanRendering: 'Rendu des pages de {name}…',
-    stepsCount_one: '{n} étape', stepsCount_other: '{n} étapes', agentLimit: 'L\'agent s\'est arrêté après {n} étapes.',
+    agentLimit: 'L\'agent s\'est arrêté après {n} étapes.',
     aboutText: 'Albireo Community Edition exécute des modèles de langage localement, sur le processeur et le processeur graphique de ce Mac, en reposant sur la bibliothèque open source Dlib-Transformer-extensions.',
-    createdBy: 'Créé par {author}', changelog: 'Notes de version', home: 'Accueil : nouvelle discussion, saisie effacée', forkedBy: 'Fork pour macOS (Apple Silicon), modifié par TortueTech', forkShort: 'fork macOS', license: 'Licence',
+    createdBy: 'Créé par {author}', changelog: 'Notes de version', home: 'Accueil : nouvelle discussion, saisie effacée', forkedBy: 'Fork pour macOS (Apple Silicon), modifié par TortueTech', forkShort: 'fork macOS',
     thirdParty: 'Composants tiers', apiDocs: 'Documentation de l\'interface', close: 'Fermer', confirm: 'Confirmer',
     licensesTitle: 'Composants et licences',
     licensesIntro: 'Albireo fonctionne sans réseau : les bibliothèques, les programmes et les modèles sur lesquels ' +
@@ -273,49 +272,28 @@ const texts = {
     component_pdfjs: 'Lit le texte des documents PDF',
     component_cmaps: 'Donne le texte des polices chinoises, japonaises et coréennes des documents PDF',
     component_swagger: 'Affiche la documentation interactive de l\'interface',
-    program_albireo: 'Le service, l\'icône de la zone de notification et cette interface',
+    program_albireo: 'Le service et cette interface',
     program_dlib: 'Moteur d\'inférence et bibliothèque des modèles',
     program_mbedtls: 'Chiffrement du serveur HTTPS local, et empreintes',
     program_httplib: 'Serveur web local et téléchargements', program_zlib: 'Compression des données',
     program_sqlite: 'Base de données du service',
     program_libpng: 'Lecture des images PNG par les moteurs',
     program_libjpeg: 'Lecture des images JPEG par les moteurs',
-    program_pico: 'Lecture des réponses à voix haute, avec ses voix de six langues',
     program_runtime: 'Environnement d\'exécution d\'un moteur',
     errorPrefix: 'Erreur : {message}', retry: 'Réessayer', cancelled: 'Interrompu.', emptyAnswer: '(aucune réponse)',
-    filesInProject_one: '{n} document', filesInProject_other: '{n} documents', characters_one: '{n} caractère',
-    characters_other: '{n} caractères', newProjectDiscussion: 'Nouvelle discussion dans {name}',
-    moveTo: 'Déplacer vers', none: 'Aucun', searchIn: 'Rechercher dans les discussions', share: 'Partager', addToProject: 'Ajouter à un projet',
-    suggest_general_1: 'Expliquer une notion|Comment fonctionne la cryptographie à clé publique, avec une analogie simple ?',
-    suggest_general_2: 'Rédiger|Rédige un courriel clair et courtois pour reporter une réunion à la semaine prochaine.',
-    suggest_general_3: 'Résumer|Résume le document joint en cinq points clés.',
-    suggest_general_4: 'Planifier|Prépare un plan de deux semaines pour apprendre les bases des statistiques.',
-    suggest_code_1: 'Relire du code|Relis cette fonction et signale les bogues et les constructions risquées.',
-    suggest_code_2: 'Écrire une fonction|Écris une fonction C++14 qui analyse une date ISO 8601.',
-    suggest_code_3: 'Expliquer une erreur|Explique cette erreur de compilation et comment la corriger.',
-    suggest_code_4: 'Écrire des tests|Écris des tests unitaires couvrant les cas limites d\'un découpeur de chaînes.',
-    suggest_security_1: 'Analyser un journal|Analyse ces journaux d\'authentification et repère les activités suspectes.',
-    suggest_security_2: 'Durcir|Liste les étapes de durcissement d\'un poste Windows 11 de développement.',
-    suggest_security_3: 'Modèle de menaces|Construis le modèle de menaces d\'une application web exposant une interface REST.',
-    suggest_security_4: 'Incident|Rédige une liste de contrôle de réponse à une infection par rançongiciel.'
+    newProjectDiscussion: 'Nouvelle discussion dans {name}',
+    moveTo: 'Déplacer vers', none: 'Aucun', searchIn: 'Rechercher dans les discussions'
   }
 };
 
 // Le fork pour macOS ne parle que français.
 export const languages = [{ code: 'fr', name: 'Français' }];
-
 let current = 'fr';
-
-export function detectLanguage() {
-  return 'fr';
-}
-
 // Le fork pour macOS ne parle que français : l'interface est en français quelle que soit la langue demandée.
 export function setLanguage(code) {
   current = 'fr';
   document.documentElement.lang = current;
 }
-
 export function language() { return current; }
 
 // Le texte s avec la valeur de chaque variable de vars à la place de son nom entre accolades.
@@ -323,7 +301,6 @@ function fillIn(s, vars) {
   if (vars) for (const k of Object.keys(vars)) s = s.split('{' + k + '}').join(String(vars[k]));
   return s;
 }
-
 export function t(key, vars) {
   return fillIn(texts.fr[key] || key, vars);
 }

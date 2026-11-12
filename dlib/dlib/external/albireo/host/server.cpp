@@ -1211,8 +1211,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             {"zlib.txt", "zlib", ZLIB_VERSION},
             {"sqlite.txt", "SQLite", SQLITE_VERSION},
             {"libpng.txt", "libpng", ""},
-            {"libjpeg.txt", "libjpeg (Independent JPEG Group)", ""},
-            {"cudnn-license.txt", "cuDNN", ""}
+            {"libjpeg.txt", "libjpeg (Independent JPEG Group)", ""}
         };
 
         // Indique si name peut être une entrée du dossier licenses : aucun séparateur, deux-points,
