@@ -547,6 +547,21 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : propre au Mac (noyau Metal).
 
+### Changement 14 : l'attention des prompts par produits de matrices sur le GPU
+
+- **Pourquoi** : le noyau `attention_tile` du changement 13 calculait chaque score par une boucle de produits scalaires, une position par voie ; au-delà de 4 096 positions, le processeur restait plus rapide (2B, 8 192 tokens : 106 contre 118 à 123 tokens/s).
+- **Quoi** : noyau `attention_mtile` (`metal_kernels.metal`, Albireo 4.11.0), qui remplace `attention_tile` : un threadgroup par (tuile de 2 à 32 tokens, tête de clés), 4 simdgroups (2 pour les têtes de 256) ; requêtes, clés et valeurs en demi-précision dans la mémoire de threadgroup, chargées huit valeurs par thread (deux `char4` et une échelle par groupe de 32 pour les clés en 8 bits) ; scores S = Q·Kᵀ et somme O += P·V par `simdgroup_multiply_accumulate` en matrices 8 × 8 ; softmax en ligne par tranche de 32 positions, avec remise à l'échelle de O par une matrice diagonale. Limite par défaut des prompts sur le GPU : 262 144 positions (au lieu de 4 096).
+- **Exactitude** : contrôle de chargement à 0,29 % (2B) ; mêmes réponses gloutonnes que le processeur sur des prompts d'environ 3 660 tokens (Qwen3-VL 2B et 4B, Qwen3.5-4B et 0.8B). Une première version sans le chargement vectorisé ne gagnait que 2 % : le temps passait à remplir la mémoire de threadgroup, pas à calculer.
+
+| Qwen3-VL 2B Q4_K_M, lecture d'un prompt (`bench_runtime`, clés q8, 8 threads), M2, mesures alternées | Processeur | GPU, changement 13 | GPU, changement 14 |
+|---|---|---|---|
+| 512 tokens (2 essais) | 243,0 et 226,5 | 533,0 | 608,1 et 603,4 |
+| 4 096 tokens (2 essais) | 177,3 et 170,0 | 198,0 | 423,0 et 424,0 |
+| 8 192 tokens (2 essais) | 116,6 et 114,5 | 106,1 et 106,2 | 295,4 et 295,1 |
+| 16 384 tokens (1 essai) | 67,2 | — | 170,9 |
+
+**Mac ou Windows** : propre au Mac (noyau Metal).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -561,7 +576,8 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 21,3 à 21,7 tokens/s sur le GPU ; 18,2 à 18,6 sur le processeur (17,6 à 18,1 sans le changement 8 ; 16,4 à 16,6 sans les changements 6 à 8) |
 | SHA-256 d'un fichier de modèle (vérification, import, restauration) | 283 à 288 Mo/s (mbedtls) | 2 059 à 2 141 Mo/s (changement 11) |
 | Qwen3.5-4B Q4_K_M (architecture lue par le fork seulement), génération | non lu par le moteur | 19,5 tokens/s sur le GPU ; 11,7 à 12,2 sur le processeur (changement 12) |
-| Qwen3-VL 2B, prompt de 4 096 tokens sur le GPU | non mesuré | 198 tokens/s (changement 13) ; 145 avec l'attention précédente |
+| Qwen3-VL 2B, prompt de 4 096 tokens sur le GPU | non mesuré | 423 à 424 tokens/s (changement 14) ; 198 avec le changement 13, 145 avec l'attention précédente |
+| Qwen3-VL 2B, prompt de 8 192 tokens | pas mesuré | 295 tokens/s sur le GPU (changement 14) ; 115 à 117 sur le processeur |
 | Qwen3.5-4B Q4_K_M, lecture d'un prompt de 783 tokens | non lu par le moteur | 148 à 149 tokens/s sur le GPU ; 86 sur le processeur (changement 12) |
 | Qwen 3.6 11B-A3B Q4_K_M (mélange d'experts, fork seulement), génération | non lu par le moteur | 26,1 à 26,3 tokens/s sur le GPU ; 24,4 à 25,0 sur le processeur (changement 12) |
 

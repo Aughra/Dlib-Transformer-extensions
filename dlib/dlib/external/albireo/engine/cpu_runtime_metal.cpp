@@ -109,9 +109,10 @@ namespace albireo
             sur le M2 (bench_runtime, clés et valeurs en 8 bits) : le GPU lit un prompt de 24 tokens environ
             deux fois plus vite que le processeur (il développe chaque poids une fois par passe, environ
             200 ms pour un modèle 2B), un prompt de 1 024 tokens 1,7 à 2,1 fois plus vite, de 2 048 tokens
-            1,2 à 1,7 fois.  Son attention de prompt lit les clés par tuiles de tokens (attention_tile, Albireo
-            4.10.0) : 4 096 tokens 198 tokens/s contre 171 à 181 sur le processeur (2B) ; à 8 192, 106 contre 118 à
-            123, d'où la limite de 4 096 positions par défaut.
+            1,2 à 1,7 fois.  Son attention de prompt (attention_mtile, instructions matricielles, Albireo 4.11.0)
+            gagne à toutes les longueurs mesurées (2B, mesures alternées : 4 096 tokens 423 à 424 tokens/s contre
+            170 à 177 sur le processeur, 8 192 tokens 295 contre 115 à 117, 16 384 tokens 171 contre 67) : la limite
+            par défaut est la longueur des modèles, 262 144 positions.
         */
         // Les valeurs par défaut de set_gpu_prompts(), que changent les réglages gpu_prompt_tokens et
         // gpu_prompt_context.
@@ -122,13 +123,13 @@ namespace albireo
         gpu_.reset();
         const long hd = cfg_.head_dim;
         const long rep = cfg_.n_kv_heads > 0 ? cfg_.n_heads / cfg_.n_kv_heads : 0;
-        // Les modèles que couvrent les noyaux : denses, leurs têtes de 64 à 256 valeurs, chaque produit en
-        // Q4_K ou Q6_K.
+        // Les modèles que couvrent les noyaux : leurs têtes de 64 à 256 valeurs, chaque produit en Q4_K ou Q6_K
+        // (et les formats de step_format pour les modèles ci-dessous).
         std::string why;
         /*
-            Les modèles à couches linéaires (qwen35) et les mélanges d'experts ne passent au GPU que pour leurs
-            étapes, dont les produits lisent aussi Q5_K et Q8_0 ; les autres modèles y passent aussi leurs prompts,
-            dont les poids développés en floats sont en Q4_K ou Q6_K.
+            Les modèles à couches linéaires (qwen35) et les mélanges d'experts lisent aussi Q5_K, Q8_0 et Q5_0
+            (step_format) : leurs étapes vont au GPU, et les prompts de qwen35 aussi, coupés aux points de reprise
+            (run_gpu_checkpointed) ; les prompts des mélanges d'experts restent sur le processeur.
         */
         const bool steps_only = cfg_.recurrent() || cfg_.is_moe();
         auto formats = [&](const weight_matrix& W) { return steps_only ? step_format(W) : gpu_format(W); };
@@ -305,8 +306,7 @@ namespace albireo
                 if (i >= sequences_.size() || !sequences_[i] || sequences_[i]->length + s.count > gpu_prompt_context_)
                     long_pass = false;
             }
-        // qwen35 : les étapes seulement ; ses prompts restent sur le processeur.
-        // Les prompts des mélanges d'experts restent sur le processeur.
+        // Les prompts des mélanges d'experts restent sur le processeur (il faudrait des produits groupés par expert).
         if (cfg_.is_moe()) long_pass = false;
         return gpu_ && gpu_->state != gpu_state::dropped && (step || long_pass)
             && batch.embedding_rows.empty() && !batch.hidden_only

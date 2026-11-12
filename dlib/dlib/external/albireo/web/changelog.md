@@ -2,6 +2,18 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.11.0 — 13 novembre 2026
+
+### Performances
+
+- L'attention des prompts sur le GPU calcule ses scores et sa somme pondérée par des produits de matrices 8 × 8 (instructions `simdgroup_matrix` de Metal), et charge ses clés et valeurs huit nombres à la fois. Ce noyau remplace celui de la 4.10.0. Qwen3-VL 2B sur MacBook Air M2, clés et valeurs en 8 bits, mesures alternées : prompt de 512 tokens 533 → 603 à 608 tokens/s (le processeur : 227 à 243), de 4 096 tokens 198 → 423 à 424 (le processeur : 170 à 177), de 8 192 tokens 106 → 295 (le processeur : 115 à 117), de 16 384 tokens 171 (le processeur : 67).
+
+### Réglages
+
+- La limite de contexte des prompts lus par le GPU (« GPU : prompts jusqu'à ») passe de 4 096 à 262 144 positions : le GPU est désormais plus rapide à toutes les longueurs mesurées. Prompts d'environ 3 660 tokens, même réponse que sur le processeur : Qwen3-VL 2B 423 contre 168 tokens/s, Qwen3-VL 4B 152 contre 62, Qwen3.5-4B 139 contre 80, Qwen3.5-0.8B 493 contre 419.
+
+---
+
 ## 4.10.0 — 12 novembre 2026
 
 ### Performances

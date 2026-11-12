@@ -33,3 +33,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 27. [Le carnet sur le GPU](27-le-carnet-sur-le-gpu.md)
 28. [Le comité d'experts](28-le-comite-d-experts.md)
 29. [Les marque-pages](29-les-marque-pages.md)
+30. [La table de multiplication](30-la-table-de-multiplication.md)

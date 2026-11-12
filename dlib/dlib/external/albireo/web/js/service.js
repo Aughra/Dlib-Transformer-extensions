@@ -201,8 +201,8 @@ const schemas = {
   gpu_prompt_context: schema('Jusqu’à quelle longueur le GPU lit',
     `<rect x="40" y="70" width="320" height="40" rx="8" class="s-blue"/>` + text(200, 95, 'GPU') +
     `<rect x="360" y="70" width="200" height="40" rx="8" class="s-gold"/>` + text(460, 95, 'processeur') +
-    arrow(360, 140, 360, 114) + text(360, 158, 'limite (4 096 positions)', 's-f') +
-    text(300, 190, 'au-delà, l’attention des prompts du GPU coûte plus qu’elle ne gagne', 's-f'), 205),
+    arrow(360, 140, 360, 114) + text(360, 158, 'limite (par défaut : la longueur du modèle)', 's-f') +
+    text(300, 190, 'le GPU lit plus vite à toutes les longueurs mesurées', 's-f'), 205),
   models_dir: schema('Où vivent les modèles',
     box(30, 76, 150, 56, 'Service', 's-blue') + arrow(180, 104, 300, 104, 'lit') +
     box(300, 60, 260, 88, 'Dossier des modèles', 's-gold', 'vide : dans les données') +
@@ -238,7 +238,7 @@ function formatMb(n) {
 const recommended = {
   accelerator: 'auto',        // GPU : écriture 21-22 contre 18-19 tokens/s (4B), lecture x1,7 (épisodes 19, 20)
   gpu_prompt_tokens: 24,      // le GPU perd à 16 tokens, gagne dès 24 (épisode 20)
-  gpu_prompt_context: 4096,   // attention en tuiles (4.10.0), 2B : à 4 096 GPU 198 contre 171-181 ; à 8 192 GPU 106 contre 118-123
+  gpu_prompt_context: 262144, // attention matricielle (4.11.0), 2B : GPU 424 / 296 / 182 contre 171-181 / 118-123 / 71 à 4 096 / 8 192 / 16 384
   threads: 0,                 // tous les cœurs physiques ; les pas d'écriture prennent les cœurs P (épisode 16)
   spin_us: 2000,
   max_sequences: 4,
@@ -281,14 +281,14 @@ const items = {
     title: 'GPU du Mac',
     control: { kind: 'switch', on: 'auto', off: 'none' },
     restart: true,
-    effect: 'Allumé : écriture environ 15 % plus rapide et lecture des documents presque deux fois plus rapide.',
+    effect: 'Allumé : écriture environ 15 % plus rapide et lecture des documents plus de deux fois plus rapide.',
     principle: "Le moteur confie les gros calculs au GPU de la puce Apple (Metal), et garde le processeur pour le reste.",
     pros: ['Écrit plus vite : 21 à 22 tokens/s au lieu de 18 à 19 pour le modèle de 4B, sur un M2.',
-      'Lit les prompts de 24 tokens ou plus environ deux fois plus vite, jusqu’à 4 096 positions.',
+      'Lit les prompts de 24 tokens ou plus deux à trois fois plus vite, à toutes les longueurs.',
       'Contrôlé à chaque chargement : au moindre écart, le moteur repasse seul au processeur.'],
-    cons: ['Pas identique au dernier chiffre près au processeur (écart de 0,04 à 0,27 % sur les scores, même mot choisi).',
+    cons: ['Pas identique au dernier chiffre près au processeur (écart de 0,04 à 0,3 % sur les scores, même mot choisi).',
       'Environ 200 Mo de mémoire en plus pour ses tampons.',
-      'Seuls les modèles en Q4_K et Q6_K en profitent ; le modèle de recherche reste sur le processeur.'],
+      'Seuls les poids en Q4_K et Q6_K y passent (aussi Q5_K, Q8_0 et Q5_0 pour Qwen 3.5 et les mélanges d’experts) ; le modèle de recherche reste sur le processeur.'],
     normal: "Le Mac a deux moteurs de calcul sur la même puce : le processeur, polyvalent, et le GPU, fait pour répéter " +
       "la même opération sur des milliers de nombres à la fois. Écrire une réponse, c’est relire tout le modèle pour " +
       "chaque mot : le GPU lit cette mémoire plus vite. Lire un long document, c’est surtout multiplier : le GPU calcule " +
@@ -297,14 +297,14 @@ const items = {
       "fichier GGUF sont pris sans copie (newBufferWithBytesNoCopy sur la projection mmap alignée sur les pages), de même " +
       "que la zone des clés et valeurs. Un pas d’écriture (1 à 8 tokens) est encodé en une seule commande : matvec Q4_K/Q6_K " +
       "en simdgroups, RMSNorm, RoPE, écriture des clés q8 tournées (Walsh-Hadamard), attention en ligne par morceaux de 256 " +
-      "positions puis fusion. Un prompt de 24 à 2 048 tokens décompresse chaque matrice en float32 puis passe par " +
-      "MPSMatrixMultiplication. Au chargement, une sonde de 32 tokens et deux pas sont comparés au processeur en produits " +
+      "positions puis fusion. Un prompt de 24 tokens ou plus décompresse chaque matrice en float32 puis passe par " +
+      "MPSMatrixMultiplication ; son attention multiplie des matrices 8 × 8 (simdgroup_matrix). Au chargement, une sonde de 29 tokens et deux pas sont comparés au processeur en produits " +
       "flottants : logits à 1 % près (5 % pour un prompt en clés 8 bits), même argmax, sinon repli.",
     marmot: "Imagine une cuisine avec un chef et une brigade de commis. Le chef (le processeur) sait tout faire, mais " +
       "un à la fois. Les commis (le GPU) épluchent mille carottes en même temps. Comme ils partagent le même plan de " +
       "travail, personne ne transporte rien : on leur donne les carottes, et le repas est prêt plus vite.",
     bee: "Coupé, tout repasse sur le processeur : les réponses restent justes, mais arrivent un peu moins vite, et un long " +
-      "document met presque deux fois plus de temps à être lu. Utile pour comparer, ou si le contrôle du chargement " +
+      "document met plus de deux fois plus de temps à être lu. Utile pour comparer, ou si le contrôle du chargement " +
       "signale un souci dans le journal du service."
   },
   threads: {
@@ -374,7 +374,7 @@ const items = {
       "octets par token : pour le 4B du service (36 couches, 8 têtes KV de 128) en q8, environ 76 Ko par token, " +
       "0,3 Go pour 4 096 tokens ; sur un Mac de 24 Go, l’auto lui donne 250 112 tokens sur 262 144. L’attention de chaque pas lit toutes " +
       "les clés : coût linéaire en longueur pour l’écriture, quadratique pour la lecture d’un prompt. Sur le GPU, les " +
-      "prompts ne passent que jusqu’à 4 096 positions (réglage « GPU : prompts jusqu’à ») ; au-delà, le processeur reprend.",
+      "prompts passent jusqu’à la longueur fixée par le réglage « GPU : prompts jusqu’à » (par défaut, celle du modèle).",
     marmot: "C’est la taille de ton bureau. Sur un petit bureau, tu ne poses que deux pages : pour lire la troisième, " +
       "tu en ranges une et tu l’oublies. Un grand bureau garde tout le dossier ouvert, mais il prend de la place dans " +
       "la pièce et tu mets plus longtemps à tout parcourir des yeux.",
@@ -598,28 +598,29 @@ const items = {
   },
   gpu_prompt_context: {
     title: 'GPU : prompts jusqu’à',
-    control: { kind: 'range', values: () => [0, 512, 1024, 2048, 4096, 8192, 16384],
+    control: { kind: 'range', values: () => [0, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144],
       label: (v) => v === 0 ? 'jamais (processeur)' : formatTokens(v) },
     restart: true,
     effect: 'La longueur de contexte jusqu’à laquelle le GPU lit les prompts. Au-delà, le processeur reprend.',
-    principle: 'L’attention des prompts coûte de plus en plus avec la longueur : au-delà d’un point, le processeur la fait mieux.',
-    pros: ['4 096 : le GPU gagne partout où il lit, sur les modèles mesurés (attention en tuiles).',
-      'Plus bas : rien à gagner, le GPU lit plus vite jusqu’à cette longueur.'],
-    cons: ['Plus haut : sur le 2B, le GPU devient plus lent que le processeur à 8 192 positions.',
+    principle: 'Le GPU lit les prompts dont le contexte reste sous cette longueur ; au-delà, le processeur.',
+    pros: ['Par défaut, la longueur du modèle : le GPU lit tout, et il gagne à toutes les longueurs mesurées.',
+      'Plus bas : seulement pour comparer, ou si une machine donnait l’avantage au processeur sur les longs textes.'],
+    cons: ['Plus bas : les longs documents sont lus par le processeur, deux à trois fois plus lentement.',
       '0 : plus aucun prompt sur le GPU, la lecture redevient deux fois plus lente.'],
     normal: "Pour chaque token d’un prompt, le modèle relit tous ceux qui le précèdent. Sur un long document, ce travail " +
-      "grossit vite. L’attention du GPU lit les clés par tuiles partagées entre plusieurs tokens, mais finit encore " +
-      "par perdre sur les très longs textes. Ce réglage fixe la frontière.",
+      "grossit vite. L’attention du GPU partage chaque tranche de clés entre plusieurs tokens et calcule par petites " +
+      "matrices : elle reste plus rapide que le processeur même sur de très longs textes. Ce réglage fixe une frontière, " +
+      "par défaut au bout du modèle.",
     owl: "Le chemin des prompts sur le GPU (takes_gpu) exige que la séquence finisse dans gpu_prompt_context positions. " +
-      "L’attention de prompt (attention_tile) prend des tuiles de 4 à 16 tokens consécutifs par tête de clés ; chaque " +
-      "voie d’un simdgroup calcule le score d’une position entière, par tranches de 32 positions chargées une fois en " +
-      "mémoire de threadgroup. Mesures (bench_runtime, une passe, clés q8, 2B, Albireo 4.10.0) : 4 096 tokens GPU 198 " +
-      "contre 171 à 181 sur le processeur ; 8 192 tokens 106 contre 118 à 123 (processeur gagnant). Le service lit un " +
-      "long document par morceaux : ceux qui finissent avant la limite vont au GPU, les suivants au processeur.",
-    marmot: "C’est comme un livreur à vélo : imbattable en ville, mais pour aller à l’autre bout du pays, la voiture " +
-      "reprend l’avantage. Ce réglage dit jusqu’où on envoie le vélo.",
-    bee: "Trop haut, les longs documents sont lus plus lentement sur le petit modèle. À 0, le GPU ne lit plus aucun " +
-      "prompt : l’écriture reste rapide, mais la lecture redevient deux fois plus lente."
+      "L’attention de prompt (attention_mtile) prend 32 lignes de requête (16 pour des têtes de 256 valeurs) par tête " +
+      "de clés, charge chaque tranche de 32 positions une fois en mémoire de threadgroup (8 valeurs par thread, une " +
+      "échelle par groupe) et calcule scores et sorties par simdgroup_matrix 8 x 8. Mesures (bench_runtime, une passe, " +
+      "clés q8, 2B, Albireo 4.11.0) : 4 096 tokens 424 tokens/s contre 171 à 181 sur le processeur ; 8 192 tokens 296 " +
+      "contre 118 à 123 ; 16 384 tokens 182 contre 71.",
+    marmot: "C’est comme un livreur qui a appris à charger tout un carton au lieu d’un colis à la fois : même pour les " +
+      "longues tournées, il reste le plus rapide. Ce réglage dit jusqu’où on l’envoie ; par défaut, partout.",
+    bee: "Trop bas, les longs documents sont lus par le processeur, deux à trois fois plus lentement. À 0, le GPU ne lit " +
+      "plus aucun prompt : l’écriture reste rapide, mais la lecture redevient deux fois plus lente."
   },
   spin_us: {
     title: 'Attente active des threads',

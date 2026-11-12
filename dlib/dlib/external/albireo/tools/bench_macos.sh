@@ -12,8 +12,7 @@
 #
 # Les modèles : ceux du portage quand ils sont là (build/models, build/albireo-home/models), et tout fichier
 # .gguf de build/bench-models (par exemple le Qwen3.6-35B-A3B sur le Mac mini).  BENCH_SIZES change les tailles
-# de prompt (« 64 512 1536 3584 » : le GPU lit les prompts dont le contexte reste sous 4 096 positions, écriture
-# comprise), BENCH_STEPS le nombre de tokens écrits (64).
+# de prompt (« 64 512 1536 3584 » : le GPU lit tous les prompts depuis Albireo 4.11.0), BENCH_STEPS le nombre de tokens écrits (64).
 
 ROOT=$(cd "$(dirname "$0")/../../../../.." && pwd)
 ROUNDS=${1:-2}
