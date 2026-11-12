@@ -2,6 +2,21 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.3.0 — 12 novembre 2026
+
+### Accès et documents
+
+- Les recherches Hugging Face et les listes de fichiers des dépôts sont conservées sur le Mac (les 30 plus récentes de chaque sorte). Hors ligne, ou si Hugging Face ne répond pas, la dernière réponse conservée est affichée avec sa date.
+- L'onglet Modèles propose deux boutons : « Rafraîchir depuis le Mac » (liste, réserve et dernière recherche, sans réseau) et « Rafraîchir depuis Hugging Face » (catalogue depuis GitHub, dernière recherche depuis Hugging Face). Les recherches conservées sont listées sous le champ de recherche.
+- Au démarrage, les modèles installés avant la version 4.2.0 sont ajoutés à la réserve, sous forme de clones.
+- API : paramètre `local=1` et champ `cached_at` pour `/albireo/v1/hub/search` et `/albireo/v1/hub/files` ; nouvelle route `/albireo/v1/hub/recent`.
+
+### Corrections
+
+- Une copie entrée dans la réserve porte la date de son entrée, et non celle du fichier d'origine : l'ordre de retrait au-delà du plafond est respecté.
+
+---
+
 ## 4.2.0 — 12 novembre 2026
 
 ### Accès et documents
