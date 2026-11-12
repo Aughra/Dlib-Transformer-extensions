@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Découper app.js : context.js (Albireo 4.11.4)
+
+- **Quoi** : `web/js/context.js` (53 déclarations, 581 lignes) : constantes et fonctions des parts du contexte de travail (`workingContext`, `wholeTokens`, `excerptBudget`, `answerReserve`, `estimateTokens`, `memoryLimitWords`…) et la section « Le contexte que reçoit le modèle » (`systemPrompt`, `apiMessages`, `compact`, `documentsOf`, mesures des images…), mot pour mot. `settings.js` prend `memoryLimitWords` de `context.js`.
+- **Fichiers** : `albireo/web/js/{app.js,context.js,settings.js}`, `albireo/web/changelog.md`, version.
+- **Pourquoi** : chantier D.
+- **Étapes** : ESLint 0 problème ; scénario principal 35 sur 35 ; nouveau scénario des documents (fichier texte joint à une question, document d'un projet, réponses justes : « ORNITHORYNQUE », « Vert émeraude ») 12 sur 12 ; aucune erreur. `app.js` : 5 896 lignes (7 274 au départ).
+
 ## 2026-11-12 — Découper app.js : dialogs.js et settings.js (Albireo 4.11.3)
 
 - **Quoi** : `web/js/dialogs.js` (10 déclarations : `dialog`, `confirmDialog`, `promptDialog`, `field`, menus et panneaux) et `web/js/settings.js` (16 : `settingsDialog` et ses onglets, `requestPersistence`, `changelogDialog`, licences), mot pour mot. `settings.js` importe 28 fonctions d'`app.js` (import circulaire, sans usage au chargement du module) ; `dialogs.js` ne dépend pas d'`app.js`.
