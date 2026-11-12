@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Découper app.js, socle : state.js et dom.js (Albireo 4.11.2)
+
+- **Quoi** : `web/js/state.js` (`defaults`, `state`, `ui`) et `web/js/dom.js` (17 déclarations : `h`, `fill`, `iconButton`, formats de tailles, nombres et durées, `toast`, presse-papiers, `storageFailed`, `download`, `mimeOf`) sortis d'`app.js`, mot pour mot. Outils (hors dépôt, scratchpad) : `move.py` déplace des déclarations de haut niveau avec leurs commentaires et calcule les `import`/`export` ; `prune.py` retire les imports inutilisés ; ESLint 9 (`no-undef`, `no-import-assign`, `no-redeclare`) installé dans le scratchpad.
+- **Fichiers** : `albireo/web/js/{app.js,state.js,dom.js}`, `albireo/web/changelog.md`, version.
+- **Pourquoi** : chantier D ; les modules du bas, qui ne dépendent pas d'`app.js`, d'abord.
+- **Étapes** : ESLint 0 problème ; scénario de la page 32 sur 32, aucune erreur ; build sans erreur.
+
 ## 2026-11-12 — Retirer le code mort de la page et les restes de Windows (Albireo 4.11.1)
 
 - **Quoi** : chantier D, première étape. Page : 31 textes jamais affichés retirés d'`i18n.js` (`suggest_*`, `roleHint_*`, `roleServedBy`, `roleShared`, `contextUsage`, `stepsCount_*`, `filesInProject_*`, `characters_*`, `share`, `addToProject`, `license`, `speed`…), ainsi que `detectLanguage` et `program_pico` ; 5 règles CSS sans élément (`.role-picker`, `.suggestions`, `.suggestion`, `.context-meter`, `.ring`). Restes de Windows : message « aucun modèle » (zone de notification → onglet Modèles), texte d'Albireo dans les licences ; cuDNN retiré de la liste des licences du service (`host/server.cpp`) et SVOX Pico de `programTexts`. Sécurité : les fichiers créés par l'agent reçoivent `.txt` aussi pour les extensions que macOS exécute (`tools.js`). Banc d'essai de la page (hors dépôt, dans le scratchpad de la session) : service isolé sur le port 18491, hors ligne, modèle 2B cloné dans sa réserve ; Chrome sans fenêtre piloté par le protocole DevTools (script Node), 32 vérifications (conversation, paramètres et leurs onglets, projet, rechargement, recherche, discussion privée, bloc de code, agent et calculatrice, noms de fichiers de l'agent, licences) et aucune erreur JavaScript.
