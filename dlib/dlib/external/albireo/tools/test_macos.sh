@@ -126,6 +126,14 @@ else
   step "qwen 3.5" "Paris" "$CHAT" "$ENGINE" "$QWEN35" --reasoning off --temperature 0 --max 40 "$QUESTION"
   step "qwen 3.5 resumed state" "same answers with resumed states" qwen35_turns
 fi
+# Qwen 3.5 sur le GPU : ses étapes de génération, quand un modèle en Q4_K / Q5_K / Q6_K est là (le 4B qu'installe
+# le service, par défaut).
+QWEN35_GPU=${QWEN35_GPU_MODEL:-$ROOT/build/albireo-home/models/hf-unsloth-qwen3.5-4b-q4_k_m.gguf}
+if [ ! -f "$ENGINE" ] || [ ! -f "$QWEN35_GPU" ]; then skip "qwen 3.5 on the GPU" "no $QWEN35_GPU"
+else
+  step "qwen 3.5 on the GPU" "the generation steps run on it" "$CHAT" "$ENGINE" "$QWEN35_GPU" --reasoning off \
+    --temperature 0 --max 20 "$QUESTION"
+fi
 
 if [ -f "$EMBEDDING" ] && [ -f "$ENGINE" ]; then
   step "embedding model" "cosine" "$CHAT" "$ENGINE" "$EMBEDDING" --parallel \

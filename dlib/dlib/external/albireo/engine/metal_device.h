@@ -108,7 +108,7 @@ namespace albireo
                 y[t * y_stride + r] = alpha * sum_i W[r][i] x[t * x_stride + i] + beta * y[...],
                 r < rows, t < tokens (au plus max_tokens), W dans la disposition GGUF de type, des
                 lignes de cols valeurs.  Renvoie false, sans rien encoder, pour un type sans noyau
-                (Q4_K et Q6_K en ont un).
+                (Q4_K, Q5_K, Q6_K et Q8_0 en ont un).
             !*/
             bool matvec(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view x, unsigned tokens,
                 unsigned x_stride, metal_view y, unsigned y_stride, float alpha = 1.0f, float beta = 0.0f);
@@ -190,6 +190,39 @@ namespace albireo
             void attention(metal_view q, metal_view region, metal_view blocks, metal_view lengths,
                 unsigned table_stride, unsigned tokens, unsigned rep, unsigned parts, unsigned q_stride,
                 metal_view partial, metal_view ctx, const kv_layout& layout, unsigned part_len = attention_part);
+
+            /*!
+                Les couches Gated DeltaNet de qwen35 (fork pour macOS), comme
+                cpu_runtime::linear_attention() les calcule (metal_kernels.metal) : mix contient,
+                par token, les C canaux de la convolution (requêtes, clés, valeurs) ; states,
+                l'état de chaque séquence à seq * slot_floats floats, celui de la couche à
+                layer_offset (la fenêtre de la convolution, conv_floats floats, puis une matrice
+                S x S par tête de valeurs, rangée par clés) ; segments, des triplets int32
+                (séquence, premier token, nombre de tokens).
+            !*/
+            struct gdn_layout
+            {
+                unsigned C = 0, K = 0, Hk = 0, Hv = 0, S = 0;
+                unsigned slot_floats = 0, layer_offset = 0, conv_floats = 0;
+                float eps = 0.0f;
+            };
+            // Convolution causale et SiLU de chaque canal, la fenêtre de chaque séquence mise à jour.
+            void gdn_conv(metal_view mix, metal_view weights, metal_view states, metal_view segments,
+                unsigned n_segments, const gdn_layout& l);
+            // Normes L2 des têtes de requêtes et de clés de tokens tokens.
+            void gdn_l2norm(metal_view mix, unsigned tokens, const gdn_layout& l);
+            // alpha devient l'oubli softplus(alpha + dt_bias) * ssm_a, beta la force sigmoid(beta).
+            void gdn_gates(metal_view alpha, metal_view beta, metal_view dt_bias, metal_view ssm_a, unsigned tokens,
+                const gdn_layout& l);
+            // La règle delta de chaque tête de valeurs de chaque segment, ses sorties dans out (Hv * S par token).
+            void gdn_delta(metal_view mix, metal_view alpha, metal_view beta, metal_view states, metal_view segments,
+                unsigned n_segments, metal_view out, const gdn_layout& l);
+            // out = norme RMS de chaque tête * weight * SiLU(z).
+            void gdn_norm(metal_view out, metal_view z, metal_view weight, unsigned tokens, const gdn_layout& l);
+            // La requête et la porte de l'attention de qwen35, rangées tête par tête dans qg (2 * heads * hd par token).
+            void split_gate(metal_view qg, metal_view q, metal_view gate, unsigned tokens, unsigned heads, unsigned hd);
+            // x[i] *= sigmoid(gate[i]), i < n.
+            void sigmoid_mul(metal_view x, metal_view gate, unsigned n);
 
             /*!
                 ensures

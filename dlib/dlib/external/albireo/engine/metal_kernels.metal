@@ -209,6 +209,109 @@ kernel void mv_q6_K(device const uchar* W0 [[buffer(0)]], device const float* x 
     store_rows(m, a, lane, acc);
 }
 
+// Q5_K (fork pour macOS, qwen35) : comme Q4_K, avec le cinquième bit de chaque valeur dans qh (32 octets) :
+// la valeur l du morceau j prend le bit 2j (quartet bas) ou 2j + 1 (quartet haut) de qh[l].  Blocs de 176
+// octets : d, dmin, 12 octets d'échelles, qh, puis 128 octets de quartets.
+template <uint NT>
+kernel void mv_q5_K(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
+    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    const mv_target m = mv_select(W0, y0, W2, y2, a, tg, sg);
+    if (m.r0 >= m.rows) return;
+    device const uchar* W = m.W;
+    const long r0 = m.r0;
+    const long nb = a.cols / 256;
+    const long row_bytes = nb * 176;
+    const int k = lane % 8;
+    const int j = k / 2;
+    const int p = (k % 2) * 16;
+    const int s1 = 2 * j, s2 = 2 * j + 1;
+    const uchar b_lo = uchar(2 * j), b_hi = uchar(2 * j + 1);
+    float acc[ROWS][NT];
+    for (int r = 0; r < ROWS; ++r)
+        for (uint t = 0; t < NT; ++t) acc[r][t] = 0.0f;
+    for (long b = lane / 8; b < nb; b += 4)
+        for (uint t = 0; t < NT; ++t)
+        {
+            if (NT > 1 && t >= a.tokens) break;
+            device const float4* xl = (device const float4*)(x + t * a.x_stride + b * 256 + 64 * j + p);
+            device const float4* xh = xl + 8;
+            float4 vl[4], vh[4];
+            float slo = 0, shi = 0;
+            for (int i = 0; i < 4; ++i)
+            {
+                vl[i] = xl[i];
+                vh[i] = xh[i];
+                slo += vl[i].x + vl[i].y + vl[i].z + vl[i].w;
+                shi += vh[i].x + vh[i].y + vh[i].z + vh[i].w;
+            }
+            for (int r = 0; r < ROWS; ++r)
+            {
+                const long row = r0 + r;
+                if (row >= m.rows) break;
+                device const uchar* blk = W + row * row_bytes + b * 176;
+                device const uint* u = (device const uint*)(blk + 4);
+                const uint u0 = u[0], u1 = u[1], u2 = u[2];
+                const uint sc_lo = u0 & 0x3F3F3F3F, sc_hi = (u2 & 0x0F0F0F0F) | (((u0 >> 6) & 0x03030303) << 4);
+                const uint mn_lo = u1 & 0x3F3F3F3F, mn_hi = ((u2 >> 4) & 0x0F0F0F0F) | (((u1 >> 6) & 0x03030303) << 4);
+                const float sc1 = float(((s1 < 4 ? sc_lo : sc_hi) >> (8 * (s1 & 3))) & 0xFF);
+                const float sc2 = float(((s2 < 4 ? sc_lo : sc_hi) >> (8 * (s2 & 3))) & 0xFF);
+                const float m1 = float(((s1 < 4 ? mn_lo : mn_hi) >> (8 * (s1 & 3))) & 0xFF);
+                const float m2 = float(((s2 < 4 ? mn_lo : mn_hi) >> (8 * (s2 & 3))) & 0xFF);
+                const half2 dd = *(device const half2*)blk;
+                device const uchar4* qv = (device const uchar4*)(blk + 48 + 16 * k);
+                device const uchar4* hv = (device const uchar4*)(blk + 16 + p);
+                float plo = 0, phi = 0;
+                for (int i = 0; i < 4; ++i)
+                {
+                    const uchar4 q = qv[i], h = hv[i];
+                    plo += dot(float4(q & uchar(0xF)) + 16.0f * float4((h >> b_lo) & uchar(1)), vl[i]);
+                    phi += dot(float4(q >> uchar(4)) + 16.0f * float4((h >> b_hi) & uchar(1)), vh[i]);
+                }
+                acc[r][t] += float(dd.x) * (sc1 * plo + sc2 * phi) - float(dd.y) * (m1 * slo + m2 * shi);
+            }
+        }
+    store_rows(m, a, lane, acc);
+}
+
+// Q8_0 (fork pour macOS, qwen35) : blocs de 34 octets, d en demi-flottant puis 32 entiers signés, lus octet
+// par octet (alignement de 2) ; une voie du simdgroup par bloc.
+template <uint NT>
+kernel void mv_q8_0(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
+    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    const mv_target m = mv_select(W0, y0, W2, y2, a, tg, sg);
+    if (m.r0 >= m.rows) return;
+    device const uchar* W = m.W;
+    const long r0 = m.r0;
+    const long nb = a.cols / 32;
+    const long row_bytes = nb * 34;
+    float acc[ROWS][NT];
+    for (int r = 0; r < ROWS; ++r)
+        for (uint t = 0; t < NT; ++t) acc[r][t] = 0.0f;
+    for (long b = lane; b < nb; b += 32)
+        for (uint t = 0; t < NT; ++t)
+        {
+            if (NT > 1 && t >= a.tokens) break;
+            device const float* xb = x + t * a.x_stride + b * 32;
+            for (int r = 0; r < ROWS; ++r)
+            {
+                const long row = r0 + r;
+                if (row >= m.rows) break;
+                device const uchar* blk = W + row * row_bytes + b * 34;
+                device const char* q = (device const char*)(blk + 2);
+                float s = 0;
+                for (int l = 0; l < 32; ++l) s += float(q[l]) * xb[l];
+                acc[r][t] += float(*(device const half*)blk) * s;
+            }
+        }
+    store_rows(m, a, lane, acc);
+}
+
 // Un token (une étape de génération), ou jusqu'à MAX_TOKENS, les accumulateurs de chaque variante gardés
 // dans des registres.
 template [[host_name("mv_q4_K_1")]] kernel void mv_q4_K<1>(device const uchar*, device const float*, device float*,
@@ -218,6 +321,14 @@ template [[host_name("mv_q4_K_n")]] kernel void mv_q4_K<8>(device const uchar*, 
 template [[host_name("mv_q6_K_1")]] kernel void mv_q6_K<1>(device const uchar*, device const float*, device float*,
     constant mv_args&, device const uchar*, device float*, uint, uint, uint);
 template [[host_name("mv_q6_K_n")]] kernel void mv_q6_K<8>(device const uchar*, device const float*, device float*,
+    constant mv_args&, device const uchar*, device float*, uint, uint, uint);
+template [[host_name("mv_q5_K_1")]] kernel void mv_q5_K<1>(device const uchar*, device const float*, device float*,
+    constant mv_args&, device const uchar*, device float*, uint, uint, uint);
+template [[host_name("mv_q5_K_n")]] kernel void mv_q5_K<8>(device const uchar*, device const float*, device float*,
+    constant mv_args&, device const uchar*, device float*, uint, uint, uint);
+template [[host_name("mv_q8_0_1")]] kernel void mv_q8_0<1>(device const uchar*, device const float*, device float*,
+    constant mv_args&, device const uchar*, device float*, uint, uint, uint);
+template [[host_name("mv_q8_0_n")]] kernel void mv_q8_0<8>(device const uchar*, device const float*, device float*,
     constant mv_args&, device const uchar*, device float*, uint, uint, uint);
 
 // ---------------------------------------------------------------------------------------------
@@ -699,4 +810,155 @@ kernel void merge_attention(device const float* partial [[buffer(0)]], device co
         acc += f * r[i * a.hd + e];
     }
     ctx[t * a.q_stride + h * a.hd + e] = acc / sum;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Les couches Gated DeltaNet de qwen35 (fork pour macOS), comme cpu_runtime::linear_attention() les
+// calcule.  L'état d'une séquence est dans states, à seq * slot_floats ; celui d'une couche commence à
+// layer_offset : la fenêtre de la convolution (K - 1 valeurs par canal), puis, par tête de valeurs, la
+// matrice S rangée par clés (S[i][r] à i * S + r).  Les tokens d'une séquence passent dans l'ordre ; une
+// séquence est un segment (séquence, premier token, nombre de tokens) du lot.
+
+struct gdn_args
+{
+    uint C;
+    uint K;
+    uint Hk;
+    uint Hv;
+    uint S;
+    uint VD;
+    uint slot_floats;
+    uint layer_offset;
+    uint conv_floats;
+    uint segments;
+    float eps;
+    float qscale;
+};
+
+// Convolution causale de chaque canal sur la fenêtre de sa séquence, puis SiLU : grille (canaux, segments).
+kernel void gdn_conv(device float* mix [[buffer(0)]], device const float* w [[buffer(1)]],
+    device float* states [[buffer(2)]], device const int* seg [[buffer(3)]], constant gdn_args& a [[buffer(4)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    const uint c = gid.x, s = gid.y;
+    if (c >= a.C || s >= a.segments) return;
+    const int sq = seg[3 * s], start = seg[3 * s + 1], count = seg[3 * s + 2];
+    const uint n = a.K - 1;
+    device float* win = states + ulong(sq) * a.slot_floats + a.layer_offset + ulong(c) * n;
+    device const float* wc = w + ulong(c) * a.K;
+    for (int j = 0; j < count; ++j)
+    {
+        device float* xp = mix + ulong(start + j) * a.C + c;
+        const float in = *xp;
+        float sum = 0.0f;
+        for (uint i = 0; i < n; ++i) sum += win[i] * wc[i];
+        sum += in * wc[n];
+        for (uint i = 0; i + 1 < n; ++i) win[i] = win[i + 1];
+        if (n > 0) win[n - 1] = in;
+        *xp = sum / (1.0f + exp(-sum));
+    }
+}
+
+// Normes L2 des têtes de requêtes et de clés de chaque token : grille (2 * Hk, tokens).
+kernel void gdn_l2norm(device float* mix [[buffer(0)]], constant gdn_args& a [[buffer(1)]],
+    uint2 gid [[thread_position_in_grid]])
+{
+    if (gid.x >= 2 * a.Hk) return;
+    device float* xp = mix + ulong(gid.y) * a.C + gid.x * a.S;
+    float ss = 0.0f;
+    for (uint i = 0; i < a.S; ++i) ss += xp[i] * xp[i];
+    const float sc = 1.0f / sqrt(ss + a.eps);
+    for (uint i = 0; i < a.S; ++i) xp[i] *= sc;
+}
+
+// L'oubli g = softplus(alpha + dt_bias) * ssm_a et la force sigmoid(beta) : grille (Hv, tokens).
+kernel void gdn_gates(device float* alpha [[buffer(0)]], device float* beta [[buffer(1)]],
+    device const float* dt_bias [[buffer(2)]], device const float* ssm_a [[buffer(3)]],
+    constant gdn_args& a [[buffer(4)]], uint2 gid [[thread_position_in_grid]])
+{
+    if (gid.x >= a.Hv) return;
+    const uint i = gid.y * a.Hv + gid.x;
+    const float b = alpha[i] + dt_bias[gid.x];
+    alpha[i] = (b > 20.0f ? b : log(1.0f + exp(b))) * ssm_a[gid.x];
+    beta[i] = 1.0f / (1.0f + exp(-beta[i]));
+}
+
+// La règle delta : un threadgroup par (tête de valeurs, segment), un thread par valeur r de la tête.
+kernel void gdn_delta(device const float* mix [[buffer(0)]], device const float* alpha [[buffer(1)]],
+    device const float* beta [[buffer(2)]], device float* states [[buffer(3)]], device const int* seg [[buffer(4)]],
+    device float* out [[buffer(5)]], constant gdn_args& a [[buffer(6)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint r [[thread_index_in_threadgroup]])
+{
+    threadgroup float kq[512];
+    const uint h = tg.x, s = tg.y, S = a.S, kh = h % a.Hk;
+    const int sq = seg[3 * s], start = seg[3 * s + 1], count = seg[3 * s + 2];
+    device float* st = states + ulong(sq) * a.slot_floats + a.layer_offset + a.conv_floats + ulong(h) * S * S;
+    for (int j = 0; j < count; ++j)
+    {
+        const uint t = uint(start + j);
+        device const float* row = mix + ulong(t) * a.C;
+        if (r < S)
+        {
+            kq[r] = row[kh * S + r];
+            kq[S + r] = row[(a.Hk + kh) * S + r];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        if (r < S)
+        {
+            const float decay = exp(alpha[t * a.Hv + h]), b = beta[t * a.Hv + h];
+            float kv = 0.0f;
+            for (uint i = 0; i < S; ++i)
+            {
+                const float v = st[i * S + r] * decay;
+                st[i * S + r] = v;
+                kv += kq[S + i] * v;
+            }
+            const float delta = (row[2 * a.Hk * S + h * S + r] - kv) * b;
+            float o = 0.0f;
+            for (uint i = 0; i < S; ++i)
+            {
+                const float v = st[i * S + r] + kq[S + i] * delta;
+                st[i * S + r] = v;
+                o += kq[i] * v;
+            }
+            out[ulong(t) * a.VD + h * S + r] = o * a.qscale;
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+}
+
+// La norme RMS de chaque tête, multipliée par SiLU(z) : grille (Hv, tokens).
+kernel void gdn_norm(device float* out [[buffer(0)]], device const float* z [[buffer(1)]],
+    device const float* w [[buffer(2)]], constant gdn_args& a [[buffer(3)]], uint2 gid [[thread_position_in_grid]])
+{
+    if (gid.x >= a.Hv) return;
+    device float* o = out + ulong(gid.y) * a.VD + gid.x * a.S;
+    device const float* zz = z + ulong(gid.y) * a.VD + gid.x * a.S;
+    float ss = 0.0f;
+    for (uint i = 0; i < a.S; ++i) ss += o[i] * o[i];
+    const float sc = 1.0f / sqrt(ss / float(a.S) + a.eps);
+    for (uint i = 0; i < a.S; ++i) o[i] = o[i] * sc * w[i] * (zz[i] / (1.0f + exp(-zz[i])));
+}
+
+// La requête et la porte de l'attention de qwen35, rangées tête par tête dans qg : grille (hd, têtes, tokens).
+struct split_args
+{
+    uint hd;
+    uint qd;
+};
+kernel void split_gate(device const float* qg [[buffer(0)]], device float* q [[buffer(1)]],
+    device float* gate [[buffer(2)]], constant split_args& a [[buffer(3)]], uint3 gid [[thread_position_in_grid]])
+{
+    if (gid.x >= a.hd) return;
+    const ulong src = ulong(gid.z) * 2 * a.qd + gid.y * 2 * a.hd + gid.x;
+    const ulong dst = ulong(gid.z) * a.qd + gid.y * a.hd + gid.x;
+    q[dst] = qg[src];
+    gate[dst] = qg[src + a.hd];
+}
+
+// x[i] *= sigmoid(gate[i]).
+kernel void sigmoid_mul(device float* x [[buffer(0)]], device const float* gate [[buffer(1)]],
+    constant uint& n [[buffer(2)]], uint i [[thread_position_in_grid]])
+{
+    if (i < n) x[i] *= 1.0f / (1.0f + exp(-gate[i]));
 }

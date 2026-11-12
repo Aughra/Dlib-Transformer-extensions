@@ -1188,6 +1188,9 @@ namespace albireo
         m->context = std::max<long>(256, std::min<long>(ctx, limit));
         m->max_sequences = embedding && !options.contains("max_sequences") ? 8
             : std::max<long>(1, static_cast<long>(setting("max_sequences", 8, 0, 256)));
+        // Un modèle à état récurrent (qwen35) garde au plus 64 états de séquences (cpu_runtime::max_state_slots) :
+        // 16 requêtes ensemble au plus, et au plus 32 séquences en cache (finish()).
+        if (m->cfg.recurrent()) m->max_sequences = std::min<long>(m->max_sequences, 16);
         m->batch_tokens = embedding && !options.contains("batch_tokens") ? 256
             : std::max<long>(16, static_cast<long>(setting("batch_tokens", 512, 0, 65536)));
 
@@ -2778,7 +2781,8 @@ namespace albireo
                 m.idle.push_back(std::move(e));
                 cached = true;
                 // Un nombre borné de séquences en cache, les moins récemment utilisées abandonnées.
-                const size_t limit = static_cast<size_t>(std::max<long>(4, 2 * m.max_sequences));
+                size_t limit = static_cast<size_t>(std::max<long>(4, 2 * m.max_sequences));
+                if (m.cfg.recurrent()) limit = std::min<size_t>(limit, 32);
                 while (m.idle.size() > limit)
                 {
                     size_t lru = 0;

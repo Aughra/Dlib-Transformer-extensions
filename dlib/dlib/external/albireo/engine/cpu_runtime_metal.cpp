@@ -40,6 +40,8 @@ namespace albireo
         struct layer_vectors
         {
             size_t attn_norm = 0, ffn_norm = 0, q_norm = 0, k_norm = 0, bq = 0, bk = 0, bv = 0;
+            // Les couches Gated DeltaNet (qwen35).
+            size_t conv1d = 0, dt_bias = 0, ssm_a = 0, ssm_norm = 0;
         };
         std::vector<layer_vectors> layers;
         size_t output_norm = 0;
@@ -48,6 +50,10 @@ namespace albireo
         size_t region_covered = 0;
         // Les tampons de travail d'une passe, pour capacity tokens.
         metal_buffer x, xn, q, k, v, ctx, gate, up, hidden, logits, cs, blocks, rows, lengths, table, partial;
+        // qwen35 : les canaux de la convolution, la porte de sortie, l'oubli et la force, les sorties des têtes,
+        // la requête et sa porte, la porte de l'attention, les segments du lot ; l'état des séquences, pris
+        // sans copie dans la zone de cpu_runtime.
+        metal_buffer mix, z, alpha, beta, lin_out, qg, attn_gate, segments, states;
         size_t capacity = 0, table_capacity = 0, partial_capacity = 0;
         // Les poids d'un produit d'un prompt développés en floats, deux tampons à tour de rôle.
         metal_buffer expanded[2];
@@ -67,6 +73,12 @@ namespace albireo
         bool gpu_format(const weight_matrix& W)
         {
             return W.type == dlib::ggml_type::Q4_K || W.type == dlib::ggml_type::Q6_K;
+        }
+
+        // Les formats des produits d'une étape : Q5_K et Q8_0 en plus, qu'emploient les modèles qwen35.
+        bool step_format(const weight_matrix& W)
+        {
+            return gpu_format(W) || W.type == dlib::ggml_type::Q5_K || W.type == dlib::ggml_type::Q8_0;
         }
 
         metal_buffer need(metal_device& d, size_t bytes)
@@ -102,8 +114,9 @@ namespace albireo
         // Q4_K ou Q6_K.
         std::string why;
         if (cfg_.is_moe()) why = "a mixture of experts";
-        // Qwen 3.5 : ses couches linéaires et la porte de son attention n'ont pas encore de noyaux Metal.
-        else if (cfg_.recurrent() || cfg_.attn_output_gate) why = "linear attention layers (gated deltanet)";
+        // qwen35 : les étapes seulement, des têtes linéaires d'au plus 256 valeurs, et un état dans la zone réservée.
+        else if (cfg_.recurrent() && (cfg_.ssm_head_dim > 256 || !states_.data))
+            why = "linear attention layers of this geometry";
         else if (hd != 64 && hd != 128 && hd != 256) why = "heads of " + std::to_string(hd) + " values";
         else if ((rep != 1 && rep != 2 && rep != 4 && rep != 8) || cfg_.n_heads % cfg_.n_kv_heads != 0)
             why = "query heads grouped otherwise";
@@ -111,6 +124,24 @@ namespace albireo
         else if (cfg_.d_model % 256 != 0 || cfg_.d_ffn % 256 != 0 || cfg_.q_dim() % 256 != 0)
             why = "widths that are not multiples of 256";
         else if (!gpu_format(output_)) why = "an output matrix in another format than Q4_K or Q6_K";
+        else if (cfg_.recurrent())
+        {
+            for (long li = 0; li < cfg_.n_layers; ++li)
+            {
+                const layer& L = layers_[static_cast<size_t>(li)];
+                const bool linear = cfg_.linear_layer(li);
+                for (const weight_matrix* W : { &L.w_gate, &L.w_up, &L.w_down })
+                    if (!step_format(*W)) why = "weights in other formats than Q4_K, Q5_K, Q6_K and Q8_0";
+                if (linear)
+                {
+                    for (const weight_matrix* W : { &L.w_mix, &L.w_z, &L.w_alpha, &L.w_beta, &L.w_ssm_out })
+                        if (!step_format(*W)) why = "weights in other formats than Q4_K, Q5_K, Q6_K and Q8_0";
+                }
+                else
+                    for (const weight_matrix* W : { &L.wq, &L.wk, &L.wv, &L.wo })
+                        if (!step_format(*W)) why = "weights in other formats than Q4_K, Q5_K, Q6_K and Q8_0";
+            }
+        }
         else
             for (const layer& L : layers_)
                 for (const weight_matrix* W : { &L.wq, &L.wk, &L.wv, &L.wo, &L.w_gate, &L.w_up, &L.w_down })
@@ -151,6 +182,10 @@ namespace albireo
             lv.bq = add(L.bq);
             lv.bk = add(L.bk);
             lv.bv = add(L.bv);
+            lv.conv1d = add(L.conv1d);
+            lv.dt_bias = add(L.dt_bias);
+            lv.ssm_a = add(L.ssm_a);
+            lv.ssm_norm = add(L.ssm_norm);
             g->layers.push_back(lv);
         }
         g->output_norm = add(output_norm_);
@@ -160,6 +195,19 @@ namespace albireo
         const size_t R = metal_device::max_tokens;
         g->hidden = need(device, R * cfg_.d_model * sizeof(float));
         g->logits = need(device, R * cfg_.vocab * sizeof(float));
+        if (cfg_.recurrent())
+        {
+            // L'état des séquences, la zone réservée entière, sans copie.
+            size_t at = 0;
+            g->states = device.wrap(states_.data, states_.bytes, at);
+            if (!g->states.valid() || at != 0)
+            {
+                if (g->log) g->log(ALBIREO_LOG_WARNING, "GPU: the states of the linear attention layers cannot be "
+                    "taken without copy, the passes stay on the processor");
+                note_gpu("the states cannot be taken without copy");
+                return;
+            }
+        }
         gpu_ = std::move(g);
         grow_gpu(metal_device::max_tokens);
     }
@@ -183,6 +231,20 @@ namespace albireo
         g.blocks = need(device, T * sizeof(int));
         g.rows = need(device, T * sizeof(int));
         g.lengths = need(device, T * sizeof(int));
+        if (cfg_.recurrent())
+        {
+            g.mix = need(device, T * cfg_.ssm_conv_dim() * f);
+            g.z = need(device, T * cfg_.ssm_value_dim() * f);
+            g.alpha = need(device, T * cfg_.ssm_v_heads * f);
+            g.beta = need(device, T * cfg_.ssm_v_heads * f);
+            g.lin_out = need(device, T * cfg_.ssm_value_dim() * f);
+            g.segments = need(device, T * 3 * sizeof(int));
+        }
+        if (cfg_.attn_output_gate)
+        {
+            g.qg = need(device, T * 2 * cfg_.q_dim() * f);
+            g.attn_gate = need(device, T * cfg_.q_dim() * f);
+        }
         g.capacity = T;
         note_gpu();
     }
@@ -199,6 +261,8 @@ namespace albireo
                 if (i >= sequences_.size() || !sequences_[i] || sequences_[i]->length + s.count > gpu_prompt_context_)
                     long_pass = false;
             }
+        // qwen35 : les étapes seulement ; ses prompts restent sur le processeur.
+        if (cfg_.recurrent()) long_pass = false;
         return gpu_ && gpu_->state != gpu_state::dropped && (step || long_pass)
             && batch.embedding_rows.empty() && !batch.hidden_only
             && batch.logit_rows.size() <= metal_device::max_tokens;
@@ -221,7 +285,8 @@ namespace albireo
             u.state = g.state == gpu_state::ready ? "on" : "checking";
             for (const metal_buffer* b : { &g.vectors, &g.x, &g.xn, &g.q, &g.k, &g.v, &g.ctx, &g.gate, &g.up,
                      &g.hidden, &g.logits, &g.cs, &g.blocks, &g.rows, &g.lengths, &g.table, &g.partial,
-                     &g.expanded[0], &g.expanded[1] })
+                     &g.expanded[0], &g.expanded[1], &g.mix, &g.z, &g.alpha, &g.beta, &g.lin_out, &g.qg,
+                     &g.attn_gate, &g.segments })
                 u.bytes += b->bytes();
         }
         else
@@ -303,7 +368,7 @@ namespace albireo
         };
         // Le prompt : sur le GPU pour la première séquence quand les prompts y vont, sur le processeur
         // sinon.
-        const bool gpu_prompt = n >= gpu_prompt_min_ && n <= gpu_prompt_context_;
+        const bool gpu_prompt = !cfg_.recurrent() && n >= gpu_prompt_min_ && n <= gpu_prompt_context_;
         prompt.logit_rows.assign(1, n - 1);
         prompt.segments.assign(1, { a, 0, n });
         try
@@ -480,6 +545,27 @@ namespace albireo
             note_gpu();
         }
 
+        // Les segments du lot, pour les couches linéaires de qwen35 : (séquence, premier token, nombre de tokens).
+        metal_device::commands::gdn_layout gl;
+        if (cfg_.recurrent())
+        {
+            int* sg = static_cast<int*>(g.segments.contents());
+            for (size_t i = 0; i < batch.segments.size(); ++i)
+            {
+                sg[3 * i] = batch.segments[i].sequence;
+                sg[3 * i + 1] = static_cast<int>(batch.segments[i].start);
+                sg[3 * i + 2] = static_cast<int>(batch.segments[i].count);
+            }
+            gl.C = static_cast<unsigned>(cfg_.ssm_conv_dim());
+            gl.K = static_cast<unsigned>(cfg_.ssm_conv_kernel);
+            gl.Hk = static_cast<unsigned>(cfg_.ssm_k_heads);
+            gl.Hv = static_cast<unsigned>(cfg_.ssm_v_heads);
+            gl.S = static_cast<unsigned>(cfg_.ssm_head_dim);
+            gl.slot_floats = static_cast<unsigned>(state_slot_bytes_ / sizeof(float));
+            gl.conv_floats = static_cast<unsigned>(cfg_.ssm_conv_state());
+            gl.eps = eps;
+        }
+        const unsigned n_segments = static_cast<unsigned>(batch.segments.size());
         const float scale = cfg_.attention_scale > 0.0 ? static_cast<float>(cfg_.attention_scale)
             : 1.0f / std::sqrt(static_cast<float>(hd));
         const unsigned uT = static_cast<unsigned>(T);
@@ -502,19 +588,46 @@ namespace albireo
         {
             const layer& L = layers_[static_cast<size_t>(li)];
             const gpu_state::layer_vectors& lv = g.layers[static_cast<size_t>(li)];
+            const long slot = kv_slot_[static_cast<size_t>(li)];
+            if (slot < 0)
+            {
+                // Couche Gated DeltaNet (qwen35), puis la somme résiduelle dans x.
+                const long C = cfg_.ssm_conv_dim(), VD = cfg_.ssm_value_dim(), Hv = cfg_.ssm_v_heads;
+                gl.layer_offset = static_cast<unsigned>(linear_slot_[static_cast<size_t>(li)] * cfg_.ssm_state_floats());
+                c->rms_norm(g.x, at(g.vectors, lv.attn_norm), g.xn, uT, d, d, d, eps);
+                product(L.w_mix, g.xn, d, g.mix, C, 1.0f, 0.0f);
+                product(L.w_z, g.xn, d, g.z, VD, 1.0f, 0.0f);
+                product(L.w_alpha, g.xn, d, g.alpha, Hv, 1.0f, 0.0f);
+                product(L.w_beta, g.xn, d, g.beta, Hv, 1.0f, 0.0f);
+                c->gdn_conv(g.mix, at(g.vectors, lv.conv1d), g.states, g.segments, n_segments, gl);
+                c->gdn_l2norm(g.mix, uT, gl);
+                c->gdn_gates(g.alpha, g.beta, at(g.vectors, lv.dt_bias), at(g.vectors, lv.ssm_a), uT, gl);
+                c->gdn_delta(g.mix, g.alpha, g.beta, g.states, g.segments, n_segments, g.lin_out, gl);
+                c->gdn_norm(g.lin_out, g.z, at(g.vectors, lv.ssm_norm), uT, gl);
+                product(L.w_ssm_out, g.lin_out, VD, g.x, d, rs, 1.0f);
+            }
+            else
+            {
             metal_device::commands::kv_layout kl;
             kl.hd = static_cast<unsigned>(hd);
             kl.heads = static_cast<unsigned>(KVH);
             kl.positions = static_cast<unsigned>(B);
             kl.q8 = q8;
             kl.block_stride = kv_.block_offset(1);
-            kl.k_slab = kv_.slab_offset(false, li, 0);
-            kl.v_slab = kv_.slab_offset(true, li, 0);
-            kl.head_stride = kv_.slab_offset(false, li, 1) - kv_.slab_offset(false, li, 0);
+            kl.k_slab = kv_.slab_offset(false, slot, 0);
+            kl.v_slab = kv_.slab_offset(true, slot, 0);
+            kl.head_stride = kv_.slab_offset(false, slot, 1) - kv_.slab_offset(false, slot, 0);
 
             // Bloc d'attention.
             c->rms_norm(g.x, at(g.vectors, lv.attn_norm), g.xn, uT, d, d, d, eps);
-            if (step && L.wq.type == L.wk.type && qd % 16 == 0)
+            if (cfg_.attn_output_gate)
+            {
+                // qwen35 : la requête et sa porte, tête par tête, puis séparées.
+                product(L.wq, g.xn, d, g.qg, 2 * qd, 1.0f, 0.0f);
+                c->split_gate(g.qg, g.q, g.attn_gate, uT, static_cast<unsigned>(H), static_cast<unsigned>(hd));
+                product(L.wk, g.xn, d, g.k, kvd, 1.0f, 0.0f);
+            }
+            else if (step && L.wq.type == L.wk.type && qd % 16 == 0)
                 c->matvec2(L.wq.type, at(g.weights, g.weight(L.wq)), qd, at(g.weights, g.weight(L.wk)), kvd, d, g.xn, uT, d,
                     g.q, qd, g.k, kvd);
             else
@@ -541,7 +654,9 @@ namespace albireo
             c->prepare_queries(g.q, uT, H, hd, qd, scale, q8);
             c->attention(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), uT, rep, parts, qd,
                 g.partial, g.ctx, kl, part_len);
+            if (cfg_.attn_output_gate) c->sigmoid_mul(g.ctx, g.attn_gate, static_cast<unsigned>(T * qd));
             product(L.wo, g.ctx, qd, g.x, d, rs, 1.0f);
+            }
 
             // Bloc feed-forward.
             c->rms_norm(g.x, at(g.vectors, lv.ffn_norm), g.xn, uT, d, d, d, eps);

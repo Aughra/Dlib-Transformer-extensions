@@ -3,6 +3,8 @@
 
 #include "cpu_runtime.h"
 
+#include <sys/mman.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -142,6 +144,18 @@ namespace albireo
                 L.w_down = f.matrix(p + "ffn_down.weight", d, cfg_.d_ffn);
             }
         }
+        if (cfg_.recurrent())
+        {
+            const size_t page = 16384;
+            const size_t used = static_cast<size_t>(n_linear) * static_cast<size_t>(cfg_.ssm_state_floats()) * sizeof(float);
+            state_slot_bytes_ = (used + page - 1) / page * page;
+            const size_t bytes = state_slot_bytes_ * max_state_slots;
+            void* p = mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+            if (p == MAP_FAILED) throw std::runtime_error("cpu_runtime: the states of the linear attention layers "
+                "cannot be reserved");
+            states_.data = static_cast<float*>(p);
+            states_.bytes = bytes;
+        }
         output_norm_ = f.floats("output_norm.weight", static_cast<size_t>(d));
         token_embd_ = f.matrix("token_embd.weight", cfg_.vocab, d);
         output_ = cfg_.tied_embeddings ? token_embd_ : f.matrix("output.weight", cfg_.vocab, d);
@@ -169,6 +183,11 @@ namespace albireo
                 if (j % 3 == 1 && j < 3 * cfg_.rope_sections[1]) pair_component_[static_cast<size_t>(j)] = 1;
                 else if (j % 3 == 2 && j < 3 * cfg_.rope_sections[2]) pair_component_[static_cast<size_t>(j)] = 2;
             }
+    }
+
+    cpu_runtime::state_region::~state_region()
+    {
+        if (data) munmap(data, bytes);
     }
 
     void cpu_runtime::set_context(long positions)
@@ -243,9 +262,13 @@ namespace albireo
         // L'état récurrent d'une nouvelle séquence part de zéro.
         if (cfg_.recurrent())
         {
-            if (states_.size() < sequences_.size()) states_.resize(sequences_.size());
-            const long n_linear = cfg_.n_layers - cfg_.n_attention_layers();
-            states_[static_cast<size_t>(s)].assign(static_cast<size_t>(n_linear * cfg_.ssm_state_floats()), 0.0f);
+            if (s >= max_state_slots)
+            {
+                release_sequence(s);
+                throw std::runtime_error("cpu_runtime: more than " + std::to_string(max_state_slots)
+                    + " sequences of a linear attention model at once");
+            }
+            std::memset(state_of(s), 0, state_slot_bytes_);
         }
         return s;
     }
@@ -255,7 +278,8 @@ namespace albireo
         if (seq < 0 || static_cast<size_t>(seq) >= sequences_.size() || !sequences_[static_cast<size_t>(seq)]) return;
         sequences_[static_cast<size_t>(seq)]->clear(kv_);
         sequences_[static_cast<size_t>(seq)].reset();
-        if (static_cast<size_t>(seq) < states_.size()) std::vector<float>().swap(states_[static_cast<size_t>(seq)]);
+        // La mémoire de son état revient au système.
+        if (cfg_.recurrent() && seq < max_state_slots) madvise(state_of(seq), state_slot_bytes_, MADV_FREE);
         free_sequences_.push_back(seq);
     }
 
@@ -278,7 +302,7 @@ namespace albireo
             if (length != 0)
                 throw std::logic_error("cpu_runtime: the state of a linear attention model cannot go back to "
                     "position " + std::to_string(length));
-            std::fill(states_[static_cast<size_t>(seq)].begin(), states_[static_cast<size_t>(seq)].end(), 0.0f);
+            std::memset(state_of(seq), 0, state_slot_bytes_);
         }
         s.truncate(kv_, length);
     }
@@ -296,9 +320,8 @@ namespace albireo
         {
             // L'état de src ne vaut qu'à sa longueur ; à 0, celui de dst repart de zéro.
             if (length != 0 && length != s.length) return false;
-            std::vector<float>& to = states_[static_cast<size_t>(dst)];
-            if (length == 0) std::fill(to.begin(), to.end(), 0.0f);
-            else to = states_[static_cast<size_t>(src)];
+            if (length == 0) std::memset(state_of(dst), 0, state_slot_bytes_);
+            else std::memcpy(state_of(dst), state_of(src), state_slot_bytes_);
         }
         // Les blocs pleins sont partagés ; chaque séquence copie un bloc partagé avant d'y écrire.
         return d.share_prefix(kv_, s, length);
@@ -1010,7 +1033,7 @@ namespace albireo
                 const float* w = L.conv1d.data() + c * K;
                 for (const auto& s : batch.segments)
                 {
-                    float* win = states_[static_cast<size_t>(s.sequence)].data() + offset + c * window;
+                    float* win = state_of(s.sequence) + offset + c * window;
                     for (long j = 0; j < s.count; ++j)
                     {
                         float* x = mix_.data() + (s.start + j) * C + c;
@@ -1055,8 +1078,9 @@ namespace albireo
         pool_.parallel_for(n_segments * Hv, [&](long job, int) {
             const auto& s = batch.segments[static_cast<size_t>(job / Hv)];
             const long h = job % Hv, kh = h % Hk;
-            float* state = states_[static_cast<size_t>(s.sequence)].data() + offset
-                + static_cast<size_t>(cfg_.ssm_conv_state()) + static_cast<size_t>(h * S * S);
+            float* state = state_of(s.sequence) + offset + static_cast<size_t>(cfg_.ssm_conv_state())
+                + static_cast<size_t>(h * S * S);
+            std::vector<float> kv(static_cast<size_t>(S)), delta(static_cast<size_t>(S));
             for (long j = 0; j < s.count; ++j)
             {
                 const long t = s.start + j;
@@ -1066,14 +1090,32 @@ namespace albireo
                 const float decay = std::exp(alpha_[static_cast<size_t>(t * Hv + h)]);
                 const float b = beta_[static_cast<size_t>(t * Hv + h)];
                 float* o = lin_out_.data() + t * VD + h * S;
-                for (long r = 0; r < S; ++r)
+                // S rangé par clés : la ligne i contient S[i][r] pour chaque valeur r.  D'abord l'oubli et S k.
+                std::fill(kv.begin(), kv.end(), 0.0f);
+                for (long i = 0; i < S; ++i)
                 {
-                    float* row = state + r * S;
-                    for (long i = 0; i < S; ++i) row[i] *= decay;
-                    const float delta = (v[r] - qk_dot_f32(row, k, S)) * b;
-                    for (long i = 0; i < S; ++i) row[i] += k[i] * delta;
-                    o[r] = qk_dot_f32(row, q, S) * qscale;
+                    float* line = state + i * S;
+                    const float ki = k[i];
+                    for (long r = 0; r < S; ++r)
+                    {
+                        line[r] *= decay;
+                        kv[static_cast<size_t>(r)] += ki * line[r];
+                    }
                 }
+                for (long r = 0; r < S; ++r) delta[static_cast<size_t>(r)] = (v[r] - kv[static_cast<size_t>(r)]) * b;
+                // Puis la correction et la lecture par q.
+                std::fill(o, o + S, 0.0f);
+                for (long i = 0; i < S; ++i)
+                {
+                    float* line = state + i * S;
+                    const float ki = k[i], qi = q[i];
+                    for (long r = 0; r < S; ++r)
+                    {
+                        line[r] += ki * delta[static_cast<size_t>(r)];
+                        o[r] += qi * line[r];
+                    }
+                }
+                for (long r = 0; r < S; ++r) o[r] *= qscale;
             }
         });
 

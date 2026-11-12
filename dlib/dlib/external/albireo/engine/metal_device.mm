@@ -9,6 +9,7 @@
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <stdexcept>
 #include <unistd.h>
@@ -30,6 +31,8 @@ namespace albireo
         // les boucles.
         const char* const kernel_names[] = { "mv_q4_K_1", "mv_q6_K_1", "mv_q4_K_n", "mv_q6_K_n", "rms_norm", "add_bias", "silu_mul", "rope",
             "kv_store", "prepare_queries", "merge_attention", "dequant_q4_K", "dequant_q6_K",
+            "mv_q5_K_1", "mv_q5_K_n", "mv_q8_0_1", "mv_q8_0_n", "gdn_conv", "gdn_l2norm", "gdn_gates", "gdn_delta",
+            "gdn_norm", "split_gate", "sigmoid_mul",
             "attention_part_1_2", "attention_part_1_4", "attention_part_1_8",
             "attention_part_2_2", "attention_part_2_4", "attention_part_2_8",
             "attention_part_4_2", "attention_part_4_4", "attention_part_4_8",
@@ -37,7 +40,10 @@ namespace albireo
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
-            k_merge_attention, k_dequant_q4_K, k_dequant_q6_K, k_attention_part, k_count = k_attention_part + 12
+            k_merge_attention, k_dequant_q4_K, k_dequant_q6_K,
+            k_mv_q5_K, k_mv_q5_K_n, k_mv_q8_0, k_mv_q8_0_n, k_gdn_conv, k_gdn_l2norm, k_gdn_gates, k_gdn_delta,
+            k_gdn_norm, k_split_gate, k_sigmoid_mul,
+            k_attention_part, k_count = k_attention_part + 12
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -323,6 +329,8 @@ namespace albireo
         kernel_index k;
         if (type == dlib::ggml_type::Q4_K) k = tokens > 1 ? k_mv_q4_K_n : k_mv_q4_K;
         else if (type == dlib::ggml_type::Q6_K) k = tokens > 1 ? k_mv_q6_K_n : k_mv_q6_K;
+        else if (type == dlib::ggml_type::Q5_K) k = tokens > 1 ? k_mv_q5_K_n : k_mv_q5_K;
+        else if (type == dlib::ggml_type::Q8_0) k = tokens > 1 ? k_mv_q8_0_n : k_mv_q8_0;
         else return false;
         if (tokens == 0) return true;
         if (tokens > max_tokens || cols % 256 != 0)
@@ -346,6 +354,8 @@ namespace albireo
         kernel_index k;
         if (type == dlib::ggml_type::Q4_K) k = tokens > 1 ? k_mv_q4_K_n : k_mv_q4_K;
         else if (type == dlib::ggml_type::Q6_K) k = tokens > 1 ? k_mv_q6_K_n : k_mv_q6_K;
+        else if (type == dlib::ggml_type::Q5_K) k = tokens > 1 ? k_mv_q5_K_n : k_mv_q5_K;
+        else if (type == dlib::ggml_type::Q8_0) k = tokens > 1 ? k_mv_q8_0_n : k_mv_q8_0;
         else return false;
         if (tokens == 0) return true;
         // Les lignes d'un simdgroup (ROWS) ne chevauchent jamais les deux matrices.
@@ -386,6 +396,111 @@ namespace albireo
         const bias_args a = { n, stride };
         impl_->args(a, 2);
         impl_->grid(n, rows, 1);
+    }
+
+    namespace
+    {
+        // Le miroir de gdn_args (metal_kernels.metal).
+        struct gdn_args
+        {
+            unsigned C, K, Hk, Hv, S, VD, slot_floats, layer_offset, conv_floats, segments;
+            float eps, qscale;
+        };
+        gdn_args gdn(const metal_device::commands::gdn_layout& l, unsigned segments)
+        {
+            return { l.C, l.K, l.Hk, l.Hv, l.S, l.Hv * l.S, l.slot_floats, l.layer_offset, l.conv_floats, segments,
+                l.eps, 1.0f / std::sqrt(static_cast<float>(l.S)) };
+        }
+        struct split_args
+        {
+            unsigned hd, qd;
+        };
+    }
+
+    void metal_device::commands::gdn_conv(metal_view mix, metal_view weights, metal_view states, metal_view segments,
+        unsigned n_segments, const gdn_layout& l)
+    {
+        if (n_segments == 0) return;
+        impl_->use(k_gdn_conv);
+        impl_->bind(mix, 0);
+        impl_->bind(weights, 1);
+        impl_->bind(states, 2);
+        impl_->bind(segments, 3);
+        impl_->args(gdn(l, n_segments), 4);
+        impl_->grid(l.C, n_segments, 1);
+    }
+
+    void metal_device::commands::gdn_l2norm(metal_view mix, unsigned tokens, const gdn_layout& l)
+    {
+        if (tokens == 0) return;
+        impl_->use(k_gdn_l2norm);
+        impl_->bind(mix, 0);
+        impl_->args(gdn(l, 0), 1);
+        impl_->grid(2 * l.Hk, tokens, 1);
+    }
+
+    void metal_device::commands::gdn_gates(metal_view alpha, metal_view beta, metal_view dt_bias, metal_view ssm_a,
+        unsigned tokens, const gdn_layout& l)
+    {
+        if (tokens == 0) return;
+        impl_->use(k_gdn_gates);
+        impl_->bind(alpha, 0);
+        impl_->bind(beta, 1);
+        impl_->bind(dt_bias, 2);
+        impl_->bind(ssm_a, 3);
+        impl_->args(gdn(l, 0), 4);
+        impl_->grid(l.Hv, tokens, 1);
+    }
+
+    void metal_device::commands::gdn_delta(metal_view mix, metal_view alpha, metal_view beta, metal_view states,
+        metal_view segments, unsigned n_segments, metal_view out, const gdn_layout& l)
+    {
+        if (n_segments == 0) return;
+        if (l.S > 256) throw std::invalid_argument("metal_device: linear attention heads wider than 256 values");
+        impl_->use(k_gdn_delta);
+        impl_->bind(mix, 0);
+        impl_->bind(alpha, 1);
+        impl_->bind(beta, 2);
+        impl_->bind(states, 3);
+        impl_->bind(segments, 4);
+        impl_->bind(out, 5);
+        impl_->args(gdn(l, n_segments), 6);
+        impl_->groups(l.Hv, n_segments, 1, (l.S + 31) / 32 * 32);
+    }
+
+    void metal_device::commands::gdn_norm(metal_view out, metal_view z, metal_view weight, unsigned tokens,
+        const gdn_layout& l)
+    {
+        if (tokens == 0) return;
+        impl_->use(k_gdn_norm);
+        impl_->bind(out, 0);
+        impl_->bind(z, 1);
+        impl_->bind(weight, 2);
+        impl_->args(gdn(l, 0), 3);
+        impl_->grid(l.Hv, tokens, 1);
+    }
+
+    void metal_device::commands::split_gate(metal_view qg, metal_view q, metal_view gate, unsigned tokens,
+        unsigned heads, unsigned hd)
+    {
+        if (tokens == 0) return;
+        impl_->use(k_split_gate);
+        impl_->bind(qg, 0);
+        impl_->bind(q, 1);
+        impl_->bind(gate, 2);
+        const split_args a = { hd, heads * hd };
+        impl_->args(a, 3);
+        impl_->grid(hd, heads, tokens);
+    }
+
+    void metal_device::commands::sigmoid_mul(metal_view x, metal_view gate, unsigned n)
+    {
+        if (n == 0) return;
+        impl_->use(k_sigmoid_mul);
+        impl_->bind(x, 0);
+        impl_->bind(gate, 1);
+        impl_->args(n, 2);
+        impl_->grid(n, 1, 1);
     }
 
     void metal_device::commands::silu_mul(metal_view gate, metal_view up, unsigned n)

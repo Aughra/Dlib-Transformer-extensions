@@ -19,10 +19,8 @@ namespace albireo
         const std::set<std::string> engine_architectures = { "llama", "mistral", "mistral3", "granite", "qwen2",
             "qwen3", "qwen3vl", "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "phi3", "qwen35" };
         const std::set<std::string> moe_architectures = { "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe" };
-        // Les architectures dont le moteur lit les images (un projecteur), et celles qu'il garde sur le processeur
-        // (qwen35 : ses couches linéaires n'ont pas encore de noyaux Metal).
+        // Les architectures dont le moteur lit les images (un projecteur).
         const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe" };
-        const std::set<std::string> cpu_only_architectures = { "qwen35" };
 
         std::string lower(std::string s)
         {
@@ -194,8 +192,7 @@ namespace albireo
                 c["reason"] = "format de poids " + (q.empty() ? std::string("inconnu") : q) + " non lu par le moteur";
             }
             for (const auto& kv : c.items()) o[kv.first] = kv.second;
-            o["gpu"] = c["compatible"].as_bool(false) && !c["moe"].as_bool(false) && quant_gpu(q)
-                && !cpu_only_architectures.count(arch);
+            o["gpu"] = c["compatible"].as_bool(false) && !c["moe"].as_bool(false) && quant_gpu(q);
             files.push_back(o);
         }
         out = json::object();

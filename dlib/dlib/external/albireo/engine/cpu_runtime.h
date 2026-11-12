@@ -287,8 +287,31 @@ namespace albireo
             seules ont des clés et valeurs (kv_slot_), ou parmi les couches linéaires (linear_slot_) ; -1
             ailleurs.
         */
-        std::vector<std::vector<float>> states_;
         std::vector<long> kv_slot_, linear_slot_;
+        /*
+            Les états sont rangés dans une zone réservée d'un bloc (mmap), max_state_slots emplacements de
+            state_slot_bytes_ octets, l'emplacement s pour la séquence s : le GPU la prend sans copie.  Seules
+            les pages écrites occupent de la mémoire.  Dans l'état d'une couche, la fenêtre de la convolution
+            (ssm_conv_kernel - 1 valeurs par canal), puis, pour chaque tête de valeurs, la matrice S rangée par
+            clés : S[i][r] à i * ssm_head_dim + r, de sorte que les threads du GPU, une valeur r chacun, lisent
+            des floats voisins.
+        */
+        struct state_region
+        {
+            float* data = nullptr;
+            size_t bytes = 0;
+            state_region() {}
+            state_region(const state_region&) = delete;
+            state_region& operator=(const state_region&) = delete;
+            ~state_region();
+        };
+        static const int max_state_slots = 64;
+        state_region states_;
+        size_t state_slot_bytes_ = 0;
+        float* state_of(int seq) const
+        {
+            return states_.data + static_cast<size_t>(seq) * (state_slot_bytes_ / sizeof(float));
+        }
 
         std::vector<layer> layers_;
         weight_matrix token_embd_, output_;
