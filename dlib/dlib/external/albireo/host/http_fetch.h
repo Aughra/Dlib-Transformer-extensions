@@ -79,8 +79,7 @@ namespace albireo
               répond à la place du fichier, comme en envoie un proxy ou un filtre du réseau.
             - Les erreurs disent le genre d'échec ("the request is answered with the status
               403") et ne nomment jamais l'adresse ni son hôte, que les appelants nomment
-              selon leurs besoins : les téléchargements de l'espace de publication ne nomment
-              que ses fichiers.
+              selon leurs besoins.
             - Ne lève jamais d'exception : une exception du transfert devient son erreur.
     !*/
     bool http_get(const std::string& url, std::string& body, std::string& error, size_t max_bytes = 16u << 20,

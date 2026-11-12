@@ -2,6 +2,22 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.0.0 — 12 novembre 2026
+
+### Accès et documents
+
+- Plus aucune clé : le catalogue des modèles n'est plus signé et le service ne vérifie plus de signature. Il lit `catalog.json` à son adresse, dans le dépôt de l'original, ou dans un dossier.
+- L'espace de publication de l'original (téléchargements par un lien partagé protégé par un mot de passe) est retiré : chaque modèle se télécharge directement à l'adresse que donne le catalogue, en trois tentatives par segment. Le délai perdu à interroger l'espace avant chaque téléchargement disparaît.
+- L'import d'un dossier de disque n'exige plus que `catalog.json` : le fichier `catalog.json.sig` n'est plus lu ni attendu. Les modèles listés restent contrôlés par leur nom, leur taille et leur empreinte SHA-256.
+- Les outils de signature et de publication de l'original (`albireo-sign`, `fill_public_link.py`, `public_link.py`) sont retirés.
+
+### Sécurité
+
+- L'import d'un dossier accepte désormais un catalogue non signé. Un dossier fourni par un tiers peut donc déclarer ses propres modèles : n'importer que des dossiers de confiance. Les empreintes SHA-256 continuent de vérifier chaque fichier téléchargé ou importé.
+- Le masquage des adresses de l'espace de publication dans le journal et dans les erreurs est retiré avec l'espace ; les adresses de requête (clés de recherche) restent retirées des messages.
+
+---
+
 ## 3.2.0 — 11 novembre 2026
 
 ### Modèles

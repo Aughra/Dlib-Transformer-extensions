@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-11 au soir, sur le Mac M2 (Albireo 3.2.0).
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-12, écrite sous Windows (branche `travail-windows`, Albireo 4.0.0 non compilé) ; le reste date du 2026-11-11 sur le Mac M2 (Albireo 3.2.0).
 
 ## Objectif
 
@@ -37,17 +37,20 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-11 (sieste de l'humain, choix consignés dans `logs/sieste-2026-11-11.md`) : **les pas d'écriture tournent sur le GPU** (M2, M3, M4 en partie) : 4B 21,3 à 21,7 tokens/s contre 18,3 à 19,0 sur le processeur, 2B 49,4 à 49,6 contre 35,7 à 40,8 ; mêmes réponses ; activé par défaut. Blog : épisode 19.
 - 2026-11-11 (sieste) : **les prompts aussi sur le GPU** (M5) : 4B 512 tokens 92 → 154 tokens/s, 2B 222 → 420 ; à partir de 24 tokens, jusqu'à 2 048 positions. Contrôle au chargement du modèle. Bug de débordement corrigé dans l'attention. Blog : épisode 20.
 
-## Pour reprendre demain (écrit le 2026-11-11 au soir)
+## Pour reprendre (mis à jour le 2026-11-12, écrit sous Windows)
 
-**État** : Albireo **3.2.0**, tout commité et poussé, tests complets passés (Albireo 17 sur 17, Pseudalis 34 sur 34 à la 2.0.2). Le service tourne (lancé par Claude, il peut s'arrêter avec la session : le relancer avec la commande du mémo). Accès réseau ouvert sans mot de passe sur `http://192.168.1.12:8444/`. Captures de toutes les pages dans [docs/captures/](../docs/captures/README.md).
+**État** : `main` = Albireo **3.2.0**, testé. La branche **`travail-windows`** (poussée sur `origin`) porte le retrait des clés, **Albireo 4.0.0, écrite sans compiler ni lancer** sur un Windows. Rien n'y est vérifié.
 
-**Prochaine étape, demandée par l'humain : retirer les clés** (« je veux tout pouvoir faire sans utiliser de clé »). Le décider pas à pas, avec ses tests :
-1. Catalogue sans signature : `model_manager::install_catalog` ne vérifie plus `catalog.json.sig` (`verify_signature`, `feed_public_key_pem`) ; `refresh_catalog` ne télécharge plus le `.sig` ; `import_catalog` et l'import de dossier (`service.cpp`, « signed offline bundle ») acceptent un `catalog.json` seul.
-2. Plus d'espace de publication de l'original : retirer `host/public_link.*`, `cmake/public_link_secret.h.in` et la lecture de `~/keys/albireo-public-link.txt` dans le CMake ; les téléchargements vont directement aux adresses officielles (aujourd'hui 16 s perdues à essayer l'espace, qui répond « protégé par mot de passe ») ; le catalogue vient directement de GitHub.
-3. Retirer l'outil `albireo-sign` (`tools/albireo_sign.cpp`) et, si plus rien ne s'en sert, `sign_data` / `verify_signature` de `crypto.cpp`.
-4. **`tests/test_host.cpp`** vérifie justement l'espace de publication (faux serveur pCloud local) et les signatures : l'adapter, c'est le gros du travail. Puis `tools/test_macos.sh`.
-5. Pseudalis : clé publique du flux (`resources/feed-public-key.pem`, `feed_public_key.h.in`) et `pseudalis-sign`, s'ils ne servent plus à rien.
-6. Version (sans doute 4.0.0 : l'import de dossiers signés change de comportement), notes de version, journal, mémo, notes pour l'auteur si un défaut de l'original apparaît, CLAUDE.md (la règle « ne pas regénérer ni re-signer les `*.sig` » reste vraie : on ne signe plus rien).
+**À faire en premier sur le Mac** (critère : tout passe) :
+1. `git fetch origin && git checkout travail-windows`.
+2. `cmake --build build/macos-albireo -- -k 0` et `cmake --build build/macos-pseudalis -- -k 0` : corriger ce qui ne compile pas (fautes de frappe possibles, `-Werror` sur les avertissements).
+3. `bash dlib/dlib/external/albireo/tools/test_macos.sh` et celui de Pseudalis. **`tests/test_host.cpp` est réécrit à l'aveugle** : les chaînes d'erreur attendues (« the file of … does not have the size the catalog gives », « … cannot be downloaded: the request is answered with the status 404 ») et les comptes de requêtes (`official_count`) sont déduits du code, à ajuster au besoin.
+4. Relancer le service, vérifier un téléchargement de modèle depuis la page (le catalogue vient de `raw.githubusercontent.com/Cydral/...`) et l'import d'un dossier avec `catalog.json` seul.
+5. Si tout passe : fusionner dans `main` (`git merge travail-windows`), pousser. Sinon corriger sur la branche.
+
+**Ce qui a été fait** (voir le journal du 2026-11-12) : catalogue sans signature, import de dossier sans `.sig`, espace de publication retiré (`public_link.*`, mot de passe du CMake, masquage du journal), `albireo-sign` et `pseudalis-sign` retirés, `verify_signature` / `sign_data` / clé publique retirées de `crypto` (Albireo et Pseudalis), `without_queries` déplacé dans `common/log`, version 4.0.0 et notes de version.
+
+**Restes de cette étape, non faits** : le `README.md` d'Albireo (original, en anglais) décrit encore l'espace de publication, les flux signés, les installateurs (lignes 112 à 115, 902, 1013, 1085 à 1087, 1380 à 1393, 1470, 1562 à 1651, 1700 à 1719) ; `macos/outils/lots-traduction.json` cite encore des fichiers supprimés ; pas de note pour l'auteur (aucun défaut de l'original trouvé cette fois).
 
 **Juste après les clés, demandé par l'humain : une réserve de modèles sur le Mac**, qui remplace l'espace de publication de l'original (contre une panne ou un blocage de Hugging Face) :
 - dossier `<données>/reserve` : chaque modèle téléchargé y reste ; supprimer un modèle le range en réserve au lieu de l'effacer ; le réinstaller est une copie locale, sans réseau ;

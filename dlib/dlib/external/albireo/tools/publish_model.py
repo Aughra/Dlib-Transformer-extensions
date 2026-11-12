@@ -20,7 +20,7 @@ The program prints the catalog entry of the model: its architecture, number of p
 and trained context read from the file, its size and SHA-256, and the "files" of its parts.
 The entry is completed with the name, the description, the roles and the other fields of
 make_catalog.py, which takes an entry with its "files" as it is, then the catalog is
-written and signed again.
+written again.
 
 The service downloads the parts in parallel, inflates the compressed ones as they arrive,
 writes each at its place in a single file and checks every part, then the whole model,

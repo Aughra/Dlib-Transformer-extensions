@@ -695,11 +695,11 @@ paths = {
         "responses": {"200": reply("Deleted, or to be deleted", {"type": "object", "properties": {
             "ok": {"type": "boolean"}, "pending": {"type": "boolean"}}}), "400": reply("Refused", ok)}}},
     "/albireo/v1/import": {"post": {
-        "tags": ["Administration"], "summary": "Imports a signed offline bundle, or the content of the import folder",
+        "tags": ["Administration"], "summary": "Imports an offline bundle, or the content of the import folder",
         "description": "For a computer without network: a memory card or a disk brought to the machine. The "
-                       "service reads with its own rights, so that it accepts two kinds of paths: a signed offline "
-                       "bundle on a local drive (a folder whose catalog.json bears the signature of Albireo), of "
-                       "which it reads only the signed catalog and the models it lists, by their names, sizes and "
+                       "service reads with its own rights, so that it accepts two kinds of paths: an offline "
+                       "bundle on a local drive (a folder holding a catalog.json), of "
+                       "which it reads only the catalog and the models it lists, by their names, sizes and "
                        "hashes; and a folder or a file of the import folder of the data folder. Every file is read "
                        "through no link. A model file of the user is sent through /albireo/v1/models/upload. An "
                        "older catalog never replaces a newer one, and a model installed already is listed under "
@@ -712,7 +712,7 @@ paths = {
             "errors": {"type": "array", "items": {"type": "string"}},
             "catalog": {"type": "object"}}}),
                       "400": reply("The path is refused before anything of it is read; the code is the same "
-                                   "whether a folder outside the import folder is missing, unreadable, unsigned or "
+                                   "whether a folder outside the import folder is missing, unreadable or "
                                    "reached through a link (import_not_bundle)", import_refusal)}}},
     "/albireo/v1/models/import": {"post": {
         "tags": ["Administration"], "summary": "Same as /albireo/v1/import",

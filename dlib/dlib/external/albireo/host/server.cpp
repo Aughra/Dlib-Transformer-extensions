@@ -101,15 +101,6 @@ namespace albireo
         void send_json(httplib::Response& res, int status, const json& j)
         {
             res.status = status;
-            // Le dernier garde-fou : les erreurs que renvoie une route nomment les fichiers de l'espace de
-            // publication, jamais ses adresses.
-            if (errors_name_publication_space(j))
-            {
-                json hidden = j;
-                hide_publication_space_in_errors(hidden);
-                res.set_content(hidden.dump(), "application/json; charset=utf-8");
-                return;
-            }
             res.set_content(j.dump(), "application/json; charset=utf-8");
         }
 

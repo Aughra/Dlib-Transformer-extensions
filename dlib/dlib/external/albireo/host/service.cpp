@@ -24,7 +24,6 @@
 #include "certificates.h"
 #include "crypto.h"
 #include "http_fetch.h"
-#include "public_link.h"
 #include "web_access.h"
 
 namespace albireo
@@ -364,9 +363,6 @@ namespace albireo
         if (first_run) settings_->set(st);
         port_ = st.port;
         apply_network_settings(st);
-        // L'espace de publication, seule source des téléchargements, est nommé sans son lien.
-        log_info(std::string("publication space: ") + (public_link_enabled() ? "set" : "not set")
-            + (public_link_has_password() ? ", with its password" : ", without password"));
         log_info("web search: " + web_search_provider(st));
 
         const std::string db_path = join_path(data_dir_, "albireo.db");
@@ -908,19 +904,17 @@ namespace albireo
         };
 
         const std::string catalog = join_path(inbox, "catalog.json");
-        if ((file_exists(catalog) || is_link(catalog)) && (file_exists(catalog + ".sig") || is_link(catalog + ".sig")))
+        if (file_exists(catalog) || is_link(catalog))
         {
             const json r = models_->import_catalog(inbox, inbox);
             if (r.contains("error"))
             {
                 log_warning("models: import folder: " + r["error"].as_string());
                 set_aside(catalog);
-                set_aside(catalog + ".sig");
             }
             else
             {
                 remove_file(catalog);
-                remove_file(catalog + ".sig");
             }
         }
 
@@ -1025,25 +1019,23 @@ namespace albireo
             return result;
         }
 
-        // Ailleurs, un paquet hors ligne signé seulement ; un fichier de modèle d'un utilisateur passe par la
+        // Ailleurs, un paquet hors ligne seulement ; un fichier de modèle d'un utilisateur passe par la
         // route d'envoi.
         if (path.size() > 5 && same_name(path.substr(path.size() - 5), ".gguf"))
             return refuse("import_use_upload", "a model file outside the import folder is sent to the service by its "
                 "user: Import..., then Model files (*.gguf), in the Models window, or the route "
                 "/albireo/v1/models/upload");
         /*
-            Les fichiers signés décident, lus sans passer par aucun lien depuis la racine du disque ; la
-            réponse est la même, que le dossier manque, soit illisible, non signé ou atteint par un lien,
-            pour qu'elle ne révèle rien d'un dossier d'un autre compte.
+            Le catalogue décide, lu sans passer par aucun lien depuis la racine du disque ; la réponse
+            est la même, que le dossier manque, soit illisible ou atteint par un lien, pour qu'elle ne
+            révèle rien d'un dossier d'un autre compte.
         */
-        std::string catalog_body, catalog_sig;
+        std::string catalog_body;
         const bool catalog = read_file_link_free(join_path(path, "catalog.json"), std::string(), catalog_body,
-                16u << 20)
-            && read_file_link_free(join_path(path, "catalog.json.sig"), std::string(), catalog_sig, 4096);
-        const bool signed_catalog = catalog && verify_signature(catalog_body, catalog_sig, feed_public_key_pem);
-        if (!signed_catalog)
-            return refuse("import_not_bundle", "the path " + path + " is no signed offline bundle of a local drive "
-                "reached through no link: a folder with catalog.json and catalog.json.sig, signed by Albireo");
+            16u << 20);
+        if (!catalog)
+            return refuse("import_not_bundle", "the path " + path + " is no offline bundle of a local drive "
+                "reached through no link: a folder with catalog.json");
         result["imported"] = json::array();
         result["already"] = json::array();
         result["pending"] = json::array();
@@ -1051,16 +1043,13 @@ namespace albireo
         if (catalog)
         {
             result["catalog"] = models_->import_catalog(path, std::string());
-            // Les modèles que liste le catalogue signé, avec leurs projecteurs, quel que soit le catalogue qui
+            // Les modèles que liste le catalogue, avec leurs projecteurs, quel que soit le catalogue qui
             // reste en usage.
-            if (signed_catalog)
-            {
-                const json r = models_->import_bundle(path, json::parse_or_null(catalog_body));
-                result["imported"] = r["imported"];
-                result["already"] = r["already"];
-                result["pending"] = r["pending"];
-                result["errors"] = r["errors"];
-            }
+            const json r = models_->import_bundle(path, json::parse_or_null(catalog_body));
+            result["imported"] = r["imported"];
+            result["already"] = r["already"];
+            result["pending"] = r["pending"];
+            result["errors"] = r["errors"];
         }
         log_info("import: offline bundle " + path + ", " + std::to_string(result["imported"].size()) + " models");
         return result;

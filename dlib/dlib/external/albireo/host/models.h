@@ -26,13 +26,11 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                Les modèles de la machine et du catalogue : le catalogue publié dans le
-                dossier dist de l'espace de publication (public_link.h), un document JSON
-                signé qui liste les modèles, leurs descriptions dans chaque langue, leurs
-                fichiers et leurs empreintes, la source officielle de chacun d'eux parmi elles,
-                lu depuis l'espace, ou depuis son adresse officielle dans le dépôt d'Albireo
-                quand l'espace ne le sert pas ; les modèles installés, les téléchargements en
-                cours et les imports depuis des supports amovibles.
+                Les modèles de la machine et du catalogue : le catalogue, un document JSON
+                sans signature qui liste les modèles, leurs descriptions dans chaque langue,
+                leurs fichiers et leurs empreintes, l'adresse de chacun d'eux, lu depuis son
+                adresse dans le dépôt de l'original ; les modèles installés, les
+                téléchargements en cours et les imports depuis des supports amovibles.
 
             MODÈLES QUI LISENT LES IMAGES
                 Un tel modèle se présente en deux fichiers GGUF : son décodeur, et un
@@ -160,10 +158,9 @@ namespace albireo
         void refresh_catalog_async();
         /*!
             ensures
-                - Installe le catalogue de folder (catalog.json et catalog.json.sig), lu sans
-                  passer par aucun lien depuis base (une base vide : la racine du disque), sa
-                  signature vérifiée comme pour un catalogue téléchargé, sauf si le catalogue
-                  en usage a été publié plus tard.
+                - Installe le catalogue de folder (catalog.json), lu sans passer par aucun lien
+                  depuis base (une base vide : la racine du disque), sauf si le catalogue en
+                  usage a été publié plus tard.
                 - Renvoie {"models": nombre de modèles} une fois installé, {"state": "kept"}
                   quand le catalogue en usage est plus récent, {"error"} sinon.
         !*/
@@ -318,8 +315,7 @@ namespace albireo
             bool in_place = false;
         };
         void run_job(std::shared_ptr<job> j);
-        bool install_catalog(const std::string& body, const std::string& sig, bool keep_newer, json& result,
-            std::string& error);
+        bool install_catalog(const std::string& body, bool keep_newer, json& result, std::string& error);
         // Enregistre le modèle id de file, avec son projecteur quand projector n'est pas vide.
         bool install_file(const std::string& id, const std::string& file, const json& descriptor,
             const std::string& sha, const std::string& source, const std::string& projector,
@@ -504,9 +500,8 @@ namespace albireo
         Réservé aux tests (tests/test_host.cpp), qui servent le catalogue depuis un serveur
         local.  Aucun réglage ni aucune route n'y mène.
         ensures
-            - model_manager::refresh_catalog() lit le catalogue à url et sa signature à
-              url + ".sig" à la place de leur adresse officielle ; une url vide rend l'adresse
-              officielle.
+            - model_manager::refresh_catalog() lit le catalogue à url à la place de son
+              adresse ; une url vide rend l'adresse.
     !*/
     void official_catalog_for_tests(const std::string& url);
 

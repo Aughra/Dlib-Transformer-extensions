@@ -25,7 +25,6 @@
 #include "../common/platform.h"
 #include "crypto.h"
 #include "http_fetch.h"
-#include "public_link.h"
 
 namespace albireo
 {
@@ -443,8 +442,7 @@ namespace albireo
     {
         struct chunk
         {
-            std::string url;          // l'adresse officielle de la ressource, lue quand l'espace ne la sert pas
-            std::string link_path;    // la copie de la ressource dans l'espace de publication (public_link.h)
+            std::string url;          // l'adresse de la ressource, donnée par le catalogue
             uint64_t resource = 0;    // octets de la ressource
             uint64_t from = 0;        // plage d'octets dans la ressource
             uint64_t length = 0;      // octets de la ressource (taille compressée pour gzip)
@@ -577,14 +575,8 @@ namespace albireo
         for (auto& kv : jobs_) kv.second->cancel = true;
     }
 
-    bool model_manager::install_catalog(const std::string& body, const std::string& sig, bool keep_newer,
-        json& result, std::string& error)
+    bool model_manager::install_catalog(const std::string& body, bool keep_newer, json& result, std::string& error)
     {
-        if (!verify_signature(body, sig, feed_public_key_pem))
-        {
-            error = "the signature of the catalog is not valid";
-            return false;
-        }
         json c;
         if (!json::parse(body, c, &error) || !c["models"].is_array())
         {
@@ -624,10 +616,7 @@ namespace albireo
 
     namespace
     {
-        /*
-            L'adresse officielle du catalogue : le dépôt d'Albireo, qui garde le catalogue signé que l'éditeur
-            place dans l'espace de publication.  Sa signature se trouve à la même adresse avec ".sig".
-        */
+        // L'adresse du catalogue : le dépôt de l'original, qui le garde à jour.  Il n'est plus signé.
         const char* const official_catalog = "https://raw.githubusercontent.com/Cydral/Dlib-Transformer-extensions/"
             "main/dist/albireo/catalog.json";
 
@@ -635,7 +624,7 @@ namespace albireo
         std::mutex catalog_address_m;
         std::string catalog_address_of_tests;
 
-        // L'adresse d'où le catalogue est lu quand l'espace de publication ne le sert pas.
+        // L'adresse d'où le catalogue est lu.
         std::string catalog_address()
         {
             std::lock_guard<std::mutex> lock(catalog_address_m);
@@ -651,53 +640,20 @@ namespace albireo
 
     bool model_manager::refresh_catalog(std::string& error)
     {
-        /*
-            Le catalogue et sa signature viennent du dossier dist de l'espace de publication, et de leur
-            adresse officielle quand l'espace ne les sert pas : un espace qui n'est pas réglé, ne les a pas,
-            ne répond pas, ou donne un catalogue dont la signature échoue.  La signature vérifie le catalogue
-            de l'un ou de l'autre.
-        */
-        std::string body, sig, space;
-        json result = json::object();
-        if (public_link_get("dist/catalog.json", body, space, 16u << 20)
-            && public_link_get("dist/catalog.json.sig", sig, space, 4096))
-        {
-            std::string refused;
-            if (install_catalog(body, sig, true, result, refused))
-            {
-                log_info("models: catalog read from the publication space of Albireo");
-                return true;
-            }
-            space = "the catalog of the publication space of Albireo is refused: " + refused;
-        }
-        // Un service qui s'arrête ou passe hors ligne ne demande à aucune autre source.
-        if (http_cancelled())
-        {
-            error = space;
-            return false;
-        }
+        // Le catalogue vient de son adresse, sans signature à vérifier.
         const std::string url = catalog_address();
-        std::string e;
-        body.clear();
-        sig.clear();
+        std::string body, e;
+        json result = json::object();
         if (!http_get(url, body, e, 16u << 20))
         {
-            error = space + "; the catalog cannot be downloaded from its official address " + url + " either: " + e;
+            error = "the catalog cannot be downloaded from " + url + ": " + e;
             return false;
         }
-        if (!http_get(url + ".sig", sig, e, 4096))
+        if (!install_catalog(body, true, result, e))
         {
-            error = space + "; the signature of the catalog cannot be downloaded from its official address " + url
-                + ".sig either: " + e;
+            error = "the catalog of " + url + " is refused: " + e;
             return false;
         }
-        if (!install_catalog(body, sig, true, result, e))
-        {
-            error = space + "; the catalog of its official address " + url + " is refused: " + e;
-            return false;
-        }
-        log_warning("models: catalog read from its official address " + url + ", the publication space of Albireo "
-            "did not serve it (" + space + ")");
         return true;
     }
 
@@ -744,14 +700,13 @@ namespace albireo
     json model_manager::import_catalog(const std::string& folder, const std::string& base)
     {
         json result = json::object();
-        std::string body, sig, error;
-        if (!read_file_link_free(join_path(folder, "catalog.json"), base, body, 16u << 20)
-            || !read_file_link_free(join_path(folder, "catalog.json.sig"), base, sig, 4096))
+        std::string body, error;
+        if (!read_file_link_free(join_path(folder, "catalog.json"), base, body, 16u << 20))
         {
-            result["error"] = "no signed catalog (catalog.json and catalog.json.sig) in " + folder;
+            result["error"] = "no catalog (catalog.json) in " + folder;
             return result;
         }
-        if (!install_catalog(body, sig, true, result, error)) result["error"] = error;
+        if (!install_catalog(body, true, result, error)) result["error"] = error;
         return result;
     }
 
@@ -1020,10 +975,7 @@ namespace albireo
                 const long long given = f["size"].as_int(0);
                 const uint64_t size = given > 0 && given <= (1ll << 40) ? static_cast<uint64_t>(given) : 0;
                 const bool gz = f["compression"].as_string() == "gzip";
-                // La copie de la partie dans l'espace de publication, nommée d'après son adresse officielle, la sert
-                // d'abord.
-                const std::string link_path = public_link_model_path(id, url);
-                if (url.empty() || size == 0 || link_path.empty())
+                if (url.empty() || size == 0)
                 {
                     error.set("the catalog entry of '" + id + "' lists an invalid file", "catalog_entry")
                         .arg("m", name);
@@ -1033,7 +985,6 @@ namespace albireo
                 {
                     std::unique_ptr<job::chunk> c(new job::chunk());
                     c->url = url;
-                    c->link_path = link_path;
                     c->from = 0;
                     c->length = static_cast<uint64_t>(std::max<long long>(0, f["compressed_size"].as_int(0)));
                     c->resource = c->length;
@@ -1056,7 +1007,6 @@ namespace albireo
                     {
                         std::unique_ptr<job::chunk> c(new job::chunk());
                         c->url = url;
-                        c->link_path = link_path;
                         c->resource = size;
                         c->from = s;
                         c->length = std::min(segment, size - s);
@@ -1296,32 +1246,6 @@ namespace albireo
             if (!j->abandoned) db_.set_download_state(j->id, st);
         };
         const bool with_projector = j->files.size() > 1;
-        /*
-            Les sources des parties, que les transferts partagent sous source_m.  L'espace de publication sert
-            d'abord.  space_down dit pourquoi il a échoué pour le téléchargement, avec le fichier de l'espace
-            qu'il nomme (down_path), dès qu'il n'est pas réglé, ne répond pas ou refuse les requêtes d'un
-            segment : les segments suivants vont aussitôt à leurs adresses officielles.  lacking dit pourquoi il
-            ne sert pas une partie, une partie qu'il n'a pas, a à une autre taille ou dont les octets venus de
-            lui échouent à leur empreinte, qui va à son adresse officielle avec tous ses segments.  Le journal
-            signale chacun de ces changements une fois.
-        */
-        typedef std::pair<size_t, size_t> part_key;   // le fichier du modèle, et la partie dans celui-ci
-        const int by_space = 1, by_official = 2;
-        std::mutex source_m;
-        std::string space_down, down_path;
-        std::map<part_key, std::string> lacking;
-        std::map<part_key, int> sources;              // les sources ayant donné des octets de chaque partie ici
-        // Enregistre que la source a donné des octets de la partie.
-        auto gave = [&](const part_key& part, int source) {
-            std::lock_guard<std::mutex> lock(source_m);
-            sources[part] |= source;
-        };
-        // Signale que le téléchargement continue depuis l'adresse officielle url, l'espace ne servant pas path.
-        auto tell = [&](const std::string& url, const std::string& path, const std::string& why) {
-            log_warning("models: download of " + j->id + " continues from its official address " + without_queries(url)
-                + ", the publication space of Albireo did not serve " + path + " (" + why + ")");
-        };
-
         log_info("models: downloading " + j->id + " (" + std::to_string(j->total >> 20) + " MB, "
             + std::to_string(j->chunks.size()) + " segments" + (with_projector ? ", with its projector)" : ")"));
         for (int round = 0; round < 2; ++round)
@@ -1470,123 +1394,27 @@ namespace albireo
                         cp = j->chunks[next++].get();
                     }
                     job::chunk& c = *cp;
-                    const part_key part(c.file, c.part);
-                    std::string space_error, reason, error;
+                    std::string reason, error;
                     uint64_t wrote = 0;
                     transfer_end end = transfer_end::failed;
-                    // Indique si space_error nomme le fichier de ce segment, ce qu'un échec d'une autre partie peut
-                    // ne pas faire.
-                    bool here = true;
-                    // Indique si l'espace a échoué pour le téléchargement ou ne sert pas la partie ; space_error dit
-                    // pourquoi.
-                    auto refused = [&]() {
-                        std::lock_guard<std::mutex> lock(source_m);
-                        const auto it = lacking.find(part);
-                        if (it != lacking.end())
-                        {
-                            space_error = it->second;
-                            here = true;
-                            return true;
-                        }
-                        if (space_down.empty()) return false;
-                        space_error = space_down;
-                        here = down_path == c.link_path;
-                        return true;
-                    };
-                    bool skipped = refused();
-                    // Indique si l'échec de l'espace concerne tout le téléchargement, ou cette partie seule.
-                    bool whole = true;
-                    /*
-                        La copie de la ressource dans l'espace de publication, son adresse redemandée après un échec.
-                        Un espace qui n'a pas la ressource à sa taille met fin aux tentatives, tout comme un autre
-                        segment qui trouve l'espace en échec.  Les messages nomment le fichier dans l'espace, jamais
-                        son adresse.
-                    */
-                    for (int attempt = 0; attempt < 4 && !skipped && !ended(); ++attempt)
+                    // Trois tentatives depuis l'adresse du catalogue, les mêmes plages ; les téléchargements
+                    // arrêtés pour tout le service (il s'arrête, ou passe hors ligne) ne sont pas retentés.
+                    bool ok = false;
+                    for (int attempt = 0; attempt < 3 && !ok && !ended(); ++attempt)
                     {
-                        // Une pause avant chaque nouvelle tentative, qu'une annulation interrompt.
                         pause(attempt);
-                        if (ended() || (attempt > 0 && (skipped = refused()))) break;
-                        std::string address;
-                        uint64_t listed = 0;
-                        link_status status = link_status::ok;
-                        if (!public_link_file(c.link_path, address, listed, space_error, attempt > 0, &status))
-                        {
-                            whole = status != link_status::missing;
-                            // Un fichier qui manque à l'espace est cherché une fois de plus dans une nouvelle liste.
-                            if (status == link_status::unset || (!whole && attempt > 0) || http_cancelled()) break;
-                            continue;
-                        }
-                        if (listed != c.resource)
-                        {
-                            space_error = "the copy of " + c.link_path + " in the publication space of Albireo does "
-                                "not have the size the catalog gives";
-                            whole = false;
-                            if (attempt > 0) break;
-                            continue;
-                        }
-                        end = fetch(c, address, false, reason, wrote);
-                        if (wrote > 0) gave(part, by_space);
-                        if (end == transfer_end::complete || end == transfer_end::local) break;
-                        whole = end != transfer_end::corrupt;
-                        space_error = end == transfer_end::corrupt ? "the compressed copy of " + c.link_path
-                            + " in the publication space of Albireo is corrupt" : "the copy of " + c.link_path
-                            + " in the publication space of Albireo cannot be downloaded: " + reason;
-                        // Les téléchargements arrêtés pour tout le service (il s'arrête, ou passe hors ligne) ne
-                        // sont pas retentés ; ils reprennent plus tard.
-                        if (http_cancelled()) break;
+                        if (ended()) break;
+                        end = fetch(c, c.url, true, reason, wrote);
+                        ok = end == transfer_end::complete;
+                        if (end == transfer_end::local || (!ok && http_cancelled())) break;
                     }
-                    bool ok = end == transfer_end::complete;
-                    error = end == transfer_end::local ? reason : space_error;
-                    /*
-                        L'adresse officielle de la partie, l'"url" du catalogue, quand l'espace ne sert pas le
-                        segment : les mêmes plages, en trois tentatives.  L'échec de l'espace est gardé pour les
-                        segments suivants, du téléchargement ou de la partie, qui y vont aussitôt ; le journal le
-                        signale quand il change la source du téléchargement ou de la partie.
-                    */
-                    if (!ok && end != transfer_end::local && !ended() && !http_cancelled())
+                    if (!ok && !ended() && !http_cancelled())
                     {
-                        if (space_error.empty()) space_error = "the publication space of Albireo does not serve "
-                            + c.link_path;
-                        const std::string official = without_queries(c.url);
-                        bool changed = false;
-                        {
-                            std::lock_guard<std::mutex> lock(source_m);
-                            if (!skipped && whole && space_down.empty())
-                            {
-                                space_down = space_error;
-                                down_path = c.link_path;
-                                changed = true;
-                            }
-                            if (!skipped && !whole) changed = lacking.emplace(part, space_error).second;
-                        }
-                        if (changed) tell(c.url, c.link_path, space_error);
-                        bool tried = false;
-                        for (int attempt = 0; attempt < 3 && !ok && !ended(); ++attempt)
-                        {
-                            pause(attempt);
-                            if (ended()) break;
-                            tried = true;
-                            end = fetch(c, c.url, true, reason, wrote);
-                            if (wrote > 0) gave(part, by_official);
-                            ok = end == transfer_end::complete;
-                            if (end == transfer_end::local || (!ok && http_cancelled())) break;
-                        }
-                        if (end == transfer_end::local)
-                        {
-                            error = reason;
-                        }
-                        else if (tried && !ok)
-                        {
-                            // Les deux sources ont échoué : le fichier dans l'espace, son adresse officielle,
-                            // l'échec de chacune.
-                            const std::string why = end == transfer_end::corrupt
-                                ? "the compressed file it gives is corrupt" : end == transfer_end::other_size
-                                ? "the file it gives does not have the size the catalog gives" : reason;
-                            error = space_error + (here ? "; its official address " + official
-                                + " cannot be downloaded either: " : "; " + c.link_path
-                                + " cannot be downloaded from its official address " + official + " either: ") + why;
-                        }
+                        error = end == transfer_end::local ? reason
+                            : end == transfer_end::corrupt ? "the compressed file of " + without_queries(c.url) + " is corrupt"
+                            : end == transfer_end::other_size ? "the file of " + without_queries(c.url)
+                                + " does not have the size the catalog gives"
+                            : without_queries(c.url) + " cannot be downloaded: " + reason;
                     }
                     if (!ok && !j->cancel)
                     {
@@ -1678,8 +1506,7 @@ namespace albireo
                 Chaque fichier écrit, lu sans passer par aucun lien depuis le dossier des modèles, est vérifié
                 avec sa propre empreinte ; il est fermé avant d'être renommé ou supprimé, ce que son handle
                 refuserait sous Windows.  Les parties dont l'empreinte propre échoue sont récupérées de
-                nouveau, une fois, depuis leurs adresses officielles quand l'espace de publication en a donné
-                des octets.
+                nouveau, une fois.
             */
             std::vector<std::string> shas(j->files.size());
             bool all_match = true;
@@ -1718,31 +1545,15 @@ namespace albireo
                     const std::string expected = p["sha256"].as_string();
                     if (round == 0 && !expected.empty() && sha256_range(written, offset, size) != expected)
                     {
-                        std::string path, url;
                         for (auto& c : j->chunks)
                             if (c->file == fi && c->part == part)
                             {
                                 j->received -= c->gzip ? c->output : c->done.load();
                                 c->done = 0;
-                                path = c->link_path;
-                                url = c->url;
                             }
                         any = true;
                         log_warning("models: part " + std::to_string(part) + " of " + (fi == 0 ? std::string()
                             : std::string("the projector of ")) + j->id + " is corrupt, fetched again");
-                        // Des octets donnés par l'espace échouent à leur empreinte : la partie vient de son
-                        // adresse officielle.
-                        const std::string why = "the copy of " + path + " in the publication space of Albireo does "
-                            "not match the hash of the catalog";
-                        bool changed = false;
-                        {
-                            std::lock_guard<std::mutex> lock(source_m);
-                            const part_key key(fi, part);
-                            if ((sources[key] & by_space) && lacking.emplace(key, why).second)
-                                changed = space_down.empty();
-                            sources[key] = 0;
-                        }
-                        if (changed) tell(url, path, why);
                     }
                     offset += size;
                     ++part;
@@ -1780,13 +1591,7 @@ namespace albireo
                 db_.remove_download_state(j->id);
                 if (with_projector) drop_pending_copy(shas[1]);
                 set_state("done");
-                // Les sources des octets de cette exécution ; un téléchargement repris complet n'en a aucune.
-                int all = 0;
-                for (const auto& s : sources) all |= s.second;
-                const char* const from = all == (by_space | by_official) ? ", from the publication space of Albireo "
-                    "and its official addresses" : all == by_official ? ", from its official addresses"
-                    : all == by_space ? ", from the publication space of Albireo" : "";
-                log_info("models: " + j->id + " installed" + (with_projector ? ", with its projector" : "") + from);
+                log_info("models: " + j->id + " installed" + (with_projector ? ", with its projector" : ""));
                 return;
             }
             if (!any) break;

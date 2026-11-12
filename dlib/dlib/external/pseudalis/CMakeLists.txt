@@ -101,23 +101,6 @@ target_include_directories(pseudalis_common PUBLIC ${PSEUDALIS_INCLUDE_DIR})
 target_compile_options(pseudalis_common PRIVATE ${PSEUDALIS_WARNINGS})
 target_link_libraries(pseudalis_common PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
 
-# La clé publique du flux de mises à jour, que pseudalis-sign keygen écrit une fois, à côté de la
-# clé privée que l'éditeur garde hors du dépôt (README.md, Publishing a version).
-set(PSEUDALIS_FEED_PUBLIC_KEY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/resources/feed-public-key.pem" CACHE FILEPATH
-   "Public key (PEM) of the update feed")
-set(PSEUDALIS_FEED_PUBLIC_KEY_TEXT "")
-if (EXISTS "${PSEUDALIS_FEED_PUBLIC_KEY_FILE}")
-   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${PSEUDALIS_FEED_PUBLIC_KEY_FILE}")
-   file(STRINGS "${PSEUDALIS_FEED_PUBLIC_KEY_FILE}" feed_key_lines)
-   foreach (line ${feed_key_lines})
-      string(APPEND PSEUDALIS_FEED_PUBLIC_KEY_TEXT "${line}\\n")
-   endforeach()
-   message(STATUS "Update feed: public key read from ${PSEUDALIS_FEED_PUBLIC_KEY_FILE}")
-else()
-   message(STATUS "Update feed: no public key at ${PSEUDALIS_FEED_PUBLIC_KEY_FILE}, the programs install no update")
-endif()
-configure_file(cmake/feed_public_key.h.in ${CMAKE_BINARY_DIR}/generated/feed_public_key.h @ONLY)
-
 # Le service, avec le moteur intégré.
 set(PSEUDALIS_SERVICE_SOURCES common/engine_loader.cpp host/main.cpp host/service.cpp host/server.cpp
    host/settings.cpp host/store.cpp host/vault.cpp host/keys.cpp host/albireo_client.cpp
@@ -129,12 +112,6 @@ target_include_directories(pseudalis-service PRIVATE ${CMAKE_BINARY_DIR}/generat
 target_link_libraries(pseudalis-service PRIVATE pseudalis_common pseudalis_sqlite dlib::httplib)
 target_compile_definitions(pseudalis-service PRIVATE PSEUDALIS_ENGINE_STATIC ${PSEUDALIS_ENGINE_DEFINITIONS})
 target_compile_options(pseudalis-service PRIVATE ${PSEUDALIS_WARNINGS})
-
-# Les signatures du flux de mises à jour, pour son éditeur.
-add_executable(pseudalis-sign tools/pseudalis_sign.cpp host/crypto.cpp)
-target_include_directories(pseudalis-sign PRIVATE ${CMAKE_BINARY_DIR}/generated)
-target_link_libraries(pseudalis-sign PRIVATE pseudalis_common dlib::httplib)
-target_compile_options(pseudalis-sign PRIVATE ${PSEUDALIS_WARNINGS})
 
 # L'application web et la documentation de l'interface, à côté du service ; Swagger UI provient
 # de la copie d'Albireo présente dans ce dépôt.

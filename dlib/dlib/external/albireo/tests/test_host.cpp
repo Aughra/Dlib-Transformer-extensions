@@ -20,27 +20,14 @@
     qu'elle refuse laisse le modèle tel quel, le suivant se complétant à partir des fichiers reçus.
     Les plages des téléchargements apportent les octets demandés et pas plus, une base de données
     abîmée échoue à l'ouverture comme malformée, et les fichiers écrits de façon atomique ne
-    laissent aucun fichier temporaire.  Les téléchargements viennent d'abord de l'espace de
-    publication, dont le lien des tests répond par une interface locale de pCloud, et sa liste et
-    ses adresses sont gardées ; un modèle que l'espace contient n'atteint jamais son adresse
-    officielle.  Les adresses officielles des catalogues se trouvent sur le serveur local, catalogue
-    officiel compris (official_catalog_for_tests()) : une partie que l'espace n'a pas, qu'il a à une
-    autre taille ou avec d'autres octets, un espace non défini, qui refuse les connexions, répond 403
-    ou une page web leur cèdent la place, les segments qui suivent l'échec de l'espace y vont
-    aussitôt, les empreintes vérifient chaque fichier, et une annulation met fin à un tel
-    téléchargement.  Le catalogue vient de son adresse officielle, sa signature vérifiée, quand
-    l'espace ne le sert pas, et le flux des mises à jour de l'espace seul.  Quand aucune des deux
-    sources ne sert un fichier, l'erreur nomme le fichier dans l'espace, l'adresse officielle et
-    l'échec de chacune.  Chaque échec de l'espace fait échouer son opération avec son message, ne
-    laisse sortir aucune exception, laisse le serveur local répondre, et ne nomme ni pCloud, ni le
-    lien, ni son code, ni une adresse de l'espace : une page web avec 200 et avec 403 et un proxy qui
-    demande son authentification, depuis chaque méthode de l'interface et depuis un serveur de
-    contenu, une connexion réinitialisée ou refusée, un JSON tronqué ou d'autres types, des tailles
-    d'un autre type, négatives, au-delà des entiers ou supérieures au fichier lu, et un serveur qui
-    cale ou envoie sa réponse octet par octet au-delà des bornes que les tests raccourcissent.  Le
-    journal fait passer ses lignes, et ses fichiers d'une version antérieure, par le dernier
-    garde-fou (common/log.h), comme les erreurs des routes.  Les réglages d'une version antérieure
-    (public_link, les fournisseurs et la clé de la recherche) sont lus sans erreur et laissent
+    laissent aucun fichier temporaire.  Les téléchargements viennent des adresses que donne le catalogue,
+    qui se trouvent sur le serveur local, catalogue officiel compris (official_catalog_for_tests()) :
+    trois tentatives par segment, les empreintes vérifient chaque fichier (une partie corrompue est
+    récupérée de nouveau), une page web, un blocage ou une réinitialisation de la connexion font échouer
+    le téléchargement avec leur message sans rien écrire dans le fichier partiel, et une annulation met
+    fin à un téléchargement en cours.  Le catalogue, sans signature, vient de son adresse ou d'un
+    dossier, et un catalogue plus ancien ne remplace jamais un plus récent.  Les réglages d'une version
+    antérieure (public_link, les fournisseurs et la clé de la recherche) sont lus sans erreur et laissent
     settings.json au départ.  Le test travaille dans un dossier de données à lui (set_data_dir()),
     jamais dans celui d'un service installé.
 
@@ -85,7 +72,6 @@
 #include "../host/crypto.h"
 #include "../host/http_fetch.h"
 #include "../host/models.h"
-#include "../host/public_link.h"
 #include "../host/settings.h"
 #include "../host/store.h"
 #include "../host/web_access.h"
@@ -183,20 +169,6 @@ namespace
         json e = catalog_entry(id, whole, urls[0]);
         e["files"] = files;
         return e;
-    }
-
-    /*
-        Un fichier de dist/albireo dans le dépôt à partir duquel le test est construit, qui garde le
-        catalogue signé : trouvé à partir du chemin de cette source, vide quand les sources ne sont pas là.
-    */
-    std::string repository_file(const std::string& name)
-    {
-        const std::string source = __FILE__;
-        const size_t slash = source.find_last_of("/\\");
-        std::string data;
-        if (slash != std::string::npos)
-            albireo::read_file(source.substr(0, slash) + "/../../../../../dist/albireo/" + name, data, 16u << 20);
-        return data;
     }
 
     // Le nombre de lignes du journal récent qui contiennent du texte.
@@ -316,20 +288,6 @@ namespace
         return folded.find(word) != std::string::npos;
     }
 
-    /*
-        Si un message nomme l'espace de publication des tests : pCloud, son lien, son code, ou une adresse
-        autre que les adresses officielles des catalogues, qui commencent par official et que les messages
-        peuvent nommer.
-    */
-    bool names_space(const std::string& text, const std::string& official)
-    {
-        std::string rest = text;
-        for (size_t at = rest.find(official); at != std::string::npos; at = rest.find(official))
-            rest.erase(at, official.size());
-        return holds_folded(rest, "pcloud") || holds_folded(rest, "publink")
-            || rest.find("TESTLINK1") != std::string::npos || rest.find("://") != std::string::npos
-            || rest.find("127.0.0.1") != std::string::npos;
-    }
 }
 
 int main(int argc, char** argv)
@@ -374,45 +332,12 @@ int main(int argc, char** argv)
         });
     });
     /*
-        L'espace de publication des tests : l'interface de pCloud sur le serveur local
-        (showpublink, getpublinkdownload) et les fichiers de son dossier, chacun servi à
-        /content/<identifier> : dist/feed.json sans sa signature, les copies des modèles que
-        prennent les téléchargements, models/linked/gone.bin, models/short/other.bin d'une autre
-        taille que le fichier du catalogue, models/mixed/first.bin, la première de deux parties, et
-        models/stale/stale.bin, de la taille du fichier du catalogue et avec d'autres octets.
-        space_catalog ajoute dist/catalog.json, le catalogue signé du dépôt, avec sa signature (1)
-        ou avec une autre (2).  Les adresses officielles des catalogues se trouvent sous
-        /official/ (official_files ci-dessous).  protected_link fait répondre l'interface comme un
-        lien dont le mot de passe est refusé, et les pannes font répondre une méthode ou le serveur
-        de contenu comme le ferait un proxy, un filtre du réseau ou un serveur abîmé ; reset_port
-        est le serveur qui réinitialise ses connexions.
+        Les pannes que le serveur local donne à la place d'une réponse, comme le ferait un proxy, un filtre
+        du réseau ou un serveur abîmé.
     */
-    const std::string feed_copy = "{\"feed\": 1}";
-    const std::string linked = blob(250000, 'l');
-    const std::string short_copy = blob(1000, 'w');
-    const std::string first_part = blob(120000, 'f'), second_part = blob(80000, 'g');
-    const std::string stale_copy = blob(150000, 's'), fresh = blob(150000, 'r');
-    const std::string repository_catalog = repository_file("catalog.json");
-    const std::string repository_signature = repository_file("catalog.json.sig");
-    // Une signature de la forme des autres qui ne signe rien des tests.
-    const std::string other_signature = "MEQCIAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gAiABAgMEBQYHCAkKCwwNDg8QERIT"
-        "FBUWFxgZGhscHR4fIA==";
-    const std::map<std::string, const std::string*> link_content = {
-        {"11", &feed_copy}, {"12", &repository_catalog}, {"13", &repository_signature}, {"14", &other_signature},
-        {"21", &linked}, {"31", &short_copy}, {"41", &served}, {"42", &other}, {"43", &newer_tiny},
-        {"51", &first_part}, {"52", &stale_copy}
-    };
-    std::atomic<int> listings{0}, addresses{0}, password_mismatch{0}, official_requests{0}, listing_requests{0};
-    std::atomic<int> space_catalog{0};
-    std::atomic<bool> protected_link{false};
-    enum fault
-    {
-        no_fault, html_200, html_403, proxy_407, truncated_json, stall, trickle, metadata_array, result_string,
-        size_string, size_negative, size_beyond, size_huge, hosts_object, reset
-    };
-    std::atomic<int> listing_fault{no_fault}, address_fault{no_fault}, content_fault{no_fault};
-    std::atomic<int> reset_port{0};
-    // La réponse d'une panne que donne n'importe quelle méthode ; false pour les pannes des documents.
+    std::atomic<int> official_requests{0};
+    enum fault { no_fault, html_200, html_403, proxy_407, stall, trickle };
+    // La réponse d'une panne ; false quand il n'y a pas de panne.
     auto fault_answer = [](int f, httplib::Response& res) {
         const std::string blocked = "<html><body><h1>Access denied</h1><p>The filter of this network blocks the "
             "site.</p></body></html>";
@@ -429,10 +354,6 @@ int main(int argc, char** argv)
             res.status = 407;
             res.set_header("Proxy-Authenticate", "Basic realm=\"filter\"");
             res.set_content(blocked, "text/html");
-            return true;
-        case truncated_json:
-            res.set_content("{\"result\": 0, \"metadata\": {\"name\": \"Albireo\", \"contents\": [{\"na",
-                "application/json");
             return true;
         case stall:
             std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -455,106 +376,17 @@ int main(int argc, char** argv)
             return false;
         }
     };
-    auto api_refusal = [&](const httplib::Request& req, httplib::Response& res) {
-        if (req.has_param("linkpassword") != albireo::public_link_has_password()) ++password_mismatch;
-        if (req.get_param_value("code") != "TESTLINK1")
-        {
-            res.set_content("{\"result\": 7001, \"error\": \"Invalid link 'code'.\"}", "application/json");
-            return true;
-        }
-        if (protected_link)
-        {
-            res.set_content("{\"result\": 1125, \"error\": \"Invalid 'linkpassword' provided.\"}", "application/json");
-            return true;
-        }
-        return false;
-    };
     server.Get("/alive", [](const httplib::Request&, httplib::Response& res) {
         res.set_content("alive", "text/plain");
     });
-    server.Get("/showpublink", [&](const httplib::Request& req, httplib::Response& res) {
-        ++listing_requests;
-        if (api_refusal(req, res) || fault_answer(listing_fault, res)) return;
-        ++listings;
-        auto file = [](const std::string& name, long long id, const json& size) {
-            json f = json::object();
-            f["name"] = name;
-            f["isfolder"] = false;
-            f["fileid"] = id;
-            f["size"] = size;
-            return f;
-        };
-        auto folder = [](const std::string& name, const json& contents) {
-            json f = json::object();
-            f["name"] = name;
-            f["isfolder"] = true;
-            f["contents"] = contents;
-            return f;
-        };
-        json dist = json::array(), models = json::array(), in_linked = json::array(), in_short = json::array();
-        json in_tiny = json::array(), in_small = json::array(), in_mixed = json::array(), in_stale = json::array();
-        auto size_of = [](const std::string& s) { return json(static_cast<unsigned long long>(s.size())); };
-        // La taille de dist/feed.json : d'un autre type, négative, au-delà des entiers, ou supérieure à
-        // tout fichier lu.
-        const int f = listing_fault;
-        const json feed_size = f == size_string ? json("11") : f == size_negative ? json(-11)
-            : f == size_beyond ? json(1e30) : f == size_huge ? json(9000000000000000000ll) : size_of(feed_copy);
-        dist.push_back(file("feed.json", 11, feed_size));
-        if (space_catalog != 0)
-        {
-            dist.push_back(file("catalog.json", 12, size_of(repository_catalog)));
-            const std::string& signature = space_catalog == 1 ? repository_signature : other_signature;
-            dist.push_back(file("catalog.json.sig", space_catalog == 1 ? 13 : 14, size_of(signature)));
-        }
-        in_linked.push_back(file("gone.bin", 21, size_of(linked)));
-        in_short.push_back(file("other.bin", 31, size_of(short_copy)));
-        in_tiny.push_back(file("model.bin", 41, size_of(served)));
-        in_tiny.push_back(file("model-2.bin", 43, size_of(newer_tiny)));
-        in_small.push_back(file("other.bin", 42, size_of(other)));
-        in_mixed.push_back(file("first.bin", 51, size_of(first_part)));
-        in_stale.push_back(file("stale.bin", 52, size_of(stale_copy)));
-        models.push_back(folder("linked", in_linked));
-        models.push_back(folder("short", in_short));
-        models.push_back(folder("tiny", in_tiny));
-        models.push_back(folder("small", in_small));
-        models.push_back(folder("mixed", in_mixed));
-        models.push_back(folder("stale", in_stale));
-        json root_contents = json::array();
-        root_contents.push_back(folder("dist", dist));
-        root_contents.push_back(folder("models", models));
-        json answer = json::object();
-        answer["result"] = f == result_string ? json("0") : json(0);
-        answer["metadata"] = f == metadata_array ? json::array() : folder("Albireo", root_contents);
-        res.set_content(answer.dump(), "application/json");
+    // Un fichier dont les premiers octets sont altérés : le premier transfert donne stale_copy, les suivants
+    // fresh, comme un serveur qui répare sa copie.
+    const std::string stale_copy = blob(150000, 's'), fresh = blob(150000, 'r');
+    std::atomic<int> flaky_requests{0};
+    server.Get("/flaky.bin", [&](const httplib::Request&, httplib::Response& res) {
+        res.set_content(flaky_requests++ == 0 ? stale_copy : fresh, "application/octet-stream");
     });
-    server.Get("/getpublinkdownload", [&](const httplib::Request& req, httplib::Response& res) {
-        if (api_refusal(req, res) || fault_answer(address_fault, res)) return;
-        ++addresses;
-        const std::string id = req.get_param_value("fileid");
-        const std::string path = link_content.count(id) ? "/content/" + id : std::string();
-        json answer = json::object();
-        if (path.empty())
-        {
-            answer["result"] = 2009;
-            answer["error"] = "File not found.";
-        }
-        else
-        {
-            // Le serveur de contenu, ou le serveur qui réinitialise ses connexions.
-            json hosts = json::array();
-            hosts.push_back("127.0.0.1:" + std::to_string(content_fault == reset ? reset_port.load() : port));
-            answer["result"] = 0;
-            answer["hosts"] = address_fault == hosts_object ? json::object() : hosts;
-            answer["path"] = path;
-        }
-        res.set_content(answer.dump(), "application/json");
-    });
-    server.Get(R"(/content/(\d+))", [&](const httplib::Request& req, httplib::Response& res) {
-        if (fault_answer(content_fault, res)) return;
-        const auto it = link_content.find(req.matches[1].str());
-        if (it == link_content.end()) res.status = 404;
-        else res.set_content(*it->second, "application/octet-stream");
-    });
+    const std::string first_part = blob(120000, 'f'), second_part = blob(80000, 'g');
     /*
         Les adresses officielles des catalogues, sous /official/ : les fichiers de official_files, donnés
         avec leurs plages, ceux dont le nom commence par "slow" à raison d'un kilo-octet toutes les 20 ms,
@@ -690,14 +522,14 @@ int main(int argc, char** argv)
     std::thread listener([&]() { server.listen_after_bind(); });
     const std::string base_url = "http://127.0.0.1:" + std::to_string(port);
     /*
-        Le lien du build définit l'espace de publication ; les téléchargements des tests viennent de leur
-        propre lien, et des adresses officielles de leurs catalogues sur le serveur local, catalogue
-        officiel compris.
+        Les téléchargements des tests viennent des adresses officielles de leurs catalogues sur le serveur
+        local, catalogue officiel compris.
     */
-    check(albireo::public_link_enabled(), "the link of the build sets the publication space");
-    albireo::public_link_for_tests(base_url + "/publink/show?code=TESTLINK1");
     const std::string official = base_url + "/official/";
     albireo::official_catalog_for_tests(official + "catalog.json");
+    official_serve("model.bin", served);
+    official_serve("other.bin", other);
+    official_serve("model-2.bin", newer_tiny);
 
     {
         albireo::store db(albireo::join_path(work, "albireo.db"));
@@ -980,64 +812,42 @@ int main(int argc, char** argv)
     }
 
     {
-        // L'espace de publication : les liens que les tests peuvent donner, sa liste et ses adresses
-        // gardées, les fichiers qui lui manquent.
-        const std::string link = base_url + "/publink/show?code=TESTLINK1";
-        albireo::public_link_for_tests("https://example.org/publink/show?code=kZeNhSJZpcMygkcC");
-        const bool other_site = albireo::public_link_enabled();
-        albireo::public_link_for_tests("http://u.pcloud.link/publink/show?code=kZeNhSJZpcMygkcC");
-        const bool without_tls = albireo::public_link_enabled();
-        albireo::public_link_for_tests("");
-        check(!other_site && !without_tls && !albireo::public_link_enabled(),
-            "a link of another site, without TLS or empty sets no publication space");
-        std::string body, error, url;
-        uint64_t size = 0;
-        albireo::link_status status = albireo::link_status::ok;
-        bool ok = albireo::public_link_file("dist/feed.json", url, size, error, false, &status);
-        check(!ok && status == albireo::link_status::unset && error == "dist/feed.json cannot be downloaded: no "
-            "publication space is set", "without a space, a file is refused with its name (" + error + ")");
-        albireo::public_link_for_tests(link);
-        check(albireo::public_link_enabled(), "a local link is used");
-        const int listed_before = listings, addressed_before = addresses;
-        error.clear();
-        ok = albireo::public_link_get("dist/feed.json", body, error, 1u << 20);
-        check(ok && body == feed_copy, "a file of the space is read (" + error + ")");
-        check(albireo::public_link_get("dist/feed.json", body, error, 1u << 20) && listings - listed_before == 1
-            && addresses - addressed_before == 1,
-            "the listing and the address of the space are kept for the next reads");
-        ok = albireo::public_link_file("dist/catalog.json", url, size, error, false, &status);
-        check(!ok && status == albireo::link_status::missing
-            && error == "the publication space of Albireo does not hold dist/catalog.json yet",
-            "a file the space lacks is reported as not published yet (" + error + ")");
-        check(password_mismatch == 0, "the password goes with each request when the program carries one");
-        check(albireo::public_link_model_path("tiny", "https://hub.example/a/resolve/abc/Tiny-Q4.gguf?download=1")
-            == "models/tiny/Tiny-Q4.gguf", "the copy of a file of a model lies in the folder of its identifier");
+        // Les adresses des messages ne portent pas leur requête (une clé de recherche peut s'y trouver).
         check(albireo::without_queries("https://example.org/search?q=X&key=Y: status 500")
             == "https://example.org/search: status 500", "the queries of the addresses stay out of the messages");
+        // Le journal écrit ses lignes telles qu'elles sont données.
+        const std::string log_path = albireo::join_path(work, "logs/service.log");
+        albireo::make_dirs(albireo::join_path(work, "logs"));
+        albireo::log_file::instance().open(log_path);
+        albireo::log_warning("models: a line of the log");
+        check(read_text(log_path).find("[warning] models: a line of the log") != std::string::npos,
+            "the log writes its lines as they are given");
+    }
 
+    {
         /*
-            Les téléchargements : la copie de l'espace d'abord, son adresse officielle pour une partie que
-            l'espace n'a pas, a à une autre taille ou a avec d'autres octets, et un message qui nomme les
-            deux échecs quand aucune ne la sert.
+            Les téléchargements depuis les adresses du catalogue : un modèle, un modèle de deux parties, un
+            fichier corrompu qui est récupéré de nouveau, une empreinte qui échoue encore, une adresse qui
+            n'a pas le fichier, puis une adresse qui le donne à une autre taille.
         */
         albireo::store db(albireo::join_path(work, "albireo-3.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-11-01T00:00:00Z";
         json list = json::array();
         const std::string absent = blob(5000, 'n');
+        const std::string linked = blob(250000, 'l');
         list.push_back(catalog_entry("linked", linked, official + "gone.bin"));
-        list.push_back(catalog_entry("short", other, official + "other.bin"));
         list.push_back(catalog_entry("absent", absent, official + "absent.bin"));
         list.push_back(parts_entry("mixed", { first_part, second_part }, { official + "first.bin",
             official + "second.bin" }, { std::string(), std::string() }));
-        list.push_back(catalog_entry("stale", fresh, official + "stale.bin"));
+        list.push_back(catalog_entry("stale", fresh, base_url + "/flaky.bin"));
+        list.push_back(catalog_entry("wrong", fresh, official + "wrong.bin"));
         catalog["models"] = list;
         db.set_value("catalog", catalog.dump());
         official_serve("gone.bin", linked);
-        official_serve("other.bin", other);
         official_serve("first.bin", first_part);
         official_serve("second.bin", second_part);
-        official_serve("stale.bin", fresh);
+        official_serve("wrong.bin", stale_copy);
         albireo::model_manager m(db, albireo::join_path(work, "models-3"));
         albireo::user_error started;
         albireo::installed_model im;
@@ -1045,223 +855,88 @@ int main(int argc, char** argv)
             return d["state"].as_string() == "done" && installed(db, id, im) && read_text(im.file) == content
                 && im.sha256 == albireo::sha256_hex(content) && d["received"].as_int(-1) == d["total"].as_int(-2);
         };
-        check(m.start_download("linked", started), "the download of a model the space holds starts");
+        check(m.start_download("linked", started), "the download of a model starts");
         json d = wait_download(m, "linked");
-        check(complete(d, "linked", linked) && official_count("gone.bin") == 0
-            && logged("models: linked installed, from the publication space of Albireo") == 1,
-            "a model comes from its copy in the space, its official address unread (" + d.dump() + ")");
-        check(m.start_download("short", started), "the download of a model whose copy has another size starts");
-        d = wait_download(m, "short");
-        check(complete(d, "short", other) && official_count("other.bin") == 1
-            && logged("models: download of short continues from its official address " + official + "other.bin, the "
-            "publication space of Albireo did not serve models/short/other.bin (the copy of models/short/other.bin in "
-            "the publication space of Albireo does not have the size the catalog gives)") == 1
-            && logged("models: short installed, from its official addresses") == 1,
-            "a copy of another size than the catalog gives way to the official address, which the log names ("
+        check(complete(d, "linked", linked) && official_count("gone.bin") == 1
+            && logged("models: linked installed") == 1, "a model comes from the address of the catalog ("
             + d.dump() + ")");
-        check(m.start_download("mixed", started), "the download of a model whose second part the space lacks starts");
+        check(m.start_download("mixed", started), "the download of a model of two parts starts");
         d = wait_download(m, "mixed");
-        check(complete(d, "mixed", first_part + second_part) && official_count("first.bin") == 0
-            && official_count("second.bin") == 1 && logged("models: download of mixed continues from its official "
-            "address " + official + "second.bin, the publication space of Albireo did not serve "
-            "models/mixed/second.bin (the publication space of Albireo does not hold models/mixed/second.bin yet)") == 1
-            && logged("models: download of mixed continues") == 1
-            && logged("models: mixed installed, from the publication space of Albireo and its official addresses") == 1,
-            "a part the space lacks comes from its official address, the part it holds from the space (" + d.dump()
+        check(complete(d, "mixed", first_part + second_part) && official_count("first.bin") == 1
+            && official_count("second.bin") == 1, "a model of two parts comes from its two addresses (" + d.dump()
             + ")");
-        check(m.start_download("stale", started), "the download of a model whose copy has other bytes starts");
+        check(m.start_download("stale", started), "the download of a model whose first copy has other bytes starts");
         d = wait_download(m, "stale");
-        check(complete(d, "stale", fresh) && official_count("stale.bin") == 1
-            && logged("models: part 0 of stale is corrupt, fetched again") == 1
-            && logged("models: download of stale continues from its official address " + official + "stale.bin, the "
-            "publication space of Albireo did not serve models/stale/stale.bin (the copy of models/stale/stale.bin in "
-            "the publication space of Albireo does not match the hash of the catalog)") == 1,
-            "a copy whose bytes fail the hash is fetched again from the official address (" + d.dump() + ")");
+        check(complete(d, "stale", fresh) && flaky_requests == 2
+            && logged("models: part 0 of stale is corrupt, fetched again") == 1,
+            "a part whose bytes fail the hash is fetched again (" + d.dump() + ")");
+        check(m.start_download("wrong", started), "the download of a model whose bytes are always wrong starts");
+        d = wait_download(m, "wrong");
+        check(d["state"].as_string() == "error" && d["code"].as_string() == "download_hash"
+            && official_count("wrong.bin") == 2 && !installed(db, "wrong", im),
+            "a file that fails its hash twice is refused, not installed (" + d.dump() + ")");
 
-        // Aucune des deux sources : l'erreur nomme le fichier dans l'espace, l'adresse officielle et l'échec
-        // de chacune.
-        check(m.start_download("absent", started), "the download of a model that neither source holds starts");
+        // Une adresse qui n'a pas le fichier : trois tentatives, l'erreur nomme l'adresse et la réponse.
+        check(m.start_download("absent", started), "the download of a model the address lacks starts");
         d = wait_download(m, "absent");
-        const std::string both = "the publication space of Albireo does not hold models/absent/absent.bin yet; its "
-            "official address " + official + "absent.bin cannot be downloaded either: the request is answered with "
-            "the status 404";
+        const std::string missing = official + "absent.bin cannot be downloaded: the request is answered with the "
+            "status 404";
         check(d["state"].as_string() == "error" && d["code"].as_string() == "download_failed"
-            && d["error"].as_string() == both && d["args"]["e"].as_string() == both && official_count("absent.bin") == 3
-            && !names_space(d.dump(), official) && !installed(db, "absent", im),
-            "a model that neither source holds fails with both failures, the space unnamed (" + d.dump() + ")");
-        std::string refreshed;
-        const bool refreshed_ok = m.refresh_catalog(refreshed);
-        check(!refreshed_ok && refreshed == "the publication space of Albireo does not hold dist/catalog.json yet; the "
-            "catalog cannot be downloaded from its official address " + official + "catalog.json either: the request "
-            "is answered with the status 404" && !names_space(refreshed, official),
-            "a catalog that neither source holds fails with both failures (" + refreshed + ")");
-        // Sans espace, les adresses officielles aussitôt : celle qui donne une autre taille échoue, la bonne
-        // se complète.
-        albireo::public_link_for_tests("");
+            && d["error"].as_string() == missing && d["args"]["e"].as_string() == missing
+            && official_count("absent.bin") == 3 && !installed(db, "absent", im),
+            "a model whose address lacks the file fails with the address and the answer (" + d.dump() + ")");
+        // Une adresse qui donne le fichier à une autre taille que le catalogue échoue, la bonne se complète.
         official_serve("absent.bin", blob(4000, 'n'));
-        check(m.start_download("absent", started), "a download starts without a space");
+        check(m.start_download("absent", started), "a download starts from an address of another size");
         d = wait_download(m, "absent");
         check(d["state"].as_string() == "error" && d["code"].as_string() == "download_failed"
-            && d["error"].as_string() == "models/absent/absent.bin cannot be downloaded: no publication space is set; "
-            "its official address " + official + "absent.bin cannot be downloaded either: the file it gives does not "
-            "have the size the catalog gives" && !albireo::file_exists(albireo::join_path(m.models_dir(),
-            "absent.gguf")), "without a space, an official address of another size fails, naming both sources ("
-            + d.dump() + ")");
+            && d["error"].as_string() == "the file of " + official + "absent.bin does not have the size the catalog "
+            "gives" && !albireo::file_exists(albireo::join_path(m.models_dir(), "absent.gguf")),
+            "an address of another size fails (" + d.dump() + ")");
         official_serve("absent.bin", absent);
-        check(m.start_download("absent", started), "a download starts again without a space");
+        check(m.start_download("absent", started), "a download starts again from the right address");
         d = wait_download(m, "absent");
-        check(complete(d, "absent", absent), "without a space, a model comes from its official address ("
+        check(complete(d, "absent", absent), "a model comes from its address once it serves the file ("
             + d.dump() + ")");
         m.stop();
-        // Un lien qui refuse le mot de passe : le message nomme la réponse, jamais la requête.
-        protected_link = true;
-        albireo::public_link_for_tests(link);
-        ok = albireo::public_link_get("dist/feed.json", body, error, 1u << 20);
-        check(!ok && error == "the publication space of Albireo answers \"Invalid 'linkpassword' provided.\" (1125) "
-            "for dist/feed.json", "a refused password is reported without the query (" + error + ")");
-        protected_link = false;
-        albireo::public_link_for_tests("");
     }
 
     {
         /*
-            Les échecs de l'espace de publication, chacun avec les bornes des attentes raccourcies à 1 s
-            et celle d'une requête entière à 2 s : l'opération échoue avec son message, aucune exception
-            n'en sort, le serveur local répond encore, et le message ne nomme ni pCloud, ni le lien, ni
-            son code, ni une adresse.
+            Les échecs du réseau, avec les bornes des attentes raccourcies à 1 s et celle d'une requête entière
+            à 2 s : une page web, un blocage ou une réinitialisation font échouer le transfert avant qu'aucun
+            octet n'atteigne le fichier, l'opération échoue avec son message, aucune exception n'en sort, et le
+            serveur local répond encore.
         */
         reset_server resetting;
         check(resetting.start(port + 1), "a server that resets its connections listens on the port "
             + std::to_string(port + 1));
-        reset_port = port + 1;
-        const std::string link = base_url + "/publink/show?code=TESTLINK1";
         albireo::http_bounds_for_tests(1, 2);
-        auto clean = [&](const std::string& text) {
-            return !holds_folded(text, "pcloud") && !holds_folded(text, "publink") && text.find("TESTLINK1")
-                == std::string::npos && text.find("://") == std::string::npos && text.find("127.0.0.1")
-                == std::string::npos;
-        };
         auto answers = [&]() {
             std::string alive, e;
             return albireo::http_get(base_url + "/alive", alive, e, 64) && alive == "alive";
         };
-        const std::string unreachable = "the publication space of Albireo cannot be reached for dist/feed.json: ";
-        const std::string undownloadable = "the copy of dist/feed.json in the publication space of Albireo cannot be "
-            "downloaded: ";
         const std::string page_text = "a web page comes in place of the answer, as a proxy or a filter of the network "
             "sends one";
-        const std::string other_answer = "the publication space of Albireo gives an answer that is not the one of its "
-            "interface for dist/feed.json";
-        const std::string invalid_entry = "the publication space of Albireo lists dist/feed.json without a valid "
-            "identifier or size";
-        struct failure_case
-        {
-            const char* what;
-            std::atomic<int>* where;
-            int f;
-            std::string expected;    // le message, ou son début quand prefix vaut true
-            bool prefix;
-        };
-        const failure_case cases[] = {
-            {"a listing answered by a web page with 200", &listing_fault, html_200, unreachable + page_text, false},
-            {"a listing answered by a web page with 403", &listing_fault, html_403,
-                unreachable + "the request is answered with the status 403", false},
-            {"a listing answered by a proxy that asks for its authentication", &listing_fault, proxy_407,
-                unreachable + "the proxy asks for an authentication (status 407)", false},
-            {"a listing cut short", &listing_fault, truncated_json, other_answer, false},
-            {"a listing whose folder is an array", &listing_fault, metadata_array, "the publication space of "
-                "Albireo gives a listing that is not the one of its interface for dist/feed.json", false},
-            {"a listing whose result is a string", &listing_fault, result_string, other_answer, false},
-            {"a listing whose size is a string", &listing_fault, size_string, invalid_entry, false},
-            {"a listing whose size is negative", &listing_fault, size_negative, invalid_entry, false},
-            {"a listing whose size is beyond the integers", &listing_fault, size_beyond, invalid_entry, false},
-            {"a listing whose size is above the file read", &listing_fault, size_huge, "the copy of dist/feed.json in "
-                "the publication space of Albireo is larger than expected", false},
-            {"a listing that stalls", &listing_fault, stall, unreachable + "no data arrives within 1 s", false},
-            {"a listing sent byte by byte", &listing_fault, trickle,
-                unreachable + "no complete answer arrives within 2 s", false},
-            {"an address answered by a web page with 200", &address_fault, html_200, unreachable + page_text, false},
-            {"an address answered by a web page with 403", &address_fault, html_403,
-                unreachable + "the request is answered with the status 403", false},
-            {"an address answered by a proxy that asks for its authentication", &address_fault, proxy_407,
-                unreachable + "the proxy asks for an authentication (status 407)", false},
-            {"an address cut short", &address_fault, truncated_json, other_answer, false},
-            {"an address whose servers are an object", &address_fault, hosts_object, "the publication space of "
-                "Albireo gives no address for dist/feed.json", false},
-            {"an address that stalls", &address_fault, stall, unreachable + "no data arrives within 1 s", false},
-            {"a content server that answers a web page with 200", &content_fault, html_200, undownloadable + page_text,
-                false},
-            {"a content server that answers a web page with 403", &content_fault, html_403,
-                undownloadable + "the request is answered with the status 403", false},
-            {"a content server that stalls", &content_fault, stall, undownloadable + "no data arrives within 1 s",
-                false},
-            {"a content server that sends the file byte by byte", &content_fault, trickle,
-                undownloadable + "no complete answer arrives within 2 s", false},
-            {"a content server that resets the connection", &content_fault, reset, undownloadable, true}
-        };
-        for (const auto& c : cases)
-        {
-            albireo::public_link_for_tests(link);
-            *c.where = c.f;
-            std::string body, error;
-            bool ok = true, escaped = false;
-            const auto begun = std::chrono::steady_clock::now();
-            try
-            {
-                ok = albireo::public_link_get("dist/feed.json", body, error, 1u << 20);
-            }
-            catch (...)
-            {
-                escaped = true;
-            }
-            const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - begun).count();
-            *c.where = no_fault;
-            const bool told = c.prefix ? error.compare(0, c.expected.size(), c.expected) == 0
-                && error.size() > c.expected.size() : error == c.expected;
-            check(!ok && !escaped && told && clean(error) && seconds < 10 && answers(), std::string(c.what)
-                + " fails with its message, in " + std::to_string(static_cast<int>(seconds)) + " s (" + error + ")");
-        }
-        // Un espace dont l'interface réinitialise ses connexions, ou n'écoute pas.
-        for (int to : { port + 1, port + 2 })
-        {
-            albireo::public_link_for_tests("http://127.0.0.1:" + std::to_string(to) + "/publink/show?code=TESTLINK1");
-            std::string body, error;
-            bool ok = true, escaped = false;
-            try
-            {
-                ok = albireo::public_link_get("dist/feed.json", body, error, 1u << 20);
-            }
-            catch (...)
-            {
-                escaped = true;
-            }
-            check(!ok && !escaped && error.compare(0, unreachable.size(), unreachable) == 0 && clean(error)
-                && answers(), std::string(to == port + 1 ? "an interface that resets its connections"
-                : "an interface that does not listen") + " fails with its message (" + error + ")");
-        }
-        albireo::public_link_for_tests(link);
-
-        // Les plages des téléchargements : une page web, un blocage et une réinitialisation échouent avant
-        // qu'aucun octet n'atteigne le fichier.
         std::string written, error;
         auto keep = [&](const char* data, size_t n) {
             written.append(data, n);
             return true;
         };
         bool escaped = false;
-        content_fault = html_200;
-        const bool from_page = albireo::http_get_range(base_url + "/content/41", 0, 999, keep, error);
+        official_fault = html_200;
+        const bool from_page = albireo::http_get_range(official + "model.bin", 0, 999, keep, error);
         const std::string page_error = error;
-        content_fault = stall;
-        const bool from_stall = albireo::http_get_range(base_url + "/content/41", 0, 999, keep, error);
+        official_fault = stall;
+        const bool from_stall = albireo::http_get_range(official + "model.bin", 0, 999, keep, error);
         const std::string stall_error = error;
-        content_fault = no_fault;
-        const bool from_reset = albireo::http_get_range("http://127.0.0.1:" + std::to_string(port + 1) + "/content/41",
-            1000, 1999, keep, error);
+        official_fault = no_fault;
+        const bool from_reset = albireo::http_get_range("http://127.0.0.1:" + std::to_string(port + 1)
+            + "/official/model.bin", 1000, 1999, keep, error);
         // Un récepteur qui lève une exception : l'exception devient l'erreur du téléchargement.
         try
         {
-            albireo::http_get_range(base_url + "/content/41", 0, 999, [](const char*, size_t) -> bool {
+            albireo::http_get_range(official + "model.bin", 0, 999, [](const char*, size_t) -> bool {
                 throw std::runtime_error("the disk is full");
             }, error);
         }
@@ -1275,10 +950,8 @@ int main(int argc, char** argv)
             "writes nothing, and an exception of its receiver becomes its error (" + page_error + "; " + stall_error
             + "; " + error + ")");
 
-        /*
-            Un modèle dont la copie est une page web, son adresse officielle une page web aussi, puis le
-            fichier ; un catalogue venant d'une liste bloquée, son adresse officielle répondant 404.
-        */
+        // Un modèle dont l'adresse répond une page web, puis donne le fichier ; un catalogue que son adresse
+        // n'a pas.
         albireo::store db(albireo::join_path(work, "albireo-4.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-11-01T00:00:00Z";
@@ -1289,62 +962,41 @@ int main(int argc, char** argv)
         {
             albireo::model_manager m(db, albireo::join_path(work, "models-4"));
             albireo::user_error started;
-            content_fault = html_200;
             official_fault = html_200;
-            check(m.start_download("tiny", started), "the download of a model whose copy is a web page starts");
+            check(m.start_download("tiny", started), "the download of a model whose address is a web page starts");
             json d = wait_download(m, "tiny");
             official_fault = no_fault;
             const std::string partial = albireo::join_path(m.models_dir(), "tiny.gguf.partial");
-            const std::string both = "the copy of models/tiny/model.bin in the publication space of Albireo cannot be "
-                "downloaded: " + page_text + "; its official address " + official + "model.bin cannot be downloaded "
-                "either: " + page_text;
+            const std::string blocked = official + "model.bin cannot be downloaded: " + page_text;
             check(d["state"].as_string() == "error" && d["code"].as_string() == "download_failed"
-                && d["error"].as_string() == both && d["args"]["e"].as_string() == both
-                && !names_space(d.dump(), official) && read_text(partial).find("Access denied") == std::string::npos
-                && answers(),
-                "a model whose copy and official address are web pages fails with both, its partial file free of the "
-                "pages (" + d.dump() + ")");
-            official_serve("model.bin", served);
-            check(m.start_download("tiny", started), "the download of a model whose copy is a web page starts again");
+                && d["error"].as_string() == blocked && d["args"]["e"].as_string() == blocked
+                && read_text(partial).find("Access denied") == std::string::npos && answers(),
+                "a model whose address is a web page fails with its message, its partial file free of the page ("
+                + d.dump() + ")");
+            check(m.start_download("tiny", started), "the download of the model starts again");
             d = wait_download(m, "tiny");
-            content_fault = no_fault;
             albireo::installed_model im;
             check(d["state"].as_string() == "done" && installed(db, "tiny", im) && read_text(im.file) == served
-                && im.sha256 == albireo::sha256_hex(served) && answers(), "a model whose copy is a web page comes from "
-                "its official address (" + d.dump() + ")");
-            listing_fault = stall;
+                && im.sha256 == albireo::sha256_hex(served) && answers(),
+                "a model comes from its address once the page is gone (" + d.dump() + ")");
             std::string refreshed;
             const bool refreshed_ok = m.refresh_catalog(refreshed);
-            check(!refreshed_ok && refreshed == "the publication space of Albireo cannot be reached for "
-                "dist/catalog.json: no data arrives within 1 s; the catalog cannot be downloaded from its official "
-                "address " + official + "catalog.json either: the request is answered with the status 404"
-                && !names_space(refreshed, official) && answers(),
-                "a catalog from a listing that stalls fails with both messages (" + refreshed + ")");
-            listing_fault = no_fault;
+            check(!refreshed_ok && refreshed == "the catalog cannot be downloaded from " + official + "catalog.json: "
+                "the request is answered with the status 404" && answers(),
+                "a catalog its address does not have fails with the address and the answer (" + refreshed + ")");
             m.stop();
         }
         albireo::http_bounds_for_tests(0, 0);
         resetting.stop();
-
-        // Le journal de ces échecs ne nomme ni pCloud, ni le lien, ni son code, ni un serveur de contenu.
-        bool named = false;
-        for (const auto& line : albireo::log_file::instance().recent())
-            named = named || holds_folded(line, "pcloud") || holds_folded(line, "publink")
-                || line.find("TESTLINK1") != std::string::npos || line.find("/content/") != std::string::npos;
-        check(!named, "the log of the failures names neither pCloud, nor the link, nor its code");
-        albireo::public_link_for_tests("");
     }
 
     {
         /*
-            Les adresses officielles quand l'espace de publication échoue : un espace qui refuse les
-            connexions, une liste refusée par 403 pour un modèle de huit parties, dont une compressée, dont
-            les segments vont aussitôt à leurs adresses officielles après l'échec de l'espace pour l'un
-            d'eux, la dernière partie reprenant seule quand son adresse officielle la sert, le catalogue
-            quand l'espace ne le sert pas, et un téléchargement annulé pendant qu'il vient de son adresse
-            officielle.  Le journal nomme les adresses officielles, jamais l'espace, son lien ou son code.
+            Un modèle de huit parties, dont une compressée, dont la dernière n'est pas encore servie : le
+            téléchargement échoue avec son adresse, puis reprend avec cette seule partie ; le catalogue sans
+            signature, de son adresse ou d'un dossier ; et un téléchargement annulé pendant qu'il vient de
+            son adresse.
         */
-        const std::string link = base_url + "/publink/show?code=TESTLINK1";
         albireo::store db(albireo::join_path(work, "albireo-5.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-11-01T00:00:00Z";
@@ -1357,7 +1009,7 @@ int main(int argc, char** argv)
             contents.push_back(blob(20000 + 1000 * i, static_cast<char>('A' + i)));
             urls.push_back(official + name);
             packed.push_back(i == 3 ? deflated(contents.back()) : std::string());
-            // La dernière partie atteint son adresse officielle plus tard.
+            // La dernière partie est servie plus tard.
             if (i < 7) official_serve(name, packed.back().empty() ? contents.back() : packed.back());
         }
         list.push_back(parts_entry("parts", contents, urls, packed));
@@ -1365,54 +1017,21 @@ int main(int argc, char** argv)
         list.push_back(catalog_entry("slow", slow, official + "slow.bin"));
         catalog["models"] = list;
         db.set_value("catalog", catalog.dump());
-        official_serve("model.bin", served);
         official_serve("slow.bin", slow);
         albireo::model_manager m(db, albireo::join_path(work, "models-5"));
         albireo::user_error started;
         albireo::installed_model im;
 
-        // Une interface qui refuse les connexions : le modèle vient de son adresse officielle.
-        albireo::public_link_for_tests("http://127.0.0.1:" + std::to_string(port + 2) + "/publink/show?code=TESTLINK1");
-        check(m.start_download("tiny", started), "the download of a model from a space that refuses connections "
-            "starts");
-        json d = wait_download(m, "tiny");
-        check(d["state"].as_string() == "done" && installed(db, "tiny", im) && read_text(im.file) == served
-            && im.sha256 == albireo::sha256_hex(served) && logged("models: download of tiny continues from its "
-            "official address " + official + "model.bin, the publication space of Albireo did not serve "
-            "models/tiny/model.bin (the publication space of Albireo cannot be reached for models/tiny/model.bin: ")
-            == 1,
-            "a space that refuses the connections gives way to the official address (" + d.dump() + ")");
-
-        /*
-            Une liste refusée par 403 : les segments après le premier échec ne demandent plus l'espace.
-            L'adresse officielle de la dernière partie répond 404, pour que l'erreur nomme l'échec de
-            l'espace pour une autre partie ; dès qu'elle sert la partie, le téléchargement reprend avec
-            cette seule partie.
-        */
-        albireo::public_link_for_tests(link);
-        listing_fault = html_403;
-        const int requests_before = listing_requests;
-        const auto begun = std::chrono::steady_clock::now();
         check(m.start_download("parts", started), "the download of a model of eight parts starts");
-        d = wait_download(m, "parts");
-        const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - begun).count();
-        const int asked = listing_requests - requests_before;
-        const std::string error = d["error"].as_string();
-        const std::string last = "; models/parts/part-7.bin cannot be downloaded from its official address " + official
-            + "part-7.bin either: the request is answered with the status 404";
-        const std::string space_side = "the publication space of Albireo cannot be reached for models/parts/part-";
+        json d = wait_download(m, "parts");
+        const std::string failure = official + "part-7.bin cannot be downloaded: the request is answered with the "
+            "status 404";
         check(d["state"].as_string() == "error" && d["code"].as_string() == "download_failed"
-            && error.compare(0, space_side.size(), space_side) == 0 && error.size() > last.size()
-            && error.compare(error.size() - last.size(), last.size(), last) == 0
-            && error.find("models/parts/part-7.bin: ") == std::string::npos && !names_space(d.dump(), official),
-            "a part that follows the failure of the space for another part names both files (" + d.dump() + ")");
-        check(asked < 4 * 8 && seconds < 60, "the segments that follow the failure of the space go to their official "
-            "addresses at once (" + std::to_string(asked) + " requests to the space, "
-            + std::to_string(static_cast<int>(seconds)) + " s)");
+            && d["error"].as_string() == failure, "a part its address lacks fails the download with the address ("
+            + d.dump() + ")");
         official_serve("part-7.bin", contents[7]);
         check(m.start_download("parts", started), "the download of the model of eight parts starts again");
         d = wait_download(m, "parts");
-        listing_fault = no_fault;
         std::string whole;
         bool each_once = true;
         for (int i = 0; i < 8; ++i)
@@ -1420,80 +1039,56 @@ int main(int argc, char** argv)
             whole += contents[static_cast<size_t>(i)];
             each_once = each_once && official_count("part-" + std::to_string(i) + ".bin") == (i < 7 ? 1 : 4);
         }
-        // Une ligne pour chaque téléchargement indique le changement de source, par le segment dont
-        // l'échec de l'espace l'a provoqué.
-        int told = 0;
-        for (int i = 0; i < 8; ++i)
-        {
-            const std::string name = "part-" + std::to_string(i) + ".bin";
-            told += logged("models: download of parts continues from its official address " + official + name
-                + ", the publication space of Albireo did not serve models/parts/" + name + " (the publication space "
-                "of Albireo cannot be reached for models/parts/" + name + ": the request is answered with the status "
-                "403)");
-        }
         check(d["state"].as_string() == "done" && installed(db, "parts", im) && read_text(im.file) == whole
             && im.sha256 == albireo::sha256_hex(whole) && d["received"].as_int(-1) == d["total"].as_int(-2)
-            && each_once && logged("models: download of parts continues") == 2 && told == 2,
-            "a model of eight parts, one compressed, comes from its official addresses, resumed with its last part, "
-            "the log telling each change of source once (" + d.dump() + ")");
+            && each_once, "a model of eight parts, one compressed, resumes with its last part (" + d.dump() + ")");
 
-        // Le catalogue : son adresse officielle sert le catalogue signé du dépôt quand l'espace ne le sert
-        // pas.
-        if (repository_catalog.empty() || repository_signature.empty())
-        {
-            std::printf("skip the signed catalog, which the sources of this build do not give\n");
-        }
-        else
-        {
-            official_serve("catalog.json", repository_catalog);
-            official_serve("catalog.json.sig", repository_signature);
-            const json signed_catalog = json::parse_or_null(repository_catalog);
-            const long long models = static_cast<long long>(signed_catalog["models"].size());
-            albireo::store cdb(albireo::join_path(work, "albireo-6.db"));
-            albireo::model_manager cm(cdb, albireo::join_path(work, "models-6"));
-            auto installs = [&](const std::string& why) {
-                std::string error;
-                const bool ok = cm.refresh_catalog(error);
-                const json s = cm.catalog_status();
-                const std::string line = "models: catalog read from its official address " + official + "catalog.json, "
-                    "the publication space of Albireo did not serve it (" + why + ")";
-                return ok && s["models"].as_int() == models && s["state"].as_string() == "ok"
-                    && s["updated"].as_string() == signed_catalog["updated"].as_string() && logged(line) == 1;
-            };
-            listing_fault = html_403;
-            const bool after_403 = installs("the publication space of Albireo cannot be reached for dist/catalog.json: "
-                "the request is answered with the status 403");
-            listing_fault = no_fault;
-            const bool after_missing = installs("the publication space of Albireo does not hold dist/catalog.json yet");
-            // L'espace contient le catalogue avec une autre signature ; sa liste et ses adresses sont relues.
-            space_catalog = 2;
-            albireo::public_link_for_tests(link);
-            const bool after_refusal = installs("the catalog of the publication space of Albireo is refused: the "
-                "signature of the catalog is not valid");
-            check(after_403 && after_missing && after_refusal, "a catalog the space refuses, lacks or holds with "
-                "another signature comes from its official address, its signature checked");
-            space_catalog = 1;
-            albireo::public_link_for_tests(link);
-            const int official_before = official_count("catalog.json");
-            const int space_lines = logged("models: catalog read from the publication space of Albireo");
-            std::string error;
-            const bool from_space = cm.refresh_catalog(error);
-            check(from_space && official_count("catalog.json") == official_before
-                && logged("models: catalog read from the publication space of Albireo") == space_lines + 1,
-                "a catalog the space holds signed comes from the space (" + error + ")");
-            space_catalog = 0;
-            albireo::public_link_for_tests(link);
-            official_serve("catalog.json.sig", other_signature);
-            const bool refused = !cm.refresh_catalog(error);
-            check(refused && error == "the publication space of Albireo does not hold dist/catalog.json yet; the "
-                "catalog of its official address " + official + "catalog.json is refused: the signature of the catalog "
-                "is not valid", "a catalog of the official address whose signature fails is refused (" + error + ")");
-            cm.stop();
-        }
+        // Le catalogue, sans signature : son adresse le sert, et un catalogue plus ancien ne remplace pas le
+        // plus récent.
+        json served_catalog = json::object();
+        served_catalog["updated"] = "2026-11-02T00:00:00Z";
+        json served_models = json::array();
+        served_models.push_back(catalog_entry("tiny", served, official + "model.bin"));
+        served_models.push_back(catalog_entry("slow", slow, official + "slow.bin"));
+        served_catalog["models"] = served_models;
+        official_serve("catalog.json", served_catalog.dump());
+        albireo::store cdb(albireo::join_path(work, "albireo-6.db"));
+        albireo::model_manager cm(cdb, albireo::join_path(work, "models-6"));
+        std::string refresh_error;
+        const bool refreshed = cm.refresh_catalog(refresh_error);
+        json status = cm.catalog_status();
+        check(refreshed && status["models"].as_int() == 2 && status["state"].as_string() == "ok"
+            && status["updated"].as_string() == "2026-11-02T00:00:00Z",
+            "the catalog comes from its address, without signature (" + refresh_error + ")");
+        json older = served_catalog;
+        older["updated"] = "2026-10-01T00:00:00Z";
+        older["models"] = json::array();
+        official_serve("catalog.json", older.dump());
+        const bool kept = cm.refresh_catalog(refresh_error);
+        status = cm.catalog_status();
+        check(kept && status["models"].as_int() == 2 && status["updated"].as_string() == "2026-11-02T00:00:00Z",
+            "an older catalog never replaces a newer one (" + refresh_error + ")");
+        // Un dossier d'un disque : son catalog.json seul suffit.
+        const std::string drive = albireo::join_path(work, "drive");
+        albireo::make_dirs(drive);
+        json drive_catalog = served_catalog;
+        drive_catalog["updated"] = "2026-11-03T00:00:00Z";
+        json drive_models = json::array();
+        drive_models.push_back(catalog_entry("tiny", served, official + "model.bin"));
+        drive_catalog["models"] = drive_models;
+        write_text(albireo::join_path(drive, "catalog.json"), drive_catalog.dump());
+        const json imported = cm.import_catalog(drive, std::string());
+        status = cm.catalog_status();
+        check(!imported.contains("error") && imported["models"].as_int() == 1
+            && status["updated"].as_string() == "2026-11-03T00:00:00Z",
+            "the catalog.json of a folder is installed without signature (" + imported.dump() + ")");
+        const json empty_drive = cm.import_catalog(albireo::join_path(work, "no-drive"), std::string());
+        check(empty_drive.contains("error"), "a folder without catalog.json is refused");
+        cm.stop();
 
-        // Un téléchargement annulé pendant qu'il vient de son adresse officielle se termine aussitôt, son
-        // fichier partiel supprimé.
-        check(m.start_download("slow", started), "the download of a model the space lacks starts");
+        // Un téléchargement annulé pendant qu'il vient de son adresse se termine aussitôt, son fichier partiel
+        // supprimé.
+        check(m.start_download("slow", started), "the download of a slow model starts");
         long long received = 0;
         for (int i = 0; i < 300 && received == 0; ++i)
         {
@@ -1510,70 +1105,10 @@ int main(int argc, char** argv)
         check(received > 0 && received < static_cast<long long>(slow.size()) && d["state"].as_string() == "cancelled"
             && cancel_seconds < 5 && official_count("slow.bin") == 1 && !installed(db, "slow", im)
             && !albireo::file_exists(albireo::join_path(m.models_dir(), "slow.gguf.partial"))
-            && !db.download_state("slow").is_object(), "a download cancelled while it comes from its official address "
+            && !db.download_state("slow").is_object(), "a download cancelled while it comes from its address "
             "ends in " + std::to_string(static_cast<int>(cancel_seconds)) + " s, its partial file and progress "
             "removed (" + d.dump() + ")");
         m.stop();
-
-        // Le journal nomme les adresses officielles, jamais l'espace, son lien, son code ou un serveur de
-        // contenu.
-        bool named = false;
-        for (const auto& line : albireo::log_file::instance().recent())
-            named = named || holds_folded(line, "pcloud") || holds_folded(line, "publink")
-                || line.find("TESTLINK1") != std::string::npos || line.find("/content/") != std::string::npos;
-        check(!named, "the log of the official addresses names neither pCloud, nor the link, nor its code");
-        albireo::public_link_for_tests("");
-    }
-
-    {
-        /*
-            Le dernier garde-fou : les mots qui nomment l'espace de publication, quelle que soit leur
-            casse, et le code donné à hide_in_messages(), dans un texte, dans les erreurs d'un document,
-            dans le journal et dans ses fichiers d'une version antérieure.
-        */
-        const std::string space = "the publication space of Albireo";
-        albireo::hide_in_messages("TESTLINK1");
-        albireo::hide_in_messages("abc");
-        check(albireo::without_publication_space("public link: https://u.pcloud.link/publink/show?code=kZeNhSJZpcMyg"
-            "kcCvGXmq1MTvkCfBuSsx2GV, with the password") == "public link: " + space + ", with the password"
-            && albireo::without_publication_space("api.pcloud.com:443: no answer") == space + ": no answer"
-            && albireo::without_publication_space("(c123.PCLOUD.com) and \"eapi.pcloud.com\".") == "(" + space
-                + ") and \"" + space + "\"."
-            && albireo::without_publication_space("the code TESTLINK1 is refused") == "the code " + space
-                + " is refused"
-            && albireo::without_publication_space("abc and abcdef stay") == "abc and abcdef stay"
-            && albireo::without_publication_space("no address here: dist/feed.json") == "no address here: "
-                "dist/feed.json", "the guard replaces the words that name the publication space");
-        json document = json::object();
-        document["error"] = "see https://api.pcloud.com/showpublink";
-        json args = json::object();
-        args["e"] = "content server c4.pcloud.com";
-        document["args"] = args;
-        document["text"] = "pcloud";
-        json errors = json::array();
-        errors.push_back("eapi.pcloud.com");
-        document["errors"] = errors;
-        const bool named = albireo::errors_name_publication_space(document);
-        albireo::hide_publication_space_in_errors(document);
-        const json& hidden = document;
-        check(named && hidden["error"].as_string() == "see " + space && hidden["args"]["e"].as_string()
-            == "content server " + space && hidden["errors"][0].as_string() == space
-            && hidden["text"].as_string() == "pcloud" && !albireo::errors_name_publication_space(hidden),
-            "the errors of a document leave the publication space unnamed, its other members unchanged");
-        const std::string old_log = albireo::join_path(work, "logs/service.log");
-        albireo::make_dirs(albireo::join_path(work, "logs"));
-        write_text(old_log, "2026-10-30 10:00:00.000 [info] public link: https://u.pcloud.link/publink/show?code="
-            "kZeNhSJZpcMygkcCvGXmq1MTvkCfBuSsx2GV, with the password\n2026-10-30 10:00:01.000 [info] kept\n");
-        write_text(old_log + ".1", "2026-10-29 09:00:00.000 [warning] updates: https://api.pcloud.com/showpublink: "
-            "status 403\n");
-        albireo::log_file::instance().open(old_log);
-        albireo::log_warning("models: c12.pcloud.com does not answer");
-        const std::string now = read_text(old_log), before = read_text(old_log + ".1");
-        check(!holds_folded(now, "pcloud") && !holds_folded(before, "pcloud")
-            && now.find("[info] kept") != std::string::npos
-            && now.find("public link: " + space + ", with the password") != std::string::npos
-            && now.find("models: " + space + " does not answer") != std::string::npos,
-            "the log and its files of an earlier version leave the publication space unnamed");
     }
 
     {

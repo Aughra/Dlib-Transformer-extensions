@@ -8,26 +8,14 @@
 #include <vector>
 
 #include <mbedtls/base64.h>
-#include <mbedtls/ctr_drbg.h>
-#include <mbedtls/entropy.h>
 #include <mbedtls/md.h>
-#include <mbedtls/pk.h>
 #include <mbedtls/sha256.h>
 #include <psa/crypto.h>
 
 #include "../common/platform.h"
-#include "feed_public_key.h"
 
 namespace pseudalis
 {
-
-    /*
-        La clé publique du flux de mises à jour, lue à la configuration depuis
-        resources/feed-public-key.pem (PSEUDALIS_FEED_PUBLIC_KEY_FILE dans CMakeLists.txt), que
-        pseudalis-sign keygen écrit avec la clé privée de l'éditeur.  Un programme construit
-        sans elle ne vérifie aucun flux, et n'installe donc aucune mise à jour.
-    */
-    const char* const feed_public_key_pem = PSEUDALIS_FEED_PUBLIC_KEY;
 
     struct sha256_stream::impl
     {
@@ -161,65 +149,6 @@ namespace pseudalis
                 clean.size()) != 0)
             return std::string();
         return std::string(reinterpret_cast<const char*>(buf.data()), n);
-    }
-
-    bool verify_signature(const std::string& data, const std::string& signature_base64,
-        const std::string& public_key_pem)
-    {
-        psa_crypto_init();
-        const std::string sig = base64_decode(signature_base64);
-        if (sig.empty()) return false;
-        unsigned char hash[32];
-        mbedtls_sha256(reinterpret_cast<const unsigned char*>(data.data()), data.size(), hash, 0);
-        mbedtls_pk_context pk;
-        mbedtls_pk_init(&pk);
-        bool ok = mbedtls_pk_parse_public_key(&pk, reinterpret_cast<const unsigned char*>(public_key_pem.c_str()),
-            public_key_pem.size() + 1) == 0;
-        ok = ok && mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, sizeof(hash),
-            reinterpret_cast<const unsigned char*>(sig.data()), sig.size()) == 0;
-        mbedtls_pk_free(&pk);
-        return ok;
-    }
-
-    std::string sign_data(const std::string& data, const std::string& private_key_pem, std::string& error)
-    {
-        psa_crypto_init();
-        mbedtls_entropy_context entropy;
-        mbedtls_ctr_drbg_context drbg;
-        mbedtls_entropy_init(&entropy);
-        mbedtls_ctr_drbg_init(&drbg);
-        mbedtls_pk_context pk;
-        mbedtls_pk_init(&pk);
-        std::string out;
-        do
-        {
-            if (mbedtls_ctr_drbg_seed(&drbg, mbedtls_entropy_func, &entropy, nullptr, 0) != 0)
-            {
-                error = "no entropy source";
-                break;
-            }
-            if (mbedtls_pk_parse_key(&pk, reinterpret_cast<const unsigned char*>(private_key_pem.c_str()),
-                    private_key_pem.size() + 1, nullptr, 0, mbedtls_ctr_drbg_random, &drbg) != 0)
-            {
-                error = "the private key cannot be read";
-                break;
-            }
-            unsigned char hash[32];
-            mbedtls_sha256(reinterpret_cast<const unsigned char*>(data.data()), data.size(), hash, 0);
-            unsigned char sig[MBEDTLS_PK_SIGNATURE_MAX_SIZE];
-            size_t n = 0;
-            if (mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, sizeof(hash), sig, sizeof(sig), &n,
-                    mbedtls_ctr_drbg_random, &drbg) != 0)
-            {
-                error = "signature failed";
-                break;
-            }
-            out = base64_encode(std::string(reinterpret_cast<const char*>(sig), n));
-        } while (false);
-        mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&drbg);
-        mbedtls_entropy_free(&entropy);
-        return out;
     }
 
 }

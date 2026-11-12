@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Albireo Community Edition local interface",
-  "version": "3.2.0",
+  "version": "4.0.0",
   "description": "The interface of the Albireo service, served on https://localhost (port 8443 unless changed in the Service tab of the web application), and, once the network access is on, in plain HTTP on every address of the Mac at its network port (8444 by default). The routes under /v1 follow the OpenAI interface, so that its client libraries work with base_url https://localhost:8443/v1 and any API key. The functions albireo-general, albireo-code and albireo-security name the models activated for each function, albireo-background the model that comes with Albireo, which the web application uses for its work in the background, and albireo-embedding the embedding model of the search in documents.\n\nA personal version for macOS: on the Mac, every route is open, without a token. On the network port, when a password is chosen, every route but /albireo/v1/lan/login asks for the cookie albireo_lan that the login gives; without one, the network port is open too.\n\nRequests carry JSON bodies of 64 MB and 524,288 values at most, with their length: a body without length is refused with 411, a longer one with 413, another type with 415. GET, HEAD, DELETE and OPTIONS take no body (400). While the JSON bodies being read at once hold the values of their budget, a route that reads one answers 503 with the code busy and a Retry-After of 2 seconds. An answer being written whose model has no memory left for its keys and values ends with the error code out_of_memory.\n\nBefore any route, the server refuses, as plain text, a body of more than 8 MB while four such bodies are being read (503, with a Retry-After header).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -1818,8 +1818,8 @@
     "tags": [
      "Administration"
     ],
-    "summary": "Imports a signed offline bundle, or the content of the import folder",
-    "description": "For a computer without network: a memory card or a disk brought to the machine. The service reads with its own rights, so that it accepts two kinds of paths: a signed offline bundle on a local drive (a folder whose catalog.json bears the signature of Albireo), of which it reads only the signed catalog and the models it lists, by their names, sizes and hashes; and a folder or a file of the import folder of the data folder. Every file is read through no link. A model file of the user is sent through /albireo/v1/models/upload. An older catalog never replaces a newer one, and a model installed already is listed under already.",
+    "summary": "Imports an offline bundle, or the content of the import folder",
+    "description": "For a computer without network: a memory card or a disk brought to the machine. The service reads with its own rights, so that it accepts two kinds of paths: an offline bundle on a local drive (a folder holding a catalog.json), of which it reads only the catalog and the models it lists, by their names, sizes and hashes; and a folder or a file of the import folder of the data folder. Every file is read through no link. A model file of the user is sent through /albireo/v1/models/upload. An older catalog never replaces a newer one, and a model installed already is listed under already.",
     "requestBody": {
      "required": true,
      "content": {
@@ -1874,7 +1874,7 @@
       }
      },
      "400": {
-      "description": "The path is refused before anything of it is read; the code is the same whether a folder outside the import folder is missing, unreadable, unsigned or reached through a link (import_not_bundle)",
+      "description": "The path is refused before anything of it is read; the code is the same whether a folder outside the import folder is missing, unreadable or reached through a link (import_not_bundle)",
       "content": {
        "application/json": {
         "schema": {

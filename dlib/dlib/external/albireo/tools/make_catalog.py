@@ -7,8 +7,7 @@ Writes the model catalog of Albireo from the list below and from the Hugging Fac
 
 For each model, the hub gives the commit the files are pinned to, the size and the SHA-256
 of the file, the number of parameters and the trained context.  The download addresses
-name the commit, so that the file behind an address never changes after the catalog is
-signed.  A model published elsewhere, such as the parts made by publish_model.py on a
+name the commit, so that the file behind an address never changes.  A model published elsewhere, such as the parts made by publish_model.py on a
 GitHub release, is listed with its "files" given in full instead of "hub".
 
 A model that reads images names its projector, the image encoder published beside the
@@ -24,8 +23,7 @@ model is installed, and one default embedding model, which it downloads in every
 search in the documents of the conversations and of the projects relies on it.  An embedding
 model holds the "embedding" role alone.
 
-The catalog is then signed with albireo-sign (sign <private key> catalog.json), and both
-files are published in dist/albireo of the repository.
+The catalog is then published as it is (it is no longer signed).
 """
 
 import json
