@@ -2,6 +2,22 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.1.1 — 12 novembre 2026
+
+### Plateforme
+
+- La version 4.0.0 à 4.1.0, écrite sous Windows, est compilée et testée sur Mac (puce M2) : test complet d'Albireo 18 étapes sur 18, de Pseudalis 34 sur 34.
+
+### Sécurité
+
+- Les contrôles des dossiers (données, modèles, réserve, import) lisent les listes de contrôle d'accès (ACL) de macOS. Une entrée qui autorise un autre compte à écrire, supprimer ou changer les droits fait refuser le dossier ; une entrée qui interdit est acceptée. Un dossier sécurisé par le service perd une telle entrée.
+
+### Accès et documents
+
+- Restauration depuis la réserve vérifiée avec le service sur Mac : Qwen3-VL 4B Thinking et son projecteur (2,8 Go) restaurés hors ligne en 23 secondes, empreintes conformes ; une copie altérée est refusée sans installation ; en ligne, le modèle est alors téléchargé de nouveau.
+
+---
+
 ## 4.1.0 — 12 novembre 2026
 
 ### Accès et documents

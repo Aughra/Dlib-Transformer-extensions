@@ -34,6 +34,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 5 | Avertissements | exemples de dlib, Pseudalis | Cinq avertissements du compilateur et un de l'éditeur de liens avec Apple clang. | Code commun, avertissements propres à clang ; voir l'entrée |
 | 6 à 15 | Portabilité macOS | CMake, `platform.cpp`, `system_info.cpp`, `picopltf.h`, `drive_folders.cpp`, scripts de test | Erreurs de compilation, et chemins propres à Linux (`/proc`, `/sys`, `endian.h`, `st_mtim`, options x86). | Propre au Mac |
 | 16 à 20 | Remarques | noyaux, pool de fils, mode économie d'énergie, seuil des produits en flottants, nombre de fils sur un processeur hybride | Pas de défaut, mais bon à savoir. | Voir chaque remarque |
+| 21 | Remarque, sécurité | `albireo/common/platform.cpp:622, 663, 735`, `pseudalis/common/platform.cpp:622, 636, 700` | Hors de Windows, les trois contrôles de dossiers répondent toujours « oui ». | **Propre à Linux** (et au Mac) ; Windows non concerné |
 
 ---
 
@@ -254,6 +255,31 @@ Mode économie actif (`pmset -g` affiche `lowpowermode 1`), le moteur tournait e
   Avec 4 fils, les questions courtes et la génération vont plus vite ; avec 8, les longs prompts, où le calcul domine, gardent l'avantage (12 à 18 %).
 - **Ce que le fork a fait** : sur Mac, tous les cœurs pour les prompts et les cœurs de performance seuls pour la génération (changement 8, partie 4). L'autre piste, prendre par défaut le nombre de cœurs de performance (`hw.perflevel0.physicalcpu`), aurait coûté 12 à 18 % sur les longs prompts.
 - **Mac ou Windows** : **probablement aussi sous Windows** sur les processeurs hybrides (Intel de 12ᵉ génération et suivants) : `GetLogicalProcessorInformationEx(RelationProcessorCore)` compte tous les cœurs, rapides et lents, alors que la structure renvoyée donne leur classe (`EfficiencyClass`). Déduit du code, non vérifié sur une machine Windows.
+
+
+### 21. Hors de Windows, les contrôles de dossiers répondent toujours « oui »
+
+- **Où dans l'original** : `dlib/dlib/external/albireo/common/platform.cpp`, fonctions `owned_by_system` (ligne 622), `secure_folder` (663) et `folder_admin_only` (735), au commit `184ea00` ; les mêmes dans `dlib/dlib/external/pseudalis/common/platform.cpp` (622, 636, 700).
+- **Ce qui se passe** : sous Windows, ces fonctions vérifient vraiment le propriétaire et les droits (SYSTEM, administrateurs, entrées des listes de droits). Dans la branche `#else`, donc sous Linux et sur macOS, elles ne vérifient rien :
+
+  ```cpp
+  // albireo/common/platform.cpp, lignes 622-633 (184ea00)
+  bool owned_by_system(const std::string& p)
+  {
+  #if defined(_WIN32)
+      ...
+  #else
+      (void)p;
+      return true;
+  #endif
+  }
+  ```
+
+  `folder_admin_only` (lignes 778-781) fait de même ; `secure_folder` (lignes 724-731) se contente de créer le dossier. Or le service s'en sert avant de charger un modèle (`host/service.cpp:1390`, le dossier du modèle ne doit pas être modifiable par un autre compte), pour son dossier d'import (`host/service.cpp:1088`), et Pseudalis avant de faire confiance au dossier de données d'Albireo et à son certificat (`pseudalis/host/albireo_client.cpp:122`). Sous Linux, un dossier de modèles ouvert en écriture à tous (`chmod 777`) est donc accepté sans un mot.
+- **Reproduire** : sous Linux, lancer le service avec `ALBIREO_HOME` dans un dossier en mode 777, y placer un modèle, et constater qu'il se charge ; la même chose sous Windows est refusée (« lets accounts other than the administrators change its files »). Déduit du code ; pas exécuté sous Linux.
+- **Ce que le fork fait** : sur macOS, les trois fonctions vérifient le propriétaire (le compte du service ou root), l'absence de droit d'écriture pour le groupe et les autres, sur l'entrée, son contenu et ses dossiers parents jusqu'à la racine (un dossier temporaire de root avec le bit sticky est accepté), refusent les liens, et `secure_folder` met le dossier en mode 0700 (commit [4c0947b](https://github.com/Aughra/Dlib-Transformer-extensions/commit/4c0947b)). Elles lisent aussi les ACL étendues de macOS : une entrée « allow » qui laisse un autre compte écrire est refusée, une entrée « deny » acceptée, et `secure_folder` vide une ACL dangereuse (commit [0d4946d](https://github.com/Aughra/Dlib-Transformer-extensions/commit/0d4946d)). Ce code est propre à macOS (`acl_get_link_np`, `mbr_uuid_to_id`) ; sous Linux, la partie POSIX conviendrait telle quelle, pas celle des ACL.
+- **Vérifié** : sur le Mac, `test_host` d'Albireo (194 vérifications, dont 7 sur les ACL) et de Pseudalis passent, ainsi que `tools/test_macos.sh` (Albireo 18 sur 18, Pseudalis 34 sur 34) ; les données réelles du service passent les nouveaux contrôles. Pas vérifié sous Linux.
+- **Mac ou Windows** : **propre à Linux** (et au Mac) ; Windows n'est pas concerné, ses contrôles sont complets.
 
 ---
 
