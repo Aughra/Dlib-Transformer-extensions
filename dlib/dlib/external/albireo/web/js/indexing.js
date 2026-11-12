@@ -8,8 +8,9 @@
 import * as images from './images.js';
 import * as rag from './rag.js';
 import * as store from './store.js';
-import { backgroundChat, backgroundReadsImages, broadcast, cancelCompaction, cancelWarmup, compactions, exclusive,
-  languageNames, projectById, serviceReady, warmups } from './app.js';
+import { broadcast, cancelCompaction, cancelWarmup, compactions, exclusive, serviceReady, warmups } from './app.js';
+import { languageNames, projectById } from './lists.js';
+import { backgroundChat, backgroundReadsImages } from './status.js';
 import { imageIds, imageThumb } from './files.js';
 import { distinctLines, estimateTokens, keepStart, knowledgeSeconds, knowledgeShare, wholeTokens } from './context.js';
 import { formatNumber, formatSize, h, iconButton, storageFailed } from './dom.js';

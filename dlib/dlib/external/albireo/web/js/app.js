@@ -33,32 +33,37 @@ import { icon } from './icons.js';
 import * as store from './store.js';
 import { renderMarkdown, attachCodeButtons, escapeHtml } from './markdown.js';
 import * as api from './api.js';
-import { extension, searchPassages, documentAccept, terms } from './documents.js';
+import { extension, searchPassages, terms } from './documents.js';
 import * as rag from './rag.js';
 import * as tools from './tools.js';
 import * as web from './web.js';
 import * as images from './images.js';
 
-import { modelSheetDialog } from './models.js';
 import { defaults, state, ui } from './state.js';
 import { copyText, download, fill, formatDecimal, formatDuration, formatNumber, formatShortDuration, formatSize, h,
   iconButton, mimeOf, storageFailed, toast } from './dom.js';
-import { closeMenu, confirmDialog, dialog, promptDialog, showMenu, showPopover } from './dialogs.js';
+import { closeMenu, confirmDialog, promptDialog, showMenu, showPopover } from './dialogs.js';
 import { changelogDialog, renderLicenses, requestPersistence, settingsDialog } from './settings.js';
 import { answerReserve, apiMessages, attachmentSeconds, attachmentShare, compact, compactShare, documentsOf,
-  estimateMedia, estimateTokens, excerptBudget, imageTokenCache, keepStart, keptShare, maxContextImages,
-  maxQuestionProjectImages, measureImages, memoryWords, readRate, requestMedia, systemPrompt, tokenEstimate,
-  wholeTokens, workingContext, writeRate } from './context.js';
-import { cancelBackground, cancelIndex, describePending, forgetDocument, forgetOwner, indexAttachments, indexProjects,
-  knowledgeMode, pruneImages, pruneIndex, queueIndex, showIndexState } from './indexing.js';
+  estimateMedia, estimateTokens, excerptBudget, keepStart, keptShare, maxContextImages, maxQuestionProjectImages,
+  measureImages, memoryWords, requestMedia, systemPrompt, tokenEstimate, wholeTokens } from './context.js';
+import { cancelBackground, cancelIndex, forgetDocument, forgetOwner, indexAttachments, indexProjects, knowledgeMode,
+  pruneImages, pruneIndex, queueIndex } from './indexing.js';
 import { attachMenu, contextImages, guardFileDrops, imageIds, imageLimitText, imageRecord, imageRoom, imageThumb,
   markOutside, pastedFiles, pendingImageCount, readFiles } from './files.js';
 import { newProject, renderProject } from './projects.js';
 import { forgetMemory, listMemory, memoryAbort, memoryParagraph, memoryRunning, memorySentences, releaseMemoryLease,
   rememberLater, tabId } from './memory.js';
+import { acceptFor, backgroundChat, backgroundModel, backgroundTimeout, inputsLabel, modelName, readsImages,
+  refreshStatus, renderStatusLine, roleCapabilities, roleInputs, roleModel, searchProvider, toolSet, toolsAvailable,
+  webUnavailable } from './status.js';
+import { dateGroup, excerptHtml, fold, languageNames, markTerms, projectActivity, projectById, queryTerms, reloadLists,
+  searchConversations, searchDelay, searchDialog, sideLimit, textLanguage } from './lists.js';
+import { cancelDraftSave, draftKey, drafts, forgetDraft, forgetStoredDrafts, imageIdsOf, pruneDrafts, saveDraft,
+  storeDraft, storedDraft, waitingImages } from './drafts.js';
 
 export const roles = ['general', 'code', 'security'];
-const roleIcons = { general: 'compass', code: 'code', security: 'shield' };
+export const roleIcons = { general: 'compass', code: 'code', security: 'shield' };
 export const projectColors = ['#5b8cff', '#f2b544', '#3fb68b', '#e5534b', '#a371f7', '#2fb9d4', '#e08a3c', '#8a90aa'];
 // Le nombre maximal d'étapes d'une réponse avec outils : chaque étape est une requête au modèle, puis les appels qu'il
 // demande.
@@ -153,7 +158,7 @@ function settingChanged(key) {
     ou de la langue d'Albireo.  Les textes sont redessinés, et la mémoire est écrite dans la
     nouvelle langue à sa prochaine mise à jour.  force les redessine même quand la langue reste.
 */
-async function languageChanged(force) {
+export async function languageChanged(force) {
   const before = language();
   applyLanguage();
   if (language() === before && !force) return;
@@ -364,7 +369,7 @@ function answeredElsewhere(c) {
 }
 
 // Oublie les marques des onglets qui ont cessé de dire qu'ils répondent ; vrai quand l'une a expiré.
-function expireBusy() {
+export function expireBusy() {
   let expired = false;
   for (const [id, mark] of othersBusy) {
     if (mark.until >= Date.now()) continue;
@@ -392,592 +397,6 @@ function announceBusy(c, busy) {
     clearInterval(busyTimer);
     busyTimer = 0;
   }
-}
-
-// État du service et modèles.
-export function roleModel(role) {
-  const s = state.status;
-  if (!s || !s.active) return null;
-  return s.active[role] || s.active.general || null;
-}
-
-function modelInfo(id) {
-  if (!state.catalog || !id) return null;
-  const same = (m) => m.id === id;
-  return (state.catalog.models || []).find(same) || (state.catalog.embedding_models || []).find(same) || null;
-}
-
-export function modelName(id) {
-  const m = modelInfo(id);
-  return m && m.name ? m.name : id;
-}
-
-export function loadedModel(id) {
-  const list = (state.status && state.status.loaded_models) || [];
-  return list.find((m) => m.id === id) || null;
-}
-
-// Ce que lit un modèle : "text", et "image" ou "audio" pour les modèles qui les lisent, comme le
-// disent le moteur ou le catalogue.
-function modelInputs(id) {
-  const loaded = loadedModel(id);
-  if (loaded && Array.isArray(loaded.inputs) && loaded.inputs.length) return loaded.inputs;
-  const m = modelInfo(id);
-  return m && Array.isArray(m.inputs) && m.inputs.length ? m.inputs : ['text'];
-}
-
-// Ce que lit le modèle d'un rôle ; les pièces jointes suivent.
-export function roleInputs(role) {
-  return modelInputs(roleModel(role));
-}
-
-export function readsImages(role) {
-  return roleInputs(role).includes('image');
-}
-
-export function inputsLabel(inputs) {
-  return inputs.map((i) => t('input_' + i)).join(', ');
-}
-
-/*
-    Le sélecteur de fichiers d'un rôle : les documents, lus comme du texte, et les médias que son
-    modèle lit, les images tant que room, les places qui leur restent, n'est pas 0.
-*/
-function acceptFor(role, room) {
-  const inputs = roleInputs(role);
-  let accept = documentAccept();
-  if (inputs.includes('image') && room !== 0) accept += ',image/*';
-  if (inputs.includes('audio')) accept += ',audio/*';
-  return accept;
-}
-
-/*
-    Les capacités du modèle d'une fonction : reasoning, reasoningAlways pour un modèle entraîné à raisonner avant chaque
-    réponse (sans le raisonnement approfondi, le moteur termine aussitôt son raisonnement), tools, son contexte et son
-    contexte de travail (workingContext), 0 tant qu'il n'est pas chargé, et ses vitesses de lecture et d'écriture
-    (readRate, writeRate).
-*/
-export function roleCapabilities(role) {
-  const id = roleModel(role);
-  const loaded = loadedModel(id);
-  const read = readRate(id);
-  const write = writeRate(id);
-  if (loaded) {
-    const context = loaded.context || 0;
-    return { reasoning: loaded.reasoning !== false, reasoningAlways: loaded.reasoning_always === true,
-      tools: loaded.tools !== false, context, working: context ? workingContext(id, context) : 0, read, write };
-  }
-  const m = modelInfo(id);
-  return { reasoning: m ? m.reasoning !== false : true, reasoningAlways: !!(m && m.reasoning_always === true),
-    tools: m ? m.tools !== false : true, context: 0, working: 0, read, write };
-}
-
-/*
-    Si les outils de l'agent et du web peuvent accompagner les questions à un modèle aux capacités caps, reasoning
-    disant si le raisonnement approfondi de la discussion est activé : un modèle capable de raisonner ne les appelle
-    qu'avec son raisonnement approfondi, pour qu'il raisonne avant chaque appel ; un modèle incapable de raisonner les
-    appelle au fil de sa réponse.
-*/
-function toolsAvailable(caps, reasoning) {
-  return !!caps.tools && (!caps.reasoning || !!reasoning);
-}
-
-/*
-    Pourquoi l'accès au web ne peut pas servir une discussion dont le modèle a les capacités caps, reasoning disant si
-    son raisonnement approfondi est activé, '' quand il le peut : un modèle qui n'appelle aucun outil, un modèle capable
-    de raisonner sans son raisonnement approfondi, un service mis hors ligne, un accès au web que l'administrateur a
-    coupé (le membre "web" de l'état), ou un état qui ne le contient pas.
-*/
-function webUnavailable(caps, reasoning) {
-  if (!caps.tools) return t('webNoTools');
-  if (!toolsAvailable(caps, reasoning)) return t('webNeedsReasoning');
-  const s = state.status;
-  if (!s || !s.web || typeof s.web !== 'object') return t('webUnavailable');
-  if (s.web.available) return '';
-  return s.offline ? t('webOffline') : t('webOff');
-}
-
-/*
-    Le fournisseur de la recherche web du service, Wikipédia, dans la langue de l'interface ; '' tant que l'accès au web
-    est indisponible ou ne donne pas de recherche (web.search "none").  L'aide du mode agent et la fenêtre « À propos »
-    le nomment.
-*/
-export function searchProvider() {
-  const w = state.status && state.status.web;
-  if (!w || typeof w !== 'object' || !w.available || w.search !== 'wikipedia') return '';
-  return t('provider_wikipedia');
-}
-
-/*
-    Les outils des requêtes de c et les parties de son message système qui les accompagnent : ceux de l'agent tant qu'il
-    est activé, puis ceux du web tant que Web est activé et que le service le propose, web_search quand le service
-    propose la recherche dans Wikipédia.  La liste et son ordre restent les mêmes tant que les interrupteurs et le
-    fournisseur ne changent pas, pour que le début du prompt reste le même d'une question à la suivante.
-*/
-function toolSet(c, caps) {
-  const reasoning = !!(c.reasoning && caps.reasoning);
-  const agent = !!(c.agent && toolsAvailable(caps, reasoning));
-  const webOn = !!(c.web && !webUnavailable(caps, reasoning));
-  const search = webOn && state.status.web.search === 'wikipedia';
-  const definitions = (agent ? tools.definitions : []).concat(webOn ? web.definitions(search) : []);
-  return { agent, web: webOn, search, definitions: definitions.length ? definitions : null };
-}
-
-/*
-    Le travail fait en arrière-plan (titres, résumés, mémoire) va au modèle livré avec Albireo,
-    que le service garde chargé, sans raisonnement ; le service le confie au modèle général quand
-    il n'y en a pas.  Un modèle qui raisonne toujours voit son raisonnement terminé aussitôt par le
-    moteur, hors de la réponse et de son max_tokens.
-*/
-const backgroundModel = 'albireo-background';
-
-// Le contexte de travail du modèle d'arrière-plan, et ses vitesses de lecture et d'écriture.
-export function backgroundContext() {
-  const s = state.status;
-  const loaded = s && s.background ? loadedModel(s.background) : null;
-  if (loaded && loaded.context) return workingContext(loaded.id, loaded.context);
-  return roleCapabilities('general').working || 8192;
-}
-
-export function backgroundRates() {
-  const s = state.status;
-  const id = s && s.background && loadedModel(s.background) ? s.background : roleModel('general');
-  return { read: readRate(id), write: writeRate(id) };
-}
-
-// Vrai quand le modèle d'arrière-plan lit les images, ce dont les descriptions des images des projets ont besoin.
-export function backgroundReadsImages() {
-  const s = state.status;
-  return modelInputs((s && s.background) || roleModel('general')).includes('image');
-}
-
-// Le texte que le modèle d'arrière-plan écrit pour une consigne et un message.
-export function backgroundText(system, user, maxTokens, signal) {
-  return backgroundChat([{ role: 'system', content: system }, { role: 'user', content: user }], maxTokens, signal);
-}
-
-/*
-    Le temps que peut prendre une requête du modèle d'arrière-plan : au-delà, la requête se termine par une
-    TimeoutError, ce qui libère le travail qui attend derrière elle (les descriptions des images, la question suivante
-    après une compression).
-*/
-const backgroundTimeout = 10 * 60 * 1000;
-
-/*
-    Le texte que le modèle d'arrière-plan écrit après une liste de messages ; signal, quand il est donné, l'arrête
-    aussi.  Sans température, le moteur échantillonne comme le conseillent les auteurs du modèle, sans la pénalité de
-    présence que certains d'entre eux donnent : les titres, les résumés et les citations de la mémoire reprennent les
-    mots de la discussion.
-*/
-export async function backgroundChat(messages, maxTokens, signal, temperature) {
-  const body = { model: backgroundModel, reasoning: false, max_tokens: maxTokens, messages, presence_penalty: 0 };
-  if (temperature != null) body.temperature = temperature;
-  let text = '';
-  let finish = null;
-  const limit = api.limitedSignal(signal, backgroundTimeout);
-  try {
-    for await (const ev of api.streamChat(body, limit.signal)) {
-      const choice = ev.type === 'chunk' && ev.data.choices && ev.data.choices[0];
-      if (!choice) continue;
-      if (choice.delta && choice.delta.content) text += choice.delta.content;
-      if (choice.finish_reason) finish = choice.finish_reason;
-    }
-  } finally {
-    limit.done();
-  }
-  return { text: text.trim(), finish };
-}
-
-// La lecture de l'état en cours, que partagent les appels faits entre-temps.
-let statusPoll = null;
-
-export function refreshStatus() {
-  if (!statusPoll) statusPoll = pollStatus().finally(() => { statusPoll = null; });
-  return statusPoll;
-}
-
-// Si le service était prêt à la lecture précédente de son état (serviceReady).
-let serviceWasReady = false;
-
-/*
-    Lit l'état du service, avec les modèles des fonctions, que la fenêtre de la zone de
-    notification peut changer, et si le service répond.  Un changement redessine aussitôt les
-    affichages qui le montrent.  Quand le service devient prêt, à l'ouverture pendant qu'il démarre,
-    ou après qu'il n'a pas répondu, le travail qu'une visite précédente ou un onglet fermé a laissé
-    reprend : les titres laissés en attente, la mémoire, et les descriptions des images.
-*/
-async function pollStatus() {
-  let changed = false;
-  let back = false;
-  try {
-    const s = await api.status();
-    // L'accès au web et le mode hors ligne changent le bouton Web de la zone de saisie et les outils de la question
-    // suivante.
-    const key = (x) => JSON.stringify([x.active, x.loaded_models, x.state, x.background, x.web, x.offline]);
-    changed = !state.status || key(state.status) !== key(s);
-    back = state.statusError;
-    state.status = s;
-    state.statusError = false;
-    if (changed || !state.catalog) state.catalog = await api.models(language()).catch(() => state.catalog);
-    // Les tokens des images ont été mesurés pour les modèles des fonctions tels qu'ils étaient.
-    if (changed) imageTokenCache.clear();
-    // Une langue choisie entre-temps dans Albireo, que cette interface suit.
-    await languageChanged();
-    renderHint();
-    // Le modèle d'embedding de la recherche dans les documents ; les documents qui n'ont pas encore
-    // reçu de vecteurs sont indexés dès qu'il est là.
-    const embedder = (s.loaded_models || []).find((m) => m.embedding && s.active && m.id === s.active.embedding);
-    const previous = rag.embeddingModel();
-    rag.setEmbeddingModel(embedder ? { id: embedder.id, dimensions: embedder.dimensions } : null);
-    if (embedder && (!previous || previous.id !== embedder.id)) indexProjects();
-    // Les documents affichés avant que le modèle d'embedding soit connu, ou avec un autre, réaffichent leur état.
-    if ((previous ? previous.id : null) !== (embedder ? embedder.id : null)) {
-      for (const el of document.querySelectorAll('[data-index-doc]')) showIndexState(el);
-    }
-  } catch (e) {
-    changed = !state.statusError;
-    state.statusError = true;
-  }
-  if ((changed || back || expireBusy()) && state.current) {
-    refreshViews();
-    lockThread();
-  } else {
-    renderStatusLine();
-  }
-  const ready = serviceReady();
-  const became = ready && !serviceWasReady;
-  serviceWasReady = ready;
-  if (became) {
-    namePending();
-    rememberLater();
-  }
-  if (back || changed || became) describePending();
-}
-
-function renderStatusLine() {
-  if (!ui.statusLine) return;
-  const s = state.status;
-  let led = 'error', text = t('serviceDown');
-  if (s && !state.statusError) {
-    const stats = s.engine && s.engine.stats;
-    const loading = Object.values(s.models_state || {}).some((v) => v === 'loading');
-    const model = roleModel(state.current ? state.current.role : 'general');
-    if (s.state === 'starting') {
-      led = 'busy';
-      text = t('serviceStarting');
-    } else if (!model) {
-      led = 'error';
-      text = t('noModel');
-    } else if (loading) {
-      led = 'busy';
-      text = t('modelLoading');
-    } else {
-      led = stats && stats.active > 0 ? 'busy' : 'ok';
-      const tps = stats ? stats.generation_tokens_per_second : 0;
-      text = modelName(model) + ' · ' + computeUnit(model)
-        + (tps > 0.05 ? ' · ' + t('tokensPerSecond', { n: formatDecimal(tps, 1) }) : '');
-    }
-  }
-  const model = s && roleModel('general');
-  ui.statusLine.replaceChildren(h('span', { class: 'led ' + led }), h('span', { class: 'grow', title: text }, text),
-    model && modelInfo(model) ? modelHelp(model) : null);
-  renderHint();
-}
-
-// Où calcule le modèle : le GPU du Mac quand ses passes y vont, le processeur sinon (état du moteur).
-function computeUnit(id) {
-  const stats = state.status && state.status.engine && state.status.engine.stats;
-  const m = stats && (stats.models || []).find((x) => x.id === id);
-  return m && m.gpu && m.gpu.state === 'on' ? 'GPU' : 'processeur';
-}
-
-// Le « ? » du modèle choisi : sa fiche, comme celles des paramètres.
-function modelHelp(id) {
-  return h('button', { type: 'button', class: 'svc-help', title: 'Le modèle utilisé', 'aria-label': 'Le modèle utilisé',
-    onclick: () => modelSheetDialog(modelInfo(id), { h, dialog, status: () => state.status,
-      openModels: () => settingsDialog('modelsTab') }) }, '?');
-}
-
-// Sous la zone de saisie : le modèle qui répond, son « ? », et l'avertissement.
-function renderHint() {
-  if (!ui.hint) return;
-  const model = state.status && !state.statusError ? roleModel('general') : null;
-  fill(ui.hint, model ? [h('span', { class: 'hint-model' }, modelName(model)), ' ', modelInfo(model) ? modelHelp(model) : null,
-    ' · '] : null, hintText());
-}
-
-// Listes.
-export async function reloadLists() {
-  state.conversations = await store.allConversations();
-  state.projects = await store.allProjects();
-}
-
-export function projectById(id) {
-  return state.projects.find((p) => p.id === id) || null;
-}
-
-function dateGroup(ts) {
-  const d = new Date(ts);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const day = 86400000;
-  if (d >= today) return 'today';
-  if (d >= today - day) return 'yesterday';
-  if (d >= today - 7 * day) return 'week';
-  if (d >= today - 30 * day) return 'month';
-  return 'older';
-}
-
-// Les listes du panneau latéral montrent au plus ce nombre de projets et de discussions ; les
-// autres se trouvent par la recherche.
-const sideLimit = 20;
-// Les recherches se lancent une fois que l'utilisateur a cessé de taper pendant ce nombre de millisecondes.
-const searchDelay = 200;
-
-// Le texte tel que la recherche le compare : en minuscules, sans accents.
-export function fold(text) {
-  return String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-}
-
-function queryTerms(query) {
-  return fold(query).split(/\s+/).filter(Boolean);
-}
-
-// La langue de l'interface, nommée en anglais pour les consignes du modèle : le français, la seule de ce fork.
-export const languageNames = { fr: 'French' };
-
-// La langue d'un texte : le français, la seule de ce fork.
-export function textLanguage() {
-  return 'fr';
-}
-
-/*
-    Les textes repliés de la recherche, gardés avec le texte dont ils sont tirés (WeakMap : message
-    ou discussion -> {text, folded}), pour qu'une recherche ne replie que ce qui a changé depuis la
-    dernière.
-*/
-const messageFolds = new WeakMap();
-const titleFolds = new WeakMap();
-
-function foldedOf(cache, owner, text) {
-  const hit = cache.get(owner);
-  if (hit && hit.text === text) return hit.folded;
-  const folded = fold(text);
-  cache.set(owner, { text, folded });
-  return folded;
-}
-
-// Le texte des messages d'une discussion, et sa forme repliée faite des messages repliés.
-function conversationFolded(c) {
-  const messages = c.messages || [];
-  const texts = messages.map(messageText);
-  return { text: texts.join('\n'), folded: messages.map((m, i) => foldedOf(messageFolds, m, texts[i])).join('\n') };
-}
-
-// La première position d'un terme de terms dans text, ou -1 quand l'un d'eux manque.  Un terme
-// correspond au début, au milieu ou à la fin d'un mot.
-function findTerms(text, terms) {
-  return findFolded(fold(text), terms);
-}
-
-// findTerms pour un texte déjà replié.
-function findFolded(f, terms) {
-  let first = -1;
-  for (const term of terms) {
-    const i = f.indexOf(term);
-    if (i < 0) return -1;
-    if (first < 0 || i < first) first = i;
-  }
-  return first;
-}
-
-// Une partie du texte autour d'une position, avec les termes marqués.
-function excerptHtml(text, at, terms, width) {
-  text = String(text || '').replace(/\s+/g, ' ');
-  const w = width || 160;
-  const start = Math.max(0, at - Math.floor(w / 3));
-  const piece = text.slice(start, start + w);
-  return (start > 0 ? '…' : '') + markTerms(piece, terms) + (start + w < text.length ? '…' : '');
-}
-
-// text en HTML, les termes de la recherche dans <mark>.
-function markTerms(text, terms) {
-  text = String(text || '');
-  const f = fold(text);
-  // Le repliage garde la longueur de la plupart des textes ; les marques sont omises pour les autres.
-  if (f.length !== text.length || !terms.length) return escapeHtml(text);
-  const marked = new Array(text.length).fill(false);
-  for (const term of terms) {
-    for (let i = f.indexOf(term); i >= 0; i = f.indexOf(term, i + 1)) marked.fill(true, i, i + term.length);
-  }
-  let out = '';
-  let open = false;
-  for (let i = 0; i < text.length; ++i) {
-    if (marked[i] !== open) {
-      out += open ? '</mark>' : '<mark>';
-      open = marked[i];
-    }
-    out += escapeHtml(text[i]);
-  }
-  return out + (open ? '</mark>' : '');
-}
-
-function messageText(m) {
-  if (m.role === 'user') return m.content || '';
-  return (m.steps || []).map((s) => s.content || '').join('\n');
-}
-
-/*
-    Les discussions qui contiennent tous les termes d'une requête, quelles que soient leur casse et
-    leurs accents, un terme correspondant au début, au milieu ou à la fin d'un mot : celles dont le
-    titre les contient d'abord, puis celles dont les messages les contiennent, chaque groupe de la
-    plus récente à la plus ancienne.  Chaque résultat dit où se trouvent les termes : {conversation,
-    where: 'title', 'question', 'answer' ou 'messages' (plusieurs d'entre eux), at, text, excerpt}.
-*/
-function searchConversations(query, limit) {
-  const terms = queryTerms(query);
-  if (!terms.length) return [];
-  const titles = [];
-  const contents = [];
-  for (const c of state.conversations) {
-    const title = c.title || '';
-    const at = findFolded(foldedOf(titleFolds, c, title), terms);
-    if (at >= 0) {
-      titles.push({ conversation: c, where: 'title', at, text: title });
-      continue;
-    }
-    // Le premier message qui contient tous les termes, sinon la discussion dans son ensemble.
-    let hit = null;
-    for (const m of c.messages || []) {
-      const text = messageText(m);
-      const i = findFolded(foldedOf(messageFolds, m, text), terms);
-      if (i >= 0) {
-        hit = { conversation: c, where: m.role === 'user' ? 'question' : 'answer', at: i, text, created: m.created };
-        break;
-      }
-    }
-    if (!hit) {
-      const all = conversationFolded(c);
-      if (findFolded(all.folded, terms) >= 0) {
-        hit = { conversation: c, where: 'messages', at: all.folded.indexOf(terms[0]), text: all.text };
-      }
-    }
-    if (hit) contents.push(hit);
-  }
-  const out = titles.concat(contents).slice(0, limit || 100);
-  for (const x of out) x.excerpt = String(x.text).replace(/\s+/g, ' ').slice(Math.max(0, x.at - 60), x.at + 120);
-  return out;
-}
-
-// L'heure de la dernière activité d'un projet : ses propres changements et ceux de ses discussions.
-function projectActivity(p) {
-  let t0 = p.updated || p.created || 0;
-  for (const c of state.conversations) if (c.projectId === p.id && c.updated > t0) t0 = c.updated;
-  return t0;
-}
-
-/*
-    Les projets qui contiennent tous les termes d'une requête, comme searchConversations : ceux
-    dont le nom les contient d'abord, puis ceux dont la description, les instructions, les
-    documents, les images ou les discussions les contiennent.  where : 'name', 'description',
-    'instructions', 'document', 'image' ou 'discussion', avec le nom du document ou de l'image ou le
-    titre de la discussion dans label.
-*/
-function searchProjects(query, limit) {
-  const terms = queryTerms(query);
-  if (!terms.length) return [];
-  const names = [];
-  const contents = [];
-  for (const p of state.projects) {
-    const at = findTerms(p.name, terms);
-    if (at >= 0) {
-      names.push({ project: p, where: 'name', at, text: p.name });
-      continue;
-    }
-    // Chaque champ avec son texte replié, les longs repliés une seule fois (foldedOf).
-    const fields = [['description', p.description || '', ''], ['instructions', p.instructions || '', '']]
-      .map(([where, text, label]) => [where, text, label, fold(text)]);
-    for (const f of p.files || []) {
-      const text = f.name + '\n' + (f.text || '');
-      fields.push(['document', text, f.name, foldedOf(messageFolds, f, text)]);
-    }
-    for (const img of p.images || []) {
-      const text = img.name + '\n' + (img.description || '');
-      fields.push(['image', text, img.name, foldedOf(messageFolds, img, text)]);
-    }
-    for (const c of state.conversations) {
-      if (c.projectId !== p.id) continue;
-      const all = conversationFolded(c);
-      fields.push(['discussion', (c.title || '') + '\n' + all.text, c.title || t('untitled'),
-        fold(c.title || '') + '\n' + all.folded]);
-    }
-    for (const [where, text, label, folded] of fields) {
-      const i = findFolded(folded, terms);
-      if (i >= 0) {
-        contents.push({ project: p, where, at: i, text, label });
-        break;
-      }
-    }
-  }
-  const byActivity = (a, b) => projectActivity(b.project) - projectActivity(a.project);
-  return names.sort(byActivity).concat(contents.sort(byActivity)).slice(0, limit || 100);
-}
-
-/*
-    La fenêtre de la recherche des projets (kind 'projects') ou des discussions : chaque résultat
-    montre son titre, l'endroit où les mots ont été trouvés, et le passage qui les contient.
-*/
-function searchDialog(kind) {
-  const projects = kind === 'projects';
-  return dialog((box, close) => {
-    const input = h('input', { type: 'search', placeholder: t('searchPlaceholder'), 'aria-label': t('searchPlaceholder') });
-    const count = h('div', { class: 'help' });
-    const list = h('div', { class: 'search-results', role: 'listbox' });
-    const open = (hit) => {
-      close(true);
-      go(projects ? '#/p/' + hit.project.id : '#/c/' + hit.conversation.id);
-    };
-    const show = () => {
-      const terms = queryTerms(input.value);
-      const hits = projects ? searchProjects(input.value) : searchConversations(input.value);
-      list.replaceChildren();
-      if (!terms.length) {
-        count.textContent = t('searchHint');
-        return;
-      }
-      count.textContent = tn('resultsCount', hits.length);
-      for (const hit of hits) {
-        const title = projects ? hit.project.name : (hit.conversation.title || t('untitled'));
-        const date = new Date(projects ? projectActivity(hit.project) : hit.conversation.updated);
-        const p = projects ? hit.project : (hit.conversation.projectId ? projectById(hit.conversation.projectId) : null);
-        const inTitle = hit.where === 'title' || hit.where === 'name';
-        const where = t('found_' + hit.where, { name: hit.label || '' });
-        list.append(h('div', { class: 'search-result', role: 'option', tabindex: '0', onclick: () => open(hit),
-          onkeydown: (e) => { if (e.key === 'Enter') open(hit); } },
-          h('div', { class: 'line' },
-            p ? h('span', { class: 'dot', style: { background: p.color || projectColors[0] } })
-              : h('span', { html: icon(roleIcons[hit.conversation.role] || 'chat') }),
-            h('span', { class: 'title', html: inTitle ? markTerms(title, terms) : escapeHtml(title) }),
-            h('span', { class: 'date' }, date.toLocaleDateString(language()))),
-          h('div', { class: 'where' }, h('span', { class: 'badge' }, where),
-            inTitle ? null : h('span', { class: 'excerpt', html: excerptHtml(hit.text, hit.at, terms) }))));
-      }
-      if (!hits.length) list.append(h('div', { class: 'empty-note' }, t('noResults')));
-    };
-    let timer = 0;
-    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(show, searchDelay); });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const first = list.querySelector('.search-result');
-        if (first) first.click();
-      }
-    });
-    box.classList.add('search-dialog');
-    box.append(h('h2', null, projects ? t('searchProjects') : t('searchDiscussions')), input, count, list,
-      h('div', { class: 'actions' }, h('button', { class: 'button', type: 'button', onclick: () => close(null) }, t('close'))));
-    show();
-    setTimeout(() => input.focus(), 0);
-  });
 }
 
 // Panneau latéral.
@@ -1360,120 +779,13 @@ async function rewriteSummary(c) {
 }
 
 /*
-    Les brouillons de la zone de saisie, un par discussion : le texte tapé et les documents et images en attente
-    d'envoi.  La zone de saisie contient le brouillon de la discussion affichée (ui.input, state.pending), drafts ceux
-    des autres discussions de cet onglet, par leur clé (draftKey).  La discussion qu'ouvre "New chat" garde son
-    brouillon sous newDraft jusqu'à ce que sa première question crée la discussion.  Les textes restent d'un
-    rechargement de la page à l'autre dans localStorage, une clé par discussion, retirée une fois sa question envoyée ou
-    la discussion supprimée ; les fichiers restent dans la mémoire de l'onglet.  Une discussion privée ne garde aucun
-    brouillon.
-*/
-const drafts = new Map();
-const newDraft = 'new';
-const draftPrefix = 'albireo-draft-';
-// Le texte tapé est gardé ce nombre de millisecondes après la dernière touche.
-const draftDelay = 400;
-let draftTimer = 0;
-
-// La clé du brouillon de c : son id, newDraft tant qu'elle n'est pas enregistrée, '' pour une discussion privée ou
-// supprimée.
-function draftKey(c) {
-  if (!c || c.incognito || deleted.has(c.id)) return '';
-  return c.messages.length || state.conversations.some((x) => x.id === c.id) ? c.id : newDraft;
-}
-
-// Le texte du brouillon key que garde localStorage, '' s'il n'y en a pas.
-function storedDraft(key) {
-  if (!key) return '';
-  try {
-    return localStorage.getItem(draftPrefix + key) || '';
-  } catch (e) {
-    return '';
-  }
-}
-
-// Garde le texte du brouillon key dans localStorage, ou le retire quand le texte ne contient rien à envoyer.
-function storeDraft(key, text) {
-  if (!key) return;
-  try {
-    if (String(text || '').trim()) localStorage.setItem(draftPrefix + key, text);
-    else localStorage.removeItem(draftPrefix + key);
-  } catch (e) {
-    // Sans localStorage, ou au-delà de sa place, le texte reste dans la mémoire de l'onglet.
-  }
-}
-
-// Garde le texte de la zone de saisie pour la discussion affichée une fois que l'utilisateur cesse de taper, aussitôt
-// avec now.
-function saveDraft(now) {
-  clearTimeout(draftTimer);
-  draftTimer = 0;
-  if (!now) {
-    draftTimer = setTimeout(() => saveDraft(true), draftDelay);
-    return;
-  }
-  if (ui.input) storeDraft(draftKey(state.current), ui.input.value);
-}
-
-// Les ids des images d'une liste de pièces jointes.
-function imageIdsOf(list) {
-  return list.filter((a) => a.kind === 'image').map((a) => a.id);
-}
-
-// Les images en attente dans les brouillons qui restent une fois tout supprimé : celles de la zone de saisie et de "New
-// chat".
-export function waitingImages() {
-  const d = drafts.get(newDraft);
-  return new Set(imageIdsOf(state.pending.concat(d ? d.files : [])));
-}
-
-// Oublie le brouillon key, une fois sa question envoyée ou sa discussion supprimée, ici ou dans un autre onglet.
-function forgetDraft(key) {
-  if (!key) return;
-  const d = drafts.get(key);
-  if (d) images.drop(imageIdsOf(d.files));
-  drafts.delete(key);
-  storeDraft(key, '');
-}
-
-// Oublie les brouillons des discussions enregistrées, une fois tout supprimé ; celui de "New chat" reste.
-export function forgetStoredDrafts() {
-  for (const key of Array.from(drafts.keys())) if (key !== newDraft) forgetDraft(key);
-  try {
-    for (let i = localStorage.length - 1; i >= 0; --i) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith(draftPrefix) && k !== draftPrefix + newDraft) localStorage.removeItem(k);
-    }
-  } catch (e) {
-    // Sans localStorage, aucun texte n'a été gardé.
-  }
-}
-
-// Retire les textes gardés pour des discussions qui n'existent plus, comme celles supprimées alors qu'aucun onglet
-// n'était ouvert.
-function pruneDrafts() {
-  const ids = new Set(state.conversations.map((c) => c.id));
-  try {
-    for (let i = localStorage.length - 1; i >= 0; --i) {
-      const k = localStorage.key(i);
-      if (!k || !k.startsWith(draftPrefix)) continue;
-      const id = k.slice(draftPrefix.length);
-      if (id !== newDraft && !ids.has(id)) localStorage.removeItem(k);
-    }
-  } catch (e) {
-    // Sans localStorage, aucun texte n'a été gardé.
-  }
-}
-
-/*
     Affiche la discussion c à la place de celle qui est affichée, chacune avec son propre brouillon.  Le brouillon de
     celle qui est affichée quitte la zone de saisie pour drafts et localStorage, ou quitte la mémoire pour une
     discussion privée ou supprimée ; le brouillon de c prend sa place : celui que cet onglet garde, sinon le texte de
     localStorage, sinon rien.
 */
 function showDiscussion(c) {
-  clearTimeout(draftTimer);
-  draftTimer = 0;
+  cancelDraftSave();
   const key = draftKey(state.current);
   const text = ui.input ? ui.input.value : '';
   if (key) {
@@ -1555,7 +867,7 @@ export function newChat(projectId) {
 function goHome() {
   state.incognito = false;
   newChat(null);
-  clearTimeout(draftTimer);
+  cancelDraftSave();
   images.drop(imageIdsOf(state.pending));
   state.pending = [];
   forgetDraft(draftKey(state.current));
@@ -2009,7 +1321,7 @@ function applyLock(button, locked, reason) {
 }
 
 // Donne aux boutons du fil affiché l'état de sa discussion.
-function lockThread() {
+export function lockThread() {
   if (!ui.content) return;
   const busy = threadLocked();
   for (const b of ui.content.querySelectorAll('button[data-lock]')) {
@@ -2718,7 +2030,7 @@ async function onSend() {
   ui.input.value = '';
   autoGrow();
   // Le brouillon part avec sa question : la discussion, créée par elle ou non, continue avec une zone de saisie vide.
-  clearTimeout(draftTimer);
+  cancelDraftSave();
   forgetDraft(draftKey(state.current));
   await sendMessage(text, attachments);
 }
@@ -3893,7 +3205,7 @@ async function warmBeginning(c) {
 }
 
 // La ligne sous la zone de saisie : ce que sont les réponses ; la version et le copyright sont dans « À propos ».
-function hintText() {
+export function hintText() {
   return t('aiNotice');
 }
 

@@ -7,9 +7,12 @@
 import * as images from './images.js';
 import * as rag from './rag.js';
 import * as store from './store.js';
-import { attachMenu, dropFiles, imageLimitText, imageRecord, itemLimitText, readFiles } from './files.js';
-import { broadcast, formatBadge, generations, go, keepOwnCopies, newChat, projectColors, refreshViews, reloadLists,
-  renderSidebar, renderTopbar, roleCapabilities } from './app.js';
+import { attachMenu, dropFiles, imageLimitText, imageRecord, itemLimitText,
+  readFiles } from './files.js';
+import { broadcast, formatBadge, generations, go, keepOwnCopies, newChat,
+  projectColors, refreshViews, renderSidebar, renderTopbar } from './app.js';
+import { reloadLists } from './lists.js';
+import { roleCapabilities } from './status.js';
 import { cancelDescription, forgetDocument, forgetOwner, knowledgeMode, projectImageRow, queueDescription, queueIndex,
   showIndexState } from './indexing.js';
 import { confirmDialog, promptDialog } from './dialogs.js';

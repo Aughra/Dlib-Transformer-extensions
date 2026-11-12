@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Découper app.js : status.js, lists.js, drafts.js (Albireo 4.11.7)
+
+- **Quoi** : `web/js/status.js` (29 déclarations : lecture de l'état du service, modèle de chaque rôle, modèle d'arrière-plan, outils, ligne d'état), `web/js/lists.js` (22 : regroupement par date, recherche dans les discussions et les projets, extraits), `web/js/drafts.js` (15 : brouillons), mot pour mot, sauf une fonction ajoutée : `cancelDraftSave()`, qui remplace les trois `clearTimeout(draftTimer)` d'`app.js` (une variable importée ne peut pas être réaffectée par le module qui l'importe). `app.js` : 3435 lignes.
+- **Fichiers** : `albireo/web/js/{app.js,status.js,lists.js,drafts.js}` et les modules qui en importent, `albireo/web/changelog.md`, version.
+- **Pourquoi** : chantier D.
+- **Étapes** : ESLint 0 problème ; scénario principal complété (boîte « Rechercher dans les projets », brouillon retrouvé après rechargement) : 40 sur 40 ; documents 12 sur 12, images 12 sur 12 ; aucune erreur.
+
 ## 2026-11-12 — Découper app.js : memory.js (Albireo 4.11.6)
 
 - **Quoi** : `web/js/memory.js` (45 déclarations, 643 lignes) : mise à jour de la mémoire des discussions (lots de questions, inactivité, bail entre onglets, réécriture dans sa taille et en français, filtres des secrets), `forgetMemory`, `tabId`. `settings.js` en prend `forgetMemory`, `memoryParagraph`, `memorySentences`.

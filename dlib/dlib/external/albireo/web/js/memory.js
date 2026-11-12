@@ -6,8 +6,9 @@
 // un seul onglet la mettre à jour, et l'identifiant de cet onglet (tabId).
 
 import * as store from './store.js';
-import { backgroundContext, backgroundRates, backgroundText, broadcast, deleted, fold, generations, languageNames,
-  saveSetting, textLanguage } from './app.js';
+import { broadcast, deleted, generations, saveSetting } from './app.js';
+import { fold, languageNames, textLanguage } from './lists.js';
+import { backgroundContext, backgroundRates, backgroundText } from './status.js';
 import { keepStart, memoryLimitWords } from './context.js';
 import { defaults, state } from './state.js';
 import { language, t, tn } from './i18n.js';
