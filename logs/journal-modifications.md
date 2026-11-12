@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-13 — Attention des prompts en tuiles sur le GPU (Albireo 4.10.0)
+
+- **Quoi** : noyau `attention_tile` (12 variantes, tailles de tuile calculées pour tenir dans 32 Ko de mémoire de threadgroup) et commande `attention_tiles` ; `metal_device::tile_tokens()` ; la passe GPU découpe chaque segment d'un prompt en tuiles (tampon `tiles`) ; les étapes gardent `attention_part`. Limite par défaut des prompts GPU 2 048 → 4 096 positions (`settings.h`, `cpu_runtime.h`, `engine.cpp`, `make_openapi.py`, `service.js` : valeur conseillée, fiche, schéma). `bench_runtime` : variable `BENCH_GPU_CONTEXT` ; `bench_macos.sh` : taille 3 584 ajoutée. `test_macos.sh` : étape des points de reprise sur processeur en `--no-metal`, étape GPU qui vérifie la reprise et le sujet. Notes de version 4.10.0, notes pour l'auteur (changement 13), tableau des différences, mémo, reprise, journal de la nuit.
+- **Fichiers** : `albireo/engine/{metal_kernels.metal,metal_device.h,metal_device.mm,cpu_runtime.h,cpu_runtime_metal.cpp,engine.cpp}`, `albireo/host/settings.h`, `albireo/tests/bench_runtime.cpp`, `albireo/tools/{bench_macos.sh,make_openapi.py,test_macos.sh}`, `albireo/web/{js/service.js,openapi.json,changelog.md}`, `albireo/common/version.h`, `CMakeLists.txt` ; `docs/*`, `logs/*`.
+- **Pourquoi** : chantier C de l'ordre validé, mené seul pendant la nuit (voir `logs/nuit-2026-11-12.md`).
+- **Étapes** : première version (une réduction par position) : gain faible, abandonnée ; seconde (une position par voie) : 2B 512 tokens 533 (ancien 512-516), 4 096 tokens 198 (ancien 145, processeur 171-181), 8 192 tokens 106 (processeur 118-123). Mêmes réponses GPU / processeur sur ~3 660 tokens : 2B 206/170, Qwen3-VL 4B 74/63, Qwen3.5-4B 107/81 tokens/s. `test_macos.sh` 26 sur 26, Pseudalis 34 sur 34, `test_metal` passe. Service relancé en 4.10.0. Commit `97db0df`.
+
 ## 2026-11-12 — Écrire tools/bench_macos.sh, toutes les mesures en une commande
 
 - **Quoi** : script `albireo/tools/bench_macos.sh` : relève la machine (modèle, puce, cœurs, mémoire, macOS, version d'Albireo et commit, mode économie, charge), puis mesure par `bench_runtime` (threads = cœurs physiques, clés et valeurs en 8 bits) la lecture de prompts de 64, 512 et 1 536 tokens et l'écriture de 64 tokens de chaque modèle présent, processeur puis GPU en alternance ; tableau Markdown et sorties brutes dans `build/bench/` (nom de fichier : modèle du Mac et date, sans le nom réseau de la machine). Consigne ajoutée à CLAUDE.md (« Mesurer la vitesse ») et section du mémo.

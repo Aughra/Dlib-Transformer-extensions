@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version d'Albireo](../dlib/dlib/external/albireo/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.9.0, 12 novembre 2026.
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.10.0, 13 novembre 2026.
 
 ## 1. Vitesse du moteur
 
@@ -28,6 +28,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Produits des poids Q5_K et Q8_0 sur le GPU | — (pas de GPU Apple) | Noyaux Metal `mv_q5_K`, `mv_q8_0` | Les fichiers Qwen 3.5 en Q4_K_M en contiennent | permettent l'écriture de Qwen 3.5 sur le GPU | ch. 12, v. 4.5.0 |
 | Mélange d'experts | Sur le processeur (et CUDA) ; pas d'expert partagé | Sur le GPU aussi (routeur, choix des experts, produits par indirection) ; expert partagé de Qwen 3.6 ; format Q5_0 sur le GPU | Les modèles à experts (Qwen3.6-35B-A3B) visent le Mac mini de 64 Go | Qwen 3.6 11B-A3B : 24,4-25,0 → 26,1-26,3 tokens/s (M2) | ch. 12, v. 4.6.0, 4.7.0 |
 | Reprise d'une conversation Qwen 3.5 au milieu | — (architecture non lue) | Points de reprise de l'état toutes les 256 positions | L'état d'une couche linéaire ne revient pas en arrière ; sans eux, tout serait relu | prompt système de 794 tokens partagé : 768 tokens repris | v. 4.8.0 |
+| Attention des prompts sur le GPU | CUDA (cartes NVIDIA) | Noyau Metal en tuiles (tranches de clés partagées entre 4 à 16 tokens) ; prompts lus par le GPU jusqu'à 4 096 positions | L'attention précédente relisait toutes les clés pour chaque token et perdait au-delà de 2 048 positions | 2B, 4 096 tokens : 145 → 198 tokens/s | ch. 13, v. 4.10.0 |
 | Contrôle au chargement | — | Le GPU est comparé au processeur à chaque chargement ; retour au processeur s'il diffère | Le GPU n'est pas exact au bit près ; on vérifie qu'il donne le même mot | logits à 0,1 à 0,2 % du processeur, même token | ch. 9, 10 |
 
 ## 2. Modèles : téléchargement, vérification, réserve

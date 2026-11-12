@@ -533,6 +533,20 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : propre au fork (une architecture que l'original ne lit pas) ; le code du processeur est commun, celui du GPU propre au Mac.
 
+### Changement 13 : l'attention des prompts en tuiles sur le GPU
+
+- **Pourquoi** : l'attention des prompts sur le GPU (noyau `attention_part` du fork) faisait relire à chaque token toutes les clés et valeurs précédentes ; au-delà de 2 048 positions, le processeur était plus rapide (2B, 4 096 tokens : 145 contre 171 à 181 tokens/s).
+- **Quoi** : noyau `attention_tile` (`metal_kernels.metal`, commit [97db0df](https://github.com/Aughra/Dlib-Transformer-extensions/commit/97db0df)) : un threadgroup par (tuile de 4 à 16 tokens consécutifs d'une séquence, tête de clés) ; tranches de 32 positions chargées une fois en mémoire de threadgroup (demi-précision), une position entière par voie pour les scores, softmax en ligne par tranche. Limite par défaut des prompts sur le GPU : 4 096 positions.
+- **Exactitude** : contrôle de chargement à 0,26 % (2B) ; mêmes réponses gloutonnes que le processeur sur des prompts d'environ 3 660 tokens (Qwen3-VL 2B et 4B, Qwen3.5-4B).
+
+| Qwen3-VL 2B Q4_K_M, lecture d'un prompt (`bench_runtime`, clés q8), M2 | Processeur | GPU avant | GPU après |
+|---|---|---|---|
+| 512 tokens (2 essais) | — | 516,4 et 511,6 | 533,0 |
+| 4 096 tokens (2 essais) | 181,1 et 170,5 | 145,3 et 145,5 | 198,0 |
+| 8 192 tokens (2 essais) | 123,1 et 118,0 | — | 106,1 et 106,2 |
+
+**Mac ou Windows** : propre au Mac (noyau Metal).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -547,6 +561,7 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 21,3 à 21,7 tokens/s sur le GPU ; 18,2 à 18,6 sur le processeur (17,6 à 18,1 sans le changement 8 ; 16,4 à 16,6 sans les changements 6 à 8) |
 | SHA-256 d'un fichier de modèle (vérification, import, restauration) | 283 à 288 Mo/s (mbedtls) | 2 059 à 2 141 Mo/s (changement 11) |
 | Qwen3.5-4B Q4_K_M (architecture lue par le fork seulement), génération | non lu par le moteur | 19,5 tokens/s sur le GPU ; 11,7 à 12,2 sur le processeur (changement 12) |
+| Qwen3-VL 2B, prompt de 4 096 tokens sur le GPU | non mesuré | 198 tokens/s (changement 13) ; 145 avec l'attention précédente |
 | Qwen3.5-4B Q4_K_M, lecture d'un prompt de 783 tokens | non lu par le moteur | 148 à 149 tokens/s sur le GPU ; 86 sur le processeur (changement 12) |
 | Qwen 3.6 11B-A3B Q4_K_M (mélange d'experts, fork seulement), génération | non lu par le moteur | 26,1 à 26,3 tokens/s sur le GPU ; 24,4 à 25,0 sur le processeur (changement 12) |
 
