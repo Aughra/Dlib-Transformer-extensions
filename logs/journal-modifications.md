@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Ranger le banc d'essai de la page dans le dépôt (tools/page_test)
+
+- **Quoi** : `albireo/tools/page_test/` : `page_test.sh` (service d'essai isolé, port 18491, hors ligne, données dans `build/page-test`, page des sources, modèles clonés depuis le Mac par un catalogue local et la réserve ; ESLint installé une fois depuis npm dans `build/page-test/lint` ; scénarios joués puis service arrêté), `cdp.mjs` (Chrome sans fenêtre par le protocole DevTools, Node.js seul), `eslint.config.mjs`, six scénarios (`regress` 40, `docs` 12, `images` 12, `actions` 24, `tabs` 11, `phone` 7 vérifications), README. Consigne ajoutée à CLAUDE.md (« Page d'Albireo »), section « Vérifier la page web » du mémo.
+- **Dépendances ajoutées** (outil de vérification seulement, rien dans le programme) : Node.js et Google Chrome, déjà sur le Mac ; ESLint 9.17.0 et `globals` 15.14.0, téléchargés depuis npm dans `build/` au premier lancement (étape sautée sans npm).
+- **Pourquoi** : le banc avait été monté dans le dossier temporaire de la session pour le chantier D ; il servira à chaque changement de la page et sur le Mac mini.
+- **Étapes** : premier lancement à neuf : tout passe en 3 min 42 s (installation d'ESLint comprise). Scénario `phone` ajouté (largeur 390, mobile) : 7 sur 7 après correction d'une étape mal écrite ; constat, dû à la page d'origine : sur téléphone, le panneau latéral est ouvert au premier affichage et recouvre la page. Pas de changement de version : le programme livré ne change pas.
+
 ## 2026-11-12 — Finir le découpage d'app.js : preferences.js, navigation.js, layout.js (Albireo 4.11.11)
 
 - **Quoi** : constantes des rôles, des projets et `maxAgentSteps` rangées dans `state.js` ; `web/js/preferences.js` (thème, langue, `saveSetting`), `web/js/navigation.js` (10 déclarations : `route`, `go`, `newChat`, `goHome`, passage d'une discussion à l'autre), `web/js/layout.js` (`buildLayout`), mot pour mot. `app.js` : 136 lignes, le grand commentaire d'origine, une carte des modules (« LES MODULES ») et `init()` ; plus aucun module n'importe `app.js`. En-têtes d'import normalisés dans les 23 modules du découpage (espaces de noms d'abord, puis par fichier, noms triés, lignes de 120 colonnes au plus).

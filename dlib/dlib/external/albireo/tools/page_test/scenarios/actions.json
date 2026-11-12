@@ -1,0 +1,117 @@
+[
+ {
+  "name": "helpers",
+  "eval": "window.T={btn:(txt,root=document)=>[...root.querySelectorAll('button,.item,[role=menuitem]')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('textarea');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''},sleep:(ms)=>new Promise(r=>setTimeout(r,ms))}; return true"
+ },
+ {
+  "name": "ask",
+  "eval": "T.ask('Donne un nombre entre 1 et 10.'); return true"
+ },
+ {
+  "name": "answer",
+  "until": "return T.done(1)",
+  "timeout": 60000
+ },
+ {
+  "name": "copy",
+  "eval": "T.btn('Copier',document.querySelector('.message.assistant')).click(); await T.sleep(500); return document.body.innerText.length>0",
+  "expect": true
+ },
+ {
+  "name": "regenerate",
+  "eval": "T.btn('Régénérer',document.querySelector('.message.assistant')).click(); await T.sleep(500); return true"
+ },
+ {
+  "name": "regenerated",
+  "until": "return T.done(1)",
+  "timeout": 60000
+ },
+ {
+  "name": "one answer after regenerate",
+  "eval": "return document.querySelectorAll('.message.assistant').length",
+  "expect": 1
+ },
+ {
+  "name": "export answer",
+  "eval": "T.btn('Exporter cette réponse',document.querySelector('.message.assistant')).click(); await T.sleep(400); T.btn('Exporter en Markdown',document.querySelector('.menu')).click(); await T.sleep(800); return true"
+ },
+ {
+  "name": "edit question",
+  "eval": "T.btn('Modifier',document.querySelector('.message.user')).click(); await T.sleep(500); const ta=document.querySelector('.message.user textarea'); if(!ta) return 'no editor'; ta.value='Donne un nombre entre 20 et 30.'; ta.dispatchEvent(new Event('input',{bubbles:true})); const save=[...document.querySelectorAll('.message.user button')].find(b=>/Envoyer|Enregistrer|Valider/.test(b.innerText+b.title)); save.click(); return true",
+  "expect": true
+ },
+ {
+  "name": "edited answer",
+  "until": "return T.done(1)",
+  "timeout": 60000
+ },
+ {
+  "name": "edited question shown",
+  "eval": "return document.querySelector('.message.user').innerText.includes('20 et 30')",
+  "expect": true
+ },
+ {
+  "name": "replay question",
+  "eval": "T.btn('Reposer cette question à la fin de la discussion',document.querySelector('.message.user')).click(); await T.sleep(500); return true"
+ },
+ {
+  "name": "replayed answer",
+  "until": "return T.done(2)",
+  "timeout": 60000
+ },
+ {
+  "name": "two questions",
+  "eval": "return document.querySelectorAll('.message.user').length",
+  "expect": 2
+ },
+ {
+  "name": "delete last question",
+  "eval": "const us=[...document.querySelectorAll('.message.user')]; T.btn('Supprimer la question et sa réponse',us[us.length-1]).click(); await T.sleep(500); const d=document.querySelector('.dialog'); if (d) [...d.querySelectorAll('button')].find(b=>b.classList.contains('primary')||/Supprimer/.test(b.innerText)).click(); await T.sleep(800); return document.querySelectorAll('.message.user').length",
+  "expect": 1
+ },
+ {
+  "shot": "actions-thread.png"
+ },
+ {
+  "name": "rename",
+  "eval": "T.btn('…',document.querySelector('.topbar')).click(); await T.sleep(400); T.btn('Renommer',document.querySelector('.menu')).click(); await T.sleep(400); const d=document.querySelector('.dialog'); d.querySelector('input').value='Nombre choisi'; [...d.querySelectorAll('button')].find(b=>b.classList.contains('primary')).click(); await T.sleep(600); return document.querySelector('.topbar').innerText.includes('Nombre choisi')",
+  "expect": true
+ },
+ {
+  "name": "pin",
+  "eval": "T.btn('…',document.querySelector('.topbar')).click(); await T.sleep(400); T.btn('Épingler',document.querySelector('.menu')).click(); await T.sleep(600); return document.querySelector('.side-scroll').innerText.includes('ÉPINGLÉES')||document.querySelector('.side-scroll').innerText.includes('Épinglées')",
+  "expect": true
+ },
+ {
+  "name": "export markdown",
+  "eval": "T.btn('…',document.querySelector('.topbar')).click(); await T.sleep(400); T.btn('Exporter en Markdown',document.querySelector('.menu')).click(); await T.sleep(800); return true"
+ },
+ {
+  "name": "export json",
+  "eval": "T.btn('…',document.querySelector('.topbar')).click(); await T.sleep(400); T.btn('Exporter en JSON',document.querySelector('.menu')).click(); await T.sleep(800); return true"
+ },
+ {
+  "name": "jump buttons",
+  "eval": "return [...document.querySelectorAll('button')].filter(b=>/Aller au/.test(b.title)).length>0",
+  "expect": true
+ },
+ {
+  "name": "stop a long answer",
+  "eval": "T.ask('Écris une histoire très longue, d\\'au moins deux mille mots, sur un phare.'); await T.sleep(2500); const b=document.querySelector('button.send'); const title=b.title; b.click(); await T.sleep(1500); return title",
+  "expect": "Arrêter"
+ },
+ {
+  "name": "stopped",
+  "until": "return !document.querySelector('.message.assistant.live') && document.querySelector('button.send').title==='Envoyer'",
+  "timeout": 20000
+ },
+ {
+  "name": "stopped answer kept",
+  "eval": "const m=[...document.querySelectorAll('.message.assistant')].pop(); return m.innerText.slice(-120)"
+ },
+ {
+  "name": "delete chat",
+  "eval": "T.btn('…',document.querySelector('.topbar')).click(); await T.sleep(400); T.btn('Supprimer',document.querySelector('.menu')).click(); await T.sleep(400); const d=document.querySelector('.dialog'); if (d) [...d.querySelectorAll('button')].find(b=>b.classList.contains('primary')||/Supprimer/.test(b.innerText)).click(); await T.sleep(800); return [...document.querySelectorAll('.side-section')].pop().innerText.includes('Nombre choisi')",
+  "expect": false
+ }
+]

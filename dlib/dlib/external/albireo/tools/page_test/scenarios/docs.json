@@ -1,0 +1,70 @@
+[
+ {
+  "name": "helpers",
+  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('textarea');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''},file:(input,name,text)=>{const dt=new DataTransfer(); dt.items.add(new File([text],name,{type:'text/plain'})); input.files=dt.files; input.dispatchEvent(new Event('change',{bubbles:true}));}}; return true"
+ },
+ {
+  "name": "inputs",
+  "eval": "return [...document.querySelectorAll('input[type=file]')].map(i=>i.className+'|'+i.accept.slice(0,40)+'|'+i.multiple)"
+ },
+ {
+  "name": "attach a text file",
+  "eval": "T.file(document.querySelector('.composer input[type=file], input[type=file]'),'note.txt','Compte rendu de la réunion du mardi.\\nLe mot secret de ce document est : ORNITHORYNQUE.\\nFin du compte rendu.'); await new Promise(r=>setTimeout(r,1500)); return document.querySelector('.composer, main').innerText.includes('note.txt')",
+  "expect": true
+ },
+ {
+  "shot": "attached.png"
+ },
+ {
+  "name": "ask about the file",
+  "eval": "T.ask('Quel est le mot secret du document joint ? Réponds par ce mot seulement.'); return true"
+ },
+ {
+  "name": "file answer",
+  "until": "return T.done(1)",
+  "timeout": 120000
+ },
+ {
+  "name": "file answer has the word",
+  "eval": "return /ornithorynque/i.test(T.done(1))",
+  "expect": true
+ },
+ {
+  "shot": "file-answer.png"
+ },
+ {
+  "name": "new project",
+  "eval": "document.querySelector('.item.new-item').click(); await new Promise(r=>setTimeout(r,400)); const d=document.querySelector('.dialog'); d.querySelector('input').value='Projet doc'; [...d.querySelectorAll('button')].find(b=>b.classList.contains('primary')).click(); await new Promise(r=>setTimeout(r,800)); return location.hash.startsWith('#/p/')",
+  "expect": true
+ },
+ {
+  "name": "project inputs",
+  "eval": "return [...document.querySelectorAll('input[type=file]')].map(i=>(i.closest('.composer')?'composer':'other')+'|'+(i.parentElement&&i.parentElement.className))"
+ },
+ {
+  "name": "add project document",
+  "eval": "const ins=[...document.querySelectorAll('input[type=file]')]; T.file(ins.find(i=>!i.closest('.composer')),'fiche.txt','Fiche du projet.\\nLa couleur préférée de l\\'équipe est le vert émeraude.\\nFin.'); await new Promise(r=>setTimeout(r,2500)); return document.querySelector('main').innerText.includes('fiche.txt')",
+  "expect": true
+ },
+ {
+  "shot": "project-doc.png"
+ },
+ {
+  "name": "project chat",
+  "eval": "const b=[...document.querySelectorAll('main button, main .item')].find(b=>/Nouvelle discussion/.test(b.innerText||'')); if(b) b.click(); await new Promise(r=>setTimeout(r,800)); T.ask('Quelle est la couleur préférée de l\\'équipe selon les documents du projet ? Réponds en trois mots.'); return !!b",
+  "expect": true
+ },
+ {
+  "name": "project answer",
+  "until": "return T.done(1)",
+  "timeout": 120000
+ },
+ {
+  "name": "project answer has the colour",
+  "eval": "return /émeraude|emeraude/i.test(T.done(1))",
+  "expect": true
+ },
+ {
+  "shot": "project-answer.png"
+ }
+]

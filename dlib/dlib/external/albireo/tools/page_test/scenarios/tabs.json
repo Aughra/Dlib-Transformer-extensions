@@ -1,0 +1,14 @@
+[
+ {"name":"helpers 1","eval":"window.T={btn:(txt,root=document)=>[...root.querySelectorAll('button,.item,[role=menuitem]')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('textarea');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''},sleep:(ms)=>new Promise(r=>setTimeout(r,ms)),chats:()=>[...document.querySelectorAll('.side-section')].pop().innerText}; return true"},
+ {"tab":2,"name":"helpers 2","eval":"window.T={sleep:(ms)=>new Promise(r=>setTimeout(r,ms)),chats:()=>[...document.querySelectorAll('.side-section')].pop().innerText}; return T.chats()"},
+ {"tab":1,"name":"ask in tab 1","eval":"T.ask('Quelle est la capitale du Japon ? Un mot.'); return true"},
+ {"tab":2,"name":"tab 2 sees the answer in progress or done","until":"return /Japon|Tokyo|capitale/i.test(T.chats()) ? T.chats() : ''","timeout":60000},
+ {"tab":1,"name":"answer in tab 1","until":"return T.done(1)","timeout":60000},
+ {"tab":1,"name":"rename in tab 1","eval":"T.btn('…',document.querySelector('.topbar')).click(); await T.sleep(400); T.btn('Renommer',document.querySelector('.menu')).click(); await T.sleep(400); const d=document.querySelector('.dialog'); d.querySelector('input').value='Capitale nippone'; [...d.querySelectorAll('button')].find(b=>b.classList.contains('primary')).click(); await T.sleep(600); return true"},
+ {"tab":2,"name":"tab 2 sees the new title","until":"return T.chats().includes('Capitale nippone') ? T.chats() : ''","timeout":15000},
+ {"tab":2,"name":"open it in tab 2","eval":"[...document.querySelectorAll('.side-section')].pop().querySelector('.item:not(.new-item)').click(); await T.sleep(800); return document.querySelectorAll('.message.assistant').length","expect":1},
+ {"tab":2,"name":"theme change in tab 2","eval":"const r=document.documentElement; return r.dataset.theme || r.className || 'none'"},
+ {"tab":1,"name":"delete in tab 1","eval":"T.btn('…',document.querySelector('.topbar')).click(); await T.sleep(400); T.btn('Supprimer',document.querySelector('.menu')).click(); await T.sleep(400); const d=document.querySelector('.dialog'); if (d) [...d.querySelectorAll('button')].find(b=>b.classList.contains('primary')||/Supprimer/.test(b.innerText)).click(); await T.sleep(800); return true"},
+ {"tab":2,"name":"tab 2 sees the deletion","until":"return !T.chats().includes('Capitale nippone')","timeout":15000},
+ {"tab":2,"shot":"tab2.png"}
+]

@@ -1,0 +1,76 @@
+[
+ {
+  "name": "use the 4B",
+  "eval": "const r=await fetch('/albireo/v1/models/qwen3-vl-4b-test/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:'general'})}); return r.status"
+ },
+ {
+  "wait": 15000
+ },
+ {
+  "reload": 5000
+ },
+ {
+  "name": "helpers",
+  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('textarea');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].querySelector('.bubble')&&m[m.length-1].querySelector('.bubble').innerText.trim().length>0?m[m.length-1].innerText.trim():''}}; return document.body.innerText.includes('Qwen3-VL 4B (essai)')",
+  "expect": true
+ },
+ {
+  "name": "attach a red image",
+  "eval": "const c=document.createElement('canvas'); c.width=128; c.height=128; const x=c.getContext('2d'); x.fillStyle='#e00000'; x.fillRect(0,0,128,128); const blob=await new Promise(r=>c.toBlob(r,'image/png')); const dt=new DataTransfer(); dt.items.add(new File([blob],'carre.png',{type:'image/png'})); const i=[...document.querySelectorAll('input[type=file]')].find(i=>i.closest('.composer')); i.files=dt.files; i.dispatchEvent(new Event('change',{bubbles:true})); await new Promise(r=>setTimeout(r,2000)); return document.querySelectorAll('.composer img').length",
+  "expect": 1
+ },
+ {
+  "shot": "img-attached.png"
+ },
+ {
+  "name": "ask the colour",
+  "eval": "T.ask('De quelle couleur est cette image ? Réponds en un mot.'); return true"
+ },
+ {
+  "name": "colour answer",
+  "until": "return T.done(1)",
+  "timeout": 240000
+ },
+ {
+  "name": "answer says red",
+  "eval": "return /rouge/i.test(T.done(1))",
+  "expect": true
+ },
+ {
+  "name": "thumbnail in thread",
+  "eval": "return document.querySelectorAll('.message.user img').length",
+  "expect": 1
+ },
+ {
+  "name": "viewer opens",
+  "eval": "document.querySelector('.message.user img').closest('button,a,img').click(); await new Promise(r=>setTimeout(r,800)); return !!document.querySelector('.viewer, .lightbox, dialog[open], .dialog')",
+  "expect": true
+ },
+ {
+  "shot": "img-viewer.png"
+ },
+ {
+  "name": "close viewer",
+  "eval": "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); await new Promise(r=>setTimeout(r,400)); const b=document.querySelector('.viewer button, .lightbox button'); if (document.querySelector('.viewer, .lightbox') && b) b.click(); return true"
+ },
+ {
+  "name": "project with an image",
+  "eval": "document.querySelector('.item.new-item').click(); await new Promise(r=>setTimeout(r,400)); const d=document.querySelector('.dialog'); d.querySelector('input').value='Projet image'; [...d.querySelectorAll('button')].find(b=>b.classList.contains('primary')).click(); await new Promise(r=>setTimeout(r,800)); const c=document.createElement('canvas'); c.width=128; c.height=128; const x=c.getContext('2d'); x.fillStyle='#0040e0'; x.fillRect(0,0,128,128); const blob=await new Promise(r=>c.toBlob(r,'image/png')); const dt=new DataTransfer(); dt.items.add(new File([blob],'bleu.png',{type:'image/png'})); const inp=[...document.querySelectorAll('input[type=file]')].find(i=>!i.closest('.composer')); inp.files=dt.files; inp.dispatchEvent(new Event('change',{bubbles:true})); await new Promise(r=>setTimeout(r,2000)); return document.querySelector('main').innerText.includes('bleu.png')",
+  "expect": true
+ },
+ {
+  "name": "image described",
+  "until": "const t=document.querySelector('main').innerText; return /bleu|blue/i.test(t.replace('bleu.png','')) ? t.slice(t.indexOf('bleu.png'), t.indexOf('bleu.png')+200) : ''",
+  "timeout": 240000
+ },
+ {
+  "shot": "project-image.png"
+ },
+ {
+  "name": "back to the 2B",
+  "eval": "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); const r=await fetch('/albireo/v1/models/qwen3-vl-2b-test/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:'general'})}); return r.status"
+ },
+ {
+  "wait": 8000
+ }
+]

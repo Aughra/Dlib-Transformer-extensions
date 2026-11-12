@@ -1,0 +1,59 @@
+[
+ {
+  "name": "phone width",
+  "viewport": [
+   390,
+   844,
+   true
+  ],
+  "eval": "return [innerWidth, document.documentElement.scrollWidth <= innerWidth]",
+  "expect": [
+   390,
+   true
+  ]
+ },
+ {
+  "name": "composer visible",
+  "eval": "const r=document.querySelector('textarea').getBoundingClientRect(); return r.width>200 && r.bottom<=innerHeight",
+  "expect": true
+ },
+ {
+  "shot": "phone-home.png"
+ },
+ {
+  "name": "ask",
+  "eval": "const a=document.querySelector('textarea');a.value='Quelle est la capitale de l\\'Espagne ? Un mot.';a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click(); return true"
+ },
+ {
+  "name": "answer",
+  "until": "const m=[...document.querySelectorAll('.message.assistant')]; return m.length && !document.querySelector('.message.assistant.live') && /Madrid/.test(m[0].innerText)",
+  "timeout": 60000
+ },
+ {
+  "name": "no horizontal scroll",
+  "eval": "return document.documentElement.scrollWidth <= innerWidth",
+  "expect": true
+ },
+ {
+  "shot": "phone-chat.png"
+ },
+ {
+  "name": "sidebar button toggles the panel",
+  "eval": "const sb=document.querySelector('.sidebar'); const b=[...document.querySelectorAll('.topbar button')][0]; const before=sb.classList.contains('collapsed'); b.click(); await new Promise(r=>setTimeout(r,600)); const mid=sb.classList.contains('collapsed'); const t=document.querySelector('.topbar button'); t.click(); await new Promise(r=>setTimeout(r,600)); return [before!==mid, sb.classList.contains('collapsed')===before]",
+  "expect": [
+   true,
+   true
+  ]
+ },
+ {
+  "shot": "phone-sidebar.png"
+ },
+ {
+  "name": "settings fit",
+  "eval": "[...document.querySelectorAll('button')].find(b=>b.title==='Paramètres'||b.innerText.trim()==='Paramètres').click(); await new Promise(r=>setTimeout(r,800)); const d=document.querySelector('.dialog').getBoundingClientRect(); return d.width<=innerWidth && d.left>=0",
+  "expect": true
+ },
+ {
+  "shot": "phone-settings.png"
+ }
+]

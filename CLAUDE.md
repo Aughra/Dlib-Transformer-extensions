@@ -46,6 +46,7 @@ La référence des commandes et des résultats est [docs/memo-portage-macos-arm6
 - **Tests dlib** : `cmake -S dlib/dlib/test -B build/macos-arm64-tests`, puis `build/macos-arm64-tests/dtest`.
 - **Albireo / Pseudalis** : `cmake -S dlib/dlib/external/<app> -B build/macos-<app> -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64`.
 - **Sonde Metal** (GPU du Mac, hors moteur) : `macos/metal-sonde/`, propre au fork ; commandes dans son README.
+- **Page d'Albireo** : `bash dlib/dlib/external/albireo/tools/page_test/page_test.sh` (ESLint et scénarios dans Chrome sans fenêtre, sur un service d'essai isolé) après tout changement de la page ; détails dans son README.
 - **Service d'Albireo** : lancement et réglages dans le mémo ; les réglages se changent dans l'onglet « Service » de la page, et l'accès depuis le réseau de la maison (http, port 8444, mot de passe) s'y ouvre.
 
 Tous les dossiers de build vont sous `build/`, que `.gitignore` ignore déjà. Un dossier par configuration. Avec Ninja, `-- -k 0` relève toutes les erreurs en un seul passage. Les compilations longues tournent en arrière-plan.

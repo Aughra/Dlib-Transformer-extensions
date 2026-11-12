@@ -1,0 +1,238 @@
+[
+ {
+  "name": "helpers",
+  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt||b.getAttribute('aria-label')===txt),ask:(q)=>{const a=document.querySelector('textarea');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''},chats:()=>[...document.querySelectorAll('.side-section')].map(s=>s.innerText)}; return true"
+ },
+ {
+  "name": "agent file names",
+  "eval": "const m=await import('/js/tools.js'); return ['a.command','b.exe','c.txt','d.app','e.sh '].map(m.fileNameOf)",
+  "expect": [
+   "a.command.txt",
+   "b.exe.txt",
+   "c.txt",
+   "d.app.txt",
+   "e.sh.txt"
+  ]
+ },
+ {
+  "name": "no cuDNN in licenses",
+  "eval": "const r=await fetch('/albireo/v1/licenses'); const j=await r.json(); return JSON.stringify(j).includes('cuDNN')",
+  "expect": false
+ },
+ {
+  "name": "question 1",
+  "eval": "T.ask('Quelle est la capitale de la France ? Réponds en un seul mot.'); return true"
+ },
+ {
+  "name": "answer 1",
+  "until": "return T.done(1)",
+  "timeout": 90000
+ },
+ {
+  "name": "answer 1 says Paris",
+  "eval": "return /Paris/.test(T.done(1))",
+  "expect": true
+ },
+ {
+  "name": "question 2",
+  "eval": "T.ask(\"Et celle de l'Italie ? Un seul mot.\"); return true"
+ },
+ {
+  "name": "answer 2",
+  "until": "return T.done(2)",
+  "timeout": 90000
+ },
+ {
+  "name": "answer 2 says Rome",
+  "eval": "return /Rome/.test(T.done(2))",
+  "expect": true
+ },
+ {
+  "name": "sidebar lists the chat",
+  "eval": "return document.querySelectorAll('.side-scroll .item:not(.new-item)').length",
+  "expect": 1
+ },
+ {
+  "shot": "chat.png"
+ },
+ {
+  "name": "open settings",
+  "eval": "T.btn('Paramètres').click(); return true",
+  "wait": 600
+ },
+ {
+  "name": "settings tabs",
+  "eval": "const tabs=[...document.querySelectorAll('.dialog .tabs button')]; const out=[]; for (const b of tabs){b.click(); await new Promise(r=>setTimeout(r,700)); out.push(b.innerText.trim()+':'+document.querySelector('.dialog').innerText.length);} return out"
+ },
+ {
+  "shot": "settings-last.png"
+ },
+ {
+  "name": "service tab cards",
+  "eval": "[...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='Service').click(); await new Promise(r=>setTimeout(r,1200)); return document.querySelector('.dialog').innerText.includes('GPU')",
+  "expect": true
+ },
+ {
+  "shot": "settings-service.png"
+ },
+ {
+  "name": "models tab",
+  "eval": "[...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='Modèles').click(); await new Promise(r=>setTimeout(r,1200)); return document.querySelector('.dialog').innerText.includes('Qwen3-VL 2B (essai)')",
+  "expect": true
+ },
+ {
+  "shot": "settings-models.png"
+ },
+ {
+  "name": "close settings",
+  "eval": "[...document.querySelectorAll('.dialog button')].find(b=>b.innerText.trim()==='Fermer').click(); await new Promise(r=>setTimeout(r,400)); return !document.querySelector('.dialog')",
+  "expect": true
+ },
+ {
+  "name": "type a draft",
+  "eval": "T.btn('Nouvelle discussion').click(); await new Promise(r=>setTimeout(r,500)); const a=document.querySelector('textarea'); a.value='Brouillon à garder'; a.dispatchEvent(new Event('input',{bubbles:true})); await new Promise(r=>setTimeout(r,1000)); return true"
+ },
+ {
+  "reload": 4000
+ },
+ {
+  "name": "draft kept after reload",
+  "eval": "return document.querySelector('textarea').value",
+  "expect": "Brouillon à garder"
+ },
+ {
+  "name": "restore helpers",
+  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt||b.getAttribute('aria-label')===txt),ask:(q)=>{const a=document.querySelector('textarea');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''}}; const a=document.querySelector('textarea'); a.value=''; a.dispatchEvent(new Event('input',{bubbles:true})); await new Promise(r=>setTimeout(r,800)); return true"
+ },
+ {
+  "name": "new project",
+  "eval": "document.querySelector('.item.new-item').click(); await new Promise(r=>setTimeout(r,400)); const d=document.querySelector('.dialog'); d.querySelector('input').value='Projet essai'; [...d.querySelectorAll('button')].find(b=>b.classList.contains('primary')).click(); await new Promise(r=>setTimeout(r,800)); return location.hash.startsWith('#/p/')",
+  "expect": true
+ },
+ {
+  "shot": "project.png"
+ },
+ {
+  "name": "project page shows name",
+  "eval": "return document.querySelector('main').innerText.includes('Projet essai')",
+  "expect": true
+ },
+ {
+  "name": "changelog dialog",
+  "eval": "T.btn('Paramètres').click(); await new Promise(r=>setTimeout(r,600)); [...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='À propos').click(); await new Promise(r=>setTimeout(r,1500)); [...document.querySelectorAll('.dialog a')].find(a=>a.innerText.trim()==='Notes de version').click(); await new Promise(r=>setTimeout(r,1500)); const ds=[...document.querySelectorAll('.dialog')]; return ds[ds.length-1].innerText.includes('4.11.0')",
+  "expect": true
+ },
+ {
+  "shot": "changelog.png"
+ },
+ {
+  "name": "close dialogs",
+  "eval": "for (let i=0;i<3;i++){const b=[...document.querySelectorAll('.dialog button')].reverse().find(b=>b.innerText.trim()==='Fermer'); if(b){b.click(); await new Promise(r=>setTimeout(r,400));}} return document.querySelectorAll('.dialog').length",
+  "expect": 0
+ },
+ {
+  "name": "licenses page",
+  "eval": "location.hash='#/licenses'; await new Promise(r=>setTimeout(r,2000)); return document.querySelector('main').innerText.includes('Composants et licences') && document.querySelector('main').innerText.includes('Qwen3-VL 2B (essai)')",
+  "expect": true
+ },
+ {
+  "shot": "licenses.png"
+ },
+ {
+  "name": "memory and data tabs",
+  "eval": "location.hash='#/'; await new Promise(r=>setTimeout(r,600)); T.btn('Paramètres').click(); await new Promise(r=>setTimeout(r,600)); const out=[]; for (const n of ['Mémoire','Données']){[...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()===n).click(); await new Promise(r=>setTimeout(r,1200)); out.push(document.querySelector('.dialog').innerText.length>200);} [...document.querySelectorAll('.dialog button')].find(b=>b.innerText.trim()==='Fermer').click(); return out",
+  "expect": [
+   true,
+   true
+  ]
+ },
+ {
+  "reload": 4000
+ },
+ {
+  "name": "helpers again",
+  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('textarea');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''}}; return true"
+ },
+ {
+  "name": "chat kept after reload",
+  "eval": "const it=[...document.querySelectorAll('.side-scroll .item:not(.new-item)')]; return it.map(i=>i.innerText.trim().split('\\n')[0])"
+ },
+ {
+  "name": "open the chat",
+  "eval": "const it=[...document.querySelectorAll('.side-section')].pop().querySelector('.item:not(.new-item)'); it.click(); await new Promise(r=>setTimeout(r,800)); return document.querySelectorAll('.message.user').length",
+  "expect": 2
+ },
+ {
+  "name": "search",
+  "eval": "const s=document.querySelector('.search input'); s.value='Italie'; s.dispatchEvent(new Event('input',{bubbles:true})); await new Promise(r=>setTimeout(r,1200)); return document.querySelector('.side-scroll').innerText.slice(0,200)"
+ },
+ {
+  "name": "clear search",
+  "eval": "const s=document.querySelector('.search input'); s.value=''; s.dispatchEvent(new Event('input',{bubbles:true})); await new Promise(r=>setTimeout(r,800)); return true"
+ },
+ {
+  "name": "project search dialog",
+  "eval": "T.btn('Rechercher dans les projets').click(); await new Promise(r=>setTimeout(r,600)); const d=document.querySelector('.dialog'); const inp=d.querySelector('input'); inp.value='essai'; inp.dispatchEvent(new Event('input',{bubbles:true})); await new Promise(r=>setTimeout(r,1200)); const txt=d.innerText; document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); const b=[...d.querySelectorAll('button')].find(b=>/Fermer|Annuler/.test(b.innerText)); if (b) b.click(); await new Promise(r=>setTimeout(r,400)); return txt.includes('Projet essai')",
+  "expect": true
+ },
+ {
+  "name": "private chat",
+  "eval": "T.btn('Démarrer une discussion privée').click(); await new Promise(r=>setTimeout(r,600)); T.ask('Dis seulement : bonjour.'); return true"
+ },
+ {
+  "name": "private answer",
+  "until": "return T.done(1)",
+  "timeout": 90000
+ },
+ {
+  "shot": "private.png"
+ },
+ {
+  "name": "private chat not listed",
+  "eval": "return [...document.querySelectorAll('.side-section')].pop().querySelectorAll('.item:not(.new-item)').length",
+  "expect": 1
+ },
+ {
+  "name": "code answer",
+  "eval": "T.btn('Nouvelle discussion').click(); await new Promise(r=>setTimeout(r,600)); T.ask('Écris une fonction Python add(a, b) qui renvoie a + b, dans un bloc de code, sans explication.'); return true"
+ },
+ {
+  "name": "code done",
+  "until": "return T.done(1)",
+  "timeout": 120000
+ },
+ {
+  "name": "code block rendered",
+  "eval": "return !!document.querySelector('.message.assistant pre code')",
+  "expect": true
+ },
+ {
+  "shot": "code.png"
+ },
+ {
+  "name": "agent",
+  "eval": "T.btn('Nouvelle discussion').click(); await new Promise(r=>setTimeout(r,600)); [...document.querySelectorAll('button.toggle')].find(b=>b.innerText.trim()==='Agent').click(); T.ask('Calcule 37 * 43 avec ton outil de calcul.'); return true"
+ },
+ {
+  "name": "agent done",
+  "until": "return T.done(1)",
+  "timeout": 180000
+ },
+ {
+  "name": "agent answer",
+  "eval": "return T.done(1).slice(0,300)"
+ },
+ {
+  "shot": "agent.png"
+ },
+ {
+  "wait": 45000
+ },
+ {
+  "name": "memory learned",
+  "eval": "T.btn('Paramètres').click(); await new Promise(r=>setTimeout(r,600)); [...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='Mémoire').click(); await new Promise(r=>setTimeout(r,1200)); const t=document.querySelector('.dialog').innerText; return t.slice(0,400)"
+ },
+ {
+  "shot": "memory.png"
+ }
+]
