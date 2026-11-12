@@ -4,24 +4,18 @@
 /*
     albireo-service : le service Albireo.
 
-        albireo-service                  comme service Windows, démarré par le gestionnaire de
-                                         services ; dans la console ailleurs, ou lancé à la main
-        albireo-service --console        dans la console, arrêté par Ctrl+C
+        albireo-service                  lancé au premier plan dans la console, arrêté par Ctrl+C
         albireo-service --version
 
-    Le service se relance lui-même avec les arguments ci-dessous, pour le
-    travail qui ne doit jamais entraîner le service dans sa chute.
+    Outils du moteur, exécutés dans un processus qui se termine après leur réponse :
 
         --probe-engine <library>         affiche la description d'une bibliothèque de moteur
         --bench-engine <library> <model> <configuration>
                                          mesure un moteur et affiche le résultat
 
-    Un redémarrage a normalement lieu dans le processus.  Une fois que le moteur d'un
-    périphérique a tourné, et que sa bibliothèque reste chargée, le service redémarre plutôt
-    dans un nouveau processus : comme service Windows, par une copie du programme lancée avec
-    --restart-service, qui attend que le service s'arrête et le redémarre.  Un processus qui a
-    chargé le moteur d'un périphérique, sondes comprises, se termine sans le décharger
-    (end_process()).
+    Quand le moteur chargé impose un redémarrage, le service relance son propre programme
+    après l'arrêt de l'instance courante.  Les outils du moteur terminent aussi leur processus
+    sans décharger le moteur (end_process()).
 */
 
 

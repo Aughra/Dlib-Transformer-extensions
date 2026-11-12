@@ -114,7 +114,7 @@ Décision de l'humain : dans Albireo et Pseudalis, tout le code propre à Window
 | Mises à jour par installateur Windows (`updater`, routes, réglages) | oui | oui, avec la case de la page web |
 | CMake | 864 → 307 lignes, un seul moteur `cpu` | 255 → 161 lignes, moteur intégré au service |
 
-Ensuite : `cpu_info` décrit la puce Apple (cœurs de performance et d'efficacité, extensions DotProd, I8MM, BF16, FP16) ; le réglage `v2ram` de CUDA est retiré ; le chargeur de Pseudalis ne prend plus que le moteur intégré ; les scripts `test_linux.sh` sont devenus `tools/test_macos.sh` (Albireo : 19 étapes sur 19, première fois que ce test passe en entier sur Mac ; Pseudalis : 34 sur 34), sans `nproc` ni `stat` de GNU. Restaient : la clé du flux et `pseudalis-sign` de Pseudalis (retirés en 4.0.0, branche `travail-windows`, pas encore compilés), des commentaires qui parlent encore de Windows ; `offload.h` et `layer_pass` seront remplacés par le chemin Metal. `accelerator` et `device_mb` sont gardés pour le GPU. Les corrections de portage listées plus bas (1 à 10) décrivent l'état d'avant ce nettoyage : plusieurs portaient sur des lignes qui n'existent plus.
+Ensuite : `cpu_info` décrit la puce Apple (cœurs de performance et d'efficacité, extensions DotProd, I8MM, BF16, FP16) ; le réglage `v2ram` est retiré ; le chargeur de Pseudalis ne prend plus que le moteur intégré ; les scripts `test_linux.sh` sont devenus `tools/test_macos.sh` (Albireo : 19 étapes sur 19, première fois que ce test passe en entier sur Mac ; Pseudalis : 34 sur 34), sans `nproc` ni `stat` de GNU. La clé du flux et `pseudalis-sign` de Pseudalis sont retirés en 4.0.0 (branche `bureau-2026-11-12`, pas encore compilée) ; des commentaires de l'ancien code restent à revoir. `offload.h` et `layer_pass` sont encore présents dans le runtime du processeur ; le chemin Metal est implémenté séparément. `accelerator` et `device_mb` sont gardés pour le GPU. Les corrections de portage listées plus bas (1 à 10) décrivent l'état d'avant ce nettoyage : plusieurs portaient sur des lignes qui n'existent plus.
 
 ### Lancer le service d'Albireo
 
@@ -122,11 +122,11 @@ Le service garde ses données (réglages, certificats, base, modèles) dans `$AL
 
 ```sh
 mkdir -p build/albireo-home
-echo '{"port": 18443, "check_updates": false}' > build/albireo-home/settings.json
+echo '{"port": 18443}' > build/albireo-home/settings.json
 ALBIREO_HOME=$PWD/build/albireo-home build/macos-albireo/bin/albireo-service --console
 ```
 
-Puis ouvrir `https://localhost:18443/` (certificat d'une autorité locale créée au premier démarrage, `build/albireo-home/certificates/albireo-authority.crt` : le navigateur l'avertit tant qu'on ne lui fait pas confiance). `check_updates: false` empêche le service de chercher une mise à jour de l'original, faite pour Windows et Linux. Au premier démarrage, s'il n'est pas `offline`, il télécharge son modèle par défaut (Qwen3-VL 4B Thinking Q4_K_M, 2,3 Go, et son projecteur d'images, 433 Mo) et son modèle de recherche (Qwen3 Embedding 0.6B Q8_0, 610 Mo) depuis Hugging Face, le catalogue depuis GitHub.
+Puis ouvrir `https://localhost:18443/` (certificat d'une autorité locale créée au premier démarrage, `build/albireo-home/certificates/albireo-authority.crt` : le navigateur l'avertit tant qu'on ne lui fait pas confiance). Au premier démarrage, s'il n'est pas `offline`, il télécharge son modèle par défaut (Qwen3-VL 4B Thinking Q4_K_M, 2,3 Go, et son projecteur d'images, 433 Mo) et son modèle de recherche (Qwen3 Embedding 0.6B Q8_0, 610 Mo) depuis Hugging Face, le catalogue depuis GitHub.
 
 **Lecture à voix haute retirée (2026-11-11, version 3.0.0).** À la demande de l'humain (« ça alourdit le programme et ne sert pas ») : plus de route `/v1/audio/speech` ni `/albireo/v1/speech/voices` (404), plus de programme `albireo-speech`, de bibliothèque SVOX Pico (`dlib/dlib/external/svox_pico`, 76 fichiers, supprimée) ni de dossier `bin/speech` ; plus de bouton de lecture dans la page. Le test complet passe à 17 étapes (les trois de la voix remplacées par une qui vérifie le 404).
 

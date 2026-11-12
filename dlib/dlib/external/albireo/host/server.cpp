@@ -11,11 +11,11 @@
         /v1/chat/completions
         /v1/completions
         /v1/embeddings
-        /albireo/v1/...           l'interface de l'application web et de la zone de notification
+        /albireo/v1/...           l'interface de l'application web
 
     Une version personnelle : le service n'écoute que sur 127.0.0.1, et toute requête qu'il
     reçoit peut tout faire, l'application web changeant les réglages, les modèles et
-    l'installation comme le faisait la zone de notification de l'original.  Il ne demande plus
+    l'installation.  Il ne demande plus
     de jeton d'administration, et ne vérifie plus les en-têtes Host et Origin (un choix du
     propriétaire de ce fork, qui sait qu'un site web ouvert dans le navigateur pourrait alors
     piloter le service).
@@ -1414,7 +1414,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             handle_embeddings(*s, req, res);
         });
 
-        // Interface de l'application web et de la zone de notification.  Le statut dit à l'application web
+        // Interface de l'application web.  Le statut dit à l'application web
         // si l'accès au web est disponible et quel est son fournisseur de recherche (web_capability()).
         srv.Get("/albireo/v1/status", [s](const httplib::Request&, httplib::Response& res) {
             json status = s->status();
@@ -1620,8 +1620,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         };
         srv.Post("/albireo/v1/import", import);
         srv.Post("/albireo/v1/models/import", import);
-        // Un fichier de modèle envoyé par la zone de notification, lu avec les droits de son utilisateur, pour les
-        // fichiers que le service ne lit jamais.
+        // Un fichier de modèle envoyé par la page, lu avec les droits de son utilisateur, pour les fichiers
+        // que le service ne lit jamais.
         srv.Post(upload_route, [s](const httplib::Request& req, httplib::Response& res,
                                     const httplib::ContentReader& reader) {
             const std::string name = file_name(req.get_param_value("name"));

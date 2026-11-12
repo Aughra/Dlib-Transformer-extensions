@@ -515,7 +515,7 @@ namespace albireo
             /*
                 Le port des réglages est pris par un autre programme, ou réservé par le système depuis
                 qu'il a été choisi : le serveur ouvre le dernier port sur lequel il a servi, que les
-                réglages reprennent pour que la barre des tâches y trouve le service.
+                réglages reprennent pour retrouver le service à ce port.
             */
             int last = 0;
             try

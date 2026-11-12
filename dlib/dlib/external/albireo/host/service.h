@@ -26,9 +26,8 @@ namespace httplib { class SSLServer; class Server; }
 namespace albireo
 {
 
-    // Le moteur que fait tourner une machine : une bibliothèque et, pour les moteurs à
-    // plusieurs périphériques, le périphérique ("NPU", "GPU").  key le nomme dans les
-    // mesures : "cpu-avx2", "openvino:npu", "openvino:gpu", "cuda".
+    // Un moteur utilisable et, s'il en offre plusieurs, le périphérique choisi.  key sert
+    // à retrouver ses mesures.
     struct engine_choice
     {
         const engine_candidate* candidate = nullptr;
@@ -38,32 +37,17 @@ namespace albireo
 
     /*!
         ensures
-            - Renvoie le moteur à faire tourner pour les réglages s parmi les candidats
-              trouvés à côté du service :
-                - engine nomme une variante : cette variante, si elle est utilisable, avec le
-                  périphérique que nomme accelerator pour les moteurs qui en ont plusieurs ;
-                - accelerator "npu", "gpu" ou "both" : le moteur de ce périphérique, le plus
-                  rapide mesuré pour "both" ;
-                - accelerator "none" : le moteur du processeur, le plus rapide mesuré, sinon
-                  celui des noyaux les plus riches (cpu-avxvnni, cpu-avx2, cpu) ;
-                - engine "best" : le moteur mesuré le plus rapide ;
-                - sinon, le choix automatique : l'accélérateur de l'ordinateur, la carte
-                  NVIDIA (cuda), sinon le NPU et le processeur graphique d'Intel ensemble
-                  (openvino:both), sinon celui des deux qui est présent, chaque moteur
-                  calculant sur le processeur les produits que son périphérique ne prend
-                  pas ; le moteur du processeur quand aucun accélérateur n'est utilisable,
-                  ou quand une mesure a trouvé l'accélérateur plus lent que le moteur du
-                  processeur.
+            - Renvoie un candidat utilisable selon les réglages engine et accelerator.
+              "best" choisit le candidat le plus rapide parmi ceux mesurés ; "auto" choisit
+              parmi les candidats disponibles et revient au processeur si aucun accélérateur
+              ne convient.
             - Le candidat renvoyé est nul quand aucun moteur n'est utilisable.
     !*/
     engine_choice choose_engine(const std::vector<engine_candidate>& candidates, const host_settings& s);
 
     /*!
         ensures
-            - Renvoie les moteurs qu'offre un ensemble de candidats, un par périphérique : ce
-              que liste la barre des tâches.  Parmi les moteurs OpenVINO, un par famille de
-              noyaux du processeur (openvino-avxvnni, openvino), le plus riche utilisable
-              offre le NPU, le processeur graphique et les deux.
+            - Renvoie les choix de moteur disponibles dans les candidats.
     !*/
     std::vector<engine_choice> engine_options(const std::vector<engine_candidate>& candidates);
     bool is_openvino_variant(const std::string& variant);
@@ -74,7 +58,7 @@ namespace albireo
             WHAT THIS OBJECT REPRESENTS
                 Le service Albireo : le moteur et ses modèles, le serveur HTTPS local avec
                 l'application web, l'interface compatible OpenAI et l'interface
-                d'administration de la barre des tâches, le catalogue et les
+                d'administration de l'application web, le catalogue et les
                 téléchargements des modèles.
 
                 run() démarre tout et bloque jusqu'à stop() ou une demande de redémarrage ;
@@ -85,8 +69,8 @@ namespace albireo
                 Le serveur répond dès que son port est ouvert.  Les moteurs sont décrits et
                 celui choisi démarre en arrière-plan, puis les modèles actifs se chargent :
                 jusque-là, starting_phase() nomme l'étape en cours, l'état le dit, et les
-                requêtes pour un modèle répondent 503 avec le code "starting", pour que la
-                barre des tâches et les clients distinguent un démarrage lent d'un échec.
+                requêtes pour un modèle répondent 503 avec le code "starting", pour que
+                l'application web et les clients distinguent un démarrage lent d'un échec.
 
             RÉSEAU
                 Le catalogue et les téléchargements tournent sur des threads à eux, chaque
@@ -94,7 +78,7 @@ namespace albireo
                 imports, les requêtes des utilisateurs) n'attende jamais le réseau.  Avec le
                 réglage "offline", aucune requête ne quitte la machine : le catalogue et les
                 modèles viennent de dossiers, le dossier d'import du dossier des données ou
-                un dossier nommé par la barre des tâches (import_folder()).
+                un dossier donné à l'interface d'import (import_folder()).
         !*/
     public:
         service();

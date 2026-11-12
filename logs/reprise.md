@@ -39,18 +39,18 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 ## Pour reprendre (mis à jour le 2026-11-12, écrit sous Windows)
 
-**État** : `main` = Albireo **3.2.0**, testé. La branche **`travail-windows`** (poussée sur `origin`) porte le retrait des clés, **Albireo 4.0.0, écrite sans compiler ni lancer** sur un Windows. Rien n'y est vérifié. La branche **`bureau-2026-11-12`**, partie de `travail-windows`, y ajoute la doc et les commentaires du retrait (README d'Albireo, `lots-traduction.json`, commentaires de `models.h`, `service.h`, `service.cpp`, `server.cpp`) : commentaires seulement, vérifié par `comment_check.py`.
+**État** : `main` = Albireo **3.2.0**, testé. La branche **`travail-windows`** (poussée sur `origin`) porte le retrait des clés, **Albireo 4.0.0, écrite sans compiler ni lancer** sur un Windows. Rien n'y est vérifié. La branche **`bureau-2026-11-12`**, partie de `travail-windows`, ajoute la documentation et le nettoyage de commentaires/UI, ainsi qu'une correction du mémo. Les changements C++ de cette branche restent des commentaires seulement, vérifiés avec `comment_check.py` ; les textes Pseudalis de langue n'ont pas été essayés dans le navigateur.
 
 **À faire en premier sur le Mac** (critère : tout passe) :
 1. `git fetch origin && git checkout bureau-2026-11-12` (elle contient `travail-windows`).
 2. `cmake --build build/macos-albireo -- -k 0` et `cmake --build build/macos-pseudalis -- -k 0` : corriger ce qui ne compile pas (fautes de frappe possibles, `-Werror` sur les avertissements).
-3. `bash dlib/dlib/external/albireo/tools/test_macos.sh` et celui de Pseudalis. **`tests/test_host.cpp` est réécrit à l'aveugle** : les chaînes d'erreur attendues (« the file of … does not have the size the catalog gives », « … cannot be downloaded: the request is answered with the status 404 ») et les comptes de requêtes (`official_count`) sont déduits du code, à ajuster au besoin.
+3. `bash dlib/dlib/external/albireo/tools/test_macos.sh` et celui de Pseudalis. Relecture statique faite pour la partie téléchargement/catalogue de `tests/test_host.cpp` : tentatives réseau, reprise d'une partie corrompue, import sans signature et erreurs correspondent au code lu ; les tests restent à exécuter sur Mac.
 4. Relancer le service, vérifier un téléchargement de modèle depuis la page (le catalogue vient de `raw.githubusercontent.com/Cydral/...`) et l'import d'un dossier avec `catalog.json` seul.
 5. Si tout passe : fusionner dans `main` (`git merge bureau-2026-11-12`, qui apporte aussi `travail-windows`), pousser. Sinon corriger sur la branche.
 
 **Ce qui a été fait** (voir le journal du 2026-11-12) : catalogue sans signature, import de dossier sans `.sig`, espace de publication retiré (`public_link.*`, mot de passe du CMake, masquage du journal), `albireo-sign` et `pseudalis-sign` retirés, `verify_signature` / `sign_data` / clé publique retirées de `crypto` (Albireo et Pseudalis), `without_queries` déplacé dans `common/log`, version 4.0.0 et notes de version.
 
-**Restes de cette étape** : faits le 2026-11-12 sur `bureau-2026-11-12` (README d'Albireo, `lots-traduction.json`, commentaires) ; pas de note pour l'auteur (aucun défaut de l'original trouvé cette fois).
+**Portage documentaire** : le README d'Albireo garde ses sections sur les signatures et les outils de publication comme documentation de l'original ; son introduction précise que le reste décrit la version Windows de l'original. Le README de Pseudalis a la même réserve. Les mentions de `pseudalis-sign` dans le mémo et de `check_updates` dans les notes pour l'auteur sont historiques et laissées telles quelles ; la commande de démarrage du mémo a été corrigée.
 
 **Juste après les clés, demandé par l'humain : une réserve de modèles sur le Mac**, qui remplace l'espace de publication de l'original (contre une panne ou un blocage de Hugging Face) :
 - dossier `<données>/reserve` : chaque modèle téléchargé y reste ; supprimer un modèle le range en réserve au lieu de l'effacer ; le réinstaller est une copie locale, sans réseau ;
@@ -65,7 +65,7 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 
 ### Fait : commentaires en français (Albireo 2.0.2)
 
-Voir le journal. Reste, plus tard : corriger sur le fond les commentaires qui décrivent encore l'original (Windows, CUDA, zone de notification ; `settings.h` qui liste « auto, en, fr, de, it, es »).
+Voir le journal. Sur `bureau-2026-11-12`, première passe statique : les commentaires de démarrage, d'interface web, de choix de moteur et de `offload.h` ne décrivent plus Windows, la barre des tâches ou des accélérateurs retirés ; le réglage de langue de Pseudalis et ses libellés parlent des descriptions d'images. D'autres commentaires de portage restent à revoir, notamment les certificats et les téléchargements HTTP. La validation de réglage Pseudalis accepte encore en entrée des langues que `from_json()` ne conserve pas (`de`, `it`, `es`) : constat statique, non corrigé ni testé.
 
 ### Plus tard, pas à pas (accord de principe de l'humain, 2026-11-11) : déplacer la logique cachée de la page vers le service C++
 
@@ -88,7 +88,7 @@ Environ 7 000 lignes en un fichier. Le découper en modules ES par thème (conve
 
 | Sous-étape | Contenu | Critère vérifiable |
 |---|---|---|
-| N4 (avant M1, presque fait) | Fin du nettoyage (fait : `cpu_info`, `v2ram`, chargeur de Pseudalis, `test_macos.sh` ; reste : clé du flux et `pseudalis-sign`, commentaires ; `offload.h` / `layer_pass` remplacés en M3) : `offload.h` et `layer_pass` dans `cpu_runtime`, champs x86 de `cpu_info`, réglages `v2ram` / `accelerator`, chargeur de Pseudalis, clé du flux et `pseudalis-sign`, commentaires ; `test_linux.sh` → `test_macos.sh` sans `nproc` ni `gstat` | build sans avertissement ; tous les tests ; services vérifiés |
+| N4 (nettoyage fait, 4.0.0 à vérifier sur Mac) | `cpu_info`, `v2ram`, chargeur de Pseudalis et scripts `test_macos.sh` ; clé du flux et `pseudalis-sign` retirés en 4.0.0 ; commentaires historiques en cours de correction ; `offload.h` et `layer_pass` restent dans le runtime du processeur, le chemin Metal est séparé | build sans avertissement ; tous les tests ; services vérifiés |
 | M1 (**fait**) | Cache des clés et valeurs dans une seule zone réservée, alignée sur les pages (`c583d29` ; la zone du 4B réserve 18,7 Go d'adresses, plus que les 13,6 Go d'un tampon Metal sur le M2 : n'envelopper que les blocs utilisés) ; module `metal_device` (fait) ; accès au début de la projection du modèle ; bibliothèque `albireo_metal` (Objective-C++, noyaux compilés au lancement) liée sous `APPLE` ; le moteur s'ouvre avec le GPU | build sans avertissement ; tous les tests passent ; `engine_chat` répond juste ; le journal du moteur nomme le GPU |
 | M2 (**fait**, `32312f6`) | Noyaux : produits Q4_K / Q6_K (1 à 8 tokens), normes RMS, rope, SiLU, écriture des clés et valeurs (q8 tournées, f16), attention en ligne sur les blocs, tête des logits | test `test_metal` : chaque noyau à 1e-4 près du processeur |
 | M3 (**fait**, `5f0b07f`) | Un pas de génération entier sur le GPU, une commande par passe ; contrôle au chargement (logits à 1 % près, même token le plus probable) ; repli sur le processeur sinon | `engine_chat` juste ; mesures alternées processeur / GPU |

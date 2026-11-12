@@ -4,10 +4,7 @@
 /*
     pseudalis-service : le service Pseudalis.
 
-        pseudalis-service                 comme service Windows, démarré par le gestionnaire de
-                                          services ; dans la console ailleurs, ou quand il est
-                                          démarré à la main
-        pseudalis-service --console       dans la console, arrêté par Ctrl+C
+        pseudalis-service                 lancé au premier plan dans la console, arrêté par Ctrl+C
         pseudalis-service --version
 
     Un redémarrage a lieu dans le processus : le service arrête son serveur et son lecteur,
@@ -44,13 +41,6 @@ namespace
     // Renvoyé par serve() quand le redémarrage demande un nouveau processus.
     const int restart_process = 75;
 
-    /*
-        La fin du programme, une fois que le service a fermé ce qu'il avait ouvert et que le
-        journal contient sa dernière ligne.  Sous Windows, le processus se termine aussitôt : la
-        bibliothèque du moteur reste chargée (engine_loader.h), et ses destructeurs statiques,
-        exécutés à la fin du processus, rejoindraient les threads du thread pool de dlib que
-        Windows a terminés d'abord, et attendraient indéfiniment.
-    */
     int finish(int code)
     {
         return code;
