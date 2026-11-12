@@ -29,6 +29,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <mach-o/dyld.h>
+#include <membership.h>
+#include <sys/acl.h>
 
 namespace pseudalis
 {
@@ -252,13 +254,58 @@ namespace pseudalis
             return st.st_uid == geteuid() || st.st_uid == 0;
         }
 
+        /*
+            Vrai si p porte une ACL étendue de macOS dont une entrée « allow » laisse un autre compte que
+            ce programme ou root écrire, ajouter ou supprimer une entrée, ou changer les attributs, les
+            droits ou le propriétaire.  Une entrée « deny » ne fait que retirer des droits : elle est
+            acceptée (le dossier personnel en porte une, « everyone deny delete »).  Une entrée dont le
+            bénéficiaire est un groupe compte comme un autre compte.  Un système de fichiers sans ACL
+            compte comme sans entrée ; une ACL illisible compte comme dangereuse.
+        */
+        bool acl_lets_others_write(const std::string& path)
+        {
+            errno = 0;
+            acl_t acl = acl_get_link_np(path.c_str(), ACL_TYPE_EXTENDED);
+            if (!acl) return !(errno == ENOENT || errno == ENOTSUP || errno == EOPNOTSUPP);
+            static const acl_perm_t writes[] = { ACL_WRITE_DATA, ACL_APPEND_DATA, ACL_ADD_SUBDIRECTORY,
+                ACL_DELETE, ACL_DELETE_CHILD, ACL_WRITE_ATTRIBUTES, ACL_WRITE_EXTATTRIBUTES,
+                ACL_WRITE_SECURITY, ACL_CHANGE_OWNER };
+            bool unsafe = false;
+            acl_entry_t entry;
+            for (int which = ACL_FIRST_ENTRY; !unsafe && acl_get_entry(acl, which, &entry) == 0;
+                 which = ACL_NEXT_ENTRY)
+            {
+                acl_tag_t tag;
+                acl_permset_t perms;
+                if (acl_get_tag_type(entry, &tag) != 0 || acl_get_permset(entry, &perms) != 0)
+                {
+                    unsafe = true;
+                    break;
+                }
+                if (tag != ACL_EXTENDED_ALLOW) continue;
+                bool grants_write = false;
+                for (const acl_perm_t perm : writes)
+                    if (acl_get_perm_np(perms, perm) != 0) grants_write = true;
+                if (!grants_write) continue;
+                guid_t* who = static_cast<guid_t*>(acl_get_qualifier(entry));
+                uid_t id = 0;
+                int type = 0;
+                const bool known = who && mbr_uuid_to_id(who->g_guid, &id, &type) == 0;
+                if (who) acl_free(who);
+                if (!(known && type == ID_TYPE_UID && (id == geteuid() || id == 0))) unsafe = true;
+            }
+            acl_free(acl);
+            return unsafe;
+        }
+
         bool safe_directory_chain(const std::string& path)
         {
             std::string p = path;
             while (!p.empty())
             {
                 struct stat st;
-                if (lstat(p.c_str(), &st) != 0 || !S_ISDIR(st.st_mode) || !trusted_owner(st)) return false;
+                if (lstat(p.c_str(), &st) != 0 || !S_ISDIR(st.st_mode) || !trusted_owner(st)
+                    || acl_lets_others_write(p)) return false;
                 const bool writable = (st.st_mode & (S_IWGRP | S_IWOTH)) != 0;
                 if (writable && !(st.st_uid == 0 && (st.st_mode & S_ISVTX) != 0)) return false;
                 const std::string parent = parent_path(p);
@@ -272,7 +319,7 @@ namespace pseudalis
         {
             struct stat st;
             if (lstat(path.c_str(), &st) != 0 || S_ISLNK(st.st_mode) || !trusted_owner(st)
-                || (st.st_mode & (S_IWGRP | S_IWOTH)) != 0) return false;
+                || (st.st_mode & (S_IWGRP | S_IWOTH)) != 0 || acl_lets_others_write(path)) return false;
             if (S_ISDIR(st.st_mode))
             {
                 DIR* dir = opendir(path.c_str());
@@ -304,7 +351,7 @@ namespace pseudalis
         if (path.empty() || lstat(path.c_str(), &st) != 0 || S_ISLNK(st.st_mode)) return false;
         const std::string actual = final_path(path);
         return !actual.empty() && safe_directory_chain(parent_path(actual))
-            && lstat(actual.c_str(), &st) == 0 && trusted_owner(st);
+            && lstat(actual.c_str(), &st) == 0 && trusted_owner(st) && !acl_lets_others_write(actual);
     }
 
     bool secure_folder(const std::string& p, std::string& error, bool check_content)
@@ -328,6 +375,19 @@ namespace pseudalis
         {
             error = "cannot restrict permissions on " + path;
             return false;
+        }
+        // Une ACL qui laisse un autre compte écrire est remplacée par une ACL vide, comme le fait
+        // « chmod -N ».
+        if (acl_lets_others_write(actual))
+        {
+            acl_t empty = acl_init(0);
+            const bool cleared = empty && acl_set_link_np(actual.c_str(), ACL_TYPE_EXTENDED, empty) == 0;
+            if (empty) acl_free(empty);
+            if (!cleared || acl_lets_others_write(actual))
+            {
+                error = "cannot remove the access control list of " + path;
+                return false;
+            }
         }
         if (check_content && !safe_tree_entry(actual))
         {

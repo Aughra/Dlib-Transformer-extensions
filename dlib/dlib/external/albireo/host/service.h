@@ -248,7 +248,7 @@ namespace albireo
         // téléchargement démarre.
         void note_default_failure(const json& entry, const user_error& error, const std::string& what);
         void scan_inbox();
-        // Sur macOS, vérifie les propriétaires et permissions POSIX ; les ACL étendues ne sont pas examinées.
+        // Vérifie les propriétaires, les permissions POSIX et les ACL étendues.
         bool secure_inbox(std::string& error);
         /*!
             ensures

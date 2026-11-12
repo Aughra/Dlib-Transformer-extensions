@@ -80,10 +80,10 @@ namespace albireo
 
     /*
         Vérifie le propriétaire de p et ses dossiers parents, sans suivre un lien final.
-        Sur Windows, accepte SYSTEM, les administrateurs, TrustedInstaller ou le compte du
-        programme. Sur macOS, accepte le compte effectif ou root ; les parents ne doivent pas
-        être modifiables par les autres comptes, sauf un dossier temporaire root avec bit sticky.
-        Les ACL étendues de macOS ne sont pas examinées.
+        Accepte le compte effectif ou root ; ni p ni ses parents ne doivent être modifiables par
+        les autres comptes, sauf un dossier temporaire de root avec le bit sticky.  Les ACL
+        étendues sont lues : une entrée « allow » qui laisse un autre compte écrire est refusée,
+        une entrée « deny » est acceptée.
     */
     bool owned_by_system(const std::string& p);
 
@@ -112,15 +112,15 @@ namespace albireo
         Renvoie false, avec la raison dans error, quand le dossier ne peut pas être rendu tel.
         Sur macOS, crée p si nécessaire, le réserve au compte effectif (mode 0700) et, avec
         check_content, refuse les liens et les entrées non régulières, d'un autre propriétaire
-        ou modifiables par les autres comptes. Il ne les déplace pas. Les ACL étendues ne sont
-        pas examinées.
+        ou modifiables par les autres comptes, par leurs permissions ou par leur ACL.  Il ne les
+        déplace pas.  Une ACL de p qui laisse un autre compte écrire est vidée.
     */
     bool secure_folder(const std::string& p, std::string& error, bool check_content = false);
 
     /*
         Vérifie p et son contenu récursif : dossier sans lien, propriétaires reconnus et aucune
-        permission POSIX d'écriture pour le groupe ou les autres. Sur macOS, les ACL étendues
-        ne sont pas examinées.
+        permission d'écriture pour le groupe ou les autres, ni par les permissions POSIX ni par
+        une entrée « allow » d'ACL étendue.
     */
     bool folder_admin_only(const std::string& p);
 

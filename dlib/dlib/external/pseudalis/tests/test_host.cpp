@@ -4,6 +4,7 @@
 // Tests des clés, du coffre, de la base de données et des réglages du service, dans un dossier
 // temporaire.
 
+#include <cstdlib>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -52,6 +53,17 @@ int main()
     CHECK(!secure_folder(secured, error, true) && !error.empty());
     CHECK(chmod(writable.c_str(), 0600) == 0);
     CHECK(folder_admin_only(secured));
+    // Les ACL étendues de macOS : une entrée « allow » qui laisse un autre compte écrire est refusée,
+    // une entrée « deny » est acceptée, et secure_folder vide l'ACL dangereuse de son dossier.
+    const auto acl = [](const std::string& rule, const std::string& path)
+    { return std::system(("/bin/chmod " + rule + " '" + path + "'").c_str()) == 0; };
+    CHECK(acl("+a 'everyone allow write'", writable));
+    CHECK(!folder_admin_only(secured));
+    CHECK(!secure_folder(secured, error, true) && !error.empty());
+    CHECK(acl("-N", writable) && folder_admin_only(secured));
+    CHECK(acl("+a 'everyone deny delete'", secured) && folder_admin_only(secured) && owned_by_system(secured));
+    CHECK(acl("+a 'everyone allow add_file'", secured) && !folder_admin_only(secured) && !owned_by_system(secured));
+    CHECK(secure_folder(secured, error) && folder_admin_only(secured));
     const std::string linked = join_path(dir, "linked-secure-test");
     CHECK(symlink(secured.c_str(), linked.c_str()) == 0);
     CHECK(!owned_by_system(linked) && !folder_admin_only(linked));

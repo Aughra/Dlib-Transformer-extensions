@@ -829,7 +829,7 @@ namespace albireo
     {
         const std::string inbox = join_path(data_dir_, "import");
         if (folder_admin_only(inbox)) return true;
-        // Sur macOS, ce contrôle vérifie les propriétaires et permissions POSIX, mais pas les ACL étendues.
+        // Ce contrôle vérifie les propriétaires, les permissions POSIX et les ACL étendues.
         log_warning("models: the import folder " + inbox + " lets other accounts than the administrators write in "
             "it: it is secured, and what they placed is set aside");
         return secure_folder(inbox, error, true);

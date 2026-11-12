@@ -48,6 +48,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -334,6 +335,23 @@ int main(int argc, char** argv)
           "secure_folder refuses unsafe content when asked to inspect it");
     chmod(writable.c_str(), 0600);
     check(albireo::folder_admin_only(secured), "safe contents pass recursive permission checks");
+    // Les ACL étendues de macOS : une entrée « allow » qui laisse un autre compte écrire est refusée,
+    // une entrée « deny » est acceptée, et secure_folder vide l'ACL dangereuse de son dossier.
+    const auto acl = [](const std::string& rule, const std::string& path)
+    { return std::system(("/bin/chmod " + rule + " '" + path + "'").c_str()) == 0; };
+    check(acl("+a 'everyone allow write'", writable), "the security test adds an ACL to a file");
+    check(!albireo::folder_admin_only(secured), "an ACL entry that lets everyone write a file is rejected");
+    check(!albireo::secure_folder(secured, security_error, true) && !security_error.empty(),
+          "secure_folder refuses content with a writable ACL when asked to inspect it");
+    check(acl("-N", writable) && albireo::folder_admin_only(secured), "the file passes again without its ACL");
+    check(acl("+a 'everyone deny delete'", secured) && albireo::folder_admin_only(secured)
+              && albireo::owned_by_system(secured),
+          "a deny ACL entry is accepted");
+    check(acl("+a 'everyone allow add_file'", secured) && !albireo::folder_admin_only(secured)
+              && !albireo::owned_by_system(secured),
+          "an ACL entry that lets everyone add files to the folder is rejected");
+    check(albireo::secure_folder(secured, security_error) && albireo::folder_admin_only(secured),
+          "secure_folder removes a writable ACL from its folder");
     const std::string linked = albireo::join_path(data, "linked-secure-test");
     check(make_symlink(secured, linked), "the security test creates a symlink");
     check(!albireo::owned_by_system(linked) && !albireo::folder_admin_only(linked),
