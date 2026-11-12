@@ -17,8 +17,8 @@ namespace albireo
 
         // Les architectures que le moteur lit (model_config.cpp).
         const std::set<std::string> engine_architectures = { "llama", "mistral", "mistral3", "granite", "qwen2",
-            "qwen3", "qwen3vl", "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "phi3", "qwen35" };
-        const std::set<std::string> moe_architectures = { "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe" };
+            "qwen3", "qwen3vl", "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "phi3", "qwen35", "qwen35moe" };
+        const std::set<std::string> moe_architectures = { "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "qwen35moe" };
         // Les architectures dont le moteur lit les images (un projecteur).
         const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe" };
 

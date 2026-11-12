@@ -59,10 +59,11 @@ namespace albireo
 
         const bool llama_like = a == "llama" || a == "mistral" || a == "mistral3" || a == "granite";
         const bool qwen_like = a == "qwen2" || a == "qwen3" || a == "qwen3vl";
-        const bool moe_arch = a == "mixtral" || a == "granitemoe" || a == "qwen3moe" || a == "qwen3vlmoe";
+        const bool moe_arch = a == "mixtral" || a == "granitemoe" || a == "qwen3moe" || a == "qwen3vlmoe"
+            || a == "qwen35moe";
         const bool phi = a == "phi3";
         // Qwen 3.5 (fork pour macOS) : couches linéaires Gated DeltaNet et attention à porte de sortie.
-        const bool qwen35 = a == "qwen35";
+        const bool qwen35 = a == "qwen35" || a == "qwen35moe";
         if (!llama_like && !qwen_like && !moe_arch && !phi && !qwen35)
             throw std::runtime_error("the architecture '" + a + "' is not supported by this engine");
 
@@ -243,7 +244,14 @@ namespace albireo
         {
             if (c.n_experts_used <= 0 || c.n_experts_used > c.n_experts)
                 throw std::runtime_error("invalid number of experts used per token");
-            if (f.has("blk.0.ffn_gate_shexp.weight") || f.has("blk.0.ffn_up_shexp.weight"))
+            if (a == "qwen35moe")
+            {
+                // L'expert partagé de Qwen 3.5 / 3.6 MoE, avec sa porte sigmoïde.
+                c.d_ffn_shared = bounded_int(g, a + ".expert_shared_feed_forward_length", 0, 0, max_ffn);
+                if (c.d_ffn_shared > 0 && !f.has("blk.0.ffn_gate_inp_shexp.weight"))
+                    throw std::runtime_error("the shared expert of this model has no gate");
+            }
+            else if (f.has("blk.0.ffn_gate_shexp.weight") || f.has("blk.0.ffn_up_shexp.weight"))
                 throw std::runtime_error("shared experts are not supported by this engine");
             if (!f.has("blk.0.ffn_gate_exps.weight"))
                 throw std::runtime_error("this mixture of experts stores its experts in a legacy layout; "

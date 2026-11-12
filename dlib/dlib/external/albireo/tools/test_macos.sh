@@ -126,6 +126,13 @@ else
   step "qwen 3.5" "Paris" "$CHAT" "$ENGINE" "$QWEN35" --reasoning off --temperature 0 --max 40 "$QUESTION"
   step "qwen 3.5 resumed state" "same answers with resumed states" qwen35_turns
 fi
+# Qwen 3.6 MoE (qwen35moe : couches linéaires, 256 experts et un expert partagé), quand le petit modèle de test est là.
+QWEN36=${QWEN36_MODEL:-$ROOT/build/models/Qwen3.6-11B-A3B-Niwaki-Q4_K_M.gguf}
+if [ ! -f "$ENGINE" ] || [ ! -f "$QWEN36" ]; then skip "qwen 3.6 moe" "no $QWEN36"
+else
+  step "qwen 3.6 moe" "Paris" "$CHAT" "$ENGINE" "$QWEN36" --reasoning off --temperature 0 --max 40 "$QUESTION"
+fi
+
 # Qwen 3.5 sur le GPU : ses étapes de génération, quand un modèle en Q4_K / Q5_K / Q6_K est là (le 4B qu'installe
 # le service, par défaut).
 QWEN35_GPU=${QWEN35_GPU_MODEL:-$ROOT/build/albireo-home/models/hf-unsloth-qwen3.5-4b-q4_k_m.gguf}

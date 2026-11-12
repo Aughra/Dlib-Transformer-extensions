@@ -178,6 +178,9 @@ namespace albireo
             // norme de ses têtes et sa projection de sortie.
             weight_matrix w_mix, w_z, w_alpha, w_beta, w_ssm_out;
             std::vector<float> conv1d, dt_bias, ssm_a, ssm_norm;
+            // L'expert partagé de qwen35moe et sa porte (model_config::d_ffn_shared).
+            weight_matrix sh_gate, sh_up, sh_down;
+            std::vector<float> sh_gate_inp;
         };
 
         // Le nombre maximal de lignes de requêtes d'une tuile d'attention : les scores d'une tuile sur un

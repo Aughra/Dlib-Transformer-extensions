@@ -51,6 +51,44 @@ namespace albireo
         const long kvd = cfg_.kv_dim();
         const long hd = cfg_.head_dim;
 
+        // Le bloc feed-forward d'une couche : dense, à experts, et l'expert partagé de qwen35moe.
+        auto load_ffn = [&](layer& L, const std::string& p) {
+            if (cfg_.is_moe())
+            {
+                const long n_exp = cfg_.n_experts;
+                const long df = cfg_.d_ffn_expert;
+                L.router = f.matrix(p + "ffn_gate_inp.weight", n_exp, d);
+                for (long e = 0; e < n_exp; ++e)
+                {
+                    L.e_gate.push_back(f.expert_matrix(p + "ffn_gate_exps.weight", df, d, e, n_exp));
+                    L.e_up.push_back(f.expert_matrix(p + "ffn_up_exps.weight", df, d, e, n_exp));
+                    L.e_down.push_back(f.expert_matrix(p + "ffn_down_exps.weight", d, df, e, n_exp));
+                }
+            }
+            else if (cfg_.fused_gate_up)
+            {
+                // Les lignes de la porte, puis celles de la projection up.
+                const weight_matrix gate_up = f.matrix(p + "ffn_up.weight", 2 * cfg_.d_ffn, d);
+                L.w_gate = row_slice(gate_up, 0, cfg_.d_ffn);
+                L.w_up = row_slice(gate_up, cfg_.d_ffn, cfg_.d_ffn);
+                L.w_down = f.matrix(p + "ffn_down.weight", d, cfg_.d_ffn);
+            }
+            else
+            {
+                L.w_gate = f.matrix(p + "ffn_gate.weight", cfg_.d_ffn, d);
+                L.w_up = f.matrix(p + "ffn_up.weight", cfg_.d_ffn, d);
+                L.w_down = f.matrix(p + "ffn_down.weight", d, cfg_.d_ffn);
+            }
+            if (cfg_.d_ffn_shared > 0)
+            {
+                const long ds = cfg_.d_ffn_shared;
+                L.sh_gate = f.matrix(p + "ffn_gate_shexp.weight", ds, d);
+                L.sh_up = f.matrix(p + "ffn_up_shexp.weight", ds, d);
+                L.sh_down = f.matrix(p + "ffn_down_shexp.weight", d, ds);
+                L.sh_gate_inp = f.floats(p + "ffn_gate_inp_shexp.weight", static_cast<size_t>(d));
+            }
+        };
+
         layers_.resize(static_cast<size_t>(cfg_.n_layers));
         kv_slot_.assign(static_cast<size_t>(cfg_.n_layers), -1);
         linear_slot_.assign(static_cast<size_t>(cfg_.n_layers), -1);
@@ -76,9 +114,7 @@ namespace albireo
                 L.ssm_a = f.floats(p + "ssm_a", static_cast<size_t>(Hv));
                 L.ssm_norm = f.floats(p + "ssm_norm.weight", static_cast<size_t>(cfg_.ssm_head_dim));
                 L.ffn_norm = f.floats(p + ffn_norm, static_cast<size_t>(d));
-                L.w_gate = f.matrix(p + "ffn_gate.weight", cfg_.d_ffn, d);
-                L.w_up = f.matrix(p + "ffn_up.weight", cfg_.d_ffn, d);
-                L.w_down = f.matrix(p + "ffn_down.weight", d, cfg_.d_ffn);
+                load_ffn(L, p);
                 continue;
             }
             kv_slot_[static_cast<size_t>(i)] = n_attention++;
@@ -117,32 +153,7 @@ namespace albireo
                 throw std::runtime_error("layer " + std::to_string(i) + " holds one of attn_q_norm and attn_k_norm "
                     "without the other");
             L.ffn_norm = f.floats(p + ffn_norm, static_cast<size_t>(d));
-            if (cfg_.is_moe())
-            {
-                const long n_exp = cfg_.n_experts;
-                const long df = cfg_.d_ffn_expert;
-                L.router = f.matrix(p + "ffn_gate_inp.weight", n_exp, d);
-                for (long e = 0; e < n_exp; ++e)
-                {
-                    L.e_gate.push_back(f.expert_matrix(p + "ffn_gate_exps.weight", df, d, e, n_exp));
-                    L.e_up.push_back(f.expert_matrix(p + "ffn_up_exps.weight", df, d, e, n_exp));
-                    L.e_down.push_back(f.expert_matrix(p + "ffn_down_exps.weight", d, df, e, n_exp));
-                }
-            }
-            else if (cfg_.fused_gate_up)
-            {
-                // Les lignes de la porte, puis celles de la projection up.
-                const weight_matrix gate_up = f.matrix(p + "ffn_up.weight", 2 * cfg_.d_ffn, d);
-                L.w_gate = row_slice(gate_up, 0, cfg_.d_ffn);
-                L.w_up = row_slice(gate_up, cfg_.d_ffn, cfg_.d_ffn);
-                L.w_down = f.matrix(p + "ffn_down.weight", d, cfg_.d_ffn);
-            }
-            else
-            {
-                L.w_gate = f.matrix(p + "ffn_gate.weight", cfg_.d_ffn, d);
-                L.w_up = f.matrix(p + "ffn_up.weight", cfg_.d_ffn, d);
-                L.w_down = f.matrix(p + "ffn_down.weight", d, cfg_.d_ffn);
-            }
+            load_ffn(L, p);
         }
         if (cfg_.recurrent())
         {
@@ -827,6 +838,26 @@ namespace albireo
                 float* dst = tmp_.data() + list[static_cast<size_t>(i)].first * d;
                 const float* src = ye.data() + i * d;
                 for (long j = 0; j < d; ++j) dst[j] += w * src[j];
+            }
+        }
+
+        // L'expert partagé de qwen35moe : chaque token, sa sortie dosée par sigmoid(xn . ffn_gate_inp_shexp).
+        if (!L.sh_gate_inp.empty())
+        {
+            const long ds = cfg_.d_ffn_shared;
+            ge.resize(static_cast<size_t>(T * ds));
+            ue.resize(static_cast<size_t>(T * ds));
+            ye.resize(static_cast<size_t>(T * d));
+            product(L.sh_gate, xn_.data(), T, d, ge.data(), ds);
+            product(L.sh_up, xn_.data(), T, d, ue.data(), ds);
+            qk_silu_mul(ge.data(), ue.data(), T * ds);
+            product(L.sh_down, ge.data(), T, ds, ye.data(), d);
+            for (long t = 0; t < T; ++t)
+            {
+                const float g = 1.0f / (1.0f + std::exp(-qk_dot_f32(xn_.data() + t * d, L.sh_gate_inp.data(), d)));
+                float* dst = tmp_.data() + t * d;
+                const float* src = ye.data() + t * d;
+                for (long j = 0; j < d; ++j) dst[j] += g * src[j];
             }
         }
     }

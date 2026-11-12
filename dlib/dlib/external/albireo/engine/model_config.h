@@ -109,6 +109,10 @@ namespace albireo
         long n_experts_used = 0;
         long d_ffn_expert = 0;
         bool expert_weights_norm = true;   // renormaliser les poids de routage sélectionnés
+        // L'expert partagé de qwen35moe (fork pour macOS) : un bloc feed-forward de d_ffn_shared valeurs que
+        // chaque token traverse, sa sortie multipliée par sigmoid(x . ffn_gate_inp_shexp) puis ajoutée à celle
+        // des experts routés ; 0 sans lui.
+        long d_ffn_shared = 0;
 
         // Tokenizer et format de chat, tels que déclarés.
         std::string chat_template;
