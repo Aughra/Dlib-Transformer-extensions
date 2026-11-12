@@ -26,8 +26,7 @@ namespace httplib { class SSLServer; class Server; }
 namespace albireo
 {
 
-    // Un moteur utilisable et, s'il en offre plusieurs, le périphérique choisi.  key sert
-    // à retrouver ses mesures.
+    // Le moteur CPU utilisable ; key sert à retrouver ses mesures.
     struct engine_choice
     {
         const engine_candidate* candidate = nullptr;
@@ -37,20 +36,16 @@ namespace albireo
 
     /*!
         ensures
-            - Renvoie un candidat utilisable selon les réglages engine et accelerator.
-              "best" choisit le candidat le plus rapide parmi ceux mesurés ; "auto" choisit
-              parmi les candidats disponibles et revient au processeur si aucun accélérateur
-              ne convient.
+            - Renvoie le moteur CPU utilisable, indépendamment des anciens choix enregistrés.
             - Le candidat renvoyé est nul quand aucun moteur n'est utilisable.
     !*/
-    engine_choice choose_engine(const std::vector<engine_candidate>& candidates, const host_settings& s);
+    engine_choice choose_engine(const std::vector<engine_candidate>& candidates);
 
     /*!
         ensures
             - Renvoie les choix de moteur disponibles dans les candidats.
     !*/
     std::vector<engine_choice> engine_options(const std::vector<engine_candidate>& candidates);
-    bool is_openvino_variant(const std::string& variant);
 
     class service
     {
@@ -253,7 +248,7 @@ namespace albireo
         // téléchargement démarre.
         void note_default_failure(const json& entry, const user_error& error, const std::string& what);
         void scan_inbox();
-        // Sur macOS, folder_admin_only() ne vérifie pas les droits et cette fonction ne sécurise pas le dossier.
+        // Sur macOS, vérifie les propriétaires et permissions POSIX ; les ACL étendues ne sont pas examinées.
         bool secure_inbox(std::string& error);
         /*!
             ensures

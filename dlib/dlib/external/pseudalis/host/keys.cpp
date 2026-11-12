@@ -10,8 +10,6 @@
 #include <dlib/crypto/secure_random.h>
 #include <dlib/crypto/sha256.h>
 
-#include <sys/stat.h>
-
 #include "../common/json.h"
 #include "../common/platform.h"
 #include "crypto.h"
@@ -83,12 +81,7 @@ namespace pseudalis
 
     bool private_folder(const std::string& path, std::string& error)
     {
-        if (!make_dirs(path) || chmod(path.c_str(), 0700) != 0)
-        {
-            error = "cannot make the folder " + path;
-            return false;
-        }
-        return true;
+        return secure_folder(path, error);
     }
 
     bool save_master_key(const std::string& keys_dir, const std::string& master, std::string& error)

@@ -21,7 +21,7 @@ namespace albireo
 
     struct engine_candidate
     {
-        // "cpu", "cpu-avx2", "cpu-avxvnni", "openvino", "openvino-avxvnni", "cuda"
+        // "cpu"
         std::string variant;
         std::string path;
         json description;

@@ -11,6 +11,7 @@
 #include <fstream>
 #include <map>
 #include <set>
+#include <utility>
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -480,8 +481,8 @@ namespace albireo
         std::thread worker;
     };
 
-    model_manager::model_manager(store& db, const std::string& models_dir)
-        : db_(db), dir_(models_dir)
+    model_manager::model_manager(store& db, const std::string& models_dir, const std::string& reserve_dir)
+        : db_(db), dir_(models_dir), reserve_dir_(reserve_dir)
     {
         // Le service écrit, renomme et supprime les fichiers des modèles avec les droits de son compte.
         std::string error;
@@ -1195,6 +1196,95 @@ namespace albireo
             return s.hex();
         }
 
+        bool matches_sha256(const std::string& path, const std::string& folder, const std::string& sha)
+        {
+            link_free_file file;
+            std::string why;
+            return file.open(path, folder, why) && file.links() == 1 && sha256_open_file(file) == sha;
+        }
+
+        bool valid_sha256(const std::string& sha)
+        {
+            return sha.size() == 64 && std::all_of(sha.begin(), sha.end(), [](unsigned char c) {
+                return std::isxdigit(c) != 0;
+            });
+        }
+
+        bool restrict_reserve_file(const std::string& path)
+        {
+            struct stat st;
+            if (lstat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != geteuid()
+                || st.st_nlink != 1) return false;
+            return (st.st_mode & (S_IRWXG | S_IRWXO)) == 0 || chmod(path.c_str(), 0600) == 0;
+        }
+
+        bool copy_verified_file(const std::string& source, const std::string& source_folder,
+            const std::string& target_folder, const std::string& target, const std::string& expected_sha,
+            uint64_t expected_size, bool private_file, std::string& error,
+            const std::atomic<bool>* cancel = nullptr)
+        {
+            link_free_file input;
+            std::string why;
+            if (!input.open(source, source_folder, why) || input.links() != 1
+                || (expected_size != 0 && input.size() != expected_size))
+            {
+                error = "cannot read a regular source file " + source;
+                return false;
+            }
+            if (!direct_path(target_folder))
+            {
+                error = "the destination folder is not reached directly: " + target_folder;
+                return false;
+            }
+            const std::string temporary = join_path(target_folder, ".reserve-" + random_hex(16) + ".partial");
+            new_file output;
+            if (!output.create(temporary))
+            {
+                error = "cannot create " + temporary;
+                return false;
+            }
+            sha256_stream hash;
+            std::vector<char> buffer(1 << 20);
+            bool copied = true;
+            for (;;)
+            {
+                if (cancel && *cancel)
+                {
+                    copied = false;
+                    break;
+                }
+                const long long n = input.read(buffer.data(), buffer.size());
+                if (n < 0)
+                {
+                    copied = false;
+                    break;
+                }
+                if (n == 0) break;
+                const size_t count = static_cast<size_t>(n);
+                if (!output.write(buffer.data(), count))
+                {
+                    copied = false;
+                    break;
+                }
+                hash.update(buffer.data(), count);
+            }
+            copied = output.close() && copied;
+            if (!copied || hash.hex() != expected_sha
+                || (private_file && chmod(temporary.c_str(), 0600) != 0))
+            {
+                remove_file(temporary);
+                error = "the copy of " + source + " failed its integrity or write check";
+                return false;
+            }
+            if (!direct_path(target_folder) || !rename_file(temporary, target))
+            {
+                remove_file(temporary);
+                error = "cannot place " + target;
+                return false;
+            }
+            return true;
+        }
+
         // Comment se termine le transfert d'un segment d'un téléchargement (run_job()).
         enum class transfer_end
         {
@@ -1214,6 +1304,67 @@ namespace albireo
         // Le dossier remplacé par un lien entre la vérification et le déplacement se voit ici : target nomme
         // un autre fichier.
         return file_identity(target) == before;
+    }
+
+    bool model_manager::save_in_reserve(const std::string& path, const std::string& sha, std::string& error)
+    {
+        if (reserve_dir_.empty()) return true;
+        std::lock_guard<std::mutex> lock(reserve_m_);
+        std::string content_sha = sha;
+        if (!valid_sha256(content_sha))
+        {
+            link_free_file source;
+            std::string why;
+            if (!source.open(path, dir_, why) || source.links() != 1)
+            {
+                error = "cannot read a regular source file " + path;
+                return false;
+            }
+            content_sha = sha256_open_file(source);
+            if (!valid_sha256(content_sha))
+            {
+                error = "cannot hash " + path;
+                return false;
+            }
+        }
+        if (!secure_folder(reserve_dir_, error, true)) return false;
+        const std::string actual = final_path(reserve_dir_);
+        if (actual.empty())
+        {
+            error = "cannot resolve the local reserve folder";
+            return false;
+        }
+        reserve_dir_ = actual;
+        const std::string target = join_path(reserve_dir_, content_sha + ".gguf");
+        if (matches_sha256(target, reserve_dir_, content_sha) && restrict_reserve_file(target)) return true;
+        return copy_verified_file(path, dir_, reserve_dir_, target, content_sha, 0, true, error);
+    }
+
+    bool model_manager::restore_from_reserve(const std::shared_ptr<job>& j)
+    {
+        if (reserve_dir_.empty() || !dir_exists(reserve_dir_)) return false;
+        std::lock_guard<std::mutex> lock(reserve_m_);
+        std::string error;
+        if (!secure_folder(reserve_dir_, error, true)) return false;
+        const std::string actual = final_path(reserve_dir_);
+        if (actual.empty()) return false;
+        reserve_dir_ = actual;
+        if (!direct_path(reserve_dir_) || !folder_admin_only(reserve_dir_)) return false;
+        for (const auto& f : j->files)
+        {
+            if (!valid_sha256(f.sha256)) return false;
+            const std::string source = join_path(reserve_dir_, f.sha256 + ".gguf");
+            if (!restrict_reserve_file(source)) return false;
+            error.clear();
+            if (!copy_verified_file(source, reserve_dir_, dir_, f.partial, f.sha256, f.size, false, error,
+                    &j->cancel))
+            {
+                if (!j->cancel && file_exists(source))
+                    log_warning("models: the reserved copy of " + j->id + " cannot be used: " + error);
+                return false;
+            }
+        }
+        return true;
     }
 
     void model_manager::run_job(std::shared_ptr<job> j)
@@ -1241,6 +1392,19 @@ namespace albireo
             std::lock_guard<std::mutex> lock(m_);
             if (!j->abandoned) db_.set_download_state(j->id, st);
         };
+        set_state("downloading");
+        if (restore_from_reserve(j))
+        {
+            for (const auto& c : j->chunks) c->done = c->length;
+            j->received = j->total;
+            log_info("models: " + j->id + " restored from the local reserve");
+        }
+        if (j->cancel)
+        {
+            set_state("cancelled");
+            drop_partials();
+            return;
+        }
         const bool with_projector = j->files.size() > 1;
         log_info("models: downloading " + j->id + " (" + std::to_string(j->total >> 20) + " MB, "
             + std::to_string(j->chunks.size()) + " segments" + (with_projector ? ", with its projector)" : ")"));
@@ -1657,6 +1821,7 @@ namespace albireo
 
     bool model_manager::remove(const std::string& id, std::string& error)
     {
+        error.clear();
         installed_model m;
         if (!db_.find_model(id, m))
         {
@@ -1670,6 +1835,20 @@ namespace albireo
                 error = "the models folder " + dir_ + " now leads elsewhere through a link";
                 return false;
             }
+        if (!reserve_dir_.empty())
+        {
+            for (const auto& file : { std::make_pair(m.file, m.sha256),
+                    std::make_pair(m.projector, m.projector_sha256) })
+            {
+                if (file.first.empty() || !file_exists(file.first)) continue;
+                std::string why;
+                if (!save_in_reserve(file.first, file.second, why))
+                {
+                    error = "cannot preserve " + file.first + " in the local reserve: " + why;
+                    return false;
+                }
+            }
+        }
         if (file_exists(m.file) && !remove_file(m.file))
         {
             error = "cannot delete " + m.file + " (in use?)";

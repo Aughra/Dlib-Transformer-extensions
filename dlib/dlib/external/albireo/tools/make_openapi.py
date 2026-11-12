@@ -277,12 +277,9 @@ schemas = {
                  "change of port, of the GPU, of the network access or of memory restarts the service.", "properties": {
         "port": {"type": "integer", "minimum": 1024, "maximum": 65535},
         "language": {"type": "string", "enum": ["auto", "fr"]},
-        "engine": {"type": "string", "enum": ["auto", "best", "cpu", "cpu-avx2", "cpu-avxvnni", "openvino", "cuda"],
-                   "description": "auto: the accelerator of the computer, the NVIDIA card (cuda), else the NPU and "
-                   "the graphics processor of Intel together, else the one of them present, with the processor "
-                   "computing the products its device does not take; the processor engine when no accelerator is "
-                   "usable or when a measure found the accelerator slower. best: the fastest measured engine. A "
-                   "variant: that engine, with the device of accelerator for the engines that have several."},
+        "engine": {"type": "string", "enum": ["auto"],
+                   "description": "Valeur acceptée : auto. Albireo utilise le moteur CPU disponible ; "
+                   "l'accélération Metal se règle avec accelerator."},
         "accelerator": {"type": "string", "enum": ["auto", "none"],
                         "description": "none: every pass of the engine on the processor, the GPU of the Mac unused; "
                         "auto lets the engine give the generation steps and the prompts to the GPU (Metal)."},
@@ -377,20 +374,19 @@ schemas = {
             "variant": {"type": "string"}, "path": {"type": "string"}, "usable": {"type": "boolean"},
             "version": {"type": "string"}, "build": {"type": "string"}, "current": {"type": "boolean"},
             "devices": {"type": "array", "items": {"type": "object", "properties": {
-                "type": {"type": "string", "enum": ["cpu", "gpu", "npu"]}, "id": {"type": "string"},
+                "type": {"type": "string", "enum": ["cpu"]}, "id": {"type": "string"},
                 "name": {"type": "string"}}}},
             "reason": {"type": "string", "description": "Why the engine cannot run here, in English."},
-            "reason_code": {"type": "string", "description": "The code of the reason: isa_avx2, isa_avx_vnni, "
-                            "no_nvidia_driver, old_nvidia_driver, no_nvidia_card, old_nvidia_card, "
-                            "no_intel_device, intel_device_unusable, library_failed, probe_timeout."},
+            "reason_code": {"type": "string", "description": "The code of the reason: library_failed, "
+                            "probe_timeout."},
             "reason_args": {"type": "object", "additionalProperties": {"type": "string"}},
             "missing": {"type": "string", "description": "For an engine that runs: why its runtime left out the "
                         "other devices it looks for, such as the message of a plugin of OpenVINO."}}}},
         "options": {"type": "array", "description": "The choices of engine and device.", "items": {
             "type": "object", "properties": {
-                "key": {"type": "string", "example": "openvino:gpu"}, "variant": {"type": "string"},
+                "key": {"type": "string", "example": "cpu"}, "variant": {"type": "string"},
                 "device": {"type": "string"}, "current": {"type": "boolean"},
-                "kind": {"type": "string", "enum": ["cpu", "gpu", "npu", "both"]},
+                "kind": {"type": "string", "enum": ["cpu"]},
                 "names": {"type": "array", "items": {"type": "string"},
                           "description": "The names of the devices of the choice."},
                 "measure": {"type": "object", "description": "The last measure of the choice."}}}},
@@ -577,7 +573,7 @@ paths = {
         "tags": ["Service"], "summary": "License texts of the installation",
         "description": "The texts of the licenses folder of the programs, which the installer fills: those of the "
                        "components of the programs (Albireo, dlib, Mbed TLS, cpp-httplib, zlib, SQLite) and of the "
-                       "runtimes of the engines (OpenVINO, CUDA, cuDNN). The list is empty without that folder, as "
+                       "runtimes of the engine. The list is empty without that folder, as "
                        "in a build folder. The components of the web application are listed by "
                        "/vendor/components.json.",
         "responses": {"200": reply("The texts, by the names of their files", {"type": "array", "items": {

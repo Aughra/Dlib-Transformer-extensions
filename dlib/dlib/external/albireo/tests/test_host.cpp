@@ -59,6 +59,7 @@
 #include <netinet/in.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <zlib.h>
@@ -312,6 +313,33 @@ int main(int argc, char** argv)
     const std::string inbox = albireo::join_path(albireo::data_dir(), "import");
     albireo::make_dirs(inbox);
 
+    const std::string secured = albireo::join_path(data, "secure-test");
+    std::string security_error;
+    check(albireo::secure_folder(secured, security_error), "secure_folder creates a private folder");
+    struct stat secured_stat;
+    check(lstat(secured.c_str(), &secured_stat) == 0 && (secured_stat.st_mode & 0777) == 0700,
+          "secure_folder sets mode 0700");
+    check(albireo::owned_by_system(secured) && albireo::folder_admin_only(secured),
+          "owned folders pass the macOS ownership checks");
+    const std::string writable = albireo::join_path(secured, "writable");
+    {
+        std::ofstream out(writable);
+        out << "test";
+    }
+    chmod(writable.c_str(), 0666);
+    check(!albireo::folder_admin_only(secured), "a group-writable or world-writable entry is rejected");
+    check(!albireo::secure_folder(secured, security_error, true) && !security_error.empty(),
+          "secure_folder refuses unsafe content when asked to inspect it");
+    chmod(writable.c_str(), 0600);
+    check(albireo::folder_admin_only(secured), "safe contents pass recursive permission checks");
+    const std::string linked = albireo::join_path(data, "linked-secure-test");
+    check(make_symlink(secured, linked), "the security test creates a symlink");
+    check(!albireo::owned_by_system(linked) && !albireo::folder_admin_only(linked),
+          "security checks refuse a symlink");
+    check(!albireo::secure_folder(linked, security_error) && !albireo::secure_folder(linked + "/", security_error),
+          "secure_folder refuses a symlink, including one with a trailing slash");
+    check(!albireo::secure_folder("/", security_error), "secure_folder refuses the filesystem root");
+
     // Les fichiers que donne le serveur local, avec des plages, et un fichier qu'il donne en entier quelle
     // que soit la plage demandée.
     const std::string served = blob(300000, 'a');
@@ -540,7 +568,8 @@ int main(int argc, char** argv)
         list.push_back(catalog_entry("small", other, base_url + "/official/other.bin"));
         catalog["models"] = list;
         db.set_value("catalog", catalog.dump());
-        albireo::model_manager m(db, models_dir);
+        const std::string reserve_dir = albireo::join_path(work, "reserve");
+        albireo::model_manager m(db, models_dir, reserve_dir);
         const std::string dir = m.models_dir();
         const std::string partial = albireo::join_path(dir, "tiny.gguf.partial");
         const std::string target = albireo::join_path(dir, "tiny.gguf");
@@ -622,6 +651,30 @@ int main(int argc, char** argv)
         check(u2["imported"].size() == 1 && u2["imported"][0].as_string() == "tiny-import-2",
             "a second unknown file of that name takes the next free name (" + u2.dump() + ")");
         albireo::remove_file(unknown);
+
+        const int network_before_restore = official_count("other.bin");
+        std::string remove_error;
+        const std::string reserved = albireo::join_path(reserve_dir, albireo::sha256_hex(other) + ".gguf");
+        struct stat reserve_stat = {};
+        check(m.remove("small", remove_error) && !albireo::file_exists(small.file)
+            && read_text(reserved) == other && ::stat(reserved.c_str(), &reserve_stat) == 0
+            && (reserve_stat.st_mode & 0777) == 0600 && !installed(db, "small", small),
+            "removing a model keeps its verified file in the local reserve");
+        check(m.start_download("small", error), "a reserved model can be reinstalled");
+        d = wait_download(m, "small");
+        check(d["state"].as_string() == "done" && read_text(small.file) == other
+            && official_count("other.bin") == network_before_restore,
+            "a reserved model is restored without a network request");
+        check(m.remove("small", remove_error), "a restored model can be reserved again");
+        std::string corrupt_reserve = other;
+        corrupt_reserve[0] ^= 1;
+        write_text(reserved, corrupt_reserve);
+        const int network_before_corrupt_reserve = official_count("other.bin");
+        check(m.start_download("small", error), "a corrupt reserved model falls back to its catalog address");
+        d = wait_download(m, "small");
+        check(d["state"].as_string() == "done" && read_text(small.file) == other
+            && official_count("other.bin") > network_before_corrupt_reserve,
+            "a corrupt reserve file is not installed and the network copy is checked");
         m.stop();
     }
 
@@ -1145,13 +1198,23 @@ int main(int argc, char** argv)
         none["web_search"] = "none";
         s.from_json(none);
         const bool off = s.web_search == "none";
+        json legacy_engine = json::object();
+        legacy_engine["engine"] = "openvino";
+        legacy_engine["accelerator"] = "gpu";
+        s.from_json(legacy_engine);
+        const bool legacy_engine_reset = s.engine == "auto" && s.accelerator == "auto";
+        json cpu_only = json::object();
+        cpu_only["accelerator"] = "none";
+        s.from_json(cpu_only);
+        const bool cpu_only_kept = s.engine == "auto" && s.accelerator == "none";
         json number = json::object();
         number["web_search"] = 3;
         s.from_json(number);
         const json document = s.to_json();
-        check(wikipedia && off && s.web_search == "wikipedia" && !document.contains("public_link")
+        check(wikipedia && off && legacy_engine_reset && cpu_only_kept && s.web_search == "wikipedia"
+            && !document.contains("public_link")
             && !document.contains("web_search_url") && !document.contains("web_search_key_set"),
-            "the search of the settings is wikipedia or none, and the documents give no link and no key");
+            "legacy engine choices return to auto, and settings retain only supported search and accelerator choices");
     }
 
     {

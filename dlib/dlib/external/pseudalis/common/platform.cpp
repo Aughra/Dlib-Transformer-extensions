@@ -238,19 +238,100 @@ namespace pseudalis
         return p.size() == f.size() || f.back() == '/' || p[f.size()] == '/';
     }
 
-    // Ces contrôles macOS sont des valeurs neutres : ils ne vérifient ni le propriétaire ni les permissions.
+    namespace
+    {
+        std::string without_trailing_slashes(const std::string& path)
+        {
+            std::string out = path;
+            while (out.size() > 1 && out.back() == '/') out.pop_back();
+            return out;
+        }
+
+        bool trusted_owner(const struct stat& st)
+        {
+            return st.st_uid == geteuid() || st.st_uid == 0;
+        }
+
+        bool safe_directory_chain(const std::string& path)
+        {
+            std::string p = path;
+            while (!p.empty())
+            {
+                struct stat st;
+                if (lstat(p.c_str(), &st) != 0 || !S_ISDIR(st.st_mode) || !trusted_owner(st)) return false;
+                const bool writable = (st.st_mode & (S_IWGRP | S_IWOTH)) != 0;
+                if (writable && !(st.st_uid == 0 && (st.st_mode & S_ISVTX) != 0)) return false;
+                const std::string parent = parent_path(p);
+                if (parent.empty() || parent == p) break;
+                p = parent;
+            }
+            return true;
+        }
+
+        bool safe_tree_entry(const std::string& path)
+        {
+            struct stat st;
+            if (lstat(path.c_str(), &st) != 0 || S_ISLNK(st.st_mode) || !trusted_owner(st)
+                || (st.st_mode & (S_IWGRP | S_IWOTH)) != 0) return false;
+            if (S_ISDIR(st.st_mode))
+            {
+                DIR* dir = opendir(path.c_str());
+                if (!dir) return false;
+                bool safe = true;
+                errno = 0;
+                while (dirent* entry = readdir(dir))
+                {
+                    const std::string name = entry->d_name;
+                    if (name != "." && name != ".." && !safe_tree_entry(join_path(path, name)))
+                    {
+                        safe = false;
+                        break;
+                    }
+                    errno = 0;
+                }
+                safe = safe && errno == 0;
+                closedir(dir);
+                return safe;
+            }
+            return S_ISREG(st.st_mode);
+        }
+    }
+
     bool owned_by_system(const std::string& p)
     {
-        (void)p;
-        return true;
+        const std::string path = without_trailing_slashes(p);
+        struct stat st;
+        if (path.empty() || lstat(path.c_str(), &st) != 0 || S_ISLNK(st.st_mode)) return false;
+        const std::string actual = final_path(path);
+        return !actual.empty() && safe_directory_chain(parent_path(actual))
+            && lstat(actual.c_str(), &st) == 0 && trusted_owner(st);
     }
 
     bool secure_folder(const std::string& p, std::string& error, bool check_content)
     {
-        (void)check_content;
-        if (!make_dirs(p) || !dir_exists(p))
+        const std::string path = without_trailing_slashes(p);
+        error.clear();
+        if (path.empty() || path == "/" || !make_dirs(path))
         {
-            error = "cannot create " + p;
+            error = "cannot create " + path;
+            return false;
+        }
+        struct stat st;
+        if (lstat(path.c_str(), &st) != 0 || !S_ISDIR(st.st_mode) || st.st_uid != geteuid())
+        {
+            error = "the folder is not owned by this account: " + path;
+            return false;
+        }
+        const std::string actual = final_path(path);
+        if (actual.empty() || actual == "/" || !safe_directory_chain(parent_path(actual))
+            || chmod(actual.c_str(), 0700) != 0)
+        {
+            error = "cannot restrict permissions on " + path;
+            return false;
+        }
+        if (check_content && !safe_tree_entry(actual))
+        {
+            error = "the folder contains an entry with unsafe ownership or permissions: " + actual;
             return false;
         }
         return true;
@@ -258,8 +339,11 @@ namespace pseudalis
 
     bool folder_admin_only(const std::string& p)
     {
-        (void)p;
-        return true;
+        const std::string path = without_trailing_slashes(p);
+        struct stat st;
+        if (path.empty() || lstat(path.c_str(), &st) != 0 || !S_ISDIR(st.st_mode) || S_ISLNK(st.st_mode)) return false;
+        const std::string actual = final_path(path);
+        return !actual.empty() && safe_directory_chain(parent_path(actual)) && safe_tree_entry(actual);
     }
 
     namespace

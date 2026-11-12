@@ -9,6 +9,8 @@
 #include <vector>
 
 #include <sqlite3.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "../common/imposed_terms.h"
 #include "../common/platform.h"
@@ -37,8 +39,27 @@ int main()
     const std::string dir = join_path(join_path(executable_dir(), "test-host-data"), random_hex(8));
     make_dirs(dir);
 
+    const std::string secured = join_path(dir, "secure-test");
+    std::string error;
+    CHECK(secure_folder(secured, error));
+    struct stat secured_stat;
+    CHECK(lstat(secured.c_str(), &secured_stat) == 0 && (secured_stat.st_mode & 0777) == 0700);
+    CHECK(owned_by_system(secured) && folder_admin_only(secured));
+    const std::string writable = join_path(secured, "writable");
+    CHECK(write_file_atomic(writable, "test"));
+    CHECK(chmod(writable.c_str(), 0666) == 0);
+    CHECK(!folder_admin_only(secured));
+    CHECK(!secure_folder(secured, error, true) && !error.empty());
+    CHECK(chmod(writable.c_str(), 0600) == 0);
+    CHECK(folder_admin_only(secured));
+    const std::string linked = join_path(dir, "linked-secure-test");
+    CHECK(symlink(secured.c_str(), linked.c_str()) == 0);
+    CHECK(!owned_by_system(linked) && !folder_admin_only(linked));
+    CHECK(!secure_folder(linked, error) && !secure_folder(linked + "/", error));
+    CHECK(!secure_folder("/", error));
+
     // La clé maîtresse : créée une fois, relue, et son export.
-    std::string master, again, error;
+    std::string master, again;
     bool created = false;
     CHECK(load_master_key(join_path(dir, "keys"), master, created, error) && created && master.size() == 32);
     CHECK(load_master_key(join_path(dir, "keys"), again, created, error) && !created && again == master);

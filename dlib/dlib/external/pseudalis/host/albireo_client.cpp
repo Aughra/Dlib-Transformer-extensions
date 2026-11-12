@@ -83,7 +83,7 @@ namespace pseudalis
             reason = "the local authority of Albireo is missing";
             return false;
         }
-        // Sur macOS, owned_by_system() et folder_admin_only() ne vérifient pas les propriétaires.
+        // Sur macOS, les contrôles vérifient les propriétaires et permissions POSIX, mais pas les ACL étendues.
         if (!folder_admin_only(dir) || !folder_admin_only(join_path(dir, "certificates")) || !owned_by_system(ca)
             || (file_exists(settings_path) && !owned_by_system(settings_path)))
         {

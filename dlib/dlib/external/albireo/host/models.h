@@ -58,29 +58,17 @@ namespace albireo
                 modèle que la base ne peut pas enregistrer ne laisse aucun des deux fichiers
                 sous son nom définitif.
 
-                Chaque segment vient d'abord de la copie de sa partie dans l'espace de
-                publication, models/<identifier>/<nom de fichier de l'adresse officielle de la
-                partie> : quatre tentatives, la première avec l'adresse du cache, les suivantes
-                avec une nouvelle, et une partie absente de la liste est cherchée une fois de
-                plus dans une nouvelle liste.  Quand l'espace ne sert pas le segment, celui-ci
-                vient de l'adresse officielle de sa partie, l'"url" du catalogue, avec les
-                mêmes plages, depuis l'endroit où le segment s'est arrêté, en trois tentatives
-                séparées par des pauses qu'une annulation interrompt ; une réponse qui annonce
-                la partie à une autre taille que le catalogue met fin à sa tentative avant
-                qu'aucun octet ne soit écrit.  Dès que l'espace n'est pas réglé, ne répond pas
-                ou refuse les requêtes d'un segment, les autres segments du téléchargement
-                vont aussitôt à leurs adresses officielles.  Une partie que l'espace n'a pas,
-                a à une autre taille, ou dont les octets venus de l'espace échouent à son
-                empreinte y va avec tous ses segments.  Le journal signale chacun de ces
-                changements de source une fois : le téléchargement continue depuis l'adresse
-                officielle qu'il nomme, avec l'échec de l'espace.  Quand l'adresse officielle
-                échoue aussi, le téléchargement se termine en erreur avec le code
-                download_failed, dont le message ("e") nomme le fichier dans l'espace, l'échec
-                de l'espace, l'adresse officielle et son échec.  Les messages et le journal
-                nomment les adresses officielles, qui sont publiques, et jamais une adresse de
-                l'espace.  Les empreintes du catalogue vérifient les octets, quelle que soit la
-                source qui les a servis.  Une exception d'un transfert fait échouer le
-                téléchargement et ne sort jamais de son thread.
+                Le téléchargement vérifie d'abord la réserve locale : si le fichier complet du
+                décodeur et, le cas échéant, du projecteur y sont présents et conformes, il les
+                restaure sans réseau. Sinon, les segments viennent des adresses officielles
+                que donne le catalogue, avec trois tentatives séparées par des pauses qu'une
+                annulation interrompt ; une réponse qui annonce une partie à une autre taille
+                que le catalogue met fin à sa tentative avant qu'aucun octet ne soit écrit.
+                Une partie dont l'empreinte échoue est récupérée de nouveau, une fois. Quand
+                l'adresse officielle échoue, le téléchargement se termine en erreur avec le
+                code download_failed et le message ("e") nomme l'adresse et l'échec. Les
+                empreintes du catalogue vérifient les octets. Une exception d'un transfert fait
+                échouer le téléchargement et ne sort jamais de son thread.
 
             INSTALLATION HORS LIGNE
                 import_path() installe les fichiers GGUF du dossier d'import du dossier des
@@ -136,7 +124,7 @@ namespace albireo
                 l'entreprise qui l'a fait.
         !*/
     public:
-        model_manager(store& db, const std::string& models_dir);
+        model_manager(store& db, const std::string& models_dir, const std::string& reserve_dir = std::string());
         ~model_manager();
 
         /*!
@@ -211,7 +199,7 @@ namespace albireo
         void resume_pending();
         json downloads() const;
 
-        // Supprime les fichiers d'un modèle installé, son projecteur compris, et son enregistrement.
+        // Garde les fichiers vérifiés dans la réserve locale, puis retire le modèle et son enregistrement.
         bool remove(const std::string& id, std::string& error);
         /*!
             ensures
@@ -301,6 +289,8 @@ namespace albireo
         struct job;
         // Un fichier GGUF d'un import, ouvert sans passer par aucun lien, haché et décrit.
         struct import_item;
+        bool save_in_reserve(const std::string& path, const std::string& sha, std::string& error);
+        bool restore_from_reserve(const std::shared_ptr<job>& j);
         // Comment put_file() a placé un fichier : déplacé, copié, ou déjà trouvé à son nom.
         struct placement
         {
@@ -412,6 +402,8 @@ namespace albireo
 
         store& db_;
         std::string dir_;
+        std::string reserve_dir_;
+        std::mutex reserve_m_;
         mutable std::mutex m_;
         json catalog_;
         // La liste personnelle, mêlée à catalog_ à chaque chargement (merge_custom()).

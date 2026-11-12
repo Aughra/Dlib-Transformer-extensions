@@ -990,7 +990,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 && in_range("gpu_prompt_tokens", 9, 1 << 20) && in_range("gpu_prompt_context", 0, 1 << 20)
                 && one_of("language", { "auto", "fr" })
                 && one_of("kv_type", { "auto", "q8", "f16" })
-                && one_of("engine", { "auto", "best", "cpu", "cpu-avx2", "cpu-avxvnni", "openvino", "cuda" })
+                && one_of("engine", { "auto" })
                 && one_of("accelerator", { "auto", "none" })
                 && in_range("port", 1024, 65535) && in_range("threads", 0, 1024) && in_range("context", 0, 1 << 20)
                 && in_range("max_sequences", 1, 64) && in_range("kv_mb", 0, 1 << 24)
@@ -1148,8 +1148,6 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             {"sqlite.txt", "SQLite", SQLITE_VERSION},
             {"libpng.txt", "libpng", ""},
             {"libjpeg.txt", "libjpeg (Independent JPEG Group)", ""},
-            {"openvino-license.txt", "OpenVINO", ""},
-            {"cuda-eula.txt", "CUDA", ""},
             {"cudnn-license.txt", "cuDNN", ""}
         };
 

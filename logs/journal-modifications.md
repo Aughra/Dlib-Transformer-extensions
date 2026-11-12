@@ -2,6 +2,42 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Enregistrer les travaux sans Mac sur la branche de préparation
+
+- **Quoi** : regroupement des contrôles de dossiers, du retrait des choix de moteur non Apple, du test de publication hors réseau et des premières opérations de réserve locale, détaillés ci-dessous. L'en-tête de reprise indique désormais la version effective, Albireo 4.0.4.
+- **Fichiers** : fichiers détaillés dans les quatre entrées suivantes ; `logs/reprise.md`, `logs/journal-modifications.md`.
+- **Pourquoi** : demande explicite de l'humain de commiter et pousser ces préparatifs afin de les retrouver sur le Mac.
+- **Étapes** : test de publication relancé avec succès (1 sur 1) ; `git diff --check` sans erreur, avec un avertissement de conversion LF/CRLF du mémo. Les vérifications de syntaxe Windows de `settings.cpp` et `engine_host.cpp` passent ; celle du service n'aboutit pas dans cet environnement (`CreateFile2`, configuration SSL). **Aucun build ni test C++ n'a été validé sur Mac ; ils restent obligatoires avant la fusion dans `main`.**
+
+## 2026-11-12 — Ajouter les premières opérations de réserve locale
+
+- **Quoi** : lorsqu'un modèle installé est supprimé, ses fichiers conformes à leurs empreintes sont copiés sous leur SHA-256 dans `<données>/reserve`. Au téléchargement suivant, Albireo réutilise le décodeur et le projecteur locaux seulement s'ils sont tous deux présents et conformes ; sinon il suit le chemin réseau habituel. Les copies de réserve sont écrites en 0600 dans un dossier 0700.
+- **Fichiers** : `dlib/dlib/external/albireo/host/models.cpp`, `host/models.h`, `host/service.cpp`, `tests/test_host.cpp`, `common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md` ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`.
+- **Pourquoi** : permettre de supprimer un modèle installé sans devoir le retélécharger ensuite, et amorcer la réserve sans figer encore sa taille maximale ni ajouter un bouton de vidage.
+- **Étapes** : test d'intégration ajouté pour la conservation, la réinstallation sans requête réseau et le retour au réseau quand la copie de réserve est altérée. Albireo passe à 4.0.4. Le test C++ et le build complet restent à exécuter sur Mac.
+
+## 2026-11-12 — Tester le découpage GGUF sans réseau
+
+- **Quoi** : ajout d'un test autonome qui fabrique un petit GGUF synthétique, lance `publish_model.py --base` en gzip, puis vérifie les métadonnées, le nombre de paramètres, les tailles et empreintes de chaque morceau, ainsi que la reconstruction octet pour octet.
+- **Fichiers** : `dlib/dlib/external/albireo/tools/test_publish_model.py`.
+- **Pourquoi** : valider l'outil de préparation sans publier de modèle, contacter GitHub ou utiliser des identifiants.
+- **Étapes** : `python -m unittest dlib.dlib.external.albireo.tools.test_publish_model -v` passe (1 test). Le modèle et les morceaux sont temporaires et supprimés à la fin du test.
+
+## 2026-11-12 — Retirer les choix de moteur non Apple
+
+- **Quoi** : Albireo ne recherche et n'expose plus que le moteur `cpu`. Les anciennes valeurs `engine` et `accelerator` des réglages sont remises à `auto`, l'API n'accepte plus qu'`engine: auto`, et les entrées de licence CUDA/OpenVINO ont été retirées. Les commentaires de sécurité périmés ont aussi été actualisés.
+- **Fichiers** : `dlib/dlib/external/albireo/host/engine_host.cpp`, `host/engine_host.h`, `host/service.cpp`, `host/service.h`, `host/settings.cpp`, `host/settings.h`, `host/server.cpp`, `tests/test_host.cpp`, `tools/make_openapi.py`, `common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md` ; `dlib/dlib/external/pseudalis/host/albireo_client.cpp` ; `logs/reprise.md`.
+- **Pourquoi** : ne plus présenter les variantes CUDA, OpenVINO et x86 héritées dans une application désormais construite pour macOS Apple Silicon, sans casser la lecture d'anciens réglages.
+- **Étapes** : test ciblé ajouté pour la conversion des anciens réglages vers `auto`. Albireo passe à 4.0.3 ; la spécification OpenAPI a été régénérée. Compilation et tests C++ non exécutés : aucun Mac disponible.
+
+## 2026-11-12 — Vérifier les permissions des dossiers macOS
+
+- **Quoi** : Albireo et Pseudalis ne valident plus les propriétaires et permissions par des réponses toujours positives. Les dossiers sécurisés sont créés en mode 0700 ; les contrôles refusent les liens finaux, les parents modifiables par d'autres comptes (hors répertoire temporaire root avec bit sticky) et, lors d'un contrôle récursif, les entrées d'un autre propriétaire ou modifiables par le groupe/les autres. Pseudalis réutilise maintenant ce contrôle pour ses dossiers de clés.
+- **Fichiers** : `dlib/dlib/external/albireo/common/platform.cpp`, `common/platform.h`, `host/service.cpp`, `host/service.h`, `tests/test_host.cpp`, `CMakeLists.txt`, `common/version.h`, `web/openapi.json`, `web/changelog.md` ; `dlib/dlib/external/pseudalis/common/platform.cpp`, `common/platform.h`, `host/albireo_client.cpp`, `host/keys.cpp`, `tests/test_host.cpp` ; `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`.
+- **Pourquoi** : remplacer les stubs macOS qui laissaient croire que les dossiers et clés étaient protégés sans vérifier leur propriétaire ni leurs droits.
+- **Étapes** : tests ciblés ajoutés pour les modes POSIX, les contenus modifiables, les liens symboliques (avec et sans slash final) et le refus de la racine. Albireo passe à 4.0.2. **Compilation et tests non exécutés : aucun Mac disponible.** Les ACL étendues macOS ne sont pas examinées ; cette limite et la vérification sur Mac restent ouvertes.
+- **À reprendre sur Mac** : compiler Albireo et Pseudalis, exécuter leurs `test_host`, puis vérifier les ACL réelles des dossiers utilisateur et le comportement de la boîte d'import avant de s'appuyer sur ces contrôles.
+
 ## 2026-11-12 — Corriger les langues et préciser les limites macOS
 
 - **Quoi** : l'API Pseudalis n'accepte plus que `auto`, `en` et `fr` ; le test d'intégration essaie les deux langues conservées et vérifie le refus de `de`, `it` et `es`. Commentaires corrigés sur les clés PEM, les délais DNS, le dossier surveillé de Pseudalis, les chemins de données et les vérifications de permissions. Albireo passe de 4.0.0 à 4.0.1 pour rectifier le message de journalisation d'une clé PEM.

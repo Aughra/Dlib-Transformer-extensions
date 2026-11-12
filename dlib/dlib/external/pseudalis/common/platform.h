@@ -81,10 +81,11 @@ namespace pseudalis
     bool path_inside(const std::string& path, const std::string& folder);
 
     /*
-        Indique si le propriétaire de p lui-même, lien compris, est SYSTEM, les administrateurs,
-        l'installateur de Windows (TrustedInstaller) ou le compte de ce programme, qui a leurs
-        droits là où la fonction sert (l'installateur, le service).  Toujours vrai ailleurs que
-        sous Windows.
+        Vérifie le propriétaire de p et ses dossiers parents, sans suivre un lien final.
+        Sur Windows, accepte SYSTEM, les administrateurs, TrustedInstaller ou le compte du
+        programme. Sur macOS, accepte le compte effectif ou root ; les parents ne doivent pas
+        être modifiables par les autres comptes, sauf un dossier temporaire root avec bit sticky.
+        Les ACL étendues de macOS ne sont pas examinées.
     */
     bool owned_by_system(const std::string& p);
 
@@ -101,16 +102,17 @@ namespace pseudalis
               programme ne lit ; avec check_content, son contenu est vérifié même quand il avait
               déjà ces permissions.
         Renvoie false, avec la raison dans error, quand le dossier ne peut pas être rendu ainsi.
-        Ailleurs, le dossier est seulement créé.
+        Sur macOS, crée p si nécessaire, le réserve au compte effectif (mode 0700) et, avec
+        check_content, refuse les liens et les entrées non régulières, d'un autre propriétaire
+        ou modifiables par les autres comptes. Il ne les déplace pas. Les ACL étendues ne sont
+        pas examinées.
     */
     bool secure_folder(const std::string& p, std::string& error, bool check_content = false);
 
     /*
-        Indique si seuls SYSTEM et les administrateurs peuvent modifier ce que contient le dossier
-        p : p est un dossier et non un lien, son propriétaire est l'un des comptes de
-        owned_by_system(), et aucune entrée de ses permissions ne permet à un autre compte d'y
-        écrire, d'y supprimer ou de changer ses permissions, que l'entrée s'applique à p ou à son
-        contenu.  Toujours vrai ailleurs que sous Windows.
+        Vérifie p et son contenu récursif : dossier sans lien, propriétaires reconnus et aucune
+        permission POSIX d'écriture pour le groupe ou les autres. Sur macOS, les ACL étendues
+        ne sont pas examinées.
     */
     bool folder_admin_only(const std::string& p);
 

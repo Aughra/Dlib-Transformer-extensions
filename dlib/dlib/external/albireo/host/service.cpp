@@ -160,145 +160,24 @@ namespace albireo
         return ok;
     }
 
-    bool is_openvino_variant(const std::string& variant)
-    {
-        return variant.compare(0, 8, "openvino") == 0;
-    }
-
     std::vector<engine_choice> engine_options(const std::vector<engine_candidate>& candidates)
     {
-        // Le moteur OpenVINO aux noyaux du processeur les plus riches qui tournent ici : ses
-        // périphériques font les choix du NPU et du processeur graphique.
-        const engine_candidate* openvino = nullptr;
-        for (const char* v : { "openvino-avxvnni", "openvino" })
-            for (const auto& c : candidates)
-                if (!openvino && c.usable && c.variant == v) openvino = &c;
         std::vector<engine_choice> out;
         for (const auto& c : candidates)
         {
-            if (!c.usable) continue;
-            if (is_openvino_variant(c.variant))
-            {
-                if (&c != openvino) continue;
-                // Un choix par genre de périphérique, et un pour le NPU et le processeur graphique
-                // ensemble, où dlib envoie chaque produit au plus rapide des deux.
-                std::string npu, gpu;
-                for (const auto& d : c.description["devices"].elements())
-                {
-                    // Le plugin du processeur n'est listé que quand DLIB_NPU_DEVICE le nomme.
-                    const std::string type = d["type"].as_string();
-                    if (type != "npu" && type != "gpu" && !(type == "cpu" && d["id"].as_string() == "CPU")) continue;
-                    const std::string key = "openvino:" + type;
-                    bool seen = false;
-                    for (const auto& e : out) seen = seen || e.key == key;
-                    if (seen) continue;
-                    engine_choice e;
-                    e.candidate = &c;
-                    e.device = d["id"].str(type == "npu" ? "NPU" : type == "gpu" ? "GPU" : "CPU");
-                    e.key = key;
-                    out.push_back(e);
-                    if (type == "npu") npu = e.device;
-                    if (type == "gpu") gpu = e.device;
-                }
-                if (!npu.empty() && !gpu.empty())
-                {
-                    engine_choice e;
-                    e.candidate = &c;
-                    e.device = npu + "," + gpu;
-                    e.key = "openvino:both";
-                    out.push_back(e);
-                }
-                continue;
-            }
+            if (!c.usable || c.variant != "cpu") continue;
             engine_choice e;
             e.candidate = &c;
-            e.key = c.variant;
+            e.key = "cpu";
             out.push_back(e);
         }
         return out;
     }
 
-    engine_choice choose_engine(const std::vector<engine_candidate>& candidates, const host_settings& s)
+    engine_choice choose_engine(const std::vector<engine_candidate>& candidates)
     {
         const std::vector<engine_choice> options = engine_options(candidates);
-        auto rate = [&](const engine_choice& e) {
-            return s.engine_benchmarks[e.key]["tokens_per_second"].as_double(0);
-        };
-        auto is_cpu = [](const engine_choice& e) { return e.key.compare(0, 3, "cpu") == 0; };
-        auto is_npu = [](const engine_choice& e) { return e.key == "openvino:npu"; };
-        auto is_gpu = [](const engine_choice& e) { return e.key == "cuda" || e.key == "openvino:gpu"; };
-        auto is_accelerator = [](const engine_choice& e) {
-            return e.key == "cuda" || e.key == "openvino:npu" || e.key == "openvino:gpu" || e.key == "openvino:both";
-        };
-        auto fastest = [&](const std::function<bool(const engine_choice&)>& keep) {
-            const engine_choice* best = nullptr;
-            for (const auto& e : options)
-                if (keep(e) && rate(e) > 0 && (!best || rate(e) > rate(*best))) best = &e;
-            return best;
-        };
-        auto first = [&](const std::vector<std::string>& keys) {
-            for (const auto& k : keys)
-                for (const auto& e : options)
-                    if (e.key == k) return &e;
-            return static_cast<const engine_choice*>(nullptr);
-        };
-
-        if (s.engine != "auto" && s.engine != "best")
-        {
-            // Une variante nommée dans les réglages ; pour les moteurs à plusieurs périphériques, le
-            // réglage accelerator choisit le périphérique.  "openvino" nomme le moteur OpenVINO que
-            // garde engine_options().
-            const engine_choice* named = nullptr;
-            for (const auto& e : options)
-            {
-                const bool openvino = s.engine == "openvino" && is_openvino_variant(e.candidate->variant);
-                if (e.key != s.engine && e.candidate->variant != s.engine && !openvino) continue;
-                if (!named) named = &e;
-                if ((s.accelerator == "npu" && is_npu(e)) || (s.accelerator == "gpu" && is_gpu(e))
-                    || (s.accelerator == "both" && e.key == "openvino:both")) named = &e;
-            }
-            if (named) return *named;
-            log_warning("engines: the engine '" + s.engine + "' of the settings is not usable, automatic selection");
-        }
-        // Le moteur du processeur : le plus rapide mesuré, sinon celui des noyaux les plus riches.
-        const engine_choice* processor = fastest(is_cpu);
-        if (!processor) processor = first({ "cpu-avxvnni", "cpu-avx2", "cpu" });
-        const engine_choice* e = nullptr;
-        if (s.accelerator == "npu")
-        {
-            e = fastest(is_npu);
-            if (!e) e = first({ "openvino:npu" });
-        }
-        else if (s.accelerator == "gpu")
-        {
-            e = fastest(is_gpu);
-            if (!e) e = first({ "cuda", "openvino:gpu" });
-        }
-        else if (s.accelerator == "both")
-        {
-            e = fastest(is_accelerator);
-            if (!e) e = first({ "cuda", "openvino:both", "openvino:gpu", "openvino:npu" });
-        }
-        else if (s.accelerator == "none")
-        {
-            e = processor;
-        }
-        else
-        {
-            // Le moteur "best" : le plus rapide mesuré.
-            if (s.engine == "best") e = fastest([](const engine_choice&) { return true; });
-            /*
-                L'accélérateur de l'ordinateur, le processeur calculant ce que son périphérique ne fait pas :
-                la carte NVIDIA, sinon le NPU et le processeur graphique d'Intel ensemble, sinon celui des
-                deux qui est présent.  Une mesure qui l'a trouvé plus lent que le moteur du processeur cède
-                la place au moteur du processeur.
-            */
-            if (!e) e = first({ "cuda", "openvino:both", "openvino:gpu", "openvino:npu" });
-            if (e && processor && rate(*e) > 0 && rate(*processor) > rate(*e)) e = processor;
-        }
-        if (!e) e = processor;
-        if (!e && !options.empty()) e = &options.front();
-        return e ? *e : engine_choice();
+        return options.empty() ? engine_choice() : options.front();
     }
 
     service::service() : program_dir_(executable_dir()), data_dir_(albireo::data_dir())
@@ -416,7 +295,8 @@ namespace albireo
         {
             try
             {
-                std::unique_ptr<model_manager> m(new model_manager(*db_, st.effective_models_dir()));
+                std::unique_ptr<model_manager> m(new model_manager(*db_, st.effective_models_dir(),
+                    join_path(data_dir_, "reserve")));
                 m->on_installed([this](const installed_model& im) { on_installed(im); });
                 m->on_replace([this](const std::string& id, const std::function<bool()>& place) {
                     return replace_model_files(id, place);
@@ -696,11 +576,11 @@ namespace albireo
             std::atomic<bool>& flag;
             ~ready_at_exit() { flag = true; }
         } ready{ engines_ready_ };
-        // Le moteur de cette machine ; un moteur du processeur quand celui choisi échoue.
+        // Le moteur CPU construit pour cette machine.
         const host_settings st = settings_->get();
         // Les descriptions s'arrêtent aussitôt quand le service s'arrête.
         candidates_ = engine_.discover(engines_dir(), executable_path(), &stopping_);
-        choice_ = choose_engine(candidates_, st);
+        choice_ = choose_engine(candidates_);
         if (stopping_) return;
         if (choice_.candidate)
         {
@@ -711,7 +591,6 @@ namespace albireo
                 log_error("engines: " + engine_error_);
                 for (const auto& o : engine_options(candidates_))
                 {
-                    if (o.key.compare(0, 3, "cpu") != 0) continue;
                     if (engine_.start(*o.candidate, engine_config(st, o.device), e))
                     {
                         choice_ = o;
@@ -950,7 +829,7 @@ namespace albireo
     {
         const std::string inbox = join_path(data_dir_, "import");
         if (folder_admin_only(inbox)) return true;
-        // Sur macOS, folder_admin_only() ne vérifie pas les droits et ce chemin ne sécurise donc pas le dossier.
+        // Sur macOS, ce contrôle vérifie les propriétaires et permissions POSIX, mais pas les ACL étendues.
         log_warning("models: the import folder " + inbox + " lets other accounts than the administrators write in "
             "it: it is secured, and what they placed is set aside");
         return secure_folder(inbox, error, true);
@@ -1234,8 +1113,7 @@ namespace albireo
         }
         /*
             Le moteur analyse les fichiers du modèle avec les droits du service : leurs dossiers doivent être
-            ceux dont folder_admin_only() accepte le dossier parent. Sous macOS, ce contrôle est neutre et
-            ne vérifie pas les droits du propriétaire.
+            ceux dont folder_admin_only() accepte le dossier parent.
         */
         for (const std::string& file : { m.file, m.projector })
         {
@@ -1890,17 +1768,11 @@ namespace albireo
             j["current"] = o.key == choice_.key;
             j["measure"] = st.engine_benchmarks[o.key];
             // Le genre du choix et les noms de ses périphériques, que montrent les menus.
-            const std::string kind = o.key == "cuda" || o.key == "openvino:gpu" ? "gpu"
-                : o.key == "openvino:npu" ? "npu" : o.key == "openvino:both" ? "both" : "cpu";
-            j["kind"] = kind;
+            j["kind"] = "cpu";
             json names = json::array();
             for (const auto& d : o.candidate->description["devices"].elements())
             {
-                const std::string type = d["type"].as_string();
-                const bool wanted = kind == "both" ? (type == "npu" || type == "gpu")
-                    : o.key == "openvino:cpu" ? (type == "cpu" && d.contains("id")) : type == kind;
-                if (wanted && (kind != "cpu" || o.key == "openvino:cpu" || names.empty()))
-                    names.push_back(d["name"]);
+                if (d["type"].as_string() == "cpu") names.push_back(d["name"]);
             }
             j["names"] = names;
             options.push_back(j);
@@ -2013,9 +1885,8 @@ namespace albireo
         });
         out["model"] = model.id;
         out["results"] = results;
-        // Le moteur "best", ou un choix d'accélérateur parmi plusieurs périphériques, suit les
-        // nouvelles mesures après un redémarrage.
-        const engine_choice next = choose_engine(candidates_, updated);
+        // Le choix reste le moteur CPU unique ; la mesure est conservée à titre informatif.
+        const engine_choice next = choose_engine(candidates_);
         out["restart"] = next.key != choice_.key;
         if (next.key != choice_.key) request_restart();
         return out;

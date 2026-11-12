@@ -39,7 +39,7 @@ namespace albireo
         int port = 8443;
         std::string models_dir;                 // vide : <data>/models
         std::string language = "auto";          // auto, en, fr, de, it, es
-        std::string engine = "auto";            // auto, best, ou une variante : cpu, cpu-avx2, cpu-avxvnni, ...
+        std::string engine = "auto";            // auto : moteur CPU construit pour le Mac
         std::string accelerator = "auto";       // auto : le GPU du Mac (Metal), none : le processeur seul
         long long device_mb = 0;                // copies des poids sur le périphérique, 0 : automatique
         int threads = 0;                        // 0 : cœurs physiques
