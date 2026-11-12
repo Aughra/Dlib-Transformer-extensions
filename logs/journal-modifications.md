@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Créer le tableau des différences avec Windows
+
+- **Quoi** : `docs/differences-mac-windows.md` : quatre tableaux (vitesse du moteur, modèles, système et sécurité, interface) de ce que le fork fait autrement que l'original, avec le pourquoi, le gain mesuré et le renvoi au détail (changements 1 à 11 des notes pour l'auteur, notes de version). Règle ajoutée à CLAUDE.md (section « Le tableau des différences avec Windows » et liste des documents qui doivent rester vrais).
+- **Fichiers** : `docs/differences-mac-windows.md`, `CLAUDE.md`, ce journal.
+- **Pourquoi** : demande de l'humain : un fichier tableau à part, qui explique ce qui a changé par rapport à Windows et pourquoi, inscrit dans CLAUDE.md.
+- **Étapes** : chiffres repris des notes pour l'auteur (changements 1 à 11), des notes de version et du journal ; aucun nouveau chiffre.
+
 ## 2026-11-12 — Réserve, partie 2 : réponses de Hugging Face gardées, anciens modèles rangés (Albireo 4.3.0), épisode 25
 
 - **Quoi** : `/albireo/v1/hub/search` et `/hub/files` gardent chaque réponse dans la base (`hub_cache`, 30 par sorte, la plus ancienne retirée) et la rendent hors ligne, avec `local=1`, ou quand Hugging Face ne répond pas, avec `cached_at` ; sinon 404 `hub_not_cached` (hors ligne) ou 502. Route `/albireo/v1/hub/recent`. `fill_reserve_async` clone dans la réserve, au démarrage, les fichiers des modèles installés qui n'y sont pas. `save_in_reserve` date la copie de son entrée (un clone gardait la date de l'original, ce qui faussait l'ordre du plafond). Page : boutons « Rafraîchir depuis le Mac » et « Rafraîchir depuis Hugging Face », recherches gardées cliquables, date des réponses gardées. `test_macos.sh` : étape « hub search kept on the Mac ». Blog : épisode 25 « Le grenier » ; notes de version 4.3.0.

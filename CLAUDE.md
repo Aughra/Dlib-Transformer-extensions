@@ -105,6 +105,7 @@ Documents du fork qui doivent toujours rester **vrais** :
 - ce fichier CLAUDE.md ;
 - [logs/reprise.md](logs/reprise.md) ;
 - [docs/notes-pour-l-auteur.md](docs/notes-pour-l-auteur.md) (voir ci-dessous).
+- [docs/differences-mac-windows.md](docs/differences-mac-windows.md) (voir ci-dessous).
 
 **À la fin de chaque sous-étape**, avant de la déclarer terminée : relire ces documents et corriger ce que le changement rend faux ou incomplet. Une doc qui décrit un état dépassé est un défaut, au même titre qu'un test qui ment. Critère vérifiable : aucune commande, option, cible ou résultat cité dans ces documents ne contredit le code ni le dernier build.
 
@@ -127,6 +128,15 @@ Les documents de l'original (`Readme.md`, `examples/Readme.md`, les README d'Alb
 - Quand l'original corrige un point après une fusion, le marquer comme corrigé, avec le commit de l'original, plutôt que de l'effacer.
 - Ni secret, ni chemin privé (`/Users/...`), ni adresse e-mail.
 - Critère vérifiable : chaque correction du fork qui touche un fichier de l'original, et chaque noyau ou optimisation du fork, a son entrée dans ce document.
+
+### Le tableau des différences avec Windows
+
+[docs/differences-mac-windows.md](docs/differences-mac-windows.md) résume, en tableaux par thème (vitesse du moteur ; modèles ; système et sécurité ; interface), **tout ce que le fork fait autrement que l'original Windows** : ce que fait l'original, ce que fait le fork, pourquoi, le gain mesuré, et où trouver le détail (changement N des notes pour l'auteur, version des notes de version). Demande de l'humain (2026-11-12) : un seul endroit pour voir d'un coup d'œil ce qui a changé et pourquoi.
+
+- **Chaque changement qui distingue le fork de l'original** (gain de vitesse, fonction ajoutée ou retirée, choix de sécurité, portage système) y ajoute ou met à jour sa ligne, dans la même sous-étape que le changement.
+- Les gains viennent des mesures alternées (règle de mesure) ; un changement sans mesure le dit (« — »).
+- La ligne « Dernière mise à jour » en tête donne la version d'Albireo.
+- Critère vérifiable : chaque « Changement N » de la partie Vitesse des notes pour l'auteur et chaque version des notes de version qui ajoute ou retire une fonction a sa ligne dans le tableau.
 
 ### Le blog du portage (un épisode par grande étape, en français)
 
