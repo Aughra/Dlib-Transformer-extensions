@@ -8,10 +8,12 @@
 import * as images from './images.js';
 
 import * as web from './web.js';
-import { acceptFor, modelName, renderStatusLine, roleCapabilities, roleModel, toolsAvailable } from './status.js';
-import { answeredElsewhere, attachmentIds, autoGrow, busyHere, compactions, conversationMenu, deleteQuestion,
-  exportAnswer, go, liveCopy, liveMessage, maxAgentSteps, moveMenu, persist, refreshViews, regenerate,
-  renderComposerState, renderSidebar, saveSetting, sendMessage } from './app.js';
+import { acceptFor, modelName, renderStatusLine, roleCapabilities, roleModel,
+  toolsAvailable } from './status.js';
+import { answeredElsewhere, attachmentIds, conversationMenu, deleteQuestion,
+  exportAnswer, go, liveCopy, maxAgentSteps, moveMenu, persist, refreshViews, renderSidebar, saveSetting } from './app.js';
+import { compactions } from './generation.js';
+import { autoGrow, busyHere, liveMessage, regenerate, renderComposerState, sendMessage } from './composer.js';
 import { attachCodeButtons, escapeHtml, renderMarkdown } from './markdown.js';
 import { attachMenu, contextImages, imageIds, imageLimitText, imageRoom, imageThumb, pastedFiles, pendingImageCount,
   readFiles } from './files.js';

@@ -9,8 +9,9 @@ import * as rag from './rag.js';
 import * as store from './store.js';
 import { attachMenu, dropFiles, imageLimitText, imageRecord, itemLimitText,
   readFiles } from './files.js';
-import { broadcast, generations, go, keepOwnCopies, newChat, projectColors,
-  refreshViews, renderSidebar } from './app.js';
+import { broadcast, go, keepOwnCopies, newChat, projectColors, refreshViews,
+  renderSidebar } from './app.js';
+import { generations } from './composer.js';
 import { formatBadge, renderTopbar } from './thread.js';
 import { reloadLists } from './lists.js';
 import { roleCapabilities } from './status.js';

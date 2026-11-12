@@ -8,7 +8,8 @@
 import * as images from './images.js';
 import * as rag from './rag.js';
 import * as store from './store.js';
-import { broadcast, cancelCompaction, cancelWarmup, compactions, exclusive, serviceReady, warmups } from './app.js';
+import { broadcast, cancelWarmup, exclusive, serviceReady, warmups } from './app.js';
+import { cancelCompaction, compactions } from './generation.js';
 import { languageNames, projectById } from './lists.js';
 import { backgroundChat, backgroundReadsImages } from './status.js';
 import { imageIds, imageThumb } from './files.js';

@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Découper app.js : composer.js, generation.js (Albireo 4.11.9)
+
+- **Quoi** : `web/js/composer.js` (24 déclarations : zone de saisie, pièces jointes en attente, envoi, régénération, arrêt) et `web/js/generation.js` (21 : compression des échanges, `fitContext`, rendu en direct, `runTurn`), mot pour mot. `app.js` : 1513 lignes.
+- **Fichiers** : `albireo/web/js/{app.js,composer.js,generation.js}` et les modules qui en importent, `albireo/web/changelog.md`, version.
+- **Pourquoi** : chantier D.
+- **Étapes** : ESLint 0 problème ; scénario des actions complété par l'arrêt d'une longue réponse (« Interrompu. », texte gardé) : 25 sur 25 ; principal 40, documents 12, images 12 ; aucune erreur. Non exercé par le banc : la compression des échanges (il faudrait dépasser le contexte de travail, 16 384 tokens au moins) ; ESLint en est le seul garde.
+
 ## 2026-11-12 — Découper app.js : thread.js (Albireo 4.11.8)
 
 - **Quoi** : `web/js/thread.js` (54 déclarations, 926 lignes) : zone principale, barre du haut, accueil, rendu des questions et des réponses (raisonnement, appels d'outils, fichiers, actions), défilement et rendu au fil de l'écriture, mot pour mot. `app.js` : 2509 lignes.

@@ -9,8 +9,8 @@ import * as images from './images.js';
 import * as rag from './rag.js';
 import * as store from './store.js';
 import * as web from './web.js';
-import { applyTheme, broadcast, deleted, generations, go, namePending, refreshViews, roles, saveSetting,
-  stopAllGenerations, syncLists, unread } from './app.js';
+import { applyTheme, broadcast, deleted, go, namePending, refreshViews, roles, saveSetting, syncLists } from './app.js';
+import { generations, stopAllGenerations, unread } from './composer.js';
 import { forgetStoredDrafts, waitingImages } from './drafts.js';
 import { reloadLists } from './lists.js';
 import { backgroundContext, modelName, refreshStatus, searchProvider } from './status.js';
