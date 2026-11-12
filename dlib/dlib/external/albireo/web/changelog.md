@@ -2,6 +2,17 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.7.0 — 12 novembre 2026
+
+### Performances
+
+- Les mélanges d'experts écrivent leurs réponses sur le GPU : produit du routeur, choix des experts (softmax et sélection des plus probables), produits des experts choisis par indirection, expert partagé et somme pondérée. Les prompts de ces modèles restent sur le processeur.
+- Le GPU lit aussi le format de poids Q5_0, employé par certains fichiers pour les experts trop étroits pour les formats K.
+- Qwen 3.6 réduit à 11B-A3B (Q4_K_M) sur MacBook Air M2, mesures alternées sur 200 tokens : 24,4 à 25,0 tokens/s sur le processeur, 26,1 à 26,3 tokens/s sur le GPU. Le contrôle au chargement trouve des logits à 0,00006 % de ceux du processeur ; réponses identiques pour une question et pour une conversation à trois tours.
+- Seule l'architecture Qwen 3.5 / 3.6 MoE a été vérifiée sur le GPU. Les autres mélanges d'experts (Qwen3 MoE, Mixtral, Granite MoE) y sont admis sans avoir été essayés ; le contrôle au chargement les laisse au processeur en cas d'écart.
+
+---
+
 ## 4.6.0 — 12 novembre 2026
 
 ### Plateforme

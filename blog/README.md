@@ -31,3 +31,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 25. [Le grenier](25-le-grenier.md)
 26. [Le carnet de notes](26-le-carnet-de-notes.md)
 27. [Le carnet sur le GPU](27-le-carnet-sur-le-gpu.md)
+28. [Le comité d'experts](28-le-comite-d-experts.md)

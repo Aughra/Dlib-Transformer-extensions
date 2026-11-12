@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version d'Albireo](../dlib/dlib/external/albireo/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.6.0, 12 novembre 2026.
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.7.0, 12 novembre 2026.
 
 ## 1. Vitesse du moteur
 
@@ -26,6 +26,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Écriture des réponses | CUDA (cartes NVIDIA) ou processeur | GPU de la puce par Metal, sans copie des poids (mémoire unifiée) | Le Mac n'a ni CUDA ni NVIDIA ; son GPU partage la mémoire | 4B : 18,3 à 19,0 → 21,3 à 21,7 tokens/s ; 2B : 35,7 à 40,8 → 49,4 à 49,6 | ch. 9, v. 2.0.0 |
 | Lecture des prompts | CUDA ou processeur | GPU par Metal, de 24 à 2 048 positions | Même raison | 4B, 512 tokens : 92 → 154 tokens/s ; 2B : 222 → 420 | ch. 10, v. 2.0.0 |
 | Produits des poids Q5_K et Q8_0 sur le GPU | — (pas de GPU Apple) | Noyaux Metal `mv_q5_K`, `mv_q8_0` | Les fichiers Qwen 3.5 en Q4_K_M en contiennent | permettent l'écriture de Qwen 3.5 sur le GPU | ch. 12, v. 4.5.0 |
+| Mélange d'experts | Sur le processeur (et CUDA) ; pas d'expert partagé | Sur le GPU aussi (routeur, choix des experts, produits par indirection) ; expert partagé de Qwen 3.6 ; format Q5_0 sur le GPU | Les modèles à experts (Qwen3.6-35B-A3B) visent le Mac mini de 64 Go | Qwen 3.6 11B-A3B : 24,4-25,0 → 26,1-26,3 tokens/s (M2) | ch. 12, v. 4.6.0, 4.7.0 |
 | Contrôle au chargement | — | Le GPU est comparé au processeur à chaque chargement ; retour au processeur s'il diffère | Le GPU n'est pas exact au bit près ; on vérifie qu'il donne le même mot | logits à 0,1 à 0,2 % du processeur, même token | ch. 9, 10 |
 
 ## 2. Modèles : téléchargement, vérification, réserve
@@ -38,7 +39,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Espace de téléchargement | Lien de l'auteur protégé par mot de passe, puis Hugging Face | Directement à l'adresse du catalogue | L'espace répondait « protégé par mot de passe » | 16 s gagnées avant chaque téléchargement | v. 4.0.0 |
 | Réserve de modèles | — | Chaque modèle gardé (clone) ; restauration sans réseau, fichier par fichier ; plafond de 200 Go | Ne pas dépendre de Hugging Face ; réinstaller sans retélécharger | Restauration du 4B en 6 s sans réseau | v. 4.0.4 à 4.3.0 |
 | Choix des modèles | Catalogue de l'auteur | Catalogue, plus tous les GGUF de Hugging Face (recherche, liste personnelle), gardés pour le hors-ligne | Utiliser d'autres modèles que ceux du catalogue | — | v. 3.2.0, 4.3.0 |
-| Architectures lues par le moteur | llama, mistral, mistral3, granite, qwen2, qwen3, qwen3vl, mixtral, granitemoe, qwen3moe, qwen3vlmoe, phi3 | Les mêmes, plus **Qwen 3.5** (`qwen35`, couches Gated DeltaNet à état récurrent ; écriture sur le GPU, lecture des prompts sur le processeur) et **Qwen 3.5 / 3.6 MoE** (`qwen35moe`, avec expert partagé ; processeur) | Qwen 3.5 puis Qwen 3.6 MoE sont les architectures GGUF les plus téléchargées que le moteur refusait (58,8 et 18,8 millions de téléchargements) ; avec 64 Go, le 35B-A3B devient utilisable | Qwen3.5-4B Q4_K_M, écriture : 19,5 tokens/s sur le GPU (11,7 à 12,2 sur le processeur) ; mêmes 150 tokens que llama.cpp | v. 4.4.0 à 4.6.0, ch. 12 |
+| Architectures lues par le moteur | llama, mistral, mistral3, granite, qwen2, qwen3, qwen3vl, mixtral, granitemoe, qwen3moe, qwen3vlmoe, phi3 | Les mêmes, plus **Qwen 3.5** (`qwen35`, couches Gated DeltaNet à état récurrent ; écriture sur le GPU, lecture des prompts sur le processeur) et **Qwen 3.5 / 3.6 MoE** (`qwen35moe`, avec expert partagé ; écriture sur le GPU) | Qwen 3.5 puis Qwen 3.6 MoE sont les architectures GGUF les plus téléchargées que le moteur refusait (58,8 et 18,8 millions de téléchargements) ; avec 64 Go, le 35B-A3B devient utilisable | Qwen3.5-4B Q4_K_M, écriture : 19,5 tokens/s sur le GPU (11,7 à 12,2 sur le processeur) ; mêmes 150 tokens que llama.cpp | v. 4.4.0 à 4.6.0, ch. 12 |
 
 ## 3. Système et sécurité
 
