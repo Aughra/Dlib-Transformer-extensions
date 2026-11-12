@@ -52,7 +52,7 @@ Tous les dossiers de build vont sous `build/`, que `.gitignore` ignore déjà. U
 
 Outils présents sur le Mac : AppleClang (Xcode), CMake et Ninja (Homebrew), `gh`, `gstat` (coreutils).
 
-**Mesurer la vitesse.** Le Mac actuel est un MacBook Air M2 sans ventilateur. Avant toute mesure : `pmset -g | grep lowpowermode` doit donner `0` (sinon le demander à l'humain : en mode économie d'énergie, le moteur va environ dix fois moins vite), et noter la charge (`sysctl -n vm.loadavg`). Pour comparer deux versions, les mesurer en alternance (A, B, A, B) dans la même séance, jamais une version aujourd'hui et l'autre demain. Une optimisation n'est gardée que si elle gagne dans ces conditions.
+**Mesurer la vitesse.** Le Mac actuel est un MacBook Air M2 sans ventilateur. Avant toute mesure : `pmset -g | grep lowpowermode` doit donner `0` (sinon le demander à l'humain : en mode économie d'énergie, le moteur va environ dix fois moins vite), et noter la charge (`sysctl -n vm.loadavg`). Pour comparer deux versions, les mesurer en alternance (A, B, A, B) dans la même séance, jamais une version aujourd'hui et l'autre demain. Une optimisation n'est gardée que si elle gagne dans ces conditions. Toutes les mesures du moteur en une commande, en alternance processeur / GPU, avec la machine relevée : `bash dlib/dlib/external/albireo/tools/bench_macos.sh [essais]` (tableau Markdown dans `build/bench/`) ; à lancer en premier sur une nouvelle machine.
 
 ---
 

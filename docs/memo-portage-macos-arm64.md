@@ -138,6 +138,15 @@ Puis ouvrir `https://localhost:18443/` (certificat d'une autorité locale créé
 
 Pour l'arrêter : Ctrl-C dans son terminal, ou `kill -TERM`. Lancé en arrière-plan par un shell non interactif (un script, `( … &)`), il ignore SIGINT : le shell le lui fait ignorer, et macOS, contrairement à Linux, jette alors le signal même quand le fil qui l'attend avec `sigwait` le bloque. `kill -INT` reste donc sans effet dans ce cas ; `kill -TERM` l'arrête en une seconde.
 
+### Mesurer toute la vitesse en une commande
+
+```sh
+bash dlib/dlib/external/albireo/tools/bench_macos.sh        # 2 essais en alternance processeur / GPU
+BENCH_SIZES="512" bash dlib/dlib/external/albireo/tools/bench_macos.sh 1   # une seule taille, un essai
+```
+
+Le tableau (machine, version d'Albireo, mode économie, charge, puis lecture et écriture de chaque modèle) va dans `build/bench/<modèle du Mac>-<date>.md`. Les modèles mesurés : ceux du portage présents dans `build/models` et `build/albireo-home/models`, et tout `.gguf` de `build/bench-models/`.
+
 ## État constaté
 
 Sur Mac M2, macOS arm64, avec AppleClang 21, CMake 4.1.2 et Ninja (état au 2026-11-09, après la fusion de `upstream/main` à `184ea00`, Albireo 1.0.12) :

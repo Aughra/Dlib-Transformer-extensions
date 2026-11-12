@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Écrire tools/bench_macos.sh, toutes les mesures en une commande
+
+- **Quoi** : script `albireo/tools/bench_macos.sh` : relève la machine (modèle, puce, cœurs, mémoire, macOS, version d'Albireo et commit, mode économie, charge), puis mesure par `bench_runtime` (threads = cœurs physiques, clés et valeurs en 8 bits) la lecture de prompts de 64, 512 et 1 536 tokens et l'écriture de 64 tokens de chaque modèle présent, processeur puis GPU en alternance ; tableau Markdown et sorties brutes dans `build/bench/` (nom de fichier : modèle du Mac et date, sans le nom réseau de la machine). Consigne ajoutée à CLAUDE.md (« Mesurer la vitesse ») et section du mémo.
+- **Fichiers** : `albireo/tools/bench_macos.sh`, `CLAUDE.md`, `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : point (4) de l'ordre validé : le premier jour sur le Mac mini, refaire toutes les mesures d'un coup pour les comparer au M2 et refaire les réglages conseillés.
+- **Étapes** : essai court (1 essai, prompts de 64 tokens, 16 tokens écrits) sur les 5 modèles du portage : tableau correct. Constat : sur le MoE, `bench_runtime` donne le GPU plus lent ou égal (16,2 ; puis 17,3 et 23,1 contre 24,4 à 26,5 sur le processeur), alors qu'`engine_chat` le donnait un peu plus rapide (26,1-26,3 contre 24,4-25,0) ; le GPU du MacBook Air, sans ventilateur, ralentit en chauffe. Moteur inchangé ; à trancher sur le Mac mini (noté dans la reprise). Pas de changement de version : le programme livré ne change pas.
+
 ## 2026-11-12 — Lire les prompts de Qwen 3.5 sur le GPU, corriger les produits de moins de 32 lignes (Albireo 4.9.0), épisode 29
 
 - **Quoi** : noyaux `dequant_q5_K`, `dequant_q8_0`, `dequant_q5_0` ; `takes_gpu` et `gpu_ready` admettent les prompts des modèles récurrents (pas des MoE) ; `run_gpu_checkpointed` coupe un prompt aux multiples de 256 positions et copie l'état entre deux morceaux ; tampon de développement dimensionné aussi pour les matrices des couches linéaires. Correction : `grow_gpu` arrondit les tampons des prompts à un multiple de 32 lignes et `gemm` calcule sur ce nombre ; le contrôle de chargement lit 29 tokens au lieu de 32. `test_macos.sh` : étapes « qwen 3.5 on the GPU » (prompts) et « qwen 3.5 checkpoint on the GPU ». Notes de version 4.9.0, notes pour l'auteur, tableau des différences, mémo, reprise, blog épisode 29.
