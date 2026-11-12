@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version d'Albireo](../dlib/dlib/external/albireo/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.5.0, 12 novembre 2026.
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.6.0, 12 novembre 2026.
 
 ## 1. Vitesse du moteur
 
@@ -38,7 +38,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Espace de téléchargement | Lien de l'auteur protégé par mot de passe, puis Hugging Face | Directement à l'adresse du catalogue | L'espace répondait « protégé par mot de passe » | 16 s gagnées avant chaque téléchargement | v. 4.0.0 |
 | Réserve de modèles | — | Chaque modèle gardé (clone) ; restauration sans réseau, fichier par fichier ; plafond de 200 Go | Ne pas dépendre de Hugging Face ; réinstaller sans retélécharger | Restauration du 4B en 6 s sans réseau | v. 4.0.4 à 4.3.0 |
 | Choix des modèles | Catalogue de l'auteur | Catalogue, plus tous les GGUF de Hugging Face (recherche, liste personnelle), gardés pour le hors-ligne | Utiliser d'autres modèles que ceux du catalogue | — | v. 3.2.0, 4.3.0 |
-| Architectures lues par le moteur | llama, mistral, mistral3, granite, qwen2, qwen3, qwen3vl, mixtral, granitemoe, qwen3moe, qwen3vlmoe, phi3 | Les mêmes, plus **Qwen 3.5** (`qwen35`, couches Gated DeltaNet à état récurrent) ; écriture sur le GPU, lecture des prompts sur le processeur | Qwen 3.5 est l'architecture GGUF la plus téléchargée que le moteur refusait (58,8 millions de téléchargements sur 69 dépôts) | Qwen3.5-4B Q4_K_M, écriture : 19,5 tokens/s sur le GPU (11,7 à 12,2 sur le processeur) ; mêmes 150 tokens que llama.cpp | v. 4.4.0, 4.5.0, ch. 12 |
+| Architectures lues par le moteur | llama, mistral, mistral3, granite, qwen2, qwen3, qwen3vl, mixtral, granitemoe, qwen3moe, qwen3vlmoe, phi3 | Les mêmes, plus **Qwen 3.5** (`qwen35`, couches Gated DeltaNet à état récurrent ; écriture sur le GPU, lecture des prompts sur le processeur) et **Qwen 3.5 / 3.6 MoE** (`qwen35moe`, avec expert partagé ; processeur) | Qwen 3.5 puis Qwen 3.6 MoE sont les architectures GGUF les plus téléchargées que le moteur refusait (58,8 et 18,8 millions de téléchargements) ; avec 64 Go, le 35B-A3B devient utilisable | Qwen3.5-4B Q4_K_M, écriture : 19,5 tokens/s sur le GPU (11,7 à 12,2 sur le processeur) ; mêmes 150 tokens que llama.cpp | v. 4.4.0 à 4.6.0, ch. 12 |
 
 ## 3. Système et sécurité
 
@@ -67,7 +67,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 
 - La bibliothèque dlib, générique : elle n'est pas nettoyée.
 - La génération pour les formats de poids autres que Q4_K et Q6_K (Q8_0, Q5_K…), en code portable sur le processeur.
-- Les autres architectures de modèles (Gemma 4, Qwen 3.6 MoE… : chantier B du fork).
+- Les autres architectures de modèles (Gemma 4… : chantier B du fork).
 
 ---
 

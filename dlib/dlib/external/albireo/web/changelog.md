@@ -2,6 +2,19 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.6.0 — 12 novembre 2026
+
+### Plateforme
+
+- Nouvelle architecture de modèles : Qwen 3.5 et 3.6 à mélange d'experts (`qwen35moe`, par exemple Qwen3.6-35B-A3B) : les couches linéaires de Qwen 3.5, 256 experts dont 8 par token, et un expert partagé dosé par une porte sigmoïde. Ces modèles s'exécutent sur le processeur ; le GPU ne prend pas encore les mélanges d'experts.
+- Vérification par rapport à llama.cpp 0.9.0 sur processeur, en choix glouton, avec un Qwen 3.6 réduit à 11B-A3B (Q4_K_M) : une réponse identique en entier, deux autres identiques jusqu'à une hésitation du modèle (0,061 contre 0,058 ; 0,399 contre 0,390). Ce modèle écrit à 24,7 tokens/s sur le processeur d'un MacBook Air M2.
+
+### Accès et documents
+
+- La recherche Hugging Face indique les dépôts Qwen 3.5 et 3.6 à mélange d'experts comme compatibles.
+
+---
+
 ## 4.5.0 — 12 novembre 2026
 
 ### Performances

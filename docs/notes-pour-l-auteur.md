@@ -525,6 +525,8 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | `engine_chat --reasoning off --temperature 0 --max 200` | 1 | 12,2 tokens/s | 19,5 tokens/s |
 | | 2 | 11,7 tokens/s | 19,5 tokens/s |
 
+- **Variante à experts (`qwen35moe`, Albireo 4.6.0)** : le mélange d'experts existant du moteur (softmax, 8 experts sur 256, poids renormalisés), plus l'expert partagé de llama.cpp (`src/models/qwen35moe.cpp`) : un bloc feed-forward que chaque token traverse, dosé par sigmoid(x · `ffn_gate_inp_shexp`) ; l'original refuse les experts partagés (« shared experts are not supported »). Comparé à llama.cpp sur un Qwen 3.6 réduit à 11B-A3B : une réponse identique, deux divergences sur des égalités (0,061 / 0,058 ; 0,399 / 0,390). Processeur seulement.
+
 **Mac ou Windows** : propre au fork (une architecture que l'original ne lit pas) ; le code du processeur est commun, celui du GPU propre au Mac.
 
 ### Bilan
