@@ -38,6 +38,14 @@ struct mv_args
     long rows2;
 };
 
+// Les produits par expert (fork pour macOS) : le pas d'un expert au suivant dans un tenseur d'experts, et le
+// nombre de cases du lot qui lisent la même ligne d'activations (les experts choisis par token).
+struct moe_args
+{
+    ulong expert_bytes;
+    uint x_div;
+};
+
 // La matrice des lignes d'un simdgroup : W, ou W2 au-delà des lignes de W (un multiple de ROWS).
 struct mv_target
 {
@@ -85,10 +93,8 @@ static inline void store_rows(thread const mv_target& m, constant mv_args& a, ui
 // 4 blocs par itération du simdgroup ; les échelles et les minimums décodés sans branchement. Les
 // tokens passent à l'extérieur des lignes, pour qu'un token lise ses activations une fois par bloc.
 template <uint NT>
-kernel void mv_q4_K(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
-    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
-    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
-    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+static inline void mv_q4_K_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
+    device const uchar* W2, device float* y2, uint tg, uint sg, uint lane)
 {
     const mv_target m = mv_select(W0, y0, W2, y2, a, tg, sg);
     if (m.r0 >= m.rows) return;
@@ -151,10 +157,8 @@ kernel void mv_q4_K(device const uchar* W0 [[buffer(0)]], device const float* x 
 // de chaque quart, l0 = (u % 2) * 16 ; les blocs de 210 octets sont lus octet par octet, leur
 // alignement étant de 2.  Les tokens passent à l'extérieur des lignes, comme pour Q4_K.
 template <uint NT>
-kernel void mv_q6_K(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
-    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
-    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
-    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+static inline void mv_q6_K_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
+    device const uchar* W2, device float* y2, uint tg, uint sg, uint lane)
 {
     const mv_target m = mv_select(W0, y0, W2, y2, a, tg, sg);
     if (m.r0 >= m.rows) return;
@@ -213,10 +217,8 @@ kernel void mv_q6_K(device const uchar* W0 [[buffer(0)]], device const float* x 
 // la valeur l du morceau j prend le bit 2j (quartet bas) ou 2j + 1 (quartet haut) de qh[l].  Blocs de 176
 // octets : d, dmin, 12 octets d'échelles, qh, puis 128 octets de quartets.
 template <uint NT>
-kernel void mv_q5_K(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
-    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
-    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
-    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+static inline void mv_q5_K_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
+    device const uchar* W2, device float* y2, uint tg, uint sg, uint lane)
 {
     const mv_target m = mv_select(W0, y0, W2, y2, a, tg, sg);
     if (m.r0 >= m.rows) return;
@@ -276,13 +278,73 @@ kernel void mv_q5_K(device const uchar* W0 [[buffer(0)]], device const float* x 
     store_rows(m, a, lane, acc);
 }
 
-// Q8_0 (fork pour macOS, qwen35) : blocs de 34 octets, d en demi-flottant puis 32 entiers signés, lus octet
-// par octet (alignement de 2) ; une voie du simdgroup par bloc.
+// Q5_0 (fork pour macOS, experts de qwen35moe) : blocs de 22 octets, d en demi-flottant, qh (32 bits, le
+// cinquième bit de chaque valeur), puis 16 octets de quartets ; la valeur j < 16 prend le quartet bas de qs[j]
+// et le bit j de qh, la valeur j + 16 le quartet haut et le bit j + 16 ; valeur - 16, fois d.  Lus octet par
+// octet (alignement de 2) ; une voie du simdgroup par bloc.
 template <uint NT>
-kernel void mv_q8_0(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+static inline void mv_q5_0_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
+    device const uchar* W2, device float* y2, uint tg, uint sg, uint lane)
+{
+    const mv_target m = mv_select(W0, y0, W2, y2, a, tg, sg);
+    if (m.r0 >= m.rows) return;
+    device const uchar* W = m.W;
+    const long r0 = m.r0;
+    const long nb = a.cols / 32;
+    const long row_bytes = nb * 22;
+    float acc[ROWS][NT];
+    for (int r = 0; r < ROWS; ++r)
+        for (uint t = 0; t < NT; ++t) acc[r][t] = 0.0f;
+    for (long b = lane; b < nb; b += 32)
+        for (uint t = 0; t < NT; ++t)
+        {
+            if (NT > 1 && t >= a.tokens) break;
+            device const float* xb = x + t * a.x_stride + b * 32;
+            for (int r = 0; r < ROWS; ++r)
+            {
+                const long row = r0 + r;
+                if (row >= m.rows) break;
+                device const uchar* blk = W + row * row_bytes + b * 22;
+                const uint qh = uint(blk[2]) | (uint(blk[3]) << 8) | (uint(blk[4]) << 16) | (uint(blk[5]) << 24);
+                device const uchar* qs = blk + 6;
+                float s = 0;
+                for (int j = 0; j < 16; ++j)
+                {
+                    const int x0 = int((qs[j] & 0x0F) | (((qh >> j) << 4) & 0x10)) - 16;
+                    const int x1 = int((qs[j] >> 4) | ((qh >> (j + 12)) & 0x10)) - 16;
+                    s += float(x0) * xb[j] + float(x1) * xb[j + 16];
+                }
+                acc[r][t] += float(*(device const half*)blk) * s;
+            }
+        }
+    store_rows(m, a, lane, acc);
+}
+
+template <uint NT>
+kernel void mv_q5_0(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
     device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
     device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
     uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    mv_q5_0_body<NT>(W0, x, y0, a, W2, y2, tg, sg, lane);
+}
+
+kernel void mv_q5_0_id(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const int* ids [[buffer(4)]],
+    constant moe_args& m [[buffer(5)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    const uint slot = tg.y;
+    device const uchar* W = W0 + ulong(ids[slot]) * m.expert_bytes;
+    device float* y = y0 + ulong(slot) * a.y_stride;
+    mv_q5_0_body<1>(W, x + ulong(slot / m.x_div) * a.x_stride, y, a, W, y, tg.x, sg, lane);
+}
+
+// Q8_0 (fork pour macOS, qwen35) : blocs de 34 octets, d en demi-flottant puis 32 entiers signés, lus octet
+// par octet (alignement de 2) ; une voie du simdgroup par bloc.
+template <uint NT>
+static inline void mv_q8_0_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
+    device const uchar* W2, device float* y2, uint tg, uint sg, uint lane)
 {
     const mv_target m = mv_select(W0, y0, W2, y2, a, tg, sg);
     if (m.r0 >= m.rows) return;
@@ -312,6 +374,95 @@ kernel void mv_q8_0(device const uchar* W0 [[buffer(0)]], device const float* x 
     store_rows(m, a, lane, acc);
 }
 
+
+template <uint NT>
+kernel void mv_q4_K(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
+    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    mv_q4_K_body<NT>(W0, x, y0, a, W2, y2, tg, sg, lane);
+}
+
+// La variante par expert (mélange d'experts) : la case tg.y du lot lit les poids de l'expert ids[tg.y], ses
+// activations à la ligne tg.y / x_div de x, et écrit sa ligne de y.
+kernel void mv_q4_K_id(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const int* ids [[buffer(4)]],
+    constant moe_args& m [[buffer(5)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    const uint slot = tg.y;
+    device const uchar* W = W0 + ulong(ids[slot]) * m.expert_bytes;
+    device float* y = y0 + ulong(slot) * a.y_stride;
+    mv_q4_K_body<1>(W, x + ulong(slot / m.x_div) * a.x_stride, y, a, W, y, tg.x, sg, lane);
+}
+
+template <uint NT>
+kernel void mv_q6_K(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
+    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    mv_q6_K_body<NT>(W0, x, y0, a, W2, y2, tg, sg, lane);
+}
+
+// La variante par expert (mélange d'experts) : la case tg.y du lot lit les poids de l'expert ids[tg.y], ses
+// activations à la ligne tg.y / x_div de x, et écrit sa ligne de y.
+kernel void mv_q6_K_id(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const int* ids [[buffer(4)]],
+    constant moe_args& m [[buffer(5)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    const uint slot = tg.y;
+    device const uchar* W = W0 + ulong(ids[slot]) * m.expert_bytes;
+    device float* y = y0 + ulong(slot) * a.y_stride;
+    mv_q6_K_body<1>(W, x + ulong(slot / m.x_div) * a.x_stride, y, a, W, y, tg.x, sg, lane);
+}
+
+template <uint NT>
+kernel void mv_q5_K(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
+    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    mv_q5_K_body<NT>(W0, x, y0, a, W2, y2, tg, sg, lane);
+}
+
+// La variante par expert (mélange d'experts) : la case tg.y du lot lit les poids de l'expert ids[tg.y], ses
+// activations à la ligne tg.y / x_div de x, et écrit sa ligne de y.
+kernel void mv_q5_K_id(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const int* ids [[buffer(4)]],
+    constant moe_args& m [[buffer(5)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    const uint slot = tg.y;
+    device const uchar* W = W0 + ulong(ids[slot]) * m.expert_bytes;
+    device float* y = y0 + ulong(slot) * a.y_stride;
+    mv_q5_K_body<1>(W, x + ulong(slot / m.x_div) * a.x_stride, y, a, W, y, tg.x, sg, lane);
+}
+
+template <uint NT>
+kernel void mv_q8_0(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
+    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    mv_q8_0_body<NT>(W0, x, y0, a, W2, y2, tg, sg, lane);
+}
+
+// La variante par expert (mélange d'experts) : la case tg.y du lot lit les poids de l'expert ids[tg.y], ses
+// activations à la ligne tg.y / x_div de x, et écrit sa ligne de y.
+kernel void mv_q8_0_id(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const int* ids [[buffer(4)]],
+    constant moe_args& m [[buffer(5)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    const uint slot = tg.y;
+    device const uchar* W = W0 + ulong(ids[slot]) * m.expert_bytes;
+    device float* y = y0 + ulong(slot) * a.y_stride;
+    mv_q8_0_body<1>(W, x + ulong(slot / m.x_div) * a.x_stride, y, a, W, y, tg.x, sg, lane);
+}
+
 // Un token (une étape de génération), ou jusqu'à MAX_TOKENS, les accumulateurs de chaque variante gardés
 // dans des registres.
 template [[host_name("mv_q4_K_1")]] kernel void mv_q4_K<1>(device const uchar*, device const float*, device float*,
@@ -325,6 +476,10 @@ template [[host_name("mv_q6_K_n")]] kernel void mv_q6_K<8>(device const uchar*, 
 template [[host_name("mv_q5_K_1")]] kernel void mv_q5_K<1>(device const uchar*, device const float*, device float*,
     constant mv_args&, device const uchar*, device float*, uint, uint, uint);
 template [[host_name("mv_q5_K_n")]] kernel void mv_q5_K<8>(device const uchar*, device const float*, device float*,
+    constant mv_args&, device const uchar*, device float*, uint, uint, uint);
+template [[host_name("mv_q5_0_1")]] kernel void mv_q5_0<1>(device const uchar*, device const float*, device float*,
+    constant mv_args&, device const uchar*, device float*, uint, uint, uint);
+template [[host_name("mv_q5_0_n")]] kernel void mv_q5_0<8>(device const uchar*, device const float*, device float*,
     constant mv_args&, device const uchar*, device float*, uint, uint, uint);
 template [[host_name("mv_q8_0_1")]] kernel void mv_q8_0<1>(device const uchar*, device const float*, device float*,
     constant mv_args&, device const uchar*, device float*, uint, uint, uint);
@@ -961,4 +1116,113 @@ kernel void sigmoid_mul(device float* x [[buffer(0)]], device const float* gate 
     constant uint& n [[buffer(2)]], uint i [[thread_position_in_grid]])
 {
     if (i < n) x[i] *= 1.0f / (1.0f + exp(-gate[i]));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Le mélange d'experts sur le GPU (fork pour macOS), comme cpu_runtime::moe_ffn() le calcule.
+
+// y[t][r] = sum_i W[r][i] x[t][i], W en floats (le routeur) : grille (lignes, tokens).
+struct f32_args
+{
+    uint rows;
+    uint cols;
+    uint x_stride;
+    uint y_stride;
+};
+// Un simdgroup par ligne, ses 32 voies lisant des floats voisins : threadgroups de 4 simdgroups, grille
+// (lignes / 4, tokens).
+kernel void mv_f32(device const float* W [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y [[buffer(2)]], constant f32_args& a [[buffer(3)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    const uint row = tg.x * 4 + sg;
+    if (row >= a.rows) return;
+    device const float* w = W + ulong(row) * a.cols;
+    device const float* xt = x + ulong(tg.y) * a.x_stride;
+    float s = 0.0f;
+    for (uint i = lane; i < a.cols; i += 32) s += w[i] * xt[i];
+    s = simd_sum(s);
+    if (lane == 0) y[ulong(tg.y) * a.y_stride + row] = s;
+}
+
+// Le routage d'un token : softmax des logits des experts, les top_k plus probables, leurs poids renormalisés
+// quand norm ; un thread par token.
+struct route_args
+{
+    uint experts;
+    uint top_k;
+    uint norm;
+};
+kernel void moe_route(device const float* logits [[buffer(0)]], device int* ids [[buffer(1)]],
+    device float* weights [[buffer(2)]], constant route_args& a [[buffer(3)]], uint t [[threadgroup_position_in_grid]],
+    uint lane [[thread_index_in_simdgroup]])
+{
+    // Un simdgroup par token : la voie lane garde les experts lane, lane + 32, ...  Le plus grand logit pas encore
+    // choisi l'emporte, le plus petit numéro à égalité, comme std::partial_sort le garde.
+    device const float* l = logits + ulong(t) * a.experts;
+    float mx = -INFINITY;
+    for (uint e = lane; e < a.experts; e += 32) mx = max(mx, l[e]);
+    mx = simd_max(mx);
+    float sum = 0.0f;
+    for (uint e = lane; e < a.experts; e += 32) sum += exp(l[e] - mx);
+    sum = simd_sum(sum);
+    uint taken = 0;   // les experts de la voie déjà choisis, un bit par rang (32 au plus : 1 024 experts)
+    float selected = 0.0f;
+    for (uint k = 0; k < a.top_k; ++k)
+    {
+        float best = -INFINITY;
+        uint best_e = 0xFFFFFFFFu;
+        for (uint e = lane, j = 0; e < a.experts; e += 32, ++j)
+            if (!(taken & (1u << j)) && (l[e] > best || (l[e] == best && e < best_e)))
+            {
+                best = l[e];
+                best_e = e;
+            }
+        const float top = simd_max(best);
+        const uint e = simd_min(best == top ? best_e : 0xFFFFFFFFu);
+        if (e % 32 == lane) taken |= 1u << (e / 32);
+        const float p = exp(top - mx) / sum;
+        if (lane == 0)
+        {
+            ids[t * a.top_k + k] = int(e);
+            weights[t * a.top_k + k] = p;
+        }
+        selected += p;
+    }
+    if (lane == 0 && a.norm != 0 && selected > 0.0f)
+        for (uint k = 0; k < a.top_k; ++k) weights[t * a.top_k + k] /= selected;
+}
+
+// La porte de l'expert partagé de qwen35moe : g[t] = sigmoid(x[t] . w) ; un thread par token.
+// Un simdgroup par token.
+kernel void shared_gate(device const float* x [[buffer(0)]], device const float* w [[buffer(1)]],
+    device float* g [[buffer(2)]], constant uint& d [[buffer(3)]], uint t [[threadgroup_position_in_grid]],
+    uint lane [[thread_index_in_simdgroup]])
+{
+    device const float* xt = x + ulong(t) * d;
+    float s = 0.0f;
+    for (uint i = lane; i < d; i += 32) s += xt[i] * w[i];
+    s = simd_sum(s);
+    if (lane == 0) g[t] = 1.0f / (1.0f + exp(-s));
+}
+
+// x[t][j] += scale * (sum_k weights[t][k] * y[t * top_k + k][j] + g[t] * shared[t][j]) : grille (d, tokens) ;
+// sans expert partagé, has_shared vaut 0.
+struct combine_args
+{
+    uint d;
+    uint top_k;
+    uint has_shared;
+    float scale;
+};
+kernel void moe_combine(device float* x [[buffer(0)]], device const float* y [[buffer(1)]],
+    device const float* weights [[buffer(2)]], device const float* shared [[buffer(3)]],
+    device const float* g [[buffer(4)]], constant combine_args& a [[buffer(5)]], uint2 gid [[thread_position_in_grid]])
+{
+    if (gid.x >= a.d) return;
+    const uint t = gid.y;
+    float s = 0.0f;
+    for (uint k = 0; k < a.top_k; ++k) s += weights[t * a.top_k + k] * y[ulong(t * a.top_k + k) * a.d + gid.x];
+    if (a.has_shared != 0) s += g[t] * shared[ulong(t) * a.d + gid.x];
+    x[ulong(t) * a.d + gid.x] += a.scale * s;
 }

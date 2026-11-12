@@ -225,6 +225,27 @@ namespace albireo
             void sigmoid_mul(metal_view x, metal_view gate, unsigned n);
 
             /*!
+                Le mélange d'experts (fork pour macOS), comme cpu_runtime::moe_ffn() :
+                matvec_id calcule, pour chaque case s < slots, la ligne s de y avec l'expert
+                ids[s] (int32) d'un tenseur d'experts dont W est le premier et expert_bytes le pas,
+                sur la ligne s / x_div de x ; false pour un type sans noyau.
+            !*/
+            bool matvec_id(dlib::ggml_type type, metal_view W, long rows, long cols, uint64_t expert_bytes,
+                metal_view x, unsigned x_stride, unsigned x_div, metal_view ids, unsigned slots, metal_view y,
+                unsigned y_stride);
+            // y[t * y_stride + r] = sum_i W[r][i] x[t * x_stride + i], W en floats (le routeur).
+            void matvec_f32(metal_view W, unsigned rows, unsigned cols, metal_view x, unsigned tokens,
+                unsigned x_stride, metal_view y, unsigned y_stride);
+            // Softmax des logits (experts par token), les top_k plus probables dans ids et weights.
+            void moe_route(metal_view logits, unsigned experts, unsigned top_k, bool norm, metal_view ids,
+                metal_view weights, unsigned tokens);
+            // g[t] = sigmoid(x[t] . w), x de d valeurs par token.
+            void shared_gate(metal_view x, metal_view w, metal_view g, unsigned d, unsigned tokens);
+            // x[t] += scale * (sum_k weights[t][k] y[t * top_k + k] + g[t] shared[t]), shared seulement s'il est donné.
+            void moe_combine(metal_view x, metal_view y, metal_view weights, const metal_view* shared, metal_view g,
+                unsigned d, unsigned top_k, unsigned tokens, float scale);
+
+            /*!
                 ensures
                     - Exécute les commandes et les attend ; lève std::runtime_error quand le
                       GPU les fait échouer.

@@ -192,7 +192,8 @@ namespace albireo
                 c["reason"] = "format de poids " + (q.empty() ? std::string("inconnu") : q) + " non lu par le moteur";
             }
             for (const auto& kv : c.items()) o[kv.first] = kv.second;
-            o["gpu"] = c["compatible"].as_bool(false) && !c["moe"].as_bool(false) && quant_gpu(q);
+            // Les mélanges d'experts écrivent aussi sur le GPU depuis Albireo 4.7.0 du fork.
+            o["gpu"] = c["compatible"].as_bool(false) && quant_gpu(q);
             files.push_back(o);
         }
         out = json::object();

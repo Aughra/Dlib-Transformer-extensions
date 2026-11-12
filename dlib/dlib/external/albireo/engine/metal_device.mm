@@ -33,6 +33,8 @@ namespace albireo
             "kv_store", "prepare_queries", "merge_attention", "dequant_q4_K", "dequant_q6_K",
             "mv_q5_K_1", "mv_q5_K_n", "mv_q8_0_1", "mv_q8_0_n", "gdn_conv", "gdn_l2norm", "gdn_gates", "gdn_delta",
             "gdn_norm", "split_gate", "sigmoid_mul",
+            "mv_q4_K_id", "mv_q5_K_id", "mv_q6_K_id", "mv_q8_0_id", "mv_f32", "moe_route", "shared_gate", "moe_combine",
+            "mv_q5_0_1", "mv_q5_0_n", "mv_q5_0_id",
             "attention_part_1_2", "attention_part_1_4", "attention_part_1_8",
             "attention_part_2_2", "attention_part_2_4", "attention_part_2_8",
             "attention_part_4_2", "attention_part_4_4", "attention_part_4_8",
@@ -43,6 +45,8 @@ namespace albireo
             k_merge_attention, k_dequant_q4_K, k_dequant_q6_K,
             k_mv_q5_K, k_mv_q5_K_n, k_mv_q8_0, k_mv_q8_0_n, k_gdn_conv, k_gdn_l2norm, k_gdn_gates, k_gdn_delta,
             k_gdn_norm, k_split_gate, k_sigmoid_mul,
+            k_mv_q4_K_id, k_mv_q5_K_id, k_mv_q6_K_id, k_mv_q8_0_id, k_mv_f32, k_moe_route, k_shared_gate, k_moe_combine,
+            k_mv_q5_0, k_mv_q5_0_n, k_mv_q5_0_id,
             k_attention_part, k_count = k_attention_part + 12
         };
 
@@ -331,9 +335,10 @@ namespace albireo
         else if (type == dlib::ggml_type::Q6_K) k = tokens > 1 ? k_mv_q6_K_n : k_mv_q6_K;
         else if (type == dlib::ggml_type::Q5_K) k = tokens > 1 ? k_mv_q5_K_n : k_mv_q5_K;
         else if (type == dlib::ggml_type::Q8_0) k = tokens > 1 ? k_mv_q8_0_n : k_mv_q8_0;
+        else if (type == dlib::ggml_type::Q5_0) k = tokens > 1 ? k_mv_q5_0_n : k_mv_q5_0;
         else return false;
         if (tokens == 0) return true;
-        if (tokens > max_tokens || cols % 256 != 0)
+        if (tokens > max_tokens || cols % (type == dlib::ggml_type::Q8_0 || type == dlib::ggml_type::Q5_0 ? 32 : 256) != 0)
             throw std::invalid_argument("metal_device: a product of more tokens or other columns than its kernel takes");
         impl_->use(k);
         impl_->bind(W, 0);
@@ -356,6 +361,7 @@ namespace albireo
         else if (type == dlib::ggml_type::Q6_K) k = tokens > 1 ? k_mv_q6_K_n : k_mv_q6_K;
         else if (type == dlib::ggml_type::Q5_K) k = tokens > 1 ? k_mv_q5_K_n : k_mv_q5_K;
         else if (type == dlib::ggml_type::Q8_0) k = tokens > 1 ? k_mv_q8_0_n : k_mv_q8_0;
+        else if (type == dlib::ggml_type::Q5_0) k = tokens > 1 ? k_mv_q5_0_n : k_mv_q5_0;
         else return false;
         if (tokens == 0) return true;
         // Les lignes d'un simdgroup (ROWS) ne chevauchent jamais les deux matrices.
@@ -501,6 +507,111 @@ namespace albireo
         impl_->bind(gate, 1);
         impl_->args(n, 2);
         impl_->grid(n, 1, 1);
+    }
+
+    namespace
+    {
+        struct moe_args
+        {
+            uint64_t expert_bytes;
+            unsigned x_div;
+        };
+        struct f32_args
+        {
+            unsigned rows, cols, x_stride, y_stride;
+        };
+        struct route_args
+        {
+            unsigned experts, top_k, norm;
+        };
+        struct combine_args
+        {
+            unsigned d, top_k, has_shared;
+            float scale;
+        };
+    }
+
+    bool metal_device::commands::matvec_id(dlib::ggml_type type, metal_view W, long rows, long cols,
+        uint64_t expert_bytes, metal_view x, unsigned x_stride, unsigned x_div, metal_view ids, unsigned slots,
+        metal_view y, unsigned y_stride)
+    {
+        kernel_index k;
+        if (type == dlib::ggml_type::Q4_K) k = k_mv_q4_K_id;
+        else if (type == dlib::ggml_type::Q5_K) k = k_mv_q5_K_id;
+        else if (type == dlib::ggml_type::Q6_K) k = k_mv_q6_K_id;
+        else if (type == dlib::ggml_type::Q8_0) k = k_mv_q8_0_id;
+        else if (type == dlib::ggml_type::Q5_0) k = k_mv_q5_0_id;
+        else return false;
+        if (slots == 0) return true;
+        if (cols % (type == dlib::ggml_type::Q8_0 || type == dlib::ggml_type::Q5_0 ? 32 : 256) != 0 || x_div == 0)
+            throw std::invalid_argument("metal_device: an expert product of other columns than its kernel takes");
+        impl_->use(k);
+        impl_->bind(W, 0);
+        impl_->bind(x, 1);
+        impl_->bind(y, 2);
+        const mv_args a = { rows, cols, 1, x_stride, y_stride, 1.0f, 0.0f, y_stride, 0 };
+        impl_->args(a, 3);
+        impl_->bind(ids, 4);
+        const moe_args m = { expert_bytes, x_div };
+        impl_->args(m, 5);
+        impl_->groups(static_cast<unsigned>((rows + mv_rows_per_group - 1) / mv_rows_per_group), slots, 1, mv_threads);
+        return true;
+    }
+
+    void metal_device::commands::matvec_f32(metal_view W, unsigned rows, unsigned cols, metal_view x, unsigned tokens,
+        unsigned x_stride, metal_view y, unsigned y_stride)
+    {
+        if (tokens == 0 || rows == 0) return;
+        impl_->use(k_mv_f32);
+        impl_->bind(W, 0);
+        impl_->bind(x, 1);
+        impl_->bind(y, 2);
+        const f32_args a = { rows, cols, x_stride, y_stride };
+        impl_->args(a, 3);
+        impl_->groups((rows + 3) / 4, tokens, 1, 128);
+    }
+
+    void metal_device::commands::moe_route(metal_view logits, unsigned experts, unsigned top_k, bool norm,
+        metal_view ids, metal_view weights, unsigned tokens)
+    {
+        if (tokens == 0) return;
+        if (top_k == 0 || top_k > 32 || top_k > experts)
+            throw std::invalid_argument("metal_device: a routing of more than 32 experts per token");
+        impl_->use(k_moe_route);
+        impl_->bind(logits, 0);
+        impl_->bind(ids, 1);
+        impl_->bind(weights, 2);
+        if (experts > 1024) throw std::invalid_argument("metal_device: a routing among more than 1024 experts");
+        const route_args a = { experts, top_k, norm ? 1u : 0u };
+        impl_->args(a, 3);
+        impl_->groups(tokens, 1, 1, 32);
+    }
+
+    void metal_device::commands::shared_gate(metal_view x, metal_view w, metal_view g, unsigned d, unsigned tokens)
+    {
+        if (tokens == 0) return;
+        impl_->use(k_shared_gate);
+        impl_->bind(x, 0);
+        impl_->bind(w, 1);
+        impl_->bind(g, 2);
+        impl_->args(d, 3);
+        impl_->groups(tokens, 1, 1, 32);
+    }
+
+    void metal_device::commands::moe_combine(metal_view x, metal_view y, metal_view weights, const metal_view* shared,
+        metal_view g, unsigned d, unsigned top_k, unsigned tokens, float scale)
+    {
+        if (tokens == 0) return;
+        impl_->use(k_moe_combine);
+        impl_->bind(x, 0);
+        impl_->bind(y, 1);
+        impl_->bind(weights, 2);
+        // Sans expert partagé, le noyau ne lit ni shared ni g : y les remplace.
+        impl_->bind(shared ? *shared : y, 3);
+        impl_->bind(shared ? g : y, 4);
+        const combine_args a = { d, top_k, shared ? 1u : 0u, scale };
+        impl_->args(a, 5);
+        impl_->grid(d, tokens, 1);
     }
 
     void metal_device::commands::silu_mul(metal_view gate, metal_view up, unsigned n)

@@ -42,6 +42,8 @@ namespace albireo
             size_t attn_norm = 0, ffn_norm = 0, q_norm = 0, k_norm = 0, bq = 0, bk = 0, bv = 0;
             // Les couches Gated DeltaNet (qwen35).
             size_t conv1d = 0, dt_bias = 0, ssm_a = 0, ssm_norm = 0;
+            // La porte de l'expert partagé (qwen35moe).
+            size_t sh_gate_inp = 0;
         };
         std::vector<layer_vectors> layers;
         size_t output_norm = 0;
@@ -54,6 +56,9 @@ namespace albireo
         // la requête et sa porte, la porte de l'attention, les segments du lot ; l'état des séquences, pris
         // sans copie dans la zone de cpu_runtime.
         metal_buffer mix, z, alpha, beta, lin_out, qg, attn_gate, segments, states;
+        // Le mélange d'experts : logits du routeur, experts choisis et leurs poids, porte et branche up des experts,
+        // leurs sorties ; l'expert partagé et sa porte.
+        metal_buffer moe_logits, moe_ids, moe_w, moe_g, moe_u, moe_y, sh_g, sh_u, sh, sh_gate;
         size_t capacity = 0, table_capacity = 0, partial_capacity = 0;
         // Les poids d'un produit d'un prompt développés en floats, deux tampons à tour de rôle.
         metal_buffer expanded[2];
@@ -78,7 +83,8 @@ namespace albireo
         // Les formats des produits d'une étape : Q5_K et Q8_0 en plus, qu'emploient les modèles qwen35.
         bool step_format(const weight_matrix& W)
         {
-            return gpu_format(W) || W.type == dlib::ggml_type::Q5_K || W.type == dlib::ggml_type::Q8_0;
+            return gpu_format(W) || W.type == dlib::ggml_type::Q5_K || W.type == dlib::ggml_type::Q8_0
+                || W.type == dlib::ggml_type::Q5_0;
         }
 
         metal_buffer need(metal_device& d, size_t bytes)
@@ -113,8 +119,21 @@ namespace albireo
         // Les modèles que couvrent les noyaux : denses, leurs têtes de 64 à 256 valeurs, chaque produit en
         // Q4_K ou Q6_K.
         std::string why;
-        if (cfg_.is_moe()) why = "a mixture of experts";
-        // qwen35 : les étapes seulement, des têtes linéaires d'au plus 256 valeurs, et un état dans la zone réservée.
+        /*
+            Les modèles à couches linéaires (qwen35) et les mélanges d'experts ne passent au GPU que pour leurs
+            étapes, dont les produits lisent aussi Q5_K et Q8_0 ; les autres modèles y passent aussi leurs prompts,
+            dont les poids développés en floats sont en Q4_K ou Q6_K.
+        */
+        const bool steps_only = cfg_.recurrent() || cfg_.is_moe();
+        auto formats = [&](const weight_matrix& W) { return steps_only ? step_format(W) : gpu_format(W); };
+        const std::string formats_why = steps_only ? "weights in other formats than Q4_K, Q5_K, Q6_K, Q5_0 and Q8_0"
+            : "weights in other formats than Q4_K and Q6_K";
+        // Une matrice d'experts lue par colonnes de 256 valeurs, ou de 32 en Q8_0.
+        auto expert_columns = [&](const weight_matrix& W) {
+            return W.cols % (W.type == dlib::ggml_type::Q8_0 || W.type == dlib::ggml_type::Q5_0 ? 32 : 256) == 0;
+        };
+        if (cfg_.is_moe() && cfg_.n_experts_used > 32) why = "more than 32 experts per token";
+        // qwen35 : des têtes linéaires d'au plus 256 valeurs, et un état dans la zone réservée.
         else if (cfg_.recurrent() && (cfg_.ssm_head_dim > 256 || !states_.data))
             why = "linear attention layers of this geometry";
         else if (hd != 64 && hd != 128 && hd != 256) why = "heads of " + std::to_string(hd) + " values";
@@ -123,29 +142,27 @@ namespace albireo
         else if (cfg_.attn_temp_scale != 0.0) why = "a temperature of the attention";
         else if (cfg_.d_model % 256 != 0 || cfg_.d_ffn % 256 != 0 || cfg_.q_dim() % 256 != 0)
             why = "widths that are not multiples of 256";
-        else if (!gpu_format(output_)) why = "an output matrix in another format than Q4_K or Q6_K";
-        else if (cfg_.recurrent())
-        {
-            for (long li = 0; li < cfg_.n_layers; ++li)
+        else if (!formats(output_)) why = "an output matrix in " + formats_why.substr(11);
+        else
+            for (long li = 0; li < cfg_.n_layers && why.empty(); ++li)
             {
                 const layer& L = layers_[static_cast<size_t>(li)];
-                const bool linear = cfg_.linear_layer(li);
-                for (const weight_matrix* W : { &L.w_gate, &L.w_up, &L.w_down })
-                    if (!step_format(*W)) why = "weights in other formats than Q4_K, Q5_K, Q6_K and Q8_0";
-                if (linear)
+                std::vector<const weight_matrix*> all;
+                if (cfg_.linear_layer(li)) all = { &L.w_mix, &L.w_z, &L.w_alpha, &L.w_beta, &L.w_ssm_out };
+                else all = { &L.wq, &L.wk, &L.wv, &L.wo };
+                if (cfg_.is_moe())
                 {
-                    for (const weight_matrix* W : { &L.w_mix, &L.w_z, &L.w_alpha, &L.w_beta, &L.w_ssm_out })
-                        if (!step_format(*W)) why = "weights in other formats than Q4_K, Q5_K, Q6_K and Q8_0";
+                    for (const weight_matrix* W : { &L.e_gate[0], &L.e_up[0], &L.e_down[0] }) all.push_back(W);
+                    if (!L.sh_gate_inp.empty()) for (const weight_matrix* W : { &L.sh_gate, &L.sh_up, &L.sh_down }) all.push_back(W);
+                    if (L.router.type != dlib::ggml_type::F32) all.push_back(&L.router);
+                    if (!expert_columns(L.e_gate[0]) || !expert_columns(L.e_down[0]))
+                        why = "experts of other widths than its kernels take";
                 }
                 else
-                    for (const weight_matrix* W : { &L.wq, &L.wk, &L.wv, &L.wo })
-                        if (!step_format(*W)) why = "weights in other formats than Q4_K, Q5_K, Q6_K and Q8_0";
+                    for (const weight_matrix* W : { &L.w_gate, &L.w_up, &L.w_down }) all.push_back(W);
+                for (const weight_matrix* W : all)
+                    if (!formats(*W)) why = formats_why;
             }
-        }
-        else
-            for (const layer& L : layers_)
-                for (const weight_matrix* W : { &L.wq, &L.wk, &L.wv, &L.wo, &L.w_gate, &L.w_up, &L.w_down })
-                    if (!gpu_format(*W)) why = "weights in other formats than Q4_K and Q6_K";
         if (!why.empty())
         {
             if (log) log(ALBIREO_LOG_INFO, "GPU: the passes stay on the processor, the kernels do not cover " + why);
@@ -186,6 +203,7 @@ namespace albireo
             lv.dt_bias = add(L.dt_bias);
             lv.ssm_a = add(L.ssm_a);
             lv.ssm_norm = add(L.ssm_norm);
+            lv.sh_gate_inp = add(L.sh_gate_inp);
             g->layers.push_back(lv);
         }
         g->output_norm = add(output_norm_);
@@ -240,6 +258,23 @@ namespace albireo
             g.lin_out = need(device, T * cfg_.ssm_value_dim() * f);
             g.segments = need(device, T * 3 * sizeof(int));
         }
+        if (cfg_.is_moe())
+        {
+            const size_t K = static_cast<size_t>(cfg_.n_experts_used), de = static_cast<size_t>(cfg_.d_ffn_expert);
+            g.moe_logits = need(device, T * cfg_.n_experts * f);
+            g.moe_ids = need(device, T * K * sizeof(int));
+            g.moe_w = need(device, T * K * f);
+            g.moe_g = need(device, T * K * de * f);
+            g.moe_u = need(device, T * K * de * f);
+            g.moe_y = need(device, T * K * cfg_.d_model * f);
+            if (cfg_.d_ffn_shared > 0)
+            {
+                g.sh_g = need(device, T * cfg_.d_ffn_shared * f);
+                g.sh_u = need(device, T * cfg_.d_ffn_shared * f);
+                g.sh = need(device, T * cfg_.d_model * f);
+                g.sh_gate = need(device, T * f);
+            }
+        }
         if (cfg_.attn_output_gate)
         {
             g.qg = need(device, T * 2 * cfg_.q_dim() * f);
@@ -262,7 +297,7 @@ namespace albireo
                     long_pass = false;
             }
         // qwen35 : les étapes seulement ; ses prompts restent sur le processeur.
-        if (cfg_.recurrent()) long_pass = false;
+        if (cfg_.recurrent() || cfg_.is_moe()) long_pass = false;
         return gpu_ && gpu_->state != gpu_state::dropped && (step || long_pass)
             && batch.embedding_rows.empty() && !batch.hidden_only
             && batch.logit_rows.size() <= metal_device::max_tokens;
@@ -286,7 +321,8 @@ namespace albireo
             for (const metal_buffer* b : { &g.vectors, &g.x, &g.xn, &g.q, &g.k, &g.v, &g.ctx, &g.gate, &g.up,
                      &g.hidden, &g.logits, &g.cs, &g.blocks, &g.rows, &g.lengths, &g.table, &g.partial,
                      &g.expanded[0], &g.expanded[1], &g.mix, &g.z, &g.alpha, &g.beta, &g.lin_out, &g.qg,
-                     &g.attn_gate, &g.segments })
+                     &g.attn_gate, &g.segments, &g.moe_logits, &g.moe_ids, &g.moe_w, &g.moe_g, &g.moe_u, &g.moe_y,
+                     &g.sh_g, &g.sh_u, &g.sh, &g.sh_gate })
                 u.bytes += b->bytes();
         }
         else
@@ -368,7 +404,7 @@ namespace albireo
         };
         // Le prompt : sur le GPU pour la première séquence quand les prompts y vont, sur le processeur
         // sinon.
-        const bool gpu_prompt = !cfg_.recurrent() && n >= gpu_prompt_min_ && n <= gpu_prompt_context_;
+        const bool gpu_prompt = !cfg_.recurrent() && !cfg_.is_moe() && n >= gpu_prompt_min_ && n <= gpu_prompt_context_;
         prompt.logit_rows.assign(1, n - 1);
         prompt.segments.assign(1, { a, 0, n });
         try
@@ -660,16 +696,57 @@ namespace albireo
 
             // Bloc feed-forward.
             c->rms_norm(g.x, at(g.vectors, lv.ffn_norm), g.xn, uT, d, d, d, eps);
-            if (step && L.w_gate.type == L.w_up.type && df % 16 == 0)
-                c->matvec2(L.w_gate.type, at(g.weights, g.weight(L.w_gate)), df, at(g.weights, g.weight(L.w_up)), df, d,
-                    g.xn, uT, d, g.gate, df, g.up, df);
+            if (cfg_.is_moe())
+            {
+                // Le mélange d'experts : routage, experts choisis par indirection, expert partagé, puis la somme
+                // pondérée ajoutée à x.
+                const long E = cfg_.n_experts, K = cfg_.n_experts_used, de = cfg_.d_ffn_expert;
+                const unsigned slots = uT * static_cast<unsigned>(K);
+                if (L.router.type == dlib::ggml_type::F32)
+                    c->matvec_f32(at(g.weights, g.weight(L.router)), static_cast<unsigned>(E), static_cast<unsigned>(d),
+                        g.xn, uT, static_cast<unsigned>(d), g.moe_logits, static_cast<unsigned>(E));
+                else
+                    product(L.router, g.xn, d, g.moe_logits, E, 1.0f, 0.0f);
+                c->moe_route(g.moe_logits, static_cast<unsigned>(E), static_cast<unsigned>(K), cfg_.expert_weights_norm,
+                    g.moe_ids, g.moe_w, uT);
+                auto experts = [&](const std::vector<weight_matrix>& M, const metal_buffer& x, long x_stride, unsigned x_div,
+                                   const metal_buffer& y, long y_stride) {
+                    const weight_matrix& W = M[0];
+                    c->matvec_id(W.type, at(g.weights, g.weight(W)), W.rows, W.cols,
+                        static_cast<uint64_t>(W.row_bytes) * static_cast<uint64_t>(W.rows), x,
+                        static_cast<unsigned>(x_stride), x_div, g.moe_ids, slots, y, static_cast<unsigned>(y_stride));
+                };
+                experts(L.e_gate, g.xn, d, static_cast<unsigned>(K), g.moe_g, de);
+                experts(L.e_up, g.xn, d, static_cast<unsigned>(K), g.moe_u, de);
+                c->silu_mul(g.moe_g, g.moe_u, slots * static_cast<unsigned>(de));
+                experts(L.e_down, g.moe_g, de, 1, g.moe_y, d);
+                const bool shared = !L.sh_gate_inp.empty();
+                if (shared)
+                {
+                    const long ds = cfg_.d_ffn_shared;
+                    product(L.sh_gate, g.xn, d, g.sh_g, ds, 1.0f, 0.0f);
+                    product(L.sh_up, g.xn, d, g.sh_u, ds, 1.0f, 0.0f);
+                    c->silu_mul(g.sh_g, g.sh_u, static_cast<unsigned>(T * ds));
+                    product(L.sh_down, g.sh_g, ds, g.sh, d, 1.0f, 0.0f);
+                    c->shared_gate(g.xn, at(g.vectors, lv.sh_gate_inp), g.sh_gate, static_cast<unsigned>(d), uT);
+                }
+                const metal_view sh(g.sh);
+                c->moe_combine(g.x, g.moe_y, g.moe_w, shared ? &sh : nullptr, g.sh_gate, static_cast<unsigned>(d),
+                    static_cast<unsigned>(K), uT, rs);
+            }
             else
             {
-                product(L.w_gate, g.xn, d, g.gate, df, 1.0f, 0.0f);
-                product(L.w_up, g.xn, d, g.up, df, 1.0f, 0.0f);
+                if (step && L.w_gate.type == L.w_up.type && df % 16 == 0)
+                    c->matvec2(L.w_gate.type, at(g.weights, g.weight(L.w_gate)), df, at(g.weights, g.weight(L.w_up)), df,
+                        d, g.xn, uT, d, g.gate, df, g.up, df);
+                else
+                {
+                    product(L.w_gate, g.xn, d, g.gate, df, 1.0f, 0.0f);
+                    product(L.w_up, g.xn, d, g.up, df, 1.0f, 0.0f);
+                }
+                c->silu_mul(g.gate, g.up, static_cast<unsigned>(T * df));
+                product(L.w_down, g.gate, df, g.x, d, rs, 1.0f);
             }
-            c->silu_mul(g.gate, g.up, static_cast<unsigned>(T * df));
-            product(L.w_down, g.gate, df, g.x, d, rs, 1.0f);
         }
         // Normalisation finale et logits des seules lignes demandées.
         const long R = static_cast<long>(batch.logit_rows.size());
