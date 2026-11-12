@@ -34,7 +34,7 @@ Le second est un robot qui se sert de la page comme un utilisateur. Un service d
 
 ## Ce que le rangement n'a pas changé
 
-Rien de visible, et c'était le but. Le robot a même relevé deux bizarreries qui préexistaient au rangement : sur un téléphone, le panneau latéral s'ouvre au premier affichage et recouvre la page ; et une image jointe à un modèle qui ne lit pas les images est écartée sans message dans le fil. On les a vérifiées sur la page d'avant le découpage : elles y étaient déjà. Elles attendront leur tour.
+Rien de visible, et c'était le but. Le robot a même relevé une bizarrerie antérieure au rangement : sur un téléphone, le panneau latéral s'ouvre au premier affichage et recouvre la page. Elle tient à la page d'origine, dont le réglage du panneau vaut « ouvert » par défaut ; le découpage n'a touché ni à ce réglage ni aux styles. Elle attendra son tour.
 
 ## Pour les curieux : les chiffres
 

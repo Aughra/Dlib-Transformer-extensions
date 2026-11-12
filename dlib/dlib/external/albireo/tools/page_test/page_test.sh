@@ -33,6 +33,7 @@ mkdir -p "$WORK" && chmod 700 "$WORK"
 # Le service d'essai, avec la page des sources.
 cp -c "$BUILD/bin/albireo-service" "$BIN/" 2>/dev/null || { mkdir -p "$BIN" && cp -c "$BUILD/bin/albireo-service" "$BIN/"; }
 rsync -a --delete "$BUILD/bin/engines/" "$BIN/engines/"
+[ -d "$BUILD/bin/licenses" ] && rsync -a --delete "$BUILD/bin/licenses/" "$BIN/licenses/"
 rsync -a --delete "$ROOT/dlib/dlib/external/albireo/web/" "$BIN/web/"
 
 # Vrai quand le service d'essai a installé le modèle id.

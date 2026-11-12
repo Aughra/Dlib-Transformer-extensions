@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(albireo VERSION 4.11.11 LANGUAGES C CXX OBJCXX)
+project(albireo VERSION 4.11.12 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -223,6 +223,36 @@ if (ALBIREO_PROGRAMS)
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/web ${CMAKE_BINARY_DIR}/bin/web
       COMMENT "Copying the web application")
    add_dependencies(albireo-service albireo-web)
+
+   # Les textes des licences des composants du service, que montre la page « Composants et licences »
+   # (fork pour macOS : l'installateur Windows de l'original les assemblait, cmake/payload.cmake).
+   set(albireo_licenses
+      albireo.txt     ${CMAKE_CURRENT_SOURCE_DIR}/resources/license.txt
+      dlib.txt        ${ALBIREO_INCLUDE_DIR}/LICENSE.txt
+      mbedtls.txt     ${ALBIREO_DLIB_DIR}/external/mbedtls/LICENSE
+      cpp-httplib.txt ${ALBIREO_DLIB_DIR}/external/httplib/LICENSE
+      zlib.txt        ${ALBIREO_DLIB_DIR}/external/zlib/README
+      sqlite.txt      ${ALBIREO_DLIB_DIR}/external/sqlite/README.txt
+      libpng.txt      ${ALBIREO_DLIB_DIR}/external/libpng/LICENSE
+      libjpeg.txt     ${ALBIREO_DLIB_DIR}/external/libjpeg/README)
+   set(albireo_license_commands)
+   set(albireo_license_sources)
+   list(LENGTH albireo_licenses albireo_license_count)
+   math(EXPR albireo_license_last "${albireo_license_count} - 1")
+   foreach(i RANGE 0 ${albireo_license_last} 2)
+      math(EXPR j "${i} + 1")
+      list(GET albireo_licenses ${i} name)
+      list(GET albireo_licenses ${j} source)
+      list(APPEND albireo_license_sources ${source})
+      list(APPEND albireo_license_commands
+         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${source} ${CMAKE_BINARY_DIR}/bin/licenses/${name})
+   endforeach()
+   add_custom_target(albireo-licenses ALL
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/bin/licenses
+      ${albireo_license_commands}
+      DEPENDS ${albireo_license_sources}
+      COMMENT "Copying the license texts")
+   add_dependencies(albireo-service albireo-licenses)
 
 endif()
 

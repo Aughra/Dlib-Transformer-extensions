@@ -8,6 +8,11 @@ import { language, t } from './i18n.js';
 import { icon } from './icons.js';
 import { ui } from './state.js';
 
+// Vrai sur un écran étroit, un téléphone par exemple, où le panneau latéral passe par-dessus la page (app.css).
+export function narrowScreen() {
+  return window.matchMedia('(max-width: 860px)').matches;
+}
+
 // Fonctions utilitaires.
 export function h(tag, props, ...children) {
   const el = document.createElement(tag);

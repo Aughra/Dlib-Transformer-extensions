@@ -99,7 +99,7 @@ Repérage du 2026-11-11 (script, rien modifié) : les 354 fonctions d'`app.js` s
 
 ### Fait (4.11.2 à 4.11.11, 2026-11-12) : découper `web/js/app.js`
 
-22 modules (carte dans le commentaire d'en-tête d'`app.js`), déplacements mot pour mot, vérifiés par ESLint et par le banc `tools/page_test` (106 vérifications, dont la largeur d'un téléphone). Restes possibles : la page ouvre le panneau latéral sur téléphone au premier affichage (comportement d'origine) ; le dossier `licenses` n'est pas copié à côté du programme sur le Mac (l'onglet des licences ne montre que la page et les modèles). Plan d'origine :
+22 modules (carte dans le commentaire d'en-tête d'`app.js`), déplacements mot pour mot, vérifiés par ESLint et par le banc `tools/page_test` (106 vérifications, dont la largeur d'un téléphone). Les deux défauts relevés en route (panneau latéral ouvert sur téléphone, licences des programmes absentes) sont corrigés en 4.11.12. Plan d'origine :
 
 Environ 7 000 lignes en un fichier. Le découper en modules ES par thème (conversations, saisie et pièces jointes, mémoire, projets, paramètres, À propos et licences ; `app.js` gardant le démarrage et la navigation), état partagé (`state`, `ui`) dans un module commun, sans changer le comportement. Une étape par module, chacune vérifiée dans Chrome sans fenêtre (Mac et largeur de téléphone) puis commitée, pour qu'une pause ne laisse jamais la page cassée. Version 2.0.x (correctif) à chaque commit.
 

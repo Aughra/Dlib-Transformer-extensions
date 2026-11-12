@@ -153,7 +153,7 @@ Le tableau (machine, version d'Albireo, mode économie, charge, puis lecture et 
 bash dlib/dlib/external/albireo/tools/page_test/page_test.sh        # ESLint, puis 5 scénarios dans Chrome sans fenêtre
 ```
 
-Un service d'essai isolé (port 18491, hors ligne, données dans `build/page-test`) sert la page des sources, avec le Qwen3-VL 2B et, s'il est là, le 4B et son projecteur, clonés depuis le Mac. ESLint vérifie les modules de la page, puis 106 vérifications jouent la page comme un utilisateur (conversation, paramètres, projets, documents, images, actions du fil, deux onglets, largeur d'un téléphone). Il faut Google Chrome et Node.js ; ESLint s'installe une fois depuis npm dans `build/page-test/lint`. Détails et écriture des scénarios : `tools/page_test/README.md`. Dernier passage : 2026-11-12, Albireo 4.11.11, tout passe (3 min 42 s, installation d'ESLint comprise).
+Un service d'essai isolé (port 18491, hors ligne, données dans `build/page-test`) sert la page des sources, avec le Qwen3-VL 2B et, s'il est là, le 4B et son projecteur, clonés depuis le Mac. ESLint vérifie les modules de la page, puis 108 vérifications jouent la page comme un utilisateur (conversation, paramètres, projets, documents, images, actions du fil, deux onglets, largeur d'un téléphone). Il faut Google Chrome et Node.js ; ESLint s'installe une fois depuis npm dans `build/page-test/lint`. Détails et écriture des scénarios : `tools/page_test/README.md`. Dernier passage : 2026-11-12, Albireo 4.11.11, tout passe (3 min 42 s, installation d'ESLint comprise).
 
 ## État constaté
 

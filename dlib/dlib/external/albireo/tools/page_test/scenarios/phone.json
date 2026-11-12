@@ -13,6 +13,11 @@
   ]
  },
  {
+  "name": "sidebar closed at start",
+  "eval": "return document.querySelector('.sidebar').classList.contains('collapsed')",
+  "expect": true
+ },
+ {
   "name": "composer visible",
   "eval": "const r=document.querySelector('textarea').getBoundingClientRect(); return r.width>200 && r.bottom<=innerHeight",
   "expect": true
@@ -38,8 +43,8 @@
   "shot": "phone-chat.png"
  },
  {
-  "name": "sidebar button toggles the panel",
-  "eval": "const sb=document.querySelector('.sidebar'); const b=[...document.querySelectorAll('.topbar button')][0]; const before=sb.classList.contains('collapsed'); b.click(); await new Promise(r=>setTimeout(r,600)); const mid=sb.classList.contains('collapsed'); const t=document.querySelector('.topbar button'); t.click(); await new Promise(r=>setTimeout(r,600)); return [before!==mid, sb.classList.contains('collapsed')===before]",
+  "name": "sidebar opens, and closes on choosing a discussion",
+  "eval": "const sb=document.querySelector('.sidebar'); document.querySelector('.topbar button').click(); await new Promise(r=>setTimeout(r,600)); const opened=!sb.classList.contains('collapsed'); sb.querySelector('.side-section:last-of-type .item:not(.new-item), .item.active, .side-scroll .item:not(.new-item)').click(); await new Promise(r=>setTimeout(r,800)); return [opened, sb.classList.contains('collapsed')]",
   "expect": [
    true,
    true

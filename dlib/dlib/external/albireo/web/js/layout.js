@@ -7,7 +7,7 @@
 import { hintText } from './background.js';
 import { addPending, autoGrow, onSend, renderComposerState } from './composer.js';
 import { persist } from './conversations.js';
-import { h, iconButton } from './dom.js';
+import { h, iconButton, narrowScreen } from './dom.js';
 import { saveDraft } from './drafts.js';
 import { attachMenu, pastedFiles } from './files.js';
 import { t } from './i18n.js';
@@ -27,7 +27,10 @@ export function buildLayout() {
   // La question en cours de saisie reste quand la mise en page est reconstruite dans une autre langue.
   const draft = ui.input ? ui.input.value : '';
   app.replaceChildren();
-  ui.sidebar = h('aside', { class: 'sidebar' + (state.settings.sidebar === false ? ' collapsed' : '') });
+  // Sur un écran étroit, le panneau latéral recouvrirait la page : il part fermé, quel que soit le réglage.
+  ui.sidebar = h('aside', {
+    class: 'sidebar' + (state.settings.sidebar === false || narrowScreen() ? ' collapsed' : '')
+  });
   ui.sideScroll = h('div', { class: 'side-scroll' });
   ui.statusLine = h('div', { class: 'status-line' });
   const search = h('input', { type: 'search', placeholder: t('search'), value: state.search });

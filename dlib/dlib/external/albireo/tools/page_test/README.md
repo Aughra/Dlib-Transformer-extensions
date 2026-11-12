@@ -19,12 +19,12 @@ PAGE_TEST_KEEP=1 bash dlib/dlib/external/albireo/tools/page_test/page_test.sh   
 
 | Scénario | Vérifications | Ce qui est essayé |
 |---|---|---|
-| `regress` | 40 | Deux questions, paramètres et leurs sept onglets, notes de version, licences, projet, brouillon gardé après rechargement, recherche dans les discussions et dans les projets, discussion privée, bloc de code, agent et calculatrice, noms des fichiers de l'agent, mémoire des discussions après 45 s d'inactivité |
+| `regress` | 41 | Deux questions, paramètres et leurs sept onglets, notes de version, licences des programmes et des modèles, projet, brouillon gardé après rechargement, recherche dans les discussions et dans les projets, discussion privée, bloc de code, agent et calculatrice, noms des fichiers de l'agent, mémoire des discussions après 45 s d'inactivité |
 | `docs` | 12 | Fichier texte joint à une question, document d'un projet, réponses tirées de l'un et de l'autre |
 | `images` | 12 | Avec le 4B : image jointe (réponse « rouge »), vignette, visionneuse, image d'un projet décrite par le modèle d'arrière-plan |
 | `actions` | 24 | Copier, régénérer, exporter une réponse, modifier une question, la reposer, la supprimer, arrêter une réponse, renommer, épingler, exporter en Markdown et en JSON, supprimer une discussion |
 | `tabs` | 11 | Deux onglets : la réponse, le renommage et la suppression faits dans l'un apparaissent dans l'autre |
-| `phone` | 7 | Largeur d'un téléphone (390 points) : zone de saisie visible, pas de défilement horizontal, une question, bouton du panneau latéral, paramètres à la largeur de l'écran |
+| `phone` | 8 | Largeur d'un téléphone (390 points) : panneau latéral fermé au départ, zone de saisie visible, pas de défilement horizontal, une question, panneau qui s'ouvre puis se ferme au choix d'une discussion, paramètres à la largeur de l'écran |
 
 Les réponses attendues (« Paris », « Rome », « ORNITHORYNQUE »…) sont celles du 2B en choix habituel ; un autre modèle peut demander d'adapter un scénario.
 
@@ -51,4 +51,3 @@ Les résultats détaillés sont dans `build/page-test/<scénario>.txt`, les fich
 - La compression des échanges anciens n'est pas essayée : il faudrait dépasser le contexte de travail du modèle (16 384 tokens au moins).
 - Le glisser-déposer et le collage de fichiers ne sont pas essayés (seuls les champs de fichiers le sont).
 - Les accès au Web et aux documents du Mac ne sont pas essayés (le service d'essai est hors ligne).
-- Constat (page d'origine, pas un effet du découpage) : à la largeur d'un téléphone, le panneau latéral est ouvert au premier affichage et recouvre la page, le réglage `sidebar` valant vrai par défaut.

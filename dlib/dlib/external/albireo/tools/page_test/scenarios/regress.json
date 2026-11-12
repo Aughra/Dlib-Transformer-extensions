@@ -136,6 +136,11 @@
   "expect": true
  },
  {
+  "name": "program licenses listed and readable",
+  "eval": "const m=document.querySelector('main'); const has=['Albireo','dlib','Mbed TLS','SQLite','libjpeg'].every(n=>m.innerText.includes(n)); const b=[...m.querySelectorAll('button')].find(b=>/Texte de la licence/.test(b.innerText+b.title)); if(!b) return 'no button'; b.click(); await new Promise(r=>setTimeout(r,1500)); return has && /Boost Software License|Permission/.test(m.innerText)",
+  "expect": true
+ },
+ {
   "shot": "licenses.png"
  },
  {

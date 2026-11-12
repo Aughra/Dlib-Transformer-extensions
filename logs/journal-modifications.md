@@ -2,6 +2,14 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-13 — Rendre les licences des programmes, fermer le panneau sur téléphone (Albireo 4.11.12)
+
+- **Quoi** : CMake d'Albireo : cible `albireo-licenses`, qui copie dans `bin/licenses` les huit textes que l'installateur Windows de l'original assemblait (`cmake/payload.cmake` de l'original : `resources/license.txt`, `dlib/LICENSE.txt`, mbedtls, httplib, zlib, sqlite, libpng, libjpeg). `resources/license.txt` rétabli (retiré par erreur avec les fichiers Windows dans `5056eb5`), adapté : sans le bloc OpenVINO / CUDA / Visual C++, chemins macOS, libpng et libjpeg ajoutés, une ligne sur le fork. Page : `narrowScreen()` (`dom.js`) ; sur un écran de 860 points ou moins, le panneau latéral part fermé (`layout.js`) et se ferme après chaque navigation (`navigation.js`). Banc : copie de `licenses`, étape « program licenses listed and readable » (`regress`), scénario `phone` adapté (8 vérifications).
+- **Fichiers** : `albireo/CMakeLists.txt`, `albireo/resources/license.txt`, `albireo/web/js/{dom.js,layout.js,navigation.js}`, `albireo/tools/page_test/{page_test.sh,scenarios/regress.json,scenarios/phone.json,README.md}`, `albireo/web/changelog.md`, version ; `blog/31-le-grand-rangement.md`, `logs/*`.
+- **Pourquoi** : deux défauts relevés pendant le chantier D.
+- **Correction d'un constat** : l'entrée de la 4.11.5 et l'épisode 31 disaient qu'une image jointe à un modèle qui ne lit pas les images était écartée « sans message » ; c'est faux, un message passager le dit (« noir.png : le modèle de cette fonction (…) ne lit que : texte ; ce fichier ne peut pas être joint. ») : seul le fil avait été regardé. L'épisode 31 est corrigé.
+- **Étapes** : build sans erreur ; banc de la page : lint ok, regress 41, docs 12, images 12, actions 24, tabs 11, phone 8, aucune erreur.
+
 ## 2026-11-12 — Ranger le banc d'essai de la page dans le dépôt (tools/page_test)
 
 - **Quoi** : `albireo/tools/page_test/` : `page_test.sh` (service d'essai isolé, port 18491, hors ligne, données dans `build/page-test`, page des sources, modèles clonés depuis le Mac par un catalogue local et la réserve ; ESLint installé une fois depuis npm dans `build/page-test/lint` ; scénarios joués puis service arrêté), `cdp.mjs` (Chrome sans fenêtre par le protocole DevTools, Node.js seul), `eslint.config.mjs`, six scénarios (`regress` 40, `docs` 12, `images` 12, `actions` 24, `tabs` 11, `phone` 7 vérifications), README. Consigne ajoutée à CLAUDE.md (« Page d'Albireo »), section « Vérifier la page web » du mémo.

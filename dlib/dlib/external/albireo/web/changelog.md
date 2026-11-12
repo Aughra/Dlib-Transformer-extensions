@@ -2,6 +2,15 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.11.12 — 13 novembre 2026
+
+### Corrections
+
+- La page « Composants et licences » liste de nouveau les programmes du service (Albireo, dlib, Mbed TLS, cpp-httplib, zlib, SQLite, libpng, libjpeg) avec le texte de leur licence : le build copie ces textes dans le dossier `licenses` à côté du service. Le texte de la licence d'Albireo, retiré par erreur avec les fichiers propres à Windows, est rétabli, sans la liste des composants Windows (OpenVINO, CUDA, Visual C++).
+- Sur un écran étroit (860 points ou moins, un téléphone par exemple), le panneau latéral est fermé à l'ouverture de la page, au lieu de la recouvrir, et se referme une fois une discussion ou une page choisie.
+
+---
+
 ## 4.11.11 — 12 novembre 2026
 
 ### Interface

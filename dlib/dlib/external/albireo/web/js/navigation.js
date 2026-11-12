@@ -12,7 +12,7 @@ import { cancelWarmup, compactLater, serviceReady } from './background.js';
 import { autoGrow, generations, stopGeneration, unread } from './composer.js';
 import { deleted } from './conversations.js';
 import { closeMenu } from './dialogs.js';
-import { storageFailed } from './dom.js';
+import { narrowScreen, storageFailed } from './dom.js';
 import { cancelDraftSave, draftKey, drafts, forgetDraft, imageIdsOf, storedDraft, storeDraft } from './drafts.js';
 import { forgetOwner, indexAttachments } from './indexing.js';
 import { state, ui } from './state.js';
@@ -165,5 +165,7 @@ export async function route() {
       showDiscussion(newConversation(null));
     }
   }
+  // Sur un écran étroit, le panneau latéral, qui recouvre la page, se ferme une fois la vue choisie.
+  if (narrowScreen() && ui.sidebar) ui.sidebar.classList.add('collapsed');
   renderAll();
 }
