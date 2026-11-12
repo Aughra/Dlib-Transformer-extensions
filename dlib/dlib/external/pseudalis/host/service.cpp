@@ -199,7 +199,7 @@ namespace pseudalis
         }
         admin_token_ = trim(token);
 
-        // Les clés, le coffre et la base de données, dans des dossiers de SYSTEM et des administrateurs.
+        // Les clés, le coffre et la base de données sont rangés dans des dossiers privés (0700).
         bool created = false;
         if (!load_master_key(join_path(data_dir_, "keys"), master_, created, error)) return false;
         if (created) log_info("keys: a new master key was made");
@@ -295,13 +295,7 @@ namespace pseudalis
         server_->set_read_timeout(30);
         server_->set_write_timeout(60);
         server_->new_task_queue = []() { return new httplib::ThreadPool(8, 32, 64); };
-        /*
-            Sous Windows, le socket garde ses options par défaut : un port lié à 127.0.0.1 de cette
-            façon ne peut pas être pris par un programme d'un autre compte, et un redémarrage le
-            lie de nouveau aussitôt, là où SO_EXCLUSIVEADDRUSE le refuserait pendant que se
-            terminent les connexions de l'exécution précédente.  Ailleurs, SO_REUSEADDR permet le
-            même redémarrage.
-        */
+        // Permet de reprendre rapidement le port après l'arrêt de l'instance précédente.
         server_->set_socket_options([](socket_t sock) {
             httplib::set_socket_opt(sock, SOL_SOCKET, SO_REUSEADDR, 1);
         });

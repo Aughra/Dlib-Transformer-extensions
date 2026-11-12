@@ -277,12 +277,9 @@ schemas = {
                  "change of port, of the GPU, of the network access or of memory restarts the service.", "properties": {
         "port": {"type": "integer", "minimum": 1024, "maximum": 65535},
         "language": {"type": "string", "enum": ["auto", "fr"]},
-        "engine": {"type": "string", "enum": ["auto", "best", "cpu", "cpu-avx2", "cpu-avxvnni", "openvino", "cuda"],
-                   "description": "auto: the accelerator of the computer, the NVIDIA card (cuda), else the NPU and "
-                   "the graphics processor of Intel together, else the one of them present, with the processor "
-                   "computing the products its device does not take; the processor engine when no accelerator is "
-                   "usable or when a measure found the accelerator slower. best: the fastest measured engine. A "
-                   "variant: that engine, with the device of accelerator for the engines that have several."},
+        "engine": {"type": "string", "enum": ["auto"],
+                   "description": "Valeur acceptée : auto. Albireo utilise le moteur CPU disponible ; "
+                   "l'accélération Metal se règle avec accelerator."},
         "accelerator": {"type": "string", "enum": ["auto", "none"],
                         "description": "none: every pass of the engine on the processor, the GPU of the Mac unused; "
                         "auto lets the engine give the generation steps and the prompts to the GPU (Metal)."},
@@ -299,8 +296,8 @@ schemas = {
                     "description": "Storage of the keys and values of the language models: q8, 8-bit integers by "
                                    "groups of 32 values with a scale, the keys rotated; f16, half precision. auto "
                                    "takes q8 for the models whose heads hold whole groups."},
-        "offline": {"type": "boolean", "description": "No access to the network: the catalog and the models "
-                    "come from imports, and the service opens no connection."},
+        "offline": {"type": "boolean", "description": "No access to the network: the catalog comes from its cache "
+                    "or imports, and models come from imports or the verified local reserve."},
         "proxy": {"type": "string",
                   "description": "Proxy of the downloads: empty for the proxy of the system, none for a direct "
                                  "connection, or http://[user:password@]host:port.  The settings give the password "
@@ -377,20 +374,19 @@ schemas = {
             "variant": {"type": "string"}, "path": {"type": "string"}, "usable": {"type": "boolean"},
             "version": {"type": "string"}, "build": {"type": "string"}, "current": {"type": "boolean"},
             "devices": {"type": "array", "items": {"type": "object", "properties": {
-                "type": {"type": "string", "enum": ["cpu", "gpu", "npu"]}, "id": {"type": "string"},
+                "type": {"type": "string", "enum": ["cpu"]}, "id": {"type": "string"},
                 "name": {"type": "string"}}}},
             "reason": {"type": "string", "description": "Why the engine cannot run here, in English."},
-            "reason_code": {"type": "string", "description": "The code of the reason: isa_avx2, isa_avx_vnni, "
-                            "no_nvidia_driver, old_nvidia_driver, no_nvidia_card, old_nvidia_card, "
-                            "no_intel_device, intel_device_unusable, library_failed, probe_timeout."},
+            "reason_code": {"type": "string", "description": "The code of the reason: library_failed, "
+                            "probe_timeout."},
             "reason_args": {"type": "object", "additionalProperties": {"type": "string"}},
             "missing": {"type": "string", "description": "For an engine that runs: why its runtime left out the "
                         "other devices it looks for, such as the message of a plugin of OpenVINO."}}}},
         "options": {"type": "array", "description": "The choices of engine and device.", "items": {
             "type": "object", "properties": {
-                "key": {"type": "string", "example": "openvino:gpu"}, "variant": {"type": "string"},
+                "key": {"type": "string", "example": "cpu"}, "variant": {"type": "string"},
                 "device": {"type": "string"}, "current": {"type": "boolean"},
-                "kind": {"type": "string", "enum": ["cpu", "gpu", "npu", "both"]},
+                "kind": {"type": "string", "enum": ["cpu"]},
                 "names": {"type": "array", "items": {"type": "string"},
                           "description": "The names of the devices of the choice."},
                 "measure": {"type": "object", "description": "The last measure of the choice."}}}},
@@ -520,8 +516,8 @@ paths = {
                         "description": "Language of the descriptions; auto, or no value, gives French (the fork for macOS speaks French only)."}],
         "responses": {"200": reply("The models", {"type": "object", "properties": {
             "free": {"type": "integer", "description": "The free bytes of the disk of the models folder."},
-            "offline": {"type": "boolean", "description": "True when the service is set offline: the models come "
-                        "from imports."},
+            "offline": {"type": "boolean", "description": "True when the service is set offline: models come "
+                        "from imports or the verified local reserve."},
             "models": {"type": "array", "items": {"type": "object", "properties": {
                 "id": {"type": "string"}, "name": {"type": "string"},
                 "roles": {"type": "array", "items": {"type": "string"}},
@@ -548,7 +544,11 @@ paths = {
                 "size": {"type": "integer"}, "publisher": {"type": "string"},
                 "license": {"type": "string", "description": "As for the language models."}}},
                 "description": "The installed embedding models."},
-            "downloads": {"type": "array", "items": {"type": "object"}},
+            "downloads": {"type": "array", "description": "Asynchronous downloads and local restorations; "
+                          "an error includes its code and message.", "items": {"type": "object", "properties": {
+                              "id": {"type": "string"}, "state": {"type": "string"},
+                              "code": {"type": "string"}, "error": {"type": "string"},
+                              "received": {"type": "integer"}, "total": {"type": "integer"}}}},
             "pending_projectors": {"type": "array", "description": "The projectors imported without their decoder, "
                                    "which wait for it.", "items": {"type": "object", "properties": {
                                        "name": {"type": "string"}, "size": {"type": "integer"},
@@ -577,7 +577,7 @@ paths = {
         "tags": ["Service"], "summary": "License texts of the installation",
         "description": "The texts of the licenses folder of the programs, which the installer fills: those of the "
                        "components of the programs (Albireo, dlib, Mbed TLS, cpp-httplib, zlib, SQLite) and of the "
-                       "runtimes of the engines (OpenVINO, CUDA, cuDNN). The list is empty without that folder, as "
+                       "runtimes of the engine. The list is empty without that folder, as "
                        "in a build folder. The components of the web application are listed by "
                        "/vendor/components.json.",
         "responses": {"200": reply("The texts, by the names of their files", {"type": "array", "items": {
@@ -665,8 +665,13 @@ paths = {
                                                               **offline_reply)}},
     "/albireo/v1/models/{id}/download": {
         "post": {"tags": ["Administration"], "summary": "Starts or resumes the download of a model",
+                 "description": "In offline mode, starts a local-only restoration of all verified files from the "
+                                "reserve, with no network fallback even if the setting changes. If the reserve "
+                                "cannot supply them, the asynchronous job reports state error and code "
+                                "reserve_unavailable in GET /albireo/v1/models. A network job already running "
+                                "for this model is refused with code download_busy.",
                  "parameters": [model_id],
-                 "responses": dict({"202": reply("Started", ok), "400": reply("Refused", ok)}, **offline_reply)},
+                 "responses": {"202": reply("Started", ok), "400": reply("Refused", ok)}},
         "delete": {"tags": ["Administration"], "summary": "Cancels a download",
                    "parameters": [model_id], "responses": {"200": reply("Cancelled", ok)}}},
     "/albireo/v1/models/{id}/activate": {"post": {
@@ -695,11 +700,11 @@ paths = {
         "responses": {"200": reply("Deleted, or to be deleted", {"type": "object", "properties": {
             "ok": {"type": "boolean"}, "pending": {"type": "boolean"}}}), "400": reply("Refused", ok)}}},
     "/albireo/v1/import": {"post": {
-        "tags": ["Administration"], "summary": "Imports a signed offline bundle, or the content of the import folder",
+        "tags": ["Administration"], "summary": "Imports an offline bundle, or the content of the import folder",
         "description": "For a computer without network: a memory card or a disk brought to the machine. The "
-                       "service reads with its own rights, so that it accepts two kinds of paths: a signed offline "
-                       "bundle on a local drive (a folder whose catalog.json bears the signature of Albireo), of "
-                       "which it reads only the signed catalog and the models it lists, by their names, sizes and "
+                       "service reads with its own rights, so that it accepts two kinds of paths: an offline "
+                       "bundle on a local drive (a folder holding a catalog.json), of "
+                       "which it reads only the catalog and the models it lists, by their names, sizes and "
                        "hashes; and a folder or a file of the import folder of the data folder. Every file is read "
                        "through no link. A model file of the user is sent through /albireo/v1/models/upload. An "
                        "older catalog never replaces a newer one, and a model installed already is listed under "
@@ -712,7 +717,7 @@ paths = {
             "errors": {"type": "array", "items": {"type": "string"}},
             "catalog": {"type": "object"}}}),
                       "400": reply("The path is refused before anything of it is read; the code is the same "
-                                   "whether a folder outside the import folder is missing, unreadable, unsigned or "
+                                   "whether a folder outside the import folder is missing, unreadable or "
                                    "reached through a link (import_not_bundle)", import_refusal)}}},
     "/albireo/v1/models/import": {"post": {
         "tags": ["Administration"], "summary": "Same as /albireo/v1/import",

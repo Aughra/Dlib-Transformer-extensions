@@ -2,18 +2,15 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    Le lecteur de Pseudalis sans pilote (drive.h) : le dossier drive du dossier de données, dont
-    un parcours trouve les changements, chaque seconde tant que des fichiers sont au repos et à
-    chaque changement que Windows signale, et qu'une lettre montre pour chaque session de
-    l'ordinateur.
+    Le dossier drive du dossier de données : un parcours y cherche les changements chaque
+    seconde. Sur macOS, il n'y a ni notification de changement utilisée ici ni montage sous
+    une lettre de lecteur.
 
-    Un fichier est traité une fois au repos, inchangé depuis deux secondes, et une fois que le
-    service l'ouvre seul : un programme qui le tient encore le garde (violation de partage), et
-    le service le tient, sans rien partager, de sa lecture à son remplacement.  Chaque fichier
-    est ouvert sans passer par aucun lien, vérifié là où se trouve son handle, et supprimé ou
-    déplacé par ce handle, pour qu'une jonction placée dans le lecteur par un utilisateur ne
-    mène jamais le service ailleurs.  Le nouveau fichier est écrit à côté sous un nom
-    temporaire caché, puis prend son nom.
+    Un fichier est traité après être resté inchangé depuis deux secondes. L'ouverture du
+    service ne verrouille pas le fichier contre les autres programmes sur macOS : ceux-ci
+    peuvent encore le lire ou le modifier. Chaque fichier est ouvert sans suivre de lien,
+    vérifié là où se trouve son descripteur, puis supprimé ou déplacé depuis ce descripteur.
+    Le nouveau fichier est écrit à côté sous un nom temporaire caché, puis prend son nom.
 
     Les fichiers traités sont enregistrés avec leur taille et l'heure de leur dernière écriture,
     en mémoire et dans la base de données : un parcours les passe tant qu'ils gardent les deux.
@@ -87,7 +84,7 @@ namespace pseudalis
         }
 
         // Les fichiers que les lecteurs laissent tranquilles : leurs fichiers temporaires, les fichiers de verrou et
-        // temporaires des éditeurs ("~$name.docx", "~WRL0001.tmp", ".~lock.name#"), les fichiers de l'Explorateur.
+        // temporaires des éditeurs ("~$name.docx", "~WRL0001.tmp", ".~lock.name#"), les fichiers d'affichage des dossiers.
         bool ignored_name(const std::string& name)
         {
             const std::string l = lower_ascii(name);
@@ -195,7 +192,8 @@ namespace pseudalis
             h = no_handle;
         }
 
-        // Hors de Windows, un fichier n'est pas tenu seul : le temps qu'il reste au repos en tient lieu.
+        // Sur macOS, cette ouverture ne bloque pas les autres programmes ; le délai attend la fin probable d'une
+        // écriture.
         int open_alone(const std::string& path, file_handle& h)
         {
             h = ::open(path.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
@@ -578,9 +576,7 @@ namespace pseudalis
 
         /*
             Déplace le fichier tenu hors du lecteur, vers le dossier des fichiers non traités de son
-            propriétaire, à la place qu'il avait dans l'arborescence du lecteur, où il n'admet que
-            ce propriétaire, SYSTEM et les administrateurs : il garderait sinon les permissions du
-            lecteur, qu'un déplacement au sein d'un volume emporte.
+            propriétaire, à la place qu'il avait dans l'arborescence du lecteur.
         */
         void refuse(folder_state& f, const std::string& path, file_handle& h, const std::string& why)
         {
@@ -1029,7 +1025,7 @@ namespace pseudalis
         p.drive.path = join_path(p.svc.data_dir(), "drive");
         p.refused_root = join_path(p.svc.data_dir(), "refused");
         p.stopping = false;
-        // Un lecteur sans lettre n'est pas lancé.
+        // Une chaîne vide désactive le parcours du dossier.
         error.clear();
         if (letter.empty()) return true;
         p.start_folder(p.drive, letter, error);

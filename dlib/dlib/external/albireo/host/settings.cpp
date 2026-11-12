@@ -143,7 +143,9 @@ namespace albireo
         models_dir = j["models_dir"].str(d.models_dir);
         language = j["language"].str(d.language);
         engine = j["engine"].str(d.engine);
+        if (engine != "auto") engine = d.engine;
         accelerator = j["accelerator"].str(d.accelerator);
+        if (accelerator != "auto" && accelerator != "none") accelerator = d.accelerator;
         device_mb = std::max<long long>(0, j["device_mb"].as_int(d.device_mb));
         threads = static_cast<int>(j["threads"].as_int(d.threads));
         context = static_cast<long>(j["context"].as_int(d.context));

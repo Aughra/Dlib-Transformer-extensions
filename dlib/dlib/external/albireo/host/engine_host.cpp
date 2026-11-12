@@ -25,8 +25,7 @@ namespace albireo
             std::string model;
         };
 
-        const char* const variant_order[] = { "cuda", "openvino-avxvnni", "openvino", "cpu-avxvnni", "cpu-avx2",
-            "cpu" };
+        const char* const variant_order[] = { "cpu" };
 
         std::atomic<bool> pinned_started{false};
 

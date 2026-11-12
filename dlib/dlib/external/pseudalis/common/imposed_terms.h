@@ -21,8 +21,8 @@ namespace pseudalis
         soit d'autre du texte (dlib::pii_imposed_term) : ses mots et ses nombres dans le même
         ordre, en mots entiers, séparés par au plus deux caractères d'une même ligne, en
         respectant leur casse et leurs accents quand case_sensitive vaut true, en ignorant les deux
-        sinon.  Le service les garde dans sa base de données, que seuls SYSTEM et les
-        administrateurs lisent, et les donne au moteur.
+        sinon. Le service les garde dans sa base de données privée au compte qui l'exécute,
+        et les donne au moteur.
     */
     const std::size_t max_imposed_terms = 100;
     // En caractères (points de code), une fois retirées les espaces aux deux bouts.

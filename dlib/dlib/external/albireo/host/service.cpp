@@ -24,7 +24,6 @@
 #include "certificates.h"
 #include "crypto.h"
 #include "http_fetch.h"
-#include "public_link.h"
 #include "web_access.h"
 
 namespace albireo
@@ -81,9 +80,9 @@ namespace albireo
         }
 
         /*
-            Indique si path, tel qu'écrit, est folder ou se trouve sous lui, les lettres des noms
-            comparées sans tenir compte de la casse sous Windows ; within reçoit folder suivi des noms
-            de path au-delà de lui.  Le système de fichiers n'est pas lu.
+            Indique si path, tel qu'écrit, est folder ou se trouve sous lui, en comparant exactement
+            les composants ; within reçoit folder suivi des noms de path au-delà de lui. Le système
+            de fichiers n'est pas lu.
         */
         bool path_under(const std::string& path, const std::string& folder, std::string& within)
         {
@@ -116,11 +115,7 @@ namespace albireo
             return std::string();
         }
 
-        /*
-            Les certificats du serveur local (certificates.h), et sous Windows la confiance accordée à
-            une nouvelle autorité : elle prend la place de l'autorité à laquelle la machine se fiait, ou
-            suit le choix de l'installation (host_settings::trust_authority).
-        */
+        // Prépare les certificats locaux ; le choix de confiance n'a pas d'effet sur macOS.
         bool prepare_certificates(const std::string& dir, int trust_choice, bool& renewed, std::string& error)
         {
             if (!ensure_certificates(dir, renewed, error)) return false;
@@ -165,145 +160,24 @@ namespace albireo
         return ok;
     }
 
-    bool is_openvino_variant(const std::string& variant)
-    {
-        return variant.compare(0, 8, "openvino") == 0;
-    }
-
     std::vector<engine_choice> engine_options(const std::vector<engine_candidate>& candidates)
     {
-        // Le moteur OpenVINO aux noyaux du processeur les plus riches qui tournent ici : ses
-        // périphériques font les choix du NPU et du processeur graphique.
-        const engine_candidate* openvino = nullptr;
-        for (const char* v : { "openvino-avxvnni", "openvino" })
-            for (const auto& c : candidates)
-                if (!openvino && c.usable && c.variant == v) openvino = &c;
         std::vector<engine_choice> out;
         for (const auto& c : candidates)
         {
-            if (!c.usable) continue;
-            if (is_openvino_variant(c.variant))
-            {
-                if (&c != openvino) continue;
-                // Un choix par genre de périphérique, et un pour le NPU et le processeur graphique
-                // ensemble, où dlib envoie chaque produit au plus rapide des deux.
-                std::string npu, gpu;
-                for (const auto& d : c.description["devices"].elements())
-                {
-                    // Le plugin du processeur n'est listé que quand DLIB_NPU_DEVICE le nomme.
-                    const std::string type = d["type"].as_string();
-                    if (type != "npu" && type != "gpu" && !(type == "cpu" && d["id"].as_string() == "CPU")) continue;
-                    const std::string key = "openvino:" + type;
-                    bool seen = false;
-                    for (const auto& e : out) seen = seen || e.key == key;
-                    if (seen) continue;
-                    engine_choice e;
-                    e.candidate = &c;
-                    e.device = d["id"].str(type == "npu" ? "NPU" : type == "gpu" ? "GPU" : "CPU");
-                    e.key = key;
-                    out.push_back(e);
-                    if (type == "npu") npu = e.device;
-                    if (type == "gpu") gpu = e.device;
-                }
-                if (!npu.empty() && !gpu.empty())
-                {
-                    engine_choice e;
-                    e.candidate = &c;
-                    e.device = npu + "," + gpu;
-                    e.key = "openvino:both";
-                    out.push_back(e);
-                }
-                continue;
-            }
+            if (!c.usable || c.variant != "cpu") continue;
             engine_choice e;
             e.candidate = &c;
-            e.key = c.variant;
+            e.key = "cpu";
             out.push_back(e);
         }
         return out;
     }
 
-    engine_choice choose_engine(const std::vector<engine_candidate>& candidates, const host_settings& s)
+    engine_choice choose_engine(const std::vector<engine_candidate>& candidates)
     {
         const std::vector<engine_choice> options = engine_options(candidates);
-        auto rate = [&](const engine_choice& e) {
-            return s.engine_benchmarks[e.key]["tokens_per_second"].as_double(0);
-        };
-        auto is_cpu = [](const engine_choice& e) { return e.key.compare(0, 3, "cpu") == 0; };
-        auto is_npu = [](const engine_choice& e) { return e.key == "openvino:npu"; };
-        auto is_gpu = [](const engine_choice& e) { return e.key == "cuda" || e.key == "openvino:gpu"; };
-        auto is_accelerator = [](const engine_choice& e) {
-            return e.key == "cuda" || e.key == "openvino:npu" || e.key == "openvino:gpu" || e.key == "openvino:both";
-        };
-        auto fastest = [&](const std::function<bool(const engine_choice&)>& keep) {
-            const engine_choice* best = nullptr;
-            for (const auto& e : options)
-                if (keep(e) && rate(e) > 0 && (!best || rate(e) > rate(*best))) best = &e;
-            return best;
-        };
-        auto first = [&](const std::vector<std::string>& keys) {
-            for (const auto& k : keys)
-                for (const auto& e : options)
-                    if (e.key == k) return &e;
-            return static_cast<const engine_choice*>(nullptr);
-        };
-
-        if (s.engine != "auto" && s.engine != "best")
-        {
-            // Une variante nommée dans les réglages ; pour les moteurs à plusieurs périphériques, le
-            // réglage accelerator choisit le périphérique.  "openvino" nomme le moteur OpenVINO que
-            // garde engine_options().
-            const engine_choice* named = nullptr;
-            for (const auto& e : options)
-            {
-                const bool openvino = s.engine == "openvino" && is_openvino_variant(e.candidate->variant);
-                if (e.key != s.engine && e.candidate->variant != s.engine && !openvino) continue;
-                if (!named) named = &e;
-                if ((s.accelerator == "npu" && is_npu(e)) || (s.accelerator == "gpu" && is_gpu(e))
-                    || (s.accelerator == "both" && e.key == "openvino:both")) named = &e;
-            }
-            if (named) return *named;
-            log_warning("engines: the engine '" + s.engine + "' of the settings is not usable, automatic selection");
-        }
-        // Le moteur du processeur : le plus rapide mesuré, sinon celui des noyaux les plus riches.
-        const engine_choice* processor = fastest(is_cpu);
-        if (!processor) processor = first({ "cpu-avxvnni", "cpu-avx2", "cpu" });
-        const engine_choice* e = nullptr;
-        if (s.accelerator == "npu")
-        {
-            e = fastest(is_npu);
-            if (!e) e = first({ "openvino:npu" });
-        }
-        else if (s.accelerator == "gpu")
-        {
-            e = fastest(is_gpu);
-            if (!e) e = first({ "cuda", "openvino:gpu" });
-        }
-        else if (s.accelerator == "both")
-        {
-            e = fastest(is_accelerator);
-            if (!e) e = first({ "cuda", "openvino:both", "openvino:gpu", "openvino:npu" });
-        }
-        else if (s.accelerator == "none")
-        {
-            e = processor;
-        }
-        else
-        {
-            // Le moteur "best" : le plus rapide mesuré.
-            if (s.engine == "best") e = fastest([](const engine_choice&) { return true; });
-            /*
-                L'accélérateur de l'ordinateur, le processeur calculant ce que son périphérique ne fait pas :
-                la carte NVIDIA, sinon le NPU et le processeur graphique d'Intel ensemble, sinon celui des
-                deux qui est présent.  Une mesure qui l'a trouvé plus lent que le moteur du processeur cède
-                la place au moteur du processeur.
-            */
-            if (!e) e = first({ "cuda", "openvino:both", "openvino:gpu", "openvino:npu" });
-            if (e && processor && rate(*e) > 0 && rate(*processor) > rate(*e)) e = processor;
-        }
-        if (!e) e = processor;
-        if (!e && !options.empty()) e = &options.front();
-        return e ? *e : engine_choice();
+        return options.empty() ? engine_choice() : options.front();
     }
 
     service::service() : program_dir_(executable_dir()), data_dir_(albireo::data_dir())
@@ -364,9 +238,6 @@ namespace albireo
         if (first_run) settings_->set(st);
         port_ = st.port;
         apply_network_settings(st);
-        // L'espace de publication, seule source des téléchargements, est nommé sans son lien.
-        log_info(std::string("publication space: ") + (public_link_enabled() ? "set" : "not set")
-            + (public_link_has_password() ? ", with its password" : ", without password"));
         log_info("web search: " + web_search_provider(st));
 
         const std::string db_path = join_path(data_dir_, "albireo.db");
@@ -424,7 +295,8 @@ namespace albireo
         {
             try
             {
-                std::unique_ptr<model_manager> m(new model_manager(*db_, st.effective_models_dir()));
+                std::unique_ptr<model_manager> m(new model_manager(*db_, st.effective_models_dir(),
+                    join_path(data_dir_, "reserve")));
                 m->on_installed([this](const installed_model& im) { on_installed(im); });
                 m->on_replace([this](const std::string& id, const std::function<bool()>& place) {
                     return replace_model_files(id, place);
@@ -519,7 +391,7 @@ namespace albireo
             /*
                 Le port des réglages est pris par un autre programme, ou réservé par le système depuis
                 qu'il a été choisi : le serveur ouvre le dernier port sur lequel il a servi, que les
-                réglages reprennent pour que la barre des tâches y trouve le service.
+                réglages reprennent pour retrouver le service à ce port.
             */
             int last = 0;
             try
@@ -704,11 +576,11 @@ namespace albireo
             std::atomic<bool>& flag;
             ~ready_at_exit() { flag = true; }
         } ready{ engines_ready_ };
-        // Le moteur de cette machine ; un moteur du processeur quand celui choisi échoue.
+        // Le moteur CPU construit pour cette machine.
         const host_settings st = settings_->get();
         // Les descriptions s'arrêtent aussitôt quand le service s'arrête.
         candidates_ = engine_.discover(engines_dir(), executable_path(), &stopping_);
-        choice_ = choose_engine(candidates_, st);
+        choice_ = choose_engine(candidates_);
         if (stopping_) return;
         if (choice_.candidate)
         {
@@ -719,7 +591,6 @@ namespace albireo
                 log_error("engines: " + engine_error_);
                 for (const auto& o : engine_options(candidates_))
                 {
-                    if (o.key.compare(0, 3, "cpu") != 0) continue;
                     if (engine_.start(*o.candidate, engine_config(st, o.device), e))
                     {
                         choice_ = o;
@@ -877,9 +748,9 @@ namespace albireo
         /*
             Ce qui est laissé dans le dossier d'import du dossier des données, par l'installateur depuis
             son support ou par un administrateur, avec la disposition d'un paquet hors ligne : un
-            catalogue signé, des modèles (aussi dans un sous-dossier "models"), une mise à jour signée
-            avec son installateur.  Ce qui est installé quitte le dossier ; un fichier qui ne peut pas
-            être installé est renommé avec le suffixe ".rejected", pour qu'il ne soit lu qu'une fois.
+            catalogue (non signé) et des modèles (aussi dans un sous-dossier "models").  Ce qui est
+            installé quitte le dossier ; un fichier qui ne peut pas être installé est renommé avec le
+            suffixe ".rejected", pour qu'il ne soit lu qu'une fois.
         */
         const std::string inbox = join_path(data_dir_, "import");
         if (!dir_exists(inbox)) return;
@@ -908,19 +779,17 @@ namespace albireo
         };
 
         const std::string catalog = join_path(inbox, "catalog.json");
-        if ((file_exists(catalog) || is_link(catalog)) && (file_exists(catalog + ".sig") || is_link(catalog + ".sig")))
+        if (file_exists(catalog) || is_link(catalog))
         {
             const json r = models_->import_catalog(inbox, inbox);
             if (r.contains("error"))
             {
                 log_warning("models: import folder: " + r["error"].as_string());
                 set_aside(catalog);
-                set_aside(catalog + ".sig");
             }
             else
             {
                 remove_file(catalog);
-                remove_file(catalog + ".sig");
             }
         }
 
@@ -960,11 +829,7 @@ namespace albireo
     {
         const std::string inbox = join_path(data_dir_, "import");
         if (folder_admin_only(inbox)) return true;
-        /*
-            Un autre compte peut écrire dans le dossier d'import, que le service lit avec les droits
-            du système : le dossier reçoit les permissions du dossier des données, et ce que d'autres
-            comptes y ont placé est mis de côté (secure_folder()).
-        */
+        // Sur macOS, ce contrôle vérifie les propriétaires et permissions POSIX, mais pas les ACL étendues.
         log_warning("models: the import folder " + inbox + " lets other accounts than the administrators write in "
             "it: it is secured, and what they placed is set aside");
         return secure_folder(inbox, error, true);
@@ -995,7 +860,7 @@ namespace albireo
         std::string within;
         if (path_under(path, inbox, within))
         {
-            // Le dossier d'import, que seuls SYSTEM et les administrateurs remplissent.
+            // Le dossier d'import du service.
             std::string insecure;
             if (dir_exists(inbox) && !secure_inbox(insecure))
                 return refuse("import_folder_insecure", "the import folder lets other accounts than the administrators "
@@ -1025,25 +890,23 @@ namespace albireo
             return result;
         }
 
-        // Ailleurs, un paquet hors ligne signé seulement ; un fichier de modèle d'un utilisateur passe par la
+        // Ailleurs, un paquet hors ligne seulement ; un fichier de modèle d'un utilisateur passe par la
         // route d'envoi.
         if (path.size() > 5 && same_name(path.substr(path.size() - 5), ".gguf"))
             return refuse("import_use_upload", "a model file outside the import folder is sent to the service by its "
                 "user: Import..., then Model files (*.gguf), in the Models window, or the route "
                 "/albireo/v1/models/upload");
         /*
-            Les fichiers signés décident, lus sans passer par aucun lien depuis la racine du disque ; la
-            réponse est la même, que le dossier manque, soit illisible, non signé ou atteint par un lien,
-            pour qu'elle ne révèle rien d'un dossier d'un autre compte.
+            Le catalogue décide, lu sans passer par aucun lien depuis la racine du disque ; la réponse
+            est la même, que le dossier manque, soit illisible ou atteint par un lien, pour qu'elle ne
+            révèle rien d'un dossier d'un autre compte.
         */
-        std::string catalog_body, catalog_sig;
+        std::string catalog_body;
         const bool catalog = read_file_link_free(join_path(path, "catalog.json"), std::string(), catalog_body,
-                16u << 20)
-            && read_file_link_free(join_path(path, "catalog.json.sig"), std::string(), catalog_sig, 4096);
-        const bool signed_catalog = catalog && verify_signature(catalog_body, catalog_sig, feed_public_key_pem);
-        if (!signed_catalog)
-            return refuse("import_not_bundle", "the path " + path + " is no signed offline bundle of a local drive "
-                "reached through no link: a folder with catalog.json and catalog.json.sig, signed by Albireo");
+            16u << 20);
+        if (!catalog)
+            return refuse("import_not_bundle", "the path " + path + " is no offline bundle of a local drive "
+                "reached through no link: a folder with catalog.json");
         result["imported"] = json::array();
         result["already"] = json::array();
         result["pending"] = json::array();
@@ -1051,16 +914,13 @@ namespace albireo
         if (catalog)
         {
             result["catalog"] = models_->import_catalog(path, std::string());
-            // Les modèles que liste le catalogue signé, avec leurs projecteurs, quel que soit le catalogue qui
+            // Les modèles que liste le catalogue, avec leurs projecteurs, quel que soit le catalogue qui
             // reste en usage.
-            if (signed_catalog)
-            {
-                const json r = models_->import_bundle(path, json::parse_or_null(catalog_body));
-                result["imported"] = r["imported"];
-                result["already"] = r["already"];
-                result["pending"] = r["pending"];
-                result["errors"] = r["errors"];
-            }
+            const json r = models_->import_bundle(path, json::parse_or_null(catalog_body));
+            result["imported"] = r["imported"];
+            result["already"] = r["already"];
+            result["pending"] = r["pending"];
+            result["errors"] = r["errors"];
         }
         log_info("import: offline bundle " + path + ", " + std::to_string(result["imported"].size()) + " models");
         return result;
@@ -1253,9 +1113,7 @@ namespace albireo
         }
         /*
             Le moteur analyse les fichiers du modèle avec les droits du service : leurs dossiers doivent être
-            ceux que seuls SYSTEM et les administrateurs modifient (folder_admin_only()).  Un dossier où un
-            autre compte peut écrire, un disque sans permissions, ou un dossier mis à la place du dossier des
-            modèles par un compte qui a renommé l'un de ses parents, laisse le modèle non chargé.
+            ceux dont folder_admin_only() accepte le dossier parent.
         */
         for (const std::string& file : { m.file, m.projector })
         {
@@ -1910,17 +1768,11 @@ namespace albireo
             j["current"] = o.key == choice_.key;
             j["measure"] = st.engine_benchmarks[o.key];
             // Le genre du choix et les noms de ses périphériques, que montrent les menus.
-            const std::string kind = o.key == "cuda" || o.key == "openvino:gpu" ? "gpu"
-                : o.key == "openvino:npu" ? "npu" : o.key == "openvino:both" ? "both" : "cpu";
-            j["kind"] = kind;
+            j["kind"] = "cpu";
             json names = json::array();
             for (const auto& d : o.candidate->description["devices"].elements())
             {
-                const std::string type = d["type"].as_string();
-                const bool wanted = kind == "both" ? (type == "npu" || type == "gpu")
-                    : o.key == "openvino:cpu" ? (type == "cpu" && d.contains("id")) : type == kind;
-                if (wanted && (kind != "cpu" || o.key == "openvino:cpu" || names.empty()))
-                    names.push_back(d["name"]);
+                if (d["type"].as_string() == "cpu") names.push_back(d["name"]);
             }
             j["names"] = names;
             options.push_back(j);
@@ -2033,9 +1885,8 @@ namespace albireo
         });
         out["model"] = model.id;
         out["results"] = results;
-        // Le moteur "best", ou un choix d'accélérateur parmi plusieurs périphériques, suit les
-        // nouvelles mesures après un redémarrage.
-        const engine_choice next = choose_engine(candidates_, updated);
+        // Le choix reste le moteur CPU unique ; la mesure est conservée à titre informatif.
+        const engine_choice next = choose_engine(candidates_);
         out["restart"] = next.key != choice_.key;
         if (next.key != choice_.key) request_restart();
         return out;

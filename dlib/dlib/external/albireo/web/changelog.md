@@ -2,6 +2,81 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.1.0 — 12 novembre 2026
+
+### Accès et documents
+
+- En mode hors ligne, un modèle du catalogue peut être restauré depuis la réserve lorsque tous ses fichiers sont présents et vérifiés. Cette opération ne recourt jamais au réseau, même si le réglage change pendant son exécution.
+- La page des modèles signale les échecs de restauration et de téléchargement.
+
+### Corrections
+
+- Une réserve incomplète ou altérée ne remplace pas la progression d'un téléchargement antérieur. En ligne, le repli vers le catalogue reste disponible.
+- La fonction qui retire les paramètres des adresses dans les messages compile de nouveau et préserve les séparateurs de ligne.
+
+---
+
+## 4.0.5 — 12 novembre 2026
+
+### Corrections
+
+- L'outil de préparation des modèles signale les fichiers GGUF invalides ou tronqués sans afficher de trace d'erreur Python.
+
+---
+
+## 4.0.4 — 12 novembre 2026
+
+### Accès et documents
+
+- La suppression d'un modèle conserve dans `<données>/reserve` les fichiers dont l'empreinte correspond à celle enregistrée. Une réinstallation les restaure sans réseau quand tous les fichiers attendus sont présents et conformes ; sinon, le téléchargement reprend depuis le catalogue.
+
+### Sécurité
+
+- La réserve est protégée par des permissions de dossier 0700 et de fichier 0600. Une copie absente, altérée ou non conforme n'est pas installée.
+
+---
+
+## 4.0.3 — 12 novembre 2026
+
+### Réglages
+
+- Le service ne recherche et ne propose plus que le moteur CPU construit pour macOS. Les anciennes valeurs de moteur et d'accélérateur enregistrées sont remplacées par `auto` ; l'API refuse les choix de moteur non pris en charge.
+- La liste des options de moteur expose uniquement le choix CPU. Les entrées de licence CUDA et OpenVINO ne sont plus annoncées.
+
+---
+
+## 4.0.2 — 12 novembre 2026
+
+### Corrections
+
+- Les contrôles de dossiers sur macOS vérifient maintenant le compte propriétaire et les permissions POSIX ; les dossiers sécurisés par Albireo sont limités au compte courant. Les ACL étendues ne sont pas évaluées.
+
+---
+
+## 4.0.1 — 12 novembre 2026
+
+### Corrections
+
+- Le message de migration des certificats indique maintenant que la clé du serveur est conservée au format PEM avec des permissions de fichier restreintes.
+
+---
+
+## 4.0.0 — 12 novembre 2026
+
+### Accès et documents
+
+- Plus aucune clé : le catalogue des modèles n'est plus signé et le service ne vérifie plus de signature. Il lit `catalog.json` à son adresse, dans le dépôt de l'original, ou dans un dossier.
+- L'espace de publication de l'original (téléchargements par un lien partagé protégé par un mot de passe) est retiré : chaque modèle se télécharge directement à l'adresse que donne le catalogue, en trois tentatives par segment. Le délai perdu à interroger l'espace avant chaque téléchargement disparaît.
+- L'import d'un dossier de disque n'exige plus que `catalog.json` : le fichier `catalog.json.sig` n'est plus lu ni attendu. Les modèles listés restent contrôlés par leur nom, leur taille et leur empreinte SHA-256.
+- Les outils de signature et de publication de l'original (`albireo-sign`, `fill_public_link.py`, `public_link.py`) sont retirés.
+
+### Sécurité
+
+- L'import d'un dossier accepte désormais un catalogue non signé. Un dossier fourni par un tiers peut donc déclarer ses propres modèles : n'importer que des dossiers de confiance. Les empreintes SHA-256 continuent de vérifier chaque fichier téléchargé ou importé.
+- Le masquage des adresses de l'espace de publication dans le journal et dans les erreurs est retiré avec l'espace ; les adresses de requête (clés de recherche) restent retirées des messages.
+
+---
+
 ## 3.2.0 — 11 novembre 2026
 
 ### Modèles

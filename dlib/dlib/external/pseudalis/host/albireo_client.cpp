@@ -83,11 +83,7 @@ namespace pseudalis
             reason = "the local authority of Albireo is missing";
             return false;
         }
-        /*
-            Un dossier, une autorité ou des réglages qu'un autre compte que SYSTEM ou les
-            administrateurs aurait pu écrire ne sont pas ceux d'Albireo : les images
-            parviendraient à celui qui les a placés.
-        */
+        // Sur macOS, les contrôles vérifient les propriétaires et permissions POSIX, mais pas les ACL étendues.
         if (!folder_admin_only(dir) || !folder_admin_only(join_path(dir, "certificates")) || !owned_by_system(ca)
             || (file_exists(settings_path) && !owned_by_system(settings_path)))
         {

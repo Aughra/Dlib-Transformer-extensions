@@ -210,9 +210,7 @@ namespace albireo
                     if (mbedtls_x509write_crt_set_extension(&crt, oid_name_constraints,
                             MBEDTLS_OID_SIZE(MBEDTLS_OID_NAME_CONSTRAINTS), 0, nc.data(), nc.size()) != 0)
                         break;
-                    /* Les certificats qu'elle signe ne servent qu'à des serveurs TLS : Windows, qui
-                       applique l'usage étendu de clé d'une autorité aux certificats placés sous
-                       elle, en refuse un pour du code ou du courrier, quoi qu'il déclare. */
+                    /* L'autorité locale ne signe que des certificats de serveur TLS. */
                     mbedtls_asn1_sequence eku;
                     std::memset(&eku, 0, sizeof(eku));
                     eku.buf.tag = MBEDTLS_ASN1_OID;
@@ -261,7 +259,7 @@ namespace albireo
             return ok;
         }
 
-        // La forme de la clé privée dans son fichier : chiffrée pour ce compte sous Windows.
+        // La clé privée reste au format PEM ; le fichier reçoit des permissions restreintes.
         bool seal_key(const std::string& pem, std::string& data)
         {
             data = pem;
@@ -284,9 +282,9 @@ namespace albireo
 
         /*
             Les fichiers des versions antérieures à 1.0.8 : la clé de leur autorité, qui n'est
-            plus jamais conservée, et sous Windows la clé du serveur en clair, qui passe dans
-            son fichier chiffré.  Renvoie true quand la clé de l'autorité a été trouvée : une
-            copie a pu quitter l'ordinateur, et l'autorité est remplacée aussitôt.
+            plus jamais conservée, et une éventuelle ancienne clé serveur distincte, déplacée
+            vers le chemin courant.  Renvoie true quand la clé de l'autorité a été trouvée :
+            une copie a pu quitter l'ordinateur, et l'autorité est remplacée aussitôt.
         */
         bool migrate(const certificate_files& f)
         {
@@ -300,7 +298,7 @@ namespace albireo
             std::string pem;
             if (!file_exists(f.server_key) && read_file(f.plain_key, pem, 64 * 1024)
                 && pem.compare(0, 11, "-----BEGIN ") == 0 && write_key(f.server_key, pem))
-                log_info("certificates: the key of the server is now encrypted for the account of the service");
+                log_info("certificates: the key of the server is now stored with restricted file permissions");
             wipe_secret(pem);
             remove_file(f.plain_key);
             return exposed;

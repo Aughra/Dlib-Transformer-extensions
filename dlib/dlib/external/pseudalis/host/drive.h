@@ -16,12 +16,10 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                Le lecteur de Pseudalis : le dossier drive du dossier de données, que le
-                service surveille et montre sous la lettre des réglages pour chaque session
-                de l'ordinateur, comme le ferait la commande subst.  Il fonctionne comme
-                n'importe quel dossier, depuis l'Explorateur et depuis l'invite de commandes,
-                à une différence près : un fichier qui y est écrit est anonymisé une fois que
-                son auteur l'a fermé.  Son original part dans le coffre chiffré avec un
+                Le dossier drive du dossier de données, parcouru par le service. Sur macOS,
+                il n'est pas monté comme un volume système ; une valeur non vide du réglage
+                active son traitement. Un fichier qui y est écrit est anonymisé après être
+                resté inchangé ; son original part dans le coffre chiffré avec un
                 enregistrement, le fichier anonymisé prend sa place, sous son nom aux valeurs
                 remplacées (images : <name>.txt, qui contient leur marqueur), et le fichier
                 écrit est supprimé.  Un dossier qui arrive prend un nom sans donnée
@@ -33,18 +31,18 @@ namespace pseudalis
 
                 Pas de pilote : le fichier écrit reste dans son dossier, en clair, de sa
                 dernière écriture à son traitement, quelques secondes pour la plupart des
-                documents, pendant lesquelles le service le détient seul (violation de
-                partage).  Supprimer le dernier fichier du lecteur qui montre un
-                enregistrement marque celui-ci (service::mark_removed()), son original restant
-                gardé pendant les jours du réglage removed_days ; un fichier retrouvé dans le
-                lecteur, renommé, déplacé ou copié là, le conserve.  Un fichier extrait d'une
-                archive protégée que la base de données enregistre reste tel quel, enregistré
+                documents. Le descripteur ouvert par le service n'empêche pas un autre
+                programme de lire ou modifier ce fichier sur macOS. Supprimer le dernier
+                fichier qui montre un enregistrement marque celui-ci (service::mark_removed()),
+                son original restant gardé pendant les jours du réglage removed_days ; un fichier
+                retrouvé dans le lecteur, renommé, déplacé ou copié là, le conserve. Un fichier
+                extrait d'une archive protégée que la base de données enregistre reste tel quel, enregistré
                 avec l'original de son entrée (service::adopt()) ; un fichier protégé dont
                 l'original a été oublié reste tel quel, sans enregistrement.  Les fichiers
                 déjà traités sont enregistrés dans la base de données, pour qu'un redémarrage
                 ne traite que ce qui a changé.
 
-                Hors de Windows, le dossier fonctionne sans lettre.
+                La valeur de lettre n'expose aucun volume sur macOS.
         !*/
     public:
         explicit drive_host(service& svc);

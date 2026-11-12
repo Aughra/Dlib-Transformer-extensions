@@ -26,13 +26,11 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                Les modèles de la machine et du catalogue : le catalogue publié dans le
-                dossier dist de l'espace de publication (public_link.h), un document JSON
-                signé qui liste les modèles, leurs descriptions dans chaque langue, leurs
-                fichiers et leurs empreintes, la source officielle de chacun d'eux parmi elles,
-                lu depuis l'espace, ou depuis son adresse officielle dans le dépôt d'Albireo
-                quand l'espace ne le sert pas ; les modèles installés, les téléchargements en
-                cours et les imports depuis des supports amovibles.
+                Les modèles de la machine et du catalogue : le catalogue, un document JSON
+                sans signature qui liste les modèles, leurs descriptions dans chaque langue,
+                leurs fichiers et leurs empreintes, l'adresse de chacun d'eux, lu depuis son
+                adresse dans le dépôt de l'original ; les modèles installés, les
+                téléchargements en cours et les imports depuis des supports amovibles.
 
             MODÈLES QUI LISENT LES IMAGES
                 Un tel modèle se présente en deux fichiers GGUF : son décodeur, et un
@@ -60,42 +58,31 @@ namespace albireo
                 modèle que la base ne peut pas enregistrer ne laisse aucun des deux fichiers
                 sous son nom définitif.
 
-                Chaque segment vient d'abord de la copie de sa partie dans l'espace de
-                publication, models/<identifier>/<nom de fichier de l'adresse officielle de la
-                partie> : quatre tentatives, la première avec l'adresse du cache, les suivantes
-                avec une nouvelle, et une partie absente de la liste est cherchée une fois de
-                plus dans une nouvelle liste.  Quand l'espace ne sert pas le segment, celui-ci
-                vient de l'adresse officielle de sa partie, l'"url" du catalogue, avec les
-                mêmes plages, depuis l'endroit où le segment s'est arrêté, en trois tentatives
-                séparées par des pauses qu'une annulation interrompt ; une réponse qui annonce
-                la partie à une autre taille que le catalogue met fin à sa tentative avant
-                qu'aucun octet ne soit écrit.  Dès que l'espace n'est pas réglé, ne répond pas
-                ou refuse les requêtes d'un segment, les autres segments du téléchargement
-                vont aussitôt à leurs adresses officielles.  Une partie que l'espace n'a pas,
-                a à une autre taille, ou dont les octets venus de l'espace échouent à son
-                empreinte y va avec tous ses segments.  Le journal signale chacun de ces
-                changements de source une fois : le téléchargement continue depuis l'adresse
-                officielle qu'il nomme, avec l'échec de l'espace.  Quand l'adresse officielle
-                échoue aussi, le téléchargement se termine en erreur avec le code
-                download_failed, dont le message ("e") nomme le fichier dans l'espace, l'échec
-                de l'espace, l'adresse officielle et son échec.  Les messages et le journal
-                nomment les adresses officielles, qui sont publiques, et jamais une adresse de
-                l'espace.  Les empreintes du catalogue vérifient les octets, quelle que soit la
-                source qui les a servis.  Une exception d'un transfert fait échouer le
-                téléchargement et ne sort jamais de son thread.
+                Le téléchargement vérifie d'abord la réserve locale : si le fichier complet du
+                décodeur et, le cas échéant, du projecteur y sont présents et conformes, il les
+                restaure sans réseau. En mode local seul, une réserve absente ou invalide met
+                fin au travail sans accès réseau. Sinon, les segments viennent des adresses
+                officielles que donne le catalogue, avec trois tentatives séparées par des pauses qu'une
+                annulation interrompt ; une réponse qui annonce une partie à une autre taille
+                que le catalogue met fin à sa tentative avant qu'aucun octet ne soit écrit.
+                Une partie dont l'empreinte échoue est récupérée de nouveau, une fois. Quand
+                l'adresse officielle échoue, le téléchargement se termine en erreur avec le
+                code download_failed et le message ("e") nomme l'adresse et l'échec. Les
+                empreintes du catalogue vérifient les octets. Une exception d'un transfert fait
+                échouer le téléchargement et ne sort jamais de son thread.
 
             INSTALLATION HORS LIGNE
                 import_path() installe les fichiers GGUF du dossier d'import du dossier des
-                données, que seuls SYSTEM et les administrateurs remplissent : les fichiers
-                d'un dossier (et de son sous-dossier "models") ou un fichier seul.  Un fichier
+                données : ceux d'un dossier (et de son sous-dossier "models") ou un fichier
+                seul. Un fichier
                 dont l'empreinte est dans le catalogue prend son entrée ; un autre est décrit
                 à partir de ses propres métadonnées, y compris l'identité d'un modèle
                 d'Albireo (albireo.id, albireo.name, albireo.roles, albireo.inputs).
-                import_bundle() installe les modèles d'un paquet hors ligne signé, où qu'il se
-                trouve : seulement les fichiers que liste son catalogue signé, décodeurs et
-                projecteurs, trouvés par leurs noms et vérifiés par leurs tailles et leurs
-                empreintes avant toute copie.  import_catalog() installe un catalogue signé
-                apporté de la même façon.
+                import_bundle() installe les modèles d'un paquet hors ligne, où qu'il se
+                trouve : seulement les fichiers que liste son catalogue (non signé), décodeurs
+                et projecteurs, trouvés par leurs noms et vérifiés par leurs tailles et leurs
+                empreintes avant toute copie.  import_catalog() installe un catalogue apporté
+                de la même façon.
 
                 Les projecteurs d'un dossier vont avec ses décodeurs comme le dit
                 pair_projectors() : par les empreintes du catalogue, sinon par les largeurs de
@@ -119,7 +106,7 @@ namespace albireo
 
             LE DOSSIER DES MODÈLES
                 Chaque fichier que le service y écrit (un téléchargement, ses fichiers
-                partiels, un import, un projecteur, un transfert depuis la barre des tâches)
+                partiels, un import, un projecteur, un fichier reçu par une route)
                 est créé dans le dossier atteint sans passer par aucun lien (direct_path()),
                 vérifié de nouveau juste avant que le fichier soit créé, renommé ou supprimé,
                 et ouvert sans suivre de lien à son propre nom ; un fichier renommé est
@@ -138,32 +125,26 @@ namespace albireo
                 l'entreprise qui l'a fait.
         !*/
     public:
-        model_manager(store& db, const std::string& models_dir);
+        model_manager(store& db, const std::string& models_dir, const std::string& reserve_dir = std::string());
         ~model_manager();
 
         /*!
             ensures
-                - Lit le catalogue et sa signature depuis le dossier dist de l'espace de
-                  publication, ou depuis leur adresse officielle dans le dépôt d'Albireo quand
-                  l'espace n'est pas réglé, ne les a pas, ne répond pas, ou donne un catalogue
-                  dont la signature échoue, et vérifie la signature de l'un ou de l'autre.  Le
-                  journal dit quelle source l'a servi.
+                - Lit le catalogue, sans signature, à son adresse unique : le dépôt de
+                  l'original (ou l'adresse que donne official_catalog_for_tests()).
                 - Garde le dernier catalogue valide, et celui en usage quand celui qui a été
                   récupéré a été publié avant lui.
-                - Renvoie false avec error quand aucune des deux sources ne donne un catalogue
-                  valide : error nomme l'échec de l'espace, l'adresse officielle et son échec.
-                  Un service qui s'arrête ou passe hors ligne ne demande à aucune autre
-                  source.
+                - Renvoie false avec error quand l'adresse ne répond pas ou donne un catalogue
+                  refusé : error nomme l'adresse et l'échec.
         !*/
         bool refresh_catalog(std::string& error);
         // La même chose sur un thread à elle, une mise à jour à la fois ; l'appelant n'attend jamais.
         void refresh_catalog_async();
         /*!
             ensures
-                - Installe le catalogue de folder (catalog.json et catalog.json.sig), lu sans
-                  passer par aucun lien depuis base (une base vide : la racine du disque), sa
-                  signature vérifiée comme pour un catalogue téléchargé, sauf si le catalogue
-                  en usage a été publié plus tard.
+                - Installe le catalogue de folder (catalog.json), lu sans passer par aucun lien
+                  depuis base (une base vide : la racine du disque), sauf si le catalogue en
+                  usage a été publié plus tard.
                 - Renvoie {"models": nombre de modèles} une fois installé, {"state": "kept"}
                   quand le catalogue en usage est plus récent, {"error"} sinon.
         !*/
@@ -207,11 +188,16 @@ namespace albireo
         /*!
             ensures
                 - Lance le téléchargement de l'entrée id du catalogue, son projecteur compris.
+                - Si local_only est vrai, restaure seulement les fichiers vérifiés de la
+                  réserve, sans jamais accéder au réseau. Une réserve inutilisable termine le
+                  travail avec le code reserve_unavailable.
                 - Refuse, avec error rempli, une entrée qui n'est pas dans le catalogue, un
                   modèle livré avec Albireo, et une entrée dont un tel modèle porte le fichier
                   (builtin_installed, qui nomme ce modèle).
+                - Refuse avec download_busy une demande locale alors qu'un téléchargement
+                  réseau du même modèle est encore en cours.
         !*/
-        bool start_download(const std::string& id, user_error& error);
+        bool start_download(const std::string& id, user_error& error, bool local_only = false);
         // Affiche un téléchargement de id qui n'a pas pu démarrer, avec son erreur, jusqu'à ce qu'un
         // téléchargement démarre.
         void note_failure(const std::string& id, const user_error& error);
@@ -219,7 +205,7 @@ namespace albireo
         void resume_pending();
         json downloads() const;
 
-        // Supprime les fichiers d'un modèle installé, son projecteur compris, et son enregistrement.
+        // Garde les fichiers vérifiés dans la réserve locale, puis retire le modèle et son enregistrement.
         bool remove(const std::string& id, std::string& error);
         /*!
             ensures
@@ -251,7 +237,7 @@ namespace albireo
         /*!
             ensures
                 - Installe les modèles du paquet hors ligne de folder que liste catalog, son
-                  catalogue signé : models/<name> ou <name>, le nom de son fichier unique ou
+                  catalogue : models/<name> ou <name>, le nom de son fichier unique ou
                   <identifier>.gguf, lu sans passer par aucun lien depuis la racine de son
                   disque, avec la taille et l'empreinte du catalogue, et de même pour le
                   projecteur d'une entrée qui en a un (<name> de son fichier unique ou
@@ -291,10 +277,9 @@ namespace albireo
             ensures
                 - f(id, place) est appelé quand de nouveaux fichiers prennent les noms de ceux
                   du modèle installé id, une version plus récente téléchargée ou importée : f
-                  exécute place, qui les renomme, pendant qu'aucun programme ne tient ouverts
-                  les fichiers de id (le moteur tient ceux d'un modèle chargé, que Windows
-                  refuse de remplacer), et renvoie son résultat.  Sans f, place s'exécute
-                  directement.
+                  exécute place, qui les renomme après que ses requêtes sont servies et que le
+                  modèle est déchargé, afin que le moteur reprenne ses nouveaux fichiers, puis
+                  renvoie son résultat. Sans f, place s'exécute directement.
         !*/
         typedef std::function<bool(const std::string&, const std::function<bool()>&)> replace_function;
         void on_replace(replace_function f) { replace_cb_ = std::move(f); }
@@ -310,6 +295,8 @@ namespace albireo
         struct job;
         // Un fichier GGUF d'un import, ouvert sans passer par aucun lien, haché et décrit.
         struct import_item;
+        bool save_in_reserve(const std::string& path, const std::string& sha, std::string& error);
+        bool restore_from_reserve(const std::shared_ptr<job>& j);
         // Comment put_file() a placé un fichier : déplacé, copié, ou déjà trouvé à son nom.
         struct placement
         {
@@ -318,8 +305,7 @@ namespace albireo
             bool in_place = false;
         };
         void run_job(std::shared_ptr<job> j);
-        bool install_catalog(const std::string& body, const std::string& sig, bool keep_newer, json& result,
-            std::string& error);
+        bool install_catalog(const std::string& body, bool keep_newer, json& result, std::string& error);
         // Enregistre le modèle id de file, avec son projecteur quand projector n'est pas vide.
         bool install_file(const std::string& id, const std::string& file, const json& descriptor,
             const std::string& sha, const std::string& source, const std::string& projector,
@@ -422,6 +408,8 @@ namespace albireo
 
         store& db_;
         std::string dir_;
+        std::string reserve_dir_;
+        std::mutex reserve_m_;
         mutable std::mutex m_;
         json catalog_;
         // La liste personnelle, mêlée à catalog_ à chaque chargement (merge_custom()).
@@ -504,9 +492,8 @@ namespace albireo
         Réservé aux tests (tests/test_host.cpp), qui servent le catalogue depuis un serveur
         local.  Aucun réglage ni aucune route n'y mène.
         ensures
-            - model_manager::refresh_catalog() lit le catalogue à url et sa signature à
-              url + ".sig" à la place de leur adresse officielle ; une url vide rend l'adresse
-              officielle.
+            - model_manager::refresh_catalog() lit le catalogue à url à la place de son
+              adresse ; une url vide rend l'adresse.
     !*/
     void official_catalog_for_tests(const std::string& url);
 

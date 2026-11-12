@@ -39,7 +39,7 @@ namespace albireo
         int port = 8443;
         std::string models_dir;                 // vide : <data>/models
         std::string language = "auto";          // auto, en, fr, de, it, es
-        std::string engine = "auto";            // auto, best, ou une variante : cpu, cpu-avx2, cpu-avxvnni, ...
+        std::string engine = "auto";            // auto : moteur CPU construit pour le Mac
         std::string accelerator = "auto";       // auto : le GPU du Mac (Metal), none : le processeur seul
         long long device_mb = 0;                // copies des poids sur le périphérique, 0 : automatique
         int threads = 0;                        // 0 : cœurs physiques
@@ -106,9 +106,9 @@ namespace albireo
                 à la main), puis réécrite.
 
                 settings.json est lisible par les utilisateurs de la machine, et donne le mot
-                de passe du proxy sous la forme proxy_password_mask.  Le proxy avec son mot de
-                passe est gardé à côté, dans proxy.secret, que seuls le service et les
-                administrateurs lisent.  Un mot de passe trouvé dans settings.json, écrit par
+                de passe du proxy sous la forme proxy_password_mask. Le proxy avec son mot de
+                passe est gardé à côté, dans proxy.secret, lisible par le compte du service
+                seul. Un mot de passe trouvé dans settings.json, écrit par
                 une version antérieure ou à la main, passe aussitôt dans proxy.secret.
 
                 Un settings.json d'une version antérieure qui contient des réglages que cette

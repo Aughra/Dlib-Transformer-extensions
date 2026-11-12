@@ -10,13 +10,11 @@
     démarrage du service, donne avec HKDF-SHA-256 la clé de la pseudonymisation (les tags des
     valeurs) et les clés du coffre (les originaux et les images, AES-256-CTR et HMAC-SHA-256).
 
-    Sous Windows, la clé maîtresse est gardée dans keys\master.key du dossier de données,
-    chiffrée avec DPAPI pour le compte du service (LocalSystem), dans un dossier que seuls
-    SYSTEM et les administrateurs ouvrent : une copie du fichier ne sert à aucun autre compte
-    ni à aucun autre ordinateur.  Ailleurs, elle est en clair dans un dossier que seul son
-    propriétaire ouvre.  Son export, protégé par une phrase secrète (PBKDF2-SHA-256,
-    600 000 itérations, AES-256-CTR et HMAC-SHA-256), est le moyen d'en garder une copie ou de
-    déplacer l'installation vers un autre ordinateur.
+    Sur macOS, la clé maîtresse est conservée en clair dans keys/master.key.  Le dossier est
+    limité au propriétaire (0700) et le fichier à son propriétaire (0600) ; la clé n'est pas
+    liée cryptographiquement à l'ordinateur.  Son export, protégé par une phrase secrète
+    (PBKDF2-SHA-256, 600 000 itérations, AES-256-CTR et HMAC-SHA-256), permet d'en garder une
+    copie ou de déplacer l'installation vers un autre ordinateur.
 */
 
 namespace pseudalis
@@ -40,7 +38,7 @@ namespace pseudalis
         ensures
             - Lit la clé maîtresse de keys_dir, ou la crée quand le dossier n'en contient
               aucune (created vaut alors true).  Renvoie false avec error quand la clé ne
-              peut être ni lue (autre compte, autre ordinateur, fichier endommagé) ni écrite.
+              peut être ni lue ni écrite.
     !*/
     bool load_master_key(const std::string& keys_dir, std::string& master, bool& created, std::string& error);
     bool save_master_key(const std::string& keys_dir, const std::string& master, std::string& error);
@@ -52,9 +50,8 @@ namespace pseudalis
 
     /*!
         ensures
-            - Fait de path un dossier que seuls SYSTEM et les administrateurs ouvrent, sous
-              Windows, et seul son propriétaire ailleurs : créé ainsi s'il manque, ses
-              permissions remplacées sinon.
+            - Crée path si nécessaire et remplace ses permissions par 0700, pour que seul
+              son propriétaire puisse l'ouvrir.
     !*/
     bool private_folder(const std::string& path, std::string& error);
 

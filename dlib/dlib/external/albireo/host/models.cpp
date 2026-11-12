@@ -4,6 +4,7 @@
 #include "models.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cctype>
 #include <chrono>
 #include <cstring>
@@ -11,6 +12,7 @@
 #include <fstream>
 #include <map>
 #include <set>
+#include <utility>
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -25,7 +27,6 @@
 #include "../common/platform.h"
 #include "crypto.h"
 #include "http_fetch.h"
-#include "public_link.h"
 
 namespace albireo
 {
@@ -443,8 +444,7 @@ namespace albireo
     {
         struct chunk
         {
-            std::string url;          // l'adresse officielle de la ressource, lue quand l'espace ne la sert pas
-            std::string link_path;    // la copie de la ressource dans l'espace de publication (public_link.h)
+            std::string url;          // l'adresse de la ressource, donnée par le catalogue
             uint64_t resource = 0;    // octets de la ressource
             uint64_t from = 0;        // plage d'octets dans la ressource
             uint64_t length = 0;      // octets de la ressource (taille compressée pour gzip)
@@ -459,7 +459,7 @@ namespace albireo
         // Un fichier du modèle : le décodeur, et le projecteur d'un modèle qui lit les images.
         struct output_file
         {
-            std::string target, partial;
+            std::string target, partial, staged;
             uint64_t size = 0;
             std::string sha256;
             json parts;               // les "files" du catalogue : url, size, sha256
@@ -475,6 +475,7 @@ namespace albireo
         // Annulé par l'utilisateur, fixé sous m_ : la progression et le fichier partiel sont abandonnés,
         // là où un arrêt du service les garde pour le prochain démarrage.
         std::atomic<bool> abandoned{false};
+        bool local_only = false;
         std::string state = "queued";
         user_error error;
         double speed = 0;
@@ -482,14 +483,10 @@ namespace albireo
         std::thread worker;
     };
 
-    model_manager::model_manager(store& db, const std::string& models_dir)
-        : db_(db), dir_(models_dir)
+    model_manager::model_manager(store& db, const std::string& models_dir, const std::string& reserve_dir)
+        : db_(db), dir_(models_dir), reserve_dir_(reserve_dir)
     {
-        /*
-            Le service écrit, renomme et supprime les fichiers des modèles avec ses droits : seuls
-            SYSTEM et les administrateurs peuvent modifier le dossier (secure_folder()).  Un dossier
-            qui ne peut pas être rendu tel laisse les modèles au dossier des données.
-        */
+        // Le service écrit, renomme et supprime les fichiers des modèles avec les droits de son compte.
         std::string error;
         if (!secure_folder(dir_, error))
         {
@@ -577,14 +574,8 @@ namespace albireo
         for (auto& kv : jobs_) kv.second->cancel = true;
     }
 
-    bool model_manager::install_catalog(const std::string& body, const std::string& sig, bool keep_newer,
-        json& result, std::string& error)
+    bool model_manager::install_catalog(const std::string& body, bool keep_newer, json& result, std::string& error)
     {
-        if (!verify_signature(body, sig, feed_public_key_pem))
-        {
-            error = "the signature of the catalog is not valid";
-            return false;
-        }
         json c;
         if (!json::parse(body, c, &error) || !c["models"].is_array())
         {
@@ -624,10 +615,7 @@ namespace albireo
 
     namespace
     {
-        /*
-            L'adresse officielle du catalogue : le dépôt d'Albireo, qui garde le catalogue signé que l'éditeur
-            place dans l'espace de publication.  Sa signature se trouve à la même adresse avec ".sig".
-        */
+        // L'adresse du catalogue : le dépôt de l'original, qui le garde à jour.  Il n'est plus signé.
         const char* const official_catalog = "https://raw.githubusercontent.com/Cydral/Dlib-Transformer-extensions/"
             "main/dist/albireo/catalog.json";
 
@@ -635,7 +623,7 @@ namespace albireo
         std::mutex catalog_address_m;
         std::string catalog_address_of_tests;
 
-        // L'adresse d'où le catalogue est lu quand l'espace de publication ne le sert pas.
+        // L'adresse d'où le catalogue est lu.
         std::string catalog_address()
         {
             std::lock_guard<std::mutex> lock(catalog_address_m);
@@ -651,53 +639,20 @@ namespace albireo
 
     bool model_manager::refresh_catalog(std::string& error)
     {
-        /*
-            Le catalogue et sa signature viennent du dossier dist de l'espace de publication, et de leur
-            adresse officielle quand l'espace ne les sert pas : un espace qui n'est pas réglé, ne les a pas,
-            ne répond pas, ou donne un catalogue dont la signature échoue.  La signature vérifie le catalogue
-            de l'un ou de l'autre.
-        */
-        std::string body, sig, space;
-        json result = json::object();
-        if (public_link_get("dist/catalog.json", body, space, 16u << 20)
-            && public_link_get("dist/catalog.json.sig", sig, space, 4096))
-        {
-            std::string refused;
-            if (install_catalog(body, sig, true, result, refused))
-            {
-                log_info("models: catalog read from the publication space of Albireo");
-                return true;
-            }
-            space = "the catalog of the publication space of Albireo is refused: " + refused;
-        }
-        // Un service qui s'arrête ou passe hors ligne ne demande à aucune autre source.
-        if (http_cancelled())
-        {
-            error = space;
-            return false;
-        }
+        // Le catalogue vient de son adresse, sans signature à vérifier.
         const std::string url = catalog_address();
-        std::string e;
-        body.clear();
-        sig.clear();
+        std::string body, e;
+        json result = json::object();
         if (!http_get(url, body, e, 16u << 20))
         {
-            error = space + "; the catalog cannot be downloaded from its official address " + url + " either: " + e;
+            error = "the catalog cannot be downloaded from " + url + ": " + e;
             return false;
         }
-        if (!http_get(url + ".sig", sig, e, 4096))
+        if (!install_catalog(body, true, result, e))
         {
-            error = space + "; the signature of the catalog cannot be downloaded from its official address " + url
-                + ".sig either: " + e;
+            error = "the catalog of " + url + " is refused: " + e;
             return false;
         }
-        if (!install_catalog(body, sig, true, result, e))
-        {
-            error = space + "; the catalog of its official address " + url + " is refused: " + e;
-            return false;
-        }
-        log_warning("models: catalog read from its official address " + url + ", the publication space of Albireo "
-            "did not serve it (" + space + ")");
         return true;
     }
 
@@ -744,14 +699,13 @@ namespace albireo
     json model_manager::import_catalog(const std::string& folder, const std::string& base)
     {
         json result = json::object();
-        std::string body, sig, error;
-        if (!read_file_link_free(join_path(folder, "catalog.json"), base, body, 16u << 20)
-            || !read_file_link_free(join_path(folder, "catalog.json.sig"), base, sig, 4096))
+        std::string body, error;
+        if (!read_file_link_free(join_path(folder, "catalog.json"), base, body, 16u << 20))
         {
-            result["error"] = "no signed catalog (catalog.json and catalog.json.sig) in " + folder;
+            result["error"] = "no catalog (catalog.json) in " + folder;
             return result;
         }
-        if (!install_catalog(body, sig, true, result, error)) result["error"] = error;
+        if (!install_catalog(body, true, result, error)) result["error"] = error;
         return result;
     }
 
@@ -940,7 +894,7 @@ namespace albireo
         return out;
     }
 
-    bool model_manager::start_download(const std::string& id, user_error& error)
+    bool model_manager::start_download(const std::string& id, user_error& error, bool local_only)
     {
         if (stopped_)
         {
@@ -981,6 +935,7 @@ namespace albireo
         std::shared_ptr<job> j(new job());
         j->id = id;
         j->entry = entry;
+        j->local_only = local_only;
         // Le décodeur, et le projecteur d'un modèle qui lit les images, chacun dans son propre fichier partiel.
         const json& e = j->entry;
         job::output_file decoder;
@@ -1004,6 +959,7 @@ namespace albireo
             }
             j->files.push_back(projector);
         }
+        for (auto& f : j->files) f.staged = join_path(dir_, ".reserve-" + random_hex(16) + ".partial");
 
         // Les parties, puis les segments des parties non compressées.
         const uint64_t segment = 64ull << 20;
@@ -1020,10 +976,7 @@ namespace albireo
                 const long long given = f["size"].as_int(0);
                 const uint64_t size = given > 0 && given <= (1ll << 40) ? static_cast<uint64_t>(given) : 0;
                 const bool gz = f["compression"].as_string() == "gzip";
-                // La copie de la partie dans l'espace de publication, nommée d'après son adresse officielle, la sert
-                // d'abord.
-                const std::string link_path = public_link_model_path(id, url);
-                if (url.empty() || size == 0 || link_path.empty())
+                if (url.empty() || size == 0)
                 {
                     error.set("the catalog entry of '" + id + "' lists an invalid file", "catalog_entry")
                         .arg("m", name);
@@ -1033,7 +986,6 @@ namespace albireo
                 {
                     std::unique_ptr<job::chunk> c(new job::chunk());
                     c->url = url;
-                    c->link_path = link_path;
                     c->from = 0;
                     c->length = static_cast<uint64_t>(std::max<long long>(0, f["compressed_size"].as_int(0)));
                     c->resource = c->length;
@@ -1056,7 +1008,6 @@ namespace albireo
                     {
                         std::unique_ptr<job::chunk> c(new job::chunk());
                         c->url = url;
-                        c->link_path = link_path;
                         c->resource = size;
                         c->from = s;
                         c->length = std::min(segment, size - s);
@@ -1096,7 +1047,7 @@ namespace albireo
         }
 
         // Reprendre ce qu'une exécution précédente a reçu, quand les fichiers du catalogue sont les mêmes.
-        const json saved = db_.download_state(id);
+        const json saved = local_only ? json() : db_.download_state(id);
         bool partials = true;
         for (const auto& f : j->files) partials = partials && file_exists(f.partial);
         const std::string saved_projector = j->files.size() > 1 ? j->files[1].sha256 : std::string();
@@ -1122,7 +1073,14 @@ namespace albireo
         if (it != jobs_.end())
         {
             if (it->second->state == "downloading" || it->second->state == "verifying" || it->second->state == "queued")
+            {
+                if (local_only && !it->second->local_only)
+                {
+                    error.set("a network download of " + id + " is still running", "download_busy").arg("m", name);
+                    return false;
+                }
                 return true;
+            }
             previous = std::move(it->second->worker);
         }
         jobs_[id] = j;
@@ -1249,6 +1207,95 @@ namespace albireo
             return s.hex();
         }
 
+        bool matches_sha256(const std::string& path, const std::string& folder, const std::string& sha)
+        {
+            link_free_file file;
+            std::string why;
+            return file.open(path, folder, why) && file.links() == 1 && sha256_open_file(file) == sha;
+        }
+
+        bool valid_sha256(const std::string& sha)
+        {
+            return sha.size() == 64 && std::all_of(sha.begin(), sha.end(), [](unsigned char c) {
+                return std::isxdigit(c) != 0;
+            });
+        }
+
+        bool restrict_reserve_file(const std::string& path)
+        {
+            struct stat st;
+            if (lstat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != geteuid()
+                || st.st_nlink != 1) return false;
+            return (st.st_mode & (S_IRWXG | S_IRWXO)) == 0 || chmod(path.c_str(), 0600) == 0;
+        }
+
+        bool copy_verified_file(const std::string& source, const std::string& source_folder,
+            const std::string& target_folder, const std::string& target, const std::string& expected_sha,
+            uint64_t expected_size, bool private_file, std::string& error,
+            const std::atomic<bool>* cancel = nullptr)
+        {
+            link_free_file input;
+            std::string why;
+            if (!input.open(source, source_folder, why) || input.links() != 1
+                || (expected_size != 0 && input.size() != expected_size))
+            {
+                error = "cannot read a regular source file " + source;
+                return false;
+            }
+            if (!direct_path(target_folder))
+            {
+                error = "the destination folder is not reached directly: " + target_folder;
+                return false;
+            }
+            const std::string temporary = join_path(target_folder, ".reserve-" + random_hex(16) + ".partial");
+            new_file output;
+            if (!output.create(temporary))
+            {
+                error = "cannot create " + temporary;
+                return false;
+            }
+            sha256_stream hash;
+            std::vector<char> buffer(1 << 20);
+            bool copied = true;
+            for (;;)
+            {
+                if (cancel && *cancel)
+                {
+                    copied = false;
+                    break;
+                }
+                const long long n = input.read(buffer.data(), buffer.size());
+                if (n < 0)
+                {
+                    copied = false;
+                    break;
+                }
+                if (n == 0) break;
+                const size_t count = static_cast<size_t>(n);
+                if (!output.write(buffer.data(), count))
+                {
+                    copied = false;
+                    break;
+                }
+                hash.update(buffer.data(), count);
+            }
+            copied = output.close() && copied;
+            if (!copied || hash.hex() != expected_sha
+                || (private_file && chmod(temporary.c_str(), 0600) != 0))
+            {
+                remove_file(temporary);
+                error = "the copy of " + source + " failed its integrity or write check";
+                return false;
+            }
+            if (!direct_path(target_folder) || !rename_file(temporary, target))
+            {
+                remove_file(temporary);
+                error = "cannot place " + target;
+                return false;
+            }
+            return true;
+        }
+
         // Comment se termine le transfert d'un segment d'un téléchargement (run_job()).
         enum class transfer_end
         {
@@ -1270,9 +1317,95 @@ namespace albireo
         return file_identity(target) == before;
     }
 
+    bool model_manager::save_in_reserve(const std::string& path, const std::string& sha, std::string& error)
+    {
+        std::lock_guard<std::mutex> lock(reserve_m_);
+        if (reserve_dir_.empty()) return true;
+        std::string content_sha = sha;
+        if (!valid_sha256(content_sha))
+        {
+            link_free_file source;
+            std::string why;
+            if (!source.open(path, dir_, why) || source.links() != 1)
+            {
+                error = "cannot read a regular source file " + path;
+                return false;
+            }
+            content_sha = sha256_open_file(source);
+            if (!valid_sha256(content_sha))
+            {
+                error = "cannot hash " + path;
+                return false;
+            }
+        }
+        if (!secure_folder(reserve_dir_, error, true)) return false;
+        const std::string actual = final_path(reserve_dir_);
+        if (actual.empty())
+        {
+            error = "cannot resolve the local reserve folder";
+            return false;
+        }
+        reserve_dir_ = actual;
+        const std::string target = join_path(reserve_dir_, content_sha + ".gguf");
+        if (matches_sha256(target, reserve_dir_, content_sha) && restrict_reserve_file(target)) return true;
+        return copy_verified_file(path, dir_, reserve_dir_, target, content_sha, 0, true, error);
+    }
+
+    bool model_manager::restore_from_reserve(const std::shared_ptr<job>& j)
+    {
+        std::lock_guard<std::mutex> lock(reserve_m_);
+        if (reserve_dir_.empty() || !dir_exists(reserve_dir_)) return false;
+        std::string error;
+        if (!secure_folder(reserve_dir_, error, true)) return false;
+        const std::string actual = final_path(reserve_dir_);
+        if (actual.empty()) return false;
+        reserve_dir_ = actual;
+        if (!direct_path(reserve_dir_) || !folder_admin_only(reserve_dir_)) return false;
+        for (const auto& f : j->files)
+        {
+            if (!valid_sha256(f.sha256)) return false;
+            const std::string source = join_path(reserve_dir_, f.sha256 + ".gguf");
+            if (!restrict_reserve_file(source)) return false;
+            error.clear();
+            if (!copy_verified_file(source, reserve_dir_, dir_, f.staged, f.sha256, f.size, false, error,
+                    &j->cancel))
+            {
+                if (!j->cancel && file_exists(source))
+                    log_warning("models: the reserved copy of " + j->id + " cannot be used: " + error);
+                return false;
+            }
+        }
+        for (auto& f : j->files) f.partial = f.staged;
+        return true;
+    }
+
     void model_manager::run_job(std::shared_ptr<job> j)
     {
+        bool restored = false;
+        auto remove_partial = [&](const std::string& path) {
+            if (!remove_file(path) && errno != ENOENT)
+                log_warning("models: cannot remove temporary file " + path);
+        };
+        // Les copies de réserve restent séparées de la progression réseau, même si le service s'arrête.
+        auto clean_staged = [&]() {
+            if (!direct_path(dir_))
+            {
+                if (restored) log_warning("models: cannot clean reserved copies in the models folder");
+                return;
+            }
+            for (const auto& f : j->files)
+            {
+                remove_partial(f.staged);
+                if (restored && j->abandoned) remove_partial(f.target + ".partial");
+            }
+        };
+        struct cleanup_on_exit
+        {
+            std::function<void()> clean;
+            ~cleanup_on_exit() { clean(); }
+        } cleanup{clean_staged};
         auto set_state = [&](const std::string& s, const user_error& e = user_error()) {
+            if (s == "done" || s == "error" || s == "cancelled") clean_staged();
             std::lock_guard<std::mutex> lock(m_);
             j->state = s;
             j->error = e;
@@ -1285,6 +1418,7 @@ namespace albireo
         // La progression est écrite sous m_, où cancel_download() la retire, pour qu'un téléchargement
         // annulé par l'utilisateur ne revienne jamais au prochain démarrage.
         auto save = [&]() {
+            if (restored) return;
             const json& e = j->entry;
             json st = json::object();
             st["sha256"] = e["sha256"];
@@ -1295,34 +1429,31 @@ namespace albireo
             std::lock_guard<std::mutex> lock(m_);
             if (!j->abandoned) db_.set_download_state(j->id, st);
         };
+        set_state("downloading");
+        restored = restore_from_reserve(j);
+        if (restored)
+        {
+            for (const auto& c : j->chunks) c->done = c->length;
+            j->received = j->total;
+            log_info("models: " + j->id + " restored from the local reserve");
+        }
+        else clean_staged();
+        if (j->cancel)
+        {
+            set_state("cancelled");
+            if (j->abandoned) drop_partials();
+            return;
+        }
+        if (j->local_only && !restored)
+        {
+            set_state("error", user_error().set("the local reserve is missing or cannot provide verified files",
+                "reserve_unavailable").arg("m", j->entry["name"].str(j->id)));
+            log_warning("models: the local reserve cannot restore " + j->id);
+            return;
+        }
         const bool with_projector = j->files.size() > 1;
-        /*
-            Les sources des parties, que les transferts partagent sous source_m.  L'espace de publication sert
-            d'abord.  space_down dit pourquoi il a échoué pour le téléchargement, avec le fichier de l'espace
-            qu'il nomme (down_path), dès qu'il n'est pas réglé, ne répond pas ou refuse les requêtes d'un
-            segment : les segments suivants vont aussitôt à leurs adresses officielles.  lacking dit pourquoi il
-            ne sert pas une partie, une partie qu'il n'a pas, a à une autre taille ou dont les octets venus de
-            lui échouent à leur empreinte, qui va à son adresse officielle avec tous ses segments.  Le journal
-            signale chacun de ces changements une fois.
-        */
-        typedef std::pair<size_t, size_t> part_key;   // le fichier du modèle, et la partie dans celui-ci
-        const int by_space = 1, by_official = 2;
-        std::mutex source_m;
-        std::string space_down, down_path;
-        std::map<part_key, std::string> lacking;
-        std::map<part_key, int> sources;              // les sources ayant donné des octets de chaque partie ici
-        // Enregistre que la source a donné des octets de la partie.
-        auto gave = [&](const part_key& part, int source) {
-            std::lock_guard<std::mutex> lock(source_m);
-            sources[part] |= source;
-        };
-        // Signale que le téléchargement continue depuis l'adresse officielle url, l'espace ne servant pas path.
-        auto tell = [&](const std::string& url, const std::string& path, const std::string& why) {
-            log_warning("models: download of " + j->id + " continues from its official address " + without_queries(url)
-                + ", the publication space of Albireo did not serve " + path + " (" + why + ")");
-        };
-
-        log_info("models: downloading " + j->id + " (" + std::to_string(j->total >> 20) + " MB, "
+        log_info("models: " + std::string(restored ? "restoring " : "downloading ") + j->id + " ("
+            + std::to_string(j->total >> 20) + " MB, "
             + std::to_string(j->chunks.size()) + " segments" + (with_projector ? ", with its projector)" : ")"));
         for (int round = 0; round < 2; ++round)
         {
@@ -1372,6 +1503,11 @@ namespace albireo
             */
             auto fetch = [&](job::chunk& c, const std::string& address, bool sized, std::string& reason,
                 uint64_t& wrote) {
+                if (j->local_only)
+                {
+                    reason = "a local restoration cannot use the network";
+                    return transfer_end::local;
+                }
                 random_access_file& file = *outputs[c.file];
                 reason.clear();
                 wrote = 0;
@@ -1470,123 +1606,27 @@ namespace albireo
                         cp = j->chunks[next++].get();
                     }
                     job::chunk& c = *cp;
-                    const part_key part(c.file, c.part);
-                    std::string space_error, reason, error;
+                    std::string reason, error;
                     uint64_t wrote = 0;
                     transfer_end end = transfer_end::failed;
-                    // Indique si space_error nomme le fichier de ce segment, ce qu'un échec d'une autre partie peut
-                    // ne pas faire.
-                    bool here = true;
-                    // Indique si l'espace a échoué pour le téléchargement ou ne sert pas la partie ; space_error dit
-                    // pourquoi.
-                    auto refused = [&]() {
-                        std::lock_guard<std::mutex> lock(source_m);
-                        const auto it = lacking.find(part);
-                        if (it != lacking.end())
-                        {
-                            space_error = it->second;
-                            here = true;
-                            return true;
-                        }
-                        if (space_down.empty()) return false;
-                        space_error = space_down;
-                        here = down_path == c.link_path;
-                        return true;
-                    };
-                    bool skipped = refused();
-                    // Indique si l'échec de l'espace concerne tout le téléchargement, ou cette partie seule.
-                    bool whole = true;
-                    /*
-                        La copie de la ressource dans l'espace de publication, son adresse redemandée après un échec.
-                        Un espace qui n'a pas la ressource à sa taille met fin aux tentatives, tout comme un autre
-                        segment qui trouve l'espace en échec.  Les messages nomment le fichier dans l'espace, jamais
-                        son adresse.
-                    */
-                    for (int attempt = 0; attempt < 4 && !skipped && !ended(); ++attempt)
+                    // Trois tentatives depuis l'adresse du catalogue, les mêmes plages ; les téléchargements
+                    // arrêtés pour tout le service (il s'arrête, ou passe hors ligne) ne sont pas retentés.
+                    bool ok = false;
+                    for (int attempt = 0; attempt < 3 && !ok && !ended(); ++attempt)
                     {
-                        // Une pause avant chaque nouvelle tentative, qu'une annulation interrompt.
                         pause(attempt);
-                        if (ended() || (attempt > 0 && (skipped = refused()))) break;
-                        std::string address;
-                        uint64_t listed = 0;
-                        link_status status = link_status::ok;
-                        if (!public_link_file(c.link_path, address, listed, space_error, attempt > 0, &status))
-                        {
-                            whole = status != link_status::missing;
-                            // Un fichier qui manque à l'espace est cherché une fois de plus dans une nouvelle liste.
-                            if (status == link_status::unset || (!whole && attempt > 0) || http_cancelled()) break;
-                            continue;
-                        }
-                        if (listed != c.resource)
-                        {
-                            space_error = "the copy of " + c.link_path + " in the publication space of Albireo does "
-                                "not have the size the catalog gives";
-                            whole = false;
-                            if (attempt > 0) break;
-                            continue;
-                        }
-                        end = fetch(c, address, false, reason, wrote);
-                        if (wrote > 0) gave(part, by_space);
-                        if (end == transfer_end::complete || end == transfer_end::local) break;
-                        whole = end != transfer_end::corrupt;
-                        space_error = end == transfer_end::corrupt ? "the compressed copy of " + c.link_path
-                            + " in the publication space of Albireo is corrupt" : "the copy of " + c.link_path
-                            + " in the publication space of Albireo cannot be downloaded: " + reason;
-                        // Les téléchargements arrêtés pour tout le service (il s'arrête, ou passe hors ligne) ne
-                        // sont pas retentés ; ils reprennent plus tard.
-                        if (http_cancelled()) break;
+                        if (ended()) break;
+                        end = fetch(c, c.url, true, reason, wrote);
+                        ok = end == transfer_end::complete;
+                        if (end == transfer_end::local || (!ok && http_cancelled())) break;
                     }
-                    bool ok = end == transfer_end::complete;
-                    error = end == transfer_end::local ? reason : space_error;
-                    /*
-                        L'adresse officielle de la partie, l'"url" du catalogue, quand l'espace ne sert pas le
-                        segment : les mêmes plages, en trois tentatives.  L'échec de l'espace est gardé pour les
-                        segments suivants, du téléchargement ou de la partie, qui y vont aussitôt ; le journal le
-                        signale quand il change la source du téléchargement ou de la partie.
-                    */
-                    if (!ok && end != transfer_end::local && !ended() && !http_cancelled())
+                    if (!ok && !ended() && !http_cancelled())
                     {
-                        if (space_error.empty()) space_error = "the publication space of Albireo does not serve "
-                            + c.link_path;
-                        const std::string official = without_queries(c.url);
-                        bool changed = false;
-                        {
-                            std::lock_guard<std::mutex> lock(source_m);
-                            if (!skipped && whole && space_down.empty())
-                            {
-                                space_down = space_error;
-                                down_path = c.link_path;
-                                changed = true;
-                            }
-                            if (!skipped && !whole) changed = lacking.emplace(part, space_error).second;
-                        }
-                        if (changed) tell(c.url, c.link_path, space_error);
-                        bool tried = false;
-                        for (int attempt = 0; attempt < 3 && !ok && !ended(); ++attempt)
-                        {
-                            pause(attempt);
-                            if (ended()) break;
-                            tried = true;
-                            end = fetch(c, c.url, true, reason, wrote);
-                            if (wrote > 0) gave(part, by_official);
-                            ok = end == transfer_end::complete;
-                            if (end == transfer_end::local || (!ok && http_cancelled())) break;
-                        }
-                        if (end == transfer_end::local)
-                        {
-                            error = reason;
-                        }
-                        else if (tried && !ok)
-                        {
-                            // Les deux sources ont échoué : le fichier dans l'espace, son adresse officielle,
-                            // l'échec de chacune.
-                            const std::string why = end == transfer_end::corrupt
-                                ? "the compressed file it gives is corrupt" : end == transfer_end::other_size
-                                ? "the file it gives does not have the size the catalog gives" : reason;
-                            error = space_error + (here ? "; its official address " + official
-                                + " cannot be downloaded either: " : "; " + c.link_path
-                                + " cannot be downloaded from its official address " + official + " either: ") + why;
-                        }
+                        error = end == transfer_end::local ? reason
+                            : end == transfer_end::corrupt ? "the compressed file of " + without_queries(c.url) + " is corrupt"
+                            : end == transfer_end::other_size ? "the file of " + without_queries(c.url)
+                                + " does not have the size the catalog gives"
+                            : without_queries(c.url) + " cannot be downloaded: " + reason;
                     }
                     if (!ok && !j->cancel)
                     {
@@ -1675,11 +1715,10 @@ namespace albireo
 
             set_state("verifying");
             /*
-                Chaque fichier écrit, lu sans passer par aucun lien depuis le dossier des modèles, est vérifié
-                avec sa propre empreinte ; il est fermé avant d'être renommé ou supprimé, ce que son handle
-                refuserait sous Windows.  Les parties dont l'empreinte propre échoue sont récupérées de
-                nouveau, une fois, depuis leurs adresses officielles quand l'espace de publication en a donné
-                des octets.
+                Chaque fichier écrit est lu sans suivre de lien depuis le dossier des modèles et vérifié
+                avec sa propre empreinte. Son descripteur est fermé avant de le renommer ou le supprimer,
+                pour ne pas garder de référence vers l'ancien fichier. Les parties dont l'empreinte propre
+                échoue sont récupérées de nouveau, une fois.
             */
             std::vector<std::string> shas(j->files.size());
             bool all_match = true;
@@ -1716,33 +1755,18 @@ namespace albireo
                 {
                     const uint64_t size = static_cast<uint64_t>(p["size"].as_int(0));
                     const std::string expected = p["sha256"].as_string();
-                    if (round == 0 && !expected.empty() && sha256_range(written, offset, size) != expected)
+                    if (!j->local_only && round == 0 && !expected.empty()
+                        && sha256_range(written, offset, size) != expected)
                     {
-                        std::string path, url;
                         for (auto& c : j->chunks)
                             if (c->file == fi && c->part == part)
                             {
                                 j->received -= c->gzip ? c->output : c->done.load();
                                 c->done = 0;
-                                path = c->link_path;
-                                url = c->url;
                             }
                         any = true;
                         log_warning("models: part " + std::to_string(part) + " of " + (fi == 0 ? std::string()
                             : std::string("the projector of ")) + j->id + " is corrupt, fetched again");
-                        // Des octets donnés par l'espace échouent à leur empreinte : la partie vient de son
-                        // adresse officielle.
-                        const std::string why = "the copy of " + path + " in the publication space of Albireo does "
-                            "not match the hash of the catalog";
-                        bool changed = false;
-                        {
-                            std::lock_guard<std::mutex> lock(source_m);
-                            const part_key key(fi, part);
-                            if ((sources[key] & by_space) && lacking.emplace(key, why).second)
-                                changed = space_down.empty();
-                            sources[key] = 0;
-                        }
-                        if (changed) tell(url, path, why);
                     }
                     offset += size;
                     ++part;
@@ -1778,15 +1802,11 @@ namespace albireo
                     return;
                 }
                 db_.remove_download_state(j->id);
+                if (restored && direct_path(dir_))
+                    for (const auto& f : j->files) remove_partial(f.target + ".partial");
                 if (with_projector) drop_pending_copy(shas[1]);
                 set_state("done");
-                // Les sources des octets de cette exécution ; un téléchargement repris complet n'en a aucune.
-                int all = 0;
-                for (const auto& s : sources) all |= s.second;
-                const char* const from = all == (by_space | by_official) ? ", from the publication space of Albireo "
-                    "and its official addresses" : all == by_official ? ", from its official addresses"
-                    : all == by_space ? ", from the publication space of Albireo" : "";
-                log_info("models: " + j->id + " installed" + (with_projector ? ", with its projector" : "") + from);
+                log_info("models: " + j->id + " installed" + (with_projector ? ", with its projector" : ""));
                 return;
             }
             if (!any) break;
@@ -1794,8 +1814,11 @@ namespace albireo
         set_state("error", user_error().set("the downloaded file does not match the hash of the catalog",
             "download_hash"));
         log_error("models: " + j->id + " does not match its hash");
-        db_.remove_download_state(j->id);
-        drop_partials();
+        if (!restored)
+        {
+            db_.remove_download_state(j->id);
+            drop_partials();
+        }
     }
 
     bool model_manager::install_file(const std::string& id, const std::string& file, const json& descriptor,
@@ -1856,6 +1879,7 @@ namespace albireo
 
     bool model_manager::remove(const std::string& id, std::string& error)
     {
+        error.clear();
         installed_model m;
         if (!db_.find_model(id, m))
         {
@@ -1869,6 +1893,17 @@ namespace albireo
                 error = "the models folder " + dir_ + " now leads elsewhere through a link";
                 return false;
             }
+        for (const auto& file : { std::make_pair(m.file, m.sha256),
+                std::make_pair(m.projector, m.projector_sha256) })
+        {
+            if (file.first.empty() || !file_exists(file.first)) continue;
+            std::string why;
+            if (!save_in_reserve(file.first, file.second, why))
+            {
+                error = "cannot preserve " + file.first + " in the local reserve: " + why;
+                return false;
+            }
+        }
         if (file_exists(m.file) && !remove_file(m.file))
         {
             error = "cannot delete " + m.file + " (in use?)";
@@ -2455,8 +2490,8 @@ namespace albireo
             entry.erase("gguf_name");
             entry.erase("projection_width");
             /*
-                Une description annexe écrite à côté du fichier, lue seulement dans le dossier d'import,
-                où seuls les administrateurs placent des fichiers, et sans passer par aucun lien.
+                Une description annexe écrite à côté du fichier, lue seulement dans le dossier d'import
+                et sans passer par aucun lien.
             */
             std::string side;
             const std::string& f = d.path;

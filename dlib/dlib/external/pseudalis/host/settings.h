@@ -16,13 +16,11 @@ namespace pseudalis
         /*!
             WHAT THIS OBJECT REPRESENTS
                 Les réglages du service, gardés dans settings.json dans le dossier de
-                données, que les utilisateurs de la machine lisent (la zone de notification y
-                prend le port) et que les administrateurs modifient, par l'interface
-                d'administration ou l'installateur.  Le service redémarre de lui-même quand
+                données et modifiés dans l'application web.  Le service redémarre de lui-même quand
                 le port, le lecteur, l'ordre des dates ou le proxy changent.
         !*/
         int port = 8444;
-        std::string language = "auto";          // auto, en, fr, de, it, es : zone de notification, shell, descriptions
+        std::string language = "auto";          // from_json garde auto, en et fr ; auto suit la langue du service
         std::string drive_letter = "A";         // la lettre du lecteur, vide sans lecteur
         std::string date_order = "dmy";         // dmy ou mdy : les dates numériques que lit le détecteur
         std::string albireo = "auto";           // auto : les images sont décrites quand Albireo répond ; off

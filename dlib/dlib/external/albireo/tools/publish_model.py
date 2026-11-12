@@ -20,7 +20,7 @@ The program prints the catalog entry of the model: its architecture, number of p
 and trained context read from the file, its size and SHA-256, and the "files" of its parts.
 The entry is completed with the name, the description, the roles and the other fields of
 make_catalog.py, which takes an entry with its "files" as it is, then the catalog is
-written and signed again.
+written again.
 
 The service downloads the parts in parallel, inflates the compressed ones as they arrive,
 writes each at its place in a single file and checks every part, then the whole model,
@@ -100,7 +100,11 @@ def main():
         print("--part-mb lies between 1 and 2000")
         return 2
 
-    meta, parameters = gguf_info(a.model)
+    try:
+        meta, parameters = gguf_info(a.model)
+    except (OSError, ValueError, struct.error, KeyError) as e:
+        print("error: %s" % e, file=sys.stderr)
+        return 1
     arch = meta.get("general.architecture", "")
     if a.release:
         base = "https://github.com/%s/releases/download/%s" % (a.repo, a.release)

@@ -11,11 +11,11 @@
         /v1/chat/completions
         /v1/completions
         /v1/embeddings
-        /albireo/v1/...           l'interface de l'application web et de la zone de notification
+        /albireo/v1/...           l'interface de l'application web
 
     Une version personnelle : le service n'écoute que sur 127.0.0.1, et toute requête qu'il
     reçoit peut tout faire, l'application web changeant les réglages, les modèles et
-    l'installation comme le faisait la zone de notification de l'original.  Il ne demande plus
+    l'installation.  Il ne demande plus
     de jeton d'administration, et ne vérifie plus les en-têtes Host et Origin (un choix du
     propriétaire de ce fork, qui sait qu'un site web ouvert dans le navigateur pourrait alors
     piloter le service).
@@ -101,15 +101,6 @@ namespace albireo
         void send_json(httplib::Response& res, int status, const json& j)
         {
             res.status = status;
-            // Le dernier garde-fou : les erreurs que renvoie une route nomment les fichiers de l'espace de
-            // publication, jamais ses adresses.
-            if (errors_name_publication_space(j))
-            {
-                json hidden = j;
-                hide_publication_space_in_errors(hidden);
-                res.set_content(hidden.dump(), "application/json; charset=utf-8");
-                return;
-            }
             res.set_content(j.dump(), "application/json; charset=utf-8");
         }
 
@@ -999,7 +990,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 && in_range("gpu_prompt_tokens", 9, 1 << 20) && in_range("gpu_prompt_context", 0, 1 << 20)
                 && one_of("language", { "auto", "fr" })
                 && one_of("kv_type", { "auto", "q8", "f16" })
-                && one_of("engine", { "auto", "best", "cpu", "cpu-avx2", "cpu-avxvnni", "openvino", "cuda" })
+                && one_of("engine", { "auto" })
                 && one_of("accelerator", { "auto", "none" })
                 && in_range("port", 1024, 65535) && in_range("threads", 0, 1024) && in_range("context", 0, 1 << 20)
                 && in_range("max_sequences", 1, 64) && in_range("kv_mb", 0, 1 << 24)
@@ -1157,8 +1148,6 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             {"sqlite.txt", "SQLite", SQLITE_VERSION},
             {"libpng.txt", "libpng", ""},
             {"libjpeg.txt", "libjpeg (Independent JPEG Group)", ""},
-            {"openvino-license.txt", "OpenVINO", ""},
-            {"cuda-eula.txt", "CUDA", ""},
             {"cudnn-license.txt", "cuDNN", ""}
         };
 
@@ -1423,7 +1412,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             handle_embeddings(*s, req, res);
         });
 
-        // Interface de l'application web et de la zone de notification.  Le statut dit à l'application web
+        // Interface de l'application web.  Le statut dit à l'application web
         // si l'accès au web est disponible et quel est son fournisseur de recherche (web_capability()).
         srv.Get("/albireo/v1/status", [s](const httplib::Request&, httplib::Response& res) {
             json status = s->status();
@@ -1571,9 +1560,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         });
         srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,
                                                                                httplib::Response& res) {
-            if (refuse_offline(*s, res)) return;
             user_error error;
-            const bool ok = s->models().start_download(req.matches[1], error);
+            const bool ok = s->models().start_download(req.matches[1], error, s->settings().get().offline);
             send_json(res, ok ? 202 : 400, ok_result(ok, error));
         });
         srv.Delete(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,
@@ -1610,7 +1598,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             send_json(res, ok ? 200 : 400, o);
         });
         /*
-            Les paquets hors ligne signés et le contenu du dossier d'import (service::import_folder()),
+            Les paquets hors ligne et le contenu du dossier d'import (service::import_folder()),
             que le service lit avec ses propres droits : un refus vient avec son code et le chemin.
         */
         auto import = [s](const httplib::Request& req, httplib::Response& res) {
@@ -1629,8 +1617,8 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         };
         srv.Post("/albireo/v1/import", import);
         srv.Post("/albireo/v1/models/import", import);
-        // Un fichier de modèle envoyé par la zone de notification, lu avec les droits de son utilisateur, pour les
-        // fichiers que le service ne lit jamais.
+        // Un fichier de modèle envoyé par la page, lu avec les droits de son utilisateur, pour les fichiers
+        // que le service ne lit jamais.
         srv.Post(upload_route, [s](const httplib::Request& req, httplib::Response& res,
                                     const httplib::ContentReader& reader) {
             const std::string name = file_name(req.get_param_value("name"));

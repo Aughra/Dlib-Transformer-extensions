@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(albireo VERSION 3.2.0 LANGUAGES C CXX OBJCXX)
+project(albireo VERSION 4.1.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -174,55 +174,13 @@ if (ALBIREO_PROGRAMS)
    target_compile_options(albireo_common PRIVATE ${ALBIREO_WARNINGS})
    target_link_libraries(albireo_common PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
 
-   # Le mot de passe du lien public des fichiers publiés (host/public_link.h), lu à chaque
-   # configuration dans un fichier hors du dépôt et intégré au service, masqué : l'en-tête
-   # généré ne se trouve que dans l'arbre de build.  Sans ce fichier, le service atteint le
-   # lien sans mot de passe.
-   set(public_link_default "$ENV{HOME}/keys/albireo-public-link.txt")
-   set(ALBIREO_PUBLIC_LINK_PASSWORD_FILE "${public_link_default}" CACHE FILEPATH
-      "File holding the password of the public link of the published files")
-   set(public_link_bytes "0")
-   set(public_link_size 0)
-   if (EXISTS "${ALBIREO_PUBLIC_LINK_PASSWORD_FILE}")
-      set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${ALBIREO_PUBLIC_LINK_PASSWORD_FILE}")
-      file(READ "${ALBIREO_PUBLIC_LINK_PASSWORD_FILE}" public_link_hex HEX)
-      # Une marque d'ordre des octets avant le mot de passe et les fins de ligne après n'en font pas partie.
-      string(REGEX REPLACE "^efbbbf" "" public_link_hex "${public_link_hex}")
-      string(REGEX REPLACE "(0d|0a)+$" "" public_link_hex "${public_link_hex}")
-      string(LENGTH "${public_link_hex}" public_link_digits)
-      math(EXPR public_link_size "${public_link_digits} / 2")
-      if (public_link_size GREATER 0)
-         # Chaque octet masqué par le générateur que host/public_link.cpp rejoue pour le démasquer.
-         set(public_link_seed 20261101)
-         set(public_link_list "")
-         math(EXPR public_link_last "${public_link_size} - 1")
-         foreach (i RANGE 0 ${public_link_last})
-            math(EXPR public_link_at "${i} * 2")
-            string(SUBSTRING "${public_link_hex}" ${public_link_at} 2 public_link_byte)
-            math(EXPR public_link_seed "(${public_link_seed} * 1103515245 + 12345) % 2147483648")
-            math(EXPR public_link_byte "0x${public_link_byte} ^ ((${public_link_seed} >> 16) & 255)")
-            list(APPEND public_link_list ${public_link_byte})
-         endforeach()
-         string(REPLACE ";" ", " public_link_bytes "${public_link_list}")
-      endif()
-      message(STATUS "Public link: password read from ${ALBIREO_PUBLIC_LINK_PASSWORD_FILE}")
-   else()
-      message(STATUS "Public link: no password, ${ALBIREO_PUBLIC_LINK_PASSWORD_FILE} does not exist")
-   endif()
-   configure_file(cmake/public_link_secret.h.in ${CMAKE_BINARY_DIR}/generated/public_link_secret.h @ONLY)
-
    # Le service.
    add_executable(albireo-service host/main.cpp host/service.cpp host/server.cpp host/settings.cpp host/store.cpp
-      host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/public_link.cpp host/crypto.cpp
+      host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/crypto.cpp
       host/certificates.cpp host/web_access.cpp host/hub.cpp)
    target_include_directories(albireo-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
    target_link_libraries(albireo-service PRIVATE albireo_common albireo_sqlite albireo_zlib dlib::httplib)
    target_compile_options(albireo-service PRIVATE ${ALBIREO_WARNINGS})
-
-   # Les signatures du flux de mises à jour et du catalogue de modèles, pour leur éditeur.
-   add_executable(albireo-sign tools/albireo_sign.cpp host/crypto.cpp)
-   target_link_libraries(albireo-sign PRIVATE albireo_common dlib::httplib)
-   target_compile_options(albireo-sign PRIVATE ${ALBIREO_WARNINGS})
 
    # La préparation des modèles fournis avec Albireo : vérifiés et convertis avec le code
    # du moteur, puis remis aux programmes de l'arbre.
@@ -270,10 +228,10 @@ endif()
 
 if (ALBIREO_TESTS AND ALBIREO_PROGRAMS)
    # Les fichiers que le service écrit dans son dossier de modèles et lit dans ses imports, les
-   # téléchargements et les mises à jour depuis le lien public, les réglages et l'accès web, avec
+   # téléchargements, les réglages et l'accès web, avec
    # un serveur local.
    add_executable(test_host tests/test_host.cpp host/models.cpp host/store.cpp host/http_fetch.cpp
-      host/public_link.cpp host/crypto.cpp host/settings.cpp host/web_access.cpp)
+      host/crypto.cpp host/settings.cpp host/web_access.cpp)
    target_include_directories(test_host PRIVATE ${CMAKE_BINARY_DIR}/generated)
    target_link_libraries(test_host PRIVATE albireo_common albireo_sqlite albireo_zlib dlib::httplib)
    target_compile_options(test_host PRIVATE ${ALBIREO_WARNINGS})

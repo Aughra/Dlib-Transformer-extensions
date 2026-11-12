@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-11 au soir, sur le Mac M2 (Albireo 3.2.0).
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-12, écrite sous Windows (branche `bureau-2026-11-12`, Albireo 4.1.0 non construit sur Mac) ; le reste date du 2026-11-11 sur le Mac M2 (Albireo 3.2.0).
 
 ## Objectif
 
@@ -37,32 +37,41 @@ Faire tourner le projet sur Mac Apple Silicon : d'abord dlib et les exemples SLM
 - 2026-11-11 (sieste de l'humain, choix consignés dans `logs/sieste-2026-11-11.md`) : **les pas d'écriture tournent sur le GPU** (M2, M3, M4 en partie) : 4B 21,3 à 21,7 tokens/s contre 18,3 à 19,0 sur le processeur, 2B 49,4 à 49,6 contre 35,7 à 40,8 ; mêmes réponses ; activé par défaut. Blog : épisode 19.
 - 2026-11-11 (sieste) : **les prompts aussi sur le GPU** (M5) : 4B 512 tokens 92 → 154 tokens/s, 2B 222 → 420 ; à partir de 24 tokens, jusqu'à 2 048 positions. Contrôle au chargement du modèle. Bug de débordement corrigé dans l'attention. Blog : épisode 20.
 
-## Pour reprendre demain (écrit le 2026-11-11 au soir)
+## Pour reprendre (mis à jour le 2026-11-12, écrit sous Windows)
 
-**État** : Albireo **3.2.0**, tout commité et poussé, tests complets passés (Albireo 17 sur 17, Pseudalis 34 sur 34 à la 2.0.2). Le service tourne (lancé par Claude, il peut s'arrêter avec la session : le relancer avec la commande du mémo). Accès réseau ouvert sans mot de passe sur `http://192.168.1.12:8444/`. Captures de toutes les pages dans [docs/captures/](../docs/captures/README.md).
+**État** : `main` = Albireo **3.2.0**, testé. La branche **`bureau-2026-11-12`** contient le retrait des clés, Albireo **4.1.0**, la documentation, le nettoyage des commentaires, la correction des langues API Pseudalis, les contrôles de propriétaires/permissions POSIX, le retrait des choix CUDA/OpenVINO/x86, les tests hors ligne de `publish_model.py` (3/3) et `make_catalog.py` (1/1 avec Hub simulé), ainsi que la restauration depuis la réserve même en mode hors ligne. Le build et les tests C++ restent à faire sur Mac. L'audit statique des chemins CMake n'a trouvé aucune source ou ressource manquante.
 
-**Prochaine étape, demandée par l'humain : retirer les clés** (« je veux tout pouvoir faire sans utiliser de clé »). Le décider pas à pas, avec ses tests :
-1. Catalogue sans signature : `model_manager::install_catalog` ne vérifie plus `catalog.json.sig` (`verify_signature`, `feed_public_key_pem`) ; `refresh_catalog` ne télécharge plus le `.sig` ; `import_catalog` et l'import de dossier (`service.cpp`, « signed offline bundle ») acceptent un `catalog.json` seul.
-2. Plus d'espace de publication de l'original : retirer `host/public_link.*`, `cmake/public_link_secret.h.in` et la lecture de `~/keys/albireo-public-link.txt` dans le CMake ; les téléchargements vont directement aux adresses officielles (aujourd'hui 16 s perdues à essayer l'espace, qui répond « protégé par mot de passe ») ; le catalogue vient directement de GitHub.
-3. Retirer l'outil `albireo-sign` (`tools/albireo_sign.cpp`) et, si plus rien ne s'en sert, `sign_data` / `verify_signature` de `crypto.cpp`.
-4. **`tests/test_host.cpp`** vérifie justement l'espace de publication (faux serveur pCloud local) et les signatures : l'adapter, c'est le gros du travail. Puis `tools/test_macos.sh`.
-5. Pseudalis : clé publique du flux (`resources/feed-public-key.pem`, `feed_public_key.h.in`) et `pseudalis-sign`, s'ils ne servent plus à rien.
-6. Version (sans doute 4.0.0 : l'import de dossiers signés change de comportement), notes de version, journal, mémo, notes pour l'auteur si un défaut de l'original apparaît, CLAUDE.md (la règle « ne pas regénérer ni re-signer les `*.sig` » reste vraie : on ne signe plus rien).
+**À faire en premier sur le Mac** (critère : tout passe) :
+1. `git fetch origin && git checkout bureau-2026-11-12` (elle contient `travail-windows`).
+2. `cmake --build build/macos-albireo -- -k 0` et `cmake --build build/macos-pseudalis -- -k 0` : corriger ce qui ne compile pas (fautes de frappe possibles, `-Werror` sur les avertissements).
+3. `bash dlib/dlib/external/albireo/tools/test_macos.sh` et `bash dlib/dlib/external/pseudalis/tools/test_macos.sh`. Ils couvrent les validations d'API, la migration des anciens réglages, les dossiers et les opérations de réserve ; aucun n'a encore tourné sur Mac. Vérifier que `models folder and imports` et `offline reserve` affichent **PASS**, pas **SKIP** : il faut le service construit et le modèle GGUF indiqué au début du script.
+4. Vérifier les permissions POSIX et les ACL étendues des dossiers utilisateur et d'import sur Mac ; les ACL ne sont pas examinées par les contrôles actuels. Évaluer aussi `trust_authority`, sans effet sur macOS.
+5. Dans un dossier de données de test isolé, vérifier la restauration hors ligne sans projecteur et avec projecteur, l'erreur si un fichier manque ou est altéré, la conservation d'une progression réseau, puis le repli en ligne. Vérifier aussi les clés/dossiers Pseudalis, le délai DNS et le dossier `drive` (pas de volume monté, pas de verrou exclusif). Le script teste la route hors ligne et le test C++ couvre le projecteur ; ils restent à exécuter sur Mac.
+6. Si les builds, tests et limites de sécurité sont traités : fusionner dans `main` (`git merge bureau-2026-11-12`), puis pousser vers `origin`. Sinon corriger sur la branche.
+
+**Ce qui a été fait** (voir le journal du 2026-11-12) : catalogue sans signature, import de dossier sans `.sig`, espace de publication et outils de signature retirés ; version 4.0.0. Puis correction des langues API Pseudalis, nettoyage des commentaires, contrôles POSIX, retrait des choix de moteur obsolètes et premières opérations de réserve ; versions Albireo 4.0.1 à 4.0.4. Albireo **4.0.5** signale proprement un GGUF invalide ; **4.1.0** restaure depuis la réserve hors ligne et corrige une erreur de compilation introduite dans le journal du fork. Les tests Python de publication passent (3/3) ; le générateur du catalogue passe avec réponses simulées (1/1). Les tests C++ et le build complet restent à faire sur Mac.
+
+**Portage documentaire** : le README d'Albireo garde ses sections sur les signatures et les outils de publication comme documentation de l'original ; son introduction précise que le reste décrit la version Windows de l'original. Le README de Pseudalis a la même réserve. Les mentions de `pseudalis-sign` dans le mémo et de `check_updates` dans les notes pour l'auteur sont historiques et laissées telles quelles ; la commande de démarrage du mémo a été corrigée.
 
 **Juste après les clés, demandé par l'humain : une réserve de modèles sur le Mac**, qui remplace l'espace de publication de l'original (contre une panne ou un blocage de Hugging Face) :
-- dossier `<données>/reserve` : chaque modèle téléchargé y reste ; supprimer un modèle le range en réserve au lieu de l'effacer ; le réinstaller est une copie locale, sans réseau ;
-- la dernière liste connue (catalogue, liste personnelle, recherches Hugging Face) enregistrée sur le Mac et affichée même hors ligne ;
-- deux boutons dans l'onglet Modèles : « Rafraîchir depuis le Mac » (réserve et liste enregistrée, sans réseau) et « Rafraîchir depuis Hugging Face » (GitHub pour le catalogue, Hugging Face pour la liste personnelle) ;
-- le téléchargement cherche d'abord dans la réserve, puis sur Hugging Face (même logique que l'espace de l'original, sans mot de passe) ;
+- **État constaté** : le catalogue reçu et la liste personnelle (modèles Hugging Face ajoutés) sont déjà conservés dans SQLite et rechargés au démarrage ; la page peut les afficher hors réseau. En revanche, les routes de recherche Hugging Face et de liste des fichiers ne gardent aucun cache. Le contenu de la réserve n'est pas présenté comme une liste de modèles ; une entrée connue du catalogue peut être restaurée hors ligne si tous ses fichiers sont disponibles et vérifiés.
+- **À achever** : conserver automatiquement chaque modèle téléchargé dans `<données>/reserve` ; actuellement ses fichiers vérifiés y sont copiés à la suppression, puis peuvent être restaurés localement ;
+- enregistrer et afficher hors ligne aussi les dernières recherches Hugging Face, en plus du catalogue et de la liste personnelle déjà conservés ;
+- ajouter deux boutons dans l'onglet Modèles : « Rafraîchir depuis le Mac » (réserve et liste enregistrée, sans réseau) et « Rafraîchir depuis Hugging Face » (GitHub pour le catalogue, Hugging Face pour la liste personnelle) ;
+- le téléchargement cherche déjà d'abord dans la réserve, puis, seulement en ligne, à l'adresse indiquée par le catalogue ;
 - à décider avec l'humain : taille maximale de la réserve (réglage de l'onglet Service) et bouton « Vider la réserve » ; place libre le 2026-11-11 : 783 Go.
 
 **Ensuite, dans l'ordre que choisira l'humain** (détails plus bas) : découper `app.js` ; retirer le code mort de la page ; déplacer la logique cachée de la page vers le service ; corriger sur le fond les commentaires périmés (Windows, CUDA) ; attention de prompt en tuiles (M7). **Nouveau constat** : beaucoup de modèles récents de Hugging Face (Qwen 3.5, 3.6, 3.8 en `qwen35`, `qwen35moe`, `qwen4exp`, Gemma, Granite hybride, DeepSeek) ont des architectures que le moteur ne lit pas ; les prendre en charge serait un chantier du moteur à part, à proposer à l'humain.
 
 ## En cours
 
-### Fait : commentaires en français (Albireo 2.0.2)
+### Restauration hors ligne de la réserve : validation Mac en attente
 
-Voir le journal. Reste, plus tard : corriger sur le fond les commentaires qui décrivent encore l'original (Windows, CUDA, zone de notification ; `settings.h` qui liste « auto, en, fr, de, it, es »).
+L'API lance une restauration strictement locale en mode « hors ligne », la page propose cette action et affiche les erreurs, et les copies temporaires restent séparées d'une progression réseau précédente. Sous Debian local, `test_host` d'Albireo passe deux fois (187 contrôles à chaque passage) et celui de Pseudalis passe ; un adaptateur temporaire remplace l'appel macOS du chemin d'exécutable. Les syntaxes C++14, JavaScript et Bash vérifiées passent aussi. Le navigateur a vérifié la page avec un service simulé : restauration, réserve absente, téléchargement occupé, réponse illisible, téléchargement en ligne et refus de suppression. Ce ne sont pas des builds ni des tests macOS.
+
+### Fait : contrôles de permissions POSIX ajoutés, validation Mac en attente
+
+Voir le journal. Albireo et Pseudalis vérifient maintenant le propriétaire et les permissions POSIX ; les dossiers sécurisés passent en mode 0700 et les tests couvrent les liens et les entrées modifiables. Albireo ne sonde plus que son moteur CPU ; les anciennes valeurs de moteur et d'accélérateur sont normalisées à `auto`. La réserve conserve les fichiers par SHA-256, sans limite de taille ni commande de vidage pour l'instant. Ces changements restent à compiler et tester sur Mac ; les ACL étendues ne sont pas vérifiées. L'API Pseudalis limite les langues à `auto`, `en` et `fr`.
 
 ### Plus tard, pas à pas (accord de principe de l'humain, 2026-11-11) : déplacer la logique cachée de la page vers le service C++
 
@@ -85,7 +94,7 @@ Environ 7 000 lignes en un fichier. Le découper en modules ES par thème (conve
 
 | Sous-étape | Contenu | Critère vérifiable |
 |---|---|---|
-| N4 (avant M1, presque fait) | Fin du nettoyage (fait : `cpu_info`, `v2ram`, chargeur de Pseudalis, `test_macos.sh` ; reste : clé du flux et `pseudalis-sign`, commentaires ; `offload.h` / `layer_pass` remplacés en M3) : `offload.h` et `layer_pass` dans `cpu_runtime`, champs x86 de `cpu_info`, réglages `v2ram` / `accelerator`, chargeur de Pseudalis, clé du flux et `pseudalis-sign`, commentaires ; `test_linux.sh` → `test_macos.sh` sans `nproc` ni `gstat` | build sans avertissement ; tous les tests ; services vérifiés |
+| N4 (nettoyage fait, 4.0.0 à vérifier sur Mac) | `cpu_info`, `v2ram`, chargeur de Pseudalis et scripts `test_macos.sh` ; clé du flux et `pseudalis-sign` retirés en 4.0.0 ; commentaires historiques en cours de correction ; `offload.h` et `layer_pass` restent dans le runtime du processeur, le chemin Metal est séparé | build sans avertissement ; tous les tests ; services vérifiés |
 | M1 (**fait**) | Cache des clés et valeurs dans une seule zone réservée, alignée sur les pages (`c583d29` ; la zone du 4B réserve 18,7 Go d'adresses, plus que les 13,6 Go d'un tampon Metal sur le M2 : n'envelopper que les blocs utilisés) ; module `metal_device` (fait) ; accès au début de la projection du modèle ; bibliothèque `albireo_metal` (Objective-C++, noyaux compilés au lancement) liée sous `APPLE` ; le moteur s'ouvre avec le GPU | build sans avertissement ; tous les tests passent ; `engine_chat` répond juste ; le journal du moteur nomme le GPU |
 | M2 (**fait**, `32312f6`) | Noyaux : produits Q4_K / Q6_K (1 à 8 tokens), normes RMS, rope, SiLU, écriture des clés et valeurs (q8 tournées, f16), attention en ligne sur les blocs, tête des logits | test `test_metal` : chaque noyau à 1e-4 près du processeur |
 | M3 (**fait**, `5f0b07f`) | Un pas de génération entier sur le GPU, une commande par passe ; contrôle au chargement (logits à 1 % près, même token le plus probable) ; repli sur le processeur sinon | `engine_chat` juste ; mesures alternées processeur / GPU |

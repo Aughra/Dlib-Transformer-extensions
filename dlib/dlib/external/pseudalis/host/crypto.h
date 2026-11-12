@@ -60,22 +60,8 @@ namespace pseudalis
     std::string copy_open_file(link_free_file& from, const std::string& to, const std::string& expected,
         const std::atomic<bool>* cancel = nullptr);
 
-    /*!
-        ensures
-            - Vérifie une signature ECDSA P-256 avec SHA-256 (encodée en DER, fournie en
-              base64) de data avec une clé publique sous forme PEM.
-    !*/
-    bool verify_signature(const std::string& data, const std::string& signature_base64,
-        const std::string& public_key_pem);
-
-    // Signe data avec une clé privée sous forme PEM ; renvoie la signature DER en base64.
-    std::string sign_data(const std::string& data, const std::string& private_key_pem, std::string& error);
-
     std::string base64_encode(const std::string& data);
     std::string base64_decode(const std::string& text);
-
-    // La clé publique qui signe le flux de mises à jour.
-    extern const char* const feed_public_key_pem;
 
 }
 

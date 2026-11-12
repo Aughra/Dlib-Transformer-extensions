@@ -12,16 +12,16 @@
 /*
     Les téléchargements du service : le flux de mises à jour, le catalogue des modèles, les
     installateurs et les fichiers de modèles.  Chaque requête tourne sur un thread de son
-    propre appelant, une tâche de fond du service, et est bornée dans le temps à chaque
-    étape : la résolution du nom du serveur (sous Windows), la connexion, puis chaque
-    attente de données.  Un service qui s'arrête, ou que les réglages mettent hors ligne,
-    appelle http_cancel_all(), qui termine les requêtes en cours à leur étape suivante et
-    fait échouer aussitôt les suivantes, pour qu'un réseau injoignable, comme sur une
-    machine sans accès à Internet, ne retarde jamais le service.
+    propre appelant, une tâche de fond du service. La connexion et chaque attente de données
+    sont bornées ; la résolution dépend du résolveur du système et ne peut pas être
+    interrompue par ce module. Un service qui s'arrête, ou que les réglages mettent hors
+    ligne, appelle http_cancel_all() : les requêtes déjà enregistrées sont arrêtées, et celles
+    qui suivent échouent aussitôt. Une résolution déjà en cours peut toutefois se terminer
+    avant que l'annulation soit constatée.
 
     L'accès au web du mode agent (web_access.h) fait ses propres requêtes avec le même
-    proxy (http_proxy_for()), la même résolution bornée (http_resolve()) et la même
-    annulation (http_registration).
+    proxy (http_proxy_for()), le résolveur du système (http_resolve()) et la même annulation
+    (http_registration).
 */
 
 namespace httplib { class Client; }
@@ -40,9 +40,7 @@ namespace albireo
     /*!
         ensures
             - Fixe le proxy des téléchargements qui suivent, d'après le réglage "proxy" :
-                - "" utilise le proxy du système : les variables HTTPS_PROXY et HTTP_PROXY
-                  (avec NO_PROXY), puis, sous Windows, le proxy de WinHTTP que
-                  "netsh winhttp set proxy" configure pour les services ;
+                - "" utilise les variables HTTPS_PROXY et HTTP_PROXY (avec NO_PROXY) ;
                 - "none" se connecte directement ;
                 - "http://[user:password@]host[:port]" désigne un proxy, joint avec CONNECT.
             - Les adresses locales sont toujours jointes directement.
@@ -54,12 +52,9 @@ namespace albireo
 
     /*!
         ensures
-            - Termine les téléchargements en cours : un transfert s'arrête aussitôt, et sous
-              Windows un nom en cours de résolution ou un serveur en cours de connexion
-              aussi.  Une connexion qu'httplib est en train d'ouvrir, sa négociation TLS ou la
-              réponse d'un proxy comprises, se termine dans ses limites (connect_seconds, puis
-              le délai de la requête pour le proxy).  Une requête sur le point de se connecter
-              n'ouvre rien : son client vérifie l'annulation avant que sa socket se connecte.
+            - Arrête les clients déjà enregistrés et empêche les suivants de se connecter.
+              Une résolution DNS déjà en cours suit le délai du résolveur système et n'est
+              pas interrompue ; le client vérifie l'annulation avant d'ouvrir sa socket.
             - Fait échouer aussitôt les téléchargements qui suivent, jusqu'à http_restore().
             - reason devient l'erreur des téléchargements qu'elle termine ou refuse.
     !*/
@@ -67,7 +62,7 @@ namespace albireo
     void http_restore();
     bool http_cancelled();
 
-    // Secondes accordées pour résoudre le nom d'un serveur, et pour s'y connecter.
+    // Secondes accordées à la connexion, après la résolution DNS.
     const int connect_seconds = 10;
 
     /*!
@@ -79,8 +74,7 @@ namespace albireo
               répond à la place du fichier, comme en envoie un proxy ou un filtre du réseau.
             - Les erreurs disent le genre d'échec ("the request is answered with the status
               403") et ne nomment jamais l'adresse ni son hôte, que les appelants nomment
-              selon leurs besoins : les téléchargements de l'espace de publication ne nomment
-              que ses fichiers.
+              selon leurs besoins.
             - Ne lève jamais d'exception : une exception du transfert devient son erreur.
     !*/
     bool http_get(const std::string& url, std::string& body, std::string& error, size_t max_bytes = 16u << 20,
@@ -131,10 +125,10 @@ namespace albireo
         ensures
             - Donne dans addresses les adresses IPv4 et IPv6 du nom host, sous forme de texte
               ("93.184.215.14", "2606:2800:21f:cb07:6820:80da:af6b:8b2c"), dans l'ordre du
-              résolveur du système.  Sous Windows, la résolution prend au plus connect_seconds
-              et se termine aussitôt quand les téléchargements sont annulés.
+              résolveur du système. Sa durée dépend de ce résolveur ; l'annulation est vérifiée
+              avant et après l'appel, mais ne l'interrompt pas.
             - Renvoie false avec error quand le nom n'est pas résolu ou quand les
-              téléchargements sont annulés.
+              téléchargements ont été annulés.
     !*/
     bool http_resolve(const std::string& host, std::vector<std::string>& addresses, std::string& error);
 

@@ -26,9 +26,7 @@ namespace httplib { class SSLServer; class Server; }
 namespace albireo
 {
 
-    // Le moteur que fait tourner une machine : une bibliothèque et, pour les moteurs à
-    // plusieurs périphériques, le périphérique ("NPU", "GPU").  key le nomme dans les
-    // mesures : "cpu-avx2", "openvino:npu", "openvino:gpu", "cuda".
+    // Le moteur CPU utilisable ; key sert à retrouver ses mesures.
     struct engine_choice
     {
         const engine_candidate* candidate = nullptr;
@@ -38,35 +36,16 @@ namespace albireo
 
     /*!
         ensures
-            - Renvoie le moteur à faire tourner pour les réglages s parmi les candidats
-              trouvés à côté du service :
-                - engine nomme une variante : cette variante, si elle est utilisable, avec le
-                  périphérique que nomme accelerator pour les moteurs qui en ont plusieurs ;
-                - accelerator "npu", "gpu" ou "both" : le moteur de ce périphérique, le plus
-                  rapide mesuré pour "both" ;
-                - accelerator "none" : le moteur du processeur, le plus rapide mesuré, sinon
-                  celui des noyaux les plus riches (cpu-avxvnni, cpu-avx2, cpu) ;
-                - engine "best" : le moteur mesuré le plus rapide ;
-                - sinon, le choix automatique : l'accélérateur de l'ordinateur, la carte
-                  NVIDIA (cuda), sinon le NPU et le processeur graphique d'Intel ensemble
-                  (openvino:both), sinon celui des deux qui est présent, chaque moteur
-                  calculant sur le processeur les produits que son périphérique ne prend
-                  pas ; le moteur du processeur quand aucun accélérateur n'est utilisable,
-                  ou quand une mesure a trouvé l'accélérateur plus lent que le moteur du
-                  processeur.
+            - Renvoie le moteur CPU utilisable, indépendamment des anciens choix enregistrés.
             - Le candidat renvoyé est nul quand aucun moteur n'est utilisable.
     !*/
-    engine_choice choose_engine(const std::vector<engine_candidate>& candidates, const host_settings& s);
+    engine_choice choose_engine(const std::vector<engine_candidate>& candidates);
 
     /*!
         ensures
-            - Renvoie les moteurs qu'offre un ensemble de candidats, un par périphérique : ce
-              que liste la barre des tâches.  Parmi les moteurs OpenVINO, un par famille de
-              noyaux du processeur (openvino-avxvnni, openvino), le plus riche utilisable
-              offre le NPU, le processeur graphique et les deux.
+            - Renvoie les choix de moteur disponibles dans les candidats.
     !*/
     std::vector<engine_choice> engine_options(const std::vector<engine_candidate>& candidates);
-    bool is_openvino_variant(const std::string& variant);
 
     class service
     {
@@ -74,7 +53,7 @@ namespace albireo
             WHAT THIS OBJECT REPRESENTS
                 Le service Albireo : le moteur et ses modèles, le serveur HTTPS local avec
                 l'application web, l'interface compatible OpenAI et l'interface
-                d'administration de la barre des tâches, le catalogue et les
+                d'administration de l'application web, le catalogue et les
                 téléchargements des modèles.
 
                 run() démarre tout et bloque jusqu'à stop() ou une demande de redémarrage ;
@@ -85,8 +64,8 @@ namespace albireo
                 Le serveur répond dès que son port est ouvert.  Les moteurs sont décrits et
                 celui choisi démarre en arrière-plan, puis les modèles actifs se chargent :
                 jusque-là, starting_phase() nomme l'étape en cours, l'état le dit, et les
-                requêtes pour un modèle répondent 503 avec le code "starting", pour que la
-                barre des tâches et les clients distinguent un démarrage lent d'un échec.
+                requêtes pour un modèle répondent 503 avec le code "starting", pour que
+                l'application web et les clients distinguent un démarrage lent d'un échec.
 
             RÉSEAU
                 Le catalogue et les téléchargements tournent sur des threads à eux, chaque
@@ -94,7 +73,7 @@ namespace albireo
                 imports, les requêtes des utilisateurs) n'attende jamais le réseau.  Avec le
                 réglage "offline", aucune requête ne quitte la machine : le catalogue et les
                 modèles viennent de dossiers, le dossier d'import du dossier des données ou
-                un dossier nommé par la barre des tâches (import_folder()).
+                un dossier donné à l'interface d'import (import_folder()).
         !*/
     public:
         service();
@@ -192,16 +171,15 @@ namespace albireo
 
         /*!
             ensures
-                - Installe ce que contient path, pour la route des imports par chemin.  Le
-                  service lit avec ses propres droits, ceux du système sous Windows, si bien
-                  que path n'est accepté que dans deux cas, un fichier d'un autre compte
-                  n'étant jamais lu, haché, listé ni révélé :
-                    - un dossier ou un fichier du dossier d'import du dossier des données, que
-                      seuls SYSTEM et les administrateurs remplissent : son catalogue signé,
+                - Installe ce que contient path, pour la route des imports par chemin. Le
+                  service lit avec les droits de son propre compte. path n'est accepté que
+                  dans deux cas :
+                    - un dossier ou un fichier du dossier d'import du dossier des données :
+                      son catalogue,
                       ses modèles (*.gguf, dans le dossier et dans son sous-dossier "models"),
                       comme scan_inbox() les installe, les fichiers restant en place ;
-                    - un paquet hors ligne signé sur un disque local : un dossier dont le
-                      catalog.json porte la signature d'Albireo.  Son catalogue et les modèles
+                    - un paquet hors ligne sur un disque local : un dossier qui contient un
+                      catalog.json (non signé).  Son catalogue et les modèles
                       que liste ce catalogue (trouvés par leurs noms, tailles et empreintes,
                       model_manager::import_bundle()) sont installés ; aucun autre fichier du
                       dossier n'est lu.
@@ -216,14 +194,13 @@ namespace albireo
                   système (import_path_device), invalide (import_path_invalid : un flux, un
                   joker, un caractère de contrôle, un nom "." ou ".."), un fichier de modèle
                   hors du dossier d'import (import_use_upload), hors du dossier d'import et
-                  qui n'est pas un paquet hors ligne signé atteint sans passer par aucun lien
+                  qui n'est pas un paquet hors ligne atteint sans passer par aucun lien
                   (import_not_bundle : le même code, que le dossier manque, soit illisible,
-                  non signé ou atteint par un lien, pour que la réponse ne révèle rien d'un
-                  dossier d'un autre compte), absent du dossier d'import (import_not_found),
+                  sans catalog.json ou atteint par un lien, pour que la réponse ne distingue pas
+                  ces cas), absent du dossier d'import (import_not_found),
                   atteint par un lien dans le dossier d'import (import_path_link), ou quand le
-                  dossier d'import laisse d'autres comptes que les administrateurs y écrire et
-                  ne peut pas être sécurisé (import_folder_insecure).  Chaque refus nomme le
-                  chemin dans ses arguments ("path").
+                  contrôle du dossier d'import échoue (import_folder_insecure). Chaque refus nomme
+                  le chemin dans ses arguments ("path").
         !*/
         json import_folder(const std::string& path, user_error& refusal);
 
@@ -271,8 +248,7 @@ namespace albireo
         // téléchargement démarre.
         void note_default_failure(const json& entry, const user_error& error, const std::string& what);
         void scan_inbox();
-        // Indique si le dossier d'import ne laisse écrire que les administrateurs : sécurisé de nouveau,
-        // son contenu vérifié, quand ce n'est pas le cas ; false avec error quand il ne peut pas l'être.
+        // Sur macOS, vérifie les propriétaires et permissions POSIX ; les ACL étendues ne sont pas examinées.
         bool secure_inbox(std::string& error);
         /*!
             ensures
@@ -303,11 +279,9 @@ namespace albireo
         /*!
             ensures
                 - Exécute place, qui renomme de nouveaux fichiers par-dessus ceux du modèle
-                  installé id, pendant que le moteur ne tient aucun fichier de id, ce que
-                  Windows refuserait de remplacer : un modèle dans le moteur le quitte d'abord,
-                  une fois ses requêtes servies, et se recharge depuis ses nouveaux fichiers une
-                  fois ceux-ci enregistrés (on_installed()), ou depuis ses fichiers tels qu'ils
-                  étaient quand place échoue.
+                  installé id : le modèle est déchargé après ses requêtes pour que place puisse
+                  renommer les fichiers ; il se recharge depuis les nouveaux fichiers une fois
+                  ceux-ci enregistrés (on_installed()), ou depuis les anciens si place échoue.
                 - Renvoie ce que renvoie place ; false sans l'exécuter quand le modèle est en
                   cours de suppression, sert le travail en arrière-plan, ou quand le service
                   s'arrête.

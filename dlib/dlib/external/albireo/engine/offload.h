@@ -144,8 +144,7 @@ namespace albireo
         /*!
             WHAT THIS OBJECT REPRESENTS
                 Un périphérique qui calcule certains des produits d'un cpu_runtime avec ses
-                matrices de poids : un processeur graphique via CUDA, ou le NPU et le processeur
-                graphique intégré d'un processeur Intel via OpenVINO.
+                matrices de poids.
 
                 Le runtime garde le reste de la passe avant sur le processeur (les
                 normalisations, les positions rotatives, l'attention sur les clés et valeurs
@@ -190,7 +189,7 @@ namespace albireo
         !*/
         virtual void set_busy(bool busy) = 0;
 
-        // Une courte description, comme "NVIDIA GeForce RTX 4070 through CUDA".
+        // Une courte description du périphérique.
         virtual std::string description() const = 0;
 
         /*!

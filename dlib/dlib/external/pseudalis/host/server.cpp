@@ -601,7 +601,7 @@ namespace pseudalis
                     return;
                 }
             }
-            const char* const choices[][2] = { { "language", " auto en fr de it es " }, { "date_order", " dmy mdy " },
+            const char* const choices[][2] = { { "language", " auto en fr " }, { "date_order", " dmy mdy " },
                                                { "albireo", " auto off " } };
             for (const auto& c : choices)
             {
