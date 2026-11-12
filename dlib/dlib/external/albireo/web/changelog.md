@@ -2,6 +2,14 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.13.1 — 13 novembre 2026
+
+### Corrections
+
+- Modèles Qwen 3.5 et 3.6 : quand le GPU échoue au milieu d'un long prompt, lu en plusieurs morceaux, l'état des couches linéaires et la longueur de la conversation sont rendus tels qu'avant le prompt, que le processeur relit alors en entier. Auparavant, la requête échouait (« sequence storage was not reserved »). Vérifié par une panne simulée au deuxième morceau : même réponse que sur le processeur seul.
+
+---
+
 ## 4.13.0 — 13 novembre 2026
 
 ### Plateforme

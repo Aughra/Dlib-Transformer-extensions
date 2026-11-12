@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-13 — Rendre l'état d'une séquence quand le GPU échoue au milieu d'un prompt (Albireo 4.13.1)
+
+- **Quoi** : `cpu_runtime::forward()` : pour un modèle à couches linéaires dont le prompt passe au GPU en morceaux (`run_gpu_checkpointed`), copie de l'état et de la longueur de chaque séquence du lot avant la passe ; en cas d'échec, l'état et la longueur sont rendus (la place réservée reste), les points de reprise posés pendant la passe sont oubliés, puis le processeur relit le lot.
+- **Fichiers** : `albireo/engine/cpu_runtime.cpp`, `albireo/web/changelog.md`, version ; `logs/*`.
+- **Pourquoi** : point (5) de B1.
+- **Étapes** : panne simulée au deuxième morceau par un correctif provisoire, retiré ensuite (variable `ALBIREO_FAIL_SECOND_CHUNK`, jamais commitée), Qwen3.5-4B, prompt système de 24 règles : sans la correction, la requête échoue (« cpu_runtime: sequence storage was not reserved ») ; avec, réponse identique à celle du processeur seul (« Hello! Our opening hours are from 7 am to 7 pm… ») et la question suivante reprend normalement. Premier essai de la correction raté : ramener la longueur par `truncate()` rendait aussi la place réservée pour le lot ; la longueur est maintenant remise directement. `test_macos.sh` 29 sur 29.
+
 ## 2026-11-13 — Faire lire les images à Qwen 3.5 (Albireo 4.13.0), épisode 33
 
 - **Quoi** : `model_config.cpp` : les sections de la rope multimodale (`rope.dimension_sections`) sont lues pour `qwen35` et `qwen35moe` quand le fichier les déclare (llama.cpp : `LLAMA_ROPE_TYPE_IMROPE` pour ces architectures, comme Qwen3-VL) ; le moteur accepte alors leur projecteur `qwen3vl_merger` (sans DeepStack). `cpu_runtime_metal.cpp` : `run_gpu_checkpointed` recopie dans chaque morceau les positions rotatives données par le lot. `hub.cpp` : la recherche propose le projecteur des dépôts `qwen35`. `test_macos.sh` : étape « qwen 3.5 image ». Projecteur de test : `build/models/Qwen3.5-4B-mmproj-F16.gguf` (unsloth/Qwen3.5-4B-GGUF, SHA-256 conforme à Hugging Face).

@@ -1051,15 +1051,44 @@ namespace albireo
         const thread_pool::fast_team_scope fast_team(static_cast<long>(batch.tokens.size()) < qk_float_product_tokens);
         if (gpu_ && takes_gpu(batch) && gpu_ready())
         {
+            /*
+                Un prompt d'un modèle à couches linéaires passe au GPU en morceaux (run_gpu_checkpointed) : si un
+                morceau échoue après d'autres, l'état et la longueur de sa séquence ont déjà avancé, alors que le
+                processeur relit tout le lot.  Leur copie d'avant la passe est rendue en cas d'échec (fork pour
+                macOS).  Une étape, d'une seule commande, ne touche à rien quand son encodage échoue ; une erreur
+                pendant l'exécution d'une étape sur le GPU, rare, laisserait l'état à moitié écrit.
+            */
+            std::vector<std::pair<int, long>> before;
+            std::vector<std::vector<float>> saved;
+            const bool chunked = cfg_.recurrent() && batch.tokens.size() > metal_device::max_tokens;
+            if (chunked)
+                for (const auto& s : batch.segments)
+                {
+                    bool seen = false;
+                    for (const auto& b : before) seen = seen || b.first == s.sequence;
+                    if (seen) continue;
+                    before.emplace_back(s.sequence, sequence_length(s.sequence));
+                    const float* st = state_of(s.sequence);
+                    saved.emplace_back(st, st + state_slot_bytes_ / sizeof(float));
+                }
             try
             {
-                if (cfg_.recurrent() && batch.tokens.size() > metal_device::max_tokens) run_gpu_checkpointed(batch, logits);
+                if (chunked) run_gpu_checkpointed(batch, logits);
                 else run_gpu(batch, logits);
                 return;
             }
             catch (const std::exception& e)
             {
-                // La passe est recalculée ci-dessous ; ses clés et valeurs sont réécrites.
+                // La passe est recalculée ci-dessous ; ses clés et valeurs sont réécrites, l'état rendu.
+                for (size_t i = 0; i < before.size(); ++i)
+                {
+                    const int seq = before[i].first;
+                    std::memcpy(state_of(seq), saved[i].data(), state_slot_bytes_);
+                    drop_checkpoints(seq, before[i].second);
+                    // La place réservée pour le lot reste : le processeur y réécrit ses clés et valeurs.
+                    sequences_.at(static_cast<size_t>(seq))->length = before[i].second;
+                }
+                pending_checkpoints_.clear();
                 drop_gpu(std::string("the GPU failed: ") + e.what());
             }
         }
