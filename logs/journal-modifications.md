@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Points de reprise de l'état de Qwen 3.5 (Albireo 4.8.0)
+
+- **Quoi** : `cpu_runtime` copie l'état des couches linéaires, pendant une passe sur le processeur, au token qui mène une séquence à un multiple de 256 positions (`token_checkpoint_`, copies faites par chaque thread dans `linear_attention` : fenêtre de convolution par canal, matrice par tête) ; 4 points par séquence, 1 Go en tout, les plus anciens retirés d'abord (`keep_checkpoints`, `drop_checkpoints`). `runtime::resume_point()` remplace `resumable()` ; `truncate_sequence` et `copy_sequence` repartent d'un point de reprise ; `assign_sequence` reprend au point le plus proche. `test_macos.sh` : étape « qwen 3.5 checkpoint ». Notes de version 4.8.0, tableau des différences, mémo, reprise.
+- **Fichiers** : `albireo/engine/{runtime.h,cpu_runtime.h,cpu_runtime.cpp,engine.cpp}`, `albireo/tools/test_macos.sh`, `albireo/common/version.h`, `CMakeLists.txt`, `web/{openapi.json,changelog.md}` ; `docs/{differences-mac-windows.md,memo-portage-macos-arm64.md}`, `logs/reprise.md`.
+- **Pourquoi** : point (2) de l'ordre validé ; modifier ou relancer un message, ou partager un prompt système, relisait toute la conversation (l'état ne revient pas en arrière).
+- **Étapes** : prompt système de 794 tokens, deux questions à la suite : la seconde reprend 768 tokens, réponse identique à la même question seule (0.8B sur le processeur, 4B avec écriture sur le GPU). `test_macos.sh` 25 sur 25, Pseudalis 34 sur 34. Service relancé en 4.8.0. Commit `0e419c1`.
+
 ## 2026-11-12 — Écrire les réponses des mélanges d'experts sur le GPU (Albireo 4.7.0), épisode 28
 
 - **Quoi** : noyaux Metal `mv_f32` (routeur), `moe_route` (softmax, top-k, poids renormalisés), variantes `_id` des produits (corps des noyaux sortis en fonctions `*_body`, puis enveloppés en produit normal et par expert), `mv_q5_0` et `mv_q5_0_id`, `shared_gate`, `moe_combine` ; commandes `matvec_id`, `matvec_f32`, `moe_route`, `shared_gate`, `moe_combine` ; `set_gpu` réécrit (modèles « étapes seulement » : récurrents et MoE, formats Q4_K, Q5_K, Q6_K, Q5_0, Q8_0 ; experts de largeur lisible) ; bloc feed-forward à experts dans `run_gpu` (et correction : la fin du bloc dense ne s'exécute plus pour les experts) ; Q8_0 et Q5_0 acceptés à des largeurs multiples de 32. `hub.cpp` : « GPU possible » aussi pour les MoE. `test_macos.sh` : étape « qwen 3.6 moe on the GPU ». Notes de version 4.7.0, notes pour l'auteur (changement 12, bilan), tableau des différences, mémo, reprise, blog épisode 28.
