@@ -2,6 +2,28 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.4.0 — 12 novembre 2026
+
+### Plateforme
+
+- Nouvelle architecture de modèles : Qwen 3.5 (`qwen35`, de 0,8B à 27B). Trois couches sur quatre sont des couches « Gated DeltaNet », une attention linéaire qui conserve un état de taille fixe par conversation ; la quatrième est une attention à porte de sortie. Les modèles Qwen 3.5 s'exécutent sur le processeur ; le GPU n'est pas encore utilisé pour eux.
+- Vérification par rapport à llama.cpp 0.9.0 sur processeur, en choix glouton : réponses identiques sur 150 tokens (Qwen3.5-4B Q4_K_M ; Qwen3.5-0.8B Q8_0 sur une question sur trois, les deux autres divergeant sur des candidats à égalité au centième près) ; gabarit de conversation identique au gabarit Jinja du modèle, avec et sans raisonnement.
+
+### Accès et documents
+
+- La recherche Hugging Face indique les dépôts Qwen 3.5 comme compatibles. Pour ces modèles, elle n'annonce ni « GPU possible » ni lecture des images, que le moteur ne prend pas encore en charge.
+
+### Performances
+
+- Seules les couches d'attention conservent des clés et valeurs (une sur quatre pour Qwen 3.5), ce qui réduit d'autant la mémoire par token.
+- Qwen3.5-4B Q4_K_M sur MacBook Air M2, processeur : écriture 10,2 à 11,5 tokens/s.
+
+### Corrections
+
+- Une conversation n'est reprise qu'à une position que le modèle sait reprendre : pour Qwen 3.5, au début ou à la fin exacte du texte déjà lu. La relecture anticipée de l'historique en tient compte ; sans cette correction, elle était abandonnée dès le troisième tour.
+
+---
+
 ## 4.3.0 — 12 novembre 2026
 
 ### Accès et documents
