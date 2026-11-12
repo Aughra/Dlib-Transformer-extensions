@@ -269,9 +269,9 @@ namespace albireo
         // référence du contrôle du GPU, par rapport à laquelle les activations 8 bits différeraient.
         bool float_products_ = false;
         // Les prompts sur le GPU (set_gpu_prompts()) : mesuré sur le M2, le GPU lit un prompt plus vite que le
-        // processeur à partir de 24 tokens, et perd au-delà de 2 048 positions.
+        // processeur à partir de 24 tokens, et perd au-delà de 4 096 positions (attention en tuiles).
         long gpu_prompt_min_ = qk_float_product_tokens;
-        long gpu_prompt_context_ = 2048;
+        long gpu_prompt_context_ = 4096;
 
         std::shared_ptr<model_file> file_;
         model_config cfg_;

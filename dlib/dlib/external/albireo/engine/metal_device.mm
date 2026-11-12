@@ -39,7 +39,11 @@ namespace albireo
             "attention_part_1_2", "attention_part_1_4", "attention_part_1_8",
             "attention_part_2_2", "attention_part_2_4", "attention_part_2_8",
             "attention_part_4_2", "attention_part_4_4", "attention_part_4_8",
-            "attention_part_8_2", "attention_part_8_4", "attention_part_8_8" };
+            "attention_part_8_2", "attention_part_8_4", "attention_part_8_8",
+            "attention_tile_1_2", "attention_tile_1_4", "attention_tile_1_8",
+            "attention_tile_2_2", "attention_tile_2_4", "attention_tile_2_8",
+            "attention_tile_4_2", "attention_tile_4_4", "attention_tile_4_8",
+            "attention_tile_8_2", "attention_tile_8_4", "attention_tile_8_8" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -49,7 +53,7 @@ namespace albireo
             k_mv_q4_K_id, k_mv_q5_K_id, k_mv_q6_K_id, k_mv_q8_0_id, k_mv_f32, k_moe_route, k_shared_gate, k_moe_combine,
             k_mv_q5_0, k_mv_q5_0_n, k_mv_q5_0_id,
             k_dequant_q5_K, k_dequant_q8_0, k_dequant_q5_0,
-            k_attention_part, k_count = k_attention_part + 12
+            k_attention_part, k_attention_tile = k_attention_part + 12, k_count = k_attention_tile + 12
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -697,6 +701,38 @@ namespace albireo
         impl_->bind(ctx, 2);
         impl_->args(a, 3);
         impl_->groups(l.heads * rep, tokens, 1, l.hd);
+    }
+
+    unsigned metal_device::tile_tokens(unsigned rep, unsigned hd)
+    {
+        // Comme les instances d'attention_tile (metal_kernels.metal) : 4 simdgroups de lignes / rep tokens, entre 1 et
+        // 4, les lignes de requête tenant avec la tranche dans les 32 Ko d'un threadgroup ; 0 quand rep lignes n'y
+        // tiennent pas (8 têtes de 256 valeurs).
+        if (hd == 0 || rep == 0) return 0;
+        const long rows = (32768L - 32L * (hd + 4) * 2) / (4L * hd * 2);
+        const long tps = std::min(4L, rows / static_cast<long>(rep));
+        return tps < 1 ? 0 : static_cast<unsigned>(4 * tps);
+    }
+
+    void metal_device::commands::attention_tiles(metal_view q, metal_view region, metal_view blocks, metal_view lengths,
+        unsigned table_stride, metal_view tiles, unsigned n_tiles, unsigned rep, unsigned q_stride, metal_view ctx,
+        const kv_layout& l)
+    {
+        if (n_tiles == 0) return;
+        const int base = attention_kernel(rep, l.hd);
+        if (base < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
+        const int kernel = base - k_attention_part + k_attention_tile;
+        const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, 0, 1, q_stride,
+            table_stride, 0, l.block_stride, l.k_slab, l.v_slab, l.head_stride };
+        impl_->use(kernel);
+        impl_->bind(q, 0);
+        impl_->bind(region, 1);
+        impl_->bind(blocks, 2);
+        impl_->bind(lengths, 3);
+        impl_->bind(tiles, 4);
+        impl_->args(a, 5);
+        impl_->bind(ctx, 6);
+        impl_->groups(n_tiles, l.heads, 1, 128);
     }
 
     void metal_device::commands::finish()

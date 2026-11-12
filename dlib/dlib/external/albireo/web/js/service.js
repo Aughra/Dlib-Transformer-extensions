@@ -201,7 +201,7 @@ const schemas = {
   gpu_prompt_context: schema('Jusqu’à quelle longueur le GPU lit',
     `<rect x="40" y="70" width="320" height="40" rx="8" class="s-blue"/>` + text(200, 95, 'GPU') +
     `<rect x="360" y="70" width="200" height="40" rx="8" class="s-gold"/>` + text(460, 95, 'processeur') +
-    arrow(360, 140, 360, 114) + text(360, 158, 'limite (2 048 positions)', 's-f') +
+    arrow(360, 140, 360, 114) + text(360, 158, 'limite (4 096 positions)', 's-f') +
     text(300, 190, 'au-delà, l’attention des prompts du GPU coûte plus qu’elle ne gagne', 's-f'), 205),
   models_dir: schema('Où vivent les modèles',
     box(30, 76, 150, 56, 'Service', 's-blue') + arrow(180, 104, 300, 104, 'lit') +
@@ -238,7 +238,7 @@ function formatMb(n) {
 const recommended = {
   accelerator: 'auto',        // GPU : écriture 21-22 contre 18-19 tokens/s (4B), lecture x1,7 (épisodes 19, 20)
   gpu_prompt_tokens: 24,      // le GPU perd à 16 tokens, gagne dès 24 (épisode 20)
-  gpu_prompt_context: 2048,   // le GPU perd à 4 096 sur le 2B (134 contre 173 tokens/s)
+  gpu_prompt_context: 4096,   // attention en tuiles (4.10.0), 2B : à 4 096 GPU 198 contre 171-181 ; à 8 192 GPU 106 contre 118-123
   threads: 0,                 // tous les cœurs physiques ; les pas d'écriture prennent les cœurs P (épisode 16)
   spin_us: 2000,
   max_sequences: 4,
@@ -284,7 +284,7 @@ const items = {
     effect: 'Allumé : écriture environ 15 % plus rapide et lecture des documents presque deux fois plus rapide.',
     principle: "Le moteur confie les gros calculs au GPU de la puce Apple (Metal), et garde le processeur pour le reste.",
     pros: ['Écrit plus vite : 21 à 22 tokens/s au lieu de 18 à 19 pour le modèle de 4B, sur un M2.',
-      'Lit les prompts de 24 tokens ou plus environ deux fois plus vite, jusqu’à 2 048 positions.',
+      'Lit les prompts de 24 tokens ou plus environ deux fois plus vite, jusqu’à 4 096 positions.',
       'Contrôlé à chaque chargement : au moindre écart, le moteur repasse seul au processeur.'],
     cons: ['Pas identique au dernier chiffre près au processeur (écart de 0,04 à 0,27 % sur les scores, même mot choisi).',
       'Environ 200 Mo de mémoire en plus pour ses tampons.',
@@ -374,7 +374,7 @@ const items = {
       "octets par token : pour le 4B du service (36 couches, 8 têtes KV de 128) en q8, environ 76 Ko par token, " +
       "0,3 Go pour 4 096 tokens ; sur un Mac de 24 Go, l’auto lui donne 250 112 tokens sur 262 144. L’attention de chaque pas lit toutes " +
       "les clés : coût linéaire en longueur pour l’écriture, quadratique pour la lecture d’un prompt. Sur le GPU, les " +
-      "prompts ne passent que jusqu’à 2 048 positions ; au-delà, le processeur reprend.",
+      "prompts ne passent que jusqu’à 4 096 positions (réglage « GPU : prompts jusqu’à ») ; au-delà, le processeur reprend.",
     marmot: "C’est la taille de ton bureau. Sur un petit bureau, tu ne poses que deux pages : pour lire la troisième, " +
       "tu en ranges une et tu l’oublies. Un grand bureau garde tout le dossier ouvert, mais il prend de la place dans " +
       "la pièce et tu mets plus longtemps à tout parcourir des yeux.",
@@ -602,19 +602,20 @@ const items = {
       label: (v) => v === 0 ? 'jamais (processeur)' : formatTokens(v) },
     restart: true,
     effect: 'La longueur de contexte jusqu’à laquelle le GPU lit les prompts. Au-delà, le processeur reprend.',
-    principle: 'L’attention des prompts du GPU traite un token à la fois : son coût croît comme le carré de la longueur.',
-    pros: ['2 048 : le GPU gagne partout où il lit, sur les modèles mesurés.',
-      'Plus haut : peut aider le modèle de 4B (mesuré plus rapide à 4 096 en une passe).'],
-    cons: ['Plus haut : sur le 2B, le GPU devient plus lent que le processeur à 4 096 positions.',
+    principle: 'L’attention des prompts coûte de plus en plus avec la longueur : au-delà d’un point, le processeur la fait mieux.',
+    pros: ['4 096 : le GPU gagne partout où il lit, sur les modèles mesurés (attention en tuiles).',
+      'Plus bas : rien à gagner, le GPU lit plus vite jusqu’à cette longueur.'],
+    cons: ['Plus haut : sur le 2B, le GPU devient plus lent que le processeur à 8 192 positions.',
       '0 : plus aucun prompt sur le GPU, la lecture redevient deux fois plus lente.'],
     normal: "Pour chaque token d’un prompt, le modèle relit tous ceux qui le précèdent. Sur un long document, ce travail " +
-      "grossit vite. L’attention du GPU, écrite pour l’instant un token à la fois, finit par perdre sur ce terrain. Ce " +
-      "réglage fixe la frontière ; une attention en tuiles, prévue plus tard, devrait la repousser.",
+      "grossit vite. L’attention du GPU lit les clés par tuiles partagées entre plusieurs tokens, mais finit encore " +
+      "par perdre sur les très longs textes. Ce réglage fixe la frontière.",
     owl: "Le chemin des prompts sur le GPU (takes_gpu) exige que la séquence finisse dans gpu_prompt_context positions. " +
-      "L’attention de prompt lance un simdgroup par token qui parcourt toutes les clés précédentes (parts = 1). Mesures " +
-      "(une passe, clés q8) : 2B 2 048 tokens 249,5 contre 208,0 tokens/s, 4 096 tokens 133,7 contre 172,8 (processeur " +
-      "gagnant) ; 4B 4 096 tokens 76,2 contre 61,1 (GPU gagnant). Le service lit un long document par morceaux : les " +
-      "morceaux qui finissent avant la limite vont au GPU, les suivants au processeur, sur la même mémoire.",
+      "L’attention de prompt (attention_tile) prend des tuiles de 4 à 16 tokens consécutifs par tête de clés ; chaque " +
+      "voie d’un simdgroup calcule le score d’une position entière, par tranches de 32 positions chargées une fois en " +
+      "mémoire de threadgroup. Mesures (bench_runtime, une passe, clés q8, 2B, Albireo 4.10.0) : 4 096 tokens GPU 198 " +
+      "contre 171 à 181 sur le processeur ; 8 192 tokens 106 contre 118 à 123 (processeur gagnant). Le service lit un " +
+      "long document par morceaux : ceux qui finissent avant la limite vont au GPU, les suivants au processeur.",
     marmot: "C’est comme un livreur à vélo : imbattable en ville, mais pour aller à l’autre bout du pays, la voiture " +
       "reprend l’avantage. Ce réglage dit jusqu’où on envoie le vélo.",
     bee: "Trop haut, les longs documents sont lus plus lentement sur le petit modèle. À 0, le GPU ne lit plus aucun " +

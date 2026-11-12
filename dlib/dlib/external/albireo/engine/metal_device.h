@@ -246,6 +246,15 @@ namespace albireo
                 unsigned d, unsigned top_k, unsigned tokens, float scale);
 
             /*!
+                L'attention des prompts en tuiles (fork pour macOS) : tiles contient n_tiles paires
+                int32 (premier token, nombre de tokens), des tokens consécutifs d'une même séquence,
+                tile_tokens(rep, hd) au plus par tuile ; le reste comme attention(), sans parties.
+            !*/
+            void attention_tiles(metal_view q, metal_view region, metal_view blocks, metal_view lengths,
+                unsigned table_stride, metal_view tiles, unsigned n_tiles, unsigned rep, unsigned q_stride,
+                metal_view ctx, const kv_layout& layout);
+
+            /*!
                 ensures
                     - Exécute les commandes et les attend ; lève std::runtime_error quand le
                       GPU les fait échouer.
@@ -264,6 +273,9 @@ namespace albireo
 
         // Une nouvelle passe de commandes.
         std::unique_ptr<commands> begin();
+
+        // Les tokens d'une tuile d'attention_tiles() pour rep têtes de requête par tête de clés et des têtes de hd valeurs.
+        static unsigned tile_tokens(unsigned rep, unsigned hd);
 
     private:
         metal_device();

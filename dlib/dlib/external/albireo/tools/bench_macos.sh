@@ -3,7 +3,7 @@
 #
 #   bash dlib/dlib/external/albireo/tools/bench_macos.sh [essais] [build folder]
 #
-# Pour chaque modèle présent, la lecture de prompts de 64, 512 et 1 536 tokens et l'écriture de 64 tokens
+# Pour chaque modèle présent, la lecture de prompts de 64, 512, 1 536 et 3 584 tokens et l'écriture de 64 tokens
 # (bench_runtime, clés et valeurs en 8 bits comme le service), sur le processeur puis sur le GPU, en
 # alternance (processeur, GPU, processeur, GPU…), essais fois (2 par défaut), comme le veut la règle de
 # mesure de CLAUDE.md.  Le résultat, un tableau Markdown avec la machine, va dans build/bench/<machine>-<date>.md,
@@ -12,14 +12,14 @@
 #
 # Les modèles : ceux du portage quand ils sont là (build/models, build/albireo-home/models), et tout fichier
 # .gguf de build/bench-models (par exemple le Qwen3.6-35B-A3B sur le Mac mini).  BENCH_SIZES change les tailles
-# de prompt (« 64 512 1536 » : le GPU lit les prompts dont le contexte reste sous 2 048 positions, écriture
+# de prompt (« 64 512 1536 3584 » : le GPU lit les prompts dont le contexte reste sous 4 096 positions, écriture
 # comprise), BENCH_STEPS le nombre de tokens écrits (64).
 
 ROOT=$(cd "$(dirname "$0")/../../../../.." && pwd)
 ROUNDS=${1:-2}
 BUILD=${2:-$ROOT/build/macos-albireo}
 BENCH=$BUILD/tests/bench_runtime
-SIZES=${BENCH_SIZES:-64 512 1536}
+SIZES=${BENCH_SIZES:-64 512 1536 3584}
 STEPS=${BENCH_STEPS:-64}
 if [ ! -x "$BENCH" ]; then echo "no $BENCH: build Albireo first"; exit 1; fi
 

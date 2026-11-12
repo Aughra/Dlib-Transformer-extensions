@@ -1281,7 +1281,7 @@ namespace albireo
         {
             // Les prompts que lit le GPU (réglages gpu_prompt_tokens et gpu_prompt_context).
             runtime->set_gpu_prompts(bounded(settings_["gpu_prompt_tokens"], qk_float_product_tokens, 9, 1 << 20),
-                bounded(settings_["gpu_prompt_context"], 2048, 0, 1 << 20));
+                bounded(settings_["gpu_prompt_context"], 4096, 0, 1 << 20));
             runtime->set_gpu(*gpu_, [this, id](int level, const std::string& message) {
                 log(level, "model '" + id + "': " + message);
             });

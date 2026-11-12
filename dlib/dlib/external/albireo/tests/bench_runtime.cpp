@@ -65,6 +65,9 @@ int main(int argc, char** argv)
             std::printf("no GPU: %s\n", why.c_str());
             return 1;
         }
+        // BENCH_GPU_CONTEXT : la longueur de contexte jusqu'à laquelle le GPU lit les prompts (2 048 par défaut, comme
+        // le réglage gpu_prompt_context du service), pour mesurer au-delà.
+        if (const char* c = std::getenv("BENCH_GPU_CONTEXT")) rt.set_gpu_prompts(24, std::atol(c));
         rt.set_gpu(*gpu, [](int, const std::string& m) { std::printf("%s\n", m.c_str()); });
         // La vérification du GPU avant les mesures, telle que le moteur la fait au chargement d'un
         // modèle.

@@ -322,7 +322,7 @@ schemas = {
                     "description": "How long the threads of the engine wait awake after a pass, in microseconds."},
         "gpu_prompt_tokens": {"type": "integer", "minimum": 9, "default": 24,
                               "description": "The prompts of so many tokens or more go to the GPU of the Mac."},
-        "gpu_prompt_context": {"type": "integer", "minimum": 0, "default": 2048,
+        "gpu_prompt_context": {"type": "integer", "minimum": 0, "default": 4096,
                                "description": "...while their context ends within so many positions; 0 leaves "
                                               "every prompt to the processor."},
         "models_dir": {"type": "string", "description": "The folder of the models, an existing one, or empty for "

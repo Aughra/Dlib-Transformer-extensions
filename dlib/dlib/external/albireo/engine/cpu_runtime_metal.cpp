@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <cstring>
 #include <sstream>
+#include <string>
 #include <stdexcept>
 
 #include "../common/engine_api.h"
@@ -61,6 +62,8 @@ namespace albireo
         // Le mélange d'experts : logits du routeur, experts choisis et leurs poids, porte et branche up des experts,
         // leurs sorties ; l'expert partagé et sa porte.
         metal_buffer moe_logits, moe_ids, moe_w, moe_g, moe_u, moe_y, sh_g, sh_u, sh, sh_gate;
+        // Les tuiles de l'attention des prompts : (premier token, nombre de tokens).
+        metal_buffer tiles;
         size_t capacity = 0, table_capacity = 0, partial_capacity = 0;
         // Les poids d'un produit d'un prompt développés en floats, deux tampons à tour de rôle.
         metal_buffer expanded[2];
@@ -106,8 +109,9 @@ namespace albireo
             sur le M2 (bench_runtime, clés et valeurs en 8 bits) : le GPU lit un prompt de 24 tokens environ
             deux fois plus vite que le processeur (il développe chaque poids une fois par passe, environ
             200 ms pour un modèle 2B), un prompt de 1 024 tokens 1,7 à 2,1 fois plus vite, de 2 048 tokens
-            1,2 à 1,7 fois ; au-delà, son attention, un simdgroup lisant les clés après les autres pour
-            chaque token, prend du retard sur un modèle 2B (4 096 tokens : 134 tokens/s contre 173).
+            1,2 à 1,7 fois.  Son attention de prompt lit les clés par tuiles de tokens (attention_tile, Albireo
+            4.10.0) : 4 096 tokens 198 tokens/s contre 171 à 181 sur le processeur (2B) ; à 8 192, 106 contre 118 à
+            123, d'où la limite de 4 096 positions par défaut.
         */
         // Les valeurs par défaut de set_gpu_prompts(), que changent les réglages gpu_prompt_tokens et
         // gpu_prompt_context.
@@ -253,6 +257,7 @@ namespace albireo
         g.blocks = need(device, T * sizeof(int));
         g.rows = need(device, T * sizeof(int));
         g.lengths = need(device, T * sizeof(int));
+        g.tiles = need(device, T * 2 * sizeof(int));
         if (cfg_.recurrent())
         {
             g.mix = need(device, T * cfg_.ssm_conv_dim() * f);
@@ -327,7 +332,7 @@ namespace albireo
                      &g.hidden, &g.logits, &g.cs, &g.blocks, &g.rows, &g.lengths, &g.table, &g.partial,
                      &g.expanded[0], &g.expanded[1], &g.mix, &g.z, &g.alpha, &g.beta, &g.lin_out, &g.qg,
                      &g.attn_gate, &g.segments, &g.moe_logits, &g.moe_ids, &g.moe_w, &g.moe_g, &g.moe_u, &g.moe_y,
-                     &g.sh_g, &g.sh_u, &g.sh, &g.sh_gate })
+                     &g.sh_g, &g.sh_u, &g.sh, &g.sh_gate, &g.tiles })
                 u.bytes += b->bytes();
         }
         else
@@ -609,6 +614,22 @@ namespace albireo
             gl.eps = eps;
         }
         const unsigned n_segments = static_cast<unsigned>(batch.segments.size());
+        // Les prompts lisent leurs clés par tuiles de tokens consécutifs d'une même séquence (attention_tiles()).
+        const long per_tile = static_cast<long>(metal_device::tile_tokens(static_cast<unsigned>(rep),
+            static_cast<unsigned>(hd)));
+        const bool tiled = !step && per_tile > 0;
+        unsigned n_tiles = 0;
+        if (tiled)
+        {
+            int* tl = static_cast<int*>(g.tiles.contents());
+            for (const auto& s : batch.segments)
+                for (long j = 0; j < s.count; j += per_tile)
+                {
+                    tl[2 * n_tiles] = static_cast<int>(s.start + j);
+                    tl[2 * n_tiles + 1] = static_cast<int>(std::min(per_tile, s.count - j));
+                    ++n_tiles;
+                }
+        }
         const float scale = cfg_.attention_scale > 0.0 ? static_cast<float>(cfg_.attention_scale)
             : 1.0f / std::sqrt(static_cast<float>(hd));
         const unsigned uT = static_cast<unsigned>(T);
@@ -700,8 +721,12 @@ namespace albireo
             c->rope(g.k, g.cs, uT, KVH, hd, half, neox, kvd, 2 * half);
             c->kv_store(g.k, g.v, kvd, g.region, g.blocks, g.rows, uT, kl);
             c->prepare_queries(g.q, uT, H, hd, qd, scale, q8);
-            c->attention(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), uT, rep, parts, qd,
-                g.partial, g.ctx, kl, part_len);
+            if (tiled)
+                c->attention_tiles(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), g.tiles, n_tiles,
+                    static_cast<unsigned>(rep), static_cast<unsigned>(qd), g.ctx, kl);
+            else
+                c->attention(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), uT, rep, parts, qd,
+                    g.partial, g.ctx, kl, part_len);
             if (cfg_.attn_output_gate) c->sigmoid_mul(g.ctx, g.attn_gate, static_cast<unsigned>(T * qd));
             product(L.wo, g.ctx, qd, g.x, d, rs, 1.0f);
             }
