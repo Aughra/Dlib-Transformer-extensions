@@ -9,8 +9,9 @@ import * as api from './api.js';
 import * as images from './images.js';
 import * as tools from './tools.js';
 import * as web from './web.js';
-import { backgroundContext, backgroundRates, backgroundText, dayText, imageDocument, imageIds, knowledgeMode,
-  loadedModel, projectById, readsImages, today } from './app.js';
+import { backgroundContext, backgroundRates, backgroundText, dayText, loadedModel, projectById, readsImages, today } from './app.js';
+import { imageIds } from './files.js';
+import { imageDocument, knowledgeMode } from './indexing.js';
 import { state } from './state.js';
 
 /*

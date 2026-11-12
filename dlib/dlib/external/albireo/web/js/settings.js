@@ -9,10 +9,10 @@ import * as images from './images.js';
 import * as rag from './rag.js';
 import * as store from './store.js';
 import * as web from './web.js';
-import { applyTheme, backgroundContext, broadcast, cancelBackground, cancelIndex, deleted, describePending,
-  forgetMemory, forgetStoredDrafts, generations, go, indexAttachments, indexProjects, memoryParagraph, memorySentences,
-  modelName, namePending, refreshStatus, refreshViews, reloadLists, roles, saveSetting, searchProvider,
-  stopAllGenerations, syncLists, unread, waitingImages } from './app.js';
+import { applyTheme, backgroundContext, broadcast, deleted, forgetMemory, forgetStoredDrafts, generations, go,
+  memoryParagraph, memorySentences, modelName, namePending, refreshStatus, refreshViews, reloadLists, roles,
+  saveSetting, searchProvider, stopAllGenerations, syncLists, unread, waitingImages } from './app.js';
+import { cancelBackground, cancelIndex, describePending, indexAttachments, indexProjects } from './indexing.js';
 import { memoryLimitWords } from './context.js';
 import { confirmDialog, dialog, field } from './dialogs.js';
 import { download, fill, formatNumber, formatSize, h, storageFailed, toast } from './dom.js';

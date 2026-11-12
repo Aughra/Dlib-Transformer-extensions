@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Découper app.js : indexing.js, files.js, projects.js (Albireo 4.11.5)
+
+- **Quoi** : `web/js/indexing.js` (31 déclarations : file d'indexation des documents, descriptions des images de projets par le modèle d'arrière-plan), `web/js/files.js` (24 : documents du Mac, lecture des fichiers choisis, images des questions et leurs places, vignettes, visionneuse, collage, glisser-déposer), `web/js/projects.js` (4 : `newProject`, `renderProject`…), mot pour mot. `app.js` : 4 765 lignes.
+- **Fichiers** : `albireo/web/js/{app.js,indexing.js,files.js,projects.js,context.js,settings.js}`, `albireo/web/changelog.md`, version.
+- **Pourquoi** : chantier D.
+- **Étapes** : ESLint 0 problème. Banc de la page complété par un scénario des images : le service d'essai reçoit aussi le Qwen3-VL 4B et son projecteur (clonés dans sa réserve, catalogue local) ; image jointe (carré rouge dessiné dans la page) : vignette, réponse « rouge », visionneuse ; image d'un projet : description écrite par le modèle d'arrière-plan (« a solid blue background »). Constat, aussi avant le découpage : avec un modèle qui ne lit pas les images, l'image jointe est refusée sans message visible dans le fil. Résultats : scénario principal 35 sur 35, documents 12 sur 12, images 12 sur 12, aucune erreur.
+
 ## 2026-11-12 — Découper app.js : context.js (Albireo 4.11.4)
 
 - **Quoi** : `web/js/context.js` (53 déclarations, 581 lignes) : constantes et fonctions des parts du contexte de travail (`workingContext`, `wholeTokens`, `excerptBudget`, `answerReserve`, `estimateTokens`, `memoryLimitWords`…) et la section « Le contexte que reçoit le modèle » (`systemPrompt`, `apiMessages`, `compact`, `documentsOf`, mesures des images…), mot pour mot. `settings.js` prend `memoryLimitWords` de `context.js`.
