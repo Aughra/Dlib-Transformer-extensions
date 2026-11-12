@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-12 — Découper app.js : memory.js (Albireo 4.11.6)
+
+- **Quoi** : `web/js/memory.js` (45 déclarations, 643 lignes) : mise à jour de la mémoire des discussions (lots de questions, inactivité, bail entre onglets, réécriture dans sa taille et en français, filtres des secrets), `forgetMemory`, `tabId`. `settings.js` en prend `forgetMemory`, `memoryParagraph`, `memorySentences`.
+- **Fichiers** : `albireo/web/js/{app.js,memory.js,settings.js}`, `albireo/web/changelog.md`, version.
+- **Pourquoi** : chantier D.
+- **Étapes** : ESLint 0 problème ; scénario principal complété par 45 s d'inactivité puis l'onglet Mémoire : la mise à jour a tourné avec le code déplacé (« mise à jour le 12/11/2026 23:14:55 »), sans erreur ; principal 36 sur 36, documents 12 sur 12, images 12 sur 12.
+
 ## 2026-11-12 — Découper app.js : indexing.js, files.js, projects.js (Albireo 4.11.5)
 
 - **Quoi** : `web/js/indexing.js` (31 déclarations : file d'indexation des documents, descriptions des images de projets par le modèle d'arrière-plan), `web/js/files.js` (24 : documents du Mac, lecture des fichiers choisis, images des questions et leurs places, vignettes, visionneuse, collage, glisser-déposer), `web/js/projects.js` (4 : `newProject`, `renderProject`…), mot pour mot. `app.js` : 4 765 lignes.
