@@ -37,3 +37,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 31. [Le grand rangement](31-le-grand-rangement.md)
 32. [Le comité se réunit](32-le-comite-se-reunit.md)
 33. [Le carnet ouvre les yeux](33-le-carnet-ouvre-les-yeux.md)
+34. [La lampe de poche](34-la-lampe-de-poche.md)

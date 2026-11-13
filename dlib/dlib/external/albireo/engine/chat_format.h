@@ -123,6 +123,9 @@ namespace albireo
                   <parameter=key> dans <tool_call>) et un raisonnement fermé aussitôt par
                   "<think></think>" quand la requête n'en demande pas.
                 - phi : Phi-4-mini, chaque message entre <|role|> et <|end|>.
+                - gemma4 : Gemma 4 (fork pour macOS), chaque tour entre <|turn>rôle et <turn|>,
+                  le raisonnement demandé par <|think|> dans le tour système et écrit entre
+                  <|channel>thought et <channel|> ; sans outils pour l'instant.
                 - foundation-sec : Foundation-Sec-8B-Reasoning, tours ouverts par
                   <|system|>, <|user|> et <|assistant|>, réponses terminées par le token de
                   fin de texte, et un raisonnement que le prompt ouvre par <think> et que le

@@ -45,17 +45,17 @@ namespace albireo
     cpu_runtime::cpu_runtime(std::shared_ptr<model_file> file, const model_config& config, thread_pool& pool,
         size_t kv_budget_bytes, long kv_block_positions, kv_format kv_type)
         : file_(std::move(file)), cfg_(config), pool_(pool),
-          kv_(config.n_attention_layers(), config.n_kv_heads, config.head_dim, kv_block_positions, kv_budget_bytes,
+          kv_(config.n_kv_layers(), config.n_kv_heads, config.head_dim, kv_block_positions, kv_budget_bytes,
               kv_type)
     {
         const model_file& f = *file_;
         const long d = cfg_.d_model;
-        const long qd = cfg_.q_dim();
-        const long kvd = cfg_.kv_dim();
+        // La plus grande tête : celle des tampons de l'attention.  Gemma 4 (fork pour macOS) a des couches à têtes plus
+        // petites, dont les lignes n'occupent qu'une partie de celles des blocs de clés et valeurs.
         const long hd = cfg_.head_dim;
 
         // Le bloc feed-forward d'une couche : dense, à experts, et l'expert partagé de qwen35moe.
-        auto load_ffn = [&](layer& L, const std::string& p) {
+        auto load_ffn = [&](layer& L, const std::string& p, long li) {
             if (cfg_.is_moe())
             {
                 const long n_exp = cfg_.n_experts;
@@ -78,9 +78,10 @@ namespace albireo
             }
             else
             {
-                L.w_gate = f.matrix(p + "ffn_gate.weight", cfg_.d_ffn, d);
-                L.w_up = f.matrix(p + "ffn_up.weight", cfg_.d_ffn, d);
-                L.w_down = f.matrix(p + "ffn_down.weight", d, cfg_.d_ffn);
+                const long df = cfg_.layer_ffn(li);
+                L.w_gate = f.matrix(p + "ffn_gate.weight", df, d);
+                L.w_up = f.matrix(p + "ffn_up.weight", df, d);
+                L.w_down = f.matrix(p + "ffn_down.weight", d, df);
             }
             if (cfg_.d_ffn_shared > 0)
             {
@@ -117,10 +118,15 @@ namespace albireo
                 L.ssm_a = f.floats(p + "ssm_a", static_cast<size_t>(Hv));
                 L.ssm_norm = f.floats(p + "ssm_norm.weight", static_cast<size_t>(cfg_.ssm_head_dim));
                 L.ffn_norm = f.floats(p + ffn_norm, static_cast<size_t>(d));
-                load_ffn(L, p);
+                load_ffn(L, p, i);
                 continue;
             }
-            kv_slot_[static_cast<size_t>(i)] = n_attention++;
+            // Une couche de gemma4 sans clés ni valeurs à elle lit celles de sa couche source.
+            const bool owns = cfg_.owns_kv(i);
+            kv_slot_[static_cast<size_t>(i)] = owns ? n_attention++ : kv_slot_[static_cast<size_t>(cfg_.kv_source(i))];
+            const long qd = cfg_.layer_q_dim(i);
+            const long kvd = cfg_.layer_kv_dim(i);
+            const long lhd = cfg_.layer_head_dim(i);
             if (cfg_.attn_output_gate)
             {
                 // Les lignes de la requête puis celles de sa porte, tête par tête.
@@ -136,6 +142,16 @@ namespace albireo
                 L.wk = row_slice(qkv, qd, kvd);
                 L.wv = row_slice(qkv, qd + kvd, kvd);
             }
+            else if (cfg_.gemma4)
+            {
+                L.wq = f.matrix(p + "attn_q.weight", qd, d);
+                if (owns)
+                {
+                    L.wk = f.matrix(p + "attn_k.weight", kvd, d);
+                    L.v_from_k = !f.has(p + "attn_v.weight");
+                    if (!L.v_from_k) L.wv = f.matrix(p + "attn_v.weight", kvd, d);
+                }
+            }
             else
             {
                 L.wq = f.matrix(p + "attn_q.weight", qd, d);
@@ -146,17 +162,41 @@ namespace albireo
             f.optional_floats(p + "attn_q.bias", static_cast<size_t>(qd), L.bq);
             f.optional_floats(p + "attn_k.bias", static_cast<size_t>(kvd), L.bk);
             f.optional_floats(p + "attn_v.bias", static_cast<size_t>(kvd), L.bv);
-            f.optional_floats(p + "attn_q_norm.weight", static_cast<size_t>(hd), L.q_norm);
-            f.optional_floats(p + "attn_k_norm.weight", static_cast<size_t>(hd), L.k_norm);
+            f.optional_floats(p + "attn_q_norm.weight", static_cast<size_t>(lhd), L.q_norm);
+            if (owns) f.optional_floats(p + "attn_k_norm.weight", static_cast<size_t>(lhd), L.k_norm);
             // La passe avant ajoute les trois biais ensemble et normalise les requêtes et les clés ensemble.
             if (L.bq.empty() != L.bk.empty() || L.bq.empty() != L.bv.empty())
                 throw std::runtime_error("layer " + std::to_string(i) + " holds some of the attn_q, attn_k and "
                     "attn_v biases without the others");
-            if (L.q_norm.empty() != L.k_norm.empty())
+            if (owns && L.q_norm.empty() != L.k_norm.empty())
                 throw std::runtime_error("layer " + std::to_string(i) + " holds one of attn_q_norm and attn_k_norm "
                     "without the other");
             L.ffn_norm = f.floats(p + ffn_norm, static_cast<size_t>(d));
-            load_ffn(L, p);
+            load_ffn(L, p, i);
+            if (cfg_.gemma4)
+            {
+                L.post_attn_norm = f.floats(p + "post_attention_norm.weight", static_cast<size_t>(d));
+                L.post_ffn_norm = f.floats(p + "post_ffw_norm.weight", static_cast<size_t>(d));
+                std::vector<float> scale;
+                if (f.optional_floats(p + "layer_output_scale.weight", 1, scale)) L.out_scale = scale[0];
+                if (cfg_.d_per_layer > 0)
+                {
+                    L.ple_gate = f.matrix(p + "inp_gate.weight", cfg_.d_per_layer, d);
+                    L.ple_proj = f.matrix(p + "proj.weight", d, cfg_.d_per_layer);
+                    L.ple_norm = f.floats(p + "post_norm.weight", static_cast<size_t>(d));
+                }
+            }
+        }
+        if (cfg_.gemma4)
+        {
+            ones_.assign(static_cast<size_t>(hd), 1.0f);
+            if (cfg_.d_per_layer > 0)
+            {
+                const long width = cfg_.n_layers * cfg_.d_per_layer;
+                ple_embd_ = f.matrix("per_layer_token_embd.weight", cfg_.vocab, width);
+                ple_model_proj_ = f.matrix("per_layer_model_proj.weight", width, d);
+                ple_proj_norm_ = f.floats("per_layer_proj_norm.weight", static_cast<size_t>(cfg_.d_per_layer));
+            }
         }
         if (cfg_.recurrent())
         {
@@ -223,7 +263,7 @@ namespace albireo
         layer_pass_checked_ = false;
         layer_pass_memory_failures_ = 0;
         layer_pass_wait_ = 0;
-        if (!offload_ || cfg_.is_moe() || cfg_.recurrent()) return;
+        if (!offload_ || cfg_.is_moe() || cfg_.recurrent() || cfg_.gemma4) return;
         dense_model m;
         m.d_model = cfg_.d_model;
         m.q_dim = cfg_.q_dim();
@@ -464,17 +504,41 @@ namespace albireo
                 theta_pow *= theta_scale;
             }
         }
+        // Les couches à fenêtre glissante de gemma4 : leur base, sur leurs dimensions, sans diviseurs ni mise à
+        // l'échelle (comme llama.cpp les règle).
+        if (cfg_.gemma4)
+        {
+            const long half_swa = cfg_.rope_dims_swa / 2;
+            const double scale_swa = std::pow(cfg_.rope_base_swa, -2.0 / static_cast<double>(cfg_.rope_dims_swa));
+            rope_swa_cos_.resize(static_cast<size_t>(target * half_swa));
+            rope_swa_sin_.resize(static_cast<size_t>(target * half_swa));
+            for (long pos = rope_positions_; pos < target; ++pos)
+            {
+                double theta_pow = 1.0;
+                for (long i = 0; i < half_swa; ++i)
+                {
+                    const float theta = static_cast<float>(static_cast<double>(pos) * theta_pow);
+                    rope_swa_cos_[static_cast<size_t>(pos * half_swa + i)] = std::cos(theta);
+                    rope_swa_sin_[static_cast<size_t>(pos * half_swa + i)] = std::sin(theta);
+                    theta_pow *= scale_swa;
+                }
+            }
+        }
         rope_positions_ = target;
     }
 
-    void cpu_runtime::apply_rope(float* rows, long n_rows, long n_heads, const std::vector<long>& positions)
+    void cpu_runtime::apply_rope(float* rows, long n_rows, long n_heads, const std::vector<long>& positions,
+        long layer)
     {
-        const long hd = cfg_.head_dim;
-        const long half = cfg_.rope_dims / 2;
+        const bool swa = layer >= 0 && cfg_.swa_layer(layer);
+        const long hd = layer >= 0 ? cfg_.layer_head_dim(layer) : cfg_.head_dim;
+        const long half = (swa ? cfg_.rope_dims_swa : cfg_.rope_dims) / 2;
+        const float* cos_table = swa ? rope_swa_cos_.data() : rope_cos_.data();
+        const float* sin_table = swa ? rope_swa_sin_.data() : rope_sin_.data();
         const bool neox = cfg_.rope == rope_style::neox;
         auto one = [&](long t) {
-            const float* c = rope_cos_.data() + positions[static_cast<size_t>(t)] * half;
-            const float* s = rope_sin_.data() + positions[static_cast<size_t>(t)] * half;
+            const float* c = cos_table + positions[static_cast<size_t>(t)] * half;
+            const float* s = sin_table + positions[static_cast<size_t>(t)] * half;
             for (long h = 0; h < n_heads; ++h)
             {
                 float* x = rows + (t * n_heads + h) * hd;
@@ -614,14 +678,49 @@ namespace albireo
         for (long t = 0; t < T; ++t) one(t);
     }
 
+    /*
+        Les entrées par couche de gemma4, comme llama.cpp (src/models/gemma4.cpp) : pour chaque couche, la ligne
+        du token dans per_layer_token_embd multipliée par sqrt(d_per_layer) / sqrt(2), plus la projection de son
+        embedding (x_) par per_layer_model_proj, divisée par sqrt(d_model), passée par une norme RMS de poids
+        per_layer_proj_norm et multipliée par 1 / sqrt(2).  La division par sqrt(d_model) avant la norme revient
+        à multiplier son epsilon par d_model.
+    */
+    void cpu_runtime::per_layer_inputs(const std::vector<int>& tokens)
+    {
+        const long T = static_cast<long>(tokens.size());
+        const long d = cfg_.d_model, P = cfg_.d_per_layer, n = cfg_.n_layers * P;
+        ple_.resize(static_cast<size_t>(T * n));
+        ple_g_.resize(static_cast<size_t>(T * n));
+        product(ple_model_proj_, x_.data(), T, d, ple_g_.data(), n);
+        const float token_scale = std::sqrt(static_cast<float>(P)) / std::sqrt(2.0f);
+        const float half = 1.0f / std::sqrt(2.0f);
+        const float eps = static_cast<float>(cfg_.rms_eps * static_cast<double>(d));
+        pool_.parallel_for(T, [&](long t, int) {
+            float* dst = ple_.data() + t * n;
+            qk_dequantize_row(ple_embd_.type,
+                ple_embd_.data + static_cast<size_t>(tokens[static_cast<size_t>(t)]) * ple_embd_.row_bytes, dst, n);
+            const float* proj = ple_g_.data() + t * n;
+            for (long l = 0; l < cfg_.n_layers; ++l)
+            {
+                const float* pr = proj + l * P;
+                float* out = dst + l * P;
+                const float scale = 1.0f / std::sqrt(qk_dot_f32(pr, pr, P) / static_cast<float>(P) + eps);
+                for (long i = 0; i < P; ++i)
+                    out[i] = out[i] * token_scale + pr[i] * scale * ple_proj_norm_[static_cast<size_t>(i)] * half;
+            }
+        });
+    }
+
     // Attention
 
-    void cpu_runtime::store_keys_values(long li, const forward_batch& batch)
+    void cpu_runtime::store_keys_values(long li, const forward_batch& batch, long layer)
     {
         const long T = static_cast<long>(batch.tokens.size());
         const long KVH = cfg_.n_kv_heads;
-        const long hd = cfg_.head_dim;
-        const long kvd = cfg_.kv_dim();
+        // Les têtes de la couche ; les lignes d'une couche à têtes plus petites ne remplissent que le début de
+        // celles des blocs (gemma4).
+        const long hd = layer >= 0 ? cfg_.layer_head_dim(layer) : cfg_.head_dim;
+        const long kvd = KVH * hd;
         const long B = kv_.block_positions();
         const bool q8 = kv_.format() == kv_format::q8;
         const long scales_per_row = hd / kv_q8_group;
@@ -662,12 +761,15 @@ namespace albireo
             for (long t = 0; t < T; ++t) one(t, 0);
     }
 
-    void cpu_runtime::attention(long layer_index, const forward_batch& batch, const std::vector<long>& positions)
+    void cpu_runtime::attention(long layer_index, const forward_batch& batch, const std::vector<long>& positions,
+        long layer)
     {
         const long T = static_cast<long>(batch.tokens.size());
         const long KVH = cfg_.n_kv_heads;
-        const long hd = cfg_.head_dim;
-        const long qd = cfg_.q_dim();
+        const long hd = layer >= 0 ? cfg_.layer_head_dim(layer) : cfg_.head_dim;
+        const long qd = cfg_.n_heads * hd;
+        // La fenêtre glissante (gemma4) : un token en position p voit les positions p - window + 1 à p.
+        const long window = layer >= 0 && cfg_.swa_layer(layer) ? cfg_.sliding_window : 0;
         const long rep = cfg_.n_heads / KVH;
         const long B = kv_.block_positions();
         const bool q8 = kv_.format() == kv_format::q8;
@@ -687,6 +789,8 @@ namespace albireo
                 tiles_.push_back({ s.sequence, s.start + j, count });
                 span = std::max(span, positions[static_cast<size_t>(s.start + j + count - 1)] + 1);
             }
+        // Une tuile d'une couche à fenêtre lit au plus window + per_tile positions.
+        if (window > 0) span = std::min(span, window + per_tile);
         /*
             Les parties d'une tuile : quand les tuiles et leurs têtes de clés et valeurs sont moins
             nombreuses que les threads, comme dans la génération d'une seule réponse, les positions
@@ -712,8 +816,11 @@ namespace albireo
             attention_work& w = attention_work_[static_cast<size_t>(thread)];
             const long rows = tile.count * rep;
             const long last = positions[static_cast<size_t>(tile.start + tile.count - 1)];
-            const long length = (last + parts) / parts;
-            const long begin = part * length;
+            // Avec une fenêtre, les positions que voit le premier token de la tuile sont les premières lues.
+            const long low = window > 0
+                ? std::max<long>(0, positions[static_cast<size_t>(tile.start)] - window + 1) : 0;
+            const long length = (last + 1 - low + parts - 1) / parts;
+            const long begin = low + part * length;
             const long end = std::min(last + 1, begin + length);
 
             // La ligne a * rep + i contient le token tile.start + a et la tête h0 + i, mise à l'échelle, et
@@ -746,18 +853,21 @@ namespace albireo
                         w.s.data(), B, w.scratch.data());
                 for (long a = 0; a < tile.count; ++a)
                 {
-                    // Chaque token voit les positions jusqu'à la sienne.
+                    // Chaque token voit les positions jusqu'à la sienne, et, avec une fenêtre, à partir de
+                    // own - window + 1 : les scores [from, seen) du morceau comptent.
                     const long own = positions[static_cast<size_t>(tile.start + a)];
                     const long seen = std::max<long>(0, std::min(m, own + 1 - p));
+                    const long from = window > 0 ? std::max<long>(0, std::min(seen, own - window + 1 - p)) : 0;
                     for (long i = 0; i < rep; ++i)
                     {
                         const long r = a * rep + i;
                         float* sr = w.s.data() + r * B;
                         std::fill(sr + seen, sr + m, 0.0f);
-                        if (seen == 0) continue;
+                        std::fill(sr, sr + from, 0.0f);
+                        if (seen == from) continue;
                         const float old = w.max[static_cast<size_t>(r)];
-                        const float mx = std::max(old, qk_max(sr, seen));
-                        const float added = qk_exp_shift_sum(sr, mx, seen);
+                        const float mx = std::max(old, qk_max(sr + from, seen - from));
+                        const float added = qk_exp_shift_sum(sr + from, mx, seen - from);
                         if (mx != old && w.sum[static_cast<size_t>(r)] > 0.0f)
                         {
                             // Un maximum plus grand : ce que la ligne a accumulé jusqu'ici diminue.
@@ -1272,7 +1382,6 @@ namespace albireo
         const long d = cfg_.d_model;
         const long qd = cfg_.q_dim();
         const long kvd = cfg_.kv_dim();
-        const long hd = cfg_.head_dim;
         const long H = cfg_.n_heads;
         const long KVH = cfg_.n_kv_heads;
         const long B = kv_.block_positions();
@@ -1314,6 +1423,7 @@ namespace albireo
 
         embed(batch.tokens);
         if (!batch.embedding_rows.empty()) add_given_embeddings(batch, 0);
+        if (cfg_.d_per_layer > 0) per_layer_inputs(batch.tokens);
         xn_.resize(static_cast<size_t>(T * d));
         q_.resize(static_cast<size_t>(T * qd));
         k_.resize(static_cast<size_t>(T * kvd));
@@ -1359,7 +1469,12 @@ namespace albireo
             }
             else
             {
-            // Bloc d'attention.
+            // Bloc d'attention, avec les têtes de la couche (gemma4 en a de deux largeurs) ; une couche qui partage
+            // les clés et valeurs d'une autre (gemma4) ne calcule que ses requêtes.
+            const long lhd = cfg_.layer_head_dim(li);
+            const long lqd = H * lhd;
+            const long lkvd = KVH * lhd;
+            const bool owns = cfg_.owns_kv(li);
             if (on_device)
                 layer_pass_->attention_inputs(li, q_.data(), k_.data(), v_.data());
             else
@@ -1368,34 +1483,40 @@ namespace albireo
                 if (cfg_.attn_output_gate)
                 {
                     // attn_q donne, tête par tête, la requête puis sa porte.
-                    qg_.resize(static_cast<size_t>(T * 2 * qd));
-                    attn_gate_.resize(static_cast<size_t>(T * qd));
-                    product(L.wq, xn_.data(), T, d, qg_.data(), 2 * qd);
+                    qg_.resize(static_cast<size_t>(T * 2 * lqd));
+                    attn_gate_.resize(static_cast<size_t>(T * lqd));
+                    product(L.wq, xn_.data(), T, d, qg_.data(), 2 * lqd);
                     for (long t = 0; t < T; ++t)
                         for (long h = 0; h < H; ++h)
                         {
-                            const float* src = qg_.data() + t * 2 * qd + h * 2 * hd;
-                            std::copy(src, src + hd, q_.data() + t * qd + h * hd);
-                            std::copy(src + hd, src + 2 * hd, attn_gate_.data() + t * qd + h * hd);
+                            const float* src = qg_.data() + t * 2 * lqd + h * 2 * lhd;
+                            std::copy(src, src + lhd, q_.data() + t * lqd + h * lhd);
+                            std::copy(src + lhd, src + 2 * lhd, attn_gate_.data() + t * lqd + h * lhd);
                         }
                 }
                 else
-                    product(L.wq, xn_.data(), T, d, q_.data(), qd);
-                product(L.wk, xn_.data(), T, d, k_.data(), kvd);
-                product(L.wv, xn_.data(), T, d, v_.data(), kvd);
+                    product(L.wq, xn_.data(), T, d, q_.data(), lqd);
+                if (owns)
+                {
+                    product(L.wk, xn_.data(), T, d, k_.data(), lkvd);
+                    if (L.v_from_k) std::copy(k_.data(), k_.data() + T * lkvd, v_.data());
+                    else product(L.wv, xn_.data(), T, d, v_.data(), lkvd);
+                }
             }
             if (!L.bq.empty())
                 for (long t = 0; t < T; ++t)
                 {
-                    for (long i = 0; i < qd; ++i) q_[static_cast<size_t>(t * qd + i)] += L.bq[static_cast<size_t>(i)];
-                    for (long i = 0; i < kvd; ++i) k_[static_cast<size_t>(t * kvd + i)] += L.bk[static_cast<size_t>(i)];
-                    for (long i = 0; i < kvd; ++i) v_[static_cast<size_t>(t * kvd + i)] += L.bv[static_cast<size_t>(i)];
+                    for (long i = 0; i < lqd; ++i) q_[static_cast<size_t>(t * lqd + i)] += L.bq[static_cast<size_t>(i)];
+                    for (long i = 0; i < lkvd; ++i) k_[static_cast<size_t>(t * lkvd + i)] += L.bk[static_cast<size_t>(i)];
+                    for (long i = 0; i < lkvd; ++i) v_[static_cast<size_t>(t * lkvd + i)] += L.bv[static_cast<size_t>(i)];
                 }
             if (!L.q_norm.empty())
             {
-                rms_norm_rows(q_.data(), L.q_norm.data(), q_.data(), T * H, hd, eps);
-                rms_norm_rows(k_.data(), L.k_norm.data(), k_.data(), T * KVH, hd, eps);
+                rms_norm_rows(q_.data(), L.q_norm.data(), q_.data(), T * H, lhd, eps);
+                if (owns) rms_norm_rows(k_.data(), L.k_norm.data(), k_.data(), T * KVH, lhd, eps);
             }
+            // Gemma 4 normalise aussi ses valeurs, sans poids.
+            if (cfg_.gemma4 && owns) rms_norm_rows(v_.data(), ones_.data(), v_.data(), T * KVH, lhd, eps);
             if (given)
             {
                 apply_given_rope(q_.data(), T, H);
@@ -1403,8 +1524,8 @@ namespace albireo
             }
             else
             {
-                apply_rope(q_.data(), T, H, positions_);
-                apply_rope(k_.data(), T, KVH, positions_);
+                apply_rope(q_.data(), T, H, positions_, li);
+                if (owns) apply_rope(k_.data(), T, KVH, positions_, li);
             }
             if (cfg_.attn_temp_scale != 0.0)
                 for (long t = 0; t < T; ++t)
@@ -1412,16 +1533,16 @@ namespace albireo
                     const double pos = static_cast<double>(positions_[static_cast<size_t>(t)]);
                     const float f = static_cast<float>(1.0 + cfg_.attn_temp_scale
                         * std::log(1.0 + std::floor(pos / cfg_.attn_temp_length)));
-                    if (f != 1.0f) qk_scale(q_.data() + t * qd, f, qd);
+                    if (f != 1.0f) qk_scale(q_.data() + t * lqd, f, lqd);
                 }
 
             // Les clés et valeurs du lot vont dans les séquences avant que l'attention ne les lise,
             // pour que chaque token voie les tokens précédents de son propre morceau.
-            store_keys_values(slot, batch);
+            if (owns) store_keys_values(slot, batch, li);
 
-            attention(slot, batch, positions_);
+            attention(slot, batch, positions_, li);
             if (cfg_.attn_output_gate)
-                for (long i = 0; i < T * qd; ++i)
+                for (long i = 0; i < T * lqd; ++i)
                     ctx_[static_cast<size_t>(i)] *= 1.0f / (1.0f + std::exp(-attn_gate_[static_cast<size_t>(i)]));
             if (on_device)
             {
@@ -1429,7 +1550,8 @@ namespace albireo
                 layer_pass_->attention_output(li, ctx_.data());
                 continue;
             }
-            product(L.wo, ctx_.data(), T, qd, tmp_.data(), d);
+            product(L.wo, ctx_.data(), T, lqd, tmp_.data(), d);
+            if (!L.post_attn_norm.empty()) rms_norm_rows(tmp_.data(), L.post_attn_norm.data(), tmp_.data(), T, d, eps);
             for (size_t i = 0; i < x_.size(); ++i) x_[i] += rs * tmp_[i];
             }
 
@@ -1441,13 +1563,22 @@ namespace albireo
             }
             else
             {
-                const long df = cfg_.d_ffn;
+                const long df = cfg_.layer_ffn(li);
                 gate_.resize(static_cast<size_t>(T * df));
                 up_.resize(static_cast<size_t>(T * df));
                 product(L.w_gate, xn_.data(), T, d, gate_.data(), df);
                 product(L.w_up, xn_.data(), T, d, up_.data(), df);
                 const long n = T * df;
-                auto gated = [&](long a, long b) { qk_silu_mul(gate_.data() + a, up_.data() + a, b - a); };
+                // SwiGLU, ou GELU(gate) * up pour gemma4.
+                auto gated = [&](long a, long b) {
+                    if (cfg_.gemma4)
+                    {
+                        qk_gelu_tanh(gate_.data() + a, b - a);
+                        for (long i = a; i < b; ++i) gate_[static_cast<size_t>(i)] *= up_[static_cast<size_t>(i)];
+                    }
+                    else
+                        qk_silu_mul(gate_.data() + a, up_.data() + a, b - a);
+                };
                 if (n >= 65536)
                     pool_.parallel_for((n + 4095) / 4096, [&](long c, int) {
                         gated(c * 4096, std::min(n, c * 4096 + 4096));
@@ -1456,8 +1587,27 @@ namespace albireo
                     gated(0, n);
                 product(L.w_down, gate_.data(), T, df, tmp_.data(), d);
             }
+            if (!L.post_ffn_norm.empty()) rms_norm_rows(tmp_.data(), L.post_ffn_norm.data(), tmp_.data(), T, d, eps);
             for (size_t i = 0; i < x_.size(); ++i) x_[i] += rs * tmp_[i];
             if (li < cfg_.n_deepstack && !batch.embedding_rows.empty()) add_given_embeddings(batch, li + 1);
+            if (cfg_.d_per_layer > 0)
+            {
+                // L'entrée de la couche (gemma4) : GELU(inp_gate x) multiplié par elle, projeté, normalisé, ajouté.
+                const long P = cfg_.d_per_layer, n = cfg_.n_layers * P;
+                ple_g_.resize(static_cast<size_t>(T * P));
+                product(L.ple_gate, x_.data(), T, d, ple_g_.data(), P);
+                qk_gelu_tanh(ple_g_.data(), T * P);
+                for (long t = 0; t < T; ++t)
+                {
+                    float* g = ple_g_.data() + t * P;
+                    const float* in = ple_.data() + t * n + li * P;
+                    for (long i = 0; i < P; ++i) g[i] *= in[i];
+                }
+                product(L.ple_proj, ple_g_.data(), T, P, tmp_.data(), d);
+                rms_norm_rows(tmp_.data(), L.ple_norm.data(), tmp_.data(), T, d, eps);
+                for (size_t i = 0; i < x_.size(); ++i) x_[i] += tmp_[i];
+            }
+            if (L.out_scale != 1.0f) qk_scale(x_.data(), L.out_scale, T * d);
         }
 
         if (on_device) layer_pass_->end(batch.logit_rows, x_.data());
@@ -1484,6 +1634,12 @@ namespace albireo
             product(output_, hidden_out_.data(), R, d, logits.data(), cfg_.vocab);
             if (cfg_.logit_scale != 1.0)
                 qk_scale(logits.data(), static_cast<float>(1.0 / cfg_.logit_scale), R * cfg_.vocab);
+            // Le plafond des logits de gemma4 : softcap * tanh(logits / softcap).
+            if (cfg_.final_softcap > 0.0)
+            {
+                const float cap = static_cast<float>(cfg_.final_softcap), inv = 1.0f / cap;
+                for (float& v : logits) v = cap * std::tanh(v * inv);
+            }
         }
         return true;
     }

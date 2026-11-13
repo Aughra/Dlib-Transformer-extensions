@@ -30,7 +30,7 @@ namespace dlib
                 conversion. It is intended to accompany a model imported by the GGUF
                 conversion tool, and is serialized next to that model.
 
-                It covers the two tokenizer families used by current open-weight models,
+                It covers the tokenizer families used by current open-weight models,
                 selected automatically from the vocabulary metadata:
 
                   - SentencePiece (kind::spm): used by Llama 1/2, Mistral and Gemma. Encoding
@@ -50,6 +50,15 @@ namespace dlib
                     returns false. The Qwen vocabularies also receive the canonical
                     composition (NFC) their reference tokenizer applies, and the llama3 and
                     tekken ones take a piece that is a token as a whole (ignore_merges).
+
+                  - SentencePiece-style BPE (kind::spm_bpe, added by the macOS fork): used by
+                    Gemma 4 (tokenizer.ggml.model "gemma4"). Spaces become the meta-space
+                    U+2581, the text is split into runs of newlines and runs of other
+                    characters, and the BPE merges are applied in rank order to each run on
+                    the raw UTF-8 characters; a run of newlines that is a token is taken
+                    whole, and a symbol missing from the vocabulary falls back to its <0xXX>
+                    byte tokens. A begin-of-sequence token is always added by default.
+                    encode and decode are exact.
 
                 Special tokens (those flagged as control or user-defined in the vocabulary,
                 such as begin/end-of-sequence or chat-template markers) are recognized inside
@@ -148,7 +157,7 @@ namespace dlib
             ensures
                 - reads the tokenizer.ggml.* metadata from g into a vocab_data and calls
                   load() with it. The family is taken from tokenizer.ggml.model ("gpt2" or
-                  "bpe" => kind::bpe, otherwise kind::spm).
+                  "bpe" => kind::bpe, "gemma4" => kind::spm_bpe, otherwise kind::spm).
             throws
                 - std::runtime_error if g does not contain tokenizer.ggml.tokens.
         !*/
@@ -212,7 +221,8 @@ namespace dlib
             ensures
                 - returns false when the byte-level pre-tokenizer named by pretokenizer() is
                   not one this object reproduces exactly, so that encode() approximates it
-                  with the qwen2 pattern. Always true for SentencePiece.
+                  with the qwen2 pattern. Always true for SentencePiece and for
+                  kind::spm_bpe.
         !*/
 
         int token_type(

@@ -2,6 +2,21 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.14.0 — 13 novembre 2026
+
+### Plateforme
+
+- Le moteur lit les modèles Gemma 4 de Google sans mélange d'experts (architecture `gemma4`), sur le processeur : couches à fenêtre glissante de 512 positions et couches globales, avec des têtes d'attention de 256 et de 512 valeurs et deux bases de positions rotatives ; clés et valeurs des 20 dernières couches reprises de couches précédentes ; entrées propres à chaque couche ; logits plafonnés. Vérification par rapport à llama.cpp 0.9.0, sur le processeur et en choix glouton, avec Gemma 4 E2B Q4_K_M : même premier token ; sur trois questions de 150 tokens, divergences seulement sur des quasi-égalités de la référence (par exemple 0,571 contre 0,427) ; sur un prompt de 2 210 tokens, qui dépasse la fenêtre glissante, réponse identique. Gemma 4 E2B Q4_K_M sur MacBook Air M2, processeur : écriture de 21 à 24 tokens/s, lecture d'un prompt de 512 tokens à 143 à 153 tokens/s.
+- Le tokenizer de Gemma 4 (fusions BPE classées sur un texte où les espaces deviennent « ▁ ») donne les mêmes tokens que llama.cpp sur 22 textes de test.
+- Format de conversation de Gemma 4 : prompt identique à son gabarit sur six conversations ; le raisonnement, quand il est demandé, est séparé de la réponse. Les appels d'outils et les images de Gemma 4 ne sont pas encore pris en charge.
+- Seul Gemma 4 E2B a été essayé. Les versions à mélange d'experts (26B-A4B) sont refusées au chargement.
+
+### Accès et documents
+
+- La recherche Hugging Face marque les dépôts Gemma 4 comme compatibles, sans GPU, et les versions à mélange d'experts comme non prises en charge ; les petits modèles de brouillon (`mtp-…`) des dépôts ne sont plus proposés comme modèles.
+
+---
+
 ## 4.13.2 — 13 novembre 2026
 
 ### Corrections

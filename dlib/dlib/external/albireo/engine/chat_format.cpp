@@ -1888,6 +1888,98 @@ namespace albireo
             }
         };
 
+        /*
+            Le format de Gemma 4 (fork pour macOS), tel que le dispose le template de ses fichiers GGUF :
+            <bos>, puis chaque tour entre <|turn>rôle et <turn|> suivi d'un saut de ligne, le modèle
+            s'appelant « model », et <|turn>model et un saut de ligne pour le laisser répondre.  Un tour
+            système ouvre le prompt quand la conversation commence par un message système ou que la
+            requête demande un raisonnement, qu'annonce alors <|think|> en tête de ce tour.  Le modèle écrit
+            son raisonnement entre <|channel>thought et <channel|>, avant sa réponse ; le template retire
+            ce raisonnement des réponses précédentes.  Les textes sont débarrassés de leurs espaces de
+            début et de fin, comme le fait le template.  Les outils ne sont pas encore pris en charge.
+        */
+        class gemma4_format : public chat_format
+        {
+        public:
+            explicit gemma4_format(const dlib::hf_tokenizer& tok)
+            {
+                for (const char* t : { "<turn|>", "<eos>" })
+                {
+                    const int id = tok.token_id(t);
+                    if (id >= 0) stop_tokens_.push_back(id);
+                }
+                bos_ = tok.bos_id() >= 0 ? tok.id_to_token(tok.bos_id()) : std::string("<bos>");
+                add_markers(tok, { "<|channel>", "<channel|>" });
+            }
+
+            const char* name() const override { return "gemma4"; }
+            bool supports_tools() const override { return false; }
+            bool supports_reasoning() const override { return true; }
+            std::vector<prompt_piece> reasoning_close() const override { return closing("<channel|>", ""); }
+
+            void render(const std::vector<chat_message>& messages, const render_options& opt,
+                std::vector<prompt_piece>& out) const override
+            {
+                piece_writer w{ out };
+                w.markup(bos_);
+                const bool has_system = !messages.empty() && messages[0].role == "system";
+                if (opt.reasoning || has_system)
+                {
+                    w.markup("<|turn>system\n");
+                    if (opt.reasoning) w.markup("<|think|>\n");
+                    if (has_system) w.text(strip_spaces(messages[0].content));
+                    w.markup("<turn|>\n");
+                }
+                for (size_t i = has_system ? 1 : 0; i < messages.size(); ++i)
+                {
+                    const chat_message& m = messages[i];
+                    if (m.role == "assistant")
+                    {
+                        w.markup("<|turn>model\n");
+                        w.text(strip_thinking(m.content));
+                    }
+                    else if (m.role == "user" || m.role == "system")
+                    {
+                        w.markup("<|turn>" + m.role + "\n");
+                        w.text(strip_spaces(m.content));
+                    }
+                    else
+                        continue;
+                    w.markup("<turn|>\n");
+                }
+                if (opt.add_generation_prompt) w.markup("<|turn>model\n");
+            }
+
+            std::unique_ptr<output_parser> make_parser(const render_options&) const override
+            {
+                parser_config c;
+                c.think_open = "<|channel>thought\n";
+                c.think_close = "<channel|>";
+                return std::unique_ptr<output_parser>(new tag_parser(c));
+            }
+
+        private:
+            // Le texte d'une réponse sans ce qui se trouve entre <|channel> et <channel|>, comme strip_thinking du
+            // template.
+            static std::string strip_thinking(const std::string& text)
+            {
+                std::string out;
+                size_t pos = 0;
+                while (pos < text.size())
+                {
+                    const size_t open = text.find("<|channel>", pos);
+                    if (open == std::string::npos) { out += text.substr(pos); break; }
+                    out += text.substr(pos, open - pos);
+                    const size_t close = text.find("<channel|>", open);
+                    if (close == std::string::npos) break;
+                    pos = close + 10;
+                }
+                return strip_spaces(out);
+            }
+
+            std::string bos_;
+        };
+
         class plain_format : public chat_format
         {
         public:
@@ -1939,6 +2031,8 @@ namespace albireo
             return std::unique_ptr<chat_format>(new llama3_format(tok, tmpl));
         if (has("<|start_of_role|>") && tok.token_id("<|start_of_role|>") >= 0)
             return std::unique_ptr<chat_format>(new granite_format(tok, tmpl));
+        if (has("<|turn>") && tok.token_id("<|turn>") >= 0 && tok.token_id("<turn|>") >= 0)
+            return std::unique_ptr<chat_format>(new gemma4_format(tok));
         const bool chatml = tok.token_id("<|im_start|>") >= 0 && tok.token_id("<|im_end|>") >= 0;
         if (chatml && has("<function=") && has("<think></think>"))
             return std::unique_ptr<chat_format>(new granite4_format(tok));

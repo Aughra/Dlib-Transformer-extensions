@@ -185,6 +185,18 @@ else
     --tools --reasoning off --temperature 0 --max 120 "What is the weather in Paris right now?"
 fi
 
+# Gemma 4 (fenêtre glissante, clés et valeurs partagées, entrées par couche ; Albireo 4.14.0) : son tokenizer comparé
+# aux identifiants de llama-tokenize (llama.cpp 0.9.0), une réponse, et un raisonnement.
+GEMMA4=${GEMMA4_MODEL:-$ROOT/build/models/gemma-4-E2B-it-Q4_K_M.gguf}
+if [ ! -f "$ENGINE" ] || [ ! -f "$GEMMA4" ]; then skip "gemma 4" "no $GEMMA4"
+else
+  step "gemma 4 tokenizer" "all texts identical" "$BUILD/tests/test_tokenizer" "$HERE/../tests/gemma4_tokenizer/texts.json" \
+    "$HERE/../tests/gemma4_tokenizer/expected.json" "gemma4=$GEMMA4"
+  step "gemma 4" "Paris" "$CHAT" "$ENGINE" "$GEMMA4" --reasoning off --temperature 0 --max 40 "$QUESTION"
+  step "gemma 4 reasoning" "391" "$CHAT" "$ENGINE" "$GEMMA4" --reasoning on --temperature 0 --max 600 \
+    "What is 17 times 23? Answer with the number."
+fi
+
 if [ -f "$EMBEDDING" ] && [ -f "$ENGINE" ]; then
   step "embedding model" "cosine" "$CHAT" "$ENGINE" "$EMBEDDING" --parallel \
     "The service runs on this computer." "Where does the service run?" "The quarterly revenue grew."

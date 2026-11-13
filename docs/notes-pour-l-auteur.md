@@ -577,6 +577,21 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : propre au Mac (noyaux Metal) ; l'idée vaut pour tout GPU (llama.cpp fait de même avec `mul_mm_id`).
 
+### Changement 16 : Gemma 4 (architecture `gemma4`), sur le processeur
+
+- **Pourquoi** : après Qwen 3.5, Gemma 4 est la famille GGUF la plus téléchargée que le moteur refusait (36 dépôts populaires, 19,4 millions de téléchargements, relevé du 2026-11-12). Comme le changement 12, c'est un ajout du fork, pas un défaut de l'original ; il est consigné ici parce qu'il touche le tokenizer de dlib, commun à toutes les plateformes.
+- **Tokenizer** (`dlib/tokenizer/hf_tokenizer.h`) : Gemma 4 déclare `tokenizer.ggml.model = "gemma4"`, que l'original lit comme du SentencePiece (fusions par score) alors que c'est un BPE à fusions classées (514 906 fusions) sur un texte où les espaces deviennent « ▁ », sans alphabet d'octets, coupé seulement aux sauts de ligne, avec repli sur les tokens `<0xXX>` (`src/llama-vocab.cpp` de llama.cpp, `LLAMA_VOCAB_PRE_TYPE_GEMMA4`). Le fork ajoute une troisième sorte, `kind::spm_bpe` (une quarantaine de lignes : `encode_spm_bpe()`, le repli sur les octets dans `encode_bpe_piece()`, le décodage du méta-espace), et ajoute toujours `<bos>`, comme llama.cpp. Vérifié : 22 textes (accents, émojis, chinois, code, espaces et sauts de ligne en série, balises) donnent les mêmes identifiants que `llama-tokenize` et se redécodent en eux-mêmes ; les textes et les identifiants attendus sont dans `albireo/tests/gemma4_tokenizer/`.
+- **Moteur** (`model_config.*`, `cpu_runtime.*`, Albireo 4.14.0) : formule de llama.cpp (`src/models/gemma4.cpp`, `llama-hparams.cpp`). Couches à fenêtre glissante de 512 positions (têtes de 256, base de rotation 10 000) et couches globales (têtes de 512, base 1 000 000, diviseurs `rope_freqs` : seul le premier quart des paires tourne) ; les 20 dernières couches lisent les clés et valeurs de la dernière couche du même type qui en a ; norme RMS sans poids des valeurs ; échelle d'attention 1 ; GELU (approximation tanh) ; normes après l'attention et après le bloc feed-forward ; largeur du bloc feed-forward propre à chaque couche ; entrées par couche (`per_layer_token_embd`, `per_layer_model_proj`, `inp_gate`, `proj`, `post_norm`) ; échelle de sortie de chaque couche ; logits plafonnés (30 · tanh(z / 30)). Les blocs de clés et valeurs gardent des lignes de la plus grande tête (512) ; une couche à têtes de 256 n'en remplit que le début. Format de conversation `gemma4` (`chat_format.cpp`) : tours `<|turn>rôle` … `<turn|>`, raisonnement demandé par `<|think|>`, écrit entre `<|channel>thought` et `<channel|>`. Pas encore d'outils, d'images, de GPU ni de mélange d'experts (26B-A4B, refusé avec un message clair).
+- **Exactitude** (Gemma 4 E2B Q4_K_M, llama.cpp 0.9.0 sur le processeur, choix glouton) : prompt rendu identique au gabarit Jinja sur six conversations (au `<bos>` près, que `/apply-template` de llama.cpp retire) ; tenseurs de sortie des 35 couches comparés à `llama-eval-callback` : la ligne du dernier token suit la référence jusqu'à la dernière couche (couche 34 : −0,0234 −0,0814 contre −0,0252 −0,0962) ; même premier token (« Paris ») ; sur trois questions de 150 tokens, divergences seulement sur des quasi-égalités de la référence (0,571 / 0,427 ; 0,519 / 0,481 ; 0,291 / 0,245) ; sur un prompt de 2 210 tokens (au-delà de la fenêtre), réponse identique.
+
+| Gemma 4 E2B Q4_K_M, processeur, 8 threads, clés q8 (`lowpowermode 0`, charge 7 à 8) | Essai 1 | Essai 2 |
+|---|---|---|
+| `bench_runtime modele 8 512 64 1 q8`, prompt de 512 tokens | 152,5 tokens/s | 142,9 tokens/s |
+| idem, génération | 23,3 tokens/s | 22,5 tokens/s |
+| `engine_chat --reasoning off --temperature 0 --max 200`, 180 tokens écrits | 23,8 tokens/s | 20,9 tokens/s |
+
+**Mac ou Windows** : le tokenizer et la passe avant sont du code commun (non essayés sous Windows) ; la mesure est propre au Mac.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -596,6 +611,7 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | Qwen3.5-4B Q4_K_M, lecture d'un prompt de 783 tokens | non lu par le moteur | 148 à 149 tokens/s sur le GPU ; 86 sur le processeur (changement 12) |
 | Qwen 3.6 11B-A3B Q4_K_M (mélange d'experts, fork seulement), génération | non lu par le moteur | 26,1 à 26,3 tokens/s sur le GPU ; 24,4 à 25,0 sur le processeur (changement 12) |
 | Qwen 3.6 11B-A3B Q4_K_M, lecture d'un prompt de 512 tokens | non lu par le moteur | 196 à 198 tokens/s sur le GPU (changement 15) ; 107 à 112 sur le processeur |
+| Gemma 4 E2B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 20,9 à 23,8 tokens/s ; lecture de 512 tokens 143 à 153 tokens/s (changement 16) |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
 

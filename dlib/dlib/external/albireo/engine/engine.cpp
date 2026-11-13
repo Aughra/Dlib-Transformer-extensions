@@ -1216,7 +1216,7 @@ namespace albireo
 
         // Seules les couches d'attention gardent des clés et valeurs (les couches linéaires de qwen35 ont un état
         // de taille fixe par séquence).
-        const size_t per_token = 2 * static_cast<size_t>(m->cfg.n_attention_layers()) * static_cast<size_t>(m->cfg.n_kv_heads)
+        const size_t per_token = 2 * static_cast<size_t>(m->cfg.n_kv_layers()) * static_cast<size_t>(m->cfg.n_kv_heads)
             * kv_row_bytes(m->kv_type, m->cfg.head_dim);
         const memory_info mem = read_memory_info();
         /*

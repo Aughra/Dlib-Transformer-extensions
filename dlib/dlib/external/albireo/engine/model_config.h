@@ -38,7 +38,9 @@ namespace albireo
                 Phi-4-mini : une matrice pour les requêtes, les clés et les valeurs, une
                 pour les projections gate et up, positions rotatives sur les premières
                 dimensions des têtes, LongRoPE ; la fenêtre glissante que déclarent les
-                fichiers n'est pas appliquée, comme dans llama.cpp).
+                fichiers n'est pas appliquée, comme dans llama.cpp).  Le fork pour macOS
+                ajoute qwen35 et qwen35moe (couches linéaires, voir full_attention_interval)
+                et gemma4 dense (voir gemma4).
 
             MODÈLES D'EMBEDDING
                 Un décodeur qui déclare <arch>.pooling_type calcule des vecteurs au lieu
@@ -161,7 +163,46 @@ namespace albireo
         // Les couches de prédiction de plusieurs tokens (MTP) rangées après les autres, non exécutées.
         long n_nextn = 0;
 
+        /*
+            Gemma 4 (fork pour macOS).  Les couches de swa_layers voient une fenêtre glissante :
+            le token en position p lit les positions p - sliding_window + 1 à p, avec des têtes de
+            head_dim_swa valeurs tournées sur rope_dims_swa dimensions de base rope_base_swa, sans
+            diviseurs ; les autres sont globales, avec head_dim, rope_dims, rope_base et
+            rope_freq_factors.  Les n_kv_shared dernières couches n'ont pas de clés et valeurs à
+            elles : elles lisent celles de la dernière couche du même type qui en a (kv_source()).
+            Chaque couche a sa largeur de bloc feed-forward (ffn_widths, d_ffn étant la plus grande),
+            un GELU (approximation tanh) au lieu de SiLU, des normes RMS après l'attention et après le
+            bloc feed-forward, une norme RMS sans poids des valeurs, une échelle d'attention de 1, et
+            une échelle de sa sortie (layer_output_scale).  Avec d_per_layer > 0, chaque couche reçoit
+            en plus une entrée de d_per_layer valeurs par token (les plongements par couche).  Les
+            logits passent par softcap * tanh(logits / softcap).
+        */
+        bool gemma4 = false;
+        std::vector<char> swa_layers;
+        long sliding_window = 0;
+        long head_dim_swa = 0;
+        long rope_dims_swa = 0;
+        double rope_base_swa = 10000.0;
+        long n_kv_shared = 0;
+        std::vector<long> ffn_widths;
+        long d_per_layer = 0;
+        double final_softcap = 0.0;
+
         bool is_moe() const { return n_experts > 0; }
+        bool swa_layer(long li) const { return !swa_layers.empty() && swa_layers[static_cast<size_t>(li)] != 0; }
+        long layer_head_dim(long li) const { return swa_layer(li) ? head_dim_swa : head_dim; }
+        long layer_q_dim(long li) const { return n_heads * layer_head_dim(li); }
+        long layer_kv_dim(long li) const { return n_kv_heads * layer_head_dim(li); }
+        long layer_ffn(long li) const { return ffn_widths.empty() ? d_ffn : ffn_widths[static_cast<size_t>(li)]; }
+        // Les couches qui ont leurs clés et valeurs, et celle dont une couche lit les clés et valeurs.
+        bool owns_kv(long li) const { return li < n_layers - n_kv_shared; }
+        long kv_source(long li) const
+        {
+            if (owns_kv(li)) return li;
+            const long first_shared = n_layers - n_kv_shared;
+            return first_shared - (swa_layer(li) ? 2 : 1);
+        }
+        long n_kv_layers() const { return n_attention_layers() - n_kv_shared; }
         bool multimodal_rope() const { return !rope_sections.empty(); }
         long input_width() const { return d_model * (1 + n_deepstack); }
         bool is_embedding() const { return pooling != 0; }

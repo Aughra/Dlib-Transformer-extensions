@@ -507,7 +507,10 @@ namespace dlib
     class hf_tokenizer
     {
     public:
-        enum class kind { spm, bpe };
+        /* spm_bpe (fork pour macOS) : le BPE de Gemma 4, des fusions par rang sur un texte où les espaces
+           deviennent le meta-espace de SentencePiece, sans alphabet d'octets, coupé seulement aux sauts de
+           ligne, avec repli sur les tokens d'octets <0xXX>. */
+        enum class kind { spm, bpe, spm_bpe };
 
         // GGUF token-type values (the common GGUF convention).
         enum token_type
@@ -554,7 +557,8 @@ namespace dlib
         {
             vocab_data v;
             const std::string model = g.get_str("tokenizer.ggml.model", "llama");
-            v.family = (model == "gpt2" || model == "bpe") ? kind::bpe : kind::spm;
+            v.family = (model == "gpt2" || model == "bpe") ? kind::bpe
+                : model == "gemma4" ? kind::spm_bpe : kind::spm;
 
             if (!g.has("tokenizer.ggml.tokens"))
                 throw std::runtime_error("hf_tokenizer: missing tokenizer.ggml.tokens");
@@ -581,6 +585,8 @@ namespace dlib
 
             v.add_bos = g.has("tokenizer.ggml.add_bos_token")
                 ? (g.get_int("tokenizer.ggml.add_bos_token") != 0) : (v.family == kind::spm);
+            // Gemma 4 commence toujours par <bos>, quoi que dise le fichier (comme llama.cpp).
+            if (v.family == kind::spm_bpe) v.add_bos = true;
             v.add_eos = g.has("tokenizer.ggml.add_eos_token")
                 ? (g.get_int("tokenizer.ggml.add_eos_token") != 0) : false;
             v.add_space_prefix = g.has("tokenizer.ggml.add_space_prefix")
@@ -611,7 +617,7 @@ namespace dlib
         const std::string& pretokenizer() const { return pre_; }
         const std::string& id_to_token(int id) const { return id_to_token_.at(static_cast<size_t>(id)); }
 
-        bool exact_pretokenizer() const { return kind_ == kind::spm || pre_exact_; }
+        bool exact_pretokenizer() const { return kind_ != kind::bpe || pre_exact_; }
 
         int token_type(int id) const
         {
@@ -741,9 +747,9 @@ namespace dlib
             pre_family_ = hf_tok_impl::pre_family_of(pre_, pre_exact_);
             ignore_merges_ = hf_tok_impl::pre_ignores_merges(pre_);
             nfc_ = kind_ == kind::bpe && hf_tok_impl::pre_normalizes_nfc(pre_);
-            if (kind_ == kind::bpe)
+            if (kind_ == kind::bpe) build_byte_unicode_tables();
+            if (kind_ != kind::spm)
             {
-                build_byte_unicode_tables();
                 bpe_ranks_.clear();
                 bpe_ranks_.reserve(bpe_merges_.size() * 2);
                 for (int i = 0; i < static_cast<int>(bpe_merges_.size()); ++i)
@@ -827,6 +833,7 @@ namespace dlib
         {
             std::vector<int> ids = (kind_ == kind::spm)
                 ? encode_spm(frag, first && allow_space_prefix && add_space_prefix_)
+                : kind_ == kind::spm_bpe ? encode_spm_bpe(frag)
                 : encode_bpe(nfc_ ? hf_tok_impl::nfc_compose(frag) : frag);
             out.insert(out.end(), ids.begin(), ids.end());
         }
@@ -942,7 +949,7 @@ namespace dlib
                 out += tok;
                 return;
             }
-            if (kind_ == kind::spm)
+            if (kind_ != kind::bpe)
             {
                 static const char meta_space[] = "\xe2\x96\x81";
                 size_t pos = 0;
@@ -1060,6 +1067,16 @@ namespace dlib
                 if (s.len == 0) continue;
                 auto it = token_to_id_.find(word.substr(s.start, s.len));
                 if (it != token_to_id_.end()) { out.push_back(it->second); continue; }
+                // Gemma 4 : un symbole absent du vocabulaire donne ses octets, en tokens <0xXX>.
+                if (kind_ == kind::spm_bpe)
+                {
+                    for (size_t k = s.start; k < s.start + s.len; ++k)
+                    {
+                        const int id = byte_to_id_[static_cast<unsigned char>(word[k])];
+                        if (id >= 0) out.push_back(id);
+                    }
+                    continue;
+                }
                 // A symbol missing from the vocabulary: its characters one by one.
                 for (size_t k = s.start; k < s.start + s.len;)
                 {
@@ -1085,6 +1102,34 @@ namespace dlib
                 for (size_t k = p.first; k < p.second; ++k)
                     word += byte_to_piece_[static_cast<unsigned char>(text[k])];
                 encode_bpe_piece(word, out);
+            }
+            return out;
+        }
+
+        /* Gemma 4 (fork pour macOS) : les espaces deviennent le meta-espace, puis chaque suite de sauts de ligne
+           et chaque suite d'autres caractères reçoit les fusions à part ; une suite de sauts de ligne qui est un
+           token entier le donne directement, comme dans llama.cpp. */
+        std::vector<int> encode_spm_bpe(const std::string& text) const
+        {
+            static const char meta_space[] = "\xe2\x96\x81";
+            std::string norm;
+            norm.reserve(text.size() + text.size() / 2);
+            for (char c : text)
+            {
+                if (c == ' ') norm += meta_space;
+                else norm.push_back(c);
+            }
+            std::vector<int> out;
+            for (size_t i = 0; i < norm.size();)
+            {
+                const bool newline = norm[i] == '\n';
+                size_t j = i;
+                while (j < norm.size() && (norm[j] == '\n') == newline) ++j;
+                const std::string word = norm.substr(i, j - i);
+                auto whole = newline ? token_to_id_.find(word) : token_to_id_.end();
+                if (whole != token_to_id_.end()) out.push_back(whole->second);
+                else encode_bpe_piece(word, out);
+                i = j;
             }
             return out;
         }

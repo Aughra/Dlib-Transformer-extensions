@@ -3,6 +3,7 @@
 
 #include "model_config.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <sstream>
@@ -64,7 +65,9 @@ namespace albireo
         const bool phi = a == "phi3";
         // Qwen 3.5 (fork pour macOS) : couches linéaires Gated DeltaNet et attention à porte de sortie.
         const bool qwen35 = a == "qwen35" || a == "qwen35moe";
-        if (!llama_like && !qwen_like && !moe_arch && !phi && !qwen35)
+        // Gemma 4 (fork pour macOS) : fenêtre glissante, clés et valeurs partagées, plongements par couche.
+        const bool gemma4 = a == "gemma4";
+        if (!llama_like && !qwen_like && !moe_arch && !phi && !qwen35 && !gemma4)
             throw std::runtime_error("the architecture '" + a + "' is not supported by this engine");
 
         if (!g.has(a + ".block_count") || !g.has(a + ".attention.head_count") || !g.has(a + ".embedding_length"))
@@ -79,7 +82,22 @@ namespace albireo
         c.n_heads = bounded_int(g, a + ".attention.head_count", 0, 1, max_heads);
         c.n_kv_heads = bounded_int(g, a + ".attention.head_count_kv", c.n_heads, 1, c.n_heads);
         c.d_model = bounded_int(g, a + ".embedding_length", 0, 1, max_width);
-        c.d_ffn = bounded_int(g, a + ".feed_forward_length", 0, 0, max_ffn);
+        if (gemma4 && g.has(a + ".feed_forward_length") && g.at(a + ".feed_forward_length").is_array())
+        {
+            // Une largeur par couche ; d_ffn est la plus grande.
+            const std::vector<int64_t>& w = g.at(a + ".feed_forward_length").arr_int;
+            if (w.size() < static_cast<size_t>(c.n_layers))
+                throw std::runtime_error("the model metadata gives fewer feed-forward widths than layers");
+            for (long li = 0; li < c.n_layers; ++li)
+            {
+                const int64_t v = w[static_cast<size_t>(li)];
+                if (v < 1 || v > max_ffn) throw std::runtime_error("the model metadata holds an invalid feed-forward width");
+                c.ffn_widths.push_back(static_cast<long>(v));
+                c.d_ffn = std::max(c.d_ffn, static_cast<long>(v));
+            }
+        }
+        else
+            c.d_ffn = bounded_int(g, a + ".feed_forward_length", 0, 0, max_ffn);
         const long split = c.d_model / c.n_heads;
         c.head_dim = bounded_int(g, a + ".attention.key_length", split, 0, max_head_dim);
         c.head_dim_v = bounded_int(g, a + ".attention.value_length", c.head_dim, 0, max_head_dim);
@@ -107,7 +125,7 @@ namespace albireo
         // Embedding rotatif.
         // Qwen 3.5 déclare des sections de positions multimodales ; pour du texte, ses trois composantes sont
         // égales, et la rotation est celle de neox sur rope_dims dimensions.
-        c.rope = qwen_like || a == "qwen3moe" || a == "qwen3vlmoe" || phi || qwen35 ? rope_style::neox
+        c.rope = qwen_like || a == "qwen3moe" || a == "qwen3vlmoe" || phi || qwen35 || gemma4 ? rope_style::neox
             : rope_style::norm;
         c.rope_dims = bounded_int(g, a + ".rope.dimension_count", c.head_dim, 0, max_head_dim);
         if (c.rope_dims <= 0 || c.rope_dims > c.head_dim || c.rope_dims % 2 != 0)
@@ -234,6 +252,44 @@ namespace albireo
             c.attn_output_gate = true;
         }
 
+        if (gemma4)
+        {
+            c.gemma4 = true;
+            if (g.has(a + ".expert_count"))
+                throw std::runtime_error("the mixtures of experts of Gemma 4 are not supported by this engine yet");
+            const std::string pattern = a + ".attention.sliding_window_pattern";
+            if (!g.has(pattern) || !g.at(pattern).is_array() || g.at(pattern).arr_int.size() < static_cast<size_t>(c.n_layers))
+                throw std::runtime_error("the model metadata lacks the sliding window pattern of its layers");
+            for (long li = 0; li < c.n_layers; ++li)
+                c.swa_layers.push_back(g.at(pattern).arr_int[static_cast<size_t>(li)] != 0 ? 1 : 0);
+            c.sliding_window = bounded_int(g, a + ".attention.sliding_window", 0, 1, max_context);
+            c.head_dim_swa = bounded_int(g, a + ".attention.key_length_swa", 0, 2, max_head_dim);
+            if (bounded_int(g, a + ".attention.value_length_swa", c.head_dim_swa, 0, max_head_dim) != c.head_dim_swa
+                || c.head_dim_swa % 2 != 0 || c.head_dim_swa > c.head_dim)
+                throw std::runtime_error("unsupported head geometry of the sliding window layers");
+            c.rope_dims_swa = bounded_int(g, a + ".rope.dimension_count_swa", c.head_dim_swa, 2, c.head_dim_swa);
+            if (c.rope_dims_swa % 2 != 0) throw std::runtime_error("unsupported rotary dimension count");
+            c.rope_base_swa = finite_double(g, a + ".rope.freq_base_swa", 10000.0);
+            if (c.rope_base_swa <= 0) throw std::runtime_error("the model metadata holds an invalid rotary base");
+            // Comme llama.cpp, au moins une couche de chaque type garde ses clés et valeurs.
+            c.n_kv_shared = bounded_int(g, a + ".attention.shared_kv_layers", 0, 0, c.n_layers - 2);
+            for (long li = c.n_layers - c.n_kv_shared; li < c.n_layers; ++li)
+            {
+                const long src = c.kv_source(li);
+                if (src < 0 || c.swa_layer(src) != c.swa_layer(li))
+                    throw std::runtime_error("the layers that share keys and values have no source of their type");
+            }
+            c.d_per_layer = bounded_int(g, a + ".embedding_length_per_layer_input", 0, 0, max_width);
+            c.final_softcap = finite_double(g, a + ".final_logit_softcapping", 0.0);
+            if (c.final_softcap < 0) throw std::runtime_error("the model metadata holds an invalid logit softcapping");
+            // Les plongements multipliés par sqrt(d_model), une échelle d'attention de 1.
+            c.embedding_scale = std::sqrt(static_cast<double>(c.d_model));
+            c.attention_scale = 1.0;
+            c.fused_qkv = false;
+            c.qkv_bias = false;
+            if (!c.qk_norm) throw std::runtime_error("this Gemma 4 model has no query and key norms");
+        }
+
         if (a == "granite" || a == "granitemoe")
         {
             c.embedding_scale = finite_double(g, a + ".embedding_scale", 1.0);
@@ -305,6 +361,16 @@ namespace albireo
             o << ", multimodal rope sections " << c.rope_sections[0] << "/" << c.rope_sections[1] << "/"
               << c.rope_sections[2] << " interleaved";
         if (c.n_deepstack > 0) o << ", deepstack inputs at " << c.n_deepstack << " layers";
+        if (c.gemma4)
+        {
+            long swa = 0;
+            for (long li = 0; li < c.n_layers; ++li) swa += c.swa_layer(li) ? 1 : 0;
+            o << ", " << swa << " sliding window layers of " << c.sliding_window << " positions (heads of "
+              << c.head_dim_swa << ", rope base " << c.rope_base_swa << "), " << c.n_kv_shared
+              << " layers sharing keys and values";
+            if (c.d_per_layer > 0) o << ", per-layer inputs of " << c.d_per_layer;
+            if (c.final_softcap > 0) o << ", logit softcap " << c.final_softcap;
+        }
         if (c.qkv_bias) o << ", qkv bias";
         if (c.qk_norm) o << ", qk norm";
         if (c.tied_embeddings) o << ", tied embeddings";

@@ -145,7 +145,9 @@ namespace albireo
         auto expert_columns = [&](const weight_matrix& W) {
             return W.cols % (W.type == dlib::ggml_type::Q8_0 || W.type == dlib::ggml_type::Q5_0 ? 32 : 256) == 0;
         };
-        if (cfg_.is_moe() && cfg_.n_experts_used > 32) why = "more than 32 experts per token";
+        // Gemma 4 (fenêtre glissante, têtes de 512, clés partagées, entrées par couche) reste sur le processeur.
+        if (cfg_.gemma4) why = "the layers of Gemma 4";
+        else if (cfg_.is_moe() && cfg_.n_experts_used > 32) why = "more than 32 experts per token";
         // qwen35 : des têtes linéaires d'au plus 256 valeurs, et un état dans la zone réservée.
         else if (cfg_.recurrent() && (cfg_.ssm_head_dim > 256 || !states_.data))
             why = "linear attention layers of this geometry";

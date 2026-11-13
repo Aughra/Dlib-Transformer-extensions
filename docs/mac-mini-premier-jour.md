@@ -32,6 +32,7 @@ Les tests et les mesures cherchent les modèles à ces places (`build/` n'est pa
 | `build/models/Qwen3.5-0.8B-Q8_0.gguf` | 0,8 Go | étapes Qwen 3.5 sur le processeur |
 | `build/models/Qwen3.5-4B-mmproj-F16.gguf` | 0,7 Go | images de Qwen 3.5 |
 | `build/models/Qwen3.6-11B-A3B-Niwaki-Q4_K_M.gguf` | 7,0 Go | mélange d'experts |
+| `build/models/gemma-4-E2B-it-Q4_K_M.gguf` | 3,1 Go | Gemma 4 (processeur ; tokenizer, raisonnement) |
 | `build/albireo-home/models/qwen3-vl-4b-thinking.gguf` et `.mmproj.gguf` | 2,9 Go | modèle du service, images |
 | `build/albireo-home/models/hf-unsloth-qwen3.5-4b-q4_k_m.gguf` | 2,7 Go | Qwen 3.5 sur le GPU, outils, images |
 | `build/albireo-home/models/qwen3-embedding-0.6b.gguf` | 0,6 Go | modèle de recherche |

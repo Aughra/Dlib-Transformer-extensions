@@ -97,7 +97,7 @@ namespace albireo
         size_t kv_bytes_budget() const override { return kv_.max_blocks() * kv_.block_bytes(); }
         size_t kv_bytes_per_token() const override
         {
-            return 2 * static_cast<size_t>(cfg_.n_attention_layers()) * cfg_.n_kv_heads
+            return 2 * static_cast<size_t>(cfg_.n_kv_layers()) * cfg_.n_kv_heads
                 * kv_row_bytes(kv_.format(), cfg_.head_dim);
         }
         kv_format kv_type() const { return kv_.format(); }
@@ -181,6 +181,15 @@ namespace albireo
             // L'expert partagé de qwen35moe et sa porte (model_config::d_ffn_shared).
             weight_matrix sh_gate, sh_up, sh_down;
             std::vector<float> sh_gate_inp;
+            /*
+                Gemma 4 : les normes après l'attention et après le bloc feed-forward, l'échelle de la sortie de
+                la couche, et le bloc de son entrée par couche (porte, projection et norme).  Une couche dont le
+                fichier n'a pas d'attn_v prend ses clés comme valeurs (v_from_k).
+            */
+            std::vector<float> post_attn_norm, post_ffn_norm, ple_norm;
+            weight_matrix ple_gate, ple_proj;
+            float out_scale = 1.0f;
+            bool v_from_k = false;
         };
 
         // Le nombre maximal de lignes de requêtes d'une tuile d'attention : les scores d'une tuile sur un
@@ -216,7 +225,8 @@ namespace albireo
 
         void rms_norm_rows(const float* x, const float* gamma, float* y, long rows, long width, float eps);
         void ensure_rope(long positions);
-        void apply_rope(float* rows, long n_rows, long n_heads, const std::vector<long>& positions);
+        // La rotation des têtes d'une couche (layer), avec la table de son type (fenêtre glissante de gemma4 ou non).
+        void apply_rope(float* rows, long n_rows, long n_heads, const std::vector<long>& positions, long layer = -1);
         // La rotation des tokens d'un lot qui donne leurs positions : les cosinus et sinus de
         // chaque paire de chaque token, rassemblés une fois par passe (prepare_given_positions),
         // puis appliqués aux requêtes et aux clés de chaque couche.
@@ -227,8 +237,13 @@ namespace albireo
         void check_given_embeddings(const forward_batch& batch, long T) const;
         void add_given_embeddings(const forward_batch& batch, long slice);
         // Les clés et valeurs des tokens d'un lot, écrites dans les blocs de leurs séquences.
-        void store_keys_values(long layer, const forward_batch& batch);
-        void attention(long layer, const forward_batch& batch, const std::vector<long>& positions);
+        // slot : la place des clés et valeurs dans les blocs ; layer : la couche, qui donne la largeur de ses têtes
+        // et sa fenêtre (gemma4).
+        void store_keys_values(long slot, const forward_batch& batch, long layer = -1);
+        void attention(long slot, const forward_batch& batch, const std::vector<long>& positions, long layer = -1);
+        // Les entrées par couche de gemma4 (model_config::d_per_layer), dans ple_ : n_layers x d_per_layer valeurs
+        // par token, calculées une fois par passe à partir des tokens et de leurs embeddings.
+        void per_layer_inputs(const std::vector<int>& tokens);
         void moe_ffn(const layer& L, long n_tokens);
         // Une couche Gated DeltaNet sur les lignes normalisées xn_, dans tmp_ ; linear est son rang parmi les
         // couches linéaires, qui situe son état dans celui de chaque séquence.
@@ -346,10 +361,17 @@ namespace albireo
         std::vector<layer> layers_;
         weight_matrix token_embd_, output_;
         std::vector<float> output_norm_;
+        // Gemma 4 : la table des plongements par couche, la projection de l'embedding vers eux et sa norme, et des
+        // poids à 1 pour la norme sans poids des valeurs.
+        weight_matrix ple_embd_, ple_model_proj_;
+        std::vector<float> ple_proj_norm_, ones_;
+        aligned_floats ple_, ple_g_;
 
         // Tables rotatives : cos et sin pour chaque position calculée jusqu'ici.
         std::vector<float> rope_cos_, rope_sin_;
         long rope_positions_ = 0;
+        // Celles des couches à fenêtre glissante de gemma4 (rope_base_swa sur rope_dims_swa dimensions).
+        std::vector<float> rope_swa_cos_, rope_swa_sin_;
         // La composante de position de chaque paire rotative (0 temps, 1 ligne, 2 colonne), et les
         // cosinus et sinus des tokens d'un lot qui donne leurs positions.
         std::vector<int> pair_component_;
