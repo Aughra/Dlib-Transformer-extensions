@@ -238,7 +238,7 @@ function formatMb(n) {
 const recommended = {
   accelerator: 'auto',        // GPU : écriture 21-22 contre 18-19 tokens/s (4B), lecture x1,7 (épisodes 19, 20)
   gpu_prompt_tokens: 24,      // le GPU perd à 16 tokens, gagne dès 24 (épisode 20)
-  gpu_prompt_context: 262144, // attention matricielle (4.11.0), 2B : GPU 424 / 296 / 182 contre 171-181 / 118-123 / 71 à 4 096 / 8 192 / 16 384
+  gpu_prompt_context: 262144, // attention matricielle (4.11.0), 2B, mesures alternées : GPU 423-424 / 295 / 171 contre 170-177 / 115-117 / 67 à 4 096 / 8 192 / 16 384
   threads: 0,                 // tous les cœurs physiques ; les pas d'écriture prennent les cœurs P (épisode 16)
   spin_us: 2000,
   max_sequences: 4,
@@ -614,9 +614,9 @@ const items = {
     owl: "Le chemin des prompts sur le GPU (takes_gpu) exige que la séquence finisse dans gpu_prompt_context positions. " +
       "L’attention de prompt (attention_mtile) prend 32 lignes de requête (16 pour des têtes de 256 valeurs) par tête " +
       "de clés, charge chaque tranche de 32 positions une fois en mémoire de threadgroup (8 valeurs par thread, une " +
-      "échelle par groupe) et calcule scores et sorties par simdgroup_matrix 8 x 8. Mesures (bench_runtime, une passe, " +
-      "clés q8, 2B, Albireo 4.11.0) : 4 096 tokens 424 tokens/s contre 171 à 181 sur le processeur ; 8 192 tokens 296 " +
-      "contre 118 à 123 ; 16 384 tokens 182 contre 71.",
+      "échelle par groupe) et calcule scores et sorties par simdgroup_matrix 8 x 8. Mesures alternées (bench_runtime, " +
+      "clés q8, 2B, Albireo 4.11.0) : 4 096 tokens 423 à 424 tokens/s contre 170 à 177 sur le processeur ; 8 192 tokens " +
+      "295 contre 115 à 117 ; 16 384 tokens 171 contre 67.",
     marmot: "C’est comme un livreur qui a appris à charger tout un carton au lieu d’un colis à la fois : même pour les " +
       "longues tournées, il reste le plus rapide. Ce réglage dit jusqu’où on l’envoie ; par défaut, partout.",
     bee: "Trop bas, les longs documents sont lus par le processeur, deux à trois fois plus lentement. À 0, le GPU ne lit " +

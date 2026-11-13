@@ -2,6 +2,14 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.13.2 — 13 novembre 2026
+
+### Corrections
+
+- La fiche du réglage « GPU : prompts jusqu'à » cite les mesures alternées de la version 4.11.0 (16 384 tokens : 171 tokens/s sur le GPU contre 67 sur le processeur) au lieu de mesures isolées antérieures.
+
+---
+
 ## 4.13.1 — 13 novembre 2026
 
 ### Corrections

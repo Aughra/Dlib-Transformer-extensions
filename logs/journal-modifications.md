@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-13 — Citer les mesures alternées dans la fiche des prompts GPU (Albireo 4.13.2)
+
+- **Quoi** : `web/js/service.js` : la fiche du réglage `gpu_prompt_context` et le commentaire de sa valeur conseillée citaient des mesures isolées antérieures (4 096 / 8 192 / 16 384 tokens : 424 / 296 / 182 contre 171-181 / 118-123 / 71) ; ils citent les mesures alternées de la 4.11.0 (423-424 / 295 / 171 contre 170-177 / 115-117 / 67). Vérifié en passant : Qwen3-VL 4B lit toujours ses images (perroquet décrit juste).
+- **Fichiers** : `albireo/web/js/service.js`, `albireo/web/changelog.md`, version ; ce journal.
+- **Pourquoi** : règle « chaque fait d'une fiche est vérifié ».
+- **Étapes** : `node --check` ; banc de la page, scénario principal : 41 sur 41, aucune erreur.
+
 ## 2026-11-13 — Rendre l'état d'une séquence quand le GPU échoue au milieu d'un prompt (Albireo 4.13.1)
 
 - **Quoi** : `cpu_runtime::forward()` : pour un modèle à couches linéaires dont le prompt passe au GPU en morceaux (`run_gpu_checkpointed`), copie de l'état et de la longueur de chaque séquence du lot avant la passe ; en cas d'échec, l'état et la longueur sont rendus (la place réservée reste), les points de reprise posés pendant la passe sont oubliés, puis le processeur relit le lot.
