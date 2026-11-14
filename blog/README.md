@@ -39,3 +39,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 33. [Le carnet ouvre les yeux](33-le-carnet-ouvre-les-yeux.md)
 34. [La lampe de poche](34-la-lampe-de-poche.md)
 35. [Le formulaire et la mosaïque](35-le-formulaire-et-la-mosaique.md)
+36. [Le post-it et la photocopie](36-le-post-it-et-la-photocopie.md)

@@ -2470,6 +2470,113 @@ namespace albireo
             std::string bos_;
         };
 
+        // LFM2 (fork pour macOS)
+
+        /*
+            Le template de LFM2 et LFM2-MoE de Liquid AI : <|startoftext|>, puis des tours ChatML ; le message
+            système vient seul en tête.  Comme llama.cpp (common/parsers/lfm2.cpp, common/jinja/caps.cpp) :
+            les templates de LFM2.5-8B-A1B écrivent la pensée d'une réponse (message.thinking, que llama.cpp
+            tire de reasoning_content) entre <think> et </think> devant son texte, et gardent les pensées
+            passées (preserve_thinking vaut true) ; ceux de LFM2.5-1.2B retirent des réponses passées, sauf la
+            dernière, ce qui précède le dernier </think> (keep_past_thinking reste false), sans les espaces des
+            bords ; celui de LFM2.5-Audio les garde telles quelles.  Le modèle ouvre lui-même son raisonnement par <think>, que le moteur sépare quand le template
+            en parle.  Ses appels d'outils (des appels Python
+            entre <|tool_call_start|> et <|tool_call_end|>) ne sont pas encore pris en charge.
+        */
+        class lfm2_format : public chat_format
+        {
+        public:
+            lfm2_format(const dlib::hf_tokenizer& tok, const std::string& tmpl)
+            {
+                for (const char* t : { "<|im_end|>", "<|endoftext|>" })
+                {
+                    const int id = tok.token_id(t);
+                    if (id >= 0) stop_tokens_.push_back(id);
+                }
+                bos_ = tok.bos_id() >= 0 ? tok.id_to_token(tok.bos_id()) : std::string("<|startoftext|>");
+                thinking_field_ = tmpl.find("message.thinking") != std::string::npos;
+                // Le template de LFM2.5-Audio ne retire pas les pensées passées.
+                strips_past_ = tmpl.find("\"</think>\" in content") != std::string::npos;
+                reasons_ = tok.token_id("<think>") >= 0 && tok.token_id("</think>") >= 0
+                    && tmpl.find("<think>") != std::string::npos;
+                add_markers(tok, { "<think>", "</think>", "<|tool_call_start|>", "<|tool_call_end|>" });
+            }
+
+            const char* name() const override { return "lfm2"; }
+            bool supports_tools() const override { return false; }
+            bool supports_reasoning() const override { return reasons_; }
+            std::vector<prompt_piece> reasoning_close() const override
+            {
+                return reasons_ ? closing("</think>", "\n") : std::vector<prompt_piece>();
+            }
+
+            void render(const std::vector<chat_message>& messages, const render_options& opt,
+                std::vector<prompt_piece>& out) const override
+            {
+                piece_writer w{ out };
+                w.markup(bos_);
+                size_t first = 0;
+                if (!messages.empty() && messages[0].role == "system")
+                {
+                    first = 1;
+                    if (!messages[0].content.empty())
+                    {
+                        w.markup("<|im_start|>system\n");
+                        w.text(messages[0].content);
+                        w.markup("<|im_end|>\n");
+                    }
+                }
+                long last_assistant = -1;
+                for (size_t i = first; i < messages.size(); ++i)
+                    if (messages[i].role == "assistant") last_assistant = static_cast<long>(i);
+                for (size_t i = first; i < messages.size(); ++i)
+                {
+                    const chat_message& m = messages[i];
+                    w.markup("<|im_start|>" + m.role + "\n");
+                    if (m.role != "assistant")
+                    {
+                        w.text(m.content);
+                        w.markup("<|im_end|>\n");
+                        continue;
+                    }
+                    // Les pensées gardées : toutes (preserve_thinking), ou celles de la dernière réponse.
+                    const bool recent = thinking_field_ || static_cast<long>(i) == last_assistant;
+                    if (thinking_field_ && !m.reasoning.empty())
+                    {
+                        w.markup("<think>");
+                        w.text(m.reasoning);
+                        w.markup("</think>");
+                    }
+                    std::string content = m.content;
+                    const size_t close = content.rfind("</think>");
+                    if (strips_past_ && !recent && close != std::string::npos)
+                        content = strip_spaces(content.substr(close + 8));
+                    w.text(content);
+                    w.markup("<|im_end|>\n");
+                }
+                if (opt.add_generation_prompt) w.markup("<|im_start|>assistant\n");
+            }
+
+            std::unique_ptr<output_parser> make_parser(const render_options&) const override
+            {
+                parser_config c;
+                if (reasons_)
+                {
+                    c.think_open = "<think>";
+                    c.think_close = "</think>";
+                }
+                return std::unique_ptr<output_parser>(new tag_parser(c));
+            }
+
+        private:
+            std::string bos_;
+            bool thinking_field_ = false;
+            bool strips_past_ = false;
+            bool reasons_ = false;
+        };
+
+        // Sans template
+
         class plain_format : public chat_format
         {
         public:
@@ -2524,6 +2631,8 @@ namespace albireo
         if (has("<|turn>") && tok.token_id("<|turn>") >= 0 && tok.token_id("<turn|>") >= 0)
             return std::unique_ptr<chat_format>(new gemma4_format(tok));
         const bool chatml = tok.token_id("<|im_start|>") >= 0 && tok.token_id("<|im_end|>") >= 0;
+        if (chatml && has("List of tools: ") && tok.token_id("<|tool_call_start|>") >= 0)
+            return std::unique_ptr<chat_format>(new lfm2_format(tok, tmpl));
         if (chatml && has("<function=") && has("<think></think>"))
             return std::unique_ptr<chat_format>(new granite4_format(tok));
         if (chatml)

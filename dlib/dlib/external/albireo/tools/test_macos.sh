@@ -111,10 +111,10 @@ fi
 # conversation, avec les mêmes réponses que sans reprise.
 QWEN35=${QWEN35_MODEL:-$ROOT/build/models/Qwen3.5-0.8B-Q8_0.gguf}
 qwen35_turns() {
-  local turns=("My name is Léa. Remember it." "What is my name?" "Spell my name backwards.") with without
-  with=$("$CHAT" "$ENGINE" "$QWEN35" --reasoning off --temperature 0 --max 40 --pause 2 --turns "${turns[@]}" 2>/dev/null) \
+  local model=${1:-$QWEN35} turns=("My name is Léa. Remember it." "What is my name?" "Spell my name backwards.") with without
+  with=$("$CHAT" "$ENGINE" "$model" --reasoning off --temperature 0 --max 40 --pause 2 --turns "${turns[@]}" 2>/dev/null) \
     || return 1
-  without=$("$CHAT" "$ENGINE" "$QWEN35" --reasoning off --temperature 0 --max 40 --no-warm --turns "${turns[@]}" \
+  without=$("$CHAT" "$ENGINE" "$model" --reasoning off --temperature 0 --max 40 --no-warm --turns "${turns[@]}" \
     2>/dev/null) || return 1
   printf '%s' "$with" | grep -q '"cached_tokens":[1-9]' || { echo "no state was resumed"; return 1; }
   [ "$(printf '%s' "$with" | grep -v '^[-{]')" = "$(printf '%s' "$without" | grep -v '^[-{]')" ] \
@@ -125,7 +125,7 @@ qwen35_turns() {
 # multiple de 256 positions.  Sur le processeur (« cpu »), sa réponse est celle de la question posée seule, au
 # caractère près.  Avec le GPU, la question reprise ne relit que 15 tokens, sur le processeur (moins de 24), alors
 # que la question seule lit son prompt sur le GPU : deux calculs qui ne s'arrondissent pas pareil, et un modèle qui
-# hésite peut alors bifurquer ; l'étape vérifie la reprise et le sujet de la réponse.
+# hésite peut alors bifurquer ; l'étape vérifie la reprise et le sujet de la réponse (de même avec « subject »).
 qwen35_checkpoint() {
   local model=$1 mode=$2 sys both alone extra=()
   [ "$mode" = cpu ] && extra=(--no-metal)
@@ -216,6 +216,29 @@ else
       --image "$WORK/gemma4-zebra-wide.jpg" --reasoning off --temperature 0 --max 60 "Describe this image in two sentences."
   else skip "gemma 4 image" "no $GEMMA4_PROJECTOR"
   fi
+fi
+
+# LFM2 et LFM2-MoE (convolutions courtes et attention ; Albireo 4.17.0) : une réponse, l'état des convolutions repris
+# sur trois tours et à un point de reprise, puis le mélange d'experts, qui raisonne avant de répondre, et un détail à
+# retrouver dans un journal de 2 622 tokens (tests/lfm2/long_prompt.txt) : l'enregistrement 3 est celui de Gaëlle, que le
+# modèle prenait pour Inès avec des clés et valeurs sur 8 bits (llama.cpp aussi, sans sa rotation de Hadamard).
+LFM2=${LFM2_MODEL:-$ROOT/build/models/LFM2.5-1.2B-Instruct-Q8_0.gguf}
+LFM2MOE=${LFM2MOE_MODEL:-$ROOT/build/models/LFM2.5-8B-A1B-Q4_K_M.gguf}
+if [ ! -f "$ENGINE" ] || [ ! -f "$LFM2" ]; then skip "lfm2" "no $LFM2"
+else
+  step "lfm2" "Paris" "$CHAT" "$ENGINE" "$LFM2" --temperature 0 --max 40 "$QUESTION"
+  step "lfm2 resumed state" "same answers with resumed states" qwen35_turns "$LFM2"
+  # La reprise relit 22 tokens en produits entiers, la question seule tout en flottants : LFM2.5-1.2B y hésite sur
+  # son premier mot (« We » 0,27, « Our » 0,255 dans llama.cpp, dont la réponse est celle de la reprise).  L'étape
+  # vérifie la reprise et le sujet de la réponse.
+  step "lfm2 checkpoint" "resumed at a checkpoint, answer on its subject" qwen35_checkpoint "$LFM2" subject
+fi
+if [ ! -f "$ENGINE" ] || [ ! -f "$LFM2MOE" ]; then skip "lfm2 moe" "no $LFM2MOE"
+else
+  step "lfm2 moe" "Paris" "$CHAT" "$ENGINE" "$LFM2MOE" --temperature 0 --max 200 "$QUESTION"
+  # Le texte exact, avec son saut de ligne final : sans lui, les entiers sur 8 bits trouvaient aussi Gaëlle.
+  LFM2_LOG=$(cat "$HERE/../tests/lfm2/long_prompt.txt"; printf x)
+  step "lfm2 moe long prompt" "PELICAN.*Gaëlle" "$CHAT" "$ENGINE" "$LFM2MOE" --temperature 0 --max 400 "${LFM2_LOG%x}"
 fi
 
 if [ -f "$EMBEDDING" ] && [ -f "$ENGINE" ]; then

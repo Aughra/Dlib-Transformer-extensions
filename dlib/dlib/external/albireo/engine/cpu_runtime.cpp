@@ -56,11 +56,13 @@ namespace albireo
 
         // Le bloc feed-forward d'une couche : dense, à experts, et l'expert partagé de qwen35moe.
         auto load_ffn = [&](layer& L, const std::string& p, long li) {
-            if (cfg_.is_moe())
+            if (cfg_.moe_layer(li))
             {
                 const long n_exp = cfg_.n_experts;
                 const long df = cfg_.d_ffn_expert;
                 L.router = f.matrix(p + "ffn_gate_inp.weight", n_exp, d);
+                // Le biais du choix des experts de LFM2-MoE.
+                if (cfg_.expert_sigmoid) L.expert_bias = f.floats(p + "exp_probs_b.bias", static_cast<size_t>(n_exp));
                 for (long e = 0; e < n_exp; ++e)
                 {
                     L.e_gate.push_back(f.expert_matrix(p + "ffn_gate_exps.weight", df, d, e, n_exp));
@@ -103,7 +105,19 @@ namespace albireo
             layer& L = layers_[static_cast<size_t>(i)];
             L.attn_norm = f.floats(p + "attn_norm.weight", static_cast<size_t>(d));
             // qwen35 nomme post_attention_norm la norme d'avant le bloc feed-forward.
-            const std::string ffn_norm = cfg_.recurrent() ? "post_attention_norm.weight" : "ffn_norm.weight";
+            const std::string ffn_norm = cfg_.full_attention_interval > 0 ? "post_attention_norm.weight"
+                : "ffn_norm.weight";
+            if (cfg_.lfm2 && cfg_.linear_layer(i))
+            {
+                // Une convolution courte de LFM2 : in_proj donne b, c et x, conv ses conv_kernel poids par canal.
+                linear_slot_[static_cast<size_t>(i)] = n_linear++;
+                L.w_mix = f.matrix(p + "shortconv.in_proj.weight", 3 * d, d);
+                L.w_ssm_out = f.matrix(p + "shortconv.out_proj.weight", d, d);
+                L.conv1d = f.floats(p + "shortconv.conv.weight", static_cast<size_t>(d * cfg_.conv_kernel));
+                L.ffn_norm = f.floats(p + ffn_norm, static_cast<size_t>(d));
+                load_ffn(L, p, i);
+                continue;
+            }
             if (cfg_.linear_layer(i))
             {
                 const long C = cfg_.ssm_conv_dim(), VD = cfg_.ssm_value_dim(), Hv = cfg_.ssm_v_heads;
@@ -210,7 +224,8 @@ namespace albireo
             states_.data = static_cast<float*>(p);
             states_.bytes = bytes;
         }
-        output_norm_ = f.floats("output_norm.weight", static_cast<size_t>(d));
+        // LFM2 range sa norme finale sous token_embd_norm, comme le relève llama.cpp (LLM_TENSOR_OUTPUT_NORM_LFM2).
+        output_norm_ = f.floats(cfg_.lfm2 ? "token_embd_norm.weight" : "output_norm.weight", static_cast<size_t>(d));
         token_embd_ = f.matrix("token_embd.weight", cfg_.vocab, d);
         output_ = cfg_.tied_embeddings ? token_embd_ : f.matrix("output.weight", cfg_.vocab, d);
 
@@ -963,27 +978,43 @@ namespace albireo
         probs.resize(static_cast<size_t>(n_exp));
         std::vector<long>& order = router_order_;
         order.resize(static_cast<size_t>(n_exp));
+        // LFM2-MoE (fork pour macOS) : le choix sur sigmoid(logit) + biais, le poids sur sigmoid(logit) seul.
+        std::vector<float>& choice = router_choice_;
+        choice.resize(static_cast<size_t>(n_exp));
+        const bool sigmoid = cfg_.expert_sigmoid;
         for (long t = 0; t < T; ++t)
         {
             const float* row = router_logits_.data() + t * n_exp;
-            const float mx = *std::max_element(row, row + n_exp);
-            float sum = 0;
-            for (long e = 0; e < n_exp; ++e)
+            if (sigmoid)
+                for (long e = 0; e < n_exp; ++e)
+                {
+                    probs[static_cast<size_t>(e)] = 1.0f / (1.0f + std::exp(-row[e]));
+                    choice[static_cast<size_t>(e)] = probs[static_cast<size_t>(e)] + L.expert_bias[static_cast<size_t>(e)];
+                }
+            else
             {
-                probs[static_cast<size_t>(e)] = std::exp(row[e] - mx);
-                sum += probs[static_cast<size_t>(e)];
+                const float mx = *std::max_element(row, row + n_exp);
+                float sum = 0;
+                for (long e = 0; e < n_exp; ++e)
+                {
+                    probs[static_cast<size_t>(e)] = std::exp(row[e] - mx);
+                    sum += probs[static_cast<size_t>(e)];
+                }
+                for (auto& p : probs) p /= sum;
             }
-            for (auto& p : probs) p /= sum;
+            const std::vector<float>& rank = sigmoid ? choice : probs;
             for (long e = 0; e < n_exp; ++e) order[static_cast<size_t>(e)] = e;
             std::partial_sort(order.begin(), order.begin() + top_k, order.end(),
-                [&](long a, long b) { return probs[static_cast<size_t>(a)] > probs[static_cast<size_t>(b)]; });
+                [&](long a, long b) { return rank[static_cast<size_t>(a)] > rank[static_cast<size_t>(b)]; });
             float selected = 0;
             for (long k = 0; k < top_k; ++k) selected += probs[static_cast<size_t>(order[static_cast<size_t>(k)])];
+            // La somme des poids choisis, bornée comme dans llama.cpp (le plus petit float16 normal).
+            if (sigmoid) selected = std::max(selected, 6.103515625e-5f);
             for (long k = 0; k < top_k; ++k)
             {
                 const long e = order[static_cast<size_t>(k)];
                 float w = probs[static_cast<size_t>(e)];
-                if (cfg_.expert_weights_norm && selected > 0) w /= selected;
+                if ((cfg_.expert_weights_norm || sigmoid) && selected > 0) w /= selected;
                 routed[static_cast<size_t>(e)].push_back(std::make_pair(t, w));
             }
         }
@@ -1233,6 +1264,52 @@ namespace albireo
     }
 
     /*
+        Une convolution courte de LFM2 (fork pour macOS), comme llama.cpp la calcule (src/models/lfm-base.cpp,
+        build_lfm_shortconv) : in_proj donne, par token, b, c et x (d_model valeurs chacun) ; chaque canal de
+        b * x passe dans une convolution causale de conv_kernel poids, dont la fenêtre des conv_kernel - 1 valeurs
+        précédentes est l'état de la séquence ; la sortie, multipliée par c, va à out_proj.  Sans activation.
+    */
+    void cpu_runtime::short_convolution(const layer& L, long linear, const forward_batch& batch)
+    {
+        const long T = static_cast<long>(batch.tokens.size());
+        const long d = cfg_.d_model, K = cfg_.conv_kernel, window = K - 1;
+        const size_t offset = static_cast<size_t>(linear) * static_cast<size_t>(cfg_.ssm_state_floats());
+
+        mix_.resize(static_cast<size_t>(T * 3 * d));
+        lin_out_.resize(static_cast<size_t>(T * d));
+        product(L.w_mix, xn_.data(), T, d, mix_.data(), 3 * d);
+
+        // Les canaux sont indépendants, les tokens d'une séquence se suivent.
+        auto convolve = [&](long first, long last) {
+            for (long ch = first; ch < last; ++ch)
+            {
+                const float* w = L.conv1d.data() + ch * K;
+                for (const auto& s : batch.segments)
+                {
+                    float* win = state_of(s.sequence) + offset + ch * window;
+                    for (long j = 0; j < s.count; ++j)
+                    {
+                        const long t = s.start + j;
+                        const float* row = mix_.data() + t * 3 * d;
+                        const float in = row[ch] * row[2 * d + ch];
+                        float sum = 0.0f;
+                        for (long i = 0; i < window; ++i) sum += win[i] * w[i];
+                        sum += in * w[window];
+                        for (long i = 0; i + 1 < window; ++i) win[i] = win[i + 1];
+                        if (window > 0) win[window - 1] = in;
+                        lin_out_[static_cast<size_t>(t * d + ch)] = row[d + ch] * sum;
+                        if (float* ck = token_checkpoint_[static_cast<size_t>(t)])
+                            std::memcpy(ck + offset + ch * window, win, sizeof(float) * static_cast<size_t>(window));
+                    }
+                }
+            }
+        };
+        const long blocks = (d + 63) / 64;
+        pool_.parallel_for(blocks, [&](long b, int) { convolve(b * 64, std::min(d, b * 64 + 64)); });
+        product(L.w_ssm_out, lin_out_.data(), T, d, tmp_.data(), d);
+    }
+
+    /*
         Une couche Gated DeltaNet (qwen35), comme llama.cpp la calcule (src/models/qwen35.cpp,
         delta-net-base.cpp) : projections, convolution causale par canal et SiLU, normes L2 des requêtes et
         des clés, puis, par tête de valeurs, la règle delta sur l'état S (ssm_head_dim x ssm_head_dim) :
@@ -1473,9 +1550,10 @@ namespace albireo
 
             if (slot < 0)
             {
-                // Couche linéaire (qwen35) : Gated DeltaNet, puis la somme résiduelle.
+                // Couche linéaire : Gated DeltaNet (qwen35) ou convolution courte (lfm2), puis la somme résiduelle.
                 rms_norm_rows(x_.data(), L.attn_norm.data(), xn_.data(), T, d, eps);
-                linear_attention(L, linear_slot_[static_cast<size_t>(li)], batch);
+                if (cfg_.lfm2) short_convolution(L, linear_slot_[static_cast<size_t>(li)], batch);
+                else linear_attention(L, linear_slot_[static_cast<size_t>(li)], batch);
                 for (size_t i = 0; i < x_.size(); ++i) x_[i] += rs * tmp_[i];
             }
             else
@@ -1568,7 +1646,7 @@ namespace albireo
 
             // Bloc feed-forward.
             rms_norm_rows(x_.data(), L.ffn_norm.data(), xn_.data(), T, d, eps);
-            if (cfg_.is_moe())
+            if (cfg_.moe_layer(li))
             {
                 moe_ffn(L, T);
             }

@@ -43,6 +43,7 @@
         --image FILE         une image PNG ou JPEG donnée avant chaque question, sous forme d'URL
                              data ; la répéter pour plusieurs images
         --detail LEVEL       low, auto ou high : les tokens que prennent les images au plus
+        --kv TYPE            auto, q8 ou f16 : le stockage des clés et valeurs
         --threads N, --context N
 
     Affiche le raisonnement entre crochets, la réponse, les appels d'outils, puis les
@@ -326,7 +327,7 @@ int main(int argc, char** argv)
     int threads = 0;
     long context = 4096;
     std::vector<std::string> questions;
-    std::string system, device, routing, reference, projector, detail, tool_result;
+    std::string system, device, routing, reference, projector, detail, tool_result, kv_type;
     bool with_result = false;
     std::vector<std::string> images;
     for (int i = 3; i < argc; ++i)
@@ -362,6 +363,7 @@ int main(int argc, char** argv)
         else if (a == "--projector" && i + 1 < argc) projector = argv[++i];
         else if (a == "--image" && i + 1 < argc) images.push_back(argv[++i]);
         else if (a == "--detail" && i + 1 < argc) detail = argv[++i];
+        else if (a == "--kv" && i + 1 < argc) kv_type = argv[++i];
         else questions.push_back(a);
     }
 
@@ -445,6 +447,8 @@ int main(int argc, char** argv)
     json options = json::object();
     options["context"] = context;
     if (!projector.empty()) options["projector"] = projector;
+    // Le stockage des clés et valeurs (auto, q8 ou f16), pour comparer à une référence en demi-précision.
+    if (!kv_type.empty()) options["kv_type"] = kv_type;
     if (lib.load_model(e, "m", argv[2], options.dump().c_str(), err, sizeof(err)) != ALBIREO_OK)
     {
         std::printf("load: %s\n", err);

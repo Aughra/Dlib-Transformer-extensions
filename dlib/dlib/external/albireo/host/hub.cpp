@@ -17,14 +17,17 @@ namespace albireo
 
         // Les architectures que le moteur lit (model_config.cpp).
         const std::set<std::string> engine_architectures = { "llama", "mistral", "mistral3", "granite", "qwen2",
-            "qwen3", "qwen3vl", "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "phi3", "qwen35", "qwen35moe", "gemma4" };
-        const std::set<std::string> moe_architectures = { "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "qwen35moe" };
+            "qwen3", "qwen3vl", "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "phi3", "qwen35", "qwen35moe", "gemma4",
+            "lfm2", "lfm2moe" };
+        const std::set<std::string> moe_architectures = { "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "qwen35moe",
+            "lfm2moe" };
         // Les architectures dont le moteur lit les images avec un projecteur : qwen3vl_merger pour Qwen3-VL, et
         // qwen35 depuis Albireo 4.13.0 du fork (qwen35moe, dont aucun projecteur n'a encore été essayé, attend) ;
         // gemma4v pour Gemma 4 depuis Albireo 4.16.0 du fork.
         const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe", "qwen35", "gemma4" };
-        // Les architectures dont les passes restent sur le processeur : Gemma 4 depuis Albireo 4.14.0 du fork.
-        const std::set<std::string> processor_architectures = { "gemma4" };
+        // Les architectures dont les passes restent sur le processeur : Gemma 4 depuis Albireo 4.14.0 du fork, LFM2 et
+        // LFM2-MoE depuis Albireo 4.17.0.
+        const std::set<std::string> processor_architectures = { "gemma4", "lfm2", "lfm2moe" };
 
         std::string lower(std::string s)
         {
@@ -196,8 +199,12 @@ namespace albireo
                 if (vision_architectures.count(arch)) projectors.push_back(o);
                 continue;
             }
-            // Les petits modèles de brouillon (prédiction de plusieurs tokens) de Gemma 4 ne se servent pas seuls.
-            if (lower(path).compare(0, 4, "mtp-") == 0) continue;
+            // Les petits modèles de brouillon (prédiction de plusieurs tokens) de Gemma 4, et le tokenizer audio et la voix
+            // (vocoder) de LFM2.5-Audio, ne se servent pas seuls.
+            const std::string name = lower(path.substr(path.rfind('/') == std::string::npos ? 0 : path.rfind('/') + 1));
+            if (name.compare(0, 4, "mtp-") == 0 || name.compare(0, 10, "tokenizer-") == 0
+                || name.compare(0, 8, "vocoder-") == 0)
+                continue;
             json c = architecture_check(arch, repo);
             if (c["compatible"].as_bool(false) && split)
             {
@@ -305,7 +312,9 @@ namespace albireo
         inputs.push_back("text");
         if (!projector.empty()) inputs.push_back("image");
         entry["inputs"] = inputs;
-        entry["tools"] = info["gguf"]["chat_template"].as_string().find("tools") != std::string::npos;
+        // Les outils de LFM2 (« List of tools: ») ne sont pas encore lus par le moteur.
+        const std::string& tmpl = info["gguf"]["chat_template"].as_string();
+        entry["tools"] = tmpl.find("tools") != std::string::npos && tmpl.find("List of tools: ") == std::string::npos;
         entry["reasoning"] = low.find("think") != std::string::npos || low.find("reason") != std::string::npos
             || low.find("-r1") != std::string::npos;
         entry["license"] = license_of(info);

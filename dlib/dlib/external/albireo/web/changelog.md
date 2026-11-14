@@ -2,6 +2,27 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.17.0 — 14 novembre 2026
+
+### Plateforme
+
+- Le moteur lit les modèles LFM2 et LFM2-MoE de Liquid AI (architectures `lfm2` et `lfm2moe`), sur le processeur : couches à convolution courte, dont l'état par conversation tient en deux positions, et couches d'attention ; pour LFM2-MoE, 32 experts dont 4 par token, routés par sigmoïde avec un biais de choix, après deux couches denses. La reprise d'une conversation depuis l'état gardé et les points de reprise toutes les 256 positions fonctionnent comme pour Qwen 3.5. Vérification par rapport à llama.cpp 0.9.0, sur le processeur et en choix glouton : avec LFM2.5-1.2B-Instruct Q8_0, deux réponses sur quatre identiques (87 et 150 tokens), les deux autres jusqu'à une quasi-égalité de la référence (par exemple 0,26 contre 0,213), réponse identique sur un prompt de 2 623 tokens, et réponses identiques aux deuxième et troisième tours d'une conversation reprise depuis l'état gardé ; avec LFM2.5-8B-A1B Q4_K_M, raisonnement et réponse jusqu'à une quasi-égalité sur quatre questions. Vitesse sur MacBook Air M2, processeur : LFM2.5-1.2B Q8_0, écriture de 35 à 36 tokens/s, lecture d'un prompt de 512 tokens à 253 à 281 tokens/s ; LFM2.5-8B-A1B Q4_K_M, écriture de 34 tokens/s, lecture à 141 à 149 tokens/s.
+- Format de conversation de LFM2 : prompt identique à son gabarit sur huit conversations, token de début de texte compris ; le raisonnement que le modèle ouvre lui-même (`<think>`) est séparé de la réponse. Les appels d'outils de LFM2 ne sont pas encore pris en charge. Seuls LFM2.5-350M, 1.2B-Instruct, Audio-1.5B (en texte) et 8B-A1B ont été essayés ; LFM2.5-24B-A2B ne l'a pas été.
+
+### Réglages
+
+- Avec le format de clés et valeurs « auto », les modèles LFM2 gardent leurs clés et valeurs en demi-précision : en 8 bits, LFM2.5-8B-A1B perdait un détail d'un prompt de 2 622 tokens. Le surcoût reste faible, ces modèles n'ayant que six couches d'attention (12 Ko par token).
+
+### Accès et documents
+
+- La recherche Hugging Face marque les dépôts LFM2 comme compatibles, sans GPU, et ne propose plus les fichiers annexes du modèle LFM2.5-Audio (tokenizer audio, vocoder). Le catalogue n'annonce pas d'outils pour LFM2. Vérifié avec un service d'essai : LFM2.5-1.2B-Instruct et LFM2.5-350M ajoutés depuis Hugging Face, installés et interrogés en français.
+
+### Corrections
+
+- L'ajout d'un modèle depuis Hugging Face sans le champ `projector` (facultatif) était refusé (« invalid repository or file name ») : la lecture de ce champ absent invalidait celle des deux autres.
+
+---
+
 ## 4.16.0 — 14 novembre 2026
 
 ### Plateforme

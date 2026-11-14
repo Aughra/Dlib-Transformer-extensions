@@ -67,7 +67,9 @@ namespace albireo
         const bool qwen35 = a == "qwen35" || a == "qwen35moe";
         // Gemma 4 (fork pour macOS) : fenêtre glissante, clés et valeurs partagées, plongements par couche.
         const bool gemma4 = a == "gemma4";
-        if (!llama_like && !qwen_like && !moe_arch && !phi && !qwen35 && !gemma4)
+        // LFM2 et LFM2-MoE (fork pour macOS) : convolutions courtes et attention, experts routés par sigmoïde.
+        const bool lfm2 = a == "lfm2" || a == "lfm2moe";
+        if (!llama_like && !qwen_like && !moe_arch && !phi && !qwen35 && !gemma4 && !lfm2)
             throw std::runtime_error("the architecture '" + a + "' is not supported by this engine");
 
         if (!g.has(a + ".block_count") || !g.has(a + ".attention.head_count") || !g.has(a + ".embedding_length"))
@@ -80,7 +82,24 @@ namespace albireo
         if (static_cast<size_t>(c.n_layers) > g.tensors().size())
             throw std::runtime_error("the model declares more layers than it holds tensors");
         c.n_heads = bounded_int(g, a + ".attention.head_count", 0, 1, max_heads);
-        c.n_kv_heads = bounded_int(g, a + ".attention.head_count_kv", c.n_heads, 1, c.n_heads);
+        if (lfm2)
+        {
+            // Une valeur par couche : 0 pour une couche à convolution, le même nombre de têtes pour les autres.
+            const std::string key = a + ".attention.head_count_kv";
+            if (!g.has(key) || !g.at(key).is_array() || g.at(key).arr_int.size() < static_cast<size_t>(c.n_layers))
+                throw std::runtime_error("the model metadata lacks the key/value heads of each layer");
+            for (long li = 0; li < c.n_layers; ++li)
+            {
+                const int64_t v = g.at(key).arr_int[static_cast<size_t>(li)];
+                if (v < 0 || v > c.n_heads || (v > 0 && c.n_kv_heads > 0 && v != c.n_kv_heads))
+                    throw std::runtime_error("the model metadata holds an invalid " + key);
+                if (v > 0) c.n_kv_heads = static_cast<long>(v);
+                c.conv_layers.push_back(v == 0 ? 1 : 0);
+            }
+            if (c.n_kv_heads <= 0) throw std::runtime_error("this model has no attention layer");
+        }
+        else
+            c.n_kv_heads = bounded_int(g, a + ".attention.head_count_kv", c.n_heads, 1, c.n_heads);
         c.d_model = bounded_int(g, a + ".embedding_length", 0, 1, max_width);
         if (gemma4 && g.has(a + ".feed_forward_length") && g.at(a + ".feed_forward_length").is_array())
         {
@@ -125,7 +144,7 @@ namespace albireo
         // Embedding rotatif.
         // Qwen 3.5 déclare des sections de positions multimodales ; pour du texte, ses trois composantes sont
         // égales, et la rotation est celle de neox sur rope_dims dimensions.
-        c.rope = qwen_like || a == "qwen3moe" || a == "qwen3vlmoe" || phi || qwen35 || gemma4 ? rope_style::neox
+        c.rope = qwen_like || a == "qwen3moe" || a == "qwen3vlmoe" || phi || qwen35 || gemma4 || lfm2 ? rope_style::neox
             : rope_style::norm;
         c.rope_dims = bounded_int(g, a + ".rope.dimension_count", c.head_dim, 0, max_head_dim);
         if (c.rope_dims <= 0 || c.rope_dims > c.head_dim || c.rope_dims % 2 != 0)
@@ -290,6 +309,28 @@ namespace albireo
             if (!c.qk_norm) throw std::runtime_error("this Gemma 4 model has no query and key norms");
         }
 
+        if (lfm2)
+        {
+            c.lfm2 = true;
+            c.conv_kernel = bounded_int(g, a + ".shortconv.l_cache", 0, 2, 64);
+            // Les modèles à tête de décision, à fenêtre glissante ou à couche de sortie dense (ColBERT) ne sont pas
+            // des modèles de conversation que le moteur sait servir.
+            if (g.get_int(a + ".decision_block_count", 0) > 0)
+                throw std::runtime_error("the decision models of LFM2 are not supported by this engine");
+            if (g.get_int(a + ".attention.sliding_window", 0) > 0)
+                throw std::runtime_error("the sliding window of this LFM2 model is not supported by this engine yet");
+            if (f.has("dense_2.weight"))
+                throw std::runtime_error("the dense output layer of this LFM2 model is not supported by this engine");
+            // blk.0 est une convolution : les options des couches d'attention se lisent sur la première d'entre elles.
+            long first = 0;
+            while (c.conv_layers[static_cast<size_t>(first)]) ++first;
+            const std::string p = "blk." + std::to_string(first) + ".";
+            c.qkv_bias = f.has(p + "attn_q.bias");
+            c.qk_norm = f.has(p + "attn_q_norm.weight");
+            c.fused_qkv = f.has(p + "attn_qkv.weight");
+            if (c.qkv_bias || c.fused_qkv) throw std::runtime_error("unsupported attention layers of LFM2");
+        }
+
         if (a == "granite" || a == "granitemoe")
         {
             c.embedding_scale = finite_double(g, a + ".embedding_scale", 1.0);
@@ -315,11 +356,20 @@ namespace albireo
             }
             else if (f.has("blk.0.ffn_gate_shexp.weight") || f.has("blk.0.ffn_up_shexp.weight"))
                 throw std::runtime_error("shared experts are not supported by this engine");
-            if (!f.has("blk.0.ffn_gate_exps.weight"))
+            if (lfm2)
+            {
+                // Les premières couches denses, et le routage par sigmoïde (expert_gating_func 2 dans llama.cpp).
+                c.n_dense_lead = bounded_int(g, a + ".leading_dense_block_count", 0, 0, c.n_layers - 1);
+                if (g.get_int(a + ".expert_gating_func", 2) != 2)
+                    throw std::runtime_error("this LFM2 model routes its experts otherwise than by a sigmoid");
+                c.expert_sigmoid = true;
+            }
+            const std::string first_moe = "blk." + std::to_string(c.n_dense_lead) + ".";
+            if (!f.has(first_moe + "ffn_gate_exps.weight"))
                 throw std::runtime_error("this mixture of experts stores its experts in a legacy layout; "
                     "convert it again with a recent tool");
         }
-        else if (moe_arch && a != "granitemoe")
+        else if ((moe_arch && a != "granitemoe") || a == "lfm2moe")
         {
             throw std::runtime_error("the model declares a mixture of experts without experts");
         }
@@ -345,7 +395,12 @@ namespace albireo
           << ", heads " << c.n_heads << "/" << c.n_kv_heads << " of " << c.head_dim
           << ", ffn " << c.d_ffn;
         if (c.is_moe()) o << ", " << c.n_experts << " experts top-" << c.n_experts_used;
-        if (c.recurrent())
+        if (c.is_moe() && c.n_dense_lead > 0) o << " after " << c.n_dense_lead << " dense layers";
+        if (c.expert_sigmoid) o << ", sigmoid routing";
+        if (c.lfm2)
+            o << ", " << c.n_layers - c.n_attention_layers() << " short convolution layers of " << c.conv_kernel
+              << " positions and " << c.n_attention_layers() << " attention layers";
+        else if (c.recurrent())
             o << ", " << c.n_layers - c.n_attention_layers() << " gated deltanet layers (heads " << c.ssm_k_heads
               << "/" << c.ssm_v_heads << " of " << c.ssm_head_dim << ", conv " << c.ssm_conv_kernel
               << ") and " << c.n_attention_layers() << " gated attention layers";

@@ -824,6 +824,67 @@ What is the weather in Paris right now?<turn|>
         expect(b.calls.empty() && b.content == broken, "Gemma 4 broken call kept as text: " + b.content);
     }
 
+    // LFM2 : le BOS, les pensées passées selon le template, le raisonnement ouvert par le modèle (fork pour macOS).
+    {
+        const dlib::hf_tokenizer ltok = tokenizer({ "<|startoftext|>", "<|endoftext|>", "<|im_start|>", "<|im_end|>" },
+            { "<think>", "</think>", "<|tool_call_start|>", "<|tool_call_end|>" });
+        // Des extraits des templates de LFM2.5-1.2B-Instruct et de LFM2.5-8B-A1B.
+        const std::string small = "{{- bos_token -}}{%- set keep_past_thinking = keep_past_thinking | default(false) -%}"
+            "\"List of tools: [\"{%- if \"</think>\" in content -%}";
+        const std::string large = "{{- bos_token -}}{%- set preserve_thinking = preserve_thinking | default(false) -%}"
+            "\"List of tools: [\"{{- \"<think>\" + message.thinking + \"</think>\" -}}";
+        const std::unique_ptr<chat_format> s = chat_format::detect(ltok, small);
+        const std::unique_ptr<chat_format> l = chat_format::detect(ltok, large);
+        expect(std::string(s->name()) == "lfm2" && !s->supports_tools() && !s->supports_reasoning(), "LFM2 1.2B detected");
+        expect(std::string(l->name()) == "lfm2" && !l->supports_tools() && l->supports_reasoning(), "LFM2 8B detected");
+
+        std::vector<chat_message> m(3);
+        m[0].role = "user";
+        m[0].content = "2+2?";
+        m[1].role = "assistant";
+        m[1].content = "<think>easy</think>\n\nFour.";
+        m[2].role = "user";
+        m[2].content = "3+3?";
+        // Tels que les écrit llama.cpp 0.9.0 (/apply-template, avec le BOS qu'il ajoute en découpant le prompt) : le
+        // 1.2B retire la pensée de la première réponse et garde celle de la dernière.
+        std::vector<chat_message> two = m;
+        two.resize(5);
+        two[3].role = "assistant";
+        two[3].content = "<think>also easy</think>\nSix.";
+        two[4].role = "user";
+        two[4].content = "And 4+4?";
+        const std::string small_expected = "<|startoftext|><|im_start|>user\n2+2?<|im_end|>\n<|im_start|>assistant\n"
+            "Four.<|im_end|>\n<|im_start|>user\n3+3?<|im_end|>\n<|im_start|>assistant\n<think>also easy</think>\nSix."
+            "<|im_end|>\n<|im_start|>user\nAnd 4+4?<|im_end|>\n<|im_start|>assistant\n";
+        expect(render(*s, two, render_options()) == small_expected, "LFM2 1.2B drops past thinking:\n"
+            + render(*s, two, render_options()));
+        const std::string large_expected = "<|startoftext|><|im_start|>user\n2+2?<|im_end|>\n<|im_start|>assistant\n"
+            "<think>easy</think>\n\nFour.<|im_end|>\n<|im_start|>user\n3+3?<|im_end|>\n<|im_start|>assistant\n";
+        expect(render(*l, m, render_options()) == large_expected, "LFM2 8B keeps past thinking:\n"
+            + render(*l, m, render_options()));
+        // Le template de LFM2.5-Audio (outils entre <|tool_list_start|> et <|tool_list_end|>) garde les pensées passées.
+        const std::unique_ptr<chat_format> a = chat_format::detect(ltok, "{{- bos_token -}}{%- set ns.system_prompt = "
+            "ns.system_prompt + \"List of tools: <|tool_list_start|>[\" -%}");
+        expect(std::string(a->name()) == "lfm2", "LFM2 Audio detected");
+        expect(render(*a, two, render_options()) == "<|startoftext|><|im_start|>user\n2+2?<|im_end|>\n<|im_start|>"
+            "assistant\n<think>easy</think>\n\nFour.<|im_end|>\n<|im_start|>user\n3+3?<|im_end|>\n<|im_start|>assistant\n"
+            "<think>also easy</think>\nSix.<|im_end|>\n<|im_start|>user\nAnd 4+4?<|im_end|>\n<|im_start|>assistant\n",
+            "LFM2 Audio keeps past thinking:\n" + render(*a, two, render_options()));
+        m[1].content = "Four.";
+        m[1].reasoning = "easy sum";
+        const std::string field_expected = "<|startoftext|><|im_start|>user\n2+2?<|im_end|>\n<|im_start|>assistant\n"
+            "<think>easy sum</think>Four.<|im_end|>\n<|im_start|>user\n3+3?<|im_end|>\n<|im_start|>assistant\n";
+        expect(render(*l, m, render_options()) == field_expected, "LFM2 8B writes the reasoning of an answer:\n"
+            + render(*l, m, render_options()));
+
+        const parsed r = read_all_ways(*l, render_options(), "<think>\nShort.\n</think>\nParis.", "LFM2 reasoning");
+        expect(r.reasoning.find("Short.") != std::string::npos && r.content.find("Paris.") != std::string::npos
+            && r.content.find("Short") == std::string::npos, "LFM2 reasoning read apart: [" + r.reasoning + "] "
+            + r.content);
+        const parsed c = read_all_ways(*s, render_options(), "The capital is Paris.", "LFM2 answer");
+        expect(c.content == "The capital is Paris." && c.reasoning.empty(), "LFM2 answer without reasoning");
+    }
+
     if (failures)
     {
         std::printf("%d checks FAILED\n", failures);

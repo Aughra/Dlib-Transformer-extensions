@@ -172,6 +172,8 @@ namespace albireo
             weight_matrix w_gate, w_up, w_down;
             weight_matrix router;
             std::vector<weight_matrix> e_gate, e_up, e_down;
+            // Le biais du choix des experts (LFM2-MoE, model_config::expert_sigmoid).
+            std::vector<float> expert_bias;
             // Une couche Gated DeltaNet (model_config::linear_layer()) : ses projections des requêtes, clés et
             // valeurs (w_mix), de la porte de sortie (w_z), de l'oubli (w_alpha) et de la force d'écriture
             // (w_beta), sa convolution (ssm_conv_kernel poids par canal), dt_bias, ssm_a (-exp(A_log)), la
@@ -248,6 +250,8 @@ namespace albireo
         // Une couche Gated DeltaNet sur les lignes normalisées xn_, dans tmp_ ; linear est son rang parmi les
         // couches linéaires, qui situe son état dans celui de chaque séquence.
         void linear_attention(const layer& L, long linear, const forward_batch& batch);
+        // Une convolution courte de LFM2 sur les lignes normalisées xn_, dans tmp_, avec le même rang linear.
+        void short_convolution(const layer& L, long linear, const forward_batch& batch);
         void embed(const std::vector<int>& tokens);
         /*
             La passe avant, avec les couches sur le périphérique via layer_pass_ quand on_device vaut
@@ -382,7 +386,7 @@ namespace albireo
         aligned_floats router_logits_, expert_x_, expert_gate_, expert_up_, expert_y_;
         // Les tampons des couches linéaires et de la porte de l'attention de qwen35.
         aligned_floats mix_, z_, alpha_, beta_, lin_out_, qg_, attn_gate_;
-        std::vector<float> hidden_out_, router_probs_;
+        std::vector<float> hidden_out_, router_probs_, router_choice_;
         std::vector<long> router_order_;
         std::vector<std::vector<std::pair<long, float>>> routed_;
         std::vector<qk_scratch> scratch_;

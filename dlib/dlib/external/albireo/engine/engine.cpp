@@ -1219,7 +1219,14 @@ namespace albireo
             || (kv_type != "auto" && kv_type != "q8" && kv_type != "f16"))
             throw std::invalid_argument("the setting kv_type must be auto, q8 or f16");
         const bool whole_groups = m->cfg.head_dim % kv_q8_group == 0;
-        m->kv_type = whole_groups && (kv_type == "q8" || (kv_type == "auto" && !embedding)) ? kv_format::q8
+        /*
+            LFM2 (fork pour macOS) garde ses clés et valeurs en demi-précision avec auto : ses six couches
+            d'attention portent seules la mémoire du texte, et les entiers sur 8 bits, sans la rotation de
+            Hadamard que llama.cpp leur applique (llama-kv-cache.cpp, attn_rot), lui font perdre un détail lu
+            2 600 tokens plus tôt (LFM2.5-8B-A1B ; llama.cpp avec LLAMA_ATTN_ROT_DISABLE=1 le perd de même).
+        */
+        const bool q8_by_default = !embedding && !m->cfg.lfm2;
+        m->kv_type = whole_groups && (kv_type == "q8" || (kv_type == "auto" && q8_by_default)) ? kv_format::q8
             : kv_format::f16;
         if (kv_type == "q8" && !whole_groups)
             log(ALBIREO_LOG_WARNING, "model '" + id + "': heads of " + std::to_string(m->cfg.head_dim) + " values "

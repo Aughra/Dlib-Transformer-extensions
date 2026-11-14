@@ -39,8 +39,8 @@ namespace albireo
                 pour les projections gate et up, positions rotatives sur les premières
                 dimensions des têtes, LongRoPE ; la fenêtre glissante que déclarent les
                 fichiers n'est pas appliquée, comme dans llama.cpp).  Le fork pour macOS
-                ajoute qwen35 et qwen35moe (couches linéaires, voir full_attention_interval)
-                et gemma4 dense (voir gemma4).
+                ajoute qwen35 et qwen35moe (couches linéaires, voir full_attention_interval),
+                gemma4 dense (voir gemma4), lfm2 et lfm2moe (convolutions courtes, voir lfm2).
 
             MODÈLES D'EMBEDDING
                 Un décodeur qui déclare <arch>.pooling_type calcule des vecteurs au lieu
@@ -178,6 +178,24 @@ namespace albireo
             logits passent par softcap * tanh(logits / softcap).
         */
         bool gemma4 = false;
+
+        /*
+            LFM2 et LFM2-MoE de Liquid AI (fork pour macOS).  Les couches de conv_layers (celles dont
+            head_count_kv vaut 0) remplacent l'attention par une convolution courte : in_proj donne b, c et x
+            (d_model valeurs chacun), y = c * conv(b * x), une convolution causale par canal sur conv_kernel
+            positions, puis out_proj.  L'état d'une séquence pour une telle couche est la fenêtre de
+            conv_kernel - 1 positions de b * x, et ces couches passent par la machinerie des couches linéaires
+            (linear_layer(), recurrent(), ssm_state_floats()).  Les autres couches sont des attentions GQA avec
+            normes des requêtes et des clés.  LFM2-MoE : les n_dense_lead premières couches ont un bloc
+            feed-forward dense, les autres des experts routés par sigmoïde, choisis sur sigmoid(logit) plus le
+            biais exp_probs_b, et pesés par sigmoid(logit) renormalisé (expert_sigmoid).
+        */
+        bool lfm2 = false;
+        std::vector<char> conv_layers;
+        long conv_kernel = 0;
+        long n_dense_lead = 0;
+        bool expert_sigmoid = false;
+
         std::vector<char> swa_layers;
         long sliding_window = 0;
         long head_dim_swa = 0;
@@ -209,11 +227,14 @@ namespace albireo
         long kv_dim() const { return n_kv_heads * head_dim; }
         long q_dim() const { return n_heads * head_dim; }
         long v_dim() const { return n_kv_heads * head_dim_v; }
-        bool recurrent() const { return full_attention_interval > 0; }
+        bool recurrent() const { return full_attention_interval > 0 || !conv_layers.empty(); }
         bool linear_layer(long li) const
         {
+            if (!conv_layers.empty()) return conv_layers[static_cast<size_t>(li)] != 0;
             return full_attention_interval > 0 && (li + 1) % full_attention_interval != 0;
         }
+        // Les couches à experts (les premières de LFM2-MoE restent denses).
+        bool moe_layer(long li) const { return is_moe() && li >= n_dense_lead; }
         long n_attention_layers() const
         {
             long n = 0;
@@ -224,9 +245,15 @@ namespace albireo
         long ssm_conv_dim() const { return (2 * ssm_k_heads + ssm_v_heads) * ssm_head_dim; }
         long ssm_value_dim() const { return ssm_v_heads * ssm_head_dim; }
         // Les floats de l'état d'une séquence pour une couche linéaire : la fenêtre de la convolution, puis
-        // une matrice par tête de valeurs.
-        long ssm_conv_state() const { return ssm_conv_dim() * (ssm_conv_kernel - 1); }
-        long ssm_state_floats() const { return ssm_conv_state() + ssm_v_heads * ssm_head_dim * ssm_head_dim; }
+        // une matrice par tête de valeurs (aucune pour la convolution courte de LFM2).
+        long ssm_conv_state() const
+        {
+            return lfm2 ? d_model * (conv_kernel - 1) : ssm_conv_dim() * (ssm_conv_kernel - 1);
+        }
+        long ssm_state_floats() const
+        {
+            return lfm2 ? ssm_conv_state() : ssm_conv_state() + ssm_v_heads * ssm_head_dim * ssm_head_dim;
+        }
     };
 
     // Lit la configuration d'un modèle, ou lève une exception donnant la raison pour

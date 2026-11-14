@@ -147,6 +147,8 @@ namespace albireo
         };
         // Gemma 4 (fenêtre glissante, têtes de 512, clés partagées, entrées par couche) reste sur le processeur.
         if (cfg_.gemma4) why = "the layers of Gemma 4";
+        // LFM2 (convolutions courtes) reste sur le processeur (fork pour macOS).
+        else if (cfg_.lfm2) why = "the short convolutions of LFM2";
         else if (cfg_.is_moe() && cfg_.n_experts_used > 32) why = "more than 32 experts per token";
         // qwen35 : des têtes linéaires d'au plus 256 valeurs, et un état dans la zone réservée.
         else if (cfg_.recurrent() && (cfg_.ssm_head_dim > 256 || !states_.data))

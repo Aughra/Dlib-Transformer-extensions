@@ -1634,7 +1634,10 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             if (!parse_body(req, res, body)) return;
             json entry;
             std::string error;
-            if (!hub_entry(body["repo"].as_string(), body["file"].as_string(), body["projector"].as_string(), entry, error)
+            // Lu en constant : sur un json modifiable, [] ajoute une clé absente (projector, facultatif), et cet ajout
+            // peut déplacer les valeurs dont les autres arguments tiennent déjà une référence.
+            const json& b = body;
+            if (!hub_entry(b["repo"].as_string(), b["file"].as_string(), b["projector"].as_string(), entry, error)
                 || !s->models().add_custom(entry, error))
             {
                 send_error(res, 400, "invalid_request_error", error, "hub_entry");
