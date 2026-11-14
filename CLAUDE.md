@@ -47,6 +47,7 @@ La référence des commandes et des résultats est [docs/memo-portage-macos-arm6
 - **Albireo / Pseudalis** : `cmake -S dlib/dlib/external/<app> -B build/macos-<app> -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64`.
 - **Sonde Metal** (GPU du Mac, hors moteur) : `macos/metal-sonde/`, propre au fork ; commandes dans son README.
 - **Site des documents** (lecture sur le téléphone, réseau de la maison, port 8650) : `macos/site-docs/serve.py` ; à mettre à jour (`SOMMAIRE`) quand un document du fork est ajouté. Détails dans son README.
+- **Mot-clé « sitelog »** : quand l'humain l'écrit, lancer le site s'il ne tourne pas (`lsof -nP -iTCP:8650 -sTCP:LISTEN`, sinon `nohup python3 macos/site-docs/serve.py > build/site-docs.log 2>&1 &`) et lui donner l'URL lue dans `build/site-docs.log`, sans autre question.
 - **Page d'Albireo** : `bash dlib/dlib/external/albireo/tools/page_test/page_test.sh` (ESLint et scénarios dans Chrome sans fenêtre, sur un service d'essai isolé) après tout changement de la page ; détails dans son README.
 - **Service d'Albireo** : lancement et réglages dans le mémo ; les réglages se changent dans l'onglet « Service » de la page, et l'accès depuis le réseau de la maison (http, port 8444, mot de passe) s'y ouvre.
 

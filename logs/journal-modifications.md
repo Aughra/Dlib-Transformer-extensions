@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-14 — Ajouter le mot-clé « sitelog »
+
+- **Quoi** : quand l'humain écrit « sitelog », Claude lance le site des documents s'il ne tourne pas et donne son URL.
+- **Fichiers** : `CLAUDE.md`.
+- **Pourquoi** : demande de l'humain, pour relancer le site d'un mot après un redémarrage du Mac.
+- **Étapes** : consigne écrite dans CLAUDE.md, pour qu'elle suive le dépôt sur le Mac mini, et dans la mémoire de Claude.
+
 ## 2026-11-14 — Ajouter un site de lecture des documents pour le réseau de la maison
 
 - **Quoi** : `macos/site-docs/serve.py`, en Python seul, sans paquet à installer : il sert en lecture seule une liste fermée de fichiers (`docs/`, `blog/`, `logs/`, CLAUDE.md, les README, les notes de version d'Albireo) sur l'adresse du Mac sur la box, port 8650. On y trouve un sommaire avec des cartes et la liste des épisodes du blog. Les pages Markdown sont mises en forme dans le navigateur par marked et DOMPurify, pris dans `albireo/web/vendor`, et les liens relatifs sont réécrits. Les en-têtes de sécurité (CSP, `nosniff`, pas de mise en cadre) sont posés. README.
