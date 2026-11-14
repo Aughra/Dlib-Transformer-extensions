@@ -289,7 +289,7 @@ const items = {
     cons: ['Pas identique au dernier chiffre près au processeur (écart de 0,04 à 0,3 % sur les scores, même mot choisi).',
       'Environ 200 Mo de mémoire en plus pour ses tampons.',
       'Seuls les poids en Q4_K et Q6_K y passent (aussi Q5_K, Q8_0 et Q5_0 pour Qwen 3.5, LFM2 et les mélanges d’experts) ; ' +
-        'Gemma 3, Gemma 4, LFM2-MoE et le modèle de recherche restent sur le processeur.'],
+        'Gemma 3, Gemma 4 et le modèle de recherche restent sur le processeur.'],
     normal: "Le Mac a deux moteurs de calcul sur la même puce : le processeur, polyvalent, et le GPU, fait pour répéter " +
       "la même opération sur des milliers de nombres à la fois. Écrire une réponse, c’est relire tout le modèle pour " +
       "chaque mot : le GPU lit cette mémoire plus vite. Lire un long document, c’est surtout multiplier : le GPU calcule " +

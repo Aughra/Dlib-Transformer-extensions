@@ -259,9 +259,10 @@ namespace albireo
             // y[t * y_stride + r] = sum_i W[r][i] x[t * x_stride + i], W en floats (le routeur).
             void matvec_f32(metal_view W, unsigned rows, unsigned cols, metal_view x, unsigned tokens,
                 unsigned x_stride, metal_view y, unsigned y_stride);
-            // Softmax des logits (experts par token), les top_k plus probables dans ids et weights.
+            // Softmax des logits (experts par token), les top_k plus probables dans ids et weights ; avec sigmoid
+            // (LFM2-MoE), le choix sur sigmoid(logit) + bias et les poids sigmoid(logit) renormalisés.
             void moe_route(metal_view logits, unsigned experts, unsigned top_k, bool norm, metal_view ids,
-                metal_view weights, unsigned tokens);
+                metal_view weights, unsigned tokens, bool sigmoid, metal_view bias);
             // g[t] = sigmoid(x[t] . w), x de d valeurs par token.
             void shared_gate(metal_view x, metal_view w, metal_view g, unsigned d, unsigned tokens);
             // x[t] += scale * (sum_k weights[t][k] y[t * top_k + k] + g[t] shared[t]), shared seulement s'il est donné.

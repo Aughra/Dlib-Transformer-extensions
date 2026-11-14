@@ -1427,16 +1427,18 @@ kernel void mv_f32(device const float* W [[buffer(0)]], device const float* x [[
 }
 
 // Le routage d'un token : softmax des logits des experts, les top_k plus probables, leurs poids renormalisés
-// quand norm ; un thread par token.
+// quand norm ; un thread par token.  Avec sigmoid (LFM2-MoE, fork pour macOS) : le choix sur sigmoid(logit) + bias,
+// le poids sigmoid(logit), renormalisé, la somme bornée au plus petit demi-flottant normal, comme cpu_runtime::moe_ffn().
 struct route_args
 {
     uint experts;
     uint top_k;
     uint norm;
+    uint sigmoid;
 };
 kernel void moe_route(device const float* logits [[buffer(0)]], device int* ids [[buffer(1)]],
-    device float* weights [[buffer(2)]], constant route_args& a [[buffer(3)]], uint t [[threadgroup_position_in_grid]],
-    uint lane [[thread_index_in_simdgroup]])
+    device float* weights [[buffer(2)]], constant route_args& a [[buffer(3)]], device const float* bias [[buffer(4)]],
+    uint t [[threadgroup_position_in_grid]], uint lane [[thread_index_in_simdgroup]])
 {
     // Un simdgroup par token : la voie lane garde les experts lane, lane + 32, ...  Le plus grand logit pas encore
     // choisi l'emporte, le plus petit numéro à égalité, comme std::partial_sort le garde.
@@ -1454,15 +1456,18 @@ kernel void moe_route(device const float* logits [[buffer(0)]], device int* ids 
         float best = -INFINITY;
         uint best_e = 0xFFFFFFFFu;
         for (uint e = lane, j = 0; e < a.experts; e += 32, ++j)
-            if (!(taken & (1u << j)) && (l[e] > best || (l[e] == best && e < best_e)))
+        {
+            const float score = a.sigmoid != 0 ? 1.0f / (1.0f + exp(-l[e])) + bias[e] : l[e];
+            if (!(taken & (1u << j)) && (score > best || (score == best && e < best_e)))
             {
-                best = l[e];
+                best = score;
                 best_e = e;
             }
+        }
         const float top = simd_max(best);
         const uint e = simd_min(best == top ? best_e : 0xFFFFFFFFu);
         if (e % 32 == lane) taken |= 1u << (e / 32);
-        const float p = exp(top - mx) / sum;
+        const float p = a.sigmoid != 0 ? 1.0f / (1.0f + exp(-l[e])) : exp(top - mx) / sum;
         if (lane == 0)
         {
             ids[t * a.top_k + k] = int(e);
@@ -1470,6 +1475,7 @@ kernel void moe_route(device const float* logits [[buffer(0)]], device int* ids 
         }
         selected += p;
     }
+    if (a.sigmoid != 0) selected = max(selected, 6.103515625e-5f);
     if (lane == 0 && a.norm != 0 && selected > 0.0f)
         for (uint k = 0; k < a.top_k; ++k) weights[t * a.top_k + k] /= selected;
 }

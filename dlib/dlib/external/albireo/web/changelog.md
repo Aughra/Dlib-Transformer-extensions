@@ -2,6 +2,19 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.21.0 — 14 novembre 2026
+
+### Performances
+
+- Les modèles LFM2-MoE passent au GPU : le routage du GPU sait choisir les experts par sigmoïde avec un biais de choix et laisser denses les premières couches. Le GPU donne les logits du processeur à 0,06 à 0,37 % près en demi-précision, sur des prompts de 29 à 1 200 tokens. Vitesse à mesurer (les premières mesures ont été faites en mode économie d'énergie et ne sont pas retenues).
+- Sur un long prompt, LFM2.5-8B-A1B raisonne autrement sur le GPU que sur le processeur, comme llama.cpp sur son propre GPU, dont la pensée est la même : ce modèle est sensible aux différences d'arrondi entre les deux.
+
+### Corrections
+
+- Le contrôle du GPU au chargement admet 25 % d'écart pour un mélange d'experts avec les clés et valeurs sur 8 bits, le token le plus probable devant rester le même : une différence d'arrondi suffit à changer l'expert d'un token. LFM2.5-8B-A1B : 7,7 % et 13,6 % en 8 bits, 0,13 % et 0,11 % en demi-précision.
+
+---
+
 ## 4.20.0 — 14 novembre 2026
 
 ### Performances

@@ -47,8 +47,8 @@ namespace albireo
             size_t attn_norm = 0, ffn_norm = 0, q_norm = 0, k_norm = 0, bq = 0, bk = 0, bv = 0;
             // Les couches Gated DeltaNet (qwen35).
             size_t conv1d = 0, dt_bias = 0, ssm_a = 0, ssm_norm = 0;
-            // La porte de l'expert partagé (qwen35moe).
-            size_t sh_gate_inp = 0;
+            // La porte de l'expert partagé (qwen35moe), le biais du choix des experts (LFM2-MoE).
+            size_t sh_gate_inp = 0, expert_bias = 0;
         };
         std::vector<layer_vectors> layers;
         size_t output_norm = 0;
@@ -147,8 +147,6 @@ namespace albireo
         };
         // Gemma 4 (fenêtre glissante, têtes de 512, clés partagées, entrées par couche) reste sur le processeur.
         if (cfg_.gemma4) why = cfg_.gemma3 ? "the layers of Gemma 3" : "the layers of Gemma 4";
-        // LFM2-MoE (routage par sigmoïde, premières couches denses) reste sur le processeur (fork pour macOS).
-        else if (cfg_.lfm2 && cfg_.is_moe()) why = "the experts of LFM2-MoE";
         else if (cfg_.is_moe() && cfg_.n_experts_used > 32) why = "more than 32 experts per token";
         // qwen35 : des têtes linéaires d'au plus 256 valeurs, et un état dans la zone réservée.
         else if (cfg_.recurrent() && (cfg_.ssm_head_dim > 256 || !states_.data))
@@ -168,7 +166,7 @@ namespace albireo
                 if (cfg_.lfm2 && cfg_.linear_layer(li)) all = { &L.w_mix, &L.w_ssm_out };
                 else if (cfg_.linear_layer(li)) all = { &L.w_mix, &L.w_z, &L.w_alpha, &L.w_beta, &L.w_ssm_out };
                 else all = { &L.wq, &L.wk, &L.wv, &L.wo };
-                if (cfg_.is_moe())
+                if (cfg_.moe_layer(li))
                 {
                     for (const weight_matrix* W : { &L.e_gate[0], &L.e_up[0], &L.e_down[0] }) all.push_back(W);
                     if (!L.sh_gate_inp.empty()) for (const weight_matrix* W : { &L.sh_gate, &L.sh_up, &L.sh_down }) all.push_back(W);
@@ -196,6 +194,8 @@ namespace albireo
             for (long li = 0; li < cfg_.n_layers && g->moe_prompts; ++li)
             {
                 const layer& L = layers_[static_cast<size_t>(li)];
+                // Les premières couches denses de LFM2-MoE n'ont pas d'experts.
+                if (!cfg_.moe_layer(li)) continue;
                 if (L.e_gate.empty() || L.e_up.empty() || L.e_down.empty() || L.e_down[0].rows % 32 != 0
                     || L.e_gate[0].cols % 64 != 0 || L.e_down[0].cols % 64 != 0)
                     g->moe_prompts = false;
@@ -234,6 +234,7 @@ namespace albireo
             lv.ssm_a = add(L.ssm_a);
             lv.ssm_norm = add(L.ssm_norm);
             lv.sh_gate_inp = add(L.sh_gate_inp);
+            lv.expert_bias = add(L.expert_bias);
             g->layers.push_back(lv);
         }
         g->output_norm = add(output_norm_);
@@ -476,7 +477,16 @@ namespace albireo
             le 2B, 16 tokens ; 0,04 % avec les clés et valeurs en demi-précision).  Un défaut donne bien
             plus, et un autre token le plus probable.
         */
-        if (gpu_prompt) compare("prompt", kv_.format() == kv_format::q8 ? 0.05 : 0.01);
+        /*
+            Un mélange d'experts en 8 bits (fork pour macOS) : une différence d'arrondi d'une clé ou d'une valeur suffit à
+            faire changer un token d'expert, ce qui déplace ses logits d'un coup ; le prompt du contrôle, des tokens pris
+            au hasard, met souvent des experts à égalité.  LFM2.5-8B-A1B : 7,7 % sur le prompt et 13,6 % à la première
+            étape en 8 bits, 0,13 % et 0,11 % en demi-précision, le même token le plus probable chaque fois.  Un défaut
+            donne des logits sans rapport et un autre token.
+        */
+        const bool q8_check = kv_.format() == kv_format::q8;
+        const double q8_limit = cfg_.is_moe() ? 0.25 : 0.05;
+        if (gpu_prompt) compare("prompt", q8_check ? q8_limit : 0.01);
         for (int step = 0; step < 2; ++step)
         {
             forward_batch one;
@@ -500,7 +510,7 @@ namespace albireo
                 dont six couches d'attention portent seules la mémoire du texte : 2,2 % à la première étape en 8 bits,
                 0,10 % en demi-précision).
             */
-            compare(step == 0 ? "step 1" : "step 2", gpu_prompt && kv_.format() == kv_format::q8 ? 0.05 : 0.01);
+            compare(step == 0 ? "step 1" : "step 2", gpu_prompt && q8_check ? q8_limit : 0.01);
         }
         if (!agree)
         {
@@ -787,7 +797,7 @@ namespace albireo
 
             // Bloc feed-forward.
             c->rms_norm(g.x, at(g.vectors, lv.ffn_norm), g.xn, uT, d, d, d, eps);
-            if (cfg_.is_moe())
+            if (cfg_.moe_layer(li))
             {
                 // Le mélange d'experts : routage, experts choisis par indirection, expert partagé, puis la somme
                 // pondérée ajoutée à x.
@@ -806,8 +816,9 @@ namespace albireo
                 }
                 else
                     product(L.router, g.xn, d, g.moe_logits, E, 1.0f, 0.0f);
-                c->moe_route(g.moe_logits, static_cast<unsigned>(E), static_cast<unsigned>(K), cfg_.expert_weights_norm,
-                    g.moe_ids, g.moe_w, uT);
+                c->moe_route(g.moe_logits, static_cast<unsigned>(E), static_cast<unsigned>(K),
+                    cfg_.expert_weights_norm || cfg_.expert_sigmoid, g.moe_ids, g.moe_w, uT, cfg_.expert_sigmoid,
+                    at(g.vectors, lv.expert_bias));
                 // Un prompt range d'abord les cases de chaque expert, que ses produits groupés multiplient d'un coup.
                 if (!step)
                     c->moe_group(g.moe_ids, slots, static_cast<unsigned>(E), uT, g.moe_list, g.moe_counts, g.moe_work,

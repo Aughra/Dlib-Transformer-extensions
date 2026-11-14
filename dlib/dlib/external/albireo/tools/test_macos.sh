@@ -264,7 +264,12 @@ else
   step "lfm2 moe" "Paris" "$CHAT" "$ENGINE" "$LFM2MOE" --temperature 0 --max 200 "$QUESTION"
   # Le texte exact, avec son saut de ligne final : sans lui, les entiers sur 8 bits trouvaient aussi Gaëlle.
   LFM2_LOG=$(cat "$HERE/../tests/lfm2/long_prompt.txt"; printf x)
-  step "lfm2 moe long prompt" "PELICAN.*Gaëlle" "$CHAT" "$ENGINE" "$LFM2MOE" --temperature 0 --max 400 "${LFM2_LOG%x}"
+  step "lfm2 moe long prompt" "PELICAN.*Gaëlle" "$CHAT" "$ENGINE" "$LFM2MOE" --no-metal --temperature 0 --max 400 \
+    "${LFM2_LOG%x}"
+  # Sur le GPU (Albireo 4.21.0) : le contrôle accepté.  Sur ce long prompt, le modèle y raisonne autrement, comme
+  # llama.cpp sur son GPU (« The secret code word is given in Record 77 »), d'où l'étape précédente sur le processeur.
+  step "lfm2 moe on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$LFM2MOE" --temperature 0 \
+    --max 200 "$QUESTION"
 fi
 
 if [ -f "$EMBEDDING" ] && [ -f "$ENGINE" ]; then

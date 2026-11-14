@@ -44,6 +44,7 @@
                              data ; la répéter pour plusieurs images
         --detail LEVEL       low, auto ou high : les tokens que prennent les images au plus
         --kv TYPE            auto, q8 ou f16 : le stockage des clés et valeurs
+        --gpu-prompt-tokens N  les prompts de N tokens ou plus vont au GPU (24 par défaut)
         --threads N, --context N
 
     Affiche le raisonnement entre crochets, la réponse, les appels d'outils, puis les
@@ -328,6 +329,7 @@ int main(int argc, char** argv)
     long context = 4096;
     std::vector<std::string> questions;
     std::string system, device, routing, reference, projector, detail, tool_result, kv_type;
+    long gpu_prompt_tokens = 0;
     bool with_result = false;
     std::vector<std::string> images;
     for (int i = 3; i < argc; ++i)
@@ -364,6 +366,7 @@ int main(int argc, char** argv)
         else if (a == "--image" && i + 1 < argc) images.push_back(argv[++i]);
         else if (a == "--detail" && i + 1 < argc) detail = argv[++i];
         else if (a == "--kv" && i + 1 < argc) kv_type = argv[++i];
+        else if (a == "--gpu-prompt-tokens" && i + 1 < argc) gpu_prompt_tokens = std::atol(argv[++i]);
         else questions.push_back(a);
     }
 
@@ -437,6 +440,7 @@ int main(int argc, char** argv)
     if (!routing.empty()) config["routing"] = routing;
     if (!warm) config["warm_history"] = false;
     if (!metal) config["metal"] = false;
+    if (gpu_prompt_tokens > 0) config["gpu_prompt_tokens"] = gpu_prompt_tokens;
     char err[1024] = { 0 };
     albireo_engine* e = lib.create(config.dump().c_str(), render_mode ? nullptr : on_log, nullptr, err, sizeof(err));
     if (!e)

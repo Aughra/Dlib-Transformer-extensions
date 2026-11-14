@@ -560,7 +560,7 @@ namespace albireo
         };
         struct route_args
         {
-            unsigned experts, top_k, norm;
+            unsigned experts, top_k, norm, sigmoid;
         };
         struct combine_args
         {
@@ -679,7 +679,7 @@ namespace albireo
     }
 
     void metal_device::commands::moe_route(metal_view logits, unsigned experts, unsigned top_k, bool norm,
-        metal_view ids, metal_view weights, unsigned tokens)
+        metal_view ids, metal_view weights, unsigned tokens, bool sigmoid, metal_view bias)
     {
         if (tokens == 0) return;
         if (top_k == 0 || top_k > 32 || top_k > experts)
@@ -689,8 +689,9 @@ namespace albireo
         impl_->bind(ids, 1);
         impl_->bind(weights, 2);
         if (experts > 1024) throw std::invalid_argument("metal_device: a routing among more than 1024 experts");
-        const route_args a = { experts, top_k, norm ? 1u : 0u };
+        const route_args a = { experts, top_k, norm ? 1u : 0u, sigmoid ? 1u : 0u };
         impl_->args(a, 3);
+        impl_->bind(bias, 4);
         impl_->groups(tokens, 1, 1, 32);
     }
 
