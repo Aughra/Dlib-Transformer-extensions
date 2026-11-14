@@ -1468,7 +1468,9 @@ namespace albireo
             m->format->render(messages, opt, pieces);
             if (!parts.empty()) prepare_images(*m, parts, true, r->images);
             r->prompt = prompt_tokens(*m, pieces, r->images);
+            opt.reasoning_opened = m->format->opens_reasoning(messages, opt);
             r->parser = m->format->make_parser(opt);
+            opt.reasoning_opened = false;
             // La conversation d'un client, dont la fin de sa réponse lit l'historique en avance.
             if (warm_history_ && req["priority"].as_string() != "background")
             {

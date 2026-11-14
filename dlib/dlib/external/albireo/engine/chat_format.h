@@ -58,6 +58,9 @@ namespace albireo
         std::string yesterday;      // "2026-10-29", "2026-10-28"
         std::string today_long;     // "October 29, 2026"
         std::string today_short;    // "29 Oct 2026"
+        // Rempli par le moteur d'après opens_reasoning() : le prompt rendu se termine en ouvrant le
+        // raisonnement, que l'analyseur de sortie lit alors dès le premier token.
+        bool reasoning_opened = false;
     };
 
     enum class output_kind { content, reasoning, tool_call };
@@ -125,7 +128,9 @@ namespace albireo
                 - phi : Phi-4-mini, chaque message entre <|role|> et <|end|>.
                 - gemma4 : Gemma 4 (fork pour macOS), chaque tour entre <|turn>rôle et <turn|>,
                   le raisonnement demandé par <|think|> dans le tour système et écrit entre
-                  <|channel>thought et <channel|> ; sans outils pour l'instant.
+                  <|channel>thought et <channel|>, les outils déclarés par <|tool>declaration:…<tool|>
+                  dans le tour système, appelés par <|tool_call>call:nom{…}<tool_call|> et leurs
+                  résultats donnés dans <|tool_response>…<tool_response|>, les chaînes entre <|"|>.
                 - foundation-sec : Foundation-Sec-8B-Reasoning, tours ouverts par
                   <|system|>, <|user|> et <|assistant|>, réponses terminées par le token de
                   fin de texte, et un raisonnement que le prompt ouvre par <think> et que le
@@ -171,6 +176,15 @@ namespace albireo
 
         virtual void render(const std::vector<chat_message>& messages, const render_options& options,
             std::vector<prompt_piece>& out) const = 0;
+
+        /*
+            ensures
+                - Indique si le prompt que render() écrit pour ces messages se termine en ouvrant le
+                  raisonnement du modèle, comme le fait le template de Gemma 4 après les résultats
+                  des outils quand la requête demande un raisonnement.  Le moteur le reporte dans
+                  render_options::reasoning_opened avant make_parser().
+        !*/
+        virtual bool opens_reasoning(const std::vector<chat_message>&, const render_options&) const { return false; }
 
         virtual std::unique_ptr<output_parser> make_parser(const render_options& options) const = 0;
 

@@ -195,6 +195,12 @@ else
   step "gemma 4" "Paris" "$CHAT" "$ENGINE" "$GEMMA4" --reasoning off --temperature 0 --max 40 "$QUESTION"
   step "gemma 4 reasoning" "391" "$CHAT" "$ENGINE" "$GEMMA4" --reasoning on --temperature 0 --max 600 \
     "What is 17 times 23? Answer with the number."
+  # Outils dans la notation de Gemma 4 (Albireo 4.15.0) : l'appel lu, puis la réponse tirée de son résultat, le
+  # raisonnement que le prompt rouvre après les résultats compris.
+  step "gemma 4 tool call" '"name":"get_weather","arguments":".*Paris' "$CHAT" "$ENGINE" "$GEMMA4" \
+    --tools --reasoning off --temperature 0 --max 120 "What is the weather in Paris right now?"
+  step "gemma 4 tool result" "21 degrees" "$CHAT" "$ENGINE" "$GEMMA4" --tools --tool-result "Sunny, 21 degrees C" \
+    --reasoning on --temperature 0 --max 600 "What is the weather in Paris right now?"
 fi
 
 if [ -f "$EMBEDDING" ] && [ -f "$ENGINE" ]; then

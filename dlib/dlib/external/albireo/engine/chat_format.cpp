@@ -316,8 +316,89 @@ namespace albireo
             mistral,         // [TOOL_CALLS]name[ARGS]{...}, name[CALL_ID]id[ARGS]{...} ou [TOOL_CALLS][{...}]
             json_list,       // <|tool_call|>[{"name":..,"arguments":..}]
             whole_json,      // la réponse entière est {"name":..,"parameters":..} nommant un outil de la requête
-            xml_function     // <tool_call><function=name><parameter=key>value</parameter></function></tool_call>
+            xml_function,    // <tool_call><function=name><parameter=key>value</parameter></function></tool_call>
+            gemma            // <|tool_call>call:name{key:<|"|>value<|"|>,n:3}<tool_call|>
         };
+
+        // Le délimiteur des chaînes de la notation des outils de Gemma 4.
+        const std::string gemma_quote = "<|\"|>";
+
+        /*
+            Lit une valeur de la notation des outils de Gemma 4 à pos dans text et avance pos
+            après elle : une chaîne entre <|"|>, écrite telle quelle, un objet {clé:valeur,...} aux
+            clés nues ou entre <|"|>, une liste [...], ou un littéral (nombre, true, false, null ;
+            tout autre texte nu devient une chaîne).  False quand le texte n'est pas une valeur
+            complète.
+        */
+        bool gemma_value(const std::string& text, size_t& pos, json& out, int depth = 0)
+        {
+            auto skip = [&]() {
+                while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos]))) ++pos;
+            };
+            if (depth > 64) return false;
+            skip();
+            if (pos >= text.size()) return false;
+            if (text.compare(pos, gemma_quote.size(), gemma_quote) == 0)
+            {
+                const size_t a = pos + gemma_quote.size();
+                const size_t b = text.find(gemma_quote, a);
+                if (b == std::string::npos) return false;
+                out = json(text.substr(a, b - a));
+                pos = b + gemma_quote.size();
+                return true;
+            }
+            const char c = text[pos];
+            if (c == '{' || c == '[')
+            {
+                const bool object = c == '{';
+                const char close = object ? '}' : ']';
+                out = object ? json::object() : json::array();
+                ++pos;
+                skip();
+                if (pos < text.size() && text[pos] == close) { ++pos; return true; }
+                for (;;)
+                {
+                    std::string key;
+                    if (object)
+                    {
+                        skip();
+                        if (text.compare(pos, gemma_quote.size(), gemma_quote) == 0)
+                        {
+                            json k;
+                            if (!gemma_value(text, pos, k, depth + 1)) return false;
+                            key = k.as_string();
+                            skip();
+                        }
+                        else
+                        {
+                            const size_t colon = text.find(':', pos);
+                            if (colon == std::string::npos) return false;
+                            key = strip_spaces(text.substr(pos, colon - pos));
+                            pos = colon;
+                        }
+                        if (pos >= text.size() || text[pos] != ':' || key.empty()) return false;
+                        ++pos;
+                    }
+                    json v;
+                    if (!gemma_value(text, pos, v, depth + 1)) return false;
+                    if (object) out[key] = v;
+                    else out.push_back(v);
+                    skip();
+                    if (pos >= text.size()) return false;
+                    if (text[pos] == close) { ++pos; return true; }
+                    if (text[pos] != ',') return false;
+                    ++pos;
+                }
+            }
+            // Un littéral, jusqu'au séparateur suivant.
+            const size_t end = text.find_first_of(",}]", pos);
+            if (end == std::string::npos) return false;
+            const std::string literal = strip_spaces(text.substr(pos, end - pos));
+            pos = end;
+            if (literal.empty()) return false;
+            if (!json::parse(literal, out)) out = json(literal);
+            return true;
+        }
 
         struct parser_config
         {
@@ -584,6 +665,35 @@ namespace albireo
             }
 
             /*
+                Les appels du texte entre <|tool_call> et <tool_call|> dans la notation de Gemma 4 :
+                call:nom suivi de l'objet de ses arguments, éventuellement plusieurs à la suite.
+                False, sans rien émettre, quand le texte contient autre chose.
+            */
+            bool emit_gemma_calls(const std::string& body, std::vector<output_event>& events)
+            {
+                static const std::string prefix = "call:";
+                std::vector<output_event> calls;
+                size_t pos = 0;
+                for (;;)
+                {
+                    while (pos < body.size() && std::isspace(static_cast<unsigned char>(body[pos]))) ++pos;
+                    if (pos >= body.size()) break;
+                    if (body.compare(pos, prefix.size(), prefix) != 0) return false;
+                    const size_t brace = body.find('{', pos);
+                    if (brace == std::string::npos) return false;
+                    const std::string name = strip_spaces(body.substr(pos + prefix.size(), brace - pos - prefix.size()));
+                    if (name.empty() || name.find_first_of("<\n:,") != std::string::npos) return false;
+                    pos = brace;
+                    json args;
+                    if (!gemma_value(body, pos, args) || !args.is_object()) return false;
+                    emit_call(name, args.dump_formatted(), calls);
+                }
+                if (calls.empty()) return false;
+                events.insert(events.end(), calls.begin(), calls.end());
+                return true;
+            }
+
+            /*
                 Les appels d'une réponse qui est une valeur JSON entière : un objet, ou une liste
                 d'objets, chacun nommant l'un des outils de la requête.  False, sans rien émettre,
                 pour toute autre réponse, qui est alors le texte de la réponse.
@@ -726,24 +836,28 @@ namespace albireo
             // Consomme un appel de buffer_ ; false quand il faut davantage de texte.
             bool parse_call(std::vector<output_event>& events, bool final)
             {
-                if (c_.calls == call_style::tagged_object || c_.calls == call_style::xml_function)
+                if (c_.calls == call_style::tagged_object || c_.calls == call_style::xml_function
+                    || c_.calls == call_style::gemma)
                 {
-                    const bool xml = c_.calls == call_style::xml_function;
+                    auto read = [&](const std::string& body) {
+                        if (c_.calls == call_style::xml_function) return emit_xml_calls(body, events);
+                        if (c_.calls == call_style::gemma) return emit_gemma_calls(body, events);
+                        return emit_calls(body, events);
+                    };
                     const size_t p = find_marker(c_.call_close);
                     if (p == std::string::npos)
                     {
                         // Un modèle peut terminer son tour après l'objet, sans le marqueur de fermeture.
                         if (final)
                         {
-                            if (!(xml ? emit_xml_calls(buffer_, events) : emit_calls(buffer_, events)))
-                                emit(output_kind::content, call_prefix_ + buffer_, events);
+                            if (!read(buffer_)) emit(output_kind::content, call_prefix_ + buffer_, events);
                             buffer_.clear();
                             reset_scans();
                         }
                         return false;
                     }
                     const std::string body = buffer_.substr(0, p);
-                    if (!(xml ? emit_xml_calls(body, events) : emit_calls(body, events)))
+                    if (!read(body))
                         emit(output_kind::content, call_prefix_ + body + c_.call_close, events);
                     buffer_.erase(0, p + c_.call_close.size());
                     state_ = state::content;
@@ -1892,30 +2006,49 @@ namespace albireo
             Le format de Gemma 4 (fork pour macOS), tel que le dispose le template de ses fichiers GGUF :
             <bos>, puis chaque tour entre <|turn>rôle et <turn|> suivi d'un saut de ligne, le modèle
             s'appelant « model », et <|turn>model et un saut de ligne pour le laisser répondre.  Un tour
-            système ouvre le prompt quand la conversation commence par un message système ou que la
-            requête demande un raisonnement, qu'annonce alors <|think|> en tête de ce tour.  Le modèle écrit
-            son raisonnement entre <|channel>thought et <channel|>, avant sa réponse ; le template retire
-            ce raisonnement des réponses précédentes.  Les textes sont débarrassés de leurs espaces de
-            début et de fin, comme le fait le template.  Les outils ne sont pas encore pris en charge.
+            système ouvre le prompt quand la conversation commence par un message système, que la
+            requête déclare des outils ou qu'elle demande un raisonnement, qu'annonce alors <|think|> en
+            tête de ce tour.  Le modèle écrit son raisonnement entre <|channel>thought et <channel|>, avant
+            sa réponse ; le template retire ce raisonnement des réponses précédentes, sauf de celles qui
+            suivent la dernière question.
+
+            Les outils sont déclarés dans le tour système, chacun entre <|tool> et <tool|>, dans une
+            notation propre à Gemma : clés nues, chaînes entre <|"|>, types en majuscules, membres triés
+            par clé.  Le modèle appelle un outil par <|tool_call>call:nom{clé:valeur,...}<tool_call|>,
+            puis écrit <|tool_response>, où son tour s'arrête ; le résultat de chaque appel suit l'appel
+            dans le même tour, sous la forme <|tool_response>response:nom{value:<|"|>texte<|"|>}
+            <tool_response|>, et la réponse du modèle reprend juste après, sans nouveau tour.  Les textes
+            sont débarrassés de leurs espaces de début et de fin, comme le fait le template.
+
+            Deux choix de llama.cpp, la référence des essais, sont suivis là où Jinja ferait autrement :
+            les clés sont triées octet par octet (dictsort de Jinja ignore la casse), et un nombre à
+            virgule entier s'écrit « 2.0 ».
         */
         class gemma4_format : public chat_format
         {
         public:
             explicit gemma4_format(const dlib::hf_tokenizer& tok)
             {
-                for (const char* t : { "<turn|>", "<eos>" })
+                // <|tool_response> termine le tour du modèle après ses appels : la suite est le résultat des outils.
+                for (const char* t : { "<turn|>", "<eos>", "<|tool_response>" })
                 {
                     const int id = tok.token_id(t);
                     if (id >= 0) stop_tokens_.push_back(id);
                 }
                 bos_ = tok.bos_id() >= 0 ? tok.id_to_token(tok.bos_id()) : std::string("<bos>");
-                add_markers(tok, { "<|channel>", "<channel|>" });
+                add_markers(tok, { "<|channel>", "<channel|>", "<|tool_call>", "<tool_call|>", gemma_quote });
             }
 
             const char* name() const override { return "gemma4"; }
-            bool supports_tools() const override { return false; }
+            bool supports_tools() const override { return true; }
             bool supports_reasoning() const override { return true; }
             std::vector<prompt_piece> reasoning_close() const override { return closing("<channel|>", ""); }
+
+            // Après les résultats des outils, le template ouvre lui-même le raisonnement demandé.
+            bool opens_reasoning(const std::vector<chat_message>& messages, const render_options& opt) const override
+            {
+                return opt.reasoning && opt.add_generation_prompt && ends_with_results(messages);
+            }
 
             void render(const std::vector<chat_message>& messages, const render_options& opt,
                 std::vector<prompt_piece>& out) const override
@@ -1923,58 +2056,415 @@ namespace albireo
                 piece_writer w{ out };
                 w.markup(bos_);
                 const bool has_system = !messages.empty() && messages[0].role == "system";
-                if (opt.reasoning || has_system)
+                const bool tools = opt.tools.is_array() && !opt.tools.empty();
+                if (opt.reasoning || tools || has_system)
                 {
                     w.markup("<|turn>system\n");
                     if (opt.reasoning) w.markup("<|think|>\n");
                     if (has_system) w.text(strip_spaces(messages[0].content));
+                    for (const auto& t : opt.tools.elements())
+                    {
+                        w.markup("<|tool>");
+                        declaration(t, w);
+                        w.markup("<tool|>");
+                    }
                     w.markup("<turn|>\n");
                 }
-                for (size_t i = has_system ? 1 : 0; i < messages.size(); ++i)
+
+                const size_t start = has_system ? 1 : 0;
+                size_t last_user = std::string::npos;
+                for (size_t i = start; i < messages.size(); ++i)
+                    if (messages[i].role == "user") last_user = i;
+
+                // Ce que le dernier message a laissé : des appels sans résultats, ou des résultats.
+                enum class last { none, calls, results } previous = last::none;
+                std::string previous_role;
+                for (size_t i = start; i < messages.size(); ++i)
                 {
                     const chat_message& m = messages[i];
-                    if (m.role == "assistant")
+                    if (m.role == "tool") continue;
+                    previous = last::none;
+                    const bool model = m.role == "assistant";
+                    // Une réponse qui suit une autre réponse, des résultats d'outils entre elles, continue son tour.
+                    if (!(model && previous_role == "assistant"))
+                        w.markup("<|turn>" + std::string(model ? "model" : m.role) + "\n");
+                    // Le raisonnement des réponses qui suivent la dernière question, et celui des réponses qui
+                    // appellent des outils (preserve_thinking, que llama.cpp donne vrai au template).
+                    if (!m.reasoning.empty() && (last_user == std::string::npos || i > last_user || !m.tool_calls.empty()))
                     {
-                        w.markup("<|turn>model\n");
-                        w.text(strip_thinking(m.content));
+                        w.markup("<|channel>thought\n");
+                        w.text(m.reasoning);
+                        w.markup("\n<channel|>");
                     }
-                    else if (m.role == "user" || m.role == "system")
+                    for (const auto& c : m.tool_calls)
                     {
-                        w.markup("<|turn>" + m.role + "\n");
-                        w.text(strip_spaces(m.content));
+                        w.markup("<|tool_call>call:");
+                        w.text(c.name);
+                        w.markup("{");
+                        call_arguments(c.arguments, w);
+                        w.markup("}<tool_call|>");
+                        previous = last::calls;
                     }
-                    else
-                        continue;
-                    w.markup("<turn|>\n");
+                    bool results = false;
+                    for (size_t k = i + 1; !m.tool_calls.empty() && k < messages.size() && messages[k].role == "tool"; ++k)
+                    {
+                        const chat_message& r = messages[k];
+                        std::string tool = r.name.empty() ? std::string("unknown") : r.name;
+                        for (const auto& c : m.tool_calls)
+                            if (c.id == r.tool_call_id) tool = c.name;
+                        w.markup("<|tool_response>");
+                        w.text("response:" + tool + "{value:");
+                        w.markup(gemma_quote);
+                        w.text(r.content);
+                        w.markup(gemma_quote);
+                        w.text("}");
+                        w.markup("<tool_response|>");
+                        results = true;
+                        previous = last::results;
+                    }
+                    const std::string content = model ? strip_thinking(m.content) : strip_spaces(m.content);
+                    w.text(content);
+
+                    std::string next_role;
+                    for (size_t j = i + 1; j < messages.size() && next_role.empty(); ++j)
+                        if (messages[j].role != "tool") next_role = messages[j].role;
+                    const bool continues = model && next_role == "assistant" && (m.tool_calls.empty() || results);
+                    if (previous == last::calls) w.markup("<|tool_response>");
+                    else if (continues) {}
+                    else if (!(results && content.empty() && next_role.empty())) w.markup("<turn|>\n");
+                    previous_role = m.role;
                 }
-                if (opt.add_generation_prompt) w.markup("<|turn>model\n");
+                if (opt.add_generation_prompt)
+                {
+                    if (previous == last::none) w.markup("<|turn>model\n");
+                    else if (previous == last::results && opt.reasoning) w.markup("<|channel>thought\n");
+                }
             }
 
-            std::unique_ptr<output_parser> make_parser(const render_options&) const override
+            std::unique_ptr<output_parser> make_parser(const render_options& opt) const override
             {
                 parser_config c;
                 c.think_open = "<|channel>thought\n";
                 c.think_close = "<channel|>";
+                c.starts_in_reasoning = opt.reasoning_opened;
+                if (opt.tools.is_array() && !opt.tools.empty())
+                {
+                    c.calls = call_style::gemma;
+                    c.call_open = "<|tool_call>";
+                    c.call_close = "<tool_call|>";
+                }
                 return std::unique_ptr<output_parser>(new tag_parser(c));
             }
 
         private:
+            // Indique si le dernier message autre qu'un résultat est une réponse dont des résultats suivent les appels.
+            static bool ends_with_results(const std::vector<chat_message>& messages)
+            {
+                size_t i = messages.size();
+                while (i > 0 && messages[i - 1].role == "tool") --i;
+                if (i == 0 || i == messages.size()) return false;
+                const chat_message& m = messages[i - 1];
+                return m.role == "assistant" && !m.tool_calls.empty();
+            }
+
             // Le texte d'une réponse sans ce qui se trouve entre <|channel> et <channel|>, comme strip_thinking du
-            // template.
+            // template : chaque morceau entre deux <channel|> perd ce qui suit son <|channel>.
             static std::string strip_thinking(const std::string& text)
             {
+                static const std::string open = "<|channel>", close = "<channel|>";
                 std::string out;
                 size_t pos = 0;
-                while (pos < text.size())
+                for (;;)
                 {
-                    const size_t open = text.find("<|channel>", pos);
-                    if (open == std::string::npos) { out += text.substr(pos); break; }
-                    out += text.substr(pos, open - pos);
-                    const size_t close = text.find("<channel|>", open);
-                    if (close == std::string::npos) break;
-                    pos = close + 10;
+                    const size_t end = text.find(close, pos);
+                    const std::string part = text.substr(pos, end == std::string::npos ? std::string::npos : end - pos);
+                    const size_t o = part.find(open);
+                    out += o == std::string::npos ? part : part.substr(0, o);
+                    if (end == std::string::npos) break;
+                    pos = end + close.size();
                 }
                 return strip_spaces(out);
+            }
+
+            // La vérité d'une valeur pour Jinja : ni null, ni faux, ni zéro, ni vide.
+            static bool truthy(const json& v)
+            {
+                if (v.is_null()) return false;
+                if (v.is_bool()) return v.as_bool();
+                if (v.is_number()) return v.as_double() != 0.0;
+                if (v.is_string()) return !v.as_string().empty();
+                return !v.empty();
+            }
+
+            // Une valeur telle que Jinja l'imprime : une chaîne telle quelle, le reste en JSON.
+            static std::string printed(const json& v)
+            {
+                if (v.is_null()) return std::string();
+                return v.is_string() ? v.as_string() : v.dump();
+            }
+
+            static std::string upper(std::string s)
+            {
+                for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+                return s;
+            }
+
+            // Les membres d'un objet triés par clé, octet par octet.
+            static std::vector<const std::pair<std::string, json>*> sorted(const json& o)
+            {
+                std::vector<const std::pair<std::string, json>*> out;
+                for (const auto& kv : o.items()) out.push_back(&kv);
+                std::sort(out.begin(), out.end(), [](const std::pair<std::string, json>* a,
+                    const std::pair<std::string, json>* b) { return a->first < b->first; });
+                return out;
+            }
+
+            static void quoted(const std::string& s, piece_writer& w)
+            {
+                w.markup(gemma_quote);
+                w.text(s);
+                w.markup(gemma_quote);
+            }
+
+            // Une liste de noms, chacun entre <|"|>, séparés par des virgules.
+            static void quoted_list(const json& list, piece_writer& w)
+            {
+                bool first = true;
+                for (const auto& e : list.elements())
+                {
+                    if (!first) w.markup(",");
+                    first = false;
+                    quoted(printed(e), w);
+                }
+            }
+
+            // Une valeur comme format_argument du template, les clés des objets entre <|"|> ou nues.
+            static void argument(const json& v, bool quote_keys, piece_writer& w)
+            {
+                if (v.is_null()) w.text("null");
+                else if (v.is_string()) quoted(v.as_string(), w);
+                else if (v.is_bool()) w.text(v.as_bool() ? "true" : "false");
+                else if (v.is_object())
+                {
+                    w.markup("{");
+                    bool first = true;
+                    for (const auto* kv : sorted(v))
+                    {
+                        if (!first) w.markup(",");
+                        first = false;
+                        if (quote_keys) quoted(kv->first, w);
+                        else w.text(kv->first);
+                        w.markup(":");
+                        argument(kv->second, quote_keys, w);
+                    }
+                    w.markup("}");
+                }
+                else if (v.is_array())
+                {
+                    w.markup("[");
+                    bool first = true;
+                    for (const auto& e : v.elements())
+                    {
+                        if (!first) w.markup(",");
+                        first = false;
+                        argument(e, quote_keys, w);
+                    }
+                    w.markup("]");
+                }
+                else
+                {
+                    // Un nombre à virgule garde sa virgule, comme l'écrivent Python et llama.cpp.
+                    std::string s = v.dump();
+                    if (!v.is_integer() && s.find_first_of(".eEn") == std::string::npos) s += ".0";
+                    w.text(s);
+                }
+            }
+
+            /*
+                Les arguments d'un appel d'une réponse précédente : un objet JSON en notation de Gemma,
+                aux clés nues ; un autre texte tel qu'écrit, sans ses accolades extérieures, comme le
+                template écrit des arguments déjà sérialisés.
+            */
+            static void call_arguments(const std::string& arguments, piece_writer& w)
+            {
+                json args;
+                if (json::parse(arguments, args))
+                {
+                    if (args.is_null()) return;
+                    if (args.is_object())
+                    {
+                        bool first = true;
+                        for (const auto* kv : sorted(args))
+                        {
+                            if (!first) w.markup(",");
+                            first = false;
+                            w.text(kv->first);
+                            w.markup(":");
+                            argument(kv->second, false, w);
+                        }
+                        return;
+                    }
+                }
+                const std::string s = strip_spaces(arguments);
+                if (s.size() >= 2 && s.front() == '{' && s.back() == '}') w.text(s.substr(1, s.size() - 2));
+                else w.text(arguments);
+            }
+
+            // Les propriétés des paramètres d'un outil, comme format_parameters du template.
+            static void parameters(const json& properties, bool filter_keys, piece_writer& w)
+            {
+                static const char* const standard[] = { "description", "type", "properties", "required", "nullable" };
+                bool first = true;
+                for (const auto* kv : sorted(properties))
+                {
+                    const std::string& key = kv->first;
+                    const json& value = kv->second;
+                    if (filter_keys && std::find(std::begin(standard), std::end(standard), key) != std::end(standard))
+                        continue;
+                    if (!first) w.markup(",");
+                    first = false;
+                    w.text(key);
+                    w.markup(":{");
+                    bool comma = false;
+                    auto separate = [&]() {
+                        if (comma) w.markup(",");
+                        comma = true;
+                    };
+                    if (truthy(value["description"]))
+                    {
+                        w.markup("description:");
+                        quoted(printed(value["description"]), w);
+                        comma = true;
+                    }
+                    const std::string type = upper(printed(value["type"]));
+                    if (type == "STRING")
+                    {
+                        if (truthy(value["enum"]))
+                        {
+                            separate();
+                            w.markup("enum:");
+                            argument(value["enum"], true, w);
+                        }
+                    }
+                    else if (type == "ARRAY" && value["items"].is_object() && !value["items"].empty())
+                    {
+                        const json& items = value["items"];
+                        separate();
+                        w.markup("items:{");
+                        bool first_item = true;
+                        for (const auto* it : sorted(items))
+                        {
+                            if (it->second.is_null()) continue;
+                            if (!first_item) w.markup(",");
+                            first_item = false;
+                            if (it->first == "properties")
+                            {
+                                w.markup("properties:{");
+                                if (it->second.is_object()) parameters(it->second, false, w);
+                                w.markup("}");
+                            }
+                            else if (it->first == "required")
+                            {
+                                w.markup("required:[");
+                                quoted_list(it->second, w);
+                                w.markup("]");
+                            }
+                            else if (it->first == "type")
+                            {
+                                w.markup("type:");
+                                if (it->second.is_string()) argument(json(upper(it->second.as_string())), true, w);
+                                else
+                                {
+                                    json list = json::array();
+                                    for (const auto& e : it->second.elements()) list.push_back(json(upper(printed(e))));
+                                    argument(list, true, w);
+                                }
+                            }
+                            else
+                            {
+                                w.text(it->first);
+                                w.markup(":");
+                                argument(it->second, true, w);
+                            }
+                        }
+                        w.markup("}");
+                    }
+                    if (truthy(value["nullable"]))
+                    {
+                        separate();
+                        w.markup("nullable:true");
+                    }
+                    if (type == "OBJECT")
+                    {
+                        separate();
+                        w.markup("properties:{");
+                        if (value["properties"].is_object()) parameters(value["properties"], false, w);
+                        else parameters(value, true, w);
+                        w.markup("}");
+                        if (truthy(value["required"]))
+                        {
+                            separate();
+                            w.markup("required:[");
+                            quoted_list(value["required"], w);
+                            w.markup("]");
+                        }
+                    }
+                    separate();
+                    w.markup("type:");
+                    quoted(type, w);
+                    w.markup("}");
+                }
+            }
+
+            // La déclaration d'un outil, comme format_function_declaration du template.
+            static void declaration(const json& tool, piece_writer& w)
+            {
+                const json& fn = tool.contains("function") ? tool["function"] : tool;
+                w.markup("declaration:");
+                w.text(printed(fn["name"]));
+                w.markup("{description:");
+                quoted(printed(fn["description"]), w);
+                const json& params = fn["parameters"];
+                if (truthy(params))
+                {
+                    w.markup(",parameters:{");
+                    if (truthy(params["properties"]))
+                    {
+                        w.markup("properties:{");
+                        parameters(params["properties"], false, w);
+                        w.markup("},");
+                    }
+                    if (truthy(params["required"]))
+                    {
+                        w.markup("required:[");
+                        quoted_list(params["required"], w);
+                        w.markup("],");
+                    }
+                    if (truthy(params["type"]))
+                    {
+                        w.markup("type:");
+                        quoted(upper(printed(params["type"])), w);
+                        w.markup("}");
+                    }
+                }
+                if (fn.contains("response"))
+                {
+                    const json& response = fn["response"];
+                    w.markup(",response:{");
+                    if (truthy(response["description"]))
+                    {
+                        w.markup("description:");
+                        quoted(printed(response["description"]), w);
+                        w.markup(",");
+                    }
+                    if (upper(printed(response["type"])) == "OBJECT")
+                    {
+                        w.markup("type:");
+                        quoted("OBJECT", w);
+                        w.markup("}");
+                    }
+                }
+                w.markup("}");
             }
 
             std::string bos_;

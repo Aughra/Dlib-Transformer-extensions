@@ -2,6 +2,15 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.15.0 — 14 novembre 2026
+
+### Plateforme
+
+- Les modèles Gemma 4 appellent des outils (mode agent), dans leur notation propre : outils déclarés dans le tour système (`<|tool>declaration:…<tool|>`), appels `<|tool_call>call:nom{…}<tool_call|>`, résultats `<|tool_response>…<tool_response|>`, chaînes entre `<|"|>`. Le prompt suit le gabarit du modèle à l'octet près : huit conversations comparées à Jinja2 3.1.6, dont six aussi à llama.cpp 0.9.0 (une conversation que llama.cpp refuse, une autre dont il retire la description de la réponse d'un outil). Gemma 4 E2B appelle l'outil, reçoit son résultat et s'en sert dans sa réponse, identique à celle de llama.cpp en choix glouton.
+- Quand le raisonnement est demandé, la pensée qui précède un appel d'outil est gardée dans les tours suivants, comme le fait llama.cpp ; le début du prompt reste ainsi le même d'une requête à l'autre et reste lu depuis le cache. Après les résultats des outils, le prompt rouvre le raisonnement, comme le gabarit, et la réponse en est séparée.
+
+---
+
 ## 4.14.0 — 13 novembre 2026
 
 ### Plateforme

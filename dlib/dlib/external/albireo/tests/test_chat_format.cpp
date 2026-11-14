@@ -761,6 +761,69 @@ int main()
         expect(q.calls.size() == 1 && q.calls[0].arguments.size() == code.size() + 12, "a long Mistral argument");
     }
 
+    // Gemma 4 : outils déclarés, appelés et leurs résultats dans la notation de Gemma (fork pour macOS).
+    {
+        const dlib::hf_tokenizer gtok = tokenizer({ "<bos>", "<eos>", "<|turn>", "<turn|>", "<|think|>", "<|tool>",
+            "<tool|>" }, { "<|channel>", "<channel|>", "<|tool_call>", "<tool_call|>", "<|tool_response>",
+            "<tool_response|>", "<|\"|>" });
+        const std::unique_ptr<chat_format> g = chat_format::detect(gtok, "{{- '<|turn>' + role + '\\n' }}");
+        expect(std::string(g->name()) == "gemma4" && g->supports_tools() && g->supports_reasoning(), "Gemma 4 detected");
+        render_options gopt;
+        gopt.tools = json::parse_or_null("[{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", "
+            "\"description\": \"Current weather of a city\", \"parameters\": {\"type\": \"object\", \"properties\": "
+            "{\"city\": {\"type\": \"string\", \"description\": \"City name\"}}, \"required\": [\"city\"]}}}]");
+        gopt.reasoning = true;
+        std::vector<chat_message> m(3);
+        m[0].role = "user";
+        m[0].content = "What is the weather in Paris right now?";
+        m[1].role = "assistant";
+        tool_call_data c;
+        c.id = "c1";
+        c.name = "get_weather";
+        c.arguments = "{\"city\": \"Paris\", \"Zed\": 1, \"alpha\": 2.0, \"n\": [1, true, null, {\"B\": \"x\", \"a\": 1}]}";
+        m[1].tool_calls.push_back(c);
+        m[2].role = "tool";
+        m[2].tool_call_id = "c1";
+        m[2].content = "{\"temp\": 20}";
+        // Tel que l'écrit le template de gemma-4-E2B-it-GGUF (Jinja2 et llama.cpp 0.9.0 donnent le même texte).
+        const std::string expected = R"G(<bos><|turn>system
+<|think|>
+<|tool>declaration:get_weather{description:<|"|>Current weather of a city<|"|>,parameters:{properties:{city:{description:<|"|>City name<|"|>,type:<|"|>STRING<|"|>}},required:[<|"|>city<|"|>],type:<|"|>OBJECT<|"|>}}<tool|><turn|>
+<|turn>user
+What is the weather in Paris right now?<turn|>
+<|turn>model
+<|tool_call>call:get_weather{Zed:1,alpha:2.0,city:<|"|>Paris<|"|>,n:[1,true,null,{B:<|"|>x<|"|>,a:1}]}<tool_call|><|tool_response>response:get_weather{value:<|"|>{"temp": 20}<|"|>}<tool_response|><|channel>thought
+)G";
+        expect(render(*g, m, gopt) == expected, "Gemma 4 prompt with a call and its result:\n" + render(*g, m, gopt));
+        expect(g->opens_reasoning(m, gopt), "Gemma 4 opens the reasoning after the results");
+        render_options plain = gopt;
+        plain.reasoning = false;
+        expect(!g->opens_reasoning(m, plain), "Gemma 4 without reasoning");
+        std::vector<chat_message> q(m.begin(), m.begin() + 1);
+        expect(!g->opens_reasoning(q, gopt), "Gemma 4 before any call");
+
+        const parsed p = read_all_ways(*g, gopt, "<|tool_call>call:get_weather{city:<|\"|>Paris, {France}<|\"|>,"
+            "days:3,deep:{a:[1,2.5,true,null]}}<tool_call|><|tool_call>call:ping{}<tool_call|>", "Gemma 4 calls");
+        expect(p.calls.size() == 2 && p.content.empty(), "two Gemma 4 calls");
+        if (p.calls.size() == 2)
+        {
+            expect(p.calls[0].name == "get_weather" && p.calls[0].arguments ==
+                "{\"city\": \"Paris, {France}\", \"days\": 3, \"deep\": {\"a\": [1, 2.5, true, null]}}",
+                "Gemma 4 arguments: " + p.calls[0].arguments);
+            expect(p.calls[1].name == "ping" && p.calls[1].arguments == "{}", "Gemma 4 call without arguments");
+        }
+        const parsed r = read_all_ways(*g, gopt, "<|channel>thought\nCall it.<channel|><|tool_call>call:get_weather{"
+            "<|\"|>city<|\"|>:<|\"|>Rome<|\"|>}<tool_call|>", "Gemma 4 reasoning then call");
+        expect(r.reasoning == "Call it." && r.calls.size() == 1 && r.content.empty(), "Gemma 4 reasoning then call");
+        render_options opened = gopt;
+        opened.reasoning_opened = true;
+        const parsed s = read_all_ways(*g, opened, "It is sunny.<channel|>Sunny in Paris.", "Gemma 4 opened reasoning");
+        expect(s.reasoning == "It is sunny." && s.content == "Sunny in Paris.", "Gemma 4 reasoning opened by the prompt");
+        const std::string broken = "<|tool_call>call:get_weather{city:<|\"|>Paris}<tool_call|>";
+        const parsed b = read_all_ways(*g, gopt, broken, "Gemma 4 broken call");
+        expect(b.calls.empty() && b.content == broken, "Gemma 4 broken call kept as text: " + b.content);
+    }
+
     if (failures)
     {
         std::printf("%d checks FAILED\n", failures);
