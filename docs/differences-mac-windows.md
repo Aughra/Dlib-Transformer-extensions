@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version d'Albireo](../dlib/dlib/external/albireo/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.22.1, 14 novembre 2026.
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.23.0, 14 novembre 2026.
 
 ## 1. Vitesse du moteur
 
@@ -75,6 +75,15 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Documents | Pièces jointes | Plus un dossier de documents sur le Mac, où chaque pièce jointe est copiée | Retrouver ses documents d'un appareil à l'autre | v. 2.0.0 |
 | Code de la page | Un fichier `app.js` de plus de 7 000 lignes | 22 modules (`app.js` : 156 lignes), sans changement visible ; banc d'essai `tools/page_test` (ESLint et 106 vérifications dans Chrome sans fenêtre) | Lire, corriger et vérifier la page sans tout parcourir | v. 4.11.2 à 4.11.11 |
 | Numéro de version | Celui de l'original (1.0.x) | Numérotation propre au fork, à partir de 2.0.0 | Le programme n'a plus grand-chose de la version Windows | v. 2.0.0 |
+
+## 5. Repris à la main de l'original, après la dernière fusion
+
+Le fork ne fusionne plus l'original, mais en reprend à la main ce qui lui sert (liste soumise à l'humain le 2026-11-14, lue sur l'original au commit `53ddfe4`, Albireo 1.0.20). Ces lignes rapprochent le fork de l'original actuel ; elles diffèrent de la base `184ea00`.
+
+| Ce qui est repris | Version de l'original | Ce que fait le fork | Où |
+|---|---|---|---|
+| Garde-fou de l'agent contre les appels répétés (8 recherches par outil, arrêt des outils, dernière étape sans outils) | 1.0.15 (`1a7f12a`) | Le même, dans les modules de la page (`tools.js`, `generation.js`) | v. 4.23.0 |
+| « Tout supprimer » efface aussi la mémoire, le nom et les instructions globales | 1.0.15 (`1a7f12a`) | Le même, avec la date de remise à zéro de la mémoire (`store.js`, `settings.js`, `tabs.js`) | v. 4.23.0 |
 
 ## Ce qui reste comme dans l'original
 

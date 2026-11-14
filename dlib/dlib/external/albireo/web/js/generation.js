@@ -427,15 +427,28 @@ export async function runTurn(c, abort, turn) {
     }
     // Les coupes des textes que partagent les étapes de la réponse (fitContext).
     const cuts = { summary: null, texts: new Map(), steps: 0 };
-    for (let step = 0; step < maxAgentSteps; ++step) {
+    /*
+        Les appels qu'un modèle répète ne s'exécutent pas (tools.callGuard, repris de l'original, Albireo 1.0.15).  Une
+        recherche au-delà du budget, un second appel refusé ou la dernière étape de l'agent arrêtent les outils : l'étape
+        suivante les garde, pour que le moteur réutilise le prompt qu'il a lu, mais n'exécute aucun de ses appels, et
+        une étape qui ne fait qu'appeler est suivie d'une dernière sans outils, pour que le modèle réponde avec les
+        résultats qu'il a au lieu de tourner en rond.
+    */
+    const guard = tools.callGuard();
+    let refusals = 0;
+    // Pourquoi les outils se sont arrêtés ('repeat', 'budget' ou 'limit'), et si l'étape se passe d'eux.
+    let stopped = '';
+    let closing = false;
+    for (let step = 0; ; ++step) {
       const s = { reasoning: '', content: '', toolCalls: [] };
       turn.steps.push(s);
-      const system = systemPrompt(c, caps, set);
+      const stepTools = closing ? null : toolDefs;
+      const system = closing ? systemPrompt(c, caps, null, set) : systemPrompt(c, caps, set);
       // La conversation, avec les étapes de cette réponse déjà faites (celles de l'agent).
       const build = (x) => apiMessages(Object.assign({}, c, {
         messages: c.messages.slice(0, -1).concat([Object.assign({}, turn, { steps: turn.steps.slice(0, -1) })])
       }), system, x, media);
-      const fitted = await fitContext(c, build, toolDefs, answerReserve(caps, reasoning), signal, () => {
+      const fitted = await fitContext(c, build, stepTools, answerReserve(caps, reasoning), signal, () => {
         turn.compacting = true;
         scheduleRender(c);
       }, 'albireo-' + role, cuts);
@@ -464,7 +477,7 @@ export async function runTurn(c, abort, turn) {
         turn.promptTokens = fitted.tokens;
       }
       const body = { model: 'albireo-' + role, messages: fitted.messages, reasoning };
-      if (toolDefs) body.tools = toolDefs;
+      if (stepTools) body.tools = stepTools;
       if (state.settings.temperature != null) body.temperature = state.settings.temperature;
       if (state.settings.topP != null) body.top_p = state.settings.topP;
       if (state.settings.topK != null) body.top_k = state.settings.topK;
@@ -514,6 +527,17 @@ export async function runTurn(c, abort, turn) {
       }
       if (s.reasoningStart && !s.reasoningMs) s.reasoningMs = Date.now() - s.reasoningStart;
       delete s.reasoningStart;
+      // Les appels qu'un modèle écrit encore une fois les outils arrêtés ne s'exécutent pas.
+      if (stopped) {
+        for (const tc of s.toolCalls) {
+          tc.status = 'skipped';
+          delete tc.index;
+        }
+        // Une étape qui ne fait qu'appeler fait passer la suivante sans outils ; une étape qui écrit, ou sans outils, termine.
+        if (!s.toolCalls.length || s.content.trim() || closing) break;
+        closing = true;
+        continue;
+      }
       if (!(useTools && s.toolCalls.length && (finish === 'tool_calls' || finish === 'stop'))) break;
       // Les outils de l'étape s'exécutent, chacun chronométré, puis le modèle continue avec leurs résultats.
       for (const tc of s.toolCalls) {
@@ -522,7 +546,22 @@ export async function runTurn(c, abort, turn) {
         tc.started = Date.now();
         scheduleRender(c);
         let r;
-        if (!offered.has(tc.name)) {
+        // Si la requête de cette étape contient tout le résultat d'un appel antérieur de la réponse.
+        const seen = (call) => turn.steps.findIndex((x) => (x.toolCalls || []).includes(call)) >= cuts.steps
+          && cuts.texts.get(call) == null;
+        // Un appel que le modèle a écrit deux fois dans l'étape, avant tout résultat, s'exécute une fois.
+        const key = tools.callKey(tc.name, tc.arguments);
+        const twin = s.toolCalls.slice(0, s.toolCalls.indexOf(tc))
+          .some((x) => tools.callKey(x.name, x.arguments) === key);
+        const refused = twin ? '' : guard.check(tc.name, tc.arguments, seen);
+        if (twin) {
+          r = { ok: false, text: tools.duplicateText };
+        } else if (refused) {
+          r = { ok: false, text: tools.refusalText(refused) };
+          // Une recherche au-delà du budget arrête les outils aussitôt, les autres appels refusés au second de la réponse.
+          ++refusals;
+          if (!stopped && (refused === 'budget' || refusals > 1)) stopped = refused;
+        } else if (!offered.has(tc.name)) {
           r = { ok: false, text: 'The tool ' + tc.name + ' is not available in this answer.' };
         } else if (web.isTool(tc.name)) {
           // fetch_page lit les adresses de la discussion telle qu'elle est quand l'appel s'exécute, y compris les
@@ -543,10 +582,11 @@ export async function runTurn(c, abort, turn) {
             signal
           });
         }
+        if (!refused && !twin) guard.record(tc.name, tc.arguments, tc, r.ok !== false);
         tc.ms = Date.now() - tc.started;
         delete tc.started;
         // Un appel que l'arrêt de la réponse a terminé garde ce qu'il a renvoyé, comme arrêté.
-        tc.status = signal.aborted ? 'stopped' : 'done';
+        tc.status = signal.aborted ? 'stopped' : refused || twin ? 'skipped' : 'done';
         tc.ok = r.ok;
         tc.result = r.text;
         if (r.file) tc.file = r.file;
@@ -555,8 +595,13 @@ export async function runTurn(c, abort, turn) {
         delete tc.index;
         scheduleRender(c);
       }
-      if (step === maxAgentSteps - 1) turn.agentLimit = true;
+      // La dernière étape de l'agent arrête les outils, pour que le modèle réponde avec ce que ses appels ont donné.
+      if (step >= maxAgentSteps - 1 && !stopped) {
+        turn.agentLimit = true;
+        stopped = 'limit';
+      }
     }
+    if (stopped && stopped !== 'limit') turn.toolsStopped = stopped;
   } catch (e) {
     if (e.name === 'AbortError') turn.cancelled = true;
     else turn.error = errorText(e);
@@ -566,7 +611,7 @@ export async function runTurn(c, abort, turn) {
     for (const s of turn.steps) {
       delete s.reasoningStart;
       for (const tc of s.toolCalls || []) {
-        if (tc.status === 'done') continue;
+        if (tc.status === 'done' || tc.status === 'skipped') continue;
         tc.status = 'stopped';
         delete tc.started;
         delete tc.index;

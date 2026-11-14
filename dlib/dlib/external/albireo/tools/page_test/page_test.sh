@@ -86,6 +86,9 @@ if [ "$fresh" = 1 ]; then
   curl -sk -H "Content-Type: application/json" -d '{"role":"general"}' "$URL/albireo/v1/models/qwen3-vl-2b-test/activate" > /dev/null
   sleep 5
 fi
+# Le modèle chargé avant les scénarios : en mode économie d'énergie, son chargement prend une vingtaine de secondes, et
+# une question posée avant reçoit « Albireo démarre ».
+for _ in $(seq 1 180); do grep -q "models: qwen3-vl-2b-test loaded" "$WORK/service.log" && break; sleep 1; done
 
 # ESLint, installé une fois dans build/page-test/lint.
 if command -v npm > /dev/null; then

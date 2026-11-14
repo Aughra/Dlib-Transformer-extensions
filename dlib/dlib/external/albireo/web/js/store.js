@@ -556,10 +556,12 @@ export async function importAll(data) {
 }
 
 // Supprime toutes les discussions, projets, passages et images, en une transaction ; les réglages restent.
-export async function clearAll() {
+export async function clearAll(reset) {
   await open();
   const names = ['conversations', 'projects', 'chunks', 'images'];
-  const tx = db.transaction(names, 'readwrite');
+  const tx = db.transaction(names.concat(['settings']), 'readwrite');
   for (const name of names) tx.objectStore(name).clear();
+  // Les réglages de reset, dans la même transaction : la mémoire, le nom et les instructions partent avec les discussions.
+  for (const key of Object.keys(reset || {})) tx.objectStore('settings').put({ key, value: reset[key] });
   await completed(tx);
 }

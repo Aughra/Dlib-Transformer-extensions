@@ -21,12 +21,12 @@ import { icon } from './icons.js';
 import { cancelBackground, cancelIndex, describePending, indexAttachments, indexProjects } from './indexing.js';
 import { reloadLists } from './lists.js';
 import { escapeHtml, renderMarkdown } from './markdown.js';
-import { forgetMemory, memoryParagraph, memorySentences } from './memory.js';
+import { forgetMemory, memoryAbort, memoryParagraph, memorySentences } from './memory.js';
 import { modelsTab } from './models.js';
 import { go } from './navigation.js';
 import { applyTheme, saveSetting } from './preferences.js';
 import { serviceTab } from './service.js';
-import { roles, state, ui } from './state.js';
+import { clearedSettings, roles, state, ui } from './state.js';
 import { backgroundContext, modelName, refreshStatus, searchProvider } from './status.js';
 import { broadcast, refreshViews, syncLists } from './tabs.js';
 
@@ -180,6 +180,7 @@ function memoryTab(body) {
         await saveSetting('memory', '');
         await saveSetting('memoryPinned', '');
         await saveSetting('memoryUpdated', 0);
+        await saveSetting('memoryReset', Date.now());
         // Les discussions oublient la mémoire avec laquelle elles ont commencé, et ce qu'elles ont
         // déjà dit reste hors des mises à jour suivantes : les discussions enregistrées changent sur
         // place, relues depuis la base avec les messages que d'autres onglets ont enregistrés, et les
@@ -270,11 +271,17 @@ function dataTab(body, close) {
           unread.clear();
           cancelIndex();
           cancelBackground();
+          // La mise à jour de la mémoire en cours s'arrête, et celle que la fin d'une réponse avait prévue ne part pas.
+          if (memoryAbort) memoryAbort.abort();
+          forgetMemory();
           rag.removeAll();
           images.removeAll(waitingImages());
           forgetStoredDrafts();
           for (const id of deleted) web.forgetPages(id);
-          await store.clearAll().catch(storageFailed);
+          // La mémoire, le nom et les instructions globales partent avec les discussions qui les ont appris ou donnés.
+          const reset = Object.assign({}, clearedSettings, { memoryReset: Date.now() });
+          await store.clearAll(reset).catch(storageFailed);
+          for (const key of Object.keys(reset)) state.settings[key] = reset[key];
           broadcast({ type: 'cleared' });
           await reloadLists().catch(storageFailed);
           close(true);

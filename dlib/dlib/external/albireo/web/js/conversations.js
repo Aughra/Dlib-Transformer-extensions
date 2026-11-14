@@ -178,7 +178,12 @@ function markdownOf(title, messages) {
       lines.push('## Albireo', '');
       for (const s of m.steps || []) {
         if (s.reasoning) lines.push('<details><summary>' + t('thinking') + '</summary>', '', s.reasoning, '', '</details>', '');
-        for (const tc of s.toolCalls || []) lines.push('> ' + tc.name + ' ' + (tc.arguments || ''), '', '```', tc.result || '', '```', '');
+        // Un appel sans résultat donne son état à la place.
+        for (const tc of s.toolCalls || []) {
+          lines.push('> ' + tc.name + ' ' + (tc.arguments || ''), '');
+          if (tc.result != null) lines.push('```', tc.result, '```', '');
+          else lines.push('> ' + t(tc.status === 'skipped' ? 'toolSkipped' : 'toolStopped'), '');
+        }
         if (s.content) lines.push(s.content);
       }
     }

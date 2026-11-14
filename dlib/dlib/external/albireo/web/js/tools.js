@@ -137,6 +137,121 @@ export const agentInstructions = 'You can call tools. Call a tool when it gives 
   'After the tool results, answer the user directly.';
 
 /*
+    Le garde-fou d'une réponse contre les appels qu'un modèle répète, comme le fait un petit modèle quand les résultats
+    ne contiennent pas ce qu'il cherche (repris de l'original, Albireo 1.0.15).  Un appel qui donne à un outil les
+    arguments d'un appel antérieur de la réponse, dont le modèle lit encore tout le résultat, ne s'exécute pas
+    ('repeat') ; un appel qui a échoué s'exécute une fois de plus.  Une recherche ne s'exécute pas quand ses mots, mots
+    courants, élisions et identifiants à trous (CVE-2026-XXXX) mis à part, contiennent ceux de sameSubject recherches
+    antérieures de son outil ou sont contenus par eux, en faisant au moins la moitié, comme la même recherche avec un
+    mot ou une année de plus ('repeat'), ni au-delà de searchBudget recherches de son outil dans la réponse ('budget').
+    Une recherche qui change un mot pour un autre, comme la même question sur une autre ville, une autre année ou une
+    autre vitamine, s'exécute.  check() dit pourquoi un appel ne s'exécute pas, ou '' quand il s'exécute ; record()
+    garde un appel exécuté et s'il a réussi.
+*/
+export const searchBudget = 8;
+const sameSubject = 2;
+const searchTools = ['web_search', 'search_documents', 'search_discussions'];
+/*
+    Les mots qui ne disent rien du sujet d'une recherche, en anglais et dans les langues que l'original propose.  Les
+    lettres seules restent, puisqu'elles nomment des choses (vitamine D, plan B) ; les articles et prépositions élidés du
+    français et de l'italien (l', d', qu', dell') partent avec leur apostrophe.
+*/
+const commonWords = new Set(('an and are as at be by for from how in is it of on the to what when where which '
+  + 'who why with au aux ce ces dans de des du en est et la le les ou par pour que quel quelle quels quelles qui sur '
+  + 'un une am auf das dem den der die ein eine einem einen einer fur im ist mit oder und vom von was wie zu zum zur '
+  + 'al alla che come con da dei del della delle di gli il lo nel nella per quale su uno como cual el las los para '
+  + 'por una unas unos').split(' '));
+const elision = /(^|[^a-z])(?:c|d|j|l|m|n|qu|s|t|all|dall|dell|nell|sull)['’]/g;
+
+// Les mots d'une recherche, dans toute écriture, sans ses mots courants, ses élisions, ses trous et ses accents.
+function searchWords(query) {
+  return new Set(String(query || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(elision, '$1 ').split(/[^\p{L}\p{M}\p{N}]+/u)
+    .filter((w) => w && !commonWords.has(w) && !/^x{3,}$/.test(w)));
+}
+
+// Le texte d'un appel qui le compare aux autres : son outil et ses arguments.
+export function callKey(name, argumentsText) {
+  return name + ' ' + argumentsKey(argumentsText);
+}
+
+// Le résultat d'un appel qui répète un appel antérieur de son étape, exécuté une seule fois.
+export const duplicateText = 'Not run: this call is the same as an earlier call of this step, whose result is above.';
+
+// Si deux recherches portent sur un même sujet : les mots de l'une contiennent ceux de l'autre, la moitié des siens au moins.
+function sameWords(a, b) {
+  const small = a.size <= b.size ? a : b;
+  const large = small === a ? b : a;
+  for (const w of small) if (!large.has(w)) return false;
+  return 2 * small.size >= large.size;
+}
+
+// Les arguments d'un appel en un seul texte, leurs clés dans l'ordre, une recherche sans sa casse ni ses espaces en trop.
+function argumentsKey(argumentsText) {
+  let args;
+  try {
+    args = JSON.parse(argumentsText || '{}');
+  } catch (e) {
+    return String(argumentsText || '');
+  }
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return JSON.stringify(args);
+  const out = {};
+  for (const k of Object.keys(args).sort()) {
+    out[k] = k === 'query' && typeof args[k] === 'string' ? args[k].toLowerCase().replace(/\s+/g, ' ').trim() : args[k];
+  }
+  return JSON.stringify(out);
+}
+
+function queryOf(argumentsText) {
+  try {
+    const args = JSON.parse(argumentsText || '{}');
+    return args && typeof args.query === 'string' ? args.query : '';
+  } catch (e) {
+    return '';
+  }
+}
+
+export function callGuard() {
+  // Les appels exécutés, par leur outil et leurs arguments : {call, ok, retried}.
+  const calls = new Map();
+  const searches = new Map();
+  return {
+    // seen(call) dit si la requête du modèle contient tout le résultat d'un appel antérieur.
+    check(name, argumentsText, seen) {
+      const earlier = calls.get(callKey(name, argumentsText));
+      if (earlier && (earlier.ok || earlier.retried) && seen(earlier.call)) return 'repeat';
+      if (!searchTools.includes(name)) return '';
+      const done = searches.get(name) || [];
+      if (done.length >= searchBudget) return 'budget';
+      // Une recherche qui a échoué, exécutée une fois de plus, ou dont le résultat a quitté la requête, s'exécute.
+      if (earlier) return '';
+      const words = searchWords(queryOf(argumentsText));
+      return done.filter((w) => sameWords(w, words)).length >= sameSubject ? 'repeat' : '';
+    },
+    record(name, argumentsText, call, ok) {
+      const key = callKey(name, argumentsText);
+      calls.set(key, { call, ok, retried: calls.has(key) });
+      if (!searchTools.includes(name)) return;
+      const done = searches.get(name) || [];
+      done.push(searchWords(queryOf(argumentsText)));
+      searches.set(name, done);
+    }
+  };
+}
+
+/*
+    Le résultat d'un appel que le garde-fou n'exécute pas : il demande au modèle de répondre avec les résultats qu'il a
+    et d'y prendre ses identifiants, faute de quoi un petit modèle en invente (des numéros de CVE, entre autres).
+*/
+export function refusalText(reason) {
+  return (reason === 'budget' ? 'Not run: this answer has run its ' + searchBudget + ' searches.'
+    : 'Not run: this call repeats earlier calls of this answer, whose results are above.')
+    + ' Answer the user now with the results above, and take from them the identifiers, names and dates you give. '
+    + 'When they do not hold what was asked, say so, then answer with what they hold that comes closest, and with '
+    + 'what you know only when you are sure of it, saying that it may be out of date.';
+}
+
+/*
     Une expression dans la notation que lit la calculatrice.  Les signes de multiplication, de
     division et de soustraction deviennent *, / et -, les groupes de milliers écrits avec des
     espaces se rejoignent ("2 340"), une virgule entre deux chiffres hors des arguments d'une

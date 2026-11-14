@@ -8,7 +8,17 @@ export const defaults = {
   theme: 'auto', language: 'auto', userName: '', defaultRole: 'general', temperature: null, topP: null, topK: null,
   maxTokens: 0, sendOnEnter: true, systemPrompt: '', sidebar: true,
   memoryEnabled: true, memorySensitive: false, memory: '', memoryUpdated: 0, memoryLanguage: '', memoryPinned: '',
+  memoryReset: 0,
   storagePersisted: null
+};
+
+/*
+    Les réglages que la suppression de toutes les discussions et de tous les projets remet à zéro avec eux : la
+    mémoire, le nom de l'utilisateur et les instructions globales, que les discussions ont appris ou donnés (repris
+    de l'original, Albireo 1.0.15).
+*/
+export const clearedSettings = {
+  memory: '', memoryPinned: '', memoryUpdated: 0, memoryLanguage: '', userName: '', systemPrompt: ''
 };
 
 export const state = {

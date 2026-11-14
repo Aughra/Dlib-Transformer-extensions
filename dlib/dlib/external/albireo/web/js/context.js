@@ -174,9 +174,11 @@ export function documentsOf(c) {
     accompagnent la question, et leurs consignes ferment le message, celles de l'agent, puis celles du web.  Il contient
     ce qui reste identique d'une question à la suivante, pour que le moteur le lise une fois : le projet et ses
     documents d'abord, que les discussions du projet partagent, puis le jour où la discussion a commencé, en anglais
-    quelle que soit la langue de l'interface, et la mémoire telle qu'elle était alors.
+    quelle que soit la langue de l'interface, et la mémoire telle qu'elle était alors.  La dernière étape d'une réponse
+    dont les outils se sont arrêtés s'en passe (set null) et garde les règles de citation et du texte du web quand les
+    étapes précédentes avaient les outils web (stopped, leur jeu).
 */
-export function systemPrompt(c, caps, set) {
+export function systemPrompt(c, caps, set, stopped) {
   const agent = !!(set && set.agent);
   const parts = [];
   const p = c.projectId ? projectById(c.projectId) : null;
@@ -215,6 +217,7 @@ export function systemPrompt(c, caps, set) {
   }
   if (agent) parts.push(tools.agentInstructions);
   if (set && set.web) parts.push(web.instructions(set.search));
+  else if (stopped && stopped.web) parts.push(web.citationInstructions);
   return parts.join('\n\n');
 }
 

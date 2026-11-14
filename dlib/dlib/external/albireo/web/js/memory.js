@@ -474,7 +474,7 @@ async function storedMemory() {
   const s = Object.assign({}, defaults, await store.getSettings());
   return {
     enabled: !!s.memoryEnabled, sensitive: !!s.memorySensitive, memory: s.memory || '', language: s.memoryLanguage,
-    pinned: s.memoryPinned || ''
+    pinned: s.memoryPinned || '', reset: s.memoryReset || 0
   };
 }
 
@@ -538,8 +538,9 @@ async function updateMemory(force) {
     // Vrai quand la mémoire a été remise à zéro, modifiée ou désactivée entre-temps, dans cet onglet
     // ou dans un autre, telle qu'elle est enregistrée maintenant : la mise à jour est alors abandonnée.
     const changed = async () => {
+      // La date de la dernière remise à zéro : une mémoire déjà vide remise à zéro ne change pas de texte.
       const now = await storedMemory();
-      return !now.enabled || now.memory !== current;
+      return !now.enabled || now.memory !== current || now.reset !== stored.reset;
     };
     // Les notes écrites sous forme de liste par une version antérieure deviennent des phrases, et sont enregistrées
     // comme telles.

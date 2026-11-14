@@ -6,6 +6,7 @@
 // défilement du fil et l'affichage d'une réponse au fil de son écriture.
 
 import * as images from './images.js';
+import * as tools from './tools.js';
 import * as web from './web.js';
 import { autoGrow, busyHere, liveMessage, regenerate, renderComposerState, sendMessage } from './composer.js';
 import { maxContextImages } from './context.js';
@@ -825,10 +826,16 @@ function noteElements(m, live, steps) {
   if (m.error) out.push(h('div', { class: 'error-box' }, t('errorPrefix', { message: m.error })));
   if (m.cancelled) note(t('cancelled'));
   if (m.repetition && !m.cancelled) note(h('span', { html: icon('info') }), t('answerRepeated'));
-  if (!live && !m.error && !m.cancelled && !steps.some((s) => s.content || (s.toolCalls || []).length)) {
+  // Une réponse sans texte, ou dont l'agent s'est arrêté sans que sa dernière étape écrive.
+  const last = steps[steps.length - 1];
+  if (!live && !m.error && !m.cancelled && (!steps.some((s) => s.content || (s.toolCalls || []).length)
+    || ((m.toolsStopped || m.agentLimit) && !(last && last.content)))) {
     note(t('emptyAnswer'));
   }
   if (m.agentLimit) note(t('agentLimit', { n: maxAgentSteps }));
+  if (m.toolsStopped) {
+    note(m.toolsStopped === 'budget' ? t('agentSearchLimit', { n: tools.searchBudget }) : t('agentRepeats'));
+  }
   return out;
 }
 
@@ -899,6 +906,8 @@ function toolState(tc) {
   if (tc.status === 'running') return { cls: 'running', label: t('toolRunning'), spin: true };
   const time = tc.ms != null ? ' · ' + formatShortDuration(tc.ms) : '';
   if (tc.status === 'stopped') return { cls: 'stopped', label: t('toolStopped') + time };
+  // Un appel que le garde-fou de la réponse n'a pas exécuté (tools.callGuard).
+  if (tc.status === 'skipped') return { cls: 'stopped', label: t('toolSkipped') };
   return tc.ok === false ? { cls: 'error', label: t('toolError') + time } : { cls: 'ok', label: t('toolDone') + time };
 }
 

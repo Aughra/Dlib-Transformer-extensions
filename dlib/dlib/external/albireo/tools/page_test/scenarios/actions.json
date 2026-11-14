@@ -113,5 +113,27 @@
   "name": "delete chat",
   "eval": "T.btn('…',document.querySelector('.topbar')).click(); await T.sleep(400); T.btn('Supprimer',document.querySelector('.menu')).click(); await T.sleep(400); const d=document.querySelector('.dialog'); if (d) [...d.querySelectorAll('button')].find(b=>b.classList.contains('primary')||/Supprimer/.test(b.innerText)).click(); await T.sleep(800); return [...document.querySelectorAll('.side-section')].pop().innerText.includes('Nombre choisi')",
   "expect": false
+ },
+ {
+  "name": "memory, name and instructions set",
+  "eval": "const p=await import('/js/preferences.js'); await p.saveSetting('userName','Lucie'); await p.saveSetting('systemPrompt','Sois bref.'); await p.saveSetting('memory','La personne aime le thé.'); const s=await (await import('/js/store.js')).getSettings(); return [s.userName,s.systemPrompt,s.memory]",
+  "expect": [
+   "Lucie",
+   "Sois bref.",
+   "La personne aime le thé."
+  ]
+ },
+ {
+  "name": "clear all resets memory, name and instructions",
+  "eval": "T.btn('Paramètres').click(); await T.sleep(600); [...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='Données').click(); await T.sleep(800); T.btn('Supprimer toutes les discussions et tous les projets').click(); await T.sleep(500); const ds=[...document.querySelectorAll('.dialog')]; const text=ds[ds.length-1].innerText; [...ds[ds.length-1].querySelectorAll('button')].find(b=>b.classList.contains('primary')).click(); await T.sleep(1500); const s=await (await import('/js/store.js')).getSettings(); const {state}=await import('/js/state.js'); return [text.includes('votre nom'), s.userName||'', s.systemPrompt||'', s.memory||'', (s.memoryReset||0)>0, state.settings.userName||'', document.querySelectorAll('.dialog').length]",
+  "expect": [
+   true,
+   "",
+   "",
+   "",
+   true,
+   "",
+   0
+  ]
  }
 ]

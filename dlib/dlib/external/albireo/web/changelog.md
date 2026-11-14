@@ -2,6 +2,25 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.23.0 — 14 novembre 2026
+
+Reprise à la main de deux nouveautés d'Albireo Community Edition 1.0.15 (Cydral Technology), publiées après la dernière fusion du fork.
+
+### Agent
+
+- L'agent n'exécute plus un appel d'outil qui répète un appel antérieur de la même réponse dont le résultat est encore lu, ni une recherche dont les mots reprennent ceux de deux recherches antérieures, ni plus de 8 recherches par outil. Après un second refus ou au-delà de ce budget, les outils s'arrêtent : l'étape suivante n'exécute plus d'appel, puis une dernière étape sans outils demande au modèle de répondre avec les résultats obtenus. Les appels non exécutés sont affichés comme tels, et une note sous la réponse indique pourquoi l'agent s'est arrêté.
+- Les consignes des outils web précisent que Wikipédia contient peu d'actualité et qu'une même recherche reformulée retrouve les mêmes articles.
+
+### Confidentialité
+
+- « Supprimer toutes les discussions et tous les projets » supprime aussi la mémoire, le nom de l'utilisateur et les instructions globales, dans la même transaction, dans l'onglet qui supprime comme dans les autres. Une mise à jour de la mémoire en cours s'arrête, et une remise à zéro est datée pour qu'aucune mise à jour commencée avant ne réécrive l'ancienne mémoire.
+
+### Corrections
+
+- Le banc d'essai de la page attend que le modèle soit chargé avant de poser ses questions.
+
+---
+
 ## 4.22.1 — 14 novembre 2026
 
 ### Corrections

@@ -20,11 +20,11 @@ import { language } from './i18n.js';
 import { cancelBackground, cancelIndex } from './indexing.js';
 import { buildLayout } from './layout.js';
 import { projectById, reloadLists } from './lists.js';
-import { forgetMemory, rememberLater, tabId } from './memory.js';
+import { forgetMemory, memoryAbort, rememberLater, tabId } from './memory.js';
 import { go } from './navigation.js';
 import { applyLanguage, applyTheme } from './preferences.js';
 import { renderSidebar } from './sidebar.js';
-import { defaults, state, ui } from './state.js';
+import { clearedSettings, defaults, state, ui } from './state.js';
 import { renderStatusLine } from './status.js';
 import { lockThread, renderAll, renderMain, renderTopbar } from './thread.js';
 
@@ -216,6 +216,13 @@ function everythingDeleted() {
   unread.clear();
   cancelIndex();
   cancelBackground();
+  // La mémoire, le nom et les instructions globales, remis à zéro par l'onglet qui a tout supprimé.
+  if (memoryAbort) memoryAbort.abort();
+  forgetMemory();
+  for (const key of Object.keys(clearedSettings)) {
+    state.settings[key] = clearedSettings[key];
+    settingChanged(key);
+  }
   rag.removeAll();
   images.removeAll(waitingImages());
   forgetStoredDrafts();
