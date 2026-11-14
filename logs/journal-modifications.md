@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-14 — Relancer le service en 4.25.0 et corriger le mémo sur SIGINT
+
+- **Quoi** : vrai service relancé (`nohup`, `ALBIREO_HOME=build/albireo-home`, journal `build/albireo-home/logs/console.log`) ; le mémo disait encore que le service lancé en arrière-plan ignore SIGINT, faux depuis la 4.22.1.
+- **Fichiers** : `docs/memo-portage-macos-arm64.md`, `logs/reprise.md`.
+- **Pourquoi** : demande de l'humain (« relance le service ») ; une doc dépassée est un défaut.
+- **Étapes** : service prêt en 2 s (4.25.0), modèle `qwen3-vl-4b-thinking` chargé en 8 s, `https://localhost:18443/` et `http://192.168.1.12:8444/` répondent 200 ; accès réseau sans mot de passe (avertissement du journal, choix de l'humain).
+
 ## 2026-11-14 — Reprendre de l'original la barre de contexte et les champs markdown (Albireo 4.25.0)
 
 - **Quoi** : n° 7 et 8 de la liste des reprises, à la main, sans `git fetch` (base `53ddfe4`) ; fin de la reprise des sept choix de l'humain. N° 7 : barre de contexte de `2f67de2` (1.0.14 : `contextUse`, `contextKey`, `measureContext`, `renderContextLine` dans `status.js`, appelée par `renderStatusLine` ; `ui.contextLine` dans le pied du panneau latéral, `layout.js` ; styles `.context-line` ; textes `contextLabel`, `contextUse`) et fenêtre de `781f550` (1.0.17 : contexte du modèle au lieu du contexte de travail dans `compactInBackground`, `background.js`, et `rewriteSummary`, `conversations.js` ; commentaires de `context.js`). N° 8 : `mdfield.js` de `1a77523` (1.0.15), code identique, commentaires traduits ; zone de saisie (`layout.js`), modification d'une question (`thread.js`, classe `edit-question`), instructions globales et mémoire (`settings.js`), instructions d'un projet (`projects.js`) ; questions du fil dessinées (`drawMarkdown`) ; `==surligné==` dans les réponses (`markdown.js`) ; styles `.md-field`, `.md-text`, `.edit-question` ; `tabs.js` et `dialogs.js` cherchent `.md-field`. Banc de la page : scénarios passés de `textarea` à `.composer .md-field` (13 endroits), étapes « context bar » et « markdown field draws ». Blog : épisode 40.
