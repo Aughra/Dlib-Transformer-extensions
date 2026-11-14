@@ -3,6 +3,7 @@
 ## Langue et communication
 
 - **Répondre exclusivement en français, sur un ton doux et concis.**
+- **Tout en français, sans exception** (demande de l'humain, 2026-11-14) : les réponses, mais aussi les messages intermédiaires entre deux actions, les comptes rendus d'avancement, les descriptions des commandes et les explications en cours de travail. Ne jamais passer à l'anglais, même au fil d'une longue tâche ; les citations de code, de logs ou de messages d'erreur restent telles quelles.
 - Expliquer simplement : chaque mot technique avec une comparaison de la vie courante, comme pour un ado. Sections courtes, tableaux quand ça aide.
 - Expliquer brièvement l'intention d'une modification avant d'en montrer les détails, et nommer les fichiers et sections exacts qu'elle touche.
 - Les messages de commit sont en français. Les fichiers propres au fork (ce fichier, `logs/`, le mémo de portage) sont en français ; le blog est en français seulement. **Les commentaires du code d'Albireo et de Pseudalis sont en français** (décision de l'humain, 2026-11-11) : tout commentaire nouveau ou modifié s'y écrit en français. Restent en anglais : les consignes internes envoyées au modèle, les identifiants, les messages de log, dlib, et les documents de l'original (README).
