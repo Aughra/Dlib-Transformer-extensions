@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-14 vers 8 h, sur le Mac M2 : Albireo **4.16.0**, **images de Gemma 4 faites** (B3 (2) : projecteur `gemma4v`, comparé à llama.cpp sur 4 images ; blog : épisode 35) ; juste avant, **outils de Gemma 4** (4.15.0). Le vrai service tourne en 4.15.0 (relancé le 2026-11-14 vers 7 h 30, port 18443, réseau 8444) : à relancer en 4.16.0. La nuit du 2026-11-12 : `logs/nuit-2026-11-12.md`. Restent : Gemma 4 (GPU, son, 26B-A4B), le Mac mini (liste `docs/mac-mini-premier-jour.md`).
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-14 vers 8 h, sur le Mac M2 : Albireo **4.16.0**, **images de Gemma 4 faites** (B3 (2) : projecteur `gemma4v`, comparé à llama.cpp sur 4 images ; blog : épisode 35) ; juste avant, **outils de Gemma 4** (4.15.0). Le vrai service tourne en 4.16.0 (relancé le 2026-11-14 vers 8 h, port 18443, réseau 8444). La nuit du 2026-11-12 : `logs/nuit-2026-11-12.md`. Restent : Gemma 4 (GPU, son, 26B-A4B), le Mac mini (liste `docs/mac-mini-premier-jour.md`).
 
 ## Objectif
 
