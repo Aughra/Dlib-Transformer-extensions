@@ -7,10 +7,15 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <functional>
+#include <iterator>
 #include <random>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace albireo
 {
@@ -148,18 +153,16 @@ namespace albireo
         }
 
         /*
-            Analyse le JSON d'un appel d'outil tel qu'un modèle l'écrit.  Les modèles écrivent le
-            code et les textes qu'ils passent à un outil avec des sauts de ligne et des
-            tabulations bruts dans ses chaînes, ce que la grammaire interdit.  Quand le texte ne
-            s'analyse pas tel quel, ces caractères sont échappés et le résultat analysé à
-            nouveau, et repaired le reçoit.
+            Le texte d'une valeur JSON dont les caractères de contrôle bruts des chaînes sont
+            échappés : les modèles écrivent le code et les textes qu'ils passent à un outil avec des
+            sauts de ligne et des tabulations bruts, ce que la grammaire interdit ; chaque guillemet
+            qu'aucune barre oblique inverse n'échappe termine sa chaîne.  False quand le texte n'a
+            aucun de ces caractères.
         */
-        bool parse_call_json(const std::string& text, json& out, std::string& repaired)
+        bool escape_controls(const std::string& text, std::string& fixed)
         {
-            repaired.clear();
-            if (json::parse(text, out)) return true;
             static const char hex[] = "0123456789abcdef";
-            std::string fixed;
+            fixed.clear();
             fixed.reserve(text.size() + 16);
             bool in_string = false, changed = false;
             for (size_t i = 0; i < text.size(); ++i)
@@ -198,7 +201,530 @@ namespace albireo
                 }
                 fixed += c;
             }
-            if (!changed || !json::parse(fixed, out)) return false;
+            return changed;
+        }
+
+        // Les définitions des outils d'une requête, telles que la réparation de leurs appels les lit.
+        struct tool_schema
+        {
+            // Si name est un paramètre de l'outil, de n'importe quel outil quand l'outil est vide.
+            std::function<bool(const std::string& tool, const std::string& name)> parameter;
+            // Si names contient tous les paramètres que l'outil exige.
+            std::function<bool(const std::string& tool, const std::vector<std::string>& names)> complete;
+        };
+
+        /*
+            La réparation du JSON des appels d'outils qu'un modèle écrit en laissant sans échappement
+            les guillemets du code qu'il passe, des caractères de contrôle bruts dans ses chaînes, ou
+            des barres obliques inverses qui ne commencent aucun échappement de la grammaire (reprise
+            de l'original, Albireo 1.0.14).  Un guillemet dans une chaîne la termine ou y reste, dans
+            cet ordre, et une lecture qui mène le texte à son terme est gardée, ses guillemets,
+            caractères de contrôle et barres obliques échappés, quand aucune autre lecture ne le mène
+            à son terme avec autant de valeurs ou plus ; une lecture dont les chaînes avalent des
+            appels entiers ne compte pas.  Les arguments d'un appel, la valeur de son membre
+            "arguments" ou "parameters", ou le texte entier quand il contient les arguments d'un seul
+            outil, sont un objet dont les membres sont des paramètres de l'outil que l'appel nomme,
+            chacun une fois, avec tous les paramètres que l'outil exige, pour que les dictionnaires
+            du code ne passent pas pour des membres ; un appel n'a que les membres name, id, type,
+            function, arguments et parameters, chacun une fois, name seul après les arguments, et son
+            nom ne contient que des lettres, des chiffres, '_', '-', '.' et ':'.  Les accolades et
+            crochets fermants qu'un modèle écrit après une valeur du texte sont laissés de côté.  La
+            recherche garde les empreintes des lectures qui ont échoué, pour lire chacune une seule
+            fois, et abandonne après un nombre borné d'étapes ; la lecture trouvée est gardée quand
+            la recherche d'une autre abandonne.
+        */
+        class stray_quotes
+        {
+        public:
+            /*
+                text : le JSON tel que le modèle l'a écrit ; schema : les outils de la requête,
+                n'importe quel nom et n'importe quels arguments quand ses fonctions sont vides ;
+                tool : l'outil dont le texte contient seul les arguments, vide quand il contient des
+                appels ; several : si le texte contient plusieurs objets à la suite.
+            */
+            stray_quotes(const std::string& text, tool_schema schema, std::string tool, bool several)
+                : t_(text), schema_(std::move(schema)), tool_(std::move(tool)), several_(several),
+                marks_(text.size(), none)
+            {
+            }
+
+            // Le texte réparé ; false quand aucune lecture, ou plus d'une, ne le mène à son terme.
+            bool repair(std::string& out)
+            {
+                mode at = mode::value;
+                size_t i = skip(0), start = 0, end = 0;
+                if (search(i, start, at, end) != outcome::complete) return false;
+                write(end, out);
+                /*
+                    Les lectures qui suivent les guillemets de cette lecture mènent le texte à son terme :
+                    un autre chemin qui atteint l'une d'elles avec autant de valeurs avant elle, ou la fin
+                    avec autant de valeurs, est une autre lecture.
+                */
+                for (const choice& c : choices_) succeeded_[c.reading] = c.values;
+                found_ = values_;
+                again_ = true;
+                if (!backtrack(i, start, at)) return true;
+                return search(i, start, at, end) != outcome::complete;
+            }
+
+        private:
+            enum class mode { value, string, after };
+            enum class outcome { complete, none, spent };
+            enum : char { none = 0, quote = 1, control = 2, backslash = 3, dropped = 4 };
+            static const size_t max_steps = 1000000;
+            static const size_t max_depth = 32;
+            /*
+                Au plus : les guillemets qui ont terminé une chaîne dans la lecture essayée, les membres
+                d'un objet d'arguments et les caractères de leurs noms, et les caractères des autres
+                noms, pour que la mémoire de la recherche reste bornée.
+            */
+            static const size_t max_choices = 1024;
+            static const size_t max_arguments = 64;
+            static const size_t max_name = 64;
+            static const size_t max_other_name = 256;
+
+            // Un objet ou une liste en cours de lecture.
+            struct frame
+            {
+                char type = '{';
+                // Un objet d'arguments, dont les noms sont des paramètres de tool, et une valeur dans un tel objet.
+                bool arguments = false;
+                bool inside = false;
+                std::string tool;
+                // Le nom du membre dont la valeur est lue, et la valeur du membre "name" d'un appel.
+                std::string key;
+                std::string name;
+                // Les noms des membres d'un objet d'arguments ou d'un appel.
+                std::vector<std::string> names;
+            };
+
+            // Un guillemet qui a terminé une chaîne, et la lecture d'avant, avec ses valeurs commencées.
+            struct choice
+            {
+                size_t position;
+                size_t start;
+                std::vector<frame> frames;
+                size_t marked;
+                uint64_t reading;
+                size_t values;
+            };
+
+            // Lit depuis i jusqu'à ce qu'une lecture mène le texte à son terme, end recevant sa fin.
+            outcome search(size_t& i, size_t& start, mode& at, size_t& end)
+            {
+                for (;;)
+                {
+                    if (++steps_ > max_steps) return outcome::spent;
+                    bool ok = false, done = false;
+                    if (at == mode::value) ok = read_value(i, at, start);
+                    else if (at == mode::string) ok = read_string(i, at, start);
+                    else ok = read_after(i, at, done);
+                    if (done && (!again_ || values_ >= found_))
+                    {
+                        end = i;
+                        return outcome::complete;
+                    }
+                    if (other_) return outcome::complete;
+                    if (ok && !done) continue;
+                    if (steps_ >= max_steps) return outcome::spent;
+                    if (!backtrack(i, start, at)) return outcome::none;
+                }
+            }
+
+            // Le dernier guillemet qui a terminé une chaîne y reste ; false quand il n'en reste aucun.
+            bool backtrack(size_t& i, size_t& start, mode& at)
+            {
+                if (choices_.empty()) return false;
+                choice c = std::move(choices_.back());
+                choices_.pop_back();
+                if (succeeded_.count(c.reading) == 0) failed_.insert(c.reading);
+                frames_ = std::move(c.frames);
+                values_ = c.values;
+                while (marked_.size() > c.marked)
+                {
+                    marks_[marked_.back()] = none;
+                    marked_.pop_back();
+                }
+                mark(c.position, quote);
+                i = c.position + 1;
+                start = c.start;
+                at = mode::string;
+                return true;
+            }
+
+            // Le texte jusqu'à end, avec les marques de la lecture.
+            void write(size_t end, std::string& out) const
+            {
+                static const char hex[] = "0123456789abcdef";
+                out.clear();
+                out.reserve(end + 64);
+                for (size_t k = 0; k < end && k < t_.size(); ++k)
+                {
+                    const char c = t_[k];
+                    const char m = marks_[k];
+                    if (m == dropped) continue;
+                    if (m == quote || m == backslash) out += '\\';
+                    if (m != control)
+                    {
+                        out += c;
+                        continue;
+                    }
+                    if (c == '\n') out += "\\n";
+                    else if (c == '\r') out += "\\r";
+                    else if (c == '\t') out += "\\t";
+                    else
+                    {
+                        out += "\\u00";
+                        out += hex[(c >> 4) & 15];
+                        out += hex[c & 15];
+                    }
+                }
+            }
+
+            size_t skip(size_t i) const
+            {
+                while (i < t_.size() && std::isspace(static_cast<unsigned char>(t_[i]))) ++i;
+                return i;
+            }
+
+            void mark(size_t i, char kind)
+            {
+                marks_[i] = kind;
+                marked_.push_back(i);
+            }
+
+            // Le début d'une valeur en i.
+            bool read_value(size_t& i, mode& at, size_t& start)
+            {
+                if (i >= t_.size()) return false;
+                const char c = t_[i];
+                if (!frames_.empty())
+                {
+                    const frame& parent = frames_.back();
+                    if (c != '{' && parent.type == '{' && !parent.arguments && !parent.inside
+                        && (parent.key == "arguments" || parent.key == "parameters"))
+                        return false;
+                }
+                if (c == '{' || c == '[')
+                {
+                    if (frames_.size() >= max_depth) return false;
+                    frame f;
+                    f.type = c;
+                    if (frames_.empty())
+                    {
+                        f.arguments = c == '{' && !tool_.empty();
+                        f.tool = tool_;
+                    }
+                    else
+                    {
+                        const frame& parent = frames_.back();
+                        f.inside = parent.arguments || parent.inside;
+                        f.arguments = c == '{' && !f.inside && parent.type == '{'
+                            && (parent.key == "arguments" || parent.key == "parameters");
+                        if (f.arguments) f.tool = parent.name;
+                    }
+                    frames_.push_back(f);
+                    const size_t p = skip(i + 1);
+                    if (p < t_.size() && t_[p] == (c == '{' ? '}' : ']'))
+                    {
+                        if (!complete(frames_.back())) return false;
+                        frames_.pop_back();
+                        i = p + 1;
+                        at = mode::after;
+                        return true;
+                    }
+                    if (c == '{') return member(p, i, at);
+                    i = p;
+                    return true;
+                }
+                if (c == '"')
+                {
+                    start = i;
+                    ++i;
+                    at = mode::string;
+                    return true;
+                }
+                // Un nombre, true, false ou null, jusqu'au délimiteur suivant.
+                size_t j = i;
+                while (j < t_.size() && t_[j] != ',' && t_[j] != '}' && t_[j] != ']'
+                    && !std::isspace(static_cast<unsigned char>(t_[j])))
+                    ++j;
+                json scalar;
+                if (j == i || !json::parse(t_.substr(i, j - i), scalar)) return false;
+                i = j;
+                at = mode::after;
+                return true;
+            }
+
+            // Si un objet d'arguments contient tous les paramètres que son outil exige.
+            bool complete(const frame& f) const
+            {
+                return !f.arguments || !schema_.complete || schema_.complete(f.tool, f.names);
+            }
+
+            // Un membre de l'objet en cours de lecture, de son nom en p jusqu'au début de sa valeur.
+            bool member(size_t p, size_t& i, mode& at)
+            {
+                if (p >= t_.size() || t_[p] != '"') return false;
+                size_t e = p + 1;
+                while (e < t_.size() && t_[e] != '"' && static_cast<unsigned char>(t_[e]) >= 0x20)
+                    e += t_[e] == '\\' ? 2 : 1;
+                if (e >= t_.size() || t_[e] != '"') return false;
+                const std::string name = t_.substr(p + 1, e - p - 1);
+                frame& f = frames_.back();
+                if (name.size() > max_other_name) return false;
+                if (!f.arguments && !f.inside)
+                {
+                    // Les membres d'un appel, chacun une fois, le nom seul après les arguments.
+                    static const char* const call_keys[] = { "name", "id", "type", "function", "arguments",
+                        "parameters" };
+                    const auto known = std::find(std::begin(call_keys), std::end(call_keys), name);
+                    if (known == std::end(call_keys)) return false;
+                    if (std::find(f.names.begin(), f.names.end(), name) != f.names.end()) return false;
+                    for (const std::string& k : f.names)
+                        if ((k == "function" || k == "arguments" || k == "parameters") && name != "name") return false;
+                    f.names.push_back(name);
+                }
+                if (f.arguments)
+                {
+                    if (name.size() > max_name || f.names.size() >= max_arguments) return false;
+                    if (std::find(f.names.begin(), f.names.end(), name) != f.names.end()) return false;
+                    if (schema_.parameter && !schema_.parameter(f.tool, name)) return false;
+                    f.names.push_back(name);
+                }
+                const size_t colon = skip(e + 1);
+                if (colon >= t_.size() || t_[colon] != ':') return false;
+                f.key = name;
+                i = skip(colon + 1);
+                at = mode::value;
+                return true;
+            }
+
+            static bool is_hex(char c)
+            {
+                return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+            }
+
+            // Si la barre oblique inverse en j commence un échappement de la grammaire.
+            bool escape_at(size_t j) const
+            {
+                if (j + 1 >= t_.size()) return false;
+                const char e = t_[j + 1];
+                if (e != '\0' && std::strchr("\"\\/bfnrt", e) != nullptr) return true;
+                if (e != 'u' || j + 5 >= t_.size()) return false;
+                for (size_t h = j + 2; h < j + 6; ++h)
+                    if (!is_hex(t_[h])) return false;
+                return true;
+            }
+
+            // Si name peut nommer une fonction : 1 à 64 lettres, chiffres, '_', '-', '.' ou ':'.
+            static bool function_name(const std::string& name)
+            {
+                if (name.empty() || name.size() > 64) return false;
+                for (char c : name)
+                {
+                    const bool sign = c != '\0' && std::strchr("_-.:", c) != nullptr;
+                    if (!std::isalnum(static_cast<unsigned char>(c)) && !sign) return false;
+                }
+                return true;
+            }
+
+            // Si le texte peut continuer après une valeur qui se termine avant p.
+            bool may_follow(size_t p) const
+            {
+                const size_t r = skip(p);
+                if (frames_.empty()) return true;
+                if (r >= t_.size()) return false;
+                return t_[r] == ',' || t_[r] == (frames_.back().type == '{' ? '}' : ']');
+            }
+
+            /*
+                La lecture après une valeur qui se termine avant p, telle que la disent les objets en
+                cours de lecture : une empreinte (FNV-1a) de la position et de ce que ces objets
+                contiennent au-delà du membre lu, qui décident de la suite de la recherche.
+            */
+            uint64_t reading(size_t p) const
+            {
+                uint64_t h = 14695981039346656037ull;
+                const auto add = [&h](const char* s, size_t n) {
+                    for (size_t i = 0; i < n; ++i) h = (h ^ static_cast<unsigned char>(s[i])) * 1099511628211ull;
+                };
+                const auto mark_end = [&h]() { h = (h ^ 0x100u) * 1099511628211ull; };
+                const std::string at = std::to_string(p);
+                add(at.data(), at.size());
+                for (const frame& f : frames_)
+                {
+                    const char head[2] = { f.type, f.arguments ? 'a' : f.inside ? 'i' : '-' };
+                    add(head, 2);
+                    add(f.tool.data(), f.tool.size());
+                    mark_end();
+                    add(f.name.data(), f.name.size());
+                    mark_end();
+                    for (const std::string& k : f.names)
+                    {
+                        add(k.data(), k.size());
+                        mark_end();
+                    }
+                    mark_end();
+                }
+                return h;
+            }
+
+            // La suite d'une chaîne depuis i, son guillemet ouvrant en start.
+            bool read_string(size_t& i, mode& at, size_t start)
+            {
+                for (size_t j = i; j < t_.size(); ++j)
+                {
+                    if (++steps_ > max_steps) return false;
+                    const char c = t_[j];
+                    if (c == '\\')
+                    {
+                        if (escape_at(j)) ++j;
+                        else mark(j, backslash);
+                        continue;
+                    }
+                    if (static_cast<unsigned char>(c) < 0x20)
+                    {
+                        mark(j, control);
+                        continue;
+                    }
+                    if (c != '"') continue;
+                    if (!may_follow(j + 1))
+                    {
+                        mark(j, quote);
+                        continue;
+                    }
+                    std::vector<frame> before = frames_;
+                    if (!frames_.empty() && frames_.back().type == '{' && frames_.back().key == "name"
+                        && !frames_.back().arguments && !frames_.back().inside)
+                    {
+                        // Le nom d'un appel, qui nomme l'outil de ses arguments.
+                        const std::string name = t_.substr(start + 1, j - start - 1);
+                        if (!function_name(name))
+                        {
+                            mark(j, quote);
+                            continue;
+                        }
+                        frames_.back().name = name;
+                    }
+                    const uint64_t r = reading(j + 1);
+                    if (failed_.count(r) != 0)
+                    {
+                        frames_ = std::move(before);
+                        mark(j, quote);
+                        continue;
+                    }
+                    // Un autre chemin atteint une lecture après laquelle le texte va à son terme.
+                    const auto known = again_ ? succeeded_.find(r) : succeeded_.end();
+                    if (known != succeeded_.end())
+                    {
+                        if (values_ >= known->second)
+                        {
+                            other_ = true;
+                            return false;
+                        }
+                        frames_ = std::move(before);
+                        mark(j, quote);
+                        continue;
+                    }
+                    if (choices_.size() >= max_choices)
+                    {
+                        steps_ = max_steps;
+                        return false;
+                    }
+                    choices_.push_back(choice{ j, start, std::move(before), marked_.size(), r, values_ });
+                    i = j + 1;
+                    at = mode::after;
+                    return true;
+                }
+                return false;
+            }
+
+            // Ce qui suit une valeur qui se termine avant i.
+            bool read_after(size_t& i, mode& at, bool& done)
+            {
+                const size_t r = skip(i);
+                if (frames_.empty())
+                {
+                    // Les accolades et crochets fermants laissés après la valeur, puis la fin ou une autre valeur.
+                    size_t k = r;
+                    std::vector<size_t> closing;
+                    for (; k < t_.size(); ++k)
+                    {
+                        if (t_[k] == '}' || t_[k] == ']') closing.push_back(k);
+                        else if (!std::isspace(static_cast<unsigned char>(t_[k]))) break;
+                    }
+                    if (k >= t_.size())
+                    {
+                        done = true;
+                        return true;
+                    }
+                    if (!several_ || t_[k] != '{') return false;
+                    for (size_t c : closing) mark(c, dropped);
+                    ++values_;
+                    i = k;
+                    at = mode::value;
+                    return true;
+                }
+                if (r >= t_.size()) return false;
+                const char type = frames_.back().type;
+                if (t_[r] == ',')
+                {
+                    const size_t p = skip(r + 1);
+                    if (type == '{') return member(p, i, at);
+                    i = p;
+                    at = mode::value;
+                    return true;
+                }
+                if (t_[r] != (type == '{' ? '}' : ']')) return false;
+                if (!complete(frames_.back())) return false;
+                frames_.pop_back();
+                i = r + 1;
+                return true;
+            }
+
+            const std::string& t_;
+            const tool_schema schema_;
+            const std::string tool_;
+            const bool several_;
+            std::vector<char> marks_;
+            std::vector<size_t> marked_;
+            std::vector<frame> frames_;
+            std::vector<choice> choices_;
+            std::unordered_set<uint64_t> failed_;
+            /*
+                Les valeurs commencées dans la lecture essayée ; les lectures de la lecture trouvée avec
+                les valeurs commencées avant chacune, et ses valeurs, pendant que la recherche en cherche
+                une autre, et si elle en a trouvé une.
+            */
+            size_t values_ = 1;
+            std::unordered_map<uint64_t, size_t> succeeded_;
+            size_t found_ = 0;
+            bool again_ = false;
+            bool other_ = false;
+            size_t steps_ = 0;
+        };
+
+        /*
+            Analyse le JSON d'un appel d'outil tel qu'un modèle l'écrit : tel quel, sinon avec les
+            caractères de contrôle bruts de ses chaînes échappés, sinon réparé par stray_quotes, avec
+            les outils de la requête et l'outil dont le texte contient seul les arguments, s'il y en
+            a un, pour les guillemets du code qu'un petit modèle laisse sans échappement, sauf si
+            repair est faux.  repaired reçoit le texte analysé quand ce n'est pas le texte donné.
+        */
+        bool parse_call_json(const std::string& text, json& out, std::string& repaired,
+            const tool_schema& schema = tool_schema(), const std::string& tool = std::string(), bool repair = true)
+        {
+            repaired.clear();
+            if (json::parse(text, out)) return true;
+            std::string fixed;
+            if (escape_controls(text, fixed) && json::parse(fixed, out))
+            {
+                repaired.swap(fixed);
+                return true;
+            }
+            if (!repair || !stray_quotes(text, schema, tool, false).repair(fixed) || !json::parse(fixed, out))
+                return false;
             repaired.swap(fixed);
             return true;
         }
@@ -637,8 +1163,10 @@ namespace albireo
                 Les appels du texte entre deux marqueurs d'appel, un objet JSON ou plusieurs à la
                 suite, éventuellement dans un bloc délimité.  Les accolades fermantes qu'un modèle
                 écrit au-delà de son dernier objet, après du code ayant ses propres accolades,
-                sont laissées de côté.  False, sans rien émettre, quand le texte contient autre
-                chose.
+                sont laissées de côté.  Les guillemets du code qu'un modèle laisse sans échappement
+                trompent sur l'étendue de chaque objet : un texte qui ne se lit pas ainsi est réparé
+                en entier (stray_quotes), puis relu.  False, sans rien émettre, quand le texte
+                contient autre chose.
             */
             bool emit_calls(const std::string& body, std::vector<output_event>& events)
             {
@@ -651,6 +1179,23 @@ namespace albireo
                     if (ends_with(text, "```")) text = strip_spaces(text.substr(0, text.size() - 3));
                 }
                 std::vector<output_event> calls;
+                if (!call_objects(text, calls))
+                {
+                    std::string fixed;
+                    calls.clear();
+                    if (!stray_quotes(text, schema(), std::string(), true).repair(fixed) || !call_objects(fixed, calls))
+                        return false;
+                }
+                events.insert(events.end(), calls.begin(), calls.end());
+                return true;
+            }
+
+            /*
+                Les appels de text, des objets JSON à la suite, les caractères de contrôle bruts de
+                leurs chaînes échappés ; false quand il contient autre chose.
+            */
+            bool call_objects(const std::string& text, std::vector<output_event>& calls)
+            {
                 size_t pos = 0;
                 while (pos < text.size())
                 {
@@ -659,16 +1204,70 @@ namespace albireo
                     if (n == 0 || text[pos] != '{') return false;
                     std::string one = text.substr(pos, n);
                     json j;
-                    std::string repaired;
-                    if (!parse_call_json(one, j, repaired) || !j.is_object()) return false;
-                    if (!repaired.empty()) one.swap(repaired);
-                    if (!emit_call_object(j, calls, one)) return false;
+                    if (!json::parse(one, j))
+                    {
+                        std::string fixed;
+                        if (!escape_controls(one, fixed) || !json::parse(fixed, j)) return false;
+                        one.swap(fixed);
+                    }
+                    if (!j.is_object() || !emit_call_object(j, calls, one)) return false;
                     pos += n;
                     while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos]))) ++pos;
                 }
-                if (calls.empty()) return false;
-                events.insert(events.end(), calls.begin(), calls.end());
+                return !calls.empty();
+            }
+
+            /*
+                Si key est un paramètre de l'outil nommé function, de n'importe quel outil de la
+                requête quand function est vide, tel que les définitions des outils de la requête les
+                déclarent ; un outil sans paramètres déclarés, ou que la requête ne définit pas,
+                accepte n'importe quel nom.
+            */
+            bool is_parameter(const std::string& function, const std::string& key) const
+            {
+                bool declared = false;
+                for (const auto& t : c_.tools.elements())
+                {
+                    const json& fn = t.contains("function") ? t["function"] : t;
+                    if (!function.empty() && fn["name"].as_string() != function) continue;
+                    const json& properties = fn["parameters"]["properties"];
+                    if (!properties.is_object() || properties.contains(key)) return true;
+                    declared = true;
+                }
+                return !declared;
+            }
+
+            /*
+                Si names contient tous les paramètres que l'outil nommé function exige, tel que la
+                définition de l'outil dans la requête les déclare ; vrai pour un outil que la requête
+                ne définit pas et pour un nom vide.
+            */
+            bool has_required(const std::string& function, const std::vector<std::string>& names) const
+            {
+                if (function.empty()) return true;
+                for (const auto& t : c_.tools.elements())
+                {
+                    const json& fn = t.contains("function") ? t["function"] : t;
+                    if (fn["name"].as_string() != function) continue;
+                    for (const auto& r : fn["parameters"]["required"].elements())
+                        if (r.is_string() && std::find(names.begin(), names.end(), r.as_string()) == names.end())
+                            return false;
+                    return true;
+                }
                 return true;
+            }
+
+            // Les outils de la requête, pour la réparation des appels (stray_quotes).
+            tool_schema schema() const
+            {
+                tool_schema s;
+                s.parameter = [this](const std::string& function, const std::string& key) {
+                    return is_parameter(function, key);
+                };
+                s.complete = [this](const std::string& function, const std::vector<std::string>& names) {
+                    return has_required(function, names);
+                };
+                return s;
             }
 
             // Le type que la définition d'un outil donne à l'un de ses paramètres, ou "".
@@ -1035,7 +1634,7 @@ namespace albireo
                     json j;
                     std::string repaired;
                     const std::string value = strip_spaces(buffer_.substr(0, n));
-                    if (parse_call_json(value, j, repaired) && (j.is_array() || j.is_object()))
+                    if (parse_call_json(value, j, repaired, schema()) && (j.is_array() || j.is_object()))
                     {
                         if (j.is_object()) emit_call_object(j, events);
                         else for (const auto& e : j.elements()) if (e.is_object()) emit_call_object(e, events);
@@ -1083,7 +1682,7 @@ namespace albireo
                 const std::string args = strip_spaces(buffer_.substr(a + args_marker.size(), n));
                 json j;
                 std::string repaired;
-                if (!name.empty() && parse_call_json(args, j, repaired) && j.is_object())
+                if (!name.empty() && parse_call_json(args, j, repaired, schema(), name) && j.is_object())
                     emit_call(name, repaired.empty() ? args : repaired, events, id);
                 else
                     emit(output_kind::content, call_prefix_ + buffer_.substr(0, a + args_marker.size() + n), events);
@@ -1445,7 +2044,8 @@ namespace albireo
                     c.calls = xml_calls_ ? call_style::xml_function : call_style::tagged_object;
                     c.call_open = "<tool_call>";
                     c.call_close = "</tool_call>";
-                    if (xml_calls_) c.tools = opt.tools;
+                    // Les types des paramètres XML, et les paramètres que lit la réparation des appels (stray_quotes).
+                    c.tools = opt.tools;
                 }
                 return std::unique_ptr<output_parser>(new tag_parser(c));
             }
@@ -1562,7 +2162,7 @@ namespace albireo
                 }
             }
 
-            std::unique_ptr<output_parser> make_parser(const render_options&) const override
+            std::unique_ptr<output_parser> make_parser(const render_options& opt) const override
             {
                 parser_config c;
                 if (reasoning_)
@@ -1572,6 +2172,8 @@ namespace albireo
                 }
                 c.calls = call_style::mistral;
                 c.call_open = "[TOOL_CALLS]";
+                // Les paramètres que lit la réparation des appels (stray_quotes).
+                c.tools = opt.tools;
                 return std::unique_ptr<output_parser>(new tag_parser(c));
             }
 
@@ -1765,6 +2367,8 @@ namespace albireo
                     c.call_open = "<|tool_call|>";
                     // Les plus petits modèles de la famille écrivent le marqueur en texte brut.
                     c.call_open_alt = "<tool_call>";
+                    // Les paramètres que lit la réparation des appels (stray_quotes).
+                    c.tools = opt.tools;
                 }
                 return std::unique_ptr<output_parser>(new tag_parser(c));
             }

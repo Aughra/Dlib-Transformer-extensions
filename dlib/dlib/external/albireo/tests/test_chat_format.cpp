@@ -213,6 +213,87 @@ int main()
         }
     }
 
+    /*
+        Du code dont un petit modèle laisse les guillemets sans échappement (Qwen3-VL 2B Instruct,
+        repris de l'original) : la chaîne vide de Python, les arguments d'une fonction, un
+        dictionnaire dont les noms ne sont pas des paramètres de l'outil, et un guillemet seul entre
+        apostrophes, avec des sauts de ligne bruts ; puis deux appels dans un bloc, les guillemets du
+        premier sans échappement.
+    */
+    {
+        render_options files = opt;
+        files.tools = json::parse_or_null("[{\"type\": \"function\", \"function\": {\"name\": \"create_file\", "
+            "\"parameters\": {\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, "
+            "\"content\": {\"type\": \"string\"}}, \"required\": [\"name\", \"content\"]}}}, "
+            "{\"type\": \"function\", \"function\": {\"name\": \"calculator\", \"parameters\": {\"type\": "
+            "\"object\", \"properties\": {\"expression\": {\"type\": \"string\"}}}}}, "
+            "{\"type\": \"function\", \"function\": {\"name\": \"run_javascript\", \"parameters\": {\"type\": "
+            "\"object\", \"properties\": {\"code\": {\"type\": \"string\"}}, \"required\": [\"code\"]}}}, "
+            "{\"type\": \"function\", \"function\": {\"name\": \"http_request\", \"parameters\": {\"type\": "
+            "\"object\", \"properties\": {\"url\": {\"type\": \"string\"}, \"body\": {\"type\": \"string\"}, "
+            "\"method\": {\"type\": \"string\"}, \"headers\": {\"type\": \"string\"}}, \"required\": [\"url\"]}}}]");
+        const std::string code = "win_msg = \"\"\nprint(\"Turn of\", player)\n"
+            "names = {\"X\": \"Player 1\", \"O\": \"Player 2\"}\nquote = '\"'\nprint(f\"{names}\")\n";
+        const parsed p = read_all_ways(*f, files, "<tool_call>\n{\"name\": \"create_file\", \"arguments\": "
+            "{\"name\": \"game.py\", \"content\": \"" + code + "\"}}\n</tool_call>", "unescaped quotes");
+        expect(p.calls.size() == 1 && p.content.empty(), "a call with unescaped quotes is read");
+        if (p.calls.size() == 1)
+        {
+            json args;
+            const bool ok = json::parse(p.calls[0].arguments, args);
+            expect(ok && args.items().size() == 2 && args["name"].as_string() == "game.py"
+                && args["content"].as_string() == code, "the code of a call with unescaped quotes: "
+                + p.calls[0].arguments);
+        }
+
+        const parsed two = read_all_ways(*f, files, "<tool_call>\n{\"name\": \"create_file\", \"arguments\": "
+            "{\"name\": \"a.py\", \"content\": \"print(\"a\", \"b\")\"}}\n{\"name\": \"calculator\", "
+            "\"arguments\": {\"expression\": \"1+1\"}}\n</tool_call>", "two calls, unescaped quotes");
+        expect(two.calls.size() == 2 && two.content.empty(), "two calls, the quotes of the first unescaped");
+        if (two.calls.size() == 2)
+        {
+            json first;
+            const bool ok = json::parse(two.calls[0].arguments, first);
+            expect(ok && first["content"].as_string() == "print(\"a\", \"b\")" && two.calls[1].name == "calculator"
+                && two.calls[1].arguments == "{\"expression\": \"1+1\"}", "the arguments of both calls: "
+                + two.calls[0].arguments + " " + two.calls[1].arguments);
+        }
+
+        /*
+            Un appel dont le seul défaut est un saut de ligne brut garde un argument que son outil
+            ne déclare pas ; un membre nommé id après les arguments reste dans le code ; un appel que
+            deux lectures mènent à leur terme, le code contenant un membre de l'outil, reste du texte.
+        */
+        const parsed extra = read_all_ways(*f, files, "<tool_call>\n{\"name\": \"run_javascript\", \"arguments\": "
+            "{\"code\": \"let a = 1;\nconsole.log(a);\", \"language\": \"javascript\"}}\n</tool_call>",
+            "an argument the tool does not declare");
+        expect(extra.calls.size() == 1 && extra.calls[0].arguments == "{\"code\": \"let a = 1;\\nconsole.log(a);\", "
+            "\"language\": \"javascript\"}", "an argument the tool does not declare is kept: "
+            + (extra.calls.empty() ? extra.content : extra.calls[0].arguments));
+        const std::string json_text = "{\"user\": {\"name\": \"a\"}, \"id\": \"42\"}";
+        const parsed member_id = read_all_ways(*f, files, "<tool_call>\n{\"name\": \"create_file\", \"arguments\": "
+            "{\"name\": \"u.json\", \"content\": \"" + json_text + "\"}}\n</tool_call>", "a member id in the code");
+        if (member_id.calls.size() == 1)
+        {
+            json args;
+            const bool ok = json::parse(member_id.calls[0].arguments, args);
+            expect(ok && args["content"].as_string() == json_text, "a member id in the code stays in it: "
+                + member_id.calls[0].arguments);
+        }
+        expect(member_id.calls.size() == 1, "a call with a member id in its code is read");
+        const std::string twice = "<tool_call>\n{\"name\": \"http_request\", \"arguments\": {\"url\": \"https://x\", "
+            "\"body\": \"{\"method\": \"POST\", \"headers\": \"y\"}\", \"method\": \"POST\"}}\n</tool_call>";
+        const parsed ambiguous = read_all_ways(*f, files, twice, "two readings");
+        expect(ambiguous.calls.empty() && ambiguous.content == twice, "a call that two readings complete stays text: "
+            + (ambiguous.calls.empty() ? std::string() : ambiguous.calls[0].arguments));
+
+        // Un texte qui ne fait que ressembler à un appel reste le texte de la réponse.
+        const std::string broken = "<tool_call>\n{\"name\": \"create_file\", \"arguments\": {\"name\": "
+            "\"a.py\", \"content\": \"x\" \"y\"}\n</tool_call>";
+        const parsed q = read_all_ways(*f, files, broken, "an object that no reading completes");
+        expect(q.calls.empty() && q.content == broken, "an object that no reading completes stays text: " + q.content);
+    }
+
     // Un raisonnement, une phrase, puis deux appels dans un bloc ; un appel laissé ouvert à la fin.
     {
         render_options think = opt;

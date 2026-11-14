@@ -363,8 +363,10 @@ reasoning ("Considering the limited time by the user, I have to give the solutio
 thinking directly now.") and the marker `</think>`; the model then answers directly, the prompt
 staying within what it learned, where a reasoning closed empty before it starts led its answer to
 take up the corrections and returns of a reasoning, which could loop. With the effort `low`, the
-engine ends the reasoning after 512 tokens, 256 for the work in the background, and
-`reasoning_budget` sets that limit for any request, -1 lifting it. The end the engine writes counts
+engine ends the reasoning after 512 tokens, 256 for the work in the background; without a budget
+or a high effort, the reasoning takes half of `max_tokens` at most, 32,768 tokens at most, so that
+the answer keeps room after it; and `reasoning_budget` sets that limit for any request, -1 or null
+lifting it. The end the engine writes counts
 among the tokens of the answer and stays out of the `reasoning_content` the client receives; the
 answer of a request that asked for no reasoning receives its `max_tokens` once the reasoning ends,
 and its stop sequences apply to that answer alone. The prompt of

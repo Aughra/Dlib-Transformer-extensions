@@ -482,11 +482,21 @@ int main(int argc, char** argv)
             "the effort low of the work in the background reasons for 256 tokens: "
             + std::to_string(low.reasoning.size()));
 
-        // Un raisonnement demandé n'a pas de budget par défaut, même pour le travail en arrière-plan.
+        /*
+            Un raisonnement demandé sans budget prend au plus la moitié de max_tokens, même pour le travail
+            en arrière-plan, et la réponse le reste ; un budget donné à null ne met aucune limite (repris de
+            l'original, Albireo 1.0.14).
+        */
         collector deep;
         const json h = ask("t", ",\"reasoning\":true,\"priority\":\"background\",\"max_tokens\":300", deep);
-        expect(deep.reasoning == std::string(300, 'a') && deep.content.empty()
-            && h["finish_reason"].as_string() == "length", "a reasoning asked for has no budget by default");
+        expect(deep.reasoning == std::string(150, 'a')
+            && trimmed(deep.content) == std::string(static_cast<size_t>(150 - closing), 'a')
+            && h["finish_reason"].as_string() == "length", "a reasoning asked for takes half of max_tokens by default: "
+            + std::to_string(deep.reasoning.size()) + " " + std::to_string(deep.content.size()));
+        collector endless;
+        const json h2 = ask("t", ",\"reasoning\":true,\"reasoning_budget\":null,\"max_tokens\":300", endless);
+        expect(endless.reasoning == std::string(300, 'a') && endless.content.empty()
+            && h2["finish_reason"].as_string() == "length", "a reasoning with a budget given as null has no bound");
 
         // Les répétitions du raisonnement et celles de la réponse sont comptées à part.
         collector parts;

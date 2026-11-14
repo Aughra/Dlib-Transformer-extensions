@@ -170,16 +170,20 @@ schemas = {
                       "clients give it; when both are given, think applies."},
             "reasoning_effort": {"type": "string", "enum": ["none", "low", "medium", "high"],
                                  "description": "none disables the reasoning; low gives it the budget of a short "
-                                                "reasoning (reasoning_budget)."},
-            "reasoning_budget": {"type": "integer", "minimum": -1,
+                                                "reasoning, high lifts its bound by default (reasoning_budget)."},
+            "reasoning_budget": {"type": "integer", "minimum": -1, "nullable": True,
                                  "description": "The tokens the reasoning may take: beyond them, the engine ends it "
                                                 "with a sentence that asks the model to answer from what it has "
                                                 "thought, then the marker that closes the reasoning; that end counts "
                                                 "among the tokens of the answer and stays out of reasoning_content. "
-                                                "-1 sets no limit, 0 ends the reasoning at once. Without it, no "
-                                                "limit, except for a model that always reasons asked for no "
-                                                "reasoning, whose reasoning ends at once, and for the effort low: 512 "
-                                                "tokens, 256 for the work in the background (albireo-background). "
+                                                "-1 or null sets no limit, 0 ends the reasoning at once. Without it, "
+                                                "the reasoning takes half of max_tokens at most (half of the room "
+                                                "the context leaves to the answer when the request gives no "
+                                                "max_tokens), 32768 tokens at most, so that the answer keeps room "
+                                                "after it, and the effort high sets no limit; a model that always "
+                                                "reasons asked for no reasoning has its reasoning ended at once, and "
+                                                "the effort low gives it 512 tokens, 256 for the work in the "
+                                                "background (albireo-background). "
                                                 "The answer of a model asked for no reasoning receives max_tokens "
                                                 "once its reasoning ends, and the stop sequences apply to that answer "
                                                 "alone. A reasoning whose last 384 tokens repeat, for nine tenths of "

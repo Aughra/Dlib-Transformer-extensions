@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version d'Albireo](../dlib/dlib/external/albireo/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.23.0, 14 novembre 2026.
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.24.0, 14 novembre 2026.
 
 ## 1. Vitesse du moteur
 
@@ -84,6 +84,9 @@ Le fork ne fusionne plus l'original, mais en reprend à la main ce qui lui sert 
 |---|---|---|---|
 | Garde-fou de l'agent contre les appels répétés (8 recherches par outil, arrêt des outils, dernière étape sans outils) | 1.0.15 (`1a7f12a`) | Le même, dans les modules de la page (`tools.js`, `generation.js`) | v. 4.23.0 |
 | « Tout supprimer » efface aussi la mémoire, le nom et les instructions globales | 1.0.15 (`1a7f12a`) | Le même, avec la date de remise à zéro de la mémoire (`store.js`, `settings.js`, `tabs.js`) | v. 4.23.0 |
+| Limite de réflexion par défaut : la moitié de la réponse, 32 768 tokens au plus | 1.0.14 (`2f67de2`) | La même (`engine.cpp`) | v. 4.24.0 |
+| Réparation des appels d'outils aux guillemets non échappés (`stray_quotes`) | 1.0.14 (`2f67de2`) | La même ; le fork donne en plus au lecteur les outils de la requête pour ChatML, Mistral et Granite 3 | v. 4.24.0 |
+| Modèle livré : Qwen3-VL 4B Instruct au lieu de Thinking | 1.0.15 (`1a77523`) | Manifeste aligné ; le catalogue de l'original, que lit le service, le désignait déjà | v. 4.24.0 |
 
 ## Ce qui reste comme dans l'original
 

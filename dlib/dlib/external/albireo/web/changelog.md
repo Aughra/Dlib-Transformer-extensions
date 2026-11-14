@@ -2,6 +2,21 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.24.0 — 14 novembre 2026
+
+Reprise à la main de trois nouveautés d'Albireo Community Edition 1.0.14 et 1.0.15 (Cydral Technology).
+
+### Moteur
+
+- Sans budget de raisonnement ni effort élevé, le raisonnement prend au plus la moitié des tokens de la réponse, 32 768 tokens au plus, pour que la réponse garde sa place après un raisonnement qui s'éternise. Un budget à -1 ou à `null` supprime cette limite, et l'effort `high` aussi.
+- Les appels d'outils dont un modèle laisse les guillemets du code sans échappement, des caractères de contrôle bruts ou des barres obliques inverses isolées sont réparés : le moteur cherche la seule lecture qui donne des appels valides, d'après les paramètres que déclarent les outils de la requête, et laisse le texte tel quel quand aucune lecture, ou plus d'une, ne convient.
+
+### Modèles
+
+- Le manifeste des modèles livrés désigne Qwen3-VL 4B Instruct, qui répond sans phase de raisonnement, à la place de Qwen3-VL 4B Thinking, comme le catalogue de l'original, que lit le service, le fait déjà pour une installation neuve. Fichiers vérifiés auprès de Hugging Face (taille et SHA-256).
+
+---
+
 ## 4.23.0 — 14 novembre 2026
 
 Reprise à la main de deux nouveautés d'Albireo Community Edition 1.0.15 (Cydral Technology), publiées après la dernière fusion du fork.

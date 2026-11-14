@@ -464,6 +464,15 @@ namespace albireo
         const long background_low_effort_budget = 256;
 
         /*
+            Le raisonnement d'une requête qui ne donne ni budget ni effort élevé prend au plus la
+            moitié des tokens de sa réponse, et reasoning_most au plus, la longueur de réponse que
+            les auteurs de Qwen3 conseillent pour la plupart des questions : la réponse garde sa place
+            après un raisonnement qui s'éternise (repris de l'original, Albireo 1.0.14 ; Qwen3-VL 2B
+            Thinking y avait écrit 4 059 tokens de raisonnement dans un contexte de 4 096 sans répondre).
+        */
+        const long reasoning_most = 32768;
+
+        /*
             L'échantillonnage que conseillent les auteurs d'une famille de modèles sur les fiches
             de leurs modèles, pour les requêtes qui n'en donnent pas, reasoning indiquant si le
             modèle raisonne avant sa réponse et images si la requête contient des images :
@@ -1447,10 +1456,13 @@ namespace albireo
             met fin aussitôt avec la phrase que ses auteurs donnent pour un budget, de sorte que
             le modèle répond sans raisonnement et sans prompt hors de ce qu'il a appris, les
             tokens de cette fin ne prenant rien à ceux de la réponse ; une requête qui demande un
-            faible effort reçoit un raisonnement court, dans la limite de son max_tokens.  Un
-            budget donné à null n'est pas un budget.
+            faible effort reçoit un raisonnement court, dans la limite de son max_tokens.  Sans
+            budget, le raisonnement prend au plus la moitié des tokens de la réponse
+            (reasoning_most), sauf avec un effort élevé ; un budget donné à null, comme à -1, ne
+            met aucune limite.
         */
         const bool budget_given = req["reasoning_budget"].is_number();
+        const bool unbounded = req.contains("reasoning_budget") && !budget_given;
         long budget = budget_given ? static_cast<long>(bounded(req["reasoning_budget"], -1, -1, 1 << 24)) : -1;
         bool brief = false;
         if (m->format->always_reasons() && !opt.reasoning)
@@ -1574,6 +1586,8 @@ namespace albireo
             r->closing = chat_format::tokenize(m->tok, m->format->reasoning_close());
             if (!r->closing.empty())
             {
+                if (budget < 0 && !budget_given && !unbounded && effort != "high")
+                    budget = std::min<long>(reasoning_most, r->max_tokens / 2);
                 r->reasoning_budget = budget;
                 // Le raisonnement court d'une requête qui n'en a pas demandé s'ajoute à sa réponse.
                 if (brief && asked > 0 && budget >= 0)
