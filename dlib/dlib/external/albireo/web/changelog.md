@@ -2,6 +2,19 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.16.0 — 14 novembre 2026
+
+### Plateforme
+
+- Les modèles Gemma 4 lisent les images, avec leur projecteur (type `gemma4v`) : encodeur de 16 couches dont chaque produit écrête son entrée et sa sortie aux bornes du fichier, positions des patchs par colonne et par ligne, regroupement des patchs par carrés de 3 × 3. Une image prend de 70 à 140, 280 ou 1 120 tokens selon le détail demandé (« low », « auto » ou « high »), son rapport d'aspect gardé. Vérification par rapport à llama.cpp 0.9.0, sur le processeur et en choix glouton, avec Gemma 4 E2B Q4_K_M et son projecteur F16, sur quatre images (carrée, large, haute, grande) : même nombre de tokens de prompt dans les quatre cas ; une description identique mot pour mot, les trois autres jusqu'à une quasi-égalité de la référence (par exemple 0,477 contre 0,468). Encodage sur MacBook Air M2 : 0,8 s pour une image de 121 tokens, 2,5 à 2,8 s pour 273 tokens.
+- La partie son du projecteur de Gemma 4 n'est pas lue.
+
+### Accès et documents
+
+- La recherche Hugging Face propose les projecteurs des dépôts Gemma 4 (« Avec la lecture des images »). Vérifié avec un service d'essai : Gemma 4 E2B et son projecteur ajoutés depuis Hugging Face, installés, puis une image décrite en français.
+
+---
+
 ## 4.15.0 — 14 novembre 2026
 
 ### Plateforme

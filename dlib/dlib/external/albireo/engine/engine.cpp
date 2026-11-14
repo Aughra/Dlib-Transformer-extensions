@@ -806,7 +806,8 @@ namespace albireo
         /*
             Les tokens d'un prompt rendu.  Une marque d'image dans le texte d'un message devient
             le balisage <|vision_start|><|image_pad|><|vision_end|> (Qwen3-VL), <image>
-            (LLaVA-NeXT) ou [IMG][IMG_END] (Pixtral), de sorte que le texte qui l'entoure est
+            (LLaVA-NeXT), [IMG][IMG_END] (Pixtral) ou <|image><|image|><image|> (Gemma 4, comme
+            mtmd.cpp de llama.cpp), de sorte que le texte qui l'entoure est
             encodé à part, comme le tokenizer de référence coupe sur ces tokens ; le token
             d'image est ensuite répété pour chaque token de l'image, et images[i].start reçoit
             l'indice de son premier token.
@@ -852,6 +853,7 @@ namespace albireo
                     const vision_encoder::family kind = m.vision->kind();
                     mark.text = kind == vision_encoder::family::llava_next ? "<image>"
                         : kind == vision_encoder::family::pixtral ? "[IMG][IMG_END]"
+                        : kind == vision_encoder::family::gemma4 ? "<|image><|image|><image|>"
                         : "<|vision_start|><|image_pad|><|vision_end|>";
                     mark.markup = true;
                     parts.push_back(mark);
@@ -1131,6 +1133,15 @@ namespace albireo
                 m->image_pad = m->tok.token_id("<image>");
                 if (m->image_pad < 0)
                     throw std::invalid_argument("the vocabulary of the model lacks the token <image>");
+            }
+            else if (kind == vision_encoder::family::gemma4)
+            {
+                // <|image|> tient lieu de chaque token de l'image, entre <|image> et <image|>.
+                m->vision_start = m->tok.token_id("<|image>");
+                m->image_pad = m->tok.token_id("<|image|>");
+                m->vision_end = m->tok.token_id("<image|>");
+                if (m->vision_start < 0 || m->image_pad < 0 || m->vision_end < 0)
+                    throw std::invalid_argument("the vocabulary of the model lacks the tokens of the images");
             }
             else if (pixtral)
             {

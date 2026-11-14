@@ -66,20 +66,25 @@ namespace albireo
     {
         const model_file& f = *file_;
         const dlib::gguf_reader& g = f.reader();
-        const std::string type = g.get_str("clip.projector_type", "");
+        // Un projecteur qui lit aussi le son (Gemma 4) nomme le type de sa partie images à part.
+        const std::string type = g.get_str("clip.projector_type", g.get_str("clip.vision.projector_type", ""));
         if (type == "qwen3vl_merger" || type == "qwen3vl")
             kind_ = family::qwen3vl;
         else if (type == "mlp" && g.has("clip.vision.image_grid_pinpoints"))
             kind_ = family::llava_next;
         else if (type == "pixtral")
             kind_ = family::pixtral;
+        else if (type == "gemma4v")
+            kind_ = family::gemma4;
         else
             throw std::runtime_error(type.empty() ? std::string("the file holds no image encoder (clip.projector_type)")
                 : "the image encoder of type '" + type + "' is not supported by this engine, which reads those of "
-                  "Qwen3-VL (qwen3vl_merger), of LLaVA-NeXT (mlp with pinpoints) and of Pixtral (pixtral)");
+                  "Qwen3-VL (qwen3vl_merger), of LLaVA-NeXT (mlp with pinpoints), of Pixtral (pixtral) and of Gemma 4 "
+                  "(gemma4v)");
         if (!present(f)) throw std::runtime_error("the file holds no vision tensors (v.patch_embd.weight)");
         const bool llava = kind_ == family::llava_next;
         const bool pixtral = kind_ == family::pixtral;
+        const bool gemma = kind_ == family::gemma4;
 
         hidden_ = metadata_int(g, "clip.vision.embedding_length", 16, 1 << 14);
         heads_ = metadata_int(g, "clip.vision.attention.head_count", 1, 256);
@@ -88,6 +93,10 @@ namespace albireo
         patch_ = metadata_int(g, "clip.vision.patch_size", 1, 64);
         merge_ = llava ? 1 : g.has("clip.vision.spatial_merge_size")
             ? metadata_int(g, "clip.vision.spatial_merge_size", 1, 8) : pixtral ? 1 : 2;
+        // Gemma 4 : le noyau du regroupement final, 3 quand le fichier ne le donne pas (clip.cpp de llama.cpp).
+        if (gemma)
+            merge_ = g.has("clip.vision.projector.scale_factor")
+                ? metadata_int(g, "clip.vision.projector.scale_factor", 1, 8) : 3;
         // La largeur de sortie de Pixtral est celle de sa dernière couche : son projection_dim en nomme une autre.
         if (kind_ == family::qwen3vl) out_dim_ = metadata_int(g, "clip.vision.projection_dim", 1, 1 << 17);
         const double eps = g.get_double("clip.vision.attention.layer_norm_epsilon", 1e-6);
@@ -171,12 +180,32 @@ namespace albireo
         patch_matrix_.cols = K;
         patch_matrix_.row_bytes = static_cast<size_t>(K) * sizeof(float);
         // Pixtral convolue sans biais.
-        if (pixtral) f.optional_floats("v.patch_embd.bias", static_cast<size_t>(hidden_), patch_b_);
+        if (pixtral || gemma) f.optional_floats("v.patch_embd.bias", static_cast<size_t>(hidden_), patch_b_);
         else patch_b_ = f.floats("v.patch_embd.bias", static_cast<size_t>(hidden_));
 
         // Les positions apprises, une grille carrée (Pixtral n'en a pas : ses têtes tournent selon les
         // seules lignes et colonnes).
-        if (!pixtral)
+        if (gemma)
+        {
+            // Deux tables bout à bout, [largeur, cases, 2] : celle des colonnes, puis celle des lignes.
+            const tensor_view* pos = f.find("v.position_embd.weight");
+            if (!pos || pos->dims.size() != 3 || static_cast<long>(pos->dims[0]) != hidden_ || pos->dims[2] != 2
+                || pos->dims[1] < 1 || pos->dims[1] > (1 << 20))
+                throw std::runtime_error("tensor v.position_embd.weight does not hold the two position tables of Gemma 4");
+            pos_cells_ = static_cast<long>(pos->dims[1]);
+            pos_table_ = f.matrix("v.position_embd.weight", 2 * pos_cells_, hidden_);
+            if (pos_table_.type != dlib::ggml_type::F32)
+            {
+                pos_.resize(static_cast<size_t>(2 * pos_cells_ * hidden_));
+                for (long c = 0; c < 2 * pos_cells_; ++c)
+                    qk_dequantize_row(pos_table_.type, pos_table_.data + static_cast<size_t>(c) * pos_table_.row_bytes,
+                        pos_.data() + c * hidden_, hidden_);
+                pos_table_.type = dlib::ggml_type::F32;
+                pos_table_.data = reinterpret_cast<const uint8_t*>(pos_.data());
+                pos_table_.row_bytes = static_cast<size_t>(hidden_) * sizeof(float);
+            }
+        }
+        else if (!pixtral)
         {
             const tensor_view* pos = f.find("v.position_embd.weight");
             if (!pos || pos->dims.size() < 2) throw std::runtime_error("missing tensor v.position_embd.weight");
@@ -199,6 +228,15 @@ namespace albireo
             const long quarter = head_dim_ / 4;
             for (long i = 0; i < quarter; ++i)
                 inv_freq_.push_back(static_cast<float>(1.0 / std::pow(10000.0, 2.0 * static_cast<double>(i)
+                    / static_cast<double>(head_dim_ / 2))));
+        }
+        else if (gemma)
+        {
+            // Chaque moitié de tête tourne comme une tête de head_dim / 2 dimensions de llama.cpp (néox), à la
+            // base 100 : la paire i à 100^(-2i / (head_dim / 2)).
+            const long quarter = head_dim_ / 4;
+            for (long i = 0; i < quarter; ++i)
+                inv_freq_.push_back(static_cast<float>(std::pow(100.0, -2.0 * static_cast<double>(i)
                     / static_cast<double>(head_dim_ / 2))));
         }
         else if (pixtral)
@@ -238,6 +276,40 @@ namespace albireo
         {
             const std::string p = "v.blk." + std::to_string(i) + ".";
             block b;
+            if (gemma)
+            {
+                // Des normes par moyenne quadratique sans biais, une porte GELU, et des bornes à chaque produit.
+                b.fused = false;
+                b.gated = true;
+                b.ln1_w = f.floats(p + "ln1.weight", static_cast<size_t>(D));
+                b.ln2_w = f.floats(p + "ln2.weight", static_cast<size_t>(D));
+                b.attn_post = f.floats(p + "attn_post_norm.weight", static_cast<size_t>(D));
+                b.ffn_post = f.floats(p + "ffn_post_norm.weight", static_cast<size_t>(D));
+                b.q_norm = f.floats(p + "attn_q_norm.weight", static_cast<size_t>(head_dim_));
+                b.k_norm = f.floats(p + "attn_k_norm.weight", static_cast<size_t>(head_dim_));
+                b.q = readable(f.matrix(p + "attn_q.weight", D, D));
+                b.k = readable(f.matrix(p + "attn_k.weight", D, D));
+                b.v = readable(f.matrix(p + "attn_v.weight", D, D));
+                b.out = readable(f.matrix(p + "attn_out.weight", D, D));
+                b.gate = readable(f.matrix(p + "ffn_gate.weight", ffn_, D));
+                b.up = readable(f.matrix(p + "ffn_up.weight", ffn_, D));
+                b.down = readable(f.matrix(p + "ffn_down.weight", D, ffn_));
+                for (const char* bias : { "attn_q.bias", "attn_k.bias", "attn_v.bias", "attn_out.bias", "ffn_gate.bias",
+                    "ffn_up.bias", "ffn_down.bias" })
+                    if (f.has(p + bias))
+                        throw std::runtime_error("a block of the Gemma 4 image encoder has a bias, which this engine "
+                            "does not read");
+                b.cq = read_clamp(f, p + "attn_q");
+                b.ck = read_clamp(f, p + "attn_k");
+                b.cv = read_clamp(f, p + "attn_v");
+                b.cout = read_clamp(f, p + "attn_out");
+                b.cgate = read_clamp(f, p + "ffn_gate");
+                b.cup = read_clamp(f, p + "ffn_up");
+                b.cdown = read_clamp(f, p + "ffn_down");
+                for (const weight_matrix* m : { &b.q, &b.k, &b.v, &b.out, &b.gate, &b.up, &b.down }) count(*m);
+                blocks_.push_back(std::move(b));
+                continue;
+            }
             // Pixtral normalise par la moyenne quadratique : ses normes n'ont pas de biais.
             b.ln1_w = f.floats(p + "ln1.weight", static_cast<size_t>(D));
             if (!pixtral) b.ln1_b = f.floats(p + "ln1.bias", static_cast<size_t>(D));
@@ -345,6 +417,21 @@ namespace albireo
             count(final_.fc1);
             count(final_.fc2);
         }
+        else if (gemma)
+        {
+            // La projection des patchs regroupés vers le modèle de langage, sans biais.
+            const tensor_view* proj = f.find("mm.input_projection.weight");
+            if (!proj || proj->dims.size() < 2 || static_cast<long>(proj->dims[0]) != D)
+                throw std::runtime_error("the Gemma 4 image encoder lacks its projection (mm.input_projection)");
+            out_dim_ = static_cast<long>(proj->dims[1]);
+            if (out_dim_ < 1 || out_dim_ > (1 << 17))
+                throw std::runtime_error("the projector of the image encoder has an invalid width");
+            input_proj_ = readable(f.matrix("mm.input_projection.weight", out_dim_, D));
+            count(input_proj_);
+            if (f.has("v.std_bias") || f.has("v.std_scale"))
+                throw std::runtime_error("the Gemma 4 image encoder standardizes its output, which this engine does "
+                    "not do");
+        }
         else if (pixtral)
         {
             // La norme après l'embedding des patchs, puis le projecteur des tokens fusionnés.
@@ -417,6 +504,7 @@ namespace albireo
             if (kv.second > most) { most = kv.second; weight_type_ = kv.first; }
         }
         weight_bytes_ += (patch_w_.size() + pos_.size()) * sizeof(float);
+        if (gemma && pos_.empty()) weight_bytes_ += pos_table_.row_bytes * static_cast<size_t>(pos_table_.rows);
 
         attention_work_.resize(static_cast<size_t>(pool_.size()));
         for (auto& w : attention_work_) w.resize(static_cast<size_t>(qk_encoder_attention_work(head_dim_)));
@@ -432,6 +520,13 @@ namespace albireo
               << " heads, patch " << patch_ << ", views of " << image_size_ << " pixels, " << pinpoints_.size()
               << " pinpoints, output " << out_dim_ << (newline_.empty() ? "" : ", newline") << ", " << weight_type_
               << ")";
+            return o.str();
+        }
+        if (kind_ == family::gemma4)
+        {
+            o << "image encoder Gemma 4 (" << blocks_.size() << " blocks, width " << hidden_ << ", " << heads_
+              << " heads, patch " << patch_ << ", pooling " << merge_ << "x" << merge_ << ", positions up to "
+              << pos_cells_ << ", clamped products, output " << out_dim_ << ", " << weight_type_ << ")";
             return o.str();
         }
         if (kind_ == family::pixtral)
@@ -529,6 +624,46 @@ namespace albireo
             return std::nearbyint(x * 1e7) / 1e7;
         }
 
+        // Les tokens qu'un détail permet au plus à une image de Gemma 4 ("min" : le moins qu'elle en prenne).
+        long gemma_tokens(const std::string& detail)
+        {
+            if (detail == "min") return 70;
+            if (detail == "low") return 140;
+            if (detail == "high") return 1120;
+            if (detail.empty() || detail == "auto") return 280;
+            throw std::invalid_argument("the detail of an image is \"low\", \"auto\" or \"high\"");
+        }
+
+        /*
+            calc_size_preserved_ratio() de llama.cpp (mtmd-image.cpp), en flottants comme lui : chaque côté
+            arrondi au multiple de align le plus proche, puis, quand l'image dépasse max_pixels ou n'atteint
+            pas min_pixels, les deux côtés du même rapport, arrondis vers le bas ou vers le haut.
+        */
+        void preserved_ratio(long width, long height, long align, long min_pixels, long max_pixels, long& out_w,
+            long& out_h)
+        {
+            const float a = static_cast<float>(align);
+            auto round_by = [&](float x) { return static_cast<long>(std::round(x / a)) * align; };
+            auto ceil_by = [&](float x) { return static_cast<long>(std::ceil(x / a)) * align; };
+            auto floor_by = [&](float x) { return static_cast<long>(std::floor(x / a)) * align; };
+            const float w = static_cast<float>(width), h = static_cast<float>(height);
+            long wb = std::max(align, round_by(w)), hb = std::max(align, round_by(h));
+            if (wb * hb > max_pixels)
+            {
+                const float beta = std::sqrt(h * w / static_cast<float>(max_pixels));
+                hb = std::max(align, floor_by(h / beta));
+                wb = std::max(align, floor_by(w / beta));
+            }
+            else if (wb * hb < min_pixels)
+            {
+                const float beta = std::sqrt(static_cast<float>(min_pixels) / (h * w));
+                hb = ceil_by(h * beta);
+                wb = ceil_by(w * beta);
+            }
+            out_w = wb;
+            out_h = hb;
+        }
+
         // Le nombre maximal de tuiles qu'un détail permet à une image LLaVA-NeXT.
         long max_tiles(const std::string& detail)
         {
@@ -622,6 +757,20 @@ namespace albireo
             p.tokens = p.grid_w * p.grid_h;
             return p;
         }
+        if (kind_ == family::gemma4)
+        {
+            const long most = gemma_tokens(detail);
+            if (static_cast<double>(std::max(width, height)) / static_cast<double>(std::min(width, height)) > 200.0)
+                throw std::invalid_argument("the sides of the image differ by a ratio over 200");
+            const long f = factor();
+            preserved_ratio(width, height, f, 70 * f * f, most * f * f, p.width, p.height);
+            p.grid_w = p.width / f;
+            p.grid_h = p.height / f;
+            p.tokens = p.grid_w * p.grid_h;
+            if (p.width / patch_ > pos_cells_ || p.height / patch_ > pos_cells_)
+                throw std::invalid_argument("the image is too long for the positions of the image encoder");
+            return p;
+        }
         if (kind_ == family::pixtral)
         {
             long most = 576;
@@ -681,6 +830,7 @@ namespace albireo
 
     long vision_encoder::most_tokens(const std::string& detail) const
     {
+        if (kind_ == family::gemma4) return gemma_tokens(detail);
         if (kind_ == family::qwen3vl)
             return detail == "min" ? 64 : detail == "low" ? 256 : detail == "high" ? 1024 : 576;
         if (kind_ == family::pixtral)
@@ -712,6 +862,64 @@ namespace albireo
         const long m2 = merge_ * merge_;
         const long grid_w = j.pw_ / merge_;
         const bool rotary = kind_ != family::llava_next;
+
+        if (kind_ == family::gemma4)
+        {
+            /*
+                Les patchs ligne par ligne, leurs pixels ramenés dans [-1, 1] (2 x la valeur normalisée - 1,
+                comme gemma4v.cpp de llama.cpp) ; chacun reçoit la ligne de sa colonne dans la première table
+                de positions et celle de sa ligne dans la seconde, et les angles de ses paires rotatives, la
+                colonne pour la première moitié de chaque tête, la ligne pour la seconde.
+            */
+            if (j.pw_ > pos_cells_ || j.ph_ > pos_cells_)
+                throw std::invalid_argument("vision_encoder: the image is too long for the position tables");
+            xn_.resize(static_cast<size_t>(n * K));
+            float gs[3], gb[3];
+            for (int c = 0; c < 3; ++c)
+            {
+                gs[c] = 2.0f / (255.0f * std_[c]);
+                gb[c] = 2.0f * mean_[c] / std_[c] + 1.0f;
+            }
+            pool_.parallel_for(n, [&](long i, int) {
+                const long row = i / j.pw_, col = i % j.pw_;
+                float* dst = xn_.data() + i * K;
+                for (long c = 0; c < 3; ++c)
+                    for (long y = 0; y < patch_; ++y)
+                    {
+                        const uint8_t* src = image.pixels.data()
+                            + (static_cast<size_t>(row * patch_ + y) * image.width + col * patch_) * 3 + c;
+                        float* d = dst + (c * patch_ + y) * patch_;
+                        for (long x = 0; x < patch_; ++x) d[x] = static_cast<float>(src[3 * x]) * gs[c] - gb[c];
+                    }
+            });
+            j.x_.resize(static_cast<size_t>(n * D));
+            product(patch_matrix_, xn_.data(), n, K, j.x_.data(), D);
+            j.cos_.resize(static_cast<size_t>(n * half));
+            j.sin_.resize(static_cast<size_t>(n * half));
+            pool_.parallel_for(n, [&](long i, int) {
+                const long row = i / j.pw_, col = i % j.pw_;
+                float* x = j.x_.data() + i * D;
+                if (!patch_b_.empty()) qk_add(x, patch_b_.data(), D);
+                const float* tx = reinterpret_cast<const float*>(pos_table_.data + static_cast<size_t>(col)
+                    * pos_table_.row_bytes);
+                const float* ty = reinterpret_cast<const float*>(pos_table_.data + static_cast<size_t>(pos_cells_ + row)
+                    * pos_table_.row_bytes);
+                qk_add(x, tx, D);
+                qk_add(x, ty, D);
+                float* c = j.cos_.data() + i * half;
+                float* s = j.sin_.data() + i * half;
+                for (long k = 0; k < quarter; ++k)
+                {
+                    const float ax = static_cast<float>(col) * inv_freq_[static_cast<size_t>(k)];
+                    const float ay = static_cast<float>(row) * inv_freq_[static_cast<size_t>(k)];
+                    c[k] = std::cos(ax);
+                    s[k] = std::sin(ax);
+                    c[quarter + k] = std::cos(ay);
+                    s[quarter + k] = std::sin(ay);
+                }
+            });
+            return;
+        }
 
         // La ligne et la colonne du patch i, les patchs pris carré par carré de merge x merge.
         auto place = [&](long i, long& row, long& col) {
@@ -1125,13 +1333,193 @@ namespace albireo
         }
     }
 
+    vision_encoder::clamp vision_encoder::read_clamp(const model_file& f, const std::string& prefix) const
+    {
+        // Les bornes absentes du fichier n'écrêtent pas (FLT_MAX de clip.cpp).
+        clamp c;
+        std::vector<float> v;
+        if (f.optional_floats(prefix + ".input_min", 1, v)) c.in_lo = v[0];
+        if (f.optional_floats(prefix + ".input_max", 1, v)) c.in_hi = v[0];
+        if (f.optional_floats(prefix + ".output_min", 1, v)) c.out_lo = v[0];
+        if (f.optional_floats(prefix + ".output_max", 1, v)) c.out_hi = v[0];
+        if (!(c.in_lo <= c.in_hi) || !(c.out_lo <= c.out_hi))
+            throw std::runtime_error("the bounds of " + prefix + " in the image encoder are inverted");
+        return c;
+    }
+
+    void vision_encoder::clamped_product(const weight_matrix& w, const clamp& c, const float* x, long n, long x_stride,
+        float* y, long y_stride)
+    {
+        const long cols = w.cols, rows = w.rows;
+        if (std::isfinite(c.in_lo) || std::isfinite(c.in_hi))
+        {
+            cl_.resize(static_cast<size_t>(n * cols));
+            pool_.parallel_for(n, [&](long r, int) {
+                const float* src = x + r * x_stride;
+                float* dst = cl_.data() + r * cols;
+                for (long i = 0; i < cols; ++i) dst[i] = std::min(std::max(src[i], c.in_lo), c.in_hi);
+            });
+            x = cl_.data();
+            x_stride = cols;
+        }
+        product(w, x, n, x_stride, y, y_stride);
+        if (std::isfinite(c.out_lo) || std::isfinite(c.out_hi))
+            pool_.parallel_for(n, [&](long r, int) {
+                float* t = y + r * y_stride;
+                for (long i = 0; i < rows; ++i) t[i] = std::min(std::max(t[i], c.out_lo), c.out_hi);
+            });
+    }
+
+    void vision_encoder::run_block_gemma(job& j, const block& b)
+    {
+        /*
+            Le bloc de Gemma 4, comme build_vit() de llama.cpp pour gemma4v : norme, requêtes, clés et valeurs
+            par des produits écrêtés, normes par tête (les valeurs sans poids), rotation, attention sans mise
+            à l'échelle, produit de sortie écrêté et sa norme, ajoutés au patch ; puis norme, porte GELU,
+            produit écrêté et sa norme, ajoutés au patch.
+        */
+        const long n = j.n_, D = hidden_, H = heads_, hd = head_dim_, half = hd / 2, quarter = hd / 4;
+        const long C = std::min(chunk_rows, n);
+        const float eps = eps_;
+        auto rms = [eps](float* x, const float* w, long width) {
+            const float s = 1.0f / std::sqrt(qk_dot_f32(x, x, width) / static_cast<float>(width) + eps);
+            if (w) for (long i = 0; i < width; ++i) x[i] = x[i] * s * w[i];
+            else for (long i = 0; i < width; ++i) x[i] *= s;
+        };
+        // Les dimensions o + i et o + i + quarter de chaque moitié tournent ensemble (néox).
+        auto rotate = [&](float* v, const float* c, const float* s) {
+            for (long o = 0; o < hd; o += half)
+            {
+                const float* cc = c + (o / half) * quarter;
+                const float* ss = s + (o / half) * quarter;
+                for (long i = 0; i < quarter; ++i)
+                {
+                    const float v0 = v[o + i], v1 = v[o + i + quarter];
+                    v[o + i] = v0 * cc[i] - v1 * ss[i];
+                    v[o + i + quarter] = v1 * cc[i] + v0 * ss[i];
+                }
+            }
+        };
+        const std::vector<float> no_bias;
+        xn_.resize(static_cast<size_t>(C * D));
+        qkv_.resize(static_cast<size_t>(C * 3 * D));
+        q_.resize(static_cast<size_t>(n * D));
+        kt_.resize(static_cast<size_t>(n * D));
+        v_.resize(static_cast<size_t>(n * D));
+        ctx_.resize(static_cast<size_t>(n * D));
+        for (long c0 = 0; c0 < n; c0 += C)
+        {
+            const long rows = std::min(C, n - c0);
+            layer_norm_rows(j.x_.data() + c0 * D, b.ln1_w, no_bias, xn_.data(), rows, D);
+            clamped_product(b.q, b.cq, xn_.data(), rows, D, qkv_.data(), 3 * D);
+            clamped_product(b.k, b.ck, xn_.data(), rows, D, qkv_.data() + D, 3 * D);
+            clamped_product(b.v, b.cv, xn_.data(), rows, D, qkv_.data() + 2 * D, 3 * D);
+            auto one = [&](long r) {
+                float* t = qkv_.data() + r * 3 * D;
+                const long p = c0 + r;
+                const float* c = j.cos_.data() + p * half;
+                const float* s = j.sin_.data() + p * half;
+                for (long h = 0; h < H; ++h)
+                {
+                    float* q = t + h * hd;
+                    float* k = t + D + h * hd;
+                    float* v = t + 2 * D + h * hd;
+                    rms(q, b.q_norm.data(), hd);
+                    rms(k, b.k_norm.data(), hd);
+                    rms(v, nullptr, hd);
+                    rotate(q, c, s);
+                    rotate(k, c, s);
+                    std::memcpy(q_.data() + (h * n + p) * hd, q, sizeof(float) * static_cast<size_t>(hd));
+                    float* kd = kt_.data() + h * hd * n + p;
+                    for (long e = 0; e < hd; ++e) kd[e * n] = k[e];
+                    std::memcpy(v_.data() + (h * n + p) * hd, v, sizeof(float) * static_cast<size_t>(hd));
+                }
+            };
+            const long group = 16;
+            pool_.parallel_for((rows + group - 1) / group, [&](long g, int) {
+                const long r1 = std::min(rows, (g + 1) * group);
+                for (long r = g * group; r < r1; ++r) one(r);
+            });
+        }
+
+        const long tile = qk_encoder_tile_rows;
+        const long tiles = (n + tile - 1) / tile;
+        pool_.parallel_for(H * tiles, [&](long task, int thread) {
+            const long h = task / tiles;
+            const long t0 = task % tiles * tile;
+            const long rows = std::min(tile, n - t0);
+            qk_encoder_attention(q_.data() + (h * n + t0) * hd, rows, kt_.data() + h * hd * n, n,
+                v_.data() + h * n * hd, hd, n, hd, ctx_.data() + t0 * D + h * hd, D,
+                attention_work_[static_cast<size_t>(thread)].data());
+        });
+        o_.resize(static_cast<size_t>(n * D));
+        clamped_product(b.out, b.cout, ctx_.data(), n, D, o_.data(), D);
+        pool_.parallel_for(n, [&](long r, int) {
+            float* o = o_.data() + r * D;
+            rms(o, b.attn_post.data(), D);
+            qk_add(j.x_.data() + r * D, o, D);
+        });
+
+        h_.resize(static_cast<size_t>(C * ffn_));
+        u_.resize(static_cast<size_t>(C * ffn_));
+        for (long c0 = 0; c0 < n; c0 += C)
+        {
+            const long rows = std::min(C, n - c0);
+            float* x = j.x_.data() + c0 * D;
+            layer_norm_rows(x, b.ln2_w, no_bias, xn_.data(), rows, D);
+            clamped_product(b.gate, b.cgate, xn_.data(), rows, D, h_.data(), ffn_);
+            clamped_product(b.up, b.cup, xn_.data(), rows, D, u_.data(), ffn_);
+            pool_.parallel_for(rows, [&](long r, int) {
+                float* g = h_.data() + r * ffn_;
+                const float* u = u_.data() + r * ffn_;
+                qk_gelu_tanh(g, ffn_);
+                for (long i = 0; i < ffn_; ++i) g[i] *= u[i];
+            });
+            clamped_product(b.down, b.cdown, h_.data(), rows, ffn_, o_.data(), D);
+            pool_.parallel_for(rows, [&](long r, int) {
+                float* o = o_.data() + r * D;
+                rms(o, b.ffn_post.data(), D);
+                qk_add(x + r * D, o, D);
+            });
+        }
+    }
+
+    void vision_encoder::project_gemma(job& j)
+    {
+        /*
+            Le regroupement de Gemma 4 : la moyenne de chaque carré de merge x merge patchs, les carrés ligne
+            par ligne, multipliée par la racine de la largeur, normalisée sans poids, puis projetée.
+        */
+        const long k = merge_, gw = j.pw_ / k, gh = j.ph_ / k, T = gw * gh, D = hidden_, O = out_dim_;
+        const float scale = std::sqrt(static_cast<float>(D)) / static_cast<float>(k * k);
+        const float eps = eps_;
+        m_.resize(static_cast<size_t>(T * D));
+        pool_.parallel_for(T, [&](long t, int) {
+            const long oy = t / gw, ox = t % gw;
+            float* dst = m_.data() + t * D;
+            std::fill(dst, dst + D, 0.0f);
+            for (long dy = 0; dy < k; ++dy)
+                for (long dx = 0; dx < k; ++dx)
+                    qk_add(dst, j.x_.data() + ((oy * k + dy) * j.pw_ + ox * k + dx) * D, D);
+            for (long i = 0; i < D; ++i) dst[i] *= scale;
+            const float s = 1.0f / std::sqrt(qk_dot_f32(dst, dst, D) / static_cast<float>(D) + eps);
+            for (long i = 0; i < D; ++i) dst[i] *= s;
+        });
+        product(input_proj_, m_.data(), T, D, j.out_.data(), O);
+    }
+
     bool vision_encoder::advance(job& j, double seconds)
     {
         const auto t0 = std::chrono::steady_clock::now();
         const long layers = static_cast<long>(blocks_.size());
         while (!j.done_)
         {
-            if (j.next_ < layers)
+            if (j.next_ < layers && kind_ == family::gemma4)
+            {
+                run_block_gemma(j, blocks_[static_cast<size_t>(j.next_)]);
+                ++j.next_;
+            }
+            else if (j.next_ < layers)
             {
                 run_block(j, blocks_[static_cast<size_t>(j.next_)]);
                 for (size_t k = 0; k < deepstack_.size(); ++k)
@@ -1156,6 +1544,14 @@ namespace albireo
                     std::vector<float>().swap(j.features_);
                     std::vector<rgb_image>().swap(j.views_);
                 }
+            }
+            else if (kind_ == family::gemma4)
+            {
+                project_gemma(j);
+                j.done_ = true;
+                aligned_floats().swap(j.x_);
+                std::vector<float>().swap(j.cos_);
+                std::vector<float>().swap(j.sin_);
             }
             else if (kind_ == family::pixtral)
             {
@@ -1204,6 +1600,8 @@ namespace albireo
         aligned_floats().swap(h_);
         aligned_floats().swap(u_);
         aligned_floats().swap(m_);
+        aligned_floats().swap(cl_);
+        aligned_floats().swap(o_);
     }
 
 }

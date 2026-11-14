@@ -345,7 +345,8 @@ namespace albireo
                 // Un projecteur : l'encodeur de vision d'un modèle qui lit les images, et la projection
                 // de sa sortie dans les embeddings du décodeur.
                 d["projector"] = true;
-                d["projector_type"] = g.get_str("clip.projector_type", "");
+                // Un projecteur qui lit aussi le son (Gemma 4) nomme le type de sa partie images à part.
+                d["projector_type"] = g.get_str("clip.projector_type", g.get_str("clip.vision.projector_type", ""));
                 d["vision"] = g.get_int("clip.has_vision_encoder", 1) != 0;
                 int64_t deepstack = 0;
                 if (g.has("clip.vision.is_deepstack_layers"))

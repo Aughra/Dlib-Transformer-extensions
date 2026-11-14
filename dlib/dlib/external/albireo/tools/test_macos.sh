@@ -201,6 +201,21 @@ else
     --tools --reasoning off --temperature 0 --max 120 "What is the weather in Paris right now?"
   step "gemma 4 tool result" "21 degrees" "$CHAT" "$ENGINE" "$GEMMA4" --tools --tool-result "Sunny, 21 degrees C" \
     --reasoning on --temperature 0 --max 600 "What is the weather in Paris right now?"
+  # Ses images (Albireo 4.16.0), quand son projecteur est là : le perroquet carré, puis le zèbre recadré en largeur, qui
+  # éprouve les deux tables de positions.
+  GEMMA4_PROJECTOR=${GEMMA4_PROJECTOR:-$ROOT/build/models/gemma-4-E2B-it-mmproj-F16.gguf}
+  PARROT="/Library/User Pictures/Animals/Parrot.heic" ZEBRA="/Library/User Pictures/Animals/Zebra.heic"
+  if [ -f "$GEMMA4_PROJECTOR" ] && [ -f "$PARROT" ] && [ -f "$ZEBRA" ] \
+    && sips -s format jpeg -Z 512 "$PARROT" --out "$WORK/gemma4-parrot.jpg" > /dev/null 2>&1 \
+    && sips -s format jpeg -Z 640 "$ZEBRA" --out "$WORK/gemma4-zebra.jpg" > /dev/null 2>&1 \
+    && sips -c 360 640 "$WORK/gemma4-zebra.jpg" --out "$WORK/gemma4-zebra-wide.jpg" > /dev/null 2>&1
+  then
+    step "gemma 4 image" "macaw" "$CHAT" "$ENGINE" "$GEMMA4" --projector "$GEMMA4_PROJECTOR" \
+      --image "$WORK/gemma4-parrot.jpg" --reasoning off --temperature 0 --max 60 "Describe this image in two sentences."
+    step "gemma 4 wide image" "zebra" "$CHAT" "$ENGINE" "$GEMMA4" --projector "$GEMMA4_PROJECTOR" \
+      --image "$WORK/gemma4-zebra-wide.jpg" --reasoning off --temperature 0 --max 60 "Describe this image in two sentences."
+  else skip "gemma 4 image" "no $GEMMA4_PROJECTOR"
+  fi
 fi
 
 if [ -f "$EMBEDDING" ] && [ -f "$ENGINE" ]; then

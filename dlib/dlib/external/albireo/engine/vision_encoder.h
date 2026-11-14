@@ -3,6 +3,7 @@
 #ifndef ALBIREO_ENGINE_VISION_ENCODER_H_
 #define ALBIREO_ENGINE_VISION_ENCODER_H_
 
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -22,7 +23,7 @@ namespace albireo
             WHAT THIS OBJECT REPRESENTS
                 L'encodeur d'images d'un modèle qui lit des images, lu depuis un fichier GGUF
                 de projecteur (architecture "clip"), ou depuis les tenseurs de vision et les
-                métadonnées clip du fichier du modèle lui-même.  Deux familles sont lues.
+                métadonnées clip du fichier du modèle lui-même.  Quatre familles sont lues.
 
                 Qwen3-VL (clip.projector_type "qwen3vl_merger") : un vision transformer dont
                 les patchs sont fusionnés par carrés de merge_size() x merge_size() en tokens
@@ -68,6 +69,22 @@ namespace albireo
                 l'embedding [IMG_BREAK] du fichier, qu'un encodeur Pixtral doit contenir ; le
                 décodeur lit le token [IMG_END] après eux.
 
+                Gemma 4 (clip.projector_type "gemma4v", fork pour macOS) : l'image, redimensionnée
+                à des multiples de factor() pixels (patch_size() x merge_size(), le noyau du
+                regroupement) entre 70 et 140, 280 ou 1120 tokens, est découpée en patchs de patch_size()
+                pixels, pris ligne par ligne, ses pixels ramenés dans [-1, 1].  Chaque patch reçoit
+                la ligne de sa colonne dans une première table de positions et celle de sa ligne
+                dans une seconde.  Les blocs normalisent par la moyenne quadratique avant et après
+                l'attention et la couche feed-forward ; requêtes et clés sont normalisées par tête,
+                les valeurs sans poids ; chaque tête fait tourner sa première moitié selon la
+                colonne du patch et sa seconde moitié selon sa ligne, chaque moitié par paires
+                distantes d'un quart de tête, à la base 100 ; l'attention n'est pas mise à
+                l'échelle ; la couche feed-forward est une porte GELU (forme tanh).  Chaque produit
+                d'un bloc écrête son entrée et sa sortie aux bornes que donne le fichier.  Les
+                patchs sont ensuite regroupés par moyenne en carrés de merge_size() x merge_size(),
+                ligne par ligne, multipliés par la racine de la largeur, normalisés sans poids et
+                projetés à la largeur du modèle de langage.
+
                 Les blocs de Qwen3-VL et de LLaVA-NeXT normalisent avant l'attention et avant
                 la couche feed-forward, avec une moyenne et un biais ; l'attention lit chaque
                 patch de la vue ; la couche feed-forward active avec la forme tanh de GELU.  Les
@@ -95,7 +112,7 @@ namespace albireo
                 fonctions const peuvent être appelées depuis n'importe quel thread.
         !*/
     public:
-        enum class family { qwen3vl, llava_next, pixtral };
+        enum class family { qwen3vl, llava_next, pixtral, gemma4 };
 
         vision_encoder(std::shared_ptr<model_file> file, thread_pool& pool);
 
@@ -139,7 +156,9 @@ namespace albireo
                   fusionnés ; pour LLaVA-NeXT, les pinpoints de 1, 2 ou 4 tuiles au plus ; pour
                   Pixtral, la taille dans la limite du plus long côté, arrondie au-dessus à des
                   multiples de factor(), puis réduite, quand elle en contient plus, à 256, 576 ou
-                  1024 tokens fusionnés.
+                  1024 tokens fusionnés ; pour Gemma 4, la taille arrondie à des multiples de
+                  factor(), son rapport d'aspect gardé, entre 70 et 140, 280 ou 1120 tokens (la
+                  règle calc_size_preserved_ratio de llama.cpp).
                 - Lève std::invalid_argument pour un autre détail ou une taille inutilisable.
         !*/
         image_plan plan(long width, long height, const std::string& detail) const;
@@ -213,6 +232,13 @@ namespace albireo
         void set_offload(std::unique_ptr<matmul_offload> offload) { offload_ = std::move(offload); }
 
     private:
+        // Les bornes auxquelles un produit de Gemma 4 écrête son entrée et sa sortie (Gemma4ClippableLinear).
+        struct clamp
+        {
+            float in_lo = -std::numeric_limits<float>::infinity(), in_hi = std::numeric_limits<float>::infinity();
+            float out_lo = -std::numeric_limits<float>::infinity(), out_hi = std::numeric_limits<float>::infinity();
+        };
+
         struct block
         {
             // Les biais sont vides quand le fichier n'en a pas (Pixtral).
@@ -220,6 +246,10 @@ namespace albireo
             weight_matrix qkv, q, k, v, out, gate, up, down;
             bool fused = true;          // requêtes, clés et valeurs dans une seule matrice
             bool gated = false;         // une porte SiLU dans la couche feed-forward (Pixtral)
+            // Gemma 4 : les normes des requêtes et des clés par tête, celles après l'attention et après la couche
+            // feed-forward, et les bornes de chaque produit.
+            std::vector<float> q_norm, k_norm, attn_post, ffn_post;
+            clamp cq, ck, cv, cout, cgate, cup, cdown;
         };
 
         struct merger
@@ -251,6 +281,12 @@ namespace albireo
         void project_view(job& j);
         void pack_views(job& j);
         void project_pixtral(job& j);
+        void run_block_gemma(job& j, const block& b);
+        void project_gemma(job& j);
+        // Un produit de Gemma 4 : son entrée écrêtée (copiée dans cl_ quand ses bornes sont finies), sa sortie écrêtée.
+        void clamped_product(const weight_matrix& w, const clamp& c, const float* x, long n, long x_stride, float* y,
+            long y_stride);
+        clamp read_clamp(const model_file& f, const std::string& prefix) const;
         void product(const weight_matrix& w, const float* x, long n, long x_stride, float* y, long y_stride,
             bool accumulate = false);
         // Une matrice du fichier, convertie en demi-précision quand elle est stockée en bfloat16.
@@ -282,11 +318,15 @@ namespace albireo
         // projecteur et l'embedding [IMG_BREAK].
         std::vector<float> pre_ln_w_, proj_norm_w_, proj1_b_, proj2_b_, img_break_;
         weight_matrix patch_merger_, proj1_, proj2_;
+        // Gemma 4 : les deux tables de positions (colonnes, puis lignes ; pos_cells_ lignes chacune), lues dans le
+        // fichier, et la projection vers le modèle de langage.
+        weight_matrix pos_table_, input_proj_;
+        long pos_cells_ = 0;
         // Les matrices converties au chargement de l'encodeur.
         std::vector<std::vector<uint16_t>> owned_;
 
         // Tampons de travail ; sum_ reçoit les produits du périphérique que l'encodeur ajoute à ses lignes.
-        aligned_floats xn_, qkv_, q_, kt_, v_, ctx_, h_, u_, m_, sum_;
+        aligned_floats xn_, qkv_, q_, kt_, v_, ctx_, h_, u_, m_, sum_, cl_, o_;
         std::vector<aligned_floats> attention_work_;
         qk_scratch scratch_;
         std::unique_ptr<matmul_offload> offload_;

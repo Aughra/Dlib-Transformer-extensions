@@ -19,10 +19,10 @@ namespace albireo
         const std::set<std::string> engine_architectures = { "llama", "mistral", "mistral3", "granite", "qwen2",
             "qwen3", "qwen3vl", "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "phi3", "qwen35", "qwen35moe", "gemma4" };
         const std::set<std::string> moe_architectures = { "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "qwen35moe" };
-        // Les architectures dont le moteur lit les images (un projecteur).
-        // Les architectures dont le moteur lit les images avec un projecteur qwen3vl_merger ; qwen35 depuis Albireo
-        // 4.13.0 du fork (qwen35moe, dont aucun projecteur n'a encore été essayé, attend).
-        const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe", "qwen35" };
+        // Les architectures dont le moteur lit les images avec un projecteur : qwen3vl_merger pour Qwen3-VL, et
+        // qwen35 depuis Albireo 4.13.0 du fork (qwen35moe, dont aucun projecteur n'a encore été essayé, attend) ;
+        // gemma4v pour Gemma 4 depuis Albireo 4.16.0 du fork.
+        const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe", "qwen35", "gemma4" };
         // Les architectures dont les passes restent sur le processeur : Gemma 4 depuis Albireo 4.14.0 du fork.
         const std::set<std::string> processor_architectures = { "gemma4" };
 

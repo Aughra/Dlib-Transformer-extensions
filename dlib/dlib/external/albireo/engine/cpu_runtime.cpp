@@ -1423,7 +1423,18 @@ namespace albireo
 
         embed(batch.tokens);
         if (!batch.embedding_rows.empty()) add_given_embeddings(batch, 0);
-        if (cfg_.d_per_layer > 0) per_layer_inputs(batch.tokens);
+        if (cfg_.d_per_layer > 0)
+        {
+            // Les tokens d'une image prennent le token 0 (de remplissage) pour leurs entrées par couche, comme
+            // llama.cpp (src/models/gemma4.cpp, TAG_GEMMA4_IMG_PADDING).
+            if (batch.embedding_rows.empty()) per_layer_inputs(batch.tokens);
+            else
+            {
+                std::vector<int> tokens = batch.tokens;
+                for (long r : batch.embedding_rows) tokens[static_cast<size_t>(r)] = 0;
+                per_layer_inputs(tokens);
+            }
+        }
         xn_.resize(static_cast<size_t>(T * d));
         q_.resize(static_cast<size_t>(T * qd));
         k_.resize(static_cast<size_t>(T * kvd));
