@@ -85,6 +85,7 @@ Outils présents sur le Mac : AppleClang (Xcode), CMake et Ninja (Homebrew), `gh
 
 - **Le mettre à jour à chaque fin de sous-étape**, avant de passer à la suivante.
 - **Le lire en premier** au début de chaque session.
+- **Du plus récent au plus ancien** (demande de l'humain, 2026-11-14) : l'état actuel, ce qui est en cours et à faire, puis « Fait » groupé par jour et « Décisions », chacun antéchronologique (l'entrée nouvelle en tête), puis les problèmes ouverts et les commandes. Un « Fait » ne reste pas éparpillé dans une autre section.
 
 ### `logs/journal-modifications.md` : l'historique
 

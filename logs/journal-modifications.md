@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-14 — Remettre la reprise du plus récent au plus ancien
+
+- **Quoi** : `logs/reprise.md` réécrit : état actuel, en cours, à faire, puis « Fait » groupé par jour du 2026-11-14 au 2026-11-05 et « Décisions », chacun antéchronologique, problèmes ouverts mis à jour (SIGINT et `bench_runtime` corrigés en 4.22.1, retirés), commandes à jour ; les paragraphes « Fait » éparpillés dans « Pour reprendre » et « En cours » ramenés dans la liste ; plans et constats périmés (réserve à achever, moteur Metal M1 à M7) résumés, leur détail restant dans ce journal. Règle ajoutée à CLAUDE.md.
+- **Fichiers** : `logs/reprise.md`, `CLAUDE.md`.
+- **Pourquoi** : demande de l'humain (« le fait doit être antéchronologique ») ; la liste allait du plus ancien au plus récent, et les étapes récentes n'y figuraient qu'en partie.
+- **Étapes** : dates et titres repris des entrées de ce journal ; relu.
+
 ## 2026-11-14 — Faire écrire Gemma 4 sur le GPU (Albireo 4.26.0)
 
 - **Quoi** : étapes A2 à A7 du plan. `metal_kernels.metal` et `metal_device.{h,mm}` : `kv_layout::scales` (octets entre les clés d'une tête et leurs échelles ; 0 = `positions × hd`) passé à `kv_store`, `attention_part` et `attention_mtile`, puisque le pool range les couches de 256 valeurs de Gemma 4 dans des têtes de 512 (échelles après 512 valeurs) ; `test_metal` : têtes de 256 dans un pool de 512. `cpu_runtime_metal.cpp` : Gemma 4 dense accepté (`steps_only` : prompts sur le processeur), têtes et FFN par couche (`layer_head_dim`, `layer_ffn`, contrôle des largeurs par couche), couches à clés partagées (seulement `wq`, pas de `kv_store`, emplacement de la source ; le contrôle des formats ne regarde plus leurs `attn_k`/`attn_v` absents), norme des valeurs (vecteur de uns), entrées par couche (`per_layer_inputs()` sur le processeur, rangées couche par couche dans `g.ple`, `matvec_f32` pour `inp_gate` et `proj`, `gelu_mul`, norme `ple_norm`, `add_rows`), échelle de sortie (`add_rows(x, x, s − 1)`), plafond des logits (processeur, après la copie). `hub.cpp` : plus d'architecture « processeur seulement ». `service.js` : fiche GPU. `test_macos.sh` : « gemma 4 on the GPU », « gemma 4 long prompt on the GPU ».
