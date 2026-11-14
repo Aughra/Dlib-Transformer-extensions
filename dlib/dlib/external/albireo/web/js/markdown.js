@@ -3,7 +3,8 @@
 
 /*
     Markdown des réponses : markdown à la GitHub, code coloré par highlight.js, formules
-    composées par KaTeX entre $...$, $$...$$, \(...\) et \[...\].  Le HTML qu'un modèle
+    composées par KaTeX entre $...$, $$...$$, \(...\) et \[...\], et texte surligné entre == et ==,
+    comme les champs des questions le montrent (mdfield.js).  Le HTML qu'un modèle
     écrit hors du code est affiché comme du texte, et le résultat est assaini avant
     d'atteindre la page.  Une réponse ne charge rien d'une autre origine, et affiche une image
     d'une autre origine comme un lien vers elle, que le navigateur ne suit que si l'utilisateur
@@ -77,6 +78,24 @@ const math = [
   }
 ];
 
+// Le texte surligné entre == et ==, sans espace à l'intérieur des marques (repris de l'original, Albireo 1.0.15).
+const highlight = {
+  name: 'highlight',
+  level: 'inline',
+  start(src) {
+    const i = src.indexOf('==');
+    return i < 0 ? undefined : i;
+  },
+  tokenizer(src) {
+    const m = /^==(?=[^\s=])([\s\S]*?[^\s=])==/.exec(src);
+    if (!m) return undefined;
+    return { type: 'highlight', raw: m[0], text: m[1], tokens: this.lexer.inlineTokens(m[1]) };
+  },
+  renderer(token) {
+    return '<mark>' + this.parser.parseInline(token.tokens) + '</mark>';
+  }
+};
+
 // Vrai pendant que renderMarkdown dessine une réponse en flux : le code sans langage attend
 // la fin de la réponse pour que son langage soit détecté, et un bloc de code dont la clôture
 // n'est pas encore arrivée est coloré une fois qu'elle arrive.
@@ -95,7 +114,7 @@ function openFence(raw) {
 
 const marked = new Marked({ gfm: true, breaks: false });
 marked.use({
-  extensions: math,
+  extensions: math.concat([highlight]),
   renderer: {
     code({ text, lang, raw }) {
       const language = String(lang || '').trim().split(/\s+/)[0].toLowerCase();

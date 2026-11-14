@@ -24,6 +24,7 @@ import { icon } from './icons.js';
 import { forgetDocument } from './indexing.js';
 import { projectById } from './lists.js';
 import { attachCodeButtons, escapeHtml, renderMarkdown } from './markdown.js';
+import { drawMarkdown, markdownField } from './mdfield.js';
 import { go } from './navigation.js';
 import { saveSetting } from './preferences.js';
 import { renderProject } from './projects.js';
@@ -310,7 +311,8 @@ function userElement(c, m, index, last) {
     el.append(h('div', { class: 'attachments' }, m.attachments.map((a) => attachmentChip(a))));
   }
   // Une question faite seulement d'images n'affiche pas de bulle vide.
-  if (m.content || !pictures.length) el.append(h('div', { class: 'bubble' }, m.content));
+  // Le texte d'une question se montre tel que la zone de saisie l'a dessiné.
+  if (m.content || !pictures.length) el.append(h('div', { class: 'bubble md-text', html: drawMarkdown(m.content || '') }));
   // L'heure de la question s'affiche avant ses boutons, qui apparaissent quand le pointeur est dessus.
   el.append(h('div', { class: 'meta' }, timeElement(m),
     iconButton('copy', t('copy'), () => copyText(m.content)),
@@ -463,7 +465,7 @@ function editMessage(c, m, index, el) {
   const places = () => maxContextImages - pendingImageCount()
     - (contextImages(c, (c.contextStart || 0) > index ? 0 : c.contextStart || 0) - contextImages(c, index));
   const room = () => Math.max(0, places() - attachments.filter((a) => a.kind === 'image').length);
-  const area = h('textarea', { style: { width: '100%', minHeight: '90px', borderRadius: '12px', padding: '10px', border: '1px solid var(--border-strong)', background: 'var(--bg-input)' } });
+  const area = markdownField({ label: t('edit'), className: 'edit-question' });
   area.value = m.content;
   const chips = h('div', { class: 'attachments', style: { justifyContent: 'flex-start', marginBottom: '6px' } });
   const fileInput = h('input', { type: 'file', multiple: true, class: 'hidden' });

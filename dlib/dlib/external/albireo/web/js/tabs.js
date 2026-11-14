@@ -174,7 +174,7 @@ async function applyStored(id) {
   const live = generations.get(id);
   let redraw = false;
   // Une question en cours de modification garde la copie à laquelle elle appartient.
-  if (live || (shown && (editingIn(ui.content) || (ui.thread && ui.thread.querySelector('textarea'))))) {
+  if (live || (shown && (editingIn(ui.content) || (ui.thread && ui.thread.querySelector('.md-field'))))) {
     copy = live ? live.c : shown;
     for (const k of sharedFields) copy[k] = stored[k];
   } else if (shown) {

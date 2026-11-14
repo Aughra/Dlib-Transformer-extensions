@@ -81,7 +81,7 @@ export function dialog(content, small) {
     document.addEventListener('keydown', onKey);
     content(box, close);
     document.body.append(overlay);
-    const f = box.querySelector('input, textarea, button.primary');
+    const f = box.querySelector('input, textarea, .md-field, button.primary');
     if (f) f.focus();
   });
 }

@@ -270,7 +270,7 @@ async function rewriteSummary(c) {
   c.summary = null;
   if (start === 0 || !roleModel(c.role)) return;
   const caps = roleCapabilities(c.role);
-  const context = caps.working || caps.context || 8192;
+  const context = caps.context || caps.working || 8192;
   const room = context - Math.min(answerReserve(caps, !!(c.reasoning && caps.reasoning)), Math.floor(context / 2));
   toast(t('compacting'));
   cancelWarmup(c.id);

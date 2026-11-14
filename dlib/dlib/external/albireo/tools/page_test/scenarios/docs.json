@@ -1,7 +1,7 @@
 [
  {
   "name": "helpers",
-  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('textarea');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''},file:(input,name,text)=>{const dt=new DataTransfer(); dt.items.add(new File([text],name,{type:'text/plain'})); input.files=dt.files; input.dispatchEvent(new Event('change',{bubbles:true}));}}; return true"
+  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('.composer .md-field');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''},file:(input,name,text)=>{const dt=new DataTransfer(); dt.items.add(new File([text],name,{type:'text/plain'})); input.files=dt.files; input.dispatchEvent(new Event('change',{bubbles:true}));}}; return true"
  },
  {
   "name": "inputs",

@@ -10,10 +10,12 @@ import * as rag from './rag.js';
 import * as tools from './tools.js';
 import * as web from './web.js';
 import { hintText, namePending, serviceReady } from './background.js';
-import { imageTokenCache, readRate, workingContext, writeRate } from './context.js';
+import { generations } from './composer.js';
+import { apiMessages, estimateMedia, imageTokenCache, readRate, systemPrompt, tokenEstimate, workingContext,
+  writeRate } from './context.js';
 import { dialog } from './dialogs.js';
 import { documentAccept } from './documents.js';
-import { fill, formatDecimal, h } from './dom.js';
+import { fill, formatDecimal, formatNumber, h } from './dom.js';
 import { language, t } from './i18n.js';
 import { describePending, indexProjects, showIndexState } from './indexing.js';
 import { rememberLater } from './memory.js';
@@ -311,6 +313,75 @@ export function renderStatusLine() {
   ui.statusLine.replaceChildren(h('span', { class: 'led ' + led }), h('span', { class: 'grow', title: text }, text),
     model && modelInfo(model) ? modelHelp(model) : null);
   renderHint();
+  renderContextLine();
+}
+
+/*
+    La part du contexte de son modèle qu'occupe la discussion affichée, sous la ligne d'état (repris de l'original,
+    Albireo 1.0.14 et 1.0.17) : les tokens de l'historique que porte la question suivante, message système et outils
+    compris, tels que le service les compte, ses images par leurs tokens (tokenEstimate), sur le contexte que le moteur
+    donne au modèle, qui est la fenêtre de la discussion.  La discussion est mesurée de nouveau quand elle, sa
+    fonction, son modèle ou ses boutons changent, une fois la réponse en cours terminée ; la ligne garde entre-temps la
+    dernière mesure de la discussion.  Une mesure qui échoue, service absent ou modèle en chargement, est retentée pour
+    cette discussion 30 secondes plus tard au plus tôt.
+*/
+const contextUse = { id: '', key: '', tokens: 0, context: 0, pending: false, failed: 0 };
+const contextRetry = 30000;
+
+function contextKey(c) {
+  const last = c.messages[c.messages.length - 1];
+  // Les outils et le raisonnement que permettent les capacités du modèle changent le prompt, comme les boutons.
+  const caps = roleCapabilities(c.role);
+  return [c.id, c.role, roleModel(c.role), c.messages.length, last ? last.id : '',
+    last && last.steps ? last.steps.length : 0, c.contextStart || 0, c.agent ? 1 : 0, c.web ? 1 : 0,
+    c.reasoning ? 1 : 0, caps.tools ? 1 : 0, caps.reasoning ? 1 : 0, c.updated || 0].join('|');
+}
+
+async function measureContext(c, key) {
+  contextUse.pending = true;
+  let tokens = 0, context = 0;
+  try {
+    const caps = roleCapabilities(c.role);
+    const set = toolSet(c, caps);
+    const system = systemPrompt(c, caps, set);
+    const model = 'albireo-' + c.role;
+    const text = apiMessages(c, system, null, { read: false, url: () => null });
+    const r = await api.count(model, text, set.definitions);
+    if (r && typeof r.tokens === 'number' && r.context) {
+      tokens = Math.round(tokenEstimate(text, r.tokens, model).of(apiMessages(c, system, null, estimateMedia(c.role))));
+      context = r.context;
+    }
+  } catch (e) {
+    // Un service hors d'atteinte : la ligne reste vide jusqu'à la mesure suivante.
+  } finally {
+    Object.assign(contextUse, { id: c.id, key: context ? key : '', tokens, context, pending: false,
+      failed: context ? 0 : Date.now() });
+  }
+  renderContextLine();
+}
+
+export function renderContextLine() {
+  if (!ui.contextLine) return;
+  const c = state.view === 'chat' ? state.current : null;
+  const ready = !!(c && serviceReady() && roleModel(c.role));
+  const waiting = ready && contextUse.id === c.id && Date.now() - contextUse.failed < contextRetry;
+  if (ready && !contextUse.pending && !generations.has(c.id) && !waiting) {
+    const key = contextKey(c);
+    if (key !== contextUse.key) measureContext(c, key);
+  }
+  const shown = ready && contextUse.id === c.id && contextUse.context > 0;
+  ui.contextLine.classList.toggle('hidden', !shown);
+  if (!shown) return;
+  const share = Math.min(1, contextUse.tokens / contextUse.context);
+  // Orange à partir des trois quarts, rouge à partir de 90 %.
+  const level = share >= 0.9 ? ' full' : share >= 0.75 ? ' high' : '';
+  const label = formatNumber(contextUse.tokens) + ' / ' + formatNumber(contextUse.context);
+  ui.contextLine.title = t('contextUse', { n: formatNumber(contextUse.tokens), total: formatNumber(contextUse.context),
+    p: Math.round(100 * share) });
+  ui.contextLine.replaceChildren(h('span', { class: 'label' }, t('contextLabel')),
+    h('div', { class: 'meter' + level, role: 'meter', 'aria-valuemin': 0, 'aria-valuemax': contextUse.context,
+      'aria-valuenow': contextUse.tokens, 'aria-valuetext': ui.contextLine.title, 'aria-label': t('contextLabel') },
+    h('div', { style: { width: (100 * share).toFixed(1) + '%' } })), h('span', { class: 'count' }, label));
 }
 
 // Où calcule le modèle : le GPU du Mac quand ses passes y vont, le processeur sinon (état du moteur).

@@ -159,6 +159,9 @@ const texts = {
     errZipInvalid: 'le fichier est endommagé, ou n\'est pas le document qu\'indique son nom',
     errZipCompression: 'il utilise une méthode de compression que le navigateur ne lit pas',
     errXmlInvalid: 'son contenu est endommagé (XML non valide)',
+    contextLabel: 'Contexte',
+    contextUse: 'Contexte de la discussion : {n} jetons sur {total} ({p} %), le contexte du modèle, au-delà de la '
+      + 'moitié duquel les échanges les plus anciens sont résumés',
     engine: 'Moteur', tokensPerSecond: '{n} jetons/s', version: 'Version', service: 'Service',
     memory: 'Mémoire', processor: 'Processeur', models: 'Modèles', usage: 'Utilisation sur 30 jours', requests: 'Requêtes',
     usageDay: '{date} : {generated}, {read}', tokensGenerated_one: '{n} jeton généré',

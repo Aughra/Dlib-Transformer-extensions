@@ -17,16 +17,20 @@ import { state } from './state.js';
 import { backgroundContext, backgroundRates, backgroundText, loadedModel, readsImages } from './status.js';
 
 /*
-    Le contexte de travail d'une discussion (workingContext) : le contexte que le moteur donne au modèle, déjà ramené
-    par lui à ce que la mémoire de l'ordinateur contient (sa mémoire physique et son fichier d'échange ou swap), dans la
+    Le contexte de travail d'un modèle (workingContext) : le contexte que le moteur donne au modèle, déjà ramené par
+    lui à ce que la mémoire de l'ordinateur contient (sa mémoire physique et son fichier d'échange ou swap), dans la
     limite de ce que l'ordinateur lit en workingSeconds à la vitesse mesurée pour le modèle (readRate),
     minWorkingContext tokens au moins, arrondi à une puissance de deux, pour qu'une nouvelle mesure ne change les choix
-    suivants que lorsque la vitesse double ou diminue de moitié.  Le moteur garde les clés et valeurs des discussions
-    lues, de sorte qu'une discussion ne relit tout son contexte que dans les rares cas où elles ont quitté la mémoire.
-    Les choix automatiques d'une discussion en prennent leurs parts : les documents d'un projet lus en entier, un
-    document joint lu en entier, et les extraits donnés avec une question, chacun dans un temps de lecture lui aussi,
-    puisqu'une question les attend ; au-delà des deux premiers, les documents sont l'objet d'une recherche.  Le contexte
-    du modèle reste la limite de ce que contient une question.
+    suivants que lorsque la vitesse double ou diminue de moitié.  Les choix automatiques d'une discussion en prennent
+    leurs parts : les documents d'un projet lus en entier, un document joint lu en entier, et les extraits donnés avec
+    une question, chacun dans un temps de lecture lui aussi, puisqu'une question les attend ; au-delà des deux
+    premiers, les documents sont l'objet d'une recherche.
+
+    La fenêtre d'une discussion est le contexte de son modèle, celui pour lequel le modèle a été entraîné sauf si la
+    mémoire de l'ordinateur l'a réduit, quelle que soit la vitesse de l'ordinateur (repris de l'original, Albireo
+    1.0.17) : le moteur garde les clés et valeurs des discussions lues, de sorte qu'une discussion ne relit tout son
+    contexte que dans les rares cas où elles ont quitté la mémoire, et les échanges les plus anciens sont compressés
+    une fois qu'ils occupent compactShare de la place que le contexte laisse à côté de la réponse.
 */
 const workingSeconds = 240;
 const minWorkingContext = 16384;
@@ -42,13 +46,13 @@ const leastExcerptTokens = 2000;
 const mostExcerptTokens = 12000;
 const passageTokens = 330;
 /*
-    La place des échanges est la place du contexte de travail moins le message système et les outils.  Quand les
-    échanges les plus anciens partent, les échanges gardés, avec le résumé de ceux qui sont partis, prennent keptShare
-    de cette place, pour qu'ils puissent croître de nouveau pendant plusieurs questions avant la coupe suivante.  Une
-    fois une réponse terminée, ou une discussion ouverte, quand les échanges occupent compactShare de leur place, leur
-    partie la plus ancienne est compressée en arrière-plan : les questions suivantes tiennent encore entre-temps, et
-    trouvent le résumé écrit.  Une conversation qui dépasse la place du contexte du modèle perd aussitôt ses échanges
-    les plus anciens (fitContext).
+    La place des échanges est la place que le contexte du modèle laisse à côté de la réponse, moins le message système
+    et les outils.  Quand les échanges les plus anciens partent, les échanges gardés, avec le résumé de ceux qui sont
+    partis, prennent keptShare de cette place, pour qu'ils puissent croître de nouveau pendant plusieurs questions avant
+    la coupe suivante.  Une fois une réponse terminée, ou une discussion ouverte, quand les échanges occupent
+    compactShare de leur place, leur partie la plus ancienne est compressée en arrière-plan : les questions suivantes
+    tiennent encore entre-temps, et trouvent le résumé écrit.  Une conversation qui dépasse d'un coup cette place perd
+    alors ses échanges les plus anciens (fitContext).
 */
 export const keptShare = 0.3;
 export const compactShare = 0.5;

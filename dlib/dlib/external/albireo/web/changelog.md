@@ -2,6 +2,19 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.25.0 — 14 novembre 2026
+
+Reprise à la main de trois nouveautés d'Albireo Community Edition 1.0.14, 1.0.15 et 1.0.17 (Cydral Technology). Avec les versions 4.23.0 et 4.24.0, elle termine la reprise des sept nouveautés retenues.
+
+### Interface
+
+- Une barre sous la ligne d'état indique la part du contexte du modèle qu'occupe la discussion affichée (tokens comptés par le service, sur le contexte du modèle), en orange à partir des trois quarts et en rouge à partir de 90 %. Elle est mesurée de nouveau quand la discussion, son modèle ou ses options changent.
+- La fenêtre d'une discussion est le contexte du modèle, et non plus le contexte de travail calculé d'après la vitesse de lecture : les échanges les plus anciens sont résumés au-delà de la moitié de ce contexte. Le contexte de travail continue de régler la place des documents lus en entier, des extraits et du résumé.
+- La zone de saisie, la modification d'une question, les instructions globales, les instructions d'un projet et la mémoire dessinent le markdown au fil de la frappe : gras, italique, barré, surligné (`==texte==`), code, titres, listes, citations et liens, leurs marques en gris clair. Le texte envoyé au modèle reste le markdown tapé. Entrée continue une liste, Tab et Maj+Tab décalent ses éléments, Cmd+B et Cmd+I mettent en gras ou en italique, Cmd+Z et Cmd+Maj+Z annulent et rétablissent.
+- Les questions du fil sont dessinées de la même façon, et le surlignage `==texte==` est aussi rendu dans les réponses.
+
+---
+
 ## 4.24.0 — 14 novembre 2026
 
 Reprise à la main de trois nouveautés d'Albireo Community Edition 1.0.14 et 1.0.15 (Cydral Technology).

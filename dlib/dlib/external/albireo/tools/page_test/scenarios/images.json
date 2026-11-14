@@ -11,7 +11,7 @@
  },
  {
   "name": "helpers",
-  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('textarea');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].querySelector('.bubble')&&m[m.length-1].querySelector('.bubble').innerText.trim().length>0?m[m.length-1].innerText.trim():''}}; return document.body.innerText.includes('Qwen3-VL 4B (essai)')",
+  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('.composer .md-field');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].querySelector('.bubble')&&m[m.length-1].querySelector('.bubble').innerText.trim().length>0?m[m.length-1].innerText.trim():''}}; return document.body.innerText.includes('Qwen3-VL 4B (essai)')",
   "expect": true
  },
  {

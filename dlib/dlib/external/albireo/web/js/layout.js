@@ -14,6 +14,7 @@ import { t } from './i18n.js';
 import { icon } from './icons.js';
 import { searchDelay } from './lists.js';
 import { escapeHtml } from './markdown.js';
+import { markdownField } from './mdfield.js';
 import { goHome, leaveCurrent, newChat, newConversation, showDiscussion } from './navigation.js';
 import { settingsDialog } from './settings.js';
 import { agentHelp, renderSidebar } from './sidebar.js';
@@ -33,6 +34,7 @@ export function buildLayout() {
   });
   ui.sideScroll = h('div', { class: 'side-scroll' });
   ui.statusLine = h('div', { class: 'status-line' });
+  ui.contextLine = h('div', { class: 'context-line hidden' });
   const search = h('input', { type: 'search', placeholder: t('search'), value: state.search });
   let searchTimer = 0;
   search.addEventListener('input', () => {
@@ -65,14 +67,14 @@ export function buildLayout() {
       }), ui.incognitoButton),
     h('div', { class: 'search' }, h('span', { html: icon('search') }), search),
     ui.sideScroll,
-    h('div', { class: 'sidebar-footer' }, ui.statusLine, h('div', { class: 'footer-buttons' },
+    h('div', { class: 'sidebar-footer' }, ui.statusLine, ui.contextLine, h('div', { class: 'footer-buttons' },
       h('button', { type: 'button', onclick: () => settingsDialog('general'), html: icon('gear') + '<span>' + escapeHtml(t('settings')) + '</span>' }),
       h('button', { type: 'button', onclick: () => window.open('/docs/', '_blank'), html: icon('book') + '<span>' + escapeHtml(t('api')) + '</span>' }))));
 
   ui.topbar = h('header', { class: 'topbar' });
   ui.banner = h('div', { class: 'banner hidden', html: icon('incognito') + '<span>' + escapeHtml(t('incognitoBanner')) + '</span>' });
   ui.content = h('div', { class: 'scroller' });
-  ui.input = h('textarea', { rows: 1, 'aria-label': t('placeholder') });
+  ui.input = markdownField({ label: t('placeholder') });
   ui.input.value = draft;
   ui.input.addEventListener('input', () => {
     autoGrow();

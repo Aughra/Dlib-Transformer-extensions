@@ -19,7 +19,7 @@
  },
  {
   "name": "composer visible",
-  "eval": "const r=document.querySelector('textarea').getBoundingClientRect(); return r.width>200 && r.bottom<=innerHeight",
+  "eval": "const r=document.querySelector('.composer .md-field').getBoundingClientRect(); return r.width>200 && r.bottom<=innerHeight",
   "expect": true
  },
  {
@@ -27,7 +27,7 @@
  },
  {
   "name": "ask",
-  "eval": "const a=document.querySelector('textarea');a.value='Quelle est la capitale de l\\'Espagne ? Un mot.';a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click(); return true"
+  "eval": "const a=document.querySelector('.composer .md-field');a.value='Quelle est la capitale de l\\'Espagne ? Un mot.';a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click(); return true"
  },
  {
   "name": "answer",

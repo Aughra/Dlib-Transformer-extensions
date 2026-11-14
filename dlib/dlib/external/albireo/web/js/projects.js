@@ -19,6 +19,7 @@ import { cancelDescription, forgetDocument, forgetOwner, knowledgeMode, projectI
   showIndexState } from './indexing.js';
 import { reloadLists } from './lists.js';
 import { escapeHtml } from './markdown.js';
+import { markdownField } from './mdfield.js';
 import { go, newChat } from './navigation.js';
 import { renderSidebar } from './sidebar.js';
 import { projectColors, state, ui } from './state.js';
@@ -68,7 +69,7 @@ export function renderProject(p) {
   const convs = state.conversations.filter((c) => c.projectId === p.id);
   const name = h('input', { value: p.name });
   const description = h('input', { value: p.description || '' });
-  const instructions = h('textarea', { rows: 8 });
+  const instructions = markdownField({ label: t('instructions') });
   instructions.value = p.instructions || '';
   const heading = h('h2', null, h('span', { class: 'dot', style: { background: p.color } }), h('span', null, p.name));
   const sub = h('p', { class: 'sub' }, p.description || '');

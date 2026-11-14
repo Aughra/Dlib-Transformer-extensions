@@ -21,6 +21,7 @@ import { icon } from './icons.js';
 import { cancelBackground, cancelIndex, describePending, indexAttachments, indexProjects } from './indexing.js';
 import { reloadLists } from './lists.js';
 import { escapeHtml, renderMarkdown } from './markdown.js';
+import { markdownField } from './mdfield.js';
 import { forgetMemory, memoryAbort, memoryParagraph, memorySentences } from './memory.js';
 import { modelsTab } from './models.js';
 import { go } from './navigation.js';
@@ -65,7 +66,7 @@ function generalTab(body, close) {
   });
   const enter = h('input', { type: 'checkbox', checked: state.settings.sendOnEnter });
   enter.addEventListener('change', () => saveSetting('sendOnEnter', enter.checked));
-  const sys = h('textarea', { rows: 4 });
+  const sys = markdownField({ label: t('systemPrompt') });
   sys.value = state.settings.systemPrompt || '';
   sys.addEventListener('change', () => saveSetting('systemPrompt', sys.value));
   body.append(field(t('theme'), theme), field(t('yourName'), name, t('yourNameHelp')),
@@ -125,7 +126,7 @@ function memoryTab(body) {
   const words = memoryLimitWords(backgroundContext());
   const enabled = h('input', { type: 'checkbox', checked: !!state.settings.memoryEnabled });
   const sensitive = h('input', { type: 'checkbox', checked: !!state.settings.memorySensitive });
-  const text = h('textarea', { rows: 8, placeholder: t('memoryEmpty') });
+  const text = markdownField({ label: t('memoryText'), placeholder: t('memoryEmpty') });
   text.value = state.settings.memory || '';
   const size = h('p', { class: 'help', style: { margin: 0, color: 'var(--text-faint)', fontSize: '12.5px' } });
   const showSize = () => {

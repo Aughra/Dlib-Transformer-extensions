@@ -1,7 +1,7 @@
 [
  {
   "name": "helpers",
-  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt||b.getAttribute('aria-label')===txt),ask:(q)=>{const a=document.querySelector('textarea');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''},chats:()=>[...document.querySelectorAll('.side-section')].map(s=>s.innerText)}; return true"
+  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt||b.getAttribute('aria-label')===txt),ask:(q)=>{const a=document.querySelector('.composer .md-field');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''},chats:()=>[...document.querySelectorAll('.side-section')].map(s=>s.innerText)}; return true"
  },
  {
   "name": "agent file names",
@@ -48,6 +48,21 @@
   "expect": true
  },
  {
+  "name": "context bar",
+  "until": "const l=document.querySelector('.context-line:not(.hidden)'); if (!l) return ''; const c=l.querySelector('.count').innerText; return /^[\\d\\s\\u202f]+ \\/ [\\d\\s\\u202f]+$/.test(c) && l.querySelector('.meter > div').style.width ? c + ' | ' + l.title : ''",
+  "timeout": 30000
+ },
+ {
+  "name": "markdown field draws",
+  "eval": "const f=document.querySelector('.composer .md-field'); f.value='**gras** et ==surligné==\\n- un'; f.dispatchEvent(new Event('input',{bubbles:true})); const r=[!!f.querySelector('.md-strong'), !!f.querySelector('.md-hl'), !!f.querySelector('.md-bullet'), f.value]; f.value=''; f.dispatchEvent(new Event('input',{bubbles:true})); return r",
+  "expect": [
+   true,
+   true,
+   true,
+   "**gras** et ==surligné==\n- un"
+  ]
+ },
+ {
   "name": "sidebar lists the chat",
   "eval": "return document.querySelectorAll('.side-scroll .item:not(.new-item)').length",
   "expect": 1
@@ -90,19 +105,19 @@
  },
  {
   "name": "type a draft",
-  "eval": "T.btn('Nouvelle discussion').click(); await new Promise(r=>setTimeout(r,500)); const a=document.querySelector('textarea'); a.value='Brouillon à garder'; a.dispatchEvent(new Event('input',{bubbles:true})); await new Promise(r=>setTimeout(r,1000)); return true"
+  "eval": "T.btn('Nouvelle discussion').click(); await new Promise(r=>setTimeout(r,500)); const a=document.querySelector('.composer .md-field'); a.value='Brouillon à garder'; a.dispatchEvent(new Event('input',{bubbles:true})); await new Promise(r=>setTimeout(r,1000)); return true"
  },
  {
   "reload": 4000
  },
  {
   "name": "draft kept after reload",
-  "eval": "return document.querySelector('textarea').value",
+  "eval": "return document.querySelector('.composer .md-field').value",
   "expect": "Brouillon à garder"
  },
  {
   "name": "restore helpers",
-  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt||b.getAttribute('aria-label')===txt),ask:(q)=>{const a=document.querySelector('textarea');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''}}; const a=document.querySelector('textarea'); a.value=''; a.dispatchEvent(new Event('input',{bubbles:true})); await new Promise(r=>setTimeout(r,800)); return true"
+  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt||b.getAttribute('aria-label')===txt),ask:(q)=>{const a=document.querySelector('.composer .md-field');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''}}; const a=document.querySelector('.composer .md-field'); a.value=''; a.dispatchEvent(new Event('input',{bubbles:true})); await new Promise(r=>setTimeout(r,800)); return true"
  },
  {
   "name": "new project",
@@ -156,7 +171,7 @@
  },
  {
   "name": "helpers again",
-  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('textarea');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''}}; return true"
+  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('.composer .md-field');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''}}; return true"
  },
  {
   "name": "chat kept after reload",

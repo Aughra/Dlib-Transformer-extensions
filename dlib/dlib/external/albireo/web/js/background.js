@@ -286,8 +286,8 @@ async function compactInBackground(c, signal) {
     api.count(model, text.slice(0, 1), toolDefs).catch(() => null)]);
   if (signal.aborted || !all || typeof all.tokens !== 'number' || !all.context) return;
   const reserve = answerReserve(caps, !!(view.reasoning && caps.reasoning));
-  // La place du contexte de travail, dans les limites de celle du contexte du modèle.
-  const context = Math.min(all.context, caps.working || all.context);
+  // La place du contexte du modèle, la fenêtre de la discussion.
+  const context = all.context;
   const room = context - Math.min(reserve, Math.floor(context / 2));
   const estimate = tokenEstimate(text, all.tokens, model);
   const media = estimateMedia(role);
