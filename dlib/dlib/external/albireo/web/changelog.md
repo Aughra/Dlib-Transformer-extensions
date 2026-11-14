@@ -2,6 +2,14 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.26.1 — 14 novembre 2026
+
+### Plateforme
+
+- Le moteur processeur ne contient plus de conditions de plateforme : les noyaux NEON et les produits par Accelerate s'appliquent toujours, et la compilation s'arrête avec un message clair sans les instructions de produit scalaire des puces Apple. Les versions portables de l'attention et de l'encodeur d'images, devenues inutiles, sont retirées (244 lignes retirées, 29 ajoutées), et les commentaires qui décrivaient encore les noyaux x86 sont corrigés. Aucun changement de comportement.
+
+---
+
 ## 4.26.0 — 14 novembre 2026
 
 ### Performances

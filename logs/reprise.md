@@ -4,7 +4,7 @@
 
 ## État actuel
 
-- `main` = **Albireo 4.26.0** (`97bc0a2`) ; Pseudalis 1.0.5 avec les corrections du fork.
+- `main` = **Albireo 4.26.1** ; Pseudalis 1.0.5 avec les corrections du fork. Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple) ; dlib garde les siennes.
 - **Vrai service** : tourne en **4.25.0** (relancé le 2026-11-14 à 21 h 01, port 18443, réseau 8444 sans mot de passe, journal `build/albireo-home/logs/console.log`) ; à relancer en 4.26.0 si l'humain le veut (Gemma 4 y écrirait sur le GPU).
 - **Tests** : `test_macos.sh` d'Albireo 53 sur 53, de Pseudalis 34 sur 34 ; banc de la page 113 vérifications ; `test_metal` passe ; 0 avertissement de compilation (Albireo, Pseudalis, exemples de dlib).
 - **Blog** : épisode 41 ; **notes pour l'auteur** : changement 22, registre de dlib (partie 5).
@@ -36,6 +36,7 @@ Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les ex
 
 ### 2026-11-14
 
+- **Albireo 4.26.1 : conditions de plateforme retirées du moteur processeur** (`ALBIREO_QK_NEON`, `ALBIREO_QK_ACCELERATE`, `__APPLE__`) : NEON et Accelerate sans condition, versions portables de l'attention et de l'encodeur retirées, commentaires x86 corrigés ; 244 lignes retirées ; `test_macos.sh` 53 sur 53.
 - **Albireo 4.26.0 : Gemma 4 écrit sur le GPU** (étapes A2 à A7) : dimensions par couche, couches à clés partagées, norme des valeurs, entrées par couche, échelle de sortie, plafond des logits ; échelles 8 bits à leur place réelle (`kv_layout::scales`) pour les têtes de 256 dans un cache de 512 ; prompts sur le processeur. Contrôle au chargement à 4e-5 % ; 150 tokens identiques au processeur en floats sur un journal de 2 622 tokens. `test_macos.sh` 53 sur 53. Blog : épisode 41 ; notes : changement 22.
 - **Albireo 4.25.1** : noyaux d'écriture du GPU à 512 valeurs par tête (`attention_part` par tranches de 128, `kv_store`, `restore_outputs`) ; `test_metal` en 512.
 - Règle de CLAUDE.md : **tout en français**, y compris les messages intermédiaires (demande de l'humain).

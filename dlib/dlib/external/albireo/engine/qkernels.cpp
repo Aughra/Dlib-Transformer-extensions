@@ -14,27 +14,17 @@
 #include "thread_pool.h"
 
 
-// ARM64 avec les instructions de produit scalaire (Apple Silicon) : les noyaux NEON de qkernels_neon.inc.
-#if defined(__ARM_NEON) && defined(__ARM_FEATURE_DOTPROD)
-#define ALBIREO_QK_NEON 1
-#include <arm_neon.h>
+/*
+    Le moteur ne se construit que pour macOS sur puce Apple (CMakeLists.txt) : les noyaux NEON de
+    qkernels_neon.inc, avec les instructions de produit scalaire, que toutes les puces Apple ont, et
+    les produits des longues passes par Accelerate (qkernels_accelerate.inc).
+*/
+#if !defined(__ARM_NEON) || !defined(__ARM_FEATURE_DOTPROD)
+#error "Albireo builds for Apple Silicon only: NEON with the dot product instructions is required"
 #endif
-
-// Apple : les produits des longues passes via Accelerate (qkernels_accelerate.inc).
-#if ALBIREO_QK_NEON && defined(__APPLE__)
-#define ALBIREO_QK_ACCELERATE 1
+#include <arm_neon.h>
 #define ACCELERATE_NEW_LAPACK
 #include <vecLib/cblas_new.h>
-#endif
-
-/*
-    Les instructions au-delà d'AVX2, les noyaux du moteur processeur cpu-avxvnni :
-        ALBIREO_QK_VNNI     les produits scalaires d'octets et d'entiers 16 bits en une seule
-                            instruction, sur des vecteurs de 256 bits : AVX-VNNI (cpu-avxvnni), ou
-                            sa forme AVX-512 (ALBIREO_QK_VNNI_EVEX, qui teste ces noyaux sur les
-                            processeurs qui ont AVX-512 VNNI mais pas AVX-VNNI).
-    MSVC ne définit aucune macro pour VNNI : le build la nomme (ALBIREO_AVX_VNNI).
-*/
 
 namespace albireo
 {
@@ -44,7 +34,7 @@ namespace albireo
 
     namespace
     {
-        // Table de conversion du build portable, remplie avant l'exécution de main().
+        // Table de conversion des demi-flottants en floats, remplie avant l'exécution de main().
         struct half_table
         {
             float v[65536];
@@ -204,11 +194,7 @@ namespace albireo
 
     const char* qk_isa()
     {
-#if   ALBIREO_QK_NEON
         return "NEON+dotprod";
-#else
-        return "portable";
-#endif
     }
 
     // Formats d'activation
@@ -705,16 +691,7 @@ namespace albireo
         }
     }
 
-#if ALBIREO_QK_NEON
 #include "qkernels_neon.inc"
-#endif
-
-// Produits scalaires AVX2
-
-
-// Produits scalaires VNNI : une seule instruction pour les sommes de quatre produits d'octets, ou de
-// deux produits d'entiers 16 bits, sur des vecteurs de 256 bits
-
 
     float qk_dot_portable(ggml_type t, const uint8_t* w, const void* act, long n)
     {
@@ -742,14 +719,13 @@ namespace albireo
 
     float qk_dot(ggml_type t, const uint8_t* w, const void* act, long n)
     {
-#if ALBIREO_QK_NEON
+        // Les noyaux NEON pour Q4_K et Q6_K ; les autres formats par le code portable.
         switch (t)
         {
         case ggml_type::Q4_K: return dot_q4_K_neon(w, static_cast<const block_q8_K*>(act), n);
         case ggml_type::Q6_K: return dot_q6_K_neon(w, static_cast<const block_q8_K*>(act), n);
         default: break;
         }
-#endif
         return qk_dot_portable(t, w, act, n);
     }
 
@@ -855,9 +831,7 @@ namespace albireo
             float* Y, long y_stride, bool accumulate)
         {
             long t = 0;
-            long r4 = 0;
-#if   ALBIREO_QK_NEON
-            r4 = n_rows / 4 * 4;
+            const long r4 = n_rows / 4 * 4;
             for (; t + 4 <= n_tokens; t += 4)
                 for (long r = 0; r < r4; r += 4)
                     gemm_neon<4>(X + t * x_stride, x_stride, W + r * K, K, Y + t * y_stride + r, y_stride, accumulate);
@@ -865,29 +839,24 @@ namespace albireo
                 for (long r = 0; r < r4; r += 4)
                     gemm_neon<1>(X + u * x_stride, x_stride, W + r * K, K, Y + u * y_stride + r, y_stride, accumulate);
             t = 0;
-#endif
-            // Ce que laissent les blocs ci-dessus : chaque token contre les dernières lignes, ou
-            // tout dans le build portable.
+            // Ce que laissent les blocs ci-dessus : chaque token contre les dernières lignes.
             for (; t < n_tokens; ++t)
                 for (long r = r4; r < n_rows; ++r)
                     store_result(Y + t * y_stride + r, qk_dot_f32(W + r * K, X + t * x_stride, K), accumulate);
         }
 
 
-#if ALBIREO_QK_ACCELERATE
 #include "qkernels_accelerate.inc"
-#endif
 
         void matmul_float(const weight_matrix& W, const float* X, long n_tokens, long x_stride,
             float* Y, long y_stride, thread_pool& pool, bool accumulate)
         {
-#if ALBIREO_QK_ACCELERATE
+            // Accelerate à partir de accelerate_min_tokens tokens ; en dessous, les tuiles ci-dessous.
             if (n_tokens >= accelerate_min_tokens)
             {
                 matmul_accelerate(W, X, n_tokens, x_stride, Y, y_stride, pool, accumulate);
                 return;
             }
-#endif
             const long rows = W.rows, K = W.cols;
             // Une tuile de lignes est développée une fois en floats et sert chaque token : ses
             // floats restent dans le cache de second niveau pendant que les tokens défilent, par
@@ -1115,117 +1084,28 @@ namespace albireo
         return attention_group(hd) * hd;
     }
 
-    namespace
-    {
-        // Les scores des lignes de requêtes sur m clés, que expand(j0, g, to) donne en floats g à la fois.
-        template <typename Expand>
-        void attention_scores(const float* Q, long rows, long m, long hd, float* S, long lds, float* scratch,
-            const Expand& expand)
-        {
-            const long G = attention_group(hd);
-            for (long j0 = 0; j0 < m; j0 += G)
-            {
-                const long g = std::min(G, m - j0);
-                expand(j0, g, scratch);
-                long r = 0;
-                for (; r + 2 <= rows; r += 2)
-                {
-                    const float* q[2] = { Q + r * hd, Q + (r + 1) * hd };
-                    long j = 0;
-                    for (; j + 4 <= g; j += 4)
-                    {
-                        float* s[2] = { S + r * lds + j0 + j, S + (r + 1) * lds + j0 + j };
-                        dot_rows_x4<2>(q, scratch + j * hd, hd, s);
-                    }
-                    for (; j < g; ++j)
-                        for (int e = 0; e < 2; ++e) S[(r + e) * lds + j0 + j] = qk_dot_f32(q[e], scratch + j * hd, hd);
-                }
-                for (; r < rows; ++r)
-                {
-                    const float* q[1] = { Q + r * hd };
-                    long j = 0;
-                    for (; j + 4 <= g; j += 4)
-                    {
-                        float* s[1] = { S + r * lds + j0 + j };
-                        dot_rows_x4<1>(q, scratch + j * hd, hd, s);
-                    }
-                    for (; j < g; ++j) S[r * lds + j0 + j] = qk_dot_f32(q[0], scratch + j * hd, hd);
-                }
-            }
-        }
-
-        // Les valeurs de m clés pondérées et ajoutées aux lignes de la sortie, expand les donnant comme
-        // ci-dessus.
-        template <typename Expand>
-        void attention_values(const float* P, long lds, long rows, long m, long hd, float* O, float* scratch,
-            const Expand& expand)
-        {
-            const long G = attention_group(hd);
-            for (long j0 = 0; j0 < m; j0 += G)
-            {
-                const long g = std::min(G, m - j0);
-                expand(j0, g, scratch);
-                long r = 0;
-                for (; r + 2 <= rows; r += 2)
-                {
-                    const float* p[2] = { P + r * lds + j0, P + (r + 1) * lds + j0 };
-                    float* o[2] = { O + r * hd, O + (r + 1) * hd };
-                    add_weighted_rows<2>(p, scratch, g, hd, o);
-                }
-                for (; r < rows; ++r)
-                {
-                    const float* p[1] = { P + r * lds + j0 };
-                    float* o[1] = { O + r * hd };
-                    add_weighted_rows<1>(p, scratch, g, hd, o);
-                }
-            }
-        }
-    }
-
     void qk_attention_scores(const float* Q, long rows, const uint16_t* K, long m, long hd, float* S, long lds,
         float* scratch)
     {
-#if ALBIREO_QK_NEON
         attention_scores_neon(Q, rows, K, m, hd, S, lds, scratch, attention_group(hd));
-        return;
-#endif
-        attention_scores(Q, rows, m, hd, S, lds, scratch,
-            [=](long j0, long g, float* to) { qk_half_to_float_row(K + j0 * hd, to, g * hd); });
     }
 
     void qk_attention_values(const float* P, long lds, long rows, const uint16_t* V, long m, long hd, float* O,
         float* scratch)
     {
-#if ALBIREO_QK_NEON
         attention_values_neon(P, lds, rows, V, m, hd, O, scratch, attention_group(hd));
-        return;
-#endif
-        attention_values(P, lds, rows, m, hd, O, scratch,
-            [=](long j0, long g, float* to) { qk_half_to_float_row(V + j0 * hd, to, g * hd); });
     }
 
     void qk_attention_scores_q8(const float* Q, long rows, const int8_t* K, const uint16_t* K_scales, long m, long hd,
         float* S, long lds, float* scratch)
     {
-#if ALBIREO_QK_NEON
         attention_scores_q8_neon(Q, rows, K, K_scales, m, hd, S, lds, scratch, attention_group(hd));
-        return;
-#endif
-        attention_scores(Q, rows, m, hd, S, lds, scratch, [=](long j0, long g, float* to) {
-            qk_q8_to_float_row(K + j0 * hd, K_scales + j0 * (hd / 32), to, g * hd);
-        });
     }
 
     void qk_attention_values_q8(const float* P, long lds, long rows, const int8_t* V, const uint16_t* V_scales, long m,
         long hd, float* O, float* scratch)
     {
-#if ALBIREO_QK_NEON
         attention_values_q8_neon(P, lds, rows, V, V_scales, m, hd, O, scratch, attention_group(hd));
-        return;
-#endif
-        attention_values(P, lds, rows, m, hd, O, scratch, [=](long j0, long g, float* to) {
-            qk_q8_to_float_row(V + j0 * hd, V_scales + j0 * (hd / 32), to, g * hd);
-        });
     }
 
     // Encodeurs
@@ -1295,93 +1175,6 @@ namespace albireo
         // Les clés de l'attention de l'encodeur lues à la fois : les scores d'une tuile de requêtes
         // contre elles prennent 32 kilo-octets.
         const long encoder_block_keys = 128;
-
-
-        /*
-            S[r * lds + j] = somme sur d < hd de Q[r * hd + d] * Kt[d * ldk + j], pour R lignes et
-            les n clés d'un groupe : exactement 16 avec AVX2, un nombre quelconque sinon.
-            Chaque clé de Kt est lue une fois pour les R lignes, sans aucune somme horizontale.
-        */
-        template <int R>
-        void encoder_scores_group(const float* Q, long hd, const float* Kt, long ldk, long n, float* S, long lds)
-        {
-            for (int r = 0; r < R; ++r)
-                for (long j = 0; j < n; ++j)
-                {
-                    float t = 0.0f;
-                    for (long d = 0; d < hd; ++d) t += Q[r * hd + d] * Kt[d * ldk + j];
-                    S[r * lds + j] = t;
-                }
-        }
-
-        void encoder_scores(const float* Q, long rows, long hd, const float* Kt, long ldk, long n, float* S, long lds)
-        {
-#if ALBIREO_QK_ACCELERATE
-            encoder_scores_accelerate(Q, rows, hd, Kt, ldk, n, S, lds);
-            return;
-#endif
-            const long G = 16;
-            for (long r = 0; r < rows; r += 6)
-            {
-                const long R = std::min<long>(6, rows - r);
-                const float* q = Q + r * hd;
-                for (long j = 0; j < n; j += G)
-                {
-                    const long g = std::min(G, n - j);
-                    float* s = S + r * lds + j;
-                    switch (R)
-                    {
-                    case 6: encoder_scores_group<6>(q, hd, Kt + j, ldk, g, s, lds); break;
-                    case 5: encoder_scores_group<5>(q, hd, Kt + j, ldk, g, s, lds); break;
-                    case 4: encoder_scores_group<4>(q, hd, Kt + j, ldk, g, s, lds); break;
-                    case 3: encoder_scores_group<3>(q, hd, Kt + j, ldk, g, s, lds); break;
-                    case 2: encoder_scores_group<2>(q, hd, Kt + j, ldk, g, s, lds); break;
-                    default: encoder_scores_group<1>(q, hd, Kt + j, ldk, g, s, lds); break;
-                    }
-                }
-            }
-        }
-
-        /*
-            O[r * ldo + i] += somme sur j < n de P[r * lds + j] * V[j * ldv + i], pour R lignes
-            et les w dimensions d'un groupe : exactement 32 avec AVX2, un nombre quelconque sinon.
-            Chaque ligne de V est lue une fois pour les R lignes.
-        */
-        template <int R>
-        void encoder_values_group(const float* P, long lds, const float* V, long ldv, long n, long w, float* O,
-            long ldo)
-        {
-            for (int r = 0; r < R; ++r)
-                for (long j = 0; j < n; ++j)
-                {
-                    const float p = P[r * lds + j];
-                    for (long i = 0; i < w; ++i) O[r * ldo + i] += p * V[j * ldv + i];
-                }
-        }
-
-        void encoder_values(const float* P, long lds, long rows, const float* V, long ldv, long n, long hd, float* O,
-            long ldo)
-        {
-#if ALBIREO_QK_ACCELERATE
-            encoder_values_accelerate(P, lds, rows, V, ldv, n, hd, O, ldo);
-            return;
-#endif
-            const long RG = 1, W = hd;
-            for (long r = 0; r < rows; r += RG)
-            {
-                const long R = std::min(RG, rows - r);
-                for (long i = 0; i < hd; i += W)
-                {
-                    const long w = std::min(W, hd - i);
-                    const float* p = P + r * lds;
-                    float* o = O + r * ldo + i;
-                    // Le build portable n'a pas de forme vectorielle pour plusieurs lignes : une ligne
-                    // à la fois.
-                    (void)R;
-                    encoder_values_group<1>(p, lds, V + i, ldv, n, w, o, ldo);
-                }
-            }
-        }
     }
 
     long qk_encoder_attention_work(long)
@@ -1405,7 +1198,7 @@ namespace albireo
         for (long j0 = 0; j0 < m; j0 += B)
         {
             const long b = std::min(B, m - j0);
-            encoder_scores(Q, rows, hd, Kt + j0, ldk, b, S, B);
+            encoder_scores_accelerate(Q, rows, hd, Kt + j0, ldk, b, S, B);
             for (long r = 0; r < rows; ++r)
             {
                 float* s = S + r * B;
@@ -1420,7 +1213,7 @@ namespace albireo
                 top[r] = mx;
                 sum[r] += qk_exp_shift_sum(s, mx, b);
             }
-            encoder_values(S, B, rows, V + j0 * ldv, ldv, b, hd, O, ldo);
+            encoder_values_accelerate(S, B, rows, V + j0 * ldv, ldv, b, hd, O, ldo);
         }
         for (long r = 0; r < rows; ++r) qk_scale(O + r * ldo, 1.0f / sum[r], hd);
     }

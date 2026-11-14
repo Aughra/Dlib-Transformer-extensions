@@ -1,6 +1,5 @@
 // Produits des longues passes via Accelerate, pour le portage macOS (Apple Silicon),
-// inclus par qkernels.cpp dans son espace de noms anonyme avant matmul_float() quand
-// ALBIREO_QK_ACCELERATE est défini.
+// inclus par qkernels.cpp dans son espace de noms anonyme avant matmul_float().
 
     /*
         Apple : les produits des longues passes via cblas_sgemm d'Accelerate, qui les exécute
@@ -11,8 +10,7 @@
         tranche, les autres threads développent la suivante.  La tâche 0 de chaque section, que
         le thread appelant prend en premier, fait l'appel ; les autres tâches développent des
         groupes de lignes.  Les sommes sont celles d'Accelerate : elles diffèrent de qk_dot_f32()
-        dans les derniers bits, comme le font les multiplications-additions fusionnées des noyaux
-        AVX2.
+        dans les derniers bits, puisqu'Accelerate les fait dans un autre ordre.
     */
     const long accelerate_slice = 256;
     const long accelerate_group = 16;

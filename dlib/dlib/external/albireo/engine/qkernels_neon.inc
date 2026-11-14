@@ -1,5 +1,5 @@
-// Noyaux NEON du portage macOS (Apple Silicon), inclus par qkernels.cpp dans l'espace de noms
-// albireo quand ALBIREO_QK_NEON est défini (ARM64 avec les instructions de produit scalaire).
+// Noyaux NEON du portage macOS (Apple Silicon, avec les instructions de produit scalaire), inclus
+// par qkernels.cpp dans l'espace de noms albireo.
 //
 // Chaque noyau calcule, bloc par bloc, les mêmes sommes entières que sa référence (dot_*_ref),
 // exactes quel que soit l'ordre des additions, puis termine chaque bloc par la même expression

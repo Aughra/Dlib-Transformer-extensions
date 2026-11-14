@@ -365,7 +365,7 @@ Mode économie actif (`pmset -g` affiche `lowpowermode 1`), le moteur tournait e
 
 ## 4. Vitesse sur le Mac : temps d'origine, changements, nouveaux temps
 
-Le fork ajoute des noyaux NEON pour puce Apple, dans un fichier à lui, `albireo/engine/qkernels_neon.inc`. `qkernels.cpp` l'inclut et l'appelle sous `ALBIREO_QK_NEON` (`__ARM_NEON` et `__ARM_FEATURE_DOTPROD`), par quelques lignes ajoutées. Le changement 4 ajoute un second fichier, `albireo/engine/qkernels_accelerate.inc`, sous `ALBIREO_QK_ACCELERATE` (NEON et `__APPLE__`). Aucune ligne du code portable ou x86 n'est modifiée.
+Le fork ajoute des noyaux NEON pour puce Apple, dans un fichier à lui, `albireo/engine/qkernels_neon.inc`. `qkernels.cpp` l'inclut et l'appelle sous `ALBIREO_QK_NEON` (`__ARM_NEON` et `__ARM_FEATURE_DOTPROD`), par quelques lignes ajoutées. Le changement 4 ajoute un second fichier, `albireo/engine/qkernels_accelerate.inc`, sous `ALBIREO_QK_ACCELERATE` (NEON et `__APPLE__`). Aucune ligne du code portable ou x86 n'est alors modifiée. Depuis Albireo 4.26.1, le fork, qui ne vise que le Mac, a retiré ces conditions : NEON et Accelerate sans condition, versions portables de l'attention et de l'encodeur d'images retirées ; les extraits ci-dessous gardent la forme conditionnelle, que vous pourriez reprendre telle quelle.
 
 **Mac ou Windows** : ces changements sont propres au Mac. Ils ne corrigent rien sous Windows.
 

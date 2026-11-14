@@ -33,10 +33,9 @@ namespace albireo
         compacte.
 
         Formats avec un noyau dédié : F32, F16, BF16, Q4_0, Q4_1, Q5_0, Q5_1, Q8_0, IQ4_NL,
-        Q2_K, Q3_K, Q4_K, Q5_K et Q6_K.  Le build AVX2 contient des versions vectorielles des
-        formats que les modèles publiés utilisent le plus (Q4_0, Q8_0, Q4_K, Q5_K, Q6_K, F16 et
-        F32) ; les autres exécutent leur version portable, que le compilateur vectorise tout de
-        même en partie.
+        Q2_K, Q3_K, Q4_K, Q5_K et Q6_K.  Q4_K et Q6_K, les formats des modèles du service, ont des
+        noyaux NEON (qkernels_neon.inc) ; les autres exécutent leur version portable, que le
+        compilateur vectorise en partie.
 
         Les produits sont répartis sur les threads d'un thread_pool par groupes de lignes de
         sortie, si bien que chaque thread lit une partie disjointe de la matrice.
@@ -80,11 +79,10 @@ namespace albireo
     void qk_dequantize_row(dlib::ggml_type t, const uint8_t* w, float* dst, long n);
 
     /*!
-        Un allocateur dont les blocs commencent sur 64 octets, la taille d'une ligne de cache et
-        d'un vecteur AVX-512.  Les tampons des activations et de l'attention l'utilisent : une
-        ligne dont la longueur est un multiple de 16 floats commence alors sur une ligne de
-        cache, et aucun chargement vectoriel des noyaux ne lit deux lignes à la fois, ce qui
-        coûte jusqu'à deux fois le temps d'un chargement à l'intérieur d'une seule.
+        Un allocateur dont les blocs commencent sur 64 octets.  Les tampons des activations et de
+        l'attention l'utilisent : une ligne dont la longueur est un multiple de 16 floats commence
+        alors sur 64 octets, et aucun chargement vectoriel des noyaux ne chevauche deux lignes de
+        cache, ce qui coûte jusqu'à deux fois le temps d'un chargement à l'intérieur d'une seule.
     !*/
     template <typename T>
     struct aligned_allocator
@@ -139,13 +137,9 @@ namespace albireo
         poids compacts, ce dont a besoin une étape de génération, limitée par la lecture des
         poids.
     !*/
-#if defined(__APPLE__) && defined(__ARM_FEATURE_DOTPROD)
-    // Apple Silicon : les noyaux entiers restent plus rapides que les produits d'Accelerate
-    // jusqu'à environ 24 tokens (qkernels_accelerate.inc).
+    // Sur puce Apple, les noyaux entiers restent plus rapides que les produits d'Accelerate
+    // jusqu'à environ 24 tokens (qkernels_accelerate.inc ; 8 dans l'original, réglé pour x86).
     const long qk_float_product_tokens = 24;
-#else
-    const long qk_float_product_tokens = 8;
-#endif
 
     /*!
         ensures

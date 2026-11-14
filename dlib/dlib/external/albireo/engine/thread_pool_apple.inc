@@ -1,5 +1,5 @@
 // L'équipe des cœurs de performance, pour le portage macOS (Apple Silicon) : incluse par
-// thread_pool.h dans la classe thread_pool, dans sa partie publique, quand __APPLE__ est défini.
+// thread_pool.h dans la classe thread_pool, dans sa partie publique.
 //
 // Un processeur Apple a des cœurs de performance et des cœurs d'efficacité (4 et 4 sur un M2).  Une
 // passe de quelques tokens, comme une étape de la génération, lit chaque poids du modèle pour peu de
