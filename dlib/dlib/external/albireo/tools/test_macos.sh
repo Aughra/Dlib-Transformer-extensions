@@ -233,6 +233,12 @@ else
   # son premier mot (« We » 0,27, « Our » 0,255 dans llama.cpp, dont la réponse est celle de la reprise).  L'étape
   # vérifie la reprise et le sujet de la réponse.
   step "lfm2 checkpoint" "resumed at a checkpoint, answer on its subject" qwen35_checkpoint "$LFM2" subject
+  # Outils dans la notation de LFM2 (appels à la manière de Python ; Albireo 4.18.0) : l'appel lu, puis la réponse tirée
+  # de son résultat, celle de llama.cpp 0.9.0.
+  step "lfm2 tool call" '"name":"get_weather","arguments":".*Paris' "$CHAT" "$ENGINE" "$LFM2" \
+    --tools --temperature 0 --max 120 "What is the weather in Paris right now?"
+  step "lfm2 tool result" "21 degrees" "$CHAT" "$ENGINE" "$LFM2" --tools --tool-result "Sunny, 21 degrees C" \
+    --temperature 0 --max 120 "What is the weather in Paris right now?"
 fi
 if [ ! -f "$ENGINE" ] || [ ! -f "$LFM2MOE" ]; then skip "lfm2 moe" "no $LFM2MOE"
 else

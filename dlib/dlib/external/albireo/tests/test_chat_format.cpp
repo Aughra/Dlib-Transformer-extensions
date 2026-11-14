@@ -835,8 +835,8 @@ What is the weather in Paris right now?<turn|>
             "\"List of tools: [\"{{- \"<think>\" + message.thinking + \"</think>\" -}}";
         const std::unique_ptr<chat_format> s = chat_format::detect(ltok, small);
         const std::unique_ptr<chat_format> l = chat_format::detect(ltok, large);
-        expect(std::string(s->name()) == "lfm2" && !s->supports_tools() && !s->supports_reasoning(), "LFM2 1.2B detected");
-        expect(std::string(l->name()) == "lfm2" && !l->supports_tools() && l->supports_reasoning(), "LFM2 8B detected");
+        expect(std::string(s->name()) == "lfm2" && s->supports_tools() && !s->supports_reasoning(), "LFM2 1.2B detected");
+        expect(std::string(l->name()) == "lfm2" && l->supports_tools() && l->supports_reasoning(), "LFM2 8B detected");
 
         std::vector<chat_message> m(3);
         m[0].role = "user";
@@ -883,6 +883,58 @@ What is the weather in Paris right now?<turn|>
             + r.content);
         const parsed c = read_all_ways(*s, render_options(), "The capital is Paris.", "LFM2 answer");
         expect(c.content == "The capital is Paris." && c.reasoning.empty(), "LFM2 answer without reasoning");
+
+        // Les outils (Albireo 4.18.0) : déclarés, un appel passé et son résultat, tels que les écrit llama.cpp 0.9.0
+        // avec le template de LFM2.5-8B-A1B ; puis les appels que le modèle écrit, à la manière de Python.
+        const std::string calls_tmpl = large + "{%- macro render_tool_calls(tool_calls) -%}";
+        const std::unique_ptr<chat_format> t = chat_format::detect(ltok, calls_tmpl);
+        expect(t->supports_tools(), "LFM2 supports tools");
+        render_options topt;
+        topt.tools = json::parse_or_null("[{\"type\": \"function\", \"function\": {\"name\": \"get_weather\", "
+            "\"description\": \"Current weather of a city\", \"parameters\": {\"type\": \"object\", \"properties\": "
+            "{\"city\": {\"type\": \"string\", \"description\": \"City name\"}, \"days\": {\"type\": \"integer\"}}, "
+            "\"required\": [\"city\"]}}}]");
+        std::vector<chat_message> tm(3);
+        tm[0].role = "user";
+        tm[0].content = "Weather in Paris?";
+        tm[1].role = "assistant";
+        tool_call_data call;
+        call.id = "c1";
+        call.name = "get_weather";
+        call.arguments = "{\"city\": \"Paris\", \"days\": 3}";
+        tm[1].tool_calls.push_back(call);
+        tm[2].role = "tool";
+        tm[2].tool_call_id = "c1";
+        tm[2].content = "Sunny, 21 degrees C";
+        const std::string tools_expected = "<|startoftext|><|im_start|>system\nList of tools: [{\"type\": \"function\", "
+            "\"function\": {\"name\": \"get_weather\", \"description\": \"Current weather of a city\", \"parameters\": "
+            "{\"type\": \"object\", \"properties\": {\"city\": {\"type\": \"string\", \"description\": \"City name\"}, "
+            "\"days\": {\"type\": \"integer\"}}, \"required\": [\"city\"]}}}]<|im_end|>\n<|im_start|>user\nWeather in "
+            "Paris?<|im_end|>\n<|im_start|>assistant\n<|tool_call_start|>[get_weather(city='Paris', days=3)]"
+            "<|tool_call_end|><|im_end|>\n<|im_start|>tool\nSunny, 21 degrees C<|im_end|>\n<|im_start|>assistant\n";
+        expect(render(*t, tm, topt) == tools_expected, "LFM2 prompt with a call and its result:\n" + render(*t, tm, topt));
+        tm[1].tool_calls[0].arguments = "{\"city\": \"O'Hara\", \"f\": 2.0, \"b\": true, \"n\": null, \"l\": [1, \"a\"], "
+            "\"o\": {\"k\": \"v\"}}";
+        expect(render(*t, tm, topt).find("[get_weather(city='O'Hara', f=2.0, b=True, n=None, l=[1, 'a'], o={\"k\": \"v\"})]")
+            != std::string::npos, "LFM2 arguments written like the template:\n" + render(*t, tm, topt));
+
+        const parsed p = read_all_ways(*t, topt, "<|tool_call_start|>[get_weather(city=\"Paris, \\\"FR\\\"\", days=3), "
+            "get_weather(city='Rome', deep={'a': [1, 2.5, True, None, false]})]<|tool_call_end|>", "LFM2 calls");
+        expect(p.calls.size() == 2 && p.content.empty(), "two LFM2 calls");
+        if (p.calls.size() == 2)
+        {
+            expect(p.calls[0].name == "get_weather" && p.calls[0].arguments == "{\"city\": \"Paris, \\\"FR\\\"\", \"days\": 3}",
+                "LFM2 arguments: " + p.calls[0].arguments);
+            expect(p.calls[1].arguments == "{\"city\": \"Rome\", \"deep\": {\"a\": [1, 2.5, true, null, false]}}",
+                "LFM2 Python values: " + p.calls[1].arguments);
+        }
+        const parsed rc = read_all_ways(*t, topt, "<think>Call it.</think><|tool_call_start|>[ping()]<|tool_call_end|>",
+            "LFM2 reasoning then call");
+        expect(rc.reasoning == "Call it." && rc.calls.size() == 1 && rc.calls[0].arguments == "{}",
+            "LFM2 reasoning then a call without arguments");
+        const std::string broken = "<|tool_call_start|>[get_weather(city=Paris)]<|tool_call_end|>";
+        const parsed b = read_all_ways(*t, topt, broken, "LFM2 broken call");
+        expect(b.calls.empty() && b.content == broken, "LFM2 broken call kept as text: " + b.content);
     }
 
     if (failures)

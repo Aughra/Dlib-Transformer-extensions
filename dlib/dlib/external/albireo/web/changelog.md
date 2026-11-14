@@ -2,6 +2,15 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.18.0 — 14 novembre 2026
+
+### Plateforme
+
+- Les modèles LFM2 appellent des outils (mode agent), dans leur notation propre : outils déclarés en JSON dans le message système (« List of tools: [...] »), appels écrits à la manière de Python entre `<|tool_call_start|>` et `<|tool_call_end|>` (`[get_weather(city='Paris', days=3)]`, valeurs `True`, `False`, `None`, listes et dictionnaires), résultats dans un tour `tool`. Le prompt suit le gabarit de chaque modèle à l'octet près : quatre conversations avec outils comparées à llama.cpp 0.9.0 pour LFM2.5-1.2B-Instruct, LFM2.5-8B-A1B et LFM2.5-Audio-1.5B, dont une qui contient des arguments de tous les types, et une cinquième (raisonnement puis appel) pour LFM2.5-8B-A1B. LFM2.5-1.2B-Instruct appelle l'outil météo, reçoit son résultat et répond comme llama.cpp, avec le même nombre de tokens de prompt aux deux tours ; LFM2.5-8B-A1B raisonne, appelle l'outil, puis donne la même réponse finale.
+- La recherche Hugging Face et le catalogue annoncent de nouveau les outils pour LFM2.
+
+---
+
 ## 4.17.1 — 14 novembre 2026
 
 ### Corrections

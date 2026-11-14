@@ -415,9 +415,7 @@ namespace albireo
                 && !holds("<|end|>");
             d["reasoning"] = !embedding && (granite4 || opens || switchable || foundation_sec || holds("[THINK]"));
             d["reasoning_always"] = !embedding && ((opens && !switchable) || foundation_sec);
-            // Les outils de LFM2 (« List of tools: », appels <|tool_call_start|>) ne sont pas encore lus (fork pour macOS).
-            const bool lfm2 = chatml && holds("List of tools: ");
-            d["tools"] = !embedding && !lfm2 && (holds("[INST]") || holds("<|start_header_id|>")
+            d["tools"] = !embedding && (holds("[INST]") || holds("<|start_header_id|>")
                 || holds("<|start_of_role|>") || granite4 || (chatml && (holds("<tool_call>") || holds("tools"))));
             // Les entrées que le moteur lit dans le modèle, et l'identité que porte un fichier
             // préparé par le build d'Albireo (tools/albireo_builtin.cpp).

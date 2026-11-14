@@ -317,7 +317,8 @@ namespace albireo
             json_list,       // <|tool_call|>[{"name":..,"arguments":..}]
             whole_json,      // la réponse entière est {"name":..,"parameters":..} nommant un outil de la requête
             xml_function,    // <tool_call><function=name><parameter=key>value</parameter></function></tool_call>
-            gemma            // <|tool_call>call:name{key:<|"|>value<|"|>,n:3}<tool_call|>
+            gemma,           // <|tool_call>call:name{key:<|"|>value<|"|>,n:3}<tool_call|>
+            python           // <|tool_call_start|>[name(key='value', n=3), other()]<|tool_call_end|> (LFM2)
         };
 
         // Le délimiteur des chaînes de la notation des outils de Gemma 4.
@@ -397,6 +398,97 @@ namespace albireo
             pos = end;
             if (literal.empty()) return false;
             if (!json::parse(literal, out)) out = json(literal);
+            return true;
+        }
+
+        /*
+            Lit une valeur écrite à la manière de Python à pos dans text et avance pos après elle
+            (fork pour macOS, appels d'outils de LFM2, comme python_or_json_value() de llama.cpp) :
+            une chaîne entre guillemets simples ou doubles avec ses échappements, un dictionnaire
+            {"clé": valeur, ...}, une liste [...], un nombre, True, False, None, ou leurs formes JSON
+            true, false, null.  False quand le texte n'est pas une valeur complète.
+        */
+        bool python_value(const std::string& text, size_t& pos, json& out, int depth = 0)
+        {
+            auto skip = [&]() {
+                while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos]))) ++pos;
+            };
+            if (depth > 64) return false;
+            skip();
+            if (pos >= text.size()) return false;
+            const char c = text[pos];
+            if (c == '"' || c == '\'')
+            {
+                std::string v;
+                for (size_t i = pos + 1; i < text.size(); ++i)
+                {
+                    const char d = text[i];
+                    if (d == c)
+                    {
+                        out = json(v);
+                        pos = i + 1;
+                        return true;
+                    }
+                    if (d != '\\') { v += d; continue; }
+                    if (++i >= text.size()) return false;
+                    const char e = text[i];
+                    if (e == 'n') v += '\n';
+                    else if (e == 't') v += '\t';
+                    else if (e == 'r') v += '\r';
+                    else if (e == 'u' && i + 4 < text.size())
+                    {
+                        // \uXXXX, rendu en UTF-8 par le lecteur JSON.
+                        json u;
+                        if (!json::parse("\"\\u" + text.substr(i + 1, 4) + "\"", u)) return false;
+                        v += u.as_string();
+                        i += 4;
+                    }
+                    else v += e;
+                }
+                return false;
+            }
+            if (c == '{' || c == '[')
+            {
+                const bool object = c == '{';
+                const char close = object ? '}' : ']';
+                out = object ? json::object() : json::array();
+                ++pos;
+                skip();
+                if (pos < text.size() && text[pos] == close) { ++pos; return true; }
+                for (;;)
+                {
+                    std::string key;
+                    if (object)
+                    {
+                        json k;
+                        if (!python_value(text, pos, k, depth + 1) || !k.is_string()) return false;
+                        key = k.as_string();
+                        skip();
+                        if (pos >= text.size() || text[pos] != ':') return false;
+                        ++pos;
+                    }
+                    json v;
+                    if (!python_value(text, pos, v, depth + 1)) return false;
+                    if (object) out[key] = v;
+                    else out.push_back(v);
+                    skip();
+                    if (pos >= text.size()) return false;
+                    if (text[pos] == close) { ++pos; return true; }
+                    if (text[pos] != ',') return false;
+                    ++pos;
+                }
+            }
+            size_t end = pos;
+            while (end < text.size() && (std::isalnum(static_cast<unsigned char>(text[end])) || text[end] == '.'
+                || text[end] == '-' || text[end] == '+'))
+                ++end;
+            const std::string literal = text.substr(pos, end - pos);
+            if (literal.empty()) return false;
+            pos = end;
+            if (literal == "True" || literal == "true") out = json(true);
+            else if (literal == "False" || literal == "false") out = json(false);
+            else if (literal == "None" || literal == "null") out = json();
+            else if (!json::parse(literal, out) || !out.is_number()) return false;
             return true;
         }
 
@@ -694,6 +786,68 @@ namespace albireo
             }
 
             /*
+                Les appels du texte entre <|tool_call_start|> et <|tool_call_end|> de LFM2 : une liste
+                d'appels à la manière de Python, [nom(clé=valeur, ...), ...].  False, sans rien émettre,
+                quand le texte contient autre chose.
+            */
+            bool emit_python_calls(const std::string& body, std::vector<output_event>& events)
+            {
+                std::vector<output_event> calls;
+                size_t pos = 0;
+                auto skip = [&]() {
+                    while (pos < body.size() && std::isspace(static_cast<unsigned char>(body[pos]))) ++pos;
+                };
+                auto identifier = [&]() {
+                    const size_t a = pos;
+                    while (pos < body.size() && (std::isalnum(static_cast<unsigned char>(body[pos])) || body[pos] == '_'
+                        || body[pos] == '-' || body[pos] == '.'))
+                        ++pos;
+                    return body.substr(a, pos - a);
+                };
+                skip();
+                if (pos >= body.size() || body[pos] != '[') return false;
+                ++pos;
+                for (;;)
+                {
+                    skip();
+                    const std::string name = identifier();
+                    skip();
+                    if (name.empty() || pos >= body.size() || body[pos] != '(') return false;
+                    ++pos;
+                    json args = json::object();
+                    skip();
+                    if (pos < body.size() && body[pos] == ')') ++pos;
+                    else
+                        for (;;)
+                        {
+                            skip();
+                            const std::string key = identifier();
+                            skip();
+                            if (key.empty() || pos >= body.size() || body[pos] != '=') return false;
+                            ++pos;
+                            json v;
+                            if (!python_value(body, pos, v)) return false;
+                            args[key] = v;
+                            skip();
+                            if (pos >= body.size()) return false;
+                            if (body[pos] == ')') { ++pos; break; }
+                            if (body[pos] != ',') return false;
+                            ++pos;
+                        }
+                    emit_call(name, args.dump_formatted(), calls);
+                    skip();
+                    if (pos >= body.size()) return false;
+                    if (body[pos] == ']') { ++pos; break; }
+                    if (body[pos] != ',') return false;
+                    ++pos;
+                }
+                skip();
+                if (pos != body.size() || calls.empty()) return false;
+                events.insert(events.end(), calls.begin(), calls.end());
+                return true;
+            }
+
+            /*
                 Les appels d'une réponse qui est une valeur JSON entière : un objet, ou une liste
                 d'objets, chacun nommant l'un des outils de la requête.  False, sans rien émettre,
                 pour toute autre réponse, qui est alors le texte de la réponse.
@@ -837,11 +991,12 @@ namespace albireo
             bool parse_call(std::vector<output_event>& events, bool final)
             {
                 if (c_.calls == call_style::tagged_object || c_.calls == call_style::xml_function
-                    || c_.calls == call_style::gemma)
+                    || c_.calls == call_style::gemma || c_.calls == call_style::python)
                 {
                     auto read = [&](const std::string& body) {
                         if (c_.calls == call_style::xml_function) return emit_xml_calls(body, events);
                         if (c_.calls == call_style::gemma) return emit_gemma_calls(body, events);
+                        if (c_.calls == call_style::python) return emit_python_calls(body, events);
                         return emit_calls(body, events);
                     };
                     const size_t p = find_marker(c_.call_close);
@@ -2474,14 +2629,18 @@ namespace albireo
 
         /*
             Le template de LFM2 et LFM2-MoE de Liquid AI : <|startoftext|>, puis des tours ChatML ; le message
-            système vient seul en tête.  Comme llama.cpp (common/parsers/lfm2.cpp, common/jinja/caps.cpp) :
-            les templates de LFM2.5-8B-A1B écrivent la pensée d'une réponse (message.thinking, que llama.cpp
-            tire de reasoning_content) entre <think> et </think> devant son texte, et gardent les pensées
-            passées (preserve_thinking vaut true) ; ceux de LFM2.5-1.2B retirent des réponses passées, sauf la
+            système vient seul en tête, suivi de « List of tools: [...] », chaque outil en JSON (entre
+            <|tool_list_start|> et <|tool_list_end|> pour LFM2.5-Audio).  Comme llama.cpp
+            (common/parsers/lfm2.cpp, common/jinja/caps.cpp) : les templates de LFM2.5-8B-A1B écrivent la
+            pensée d'une réponse (message.thinking, que llama.cpp tire de reasoning_content) entre <think> et
+            </think> devant son texte, gardent les pensées passées (preserve_thinking vaut true), et écrivent
+            les appels d'une réponse après son texte, <|tool_call_start|>[nom(clé='texte', n=3)]<|tool_call_end|>
+            (format_arg_value du template) ; ceux de LFM2.5-1.2B retirent des réponses passées, sauf la
             dernière, ce qui précède le dernier </think> (keep_past_thinking reste false), sans les espaces des
-            bords ; celui de LFM2.5-Audio les garde telles quelles.  Le modèle ouvre lui-même son raisonnement par <think>, que le moteur sépare quand le template
-            en parle.  Ses appels d'outils (des appels Python
-            entre <|tool_call_start|> et <|tool_call_end|>) ne sont pas encore pris en charge.
+            bords, et n'écrivent que le texte des réponses ; celui de LFM2.5-Audio garde les pensées et entoure
+            le résultat d'un outil de <|tool_response_start|> et <|tool_response_end|>.  Le modèle ouvre
+            lui-même son raisonnement par <think>, que le moteur sépare quand le template en parle, et écrit
+            ses appels entre <|tool_call_start|> et <|tool_call_end|> (call_style::python).
         */
         class lfm2_format : public chat_format
         {
@@ -2499,11 +2658,14 @@ namespace albireo
                 strips_past_ = tmpl.find("\"</think>\" in content") != std::string::npos;
                 reasons_ = tok.token_id("<think>") >= 0 && tok.token_id("</think>") >= 0
                     && tmpl.find("<think>") != std::string::npos;
+                list_marks_ = tmpl.find("<|tool_list_start|>[") != std::string::npos;
+                response_marks_ = tmpl.find("<|tool_response_start|>") != std::string::npos;
+                writes_calls_ = tmpl.find("render_tool_calls") != std::string::npos;
                 add_markers(tok, { "<think>", "</think>", "<|tool_call_start|>", "<|tool_call_end|>" });
             }
 
             const char* name() const override { return "lfm2"; }
-            bool supports_tools() const override { return false; }
+            bool supports_tools() const override { return true; }
             bool supports_reasoning() const override { return reasons_; }
             std::vector<prompt_piece> reasoning_close() const override
             {
@@ -2516,15 +2678,31 @@ namespace albireo
                 piece_writer w{ out };
                 w.markup(bos_);
                 size_t first = 0;
+                std::string system;
                 if (!messages.empty() && messages[0].role == "system")
                 {
                     first = 1;
-                    if (!messages[0].content.empty())
+                    system = messages[0].content;
+                }
+                const bool tools = opt.tools.is_array() && !opt.tools.empty();
+                if (tools)
+                {
+                    if (!system.empty()) system += "\n";
+                    system += list_marks_ ? "List of tools: <|tool_list_start|>[" : "List of tools: [";
+                    bool more = false;
+                    for (const auto& t : opt.tools.elements())
                     {
-                        w.markup("<|im_start|>system\n");
-                        w.text(messages[0].content);
-                        w.markup("<|im_end|>\n");
+                        if (more) system += ", ";
+                        system += t.dump_formatted();
+                        more = true;
                     }
+                    system += list_marks_ ? "]<|tool_list_end|>" : "]";
+                }
+                if (!system.empty())
+                {
+                    w.markup("<|im_start|>system\n");
+                    w.text(system);
+                    w.markup("<|im_end|>\n");
                 }
                 long last_assistant = -1;
                 for (size_t i = first; i < messages.size(); ++i)
@@ -2535,7 +2713,9 @@ namespace albireo
                     w.markup("<|im_start|>" + m.role + "\n");
                     if (m.role != "assistant")
                     {
+                        if (m.role == "tool" && response_marks_) w.markup("<|tool_response_start|>");
                         w.text(m.content);
+                        if (m.role == "tool" && response_marks_) w.markup("<|tool_response_end|>");
                         w.markup("<|im_end|>\n");
                         continue;
                     }
@@ -2552,12 +2732,35 @@ namespace albireo
                     if (strips_past_ && !recent && close != std::string::npos)
                         content = strip_spaces(content.substr(close + 8));
                     w.text(content);
+                    if (writes_calls_ && !m.tool_calls.empty())
+                    {
+                        w.markup("<|tool_call_start|>");
+                        std::string calls = "[";
+                        for (size_t k = 0; k < m.tool_calls.size(); ++k)
+                        {
+                            if (k > 0) calls += ", ";
+                            calls += m.tool_calls[k].name + "(";
+                            json args;
+                            if (!json::parse(m.tool_calls[k].arguments, args) || !args.is_object())
+                                args = json::object();
+                            bool more = false;
+                            for (const auto& member : args.items())
+                            {
+                                if (more) calls += ", ";
+                                calls += member.first + "=" + argument(member.second);
+                                more = true;
+                            }
+                            calls += ")";
+                        }
+                        w.text(calls + "]");
+                        w.markup("<|tool_call_end|>");
+                    }
                     w.markup("<|im_end|>\n");
                 }
                 if (opt.add_generation_prompt) w.markup("<|im_start|>assistant\n");
             }
 
-            std::unique_ptr<output_parser> make_parser(const render_options&) const override
+            std::unique_ptr<output_parser> make_parser(const render_options& opt) const override
             {
                 parser_config c;
                 if (reasons_)
@@ -2565,14 +2768,69 @@ namespace albireo
                     c.think_open = "<think>";
                     c.think_close = "</think>";
                 }
+                if (opt.tools.is_array() && !opt.tools.empty())
+                {
+                    c.calls = call_style::python;
+                    c.call_open = "<|tool_call_start|>";
+                    c.call_close = "<|tool_call_end|>";
+                }
                 return std::unique_ptr<output_parser>(new tag_parser(c));
             }
 
         private:
+            /*
+                Un argument d'un appel passé, comme format_arg_value du template : un texte entre apostrophes,
+                tel quel ; un objet en JSON ; le reste comme le filtre string de Jinja, à la manière de Python
+                (True, False, None, 2.0, listes entre crochets aux textes entre apostrophes).
+            */
+            static std::string argument(const json& v)
+            {
+                if (v.is_string()) return "'" + v.as_string() + "'";
+                if (v.is_object()) return v.dump_formatted();
+                return python_repr(v);
+            }
+
+            static std::string python_repr(const json& v)
+            {
+                if (v.is_string()) return "'" + v.as_string() + "'";
+                if (v.is_bool()) return v.as_bool() ? "True" : "False";
+                if (v.is_null()) return "None";
+                if (v.is_array())
+                {
+                    std::string out = "[";
+                    bool more = false;
+                    for (const auto& e : v.elements())
+                    {
+                        if (more) out += ", ";
+                        out += python_repr(e);
+                        more = true;
+                    }
+                    return out + "]";
+                }
+                if (v.is_object())
+                {
+                    std::string out = "{";
+                    bool more = false;
+                    for (const auto& member : v.items())
+                    {
+                        if (more) out += ", ";
+                        out += "'" + member.first + "': " + python_repr(member.second);
+                        more = true;
+                    }
+                    return out + "}";
+                }
+                std::string n = v.dump();
+                if (!v.is_integer() && n.find_first_of(".eE") == std::string::npos) n += ".0";
+                return n;
+            }
+
             std::string bos_;
             bool thinking_field_ = false;
             bool strips_past_ = false;
             bool reasons_ = false;
+            bool list_marks_ = false;
+            bool response_marks_ = false;
+            bool writes_calls_ = false;
         };
 
         // Sans template

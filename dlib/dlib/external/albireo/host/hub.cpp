@@ -312,9 +312,7 @@ namespace albireo
         inputs.push_back("text");
         if (!projector.empty()) inputs.push_back("image");
         entry["inputs"] = inputs;
-        // Les outils de LFM2 (« List of tools: ») ne sont pas encore lus par le moteur.
-        const std::string& tmpl = info["gguf"]["chat_template"].as_string();
-        entry["tools"] = tmpl.find("tools") != std::string::npos && tmpl.find("List of tools: ") == std::string::npos;
+        entry["tools"] = info["gguf"]["chat_template"].as_string().find("tools") != std::string::npos;
         entry["reasoning"] = low.find("think") != std::string::npos || low.find("reason") != std::string::npos
             || low.find("-r1") != std::string::npos;
         entry["license"] = license_of(info);
