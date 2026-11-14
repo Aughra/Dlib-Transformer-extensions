@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-14 vers 19 h, sur le Mac M2 : Albireo **4.22.0**, **Gemma 3 sur le GPU** ; avant, LFM2-MoE (4.21.0) et LFM2 (4.20.0) sur le GPU ; blog : épisode 38. **Le M2 reste en mode économie d'énergie (choix de l'humain) : les vitesses de la 4.21.0 et de la 4.22.0 se mesureront sur le Mac mini.** Le vrai service tourne en **4.21.0** (port 18443, réseau 8444, journal `build/albireo-home/logs/console.log`). La nuit du 2026-11-12 : `logs/nuit-2026-11-12.md`. Restent : Gemma 4 sur le GPU, images de Gemma 3, le Mac mini (liste `docs/mac-mini-premier-jour.md`).
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-14 vers 19 h, sur le Mac M2 : Albireo **4.22.0**, **Gemma 3 sur le GPU** ; avant, LFM2-MoE (4.21.0) et LFM2 (4.20.0) sur le GPU ; blog : épisode 38. **Le M2 reste en mode économie d'énergie (choix de l'humain) : les vitesses de la 4.21.0 et de la 4.22.0 se mesureront sur le Mac mini.** Le vrai service tourne en **4.22.0** (relancé le 2026-11-14 vers 19 h, port 18443, réseau 8444, journal `build/albireo-home/logs/console.log`). La nuit du 2026-11-12 : `logs/nuit-2026-11-12.md`. Restent : Gemma 4 sur le GPU, images de Gemma 3, le Mac mini (liste `docs/mac-mini-premier-jour.md`).
 
 ## Objectif
 
