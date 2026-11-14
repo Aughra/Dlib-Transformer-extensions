@@ -789,7 +789,7 @@
     "summary": "The state of the drive",
     "responses": {
      "200": {
-      "description": "{\"letter\", \"mounted\", \"folder\", \"files\", \"bytes\", \"error\", \"refused_folder\"}: the drive, and the folder that holds the files the drive did not process, one folder per user, where each file keeps its place in the tree of the drive",
+      "description": "{\"letter\", \"mounted\", \"folder\", \"files\", \"bytes\", \"error\", \"refused_folder\", \"scans\", \"idle\"}: the drive, the folder that holds the files the drive did not process, one folder per user, where each file keeps its place in the tree of the drive, the number of scans of the drive done so far, and whether nothing is changing, waiting or being processed",
       "content": {
        "application/json": {
         "schema": {

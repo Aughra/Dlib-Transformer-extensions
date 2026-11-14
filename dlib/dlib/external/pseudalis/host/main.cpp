@@ -112,6 +112,12 @@ namespace
         sigaddset(&set, SIGTERM);
         sigaddset(&set, SIGHUP);
         pthread_sigmask(SIG_BLOCK, &set, nullptr);
+        // Un shell non interactif lance ses tâches d'arrière-plan avec SIGINT ignoré, et macOS jette un signal
+        // ignoré même bloqué : sigwait ne le verrait jamais.  Le comportement par défaut, quel que soit celui hérité
+        // du parent ; les signaux étant déjà bloqués, il n'est jamais exécuté, ils attendent sigwait.
+        signal(SIGINT, SIG_DFL);
+        signal(SIGTERM, SIG_DFL);
+        signal(SIGHUP, SIG_DFL);
         signal(SIGPIPE, SIG_IGN);
         std::thread([set]() {
             int sig = 0;

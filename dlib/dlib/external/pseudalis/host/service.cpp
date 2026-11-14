@@ -366,6 +366,11 @@ namespace pseudalis
         counts_at_ = std::chrono::steady_clock::time_point();
     }
 
+    json service::drive_status()
+    {
+        return drive_ ? drive_->status() : json::object();
+    }
+
     json service::status()
     {
         json j = json::object();

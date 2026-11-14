@@ -159,6 +159,12 @@ PY
     for _ in $(seq 1 "$n"); do "$@" && return 0; sleep 1; done
     return 1
   }
+  # Attendre que le lecteur ait vu le dernier changement et l'ait traité : deux parcours de plus que maintenant,
+  # puis le repos.  Pour les étapes qui vérifient qu'il ne se passe rien, à la place d'une attente fixe.
+  drive_state() { api "$URL/v1/drive" | python3 -c 'import json, sys
+d = json.load(sys.stdin); print(d.get("scans", 0), 1 if d.get("idle") else 0)'; }
+  settled() { set -- "$1" $(drive_state); [ "${2:-0}" -ge $(( $1 + 2 )) ] && [ "$3" = 1 ]; }
+  settle() { wait_for 60 settled "$(drive_state | cut -d' ' -f1)"; }
   printf 'Bonjour,\nJe suis Jean Dupont, joignable au 06 12 34 56 78.\n' > "$WORK/lettre.txt"
   printf 'Note de Marie Curie, 12 rue des Lilas, 75005 Paris.\n' > "$WORK/note.txt"
   cp "$WORK/lettre.txt" "$DRIVE/Lettre jean.dupont@exemple.fr.txt"
@@ -197,15 +203,18 @@ PY
     [ -f "$DRIVE/grosse.zip" ] && [ -n "$(bare)" ] && ! cmp -s "$WORK/grosse.zip" "$DRIVE/grosse.zip" &&
       ! cmp -s "$WORK/grosse.zip" "$(bare)"
   }
-  wait_for 90 archive_done
+  # En mode économie d'énergie, protéger cette archive de 420 Ko prend plus de deux minutes ; renommée avant,
+  # l'archive d'origine serait refusée.
+  ARCHIVE_DONE=yes
+  wait_for 300 archive_done || ARCHIVE_DONE="no, still unprotected after 300 s"
   BIG=$(stat -f %z "$DRIVE/grosse.zip" 2>/dev/null || echo 0)
   mv "$DRIVE/grosse.zip" "$DRIVE/grosse.zip.bak"
-  sleep 8
-  if [ -f "$DRIVE/grosse.zip.bak" ] && [ ! -e "$HOME_DIR/refused/files/grosse.zip.bak" ] &&
+  settle
+  if [ "$ARCHIVE_DONE" = yes ] && [ -f "$DRIVE/grosse.zip.bak" ] && [ ! -e "$HOME_DIR/refused/files/grosse.zip.bak" ] &&
      [ "$BIG" -gt 65536 ] && [ -n "$(bare)" ] && ! cmp -s "$WORK/grosse.zip" "$(bare)"; then
     record "drive signatures" PASS "a protected archive renamed stays, an archive without extension is taken"
   else
-    record "drive signatures" FAIL "size $BIG, $(find "$DRIVE" "$HOME_DIR/refused" -name '*grosse*' -o -name '*sans*' |
+    record "drive signatures" FAIL "archive protected: $ARCHIVE_DONE; size $BIG, $(find "$DRIVE" "$HOME_DIR/refused" -name '*grosse*' -o -name '*sans*' |
       tr '\n' ' ')"
   fi
   ANON=$(find "$DRIVE" -maxdepth 1 -type f -name 'Lettre*' | head -1)
@@ -315,7 +324,7 @@ PY
   # L'archive oubliée revient sur le lecteur : elle reste telle quelle, sans nouvel original.
   COUNT=$(total)
   cp "$WORK/envoi.anon.zip" "$DRIVE/revenu.zip"
-  sleep 8
+  settle
   if cmp -s "$WORK/envoi.anon.zip" "$DRIVE/revenu.zip" && [ "$(total)" = "$COUNT" ]; then
     record "forgotten comes back" PASS "kept as it is, no new original"
   else record "forgotten comes back" FAIL "$(ls "$DRIVE" | tr '\n' ' '), records $COUNT then $(total)"
@@ -329,9 +338,9 @@ PY
   COUNT=$(total)
   cp "$DRIVE/copies.txt" "$DRIVE/copies (2).txt"
   # La copie se pose, puis sa fiche est celle du fichier : pas de nouvel original.
-  sleep 6
+  settle
   rm -f "$DRIVE/copies.txt"
-  sleep 4
+  settle
   KEPT=$(record_of "" "$COPIES_ID" | cut -d'|' -f2)
   rm -f "$DRIVE/copies (2).txt"
   copies_gone() { [ "$(record_of "" "$COPIES_ID" | cut -d'|' -f2)" != "-" ]; }

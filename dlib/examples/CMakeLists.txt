@@ -132,8 +132,13 @@ macro(add_example name)
    if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.13.0" AND NOT MSVC) 
    # And strip symbols to make your binary smaller if you like.  Certainly not
    # required though.  -s is a GCC/Clang linker flag; on MSVC it becomes /s and
-   # triggers LNK4044, so restrict it to non-MSVC toolchains.
-       target_link_options(${name} PRIVATE $<$<CONFIG:RELEASE>:-s>)
+   # triggers LNK4044, so restrict it to non-MSVC toolchains.  Apple's linker
+   # declares -s obsolete: -x (no local symbols) is its equivalent there.
+       if (APPLE)
+          target_link_options(${name} PRIVATE $<$<CONFIG:RELEASE>:LINKER:-x>)
+       else()
+          target_link_options(${name} PRIVATE $<$<CONFIG:RELEASE>:-s>)
+       endif()
    endif()
 
    if (MSVC)

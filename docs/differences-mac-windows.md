@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version d'Albireo](../dlib/dlib/external/albireo/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.22.0, 14 novembre 2026.
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.22.1, 14 novembre 2026.
 
 ## 1. Vitesse du moteur
 
@@ -60,6 +60,8 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Jeton d'administration, contrôle `Host` et `Origin` | Présents | Retirés | Usage personnel sur un seul Mac, choix de l'humain ; risque écrit dans les notes de version (une page piégée pourrait piloter le service) | v. 2.0.0 |
 | Accès depuis le réseau de la maison | — | Port 8444 en http, mot de passe facultatif | Ouvrir Albireo depuis le téléphone ou l'iPad | v. 2.0.0 |
 | Installateur, icône de la barre des tâches, service Windows, mises à jour signées | Présents | Retirés | Propres à Windows | v. 2.0.0, 4.0.0 |
+| Arrêt par SIGINT d'un service lancé en arrière-plan | Le signal est perdu sur macOS (ignoré par le shell, `sigwait` ne le voit pas) ; sans objet sous Windows | Comportement par défaut rétabli avant d'attendre les signaux | Arrêter le service par Ctrl-C ou `kill -INT` depuis un script | notes n° 4, v. 4.22.1 |
+| Défauts de l'original corrigés (banc d'essai, test du lecteur de Pseudalis, avertissements) | Présents | Corrigés : `bench_runtime` borné à son prompt, état `scans`/`idle` du lecteur attendu par le test, 0 avertissement | Le fork est détaché : il corrige ses propres fichiers, dlib compris | notes n° 1, 2 et 5, v. 4.22.1 |
 | Fichiers créés par l'agent | Une extension exécutable par Windows (`.exe`, `.bat`…) reçoit `.txt` en plus | Aussi celles que macOS exécute ou ouvre comme un programme (`.command`, `.app`, `.pkg`, `.sh`, `.scpt`, `.webloc`…) | La page s'ouvre sur le Mac et depuis les autres appareils de la maison | v. 4.11.1 |
 
 ## 4. Interface et usage
@@ -76,7 +78,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 
 ## Ce qui reste comme dans l'original
 
-- La bibliothèque dlib, générique : elle n'est pas nettoyée (son tokenizer gagne seulement la sorte de Gemma 4).
+- La bibliothèque dlib, générique : elle n'est pas nettoyée. Le fork y corrige ce que le portage révèle (avertissements, depuis le 2026-11-14) et son tokenizer gagne la sorte de Gemma 4.
 - La génération pour les formats de poids autres que Q4_K et Q6_K (Q8_0, Q5_K…), en code portable sur le processeur (le GPU les lit pour Qwen 3.5 et les mélanges d'experts).
 - Les autres architectures de modèles (Gemma 4 à mélange d'experts, DeepSeek, Qwen 4… : chantier B du fork).
 

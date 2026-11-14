@@ -504,7 +504,7 @@ namespace pseudalis
 
         // Le lecteur, ses événements, Albireo.
         srv.Get("/v1/drive", [s](const httplib::Request&, httplib::Response& res) {
-            send_json(res, 200, s->status()["drive"]);
+            send_json(res, 200, s->drive_status());
         });
         srv.Get("/v1/events", [s, admin](const httplib::Request& req, httplib::Response& res) {
             if (!admin(req, res)) return;

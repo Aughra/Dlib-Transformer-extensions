@@ -16,7 +16,7 @@
 
 Ce dépôt est un **fork** de [`Cydral/Dlib-Transformer-extensions`](https://github.com/Cydral/Dlib-Transformer-extensions) : dlib, des extensions Transformer (modèles de langage, GGUF, LoRA, distillation, vision) et deux applications Windows 11 construites dessus, **Albireo** (moteur GGUF et service de chat) et **Pseudalis** (anonymisation de documents).
 
-**But du fork : faire tourner le projet sur Mac Apple Silicon (arm64), et seulement là.** Machine actuelle : Mac M2 (8 cœurs, 24 Go). Machine prévue : Mac mini M5 Pro, 64 Go. **Du pur Apple** (décision de l'humain, 2026-11-11) : dans Albireo et Pseudalis, le code propre à Windows, à Linux, aux processeurs x86 (AVX2, VNNI), à CUDA et à OpenVINO est retiré, ainsi que `dist/` (installateurs et flux signés Windows de l'original). La bibliothèque dlib reste telle quelle : elle est générique, et la nettoyer n'apporterait rien. Le code neuf n'écrit que pour macOS sur Apple Silicon.
+**But du fork : faire tourner le projet sur Mac Apple Silicon (arm64), et seulement là.** Machine actuelle : Mac M2 (8 cœurs, 24 Go). Machine prévue : Mac mini M5 Pro, 64 Go. **Du pur Apple** (décision de l'humain, 2026-11-11) : dans Albireo et Pseudalis, le code propre à Windows, à Linux, aux processeurs x86 (AVX2, VNNI), à CUDA et à OpenVINO est retiré, ainsi que `dist/` (installateurs et flux signés Windows de l'original). **dlib peut être modifié aussi** (décision de l'humain, 2026-11-14 : le fork est détaché) : on y corrige ce que le portage révèle (bugs, avertissements) ; on n'y fait pas de grand ménage sans raison, puisqu'elle reste générique. **Chaque changement de dlib laisse une trace**, dans la même sous-étape (demande de l'humain, 2026-11-14) : une ligne au registre « Ce que le fork change dans dlib » des notes pour l'auteur, et une mention dans l'épisode du blog de l'étape (voir ces deux sections). Le code neuf n'écrit que pour macOS sur Apple Silicon.
 
 Les solutions propres au Mac sont la règle (instructions NEON, `__fp16`, Accelerate, Metal, Objective-C++, un standard C++ plus récent).
 
@@ -126,11 +126,12 @@ Les documents de l'original (`Readme.md`, `examples/Readme.md`, les README d'Alb
   - la correction du fork, avec son commit, ou une suggestion marquée **non testée** ;
   - ce qui est vérifié et ce qui ne l'est pas ;
   - une ligne **« Mac ou Windows »** : « aussi sous Windows » quand le défaut est dans du code ou un service communs (l'humain en fait alors une PR vers l'original), « propre au Mac » (ou à Linux) quand il tient au système. Faute de machine Windows, dire que c'est déduit du code, non vérifié. Reporter le classement dans la colonne « Mac ou Windows » du résumé.
-  - pour une entrée « aussi sous Windows » qui se corrige dans le code : le **nom du fichier**, l'**extrait du code avant** (avec ses numéros de ligne dans `upstream/main`) et le **code après la correction**, essayé sur le Mac dans une copie hors du dépôt quand c'est possible (le fork ne modifie pas le fichier de l'original pour cela), et marqué non testé sous Windows.
+  - pour une entrée « aussi sous Windows » qui se corrige dans le code : le **nom du fichier**, l'**extrait du code avant** (avec ses numéros de ligne dans `upstream/main`) et le **code après la correction**, **corrigé dans le fork** dans la même sous-étape (le fork est détaché : plus de copie hors du dépôt), avec le commit, et marqué non testé sous Windows.
 - **Chaque gain de vitesse** y est consigné dans la partie « Vitesse » : les temps d'avant, le changement (quoi, exactitude, commit) et les temps d'après, en mesures alternées selon la règle de mesure. Mettre aussi à jour le tableau « Bilan ».
 - Quand l'original corrige un point après une fusion, le marquer comme corrigé, avec le commit de l'original, plutôt que de l'effacer.
 - Ni secret, ni chemin privé (`/Users/...`), ni adresse e-mail.
-- Critère vérifiable : chaque correction du fork qui touche un fichier de l'original, et chaque noyau ou optimisation du fork, a son entrée dans ce document.
+- **Registre de dlib** : chaque changement du fork dans dlib (`dlib/dlib` hors `external/albireo` et `external/pseudalis`, et `dlib/examples`) a sa ligne dans la partie « Ce que le fork change dans dlib » : fichier, quoi, pourquoi, commit, vérification, « Mac ou Windows ». `git diff --stat 184ea00 -- dlib/dlib ':!dlib/dlib/external/albireo' ':!dlib/dlib/external/pseudalis' dlib/examples` liste ce qui doit y figurer.
+- Critère vérifiable : chaque correction du fork qui touche un fichier de l'original, et chaque noyau ou optimisation du fork, a son entrée dans ce document ; chaque fichier de dlib que liste la commande ci-dessus a sa ligne au registre.
 
 ### Le tableau des différences avec Windows
 
@@ -158,6 +159,7 @@ Le blog raconte le portage **épisode par épisode**, comme un billet de carnet,
 - **Exactitude** : chaque chiffre vient du journal, des commits ou d'une sortie réelle ; un extrait de code, de log ou de commande est copié, jamais inventé. Distinguer ce qui est vérifié de ce qui ne l'est pas (« compilé, pas encore lancé »).
 - **Tableaux** pour comparer (applications, options, relevés de build), listes à puces pour énumérer des causes ou des choix.
 - **Aucun secret ni donnée privée** : pas d'adresse e-mail, de chemin privé (`/Users/...`), de clé ni de jeton. Les noms des comptes GitHub du fork peuvent apparaître, comme dans l'épisode 1.
+- **Changements de dlib** : l'épisode d'une étape qui modifie dlib le dit (ce qui change, pourquoi), avec la liste des fichiers dans sa section « Pour les curieux ».
 - Critère vérifiable : chaque `blog/NN-*.md` figure au sommaire, commence par le titre « Dlib Transformer Extensions sur macOS, épisode N » suivi de sa ligne « Repère de vitesse », et ne contient ni adresse e-mail ni chemin `/Users/`.
 
 ### Version et notes de version d'Albireo

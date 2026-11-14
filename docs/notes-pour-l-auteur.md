@@ -27,14 +27,15 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 
 | N° | Nature | Où | En une ligne | Mac ou Windows |
 |---|---|---|---|---|
-| 1 | Bug, toutes plateformes | `albireo/tests/bench_runtime.cpp:92` | Un prompt de moins de 64 tokens fait lire le banc d'essai au-delà de son tableau. | **Aussi sous Windows** |
-| 2 | Test fragile | `pseudalis/tools/test_linux.sh:202, 315, 328, 330` | Deux étapes attendent un temps fixe au lieu d'attendre le résultat, et échouent sur une machine lente. | Linux et Mac (script non lancé sous Windows) |
+| 1 | Bug, toutes plateformes | `albireo/tests/bench_runtime.cpp:92` | Un prompt de moins de 64 tokens fait lire le banc d'essai au-delà de son tableau (corrigé dans le fork, Albireo 4.22.1). | **Aussi sous Windows** |
+| 2 | Test fragile | `pseudalis/tools/test_linux.sh:202, 315, 328, 330` | Deux étapes attendent un temps fixe au lieu d'attendre le résultat, et échouent sur une machine lente (corrigé dans le fork). | Linux et Mac (script non lancé sous Windows) |
 | 3 | Réglage du serveur | espace de publication d'Albireo | Le catalogue et chaque téléchargement reçoivent « This link is password protected. » et retombent sur leurs adresses officielles. | **Aussi sous Windows** (côté serveur) |
-| 4 | Robustesse | `albireo/host/main.cpp:315`, `pseudalis/host/main.cpp:307` | En `--console`, un service lancé en arrière-plan par un script ne s'arrête pas par SIGINT sur macOS. | Propre au Mac |
-| 5 | Avertissements | exemples de dlib, Pseudalis | Cinq avertissements du compilateur et un de l'éditeur de liens avec Apple clang. | Code commun, avertissements propres à clang ; voir l'entrée |
+| 4 | Robustesse | `albireo/host/main.cpp:315`, `pseudalis/host/main.cpp:307` | En `--console`, un service lancé en arrière-plan par un script ne s'arrête pas par SIGINT sur macOS (corrigé dans le fork, Albireo 4.22.1). | Propre au Mac |
+| 5 | Avertissements | exemples de dlib, Pseudalis | Cinq avertissements du compilateur et un de l'éditeur de liens avec Apple clang (corrigés dans le fork). | Code commun, avertissements propres à clang ; voir l'entrée |
 | 6 à 15 | Portabilité macOS | CMake, `platform.cpp`, `system_info.cpp`, `picopltf.h`, `drive_folders.cpp`, scripts de test | Erreurs de compilation, et chemins propres à Linux (`/proc`, `/sys`, `endian.h`, `st_mtim`, options x86). | Propre au Mac |
 | 16 à 20 | Remarques | noyaux, pool de fils, mode économie d'énergie, seuil des produits en flottants, nombre de fils sur un processeur hybride | Pas de défaut, mais bon à savoir. | Voir chaque remarque |
 | 21 | Remarque, sécurité | `albireo/common/platform.cpp:622, 663, 735`, `pseudalis/common/platform.cpp:622, 636, 700` | Hors de Windows, les trois contrôles de dossiers répondent toujours « oui ». | **Propre à Linux** (et au Mac) ; Windows non concerné |
+| Registre | dlib | `dlib/dlib`, `dlib/examples` | Tout ce que le fork change dans dlib, fichier par fichier (partie 5). | Voir chaque ligne |
 | 22 | Remarque, exactitude | `albireo/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant (corrigé dans le fork). | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
 
 ---
@@ -104,8 +105,18 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
   ```
 
 - **Vérifié sur le Mac** (copie corrigée hors du dépôt, mêmes options que le build, plus `-Wall -Wextra`) : compile sans avertissement ; AddressSanitizer ne signale plus rien avec un prompt de 32 tokens ; `bench_runtime modele.gguf 8 <prompt> 4 2` va au bout avec 1, 32 et 64 tokens et affiche la ligne « batched generation ». À 64 tokens et plus, le comportement est celui d'avant (`head` vaut 64). **Non testé sous Windows.**
-- **Non couvert par cette correction** : un prompt de 0 token (`prompt - 1` vaut alors -1 à la ligne 64) et `steps` à 0 (division par zéro aux lignes 81 et 110, qui affiche un temps infini ou NaN). On peut les refuser dans le message d'usage.
-- **Ce que le fork a fait** : rien dans son code (pour ne pas créer de conflit avec l'original). On donne toujours au moins 64 tokens. La correction ci-dessus est prête pour une demande de fusion.
+- **Deux cas que ce bloc ne couvre pas, refusés aussi dans le fork (bloc suivant)** : un prompt de 0 token (`prompt - 1` vaut alors -1 à la ligne 64 de `upstream/main`) et `steps` à 0 (division par zéro aux lignes 81 et 110, qui affiche un temps infini ou NaN). La correction complète, prête pour une demande de fusion, est donc ce bloc **plus** le refus qui suit, placé juste après la lecture des arguments.
+- **Corrigé dans le fork** (Albireo 4.22.1, 2026-11-14) : la correction ci-dessus, plus le refus d'un prompt de 0 token, de `steps` à 0 et d'un `parallel` négatif, avant tout chargement :
+
+  ```cpp
+      if (prompt < 1 || steps < 1 || parallel < 0)
+      {
+          std::printf("bench_runtime: prompt_tokens and steps must be at least 1, parallel at least 0\n");
+          return 2;
+      }
+  ```
+
+  Vérifié sur le Mac avec le fichier du fork (Qwen3.5-0.8B Q8_0, 8 threads) : `bench_runtime modele 8 1 4 2`, `8 32 4 2` et `8 64 2 2` vont au bout et affichent « batched generation » ; `8 0 2 2` et `8 4 0 2` répondent par le message ci-dessus (code 2). AddressSanitizer n'a pas été relancé sur ce fichier (il l'avait été sur la copie corrigée). Le fork était jusque-là resté sans correction pour ne pas créer de conflit avec l'original ; il ne le fusionne plus depuis le 2026-11-11.
 
 ### 2. Deux étapes du test de Pseudalis attendent un temps fixe
 
@@ -114,7 +125,18 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
   - lignes 315 (`sleep 8`), 328 (`sleep 6`) et 330 (`sleep 4`), avant « copies on the drive ».
 - **Ce qui se passe** : toutes les autres étapes du lecteur attendent leur résultat avec `wait_for <secondes> <vérification>`, en réessayant chaque seconde. Ces deux-là dorment un temps fixe, puis ne vérifient qu'une fois. Sur une machine lente, le lecteur n'a pas fini au moment de la vérification, et l'étape échoue alors que le service fonctionne.
 - **Constaté sur le Mac** : un premier passage a donné 26 étapes sur 28, avec « drive signatures » et « copies on the drive » en échec. Il a très probablement tourné avec le mode économie d'énergie de macOS actif (voir la remarque 18), qui rend la machine environ dix fois plus lente. Ce n'est pas vérifié pour ce passage précis, mais le mode était actif lors des mesures faites juste après. Mode coupé : 28 sur 28, avec et sans les modifications du fork.
-- **Correction suggérée** (non testée) : remplacer chaque `sleep` fixe par un `wait_for` sur la condition que l'étape vérifie ensuite, comme le font les autres étapes du lecteur.
+- **Correction suggérée au départ** (non testée) : remplacer chaque `sleep` fixe par un `wait_for` sur la condition que l'étape vérifie ensuite. **Elle ne suffit pas**, et c'est une erreur de ces notes : ces étapes vérifient qu'il ne se passe *rien* (l'archive renommée reste en place, l'archive oubliée revient telle quelle, une copie ne crée pas de nouvel original). Attendre que « rien ne se passe » réussit dès le premier essai, avant même que le lecteur ait vu le fichier. Il faut un signe que le lecteur a fini son travail.
+- **Corrigé dans le fork** (2026-11-14) : le lecteur compte ses parcours et dit s'il est au repos. Dans `pseudalis/host/drive_folders.cpp`, `drive_host::status()` donne deux champs de plus, `scans` (parcours finis, comptés dans `scanner_loop`) et `idle` (rien en changement, en attente, dans la file ni en cours de traitement : `pending`, `seen_folders`, `busy` et `queue` vides). `GET /v1/drive` les lit à l'instant (`service::drive_status()`), sans la mise en cache de deux secondes de `status()`. Le script remplace les quatre `sleep` par `settle`, qui attend deux parcours de plus qu'au moment de l'appel, puis le repos (60 s au plus) :
+
+  ```sh
+  drive_state() { api "$URL/v1/drive" | python3 -c 'import json, sys
+  d = json.load(sys.stdin); print(d.get("scans", 0), 1 if d.get("idle") else 0)'; }
+  settled() { set -- "$1" $(drive_state); [ "${2:-0}" -ge $(( $1 + 2 )) ] && [ "$3" = 1 ]; }
+  settle() { wait_for 60 settled "$(drive_state | cut -d' ' -f1)"; }
+  ```
+
+  Deux parcours, parce que celui qui est en cours au moment de l'appel a pu lister le dossier avant le changement ; le suivant le voit forcément, et le fichier vu reste « en attente » jusqu'à son traitement, donc `idle` ne peut pas être vrai trop tôt. Le script du fork est `pseudalis/tools/test_macos.sh` (le `test_linux.sh` de l'original, adapté au Mac).
+- **Un second délai trop court, trouvé grâce à cette correction** : avant de renommer l'archive, l'étape « drive signatures » attend sa protection par `wait_for 90 archive_done` (ligne 199 de `test_linux.sh` au commit `184ea00`), sans vérifier que l'attente a réussi. Sur le Mac en mode économie d'énergie, la protection de cette archive de 421 595 octets a pris plus de deux minutes : le test a renommé l'archive d'origine, que le lecteur a refusée (`refused/files/grosse.zip.bak`, identique à l'original), puis le lecteur a écrit l'archive protégée sous son ancien nom. L'ancien `sleep 8` masquait ce défaut, puisqu'il vérifiait avant le passage du lecteur. Le fork porte l'attente à 300 s (elle s'arrête dès que l'archive est prête) et fait échouer l'étape avec la raison quand elle expire. Vérifié : `test_macos.sh` de Pseudalis passe **34 sur 34** sur le Mac en mode économie d'énergie (le premier passage, avec 90 s, avait donné 33 sur 34).
 - **Mac ou Windows** : Linux et Mac. Le script ne tourne pas sous Windows, et Pseudalis n'a pas de script de test pour Windows. Sur une machine Linux lente ou chargée, l'échec devrait se reproduire, d'après le code (non vérifié).
 
 ### 3. L'espace de publication d'Albireo répond « protégé par mot de passe »
@@ -140,7 +162,16 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
   - macOS jette un signal ignoré, même bloqué : `sigwait` ne le voit jamais, et `kill -INT` reste sans effet.
 - **Reproduire** (macOS) : `bash -c 'albireo-service --console &'`, puis `kill -INT <pid>`. Le service continue de tourner. Un `sample` du processus montre son fil de signaux toujours dans `__sigwait`. `kill -TERM` l'arrête en une seconde environ, et Ctrl-C dans un terminal marche.
 - **Correction suggérée** (non testée) : avant `pthread_sigmask`, remettre les trois signaux à leur comportement par défaut, par exemple `signal(SIGINT, SIG_DFL); signal(SIGTERM, SIG_DFL); signal(SIGHUP, SIG_DFL);`. Ainsi, `sigwait` les reçoit quel que soit le réglage hérité du parent.
-- **Ce que le fork a fait** : rien dans le code. On arrête les services par SIGTERM.
+- **Corrigé dans le fork** (Albireo 4.22.1, 2026-11-14), dans `run_console` d'Albireo et de Pseudalis : après `pthread_sigmask`, les trois signaux reprennent leur comportement par défaut. Ils sont déjà bloqués à ce moment : ce comportement n'est donc jamais exécuté, les signaux attendent `sigwait`, et un Ctrl-C qui arrive entre les deux appels n'arrête pas le programme brutalement.
+
+  ```cpp
+          pthread_sigmask(SIG_BLOCK, &set, nullptr);
+          signal(SIGINT, SIG_DFL);
+          signal(SIGTERM, SIG_DFL);
+          signal(SIGHUP, SIG_DFL);
+  ```
+
+  Vérifié sur le Mac : `bash -c 'albireo-service --console &'` (dossier de données neuf, port 18475), puis `kill -INT` : le service écrit `service stopped` et s'arrête en une seconde. Le même shell lance bien ses tâches avec SIGINT ignoré (un `sleep 30` lancé ainsi survit à `kill -INT`). Pseudalis : même code, vérifié de la même façon (port 18477) : `service: stopped`, arrêt en une seconde.
 - **Mac ou Windows** : propre au Mac. Sous Linux, `sigwait` reçoit le signal. Sous Windows, ce code n'est pas compilé : `run_console` y a sa propre version (la branche `#else` commence à la ligne 306 d'Albireo).
 
 ### 5. Avertissements avec Apple clang
@@ -159,6 +190,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
   - `whitespace_count` et `total_temp_score` : code commun à toutes les plateformes ; clang et GCC donnent cet avertissement (`-Wall`), MSVC probablement pas (non vérifié). Correction suggérée (non testée) : supprimer la variable et la ligne qui la modifie (`language_model_data.h` lignes 185 et 195, `scan_image_pyramid.h` lignes 873 et 940), ou s'en servir si un usage était prévu ;
   - `handle_` : hors Windows seulement, puisque sous Windows le moteur est une DLL et `handle_` sert ;
   - `ld -s` : propre au Mac.
+- **Corrigé dans le fork** (2026-11-14) : accolades retirées (`tokenizer.decode(ref_subset[i], false)`, qui existe pour un seul token, et `get_dataset_as_pairs(dataset_id::BLACK_HOLE_QA_PARTA)`, qui existe pour un seul jeu et donne le même résultat) ; `whitespace_count` et `total_temp_score` supprimées avec la ligne qui les modifiait ; `-s` remplacé sur macOS par `LINKER:-x` dans `dlib/examples/CMakeLists.txt` (`-s` gardé ailleurs) ; `handle_` avait déjà disparu avec le code Windows de Pseudalis. Vérifié : Albireo, Pseudalis et les 25 exemples compilent avec **0 avertissement** (`slm_transformer_configs_ex.cpp` et `slm_cygnus_instruct_ex.cpp` recompilés, `-Xlinker -x` dans les options de liaison des 25 exemples). Le comportement ne change pas (variables jamais lues, mêmes fonctions appelées).
 
 ---
 
@@ -724,6 +756,20 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | Gemma 3 4B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 16,3 à 17,2 tokens/s ; lecture de 512 tokens 88 à 92 tokens/s (changement 18) ; le 1B : 25,0 à 28,2 et 396 à 436 |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
+
+## 5. Ce que le fork change dans dlib
+
+Le fork modifie aussi dlib depuis le 2026-11-14, quand le portage le demande. Chaque changement y est noté ici, pour que vous puissiez reprendre ceux qui vous servent. Base : `184ea00`. La liste complète s'obtient par `git diff --stat 184ea00 -- dlib/dlib ':!dlib/dlib/external/albireo' ':!dlib/dlib/external/pseudalis' dlib/examples`.
+
+| Fichier | Quoi | Pourquoi | Commit du fork | Vérifié | Mac ou Windows |
+|---|---|---|---|---|---|
+| `dlib/dlib/CMakeLists.txt` (`dlib_httplib`) | `if (APPLE)` : liaison à `-framework CoreFoundation` et `-framework Security` | cpp-httplib lit les certificats du Trousseau de macOS ; sans eux, `Undefined symbols: _CFRelease…` (n° 9) | [451c3fe](https://github.com/Aughra/Dlib-Transformer-extensions/commit/451c3fe) | Albireo et Pseudalis se lient et servent en https | Propre au Mac |
+| `dlib/dlib/external/svox_pico/` | Retiré (76 fichiers) | Le fork a retiré la lecture à voix haute d'Albireo (3.0.0), seul utilisateur de cette bibliothèque | [81cd18b](https://github.com/Aughra/Dlib-Transformer-extensions/commit/81cd18b) | Albireo compile et passe ses tests sans elle | Choix du fork, rien à reprendre |
+| `dlib/dlib/tokenizer/hf_tokenizer.h`, `hf_tokenizer_abstract.h` | Troisième sorte de tokenizer, `kind::spm_bpe` (Gemma 4) | `tokenizer.ggml.model = "gemma4"` était lu comme du SentencePiece (détail au changement de Gemma 4, partie 4) | [b9e78c5](https://github.com/Aughra/Dlib-Transformer-extensions/commit/b9e78c5) | 22 textes identiques à `llama-tokenize` ; `dtest --test_tokenizer` 516 vérifications | Aussi sous Windows (code commun, non essayé) |
+| `dlib/dlib/data_io/language_model_data.h` (`is_text_content`) | `whitespace_count` supprimée, avec son incrément | Variable jamais lue (`-Wunused-but-set-variable`, n° 5) | Albireo 4.22.1 | 0 avertissement ; comportement inchangé | Aussi sous Windows (clang et GCC) |
+| `dlib/dlib/image_processing/scan_image_pyramid.h` | `total_temp_score` supprimée, avec son `+=` | Variable jamais lue (n° 5) | Albireo 4.22.1 | 0 avertissement ; comportement inchangé | Aussi sous Windows (clang et GCC) |
+| `dlib/examples/slm_transformer_configs_ex.cpp`, `slm_cygnus_instruct_ex.cpp` | Accolades retirées autour d'un seul token et d'un seul jeu de données | `-Wbraced-scalar-init` (n° 5) ; les surcharges appelées donnent le même résultat | Albireo 4.22.1 | Recompilés sans avertissement ; non exécutés | Aussi sous Windows avec clang-cl |
+| `dlib/examples/CMakeLists.txt` | `LINKER:-x` à la place de `-s` sur macOS | `ld: warning: -s is obsolete` (n° 5) | Albireo 4.22.1 | `-Xlinker -x` dans les 25 exemples, 0 avertissement | Propre au Mac |
 
 ---
 

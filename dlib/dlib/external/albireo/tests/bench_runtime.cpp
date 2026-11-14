@@ -44,6 +44,11 @@ int main(int argc, char** argv)
     const long parallel = argc > 5 ? std::atol(argv[5]) : 4;
     const kv_format format = argc > 6 && std::string(argv[6]) == "q8" ? kv_format::q8 : kv_format::f16;
     const bool metal = argc > 7 && std::string(argv[7]) == "metal";
+    if (prompt < 1 || steps < 1 || parallel < 0)
+    {
+        std::printf("bench_runtime: prompt_tokens and steps must be at least 1, parallel at least 0\n");
+        return 2;
+    }
 
     auto file = std::make_shared<model_file>(argv[1]);
     const model_config cfg = read_model_config(*file);
@@ -104,16 +109,18 @@ int main(int argc, char** argv)
     std::printf("generation: %.2f ms per token, %.1f tokens/s\n", sms, 1000.0 / sms);
     rt.release_sequence(seq);
 
-    // Plusieurs séquences qui avancent ensemble.
+    // Plusieurs séquences qui avancent ensemble, chacune après les premiers tokens du prompt (64 au plus) : un
+    // prompt plus court ne doit pas être lu au-delà de sa fin.
+    const long head = std::min<long>(64, prompt);
     std::vector<int> seqs;
     for (long p = 0; p < parallel; ++p)
     {
         const int s = rt.create_sequence();
-        rt.reserve_sequence(s, 64 + steps);
+        rt.reserve_sequence(s, head + steps);
         b.clear();
-        b.tokens.assign(tokens.begin(), tokens.begin() + 64);
-        b.segments.push_back({ s, 0, 64 });
-        b.logit_rows.push_back(63);
+        b.tokens.assign(tokens.begin(), tokens.begin() + head);
+        b.segments.push_back({ s, 0, head });
+        b.logit_rows.push_back(head - 1);
         rt.forward(b, logits);
         seqs.push_back(s);
     }

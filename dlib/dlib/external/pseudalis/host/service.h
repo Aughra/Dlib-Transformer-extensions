@@ -143,6 +143,8 @@ namespace pseudalis
         work_slots& work() { return work_; }
 
         json status();
+        // L'état du lecteur à l'instant, sans la mise en cache de status().
+        json drive_status();
         // La langue des descriptions et des messages : le réglage, sinon celle du système.
         std::string language() const;
 

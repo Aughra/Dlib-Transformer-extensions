@@ -295,6 +295,7 @@ namespace pseudalis
         mutable std::mutex m;
         std::condition_variable wake_cv;
         bool woken = false;
+        long long scans = 0;            // m tenu.  Les parcours finis, pour qui attend que le lecteur ait vu un changement.
         std::atomic<bool> stopping{false};
         std::thread scanner;
         std::vector<std::thread> workers;
@@ -958,6 +959,7 @@ namespace pseudalis
                     std::lock_guard<std::mutex> lock(m);
                     for (const job& j : ready) queue.push_back(j);
                     waiting = !drive.pending.empty() || !drive.seen_folders.empty() || !queue.empty();
+                    ++scans;
                 }
                 if (!ready.empty()) queue_cv.notify_all();
                 std::unique_lock<std::mutex> lock(m);
@@ -1073,6 +1075,10 @@ namespace pseudalis
         j["bytes"] = bytes;
         j["error"] = f.error;
         j["refused_folder"] = p.refused_root;
+        // Au repos : rien en changement, en attente, dans la file ni en cours.  Avec scans, qui attend un changement
+        // sait quand le lecteur l'a vu puis traité (deux parcours de plus, puis le repos).
+        j["scans"] = p.scans;
+        j["idle"] = f.pending.empty() && f.seen_folders.empty() && f.busy.empty() && p.queue.empty();
         return j;
     }
 }

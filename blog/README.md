@@ -42,3 +42,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 36. [Le post-it et la photocopie](36-le-post-it-et-la-photocopie.md)
 37. [Le tiroir voisin](37-le-tiroir-voisin.md)
 38. [La fenêtre du GPU](38-la-fenetre-du-gpu.md)
+39. [Les dettes payées](39-les-dettes-payees.md)

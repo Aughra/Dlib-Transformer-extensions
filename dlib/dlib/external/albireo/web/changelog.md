@@ -2,6 +2,17 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.22.1 — 14 novembre 2026
+
+### Corrections
+
+- Le service lancé en arrière-plan par un script s'arrête désormais par SIGINT (Ctrl-C ou `kill -INT`) : un shell non interactif lance ses tâches avec ce signal ignoré, et macOS ne le transmettait pas. Même correction dans Pseudalis.
+- `bench_runtime` ne lit plus au-delà de son prompt quand celui-ci compte moins de 64 tokens, et refuse un prompt vide ou zéro étape au lieu d'afficher un temps infini.
+- Pseudalis : le lecteur indique le nombre de ses parcours et s'il est au repos (`scans`, `idle` de `GET /v1/drive`, lus à l'instant) ; son test attend ce repos au lieu de délais fixes, qui échouaient sur un Mac lent.
+- Compilation sans avertissement d'Albireo, de Pseudalis et des exemples de dlib (deux variables jamais lues dans dlib, accolades superflues dans deux exemples, option `-s` de l'éditeur de liens, obsolète sur macOS, remplacée par `-x`).
+
+---
+
 ## 4.22.0 — 14 novembre 2026
 
 ### Performances
