@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-14 — Ajouter un site de lecture des documents pour le réseau de la maison
+
+- **Quoi** : `macos/site-docs/serve.py`, en Python seul, sans paquet à installer : il sert en lecture seule une liste fermée de fichiers (`docs/`, `blog/`, `logs/`, CLAUDE.md, les README, les notes de version d'Albireo) sur l'adresse du Mac sur la box, port 8650. On y trouve un sommaire avec des cartes et la liste des épisodes du blog. Les pages Markdown sont mises en forme dans le navigateur par marked et DOMPurify, pris dans `albireo/web/vendor`, et les liens relatifs sont réécrits. Les en-têtes de sécurité (CSP, `nosniff`, pas de mise en cadre) sont posés. README.
+- **Fichiers** : `macos/site-docs/{serve.py,README.md}`, `CLAUDE.md` (ligne « Site des documents »).
+- **Pourquoi** : l'humain voulait lire la documentation sur son téléphone, depuis le canapé.
+- **Étapes** : test par `curl` : le sommaire, une page, le PDF et une capture répondent 200 ; `.git/config`, `../../.ssh/id_rsa` et un fichier source répondent 404. Test par `page_test/cdp.mjs` à 390 px, en mode téléphone : sommaire (17 cartes, 38 épisodes), `differences-mac-windows.md` (4 tableaux) et l'épisode 38 s'affichent sans défilement de côté, les liens mènent aux bonnes pages, aucune erreur dans la page. Le port 8642 était déjà pris par un autre projet ; le site prend 8650. Lancé avec `nohup` (journal dans `build/site-docs.log`).
+
 ## 2026-11-14 — Faire passer Gemma 3 au GPU (Albireo 4.22.0)
 
 - **Quoi** : choix de l'humain : le M2 reste en mode économie d'énergie (« on le coupera lors des vrais tests sur le mini »), et Gemma ensuite. `metal_kernels.metal` : `attention_args.window` (à la place du bourrage), fenêtre dans `attention_part` et `attention_mtile`, noyaux `gelu_mul` et `add_rows` ; `metal_device.{h,mm}` : `kv_layout.window`, `gelu_mul`, `add_rows` ; `cpu_runtime_metal.cpp` : Gemma 3 accepté (Gemma 4 et un plafond des logits refusés), tampons `cs_swa` et `out`, normes après l'attention et après le bloc feed-forward, table et fenêtre par couche. `hub.cpp` : `gemma3` n'est plus « processeur seulement ». `service.js` : fiche GPU. `test_macos.sh` : deux étapes sur le 4B.
