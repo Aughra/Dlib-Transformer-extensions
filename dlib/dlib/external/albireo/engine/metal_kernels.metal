@@ -793,7 +793,8 @@ static inline void q8_group(float x, device char* q, device ushort* scale, uint 
 
 // L'endroit où se trouvent les clés et valeurs d'une couche dans la région du pool (kv_cache.h) : le
 // bloc b commence à b * block_stride, les clés de la tête h à k_slab + h * head_stride, les valeurs à
-// v_slab + h * head_stride, leurs échelles positions * hd octets plus loin (q8).
+// v_slab + h * head_stride, leurs échelles scales octets plus loin (q8 ; positions * hd, ou positions * 512 pour
+// les couches de 256 valeurs de Gemma 4).
 struct kv_args
 {
     uint hd;
@@ -804,6 +805,7 @@ struct kv_args
     ulong k_slab;
     ulong v_slab;
     ulong head_stride;
+    ulong scales;
 };
 
 // Les clés et valeurs des tokens d'une passe dans leurs lignes du pool : le token t à la ligne
@@ -828,7 +830,7 @@ kernel void kv_store(device const float* k [[buffer(0)]], device const float* v 
         threadgroup_barrier(mem_flags::mem_threadgroup);
         rotate_row(row_k, i, a.hd);
         rotate_row(row_v, i, a.hd);
-        const ulong scales = ulong(a.positions) * a.hd + ulong(pos) * (a.hd / 32) * 2 + sg * 2;
+        const ulong scales = a.scales + ulong(pos) * (a.hd / 32) * 2 + sg * 2;
         device uchar* kb = region + base + a.k_slab;
         device uchar* vb = region + base + a.v_slab;
         q8_group(row_k[i], (device char*)(kb + ulong(pos) * a.hd + i), (device ushort*)(kb + scales), lane);
@@ -911,6 +913,7 @@ struct attention_args
     ulong k_slab;
     ulong v_slab;
     ulong head_stride;
+    ulong scales;      // les octets entre les clés d'une tête et leurs échelles (kv_args)
 };
 
 template <uint PER>
@@ -920,7 +923,7 @@ static inline void load_row(device const uchar* slab, ulong pos, uint e0, consta
     if (a.q8)
     {
         device const char* q = (device const char*)(slab + pos * a.hd + e0);
-        const float d = float(as_type<half>(*(device const ushort*)(slab + ulong(a.positions) * a.hd
+        const float d = float(as_type<half>(*(device const ushort*)(slab + a.scales
             + pos * (a.hd / 32) * 2 + (e0 / 32) * 2)));
         for (uint e = 0; e < PER; ++e) out[e] = d * float(q[e]);
     }
@@ -1135,7 +1138,7 @@ kernel void attention_mtile(device const float* q [[buffer(0)]], device const uc
             const ulong row = ulong(p % a.positions);
             if (a.q8)
             {
-                const float d = float(as_type<half>(*(device const ushort*)(s + ulong(a.positions) * HD
+                const float d = float(as_type<half>(*(device const ushort*)(s + a.scales
                     + row * (HD / 32) * 2 + (e / 32) * 2)));
                 device const char4* qv = (device const char4*)(s + row * HD + e);
                 dst[0] = half4(d * float4(qv[0]));

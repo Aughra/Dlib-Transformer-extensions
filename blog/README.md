@@ -44,3 +44,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 38. [La fenêtre du GPU](38-la-fenetre-du-gpu.md)
 39. [Les dettes payées](39-les-dettes-payees.md)
 40. [Le panier du voisin](40-le-panier-du-voisin.md)
+41. [Les grandes têtes](41-les-grandes-tetes.md)

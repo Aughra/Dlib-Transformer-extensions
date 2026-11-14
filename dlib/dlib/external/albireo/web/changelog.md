@@ -2,6 +2,18 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.26.0 — 14 novembre 2026
+
+### Performances
+
+- Les modèles Gemma 4 dense écrivent leurs réponses sur le GPU : têtes d'attention de 256 et de 512 valeurs, couches qui partagent les clés et valeurs d'une couche antérieure, norme des valeurs, entrée propre à chaque couche, échelle de sortie et plafond des logits. Les prompts restent lus par le processeur. Sur Gemma 4 E2B, les 150 tokens écrits par le GPU après un journal de 2 622 tokens sont identiques à ceux du processeur calculant en nombres à virgule flottante. Vitesse à mesurer sur le Mac mini.
+
+### Corrections
+
+- Les noyaux GPU lisent les échelles des clés et valeurs sur 8 bits à leur place réelle quand une couche a des têtes plus étroites que celles que prévoit le cache (couches de 256 valeurs de Gemma 4 dans un cache prévu pour 512).
+
+---
+
 ## 4.25.1 — 14 novembre 2026
 
 ### Moteur

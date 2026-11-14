@@ -174,6 +174,12 @@ namespace albireo
                 uint64_t k_slab = 0;
                 uint64_t v_slab = 0;
                 uint64_t head_stride = 0;
+                /*
+                    Les octets entre le début des clés (ou des valeurs) d'une tête et leurs échelles (q8) : 0 pour
+                    positions * hd, la place d'un pool dont toutes les couches ont des têtes de hd valeurs ; Gemma 4
+                    range ses couches de 256 valeurs dans un pool de têtes de 512, leurs échelles après 512 valeurs.
+                */
+                uint64_t scales = 0;
             };
 
             // Les clés et valeurs de tokens tokens (kv_stride floats par token) dans la ligne rows[t] du

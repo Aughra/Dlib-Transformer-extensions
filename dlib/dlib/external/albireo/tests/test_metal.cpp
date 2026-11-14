@@ -340,14 +340,17 @@ namespace
         processeur écrit les L - T premières, le GPU les T dernières ; puis l'attention des T tokens,
         chacun sur les positions jusqu'à la sienne, comparée à une somme en double précision sur les
         clés et valeurs telles que le pool les contient.  Des têtes de 128 valeurs, 4 têtes de requête par tête
-        de clés, et de 512 valeurs, 8 têtes de requête par tête de clés (Gemma 4).
+        de clés, et de 512 valeurs, 8 têtes de requête par tête de clés (Gemma 4) ; et des têtes de 256 valeurs
+        dans un pool de têtes de 512 (pool_hd), comme les couches à fenêtre de Gemma 4, leurs échelles après 512
+        valeurs.
     */
-    void test_attention(metal_device& gpu, kv_format format, long hd = 128, unsigned rep = 4)
+    void test_attention(metal_device& gpu, kv_format format, long hd = 128, unsigned rep = 4, long pool_hd = 0)
     {
+        if (pool_hd == 0) pool_hd = hd;
         const bool q8 = format == kv_format::q8;
         const long layers = 2, heads = 2, B = 16, L = 300, layer = 1;
         const unsigned T = 3, H = heads * static_cast<unsigned>(rep);
-        kv_pool pool(layers, heads, hd, B, 64 * 1024 * 1024, format);
+        kv_pool pool(layers, heads, pool_hd, B, 64 * 1024 * 1024, format);
         std::vector<int> blocks;
         for (long p = 0; p < L; p += B) blocks.push_back(pool.allocate());
         size_t region_offset = 0;
@@ -364,6 +367,7 @@ namespace
         layout.k_slab = pool.slab_offset(false, layer, 0);
         layout.v_slab = pool.slab_offset(true, layer, 0);
         layout.head_stride = pool.slab_offset(false, layer, 1) - pool.slab_offset(false, layer, 0);
+        layout.scales = pool.scales_offset(false, layer, 0) - pool.slab_offset(false, layer, 0);
 
         std::vector<float> keys(L * heads * hd), values(L * heads * hd);
         for (auto& v : keys) v = uniform(-2.0f, 2.0f);
@@ -450,7 +454,7 @@ namespace
                 }
             }
         check(differ == 0 && scales_differ == 0, std::string("kv_store ") + (q8 ? "q8" : "f16") + ", heads of "
-            + std::to_string(hd) + ": "
+            + std::to_string(hd) + (pool_hd != hd ? " in a pool of " + std::to_string(pool_hd) : std::string()) + ": "
             + std::to_string(differ) + " of " + std::to_string(compared) + " values and " + std::to_string(scales_differ)
             + " scales apart from the processor");
 
@@ -529,6 +533,7 @@ namespace
                 }
             }
         check(worst < 1e-4, std::string("attention ") + (q8 ? "q8" : "f16") + ", heads of " + std::to_string(hd)
+            + (pool_hd != hd ? " in a pool of " + std::to_string(pool_hd) : std::string())
             + ", rep " + std::to_string(rep) + ", over " + std::to_string(L)
             + " positions in blocks of " + std::to_string(B) + ", " + std::to_string(T) + " tokens: largest error "
             + sci(worst));
@@ -575,6 +580,8 @@ int main()
     test_attention(*gpu, kv_format::f16);
     test_attention(*gpu, kv_format::q8, 512, 8);
     test_attention(*gpu, kv_format::f16, 512, 8);
+    test_attention(*gpu, kv_format::q8, 256, 8, 512);
+    test_attention(*gpu, kv_format::f16, 256, 8, 512);
     std::printf(failures ? "test_metal: %d checks failed\n" : "test_metal: all checks passed\n", failures);
     return failures;
 }

@@ -732,6 +732,14 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : propre au Mac (noyaux Metal).
 
+### Changement 22 : les étapes de Gemma 4 sur le GPU (Albireo 4.25.1 et 4.26.0)
+
+- **Changement** : noyaux des étapes à 512 valeurs par tête (`kv_store`, `prepare_queries`, `restore_outputs` sur des lignes de 512 ; `attention_part` écrit ses sorties par tranches de 128 valeurs pour garder 16 Ko de mémoire de threadgroup, instances `attention_part_{1,2,4,8}_16`) ; l'endroit des échelles 8 bits passé aux noyaux (`kv_layout::scales`), puisque le pool range les couches de 256 valeurs dans des têtes de 512, leurs échelles après 512 valeurs ; dans la passe, les dimensions de chaque couche (têtes, largeur du bloc feed-forward : 6 144 puis 12 288 pour le E2B), les couches à clés partagées (ni `attn_k` ni `attn_v`, pas de `kv_store`, emplacement de la couche source), la norme des valeurs sans poids, les entrées par couche (calculées par le processeur, rangées couche par couche, `inp_gate` et `proj` en floats par `mv_f32`, `gelu_mul`, norme, somme), l'échelle de sortie (`add_rows`), le plafond des logits (sur le processeur, après la copie). Les prompts de Gemma 4 restent sur le processeur : `attention_mtile` demanderait 64 Ko de mémoire de threadgroup en 512.
+- **Exactitude** (gemma-4-E2B-it Q4_K_M) : `test_metal` en têtes de 512 et en têtes de 256 dans un pool de 512 (écriture identique au processeur, attention à 1e-7 de la double précision) ; contrôle au chargement à 4e-5 et 9e-5 % du processeur ; journal de 2 622 tokens (fenêtre de 512) : 150 tokens écrits par le GPU identiques à ceux du processeur calculant ses produits en floats, comme le contrôle. **Remarque** : contre le processeur dans son mode habituel (activations des étapes arrondies sur 8 bits), Gemma 4 diverge dès les premiers tokens (score du token choisi 17,97 contre 17,05 à la deuxième étape, 230 tokens de prompt) ; le GPU est donc plus proche du calcul exact que le processeur sur ce modèle, sensible à l'arrondi de ses activations. La réponse finale est la même (PELICAN ; l'enregistrement 3 pris pour celui d'Inès, sur le processeur comme sur le GPU).
+- **Vitesse** : à mesurer sur le Mac mini (le M2 reste en mode économie d'énergie).
+
+**Mac ou Windows** : propre au Mac (noyaux Metal). L'endroit des échelles (`scales`) vaudrait pour tout pool dont les couches ont des têtes de largeurs différentes.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

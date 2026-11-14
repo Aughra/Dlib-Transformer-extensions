@@ -35,6 +35,8 @@ namespace albireo
         int wait = 0;
         // Les prompts d'un mélange d'experts passent au GPU (produits groupés, matmul_id) : qwen35moe seulement.
         bool moe_prompts = false;
+        // Gemma 4 : les étapes seules, ses prompts restant sur le processeur (pas d'attention de prompt en 512).
+        bool steps_only = false;
 
         // Les poids : tout le mappage du fichier, sans copie.
         metal_buffer weights;
@@ -49,18 +51,22 @@ namespace albireo
             size_t conv1d = 0, dt_bias = 0, ssm_a = 0, ssm_norm = 0;
             // La porte de l'expert partagé (qwen35moe), le biais du choix des experts (LFM2-MoE).
             size_t sh_gate_inp = 0, expert_bias = 0;
-            // Les normes après l'attention et après le bloc feed-forward (Gemma 3).
-            size_t post_attn_norm = 0, post_ffn_norm = 0;
+            // Les normes après l'attention et après le bloc feed-forward (Gemma 3 et 4), celle de l'entrée de la couche
+            // (Gemma 4).
+            size_t post_attn_norm = 0, post_ffn_norm = 0, ple_norm = 0;
         };
         std::vector<layer_vectors> layers;
         size_t output_norm = 0;
+        // Des uns, le poids de la norme des valeurs de Gemma 4, qui n'en a pas.
+        size_t ones = 0;
         // La région du pool, reprise plus grande quand un bloc se trouve au-delà.
         metal_buffer region;
         size_t region_covered = 0;
         // Les tampons de travail d'une passe, pour capacity tokens.
         metal_buffer x, xn, q, k, v, ctx, gate, up, hidden, logits, cs, blocks, rows, lengths, table, partial;
-        // Gemma 3 : les cosinus et sinus des couches à fenêtre glissante, et la sortie d'un bloc avant sa norme.
-        metal_buffer cs_swa, out;
+        // Gemma 3 et 4 : les cosinus et sinus des couches à fenêtre glissante, et la sortie d'un bloc avant sa norme ;
+        // Gemma 4 : les entrées par couche, rangées couche par couche, et leur porte.
+        metal_buffer cs_swa, out, ple, ple_g;
         // qwen35 : les canaux de la convolution, la porte de sortie, l'oubli et la force, les sorties des têtes,
         // la requête et sa porte, la porte de l'attention, les segments du lot ; l'état des séquences, pris
         // sans copie dans la zone de cpu_runtime.
@@ -149,20 +155,34 @@ namespace albireo
         auto expert_columns = [&](const weight_matrix& W) {
             return W.cols % (W.type == dlib::ggml_type::Q8_0 || W.type == dlib::ggml_type::Q5_0 ? 32 : 256) == 0;
         };
-        // Gemma 4 (fenêtre glissante, têtes de 512, clés partagées, entrées par couche) reste sur le processeur.
-        // Gemma 3 passe au GPU depuis Albireo 4.22.0 ; Gemma 4 (têtes de 512, clés partagées, entrées par couche) non.
-        if (cfg_.gemma4 && !cfg_.gemma3) why = "the layers of Gemma 4";
-        else if (cfg_.gemma3 && cfg_.final_softcap > 0.0) why = "a softcap of the logits";
+        /*
+            Gemma 3 passe au GPU depuis Albireo 4.22.0, les étapes de Gemma 4 depuis Albireo 4.26.0 (têtes de 256 et
+            de 512, clés et valeurs partagées, norme des valeurs, entrées par couche, échelle de sortie, plafond des
+            logits) ; les prompts de Gemma 4 restent sur le processeur (steps_only) : attention_mtile n'existe pas en
+            512.  Les mélanges d'experts de Gemma 4 (26B-A4B) restent sur le processeur.
+        */
+        const bool gemma4 = cfg_.gemma4 && !cfg_.gemma3;
+        auto layer_widths = [&]() {
+            for (long li = 0; li < cfg_.n_layers; ++li)
+                if (cfg_.layer_ffn(li) % 256 != 0 || cfg_.layer_q_dim(li) % 256 != 0) return false;
+            return true;
+        };
+        if (gemma4 && cfg_.is_moe()) why = "the mixtures of experts of Gemma 4";
         else if (cfg_.is_moe() && cfg_.n_experts_used > 32) why = "more than 32 experts per token";
         // qwen35 : des têtes linéaires d'au plus 256 valeurs, et un état dans la zone réservée.
         else if (cfg_.recurrent() && (cfg_.ssm_head_dim > 256 || !states_.data))
             why = "linear attention layers of this geometry";
-        else if (hd != 64 && hd != 128 && hd != 256) why = "heads of " + std::to_string(hd) + " values";
+        else if (hd != 64 && hd != 128 && hd != 256 && !(gemma4 && hd == 512)) why = "heads of " + std::to_string(hd) + " values";
+        else if (gemma4 && cfg_.head_dim_swa != 256 && cfg_.head_dim_swa != hd)
+            why = "sliding window heads of " + std::to_string(cfg_.head_dim_swa) + " values";
         else if ((rep != 1 && rep != 2 && rep != 4 && rep != 8) || cfg_.n_heads % cfg_.n_kv_heads != 0)
             why = "query heads grouped otherwise";
         else if (cfg_.attn_temp_scale != 0.0) why = "a temperature of the attention";
-        else if (cfg_.d_model % 256 != 0 || cfg_.d_ffn % 256 != 0 || cfg_.q_dim() % 256 != 0)
+        else if (cfg_.d_model % 256 != 0 || cfg_.d_ffn % 256 != 0 || cfg_.q_dim() % 256 != 0 || !layer_widths())
             why = "widths that are not multiples of 256";
+        else if (gemma4 && cfg_.d_per_layer > 0 && (cfg_.d_per_layer % 4 != 0 || layers_[0].ple_gate.type != dlib::ggml_type::F32
+            || layers_[0].ple_proj.type != dlib::ggml_type::F32))
+            why = "per-layer inputs of this form";
         else if (!formats(output_)) why = "an output matrix in " + formats_why.substr(11);
         else
             for (long li = 0; li < cfg_.n_layers && why.empty(); ++li)
@@ -171,6 +191,8 @@ namespace albireo
                 std::vector<const weight_matrix*> all;
                 if (cfg_.lfm2 && cfg_.linear_layer(li)) all = { &L.w_mix, &L.w_ssm_out };
                 else if (cfg_.linear_layer(li)) all = { &L.w_mix, &L.w_z, &L.w_alpha, &L.w_beta, &L.w_ssm_out };
+                // Une couche qui partage les clés et valeurs d'une autre (Gemma 4) n'a ni attn_k ni attn_v.
+                else if (!cfg_.owns_kv(li)) all = { &L.wq, &L.wo };
                 else all = { &L.wq, &L.wk, &L.wv, &L.wo };
                 if (cfg_.moe_layer(li))
                 {
@@ -193,6 +215,7 @@ namespace albireo
         }
         std::unique_ptr<gpu_state> g(new gpu_state);
         g->device = &device;
+        g->steps_only = gemma4;
         if (cfg_.is_moe() && cfg_.recurrent())
         {
             // Les tuiles de matmul_id : 32 lignes, 64 colonnes.
@@ -243,9 +266,11 @@ namespace albireo
             lv.expert_bias = add(L.expert_bias);
             lv.post_attn_norm = add(L.post_attn_norm);
             lv.post_ffn_norm = add(L.post_ffn_norm);
+            lv.ple_norm = add(L.ple_norm);
             g->layers.push_back(lv);
         }
         g->output_norm = add(output_norm_);
+        if (cfg_.value_norm) g->ones = add(std::vector<float>(static_cast<size_t>(cfg_.head_dim), 1.0f));
         g->vectors = need(device, all.size() * sizeof(float));
         std::memcpy(g->vectors.contents(), all.data(), all.size() * sizeof(float));
         // Les logits et les états cachés des lignes demandées, max_tokens au plus.
@@ -291,10 +316,15 @@ namespace albireo
         g.rows = need(device, T * sizeof(int));
         g.lengths = need(device, T * sizeof(int));
         g.tiles = need(device, T * 2 * sizeof(int));
-        if (cfg_.gemma3)
+        if (cfg_.gemma4)
         {
             g.cs_swa = need(device, T * std::max<long>(cfg_.rope_dims_swa, 2) * f);
             g.out = need(device, T * cfg_.d_model * f);
+            if (cfg_.d_per_layer > 0)
+            {
+                g.ple = need(device, T * cfg_.n_layers * cfg_.d_per_layer * f);
+                g.ple_g = need(device, T * cfg_.d_per_layer * f);
+            }
         }
         if (cfg_.lfm2)
         {
@@ -358,8 +388,10 @@ namespace albireo
                 if (i >= sequences_.size() || !sequences_[i] || sequences_[i]->length + s.count > gpu_prompt_context_)
                     long_pass = false;
             }
-        // Les prompts des mélanges d'experts restent sur le processeur, sauf ceux de qwen35moe (produits groupés).
+        // Les prompts des mélanges d'experts restent sur le processeur, sauf ceux de qwen35moe (produits groupés) ;
+        // ceux de Gemma 4 aussi (steps_only).
         if (cfg_.is_moe() && !(gpu_ && gpu_->moe_prompts)) long_pass = false;
+        if (gpu_ && gpu_->steps_only) long_pass = false;
         return gpu_ && gpu_->state != gpu_state::dropped && (step || long_pass)
             && batch.embedding_rows.empty() && !batch.hidden_only
             && batch.logit_rows.size() <= metal_device::max_tokens;
@@ -467,7 +499,8 @@ namespace albireo
         };
         // Le prompt : sur le GPU pour la première séquence quand les prompts y vont, sur le processeur
         // sinon.
-        const bool gpu_prompt = (!cfg_.is_moe() || gpu_->moe_prompts) && n >= gpu_prompt_min_ && n <= gpu_prompt_context_;
+        const bool gpu_prompt = (!cfg_.is_moe() || gpu_->moe_prompts) && !gpu_->steps_only && n >= gpu_prompt_min_
+            && n <= gpu_prompt_context_;
         prompt.logit_rows.assign(1, n - 1);
         prompt.segments.assign(1, { a, 0, n });
         try
@@ -545,7 +578,7 @@ namespace albireo
         gpu_state& g = *gpu_;
         metal_device& dev = *g.device;
         const long T = static_cast<long>(batch.tokens.size());
-        const long d = cfg_.d_model, qd = cfg_.q_dim(), kvd = cfg_.kv_dim(), hd = cfg_.head_dim, df = cfg_.d_ffn;
+        const long d = cfg_.d_model, qd = cfg_.q_dim(), kvd = cfg_.kv_dim(), hd = cfg_.head_dim;
         const long H = cfg_.n_heads, KVH = cfg_.n_kv_heads, rep = H / KVH, B = kv_.block_positions();
         const long half = cfg_.rope_dims / 2;
         const float eps = static_cast<float>(cfg_.rms_eps), rs = static_cast<float>(cfg_.residual_scale);
@@ -588,6 +621,17 @@ namespace albireo
         embed(batch.tokens);
         grow_gpu(static_cast<size_t>(T));
         std::memcpy(g.x.contents(), x_.data(), sizeof(float) * T * d);
+        if (cfg_.d_per_layer > 0)
+        {
+            // Les entrées par couche de Gemma 4, calculées par le processeur, rangées couche par couche pour que
+            // chaque couche lise les siennes d'un seul tenant.
+            per_layer_inputs(batch.tokens);
+            const long P = cfg_.d_per_layer, n = cfg_.n_layers * P;
+            float* dst = static_cast<float*>(g.ple.contents());
+            for (long li = 0; li < cfg_.n_layers; ++li)
+                for (long t = 0; t < T; ++t)
+                    std::memcpy(dst + (li * T + t) * P, ple_.data() + t * n + li * P, sizeof(float) * P);
+        }
 
         // Les cosinus et sinus de chaque token, le bloc et la ligne que chacun écrit, la longueur qu'il
         // voit, et les blocs de sa séquence.
@@ -612,7 +656,7 @@ namespace albireo
             const float* s = given ? given_sin_.data() + t * half : rope_sin_.data() + pos * half;
             std::memcpy(cs + t * 2 * half, c, sizeof(float) * half);
             std::memcpy(cs + t * 2 * half + half, s, sizeof(float) * half);
-            if (cfg_.gemma3)
+            if (cfg_.gemma4)
             {
                 // La table des couches à fenêtre glissante (rope_base_swa, sans mise à l'échelle).
                 const long hs = cfg_.rope_dims_swa / 2;
@@ -705,8 +749,6 @@ namespace albireo
                     ++n_tiles;
                 }
         }
-        const float scale = cfg_.attention_scale > 0.0 ? static_cast<float>(cfg_.attention_scale)
-            : 1.0f / std::sqrt(static_cast<float>(hd));
         const unsigned uT = static_cast<unsigned>(T);
         auto c = dev.begin();
         auto at = [&](const metal_buffer& b, size_t offset) { return metal_view(b, offset); };
@@ -761,8 +803,14 @@ namespace albireo
             }
             else
             {
+            // Les têtes de la couche (Gemma 4 en a de deux largeurs) ; une couche qui partage les clés et valeurs d'une
+            // autre (Gemma 4) ne calcule que ses requêtes et lit l'emplacement de sa couche source.
+            const long lhd = cfg_.layer_head_dim(li), lqd = H * lhd, lkvd = KVH * lhd;
+            const bool owns = cfg_.owns_kv(li);
+            const float lscale = cfg_.attention_scale > 0.0 ? static_cast<float>(cfg_.attention_scale)
+                : 1.0f / std::sqrt(static_cast<float>(lhd));
             metal_device::commands::kv_layout kl;
-            kl.hd = static_cast<unsigned>(hd);
+            kl.hd = static_cast<unsigned>(lhd);
             kl.heads = static_cast<unsigned>(KVH);
             kl.positions = static_cast<unsigned>(B);
             kl.q8 = q8;
@@ -770,6 +818,7 @@ namespace albireo
             kl.k_slab = kv_.slab_offset(false, slot, 0);
             kl.v_slab = kv_.slab_offset(true, slot, 0);
             kl.head_stride = kv_.slab_offset(false, slot, 1) - kv_.slab_offset(false, slot, 0);
+            kl.scales = kv_.scales_offset(false, slot, 0) - kv_.slab_offset(false, slot, 0);
             const bool swa = cfg_.swa_layer(li);
             kl.window = swa ? static_cast<unsigned>(cfg_.sliding_window) : 0;
 
@@ -782,15 +831,17 @@ namespace albireo
                 c->split_gate(g.qg, g.q, g.attn_gate, uT, static_cast<unsigned>(H), static_cast<unsigned>(hd));
                 product(L.wk, g.xn, d, g.k, kvd, 1.0f, 0.0f);
             }
-            else if (step && L.wq.type == L.wk.type && qd % 16 == 0)
-                c->matvec2(L.wq.type, at(g.weights, g.weight(L.wq)), qd, at(g.weights, g.weight(L.wk)), kvd, d, g.xn, uT, d,
-                    g.q, qd, g.k, kvd);
+            else if (!owns)
+                product(L.wq, g.xn, d, g.q, lqd, 1.0f, 0.0f);
+            else if (step && L.wq.type == L.wk.type && lqd % 16 == 0)
+                c->matvec2(L.wq.type, at(g.weights, g.weight(L.wq)), lqd, at(g.weights, g.weight(L.wk)), lkvd, d, g.xn, uT,
+                    d, g.q, lqd, g.k, lkvd);
             else
             {
-                product(L.wq, g.xn, d, g.q, qd, 1.0f, 0.0f);
-                product(L.wk, g.xn, d, g.k, kvd, 1.0f, 0.0f);
+                product(L.wq, g.xn, d, g.q, lqd, 1.0f, 0.0f);
+                product(L.wk, g.xn, d, g.k, lkvd, 1.0f, 0.0f);
             }
-            product(L.wv, g.xn, d, g.v, kvd, 1.0f, 0.0f);
+            if (owns) product(L.wv, g.xn, d, g.v, lkvd, 1.0f, 0.0f);
             if (!L.bq.empty())
             {
                 c->add_bias(g.q, at(g.vectors, lv.bq), qd, qd, uT);
@@ -799,40 +850,42 @@ namespace albireo
             }
             if (!L.q_norm.empty())
             {
-                c->rms_norm(g.q, at(g.vectors, lv.q_norm), g.q, uT * H, hd, hd, hd, eps);
-                c->rms_norm(g.k, at(g.vectors, lv.k_norm), g.k, uT * KVH, hd, hd, hd, eps);
+                c->rms_norm(g.q, at(g.vectors, lv.q_norm), g.q, uT * H, lhd, lhd, lhd, eps);
+                if (owns) c->rms_norm(g.k, at(g.vectors, lv.k_norm), g.k, uT * KVH, lhd, lhd, lhd, eps);
             }
+            // Gemma 4 normalise aussi ses valeurs, sans poids.
+            if (cfg_.value_norm && owns) c->rms_norm(g.v, at(g.vectors, g.ones), g.v, uT * KVH, lhd, lhd, lhd, eps);
             const bool neox = cfg_.rope == rope_style::neox;
             if (swa)
             {
                 const long hs = cfg_.rope_dims_swa / 2;
-                c->rope(g.q, g.cs_swa, uT, H, hd, hs, neox, qd, 2 * hs);
-                c->rope(g.k, g.cs_swa, uT, KVH, hd, hs, neox, kvd, 2 * hs);
+                c->rope(g.q, g.cs_swa, uT, H, lhd, hs, neox, lqd, 2 * hs);
+                if (owns) c->rope(g.k, g.cs_swa, uT, KVH, lhd, hs, neox, lkvd, 2 * hs);
             }
             else
             {
-                c->rope(g.q, g.cs, uT, H, hd, half, neox, qd, 2 * half);
-                c->rope(g.k, g.cs, uT, KVH, hd, half, neox, kvd, 2 * half);
+                c->rope(g.q, g.cs, uT, H, lhd, half, neox, lqd, 2 * half);
+                if (owns) c->rope(g.k, g.cs, uT, KVH, lhd, half, neox, lkvd, 2 * half);
             }
-            c->kv_store(g.k, g.v, kvd, g.region, g.blocks, g.rows, uT, kl);
-            c->prepare_queries(g.q, uT, H, hd, qd, scale, q8);
+            if (owns) c->kv_store(g.k, g.v, lkvd, g.region, g.blocks, g.rows, uT, kl);
+            c->prepare_queries(g.q, uT, H, lhd, lqd, lscale, q8);
             if (tiled)
                 c->attention_tiles(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), g.tiles, n_tiles,
-                    static_cast<unsigned>(rep), static_cast<unsigned>(qd), g.ctx, kl);
+                    static_cast<unsigned>(rep), static_cast<unsigned>(lqd), g.ctx, kl);
             else
-                c->attention(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), uT, rep, parts, qd,
+                c->attention(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), uT, rep, parts, lqd,
                     g.partial, g.ctx, kl, part_len);
-            if (q8) c->restore_outputs(g.ctx, uT, H, hd, qd);
-            if (cfg_.attn_output_gate) c->sigmoid_mul(g.ctx, g.attn_gate, static_cast<unsigned>(T * qd));
-            if (cfg_.gemma3)
+            if (q8) c->restore_outputs(g.ctx, uT, H, lhd, lqd);
+            if (cfg_.attn_output_gate) c->sigmoid_mul(g.ctx, g.attn_gate, static_cast<unsigned>(T * lqd));
+            if (cfg_.gemma4)
             {
-                // La norme après l'attention, puis la somme résiduelle.
-                product(L.wo, g.ctx, qd, g.out, d, 1.0f, 0.0f);
+                // La norme après l'attention, puis la somme résiduelle (Gemma 3 et 4).
+                product(L.wo, g.ctx, lqd, g.out, d, 1.0f, 0.0f);
                 c->rms_norm(g.out, at(g.vectors, lv.post_attn_norm), g.out, uT, d, d, d, eps);
                 c->add_rows(g.x, g.out, static_cast<unsigned>(T * d), rs);
             }
             else
-                product(L.wo, g.ctx, qd, g.x, d, rs, 1.0f);
+                product(L.wo, g.ctx, lqd, g.x, d, rs, 1.0f);
             }
 
             // Bloc feed-forward.
@@ -896,6 +949,8 @@ namespace albireo
             }
             else
             {
+                // La largeur du bloc feed-forward de la couche (Gemma 4 en a deux).
+                const long df = cfg_.layer_ffn(li);
                 if (step && L.w_gate.type == L.w_up.type && df % 16 == 0)
                     c->matvec2(L.w_gate.type, at(g.weights, g.weight(L.w_gate)), df, at(g.weights, g.weight(L.w_up)), df,
                         d, g.xn, uT, d, g.gate, df, g.up, df);
@@ -904,9 +959,9 @@ namespace albireo
                     product(L.w_gate, g.xn, d, g.gate, df, 1.0f, 0.0f);
                     product(L.w_up, g.xn, d, g.up, df, 1.0f, 0.0f);
                 }
-                if (cfg_.gemma3)
+                if (cfg_.gemma4)
                 {
-                    // GELU, puis la norme après le bloc feed-forward et la somme résiduelle.
+                    // GELU, puis la norme après le bloc feed-forward et la somme résiduelle (Gemma 3 et 4).
                     c->gelu_mul(g.gate, g.up, static_cast<unsigned>(T * df));
                     product(L.w_down, g.gate, df, g.out, d, 1.0f, 0.0f);
                     c->rms_norm(g.out, at(g.vectors, lv.post_ffn_norm), g.out, uT, d, d, d, eps);
@@ -918,6 +973,19 @@ namespace albireo
                     product(L.w_down, g.gate, df, g.x, d, rs, 1.0f);
                 }
             }
+            if (cfg_.d_per_layer > 0)
+            {
+                // L'entrée de la couche (Gemma 4) : GELU(inp_gate x) multiplié par elle, projeté, normalisé, ajouté,
+                // les deux matrices en floats dans le fichier.
+                const unsigned P = static_cast<unsigned>(cfg_.d_per_layer), ud = static_cast<unsigned>(d);
+                c->matvec_f32(at(g.weights, g.weight(L.ple_gate)), P, ud, g.x, uT, ud, g.ple_g, P);
+                c->gelu_mul(g.ple_g, at(g.ple, sizeof(float) * static_cast<size_t>(li) * T * P), uT * P);
+                c->matvec_f32(at(g.weights, g.weight(L.ple_proj)), ud, P, g.ple_g, uT, P, g.out, ud);
+                c->rms_norm(g.out, at(g.vectors, lv.ple_norm), g.out, uT, d, d, d, eps);
+                c->add_rows(g.x, g.out, static_cast<unsigned>(T * d), 1.0f);
+            }
+            // L'échelle de sortie de la couche (Gemma 4) : x + (s - 1) x.
+            if (L.out_scale != 1.0f) c->add_rows(g.x, g.x, static_cast<unsigned>(T * d), L.out_scale - 1.0f);
         }
         // Normalisation finale et logits des seules lignes demandées.
         const long R = static_cast<long>(batch.logit_rows.size());
@@ -934,6 +1002,12 @@ namespace albireo
             sequences_[static_cast<size_t>(s.sequence)]->length += s.count;
         logits.resize(static_cast<size_t>(R * cfg_.vocab));
         if (R > 0) std::memcpy(logits.data(), g.logits.contents(), sizeof(float) * R * cfg_.vocab);
+        // Le plafond des logits (Gemma 4) : softcap * tanh(logits / softcap), comme le processeur.
+        if (cfg_.final_softcap > 0.0)
+        {
+            const float cap = static_cast<float>(cfg_.final_softcap), inv = 1.0f / cap;
+            for (float& v : logits) v = cap * std::tanh(v * inv);
+        }
         hidden_out_.resize(static_cast<size_t>(R * d));
         if (R > 0) std::memcpy(hidden_out_.data(), g.hidden.contents(), sizeof(float) * R * d);
     }

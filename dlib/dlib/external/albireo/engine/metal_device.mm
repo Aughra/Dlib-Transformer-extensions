@@ -122,6 +122,7 @@ namespace albireo
             uint64_t k_slab;
             uint64_t v_slab;
             uint64_t head_stride;
+            uint64_t scales;
         };
         struct query_args
         {
@@ -146,7 +147,13 @@ namespace albireo
             uint64_t k_slab;
             uint64_t v_slab;
             uint64_t head_stride;
+            uint64_t scales;
         };
+        // Les octets entre les clés d'une tête et leurs échelles (kv_layout::scales).
+        uint64_t scales_at(const metal_device::commands::kv_layout& l)
+        {
+            return l.scales ? l.scales : static_cast<uint64_t>(l.positions) * l.hd;
+        }
 
         // Les lignes que calcule un threadgroup des produits : ROWS * SG_PER_TG de metal_kernels.metal.
         const long mv_rows_per_group = 16;
@@ -780,7 +787,8 @@ namespace albireo
         impl_->bind(region, 2);
         impl_->bind(blocks, 3);
         impl_->bind(rows, 4);
-        const kv_args a = { l.hd, l.q8 ? 1u : 0u, l.positions, kv_stride, l.block_stride, l.k_slab, l.v_slab, l.head_stride };
+        const kv_args a = { l.hd, l.q8 ? 1u : 0u, l.positions, kv_stride, l.block_stride, l.k_slab, l.v_slab, l.head_stride,
+            scales_at(l) };
         impl_->args(a, 5);
         impl_->groups(l.heads, tokens, 1, l.hd);
     }
@@ -815,7 +823,7 @@ namespace albireo
         const int kernel = attention_kernel(rep, l.hd);
         if (kernel < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
         const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, part_len, parts, q_stride,
-            table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride };
+            table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l) };
         impl_->use(kernel);
         impl_->bind(q, 0);
         impl_->bind(region, 1);
@@ -853,7 +861,7 @@ namespace albireo
         if (base < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
         const int kernel = base - k_attention_part + k_attention_mtile;
         const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, 0, 1, q_stride,
-            table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride };
+            table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l) };
         impl_->use(kernel);
         impl_->bind(q, 0);
         impl_->bind(region, 1);
