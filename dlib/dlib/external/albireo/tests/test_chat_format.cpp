@@ -824,6 +824,30 @@ What is the weather in Paris right now?<turn|>
         expect(b.calls.empty() && b.content == broken, "Gemma 4 broken call kept as text: " + b.content);
     }
 
+    // Gemma 3 : tours <start_of_turn>, système en tête du premier tour, textes rognés (fork pour macOS).
+    {
+        const dlib::hf_tokenizer gtok = tokenizer({ "<bos>", "<eos>", "<start_of_turn>", "<end_of_turn>" }, {});
+        const std::unique_ptr<chat_format> g = chat_format::detect(gtok,
+            "{{ bos_token }}{{ '<start_of_turn>' + role + '\\n' }}");
+        expect(std::string(g->name()) == "gemma3" && !g->supports_tools() && !g->supports_reasoning(), "Gemma 3 detected");
+        std::vector<chat_message> m(4);
+        m[0].role = "system";
+        m[0].content = "Be brief.";
+        m[1].role = "user";
+        m[1].content = "  Name a fruit.\n";
+        m[2].role = "assistant";
+        m[2].content = "Apple. ";
+        m[3].role = "user";
+        m[3].content = "Another one?";
+        // Tel que l'écrit llama.cpp 0.9.0 (/apply-template, sans le <bos> qu'il ajoute en découpant le prompt).
+        const std::string expected = "<bos><start_of_turn>user\nBe brief.\n\nName a fruit.<end_of_turn>\n"
+            "<start_of_turn>model\nApple.<end_of_turn>\n<start_of_turn>user\nAnother one?<end_of_turn>\n"
+            "<start_of_turn>model\n";
+        expect(render(*g, m, render_options()) == expected, "Gemma 3 prompt:\n" + render(*g, m, render_options()));
+        const parsed a = read_all_ways(*g, render_options(), "Banana.", "Gemma 3 answer");
+        expect(a.content == "Banana." && a.calls.empty(), "Gemma 3 answer");
+    }
+
     // LFM2 : le BOS, les pensées passées selon le template, le raisonnement ouvert par le modèle (fork pour macOS).
     {
         const dlib::hf_tokenizer ltok = tokenizer({ "<|startoftext|>", "<|endoftext|>", "<|im_start|>", "<|im_end|>" },

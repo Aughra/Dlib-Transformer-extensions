@@ -657,6 +657,21 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : la passe avant et le format sont du code commun (non essayés sous Windows) ; la mesure est propre au Mac.
 
+### Changement 18 : Gemma 3 (architecture `gemma3`), sur le processeur
+
+- **Pourquoi** : Gemma 3 de Google (270 M à 27 B paramètres, de nombreux dépôts GGUF) est proche de Gemma 4, que le fork lit déjà : la famille vient presque gratuitement. Ajout du fork, consigné ici comme les changements 12, 16 et 17.
+- **Moteur** (`model_config.*`, `cpu_runtime.cpp`, Albireo 4.19.0) : formule de llama.cpp (`src/models/gemma3.cpp`, `load_swa_pattern`, `get_rope_freq_base/scale`). Gemma 3 prend le chemin de Gemma 4 (quatre normes RMS par couche, normes des requêtes et des clés, GELU, plongements multipliés par √d) avec ses réglages : une couche globale toutes les six (`sliding_window_pattern`, 6 par défaut, ou la liste du fichier), les autres à fenêtre glissante (512 positions pour le 1B, 1 024 pour le 4B), les mêmes têtes partout, base de rotation 10 000 pour les couches à fenêtre et `rope.freq_base` (1 000 000) avec la mise à l'échelle linéaire (×8 pour le 4B) pour les seules couches globales ; ni norme des valeurs (champ `value_norm`, réservé à Gemma 4), ni clés partagées, ni entrées par couche ; échelle d'attention 1/√(taille d'une tête), ou 1/√(d / têtes) pour le 27B, comme `gemma_pytorch` ; plafond des logits seulement s'il est déclaré. Format de conversation `gemma3` (`chat_format.cpp`) : `<bos>`, tours `<start_of_turn>rôle` … `<end_of_turn>`, l'assistant s'appelant `model`, textes rognés, message système en tête du premier tour. Pas de GPU, pas d'images (projecteur non lu), pas d'outils (le gabarit n'en a pas). Le tokenizer SentencePiece de dlib convient tel quel. Commit à venir.
+- **Exactitude** (llama.cpp 0.9.0 sur le processeur, `-ngl 0 --jinja`, choix glouton) : tokenizer identique sur les 22 textes de Gemma 4 (`albireo/tests/gemma3_tokenizer/`) ; cinq rendus identiques à `/apply-template` pour le 1B et le 4B. gemma-3-1b-it Q4_K_M : avec les clés et valeurs en demi-précision, comme llama.cpp, quatre réponses jusqu'à une quasi-égalité (0,563 / 0,436 ; 0,168 / 0,125 ; 0,46 / 0,184 ; 0,602 / 0,398) ; en 8 bits, le 1B, qui n'a qu'une tête de clés de 256 valeurs, bifurque plus tôt, comme llama.cpp avec son cache `q8_0`. Prompt de 2 816 tokens, au-delà de la fenêtre : réponse identique pour le 1B et le 4B. gemma-3-4b-it Q4_K_M : deux réponses jusqu'à une quasi-égalité (0,516 / 0,484 ; 0,562 / 0,438). Le 1B écrit parfois un octet `<0xC2>` seul, que llama.cpp écrit aussi ; le JSON du service le remplace par U+FFFD.
+
+| Gemma 3, processeur, 8 threads, clés et valeurs en 8 bits (`lowpowermode 0`, charge 3,3 à 7,8, en alternance) | Essai 1 | Essai 2 |
+|---|---|---|
+| 1B Q4_K_M, `bench_runtime modele 8 512 16 1 q8`, prompt de 512 tokens | 436,3 tokens/s | 395,9 tokens/s |
+| 1B Q4_K_M, `engine_chat --temperature 0 --max 200`, 200 tokens écrits | 28,2 tokens/s | 25,0 tokens/s |
+| 4B Q4_K_M, prompt de 512 tokens | 92,2 tokens/s | 88,1 tokens/s |
+| 4B Q4_K_M, 200 tokens écrits | 17,2 tokens/s | 16,3 tokens/s |
+
+**Mac ou Windows** : la passe avant et le format sont du code commun (non essayés sous Windows) ; la mesure est propre au Mac.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -678,6 +693,7 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | Qwen 3.6 11B-A3B Q4_K_M, lecture d'un prompt de 512 tokens | non lu par le moteur | 196 à 198 tokens/s sur le GPU (changement 15) ; 107 à 112 sur le processeur |
 | Gemma 4 E2B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 20,9 à 23,8 tokens/s ; lecture de 512 tokens 143 à 153 tokens/s (changement 16) |
 | LFM2.5-8B-A1B Q4_K_M (mélange d'experts, fork seulement), processeur | non lu par le moteur | écriture 34,2 à 34,3 tokens/s ; lecture de 512 tokens 141 à 149 tokens/s (changement 17) ; le 1.2B en Q8_0 : 35,3 à 36,1 et 253 à 281 |
+| Gemma 3 4B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 16,3 à 17,2 tokens/s ; lecture de 512 tokens 88 à 92 tokens/s (changement 18) ; le 1B : 25,0 à 28,2 et 396 à 436 |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
 

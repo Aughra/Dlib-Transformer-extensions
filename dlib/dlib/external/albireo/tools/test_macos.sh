@@ -218,6 +218,20 @@ else
   fi
 fi
 
+# Gemma 3 (le chemin de Gemma 4 : fenêtre glissante sur cinq couches sur six, sans norme des valeurs ; Albireo 4.19.0) :
+# son tokenizer comparé à llama.cpp sur les textes de Gemma 4, une réponse, et le mot de code retrouvé dans un prompt de
+# 2 816 tokens, au-delà de la fenêtre de 512 positions (le 1B se trompe ensuite de voyageur, comme dans llama.cpp ; la
+# majuscule distingue la réponse de la question recopiée).
+GEMMA3=${GEMMA3_MODEL:-$ROOT/build/models/gemma-3-1b-it-Q4_K_M.gguf}
+if [ ! -f "$ENGINE" ] || [ ! -f "$GEMMA3" ]; then skip "gemma 3" "no $GEMMA3"
+else
+  step "gemma 3 tokenizer" "all texts identical" "$BUILD/tests/test_tokenizer" "$HERE/../tests/gemma4_tokenizer/texts.json" \
+    "$HERE/../tests/gemma3_tokenizer/expected.json" "gemma3=$GEMMA3"
+  step "gemma 3" "Paris" "$CHAT" "$ENGINE" "$GEMMA3" --temperature 0 --max 40 "$QUESTION"
+  GEMMA3_LOG=$(cat "$HERE/../tests/lfm2/long_prompt.txt"; printf x)
+  step "gemma 3 long prompt" "The secret code word is PELICAN" "$CHAT" "$ENGINE" "$GEMMA3" --temperature 0 --max 60 "${GEMMA3_LOG%x}"
+fi
+
 # LFM2 et LFM2-MoE (convolutions courtes et attention ; Albireo 4.17.0) : une réponse, l'état des convolutions repris
 # sur trois tours et à un point de reprise, puis le mélange d'experts, qui raisonne avant de répondre, et un détail à
 # retrouver dans un journal de 2 622 tokens (tests/lfm2/long_prompt.txt) : l'enregistrement 3 est celui de Gaëlle, que le

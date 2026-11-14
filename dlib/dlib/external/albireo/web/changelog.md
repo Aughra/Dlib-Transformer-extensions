@@ -2,6 +2,19 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.19.0 — 14 novembre 2026
+
+### Plateforme
+
+- Le moteur lit les modèles Gemma 3 de Google (architecture `gemma3`), sur le processeur : une couche globale toutes les six, les autres à fenêtre glissante (512 positions pour le 1B, 1 024 pour le 4B), une base de positions rotatives propre à chaque type de couche et la mise à l'échelle linéaire sur les seules couches globales. Format de conversation de Gemma 3 : prompt identique à son gabarit sur cinq conversations. Le tokenizer donne les mêmes tokens que llama.cpp sur 22 textes de test. Vérification par rapport à llama.cpp 0.9.0, sur le processeur et en choix glouton : avec gemma-3-1b-it et gemma-3-4b-it Q4_K_M, divergences seulement sur des quasi-égalités de la référence (par exemple 0,516 contre 0,484), et réponse identique sur un prompt de 2 816 tokens qui dépasse la fenêtre glissante. Vitesse sur MacBook Air M2, processeur : 1B, écriture de 25 à 28 tokens/s, lecture d'un prompt de 512 tokens à 396 à 436 tokens/s ; 4B, écriture de 16 à 17 tokens/s, lecture à 88 à 92 tokens/s.
+- Les images de Gemma 3 (projecteur) et les versions de recherche (EmbeddingGemma) ne sont pas encore prises en charge. Le gabarit de Gemma 3 n'a pas d'outils.
+
+### Accès et documents
+
+- La recherche Hugging Face marque les dépôts Gemma 3 comme compatibles, sans GPU.
+
+---
+
 ## 4.18.0 — 14 novembre 2026
 
 ### Plateforme

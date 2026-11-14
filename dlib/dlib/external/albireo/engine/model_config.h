@@ -40,7 +40,8 @@ namespace albireo
                 dimensions des têtes, LongRoPE ; la fenêtre glissante que déclarent les
                 fichiers n'est pas appliquée, comme dans llama.cpp).  Le fork pour macOS
                 ajoute qwen35 et qwen35moe (couches linéaires, voir full_attention_interval),
-                gemma4 dense (voir gemma4), lfm2 et lfm2moe (convolutions courtes, voir lfm2).
+                gemma4 dense (voir gemma4), gemma3 (voir gemma3), lfm2 et lfm2moe (convolutions courtes,
+                voir lfm2).
 
             MODÈLES D'EMBEDDING
                 Un décodeur qui déclare <arch>.pooling_type calcule des vecteurs au lieu
@@ -178,6 +179,15 @@ namespace albireo
             logits passent par softcap * tanh(logits / softcap).
         */
         bool gemma4 = false;
+        /*
+            Gemma 3 (fork pour macOS) prend le chemin de Gemma 4 (gemma4 vaut true) avec gemma3 : une couche
+            globale toutes les sliding_window_pattern couches (6), les autres à fenêtre glissante, les mêmes têtes
+            partout, une base de rotation par type de couche et la mise à l'échelle linéaire sur les seules couches
+            globales ; ni norme des valeurs (value_norm), ni clés partagées, ni entrées par couche ; une échelle
+            d'attention de 1/sqrt(head_dim), ou 1/sqrt(d_model / n_heads) pour le 27B.
+        */
+        bool gemma3 = false;
+        bool value_norm = false;
 
         /*
             LFM2 et LFM2-MoE de Liquid AI (fork pour macOS).  Les couches de conv_layers (celles dont

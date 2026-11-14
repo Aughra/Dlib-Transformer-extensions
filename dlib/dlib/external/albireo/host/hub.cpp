@@ -18,7 +18,7 @@ namespace albireo
         // Les architectures que le moteur lit (model_config.cpp).
         const std::set<std::string> engine_architectures = { "llama", "mistral", "mistral3", "granite", "qwen2",
             "qwen3", "qwen3vl", "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "phi3", "qwen35", "qwen35moe", "gemma4",
-            "lfm2", "lfm2moe" };
+            "gemma3", "lfm2", "lfm2moe" };
         const std::set<std::string> moe_architectures = { "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "qwen35moe",
             "lfm2moe" };
         // Les architectures dont le moteur lit les images avec un projecteur : qwen3vl_merger pour Qwen3-VL, et
@@ -26,8 +26,8 @@ namespace albireo
         // gemma4v pour Gemma 4 depuis Albireo 4.16.0 du fork.
         const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe", "qwen35", "gemma4" };
         // Les architectures dont les passes restent sur le processeur : Gemma 4 depuis Albireo 4.14.0 du fork, LFM2 et
-        // LFM2-MoE depuis Albireo 4.17.0.
-        const std::set<std::string> processor_architectures = { "gemma4", "lfm2", "lfm2moe" };
+        // LFM2-MoE depuis Albireo 4.17.0, Gemma 3 depuis Albireo 4.19.0.
+        const std::set<std::string> processor_architectures = { "gemma4", "gemma3", "lfm2", "lfm2moe" };
 
         std::string lower(std::string s)
         {

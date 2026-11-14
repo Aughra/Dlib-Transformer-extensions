@@ -146,7 +146,7 @@ namespace albireo
             return W.cols % (W.type == dlib::ggml_type::Q8_0 || W.type == dlib::ggml_type::Q5_0 ? 32 : 256) == 0;
         };
         // Gemma 4 (fenêtre glissante, têtes de 512, clés partagées, entrées par couche) reste sur le processeur.
-        if (cfg_.gemma4) why = "the layers of Gemma 4";
+        if (cfg_.gemma4) why = cfg_.gemma3 ? "the layers of Gemma 3" : "the layers of Gemma 4";
         // LFM2 (convolutions courtes) reste sur le processeur (fork pour macOS).
         else if (cfg_.lfm2) why = "the short convolutions of LFM2";
         else if (cfg_.is_moe() && cfg_.n_experts_used > 32) why = "more than 32 experts per token";

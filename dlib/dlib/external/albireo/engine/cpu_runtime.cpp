@@ -1609,8 +1609,8 @@ namespace albireo
                 rms_norm_rows(q_.data(), L.q_norm.data(), q_.data(), T * H, lhd, eps);
                 if (owns) rms_norm_rows(k_.data(), L.k_norm.data(), k_.data(), T * KVH, lhd, eps);
             }
-            // Gemma 4 normalise aussi ses valeurs, sans poids.
-            if (cfg_.gemma4 && owns) rms_norm_rows(v_.data(), ones_.data(), v_.data(), T * KVH, lhd, eps);
+            // Gemma 4 normalise aussi ses valeurs, sans poids (pas Gemma 3).
+            if (cfg_.value_norm && owns) rms_norm_rows(v_.data(), ones_.data(), v_.data(), T * KVH, lhd, eps);
             if (given)
             {
                 apply_given_rope(q_.data(), T, H);

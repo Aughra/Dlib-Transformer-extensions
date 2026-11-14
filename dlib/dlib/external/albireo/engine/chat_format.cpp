@@ -2625,6 +2625,64 @@ namespace albireo
             std::string bos_;
         };
 
+        // Gemma 3 (fork pour macOS)
+
+        /*
+            Le template de Gemma 3 : <bos>, puis chaque message entre <start_of_turn>rôle et <end_of_turn> suivi
+            d'un saut de ligne, l'assistant s'appelant model et chaque texte sans les espaces de ses bords ; le
+            message système, suivi de deux sauts de ligne, ouvre le premier tour qui suit.  Le template refuse
+            une conversation dont les tours n'alternent pas ; le moteur l'écrit telle quelle.  Ni outils ni
+            raisonnement.
+        */
+        class gemma3_format : public chat_format
+        {
+        public:
+            explicit gemma3_format(const dlib::hf_tokenizer& tok)
+            {
+                for (const char* t : { "<end_of_turn>", "<eos>" })
+                {
+                    const int id = tok.token_id(t);
+                    if (id >= 0) stop_tokens_.push_back(id);
+                }
+                bos_ = tok.bos_id() >= 0 ? tok.id_to_token(tok.bos_id()) : std::string("<bos>");
+            }
+
+            const char* name() const override { return "gemma3"; }
+            bool supports_tools() const override { return false; }
+            bool supports_reasoning() const override { return false; }
+
+            void render(const std::vector<chat_message>& messages, const render_options& opt,
+                std::vector<prompt_piece>& out) const override
+            {
+                piece_writer w{ out };
+                w.markup(bos_);
+                size_t first = 0;
+                std::string prefix;
+                if (!messages.empty() && messages[0].role == "system")
+                {
+                    first = 1;
+                    prefix = messages[0].content + "\n\n";
+                }
+                for (size_t i = first; i < messages.size(); ++i)
+                {
+                    const chat_message& m = messages[i];
+                    w.markup("<start_of_turn>" + (m.role == "assistant" ? std::string("model") : m.role) + "\n");
+                    if (i == first) w.text(prefix);
+                    w.text(strip_spaces(m.content));
+                    w.markup("<end_of_turn>\n");
+                }
+                if (opt.add_generation_prompt) w.markup("<start_of_turn>model\n");
+            }
+
+            std::unique_ptr<output_parser> make_parser(const render_options&) const override
+            {
+                return std::unique_ptr<output_parser>(new tag_parser(parser_config()));
+            }
+
+        private:
+            std::string bos_;
+        };
+
         // LFM2 (fork pour macOS)
 
         /*
@@ -2888,6 +2946,8 @@ namespace albireo
             return std::unique_ptr<chat_format>(new granite_format(tok, tmpl));
         if (has("<|turn>") && tok.token_id("<|turn>") >= 0 && tok.token_id("<turn|>") >= 0)
             return std::unique_ptr<chat_format>(new gemma4_format(tok));
+        if (has("<start_of_turn>") && tok.token_id("<start_of_turn>") >= 0 && tok.token_id("<end_of_turn>") >= 0)
+            return std::unique_ptr<chat_format>(new gemma3_format(tok));
         const bool chatml = tok.token_id("<|im_start|>") >= 0 && tok.token_id("<|im_end|>") >= 0;
         if (chatml && has("List of tools: ") && tok.token_id("<|tool_call_start|>") >= 0)
             return std::unique_ptr<chat_format>(new lfm2_format(tok, tmpl));

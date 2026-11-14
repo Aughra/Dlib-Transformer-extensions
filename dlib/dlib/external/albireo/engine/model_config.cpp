@@ -67,9 +67,11 @@ namespace albireo
         const bool qwen35 = a == "qwen35" || a == "qwen35moe";
         // Gemma 4 (fork pour macOS) : fenêtre glissante, clés et valeurs partagées, plongements par couche.
         const bool gemma4 = a == "gemma4";
+        // Gemma 3 (fork pour macOS) : le chemin de Gemma 4, avec ses propres réglages.
+        const bool gemma3 = a == "gemma3";
         // LFM2 et LFM2-MoE (fork pour macOS) : convolutions courtes et attention, experts routés par sigmoïde.
         const bool lfm2 = a == "lfm2" || a == "lfm2moe";
-        if (!llama_like && !qwen_like && !moe_arch && !phi && !qwen35 && !gemma4 && !lfm2)
+        if (!llama_like && !qwen_like && !moe_arch && !phi && !qwen35 && !gemma4 && !gemma3 && !lfm2)
             throw std::runtime_error("the architecture '" + a + "' is not supported by this engine");
 
         if (!g.has(a + ".block_count") || !g.has(a + ".attention.head_count") || !g.has(a + ".embedding_length"))
@@ -144,7 +146,7 @@ namespace albireo
         // Embedding rotatif.
         // Qwen 3.5 déclare des sections de positions multimodales ; pour du texte, ses trois composantes sont
         // égales, et la rotation est celle de neox sur rope_dims dimensions.
-        c.rope = qwen_like || a == "qwen3moe" || a == "qwen3vlmoe" || phi || qwen35 || gemma4 || lfm2 ? rope_style::neox
+        c.rope = qwen_like || a == "qwen3moe" || a == "qwen3vlmoe" || phi || qwen35 || gemma4 || gemma3 || lfm2 ? rope_style::neox
             : rope_style::norm;
         c.rope_dims = bounded_int(g, a + ".rope.dimension_count", c.head_dim, 0, max_head_dim);
         if (c.rope_dims <= 0 || c.rope_dims > c.head_dim || c.rope_dims % 2 != 0)
@@ -271,9 +273,53 @@ namespace albireo
             c.attn_output_gate = true;
         }
 
+        if (gemma3)
+        {
+            c.gemma4 = true;
+            c.gemma3 = true;
+            if (f.has("dense_2.weight"))
+                throw std::runtime_error("the embedding models of Gemma 3 are not supported by this engine");
+            // Les couches à fenêtre glissante : une liste du fichier, ou une couche globale toutes les n (6), comme
+            // load_swa_pattern() de llama.cpp ; sans fenêtre déclarée, toutes les couches sont globales.
+            c.sliding_window = bounded_int(g, a + ".attention.sliding_window", 0, 0, max_context);
+            const std::string pattern = a + ".attention.sliding_window_pattern";
+            for (long li = 0; li < c.n_layers; ++li)
+            {
+                bool swa = false;
+                if (c.sliding_window > 0)
+                {
+                    if (g.has(pattern) && g.at(pattern).is_array())
+                    {
+                        if (g.at(pattern).arr_int.size() < static_cast<size_t>(c.n_layers))
+                            throw std::runtime_error("the model metadata lacks the sliding window pattern of its layers");
+                        swa = g.at(pattern).arr_int[static_cast<size_t>(li)] != 0;
+                    }
+                    else
+                    {
+                        const long n = bounded_int(g, pattern, 6, 0, c.n_layers);
+                        swa = n == 0 || li % n < n - 1;
+                    }
+                }
+                c.swa_layers.push_back(swa ? 1 : 0);
+            }
+            c.head_dim_swa = c.head_dim;
+            c.rope_dims_swa = c.rope_dims;
+            c.rope_base_swa = finite_double(g, a + ".rope.freq_base_swa", 10000.0);
+            if (c.rope_base_swa <= 0) throw std::runtime_error("the model metadata holds an invalid rotary base");
+            c.final_softcap = finite_double(g, a + ".final_logit_softcapping", 0.0);
+            if (c.final_softcap < 0) throw std::runtime_error("the model metadata holds an invalid logit softcapping");
+            c.embedding_scale = std::sqrt(static_cast<double>(c.d_model));
+            // Comme gemma_pytorch (config.py) et llama.cpp : la largeur d'une tête, sauf pour le 27B.
+            if (c.n_layers == 62) c.attention_scale = 1.0 / std::sqrt(static_cast<double>(c.d_model / c.n_heads));
+            c.fused_qkv = false;
+            c.qkv_bias = false;
+            if (!c.qk_norm) throw std::runtime_error("this Gemma 3 model has no query and key norms");
+        }
+
         if (gemma4)
         {
             c.gemma4 = true;
+            c.value_norm = true;
             if (g.has(a + ".expert_count"))
                 throw std::runtime_error("the mixtures of experts of Gemma 4 are not supported by this engine yet");
             const std::string pattern = a + ".attention.sliding_window_pattern";
