@@ -688,7 +688,15 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 - **Changement** : `moe_route` (Metal) reçoit un mode sigmoïde (choix sur sigmoid(logit) + `exp_probs_b`, poids sigmoid(logit) renormalisés, somme bornée au plus petit demi-flottant normal, comme le processeur) et le tampon des biais ; la passe du GPU teste `moe_layer(li)` au lieu de `is_moe()`, ce qui laisse denses les premières couches de LFM2-MoE ; leurs contrôles de formats et des produits groupés les sautent. Le contrôle du GPU admet 25 % d'écart pour un mélange d'experts en 8 bits, le token le plus probable devant rester le même (7,7 % et 13,6 % en 8 bits, 0,13 % et 0,11 % en demi-précision pour LFM2.5-8B-A1B). Commit [5a0ae28](https://github.com/Aughra/Dlib-Transformer-extensions/commit/5a0ae28).
 - **Exactitude** : en demi-précision, logits du GPU à 0,06-0,37 % de ceux du processeur sur des prompts de 29 à 1 200 tokens, même token le plus probable. Sur le journal de 2 622 tokens, le modèle raisonne autrement sur le GPU (« The secret code word is given in Record 77 »), exactement comme llama.cpp 0.9.0 sur son GPU (`-ngl 99`, deux essais) : sensibilité du modèle aux arrondis, pas un défaut ; sur le processeur, sa réponse reste celle de llama.cpp sur le processeur.
-- **Vitesse** : à mesurer (une série prise en mode économie d'énergie, écartée).
+- **Vitesse** : à mesurer sur le Mac mini (une série prise en mode économie d'énergie, écartée).
+
+**Mac ou Windows** : propre au Mac (noyaux Metal).
+
+### Changement 21 : Gemma 3 sur le GPU (Albireo 4.22.0)
+
+- **Changement** : fenêtre glissante dans les noyaux d'attention du GPU (`attention_args.window`, à la place du bourrage d'alignement ; `attention_part` commence à `longueur − fenêtre`, `attention_mtile` à la fenêtre du premier token de la tuile et masque chaque ligne à la sienne) ; seconde table de cosinus et sinus pour les couches à fenêtre (base 10 000, sans mise à l'échelle) ; noyaux `gelu_mul` (approximation tanh) et `add_rows` (x += s · y) ; dans la passe, les normes après l'attention et après le bloc feed-forward (produit dans un tampon, norme sur place, somme). Les plongements × √d viennent du processeur, comme avant. Refusés : Gemma 4, un plafond des logits déclaré, et les largeurs qui ne sont pas des multiples de 256 (le 1B). Commit à venir.
+- **Exactitude** (gemma-3-4b-it Q4_K_M) : contrôle du GPU en demi-précision à 0,07-0,10 % du processeur ; journal de 2 816 tokens (fenêtre de 1 024) : même réponse sur le GPU et le processeur, en 8 bits et en demi-précision, celle de llama.cpp ; réponse de 150 tokens après ce journal identique, octet pour octet, sur le GPU et le processeur ; avec la fenêtre coupée sur le GPU (essai jetable), cette réponse n'est plus que des chiffres : le test voit la fenêtre.
+- **Vitesse** : à mesurer sur le Mac mini (le M2 reste en mode économie d'énergie).
 
 **Mac ou Windows** : propre au Mac (noyaux Metal).
 

@@ -232,6 +232,18 @@ else
   GEMMA3_LOG=$(cat "$HERE/../tests/lfm2/long_prompt.txt"; printf x)
   step "gemma 3 long prompt" "The secret code word is PELICAN" "$CHAT" "$ENGINE" "$GEMMA3" --temperature 0 --max 60 "${GEMMA3_LOG%x}"
 fi
+# Gemma 3 sur le GPU (Albireo 4.22.0 ; le 4B, le 1B ayant une largeur de 1 152, qui n'est pas un multiple de 256) : le
+# contrôle accepté, puis le journal de 2 816 tokens, où la fenêtre glissante de 1 024 positions agit (sans elle, le GPU
+# n'écrit plus que des chiffres) ; la réponse est celle du processeur et de llama.cpp.
+GEMMA3_GPU=${GEMMA3_GPU_MODEL:-$ROOT/build/models/gemma-3-4b-it-Q4_K_M.gguf}
+if [ ! -f "$ENGINE" ] || [ ! -f "$GEMMA3_GPU" ]; then skip "gemma 3 on the GPU" "no $GEMMA3_GPU"
+else
+  step "gemma 3 on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$GEMMA3_GPU" --temperature 0 \
+    --max 40 "$QUESTION"
+  GEMMA3_LOG=$(cat "$HERE/../tests/lfm2/long_prompt.txt"; printf x)
+  step "gemma 3 long prompt on the GPU" "Record 3 was travelled by Gaëlle" "$CHAT" "$ENGINE" "$GEMMA3_GPU" --temperature 0 \
+    --max 60 "${GEMMA3_LOG%x}"
+fi
 
 # LFM2 et LFM2-MoE (convolutions courtes et attention ; Albireo 4.17.0) : une réponse, l'état des convolutions repris
 # sur trois tours et à un point de reprise (sur le processeur, puis sur le GPU pour LFM2 dense), puis le mélange d'experts, qui raisonne avant de répondre, et un détail à

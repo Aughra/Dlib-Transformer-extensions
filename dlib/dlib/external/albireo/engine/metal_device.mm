@@ -46,7 +46,8 @@ namespace albireo
             "attention_mtile_1_64", "attention_mtile_1_128", "attention_mtile_1_256",
             "attention_mtile_2_64", "attention_mtile_2_128", "attention_mtile_2_256",
             "attention_mtile_4_64", "attention_mtile_4_128", "attention_mtile_4_256",
-            "attention_mtile_8_64", "attention_mtile_8_128", "attention_mtile_8_256", "restore_outputs", "short_conv" };
+            "attention_mtile_8_64", "attention_mtile_8_128", "attention_mtile_8_256", "restore_outputs", "short_conv",
+            "gelu_mul", "add_rows" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -58,7 +59,7 @@ namespace albireo
             k_dequant_q5_K, k_dequant_q8_0, k_dequant_q5_0,
             k_moe_group, k_moe_tiles, k_mm_id_q4_K, k_mm_id_q5_K, k_mm_id_q6_K, k_mm_id_q8_0, k_mm_id_q5_0,
             k_attention_part, k_attention_mtile = k_attention_part + 12, k_restore_outputs = k_attention_mtile + 12,
-            k_short_conv, k_count
+            k_short_conv, k_gelu_mul, k_add_rows, k_count
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -138,7 +139,7 @@ namespace albireo
             uint32_t parts;
             uint32_t q_stride;
             uint32_t table_stride;
-            uint32_t pad;          // l'alignement des champs 64 bits qui suivent, comme dans Metal
+            uint32_t window;       // fenêtre glissante (0 : aucune), qui aligne aussi les champs 64 bits qui suivent
             uint64_t block_stride;
             uint64_t k_slab;
             uint64_t v_slab;
@@ -722,6 +723,28 @@ namespace albireo
         impl_->grid(d, tokens, 1);
     }
 
+    void metal_device::commands::gelu_mul(metal_view gate, metal_view up, unsigned n)
+    {
+        if (n == 0) return;
+        impl_->use(k_gelu_mul);
+        impl_->bind(gate, 0);
+        impl_->bind(up, 1);
+        impl_->args(n, 2);
+        impl_->grid(n, 1, 1);
+    }
+
+    void metal_device::commands::add_rows(metal_view x, metal_view y, unsigned n, float s)
+    {
+        if (n == 0) return;
+        struct add_args { uint32_t n; float s; };
+        impl_->use(k_add_rows);
+        impl_->bind(x, 0);
+        impl_->bind(y, 1);
+        const add_args a = { n, s };
+        impl_->args(a, 2);
+        impl_->grid(n, 1, 1);
+    }
+
     void metal_device::commands::silu_mul(metal_view gate, metal_view up, unsigned n)
     {
         if (n == 0) return;
@@ -790,7 +813,7 @@ namespace albireo
         const int kernel = attention_kernel(rep, l.hd);
         if (kernel < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
         const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, part_len, parts, q_stride,
-            table_stride, 0, l.block_stride, l.k_slab, l.v_slab, l.head_stride };
+            table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride };
         impl_->use(kernel);
         impl_->bind(q, 0);
         impl_->bind(region, 1);
@@ -827,7 +850,7 @@ namespace albireo
         if (base < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
         const int kernel = base - k_attention_part + k_attention_mtile;
         const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, 0, 1, q_stride,
-            table_stride, 0, l.block_stride, l.k_slab, l.v_slab, l.head_stride };
+            table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride };
         impl_->use(kernel);
         impl_->bind(q, 0);
         impl_->bind(region, 1);

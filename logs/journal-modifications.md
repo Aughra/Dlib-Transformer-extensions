@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-14 — Faire passer Gemma 3 au GPU (Albireo 4.22.0)
+
+- **Quoi** : choix de l'humain : le M2 reste en mode économie d'énergie (« on le coupera lors des vrais tests sur le mini »), et Gemma ensuite. `metal_kernels.metal` : `attention_args.window` (à la place du bourrage), fenêtre dans `attention_part` et `attention_mtile`, noyaux `gelu_mul` et `add_rows` ; `metal_device.{h,mm}` : `kv_layout.window`, `gelu_mul`, `add_rows` ; `cpu_runtime_metal.cpp` : Gemma 3 accepté (Gemma 4 et un plafond des logits refusés), tampons `cs_swa` et `out`, normes après l'attention et après le bloc feed-forward, table et fenêtre par couche. `hub.cpp` : `gemma3` n'est plus « processeur seulement ». `service.js` : fiche GPU. `test_macos.sh` : deux étapes sur le 4B.
+- **Fichiers** : `albireo/engine/{metal_kernels.metal,metal_device.h,metal_device.mm,cpu_runtime_metal.cpp}`, `albireo/host/hub.cpp`, `albireo/tools/test_macos.sh`, `albireo/web/{js/service.js,changelog.md}`, version ; `docs/{memo-portage-macos-arm64.md,notes-pour-l-auteur.md,differences-mac-windows.md}`, `blog/{38-la-fenetre-du-gpu.md,README.md}`, `logs/reprise.md`.
+- **Pourquoi** : le GPU pour les Gemma, après LFM2 ; Gemma 3 d'abord, plus simple que Gemma 4.
+- **Étapes** : contrôle du GPU, 4B : 2,5 / 2,1 / 2,4 % en 8 bits, 0,09 / 0,07 / 0,10 % en demi-précision, même token. Journal de 2 816 tokens : « Record 3 was travelled by Gaëlle » sur le GPU et le processeur, en 8 bits et en demi-précision ; 150 tokens après ce journal, identiques sur le GPU et le processeur ; avec `kl.window = 0` (essai jetable, retiré), que des chiffres. Le 1B refusé (« widths that are not multiples of 256 »). `test_metal` passe ; `test_macos.sh` (`ALBIREO_TEST_PORT=18473`) : **51 sur 51** ; page : lancée juste après, 2 échecs du scénario `regress` (503 du chat, modèle pas encore chargé en mode économie d'énergie), puis relancée seule : lint et 108 vérifications. Vitesse non mesurée (mode économie d'énergie). Blog : épisode 38.
+
 ## 2026-11-14 — Faire passer LFM2-MoE au GPU (Albireo 4.21.0)
 
 - **Quoi** : `metal_kernels.metal` : `moe_route` avec un mode sigmoïde et le tampon des biais (`route_args.sigmoid`) ; `metal_device.{h,mm}` : `moe_route(…, sigmoid, bias)` ; `cpu_runtime_metal.cpp` : LFM2-MoE accepté, `moe_layer(li)` dans les contrôles et la passe, biais des experts copiés avec les vecteurs, limite du contrôle à 25 % pour un mélange d'experts en 8 bits. `hub.cpp` : plus de « processeur seulement » pour `lfm2moe`. `service.js` : fiche GPU. `engine_chat --gpu-prompt-tokens`. `test_macos.sh` : « lfm2 moe long prompt » sur le processeur, « lfm2 moe on the GPU ».

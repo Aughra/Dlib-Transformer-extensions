@@ -141,6 +141,10 @@ namespace albireo
 
             // gate[i] = silu(gate[i]) * up[i], i < n.
             void silu_mul(metal_view gate, metal_view up, unsigned n);
+            // gate[i] = gelu(gate[i]) * up[i] (approximation tanh), i < n (Gemma 3, fork pour macOS).
+            void gelu_mul(metal_view gate, metal_view up, unsigned n);
+            // x[i] += s * y[i], i < n (Gemma 3, fork pour macOS).
+            void add_rows(metal_view x, metal_view y, unsigned n, float s);
 
             /*!
                 Les positions rotatives de tokens lignes de heads têtes de hd valeurs (stride floats
@@ -163,6 +167,9 @@ namespace albireo
                 unsigned heads = 0;
                 unsigned positions = 0;
                 bool q8 = false;
+                // La fenêtre glissante d'une couche (Gemma 3) : le token de longueur L voit ses window dernières
+                // positions ; 0 sans fenêtre.
+                unsigned window = 0;
                 uint64_t block_stride = 0;
                 uint64_t k_slab = 0;
                 uint64_t v_slab = 0;

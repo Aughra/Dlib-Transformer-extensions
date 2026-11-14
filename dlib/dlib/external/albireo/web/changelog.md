@@ -2,11 +2,20 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.22.0 — 14 novembre 2026
+
+### Performances
+
+- Les modèles Gemma 3 dont la largeur est un multiple de 256 (4B, 12B, 27B) passent au GPU, pour l'écriture comme pour la lecture des prompts : les noyaux d'attention du GPU tiennent compte de la fenêtre glissante des couches qui en ont une, chaque type de couche a sa table de positions rotatives, et deux noyaux nouveaux calculent la porte GELU et ajoutent les sorties normalisées. Le GPU donne les logits du processeur à 0,07 à 0,10 % près en demi-précision ; sur un prompt de 2 816 tokens, qui dépasse la fenêtre de 1 024 positions, la réponse est celle du processeur et de llama.cpp, et une réponse de 150 tokens est identique à celle du processeur. Le 1B (largeur 1 152) reste sur le processeur. Vitesse à mesurer sur le Mac mini.
+- Gemma 4 reste sur le processeur.
+
+---
+
 ## 4.21.0 — 14 novembre 2026
 
 ### Performances
 
-- Les modèles LFM2-MoE passent au GPU : le routage du GPU sait choisir les experts par sigmoïde avec un biais de choix et laisser denses les premières couches. Le GPU donne les logits du processeur à 0,06 à 0,37 % près en demi-précision, sur des prompts de 29 à 1 200 tokens. Vitesse à mesurer (les premières mesures ont été faites en mode économie d'énergie et ne sont pas retenues).
+- Les modèles LFM2-MoE passent au GPU : le routage du GPU sait choisir les experts par sigmoïde avec un biais de choix et laisser denses les premières couches. Le GPU donne les logits du processeur à 0,06 à 0,37 % près en demi-précision, sur des prompts de 29 à 1 200 tokens. Vitesse à mesurer sur le Mac mini (les premières mesures, en mode économie d'énergie, ne sont pas retenues).
 - Sur un long prompt, LFM2.5-8B-A1B raisonne autrement sur le GPU que sur le processeur, comme llama.cpp sur son propre GPU, dont la pensée est la même : ce modèle est sensible aux différences d'arrondi entre les deux.
 
 ### Corrections

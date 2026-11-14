@@ -681,6 +681,28 @@ kernel void silu_mul(device float* gate [[buffer(0)]], device const float* up [[
     gate[i] = g / (1.0f + exp(-g)) * up[i];
 }
 
+// Gemma 3 (fork pour macOS) : gate[i] = gelu(gate[i]) * up[i], l'approximation tanh (qk_gelu_tanh).
+kernel void gelu_mul(device float* gate [[buffer(0)]], device const float* up [[buffer(1)]],
+    constant uint& n [[buffer(2)]], uint i [[thread_position_in_grid]])
+{
+    if (i >= n) return;
+    const float g = gate[i];
+    gate[i] = 0.5f * g * (1.0f + precise::tanh(0.7978845608028654f * (g + 0.044715f * g * g * g))) * up[i];
+}
+
+// Gemma 3 (fork pour macOS) : x[i] += s * y[i], la somme résiduelle d'une sortie normalisée.
+struct add_args
+{
+    uint n;
+    float s;
+};
+kernel void add_rows(device float* x [[buffer(0)]], device const float* y [[buffer(1)]],
+    constant add_args& a [[buffer(2)]], uint i [[thread_position_in_grid]])
+{
+    if (i >= a.n) return;
+    x[i] += a.s * y[i];
+}
+
 // ---------------------------------------------------------------------------------------------
 // Les positions rotatives (cpu_runtime::apply_rope) : le token t fait tourner les rope_dims
 // premières valeurs de chacune de ses têtes des cosinus et sinus de sa position,
@@ -884,6 +906,7 @@ struct attention_args
     uint parts;        // parties de la grille
     uint q_stride;     // les floats des requêtes d'un token
     uint table_stride;
+    uint window;       // fenêtre glissante (Gemma 3) : le token de longueur L voit les positions L - window à L - 1 ; 0 sans
     ulong block_stride;
     ulong k_slab;
     ulong v_slab;
@@ -920,7 +943,9 @@ kernel void attention_part(device const float* q [[buffer(0)]], device const uch
     const uint part = tg.x, kvh = tg.y, t = tg.z;
     const uint per = PER, e0 = lane * PER;
     const long length = lengths[t];
-    const long p0 = long(part) * a.part_len, p1 = min(length, p0 + long(a.part_len));
+    long p0 = long(part) * a.part_len;
+    const long p1 = min(length, p0 + long(a.part_len));
+    if (a.window > 0) p0 = max(p0, length - long(a.window));
     device float* out = partial + ((ulong(t) * a.kv_heads + kvh) * a.parts + part) * (a.rep * (a.hd + 2));
 
     float qv[REP][PER];
@@ -1076,6 +1101,8 @@ kernel void attention_mtile(device const float* q [[buffer(0)]], device const uc
     simdgroup_float8x8 o[F];
     for (uint j = 0; j < F; ++j) o[j] = make_filled_simdgroup_matrix<float, 8, 8>(0.0f);
     const long last = long(lengths[t0 + count - 1]);
+    // La fenêtre glissante : rien avant celle du premier token de la tuile.
+    const long first = a.window > 0 ? max(0L, long(lengths[t0]) - long(a.window)) : 0;
     device const int* table = blocks + ulong(t0) * a.table_stride;
     // Huit valeurs consécutives par thread (un groupe de 32 n'a qu'une échelle) : une recherche dans la table des blocs,
     // une échelle et une lecture de 8 octets (ou 16 en demi-précision) par huit valeurs.
@@ -1111,7 +1138,7 @@ kernel void attention_mtile(device const float* q [[buffer(0)]], device const uc
         }
     };
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    for (long p0 = 0; p0 < last; p0 += 32)
+    for (long p0 = first; p0 < last; p0 += 32)
     {
         const uint nk = uint(min(32L, last - p0));
         load(a.k_slab, p0, nk);
@@ -1135,7 +1162,8 @@ kernel void attention_mtile(device const float* q [[buffer(0)]], device const uc
         float shrink[8];
         for (uint r = 0; r < 8; ++r)
         {
-            const bool visible = lane < nk && p0 + long(lane) < len[r];
+            const bool visible = lane < nk && p0 + long(lane) < len[r]
+                && (a.window == 0 || p0 + long(lane) >= len[r] - long(a.window));
             const float sv = visible ? ss[sg][r * 32 + lane] : -INFINITY;
             const float mn = max(m[r], simd_max(sv));
             if (mn == -INFINITY)
