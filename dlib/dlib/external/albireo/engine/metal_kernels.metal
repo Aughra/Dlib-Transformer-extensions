@@ -736,7 +736,7 @@ kernel void rope(device float* x [[buffer(0)]], device const float* cs [[buffer(
 // La rotation des clés et valeurs 8 bits et des requêtes qui lisent les clés (qk_rotate_row) : les
 // signes d'un hachage, puis une transformée de Walsh-Hadamard sur la plus grande puissance de deux
 // qui divise hd, normalisée ; unrotate_row la défait (qk_unrotate_row).  Un thread par valeur, la
-// ligne en mémoire de threadgroup ; hd au plus 256.
+// ligne en mémoire de threadgroup ; hd au plus 512 (Gemma 4).
 
 static inline void walsh_hadamard_row(threadgroup float* v, uint i, uint hd)
 {
@@ -814,8 +814,8 @@ kernel void kv_store(device const float* k [[buffer(0)]], device const float* v 
     uint2 tg [[threadgroup_position_in_grid]], uint i [[thread_index_in_threadgroup]],
     uint lane [[thread_index_in_simdgroup]], uint sg [[simdgroup_index_in_threadgroup]])
 {
-    threadgroup float row_k[256];
-    threadgroup float row_v[256];
+    threadgroup float row_k[512];
+    threadgroup float row_v[512];
     const uint h = tg.x, t = tg.y;
     const ulong base = ulong(blocks[t]) * a.block_stride + ulong(h) * a.head_stride;
     const uint pos = uint(rows[t]);
@@ -856,7 +856,7 @@ struct query_args
 kernel void prepare_queries(device float* q [[buffer(0)]], constant query_args& a [[buffer(1)]],
     uint2 tg [[threadgroup_position_in_grid]], uint i [[thread_index_in_threadgroup]])
 {
-    threadgroup float row[256];
+    threadgroup float row[512];
     device float* r = q + tg.y * a.q_stride + tg.x * a.hd;
     if (!a.q8)
     {
@@ -874,7 +874,7 @@ kernel void prepare_queries(device float* q [[buffer(0)]], constant query_args& 
 kernel void restore_outputs(device float* o [[buffer(0)]], constant query_args& a [[buffer(1)]],
     uint2 tg [[threadgroup_position_in_grid]], uint i [[thread_index_in_threadgroup]])
 {
-    threadgroup float row[256];
+    threadgroup float row[512];
     device float* r = o + tg.y * a.q_stride + tg.x * a.hd;
     row[i] = r[i];
     threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -893,7 +893,7 @@ kernel void restore_outputs(device float* o [[buffer(0)]], constant query_args& 
 
 #define ATT_SG 4
 #define MAX_REP 8
-#define MAX_PER_LANE 8      // hd / 32 au plus : hd jusqu'à 256
+#define MAX_PER_LANE 16     // hd / 32 au plus : hd jusqu'à 512 (Gemma 4)
 
 struct attention_args
 {
@@ -939,7 +939,10 @@ kernel void attention_part(device const float* q [[buffer(0)]], device const uch
     uint lane [[thread_index_in_simdgroup]])
 {
     threadgroup float tm[ATT_SG][MAX_REP], tl[ATT_SG][MAX_REP];
-    threadgroup float to[ATT_SG][REP][16 * PER];
+    // Les sorties par tranches de CH valeurs : la moitié de la tête, 128 au plus (16 Ko pour 8 têtes de requête),
+    // pour que la mémoire de threadgroup reste petite avec les têtes de 512 de Gemma 4.
+    constexpr uint CH = 16 * PER < 128 ? 16 * PER : 128;
+    threadgroup float to[ATT_SG][REP][CH];
     const uint part = tg.x, kvh = tg.y, t = tg.z;
     const uint per = PER, e0 = lane * PER;
     const long length = lengths[t];
@@ -999,8 +1002,8 @@ kernel void attention_part(device const float* q [[buffer(0)]], device const uch
             if (tl[s][i] > 0.0f) sum += tl[s][i] * exp(tm[s][i] - mx);
         jl[i] = sum;
     }
-    // Les sorties, une moitié de la ligne à la fois pour que la mémoire de threadgroup reste petite.
-    const uint half_hd = a.hd / 2;
+    // Les sorties, une tranche de CH valeurs de la ligne à la fois pour que la mémoire de threadgroup reste petite.
+    const uint half_hd = CH;
     for (uint h0 = 0; h0 < a.hd; h0 += half_hd)
     {
         for (uint i = 0; i < REP; ++i)
@@ -1061,6 +1064,15 @@ template [[host_name("attention_part_8_2")]] kernel void attention_part<8, 2>(de
 template [[host_name("attention_part_8_4")]] kernel void attention_part<8, 4>(device const float*, device const uchar*,
     device const int*, device const int*, device float*, constant attention_args&, device float*, uint3, uint, uint);
 template [[host_name("attention_part_8_8")]] kernel void attention_part<8, 8>(device const float*, device const uchar*,
+    device const int*, device const int*, device float*, constant attention_args&, device float*, uint3, uint, uint);
+// Les têtes de 512 valeurs (Gemma 4).
+template [[host_name("attention_part_1_16")]] kernel void attention_part<1, 16>(device const float*, device const uchar*,
+    device const int*, device const int*, device float*, constant attention_args&, device float*, uint3, uint, uint);
+template [[host_name("attention_part_2_16")]] kernel void attention_part<2, 16>(device const float*, device const uchar*,
+    device const int*, device const int*, device float*, constant attention_args&, device float*, uint3, uint, uint);
+template [[host_name("attention_part_4_16")]] kernel void attention_part<4, 16>(device const float*, device const uchar*,
+    device const int*, device const int*, device float*, constant attention_args&, device float*, uint3, uint, uint);
+template [[host_name("attention_part_8_16")]] kernel void attention_part<8, 16>(device const float*, device const uchar*,
     device const int*, device const int*, device float*, constant attention_args&, device float*, uint3, uint, uint);
 
 // ---------------------------------------------------------------------------------------------

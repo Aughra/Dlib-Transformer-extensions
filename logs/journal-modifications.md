@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-14 — Étendre les noyaux d'écriture du GPU aux têtes de 512 valeurs (Albireo 4.25.1)
+
+- **Quoi** : étape A1 du plan de Gemma 4 sur le GPU. `metal_kernels.metal` : `kv_store`, `prepare_queries`, `restore_outputs` sur des lignes de 512 ; `attention_part` écrit ses sorties par tranches de `CH` = min(16 × PER, 128) valeurs (mémoire de threadgroup inchangée, 16 Ko pour 8 têtes de requête), `MAX_PER_LANE` 16, instances `attention_part_{1,2,4,8}_16`. `metal_device.mm` : ces 4 noyaux (77 en tout), `attention_kernel` les choisit pour 512, `attention_tiles` refuse 512 (pas d'`attention_mtile` à cette largeur), `kv_store` accepte jusqu'à 512. `test_metal` : `test_attention` paramétré, et vérifié aussi en têtes de 512 et 8 têtes de requête par tête de clés.
+- **Fichiers** : `albireo/engine/{metal_kernels.metal,metal_device.mm}`, `albireo/tests/test_metal.cpp`, version et `albireo/web/changelog.md` ; `logs/reprise.md`.
+- **Pourquoi** : les couches globales de Gemma 4 ont des têtes de 512 ; les noyaux s'arrêtaient à 256.
+- **Étapes** : premier essai : arrêt sur « heads of other widths than its kernels take » (garde de `kv_store` à 256), relevée ; puis `test_metal` : *all checks passed* ; en 512 : `kv_store` q8 et f16 identiques au processeur (0 sur 6 144 valeurs et 0 échelle), attention q8 1,40e-07 et f16 8,73e-08 d'écart à la double précision sur 300 positions, `restore_outputs` identique. Gemma 4 reste refusé par `set_gpu` (étapes suivantes).
+
 ## 2026-11-14 — Relancer le service en 4.25.0 et corriger le mémo sur SIGINT
 
 - **Quoi** : vrai service relancé (`nohup`, `ALBIREO_HOME=build/albireo-home`, journal `build/albireo-home/logs/console.log`) ; le mémo disait encore que le service lancé en arrière-plan ignore SIGINT, faux depuis la 4.22.1.

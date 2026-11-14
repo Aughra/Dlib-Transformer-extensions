@@ -2,6 +2,14 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.25.1 — 14 novembre 2026
+
+### Moteur
+
+- Les noyaux GPU des étapes d'écriture acceptent des têtes d'attention de 512 valeurs (écriture des clés et valeurs, attention, remise en place des sorties), première étape du passage de Gemma 4 au GPU. Gemma 4 reste sur le processeur tant que les autres étapes ne sont pas faites.
+
+---
+
 ## 4.25.0 — 14 novembre 2026
 
 Reprise à la main de trois nouveautés d'Albireo Community Edition 1.0.14, 1.0.15 et 1.0.17 (Cydral Technology). Avec les versions 4.23.0 et 4.24.0, elle termine la reprise des sept nouveautés retenues.

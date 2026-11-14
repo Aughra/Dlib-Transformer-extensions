@@ -339,13 +339,14 @@ namespace
         Les clés et valeurs d'une séquence de L positions dans un pool de blocs de 16 positions : le
         processeur écrit les L - T premières, le GPU les T dernières ; puis l'attention des T tokens,
         chacun sur les positions jusqu'à la sienne, comparée à une somme en double précision sur les
-        clés et valeurs telles que le pool les contient.
+        clés et valeurs telles que le pool les contient.  Des têtes de 128 valeurs, 4 têtes de requête par tête
+        de clés, et de 512 valeurs, 8 têtes de requête par tête de clés (Gemma 4).
     */
-    void test_attention(metal_device& gpu, kv_format format)
+    void test_attention(metal_device& gpu, kv_format format, long hd = 128, unsigned rep = 4)
     {
         const bool q8 = format == kv_format::q8;
-        const long layers = 2, heads = 2, hd = 128, B = 16, L = 300, layer = 1;
-        const unsigned T = 3, rep = 4, H = heads * rep;
+        const long layers = 2, heads = 2, B = 16, L = 300, layer = 1;
+        const unsigned T = 3, H = heads * static_cast<unsigned>(rep);
         kv_pool pool(layers, heads, hd, B, 64 * 1024 * 1024, format);
         std::vector<int> blocks;
         for (long p = 0; p < L; p += B) blocks.push_back(pool.allocate());
@@ -448,7 +449,8 @@ namespace
                     }
                 }
             }
-        check(differ == 0 && scales_differ == 0, std::string("kv_store ") + (q8 ? "q8" : "f16") + ": "
+        check(differ == 0 && scales_differ == 0, std::string("kv_store ") + (q8 ? "q8" : "f16") + ", heads of "
+            + std::to_string(hd) + ": "
             + std::to_string(differ) + " of " + std::to_string(compared) + " values and " + std::to_string(scales_differ)
             + " scales apart from the processor");
 
@@ -526,7 +528,8 @@ namespace
                     worst = std::max(worst, std::fabs(ctx[t * q_stride + hq * hd + i] - o) / (mag + 1e-6));
                 }
             }
-        check(worst < 1e-4, std::string("attention ") + (q8 ? "q8" : "f16") + " over " + std::to_string(L)
+        check(worst < 1e-4, std::string("attention ") + (q8 ? "q8" : "f16") + ", heads of " + std::to_string(hd)
+            + ", rep " + std::to_string(rep) + ", over " + std::to_string(L)
             + " positions in blocks of " + std::to_string(B) + ", " + std::to_string(T) + " tokens: largest error "
             + sci(worst));
         if (q8)
@@ -543,7 +546,7 @@ namespace
             double apart = 0;
             for (unsigned i = 0; i < T * q_stride; ++i)
                 apart = std::max(apart, static_cast<double>(std::fabs(ctx[i] - expected[i])));
-            check(apart < 1e-5, "restore_outputs: largest difference " + sci(apart) + " from the processor");
+            check(apart < 1e-5, "restore_outputs, heads of " + std::to_string(hd) + ": largest difference " + sci(apart) + " from the processor");
         }
     }
 }
@@ -570,6 +573,8 @@ int main()
     test_norm_rope_gate(*gpu);
     test_attention(*gpu, kv_format::q8);
     test_attention(*gpu, kv_format::f16);
+    test_attention(*gpu, kv_format::q8, 512, 8);
+    test_attention(*gpu, kv_format::f16, 512, 8);
     std::printf(failures ? "test_metal: %d checks failed\n" : "test_metal: all checks passed\n", failures);
     return failures;
 }

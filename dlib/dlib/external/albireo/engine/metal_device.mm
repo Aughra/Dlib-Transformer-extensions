@@ -29,8 +29,8 @@ namespace albireo
 
         // Les noyaux, dans l'ordre de l'énumération ci-dessous ; chacun doit se compiler en pipeline.
         // L'attention existe en une variante pour chaque regroupement des têtes de requête (1, 2, 4, 8) et
-        // chaque largeur de tête (64, 128, 256 valeurs : 2, 4, 8 par voie), dont le compilateur déroule
-        // les boucles.
+        // chaque largeur de tête (64, 128, 256 valeurs : 2, 4, 8 par voie ; 512 valeurs, 16 par voie, pour les
+        // étapes de Gemma 4), dont le compilateur déroule les boucles.
         const char* const kernel_names[] = { "mv_q4_K_1", "mv_q6_K_1", "mv_q4_K_n", "mv_q6_K_n", "rms_norm", "add_bias", "silu_mul", "rope",
             "kv_store", "prepare_queries", "merge_attention", "dequant_q4_K", "dequant_q6_K",
             "mv_q5_K_1", "mv_q5_K_n", "mv_q8_0_1", "mv_q8_0_n", "gdn_conv", "gdn_l2norm", "gdn_gates", "gdn_delta",
@@ -47,7 +47,8 @@ namespace albireo
             "attention_mtile_2_64", "attention_mtile_2_128", "attention_mtile_2_256",
             "attention_mtile_4_64", "attention_mtile_4_128", "attention_mtile_4_256",
             "attention_mtile_8_64", "attention_mtile_8_128", "attention_mtile_8_256", "restore_outputs", "short_conv",
-            "gelu_mul", "add_rows" };
+            "gelu_mul", "add_rows",
+            "attention_part_1_16", "attention_part_2_16", "attention_part_4_16", "attention_part_8_16" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -59,7 +60,7 @@ namespace albireo
             k_dequant_q5_K, k_dequant_q8_0, k_dequant_q5_0,
             k_moe_group, k_moe_tiles, k_mm_id_q4_K, k_mm_id_q5_K, k_mm_id_q6_K, k_mm_id_q8_0, k_mm_id_q5_0,
             k_attention_part, k_attention_mtile = k_attention_part + 12, k_restore_outputs = k_attention_mtile + 12,
-            k_short_conv, k_gelu_mul, k_add_rows, k_count
+            k_short_conv, k_gelu_mul, k_add_rows, k_attention_part_512, k_count = k_attention_part_512 + 4
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -67,6 +68,7 @@ namespace albireo
         int attention_kernel(unsigned rep, unsigned hd)
         {
             const int r = rep == 1 ? 0 : rep == 2 ? 1 : rep == 4 ? 2 : rep == 8 ? 3 : -1;
+            if (r >= 0 && hd == 512) return k_attention_part_512 + r;
             const int p = hd == 64 ? 0 : hd == 128 ? 1 : hd == 256 ? 2 : -1;
             return r < 0 || p < 0 ? -1 : k_attention_part + 3 * r + p;
         }
@@ -771,7 +773,7 @@ namespace albireo
         metal_view blocks, metal_view rows, unsigned tokens, const kv_layout& l)
     {
         if (tokens == 0) return;
-        if (l.hd > 256 || l.hd % 32 != 0) throw std::invalid_argument("metal_device: heads of other widths than its kernels take");
+        if (l.hd > 512 || l.hd % 32 != 0) throw std::invalid_argument("metal_device: heads of other widths than its kernels take");
         impl_->use(k_kv_store);
         impl_->bind(k, 0);
         impl_->bind(v, 1);
@@ -846,7 +848,8 @@ namespace albireo
         const kv_layout& l)
     {
         if (n_tiles == 0) return;
-        const int base = attention_kernel(rep, l.hd);
+        // attention_mtile n'existe pas pour les têtes de 512 valeurs (tile_tokens vaut 0).
+        const int base = l.hd == 512 ? -1 : attention_kernel(rep, l.hd);
         if (base < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
         const int kernel = base - k_attention_part + k_attention_mtile;
         const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, 0, 1, q_stride,
