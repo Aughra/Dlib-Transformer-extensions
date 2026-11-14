@@ -672,6 +672,18 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : la passe avant et le format sont du code commun (non essayés sous Windows) ; la mesure est propre au Mac.
 
+### Changement 19 : LFM2 sur le GPU (Albireo 4.20.0)
+
+- **Changement** : noyau Metal `short_conv` (une file par canal et par segment ; lit b, c et x, met à jour la fenêtre de la séquence dans la zone des états, prise sans copie, écrit c · conv(b · x)) ; dans la passe du GPU, une branche LFM2 : norme, `in_proj`, `short_conv`, `out_proj` ; les longs prompts par morceaux aux points de reprise (`run_gpu_checkpointed`), comme Qwen 3.5. LFM2-MoE reste sur le processeur (routage par sigmoïde, premières couches denses). Le contrôle du GPU donne aux étapes qui suivent un prompt lu par le GPU en 8 bits la même limite que ce prompt (5 %) : elles en héritent les arrondis (LFM2.5-1.2B : 2,2 % en 8 bits, 0,10 % en demi-précision, même token le plus probable). Commit à venir.
+- **Exactitude** : contrôle du GPU en demi-précision à 0,08-0,10 % du processeur ; prompt de 2 623 tokens : même réponse que le processeur et que llama.cpp ; reprise de l'état sur trois tours et à un point de reprise : mêmes réponses.
+
+| LFM2.5-1.2B-Instruct Q8_0, `bench_runtime modele 8 512 64 1 q8 [metal]` (`lowpowermode 0`, charge 3,6 à 4,4, en alternance) | Processeur | GPU |
+|---|---|---|
+| Prompt de 512 tokens | 296,1 et 286,7 tokens/s | 433,1 et 462,1 tokens/s |
+| Génération | 36,2 et 35,0 tokens/s | 40,4 et 40,4 tokens/s |
+
+**Mac ou Windows** : propre au Mac (noyaux Metal).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -692,7 +704,7 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | Qwen 3.6 11B-A3B Q4_K_M (mélange d'experts, fork seulement), génération | non lu par le moteur | 26,1 à 26,3 tokens/s sur le GPU ; 24,4 à 25,0 sur le processeur (changement 12) |
 | Qwen 3.6 11B-A3B Q4_K_M, lecture d'un prompt de 512 tokens | non lu par le moteur | 196 à 198 tokens/s sur le GPU (changement 15) ; 107 à 112 sur le processeur |
 | Gemma 4 E2B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 20,9 à 23,8 tokens/s ; lecture de 512 tokens 143 à 153 tokens/s (changement 16) |
-| LFM2.5-8B-A1B Q4_K_M (mélange d'experts, fork seulement), processeur | non lu par le moteur | écriture 34,2 à 34,3 tokens/s ; lecture de 512 tokens 141 à 149 tokens/s (changement 17) ; le 1.2B en Q8_0 : 35,3 à 36,1 et 253 à 281 |
+| LFM2.5-8B-A1B Q4_K_M (mélange d'experts, fork seulement), processeur | non lu par le moteur | écriture 34,2 à 34,3 tokens/s ; lecture de 512 tokens 141 à 149 tokens/s (changement 17) ; le 1.2B en Q8_0 : 35,3 à 36,1 et 253 à 281, et sur le GPU 40,4 et 433 à 462 (changement 19) |
 | Gemma 3 4B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 16,3 à 17,2 tokens/s ; lecture de 512 tokens 88 à 92 tokens/s (changement 18) ; le 1B : 25,0 à 28,2 et 396 à 436 |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.

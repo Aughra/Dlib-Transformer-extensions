@@ -46,7 +46,7 @@ namespace albireo
             "attention_mtile_1_64", "attention_mtile_1_128", "attention_mtile_1_256",
             "attention_mtile_2_64", "attention_mtile_2_128", "attention_mtile_2_256",
             "attention_mtile_4_64", "attention_mtile_4_128", "attention_mtile_4_256",
-            "attention_mtile_8_64", "attention_mtile_8_128", "attention_mtile_8_256", "restore_outputs" };
+            "attention_mtile_8_64", "attention_mtile_8_128", "attention_mtile_8_256", "restore_outputs", "short_conv" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -58,7 +58,7 @@ namespace albireo
             k_dequant_q5_K, k_dequant_q8_0, k_dequant_q5_0,
             k_moe_group, k_moe_tiles, k_mm_id_q4_K, k_mm_id_q5_K, k_mm_id_q6_K, k_mm_id_q8_0, k_mm_id_q5_0,
             k_attention_part, k_attention_mtile = k_attention_part + 12, k_restore_outputs = k_attention_mtile + 12,
-            k_count
+            k_short_conv, k_count
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -457,6 +457,20 @@ namespace albireo
         impl_->bind(states, 2);
         impl_->bind(segments, 3);
         impl_->args(gdn(l, n_segments), 4);
+        impl_->grid(l.C, n_segments, 1);
+    }
+
+    void metal_device::commands::short_conv(metal_view mix, metal_view weights, metal_view states, metal_view segments,
+        unsigned n_segments, metal_view out, const gdn_layout& l)
+    {
+        if (n_segments == 0) return;
+        impl_->use(k_short_conv);
+        impl_->bind(mix, 0);
+        impl_->bind(weights, 1);
+        impl_->bind(states, 2);
+        impl_->bind(segments, 3);
+        impl_->bind(out, 4);
+        impl_->args(gdn(l, n_segments), 5);
         impl_->grid(l.C, n_segments, 1);
     }
 

@@ -1269,6 +1269,32 @@ kernel void gdn_conv(device float* mix [[buffer(0)]], device const float* w [[bu
     }
 }
 
+// La convolution courte de LFM2 (fork pour macOS), comme cpu_runtime::short_convolution() : mix contient, par token,
+// b, c et x (C valeurs chacun) ; chaque canal de b * x passe dans la convolution causale de ses K poids, sur la
+// fenêtre de sa séquence (K - 1 valeurs à layer_offset), et out reçoit c fois le résultat.  Grille (canaux, segments).
+kernel void short_conv(device const float* mix [[buffer(0)]], device const float* w [[buffer(1)]],
+    device float* states [[buffer(2)]], device const int* seg [[buffer(3)]], device float* out [[buffer(4)]],
+    constant gdn_args& a [[buffer(5)]], uint2 gid [[thread_position_in_grid]])
+{
+    const uint c = gid.x, s = gid.y;
+    if (c >= a.C || s >= a.segments) return;
+    const int sq = seg[3 * s], start = seg[3 * s + 1], count = seg[3 * s + 2];
+    const uint n = a.K - 1;
+    device float* win = states + ulong(sq) * a.slot_floats + a.layer_offset + ulong(c) * n;
+    device const float* wc = w + ulong(c) * a.K;
+    for (int j = 0; j < count; ++j)
+    {
+        device const float* row = mix + ulong(start + j) * 3 * a.C;
+        const float in = row[c] * row[2 * a.C + c];
+        float sum = 0.0f;
+        for (uint i = 0; i < n; ++i) sum += win[i] * wc[i];
+        sum += in * wc[n];
+        for (uint i = 0; i + 1 < n; ++i) win[i] = win[i + 1];
+        if (n > 0) win[n - 1] = in;
+        out[ulong(start + j) * a.C + c] = row[a.C + c] * sum;
+    }
+}
+
 // Normes L2 des têtes de requêtes et de clés de chaque token : grille (2 * Hk, tokens).
 kernel void gdn_l2norm(device float* mix [[buffer(0)]], constant gdn_args& a [[buffer(1)]],
     uint2 gid [[thread_position_in_grid]])

@@ -147,8 +147,8 @@ namespace albireo
         };
         // Gemma 4 (fenêtre glissante, têtes de 512, clés partagées, entrées par couche) reste sur le processeur.
         if (cfg_.gemma4) why = cfg_.gemma3 ? "the layers of Gemma 3" : "the layers of Gemma 4";
-        // LFM2 (convolutions courtes) reste sur le processeur (fork pour macOS).
-        else if (cfg_.lfm2) why = "the short convolutions of LFM2";
+        // LFM2-MoE (routage par sigmoïde, premières couches denses) reste sur le processeur (fork pour macOS).
+        else if (cfg_.lfm2 && cfg_.is_moe()) why = "the experts of LFM2-MoE";
         else if (cfg_.is_moe() && cfg_.n_experts_used > 32) why = "more than 32 experts per token";
         // qwen35 : des têtes linéaires d'au plus 256 valeurs, et un état dans la zone réservée.
         else if (cfg_.recurrent() && (cfg_.ssm_head_dim > 256 || !states_.data))
@@ -165,7 +165,8 @@ namespace albireo
             {
                 const layer& L = layers_[static_cast<size_t>(li)];
                 std::vector<const weight_matrix*> all;
-                if (cfg_.linear_layer(li)) all = { &L.w_mix, &L.w_z, &L.w_alpha, &L.w_beta, &L.w_ssm_out };
+                if (cfg_.lfm2 && cfg_.linear_layer(li)) all = { &L.w_mix, &L.w_ssm_out };
+                else if (cfg_.linear_layer(li)) all = { &L.w_mix, &L.w_z, &L.w_alpha, &L.w_beta, &L.w_ssm_out };
                 else all = { &L.wq, &L.wk, &L.wv, &L.wo };
                 if (cfg_.is_moe())
                 {
@@ -281,7 +282,14 @@ namespace albireo
         g.rows = need(device, T * sizeof(int));
         g.lengths = need(device, T * sizeof(int));
         g.tiles = need(device, T * 2 * sizeof(int));
-        if (cfg_.recurrent())
+        if (cfg_.lfm2)
+        {
+            // LFM2 : b, c et x de chaque token, puis la sortie de la convolution.
+            g.mix = need(device, T * 3 * cfg_.d_model * f);
+            g.lin_out = need(device, T * cfg_.d_model * f);
+            g.segments = need(device, T * 3 * sizeof(int));
+        }
+        else if (cfg_.recurrent())
         {
             g.mix = need(device, T * cfg_.ssm_conv_dim() * f);
             g.z = need(device, T * cfg_.ssm_value_dim() * f);
@@ -486,7 +494,13 @@ namespace albireo
             }
             one.segments.assign(1, { b, 0, 1 });
             run(one, on_cpu, false);
-            compare(step == 0 ? "step 1" : "step 2", 0.01);
+            /*
+                Les étapes lisent les clés et valeurs que le prompt a écrites : après un prompt sur le GPU en 8 bits,
+                elles en héritent les différences d'arrondi, et reçoivent la même limite (fork pour macOS ; LFM2.5-1.2B,
+                dont six couches d'attention portent seules la mémoire du texte : 2,2 % à la première étape en 8 bits,
+                0,10 % en demi-précision).
+            */
+            compare(step == 0 ? "step 1" : "step 2", gpu_prompt && kv_.format() == kv_format::q8 ? 0.05 : 0.01);
         }
         if (!agree)
         {
@@ -634,8 +648,8 @@ namespace albireo
                 sg[3 * i + 1] = static_cast<int>(batch.segments[i].start);
                 sg[3 * i + 2] = static_cast<int>(batch.segments[i].count);
             }
-            gl.C = static_cast<unsigned>(cfg_.ssm_conv_dim());
-            gl.K = static_cast<unsigned>(cfg_.ssm_conv_kernel);
+            gl.C = static_cast<unsigned>(cfg_.lfm2 ? cfg_.d_model : cfg_.ssm_conv_dim());
+            gl.K = static_cast<unsigned>(cfg_.lfm2 ? cfg_.conv_kernel : cfg_.ssm_conv_kernel);
             gl.Hk = static_cast<unsigned>(cfg_.ssm_k_heads);
             gl.Hv = static_cast<unsigned>(cfg_.ssm_v_heads);
             gl.S = static_cast<unsigned>(cfg_.ssm_head_dim);
@@ -688,7 +702,16 @@ namespace albireo
             const layer& L = layers_[static_cast<size_t>(li)];
             const gpu_state::layer_vectors& lv = g.layers[static_cast<size_t>(li)];
             const long slot = kv_slot_[static_cast<size_t>(li)];
-            if (slot < 0)
+            if (slot < 0 && cfg_.lfm2)
+            {
+                // Convolution courte (lfm2), puis la somme résiduelle dans x.
+                gl.layer_offset = static_cast<unsigned>(linear_slot_[static_cast<size_t>(li)] * cfg_.ssm_state_floats());
+                c->rms_norm(g.x, at(g.vectors, lv.attn_norm), g.xn, uT, d, d, d, eps);
+                product(L.w_mix, g.xn, d, g.mix, 3 * d, 1.0f, 0.0f);
+                c->short_conv(g.mix, at(g.vectors, lv.conv1d), g.states, g.segments, n_segments, g.lin_out, gl);
+                product(L.w_ssm_out, g.lin_out, d, g.x, d, rs, 1.0f);
+            }
+            else if (slot < 0)
             {
                 // Couche Gated DeltaNet (qwen35), puis la somme résiduelle dans x.
                 const long C = cfg_.ssm_conv_dim(), VD = cfg_.ssm_value_dim(), Hv = cfg_.ssm_v_heads;

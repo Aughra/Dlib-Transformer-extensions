@@ -25,9 +25,9 @@ namespace albireo
         // qwen35 depuis Albireo 4.13.0 du fork (qwen35moe, dont aucun projecteur n'a encore été essayé, attend) ;
         // gemma4v pour Gemma 4 depuis Albireo 4.16.0 du fork.
         const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe", "qwen35", "gemma4" };
-        // Les architectures dont les passes restent sur le processeur : Gemma 4 depuis Albireo 4.14.0 du fork, LFM2 et
-        // LFM2-MoE depuis Albireo 4.17.0, Gemma 3 depuis Albireo 4.19.0.
-        const std::set<std::string> processor_architectures = { "gemma4", "gemma3", "lfm2", "lfm2moe" };
+        // Les architectures dont les passes restent sur le processeur : Gemma 4 depuis Albireo 4.14.0 du fork, LFM2-MoE
+        // depuis Albireo 4.17.0, Gemma 3 depuis Albireo 4.19.0 (LFM2 dense va au GPU depuis Albireo 4.20.0).
+        const std::set<std::string> processor_architectures = { "gemma4", "gemma3", "lfm2moe" };
 
         std::string lower(std::string s)
         {

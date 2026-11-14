@@ -288,7 +288,8 @@ const items = {
       'Contrôlé à chaque chargement : au moindre écart, le moteur repasse seul au processeur.'],
     cons: ['Pas identique au dernier chiffre près au processeur (écart de 0,04 à 0,3 % sur les scores, même mot choisi).',
       'Environ 200 Mo de mémoire en plus pour ses tampons.',
-      'Seuls les poids en Q4_K et Q6_K y passent (aussi Q5_K, Q8_0 et Q5_0 pour Qwen 3.5 et les mélanges d’experts) ; le modèle de recherche reste sur le processeur.'],
+      'Seuls les poids en Q4_K et Q6_K y passent (aussi Q5_K, Q8_0 et Q5_0 pour Qwen 3.5, LFM2 et les mélanges d’experts) ; ' +
+        'Gemma 3, Gemma 4, LFM2-MoE et le modèle de recherche restent sur le processeur.'],
     normal: "Le Mac a deux moteurs de calcul sur la même puce : le processeur, polyvalent, et le GPU, fait pour répéter " +
       "la même opération sur des milliers de nombres à la fois. Écrire une réponse, c’est relire tout le modèle pour " +
       "chaque mot : le GPU lit cette mémoire plus vite. Lire un long document, c’est surtout multiplier : le GPU calcule " +
@@ -296,7 +297,7 @@ const items = {
     owl: "Le moteur ouvre un MTLDevice et compile ses noyaux Metal au démarrage (newLibraryWithSource). Les poids du " +
       "fichier GGUF sont pris sans copie (newBufferWithBytesNoCopy sur la projection mmap alignée sur les pages), de même " +
       "que la zone des clés et valeurs. Un pas d’écriture (1 à 8 tokens) est encodé en une seule commande : matvec Q4_K/Q6_K " +
-      "en simdgroups, RMSNorm, RoPE, écriture des clés q8 tournées (Walsh-Hadamard), attention en ligne par morceaux de 256 " +
+      "en simdgroups, RMSNorm, RoPE, écriture des clés et valeurs q8 tournées (Walsh-Hadamard), attention en ligne par morceaux de 256 " +
       "positions puis fusion. Un prompt de 24 tokens ou plus décompresse chaque matrice en float32 puis passe par " +
       "MPSMatrixMultiplication ; son attention multiplie des matrices 8 × 8 (simdgroup_matrix). Au chargement, une sonde de 29 tokens et deux pas sont comparés au processeur en produits " +
       "flottants : logits à 1 % près (5 % pour un prompt en clés 8 bits), même argmax, sinon repli.",

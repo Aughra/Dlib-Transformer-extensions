@@ -213,6 +213,10 @@ namespace albireo
             // Convolution causale et SiLU de chaque canal, la fenêtre de chaque séquence mise à jour.
             void gdn_conv(metal_view mix, metal_view weights, metal_view states, metal_view segments,
                 unsigned n_segments, const gdn_layout& l);
+            // La convolution courte de LFM2 (fork pour macOS) : mix contient b, c et x (l.C valeurs chacun) par token ;
+            // out reçoit c * conv(b * x), la fenêtre de chaque séquence mise à jour (l.K poids par canal).
+            void short_conv(metal_view mix, metal_view weights, metal_view states, metal_view segments,
+                unsigned n_segments, metal_view out, const gdn_layout& l);
             // Normes L2 des têtes de requêtes et de clés de tokens tokens.
             void gdn_l2norm(metal_view mix, unsigned tokens, const gdn_layout& l);
             // alpha devient l'oubli softplus(alpha + dt_bias) * ssm_a, beta la force sigmoid(beta).

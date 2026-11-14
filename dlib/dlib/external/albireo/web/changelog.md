@@ -2,6 +2,19 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.20.0 — 14 novembre 2026
+
+### Performances
+
+- Les modèles LFM2 sans mélange d'experts passent au GPU, pour l'écriture comme pour la lecture des prompts : un noyau Metal calcule la convolution courte et tient l'état de chaque conversation, que le GPU prend sans copie, comme pour Qwen 3.5 ; les longs prompts sont lus par morceaux aux points de reprise. LFM2.5-1.2B-Instruct Q8_0 sur MacBook Air M2, mesures alternées : lecture d'un prompt de 512 tokens de 287-296 à 433-462 tokens/s, écriture de 35-36 à 40 tokens/s ; sur un prompt de 2 623 tokens, réponse identique à celle du processeur et lecture à 420 tokens/s au lieu de 260.
+- LFM2-MoE, Gemma 3 et Gemma 4 restent sur le processeur.
+
+### Corrections
+
+- Le contrôle du GPU au chargement admettait 5 % d'écart sur un prompt avec les clés et valeurs sur 8 bits, mais 1 % sur les étapes qui le suivent, alors qu'elles en héritent les différences d'arrondi ; les étapes reçoivent désormais la même limite dans ce cas (le token le plus probable doit toujours être le même). Avec LFM2.5-1.2B, l'écart était de 2,2 % en 8 bits et de 0,10 % en demi-précision.
+
+---
+
 ## 4.19.0 — 14 novembre 2026
 
 ### Plateforme

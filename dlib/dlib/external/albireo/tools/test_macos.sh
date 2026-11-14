@@ -125,10 +125,11 @@ qwen35_turns() {
 # multiple de 256 positions.  Sur le processeur (« cpu »), sa réponse est celle de la question posée seule, au
 # caractère près.  Avec le GPU, la question reprise ne relit que 15 tokens, sur le processeur (moins de 24), alors
 # que la question seule lit son prompt sur le GPU : deux calculs qui ne s'arrondissent pas pareil, et un modèle qui
-# hésite peut alors bifurquer ; l'étape vérifie la reprise et le sujet de la réponse (de même avec « subject »).
+# hésite peut alors bifurquer ; l'étape vérifie la reprise et le sujet de la réponse (de même avec « subject », sur le
+# processeur).
 qwen35_checkpoint() {
   local model=$1 mode=$2 sys both alone extra=()
-  [ "$mode" = cpu ] && extra=(--no-metal)
+  if [ "$mode" = cpu ] || [ "$mode" = subject ]; then extra=(--no-metal); fi
   sys=$(for i in $(seq 1 24); do printf 'Rule %s: always answer politely, mention the opening hours (7am to 7pm) only when asked, and keep answers under three sentences. ' "$i"; done)
   both=$("$CHAT" "$ENGINE" "$model" --reasoning off --temperature 0 --max 30 --no-warm ${extra[@]+"${extra[@]}"} --system "$sys" \
     "What are your opening hours?" "Do you sell croissants?" 2>/dev/null) || return 1
@@ -233,7 +234,7 @@ else
 fi
 
 # LFM2 et LFM2-MoE (convolutions courtes et attention ; Albireo 4.17.0) : une réponse, l'état des convolutions repris
-# sur trois tours et à un point de reprise, puis le mélange d'experts, qui raisonne avant de répondre, et un détail à
+# sur trois tours et à un point de reprise (sur le processeur, puis sur le GPU pour LFM2 dense), puis le mélange d'experts, qui raisonne avant de répondre, et un détail à
 # retrouver dans un journal de 2 622 tokens (tests/lfm2/long_prompt.txt) : l'enregistrement 3 est celui de Gaëlle, que le
 # modèle prenait pour Inès avec des valeurs sur 8 bits non tournées (llama.cpp aussi, sans sa rotation de Hadamard) ;
 # depuis Albireo 4.17.1, les valeurs sont tournées comme les clés, et l'étape le vérifie avec les 8 bits par défaut.
@@ -247,6 +248,10 @@ else
   # son premier mot (« We » 0,27, « Our » 0,255 dans llama.cpp, dont la réponse est celle de la reprise).  L'étape
   # vérifie la reprise et le sujet de la réponse.
   step "lfm2 checkpoint" "resumed at a checkpoint, answer on its subject" qwen35_checkpoint "$LFM2" subject
+  # Sur le GPU (Albireo 4.20.0) : le contrôle accepté pour les étapes et les prompts, puis un point de reprise.
+  step "lfm2 on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$LFM2" --temperature 0 --max 40 \
+    "$QUESTION"
+  step "lfm2 checkpoint on the GPU" "resumed at a checkpoint, answer on its subject" qwen35_checkpoint "$LFM2" gpu
   # Outils dans la notation de LFM2 (appels à la manière de Python ; Albireo 4.18.0) : l'appel lu, puis la réponse tirée
   # de son résultat, celle de llama.cpp 0.9.0.
   step "lfm2 tool call" '"name":"get_weather","arguments":".*Paris' "$CHAT" "$ENGINE" "$LFM2" \
