@@ -757,6 +757,7 @@ namespace albireo
             else
                 c->attention(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), uT, rep, parts, qd,
                     g.partial, g.ctx, kl, part_len);
+            if (q8) c->restore_outputs(g.ctx, uT, H, hd, qd);
             if (cfg_.attn_output_gate) c->sigmoid_mul(g.ctx, g.attn_gate, static_cast<unsigned>(T * qd));
             product(L.wo, g.ctx, qd, g.x, d, rs, 1.0f);
             }

@@ -170,13 +170,17 @@ namespace albireo
             };
 
             // Les clés et valeurs de tokens tokens (kv_stride floats par token) dans la ligne rows[t] du
-            // bloc blocks[t] (int32), les clés tournées en q8 (qk_rotate_row).
+            // bloc blocks[t] (int32), les clés et valeurs tournées en q8 (qk_rotate_row).
             void kv_store(metal_view k, metal_view v, unsigned kv_stride, metal_view region, metal_view blocks,
                 metal_view rows, unsigned tokens, const kv_layout& layout);
 
             // Les requêtes de tokens tokens, heads têtes de hd valeurs, mises à l'échelle, et tournées en q8.
             void prepare_queries(metal_view q, unsigned tokens, unsigned heads, unsigned hd, unsigned q_stride,
                 float scale, bool q8);
+
+            // Les sorties de l'attention sur des valeurs q8, stockées tournées : chaque tête remise en place
+            // (qk_unrotate_row ; fork pour macOS).
+            void restore_outputs(metal_view o, unsigned tokens, unsigned heads, unsigned hd, unsigned stride);
 
             /*!
                 L'attention de tokens tokens : le token t, dont les requêtes (préparées) se trouvent à

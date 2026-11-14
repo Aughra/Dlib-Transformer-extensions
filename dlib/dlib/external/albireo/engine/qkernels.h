@@ -218,8 +218,19 @@ namespace albireo
               contiennent des valeurs dix fois plus grandes que les autres, que la rotation
               répartit sur la ligne, pour que les groupes du format 8 bits les arrondissent avec
               un pas plus fin.
+            - Les valeurs du cache 8 bits sont stockées tournées de même (fork pour macOS, Albireo
+              4.17.1), et la sortie de l'attention, qui en est une moyenne pondérée, est remise
+              en place par qk_unrotate_row(), comme llama.cpp tourne ses valeurs quantifiées.
     !*/
     void qk_rotate_row(float* x, long n);
+
+    /*!
+        ensures
+            - Défait qk_rotate_row() : la même transformée de Walsh-Hadamard normalisée, qui est
+              sa propre inverse, puis les mêmes signes.  qk_unrotate_row(qk_rotate_row(x)) rend x
+              aux arrondis près.
+    !*/
+    void qk_unrotate_row(float* x, long n);
 
     // Fonctions vectorielles d'aide du code d'attention et de normalisation.
     float qk_dot_f32(const float* a, const float* b, long n);

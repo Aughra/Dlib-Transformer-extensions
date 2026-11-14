@@ -160,25 +160,46 @@ namespace albireo
         }
     }
 
+    namespace
+    {
+        // Les signes de la rotation : ceux d'un hachage de l'indice.
+        void flip_signs(float* x, long n)
+        {
+            for (long i = 0; i < n; ++i)
+                if ((static_cast<uint32_t>(i) * 2654435761u) >> 31) x[i] = -x[i];
+        }
+
+        // La transformée de Walsh-Hadamard normalisée, par blocs de la plus grande puissance de deux qui divise n.
+        void walsh_hadamard(float* x, long n)
+        {
+            const long block = n & -n;
+            const float norm = 1.0f / std::sqrt(static_cast<float>(block));
+            for (long b0 = 0; b0 < n; b0 += block)
+            {
+                float* y = x + b0;
+                for (long len = 1; len < block; len <<= 1)
+                    for (long i = 0; i < block; i += 2 * len)
+                        for (long j = i; j < i + len; ++j)
+                        {
+                            const float a = y[j], c = y[j + len];
+                            y[j] = a + c;
+                            y[j + len] = a - c;
+                        }
+                for (long i = 0; i < block; ++i) y[i] *= norm;
+            }
+        }
+    }
+
     void qk_rotate_row(float* x, long n)
     {
-        for (long i = 0; i < n; ++i)
-            if ((static_cast<uint32_t>(i) * 2654435761u) >> 31) x[i] = -x[i];
-        const long block = n & -n;
-        const float norm = 1.0f / std::sqrt(static_cast<float>(block));
-        for (long b0 = 0; b0 < n; b0 += block)
-        {
-            float* y = x + b0;
-            for (long len = 1; len < block; len <<= 1)
-                for (long i = 0; i < block; i += 2 * len)
-                    for (long j = i; j < i + len; ++j)
-                    {
-                        const float a = y[j], c = y[j + len];
-                        y[j] = a + c;
-                        y[j + len] = a - c;
-                    }
-            for (long i = 0; i < block; ++i) y[i] *= norm;
-        }
+        flip_signs(x, n);
+        walsh_hadamard(x, n);
+    }
+
+    void qk_unrotate_row(float* x, long n)
+    {
+        walsh_hadamard(x, n);
+        flip_signs(x, n);
     }
 
     const char* qk_isa()

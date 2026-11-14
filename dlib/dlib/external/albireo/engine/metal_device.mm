@@ -46,7 +46,7 @@ namespace albireo
             "attention_mtile_1_64", "attention_mtile_1_128", "attention_mtile_1_256",
             "attention_mtile_2_64", "attention_mtile_2_128", "attention_mtile_2_256",
             "attention_mtile_4_64", "attention_mtile_4_128", "attention_mtile_4_256",
-            "attention_mtile_8_64", "attention_mtile_8_128", "attention_mtile_8_256" };
+            "attention_mtile_8_64", "attention_mtile_8_128", "attention_mtile_8_256", "restore_outputs" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -57,7 +57,8 @@ namespace albireo
             k_mv_q5_0, k_mv_q5_0_n, k_mv_q5_0_id,
             k_dequant_q5_K, k_dequant_q8_0, k_dequant_q5_0,
             k_moe_group, k_moe_tiles, k_mm_id_q4_K, k_mm_id_q5_K, k_mm_id_q6_K, k_mm_id_q8_0, k_mm_id_q5_0,
-            k_attention_part, k_attention_mtile = k_attention_part + 12, k_count = k_attention_mtile + 12
+            k_attention_part, k_attention_mtile = k_attention_part + 12, k_restore_outputs = k_attention_mtile + 12,
+            k_count
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -751,6 +752,17 @@ namespace albireo
         impl_->use(k_prepare_queries);
         impl_->bind(q, 0);
         const query_args a = { hd, q8 ? 1u : 0u, q_stride, scale };
+        impl_->args(a, 1);
+        impl_->groups(heads, tokens, 1, hd);
+    }
+
+    void metal_device::commands::restore_outputs(metal_view o, unsigned tokens, unsigned heads, unsigned hd,
+        unsigned stride)
+    {
+        if (tokens == 0) return;
+        impl_->use(k_restore_outputs);
+        impl_->bind(o, 0);
+        const query_args a = { hd, 1u, stride, 1.0f };
         impl_->args(a, 1);
         impl_->groups(heads, tokens, 1, hd);
     }

@@ -35,7 +35,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 6 à 15 | Portabilité macOS | CMake, `platform.cpp`, `system_info.cpp`, `picopltf.h`, `drive_folders.cpp`, scripts de test | Erreurs de compilation, et chemins propres à Linux (`/proc`, `/sys`, `endian.h`, `st_mtim`, options x86). | Propre au Mac |
 | 16 à 20 | Remarques | noyaux, pool de fils, mode économie d'énergie, seuil des produits en flottants, nombre de fils sur un processeur hybride | Pas de défaut, mais bon à savoir. | Voir chaque remarque |
 | 21 | Remarque, sécurité | `albireo/common/platform.cpp:622, 663, 735`, `pseudalis/common/platform.cpp:622, 636, 700` | Hors de Windows, les trois contrôles de dossiers répondent toujours « oui ». | **Propre à Linux** (et au Mac) ; Windows non concerné |
-| 22 | Remarque, exactitude | `albireo/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant. | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
+| 22 | Remarque, exactitude | `albireo/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant (corrigé dans le fork). | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
 
 ---
 
@@ -303,21 +303,30 @@ Mode économie actif (`pmset -g` affiche `lowpowermode 1`), le moteur tournait e
 
   llama.cpp tourne les deux (`src/llama-kv-cache.cpp`, `attn_rot_k` et `attn_rot_v`, matrices de Hadamard de 64 et plus, dès que le cache est quantifié). Avec LFM2.5-8B-A1B Q4_K_M (architecture `lfm2moe`, que le fork lit depuis Albireo 4.17.0), sur un journal de 2 622 tokens où il faut retrouver l'enregistrement 3 : en 8 bits, le modèle répond « Inès » au lieu de « Gaëlle » ; en demi-précision, il répond juste. llama.cpp 0.9.0 avec un cache `q8_0` répond juste, et se trompe de la même façon quand on coupe sa rotation (`LLAMA_ATTN_ROT_DISABLE=1`). Donné le même début de raisonnement jusqu'au nom, llama.cpp choisit « Gaëlle » à 74 % et « Inès » à 9 % : ce n'est pas une hésitation du modèle.
 - **Reproduire** : dans le fork, `engine_chat <moteur> LFM2.5-8B-A1B-Q4_K_M.gguf --temperature 0 --max 400 --kv q8` avec le texte exact de `albireo/tests/lfm2/long_prompt.txt` (saut de ligne final compris : sans lui, les deux formats répondent juste).
-- **Suggestion** (essayée sur le Mac, sur le processeur seulement, puis retirée) : tourner aussi les valeurs avant l'arrondi, et défaire la rotation sur la sortie de l'attention, tête par tête (la transformée de Walsh-Hadamard normalisée est sa propre inverse, puis les mêmes signes) :
+- **Correction du fork** (Albireo 4.17.1, commit à venir) : les valeurs sont tournées comme les clés avant l'arrondi, et la sortie de l'attention est remise en place, tête par tête, par `qk_unrotate_row` (la transformée de Walsh-Hadamard normalisée est sa propre inverse, suivie des mêmes signes). Fichier `albireo/engine/cpu_runtime.cpp`, à la place des lignes 474 à 480 :
 
   ```cpp
-  // store_keys_values, à la place de la ligne 479
+  float* rotated_v = rotated + hd;   // le tampon de travail contient au moins quatre lignes
+  std::copy(k, k + hd, rotated);
+  qk_rotate_row(rotated, hd);
   std::copy(v, v + hd, rotated_v);
   qk_rotate_row(rotated_v, hd);
+  qk_float_to_q8_row(rotated, reinterpret_cast<int8_t*>(kv_.keys(block, li, h)) + row * hd,
+      kv_.key_scales(block, li, h) + row * scales_per_row, hd);
   qk_float_to_q8_row(rotated_v, reinterpret_cast<int8_t*>(kv_.values(block, li, h)) + row * hd,
       kv_.value_scales(block, li, h) + row * scales_per_row, hd);
-
-  // après attention(), pour chaque token t et chaque tête de requêtes h, quand le format est q8
-  qk_unrotate_row(ctx_.data() + t * qd + h * hd, hd);   // Walsh-Hadamard normalisé, puis les signes de qk_rotate_row
   ```
 
-  Avec ce changement, le même modèle en 8 bits retrouve « Gaëlle » (deux essais), et Qwen3-VL 2B répond toujours juste. **Non testé** : les autres chemins qui écrivent ou lisent le cache (GPU Metal du fork ; CUDA et OpenVINO de l'original) devraient faire de même, et l'effet sur les modèles que l'original lit n'a pas été mesuré.
-- **Ce que le fork fait pour l'instant** : « auto » garde les clés et valeurs de LFM2 en demi-précision (Albireo 4.17.0). Ses six couches d'attention, sur 16 ou 24, n'occupent que 12 Ko par token dans ce format. La rotation des valeurs reste à faire, sur le processeur et le GPU.
+  puis, dans la passe avant, juste après `attention(...)` :
+
+  ```cpp
+  if (kv_.format() == kv_format::q8)
+      for (long r = 0; r < T * H; ++r) qk_unrotate_row(ctx_.data() + r * hd, hd);
+  ```
+
+  avec, dans `albireo/engine/qkernels.cpp`, `qk_unrotate_row(x, n)` = la boucle de Walsh-Hadamard de `qk_rotate_row`, puis ses signes. Le fork fait de même dans ses noyaux Metal (`kv_store` tourne aussi les valeurs, un noyau `restore_outputs` remet les sorties en place) ; dans l'original, les moteurs CUDA et OpenVINO, qui écrivent et lisent le même cache, devraient faire de même (**non testé**).
+- **Vérifié** (sur le Mac) : le modèle de l'exemple retrouve « Gaëlle » en 8 bits ; `test_qkernels` et `test_metal` passent (le rangement du GPU est identique au bit près à celui du processeur, et `restore_outputs` à `qk_unrotate_row`) ; `tools/test_macos.sh` passe en entier. Coût non mesurable : Qwen3-VL 2B Q4_K_M, quatre essais en alternance, écriture sur le processeur 29,1 à 32,9 tokens/s contre 27,5 à 34,7 avant, lecture de 4 096 tokens sur le GPU 288 à 297 contre 281 à 300. Pas vérifié : l'effet sur la qualité des modèles que lit l'original, et Windows.
+- **Ce que le fork a fait entre-temps** : en 4.17.0, « auto » gardait les clés et valeurs de LFM2 en demi-précision ; depuis la 4.17.1, LFM2 revient aux 8 bits.
 - **Mac ou Windows** : **aussi sous Windows**, déduit du code (le rangement est commun). Constaté seulement avec un modèle que l'original ne lit pas ; non vérifié sous Windows.
 
 ---
@@ -636,10 +645,10 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 - **Pourquoi** : parmi les familles GGUF que le moteur refusait, les plus téléchargées après Gemma 4 (`qwen4exp`, `deepseek41`, `glm5-next`) font de 165 à 755 milliards de paramètres et ne tiennent pas dans la mémoire d'un Mac. Vient ensuite LFM2 de Liquid AI : LFM2.5 de 230 millions à 2,6 milliards de paramètres, et à mélange d'experts LFM2.5-8B-A1B et 24B-A2B (plus d'un million de téléchargements pour ce dernier, relevé du 2026-11-14). Comme les changements 12 et 16, c'est un ajout du fork ; il est consigné ici parce qu'il révèle la remarque 22.
 - **Moteur** (`model_config.*`, `cpu_runtime.*`, Albireo 4.17.0) : formule de llama.cpp (`src/models/lfm-base.cpp`, `lfm2.cpp`, `lfm2moe.cpp`). `head_count_kv` est une liste, une valeur par couche ; une couche à 0 tête de clés est une **convolution courte** : `shortconv.in_proj` donne b, c et x, y = c · conv(b · x), une convolution causale par canal de `shortconv.l_cache` = 3 poids, puis `shortconv.out_proj`, sans activation. Son état par séquence est la fenêtre des deux valeurs précédentes de b · x pour chaque canal (4 096 flottants par couche) ; il passe par la machinerie des couches linéaires de Qwen 3.5 (états dans une zone réservée, reprise à la longueur de la séquence, points de reprise toutes les 256 positions). Les autres couches sont des attentions GQA avec normes RMS des requêtes et des clés, rotation néox. La norme finale s'appelle `token_embd_norm` (llama.cpp : « fix for wrong tensor name »). LFM2-MoE : les `leading_dense_block_count` premières couches (2) sont denses ; les autres ont 32 experts, dont 4 par token, choisis sur sigmoid(logit) + `exp_probs_b`, pesés par sigmoid(logit) renormalisé (`expert_gating_func` 2), sans échelle. Refusés avec un message : les modèles à tête de décision, à fenêtre glissante et à couche de sortie dense (ColBERT). Pas de GPU.
 - **Format de conversation** (`chat_format.cpp`, `lfm2_format`) : `<|startoftext|>` puis des tours ChatML ; ce BOS, que le gabarit écrit (`{{- bos_token -}}`), manquait quand le modèle passait par le format ChatML, et faisait diverger les réponses dès le premier mot. Comme llama.cpp : `preserve_thinking` vrai pour les gabarits du 8B, qui écrivent la pensée d'une réponse (tirée de `reasoning_content`) entre `<think>` et `</think>` ; ceux du 1.2B retirent les pensées des réponses passées sauf la dernière ; celui de LFM2.5-Audio les garde. Le modèle ouvre lui-même son raisonnement par `<think>`, que le moteur sépare de la réponse. Les appels d'outils (appels Python entre `<|tool_call_start|>` et `<|tool_call_end|>`) ne sont pas encore pris en charge, et le catalogue ne les annonce pas.
-- **Clés et valeurs** : « auto » les garde en demi-précision pour LFM2 (remarque 22).
-- **Exactitude** (llama.cpp 0.9.0 sur le processeur, `-ngl 0 --jinja`, choix glouton) : prompt rendu identique à `/apply-template` sur huit conversations, pour le 1.2B et le 8B ; mêmes nombres de tokens de prompt. LFM2.5-1.2B-Instruct Q8_0 : deux réponses de 87 et 150 tokens identiques, deux autres jusqu'à une quasi-égalité (0,26 / 0,213 ; 0,191 / 0,176) ; prompt de 2 623 tokens : réponse identique ; trois tours d'une conversation, les tours 2 et 3 lus depuis l'état gardé (49 et 97 tokens repris) : identiques à llama.cpp, qui relit tout. LFM2.5-8B-A1B Q4_K_M : raisonnement et réponse jusqu'à une quasi-égalité sur quatre questions (0,308 / 0,263 ; 0,46 / 0,426 ; 0,586 / 0,405 ; une distribution plate à 0,169 / 0,157) ; prompt de 2 622 tokens : bonne réponse en demi-précision. Commit [de5e5b0](https://github.com/Aughra/Dlib-Transformer-extensions/commit/de5e5b0).
+- **Clés et valeurs** : « auto » les gardait en demi-précision pour LFM2 en 4.17.0 ; en 8 bits depuis la 4.17.1, qui tourne aussi les valeurs (remarque 22).
+- **Exactitude** (llama.cpp 0.9.0 sur le processeur, `-ngl 0 --jinja`, choix glouton) : prompt rendu identique à `/apply-template` sur huit conversations, pour le 1.2B et le 8B ; mêmes nombres de tokens de prompt. LFM2.5-1.2B-Instruct Q8_0 : deux réponses de 87 et 150 tokens identiques, deux autres jusqu'à une quasi-égalité (0,26 / 0,213 ; 0,191 / 0,176) ; prompt de 2 623 tokens : réponse identique ; trois tours d'une conversation, les tours 2 et 3 lus depuis l'état gardé (49 et 97 tokens repris) : identiques à llama.cpp, qui relit tout. LFM2.5-8B-A1B Q4_K_M : raisonnement et réponse jusqu'à une quasi-égalité sur quatre questions (0,308 / 0,263 ; 0,46 / 0,426 ; 0,586 / 0,405 ; une distribution plate à 0,169 / 0,157) ; prompt de 2 622 tokens : bonne réponse en demi-précision, et en 8 bits depuis la 4.17.1. Commit [de5e5b0](https://github.com/Aughra/Dlib-Transformer-extensions/commit/de5e5b0).
 
-| LFM2.5, processeur, 8 threads, clés et valeurs en demi-précision (`lowpowermode 0`, charge 3,0 à 5,7, en alternance) | Essai 1 | Essai 2 |
+| LFM2.5, processeur, 8 threads, clés et valeurs en demi-précision, comme en 4.17.0 (`lowpowermode 0`, charge 3,0 à 5,7, en alternance) | Essai 1 | Essai 2 |
 |---|---|---|
 | 1.2B Q8_0, `bench_runtime modele 8 512 16 1`, prompt de 512 tokens | 281,3 tokens/s | 252,9 tokens/s |
 | 1.2B Q8_0, `engine_chat --temperature 0 --max 200`, 200 tokens écrits | 36,1 tokens/s | 35,3 tokens/s |

@@ -36,7 +36,7 @@ Le coupable était un réglage ancien : pour gagner de la mémoire, Albireo arro
 
 C'est une photocopie trop contrastée : le texte principal reste lisible, mais un petit nom en marge disparaît. Et LFM2 y est plus sensible que d'autres, parce que ses six couches d'attention portent seules toute la mémoire du texte. L'erreur ne vient pas du portage de LFM2 : elle est dans le code d'origine, et ce modèle n'a fait que la montrer.
 
-Pour l'instant, LFM2 garde ses clés et valeurs en demi-précision. Avec si peu de couches d'attention, cela ne coûte que 12 Ko par mot. La vraie correction, faire tourner les valeurs partout, sur le processeur comme sur le GPU, attend son tour ; elle est décrite à l'auteur de l'original.
+Dans un premier temps, LFM2 a gardé ses clés et valeurs en demi-précision : avec si peu de couches d'attention, cela ne coûtait que 12 Ko par mot. Puis, quelques heures plus tard, on a fait la vraie correction : tourner les valeurs avant de les arrondir, et défaire la rotation sur ce que l'attention en tire, sur le processeur comme sur le GPU. C'est un petit noyau de plus pour le GPU, et une vingtaine de lignes pour le processeur. Le modèle retrouve « Gaëlle » en 8 bits, LFM2 revient au réglage commun, et le surcoût se perd dans le bruit des mesures. L'auteur de l'original a reçu la description du défaut et de sa correction.
 
 ## Deux petites portes mal fermées
 
@@ -51,8 +51,9 @@ L'essai de bout en bout, un service jetable qui ajoute LFM2 depuis Hugging Face 
 - Référence : llama.cpp 0.9.0, `llama-server -ngl 0 --jinja`, choix glouton, probabilités par `top_logprobs` ; rotation coupée par `LLAMA_ATTN_ROT_DISABLE=1` avec un cache `-ctk q8_0 -ctv q8_0`.
 - Conversation reprise depuis l'état : 49 puis 97 tokens repris aux tours 2 et 3, réponses identiques à celles de llama.cpp, qui relit tout.
 - Vitesse, processeur, 8 threads, en alternance, machine reposée (charge 3,0 à 5,7) : 1.2B Q8_0, prompt de 512 tokens 281 et 253 tokens/s, écriture 36,1 et 35,3 ; 8B-A1B Q4_K_M, 149 et 141 tokens/s, écriture 34,3 et 34,2. Une première série, prise juste après 40 minutes de tests, avait donné de 19 à 35 tokens/s : un MacBook Air sans ventilateur ralentit quand il chauffe, et on l'a écartée.
-- Le test complet d'Albireo compte maintenant 41 étapes, dont « lfm2 moe long prompt », qui rejoue le journal piégé : à une ligne vide près en fin de texte, les deux formats répondaient juste, et l'étape ne protégeait plus de rien.
+- Le test complet d'Albireo compte maintenant 41 étapes, dont « lfm2 moe long prompt », qui rejoue le journal piégé : à une ligne vide près en fin de texte, les deux formats répondaient juste, et l'étape ne protégeait plus de rien. Depuis la 4.17.1, elle tourne avec les 8 bits par défaut, et garde donc la rotation des valeurs.
+- Coût de cette rotation, Qwen3-VL 2B, quatre essais en alternance avec la version d'avant : écriture sur le processeur de 29,1 à 32,9 tokens/s contre 27,5 à 34,7 ; lecture de 4 096 tokens sur le GPU de 288 à 297 contre 281 à 300.
 
 ## À suivre
 
-Il reste à LFM2 ses outils, écrits comme des appels de fonctions Python, et le GPU. Le moteur, lui, doit encore faire tourner ses valeurs, ce qui profitera à tous les modèles. Le Mac mini arrive dans moins de deux semaines.
+Il reste à LFM2 ses outils, écrits comme des appels de fonctions Python, et le GPU. Le Mac mini arrive dans moins de deux semaines.

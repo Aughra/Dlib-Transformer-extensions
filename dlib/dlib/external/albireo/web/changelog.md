@@ -2,6 +2,19 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.17.1 — 14 novembre 2026
+
+### Corrections
+
+- Avec les clés et valeurs sur 8 bits (format « auto » des modèles de langue), les valeurs sont désormais tournées avant l'arrondi, comme les clés l'étaient déjà (signes pseudo-aléatoires puis transformée de Walsh-Hadamard), et la sortie de l'attention est remise en place ensuite, sur le processeur comme sur le GPU. llama.cpp procède de même. Sans cette rotation, LFM2.5-8B-A1B perdait un détail d'un prompt de 2 622 tokens ; il le retrouve désormais en 8 bits.
+- LFM2 revient au format 8 bits par défaut, comme les autres modèles de langue (en 4.17.0, il restait en demi-précision faute de cette rotation).
+
+### Performances
+
+- Coût de la rotation non mesurable sur MacBook Air M2 : Qwen3-VL 2B Q4_K_M, quatre essais en alternance avec la version précédente, écriture sur le processeur de 29,1 à 32,9 tokens/s contre 27,5 à 34,7, lecture de 4 096 tokens sur le GPU de 288 à 297 tokens/s contre 281 à 300 (un essai perturbé de la version précédente écarté).
+
+---
+
 ## 4.17.0 — 14 novembre 2026
 
 ### Plateforme

@@ -221,7 +221,8 @@ fi
 # LFM2 et LFM2-MoE (convolutions courtes et attention ; Albireo 4.17.0) : une réponse, l'état des convolutions repris
 # sur trois tours et à un point de reprise, puis le mélange d'experts, qui raisonne avant de répondre, et un détail à
 # retrouver dans un journal de 2 622 tokens (tests/lfm2/long_prompt.txt) : l'enregistrement 3 est celui de Gaëlle, que le
-# modèle prenait pour Inès avec des clés et valeurs sur 8 bits (llama.cpp aussi, sans sa rotation de Hadamard).
+# modèle prenait pour Inès avec des valeurs sur 8 bits non tournées (llama.cpp aussi, sans sa rotation de Hadamard) ;
+# depuis Albireo 4.17.1, les valeurs sont tournées comme les clés, et l'étape le vérifie avec les 8 bits par défaut.
 LFM2=${LFM2_MODEL:-$ROOT/build/models/LFM2.5-1.2B-Instruct-Q8_0.gguf}
 LFM2MOE=${LFM2MOE_MODEL:-$ROOT/build/models/LFM2.5-8B-A1B-Q4_K_M.gguf}
 if [ ! -f "$ENGINE" ] || [ ! -f "$LFM2" ]; then skip "lfm2" "no $LFM2"

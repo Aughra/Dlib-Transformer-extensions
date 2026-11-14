@@ -754,12 +754,17 @@ namespace albireo
                 const float* v = v_.data() + t * kvd + h * hd;
                 if (q8)
                 {
-                    // Les clés sont stockées tournées (qk_rotate_row), les requêtes étant tournées de même.
+                    // Les clés sont stockées tournées (qk_rotate_row), les requêtes étant tournées de même ; les
+                    // valeurs aussi (fork pour macOS), la sortie de l'attention étant remise en place ensuite
+                    // (run()).  Le tampon de travail contient au moins quatre lignes (qk_attention_scratch).
+                    float* rotated_v = rotated + hd;
                     std::copy(k, k + hd, rotated);
                     qk_rotate_row(rotated, hd);
+                    std::copy(v, v + hd, rotated_v);
+                    qk_rotate_row(rotated_v, hd);
                     qk_float_to_q8_row(rotated, reinterpret_cast<int8_t*>(kv_.keys(block, li, h)) + row * hd,
                         kv_.key_scales(block, li, h) + row * scales_per_row, hd);
-                    qk_float_to_q8_row(v, reinterpret_cast<int8_t*>(kv_.values(block, li, h)) + row * hd,
+                    qk_float_to_q8_row(rotated_v, reinterpret_cast<int8_t*>(kv_.values(block, li, h)) + row * hd,
                         kv_.value_scales(block, li, h) + row * scales_per_row, hd);
                 }
                 else
@@ -1630,6 +1635,18 @@ namespace albireo
             if (owns) store_keys_values(slot, batch, li);
 
             attention(slot, batch, positions_, li);
+            // Les valeurs 8 bits sont stockées tournées : leur moyenne pondérée, la sortie de chaque tête, l'est aussi.
+            if (kv_.format() == kv_format::q8)
+            {
+                auto restore = [&](long r0, long r1) {
+                    for (long r = r0; r < r1; ++r) qk_unrotate_row(ctx_.data() + r * lhd, lhd);
+                };
+                const long rows = T * H;
+                if (rows >= 256) pool_.parallel_for((rows + 63) / 64, [&](long b, int) {
+                    restore(b * 64, std::min(rows, b * 64 + 64));
+                });
+                else restore(0, rows);
+            }
             if (cfg_.attn_output_gate)
                 for (long i = 0; i < T * lqd; ++i)
                     ctx_[static_cast<size_t>(i)] *= 1.0f / (1.0f + std::exp(-attn_gate_[static_cast<size_t>(i)]));

@@ -417,10 +417,11 @@ const items = {
     normal: "Chaque fiche des clés et valeurs est une liste de nombres. En 16 bits, on les garde presque tels quels. " +
       "En 8 bits, on les arrondit, mais intelligemment : par petits groupes, avec une échelle pour chacun. La différence " +
       "de qualité est à peine mesurable, et la mémoire gagnée permet de lire des documents deux fois plus longs.",
-    owl: "q8 : groupes de 32 valeurs en int8 plus une échelle en half (34 octets contre 64 en f16). Les clés sont d’abord " +
-      "tournées (signes pseudo-aléatoires puis transformée de Walsh-Hadamard, qk_rotate_row) pour étaler les valeurs " +
-      "extrêmes avant l’arrondi ; les requêtes subissent la même rotation, ce qui laisse les produits scalaires " +
-      "inchangés. Auto choisit q8 pour les modèles de langue dont la tête contient des groupes entiers de 32, f16 pour " +
+    owl: "q8 : groupes de 32 valeurs en int8 plus une échelle en half (34 octets contre 64 en f16). Les clés et les " +
+      "valeurs sont d’abord tournées (signes pseudo-aléatoires puis transformée de Walsh-Hadamard, qk_rotate_row) pour " +
+      "étaler les valeurs extrêmes avant l’arrondi ; les requêtes subissent la même rotation, ce qui laisse les produits " +
+      "scalaires inchangés, et la sortie de l’attention, moyenne des valeurs tournées, est remise en place " +
+      "(qk_unrotate_row), comme le fait llama.cpp. Auto choisit q8 pour les modèles de langue dont la tête contient des groupes entiers de 32, f16 pour " +
       "les modèles de recherche. Noyaux NEON et Metal pour les deux formats ; le contrôle du GPU tolère 5 % sur un prompt en q8.",
     marmot: "C’est comme une photo en haute qualité ou bien compressée. Sur ton téléphone, tu ne vois presque pas la " +
       "différence, mais la photo compressée prend deux fois moins de place, et tu peux en garder deux fois plus.",

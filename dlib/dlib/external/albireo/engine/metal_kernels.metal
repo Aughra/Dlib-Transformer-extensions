@@ -711,14 +711,13 @@ kernel void rope(device float* x [[buffer(0)]], device const float* cs [[buffer(
 }
 
 // ---------------------------------------------------------------------------------------------
-// La rotation des clés 8 bits et des requêtes qui les lisent (qk_rotate_row) : les signes d'un
-// hachage, puis une transformée de Walsh-Hadamard sur la plus grande puissance de deux qui divise
-// hd, normalisée.  Un thread par valeur, la ligne en mémoire de threadgroup ; hd au plus 256.
+// La rotation des clés et valeurs 8 bits et des requêtes qui lisent les clés (qk_rotate_row) : les
+// signes d'un hachage, puis une transformée de Walsh-Hadamard sur la plus grande puissance de deux
+// qui divise hd, normalisée ; unrotate_row la défait (qk_unrotate_row).  Un thread par valeur, la
+// ligne en mémoire de threadgroup ; hd au plus 256.
 
-static inline void rotate_row(threadgroup float* v, uint i, uint hd)
+static inline void walsh_hadamard_row(threadgroup float* v, uint i, uint hd)
 {
-    if ((i * 2654435761u) >> 31) v[i] = -v[i];
-    threadgroup_barrier(mem_flags::mem_threadgroup);
     const uint block = hd & (0u - hd);
     for (uint len = 1; len < block; len <<= 1)
     {
@@ -739,6 +738,20 @@ static inline void rotate_row(threadgroup float* v, uint i, uint hd)
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
     v[i] *= 1.0f / sqrt(float(block));
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+}
+
+static inline void rotate_row(threadgroup float* v, uint i, uint hd)
+{
+    if ((i * 2654435761u) >> 31) v[i] = -v[i];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    walsh_hadamard_row(v, i, hd);
+}
+
+static inline void unrotate_row(threadgroup float* v, uint i, uint hd)
+{
+    walsh_hadamard_row(v, i, hd);
+    if ((i * 2654435761u) >> 31) v[i] = -v[i];
     threadgroup_barrier(mem_flags::mem_threadgroup);
 }
 
@@ -780,6 +793,7 @@ kernel void kv_store(device const float* k [[buffer(0)]], device const float* v 
     uint lane [[thread_index_in_simdgroup]], uint sg [[simdgroup_index_in_threadgroup]])
 {
     threadgroup float row_k[256];
+    threadgroup float row_v[256];
     const uint h = tg.x, t = tg.y;
     const ulong base = ulong(blocks[t]) * a.block_stride + ulong(h) * a.head_stride;
     const uint pos = uint(rows[t]);
@@ -788,13 +802,15 @@ kernel void kv_store(device const float* k [[buffer(0)]], device const float* v 
     if (a.q8)
     {
         row_k[i] = kv_k;
+        row_v[i] = kv_v;
         threadgroup_barrier(mem_flags::mem_threadgroup);
         rotate_row(row_k, i, a.hd);
+        rotate_row(row_v, i, a.hd);
         const ulong scales = ulong(a.positions) * a.hd + ulong(pos) * (a.hd / 32) * 2 + sg * 2;
         device uchar* kb = region + base + a.k_slab;
         device uchar* vb = region + base + a.v_slab;
         q8_group(row_k[i], (device char*)(kb + ulong(pos) * a.hd + i), (device ushort*)(kb + scales), lane);
-        q8_group(kv_v, (device char*)(vb + ulong(pos) * a.hd + i), (device ushort*)(vb + scales), lane);
+        q8_group(row_v[i], (device char*)(vb + ulong(pos) * a.hd + i), (device ushort*)(vb + scales), lane);
     }
     else
     {
@@ -828,6 +844,19 @@ kernel void prepare_queries(device float* q [[buffer(0)]], constant query_args& 
     row[i] = r[i] * a.scale;
     threadgroup_barrier(mem_flags::mem_threadgroup);
     rotate_row(row, i, a.hd);
+    r[i] = row[i];
+}
+
+// Les sorties de l'attention sur des valeurs 8 bits, stockées tournées : chaque tête remise en place
+// (qk_unrotate_row).  Un threadgroup de hd threads par (tête, token) ; les arguments de prepare_queries.
+kernel void restore_outputs(device float* o [[buffer(0)]], constant query_args& a [[buffer(1)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint i [[thread_index_in_threadgroup]])
+{
+    threadgroup float row[256];
+    device float* r = o + tg.y * a.q_stride + tg.x * a.hd;
+    row[i] = r[i];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    unrotate_row(row, i, a.hd);
     r[i] = row[i];
 }
 

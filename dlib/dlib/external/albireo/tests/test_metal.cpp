@@ -374,10 +374,11 @@ namespace
             const float* v = values.data() + (p * heads + h) * hd;
             if (q8)
             {
-                std::vector<float> rotated(k, k + hd);
+                std::vector<float> rotated(k, k + hd), rotated_v(v, v + hd);
                 qk_rotate_row(rotated.data(), hd);
+                qk_rotate_row(rotated_v.data(), hd);
                 qk_float_to_q8_row(rotated.data(), kq, ks, hd);
-                qk_float_to_q8_row(v, vq, vs, hd);
+                qk_float_to_q8_row(rotated_v.data(), vq, vs, hd);
             }
             else
             {
@@ -528,6 +529,22 @@ namespace
         check(worst < 1e-4, std::string("attention ") + (q8 ? "q8" : "f16") + " over " + std::to_string(L)
             + " positions in blocks of " + std::to_string(B) + ", " + std::to_string(T) + " tokens: largest error "
             + sci(worst));
+        if (q8)
+        {
+            // Les sorties sur des valeurs tournées, remises en place par le GPU comme par qk_unrotate_row().
+            std::vector<float> expected(ctx, ctx + T * q_stride);
+            for (unsigned t = 0; t < T; ++t)
+                for (unsigned hq = 0; hq < H; ++hq) qk_unrotate_row(expected.data() + t * q_stride + hq * hd, hd);
+            {
+                auto c = gpu.begin();
+                c->restore_outputs(C, T, H, hd, q_stride);
+                c->finish();
+            }
+            double apart = 0;
+            for (unsigned i = 0; i < T * q_stride; ++i)
+                apart = std::max(apart, static_cast<double>(std::fabs(ctx[i] - expected[i])));
+            check(apart < 1e-5, "restore_outputs: largest difference " + sci(apart) + " from the processor");
+        }
     }
 }
 
