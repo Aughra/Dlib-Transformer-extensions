@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-15 — Retirer de dlib les conditions Apple ajoutées par le fork
+
+- **Quoi** : quatrième étape du nettoyage de dlib (groupe 1). `dlib/dlib/CMakeLists.txt` : `dlib_httplib` lie toujours les threads et les frameworks `CoreFoundation` et `Security` (branche Windows et `if (APPLE)` retirés) ; `dlib/examples/CMakeLists.txt` : `LINKER:-x` sans condition (branches MSVC et `-s` retirées).
+- **Fichiers** : `dlib/dlib/CMakeLists.txt`, `dlib/examples/CMakeLists.txt`, `docs/notes-pour-l-auteur.md`.
+- **Pourquoi** : demande de l'humain ; le fork ne vise que le Mac.
+- **Étapes** : exemples, Albireo et Pseudalis : 0 erreur, 0 avertissement, `-Xlinker -x` dans les 25 exemples ; tests rapides : tout passe.
+
 ## 2026-11-15 — Lier dlib, Albireo et Pseudalis à la zlib de macOS (Albireo 4.26.2)
 
 - **Quoi** : troisième étape du nettoyage de dlib. `dlib/dlib/CMakeLists.txt` : la copie de libpng compilée quand le système n'en a pas utilise `find_package(ZLIB REQUIRED)` au lieu des sources de zlib ; Albireo : `albireo_zlib` remplacée par `ZLIB::ZLIB` (moteur, service, `test_host`), licence de zlib plus livrée, ligne retirée de la page des licences (`settings.js`, `i18n.js`) ; Pseudalis : `pseudalis_zlib`, déclarée mais liée nulle part, retirée ; `external/zlib` supprimé. `libpng/pnglibconf.h` : `PNG_ZLIB_VERNUM` à 0, comme le fichier tout prêt de libpng.

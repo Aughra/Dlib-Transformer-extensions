@@ -129,17 +129,10 @@ macro(add_example name)
    add_executable(${name} ${name}.cpp)
    target_link_libraries(${name} dlib::dlib )
 
-   if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.13.0" AND NOT MSVC) 
-   # And strip symbols to make your binary smaller if you like.  Certainly not
-   # required though.  -s is a GCC/Clang linker flag; on MSVC it becomes /s and
-   # triggers LNK4044, so restrict it to non-MSVC toolchains.  Apple's linker
-   # declares -s obsolete: -x (no local symbols) is its equivalent there.
-       if (APPLE)
-          target_link_options(${name} PRIVATE $<$<CONFIG:RELEASE>:LINKER:-x>)
-       else()
-          target_link_options(${name} PRIVATE $<$<CONFIG:RELEASE>:-s>)
-       endif()
-   endif()
+   # And strip symbols to make your binary smaller if you like.  Certainly not required
+   # though.  macOS fork: Apple's linker declares -s obsolete; -x (no local symbols) is its
+   # equivalent.
+   target_link_options(${name} PRIVATE $<$<CONFIG:RELEASE>:LINKER:-x>)
 
    if (MSVC)
       # For DNN builds on Visual C++, increase the stack size from the default 1 MB -

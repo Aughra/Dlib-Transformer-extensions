@@ -920,18 +920,10 @@ if (NOT TARGET dlib)
    # when a program links the target.
    if (NOT TARGET dlib_httplib)
       add_library(dlib_httplib INTERFACE)
-      if (WIN32)
-         # cpp-httplib supports Windows 10 and later, and refuses an older target.
-         target_compile_definitions(dlib_httplib INTERFACE _WIN32_WINNT=0x0A00)
-         target_link_libraries(dlib_httplib INTERFACE ws2_32 crypt32)
-      else()
-         find_package(Threads REQUIRED)
-         target_link_libraries(dlib_httplib INTERFACE Threads::Threads)
-         if (APPLE)
-            # cpp-httplib reads the certificates of the macOS Keychain.
-            target_link_libraries(dlib_httplib INTERFACE "-framework CoreFoundation" "-framework Security")
-         endif()
-      endif()
+      # macOS fork: threads, and the frameworks through which cpp-httplib reads the certificates of
+      # the macOS Keychain.
+      find_package(Threads REQUIRED)
+      target_link_libraries(dlib_httplib INTERFACE Threads::Threads "-framework CoreFoundation" "-framework Security")
 
       if (DLIB_HTTPLIB_TLS)
          file(GLOB dlib_mbedtls_sources ${CMAKE_CURRENT_SOURCE_DIR}/external/mbedtls/library/*.c)
