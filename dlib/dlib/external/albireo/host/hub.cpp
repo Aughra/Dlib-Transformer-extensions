@@ -102,8 +102,8 @@ namespace albireo
             return q == "Q4_K_M" || q == "Q4_K_S" || q == "Q4_K" || q == "Q6_K";
         }
 
-        // Un dépôt de Gemma 4 à mélange d'experts (26B-A4B), que le moteur refuse : son nom le dit, l'API ne donnant
-        // pas le nombre d'experts.
+        // Un dépôt de Gemma 4 à mélange d'experts (26B-A4B), que le moteur lit sur le processeur depuis Albireo 4.29.0 du
+        // fork : son nom le dit, l'API ne donnant pas le nombre d'experts.
         bool gemma4_experts(const std::string& arch, const std::string& repo)
         {
             return arch == "gemma4" && std::regex_search(repo, std::regex("[-_]A[0-9]+B", std::regex::icase));
@@ -115,12 +115,7 @@ namespace albireo
             c["compatible"] = arch.empty() ? false : engine_architectures.count(arch) > 0;
             if (arch.empty()) c["reason"] = "architecture inconnue";
             else if (!engine_architectures.count(arch)) c["reason"] = "architecture " + arch + " non prise en charge par le moteur";
-            else if (gemma4_experts(arch, repo))
-            {
-                c["compatible"] = false;
-                c["reason"] = "mélange d'experts de Gemma 4, pas encore pris en charge par le moteur";
-            }
-            c["moe"] = moe_architectures.count(arch) > 0;
+            c["moe"] = moe_architectures.count(arch) > 0 || gemma4_experts(arch, repo);
             return c;
         }
 
@@ -220,7 +215,9 @@ namespace albireo
             }
             for (const auto& kv : c.items()) o[kv.first] = kv.second;
             // Les mélanges d'experts écrivent aussi sur le GPU depuis Albireo 4.7.0 du fork.
-            o["gpu"] = c["compatible"].as_bool(false) && quant_gpu(q) && !processor_architectures.count(arch);
+            // Ceux de Gemma 4 restent sur le processeur.
+            o["gpu"] = c["compatible"].as_bool(false) && quant_gpu(q) && !processor_architectures.count(arch)
+                && !gemma4_experts(arch, repo);
             files.push_back(o);
         }
         out = json::object();
@@ -278,11 +275,6 @@ namespace albireo
         if (!engine_architectures.count(arch))
         {
             error = "the architecture " + (arch.empty() ? std::string("(unknown)") : arch) + " is not supported by the engine";
-            return false;
-        }
-        if (gemma4_experts(arch, repo))
-        {
-            error = "the mixtures of experts of Gemma 4 are not supported by the engine yet";
             return false;
         }
         if (!projector.empty() && !vision_architectures.count(arch))

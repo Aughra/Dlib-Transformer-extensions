@@ -48,3 +48,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 42. [Le grand tri de dlib](42-le-grand-tri-de-dlib.md)
 43. [La tête en deux tranches](43-la-tete-en-deux-tranches.md)
 44. [Le passe-partout et la photo de groupe](44-le-passe-partout-et-la-photo-de-groupe.md)
+45. [L'orchestre et les solistes](45-l-orchestre-et-les-solistes.md)

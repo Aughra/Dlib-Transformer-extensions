@@ -33,6 +33,8 @@ Les tests et les mesures cherchent les modèles à ces places (`build/` n'est pa
 | `build/models/Qwen3.5-4B-mmproj-F16.gguf` | 0,7 Go | images de Qwen 3.5 |
 | `build/models/Qwen3.6-11B-A3B-Niwaki-Q4_K_M.gguf` | 7,0 Go | mélange d'experts |
 | `build/models/gemma-4-E2B-it-Q4_K_M.gguf` | 3,1 Go | Gemma 4 (tokenizer, raisonnement ; écriture et prompts sur le GPU) |
+| `build/models/gemma-4-26B-A4B-it-UD-Q4_K_M.gguf` | 16,9 Go | Gemma 4 à experts, sur le processeur (Albireo 4.29.0) |
+| `build/models/gemma-3-4b-it-mmproj-F16.gguf` | 0,9 Go | images de Gemma 3 (Albireo 4.28.0) |
 | `build/albireo-home/models/qwen3-vl-4b-thinking.gguf` et `.mmproj.gguf` | 2,9 Go | modèle du service, images |
 | `build/albireo-home/models/hf-unsloth-qwen3.5-4b-q4_k_m.gguf` | 2,7 Go | Qwen 3.5 sur le GPU, outils, images |
 | `build/albireo-home/models/qwen3-embedding-0.6b.gguf` | 0,6 Go | modèle de recherche |
@@ -71,6 +73,8 @@ Le script mesure chaque modèle présent (y compris ceux de `build/bench-models/
 | Le mélange d'experts écrit-il plus vite sur le GPU ? | moteur (`set_gpu`) | `engine_chat` sur le 35B-A3B, processeur contre GPU : sur le M2, l'écart était faible (26 contre 25 tokens/s) |
 | Les tuiles du produit groupé des experts (`mm_id`) sont-elles à la bonne taille ? | `MM_TT`, `MM_NR` dans `metal_kernels.metal` | lecture de prompts du 35B-A3B, en alternance |
 | Les prompts de Gemma 4 vont-ils plus vite sur le GPU (Albireo 4.27.0) ? | `attention_mtile` en deux tranches de 256 (`SPLIT`, `metal_kernels.metal`) ; à défaut, renvoyer ces prompts au processeur | `bench_runtime` sur gemma-4-E2B, 512 et 4 096 tokens, processeur contre GPU, en alternance : les couches de 512 calculent leurs scores deux fois |
+| Combien écrit et lit Gemma 4 26B-A4B sur le processeur (Albireo 4.29.0), et faut-il le porter au GPU ? | moteur (`set_gpu`, `cpu_runtime_metal.cpp`, qui le refuse) | `engine_chat` et `bench_runtime` sur le 26B-A4B ; le comparer au Qwen 3.6 35B-A3B sur le GPU |
+| Combien de temps prend l'encodage d'une image de Gemma 3 (Albireo 4.28.0) ? | — (sur le M2 en mode économie d'énergie : 26 à 30 s) | `engine_chat --projector … --image …`, ligne « image of 16x16 tokens encoded in » |
 | Le projecteur du 35B-A3B marche-t-il ? | `vision_architectures` de `host/hub.cpp` (ajouter `qwen35moe`) | description d'une image comparée à llama.cpp |
 
 Chaque réglage changé met à jour sa valeur conseillée et sa fiche dans l'onglet Service, avec la mesure en commentaire (règle de CLAUDE.md).

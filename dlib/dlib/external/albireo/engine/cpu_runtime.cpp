@@ -63,11 +63,36 @@ namespace albireo
                 L.router = f.matrix(p + "ffn_gate_inp.weight", n_exp, d);
                 // Le biais du choix des experts de LFM2-MoE.
                 if (cfg_.expert_sigmoid) L.expert_bias = f.floats(p + "exp_probs_b.bias", static_cast<size_t>(n_exp));
+                // Les portes et les projections up de Gemma 4 26B-A4B dans un seul tenseur : pour chaque expert, les
+                // lignes de la porte puis celles de up (build_moe_ffn de llama.cpp).
+                const bool gate_up = f.has(p + "ffn_gate_up_exps.weight");
                 for (long e = 0; e < n_exp; ++e)
                 {
-                    L.e_gate.push_back(f.expert_matrix(p + "ffn_gate_exps.weight", df, d, e, n_exp));
-                    L.e_up.push_back(f.expert_matrix(p + "ffn_up_exps.weight", df, d, e, n_exp));
+                    if (gate_up)
+                    {
+                        const weight_matrix both = f.expert_matrix(p + "ffn_gate_up_exps.weight", 2 * df, d, e, n_exp);
+                        L.e_gate.push_back(row_slice(both, 0, df));
+                        L.e_up.push_back(row_slice(both, df, df));
+                    }
+                    else
+                    {
+                        L.e_gate.push_back(f.expert_matrix(p + "ffn_gate_exps.weight", df, d, e, n_exp));
+                        L.e_up.push_back(f.expert_matrix(p + "ffn_up_exps.weight", df, d, e, n_exp));
+                    }
                     L.e_down.push_back(f.expert_matrix(p + "ffn_down_exps.weight", d, df, e, n_exp));
+                }
+                if (cfg_.dense_beside_experts)
+                {
+                    // Le bloc dense de la couche, ses normes et les échelles du routeur et des experts.
+                    const long dd = cfg_.layer_ffn(li);
+                    L.w_gate = f.matrix(p + "ffn_gate.weight", dd, d);
+                    L.w_up = f.matrix(p + "ffn_up.weight", dd, d);
+                    L.w_down = f.matrix(p + "ffn_down.weight", d, dd);
+                    L.post_dense_norm = f.floats(p + "post_ffw_norm_1.weight", static_cast<size_t>(d));
+                    L.pre_experts_norm = f.floats(p + "pre_ffw_norm_2.weight", static_cast<size_t>(d));
+                    L.post_experts_norm = f.floats(p + "post_ffw_norm_2.weight", static_cast<size_t>(d));
+                    L.router_scale = f.floats(p + "ffn_gate_inp.scale", static_cast<size_t>(d));
+                    f.optional_floats(p + "ffn_down_exps.scale", static_cast<size_t>(n_exp), L.expert_scale);
                 }
             }
             else if (cfg_.fused_gate_up)
@@ -731,9 +756,9 @@ namespace albireo
     void cpu_runtime::store_keys_values(long li, const forward_batch& batch, long layer)
     {
         const long T = static_cast<long>(batch.tokens.size());
-        const long KVH = cfg_.n_kv_heads;
-        // Les têtes de la couche ; les lignes d'une couche à têtes plus petites ne remplissent que le début de
-        // celles des blocs (gemma4).
+        // Les têtes de clés de la couche, et leur largeur ; les lignes d'une couche à têtes plus petites ne
+        // remplissent que le début de celles des blocs (gemma4).
+        const long KVH = layer >= 0 ? cfg_.layer_kv_heads(layer) : cfg_.n_kv_heads;
         const long hd = layer >= 0 ? cfg_.layer_head_dim(layer) : cfg_.head_dim;
         const long kvd = KVH * hd;
         const long B = kv_.block_positions();
@@ -785,7 +810,7 @@ namespace albireo
         long layer)
     {
         const long T = static_cast<long>(batch.tokens.size());
-        const long KVH = cfg_.n_kv_heads;
+        const long KVH = layer >= 0 ? cfg_.layer_kv_heads(layer) : cfg_.n_kv_heads;
         const long hd = layer >= 0 ? cfg_.layer_head_dim(layer) : cfg_.head_dim;
         const long qd = cfg_.n_heads * hd;
         // La fenêtre glissante (gemma4) : un token en position p voit les positions p - window + 1 à p.
@@ -968,7 +993,7 @@ namespace albireo
 
     // Mélange d'experts
 
-    void cpu_runtime::moe_ffn(const layer& L, long T)
+    void cpu_runtime::moe_ffn(const layer& L, long T, const float* router_in)
     {
         const long d = cfg_.d_model;
         const long n_exp = cfg_.n_experts;
@@ -976,7 +1001,7 @@ namespace albireo
         const long df = cfg_.d_ffn_expert;
 
         router_logits_.resize(static_cast<size_t>(T * n_exp));
-        product(L.router, xn_.data(), T, d, router_logits_.data(), n_exp);
+        product(L.router, router_in ? router_in : xn_.data(), T, d, router_logits_.data(), n_exp);
 
         // Les listes des experts gardent leur mémoire d'une couche et d'une passe à l'autre.
         std::vector<std::vector<std::pair<long, float>>>& routed = routed_;
@@ -1023,6 +1048,8 @@ namespace albireo
                 const long e = order[static_cast<size_t>(k)];
                 float w = probs[static_cast<size_t>(e)];
                 if ((cfg_.expert_weights_norm || sigmoid) && selected > 0) w /= selected;
+                // L'échelle de la sortie de l'expert (Gemma 4 26B-A4B), qui multiplie son poids.
+                if (!L.expert_scale.empty()) w *= L.expert_scale[static_cast<size_t>(e)];
                 routed[static_cast<size_t>(e)].push_back(std::make_pair(t, w));
             }
         }
@@ -1045,7 +1072,14 @@ namespace albireo
             ue.resize(static_cast<size_t>(m * df));
             product(L.e_gate[static_cast<size_t>(e)], xe.data(), m, d, ge.data(), df, path);
             product(L.e_up[static_cast<size_t>(e)], xe.data(), m, d, ue.data(), df, path);
-            qk_silu_mul(ge.data(), ue.data(), static_cast<long>(ge.size()));
+            if (cfg_.gemma4)
+            {
+                // GELU(porte) * up (Gemma 4).
+                qk_gelu_tanh(ge.data(), m * df);
+                for (long i = 0; i < m * df; ++i) ge[static_cast<size_t>(i)] *= ue[static_cast<size_t>(i)];
+            }
+            else
+                qk_silu_mul(ge.data(), ue.data(), static_cast<long>(ge.size()));
             ye.resize(static_cast<size_t>(m * d));
             product(L.e_down[static_cast<size_t>(e)], ge.data(), m, df, ye.data(), d, path);
             for (long i = 0; i < m; ++i)
@@ -1076,6 +1110,62 @@ namespace albireo
                 for (long j = 0; j < d; ++j) dst[j] += g * src[j];
             }
         }
+    }
+
+    void cpu_runtime::dense_ffn(const layer& L, long T, long df)
+    {
+        const long d = cfg_.d_model;
+        gate_.resize(static_cast<size_t>(T * df));
+        up_.resize(static_cast<size_t>(T * df));
+        product(L.w_gate, xn_.data(), T, d, gate_.data(), df);
+        product(L.w_up, xn_.data(), T, d, up_.data(), df);
+        const long n = T * df;
+        // SwiGLU, ou GELU(gate) * up pour gemma4.
+        auto gated = [&](long a, long b) {
+            if (cfg_.gemma4)
+            {
+                qk_gelu_tanh(gate_.data() + a, b - a);
+                for (long i = a; i < b; ++i) gate_[static_cast<size_t>(i)] *= up_[static_cast<size_t>(i)];
+            }
+            else
+                qk_silu_mul(gate_.data() + a, up_.data() + a, b - a);
+        };
+        if (n >= 65536)
+            pool_.parallel_for((n + 4095) / 4096, [&](long c, int) {
+                gated(c * 4096, std::min(n, c * 4096 + 4096));
+            });
+        else
+            gated(0, n);
+        product(L.w_down, gate_.data(), T, df, tmp_.data(), d);
+    }
+
+    void cpu_runtime::dense_and_experts(const layer& L, long T)
+    {
+        /*
+            Gemma 4 26B-A4B, comme src/models/gemma4.cpp de llama.cpp : à partir de l'état x_ après l'attention,
+            le bloc dense lit x_ normalisé par ffn_norm (xn_) et sa sortie est normalisée par post_ffw_norm_1 ; les
+            experts lisent x_ normalisé par pre_ffw_norm_2, choisis par le routeur sur x_ normalisé sans poids,
+            divisé par sqrt(d_model) et multiplié par ffn_gate_inp.scale, et leur somme est normalisée par
+            post_ffw_norm_2 ; tmp_ reçoit la somme des deux.
+        */
+        const long d = cfg_.d_model;
+        const float eps = static_cast<float>(cfg_.rms_eps);
+        dense_ffn(L, T, L.w_gate.rows);
+        dense_out_.resize(static_cast<size_t>(T * d));
+        rms_norm_rows(tmp_.data(), L.post_dense_norm.data(), dense_out_.data(), T, d, eps);
+
+        router_in_.resize(static_cast<size_t>(T * d));
+        const float inv_root = 1.0f / std::sqrt(static_cast<float>(d));
+        pool_.parallel_for(T, [&](long t, int) {
+            const float* x = x_.data() + t * d;
+            float* r = router_in_.data() + t * d;
+            const float s = inv_root / std::sqrt(qk_dot_f32(x, x, d) / static_cast<float>(d) + eps);
+            for (long i = 0; i < d; ++i) r[i] = x[i] * s * L.router_scale[static_cast<size_t>(i)];
+        });
+        rms_norm_rows(x_.data(), L.pre_experts_norm.data(), xn_.data(), T, d, eps);
+        moe_ffn(L, T, router_in_.data());
+        rms_norm_rows(tmp_.data(), L.post_experts_norm.data(), tmp_.data(), T, d, eps);
+        for (long i = 0; i < T * d; ++i) tmp_[static_cast<size_t>(i)] += dense_out_[static_cast<size_t>(i)];
     }
 
     // Passe avant
@@ -1468,7 +1558,6 @@ namespace albireo
         const long qd = cfg_.q_dim();
         const long kvd = cfg_.kv_dim();
         const long H = cfg_.n_heads;
-        const long KVH = cfg_.n_kv_heads;
         const long B = kv_.block_positions();
         const float eps = static_cast<float>(cfg_.rms_eps);
         const float rs = static_cast<float>(cfg_.residual_scale);
@@ -1590,6 +1679,8 @@ namespace albireo
             // les clés et valeurs d'une autre (gemma4) ne calcule que ses requêtes.
             const long lhd = cfg_.layer_head_dim(li);
             const long lqd = H * lhd;
+            // Les têtes de clés de la couche (Gemma 4 26B-A4B en a moins dans ses couches globales).
+            const long KVH = cfg_.layer_kv_heads(li);
             const long lkvd = KVH * lhd;
             const bool owns = cfg_.owns_kv(li);
             if (on_device)
@@ -1686,36 +1777,12 @@ namespace albireo
 
             // Bloc feed-forward.
             rms_norm_rows(x_.data(), L.ffn_norm.data(), xn_.data(), T, d, eps);
-            if (cfg_.moe_layer(li))
-            {
+            if (cfg_.dense_beside_experts)
+                dense_and_experts(L, T);
+            else if (cfg_.moe_layer(li))
                 moe_ffn(L, T);
-            }
             else
-            {
-                const long df = cfg_.layer_ffn(li);
-                gate_.resize(static_cast<size_t>(T * df));
-                up_.resize(static_cast<size_t>(T * df));
-                product(L.w_gate, xn_.data(), T, d, gate_.data(), df);
-                product(L.w_up, xn_.data(), T, d, up_.data(), df);
-                const long n = T * df;
-                // SwiGLU, ou GELU(gate) * up pour gemma4.
-                auto gated = [&](long a, long b) {
-                    if (cfg_.gemma4)
-                    {
-                        qk_gelu_tanh(gate_.data() + a, b - a);
-                        for (long i = a; i < b; ++i) gate_[static_cast<size_t>(i)] *= up_[static_cast<size_t>(i)];
-                    }
-                    else
-                        qk_silu_mul(gate_.data() + a, up_.data() + a, b - a);
-                };
-                if (n >= 65536)
-                    pool_.parallel_for((n + 4095) / 4096, [&](long c, int) {
-                        gated(c * 4096, std::min(n, c * 4096 + 4096));
-                    });
-                else
-                    gated(0, n);
-                product(L.w_down, gate_.data(), T, df, tmp_.data(), d);
-            }
+                dense_ffn(L, T, cfg_.layer_ffn(li));
             if (!L.post_ffn_norm.empty()) rms_norm_rows(tmp_.data(), L.post_ffn_norm.data(), tmp_.data(), T, d, eps);
             for (size_t i = 0; i < x_.size(); ++i) x_[i] += rs * tmp_[i];
             if (li < cfg_.n_deepstack && !batch.embedding_rows.empty()) add_given_embeddings(batch, li + 1);

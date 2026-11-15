@@ -2,6 +2,18 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.29.0 — 15 novembre 2026
+
+### Modèles
+
+- Gemma 4 26B-A4B, le mélange d'experts de la famille, est pris en charge sur le processeur. Dans chaque couche, un bloc feed-forward dense et 128 experts, dont 8 sont choisis pour chaque token, travaillent côte à côte, et leurs sorties normalisées sont additionnées ; le routeur lit l'état normalisé sans poids, avec son échelle propre, et la sortie de chaque expert reçoit la sienne. Les couches globales ont 2 têtes de clés et valeurs, les couches à fenêtre glissante 8 : le moteur lit désormais ce nombre couche par couche. Vérification par rapport à llama.cpp 0.9.0, sur le processeur et en choix glouton, avec gemma-4-26B-A4B-it UD-Q4_K_M : un calcul avec raisonnement de 233 tokens identique mot pour mot ; une réponse sur un journal de 2 820 tokens identique ; un paragraphe identique jusqu'à une quasi-égalité de la référence (0,494 contre 0,339). Le GPU reste inutilisé pour ce modèle. Le service ne refuse plus ces dépôts dans sa recherche.
+
+### Corrections
+
+- Pour les modèles Gemma 4 dont le gabarit l'écrit (le 26B-A4B, pas le E2B), un raisonnement vide est ajouté au prompt quand aucun raisonnement n'est demandé, comme le fait le gabarit ; sans lui, le prompt comptait quatre tokens de moins que celui de la référence.
+
+---
+
 ## 4.28.0 — 15 novembre 2026
 
 ### Modèles

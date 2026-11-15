@@ -40,8 +40,8 @@ namespace albireo
                 dimensions des têtes, LongRoPE ; la fenêtre glissante que déclarent les
                 fichiers n'est pas appliquée, comme dans llama.cpp).  Le fork pour macOS
                 ajoute qwen35 et qwen35moe (couches linéaires, voir full_attention_interval),
-                gemma4 dense (voir gemma4), gemma3 (voir gemma3), lfm2 et lfm2moe (convolutions courtes,
-                voir lfm2).
+                gemma4, dense et à experts (voir gemma4 et dense_beside_experts), gemma3 (voir gemma3), lfm2 et
+                lfm2moe (convolutions courtes, voir lfm2).
 
             MODÈLES D'EMBEDDING
                 Un décodeur qui déclare <arch>.pooling_type calcule des vecteurs au lieu
@@ -116,6 +116,16 @@ namespace albireo
         // chaque token traverse, sa sortie multipliée par sigmoid(x . ffn_gate_inp_shexp) puis ajoutée à celle
         // des experts routés ; 0 sans lui.
         long d_ffn_shared = 0;
+        /*
+            Gemma 4 26B-A4B (fork pour macOS) : chaque couche a son bloc feed-forward dense et ses experts côte à
+            côte, leurs sorties normalisées puis additionnées ; le routeur lit l'état normalisé sans poids, divisé
+            par sqrt(d_model) et multiplié par ffn_gate_inp.scale, et la sortie de chaque expert est multipliée par
+            son échelle (ffn_down_exps.scale).
+        */
+        bool dense_beside_experts = false;
+        // Les têtes de clés et valeurs de chaque couche, quand elles diffèrent d'une couche à l'autre (Gemma 4
+        // 26B-A4B) ; n_kv_heads est alors la plus grande.  Vide sinon.
+        std::vector<long> kv_head_counts;
 
         // Tokenizer et format de chat, tels que déclarés.
         std::string chat_template;
@@ -220,7 +230,11 @@ namespace albireo
         bool swa_layer(long li) const { return !swa_layers.empty() && swa_layers[static_cast<size_t>(li)] != 0; }
         long layer_head_dim(long li) const { return swa_layer(li) ? head_dim_swa : head_dim; }
         long layer_q_dim(long li) const { return n_heads * layer_head_dim(li); }
-        long layer_kv_dim(long li) const { return n_kv_heads * layer_head_dim(li); }
+        long layer_kv_heads(long li) const
+        {
+            return kv_head_counts.empty() ? n_kv_heads : kv_head_counts[static_cast<size_t>(li)];
+        }
+        long layer_kv_dim(long li) const { return layer_kv_heads(li) * layer_head_dim(li); }
         long layer_ffn(long li) const { return ffn_widths.empty() ? d_ffn : ffn_widths[static_cast<size_t>(li)]; }
         // Les couches qui ont leurs clés et valeurs, et celle dont une couche lit les clés et valeurs.
         bool owns_kv(long li) const { return li < n_layers - n_kv_shared; }

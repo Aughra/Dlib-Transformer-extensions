@@ -100,6 +100,25 @@ namespace albireo
             }
             if (c.n_kv_heads <= 0) throw std::runtime_error("this model has no attention layer");
         }
+        else if (gemma4 && g.has(a + ".attention.head_count_kv") && g.at(a + ".attention.head_count_kv").is_array())
+        {
+            /*
+                Gemma 4 26B-A4B (fork pour macOS) : une valeur par couche, 8 têtes de clés dans les couches à
+                fenêtre glissante, 2 dans les couches globales.  n_kv_heads est la plus grande : les blocs de clés
+                et valeurs en gardent la place, dont une couche à moins de têtes n'occupe que le début.
+            */
+            const std::string key = a + ".attention.head_count_kv";
+            if (g.at(key).arr_int.size() < static_cast<size_t>(c.n_layers))
+                throw std::runtime_error("the model metadata lacks the key/value heads of each layer");
+            for (long li = 0; li < c.n_layers; ++li)
+            {
+                const int64_t v = g.at(key).arr_int[static_cast<size_t>(li)];
+                if (v < 1 || v > c.n_heads || c.n_heads % v != 0)
+                    throw std::runtime_error("the model metadata holds an invalid " + key);
+                c.kv_head_counts.push_back(static_cast<long>(v));
+                c.n_kv_heads = std::max(c.n_kv_heads, static_cast<long>(v));
+            }
+        }
         else
             c.n_kv_heads = bounded_int(g, a + ".attention.head_count_kv", c.n_heads, 1, c.n_heads);
         c.d_model = bounded_int(g, a + ".embedding_length", 0, 1, max_width);
@@ -320,8 +339,6 @@ namespace albireo
         {
             c.gemma4 = true;
             c.value_norm = true;
-            if (g.has(a + ".expert_count"))
-                throw std::runtime_error("the mixtures of experts of Gemma 4 are not supported by this engine yet");
             const std::string pattern = a + ".attention.sliding_window_pattern";
             if (!g.has(pattern) || !g.at(pattern).is_array() || g.at(pattern).arr_int.size() < static_cast<size_t>(c.n_layers))
                 throw std::runtime_error("the model metadata lacks the sliding window pattern of its layers");
@@ -410,8 +427,20 @@ namespace albireo
                     throw std::runtime_error("this LFM2 model routes its experts otherwise than by a sigmoid");
                 c.expert_sigmoid = true;
             }
+            if (gemma4)
+            {
+                /*
+                    Gemma 4 26B-A4B (fork pour macOS) : dans chaque couche, le bloc feed-forward dense et les experts
+                    travaillent côte à côte (llama.cpp : src/models/gemma4.cpp), les experts routés par softmax sur
+                    une entrée normalisée sans poids, et leurs portes et projections up rangées dans un seul tenseur.
+                */
+                c.dense_beside_experts = true;
+                if (!f.has("blk.0.ffn_gate_inp.scale") || !f.has("blk.0.pre_ffw_norm_2.weight")
+                    || !f.has("blk.0.post_ffw_norm_1.weight") || !f.has("blk.0.post_ffw_norm_2.weight"))
+                    throw std::runtime_error("the mixture of experts of this Gemma 4 model lacks its norms");
+            }
             const std::string first_moe = "blk." + std::to_string(c.n_dense_lead) + ".";
-            if (!f.has(first_moe + "ffn_gate_exps.weight"))
+            if (!f.has(first_moe + "ffn_gate_exps.weight") && !(gemma4 && f.has(first_moe + "ffn_gate_up_exps.weight")))
                 throw std::runtime_error("this mixture of experts stores its experts in a legacy layout; "
                     "convert it again with a recent tool");
         }
@@ -438,9 +467,13 @@ namespace albireo
     {
         std::ostringstream o;
         o << c.name << " (" << c.arch << ", " << c.n_layers << " layers, width " << c.d_model
-          << ", heads " << c.n_heads << "/" << c.n_kv_heads << " of " << c.head_dim
-          << ", ffn " << c.d_ffn;
+          << ", heads " << c.n_heads << "/" << c.n_kv_heads << " of " << c.head_dim;
+        if (!c.kv_head_counts.empty())
+            o << " (" << *std::min_element(c.kv_head_counts.begin(), c.kv_head_counts.end()) << " key/value heads in some "
+              << "layers)";
+        o << ", ffn " << c.d_ffn;
         if (c.is_moe()) o << ", " << c.n_experts << " experts top-" << c.n_experts_used;
+        if (c.dense_beside_experts) o << " beside the dense block";
         if (c.is_moe() && c.n_dense_lead > 0) o << " after " << c.n_dense_lead << " dense layers";
         if (c.expert_sigmoid) o << ", sigmoid routing";
         if (c.lfm2)

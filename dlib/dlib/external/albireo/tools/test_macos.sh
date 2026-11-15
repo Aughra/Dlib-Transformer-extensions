@@ -274,6 +274,16 @@ else
     "${GEMMA4_LOG%x}"
 fi
 
+# Gemma 4 26B-A4B (Albireo 4.29.0), sur le processeur, quand il est là (16,9 Go) : le bloc dense et les 128 experts côte à
+# côte, les têtes de clés par couche (8, et 2 dans les couches globales) ; une réponse, puis un calcul en raisonnant.
+GEMMA4MOE=${GEMMA4_MOE_MODEL:-$ROOT/build/models/gemma-4-26B-A4B-it-UD-Q4_K_M.gguf}
+if [ ! -f "$ENGINE" ] || [ ! -f "$GEMMA4MOE" ]; then skip "gemma 4 moe" "no $GEMMA4MOE"
+else
+  step "gemma 4 moe" "Paris" "$CHAT" "$ENGINE" "$GEMMA4MOE" --reasoning off --temperature 0 --max 20 "$QUESTION"
+  step "gemma 4 moe reasoning" "391" "$CHAT" "$ENGINE" "$GEMMA4MOE" --reasoning on --temperature 0 --max 600 \
+    "What is 17 times 23? Answer with the number."
+fi
+
 # LFM2 et LFM2-MoE (convolutions courtes et attention ; Albireo 4.17.0) : une réponse, l'état des convolutions repris
 # sur trois tours et à un point de reprise (sur le processeur, puis sur le GPU pour LFM2 dense), puis le mélange d'experts, qui raisonne avant de répondre, et un détail à
 # retrouver dans un journal de 2 622 tokens (tests/lfm2/long_prompt.txt) : l'enregistrement 3 est celui de Gaëlle, que le

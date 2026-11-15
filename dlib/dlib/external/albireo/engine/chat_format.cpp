@@ -2769,7 +2769,9 @@ namespace albireo
             requête déclare des outils ou qu'elle demande un raisonnement, qu'annonce alors <|think|> en
             tête de ce tour.  Le modèle écrit son raisonnement entre <|channel>thought et <channel|>, avant
             sa réponse ; le template retire ce raisonnement des réponses précédentes, sauf de celles qui
-            suivent la dernière question.
+            suivent la dernière question.  Le template du 26B-A4B, quand il ne demande pas de raisonnement,
+            écrit un raisonnement vide, <|channel>thought et un saut de ligne puis <channel|>, après
+            <|turn>model ; celui du E2B non : le format le fait quand le template du fichier le fait.
 
             Les outils sont déclarés dans le tour système, chacun entre <|tool> et <tool|>, dans une
             notation propre à Gemma : clés nues, chaînes entre <|"|>, types en majuscules, membres triés
@@ -2786,8 +2788,10 @@ namespace albireo
         class gemma4_format : public chat_format
         {
         public:
-            explicit gemma4_format(const dlib::hf_tokenizer& tok)
+            gemma4_format(const dlib::hf_tokenizer& tok, const std::string& tmpl)
             {
+                // Le template du 26B-A4B (pas celui du E2B) écrit un raisonnement vide quand il n'en demande pas.
+                empty_thought_ = tmpl.find("'<|channel>thought\\n<channel|>'") != std::string::npos;
                 // <|tool_response> termine le tour du modèle après ses appels : la suite est le résultat des outils.
                 for (const char* t : { "<turn|>", "<eos>", "<|tool_response>" })
                 {
@@ -2895,7 +2899,11 @@ namespace albireo
                 }
                 if (opt.add_generation_prompt)
                 {
-                    if (previous == last::none) w.markup("<|turn>model\n");
+                    if (previous == last::none)
+                    {
+                        w.markup("<|turn>model\n");
+                        if (empty_thought_ && !opt.reasoning) w.markup("<|channel>thought\n<channel|>");
+                    }
                     else if (previous == last::results && opt.reasoning) w.markup("<|channel>thought\n");
                 }
             }
@@ -2916,6 +2924,8 @@ namespace albireo
             }
 
         private:
+            bool empty_thought_ = false;
+
             // Indique si le dernier message autre qu'un résultat est une réponse dont des résultats suivent les appels.
             static bool ends_with_results(const std::vector<chat_message>& messages)
             {
@@ -3549,7 +3559,7 @@ namespace albireo
         if (has("<|start_of_role|>") && tok.token_id("<|start_of_role|>") >= 0)
             return std::unique_ptr<chat_format>(new granite_format(tok, tmpl));
         if (has("<|turn>") && tok.token_id("<|turn>") >= 0 && tok.token_id("<turn|>") >= 0)
-            return std::unique_ptr<chat_format>(new gemma4_format(tok));
+            return std::unique_ptr<chat_format>(new gemma4_format(tok, tmpl));
         if (has("<start_of_turn>") && tok.token_id("<start_of_turn>") >= 0 && tok.token_id("<end_of_turn>") >= 0)
             return std::unique_ptr<chat_format>(new gemma3_format(tok));
         const bool chatml = tok.token_id("<|im_start|>") >= 0 && tok.token_id("<|im_end|>") >= 0;

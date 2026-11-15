@@ -47,4 +47,4 @@ Une limite assumée : une passe qui contient une image reste sur le processeur, 
 
 ## À suivre
 
-L'autre chantier demandé en même temps : Gemma 4 26B-A4B, un « mélange d'experts » de 26 milliards de nombres dont 4 seulement travaillent pour chaque mot, le modèle taillé pour le futur Mac mini.
+L'autre chantier demandé en même temps : Gemma 4 26B-A4B, un « mélange d'experts » de 26 milliards de nombres dont 4 seulement travaillent pour chaque mot, le modèle taillé pour le futur Mac mini ([épisode 45](45-l-orchestre-et-les-solistes.md)).

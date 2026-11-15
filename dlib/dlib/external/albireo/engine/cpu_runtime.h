@@ -189,6 +189,11 @@ namespace albireo
                 fichier n'a pas d'attn_v prend ses clés comme valeurs (v_from_k).
             */
             std::vector<float> post_attn_norm, post_ffn_norm, ple_norm;
+            /*
+                Gemma 4 26B-A4B (model_config::dense_beside_experts) : la norme après le bloc dense, celles avant
+                et après les experts, l'échelle de l'entrée du routeur et celle de la sortie de chaque expert.
+            */
+            std::vector<float> post_dense_norm, pre_experts_norm, post_experts_norm, router_scale, expert_scale;
             weight_matrix ple_gate, ple_proj;
             float out_scale = 1.0f;
             bool v_from_k = false;
@@ -246,7 +251,12 @@ namespace albireo
         // Les entrées par couche de gemma4 (model_config::d_per_layer), dans ple_ : n_layers x d_per_layer valeurs
         // par token, calculées une fois par passe à partir des tokens et de leurs embeddings.
         void per_layer_inputs(const std::vector<int>& tokens);
-        void moe_ffn(const layer& L, long n_tokens);
+        // Les experts de la couche sur xn_, routés d'après router_in (xn_ quand il est nul) ; leur somme dans tmp_.
+        void moe_ffn(const layer& L, long n_tokens, const float* router_in = nullptr);
+        // Le bloc feed-forward dense de la couche sur xn_, dans tmp_ (SwiGLU, ou GELU(porte) * up pour gemma4).
+        void dense_ffn(const layer& L, long n_tokens, long width);
+        // Le bloc dense et les experts côte à côte de Gemma 4 26B-A4B (model_config::dense_beside_experts).
+        void dense_and_experts(const layer& L, long n_tokens);
         // Une couche Gated DeltaNet sur les lignes normalisées xn_, dans tmp_ ; linear est son rang parmi les
         // couches linéaires, qui situe son état dans celui de chaque séquence.
         void linear_attention(const layer& L, long linear, const forward_batch& batch);
@@ -384,6 +394,8 @@ namespace albireo
         // Tampons de travail, réutilisés d'une passe à l'autre.
         aligned_floats x_, xn_, q_, k_, v_, ctx_, tmp_, gate_, up_;
         aligned_floats router_logits_, expert_x_, expert_gate_, expert_up_, expert_y_;
+        // Gemma 4 26B-A4B : la sortie normalisée du bloc dense, et l'entrée du routeur.
+        aligned_floats dense_out_, router_in_;
         // Les tampons des couches linéaires et de la porte de l'attention de qwen35.
         aligned_floats mix_, z_, alpha_, beta_, lin_out_, qg_, attn_gate_;
         std::vector<float> hidden_out_, router_probs_, router_choice_;
