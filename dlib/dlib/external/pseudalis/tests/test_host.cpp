@@ -4,6 +4,9 @@
 // Tests des clés, du coffre, de la base de données et des réglages du service, dans un dossier
 // temporaire.
 
+#include <dlib/crypto/sha256.h>
+
+#include <array>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -75,16 +78,20 @@ int main()
     bool created = false;
     CHECK(load_master_key(join_path(dir, "keys"), master, created, error) && created && master.size() == 32);
     CHECK(load_master_key(join_path(dir, "keys"), again, created, error) && !created && again == master);
-    const std::string exported = export_master_key(master, "a passphrase of the tests");
+    // L'export en clair (version 2) : relu sans phrase de passe ; un export abîmé, ou protégé sans sa phrase, refusé.
+    const std::string exported = export_master_key(master);
     std::string imported;
-    CHECK(!import_master_key(exported, "another passphrase", imported, error));
-    CHECK(import_master_key(exported, "a passphrase of the tests", imported, error) && imported == master);
+    CHECK(exported.find("\"version\": 2") != std::string::npos && exported.find("passphrase") == std::string::npos);
+    CHECK(import_master_key(exported, std::string(), imported, error) && imported == master);
+    CHECK(!import_master_key("{\"format\": \"pseudalis-master-key\", \"version\": 2, \"key\": \"AAAA\"}", "", imported,
+                             error));
+    CHECK(!import_master_key("{\"format\": \"pseudalis-master-key\", \"version\": 1}", "", imported, error));
     const key_set keys = derive_keys(master);
     CHECK(keys.pseudonymization.size() == 32 && keys.vault_encryption != keys.vault_authentication);
     CHECK(aes256_ctr(keys.vault_encryption, std::string(16, '\1'),
                      aes256_ctr(keys.vault_encryption, std::string(16, '\1'), "round trip")) == "round trip");
 
-    // Le coffre : des blobs relus, ceux qui sont altérés refusés.
+    // Le coffre : des blobs écrits en clair et relus (2.2.0).
     vault v(join_path(dir, "vault"), keys.vault_encryption, keys.vault_authentication);
     const std::string data(100000, 'x');
     const std::string id = v.put(data);
@@ -92,14 +99,26 @@ int main()
     CHECK(vault::valid_id(id) && v.get(id, back) && back == data);
     std::string file;
     const std::string path = join_path(join_path(join_path(dir, "vault"), id.substr(0, 2)), id + ".bin");
-    CHECK(read_file(path, file) && file.find(std::string(100, 'x')) == std::string::npos);
-    file[40] ^= 1;
-    CHECK(write_file_atomic(path, file) && !v.get(id, back));
-    vault other(join_path(dir, "vault"), derive_keys(std::string(32, '\7')).vault_encryption,
-                derive_keys(std::string(32, '\7')).vault_authentication);
+    CHECK(read_file(path, file) && file == data);
     const std::string id2 = v.put("second");
-    CHECK(!other.get(id2, back) && v.get(id2, back) && back == "second");
+    CHECK(v.get(id2, back) && back == "second");
     CHECK(v.remove(id2) && !v.exists(id2));
+    // Un blob chiffré d'une version antérieure : lu, puis réécrit en clair ; altéré, il est rendu tel quel.
+    {
+        const std::string old_id(32, 'a'), iv(16, '\3');
+        std::string sealed = "PSDV1" + iv + aes256_ctr(keys.vault_encryption, iv, "an earlier original");
+        dlib::hmac_sha256 mac(keys.vault_authentication);
+        mac.update(old_id);
+        mac.update(sealed.data(), sealed.size());
+        const std::array<unsigned char, 32> tag = mac.finalize();
+        sealed.append(reinterpret_cast<const char*>(tag.data()), tag.size());
+        const std::string old_path = join_path(join_path(join_path(dir, "vault"), "aa"), old_id + ".bin");
+        CHECK(make_dirs(join_path(join_path(dir, "vault"), "aa")) && write_file_atomic(old_path, sealed));
+        CHECK(v.get(old_id, back) && back == "an earlier original");
+        CHECK(v.migrate_to_plain({ old_id }) == 1 && read_file(old_path, file) && file == "an earlier original");
+        CHECK(v.migrate_to_plain({ old_id }) == 0 && v.get(old_id, back) && back == "an earlier original");
+        CHECK(v.remove(old_id));
+    }
     const std::string empty_id = v.put(std::string());
     CHECK(v.get(empty_id, back) && back.empty());
     // La liste du coffre, qui retire les écritures interrompues.

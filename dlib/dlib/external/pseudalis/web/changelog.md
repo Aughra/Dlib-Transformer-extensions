@@ -2,6 +2,16 @@
 
 Pseudalis pour macOS sur puce Apple, version dérivée de Pseudalis Community (Cydral Technology), maintenue par TortueTech. Le fork numérote Pseudalis à part de l'original à partir de 2.0.0. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne ; avant 2.0.0, la section porte le numéro de la version de l'original sur laquelle reposait le fork.
 
+## 2.2.0 — 15 novembre 2026
+
+### Sécurité
+
+- Le coffre des originaux n'est plus chiffré : les originaux, leurs images et les descriptions d'Albireo sont gardés tels quels dans `vault/`. Les blobs chiffrés d'une version antérieure se lisent encore, et sont réécrits en clair au démarrage du service.
+- L'export de la clé est la clé en clair (format version 2), sans phrase secrète : quiconque lit le fichier peut restaurer les copies protégées. Les champs de phrase secrète quittent la section « Clé de cet ordinateur ». Un export protégé d'une version antérieure (version 1) s'importe encore par l'interface, avec sa phrase.
+- Ces deux changements suivent la décision de l'utilisateur de ne plus rien chiffrer en sortie de Pseudalis ; les balises des copies protégées, qui portent encore les valeurs chiffrées, suivront.
+
+---
+
 ## 2.1.0 — 15 novembre 2026
 
 ### Accès et documents

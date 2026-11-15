@@ -750,7 +750,7 @@ namespace pseudalis
             if (!parse_body(req, res, body)) return;
             std::string exported;
             user_error e;
-            if (!s->export_key(body["passphrase"].str(), exported, e))
+            if (!s->export_key(exported, e))
             {
                 send_error(res, 422, e);
                 return;

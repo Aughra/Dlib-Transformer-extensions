@@ -12,14 +12,14 @@ namespace pseudalis
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                Les fichiers chiffrés du service : les originaux des fichiers qu'il a
+                Les fichiers gardés par le service : les originaux des fichiers qu'il a
                 protégés, leurs images, et le contenu des fichiers du lecteur.  Chaque blob
                 se trouve dans <dir>/<two digits>/<identifier>.bin, son identifiant étant 32
-                chiffres hexadécimaux aléatoires, chiffré avec AES-256-CTR sous un bloc
-                compteur aléatoire et authentifié avec HMAC-SHA-256 sur son identifiant, son
-                bloc compteur et son texte chiffré : un blob altéré, ou déplacé sous un autre
-                identifiant, ne s'ouvre pas.  Le dossier est privé au compte qui exécute le
-                service.
+                chiffres hexadécimaux aléatoires.  Depuis Pseudalis 2.2.0 (fork pour macOS,
+                décision de l'humain du 2026-11-15), un blob est écrit en clair : ses octets
+                tels quels.  Un blob d'une version antérieure, chiffré avec AES-256-CTR et
+                authentifié avec HMAC-SHA-256 ("PSDV1"), se lit encore, et migrate_to_plain()
+                les réécrit en clair.  Le dossier est privé au compte qui exécute le service.
 
             THREAD SAFETY
                 Les méthodes peuvent être appelées depuis plusieurs threads à la fois.
@@ -40,9 +40,13 @@ namespace pseudalis
             des écritures interrompues.  Pour le démarrage du service, avant toute écriture.
         !*/
         std::vector<std::string> list_and_clean();
+        // Réécrit en clair chaque blob chiffré d'une version antérieure ; renvoie leur nombre.
+        size_t migrate_to_plain(const std::vector<std::string>& ids);
 
     private:
         std::string path_of(const std::string& id) const;
+        // Si file est un blob chiffré d'une version antérieure de l'identifiant id : data reçoit ses données.
+        bool open_sealed(const std::string& id, std::string& file, std::string& data) const;
         std::string dir_;
         std::string enc_, mac_;
     };

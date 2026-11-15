@@ -744,21 +744,17 @@
     return r.status === 0 ? t('s_offline') : errorText(r.body, r.status);
   }
 
+  // L'export de la clé, en clair (fork pour macOS, 2.2.0) : plus de phrase secrète.
   async function exportKey() {
-    const p1 = document.getElementById('pass1').value, p2 = document.getElementById('pass2').value;
-    if (p1 !== p2) return message('key-message', t('passphrase_mismatch'), true);
-    const r = await sendJson('v1/key/export', { passphrase: p1 });
+    const r = await sendJson('v1/key/export', {});
     if (!r.ok) return message('key-message', failure(r), true);
     save(new Blob([r.body.key], { type: 'application/json' }), 'pseudalis-key-' + (fingerprint || 'export') + '.json');
-    document.getElementById('pass1').value = document.getElementById('pass2').value = '';
     message('key-message', t('key_exported'));
   }
 
   async function importKey(file) {
-    const passphrase = document.getElementById('pass1').value;
-    const r = await sendJson('v1/key/import', { key: await file.text(), passphrase: passphrase });
+    const r = await sendJson('v1/key/import', { key: await file.text() });
     if (!r.ok) return message('key-message', failure(r), true);
-    document.getElementById('pass1').value = document.getElementById('pass2').value = '';
     message('key-message', t('key_imported'));
   }
 

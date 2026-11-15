@@ -239,7 +239,7 @@ namespace pseudalis
         json terms();
         bool set_terms(const json& list, user_error& error);
 
-        bool export_key(const std::string& passphrase, std::string& exported, user_error& error);
+        bool export_key(std::string& exported, user_error& error);
         // Permis tant que la base de données n'enregistre aucun fichier : la clé d'une installation antérieure.
         bool import_key(const std::string& exported, const std::string& passphrase, user_error& error);
 

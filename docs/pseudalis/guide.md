@@ -1,6 +1,6 @@
 # Pseudalis sur Mac — guide
 
-Pseudalis protège les données personnelles des documents : chaque nom, adresse, numéro, identifiant ou date est remplacé par une balise que seule la clé de cet ordinateur sait rendre. Ce guide décrit la version du fork pour macOS à puce Apple (Pseudalis **2.1.0**) : la construire, la lancer, s'en servir, la tester. Il suit le code ; les choix et l'historique sont dans les [notes de version](../../dlib/dlib/external/pseudalis/web/changelog.md), le [tableau des différences avec Windows](differences-mac-windows.md) et le [blog de Pseudalis](../../blog/pseudalis/README.md).
+Pseudalis protège les données personnelles des documents : chaque nom, adresse, numéro, identifiant ou date est remplacé par une balise que seule la clé de cet ordinateur sait rendre. Ce guide décrit la version du fork pour macOS à puce Apple (Pseudalis **2.2.0**) : la construire, la lancer, s'en servir, la tester. Il suit le code ; les choix et l'historique sont dans les [notes de version](../../dlib/dlib/external/pseudalis/web/changelog.md), le [tableau des différences avec Windows](differences-mac-windows.md) et le [blog de Pseudalis](../../blog/pseudalis/README.md).
 
 Pseudalis vit dans le même dépôt qu'Albireo et repose, comme lui, sur dlib : sur [`dlib/privacy`](../../dlib/dlib/privacy.h) et sur les modèles de reconnaissance de l'exemple `slm_document_anonymizer_ex`, compilés dans le service.
 
@@ -42,7 +42,7 @@ Dans la section Réglages, « Ouvrir Pseudalis aux appareils de la maison » ouv
 | Restaurer des fichiers | Rend l'original d'un fichier protégé, ou d'une copie de celui-ci |
 | Protéger un texte | Protège ou restaure un texte collé, ou montre les valeurs trouvées, en couleurs |
 | Originaux conservés | La liste des originaux gardés, à télécharger ou à oublier |
-| Clé de cet ordinateur | L'empreinte de la clé, son export et son import protégés par une phrase de passe |
+| Clé de cet ordinateur | L'empreinte de la clé, son export (en clair, sans phrase secrète) et son import |
 | Réglages | Balises par défaut, lettre du lecteur, ordre des dates, taille maximale d'un fichier, durée et espace des originaux, description des images par Albireo |
 | Termes imposés | Des termes toujours protégés, quel que soit le détecteur |
 
@@ -86,8 +86,8 @@ Quand Albireo tourne et que l'un de ses modèles lit les images, Pseudalis lui e
 | Élément | Contenu |
 |---|---|
 | `settings.json` | Les réglages |
-| `keys/` | La clé maîtresse de l'ordinateur (0700) |
-| `vault/` | Les originaux conservés, chiffrés |
+| `keys/` | La clé maîtresse de l'ordinateur, en clair (dossier 0700, fichier 0600) |
+| `vault/` | Les originaux conservés, leurs images et leurs descriptions, en clair depuis la 2.2.0 |
 | `db/` | La base des enregistrements, des termes et de l'historique |
 | `drive/`, `refused/` | Le lecteur et ses fichiers refusés |
 | `certificates/` | L'autorité locale et le certificat du serveur |
@@ -107,6 +107,7 @@ PSEUDALIS_TEST_PORT=18474 bash dlib/dlib/external/pseudalis/tools/test_macos.sh 
 
 ## Sécurité
 
+- **Plus de chiffrement en sortie** (2.2.0, décision de l'humain du 2026-11-15) : le coffre garde les originaux en clair (les blobs chiffrés d'une version antérieure sont réécrits en clair au démarrage), et l'export de la clé est la clé en clair. Tout programme du Mac qui lit le dossier de données lit les originaux ; quiconque lit un export de la clé peut restaurer les copies protégées. Un export protégé d'une version antérieure s'importe encore, avec sa phrase secrète, par l'interface. Les balises des copies protégées portent encore leurs valeurs chiffrées : leur passage à une table gardée sur le Mac est la prochaine étape.
 - Sans jeton d'administration, tout programme du Mac qui joint `https://localhost` au port du service peut lire les originaux conservés, exporter la clé avec une phrase de passe de son choix, et changer les réglages. C'est le choix de l'humain (2026-11-15), le même que pour Albireo ; il convient à un Mac à un seul utilisateur.
 - Restent les gardes de toutes les routes : l'en-tête Host doit nommer le serveur local, et une requête venue d'une page doit venir de ce serveur. Aucun site web ne peut donc piloter le service par le navigateur.
 - Sans l'accès réseau, le service n'écoute que sur `127.0.0.1` : les autres appareils ne le joignent pas.

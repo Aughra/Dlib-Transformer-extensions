@@ -43,46 +43,30 @@ namespace pseudalis
         return join_path(join_path(dir_, id.substr(0, 2)), id + ".bin");
     }
 
-    /*
-        Un blob est "PSDV1", l'IV (16 octets), les données chiffrées et le HMAC (32 octets) de
-        l'identifiant et de tout ce qui le précède.  Il est construit et lu dans un seul tampon,
-        pour que les données ne soient jamais en mémoire plus de deux fois.
-    */
+    // Un blob est écrit en clair : les octets de data, tels quels.
     std::string vault::put(const std::string& data)
     {
         const std::string id = dlib::to_hex(dlib::generate_secure_random_bytes(16));
-        const std::string iv = dlib::generate_secure_random_bytes(16);
-        std::string file;
-        file.reserve(21 + data.size() + 32);
-        file.append(magic, 5);
-        file.append(iv);
-        file.resize(21 + data.size());
-        if (!data.empty()) aes256_ctr_into(enc_, iv.data(), data.data(), &file[21], data.size());
-        dlib::hmac_sha256 mac(mac_);
-        mac.update(id);
-        mac.update(file.data(), file.size());
-        const std::array<unsigned char, 32> tag = mac.finalize();
-        file.append(reinterpret_cast<const char*>(tag.data()), tag.size());
         const std::string folder = join_path(dir_, id.substr(0, 2));
         if (!dir_exists(folder) && !make_dirs(folder)) return std::string();
-        if (!write_file_atomic(path_of(id), file)) return std::string();
+        if (!write_file_atomic(path_of(id), data)) return std::string();
         return id;
     }
 
-    bool vault::get(const std::string& id, std::string& data) const
+    /*
+        Un blob d'une version antérieure est "PSDV1", l'IV (16 octets), les données chiffrées et le HMAC (32 octets)
+        de l'identifiant et de tout ce qui le précède.  Il est déchiffré sur place, puis déplacé au début du tampon,
+        qui devient les données.
+    */
+    bool vault::open_sealed(const std::string& id, std::string& file, std::string& data) const
     {
-        data.clear();
-        if (!valid_id(id)) return false;
-        std::string file;
-        if (!read_file(path_of(id), file, 4ull << 30) || file.size() < 5 + 16 + 32 || file.compare(0, 5, magic, 5) != 0)
-            return false;
+        if (file.size() < 5 + 16 + 32 || file.compare(0, 5, magic, 5) != 0) return false;
         const size_t sealed = file.size() - 21 - 32;
         dlib::hmac_sha256 mac(mac_);
         mac.update(id);
         mac.update(file.data(), 21 + sealed);
         const std::array<unsigned char, 32> expected = mac.finalize();
         if (!dlib::constant_time_equal(expected.data(), file.data() + 21 + sealed, 32)) return false;
-        // Déchiffré sur place, puis déplacé au début du tampon, qui devient les données.
         char iv[16];
         std::memcpy(iv, file.data() + 5, 16);
         if (sealed > 0) aes256_ctr_into(enc_, iv, file.data() + 21, &file[21], sealed);
@@ -90,6 +74,30 @@ namespace pseudalis
         file.resize(sealed);
         data.swap(file);
         return true;
+    }
+
+    bool vault::get(const std::string& id, std::string& data) const
+    {
+        data.clear();
+        if (!valid_id(id)) return false;
+        std::string file;
+        if (!read_file(path_of(id), file, 4ull << 30)) return false;
+        if (open_sealed(id, file, data)) return true;
+        data.swap(file);
+        return true;
+    }
+
+    size_t vault::migrate_to_plain(const std::vector<std::string>& ids)
+    {
+        size_t done = 0;
+        for (const std::string& id : ids)
+        {
+            std::string file, data;
+            if (!read_file(path_of(id), file, 4ull << 30) || !open_sealed(id, file, data)) continue;
+            if (write_file_atomic(path_of(id), data)) ++done;
+            wipe(data);
+        }
+        return done;
     }
 
     bool vault::remove(const std::string& id)

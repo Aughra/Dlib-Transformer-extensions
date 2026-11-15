@@ -19,7 +19,6 @@ namespace pseudalis
     namespace
     {
         const char* const salt = "Pseudalis key derivation 1";
-        const unsigned long export_iterations = 600000;
 
         std::string key_path(const std::string& dir)
         {
@@ -124,23 +123,17 @@ namespace pseudalis
         return true;
     }
 
-    std::string export_master_key(const std::string& master, const std::string& passphrase)
+    /*
+        L'export de la clé, en clair (fork pour macOS, décision de l'humain du 2026-11-15 : plus de chiffrement en
+        sortie de Pseudalis) : la clé maîtresse en base64, sans phrase de passe.  Quiconque lit ce fichier peut
+        restaurer les copies protégées par cette clé.
+    */
+    std::string export_master_key(const std::string& master)
     {
-        const std::string salt_bytes = dlib::generate_secure_random_bytes(16);
-        const std::string iv = dlib::generate_secure_random_bytes(16);
-        std::string keys = dlib::pbkdf2_hmac_sha256(passphrase, salt_bytes, export_iterations, 64);
-        const std::string enc = keys.substr(0, 32), mac = keys.substr(32);
-        wipe(keys);
-        const std::string sealed = aes256_ctr(enc, iv, master);
         json j = json::object();
         j["format"] = "pseudalis-master-key";
-        j["version"] = 1;
-        j["kdf"] = "pbkdf2-sha256";
-        j["iterations"] = static_cast<unsigned long long>(export_iterations);
-        j["salt"] = base64_encode(salt_bytes);
-        j["iv"] = base64_encode(iv);
-        j["key"] = base64_encode(sealed);
-        j["mac"] = base64_encode(hmac_sha256(mac, salt_bytes + iv + sealed));
+        j["version"] = 2;
+        j["key"] = base64_encode(master);
         return j.dump_formatted(2) + "\n";
     }
 
@@ -148,9 +141,24 @@ namespace pseudalis
                            std::string& error)
     {
         json j;
-        if (!json::parse(exported, j) || j["format"].str() != "pseudalis-master-key" || j["version"].as_int() != 1)
+        const long long version = json::parse(exported, j) ? j["version"].as_int() : 0;
+        if (j["format"].str() != "pseudalis-master-key" || (version != 1 && version != 2))
         {
             error = "not an export of a Pseudalis key";
+            return false;
+        }
+        // Un export en clair (version 2) ; un export protégé par phrase de passe (version 1) reste lisible.
+        if (version == 2)
+        {
+            master = base64_decode(j["key"].str());
+            if (master.size() == 32) return true;
+            wipe(master);
+            error = "the export is damaged";
+            return false;
+        }
+        if (passphrase.empty())
+        {
+            error = "this earlier export is protected: give its passphrase";
             return false;
         }
         const long long iterations = j["iterations"].as_int(0);

@@ -237,9 +237,16 @@ namespace pseudalis
             if (unlinked) log_info("pictures: " + std::to_string(unlinked) + " that no record names removed");
             const std::set<std::string> named = db_->referenced_blobs();
             size_t orphans = 0;
+            std::vector<std::string> kept;
             for (const std::string& id : vault_->list_and_clean())
-                if (!named.count(id) && vault_->remove(id)) ++orphans;
+            {
+                if (!named.count(id)) { if (vault_->remove(id)) ++orphans; }
+                else kept.push_back(id);
+            }
             if (orphans) log_info("vault: " + std::to_string(orphans) + " blob(s) that no record names removed");
+            // Les blobs chiffrés d'une version antérieure passent en clair (fork pour macOS, 2.2.0).
+            const size_t opened = vault_->migrate_to_plain(kept);
+            if (opened) log_info("vault: " + std::to_string(opened) + " encrypted blob(s) written again in clear");
         }
         catch (const std::exception& x)
         {
@@ -475,7 +482,7 @@ namespace pseudalis
             trois minutes au plus, et aucune ne commence une fois que le service s'arrête : les
             images qui suivent gardent leur seul marqueur, comme toute image pendant que le
             réglage albireo est sur off.  Une description peut nommer ce que montre l'image : elle
-            est gardée chiffrée dans le coffre, comme l'image, et le moteur la protège chaque fois
+            est gardée dans le coffre, comme l'image, et le moteur la protège chaque fois
             qu'il l'écrit.  Une image gardée sans description, ou dont la description ne peut plus
             être lue, reçoit celle qu'Albireo donne maintenant.
         */
@@ -1216,20 +1223,15 @@ namespace pseudalis
         return true;
     }
 
-    bool service::export_key(const std::string& passphrase, std::string& exported, user_error& error)
+    bool service::export_key(std::string& exported, user_error& error)
     {
         if (key_replaced_)
         {
             error.set("the service restarts with the key imported", "stopping");
             return false;
         }
-        if (passphrase.size() < 12)
-        {
-            error.set("the passphrase must have 12 characters at least", "passphrase_short");
-            return false;
-        }
         std::lock_guard<std::mutex> lock(key_m_);
-        exported = export_master_key(master_, passphrase);
+        exported = export_master_key(master_);
         log_info("keys: the master key was exported");
         return true;
     }

@@ -74,7 +74,7 @@ window.PSEUDALIS_TEXTS = {
     s_records: 'Originaux conservés',
     s_offline: 'Le service ne répond pas.',
     records_title: 'Originaux conservés',
-    records_hint: 'Les originaux des fichiers protégés sur cet ordinateur, chiffrés dans son coffre. Un original ' +
+    records_hint: 'Les originaux des fichiers protégés sur cet ordinateur, gardés en clair dans son coffre. Un original ' +
       'oublié est supprimé avec ses images : son fichier protégé est alors restauré par ses balises, qui rendent ' +
       'ses valeurs mais pas ses images ; protégé sans balises, il ne peut plus être restauré.',
     records_none: 'Aucun original conservé.',
@@ -117,16 +117,13 @@ window.PSEUDALIS_TEXTS = {
     err_tagless_forgotten: 'Ce fichier a été protégé sans balises et son original a été oublié le {date} : ses ' +
       'valeurs ne peuvent plus revenir.',
     key_title: 'Clé de cet ordinateur',
-    key_hint: 'Cette clé restaure tous les fichiers protégés ici. Exportez-la, protégée par une phrase secrète de ' +
-      "12 caractères ou plus, et conservez l'export hors de cet ordinateur : sans lui, une nouvelle installation " +
-      'ne restaure rien.',
+    key_hint: 'Cette clé restaure tous les fichiers protégés ici. Son export est en clair, sans phrase secrète : ' +
+      'quiconque lit le fichier peut restaurer vos copies protégées. Conservez-le en lieu sûr, hors de cet ' +
+      'ordinateur : sans lui, une nouvelle installation ne restaure rien.',
     key_fingerprint: 'Empreinte',
-    passphrase: 'Phrase secrète',
-    passphrase_again: 'Phrase secrète, à nouveau',
     btn_export: 'Exporter la clé',
     btn_import: 'Importer une clé',
     import_hint: 'Un import remplace la clé de cette installation, qui ne doit encore conserver aucun original.',
-    passphrase_mismatch: 'Les deux phrases secrètes diffèrent.',
     key_exported: 'La clé est exportée : conservez le fichier hors de cet ordinateur.',
     key_imported: 'La clé est importée : le service redémarre avec elle.',
     settings_title: 'Réglages',
@@ -167,7 +164,6 @@ window.PSEUDALIS_TEXTS = {
     err_server_error: "Le service n'a pas pu traiter la requête.",
     err_text_failed: 'Le texte ne peut pas être traité : {e}',
     err_stopping: "Le service s'arrête.",
-    err_passphrase_short: 'La phrase de passe doit compter au moins 12 caractères.',
     err_import_failed: 'La clé ne peut pas être importée : {e}',
     err_import_not_empty: "Une clé ne s'importe que tant que cette installation ne conserve aucun original " +
       'ni aucun fichier sur son lecteur.',
