@@ -40,26 +40,15 @@ project(examples)
 # Tell cmake we will need dlib.  This command will pull in dlib and compile it
 # into your project.  Note that you don't need to compile or install dlib.  All
 # cmake needs is the dlib source code folder and it will take care of everything.
-# Whole-program optimization (/GL plus the matching /LTCG link) is turned on by the parent
-# configuration and applies to dlib and to every example here. On the very deep DNN template
-# instantiations (in particular the imported transformer network) the /LTCG link is extremely
-# slow and can leave an object the linker cannot read (LNK1107 at 0xFFFFFFFF). Turning it off
-# for this whole tree, dlib included, keeps everything functionally identical and links cleanly.
+# Whole-program (link-time) optimization stays off for this whole tree, dlib included: on the
+# very deep DNN template instantiations (in particular the imported transformer network) it makes
+# the link extremely slow, for a result that is functionally identical.
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
-if (MSVC)
-    foreach(_cfg "" "_DEBUG" "_RELEASE" "_RELWITHDEBINFO" "_MINSIZEREL")
-        foreach(_base CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS
-                      CMAKE_SHARED_LINKER_FLAGS CMAKE_STATIC_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS)
-            string(REPLACE "/GL"   "" ${_base}${_cfg} "${${_base}${_cfg}}")
-            string(REPLACE "/LTCG" "" ${_base}${_cfg} "${${_base}${_cfg}}")
-        endforeach()
-    endforeach()
-endif()
 
 add_subdirectory(../dlib dlib_build)
 
 # dlib was just configured above; force its interprocedural optimization off too, so the static
-# library carries no /GL objects (those would otherwise drag every example link back to /LTCG).
+# library carries no link-time objects (those would otherwise drag every example link back to it).
 if (TARGET dlib)
     set_target_properties(dlib PROPERTIES INTERPROCEDURAL_OPTIMIZATION OFF)
 endif()
@@ -134,15 +123,6 @@ macro(add_example name)
    # equivalent.
    target_link_options(${name} PRIVATE $<$<CONFIG:RELEASE>:LINKER:-x>)
 
-   if (MSVC)
-      # For DNN builds on Visual C++, increase the stack size from the default 1 MB -
-      # because otherwise there may easily be a stack overflow error (0xC00000FD) when
-      # calling cudnnFindConvolutionBackwardDataAlgorithm (and/or friends) on Blackwell
-      # (where calling these "Find" functions may result in a deep recursive search).
-      if (${name} MATCHES "dnn_.*_ex")
-         set_target_properties(${name} PROPERTIES LINK_FLAGS "/STACK:16777216")
-      endif()
-   endif()
 endmacro()
 
 # if an example requires GUI, call this macro to check DLIB_NO_GUI_SUPPORT to include or exclude
@@ -201,11 +181,6 @@ add_example(slm_embed_ex)
 add_example(slm_extended_memory_ex)
 add_example(slm_npu_offload_ex)
 add_example(slm_document_anonymizer_ex)
-# The anonymizer compiles the document stack, the structural SVM tagger, two sizes of the
-# transformer span model and the trained recognizers of its header into one translation unit.
-if(MSVC)
-    target_compile_options(slm_document_anonymizer_ex PRIVATE /bigobj)
-endif()
 
 # The examples that compile a whole model in from a generated header.
 #
@@ -216,11 +191,7 @@ endif()
 # rises with the depth of the model rather than with anything these files do, so it is
 # raised once for both of them instead of being chased target by target.
 foreach(target slm_gguf_import_ex slm_lora_finetune_ex slm_distill_ex)
-    if(MSVC)
-        target_compile_options(${target} PRIVATE /bigobj)
-    else()
-        target_compile_options(${target} PRIVATE -ftemplate-depth=4096)
-    endif()
+    target_compile_options(${target} PRIVATE -ftemplate-depth=4096)
 endforeach()
 #add_gui_example(3d_point_cloud_ex)
 #add_example(bayes_net_ex)

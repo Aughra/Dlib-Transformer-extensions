@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-15 — Retirer les branches Windows et Visual Studio des fichiers CMake de dlib
+
+- **Quoi** : paquet 3 du retrait des conditions Windows de dlib. `dlib/dlib/CMakeLists.txt` : erreur `MSVC` des DLL, message OpenVINO pour Windows, test `MSVC AND CMAKE_VERSION VERSION_LESS 3.11`, branche `WIN32` de Mbed TLS (la liaison aux threads gardée), copie de la DLL d'OpenMP de la MKL, suffixes `MSVC` des noms de bibliothèque. `examples/CMakeLists.txt` : retrait de `/GL` et `/LTCG`, `/STACK` des exemples `dnn_*`, `/bigobj` (commentaires réécrits ; `-ftemplate-depth=4096` gardé sans condition). `test/CMakeLists.txt` : branche `MSVC` (`/WX`) retirée, `LINKER:-x` à la place de `-s` dans la branche Clang. `cmake_utils/find_blas.cmake` : branche `WIN32` (MKL sous `C:/Program Files`) retirée, les deux `if (UNIX OR MINGW)` déroulés, un message en double retiré. `set_compiler_specific_options.cmake` : branche Visual Studio des instructions SSE/AVX et bloc `/bigobj`, `/MP`. `find_openvino.cmake` : recherche de Python pour Windows. `tell_visual_studio_to_use_static_runtime.cmake` supprimé (inclus nulle part).
+- **Fichiers** : les sept fichiers CMake ci-dessus ; `docs/notes-pour-l-auteur.md` (registre, entrée n° 5), `logs/nuit-2026-11-15.md`.
+- **Pourquoi** : demande de l'humain ; dlib ne vise plus que macOS. Le `-s` du build des tests donnait le dernier avertissement des builds (`ld: warning: -s is obsolete`).
+- **Étapes** : modifications par blocs `if`/`endif` appariés (script), `git diff -w` relu ; aucune condition `WIN32`, `MSVC`, `MINGW`, `CYGWIN` ne reste dans les CMake de dlib hors bibliothèques embarquées ; quatre builds (exemples, Albireo, Pseudalis, tests de dlib) : 0 échec, **0 avertissement** ; tests rapides passent ; `dtest` : 4 457 648 vérifications passent.
+
 ## 2026-11-15 — Retirer les contournements pour Windows et Visual Studio du code de dlib
 
 - **Quoi** : paquet 2 du retrait des conditions Windows de dlib. `unifdef -m -U_MSC_VER -U_WIN32 -UWIN32 -U_WIN64 -U__CYGWIN__ -U__MINGW32__ -U_MSVC_LANG -U__WIN32__` sur les 37 fichiers du code propre de dlib qui en contenaient (hors `external/`, `test/`, `cuda/`, `server/`), dont 34 changés (628 lignes retirées : `#pragma warning` de Visual Studio, police Windows de `nativefont.h`, version Cygwin de `hostname_to_ip`…) ; à la main : `simd/simd4f.h`, `sqlite/sqlite_tools.h`, `matrix/lapack/fortran_id.h` (conditions mêlées à d'autres que `unifdef` laisse), le commentaire sur Cygwin de `sockets_kernel_2.cpp` ; `test/stft_good_data.h` : `operator ""_i` (avertissement de l'original, notes n° 5).

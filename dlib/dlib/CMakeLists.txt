@@ -74,10 +74,6 @@ if (DLIB_IN_PROJECT_BUILD)
    # Tell cmake to build dlib as a static library
    set(BUILD_SHARED_LIBS false)
 
-elseif(BUILD_SHARED_LIBS)
-   if (MSVC)
-      message(FATAL_ERROR "Building dlib as a standalone dll is not supported when using Visual Studio.  You are highly encouraged to use static linking instead.  See https://github.com/davisking/dlib/issues/1483 for a discussion.") 
-   endif()
 endif()
 
 macro (enable_preprocessor_switch option_name)
@@ -723,9 +719,6 @@ if (NOT TARGET dlib)
             # cuda/npu_dlib.cpp is built as a separate object library (see the end of this
             # file) because it alone is compiled as C++17.
             message(STATUS "Enabling NPU support for dlib.  DLIB WILL USE THE NPU AND THE INTEL GPU of the processor when found at run time, through OpenVINO ${OpenVINO_VERSION}.")
-            if (WIN32)
-               message(STATUS "Programs built with NPU support load the OpenVINO runtime: add ${DLIB_OPENVINO_LIBRARY_DIR} to the PATH before running them.")
-            endif()
          else()
             set(DLIB_USE_NPU OFF CACHE BOOL ${DLIB_USE_NPU_STR} FORCE)
             message(STATUS "${dlib_npu_problem}")
@@ -849,13 +842,8 @@ if (NOT TARGET dlib)
    endif()
 
    target_compile_features(dlib PUBLIC cxx_std_14)
-   if((MSVC AND CMAKE_VERSION VERSION_LESS 3.11))
-      target_compile_options(dlib PUBLIC ${active_compile_opts})
-      target_compile_options(dlib PRIVATE ${active_compile_opts_private})
-   else()
-      target_compile_options(dlib PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${active_compile_opts}>)
-      target_compile_options(dlib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${active_compile_opts_private}>)
-   endif()
+   target_compile_options(dlib PUBLIC $<$<COMPILE_LANGUAGE:CXX>:${active_compile_opts}>)
+   target_compile_options(dlib PRIVATE $<$<COMPILE_LANGUAGE:CXX>:${active_compile_opts_private}>)
 
    if (DLIB_USE_NPU AND NOT DLIB_ISO_CPP_ONLY)
       # cuda/npu_dlib.cpp is the only file that includes OpenVINO, whose headers need C++17.
@@ -907,12 +895,8 @@ if (NOT TARGET dlib)
          # Every translation unit that includes an Mbed TLS header must see the configuration
          # the library was compiled with, see external/mbedtls/README.txt.
          target_compile_definitions(dlib_mbedtls PUBLIC "MBEDTLS_USER_CONFIG_FILE=\"dlib_mbedtls_config.h\"")
-         if (WIN32)
-            target_link_libraries(dlib_mbedtls PUBLIC bcrypt ws2_32)
-         else()
-            find_package(Threads REQUIRED)
-            target_link_libraries(dlib_mbedtls PUBLIC Threads::Threads)
-         endif()
+         find_package(Threads REQUIRED)
+         target_link_libraries(dlib_mbedtls PUBLIC Threads::Threads)
          target_link_libraries(dlib_httplib INTERFACE dlib_mbedtls)
          target_compile_definitions(dlib_httplib INTERFACE CPPHTTPLIB_MBEDTLS_SUPPORT)
       endif()
@@ -1006,49 +990,8 @@ if (NOT TARGET dlib)
 
    endif()
 
-   if (WIN32 AND mkl_iomp_dll)
-      # If we are using the Intel MKL on windows then try and copy the iomp dll
-      # file to the output folder.  We do this since a very large number of
-      # windows users don't understand that they need to add the Intel MKL's
-      # folders to their PATH to use the Intel MKL.  They then complain on the
-      # dlib forums.  Copying the Intel MKL dlls to the output directory removes
-      # the need to add the Intel MKL to the PATH.  The copy is attached here, in
-      # the directory that creates the dlib target, since add_custom_command()
-      # only accepts a target of its own directory and a project may add dlib
-      # more than once, as the tests do with the examples and the tools.
-      if (CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-         add_custom_command(TARGET dlib POST_BUILD
-            # In some newer versions of windows/visual studio the output Config folder doesn't
-            # exist at first, so you can't copy to it unless you make it yourself.  So make
-            # sure the target folder exists first.
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/"
-            COMMAND ${CMAKE_COMMAND} -E copy "${mkl_iomp_dll}" "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/"
-            )
-      else()
-         add_custom_command(TARGET dlib POST_BUILD
-            # In some newer versions of windows/visual studio the output Config folder doesn't
-            # exist at first, so you can't copy to it unless you make it yourself.  So make
-            # sure the target folder exists first.
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/$<CONFIG>/"
-            COMMAND ${CMAKE_COMMAND} -E copy "${mkl_iomp_dll}" "${CMAKE_BINARY_DIR}/$<CONFIG>/"
-            )
-      endif()
-   endif()
 
 endif()
 
-if (MSVC)
-   # Give the output library files names that are unique functions of the
-   # visual studio mode that compiled them.  We do this so that people who
-   # compile dlib and then copy the .lib files around (which they shouldn't be
-   # doing in the first place!) will hopefully be slightly less confused by
-   # what happens since, at the very least, the filenames will indicate what
-   # visual studio runtime they go with.
-   math(EXPR numbits ${CMAKE_SIZEOF_VOID_P}*8)
-   set_target_properties(dlib PROPERTIES DEBUG_POSTFIX "${VERSION}_debug_${numbits}bit_msvc${MSVC_VERSION}")
-   set_target_properties(dlib PROPERTIES RELEASE_POSTFIX "${VERSION}_release_${numbits}bit_msvc${MSVC_VERSION}")
-   set_target_properties(dlib PROPERTIES MINSIZEREL_POSTFIX "${VERSION}_minsizerel_${numbits}bit_msvc${MSVC_VERSION}")
-   set_target_properties(dlib PROPERTIES RELWITHDEBINFO_POSTFIX "${VERSION}_relwithdebinfo_${numbits}bit_msvc${MSVC_VERSION}")
-endif()
 
 add_library(dlib::dlib ALIAS dlib)

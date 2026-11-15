@@ -217,9 +217,6 @@ if (CMAKE_COMPILER_IS_GNUCXX)
       target_link_options(${target_name} PRIVATE $<$<CONFIG:RELEASE>:-s>)
    endif()
 
-elseif (MSVC)
-   # Treat warnings as errors.
-   add_compile_options(/WX)
 else() # basically Clang
    # Treat warnings as errors, but do not turn on all warnings.
    add_compile_options(-W -Werror)
@@ -227,8 +224,8 @@ else() # basically Clang
    add_compile_options(-Wno-comment)
 
    if(${CMAKE_VERSION} VERSION_GREATER "3.8.0") 
-      # strip debug symbols to make the binary smaller
-      target_link_options(${target_name} PRIVATE $<$<CONFIG:RELEASE>:-s>)
+      # Strip local symbols to make the binary smaller (ld64 no longer supports -s).
+      target_link_options(${target_name} PRIVATE $<$<CONFIG:RELEASE>:LINKER:-x>)
    endif()
 endif()
 
