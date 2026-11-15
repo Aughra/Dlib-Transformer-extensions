@@ -51,32 +51,7 @@ if(has_parent)
 endif()
 
 
-if (COMMAND pybind11_add_module AND MSVC)
-   # True when building a python extension module using Visual Studio.  We care
-   # about this because a huge number of windows users have broken systems, and
-   # in particular, they have broken or incompatibly installed copies of things
-   # like libjpeg or libpng.  So if we detect we are in this mode we will never
-   # ever link to those libraries.  Instead, we link to the copy included with
-   # dlib.
-   set (BUILDING_PYTHON_IN_MSVC true)
-else()
-   set (BUILDING_PYTHON_IN_MSVC false)
-endif()
-
 if (DLIB_IN_PROJECT_BUILD)
-
-   # Check if we are being built as part of a pybind11 module. 
-   if (COMMAND pybind11_add_module)
-      set(CMAKE_POSITION_INDEPENDENT_CODE True)
-      if (CMAKE_COMPILER_IS_GNUCXX)
-         # Just setting CMAKE_POSITION_INDEPENDENT_CODE should be enough to set
-         # -fPIC for GCC but sometimes it still doesn't get set, so make sure it
-         # does.
-         add_definitions("-fPIC")
-      endif()
-      # Make DLIB_ASSERT statements not abort the python interpreter, but just return an error.
-      list(APPEND active_preprocessor_switches "-DDLIB_NO_ABORT_ON_2ND_FATAL_ERROR")
-   endif()
 
    # DLIB_IN_PROJECT_BUILD==true means you are using dlib by invoking
    # add_subdirectory(dlib) in the parent project. In this case, we always want
@@ -1132,13 +1107,6 @@ if (MSVC)
    set_target_properties(dlib PROPERTIES RELEASE_POSTFIX "${VERSION}_release_${numbits}bit_msvc${MSVC_VERSION}")
    set_target_properties(dlib PROPERTIES MINSIZEREL_POSTFIX "${VERSION}_minsizerel_${numbits}bit_msvc${MSVC_VERSION}")
    set_target_properties(dlib PROPERTIES RELWITHDEBINFO_POSTFIX "${VERSION}_relwithdebinfo_${numbits}bit_msvc${MSVC_VERSION}")
-endif()
-
-# Check if we are being built as part of a pybind11 module. 
-if (COMMAND pybind11_add_module)
-   # Don't export unnecessary symbols.
-   set_target_properties(dlib PROPERTIES CXX_VISIBILITY_PRESET "hidden")
-   set_target_properties(dlib PROPERTIES CUDA_VISIBILITY_PRESET "hidden")
 endif()
 
 add_library(dlib::dlib ALIAS dlib)

@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-15 — Retirer de dlib son interface Python (pybind11)
+
+- **Quoi** : première étape du nettoyage de dlib demandé par l'humain (pybind11, cblas, zlib du système, conditions Apple du fork et de dlib lui-même ; les bibliothèques embarquées sqlite, httplib, mbedtls, libpng, libjpeg restent). Retirés : `external/pybind11`, `dlib/python/`, `dlib/python.h`, `tools/python/`, `python_examples/`, `setup.py`, `pyproject.toml`, `MANIFEST.in` (132 fichiers) ; blocs pybind11 et `BUILDING_PYTHON_IN_MSVC` des CMake (`dlib/CMakeLists.txt`, `dlib/dlib/CMakeLists.txt`, `set_compiler_specific_options.cmake`, `find_libpng.cmake`, `find_libjpeg.cmake`) ; section Python du README de dlib remplacée par une phrase.
+- **Fichiers** : ceux ci-dessus ; `docs/notes-pour-l-auteur.md` (registre de dlib).
+- **Pourquoi** : rien dans le fork ne se sert de l'interface Python de dlib.
+- **Étapes** : exemples (26 programmes), Albireo et Pseudalis recompilés : 0 erreur, 0 avertissement ; `test_qkernels`, `test_host` d'Albireo, `test_engine` et `test_host` de Pseudalis : tout passe.
+
 ## 2026-11-14 — Retirer les conditions de plateforme du moteur processeur (Albireo 4.26.1)
 
 - **Quoi** : question de l'humain (« il y a besoin de laisser des if mac pour le compilo ? »), option B choisie (nettoyage complet). Constat : les `#if defined(__APPLE__)` du portage (`platform.cpp`, `system_info.cpp`) avaient déjà disparu au grand ménage du 2026-11-11 ; il restait `ALBIREO_QK_NEON`, `ALBIREO_QK_ACCELERATE` et deux `__APPLE__` dans le moteur, toujours vrais puisque le CMake refuse tout sauf macOS arm64. `qkernels.cpp` : `<arm_neon.h>` et `<vecLib/cblas_new.h>` sans condition, `#error` sans NEON et produit scalaire ; `qk_isa()`, `qk_dot`, `gemm_rows`, `matmul_float` sans condition (la branche portable de `qk_dot` reste pour Q8_0, Q5_K…, les tuiles de `matmul_float` sous 16 tokens) ; attention : NEON seule, modèles portables `attention_scores`/`attention_values` retirés ; encodeur d'images : appel direct d'Accelerate, `encoder_scores`, `encoder_values`, `encoder_scores_group`, `encoder_values_group` retirés ; commentaires AVX2, VNNI et « build portable » corrigés. `qkernels.h` : `qk_float_product_tokens` = 24 sans condition. En-têtes de `qkernels_neon.inc`, `qkernels_accelerate.inc`, `thread_pool_apple.inc`. dlib garde ses `if (APPLE)` (bibliothèque générique). Mémo et notes pour l'auteur corrigés (les extraits des notes gardent la forme conditionnelle, utile à l'auteur).

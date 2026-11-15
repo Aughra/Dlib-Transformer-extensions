@@ -3,12 +3,6 @@
 
 cmake_minimum_required(VERSION 3.10.0)
 
-if (BUILDING_PYTHON_IN_MSVC)
-   # Never use any system copy of libjpeg when building python in visual studio
-   set(JPEG_FOUND 0)
-   return()
-endif()
-
 # Don't rerun this script if its already been executed.
 if (DEFINED JPEG_FOUND)
    return()

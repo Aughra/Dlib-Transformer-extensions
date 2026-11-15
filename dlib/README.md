@@ -37,16 +37,7 @@ vcpkg install dlib
 
 ## Compiling dlib Python API
 
-Either fetch the latest stable release of dlib from PyPi and install that:
-```bash
-pip install dlib
-```
-Or fetch the very latest version from github and install that:
-```bash
-git clone https://github.com/davisking/dlib.git
-cd dlib
-pip install .
-```
+The macOS fork of this repository does not carry the Python API of dlib (pybind11, `setup.py`, `tools/python`), which nothing in the fork uses. The upstream dlib project provides it: `pip install dlib`.
 
 It's possible to change build settings by passing parameters to `setup.py` or `DLIB_*` environment variables.
 For example, setting the environment variable `DLIB_NO_GUI_SUPPORT` to `ON` will add the cmake option
