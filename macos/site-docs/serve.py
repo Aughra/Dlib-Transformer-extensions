@@ -60,6 +60,7 @@ SOMMAIRE = [
         ("logs/journal-modifications.md", "Journal des modifications", "L'historique, le plus récent en haut."),
         ("logs/sieste-2026-11-11.md", "Pendant la sieste (11 nov.)", "Les choix faits seul."),
         ("logs/nuit-2026-11-12.md", "Pendant la nuit (12-13 nov.)", "Les choix faits seul."),
+        ("logs/nuit-2026-11-15.md", "Pendant la nuit (15 nov.)", "Les choix faits seul."),
     ]),
     ("Albireo et Pseudalis", [
         ("dlib/dlib/external/albireo/web/changelog.md", "Notes de version d'Albireo", "Ce que chaque version apporte."),

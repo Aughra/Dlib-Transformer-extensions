@@ -7,6 +7,7 @@ Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition
 ### Plateforme
 
 - Albireo et Pseudalis se lient à la zlib de macOS au lieu d'en compiler une copie ; la licence de zlib n'est plus livrée avec les programmes, ni listée dans la page « Composants et licences ».
+- La bibliothèque dlib, sur laquelle reposent Albireo et Pseudalis, ne vise plus que macOS : son interface Python et sa copie de CBLAS sont retirées, et son code ne contient plus de conditions Apple ni Windows (versions Windows des services de base, contournements de Visual Studio, branches des fichiers de construction, exemples et tests, soit 7 233 lignes). Les bibliothèques tierces qu'elle embarque sont inchangées. Aucun changement de comportement ; les builds de dlib, d'Albireo et de Pseudalis ne produisent plus aucun avertissement.
 
 ---
 

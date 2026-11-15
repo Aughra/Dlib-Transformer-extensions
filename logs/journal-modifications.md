@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-15 — Clore le retrait des conditions Windows de dlib : tests complets et documents
+
+- **Quoi** : tests complets après les quatre paquets ; épisode 42 du blog complété (retrait des conditions Windows, test qui ne testait pas, dernier avertissement) et ajouté au sommaire ; notes de version 4.26.2 (ligne sur dlib) ; mémo (« État constaté » de `dtest`, section du nettoyage), tableau des différences, CLAUDE.md, reprise (journée du 15, décisions, commande `dtest`), registre (634 lignes au paquet 2, selon le commit) ; journal de la nuit au sommaire du site des documents. Vrai service relancé en 4.26.2.
+- **Fichiers** : `blog/42-le-grand-tri-de-dlib.md`, `blog/README.md`, `dlib/dlib/external/albireo/web/changelog.md`, `docs/memo-portage-macos-arm64.md`, `docs/differences-mac-windows.md`, `docs/notes-pour-l-auteur.md`, `CLAUDE.md`, `logs/reprise.md`, `logs/nuit-2026-11-15.md`, `macos/site-docs/serve.py`.
+- **Pourquoi** : règle de CLAUDE.md : la documentation suit le code, un épisode par grande étape.
+- **Étapes** : `test_macos.sh` d'Albireo 53 sur 53, de Pseudalis 34 sur 34 ; quatre builds sans avertissement ; blog sans adresse ni chemin privé ; version inchangée (4.26.2 : seul dlib a changé depuis).
+
 ## 2026-11-15 — Retirer les conditions Windows des exemples, des tests, de CUDA et du serveur de dlib
 
 - **Quoi** : paquet 4, le dernier, du retrait des conditions Windows de dlib. `unifdef` (mêmes symboles qu'au paquet 2, plus `_WIN32_WINNT`) sur 16 fichiers : `examples/` (anonymiseur, `slm_gguf_runtime_ex`, `slm_gguf_import_ex`, les deux Cygnus, `slm_tok_predictive_compressor_ex`, `gui_api_ex`, `bayes_net_gui_ex`), `server/` (`slm_gguf_runtime_ex.cpp`, `server_http.h`), `cuda/` (`extended_memory.cpp`, `npu_dlib.cpp`), `threads/async.h`, `test/` (`httplib.cpp`, `invoke.cpp`, `is_same_object.cpp`) : 577 lignes retirées. À la main : les conditions mêlées de `async.h` et de `slm_tok_predictive_compressor_ex.cpp`, le commentaire des `#pragma` de Visual Studio de `gui_api_ex.cpp`, la classe `console_utf8` des deux Cygnus (vide sans Windows) et son usage. `is_same_object.cpp` : la vérification que `#if _MSC_VER > 1600` désactivait hors de Visual Studio tourne de nouveau (notes pour l'auteur, n° 23).

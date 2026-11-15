@@ -1,13 +1,13 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-14 vers 22 h 30, sur le Mac M2. Ce fichier va **du plus récent au plus ancien** : l'état actuel, ce qui est en cours et à faire, puis ce qui est fait et les décisions (antéchronologiques), les problèmes ouverts et les commandes. Le détail de chaque étape est dans `logs/journal-modifications.md`.
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-15 vers 9 h, sur le Mac M2. Ce fichier va **du plus récent au plus ancien** : l'état actuel, ce qui est en cours et à faire, puis ce qui est fait et les décisions (antéchronologiques), les problèmes ouverts et les commandes. Le détail de chaque étape est dans `logs/journal-modifications.md`.
 
 ## État actuel
 
-- `main` = **Albireo 4.26.1** ; Pseudalis 1.0.5 avec les corrections du fork. Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple) ; dlib garde les siennes.
-- **Vrai service** : tourne en **4.25.0** (relancé le 2026-11-14 à 21 h 01, port 18443, réseau 8444 sans mot de passe, journal `build/albireo-home/logs/console.log`) ; à relancer en 4.26.0 si l'humain le veut (Gemma 4 y écrirait sur le GPU).
-- **Tests** : `test_macos.sh` d'Albireo 53 sur 53, de Pseudalis 34 sur 34 ; banc de la page 113 vérifications ; `test_metal` passe ; 0 avertissement de compilation (Albireo, Pseudalis, exemples de dlib).
-- **Blog** : épisode 41 ; **notes pour l'auteur** : changement 22, registre de dlib (partie 5).
+- `main` = **Albireo 4.26.2** ; Pseudalis 1.0.5 avec les corrections du fork. Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
+- **Vrai service** : tourne en **4.26.2** (relancé le 2026-11-15 à 9 h 28 ; il s'était arrêté le 14 à 22 h 23 ; port 18443, réseau 8444 sans mot de passe, journal `build/albireo-home/logs/console.log`).
+- **Tests** : `test_macos.sh` d'Albireo 53 sur 53, de Pseudalis 34 sur 34 (encore le 2026-11-15, après le retrait des conditions Windows de dlib) ; banc de la page 113 vérifications ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
+- **Blog** : épisode 42 ; **notes pour l'auteur** : changement 22, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
 - **Le M2 reste en mode économie d'énergie** (choix de l'humain) : aucune mesure de vitesse ; celles de 4.21.0 à 4.26.0 se feront sur le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
 - **Original** : détaché depuis le 2026-11-11, plus de fusion ; lu à `53ddfe4` (Albireo 1.0.20) pour la reprise à la main du 2026-11-14.
 - **Site des documents** : `macos/site-docs/serve.py`, port 8650 ; mot-clé « sitelog » (le lancer et donner l'URL).
@@ -29,10 +29,19 @@ Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les ex
 5. Sur le Mac mini : `tools/bench_macos.sh` en premier ; trancher le mélange d'experts sur le GPU ou le processeur (sur le M2, à peu près à égalité) ; Qwen3.6-35B-A3B (UD-Q4_K_M, 22,1 Go) et projecteurs de qwen35moe ; qwen3moe, mixtral, granitemoe sur le GPU (admis, jamais essayés) ; noyau Q4_K du GPU (54 Go/s contre 70 au plafond) ; relancer la sonde Metal ; régler `recommended` de `service.js` d'après les mesures.
 6. Reste de Qwen 3.5 : une erreur pendant l'exécution d'une étape sur le GPU (analyse du 2026-11-13 : le moteur devrait relire la séquence depuis un point sûr).
 7. Plus tard, pas à pas, à la demande de l'humain (accord de principe du 2026-11-11) : déplacer la logique de la page vers le service (conversations et documents gardés par le service et partagés entre appareils ; lecture et recherche des documents ; éventuellement assemblage des questions, mémoire et agent).
-8. Plus tard : noyaux NEON de génération pour Q8_0, Q5_K… ; essai de la page de Pseudalis par l'humain ; `dtest` complet et quelques exemples `slm_*` ; s'éloigner de dlib (décision du 2026-11-11).
+8. Plus tard : noyaux NEON de génération pour Q8_0, Q5_K… ; essai de la page de Pseudalis par l'humain ; `dtest` complet (la liste du mémo passe ; les autres tests, dont les longs `dnn`, jamais lancés) et quelques exemples `slm_*` ; s'éloigner de dlib (décision du 2026-11-11).
 9. Pour l'humain, images du Qwen3.5-4B déjà installé : onglet Modèles, chercher « unsloth/Qwen3.5-4B-GGUF », cocher « Avec la lecture des images » et ajouter de nouveau le fichier Q4_K_M (seul le projecteur, 672 Mo, est téléchargé ; essayé sur le service d'essai, pas sur le vrai).
 
 ## Fait, du plus récent au plus ancien
+
+### 2026-11-15
+
+- **Conditions Windows retirées du code propre de dlib**, en quatre paquets testés un par un : versions Windows des cinq services de base (`b728dc9`), contournements de Visual Studio par `unifdef` (`bb23100`), branches des fichiers CMake et `-s` du build des tests (`6c4d429`), exemples, tests, CUDA et serveur (`496d3af`) ; 85 fichiers, 7 233 lignes retirées ; 0 avertissement. Au passage, un test de `is_same_object.cpp` désactivé hors de Visual Studio réactivé (notes pour l'auteur, n° 23).
+- **Paramètres inutilisés de l'original** (`loss.h`, quatre exemples) : le build des tests de dlib passe (`686326c`).
+- **dlib pour macOS seulement** (`ff874f8`) : `platform.h` (`#error` ailleurs), `assert.h`, `secure_random.h` (`arc4random_buf`), bloc des bibliothèques du système de CMake ; `CMakeLists.txt` de la racine de `dlib/` retiré.
+- **Conditions Apple du fork retirées de dlib** (`b6a33d8`).
+- **Albireo 4.26.2 : zlib de macOS** pour dlib, Albireo et Pseudalis (`28d2335`) ; `PNG_ZLIB_VERNUM` à 0.
+- **CBLAS** (`bc1beda`) et **interface Python** de dlib (`ccecbb9`) retirés.
 
 ### 2026-11-14
 
@@ -117,6 +126,8 @@ Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les ex
 
 ## Décisions, de la plus récente à la plus ancienne
 
+- 2026-11-15 : dlib ne vise plus que macOS : ses conditions Apple, Windows et Linux sont retirées ; les bibliothèques d'autres projets qu'il embarque restent telles qu'elles sont livrées.
+- 2026-11-15 : les commits qui ne touchent que dlib ne changent pas la version d'Albireo ; leurs effets vont aux notes de version de la version en cours.
 - 2026-11-14 : tout se dit en français, y compris les messages intermédiaires (règle de CLAUDE.md).
 - 2026-11-14 : le fichier de reprise va du plus récent au plus ancien.
 - 2026-11-14 : dlib peut être modifié, chaque changement laissant une trace au blog et au registre des notes pour l'auteur.
@@ -151,6 +162,7 @@ ALBIREO_TEST_PORT=18473 bash dlib/dlib/external/albireo/tools/test_macos.sh
 PSEUDALIS_TEST_PORT=18476 bash dlib/dlib/external/pseudalis/tools/test_macos.sh
 bash dlib/dlib/external/albireo/tools/page_test/page_test.sh     # banc de la page
 build/macos-albireo/tests/test_metal                               # noyaux du GPU
+(cd build/macos-arm64-tests && ./dtest --test_threads --test_sockets --test_httplib --test_tokenizer --test_image)   # tests de dlib, depuis leur dossier
 
 # Service d'Albireo (page : https://localhost:18443/ ; arrêt : Ctrl-C, kill -INT ou kill -TERM)
 ALBIREO_HOME=$PWD/build/albireo-home build/macos-albireo/bin/albireo-service --console
