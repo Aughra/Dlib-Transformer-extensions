@@ -104,7 +104,6 @@ namespace std
 #endif
 
 #include "platform.h"
-#include "windows_magic.h"
 
 
 #include <algorithm>    // for std::swap

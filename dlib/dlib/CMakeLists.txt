@@ -312,9 +312,7 @@ if (NOT TARGET dlib)
    else()
 
       set(source_files ${source_files}
-         sockets/sockets_kernel_1.cpp
          bsp/bsp.cpp
-         dir_nav/dir_nav_kernel_1.cpp
          dir_nav/dir_nav_kernel_2.cpp
          dir_nav/dir_nav_extensions.cpp
          gui_widgets/fonts.cpp
@@ -322,7 +320,6 @@ if (NOT TARGET dlib)
          logger/extra_logger_headers.cpp
          logger/logger_kernel_1.cpp
          logger/logger_config_file.cpp
-         misc_api/misc_api_kernel_1.cpp
          misc_api/misc_api_kernel_2.cpp
          sockets/sockets_extensions.cpp
          sockets/sockets_kernel_2.cpp
@@ -333,7 +330,6 @@ if (NOT TARGET dlib)
          server/server_http.cpp
          threads/multithreaded_object_extension.cpp
          threads/threaded_object_extension.cpp
-         threads/threads_kernel_1.cpp
          threads/threads_kernel_2.cpp
          threads/threads_kernel_shared.cpp
          threads/thread_pool_extension.cpp
@@ -410,7 +406,6 @@ if (NOT TARGET dlib)
             gui_widgets/canvas_drawing.cpp
             gui_widgets/style.cpp
             gui_widgets/base_widgets.cpp
-            gui_core/gui_core_kernel_1.cpp
             gui_core/gui_core_kernel_2.cpp
             )
       endif()

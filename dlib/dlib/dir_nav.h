@@ -7,13 +7,7 @@
 #include "platform.h"
 
 
-#ifdef WIN32
-#include "dir_nav/windows.h"
-#endif
-
-#ifndef WIN32
 #include "dir_nav/posix.h"
-#endif
 
 #include "dir_nav/dir_nav_extensions.h"
 

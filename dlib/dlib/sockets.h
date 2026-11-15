@@ -6,13 +6,7 @@
 #include "platform.h"
 
 
-#ifdef WIN32
-#include "sockets/windows.h"
-#endif
-
-#ifndef WIN32
 #include "sockets/posix.h"
-#endif
 
 #include "sockets/sockets_extensions.h"
 

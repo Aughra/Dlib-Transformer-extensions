@@ -5,13 +5,7 @@
 
 #include "../platform.h"
 
-#ifdef WIN32
-#include "windows.h"
-#endif
-
-#ifndef WIN32
 #include "posix.h"
-#endif
 
 #endif // DLIB_THREADs_KERNEL_
 

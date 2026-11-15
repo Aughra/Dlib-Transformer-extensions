@@ -8,11 +8,7 @@
 
 
 
-#ifdef WIN32
-#include "gui_core/windows.h"
-#else
 #include "gui_core/xlib.h"
-#endif
 
 
 

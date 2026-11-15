@@ -29,10 +29,8 @@
 
 // include this first so that it can disable the older version
 // of the winsock API when compiled in windows.
-#include "../sockets/sockets_kernel_1.cpp"
 #include "../bsp/bsp.cpp"
 
-#include "../dir_nav/dir_nav_kernel_1.cpp"
 #include "../dir_nav/dir_nav_kernel_2.cpp"
 #include "../dir_nav/dir_nav_extensions.cpp"
 #include "../fft/fft.cpp"
@@ -40,7 +38,6 @@
 #include "../logger/extra_logger_headers.cpp"
 #include "../logger/logger_kernel_1.cpp"
 #include "../logger/logger_config_file.cpp"
-#include "../misc_api/misc_api_kernel_1.cpp"
 #include "../misc_api/misc_api_kernel_2.cpp"
 #include "../sockets/sockets_extensions.cpp"
 #include "../sockets/sockets_kernel_2.cpp"
@@ -51,7 +48,6 @@
 #include "../server/server_http.cpp"
 #include "../threads/multithreaded_object_extension.cpp"
 #include "../threads/threaded_object_extension.cpp"
-#include "../threads/threads_kernel_1.cpp"
 #include "../threads/threads_kernel_2.cpp"
 #include "../threads/threads_kernel_shared.cpp"
 #include "../threads/thread_pool_extension.cpp"
@@ -77,7 +73,6 @@
 #include "../gui_widgets/canvas_drawing.cpp"
 #include "../gui_widgets/style.cpp"
 #include "../gui_widgets/base_widgets.cpp"
-#include "../gui_core/gui_core_kernel_1.cpp"
 #include "../gui_core/gui_core_kernel_2.cpp"
 #endif // DLIB_NO_GUI_SUPPORT
 

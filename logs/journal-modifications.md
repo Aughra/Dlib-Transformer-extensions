@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-15 — Retirer de dlib les versions Windows de ses services de base
+
+- **Quoi** : paquet 1 du retrait des conditions Windows de dlib. Supprimés : `threads/`, `sockets/`, `misc_api/`, `dir_nav/`, `gui_core/` : `windows.h`, `*_kernel_1.h`, `*_kernel_1.cpp` (15 fichiers), et `windows_magic.h`. Les aiguillages (`threads/threads_kernel.h`, `sockets.h`, `misc_api.h`, `dir_nav.h`, `gui_core.h`) incluent la seule version POSIX (Xlib pour les fenêtres) ; lignes de compilation retirées de `CMakeLists.txt` et `all/source.cpp` ; `algs.h` n'inclut plus `windows_magic.h`. `math/windows.h` (fenêtres du traitement du signal) est gardé.
+- **Fichiers** : ceux ci-dessus ; `docs/notes-pour-l-auteur.md`, `logs/nuit-2026-11-15.md`.
+- **Pourquoi** : demande de l'humain ; dlib ne vise plus que macOS.
+- **Étapes** : exemples, Albireo, Pseudalis : 0 avertissement ; build des tests : 0 échec, 2 avertissements (`ld -s` obsolète, `test/stft_good_data.h` : opérateur littéral `"" _i` déprécié, de l'original, traités aux paquets suivants) ; tests rapides : tout passe ; `dtest --test_threads --test_thread_pool --test_multithreaded_object --test_read_write_mutex --test_pipe --test_timer --test_sockets --test_sockets2 --test_iosockstream --test_httplib --test_queue --test_tokenizer --test_md5 --test_base64 --test_image` : 4 457 648 vérifications, toutes passent.
+
 ## 2026-11-15 — Corriger les paramètres inutilisés de l'original qui cassaient le build des tests de dlib
 
 - **Quoi** : le build des tests de dlib (`dlib/test`, `-W -Werror`) compile aussi les exemples et `imglab` ; 31 fichiers échouaient sur « unused parameter » dans du code de l'original : `dnn/loss.h:3582` et `:3603` (`input_tensor`), `slm_cygnus_foundation_ex.cpp:563` et `slm_cygnus_instruct_ex.cpp:209` (`tokenizer_file`), `slm_embed_ex.cpp:470` (`truncate_dim`), `slm_extended_memory_ex.cpp:213` (`batch_size`). Noms mis en commentaire, signatures gardées. Notes pour l'auteur : entrée n° 5 et registre de dlib.
