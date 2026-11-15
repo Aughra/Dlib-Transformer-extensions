@@ -10,25 +10,6 @@
 
 // figure out which SIMD instructions we can use.
 #ifndef DLIB_DO_NOT_USE_SIMD
-    #if defined(_MSC_VER) 
-        #ifdef __AVX__
-            #ifndef DLIB_HAVE_SSE2
-                #define DLIB_HAVE_SSE2
-            #endif 
-            #ifndef DLIB_HAVE_SSE3
-                #define DLIB_HAVE_SSE3
-            #endif
-            #ifndef DLIB_HAVE_SSE41
-                #define DLIB_HAVE_SSE41
-            #endif
-            #ifndef DLIB_HAVE_AVX
-                #define DLIB_HAVE_AVX
-            #endif
-        #endif
-        #if (defined( _M_X64) || defined(_M_IX86_FP) && _M_IX86_FP >= 2) && !defined(DLIB_HAVE_SSE2)
-            #define DLIB_HAVE_SSE2
-        #endif
-    #else
         #ifdef __SSE2__
             #ifndef DLIB_HAVE_SSE2
                 #define DLIB_HAVE_SSE2
@@ -74,7 +55,6 @@
                 #define DLIB_HAVE_NEON
             #endif
         #endif
-    #endif
 #endif
 
  
@@ -113,18 +93,7 @@
 // ----------------------------------------------------------------------------------------
 // Define functions to check, at runtime, what instructions are available
 
-#if defined(_MSC_VER) && (defined(_M_I86) || defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64) )
-    #include <intrin.h>
-
-    inline std::array<unsigned int,4> cpuid(int function_id) 
-    { 
-        std::array<unsigned int,4> info;
-        // Load EAX, EBX, ECX, EDX into info
-        __cpuid((int*)info.data(), function_id);
-        return info;
-    }
-
-#elif (defined(__GNUC__) || defined(__clang__)) && (defined(__i386__) || defined(__i686__) || defined(__amd64__) || defined(__x86_64__))
+#if   (defined(__GNUC__) || defined(__clang__)) && (defined(__i386__) || defined(__i686__) || defined(__amd64__) || defined(__x86_64__))
     #include <cpuid.h>
 
     inline std::array<unsigned int,4> cpuid(int function_id) 

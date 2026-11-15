@@ -28,10 +28,8 @@
 #include "unicode_text.h"
 #include "id_checks.h"
 
-#if !defined(_WIN32)
 #  include <fcntl.h>
 #  include <unistd.h>
-#endif
 
 namespace dlib
 {
@@ -87,7 +85,6 @@ namespace dlib
                 "# dlib pseudonymization key: keep this file secret, it restores every document protected with it\n"
                 "v1:" + to_hex(key_) + "\n";
             bool ok = false;
-#if !defined(_WIN32)
             /* O_EXCL: an existing key is never overwritten, losing it would make every
                document protected with it impossible to restore. */
             const int fd = ::open(filename.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0600);
@@ -105,19 +102,6 @@ namespace dlib
             }
             ok = done == content.size() && ::fsync(fd) == 0;
             ok = ::close(fd) == 0 && ok;
-#else
-            if (std::ifstream(filename))
-            {
-                secure_wipe(&content[0], content.size());
-                throw crypto_error("pseudonymization_key: cannot create " + filename + " (it must not exist yet)");
-            }
-            {
-                std::ofstream out(filename, std::ios::binary | std::ios::trunc);
-                out << content;
-                out.flush();
-                ok = static_cast<bool>(out);
-            }
-#endif
             secure_wipe(&content[0], content.size());
             if (!ok)
             {

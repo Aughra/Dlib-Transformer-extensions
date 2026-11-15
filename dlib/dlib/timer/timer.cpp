@@ -49,13 +49,11 @@ namespace dlib
         // linux: the destructor for linux will do it's usual job regardless.
         //
 
-        #ifndef _WIN32
         m.lock();
         shutdown = true;
         s.signal();
         m.unlock();
         wait();
-        #endif
     }
 
 // ----------------------------------------------------------------------------------------

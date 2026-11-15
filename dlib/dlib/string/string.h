@@ -243,7 +243,6 @@ namespace dlib
 
     // don't declare this if we are using mingw because it apparently doesn't
     // support iostreams with wchar_t?
-#if !(defined(__MINGW32__) && (__GNUC__ < 4))
     template <
         typename T
         >
@@ -257,7 +256,6 @@ namespace dlib
             throw cast_to_string_error();
         return sout.str();
     }
-#endif
 
 // ----------------------------------------------------------------------------------------
 

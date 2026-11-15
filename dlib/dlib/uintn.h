@@ -28,9 +28,6 @@ namespace dlib
 #elif defined(__BORLANDC__)
     typedef unsigned __int64 uint64;
     typedef __int64 int64;
-#elif defined(_MSC_VER)
-    typedef unsigned __int64 uint64;
-    typedef __int64 int64;
 #else
     typedef unsigned long long uint64;
     typedef long long int64;

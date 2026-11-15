@@ -13,15 +13,6 @@
 #include <limits>
 #include <array>
 
-#if defined(_MSC_VER) && _MSC_VER < 1400
-#pragma warning(push)
-
-// Despite my efforts to disabuse visual studio of its usual nonsense I can't find a 
-// way to make this warning go away without just disabling it.   This is the warning:
-//   dlib\geometry\vector.h(129) : warning C4805: '==' : unsafe mix of type 'std::numeric_limits<_Ty>::is_integer' and type 'bool' in operation
-// 
-#pragma warning(disable:4805)
-#endif
 
 namespace dlib
 {
@@ -1445,10 +1436,6 @@ namespace std
     };
 }
 
-#if defined(_MSC_VER) && _MSC_VER < 1400
-// restore warnings back to their previous settings
-#pragma warning(pop)
-#endif
 
 #endif // DLIB_VECTOr_H_
 

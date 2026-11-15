@@ -18,11 +18,7 @@ namespace dlib
     typedef std::shared_ptr<dlib::timeout> timeout_ptr;
 
 
-#ifdef _MSC_VER
-#define BR_CASECMP strnicmp
-#else
 #define BR_CASECMP strncasecmp
-#endif
 // Default timeout after 60 seconds
 #define DEFAULT_TIMEOUT 60000
 

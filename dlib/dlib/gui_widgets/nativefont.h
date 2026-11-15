@@ -19,10 +19,7 @@
 #include <stdlib.h>
 #include <locale.h>
 
-#if defined(WIN32)
-#include <windows.h>
-#include <mbstring.h>
-#elif defined(DLIB_POSIX)
+#if   defined(DLIB_POSIX)
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -40,19 +37,6 @@ namespace nativefont
         typedef dlib::uint8 byte;
 
 
-#ifdef WIN32
-        template <typename T> struct input2native_trait{
-        };
-        template <> struct input2native_trait<char>{
-            typedef char type_t;
-        };
-        template <> struct input2native_trait<wchar_t>{
-            typedef wchar_t type_t;
-        };
-        template <> struct input2native_trait<dlib::unichar>{
-            typedef wchar_t type_t;
-        };
-#endif
         // T : N : sizeof_source_type
         template <int N> struct size2inner_trait{
         };
@@ -155,149 +139,7 @@ namespace nativefont
             }
             struct vals_internal{
                 int width, height;
-#ifdef WIN32
-                COLORREF rgb2RGB(rgb_type &rgb){
-                    return RGB(rgb.r, rgb.g, rgb.b);
-                }
-                HBITMAP hBmp, hBmpOld;
-                HDC hDCBmp;
-                BYTE *pixelint;
-                HFONT hFont, hFontOld;
-                HBRUSH hBrush;
-                int pix_width_prev, pix_height_prev;
-                bool first;
-                int ascender, descender;
-                int height_prev;
-                char attribute_prev;
-
-                template <typename T> void create(T *str, int height_want, bool italic, bool bold, bool fixed, rgb_type &background, rgb_type &foreground){
-                    struct inner{
-                        inline static BOOL GetTextExtentPoint32(HDC hDC, LPCSTR str, int len, LPSIZE lpsize){
-                            return ::GetTextExtentPoint32A(hDC, str, len, lpsize);
-                        }
-                        inline static BOOL GetTextExtentPoint32(HDC hDC, LPCWSTR str, int len, LPSIZE lpsize){
-                            return ::GetTextExtentPoint32W(hDC, str, len, lpsize);
-                        }
-                        inline static BOOL TextOut(HDC hDC, int nxstart, int nystart, LPCSTR str, int cbstr){
-                            return ::TextOutA(hDC, nxstart, nystart, str, cbstr);
-                        }
-                        inline static BOOL TextOut(HDC hDC, int nxstart, int nystart, LPCWSTR str, int cbstr){
-                            return ::TextOutW(hDC, nxstart, nystart, str, cbstr);
-                        }
-                    };
-
-                    create_helper<sizeof(typename input2native_trait<T>::type_t)> ch(str);
-
-                    if (hDCBmp == NULL){
-                        HWND hWnd = GetDesktopWindow();
-                        HDC hDC = GetDC(hWnd);
-                        hDCBmp = CreateCompatibleDC(hDC);
-                        ReleaseDC(hWnd, hDC);
-                    }
-                    SetTextColor(hDCBmp, rgb2RGB(foreground));
-                    SetBkColor(hDCBmp, rgb2RGB(background));
-
-                    char attribute = (italic ? 1 : 0) | (bold ? 2 : 0) | (fixed ? 4 : 0);
-                    if (!hFont || height_prev != height || attribute != attribute_prev){
-                        attribute_prev = attribute;
-                        height_prev = height_want;
-                        if (hFont){
-                            SelectObject(hDCBmp, hFontOld);
-                            DeleteObject(hFont);
-                        }
-                        hFont = CreateFont(height_want, 0, 0, 0, bold ? FW_BOLD : FW_DONTCARE, italic ? TRUE : FALSE, 
-                                           FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
-                                           fixed ? (FIXED_PITCH | FF_DONTCARE) : (VARIABLE_PITCH | FF_DONTCARE), NULL);
-                        hFontOld = (HFONT)SelectObject(hDCBmp, hFont);
-                    }
-
-                    {
-                        SIZE sz;
-                        inner::GetTextExtentPoint32(hDCBmp, ch.istr, ch.len, &sz);
-                        width = ((sz.cx + 3) / 4) * 4;
-                        height = sz.cy;
-                    }
-
-                    if (pix_width_prev < width || pix_height_prev < height){
-                        if (hBmp){
-                            SelectObject(hDCBmp, hBmpOld);
-                            DeleteObject(hBmp);
-                        }
-                        pix_width_prev = width * 2;
-                        pix_height_prev = height * 2;
-                        BITMAPINFO bi;
-                        ZeroMemory(&bi, sizeof(bi));
-                        bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                        bi.bmiHeader.biBitCount = 24;
-                        bi.bmiHeader.biPlanes = 1;
-                        bi.bmiHeader.biWidth = pix_width_prev;
-                        bi.bmiHeader.biHeight = -pix_height_prev;
-                        hBmp = CreateDIBSection(NULL, &bi, DIB_RGB_COLORS, (void **)&pixelint, NULL, 0);
-                        hBmpOld = (HBITMAP)SelectObject(hDCBmp, hBmp);
-                    }
-
-                    {
-                        HBRUSH hBrush = CreateSolidBrush(rgb2RGB(background));
-                        RECT rc;
-                        rc.left = rc.top = 0;
-                        rc.right = pix_width_prev;
-                        rc.bottom = pix_height_prev;
-                        FillRect(hDCBmp, &rc, hBrush);
-                    }
-
-                    inner::TextOut(hDCBmp, 0, 0, ch.istr, ch.len);
-                    TEXTMETRICW tm;
-                    GetTextMetricsW(hDCBmp,&tm);
-                    ascender = tm.tmAscent;
-                    descender = tm.tmDescent;
-                }
-
-                template <typename T> vals_internal(T *str, int height_want, bool italic = false,
-                    bool bold = false, bool fixed = false, rgb_type background = rgb_type(), rgb_type foreground = rgb_type()){
-                    first = true;
-                    hFont = NULL;
-                    hDCBmp = 0;
-                    hBmpOld = 0;
-                    hBmp = 0;
-                    hDCBmp = 0;
-                    pixelint = 0;
-                    pix_width_prev = pix_height_prev = 0;
-                    height_prev = -1;
-                    attribute_prev = 0;
-                    create(str, height_want, italic, bold, fixed, background, foreground);
-                    first = false;
-                }
-
-                inline int get_ascender(){
-                    return ascender;
-                }
-
-                inline int get_descender(){
-                    return descender;
-                }
-
-                inline void get_pixel(int x, int y, byte &r, byte &g, byte &b){
-                    byte *p = pixelint + (y * pix_width_prev + x) * 3;
-                    r = *(p+2), g = *(p+1), b = *p;
-                }
-
-                void destroy(){
-                    SelectObject(hDCBmp, hBmpOld);
-                    DeleteObject(hBmp);
-                    SelectObject(hDCBmp, hFontOld);
-                    DeleteObject(hFont);
-                    DeleteDC(hDCBmp);
-                    hFont = NULL;
-                    hDCBmp = 0;
-                    hBmpOld = 0;
-                    hBmp = 0;
-                    hDCBmp = 0;
-                    pixelint = 0;
-                }
-                ~vals_internal(){
-                    destroy();
-                }
-#elif defined(DLIB_POSIX)
+#if   defined(DLIB_POSIX)
                 XImage *ximg;
                 Display *d;
                 GC gc;

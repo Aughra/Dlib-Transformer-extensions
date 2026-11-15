@@ -186,15 +186,9 @@ namespace dlib
             sout << "Unable to load image in file " + file_name + ".\n" +
                     "You must #define DLIB_JPEG_SUPPORT and link to libjpeg to read JPEG files.\n" +
                     "Do this by following the instructions at http://dlib.net/compile.html.\n\n";
-#ifdef _MSC_VER
-            sout << "Note that you must cause DLIB_JPEG_SUPPORT to be defined for your entire project.\n";
-            sout << "So don't #define it in one file. Instead, add it to the C/C++->Preprocessor->Preprocessor Definitions\n";
-            sout << "field in Visual Studio's Property Pages window so it takes effect for your entire application.";
-#else
             sout << "Note that you must cause DLIB_JPEG_SUPPORT to be defined for your entire project.\n";
             sout << "So don't #define it in one file. Instead, use a compiler switch like -DDLIB_JPEG_SUPPORT\n";
             sout << "so it takes effect for your entire application.";
-#endif
             throw image_load_error(sout.str());
         }
         else if (im_type == image_file_type::PNG)
@@ -203,15 +197,9 @@ namespace dlib
             sout << "Unable to load image in file " + file_name + ".\n" +
                     "You must #define DLIB_PNG_SUPPORT and link to libpng to read PNG files.\n" +
                     "Do this by following the instructions at http://dlib.net/compile.html.\n\n";
-#ifdef _MSC_VER
-            sout << "Note that you must cause DLIB_PNG_SUPPORT to be defined for your entire project.\n";
-            sout << "So don't #define it in one file. Instead, add it to the C/C++->Preprocessor->Preprocessor Definitions\n";
-            sout << "field in Visual Studio's Property Pages window so it takes effect for your entire application.\n";
-#else
             sout << "Note that you must cause DLIB_PNG_SUPPORT to be defined for your entire project.\n";
             sout << "So don't #define it in one file. Instead, use a compiler switch like -DDLIB_PNG_SUPPORT\n";
             sout << "so it takes effect for your entire application.";
-#endif
             throw image_load_error(sout.str());
         }
         else if (im_type == image_file_type::GIF)
@@ -219,15 +207,9 @@ namespace dlib
             std::ostringstream sout;
             sout << "Unable to load image in file " + file_name + ".\n" +
                     "You must #define DLIB_GIF_SUPPORT and link to libgif to read GIF files.\n\n";
-#ifdef _MSC_VER
-            sout << "Note that you must cause DLIB_GIF_SUPPORT to be defined for your entire project.\n";
-            sout << "So don't #define it in one file. Instead, add it to the C/C++->Preprocessor->Preprocessor Definitions\n";
-            sout << "field in Visual Studio's Property Pages window so it takes effect for your entire application.\n";
-#else
             sout << "Note that you must cause DLIB_GIF_SUPPORT to be defined for your entire project.\n";
             sout << "So don't #define it in one file. Instead, use a compiler switch like -DDLIB_GIF_SUPPORT\n";
             sout << "so it takes effect for your entire application.";
-#endif
             throw image_load_error(sout.str());
         }
         else if (im_type == image_file_type::WEBP)
@@ -236,15 +218,9 @@ namespace dlib
             sout << "Unable to load image in file " + file_name + ".\n" +
                     "You must #define DLIB_WEBP_SUPPORT and link to libwebp to read WebP files.\n" +
                     "Do this by following the instructions at http://dlib.net/compile.html.\n\n";
-#ifdef _MSC_VER
-            sout << "Note that you must cause DLIB_WEBP_SUPPORT to be defined for your entire project.\n";
-            sout << "So don't #define it in one file. Instead, add it to the C/C++->Preprocessor->Preprocessor Definitions\n";
-            sout << "field in Visual Studio's Property Pages window so it takes effect for your entire application.";
-#else
             sout << "Note that you must cause DLIB_WEBP_SUPPORT to be defined for your entire project.\n";
             sout << "So don't #define it in one file. Instead, use a compiler switch like -DDLIB_WEBP_SUPPORT\n";
             sout << "so it takes effect for your entire application.";
-#endif
             throw image_load_error(sout.str());
         }
         else if (im_type == image_file_type::JXL)
@@ -253,15 +229,9 @@ namespace dlib
             sout << "Unable to load image in file " + file_name + ".\n" +
                     "You must #define DLIB_JXL_SUPPORT and link to libjxl to read JPEG XL files.\n" +
                     "Do this by following the instructions at http://dlib.net/compile.html.\n\n";
-#ifdef _MSC_VER
-            sout << "Note that you must cause DLIB_JXL_SUPPORT to be defined for your entire project.\n";
-            sout << "So don't #define it in one file. Instead, add it to the C/C++->Preprocessor->Preprocessor Definitions\n";
-            sout << "field in Visual Studio's Property Pages window so it takes effect for your entire application.";
-#else
             sout << "Note that you must cause DLIB_JXL_SUPPORT to be defined for your entire project.\n";
             sout << "So don't #define it in one file. Instead, use a compiler switch like -DDLIB_JXL_SUPPORT\n";
             sout << "so it takes effect for your entire application.";
-#endif
             throw image_load_error(sout.str());
         }
         else

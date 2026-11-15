@@ -30,59 +30,6 @@
 #endif
 
 
-#ifdef _MSC_VER
-
-#if  _MSC_VER < 1900
-#error "dlib versions newer than v19.1 use C++11 and therefore require Visual Studio 2015 or newer."
-#endif
-
-// Disable the following warnings for Visual Studio
-
-// this is to disable the "'this' : used in base member initializer list"
-// warning you get from some of the GUI objects since all the objects
-// require that their parent class be passed into their constructor. 
-// In this case though it is totally safe so it is ok to disable this warning.
-#pragma warning(disable : 4355)
-
-// This is a warning you get sometimes when Visual Studio performs a Koenig Lookup. 
-// This is a bug in visual studio.  It is a totally legitimate thing to 
-// expect from a compiler. 
-#pragma warning(disable : 4675)
-
-// This is a warning you get from visual studio 2005 about things in the standard C++
-// library being "deprecated."  I checked the C++ standard and it doesn't say jack 
-// about any of them (I checked the searchable PDF).   So this warning is total Bunk.
-#pragma warning(disable : 4996)
-
-// This is a warning you get from visual studio 2003:
-//    warning C4345: behavior change: an object of POD type constructed with an initializer 
-//    of the form () will be default-initialized.
-// I love it when this compiler gives warnings about bugs in previous versions of itself. 
-#pragma warning(disable : 4345)
-
-
-// Disable warnings about conversion from size_t to unsigned long and long.
-#pragma warning(disable : 4267)
-
-// Disable warnings about conversion from double to float  
-#pragma warning(disable : 4244)
-#pragma warning(disable : 4305)
-
-// Disable "warning C4180: qualifier applied to function type has no meaning; ignored".
-// This warning happens often in generic code that works with functions and isn't useful.
-#pragma warning(disable : 4180)
-
-// Disable "warning C4290: C++ exception specification ignored except to indicate a function is not __declspec(nothrow)"
-#pragma warning(disable : 4290)
-
-
-// DNN module uses template-based network declaration that leads to very long
-// type names. Visual Studio will produce Warning C4503 in such cases. https://msdn.microsoft.com/en-us/library/074af4b6.aspx says
-// that correct binaries are still produced even when this warning happens, but linker errors from visual studio, if they occur could be confusing.
-#pragma warning( disable: 4503 )
-
-
-#endif
 
 #ifdef __BORLANDC__
 // Disable the following warnings for the Borland Compilers
@@ -96,12 +43,6 @@
 
 #include <string>       // for the exceptions
 
-#ifdef __CYGWIN__
-namespace std
-{
-   typedef std::basic_string<wchar_t> wstring;
-}
-#endif
 
 #include "platform.h"
 

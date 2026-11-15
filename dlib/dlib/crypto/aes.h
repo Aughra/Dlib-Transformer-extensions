@@ -12,12 +12,7 @@
 #include "crypto_utils.h"
 
 #if !defined(DLIB_NO_AESNI) && (defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86))
-#  if defined(_MSC_VER) && !defined(__clang__)
-#    define DLIB_AES_NI_AVAILABLE 1
-#    include <intrin.h>
-#    include <wmmintrin.h>
-#    define DLIB_AES_NI_TARGET
-#  elif defined(__GNUC__) || defined(__clang__)
+#  if   defined(__GNUC__) || defined(__clang__)
 #    define DLIB_AES_NI_AVAILABLE 1
 #    include <cpuid.h>
 #    include <wmmintrin.h>
@@ -82,16 +77,10 @@ namespace dlib
 #ifdef DLIB_AES_NI_AVAILABLE
         inline bool cpu_has_aes_ni()
         {
-#  if defined(_MSC_VER) && !defined(__clang__)
-            int regs[4];
-            __cpuid(regs, 1);
-            return (regs[2] & (1 << 25)) != 0;
-#  else
             unsigned int a = 0, b = 0, c = 0, d = 0;
             if (!__get_cpuid(1, &a, &b, &c, &d))
                 return false;
             return (c & (1u << 25)) != 0;
-#  endif
         }
 
         DLIB_AES_NI_TARGET

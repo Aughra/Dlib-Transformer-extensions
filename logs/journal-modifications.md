@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-15 — Retirer les contournements pour Windows et Visual Studio du code de dlib
+
+- **Quoi** : paquet 2 du retrait des conditions Windows de dlib. `unifdef -m -U_MSC_VER -U_WIN32 -UWIN32 -U_WIN64 -U__CYGWIN__ -U__MINGW32__ -U_MSVC_LANG -U__WIN32__` sur les 37 fichiers du code propre de dlib qui en contenaient (hors `external/`, `test/`, `cuda/`, `server/`), dont 34 changés (628 lignes retirées : `#pragma warning` de Visual Studio, police Windows de `nativefont.h`, version Cygwin de `hostname_to_ip`…) ; à la main : `simd/simd4f.h`, `sqlite/sqlite_tools.h`, `matrix/lapack/fortran_id.h` (conditions mêlées à d'autres que `unifdef` laisse), le commentaire sur Cygwin de `sockets_kernel_2.cpp` ; `test/stft_good_data.h` : `operator ""_i` (avertissement de l'original, notes n° 5).
+- **Fichiers** : 38 fichiers de `dlib/dlib` ; `docs/notes-pour-l-auteur.md`, `logs/nuit-2026-11-15.md`.
+- **Pourquoi** : demande de l'humain ; dlib ne vise plus que macOS.
+- **Étapes** : essai de `unifdef` sur des copies (garde les branches non Windows, laisse les conditions mêlées) ; vérification que `external/`, `test/`, `cuda/`, `server/` sont intacts ; quatre builds : 0 échec, seul reste `ld -s` obsolète (paquet 3) ; tests rapides : tout passe ; `dtest` : 4 457 648 vérifications passent.
+
 ## 2026-11-15 — Retirer de dlib les versions Windows de ses services de base
 
 - **Quoi** : paquet 1 du retrait des conditions Windows de dlib. Supprimés : `threads/`, `sockets/`, `misc_api/`, `dir_nav/`, `gui_core/` : `windows.h`, `*_kernel_1.h`, `*_kernel_1.cpp` (15 fichiers), et `windows_magic.h`. Les aiguillages (`threads/threads_kernel.h`, `sockets.h`, `misc_api.h`, `dir_nav.h`, `gui_core.h`) incluent la seule version POSIX (Xlib pour les fenêtres) ; lignes de compilation retirées de `CMakeLists.txt` et `all/source.cpp` ; `algs.h` n'inclut plus `windows_magic.h`. `math/windows.h` (fenêtres du traitement du signal) est gardé.

@@ -12,12 +12,7 @@
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #define DLIB_CPU_FEATURES_X86 1
-#if defined(_MSC_VER)
-#include <intrin.h>
-#include <immintrin.h>
-#else
 #include <cpuid.h>
-#endif
 #else
 #define DLIB_CPU_FEATURES_X86 0
 #endif
@@ -63,28 +58,15 @@ namespace dlib
 #if DLIB_CPU_FEATURES_X86
         inline void cpuid (unsigned leaf, unsigned sub, unsigned r[4])
         {
-#if defined(_MSC_VER)
-            int v[4];
-            __cpuidex(v, static_cast<int>(leaf), static_cast<int>(sub));
-            for (int i = 0; i < 4; ++i) r[i] = static_cast<unsigned>(v[i]);
-#else
             __cpuid_count(leaf, sub, r[0], r[1], r[2], r[3]);
-#endif
         }
 
         // XCR0, the register state the operating system saves; read only once OSXSAVE is set.
-#if defined(_MSC_VER) && defined(__clang__)
-        __attribute__((target("xsave")))
-#endif
         inline uint64_t xcr0 ()
         {
-#if defined(_MSC_VER)
-            return _xgetbv(0);
-#else
             unsigned lo, hi;
             __asm__ volatile("xgetbv" : "=a"(lo), "=d"(hi) : "c"(0));
             return (static_cast<uint64_t>(hi) << 32) | lo;
-#endif
         }
 
         inline bool bit (unsigned word, int b) { return ((word >> b) & 1u) != 0; }
@@ -92,17 +74,8 @@ namespace dlib
 
         inline std::string environment (const char* name)
         {
-#if defined(_MSC_VER)
-            char* value = nullptr;
-            size_t length = 0;
-            if (_dupenv_s(&value, &length, name) != 0 || value == nullptr) return std::string();
-            const std::string text(value);
-            std::free(value);
-            return text;
-#else
             const char* value = std::getenv(name);
             return value ? std::string(value) : std::string();
-#endif
         }
 
         inline void clear_avx512 (cpu_features& f)

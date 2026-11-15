@@ -636,9 +636,7 @@ namespace dlib
     // _NATIVE_WCHAR_T_DEFINED isn't defined since if it isn't they improperly set
     // wchar_t to be a typedef rather than its own type as required by the C++ 
     // standard.
-#if !defined(_MSC_VER) || _NATIVE_WCHAR_T_DEFINED
     USE_DEFAULT_INT_SERIALIZATION_FOR(wchar_t)
-#endif
 
 // ----------------------------------------------------------------------------------------
 

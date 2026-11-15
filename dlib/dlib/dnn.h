@@ -5,9 +5,6 @@
 
 // DNN module uses template-based network declaration that leads to very long
 // type names. Visual Studio will produce Warning C4503 in such cases
-#ifdef _MSC_VER
-#   pragma warning( disable: 4503 )
-#endif
 
 #include "cuda/tensor.h"
 #include "dnn/input.h"

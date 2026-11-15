@@ -38,11 +38,6 @@
 #elif defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 2)) && defined(__GXX_EXPERIMENTAL_CXX0X__) 
 #   define DLIB_HAS_RVALUE_REFERENCES
 #   define DLIB_HAS_INITIALIZER_LISTS
-#elif defined(_MSC_VER) && _MSC_VER >= 1800
-#   define DLIB_HAS_INITIALIZER_LISTS
-#   define DLIB_HAS_RVALUE_REFERENCES
-#elif defined(_MSC_VER) && _MSC_VER >= 1600
-#   define DLIB_HAS_RVALUE_REFERENCES
 #elif defined(__INTEL_COMPILER) && defined(BOOST_INTEL_STDCXX0X)
 #   define DLIB_HAS_RVALUE_REFERENCES
 #   define DLIB_HAS_INITIALIZER_LISTS
@@ -54,8 +49,6 @@
 #       define DLIB_HAS_STATIC_ASSERT
 #   endif
 #elif defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ > 2)) && defined(__GXX_EXPERIMENTAL_CXX0X__) 
-#   define DLIB_HAS_STATIC_ASSERT
-#elif defined(_MSC_VER) && _MSC_VER >= 1600
 #   define DLIB_HAS_STATIC_ASSERT
 #elif defined(__INTEL_COMPILER) && defined(BOOST_INTEL_STDCXX0X)
 #   define DLIB_HAS_STATIC_ASSERT
@@ -129,8 +122,6 @@ namespace dlib
 #  else
 #    define DLIB_FUNCTION_NAME "unknown function" 
 #  endif
-#elif defined(_MSC_VER)
-#define DLIB_FUNCTION_NAME __FUNCSIG__
 #else
 #define DLIB_FUNCTION_NAME "unknown function" 
 #endif

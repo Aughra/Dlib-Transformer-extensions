@@ -633,11 +633,7 @@ namespace dlib
             // following line of code.  However, there is also a bug in gcc-3.3 
             // that causes it to error out if <T> is present.  So this works around
             // this problem.
-#if defined(_MSC_VER) && _MSC_VER == 1400
-            hook.set<T>(object, hook_);
-#else
             hook.set(object, hook_);
-#endif
 
             logger::global_data& gd = logger::get_global_data();
             auto_mutex M(gd.m);

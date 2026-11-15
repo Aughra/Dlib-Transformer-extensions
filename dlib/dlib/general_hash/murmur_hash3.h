@@ -30,20 +30,6 @@ namespace dlib
 #define DLIB_FALLTHROUGH 
 #endif
 
-#if defined(_MSC_VER)
-
-#define DLIB_FORCE_INLINE	__forceinline
-
-#include <stdlib.h>
-
-#define DLIB_ROTL32(x,y)	_rotl(x,y)
-#define DLIB_ROTL64(x,y)	_rotl64(x,y)
-
-#define DLIB_BIG_CONSTANT(x) (x)
-
-    // Other compilers
-
-#else	// defined(_MSC_VER)
 
 #define	DLIB_FORCE_INLINE __attribute__((always_inline)) inline 
 
@@ -62,7 +48,6 @@ namespace dlib
 
 #define DLIB_BIG_CONSTANT(x) (x##LLU)
 
-#endif // !defined(_MSC_VER)
 
 // ----------------------------------------------------------------------------------------
     // Block read - if your platform needs to do endian-swapping or can only

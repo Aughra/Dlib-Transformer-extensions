@@ -18,7 +18,7 @@ namespace dlib
         inline bool exception_in_flight (
         )
         {
-#if __cplusplus >= 201703L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L)
+#if __cplusplus >= 201703L
             return std::uncaught_exceptions() > 0;
 #else
             return std::uncaught_exception();

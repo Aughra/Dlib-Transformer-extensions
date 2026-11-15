@@ -108,9 +108,6 @@
 #include <tuple>
 #include <map>
 
-#if defined(_MSC_VER)
-#define DLL_EXPORT_SYM __declspec(dllexport)
-#endif
 #include "mex.h"
 #include <sstream>
 #include "call_matlab.h"

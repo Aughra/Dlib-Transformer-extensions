@@ -369,11 +369,7 @@ namespace dlib
         {
             const std::time_t now = std::time(nullptr);
             std::tm parts;
-#if defined(_WIN32)
-            gmtime_s(&parts, &now);
-#else
             gmtime_r(&now, &parts);
-#endif
             return parts.tm_year + 1900;
         }
 

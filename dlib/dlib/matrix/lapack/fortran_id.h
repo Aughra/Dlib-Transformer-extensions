@@ -24,7 +24,7 @@
 #define DLIB_BIND_FORTRAN_LOWERCASE
 #elif defined(__GNUC__) || defined(__ICC) || defined(__sgi) || defined(__COMO__) || defined(__KCC)
 #define DLIB_BIND_FORTRAN_LOWERCASE_UNDERSCORE
-#elif defined(__IBMCPP__) || defined(_MSC_VER) || defined(__BORLANDC__)
+#elif defined(__IBMCPP__) || defined(__BORLANDC__)
 #define DLIB_BIND_FORTRAN_LOWERCASE
 #else
 #error do not know how to link with fortran for the given platform

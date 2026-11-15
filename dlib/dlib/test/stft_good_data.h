@@ -3,7 +3,7 @@
 
 #include <complex>
 
-constexpr std::complex<double> operator "" _i (long double imag)
+constexpr std::complex<double> operator ""_i (long double imag)
 {
     return std::complex<double>{0.0, static_cast<double>(imag)};
 }
