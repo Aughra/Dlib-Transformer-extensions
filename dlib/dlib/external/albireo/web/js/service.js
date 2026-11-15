@@ -140,8 +140,8 @@ const schemas = {
   lan: schema('Le téléphone sur le canapé, le Mac au bureau',
     box(20, 70, 120, 60, 'Téléphone', 's-soft', 'navigateur') +
     arrow(140, 100, 250, 100, 'Wi-Fi') +
-    `<rect x="250" y="56" width="90" height="88" rx="12" class="s-box s-gold"/>` + text(295, 96, 'mot de') + text(295, 114, 'passe') +
-    arrow(340, 100, 430, 100, 'cookie') +
+    `<rect x="250" y="56" width="90" height="88" rx="12" class="s-box s-gold"/>` + text(295, 96, 'porte') + text(295, 114, 'ouverte') +
+    arrow(340, 100, 430, 100, 'http') +
     box(430, 60, 150, 80, 'Mac', 's-blue', 'http, port 8444') +
     box(430, 160, 150, 40, 'localhost : libre', 's-soft') +
     text(80, 166, 'chaque appareil garde', 's-f') + text(80, 182, 'ses conversations', 's-f'), 215),
@@ -150,12 +150,6 @@ const schemas = {
     box(210, 84, 80, 96, '18443', 's-blue', 'Mac seul') + box(310, 84, 80, 96, '8444', 's-gold', 'réseau') +
     arrow(80, 132, 210, 132, 'localhost') + arrow(520, 132, 390, 132, 'Wi-Fi') +
     text(70, 160, 'le Mac lui-même', 's-f') + text(530, 160, 'les autres appareils', 's-f'), 215),
-  lan_password: schema('Le mot de passe ne voyage pas souvent',
-    box(20, 80, 120, 50, 'Téléphone', 's-soft') + arrow(140, 96, 260, 96, '1. mot de passe') +
-    box(260, 70, 140, 70, 'Service', 's-blue', 'compare l’empreinte') +
-    arrow(260, 120, 140, 120, '2. cookie, 30 jours') +
-    box(440, 70, 140, 70, 'Empreinte', 's-gold', 'PBKDF2, salée') + arrow(400, 105, 440, 105) +
-    text(300, 180, 'ensuite, le cookie suffit ; un nouveau mot de passe les annule tous', 's-f'), 200),
   port: schema("L'adresse de la page sur le Mac",
     box(30, 80, 150, 56, 'Navigateur', 's-soft') + arrow(180, 108, 330, 108, 'https://localhost:18443') +
     box(330, 80, 150, 56, 'Service', 's-blue') +
@@ -273,7 +267,7 @@ const groups = [
   {
     title: 'Accès depuis le réseau',
     note: 'Pour ouvrir Albireo depuis un téléphone ou une tablette de la maison.',
-    items: ['lan', 'lan_port', 'lan_password', 'port']
+    items: ['lan', 'lan_port', 'port']
   },
   {
     title: 'Internet',
@@ -443,29 +437,25 @@ const items = {
     title: 'Accès depuis le réseau',
     control: { kind: 'switch', on: true, off: false },
     restart: true,
-    effect: 'Ouvre la page aux appareils de la maison (http, port réseau ci-dessous), avec un mot de passe facultatif.',
+    effect: 'Ouvre la page aux appareils de la maison (http, port réseau ci-dessous), sans mot de passe.',
     principle: 'Le service ouvre une seconde porte, sur l’adresse du Mac dans ton réseau, pour le téléphone ou la tablette.',
     pros: ['Albireo depuis le canapé, sur le téléphone ou la tablette, sans rien installer.',
       'Le Mac fait tout le calcul : le téléphone n’affiche que la page.'],
-    cons: ['Sans mot de passe, tout appareil de ton Wi-Fi peut s’en servir et tout régler.',
+    cons: ['Pas de mot de passe : tout appareil de ton Wi-Fi peut s’en servir et tout régler.',
       'En http : le trafic n’est pas chiffré sur le Wi-Fi.',
       'Chaque appareil garde ses propres conversations : celles du téléphone ne sont pas celles du Mac.',
       'Pas de dictée au micro sur le téléphone (elle exige https).'],
     normal: "Normalement, la page n’est visible que sur le Mac lui-même. Allumé, ce réglage ouvre une seconde entrée " +
-      "pour les autres appareils de ton réseau. Avec un mot de passe, chaque appareil le donne une fois ; sans, la " +
-      "porte est ouverte à toute la maison. Les conversations sont rangées dans le navigateur de chaque appareil : le " +
+      "pour les autres appareils de ton réseau, sans mot de passe : la porte est ouverte à toute la maison. " +
+      "Les conversations sont rangées dans le navigateur de chaque appareil : le " +
       "téléphone a donc les siennes. Le calcul, lui, se fait toujours sur le Mac.",
-    owl: "Un second serveur httplib (HTTP, sans TLS) écoute sur 0.0.0.0:lan_port avec les mêmes routes. Quand un mot " +
-      "de passe est choisi, un gestionnaire de pré-routage exige le cookie albireo_lan = nonce.HMAC-SHA-256(empreinte, " +
-      "nonce), posé par POST /albireo/v1/lan/login pour 30 jours (HttpOnly, SameSite=Strict) ; sans mot de passe, il " +
-      "laisse tout passer. Le serveur ne répond qu’aux appareils qui peuvent joindre le Mac : ceux du réseau local, " +
+    owl: "Un second serveur httplib (HTTP, sans TLS) écoute sur 0.0.0.0:lan_port avec les mêmes routes, sans " +
+      "authentification (le mot de passe facultatif des versions antérieures est retiré depuis la 5.0.0). Le serveur ne répond qu’aux appareils qui peuvent joindre le Mac : ceux du réseau local, " +
       "sauf si la box redirige ce port depuis Internet (elle ne le fait pas d’elle-même).",
-    marmot: "C’est une deuxième porte d’entrée, côté jardin. Sans digicode, n’importe qui dans le jardin peut entrer : " +
-      "chez toi, ce sont ta famille et tes invités. Avec un digicode, il faut le taper une fois, puis le téléphone " +
-      "garde un badge pendant un mois.",
-    bee: "Sans mot de passe, un invité, une télé connectée ou un objet piraté de ton Wi-Fi peut utiliser Albireo, " +
-      "changer ses réglages ou effacer des modèles et des documents. Sur un Wi-Fi partagé ou public, ne l’allume pas, " +
-      "ou choisis un mot de passe juste en dessous."
+    marmot: "C’est une deuxième porte d’entrée, côté jardin, sans digicode : n’importe qui dans le jardin peut " +
+      "entrer. Chez toi, ce sont ta famille et tes invités.",
+    bee: "Un invité, une télé connectée ou un objet piraté de ton Wi-Fi peut utiliser Albireo, changer ses " +
+      "réglages ou effacer des modèles et des documents. Sur un Wi-Fi partagé ou public, ne l’allume pas."
   },
   lan_port: {
     title: 'Port réseau',
@@ -483,30 +473,7 @@ const items = {
     marmot: "Ton immeuble a une adresse, et chaque appartement un numéro. Les copains doivent connaître les deux pour " +
       "sonner chez toi. Changer de numéro, c’est leur redonner la nouvelle adresse.",
     bee: "Un port déjà pris par un autre programme est refusé. Si tu le changes, les favoris enregistrés sur les " +
-      "appareils ne mènent plus nulle part, et chaque appareil doit retaper son mot de passe (nouvelle adresse, nouveau cookie)."
-  },
-  lan_password: {
-    title: 'Mot de passe réseau',
-    control: { kind: 'password' },
-    restart: false,
-    effect: 'Facultatif. Vide : la porte réseau est ouverte. Choisi : demandé une fois par appareil, retenu 30 jours.',
-    principle: 'Le service ne garde pas le mot de passe, seulement son empreinte, impossible à remonter.',
-    pros: ['Protège l’accès réseau contre les appareils qui ne le connaissent pas.',
-      'Même si quelqu’un lit le fichier des réglages, il n’y trouve pas le mot de passe.'],
-    cons: ['Il faut le taper une fois sur chaque appareil.',
-      'En http, il passe en clair sur le Wi-Fi au moment où on le tape.',
-      'Oublié, il suffit d’en choisir un nouveau, ou de le retirer, depuis le Mac.'],
-    normal: "Le mot de passe protège la porte réseau. Le service en calcule une empreinte, une sorte de signature " +
-      "impossible à retourner, et ne garde que celle-ci. Quand un appareil se présente, il refait le calcul et compare. " +
-      "Au bon mot de passe, l’appareil reçoit un cookie pour un mois.",
-    owl: "password_hash() : PBKDF2-HMAC-SHA-256, sel aléatoire de 16 octets, 200 000 itérations, stocké dans " +
-      "settings.json sous la forme pbkdf2-sha256$200000$sel$empreinte (lan_password_hash, jamais renvoyé par GET " +
-      "/albireo/v1/settings, qui ne dit que lan_password_set). Comparaison en temps constant. Les cookies de session " +
-      "sont signés par HMAC avec l’empreinte comme clé : un nouveau mot de passe les rend tous invalides. 4 à 128 caractères.",
-    marmot: "C’est comme le code du cadenas de ton casier. Le gardien n’écrit pas ton code dans un cahier : il garde " +
-      "juste de quoi vérifier que c’est le bon. Si tu changes de code, tous les anciens badges ne marchent plus.",
-    bee: "Trop simple (1234, le nom du chien), un invité le devine. Partagé avec trop de monde, n’importe qui de la liste " +
-      "peut changer tes réglages. En cas de doute, change-le : tous les appareils devront le retaper."
+      "appareils ne mènent plus nulle part."
   },
   port: {
     title: 'Port du Mac',
@@ -910,21 +877,7 @@ export function serviceTab(body, env) {
       input.addEventListener('change', () => change(key, c.kind === 'number' ? Number(input.value) : input.value.trim()));
       return h('div', { class: 'svc-input' }, input);
     }
-    // Le mot de passe réseau : tapé, puis enregistré par son bouton.
-    const input = h('input', { type: 'password', autocomplete: 'new-password', 'aria-label': item.title,
-      placeholder: current.lan_password_set ? '•••••••• (choisi)' : 'aucun : porte ouverte' });
-    const save = h('button', { class: 'button', type: 'button', onclick: async () => {
-      if (input.value.length < 4) return toast('Au moins 4 caractères.', true);
-      await setLive('lan_password', input.value);
-      current.lan_password_set = true;
-      render();
-    } }, 'Enregistrer');
-    const remove = current.lan_password_set ? h('button', { class: 'button', type: 'button', onclick: async () => {
-      await setLive('lan_password', '');
-      current.lan_password_set = false;
-      render();
-    } }, 'Retirer') : null;
-    return h('div', { class: 'svc-input' }, input, save, remove);
+    return null;
   }
 
   function sheet(item, key) {
@@ -1041,7 +994,7 @@ export function serviceTab(body, env) {
         ? 'Tous les réglages du moteur et d’Internet sont aux valeurs conseillées pour ce Mac (mesures du portage sur le M2).'
         : n + (n === 1 ? ' réglage diffère' : ' réglages diffèrent') + ' des valeurs conseillées pour ce Mac ; chaque carte concernée le signale.'),
       h('div', { class: 'svc-head', style: { marginTop: '12px' } }, h('div', { class: 'svc-title' }, h('span', null, 'Sauvegardes'))),
-      h('p', { class: 'svc-effect' }, 'Garde les réglages actuels sous un libellé, pour y revenir plus tard. Le mot de passe réseau n’est pas sauvé.'),
+      h('p', { class: 'svc-effect' }, 'Garde les réglages actuels sous un libellé, pour y revenir plus tard.'),
       h('div', { class: 'svc-input', style: { marginTop: '8px', flexWrap: 'wrap' } }, label, save),
       profilesBox);
   }

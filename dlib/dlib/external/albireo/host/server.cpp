@@ -406,80 +406,14 @@ namespace albireo
             return out;
         }
 
-        // Les réglages tels que les lit l'application web : le hash du mot de passe de l'accès réseau
-        // reste dans le service, qui dit s'il y en a un, et ses adresses.
+        // Les réglages tels que les lit l'application web, avec les adresses de l'accès réseau.
         json public_settings(service& svc)
         {
-            const host_settings st = svc.settings().get();
-            json j = st.to_json();
-            j.erase("lan_password_hash");
-            j["lan_password_set"] = !st.lan_password_hash.empty();
+            json j = svc.settings().get().to_json();
             j["lan_addresses"] = lan_addresses();
             return j;
         }
 
-        /*
-            La session d'un appareil du réseau : le cookie albireo_lan, un nonce aléatoire et son
-            HMAC sous le hash du mot de passe, pour qu'un nouveau mot de passe termine toutes les
-            sessions, et un redémarrage aucune.
-        */
-        const char* const lan_cookie = "albireo_lan";
-
-        std::string lan_session(const std::string& hash)
-        {
-            const std::string nonce = random_hex(16);
-            return nonce + "." + hmac_sha256_hex(hash, nonce);
-        }
-
-        bool lan_authorized(const httplib::Request& req, const std::string& hash)
-        {
-            if (hash.empty()) return false;
-            const std::string cookies = req.get_header_value("Cookie");
-            const std::string key = std::string(lan_cookie) + "=";
-            size_t at = 0;
-            while ((at = cookies.find(key, at)) != std::string::npos)
-            {
-                if (at == 0 || cookies[at - 1] == ' ' || cookies[at - 1] == ';') break;
-                at += key.size();
-            }
-            if (at == std::string::npos) return false;
-            const size_t from = at + key.size(), end = cookies.find(';', from);
-            const std::string value = cookies.substr(from, end == std::string::npos ? std::string::npos : end - from);
-            const size_t dot = value.find('.');
-            if (dot == std::string::npos) return false;
-            const std::string mac = hmac_sha256_hex(hash, value.substr(0, dot));
-            return !mac.empty() && same_secret(mac, value.substr(dot + 1));
-        }
-
-        // La page qui demande le mot de passe à un appareil du réseau.
-        const char* const lan_login_page = R"ALBIREO(<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Albireo</title><style>
-:root { color-scheme: light dark; --bg: #f6f4f0; --card: #fff; --text: #222; --accent: #e56b3f; }
-@media (prefers-color-scheme: dark) { :root { --bg: #0f1424; --card: #18203a; --text: #eee; } }
-body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--text);
-  font: 16px -apple-system, system-ui, sans-serif; }
-form { background: var(--card); padding: 28px 24px; border-radius: 16px; width: min(340px, calc(100vw - 32px));
-  box-shadow: 0 8px 30px rgb(0 0 0 / 15%); display: grid; gap: 14px; }
-h1 { margin: 0; font-size: 22px; } p { margin: 0; opacity: .8; font-size: 14px; }
-input, button { font: inherit; padding: 12px; border-radius: 10px; border: 1px solid rgb(128 128 128 / 40%); }
-button { background: var(--accent); color: #fff; border: 0; font-weight: 600; }
-.error { color: #d33; min-height: 1.2em; }
-</style></head><body><form id="f"><h1>Albireo</h1><p>Accès depuis le réseau : le mot de passe choisi dans
-l'onglet « Service » des paramètres, sur le Mac.</p>
-<input id="p" type="password" autocomplete="current-password" placeholder="Mot de passe" required autofocus>
-<button>Entrer</button><p class="error" id="e"></p></form><script>
-document.getElementById('f').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const e = document.getElementById('e');
-  e.textContent = '';
-  const r = await fetch('/albireo/v1/lan/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: document.getElementById('p').value }) });
-  if (r.ok) location.replace('/');
-  else e.textContent = r.status === 401 ? 'Mot de passe incorrect.' : 'Erreur ' + r.status + '.';
-});
-</script></body></html>
-)ALBIREO";
 
         struct event_channel
         {
@@ -1001,7 +935,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         {
             static const char* const keys[] = { "port", "language", "engine", "accelerator",
                 "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "offline",
-                "proxy", "web_access", "web_search", "lan", "lan_port", "lan_password", "warm_history", "spin_us",
+                "proxy", "web_access", "web_search", "lan", "lan_port", "warm_history", "spin_us",
                 "gpu_prompt_tokens", "gpu_prompt_context", "models_dir", "reserve_gb", "library_dir" };
             for (const auto& kv : body.items())
             {
@@ -1034,13 +968,6 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             if (body.contains("proxy") && !(proxy.is_string() && valid_proxy_setting(proxy.as_string())))
             {
                 error = "invalid value for proxy: http://host:port, \"none\" or empty";
-                return false;
-            }
-            const json& password = body["lan_password"];
-            if (body.contains("lan_password") && !(password.is_string() && (password.as_string().empty()
-                || (password.as_string().size() >= 4 && password.as_string().size() <= 128))))
-            {
-                error = "invalid value for lan_password: empty (no password), or 4 to 128 characters";
                 return false;
             }
             const json& models_dir = body["models_dir"];
@@ -1322,33 +1249,18 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         }
     }
 
-    void install_routes(httplib::Server& srv, service& svc, bool lan)
+    void install_routes(httplib::Server& srv, service& svc)
     {
         service* s = &svc;
 
-        // Le mot de passe de l'accès réseau, puis les corps que les routes acceptent.
-        srv.set_pre_routing_handler([s, lan](const httplib::Request& req, httplib::Response& res) {
+        // Les corps que les routes acceptent ; l'accès réseau est ouvert, sans mot de passe (fork pour macOS).
+        srv.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
             auto refuse = [&](int status, const char* message) {
                 res.status = status;
                 res.set_header("Connection", "close");
                 res.set_content(message, "text/plain");
                 return httplib::Server::HandlerResponse::Handled;
             };
-            // Sans mot de passe, l'accès réseau est ouvert à tous les appareils du réseau.
-            const std::string lan_hash = lan ? s->settings().get().lan_password_hash : std::string();
-            if (lan && !lan_hash.empty() && !(req.method == "POST" && req.path == "/albireo/v1/lan/login")
-                && !lan_authorized(req, lan_hash))
-            {
-                // Une page demande le mot de passe ; toute autre requête est refusée.
-                const bool page = req.method == "GET" && req.path.compare(0, 4, "/v1/") != 0
-                    && req.path.compare(0, 9, "/albireo/") != 0;
-                res.status = page ? 200 : 401;
-                res.set_header("Cache-Control", "no-store");
-                if (page) res.set_content(lan_login_page, "text/html; charset=utf-8");
-                else send_error(res, 401, "authentication_error", "the network access asks for its password first",
-                    "lan_login");
-                return httplib::Server::HandlerResponse::Handled;
-            }
             // Les méthodes qui n'envoient pas de données ne prennent aucun corps, qu'httplib lirait en
             // entier avant que leurs gestionnaires tournent.  Tout autre corps est du JSON de longueur
             // connue, de 64 Mo au plus, hormis les modèles envoyés à leur propre route.
@@ -1962,8 +1874,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         /*
             Les réglages enregistrés : des instantanés des réglages que change l'application web, sous une
             étiquette que donne l'utilisateur, dans settings-profiles.json du dossier de données.  Un
-            instantané ne contient ni le mot de passe de l'accès réseau ni celui du proxy (seulement son
-            masque).  En restaurer un est un changement des réglages, que l'application web envoie à
+            instantané ne contient pas le mot de passe du proxy (seulement son masque).  En restaurer un est un changement des réglages, que l'application web envoie à
             /albireo/v1/settings.
         */
         srv.Get("/albireo/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
@@ -2024,30 +1935,6 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         });
 
         // Le mot de passe du proxy est donné sous la forme proxy_password_mask (host_settings::to_json()).
-        /*
-            La connexion d'un appareil du réseau : le mot de passe de l'accès réseau donne un cookie
-            pour 30 jours.  Un mauvais mot de passe attend une seconde, pour que le deviner prenne du temps.
-        */
-        srv.Post("/albireo/v1/lan/login", [s](const httplib::Request& req, httplib::Response& res) {
-            json body;
-            if (!parse_body(req, res, body)) return;
-            const std::string hash = s->settings().get().lan_password_hash;
-            if (hash.empty() || !password_matches(body["password"].as_string(), hash))
-            {
-                log_warning("server: a wrong password of the network access, from " + req.remote_addr);
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-                send_error(res, 401, "authentication_error", "wrong password", "lan_password_wrong");
-                return;
-            }
-            log_info("server: the network access opened to " + req.remote_addr);
-            res.set_header("Set-Cookie", std::string(lan_cookie) + "=" + lan_session(hash)
-                + "; Path=/; Max-Age=2592000; HttpOnly; SameSite=Strict");
-            send_json(res, 200, ok_result(true));
-        });
-        srv.Post("/albireo/v1/lan/logout", [](const httplib::Request& req, httplib::Response& res) {
-            res.set_header("Set-Cookie", std::string(lan_cookie) + "=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict");
-            send_json(res, 200, ok_result(true));
-        });
         srv.Get("/albireo/v1/settings", [s](const httplib::Request& req, httplib::Response& res) {
             send_json(res, 200, public_settings(*s));
         });
@@ -2086,19 +1973,6 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                     + " is in use or cannot be opened", "port_unavailable");
                 return;
             }
-            // Le mot de passe n'est gardé que sous forme de hash, calculé hors du verrou des réglages ; un mot de
-            // passe vide le supprime.
-            std::string lan_hash;
-            const bool lan_password_removed = changes.contains("lan_password") && changes["lan_password"].as_string().empty();
-            if (changes.contains("lan_password") && !lan_password_removed)
-            {
-                lan_hash = password_hash(changes["lan_password"].as_string());
-                if (lan_hash.empty())
-                {
-                    send_error(res, 500, "server_error", "the password cannot be hashed");
-                    return;
-                }
-            }
             host_settings before;
             bool masked_elsewhere = false;
             const host_settings after = s->settings().update([&](host_settings& current) {
@@ -2112,10 +1986,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                     return;
                 }
                 json merged = current.to_json();
-                for (const auto& kv : body.items())
-                    if (kv.first != "lan_password") merged[kv.first] = kv.second;
-                if (!lan_hash.empty()) merged["lan_password_hash"] = lan_hash;
-                if (lan_password_removed) merged["lan_password_hash"] = "";
+                for (const auto& kv : body.items()) merged[kv.first] = kv.second;
                 current.from_json(merged);
                 if (current.proxy == masked_proxy(before.proxy)) current.proxy = before.proxy;
             });
@@ -2136,8 +2007,6 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 || after.warm_history != before.warm_history || after.spin_us != before.spin_us
                 || after.gpu_prompt_tokens != before.gpu_prompt_tokens
                 || after.gpu_prompt_context != before.gpu_prompt_context || after.models_dir != before.models_dir;
-            if (!lan_hash.empty()) log_info("server: the password of the network access changed");
-            if (lan_password_removed) log_info("server: the network access has no password any more");
             json o = ok_result(true);
             o["restart"] = restart;
             send_json(res, 200, o);

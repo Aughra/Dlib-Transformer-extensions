@@ -2,8 +2,8 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Albireo Community Edition",
-  "version": "4.32.1",
-  "description": "L'interface du service Albireo, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions albireo-general, albireo-code et albireo-security désignent les modèles activés pour chaque fonction, albireo-background le modèle livré avec Albireo, que l'application web utilise pour son travail en arrière-plan, et albireo-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : sur le Mac, chaque route est ouverte, sans jeton. Sur le port réseau, quand un mot de passe est choisi, chaque route sauf /albireo/v1/lan/login demande le cookie albireo_lan que donne la connexion ; sans mot de passe, le port réseau est ouvert lui aussi.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
+  "version": "5.0.0",
+  "description": "L'interface du service Albireo, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions albireo-general, albireo-code et albireo-security désignent les modèles activés pour chaque fonction, albireo-background le modèle livré avec Albireo, que l'application web utilise pour son travail en arrière-plan, et albireo-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
    "url": "https://www.boost.org/LICENSE_1_0.txt"
@@ -59,16 +59,6 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/ModelList"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -155,16 +145,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -236,16 +216,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -310,16 +280,6 @@
      },
      "500": {
       "description": "Le moteur a échoué sur la requête, qui n'était pas diffusée en flux : type server_error, et pour code la raison que donne le moteur, comme out_of_memory",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -622,16 +582,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -874,16 +824,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -949,16 +889,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    },
@@ -986,16 +916,6 @@
            "description": "Octets que comptaient les copies retirées."
           }
          }
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -1044,16 +964,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -1071,16 +981,6 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/Engines"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -1122,16 +1022,6 @@
            }
           }
          }
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -1180,16 +1070,6 @@
      },
      "404": {
       "description": "Aucun texte de ce nom (code license_not_found)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -1267,16 +1147,6 @@
            "type": "string"
           }
          }
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -1364,16 +1234,6 @@
      },
      "504": {
       "description": "Le fournisseur n'a pas répondu à temps (code timeout)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -1482,16 +1342,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -1527,16 +1377,6 @@
            "type": "string"
           }
          }
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -1599,16 +1439,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    },
@@ -1644,16 +1474,6 @@
            "type": "string"
           }
          }
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -1738,16 +1558,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -1807,16 +1617,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -1846,16 +1646,6 @@
        "application/json": {
         "schema": {
          "type": "object"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -1915,16 +1705,6 @@
            "type": "string"
           }
          }
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -2024,16 +1804,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -2105,16 +1875,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -2150,16 +1910,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -2189,16 +1939,6 @@
            "type": "boolean"
           }
          }
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -2296,16 +2036,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -2384,16 +2114,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -2466,16 +2186,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -2488,21 +2198,11 @@
     "summary": "Réglages du service",
     "responses": {
      "200": {
-      "description": "Les réglages, le mot de passe du proxy donné sous la forme ********, celui de l'accès réseau sous la seule forme de lan_password_set, et les adresses IPv4 du Mac (lan_addresses)",
+      "description": "Les réglages, le mot de passe du proxy donné sous la forme ********, et les adresses IPv4 du Mac (lan_addresses)",
       "content": {
        "application/json": {
         "schema": {
          "type": "object"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -2548,16 +2248,6 @@
      },
      "409": {
       "description": "Le nouveau port est occupé ou ne peut pas être ouvert (code port_unavailable)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -2620,16 +2310,6 @@
      },
      "502": {
       "description": "Hugging Face ne peut pas être joint et rien n'est gardé (code hub_unreachable)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -2700,16 +2380,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -2727,16 +2397,6 @@
        "application/json": {
         "schema": {
          "type": "object"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -2797,16 +2457,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -2827,16 +2477,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    },
@@ -2845,7 +2485,7 @@
      "Administration"
     ],
     "summary": "Enregistre les réglages actuels sous une étiquette",
-    "description": "Les réglages que change l'application web, sans le mot de passe de l'accès réseau ; une étiquette enregistrée à nouveau est remplacée. Les restaurer, c'est faire un PUT de leurs settings vers /albireo/v1/settings.",
+    "description": "Les réglages que change l'application web ; une étiquette enregistrée à nouveau est remplacée. Les restaurer, c'est faire un PUT de leurs settings vers /albireo/v1/settings.",
     "requestBody": {
      "required": true,
      "content": {
@@ -2879,16 +2519,6 @@
      },
      "400": {
       "description": "Pas d'étiquette, ou une étiquette trop longue (code label)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -2942,16 +2572,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -2970,16 +2590,6 @@
        "application/json": {
         "schema": {
          "type": "object"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -3034,16 +2644,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -3070,16 +2670,6 @@
      },
      "404": {
       "description": "Aucun document de ce nom (code document_not_found)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
       "content": {
        "application/json": {
         "schema": {
@@ -3133,111 +2723,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/albireo/v1/lan/login": {
-   "post": {
-    "tags": [
-     "Administration"
-    ],
-    "summary": "Ouvre l'accès réseau à un appareil",
-    "description": "Le mot de passe de l'accès réseau (réglage lan_password) donne le cookie albireo_lan pour 30 jours (HttpOnly, SameSite=Strict) ; un nouveau mot de passe met fin à chaque session. Un mauvais mot de passe fait attendre une seconde.",
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "type": "object",
-        "required": [
-         "password"
-        ],
-        "properties": {
-         "password": {
-          "type": "string"
-         }
-        }
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Le cookie est posé",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "properties": {
-          "ok": {
-           "type": "boolean"
-          },
-          "error": {
-           "type": "string"
-          }
-         }
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Mauvais mot de passe, ou aucun choisi (code lan_password_wrong)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/albireo/v1/lan/logout": {
-   "post": {
-    "tags": [
-     "Administration"
-    ],
-    "summary": "Met fin à la session de cet appareil",
-    "responses": {
-     "200": {
-      "description": "Le cookie est retiré",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "object",
-         "properties": {
-          "ok": {
-           "type": "boolean"
-          },
-          "error": {
-           "type": "string"
-          }
-         }
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -3263,16 +2748,6 @@
            "type": "string"
           }
          }
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -3318,16 +2793,6 @@
         }
        }
       }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
-        }
-       }
-      }
      }
     }
    }
@@ -3345,16 +2810,6 @@
        "application/json": {
         "schema": {
          "type": "object"
-        }
-       }
-      }
-     },
-     "401": {
-      "description": "Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code lan_login)",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -4244,7 +3699,7 @@
      "lan": {
       "type": "boolean",
       "default": false,
-      "description": "L'accès depuis le réseau local : un serveur en HTTP simple sur chaque adresse du Mac, au port lan_port, derrière le mot de passe de lan_password quand il y en a un, ouvert au réseau sinon."
+      "description": "L'accès depuis le réseau local : un serveur en HTTP simple sur chaque adresse du Mac, au port lan_port, ouvert à tous les appareils du réseau, sans mot de passe."
      },
      "lan_port": {
       "type": "integer",
@@ -4252,12 +3707,6 @@
       "maximum": 65535,
       "default": 8444,
       "description": "Le port de l'accès réseau, différent de port."
-     },
-     "lan_password": {
-      "type": "string",
-      "maxLength": 128,
-      "writeOnly": true,
-      "description": "Le mot de passe de l'accès réseau, de 4 à 128 caractères, gardé seulement sous la forme de son hachage PBKDF2 ; un nouveau met fin aux sessions de chaque appareil, un vide le retire."
      },
      "warm_history": {
       "type": "boolean",

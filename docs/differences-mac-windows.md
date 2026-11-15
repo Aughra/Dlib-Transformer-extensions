@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version d'Albireo](../dlib/dlib/external/albireo/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.32.1, 15 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 5.0.0, 15 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -62,7 +62,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Mémoire et nom du processeur | API Windows ou `/proc` | `sysctl` | Même raison | v. 1.0.11 |
 | Contrôle des dossiers (propriétaire, droits) | Vérifié sous Windows ; **toujours « oui »** sous Linux et macOS | Propriétaire, droits POSIX et ACL de macOS vérifiés | Sans ça, un dossier ouvert à tous aurait été accepté | v. 4.0.2, 4.1.1, notes remarque 21 |
 | Jeton d'administration, contrôle `Host` et `Origin` | Présents | Retirés | Usage personnel sur un seul Mac, choix de l'humain ; risque écrit dans les notes de version (une page piégée pourrait piloter le service) | v. 2.0.0 |
-| Accès depuis le réseau de la maison | — | Port 8444 en http, mot de passe facultatif | Ouvrir Albireo depuis le téléphone ou l'iPad | v. 2.0.0 |
+| Accès depuis le réseau de la maison | — | Port 8444 en http, sans mot de passe (facultatif jusqu'à la 4.32.1, retiré en 5.0.0) ; tout appareil du Wi-Fi peut s'en servir | Ouvrir Albireo depuis le téléphone ou l'iPad ; demande de l'humain : « enlève les mots de passe partout » | v. 2.0.0, v. 5.0.0 |
 | Installateur, icône de la barre des tâches, service Windows, mises à jour signées | Présents | Retirés | Propres à Windows | v. 2.0.0, 4.0.0 |
 | Bibliothèques embarquées | zlib, CBLAS, pybind11 et l'interface Python de dlib embarqués | zlib de macOS ; CBLAS, pybind11 et l'interface Python retirés (rien ne s'en servait) | Moins de code recopié à entretenir ; Apple met zlib à jour avec le système | v. 4.26.2 |
 | dlib | Bibliothèque générique (Windows, Linux, Mac) | Ne vise que macOS : `platform.h` arrête la compilation ailleurs ; conditions Apple retirées ; toutes les conditions Windows retirées (versions Windows des services de base, contournements de Visual Studio, branches des fichiers CMake, exemples et tests : 85 fichiers, 7 233 lignes) ; branches Linux de la plate-forme retirées | Le fork ne vise que le Mac | registre des notes, partie 5 |

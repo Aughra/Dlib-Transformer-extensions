@@ -1126,8 +1126,7 @@ et un autre fournisseur de recherche, lu comme `wikipedia`, en disparaissent au 
 ## Interfaces
 
 L'interface compatible avec OpenAI ne prend aucune clé : le service écoute sur l'interface de bouclage
-(et, dans le fork macOS, sur le port réseau une fois l'accès réseau activé, derrière un mot de passe quand il en a été
-choisi un).
+(et, dans le fork macOS, sur le port réseau une fois l'accès réseau activé, sans mot de passe).
 Le champ `model` prend
 l'identifiant d'un modèle chargé, une fonction (`general`, `code`, `security`, ou `albireo-code` et
 ses semblables), `albireo-background` pour le modèle livré avec Albireo, ou `auto` ; le `model`
@@ -1207,8 +1206,8 @@ images envoyées à un modèle qui ne lit que du texte (`image_input_not_support
 Les routes d'administration (`/albireo/v1/settings`, `/albireo/v1/models/<id>/download`,
 `/activate`, `/deactivate`, `DELETE /albireo/v1/models/<id>`, `/verify`, `/import`,
 `/models/upload`, `/updates/check`, `/updates/apply`, `/restart`, `/engines/benchmark`, `/logs`)
-ne prennent aucun jeton dans le fork macOS, une version personnelle : sur le Mac, toutes les routes sont ouvertes, et sur le
-port réseau, quand un mot de passe a été choisi, toutes les routes demandent d'abord le cookie de `/albireo/v1/lan/login`.
+ne prennent aucun jeton dans le fork macOS, une version personnelle : toutes les routes sont ouvertes, sans jeton ni mot de
+passe, sur le Mac comme sur le port réseau.
 Une mesure des
 moteurs s'exécute seule : `/engines/benchmark` répond 409 `benchmark_running` pendant ce temps. Un modèle
 désactivé, remplacé ou supprimé pendant qu'il répond quitte le moteur une fois ses requêtes servies :
@@ -1665,7 +1664,7 @@ taille et son SHA-256, et l'exécutent en mode mise à jour à leur démarrage s
 ## Sécurité
 
 - Le service n'écoute que sur `127.0.0.1` (le fork macOS ajoute le port réseau, en HTTP simple,
-  derrière un mot de passe facultatif, et ne vérifie plus ni `Host` ni `Origin`), ne prend que des corps JSON, de 64 Mo et
+  sans mot de passe, et ne vérifie plus ni `Host` ni `Origin`), ne prend que des corps JSON, de 64 Mo et
   524 288 valeurs au plus, et aucun corps sur `GET`, `HEAD`, `DELETE` et `OPTIONS`, et répond avec
   `nosniff`, `no-referrer`, une politique de sécurité du contenu et des protections contre l'intégration en cadre. Il lit au plus quatre
   corps de plus de 8 Mo à la fois, chacun compté jusqu'à ce que sa réponse soit écrite, et tient environ 2 millions

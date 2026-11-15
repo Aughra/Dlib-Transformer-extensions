@@ -518,14 +518,13 @@ namespace albireo
 
     /*
         Le serveur du réseau local, en HTTP simple sur chaque adresse du Mac, avec les mêmes routes,
-        derrière le mot de passe de l'accès réseau quand il y en a un.  Un échec laisse le service au
-        Mac seul, avec un avertissement.
+        ouvert à tous les appareils du réseau, sans mot de passe.  Un échec laisse le service au Mac
+        seul, avec un avertissement.
     */
     void service::start_lan_server(const host_settings& st)
     {
         if (!st.lan) return;
-        if (st.lan_password_hash.empty())
-            log_warning("server: the network access has no password: every device of the network may use the service");
+        log_warning("server: the network access has no password: every device of the network may use the service");
         std::unique_ptr<httplib::Server> lan(new httplib::Server);
         lan->set_payload_max_length(0);
         lan->set_keep_alive_timeout(5);
@@ -538,7 +537,7 @@ namespace albireo
             log_warning("server: the network port " + std::to_string(st.lan_port) + " is in use or cannot be opened");
             return;
         }
-        install_routes(*lan, *this, true);
+        install_routes(*lan, *this);
         {
             std::lock_guard<std::mutex> lock(server_m_);
             lan_server_ = std::move(lan);

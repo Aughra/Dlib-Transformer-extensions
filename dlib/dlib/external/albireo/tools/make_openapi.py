@@ -324,14 +324,10 @@ schemas = {
                        "description": "L'accès au web du bouton Web, de /albireo/v1/web/search et de "
                                       "/albireo/v1/web/fetch ; false le coupe."},
         "lan": {"type": "boolean", "default": False, "description": "L'accès depuis le réseau local : un serveur en "
-                "HTTP simple sur chaque adresse du Mac, au port lan_port, derrière le mot de passe de lan_password "
-                "quand il y en a un, ouvert au réseau sinon."},
+                "HTTP simple sur chaque adresse du Mac, au port lan_port, ouvert à tous les appareils du réseau, "
+                "sans mot de passe."},
         "lan_port": {"type": "integer", "minimum": 1024, "maximum": 65535, "default": 8444,
                      "description": "Le port de l'accès réseau, différent de port."},
-        "lan_password": {"type": "string", "maxLength": 128, "writeOnly": True,
-                         "description": "Le mot de passe de l'accès réseau, de 4 à 128 caractères, gardé seulement "
-                                        "sous la forme de son hachage PBKDF2 ; un nouveau met fin aux sessions de "
-                                        "chaque appareil, un vide le retire."},
         "warm_history": {"type": "boolean", "default": True, "description": "L'historique d'une réponse lu en "
                          "arrière-plan, tel que la requête suivante le rendra, pour que la question suivante ne "
                          "calcule que ses propres tokens."},
@@ -850,9 +846,8 @@ paths = {
                                    ref("Error"))}}},
     "/albireo/v1/settings": {
         "get": {"tags": ["Administration"], "summary": "Réglages du service",
-                "responses": {"200": reply("Les réglages, le mot de passe du proxy donné sous la forme ********, "
-                                           "celui de l'accès réseau sous la seule forme de lan_password_set, et les "
-                                           "adresses IPv4 du Mac (lan_addresses)", {"type": "object"})}},
+                "responses": {"200": reply("Les réglages, le mot de passe du proxy donné sous la forme ********, et "
+                                           "les adresses IPv4 du Mac (lan_addresses)", {"type": "object"})}},
         "put": {"tags": ["Administration"], "summary": "Change des réglages",
                 "description": "Un nouveau port est ouvert une fois avant d'être enregistré.",
                 "requestBody": json_body(ref("Settings")),
@@ -909,8 +904,7 @@ paths = {
         "get": {"tags": ["Administration"], "summary": "Les réglages enregistrés",
                 "responses": {"200": reply("{profiles: [{label, saved, settings}]}", {"type": "object"})}},
         "post": {"tags": ["Administration"], "summary": "Enregistre les réglages actuels sous une étiquette",
-                 "description": "Les réglages que change l'application web, sans le mot de passe de l'accès réseau ; "
-                                "une étiquette enregistrée à nouveau est remplacée. Les restaurer, c'est faire un PUT "
+                 "description": "Les réglages que change l'application web ; une étiquette enregistrée à nouveau est remplacée. Les restaurer, c'est faire un PUT "
                                 "de leurs settings vers /albireo/v1/settings.",
                  "requestBody": json_body({"type": "object", "required": ["label"], "properties": {
                      "label": {"type": "string", "minLength": 1, "maxLength": 120}}}),
@@ -947,16 +941,6 @@ paths = {
                    "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
                    "responses": {"200": reply("Supprimé", ok),
                                  "404": reply("Aucun document de ce nom (code document_not_found)", ref("Error"))}}},
-    "/albireo/v1/lan/login": {"post": {"tags": ["Administration"], "summary": "Ouvre l'accès réseau à un appareil",
-        "description": "Le mot de passe de l'accès réseau (réglage lan_password) donne le cookie albireo_lan pour 30 "
-                       "jours (HttpOnly, SameSite=Strict) ; un nouveau mot de passe met fin à chaque session. Un "
-                       "mauvais mot de passe fait attendre une seconde.",
-        "requestBody": json_body({"type": "object", "required": ["password"],
-                                  "properties": {"password": {"type": "string"}}}),
-        "responses": {"200": reply("Le cookie est posé", ok),
-                      "401": reply("Mauvais mot de passe, ou aucun choisi (code lan_password_wrong)", ref("Error"))}}},
-    "/albireo/v1/lan/logout": {"post": {"tags": ["Administration"], "summary": "Met fin à la session de cet appareil",
-                                        "responses": {"200": reply("Le cookie est retiré", ok)}}},
     "/albireo/v1/restart": {"post": {"tags": ["Administration"], "summary": "Redémarre le service",
                                      "responses": {"202": reply("Redémarrage en cours", ok)}}},
     "/albireo/v1/engines/benchmark": {"post": {"tags": ["Administration"],
@@ -973,13 +957,6 @@ paths = {
                                  "responses": {"200": reply("Les lignes", {"type": "object"})}}},
 }
 
-# Sur le serveur du réseau local, chaque route sauf la connexion répond 401 sans le cookie de la connexion.
-lan_unauthorized = reply("Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code "
-                         "lan_login)", ref("Error"))
-for path, operations in paths.items():
-    for operation in operations.values():
-        if path != "/albireo/v1/lan/login":
-            operation["responses"].setdefault("401", lan_unauthorized)
 
 here = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(here, "..", "common", "version.h"), encoding="utf-8") as f:
@@ -999,10 +976,8 @@ doc = {
                        "albireo-background le modèle livré avec Albireo, que l'application web utilise pour son "
                        "travail en arrière-plan, et albireo-embedding le modèle d'embedding de la recherche dans les "
                        "documents.\n\n"
-                       "Une version personnelle pour macOS : sur le Mac, chaque route est ouverte, sans jeton. Sur le "
-                       "port réseau, quand un mot de passe est choisi, chaque route sauf /albireo/v1/lan/login "
-                       "demande le cookie albireo_lan que donne la connexion ; sans mot de passe, le port réseau est "
-                       "ouvert lui aussi.\n\n"
+                       "Une version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur "
+                       "le Mac comme sur le port réseau.\n\n"
                        "Les requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : "
                        "un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. "
                        "GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en "

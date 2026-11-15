@@ -2,6 +2,15 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 5.0.0 — 15 novembre 2026
+
+### Sécurité
+
+- L'accès depuis le réseau de la maison n'a plus de mot de passe : il est ouvert à tous les appareils du réseau dès qu'il est activé dans l'onglet Service. Le réglage `lan_password`, la page de connexion, les routes `POST /albireo/v1/lan/login` et `POST /albireo/v1/lan/logout` et le cookie de session sont retirés. Un mot de passe enregistré par une version antérieure n'est plus lu, et disparaît de `settings.json` au prochain enregistrement des réglages. Changement incompatible pour un client qui utilisait ces routes, d'où le passage à la version 5.
+- La fiche « Accès depuis le réseau » le dit : sur un Wi-Fi partagé ou public, ne pas l'activer.
+
+---
+
 ## 4.32.1 — 15 novembre 2026
 
 ### Accès et documents

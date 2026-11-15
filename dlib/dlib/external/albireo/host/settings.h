@@ -81,13 +81,12 @@ namespace albireo
         int trust_authority = -1;
         /*
             L'accès depuis le réseau local : un second serveur, en HTTP simple, sur chaque adresse
-            du Mac au port lan_port, qui demande le mot de passe (lan_password_hash, sous la
-            forme de password_hash()) avant toute chose quand il y en a un, et qui est ouvert au
-            réseau sinon.
+            du Mac au port lan_port, ouvert à tous les appareils du réseau, sans mot de passe (fork
+            pour macOS, demande de l'humain du 2026-11-15).  Un lan_password_hash laissé dans
+            settings.json par une version antérieure n'est plus lu.
         */
         bool lan = false;
         int lan_port = 8444;
-        std::string lan_password_hash;
 
         /*
             Les réglages tels que settings.json et l'interface d'administration les donnent, le

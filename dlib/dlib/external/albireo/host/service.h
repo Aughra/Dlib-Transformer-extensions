@@ -377,11 +377,10 @@ namespace albireo
     };
 
     /*
-        Installe les routes sur un serveur (server.cpp) : le serveur HTTPS du Mac, ou, avec lan,
-        le serveur HTTP du réseau local, qui demande le mot de passe de l'accès réseau, quand il y
-        en a un (un cookie que pose sa route de connexion), avant toute autre route.
+        Installe les routes sur un serveur (server.cpp) : le serveur HTTPS du Mac, ou le serveur
+        HTTP du réseau local, ouvert à tous les appareils du réseau, avec les mêmes routes.
     */
-    void install_routes(httplib::Server& server, service& svc, bool lan = false);
+    void install_routes(httplib::Server& server, service& svc);
 
     // Indique si le serveur peut ouvrir port sur l'interface de bouclage, ou sur toutes les
     // adresses avec every_address, avec les options de sa propre socket ; le port est refermé

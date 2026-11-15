@@ -39,7 +39,7 @@ Les tests et les mesures cherchent les modèles à ces places (`build/` n'est pa
 | `build/albireo-home/models/hf-unsloth-qwen3.5-4b-q4_k_m.gguf` | 2,7 Go | Qwen 3.5 sur le GPU, outils, images |
 | `build/albireo-home/models/qwen3-embedding-0.6b.gguf` | 0,6 Go | modèle de recherche |
 
-Le dossier `build/albireo-home` contient aussi les réglages du service (dont, si l'accès réseau est ouvert, l'empreinte de son mot de passe) : le copier en entier garde le service tel qu'il est ; sinon le service retélécharge ses modèles par défaut au premier lancement. Les discussions, elles, sont dans le navigateur, pas dans ce dossier.
+Le dossier `build/albireo-home` contient aussi les réglages du service : le copier en entier garde le service tel qu'il est ; sinon le service retélécharge ses modèles par défaut au premier lancement. Les discussions, elles, sont dans le navigateur, pas dans ce dossier.
 
 Pour le grand modèle à experts, le télécharger directement sur le Mac mini dans `build/bench-models/` (22,1 Go, `unsloth/Qwen3.6-35B-A3B-GGUF`, fichier UD-Q4_K_M), avec son projecteur s'il y en a un.
 

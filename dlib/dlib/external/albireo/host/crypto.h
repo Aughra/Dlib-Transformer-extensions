@@ -33,27 +33,6 @@ namespace albireo
 
     /*!
         ensures
-            - Renvoie la forme stockée d'un mot de passe : "pbkdf2-sha256$<iterations>$<salt>$<hash>",
-              PBKDF2 avec HMAC-SHA-256 sur un sel aléatoire, en hexadécimal.
-    !*/
-    std::string password_hash(const std::string& password);
-
-    /*!
-        ensures
-            - Indique si password donne stored (password_hash()), comparés en un temps qui ne
-              dépend pas de l'endroit où ils diffèrent.  False pour une forme stockée qui n'en
-              est pas une.
-    !*/
-    bool password_matches(const std::string& password, const std::string& stored);
-
-    // HMAC-SHA-256 de message sous key, en hexadécimal minuscule.
-    std::string hmac_sha256_hex(const std::string& key, const std::string& message);
-
-    // Compare deux chaînes en un temps qui ne dépend pas de l'endroit où elles diffèrent.
-    bool same_secret(const std::string& a, const std::string& b);
-
-    /*!
-        ensures
             - Renvoie le SHA-256 d'un fichier en hexadécimal minuscule, ou une chaîne vide
               quand il ne peut pas être lu ou quand cancel devient true.
             - progress, quand il est fourni, reçoit les octets lus jusque-là.
