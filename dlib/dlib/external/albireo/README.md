@@ -946,7 +946,7 @@ cmake --build build-albireo-win -j
 | `test_model_file` | un petit modèle Qwen3 construit en mémoire et 144 formes endommagées de celui-ci (dont des noms donnés deux fois et des tenseurs hors de l'alignement), que le chargeur doit toutes refuser sans allouer plus de 256 Mo, puis un fichier creux de plus de 2 Gio dont le dernier tenseur se trouve au-delà de 2 Gio, lu projeté en mémoire et en flux, chaque valeur de ce tenseur vérifiée et les logits comparés à ceux du même modèle dans un petit fichier |
 | `test_engine_api` | les refus de l'interface C, trois threads de requêtes avec des annulations sous la pression des clés et valeurs, le déchargement et la destruction pendant des requêtes, un seul événement final par requête, et l'historique d'une réponse lu en avance sur la question suivante |
 | `test_chat_format` | les prompts du mode agent et de chaque format de conversation par rapport à ceux de son template rendu par Jinja, les tokens marqueurs et l'analyse des appels d'outils, entiers ou découpés en morceaux, les appels de Mistral avec et sans leur identifiant, les réponses de Llama 3 qui ne sont pas des appels et une réponse antérieure contenant `</think>` |
-| `test_host`      | dans un dossier de données à part : les fichiers des téléchargements et des imports par aucun lien, les refus de la route d'import, les copies de modèles déjà installés, les identifiants des imports, le remplacement d'un fichier de modèle, les plages des téléchargements, une base de données endommagée, les téléchargements par une interface locale de pCloud et un serveur local d'adresses officielles (le listing de l'espace et les copies qu'il contient ; une partie qui lui manque, une copie d'une autre taille ou d'autres octets, une page web à la place d'une copie, une interface qui refuse les connexions et un espace non configuré, chacun pris à son adresse officielle, les segments qui suivent un échec de l'espace envoyés là aussitôt et une ligne du journal pour chaque changement de source ; un fichier qu'aucune des deux sources ne contient échouant avec le nom du fichier dans l'espace, l'adresse officielle et l'échec de chacune ; un téléchargement depuis une adresse officielle annulé aussitôt ; le catalogue pris dans l'espace, ou à son adresse officielle quand l'espace le refuse, ne l'a pas ou le contient avec une autre signature ; le flux des mises à jour pris dans l'espace seul, sans aucune requête vers une adresse officielle ; un mot de passe refusé), chaque échec de l'espace avec les délais des tests raccourcis (pages web avec 200 et 403 et un proxy qui demande son authentification depuis chaque méthode de l'interface et depuis un serveur de contenu, connexions réinitialisées ou refusées, un JSON tronqué ou d'autres types, des tailles d'un autre type, négatives ou au-delà des entiers, un serveur qui se bloque ou répond octet par octet) échouant avec son message, sans exception, le serveur local répondant toujours, et aucun message ni aucune ligne du journal ne nommant pCloud, le lien ou son code, la dernière garde des messages et des fichiers journaux d'une version antérieure, les réglages d'une version antérieure réécrits sans le lien et les fournisseurs de recherche, et l'accès au web par un serveur local (les adresses publiques de part et d'autre de chaque plage, les adresses refusées avant toute connexion, une page, un texte coupé à 2 Mo, un type refusé, les fichiers PDF au-delà de 20 Mo, une redirection vers une adresse privée, la recherche dans Wikipédia, les refus hors ligne, avec l'accès au web désactivé et sans fournisseur) |
+| `test_host`      | dans un dossier de données à part : les fichiers des téléchargements et des imports par aucun lien, les refus de la route d'import, les copies de modèles déjà installés, les identifiants des imports, le remplacement d'un fichier de modèle, les plages des téléchargements, une base de données endommagée, les réglages d'une version antérieure réécrits sans le lien de publication et les fournisseurs de recherche, et l'accès au web par un serveur local (les adresses publiques de part et d'autre de chaque plage, les adresses refusées avant toute connexion, une page, un texte coupé à 2 Mo, un type refusé, les fichiers PDF au-delà de 20 Mo, une redirection vers une adresse privée, la recherche dans Wikipédia, les refus hors ligne, avec l'accès au web désactivé et sans fournisseur) |
 | `engine_chat`    | pilote une bibliothèque de moteur par son interface C : discussion, images avec leur projecteur (`--image`, `--detail`), outils, les résultats des appels d'outils rendus au modèle comme les rend le mode agent (`--tools --tool-result`), raisonnement et son budget (`--budget`), l'échantillonnage que conseillent les auteurs du modèle (`--temperature auto`) et une pénalité de présence (`--presence`), requêtes parallèles, tours avec pauses (`--turns --pause`), embeddings comparés à une référence ; il se termine sans décharger le moteur d'un périphérique, comme le fait le service |
 | `bench_runtime`  | tokens par seconde du prompt et de la génération, aussi sous la forme `bench_runtime_avxvnni` et `bench_runtime_vnni256` |
 
@@ -1598,32 +1598,11 @@ ne donne la clé privée qu'au compte qui l'exécute. Les programmes voyagent da
 porte le service, l'icône, chaque moteur avec les bibliothèques d'exécution de son périphérique, et l'application
 web.
 
-Les fichiers publiés se trouvent dans l'espace de publication d'Albireo, le lien public d'un dossier public de
-pCloud en lecture seule, une constante du build qu'aucun réglage, aucune route ni aucun document ne donne
-([`host/public_link.h`](host/public_link.h)), protégé par un mot de passe que porte le service. Son
-dossier `dist` contient `feed.json`, `catalog.json`, leurs signatures, l'installateur des mises à jour,
-`albireo-setup-online-<version>.exe`, et l'installateur complet,
-`albireo-setup-complete-<version>.exe` ; son dossier `models` contient chaque fichier du catalogue à
-`<identifier>/<file name of its official address>`. Le service y lit le flux et l'installateur
-et seulement là, par l'API de pCloud : un espace qui ne répond pas ou qui ne contient pas un fichier
-fait échouer la mise à jour avec un message qui nomme le fichier dans l'espace et le type d'échec (« l'espace
-de publication d'Albireo est injoignable pour dist/feed.json : la requête reçoit pour réponse le
-statut 403 »). Le catalogue et les fichiers des modèles viennent de là d'abord, et de leurs adresses
-officielles quand l'espace ne les sert pas (voir [Modèles](#modèles)), le message d'un échec des
-deux nommant le fichier dans l'espace, son échec, l'adresse officielle et son échec. Les
-signatures et les empreintes vérifient chaque fichier. Aucun message, aucune fenêtre ni aucun journal du service, de l'icône
-ou de l'installateur ne nomme le lien, son code, une adresse de l'API ou d'un serveur de contenu, ou un hôte
-de pCloud : les messages nomment les fichiers de l'espace, et le journal, les erreurs des routes, les
-fenêtres de l'icône et le journal de l'installateur font passer leurs textes par une dernière garde qui
-remplace tout mot de ce genre par « l'espace de publication d'Albireo » ([`common/log.h`](common/log.h)),
-fichiers journaux d'une version antérieure compris. [`dist/albireo`](../../../../dist/albireo) du
-dépôt garde le flux et le catalogue signés que l'éditeur place dans le lien.
-
-Le mot de passe est lu à la configuration depuis `ALBIREO_PUBLIC_LINK_PASSWORD_FILE`, par défaut
-`keys\albireo-public-link.txt` dans le dossier de l'utilisateur (`~/keys` sous Linux), hors du
-dépôt, et intégré au service sous forme masquée ; un service construit sans ce fichier atteint le lien
-sans mot de passe, ce que le lien refuse tant qu'il est protégé. Les outils de l'éditeur lisent le
-même fichier, ou la variable `ALBIREO_PUBLIC_LINK_PASSWORD`.
+Les fichiers publiés se trouvent dans l'espace de publication d'Albireo, un dossier public en lecture seule chez un
+hébergeur de fichiers, d'où le service lit le flux, l'installateur, le catalogue et les fichiers des modèles, ces deux
+derniers venant de leurs adresses officielles quand l'espace ne les sert pas (voir [Modèles](#modèles)). Les
+signatures et les empreintes vérifient chaque fichier. (Le fork macOS ne garde de cet espace ni le lien, ni son
+mot de passe, ni le nom de l'hébergeur.)
 
 [`tools/publish_release.py`](tools/publish_release.py) écrit le flux d'une version à partir de son
 installateur sans modèles : il vérifie que l'installateur porte la version de
@@ -1717,11 +1696,7 @@ taille et son SHA-256, et l'exécutent en mode mise à jour à leur démarrage s
   catalogue ou du modèle, vérifiée de la même façon, prend sa place. Une page web qu'un proxy ou un
   filtre du réseau envoie à la place d'une réponse, un corps tronqué, un JSON d'autres types, un
   serveur bloqué et une connexion réinitialisée terminent la tentative avec son message, dans un temps limité, et aucune
-  exception ne sort des threads des téléchargements et des vérifications. Le mot de passe de son lien ne
-  se trouve jamais dans le dépôt : la configuration le lit dans un fichier de l'éditeur et l'intègre au
-  service sous forme masquée, et les messages et les journaux ne nomment jamais le lien, son code ni les adresses
-  de pCloud. Cela empêche de lire le lien en dehors d'Albireo, pas quelqu'un qui étudie le
-  programme de le faire.
+  exception ne sort des threads des téléchargements et des vérifications.
 - Le JavaScript qu'exécute le mode agent tourne dans un cadre isolé d'origine opaque, dans un worker
   arrêté après 15 s ; la page construit sa propre copie de chaque réponse du cadre, avec des champs vérifiés et
   raccourcis, et abandonne un cadre resté silencieux pendant 20 s.

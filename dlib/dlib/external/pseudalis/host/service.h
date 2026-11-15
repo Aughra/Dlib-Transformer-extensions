@@ -273,6 +273,10 @@ namespace pseudalis
         albireo_client albireo_;
         std::unique_ptr<drive_host> drive_;
         std::unique_ptr<httplib::SSLServer> server_;
+        // Le serveur du réseau de la maison, quand le réglage lan l'ouvre, et son thread.
+        std::unique_ptr<httplib::Server> lan_server_;
+        std::thread lan_thread_;
+        void start_lan_server(const host_settings& st);
         std::mutex server_m_;
         std::thread background_;
         std::mutex wake_m_;
@@ -309,7 +313,11 @@ namespace pseudalis
     };
 
     // Les routes du serveur (server.cpp).
-    void install_routes(httplib::Server& srv, service& svc);
+    /*
+        Installe les routes sur un serveur : le serveur HTTPS du Mac (lan_port 0), ou le serveur HTTP du réseau
+        de la maison, à son port, avec les mêmes routes et la garde des adresses du Mac (fork pour macOS).
+    */
+    void install_routes(httplib::Server& srv, service& svc, int lan_port = 0);
 }
 
 #endif // PSEUDALIS_HOST_SERVICE_H_

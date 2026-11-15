@@ -86,6 +86,39 @@ namespace pseudalis
         wake_.notify_all();
         std::lock_guard<std::mutex> lock(server_m_);
         if (server_) server_->stop();
+        if (lan_server_) lan_server_->stop();
+    }
+
+    /*
+        Le serveur du réseau de la maison (fork pour macOS) : en HTTP simple sur chaque adresse du Mac, au port
+        lan_port, sans mot de passe.  Un port qui ne s'ouvre pas laisse le service au Mac seul, avec un avertissement.
+    */
+    void service::start_lan_server(const host_settings& st)
+    {
+        if (!st.lan) return;
+        std::unique_ptr<httplib::Server> lan(new httplib::Server);
+        lan->set_payload_max_length(static_cast<size_t>(2048 + 1) << 20);
+        lan->set_keep_alive_timeout(1);
+        lan->set_keep_alive_max_count(20);
+        lan->set_read_timeout(30);
+        lan->set_write_timeout(60);
+        lan->new_task_queue = []() { return new httplib::ThreadPool(4, 16, 32); };
+        lan->set_socket_options([](socket_t sock) { httplib::set_socket_opt(sock, SOL_SOCKET, SO_REUSEADDR, 1); });
+        if (!lan->bind_to_port("0.0.0.0", st.lan_port))
+        {
+            log_warning("server: the network access cannot open the port " + std::to_string(st.lan_port));
+            return;
+        }
+        install_routes(*lan, *this, st.lan_port);
+        {
+            std::lock_guard<std::mutex> lock(server_m_);
+            if (stopping_) return;
+            lan_server_ = std::move(lan);
+        }
+        log_warning("server: the network access has no password: every device of the network may use the service, "
+                    "at http://<address of the Mac>:" + std::to_string(st.lan_port) + "/");
+        httplib::Server* server = lan_server_.get();
+        lan_thread_ = std::thread([server]() { server->listen_after_bind(); });
     }
 
     void service::request_restart()
@@ -303,6 +336,7 @@ namespace pseudalis
             if (stopping_) server_->stop();
         }
         log_info("server: https://localhost:" + std::to_string(port_) + "/");
+        start_lan_server(st);
         background_ = std::thread([this]() {
             try
             {
@@ -314,6 +348,12 @@ namespace pseudalis
             }
         });
         server_->listen_after_bind();
+        {
+            std::lock_guard<std::mutex> lock(server_m_);
+            if (lan_server_) lan_server_->stop();
+        }
+        if (lan_thread_.joinable()) lan_thread_.join();
+        lan_server_.reset();
 
         stop();
         http_cancel_all("the service stops");

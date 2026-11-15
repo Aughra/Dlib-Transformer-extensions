@@ -54,6 +54,7 @@
 #include "../common/log.h"
 #include "../common/platform.h"
 #include "../common/version.h"
+#include "carnet.h"
 #include "crypto.h"
 #include "http_fetch.h"
 #include "hub.h"
@@ -1014,9 +1015,14 @@ namespace albireo
             else if (const char* u = std::getenv("HOME")) home = join_path(join_path(join_path(u, ".local"), "share"), "pseudalis");
             std::string text;
             const bool found = !home.empty() && read_file(join_path(home, "settings.json"), text, 1u << 20);
-            const long long port = found ? json::parse_or_null(text)["port"].as_int(8444) : 0;
+            const json settings = found ? json::parse_or_null(text) : json();
+            const long long port = found ? settings["port"].as_int(8444) : 0;
             o["found"] = found && port > 0 && port < 65536;
             o["port"] = port;
+            // Son accès depuis le réseau de la maison, pour le sélecteur vu depuis un autre appareil.
+            const long long lan_port = found ? settings["lan_port"].as_int(8445) : 0;
+            o["lan"] = found && settings["lan"].as_bool(false) && lan_port >= 1024 && lan_port <= 65535;
+            o["lan_port"] = lan_port;
             bool running = false;
             if (o["found"].as_bool())
             {
@@ -1466,6 +1472,19 @@ namespace albireo
         // Pseudalis sur ce Mac (fork pour macOS), pour passer d'une application à l'autre.
         srv.Get("/albireo/v1/pseudalis", [](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, pseudalis_peer());
+        });
+        // Le carnet du portage (fork pour macOS, host/carnet.h) : son sommaire, puis un fichier de sa liste.
+        srv.Get("/albireo/v1/carnet", [](const httplib::Request&, httplib::Response& res) {
+            send_json(res, 200, carnet_index());
+        });
+        srv.Get("/albireo/v1/carnet/file", [](const httplib::Request& req, httplib::Response& res) {
+            std::string data, type;
+            if (!carnet_file(req.get_param_value("path"), data, type))
+            {
+                send_error(res, 404, "invalid_request_error", "no such document in the notebook", "not_found");
+                return;
+            }
+            res.set_content(data, type);
         });
         // La réserve des modèles (fork pour macOS) : ce qu'elle garde, et son vidage.
         srv.Get("/albireo/v1/reserve", [s](const httplib::Request&, httplib::Response& res) {

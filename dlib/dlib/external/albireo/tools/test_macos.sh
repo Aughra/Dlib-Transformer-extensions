@@ -407,6 +407,19 @@ offline_reserve_test() {
   echo "local restoration and missing reserve reported"
 }
 
+# Le carnet du portage : un fichier de sa liste se lit, et chaque chemin hors de la liste répond 404 (fork pour macOS).
+carnet_refusals() {
+  local n=0 p code
+  for p in '../etc/passwd' 'dlib/dlib/external/albireo/host/server.cpp' 'docs/../CLAUDE.md' '.git/config' \
+      'logs/.hidden.md' '/etc/hosts' 'docs//memo-portage-macos-arm64.md'; do
+    code=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' -G --data-urlencode "path=$p" \
+      "https://localhost:$PORT/albireo/v1/carnet/file") || return 1
+    [ "$code" = 404 ] && n=$((n + 1))
+  done
+  code=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' "https://localhost:$PORT/albireo/v1/carnet/file?path=CLAUDE.md")
+  echo "refused $n of 7, CLAUDE.md $code"
+}
+
 # Le service, hors ligne, dans un dossier de données à lui.
 SERVICE=$BUILD/bin/albireo-service
 if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
@@ -428,6 +441,8 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
     step "service licenses" '^\[(\]|\{"file")' curl -sk --max-time 5 https://localhost:$PORT/albireo/v1/licenses
     step "service license refusal" '"code":"invalid_license"' curl -sk --max-time 5 --path-as-is \
       "https://localhost:$PORT/albireo/v1/licenses/../settings.json"
+    step "service carnet" '"found":true,"sections":\[\{' curl -sk --max-time 5 https://localhost:$PORT/albireo/v1/carnet
+    step "service carnet refusals" 'refused 7 of 7, CLAUDE.md 200' carnet_refusals
     # Un modèle de l'utilisateur n'est pas lu par son chemin : l'application web l'envoie.
     step "service import refusal" '"code":"import_use_upload"' curl -sk --max-time 30 -X POST \
       -H "Content-Type: application/json" -d "{\"path\": \"$MODEL\"}" \

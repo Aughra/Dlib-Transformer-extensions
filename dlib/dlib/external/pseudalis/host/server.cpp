@@ -76,6 +76,30 @@ namespace pseudalis
             return o == "https://localhost" + p || o == "https://127.0.0.1" + p || o == "https://[::1]" + p;
         }
 
+        /*
+            Le serveur du réseau de la maison (fork pour macOS) : l'en-tête Host nomme le Mac par une adresse IPv4
+            ou par son nom en .local, avec le port réseau.  Un nom de domaine quelconque est refusé, pour qu'un site
+            dont le nom mène au Mac (rebinding DNS) ne puisse pas lire les réponses ; une requête venue d'une page
+            vient de la même adresse.
+        */
+        bool is_lan_host(const std::string& host, int port)
+        {
+            const std::string h = lower(host);
+            const std::string p = ":" + std::to_string(port);
+            if (h.size() <= p.size() || h.compare(h.size() - p.size(), p.size(), p) != 0) return false;
+            const std::string name = h.substr(0, h.size() - p.size());
+            if (name.size() > 6 && name.compare(name.size() - 6, 6, ".local") == 0)
+                return std::all_of(name.begin(), name.end(), [](char c) {
+                    return std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '.'; });
+            int dots = 0;
+            for (char c : name)
+            {
+                if (c == '.') ++dots;
+                else if (!std::isdigit(static_cast<unsigned char>(c))) return false;
+            }
+            return dots == 3;
+        }
+
         // Encodage en pourcentage de l'UTF-8 pour un en-tête : le nom d'un fichier, un rapport.
         std::string percent_encode(const std::string& s)
         {
@@ -232,22 +256,31 @@ namespace pseudalis
         }
     }
 
-    void install_routes(httplib::Server& srv, service& svc)
+    void install_routes(httplib::Server& srv, service& svc, int lan_port)
     {
         const int port = svc.port();
         service* s = &svc;
 
-        srv.set_pre_routing_handler([port, s](const httplib::Request& req, httplib::Response& res) {
+        srv.set_pre_routing_handler([port, lan_port, s](const httplib::Request& req, httplib::Response& res) {
             auto refuse = [&](int status, const char* message) {
                 res.status = status;
                 res.set_header("Connection", "close");
                 res.set_content(message, "text/plain");
                 return httplib::Server::HandlerResponse::Handled;
             };
-            if (!is_local_host(req.get_header_value("Host"), port)) return refuse(421, "misdirected request");
-            const std::string origin = req.get_header_value("Origin");
-            if (!origin.empty() && !is_local_origin(origin, port))
-                return refuse(403, "cross-origin requests are refused");
+            const std::string host = req.get_header_value("Host"), origin = req.get_header_value("Origin");
+            if (lan_port)
+            {
+                if (!is_lan_host(host, lan_port)) return refuse(421, "misdirected request");
+                if (!origin.empty() && lower(origin) != "http://" + lower(host))
+                    return refuse(403, "cross-origin requests are refused");
+            }
+            else
+            {
+                if (!is_local_host(host, port)) return refuse(421, "misdirected request");
+                if (!origin.empty() && !is_local_origin(origin, port))
+                    return refuse(403, "cross-origin requests are refused");
+            }
             /*
                 Un corps plus gros que ce que prend sa route est refusé avant d'être lu : les
                 fichiers jusqu'à la taille des réglages, un corps JSON jusqu'à 16 Mo.
@@ -578,7 +611,7 @@ namespace pseudalis
                 const char* name;
                 long long low, high;
             };
-            const range ranges[] = { { "port", 1024, 65535 }, { "max_file_mb", 1, 2048 },
+            const range ranges[] = { { "port", 1024, 65535 }, { "lan_port", 1024, 65535 }, { "max_file_mb", 1, 2048 },
                                      { "removed_days", 0, host_settings::max_removed_days },
                                      { "history_mb", 1, host_settings::max_history_mb } };
             for (const range& r : ranges)
@@ -611,7 +644,7 @@ namespace pseudalis
                     return;
                 }
             }
-            for (const char* flag : { "tags", "trust_authority" })
+            for (const char* flag : { "tags", "trust_authority", "lan" })
                 if (body.contains(flag) && !body[flag].is_bool())
                 {
                     user_error e;
@@ -620,6 +653,19 @@ namespace pseudalis
                     send_error(res, 400, e);
                     return;
                 }
+            // Le port réseau diffère du port du Mac.
+            {
+                const host_settings current = s->settings().get();
+                const long long main_port = body.contains("port") ? body["port"].as_int(0) : current.port;
+                const long long lan_port = body.contains("lan_port") ? body["lan_port"].as_int(0) : current.lan_port;
+                if (main_port == lan_port)
+                {
+                    user_error e;
+                    e.set("the setting lan_port must differ from port", "settings_value").arg("field", "lan_port");
+                    send_error(res, 400, e);
+                    return;
+                }
+            }
             // L'espace des originaux contient le plus gros fichier.
             {
                 const host_settings current = s->settings().get();
@@ -650,7 +696,8 @@ namespace pseudalis
                 return;
             }
             const bool restart = after.port != before.port || after.drive_letter != before.drive_letter ||
-                                 after.date_order != before.date_order || after.proxy != before.proxy;
+                                 after.date_order != before.date_order || after.proxy != before.proxy ||
+                                 after.lan != before.lan || after.lan_port != before.lan_port;
             s->albireo().set_enabled(after.albireo != "off");
             // Moins de jours ou moins d'espace : les originaux au-delà partent maintenant, en arrière-plan.
             if (after.removed_days != before.removed_days || after.history_mb != before.history_mb)

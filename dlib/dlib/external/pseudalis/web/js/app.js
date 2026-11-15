@@ -779,13 +779,15 @@
     document.getElementById('set-history').value = s.history_mb;
     document.getElementById('set-albireo').checked = s.albireo !== 'off';
     document.getElementById('set-tags').checked = s.tags !== false;
+    document.getElementById('set-lan').checked = s.lan === true;
+    document.getElementById('set-lan-port').value = s.lan_port;
   }
 
   // Les réglages que la carte affiche, par leur nom dans l'interface, avec la clé de leur libellé.
   const settingLabels = {
     drive_letter: 'set_drive', date_order: 'set_dates', max_file_mb: 'set_max',
     removed_days: 'set_removed', history_mb: 'set_history', albireo: 'set_albireo',
-    tags: 'set_tags'
+    tags: 'set_tags', lan: 'set_lan', lan_port: 'set_lan_port'
   };
 
   // Le nombre entier d'un champ, ou null quand il n'en contient pas : le service le refuse avec sa plage.
@@ -802,7 +804,9 @@
       removed_days: wholeNumber('set-removed'),
       history_mb: wholeNumber('set-history'),
       albireo: document.getElementById('set-albireo').checked ? 'auto' : 'off',
-      tags: document.getElementById('set-tags').checked
+      tags: document.getElementById('set-tags').checked,
+      lan: document.getElementById('set-lan').checked,
+      lan_port: wholeNumber('set-lan-port')
     }, 'PUT');
     if (!r.ok) {
       const b = r.body || {};

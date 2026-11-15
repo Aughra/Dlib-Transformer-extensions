@@ -49,7 +49,8 @@ export function renderAll() {
 /*
     Le menu de la barre du haut (fork pour macOS : il remplace le bouton « Paramètres » du bas du panneau latéral,
     puis l'engrenage, à la demande de l'humain) : trois traits, et un grand menu en colonnes sur le modèle de celui de
-    TortueTech.  Les onglets des paramètres, le contexte de la prochaine question, l'aide et la page de l'interface.
+    TortueTech.  Les onglets des paramètres, le contexte de la prochaine question, l'aide, les documents du portage
+    (web/carnet) et la page de l'interface.
 */
 function menuButton() {
   const openApi = () => window.open('/docs/', '_blank');
@@ -70,6 +71,7 @@ function menuButton() {
       { title: 'En savoir plus', entries: [
         { label: t('about'), action: () => settingsDialog('about') },
         { label: t('changelog'), action: () => changelogDialog() },
+        { label: 'Documents du portage', action: () => window.open('/carnet/', '_blank') },
         { label: 'Interface de programmation (API)', action: openApi }] }
     ], [
       Object.assign({}, context, { label: 'Contexte', desc: 'ce que le modèle lira pour la prochaine question' }),

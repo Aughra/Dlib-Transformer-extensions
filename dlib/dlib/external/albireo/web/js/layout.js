@@ -197,11 +197,14 @@ export function buildLayout() {
 function appSwitch() {
   const box = h('div', { class: 'app-switch', hidden: true, role: 'group', 'aria-label': 'Application' },
     h('span', { class: 'on', 'aria-current': 'page' }, 'Albireo'));
+  // Sur le Mac, par localhost ; depuis un autre appareil, par l'accès réseau de Pseudalis quand il est ouvert.
   const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  if (!local) return box;
   fetch('/albireo/v1/pseudalis', { cache: 'no-store' }).then((r) => r.json()).then((p) => {
     if (!p || !p.running || !p.port) return;
-    box.append(h('a', { href: 'https://localhost:' + p.port + '/', target: 'pseudalis', rel: 'noopener',
+    const href = local ? 'https://localhost:' + p.port + '/'
+      : p.lan && p.lan_port ? 'http://' + location.hostname + ':' + p.lan_port + '/' : '';
+    if (!href) return;
+    box.append(h('a', { href, target: 'pseudalis', rel: 'noopener',
       title: 'Protéger les données personnelles de vos documents' }, 'Pseudalis'));
     box.hidden = false;
   }).catch(() => { /* Pseudalis absent */ });

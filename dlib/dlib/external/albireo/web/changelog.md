@@ -2,6 +2,19 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 5.2.0 — 15 novembre 2026
+
+### Accès et documents
+
+- Les documents du portage se lisent dans Albireo : menu « En savoir plus », « Documents du portage », ou la page `/carnet/`, depuis le Mac, le téléphone ou l'iPad. Sommaire en cartes, deux blogs, journaux, guides, notes de version et README, mis en page en clair et en sombre, avec les liens entre documents. Routes `GET /albireo/v1/carnet` et `GET /albireo/v1/carnet/file`, limitées à une liste fermée de fichiers du dépôt (`macos/site-docs/sommaire.json`) : aucun autre fichier, ni chemin caché, ni lien n'est servi. Le petit site à part (port 8650) est retiré.
+- Le sélecteur « Albireo | Pseudalis » apparaît aussi depuis un autre appareil, quand l'accès réseau de Pseudalis est ouvert (Pseudalis 2.1.0) ; `GET /albireo/v1/pseudalis` donne `lan` et `lan_port`.
+
+### Corrections
+
+- Le README ne décrit plus l'hébergeur de l'espace de publication de l'original, ni les tests de cet espace, retirés du fork ; le test des anciens réglages n'en cite plus l'adresse.
+
+---
+
 ## 5.1.0 — 15 novembre 2026
 
 ### Accès et documents

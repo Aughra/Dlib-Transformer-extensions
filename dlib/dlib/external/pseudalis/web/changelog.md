@@ -2,6 +2,24 @@
 
 Pseudalis pour macOS sur puce Apple, version dérivée de Pseudalis Community (Cydral Technology), maintenue par TortueTech. Le fork numérote Pseudalis à part de l'original à partir de 2.0.0. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne ; avant 2.0.0, la section porte le numéro de la version de l'original sur laquelle reposait le fork.
 
+## 2.1.0 — 15 novembre 2026
+
+### Accès et documents
+
+- Accès depuis le réseau de la maison (iPad, téléphone) : réglage « Ouvrir Pseudalis aux appareils de la maison » et son port (8445 par défaut), dans la section Réglages. Un second serveur, en HTTP simple et sans mot de passe, répond sur chaque adresse du Mac avec les mêmes routes ; le service redémarre quand le réglage change. Réglages `lan` et `lan_port` dans l'interface de programmation.
+- Le sélecteur « Albireo | Pseudalis » apparaît aussi depuis un autre appareil : il mène à l'accès réseau d'Albireo quand celui-ci est ouvert.
+
+### Sécurité
+
+- L'accès réseau n'a pas de mot de passe : tout appareil du réseau peut protéger et restaurer des fichiers, lire les originaux conservés, exporter la clé et changer les réglages. Il ne doit pas être activé sur un Wi-Fi partagé ou public.
+- Le serveur du réseau n'accepte que les requêtes qui nomment le Mac par une adresse IPv4 ou un nom en `.local` (421 sinon), et refuse une requête venue d'une page d'une autre origine (403) : un site web ne peut pas piloter Pseudalis par le navigateur.
+
+### Corrections
+
+- Trois textes restés de la version Windows renvoyaient à « l'application ouverte depuis l'icône » ou au jeton d'administration ; ils renvoient à la section Réglages.
+
+---
+
 ## 2.0.1 — 15 novembre 2026
 
 ### Accès et documents

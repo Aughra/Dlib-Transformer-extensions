@@ -1,20 +1,13 @@
-# Site des documents du fork
+# Documents du portage, dans Albireo
 
-Un petit site, pour lire les documents du fork depuis un téléphone sur le réseau de la maison : le sommaire, les documents de `docs/`, les journaux de `logs/`, le blog, les notes de version et les README d'Albireo et de Pseudalis.
+Les documents du fork se lisent dans Albireo lui-même, depuis le Mac, le téléphone ou l'iPad : menu ☰, « Documents du portage », ou directement `/carnet/` (par exemple `http://<adresse du Mac>:8444/carnet/` sur le réseau de la maison). Le sommaire, les documents de `docs/`, les journaux de `logs/`, les deux blogs, les notes de version et les README d'Albireo et de Pseudalis y sont. Il n'y a plus de site à lancer à part (l'ancien `serve.py`, port 8650, est retiré depuis Albireo 5.2.0).
 
-```sh
-python3 macos/site-docs/serve.py            # adresse du Mac sur la box, port 8650
-python3 macos/site-docs/serve.py --port 8651 --host 127.0.0.1
-```
+Ce dossier ne garde que le sommaire, [`sommaire.json`](sommaire.json), que lit le service (`host/carnet.cpp`) :
 
-Pour qu'il continue de tourner une fois le terminal fermé :
+- **`motifs`** : la liste fermée des fichiers lisibles, chacun un dossier exact et un nom (`*`, `*.extension` ou un nom exact). Le reste du dépôt, les dossiers cachés, les chemins avec `..` et les liens symboliques ne sont jamais servis.
+- **`sections`** : les cartes du sommaire (chemin, titre, description). Un nouveau document de `docs/` se lit dès qu'il répond à un motif, mais il faut l'ajouter ici pour qu'il ait sa carte.
+- **`blogs`** : les dossiers des épisodes `NN-titre.md` ; un nouvel épisode apparaît tout seul.
 
-```sh
-nohup python3 macos/site-docs/serve.py > build/site-docs.log 2>&1 &
-pkill -f macos/site-docs/serve.py           # pour l'arrêter
-```
+Le service lit le dépôt où il a été construit (`ALBIREO_FORK_ROOT_DEFAULT`, donné par la construction), ou celui que nomme la variable `ALBIREO_FORK_ROOT`. Les pages Markdown sont mises en forme dans le navigateur par marked et DOMPurify, ceux d'Albireo ; rien n'est chargé depuis Internet.
 
-- **Python seul**, sans paquet à installer. Les pages Markdown sont mises en forme dans le navigateur par marked et DOMPurify, pris dans `dlib/dlib/external/albireo/web/vendor/`. Rien n'est chargé depuis Internet.
-- **Lecture seule, liste fermée** : seuls les fichiers des motifs `MOTIFS` de `serve.py` sont servis. Le reste du dépôt et les dossiers cachés ne sont pas servis, et les liens symboliques sont ignorés. Un lien vers un fichier source donne « Introuvable ».
-- **Sans mot de passe** : n'importe quel appareil branché sur la box peut lire ces pages. Ils ne contiennent pas de secret (c'est une règle du fork), mais il ne faut pas ouvrir ce port vers Internet.
-- Un nouvel épisode du blog apparaît tout seul dans le sommaire. Un nouveau document de `docs/` peut être lu, mais il faut l'ajouter à `SOMMAIRE` pour qu'il ait sa carte.
+**Sans mot de passe** : comme Albireo, tout appareil branché sur la box peut lire ces pages. Elles ne contiennent pas de secret (c'est une règle du fork), mais il ne faut pas ouvrir le port réseau d'Albireo vers Internet.

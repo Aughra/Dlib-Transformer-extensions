@@ -2,8 +2,8 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface de Pseudalis",
-  "version": "2.0.1",
-  "description": "L'interface locale de Pseudalis, sur ce Mac seulement (https://localhost:8444 par défaut). Les fichiers voyagent tels quels, dans le corps des requêtes. Aucun compte ni jeton n'est nécessaire : sur macOS, les opérations d'administration sont ouvertes sur le Mac, comme les routes d'Albireo ; chaque requête doit toutefois nommer le serveur local dans son en-tête Host, et une requête venue d'une page doit venir du serveur local.",
+  "version": "2.1.0",
+  "description": "L'interface locale de Pseudalis, sur ce Mac (https://localhost:8444 par défaut) et, une fois l'accès réseau activé (réglage lan), en HTTP simple sur chaque adresse du Mac, au port lan_port (8445 par défaut), sans mot de passe. Les fichiers voyagent tels quels, dans le corps des requêtes. Aucun compte ni jeton n'est nécessaire : sur macOS, les opérations d'administration sont ouvertes sur le Mac, comme les routes d'Albireo ; chaque requête doit toutefois nommer le serveur local dans son en-tête Host, et une requête venue d'une page doit venir du serveur local.",
   "contact": {
    "name": "Cydral Technology",
    "email": "cydraltechnology@gmail.com",
@@ -1416,6 +1416,18 @@
      },
      "proxy": {
       "type": "string"
+     },
+     "lan": {
+      "type": "boolean",
+      "default": false,
+      "description": "L'accès depuis le réseau de la maison : un second serveur, en HTTP simple, sur chaque adresse du Mac au port lan_port, sans mot de passe, avec les mêmes routes. L'en-tête Host doit nommer le Mac par une adresse IPv4 ou un nom en .local. Le service redémarre quand il change."
+     },
+     "lan_port": {
+      "type": "integer",
+      "minimum": 1024,
+      "maximum": 65535,
+      "default": 8445,
+      "description": "Le port de l'accès réseau, différent de port."
      }
     }
    },

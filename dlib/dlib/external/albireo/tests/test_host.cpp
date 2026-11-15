@@ -1376,13 +1376,13 @@ int main(int argc, char** argv)
         const std::string key_file = albireo::join_path(folder, "web_search.secret");
         write_text(settings_file, "{\"port\": 9123, \"web_search\": \"brave\", \"web_search_url\": "
             "\"https://searx.example.org\", \"web_search_key_set\": true, \"web_search_key\": \"BSA-by-hand-42\", "
-            "\"public_link\": \"https://u.pcloud.link/publink/show?code=kZeNhSJZpcMygkcCvGXmq1MTvkCfBuSsx2GV\"}");
+            "\"public_link\": \"https://files.example.invalid/publink/show?code=0123456789\"}");
         write_text(key_file, "BSA-secret-0123456789");
         {
             albireo::settings_store store(settings_file);
             const std::string text = read_text(settings_file), copy = read_text(settings_file + ".bak");
-            check(store.get().port == 9123 && store.get().web_search == "wikipedia" && !holds_folded(text, "pcloud")
-                && !holds_folded(copy, "pcloud") && text.find("web_search_url") == std::string::npos
+            check(store.get().port == 9123 && store.get().web_search == "wikipedia" && !holds_folded(text, "example.invalid")
+                && !holds_folded(copy, "example.invalid") && text.find("web_search_url") == std::string::npos
                 && text.find("web_search_key") == std::string::npos && text.find("public_link") == std::string::npos
                 && text.find("BSA-") == std::string::npos && !albireo::file_exists(key_file),
                 "the settings of an earlier version are read, and written again without what this version lacks");

@@ -101,14 +101,14 @@ window.PSEUDALIS_TEXTS = {
     records_untagged: 'protégé sans balises',
     tags_option: 'Écrire les balises dans ces fichiers',
     tags_option_hint: 'Avec elles, toute copie se restaure avec la clé de cet ordinateur. Cette case ne vaut ' +
-      'que pour les fichiers déposés ici ; le réglage général, que suit le lecteur, est dans les Réglages ' +
-      'de l’application ouverte depuis l’icône.',
+      'que pour les fichiers déposés ici ; le réglage général, que suit le lecteur, est dans la ' +
+      'section Réglages.',
     no_restore_hint: 'Sans balises ni original conservé, les fichiers protégés ne pourront pas être restaurés.',
     protected_untagged: 'sans balises',
     not_restorable: 'il ne pourra pas être restauré',
     text_tags: 'Écrire les balises dans ce texte',
     text_tags_hint: 'Cette case ne vaut que pour ce texte ; le réglage général, que suit le lecteur, est ' +
-      'dans les Réglages de l’application ouverte depuis l’icône.',
+      'dans la section Réglages.',
     text_untagged_hint: 'Sans balises, seule cette page restaure le texte, tant qu’elle reste ouverte.',
     set_tags: 'Écrire les balises par défaut',
     set_tags_hint: 'Le lecteur suit ce réglage, l’interface l’applique aux requêtes sans paramètre tags, et ' +
@@ -134,6 +134,11 @@ window.PSEUDALIS_TEXTS = {
     set_language_auto: 'Français si la langue du service est le français, anglais sinon',
     set_drive: 'Lettre du lecteur (vide : pas de lecteur)',
     set_albireo: "Décrire les images avec Albireo lorsqu'il est installé",
+    set_lan: 'Ouvrir Pseudalis aux appareils de la maison (iPad, téléphone)',
+    set_lan_port: 'Port réseau',
+    set_lan_hint: 'En http, sans mot de passe : tout appareil du Wi-Fi peut s’en servir, lire les originaux gardés et ' +
+      'changer les réglages. L’adresse est http://adresse-du-Mac:port. Ne pas l’activer sur un Wi-Fi partagé ou public. ' +
+      'Le service redémarre quand ce réglage change.',
     set_max: 'Fichier le plus grand (Mo)',
     set_removed: 'Conservation après retrait du lecteur (jours)',
     btn_save: 'Enregistrer',
@@ -156,7 +161,7 @@ window.PSEUDALIS_TEXTS = {
     err_picture_missing: 'Le coffre de cet ordinateur ne contient pas l’image de ce fichier.',
     err_vault: "L'original ne peut pas être conservé dans le coffre.",
     err_database: 'La base de données de Pseudalis ne peut pas être écrite : {e}',
-    err_authentication: "Le jeton d'administration manque ou est incorrect : rouvrez Pseudalis depuis son icône.",
+    err_authentication: "Le service refuse l'accès : rechargez la page.",
     err_bad_request: "La requête n'est pas valide.",
     err_not_found: "Cet original n'est plus conservé.",
     err_server_error: "Le service n'a pas pu traiter la requête.",

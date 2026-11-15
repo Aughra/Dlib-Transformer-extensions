@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Albireo Community Edition",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "description": "L'interface du service Albireo, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions albireo-general, albireo-code et albireo-security désignent les modèles activés pour chaque fonction, albireo-background le modèle livré avec Albireo, que l'application web utilise pour son travail en arrière-plan, et albireo-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -1920,7 +1920,7 @@
      "Service"
     ],
     "summary": "Pseudalis sur ce Mac",
-    "description": "Si Pseudalis est installé sur ce Mac (son dossier de données : PSEUDALIS_HOME, ou ~/.local/share/pseudalis), le port de ses réglages, et s'il répond sur 127.0.0.1, pour que l'application web propose d'y passer. Rien d'autre de Pseudalis n'est lu.",
+    "description": "Si Pseudalis est installé sur ce Mac (son dossier de données : PSEUDALIS_HOME, ou ~/.local/share/pseudalis), le port de ses réglages, son accès réseau (lan, lan_port) et s'il répond sur 127.0.0.1, pour que l'application web propose d'y passer, depuis le Mac ou depuis un autre appareil. Rien d'autre de Pseudalis n'est lu.",
     "responses": {
      "200": {
       "description": "Pseudalis",
@@ -1935,10 +1935,79 @@
           "port": {
            "type": "integer"
           },
+          "lan": {
+           "type": "boolean"
+          },
+          "lan_port": {
+           "type": "integer"
+          },
           "running": {
            "type": "boolean"
           }
          }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/albireo/v1/carnet": {
+   "get": {
+    "tags": [
+     "Service"
+    ],
+    "summary": "Le sommaire des documents du portage",
+    "description": "Les sections du sommaire (macos/site-docs/sommaire.json du dépôt où le service a été construit, ou de ALBIREO_FORK_ROOT) et les épisodes de chaque blog ; found est false sans dépôt. La page /carnet/ les affiche.",
+    "responses": {
+     "200": {
+      "description": "{found, sections: [{title, entries: [{path, title, desc}]}], blogs: [{title, episodes: [{number, path, title}]}]}",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/albireo/v1/carnet/file": {
+   "get": {
+    "tags": [
+     "Service"
+    ],
+    "summary": "Un document du portage",
+    "description": "Le fichier de chemin path dans le dépôt, s'il répond à un motif de la liste fermée du sommaire : un Markdown en texte, une image, un PDF. Un chemin avec un composant vide, caché ou .., ou qui passe par un lien, est refusé.",
+    "parameters": [
+     {
+      "name": "path",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Le fichier",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "string",
+         "format": "binary"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Absent de la liste (code not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }

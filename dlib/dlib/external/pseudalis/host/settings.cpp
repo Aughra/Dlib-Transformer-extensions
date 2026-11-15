@@ -37,6 +37,8 @@ namespace pseudalis
         j["history_mb"] = history_mb;
         j["tags"] = tags;
         j["trust_authority"] = trust_authority;
+        j["lan"] = lan;
+        j["lan_port"] = lan_port;
         // Le lieu de la publication n'apparaît que lorsqu'il diffère de celui du build.
         j["proxy"] = proxy;
         return j;
@@ -75,6 +77,10 @@ namespace pseudalis
         if (s.history_mb < s.max_file_mb) s.history_mb = s.max_file_mb;
         s.tags = j["tags"].as_bool(d.tags);
         s.trust_authority = j["trust_authority"].as_bool(d.trust_authority);
+        s.lan = j["lan"].as_bool(d.lan);
+        const long long lan_port = j["lan_port"].as_int(d.lan_port);
+        s.lan_port = lan_port >= 1024 && lan_port <= 65535 && lan_port != s.port ? static_cast<int>(lan_port) : d.lan_port;
+        if (s.lan_port == s.port) s.lan_port = s.port == 65535 ? 65534 : s.port + 1;
         s.proxy = j["proxy"].str(d.proxy);
         return s;
     }

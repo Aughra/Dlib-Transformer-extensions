@@ -48,8 +48,8 @@ La référence des commandes et des résultats est [docs/memo-portage-macos-arm6
 - **Albireo / Pseudalis** : `cmake -S dlib/dlib/external/<app> -B build/macos-<app> -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64`.
 - **Service de Pseudalis** : `PSEUDALIS_HOME=$PWD/build/pseudalis-home ALBIREO_HOME=$PWD/build/albireo-home build/macos-pseudalis/bin/pseudalis-service --console` (port 18444, réglé dans ses données : le port par défaut, 8444, est celui de l'accès réseau d'Albireo) ; Albireo se lance avec `PSEUDALIS_HOME` aussi, pour son sélecteur. Ne jamais lancer `pseudalis-service` sans `PSEUDALIS_HOME` (il n'a pas d'option `--help` et crée un dossier de données par défaut). Test complet : `PSEUDALIS_TEST_PORT=18474 bash dlib/dlib/external/pseudalis/tools/test_macos.sh` quand le vrai service tourne. Détails : [docs/pseudalis/guide.md](docs/pseudalis/guide.md).
 - **Sonde Metal** (GPU du Mac, hors moteur) : `macos/metal-sonde/`, propre au fork ; commandes dans son README.
-- **Site des documents** (lecture sur le téléphone, réseau de la maison, port 8650) : `macos/site-docs/serve.py` ; à mettre à jour (`SOMMAIRE`) quand un document du fork est ajouté. Détails dans son README.
-- **Mot-clé « sitelog »** : quand l'humain l'écrit, lancer le site s'il ne tourne pas (`lsof -nP -iTCP:8650 -sTCP:LISTEN`, sinon `nohup python3 macos/site-docs/serve.py > build/site-docs.log 2>&1 &`) et lui donner l'URL lue dans `build/site-docs.log`, sans autre question.
+- **Documents du portage** (lecture sur le Mac, le téléphone ou l'iPad) : servis par Albireo lui-même, page `/carnet/` (menu ☰, « Documents du portage ») ; leur sommaire est `macos/site-docs/sommaire.json`, à mettre à jour quand un document du fork est ajouté. Détails dans `macos/site-docs/README.md`.
+- **Mot-clé « sitelog »** : quand l'humain l'écrit, vérifier qu'Albireo tourne avec son accès réseau ouvert et lui donner l'adresse du carnet, `http://<adresse du Mac>:8444/carnet/` (adresse lue par `ipconfig getifaddr en0`), sans autre question.
 - **Page d'Albireo** : `bash dlib/dlib/external/albireo/tools/page_test/page_test.sh` (ESLint et scénarios dans Chrome sans fenêtre, sur un service d'essai isolé) après tout changement de la page ; détails dans son README.
 - **Service d'Albireo** : lancement et réglages dans le mémo ; les réglages se changent dans l'onglet « Service » de la page, et l'accès depuis le réseau de la maison (http, port 8444, sans mot de passe) s'y ouvre.
 
@@ -176,7 +176,7 @@ Pseudalis partage le dépôt d'Albireo, mais a son propre suivi (demande de l'hu
 - **Notes pour l'auteur** : [docs/pseudalis/notes-pour-l-auteur.md](docs/pseudalis/notes-pour-l-auteur.md), entrées numérotées P1, P2…, avec les mêmes exigences que les notes générales ; les points communs à Albireo et Pseudalis restent dans les notes générales, avec un renvoi.
 - **Différences avec Windows** : [docs/pseudalis/differences-mac-windows.md](docs/pseudalis/differences-mac-windows.md), mêmes règles que le tableau général.
 - **Blog** : [blog/pseudalis/](blog/pseudalis/README.md), `NN-titre.md`, titre « Pseudalis sur macOS, épisode N : <sujet> », suivi d'une ligne en citation **« Repère de débit »** (le débit mesuré de la protection, ou « pas encore de mesure »), même forme et même ton que le blog du portage ; au sommaire de `blog/pseudalis/README.md`.
-- Critère vérifiable : le numéro de `pseudalis/common/version.h` a sa section dans son `changelog.md` ; chaque `blog/pseudalis/NN-*.md` est au sommaire et commence par son titre et sa ligne « Repère de débit » ; le site des documents liste ces documents.
+- Critère vérifiable : le numéro de `pseudalis/common/version.h` a sa section dans son `changelog.md` ; chaque `blog/pseudalis/NN-*.md` est au sommaire et commence par son titre et sa ligne « Repère de débit » ; le sommaire du carnet (`macos/site-docs/sommaire.json`) liste ces documents.
 
 ### Version et notes de version d'Albireo
 

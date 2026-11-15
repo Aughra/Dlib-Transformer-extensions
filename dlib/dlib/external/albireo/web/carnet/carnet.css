@@ -1,0 +1,33 @@
+/* Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
+   License: Boost Software License   See LICENSE.txt for the full license. */
+
+/* Le carnet du portage (fork pour macOS) : le sommaire en cartes, puis chaque document mis en page pour la lecture. */
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
+.carnet { max-width: 780px; margin: 0 auto; padding: 18px 16px 72px; font-size: 17px; line-height: 1.62; }
+.carnet a { color: var(--brand); }
+.carnet .faint { color: var(--faint); font-size: 15px; }
+.carnet h1 { font-size: 1.65em; line-height: 1.25; margin: 0.6em 0 0.4em; }
+.carnet h2 { font-size: 1.3em; margin-top: 1.8em; }
+.carnet h3 { font-size: 1.1em; }
+.carnet .section-title {
+  margin: 1.8em 0 0.6em; padding-bottom: 8px; border-bottom: 1px solid var(--line); color: var(--brand-2);
+  font-size: 12.5px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+}
+.carnet .card {
+  display: block; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+  margin: 8px 0; text-decoration: none; color: var(--text);
+}
+.carnet .card:hover { border-color: var(--brand); }
+.carnet .card b { color: var(--text); font-size: 16.5px; }
+.carnet .card span { display: block; color: var(--faint); font-size: 15px; }
+.carnet ol.episodes { padding-left: 1.8em; }
+.carnet ol.episodes li { margin: 6px 0; }
+.carnet pre { background: var(--soft); padding: 12px; overflow-x: auto; border-radius: 10px; font: 13.5px/1.5 var(--mono); }
+.carnet code { background: var(--soft); padding: 1px 5px; border-radius: 5px; font: 0.88em var(--mono); overflow-wrap: anywhere; }
+.carnet pre code { padding: 0; background: none; overflow-wrap: normal; }
+.carnet table { border-collapse: collapse; display: block; overflow-x: auto; font-size: 15px; margin: 1em 0; }
+.carnet th, .carnet td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }
+.carnet th { background: var(--soft); }
+.carnet img { max-width: 100%; height: auto; border-radius: 8px; }
+.carnet blockquote { margin: 1em 0; padding: 0 1em; border-left: 4px solid var(--brand-2); color: var(--faint); }
+.carnet .path { color: var(--faint); font: 13px var(--mono); margin-top: 0.4em; }

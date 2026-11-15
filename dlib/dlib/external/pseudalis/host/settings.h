@@ -43,6 +43,13 @@ namespace pseudalis
         */
         bool tags = true;
         bool trust_authority = true;            // l'autorité locale dans les racines de confiance (l'installateur)
+        /*
+            L'accès depuis le réseau de la maison (fork pour macOS, demande de l'humain du 2026-11-15) : un
+            second serveur, en HTTP simple, sur chaque adresse du Mac au port lan_port, sans mot de passe,
+            avec les mêmes routes, pour l'iPad ou le téléphone.  lan_port diffère de port.
+        */
+        bool lan = false;
+        int lan_port = 8445;
         std::string proxy;                      // "", "none" ou http://host:port (http_fetch.h)
 
         json to_json() const;

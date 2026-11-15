@@ -149,6 +149,12 @@
       </div>
       <p class="hint" data-t="set_removed_hint"></p>
       <label class="option"><input type="checkbox" id="set-albireo"> <span data-t="set_albireo"></span></label>
+      <!-- L'accès depuis le réseau de la maison (fork pour macOS). -->
+      <label class="option"><input type="checkbox" id="set-lan"> <span data-t="set_lan"></span></label>
+      <div class="fields">
+        <label><span data-t="set_lan_port"></span><input type="number" id="set-lan-port" min="1024" max="65535" step="1"></label>
+      </div>
+      <p class="hint" id="set-lan-hint" data-t="set_lan_hint"></p>
       <div class="buttons"><button id="settings-save" data-t="btn_save"></button></div>
       <p class="message" id="settings-message" hidden></p>
     </section>

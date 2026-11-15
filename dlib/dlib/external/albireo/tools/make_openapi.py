@@ -790,10 +790,27 @@ paths = {
     "/albireo/v1/pseudalis": {"get": {
         "tags": ["Service"], "summary": "Pseudalis sur ce Mac",
         "description": "Si Pseudalis est installé sur ce Mac (son dossier de données : PSEUDALIS_HOME, ou "
-                       "~/.local/share/pseudalis), le port de ses réglages, et s'il répond sur 127.0.0.1, pour que "
-                       "l'application web propose d'y passer. Rien d'autre de Pseudalis n'est lu.",
+                       "~/.local/share/pseudalis), le port de ses réglages, son accès réseau (lan, lan_port) et s'il "
+                       "répond sur 127.0.0.1, pour que l'application web propose d'y passer, depuis le Mac ou depuis "
+                       "un autre appareil. Rien d'autre de Pseudalis n'est lu.",
         "responses": {"200": reply("Pseudalis", {"type": "object", "properties": {
-            "found": {"type": "boolean"}, "port": {"type": "integer"}, "running": {"type": "boolean"}}})}}},
+            "found": {"type": "boolean"}, "port": {"type": "integer"}, "lan": {"type": "boolean"},
+            "lan_port": {"type": "integer"}, "running": {"type": "boolean"}}})}}},
+    "/albireo/v1/carnet": {"get": {
+        "tags": ["Service"], "summary": "Le sommaire des documents du portage",
+        "description": "Les sections du sommaire (macos/site-docs/sommaire.json du dépôt où le service a été "
+                       "construit, ou de ALBIREO_FORK_ROOT) et les épisodes de chaque blog ; found est false sans "
+                       "dépôt. La page /carnet/ les affiche.",
+        "responses": {"200": reply("{found, sections: [{title, entries: [{path, title, desc}]}], blogs: [{title, "
+                                   "episodes: [{number, path, title}]}]}", {"type": "object"})}}},
+    "/albireo/v1/carnet/file": {"get": {
+        "tags": ["Service"], "summary": "Un document du portage",
+        "description": "Le fichier de chemin path dans le dépôt, s'il répond à un motif de la liste fermée du "
+                       "sommaire : un Markdown en texte, une image, un PDF. Un chemin avec un composant vide, caché "
+                       "ou .., ou qui passe par un lien, est refusé.",
+        "parameters": [{"name": "path", "in": "query", "required": True, "schema": {"type": "string"}}],
+        "responses": {"200": reply("Le fichier", {"type": "string", "format": "binary"}),
+                      "404": reply("Absent de la liste (code not_found)", ref("Error"))}}},
     "/albireo/v1/library": {"get": {
         "tags": ["Service"], "summary": "Les fichiers GGUF de la bibliothèque du Mac",
         "description": "Le dossier du réglage library_dir (créé à la première lecture quand c'est celui par défaut), "

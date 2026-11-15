@@ -1,0 +1,182 @@
+{
+ "_note": "Le sommaire du carnet du portage, que sert Albireo (host/carnet.h) : motifs = la liste fermée des fichiers lisibles (un dossier exact et un nom : « * », « *.extension » ou un nom exact) ; sections = le sommaire ; blogs = les dossiers des épisodes NN-titre.md, dont le titre perd le préfixe strip jusqu'à « : ». À mettre à jour quand un document du fork est ajouté.",
+ "motifs": [
+  "docs/*.md",
+  "docs/*.pdf",
+  "docs/captures/*.md",
+  "docs/captures/*.jpg",
+  "docs/captures/*.png",
+  "docs/pseudalis/*.md",
+  "blog/*.md",
+  "blog/images/*",
+  "blog/pseudalis/*.md",
+  "logs/*.md",
+  "CLAUDE.md",
+  "macos/metal-sonde/README.md",
+  "macos/site-docs/README.md",
+  "dlib/dlib/external/albireo/README.md",
+  "dlib/dlib/external/albireo/web/changelog.md",
+  "dlib/dlib/external/albireo/tools/page_test/README.md",
+  "dlib/dlib/external/pseudalis/README.md",
+  "dlib/dlib/external/pseudalis/web/changelog.md"
+ ],
+ "sections": [
+  {
+   "title": "Pour commencer",
+   "entries": [
+    {
+     "path": "docs/differences-mac-windows.md",
+     "title": "Différences avec Windows",
+     "desc": "Tout ce que le fork fait autrement que l'original, en tableaux."
+    },
+    {
+     "path": "logs/reprise.md",
+     "title": "Où en est le chantier",
+     "desc": "Fait, en cours, à faire."
+    }
+   ]
+  },
+  {
+   "title": "Le portage",
+   "entries": [
+    {
+     "path": "docs/memo-portage-macos-arm64.md",
+     "title": "Mémo de portage",
+     "desc": "Commandes de build, service, état constaté."
+    },
+    {
+     "path": "docs/notes-pour-l-auteur.md",
+     "title": "Notes pour l'auteur",
+     "desc": "Bugs de l'original et gains de vitesse."
+    },
+    {
+     "path": "docs/mac-mini-premier-jour.md",
+     "title": "Premier jour sur le Mac mini",
+     "desc": "La liste à suivre à l'arrivée du M5 Pro."
+    },
+    {
+     "path": "macos/metal-sonde/README.md",
+     "title": "La sonde Metal",
+     "desc": "Le petit programme qui teste le GPU."
+    },
+    {
+     "path": "CLAUDE.md",
+     "title": "Règles du fork",
+     "desc": "Le document d'autorité."
+    }
+   ]
+  },
+  {
+   "title": "Journaux",
+   "entries": [
+    {
+     "path": "logs/journal-modifications.md",
+     "title": "Journal des modifications",
+     "desc": "L'historique, le plus récent en haut."
+    },
+    {
+     "path": "logs/sieste-2026-11-11.md",
+     "title": "Pendant la sieste (11 nov.)",
+     "desc": "Les choix faits seul."
+    },
+    {
+     "path": "logs/nuit-2026-11-12.md",
+     "title": "Pendant la nuit (12-13 nov.)",
+     "desc": "Les choix faits seul."
+    },
+    {
+     "path": "logs/nuit-2026-11-15.md",
+     "title": "Pendant la nuit (15 nov.)",
+     "desc": "Les choix faits seul."
+    }
+   ]
+  },
+  {
+   "title": "Albireo",
+   "entries": [
+    {
+     "path": "dlib/dlib/external/albireo/web/changelog.md",
+     "title": "Notes de version d'Albireo",
+     "desc": "Ce que chaque version apporte."
+    },
+    {
+     "path": "docs/captures/README.md",
+     "title": "Captures d'écran",
+     "desc": "Albireo sur le Mac et sur le téléphone."
+    },
+    {
+     "path": "dlib/dlib/external/albireo/tools/page_test/README.md",
+     "title": "Tests de la page",
+     "desc": "Le banc d'essai de l'interface."
+    },
+    {
+     "path": "dlib/dlib/external/albireo/README.md",
+     "title": "README d'Albireo",
+     "desc": "De l'original, traduit en français."
+    }
+   ]
+  },
+  {
+   "title": "Pseudalis",
+   "entries": [
+    {
+     "path": "docs/pseudalis/guide.md",
+     "title": "Guide de Pseudalis",
+     "desc": "Construire, lancer, utiliser et tester sur le Mac."
+    },
+    {
+     "path": "dlib/dlib/external/pseudalis/web/changelog.md",
+     "title": "Notes de version de Pseudalis",
+     "desc": "Ce que chaque version apporte."
+    },
+    {
+     "path": "docs/pseudalis/notes-pour-l-auteur.md",
+     "title": "Notes pour l'auteur (Pseudalis)",
+     "desc": "Ce que le portage révèle sur Pseudalis."
+    },
+    {
+     "path": "docs/pseudalis/differences-mac-windows.md",
+     "title": "Différences avec Windows (Pseudalis)",
+     "desc": "Ce que le fork change dans Pseudalis."
+    },
+    {
+     "path": "blog/pseudalis/README.md",
+     "title": "Blog de Pseudalis",
+     "desc": "Son carnet de portage, à part."
+    },
+    {
+     "path": "dlib/dlib/external/pseudalis/README.md",
+     "title": "README de Pseudalis",
+     "desc": "De l'original, traduit en français."
+    }
+   ]
+  },
+  {
+   "title": "Articles de l'original (anglais)",
+   "entries": [
+    {
+     "path": "docs/01-introduction.md",
+     "title": "A Small Language Model Stack",
+     "desc": "La chaîne complète, du corpus au modèle servi."
+    },
+    {
+     "path": "docs/buffer-level-residency.pdf",
+     "title": "Buffer-level residency (PDF)",
+     "desc": "Rapport sur la gestion de la mémoire."
+    }
+   ]
+  }
+ ],
+ "blogs": [
+  {
+   "title": "Le blog du portage",
+   "dir": "blog",
+   "strip": "Dlib Transformer Extensions sur macOS, épisode "
+  },
+  {
+   "title": "Le blog de Pseudalis",
+   "dir": "blog/pseudalis",
+   "strip": "Pseudalis sur macOS, épisode "
+  }
+ ]
+}

@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(albireo VERSION 5.1.0 LANGUAGES C CXX OBJCXX)
+project(albireo VERSION 5.2.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -173,8 +173,11 @@ if (ALBIREO_PROGRAMS)
    # Le service.
    add_executable(albireo-service host/main.cpp host/service.cpp host/server.cpp host/settings.cpp host/store.cpp
       host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/crypto.cpp
-      host/certificates.cpp host/web_access.cpp host/hub.cpp)
+      host/certificates.cpp host/web_access.cpp host/hub.cpp host/carnet.cpp)
    target_include_directories(albireo-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
+   # Le carnet du portage lit les documents du dépôt où le service est construit (host/carnet.h).
+   get_filename_component(ALBIREO_FORK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
+   target_compile_definitions(albireo-service PRIVATE ALBIREO_FORK_ROOT_DEFAULT="${ALBIREO_FORK_ROOT}")
    target_link_libraries(albireo-service PRIVATE albireo_common albireo_sqlite ZLIB::ZLIB dlib::httplib)
    target_compile_options(albireo-service PRIVATE ${ALBIREO_WARNINGS})
 

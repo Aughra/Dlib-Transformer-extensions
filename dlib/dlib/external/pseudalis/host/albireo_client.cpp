@@ -179,6 +179,16 @@ namespace pseudalis
         j["port"] = port_;
         j["model"] = ok ? model_ : std::string();
         j["reason"] = reason;
+        // L'accès d'Albireo depuis le réseau de la maison, lu dans ses réglages, pour le sélecteur de la page vue
+        // depuis un autre appareil (fork pour macOS).
+        const std::string dir = albireo_data_dir();
+        std::string text;
+        json settings;
+        const bool read = !dir.empty() && read_file(join_path(dir, "settings.json"), text, 1u << 20)
+            && json::parse(text, settings);
+        const long long lan_port = read ? settings["lan_port"].as_int(8444) : 0;
+        j["lan"] = read && settings["lan"].as_bool(false) && lan_port >= 1024 && lan_port <= 65535;
+        j["lan_port"] = lan_port;
         return j;
     }
 

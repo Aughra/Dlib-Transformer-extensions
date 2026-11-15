@@ -1,6 +1,6 @@
 # Pseudalis sur Mac — guide
 
-Pseudalis protège les données personnelles des documents : chaque nom, adresse, numéro, identifiant ou date est remplacé par une balise que seule la clé de cet ordinateur sait rendre. Ce guide décrit la version du fork pour macOS à puce Apple (Pseudalis **2.0.1**) : la construire, la lancer, s'en servir, la tester. Il suit le code ; les choix et l'historique sont dans les [notes de version](../../dlib/dlib/external/pseudalis/web/changelog.md), le [tableau des différences avec Windows](differences-mac-windows.md) et le [blog de Pseudalis](../../blog/pseudalis/README.md).
+Pseudalis protège les données personnelles des documents : chaque nom, adresse, numéro, identifiant ou date est remplacé par une balise que seule la clé de cet ordinateur sait rendre. Ce guide décrit la version du fork pour macOS à puce Apple (Pseudalis **2.1.0**) : la construire, la lancer, s'en servir, la tester. Il suit le code ; les choix et l'historique sont dans les [notes de version](../../dlib/dlib/external/pseudalis/web/changelog.md), le [tableau des différences avec Windows](differences-mac-windows.md) et le [blog de Pseudalis](../../blog/pseudalis/README.md).
 
 Pseudalis vit dans le même dépôt qu'Albireo et repose, comme lui, sur dlib : sur [`dlib/privacy`](../../dlib/dlib/privacy.h) et sur les modèles de reconnaissance de l'exemple `slm_document_anonymizer_ex`, compilés dans le service.
 
@@ -29,6 +29,10 @@ La version se change par `python3 dlib/dlib/external/pseudalis/tools/bump_versio
 - Arrêt : `kill -INT` ou `kill -TERM` sur le service ; il s'arrête proprement.
 
 L'application s'ouvre à `https://localhost:18444/`, la page de l'interface à `https://localhost:18444/docs/`. Le certificat vient de l'autorité locale du dossier de données (`certificates/pseudalis-authority.crt`).
+
+### Depuis l'iPad ou le téléphone
+
+Dans la section Réglages, « Ouvrir Pseudalis aux appareils de la maison » ouvre un second serveur, en http, sur chaque adresse du Mac, au port réseau (8445 par défaut, réglages `lan` et `lan_port`) ; le service redémarre. Pseudalis s'ouvre alors à `http://<adresse du Mac>:8445/` (sur ce Mac : `http://192.168.1.12:8445/`, adresse donnée par la box). Le sélecteur « Albireo | Pseudalis » mène à l'accès réseau d'Albireo (port 8444) quand celui-ci est ouvert.
 
 ## L'application
 
@@ -105,4 +109,5 @@ PSEUDALIS_TEST_PORT=18474 bash dlib/dlib/external/pseudalis/tools/test_macos.sh 
 
 - Sans jeton d'administration, tout programme du Mac qui joint `https://localhost` au port du service peut lire les originaux conservés, exporter la clé avec une phrase de passe de son choix, et changer les réglages. C'est le choix de l'humain (2026-11-15), le même que pour Albireo ; il convient à un Mac à un seul utilisateur.
 - Restent les gardes de toutes les routes : l'en-tête Host doit nommer le serveur local, et une requête venue d'une page doit venir de ce serveur. Aucun site web ne peut donc piloter le service par le navigateur.
-- Le service n'écoute que sur `127.0.0.1` : les autres appareils du réseau ne le joignent pas.
+- Sans l'accès réseau, le service n'écoute que sur `127.0.0.1` : les autres appareils ne le joignent pas.
+- Avec l'accès réseau (2.1.0), **tout appareil du Wi-Fi** peut s'en servir sans mot de passe : protéger, restaurer, lire les originaux conservés, exporter la clé, changer les réglages, et le trafic passe en clair (http). C'est le choix de l'humain (2026-11-15), comme pour Albireo ; à ne pas activer sur un Wi-Fi partagé ou public. Le serveur du réseau n'accepte que les requêtes qui nomment le Mac par une adresse IPv4 ou un nom en `.local` (421 sinon) et refuse une requête venue d'une autre origine (403), pour qu'un site web ne puisse pas le piloter par le navigateur (rebinding DNS compris).

@@ -51,15 +51,18 @@
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply);
   apply();
 
-  // Albireo sur ce Mac : seulement depuis le Mac lui-même.
-  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-    fetch('v1/info', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (info) {
-      const a = (info && info.albireo) || {};
-      if (!a.found || !a.port) return;
-      document.getElementById('to-albireo').href = 'https://localhost:' + a.port + '/';
-      document.getElementById('app-switch').hidden = false;
-    }).catch(function () { /* service muet */ });
-  }
+  // Albireo sur ce Mac : par localhost depuis le Mac lui-même, par son accès réseau depuis un autre appareil.
+  const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  fetch('v1/info', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (info) {
+    const a = (info && info.albireo) || {};
+    if (!a.found || !a.port) return;
+    let href = '';
+    if (local) href = 'https://localhost:' + a.port + '/';
+    else if (a.lan && a.lan_port) href = 'http://' + location.hostname + ':' + a.lan_port + '/';
+    if (!href) return;
+    document.getElementById('to-albireo').href = href;
+    document.getElementById('app-switch').hidden = false;
+  }).catch(function () { /* service muet */ });
 
   // Le débit du moteur en direct : les octets lus et écrits des cinq dernières secondes, relus chaque seconde ; au
   // repos, les dernières valeurs mesurées restent, en plus pâle.
