@@ -29,16 +29,8 @@
 #include <algorithm>
 #include <cmath>
 
-#ifdef _WIN32
-#  define WIN32_LEAN_AND_MEAN
-#  ifndef NOMINMAX
-#    define NOMINMAX
-#  endif
-#  include <windows.h>
-#else
 #  include <sys/ioctl.h>
 #  include <unistd.h>
-#endif
 
 #include <chrono>
 #include <memory>
@@ -130,15 +122,9 @@ static void report_tensor(const std::string& what, const tensor& t)
 /* Width of the terminal, for the physical-row accounting of the erase sequences. */
 static long terminal_width()
 {
-#ifdef _WIN32
-    CONSOLE_SCREEN_BUFFER_INFO info;
-    if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info))
-        return info.srWindow.Right - info.srWindow.Left + 1;
-#else
     winsize w{};
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 && w.ws_col > 0)
         return w.ws_col;
-#endif
     return 80;
 }
 
@@ -291,16 +277,6 @@ int main(int argc, char** argv)
 {
     try
     {
-#ifdef _WIN32
-        SetConsoleOutputCP(CP_UTF8);
-        SetConsoleCP(CP_UTF8);
-        {
-            HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-            DWORD mode = 0;
-            if (h != INVALID_HANDLE_VALUE && GetConsoleMode(h, &mode))
-                SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-        }
-#endif
         command_line_parser parser;
         parser.add_option("input", "Path to the source model: .gguf, or a runtime .dat archive", 1);
         parser.add_option("save-dat", "After loading a GGUF, write a self-contained runtime archive (model + tokenizer)", 1);
@@ -424,9 +400,6 @@ int main(int argc, char** argv)
                second and later comma-separated paths arrive verbatim; expand it
                here for every entry. */
             const char* home = std::getenv("HOME");
-#ifdef _WIN32
-            if (!home) home = std::getenv("USERPROFILE");
-#endif
             string all = parser.option("input").argument();
             std::istringstream iss(all);
             string p;

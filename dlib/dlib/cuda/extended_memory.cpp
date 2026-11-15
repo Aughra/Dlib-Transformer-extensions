@@ -14,15 +14,6 @@
 #include <sstream>
 #include <string>
 
-#ifdef _WIN32
-#  ifndef NOMINMAX
-#    define NOMINMAX
-#  endif
-#  ifndef WIN32_LEAN_AND_MEAN
-#    define WIN32_LEAN_AND_MEAN
-#  endif
-#  include <windows.h>
-#endif
 
 namespace dlib
 {
@@ -35,38 +26,6 @@ namespace dlib
            comes first so that the same binary can be pointed at a fast local disk on one
            machine and at whatever is available on another, and only then do we fall back on
            the platform's temporary directory. */
-#ifdef _WIN32
-        /* The value of a variable in UTF-8, empty when it is not set. The variables are read
-           in UTF-16, so that a folder whose name the ANSI code page cannot spell, such as the
-           temporary folder of a user named in another script, keeps its name. */
-        const auto env = [](const wchar_t* name)
-        {
-            std::wstring value;
-            const DWORD size = GetEnvironmentVariableW(name, nullptr, 0);
-            if (size > 1)
-            {
-                value.resize(size);
-                const DWORD length = GetEnvironmentVariableW(name, &value[0], size);
-                value.resize(length < size ? length : 0);
-            }
-            std::string utf8;
-            const int n = value.empty() ? 0 : WideCharToMultiByte(CP_UTF8, 0, value.data(), (int)value.size(),
-                                                                   nullptr, 0, nullptr, nullptr);
-            if (n > 0)
-            {
-                utf8.resize((std::size_t)n);
-                WideCharToMultiByte(CP_UTF8, 0, value.data(), (int)value.size(), &utf8[0], n, nullptr, nullptr);
-            }
-            return utf8;
-        };
-        std::string v = env(L"DLIB_XMEM_STORE");
-        if (!v.empty()) return v;
-        v = env(L"TEMP");
-        if (!v.empty()) return v;
-        v = env(L"TMP");
-        if (!v.empty()) return v;
-        return std::string("C:\\Windows\\Temp");
-#else
         // The value of a variable, empty when it is not set.
         const auto env = [](const char* name)
         {
@@ -78,7 +37,6 @@ namespace dlib
         v = env("TMPDIR");
         if (!v.empty()) return v;
         return std::string("/tmp");
-#endif
     }
 
 // ----------------------------------------------------------------------------------------
@@ -129,15 +87,6 @@ namespace dlib
 
 #include <cuda_runtime.h>
 
-#ifdef _WIN32
-#  ifndef WIN32_LEAN_AND_MEAN
-#    define WIN32_LEAN_AND_MEAN
-#  endif
-#  include <windows.h>
-// FSCTL_SET_SPARSE, which WIN32_LEAN_AND_MEAN leaves out of windows.h.
-#  include <winioctl.h>
-#  include <process.h>
-#else
 #  include <fcntl.h>
 #  include <sys/mman.h>
 #  include <sys/stat.h>
@@ -145,7 +94,6 @@ namespace dlib
 #  include <sys/statvfs.h>
 #  include <sys/types.h>
 #  include <unistd.h>
-#endif
 
 namespace dlib
 {
@@ -188,31 +136,6 @@ namespace xmem
 // after the first pass.
 // ----------------------------------------------------------------------------------------
 
-#ifdef _WIN32
-    /*
-        The store path in UTF-16, for the W functions of Windows. The path is UTF-8; a string
-        that is not valid UTF-8 is read in the ANSI code page, as the A functions read it.
-    */
-    static std::wstring wide_path (const std::string& path)
-    {
-        if (path.empty())
-            return std::wstring();
-        UINT page = CP_UTF8;
-        DWORD flags = MB_ERR_INVALID_CHARS;
-        int n = MultiByteToWideChar(page, flags, path.data(), (int)path.size(), nullptr, 0);
-        if (n <= 0)
-        {
-            page = CP_ACP;
-            flags = 0;
-            n = MultiByteToWideChar(page, flags, path.data(), (int)path.size(), nullptr, 0);
-        }
-        if (n <= 0)
-            return std::wstring();
-        std::wstring out((std::size_t)n, L'\0');
-        MultiByteToWideChar(page, flags, path.data(), (int)path.size(), &out[0], n);
-        return out;
-    }
-#endif
 
     /*
         Free space on the volume holding the store. Zero when it cannot be determined, which
@@ -220,18 +143,10 @@ namespace xmem
     */
     static std::size_t volume_free_bytes (const std::string& dir)
     {
-#ifdef _WIN32
-        ULARGE_INTEGER avail;
-        avail.QuadPart = 0;
-        if (!GetDiskFreeSpaceExW(wide_path(dir).c_str(), &avail, nullptr, nullptr))
-            return 0;
-        return (std::size_t)avail.QuadPart;
-#else
         struct statvfs st;
         if (::statvfs(dir.c_str(), &st) != 0)
             return 0;
         return (std::size_t)st.f_bavail * (std::size_t)st.f_frsize;
-#endif
     }
 
     /*
@@ -241,15 +156,9 @@ namespace xmem
     */
     static void check_directory (const std::string& dir)
     {
-#ifdef _WIN32
-        const DWORD attr = GetFileAttributesW(wide_path(dir).c_str());
-        const bool exists    = (attr != INVALID_FILE_ATTRIBUTES);
-        const bool directory = exists && (attr & FILE_ATTRIBUTE_DIRECTORY) != 0;
-#else
         struct stat st;
         const bool exists    = (::stat(dir.c_str(), &st) == 0);
         const bool directory = exists && S_ISDIR(st.st_mode);
-#endif
         if (!exists)
             throw dlib::error("extended memory: store_path names something that does not exist: \"" +
                               dir + "\". Create the directory, or set DLIB_XMEM_STORE.");
@@ -291,60 +200,6 @@ namespace xmem
             if (!dir.empty() && dir.back() != '/' && dir.back() != '\\')
                 name << '/';
 
-#ifdef _WIN32
-            name << "dlib_xmem_" << (unsigned long)GetCurrentProcessId() << ".store";
-            const std::string path = name.str();
-
-            file = CreateFileW(wide_path(path).c_str(),
-                               GENERIC_READ | GENERIC_WRITE,
-                               0,
-                               nullptr,
-                               CREATE_ALWAYS,
-                               FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE,
-                               nullptr);
-            if (file == INVALID_HANDLE_VALUE)
-            {
-                file = nullptr;
-                throw dlib::error("extended memory: cannot create the store file " + path);
-            }
-
-            /* FAT and exFAT volumes refuse the sparse attribute. The mapping then takes its
-               whole capacity on the volume when it is created, so the capacity is limited
-               before the mapping exists. */
-            DWORD returned = 0;
-            sparse = DeviceIoControl((HANDLE)file, FSCTL_SET_SPARSE, nullptr, 0, nullptr, 0, &returned, nullptr) != 0;
-            if (!sparse && !limit_dense(dir, avail, dense_bytes))
-            {
-                CloseHandle((HANDLE)file);
-                file = nullptr;
-                throw dlib::error(dense_error(dir));
-            }
-
-            section = CreateFileMappingA((HANDLE)file, nullptr, PAGE_READWRITE,
-                                         (DWORD)((std::uint64_t)cap >> 32),
-                                         (DWORD)((std::uint64_t)cap & 0xffffffffu),
-                                         nullptr);
-            if (!section)
-            {
-                CloseHandle((HANDLE)file);
-                file = nullptr;
-                throw dlib::error("extended memory: cannot create the store mapping");
-            }
-
-            mapping = (char*)MapViewOfFile((HANDLE)section, FILE_MAP_ALL_ACCESS, 0, 0, cap);
-            if (!mapping)
-            {
-                CloseHandle((HANDLE)section);
-                CloseHandle((HANDLE)file);
-                section = nullptr;
-                file = nullptr;
-                throw dlib::error("extended memory: cannot map the store");
-            }
-
-            HMODULE k32 = GetModuleHandleA("kernel32.dll");
-            if (k32)
-                prefetch_fn = (prefetch_t)GetProcAddress(k32, "PrefetchVirtualMemory");
-#else
             name << "dlib_xmem_" << (long)getpid() << ".store";
             const std::string path = name.str();
 
@@ -379,20 +234,13 @@ namespace xmem
                 throw dlib::error("extended memory: cannot map the store");
             }
             mapping = (char*)p;
-#endif
             report_medium(dir, verbose);
         }
 
         ~memory_arena ()
         {
-#ifdef _WIN32
-            if (mapping) UnmapViewOfFile(mapping);
-            if (section) CloseHandle((HANDLE)section);
-            if (file)    CloseHandle((HANDLE)file);
-#else
             if (mapping) ::munmap(mapping, cap);
             if (fd >= 0) ::close(fd);
-#endif
         }
 
         memory_arena(const memory_arena&) = delete;
@@ -458,15 +306,7 @@ namespace xmem
         void advise_willneed (std::int64_t off, std::size_t bytes) const
         {
             if (off < 0 || !mapping) return;
-#ifdef _WIN32
-            if (!prefetch_fn) return;
-            WIN32_MEMORY_RANGE_ENTRY range;
-            range.VirtualAddress = mapping + off;
-            range.NumberOfBytes  = bytes;
-            prefetch_fn(GetCurrentProcess(), 1, &range, 0);
-#else
             ::madvise(mapping + off, bytes, MADV_WILLNEED);
-#endif
         }
 
     private:
@@ -501,7 +341,6 @@ namespace xmem
                    "memory.";
         }
 
-#ifndef _WIN32
         /*
             Whether the file system leaves the unwritten pages of the file without blocks.
             FAT and exFAT allocate, and may write, every block of a file they extend, which
@@ -516,7 +355,6 @@ namespace xmem
                 return true;
             return (std::uint64_t)st.st_blocks * 512 < (std::uint64_t)trial / 2;
         }
-#endif
 
         /*
             Where the store ended up is the single decision that most affects how the
@@ -529,7 +367,6 @@ namespace xmem
         */
         void report_medium (const std::string& dir, bool verbose) const
         {
-#ifndef _WIN32
             struct statfs sf;
             if (::statfs(dir.c_str(), &sf) == 0)
             {
@@ -551,7 +388,6 @@ namespace xmem
                                  "when it does not.\n";
                 }
             }
-#endif
             /* The probe runs whether or not the run is verbose, because its result decides
                whether starting at all makes sense. A store slower than the floor cannot
                serve the traffic the mechanism generates: the device goes idle waiting for
@@ -566,11 +402,7 @@ namespace xmem
             char* probe = mapping + (sparse ? cap - n : 0);
             const auto t0 = std::chrono::steady_clock::now();
             std::memset(probe, 0xa5, n);
-#ifdef _WIN32
-            FlushViewOfFile(probe, n);
-#else
             ::msync(probe, n, MS_SYNC);
-#endif
             const double dt = std::chrono::duration<double>(
                                   std::chrono::steady_clock::now() - t0).count();
             if (dt <= 0)
@@ -604,14 +436,7 @@ namespace xmem
         std::size_t  used    = 0;
         std::map<std::size_t, std::vector<std::int64_t> > free_slots;
 
-#ifdef _WIN32
-        typedef BOOL (WINAPI *prefetch_t)(HANDLE, ULONG_PTR, PWIN32_MEMORY_RANGE_ENTRY, ULONG);
-        prefetch_t prefetch_fn = nullptr;
-        void* file    = nullptr;
-        void* section = nullptr;
-#else
         int fd = -1;
-#endif
     };
 
 // ----------------------------------------------------------------------------------------

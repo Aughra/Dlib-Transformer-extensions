@@ -1,9 +1,6 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-#if defined(_WIN32) && !defined(_WIN32_WINNT)
-#define _WIN32_WINNT 0x0A00
-#endif
 
 #include <dlib/external/httplib/httplib.h>
 
@@ -19,12 +16,8 @@
 #include <thread>
 #include <vector>
 
-#if defined(_WIN32)
-#include <direct.h>
-#else
 #include <sys/stat.h>
 #include <unistd.h>
-#endif
 
 #ifdef CPPHTTPLIB_MBEDTLS_SUPPORT
 #include <mbedtls/ctr_drbg.h>
@@ -100,11 +93,7 @@ namespace
 
     bool make_dir(const std::string& path)
     {
-#if defined(_WIN32)
-        return _mkdir(path.c_str()) == 0 || errno == EEXIST;
-#else
         return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
-#endif
     }
 
     void write_file(const std::string& path, const std::string& content)
@@ -378,11 +367,9 @@ namespace
         write_file(base + "/index.html", "<p>index</p>");
         write_file(base + "/sub/page.txt", "page");
         write_file("dtest_httplib_secret/secret.txt", "secret");
-#if !defined(_WIN32)
         // A link out of the mounted directory must not be followed.
         std::remove((base + "/escape.txt").c_str());
         const bool linked = symlink("../dtest_httplib_secret/secret.txt", (base + "/escape.txt").c_str()) == 0;
-#endif
 
         httplib::Server srv;
         DLIB_TEST(srv.set_mount_point("/static", base));
@@ -400,14 +387,12 @@ namespace
         DLIB_TEST(r && r->status == 301);
         r = cli.Get("/staticx/index.html");
         DLIB_TEST(r && r->status == 404);
-#if !defined(_WIN32)
         if (linked)
         {
             r = cli.Get("/static/escape.txt");
             DLIB_TEST(r && r->status == 403);
             DLIB_TEST(r->body.find("secret") == std::string::npos);
         }
-#endif
 
         // Traversal attempts, sent raw so that no client normalizes them first.
         const char* attempts[] = {
@@ -427,9 +412,7 @@ namespace
             DLIB_TEST_MSG(status_of(answer) != 200, path << " -> " << answer.substr(0, 40));
         }
 
-#if !defined(_WIN32)
         std::remove((base + "/escape.txt").c_str());
-#endif
     }
 
 // ----------------------------------------------------------------------------------------

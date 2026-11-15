@@ -196,22 +196,11 @@
 #include <string>
 #include <vector>
 
-#if defined(_WIN32)
-#include <dlib/windows_magic.h>
-#include <windows.h>
-#include <direct.h>
-#include <fcntl.h>
-#include <io.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#else
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#endif
 
 /* The trained recognizers can be compiled into this program from the header the embed
    command writes. The header is detected rather than declared, as slm_distill_ex does for
@@ -252,48 +241,16 @@ namespace
     enum class command { anonymize, restore, scan, text, keygen, detect, train_tagger, train_model, evaluate, embed };
 
     const char separator =
-#if defined(_WIN32)
-        '\\';
-#else
         '/';
-#endif
 
     string default_key_path()
     {
-#if defined(_WIN32)
-        const char* base = getenv("APPDATA");
-        return string(base ? base : ".") + "\\dlib\\privacy.key";
-#else
         const char* xdg = getenv("XDG_CONFIG_HOME");
         const char* home = getenv("HOME");
         const string base = (xdg && *xdg) ? string(xdg) : (home ? string(home) + "/.config" : string("."));
         return base + "/dlib/privacy.key";
-#endif
     }
 
-#if defined(_WIN32)
-    /* Standard input and output carry bytes unchanged, as on other systems, and the console
-       shows UTF-8 while the program runs; it gets its code pages back at the end. */
-    struct windows_console
-    {
-        const UINT input = GetConsoleCP();
-        const UINT output = GetConsoleOutputCP();
-
-        windows_console()
-        {
-            _setmode(_fileno(stdin), _O_BINARY);
-            _setmode(_fileno(stdout), _O_BINARY);
-            if (input) SetConsoleCP(CP_UTF8);
-            if (output) SetConsoleOutputCP(CP_UTF8);
-        }
-
-        ~windows_console()
-        {
-            if (input) SetConsoleCP(input);
-            if (output) SetConsoleOutputCP(output);
-        }
-    };
-#endif
 
     /* The name the program was started under, without its folder and its ".exe". */
     string program_name(const char* argv0)
@@ -319,13 +276,7 @@ namespace
     {
         if (dir.empty() || file_exists(dir)) return;
         make_directories(parent_of(dir), false);
-#if defined(_WIN32)
-        // The user profile that holds %APPDATA% is private already.
-        (void)private_dir;
-        _mkdir(dir.c_str());
-#else
         mkdir(dir.c_str(), private_dir ? 0700 : 0777);
-#endif
     }
 
     /* The absolute form of a path, links resolved. For a file that does not exist yet,
@@ -333,11 +284,6 @@ namespace
        spellings of the same output compare equal. */
     string absolute_path(const string& path)
     {
-#if defined(_WIN32)
-        char buf[_MAX_PATH];
-        if (_fullpath(buf, path.c_str(), _MAX_PATH)) return buf;
-        return path;
-#else
         char buf[PATH_MAX];
         if (realpath(path.c_str(), buf)) return buf;
         const size_t slash = path.find_last_of('/');
@@ -345,7 +291,6 @@ namespace
         if (realpath(dir.c_str(), buf)) return string(buf) + "/" + path.substr(slash == string::npos ? 0 : slash + 1);
         if (!path.empty() && path[0] != '/' && getcwd(buf, sizeof(buf))) return string(buf) + "/" + path;
         return path;
-#endif
     }
 
     /* The lines of a list file, without a byte order mark, blank lines and lines starting
@@ -435,13 +380,8 @@ namespace
 
     bool is_symbolic_link(const string& path)
     {
-#if defined(_WIN32)
-        (void)path;
-        return false;
-#else
         struct stat st;
         return lstat(path.c_str(), &st) == 0 && S_ISLNK(st.st_mode);
-#endif
     }
 
     /* The files of a folder and of its subfolders. A link to a folder is not followed, so
@@ -492,32 +432,18 @@ namespace
     void write_atomically(const string& path, const string& bytes)
     {
         const string tmp = path + "." + to_hex(generate_secure_random_bytes(6)) + ".tmp";
-#if defined(_WIN32)
-        const int fd = _open(tmp.c_str(), _O_WRONLY | _O_CREAT | _O_EXCL | _O_BINARY, _S_IREAD | _S_IWRITE);
-#else
         const int fd = ::open(tmp.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
-#endif
         if (fd < 0) throw error("cannot write " + tmp);
         size_t done = 0;
         bool ok = true;
         while (ok && done < bytes.size())
         {
             const size_t chunk = std::min<size_t>(bytes.size() - done, 1 << 20);
-#if defined(_WIN32)
-            const int n = _write(fd, bytes.data() + done, static_cast<unsigned int>(chunk));
-#else
             const ssize_t n = ::write(fd, bytes.data() + done, chunk);
-#endif
             if (n <= 0) ok = false;
             else done += static_cast<size_t>(n);
         }
-#if defined(_WIN32)
-        ok = _close(fd) == 0 && ok;
-        // rename() does not replace an existing file on Windows; MoveFileEx does.
-        ok = ok && MoveFileExA(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
-#else
         ok = ::close(fd) == 0 && ok && std::rename(tmp.c_str(), path.c_str()) == 0;
-#endif
         if (!ok)
         {
             std::remove(tmp.c_str());
@@ -1167,9 +1093,6 @@ namespace
        confidence and the value. */
     int detect(pii_detector& detector, const recognizers& r)
     {
-#if defined(_WIN32)
-        _setmode(_fileno(stdin), _O_BINARY);
-#endif
         const string text((istreambuf_iterator<char>(cin)), istreambuf_iterator<char>());
         const std::vector<pii_span> spans = detector_spans(detector, text);
         cout << "found: " << (spans.empty() ? "no" : "yes") << "\n";
@@ -1193,9 +1116,6 @@ namespace
 
 int main(int argc, char** argv)
 {
-#if defined(_WIN32)
-    const windows_console console;
-#endif
     try
     {
         command_line_parser parser;
@@ -1480,10 +1400,6 @@ int main(int argc, char** argv)
         // Standard input to standard output.
         if (cmd == command::text)
         {
-#if defined(_WIN32)
-            _setmode(_fileno(stdin), _O_BINARY);
-            _setmode(_fileno(stdout), _O_BINARY);
-#endif
             const string input((istreambuf_iterator<char>(cin)), istreambuf_iterator<char>());
             document_report report;
             const string output = restoring ? anonymizer.restore(input, document_format::text, report)

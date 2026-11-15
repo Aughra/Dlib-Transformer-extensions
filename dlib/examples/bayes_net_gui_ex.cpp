@@ -149,21 +149,6 @@ int main()
 
 // ----------------------------------------------------------------------------------------
 
-#ifdef WIN32
-//  If you use main() as your entry point when building a program on MS Windows then
-//  there will be a black console window associated with your application.  If you
-//  want your application to not have this console window then you need to build
-//  using the WinMain() entry point as shown below and also set your compiler to 
-//  produce a "Windows" project instead of a "Console" project.  In visual studio
-//  this can be accomplished by going to project->properties->general configuration->
-//  Linker->System->SubSystem and selecting Windows instead of Console.  
-// 
-int WINAPI WinMain (HINSTANCE, HINSTANCE, PSTR cmds, int)
-{
-    main();
-    return 0;
-}
-#endif
 
 // ----------------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------------

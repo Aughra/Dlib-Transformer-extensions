@@ -65,13 +65,6 @@
 #include <algorithm>
 #include <sstream>
 
-#ifdef _WIN32
-#  define WIN32_LEAN_AND_MEAN
-#  ifndef NOMINMAX
-#    define NOMINMAX
-#  endif
-#  include <windows.h>
-#endif
 
 #include <dlib/cmd_line_parser.h>
 #include <dlib/image_io.h>
@@ -1363,13 +1356,6 @@ int main(int argc, char** argv)
 {
     try
     {
-#ifdef _WIN32
-        /* The Windows console defaults to the OEM code page (CP850 on French systems),
-           which garbles the UTF-8 byte stream the tokenizer emits and reads. Switch both
-           directions to UTF-8 so accented output and input display correctly. */
-        SetConsoleOutputCP(CP_UTF8);
-        SetConsoleCP(CP_UTF8);
-#endif
         command_line_parser parser;
         parser.add_option("input", "Path to the source .gguf model", 1);
         parser.add_option("out-prefix", "Output prefix for generated files (default: derived from the model name)", 1);

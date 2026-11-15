@@ -35,6 +35,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 6 à 15 | Portabilité macOS | CMake, `platform.cpp`, `system_info.cpp`, `picopltf.h`, `drive_folders.cpp`, scripts de test | Erreurs de compilation, et chemins propres à Linux (`/proc`, `/sys`, `endian.h`, `st_mtim`, options x86). | Propre au Mac |
 | 16 à 20 | Remarques | noyaux, pool de fils, mode économie d'énergie, seuil des produits en flottants, nombre de fils sur un processeur hybride | Pas de défaut, mais bon à savoir. | Voir chaque remarque |
 | 21 | Remarque, sécurité | `albireo/common/platform.cpp:622, 663, 735`, `pseudalis/common/platform.cpp:622, 636, 700` | Hors de Windows, les trois contrôles de dossiers répondent toujours « oui ». | **Propre à Linux** (et au Mac) ; Windows non concerné |
+| 23 | Test qui ne teste pas | `dlib/test/is_same_object.cpp:48` | `#if _MSC_VER > 1600` désactive une vérification avec tout compilateur autre que Visual Studio (corrigé dans le fork). | Aussi sous Windows (clang, gcc) et Linux, déduit du code |
 | Registre | dlib | `dlib/dlib`, `dlib/examples` | Tout ce que le fork change dans dlib, fichier par fichier (partie 5). | Voir chaque ligne |
 | 22 | Remarque, exactitude | `albireo/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant (corrigé dans le fork). | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
 
@@ -197,6 +198,29 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
   - `ld -s` : propre au Mac.
 - **Corrigé dans le fork** (2026-11-14, commit [eb83ae4](https://github.com/Aughra/Dlib-Transformer-extensions/commit/eb83ae4)) : accolades retirées (`tokenizer.decode(ref_subset[i], false)`, qui existe pour un seul token, et `get_dataset_as_pairs(dataset_id::BLACK_HOLE_QA_PARTA)`, qui existe pour un seul jeu et donne le même résultat) ; `whitespace_count` et `total_temp_score` supprimées avec la ligne qui les modifiait ; `-s` remplacé sur macOS par `LINKER:-x` dans `dlib/examples/CMakeLists.txt` (`-s` gardé ailleurs) ; `handle_` avait déjà disparu avec le code Windows de Pseudalis. Vérifié : Albireo, Pseudalis et les 25 exemples compilent avec **0 avertissement** (`slm_transformer_configs_ex.cpp` et `slm_cygnus_instruct_ex.cpp` recompilés, `-Xlinker -x` dans les options de liaison des 25 exemples). Le comportement ne change pas (variables jamais lues, mêmes fonctions appelées).
 - **Corrigé dans le fork aussi** (2026-11-15) : les six paramètres inutilisés du build des tests (`loss.h`, quatre exemples) ont leur nom mis en commentaire (`const tensor& /*input_tensor*/`), ce qui garde la signature ; le build des tests compile alors sans échec (voir le journal). Aussi sous Windows avec clang ; MSVC ne donne pas cet avertissement à son niveau par défaut (non vérifié).
+
+
+### 23. Un test de `is_same_object.cpp` ne tourne qu'avec Visual Studio
+
+- **Où** : `dlib/dlib/test/is_same_object.cpp:48` (fonction `test_metaprog`).
+- **Ce qui se passe** : la vérification `DLIB_TEST(has_booya_template<htest>::value == true);` est entourée de `#if _MSC_VER > 1600`, avec le commentaire « there is a bug in visual studio 2010 and older that prevents this test from working ». L'intention était d'écarter les vieux Visual Studio. Mais hors de Visual Studio, `_MSC_VER` n'est pas défini, et le préprocesseur le remplace par 0 : la condition est fausse, et le test ne tourne avec aucun autre compilateur (clang, gcc). Aucun message : le test est simplement absent.
+- **Reproduire** : compiler `dlib/test` avec clang ou gcc, et constater que la ligne 49 n'est pas compilée (par exemple en y mettant une erreur volontaire : le build passe).
+- **Correction du fork** : la vérification est gardée sans condition (Visual Studio 2010 n'est plus pris en charge). Une correction qui garde l'intention d'origine sur toutes les plateformes serait `#if !defined(_MSC_VER) || _MSC_VER > 1600` (**non testée**).
+- **Vérifié** : sur le Mac, `dtest --test_is_same_object --test_invoke` passe (1 851 vérifications), la ligne réactivée comprise. **Non vérifié** : gcc et Visual Studio.
+- **Mac ou Windows** : aussi sous Windows avec clang ou gcc, et sous Linux (déduit du code, non vérifié) ; avec Visual Studio récent, le test tournait déjà.
+- **Fichier, avant** (`upstream/main`, lignes 48 à 50) :
+
+  ```cpp
+  #if _MSC_VER > 1600 // there is a bug in visual studio 2010 and older that prevents this test from working
+          DLIB_TEST(has_booya_template<htest>::value  == true);
+  #endif
+  ```
+
+- **Après** (fork, commit de ce paquet) :
+
+  ```cpp
+          DLIB_TEST(has_booya_template<htest>::value  == true);
+  ```
 
 ---
 
@@ -792,6 +816,8 @@ Le fork modifie aussi dlib depuis le 2026-11-14, quand le portage le demande. Ch
 | `threads/`, `sockets/`, `misc_api/`, `dir_nav/`, `gui_core/` (`windows.h`, `*_kernel_1.h`, `*_kernel_1.cpp`), `windows_magic.h` ; aiguillages `threads/threads_kernel.h`, `sockets.h`, `misc_api.h`, `dir_nav.h`, `gui_core.h` ; `algs.h`, `CMakeLists.txt`, `all/source.cpp` | Versions Windows des cinq services de base retirées (16 fichiers) ; les aiguillages incluent la version POSIX (Xlib pour les fenêtres) | Le fork ne vise que macOS | (ce commit) | Quatre builds sans échec ; `dtest` (threads, réseau, timer, tubes, verrous, httplib…) : 4 457 648 vérifications passent | Choix du fork, rien à reprendre |
 | 34 fichiers du code propre de dlib (`algs.h`, `assert.h`, `pixel.h`, `serialize.h`, `matrix/`, `geometry/`, `simd/`, `gui_widgets/nativefont.h`, `sockets/sockets_kernel_2.cpp`, `threads/`, `privacy/`, `image_loader/load_image.h`…) ; `simd/simd4f.h`, `sqlite/sqlite_tools.h`, `matrix/lapack/fortran_id.h` à la main ; `test/stft_good_data.h` | Conditions `_MSC_VER`, `_WIN32`, `WIN32`, `__CYGWIN__`, `__MINGW32__`, `_MSVC_LANG` retirées par `unifdef` (632 lignes retirées), la branche non Windows gardée ; opérateur littéral `""_i` | Le fork ne vise que macOS ; avertissement de l'original (n° 5) | (ce commit) | Quatre builds sans échec ; `dtest` 4 457 648 vérifications passent | Choix du fork ; l'opérateur littéral : aussi sous Windows avec clang |
 | `dlib/dlib/CMakeLists.txt`, `dlib/examples/CMakeLists.txt`, `dlib/dlib/test/CMakeLists.txt`, `cmake_utils/find_blas.cmake`, `set_compiler_specific_options.cmake`, `find_openvino.cmake` ; `cmake_utils/tell_visual_studio_to_use_static_runtime.cmake` (retiré, inclus nulle part) | Branches `WIN32`, `MSVC` et `MINGW` retirées (options `/bigobj`, `/MP`, `/STACK`, `/GL`, `/WX`, recherche de la MKL sous `C:/Program Files`, DLL d'OpenMP), la branche Unix gardée ; dans le build des tests, `LINKER:-x` à la place de `-s` | Le fork ne vise que macOS ; `ld: warning: -s is obsolete` (n° 5) | (ce commit) | Quatre builds sans échec et sans avertissement ; tests rapides et `dtest` passent | Choix du fork ; le `-s` : propre au Mac |
+| `dlib/examples/` (`slm_document_anonymizer_ex.cpp`, `slm_gguf_runtime_ex.cpp`, `slm_gguf_import_ex.cpp`, `slm_cygnus_foundation_ex.cpp`, `slm_cygnus_instruct_ex.cpp`, `slm_tok_predictive_compressor_ex.cpp`, `gui_api_ex.cpp`, `bayes_net_gui_ex.cpp`), `dlib/dlib/server/` (`slm_gguf_runtime_ex.cpp`, `server_http.h`), `dlib/dlib/cuda/` (`extended_memory.cpp`, `npu_dlib.cpp`), `dlib/dlib/threads/async.h`, `dlib/dlib/test/` (`httplib.cpp`, `invoke.cpp`) | Conditions `_WIN32`, `WIN32`, `_MSC_VER`, `_MSVC_LANG` retirées par `unifdef` (577 lignes), la branche non Windows gardée ; à la main, deux conditions mêlées, le commentaire des `#pragma` de Visual Studio et la classe `console_utf8` des exemples Cygnus, devenue vide | Le fork ne vise que macOS | (ce commit) | Quatre builds sans échec ni avertissement ; `dtest` passe ; `npu_dlib.cpp` n'est compilé qu'avec OpenVINO, absent du Mac : **pas compilé** | Choix du fork, rien à reprendre |
+| `dlib/dlib/test/is_same_object.cpp:48` | `DLIB_TEST(has_booya_template<htest>::value == true)` sans la condition `#if _MSC_VER > 1600` | La condition visait un défaut de Visual Studio 2010, mais `_MSC_VER` vaut 0 hors de Visual Studio : le test ne tournait sur aucun autre compilateur | (ce commit) | `dtest --test_is_same_object --test_invoke` : 1 851 vérifications passent, celle-ci comprise (Apple clang) | Aussi sous Windows avec clang ou gcc (déduit du code, non vérifié) |
 | `dlib/dlib/platform.h` | `DLIB_POSIX` et `MACOSX` toujours définis, `#error` hors de macOS ; détection de Windows et de HP-UX retirée | Le fork ne vise que macOS | (ce commit) | Exemples, Albireo, Pseudalis et `dtest` compilent ; tests passent | Choix du fork, rien à reprendre |
 | `dlib/dlib/assert.h` | Contournement de la libstdc++ d'Apple 4.02 retiré | Ce compilateur a disparu (macOS emploie libc++) : la condition n'est jamais vraie | (ce commit) | Idem | Aussi sous Windows (code mort partout) |
 | `dlib/dlib/crypto/secure_random.h` | `arc4random_buf` seul ; branches Windows (`RtlGenRandom`) et Linux (`getrandom`, `/dev/urandom`) retirées | Le fork ne vise que macOS | (ce commit) | Pseudalis (clés) et Albireo : `test_host` passent | Choix du fork, rien à reprendre |

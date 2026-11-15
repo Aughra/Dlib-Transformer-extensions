@@ -61,9 +61,6 @@
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #define DLIB_NPU_X86 1
 #include <immintrin.h>
-#if defined(_MSC_VER)
-#include <intrin.h>
-#endif
 #if defined(__GNUC__) || defined(__clang__)
 #define DLIB_NPU_SIMD __attribute__((target("avx2,f16c")))
 #else
@@ -100,34 +97,11 @@ namespace dlib
                 bool& present
             )
             {
-#ifdef _MSC_VER
-                char* buf = nullptr;
-                size_t len = 0;
-                if (_dupenv_s(&buf, &len, name) == 0 && buf != nullptr)
-                {
-                    std::string value(buf);
-                    free(buf);
-                    present = true;
-                    return value;
-                }
-                present = false;
-                return std::string();
-#else
                 const char* value = std::getenv(name);
                 present = value != nullptr;
                 return value ? std::string(value) : std::string();
-#endif
             }
 
-#ifdef _WIN32
-            std::string to_utf8 (
-                const std::filesystem::path& p
-            )
-            {
-                const auto s = p.u8string();
-                return std::string(s.begin(), s.end());
-            }
-#endif
 
             // An environment variable holding a path, as UTF-8 whatever the code page.
             std::string read_env_path (
@@ -135,28 +109,7 @@ namespace dlib
                 bool& present
             )
             {
-#ifdef _WIN32
-                const std::wstring wname(name, name + std::strlen(name));
-#ifdef _MSC_VER
-                wchar_t* buf = nullptr;
-                size_t len = 0;
-                if (_wdupenv_s(&buf, &len, wname.c_str()) == 0 && buf != nullptr)
-                {
-                    const std::string value = to_utf8(std::filesystem::path(buf));
-                    free(buf);
-                    present = true;
-                    return value;
-                }
-                present = false;
-                return std::string();
-#else
-                const wchar_t* value = _wgetenv(wname.c_str());
-                present = value != nullptr;
-                return value ? to_utf8(std::filesystem::path(value)) : std::string();
-#endif
-#else
                 return read_env(name, present);
-#endif
             }
 
             std::string lowercase (
@@ -275,22 +228,8 @@ namespace dlib
             )
             {
 #if defined(DLIB_NPU_X86)
-#if defined(_MSC_VER)
-                int r[4];
-                __cpuid(r, 1);
-                const bool f16c = ((r[2] >> 29) & 1) != 0;
-                const bool avx = ((r[2] >> 28) & 1) != 0;
-                const bool osxsave = ((r[2] >> 27) & 1) != 0;
-                if (!(f16c && avx && osxsave))
-                    return false;
-                if ((_xgetbv(0) & 6) != 6)
-                    return false;
-                __cpuidex(r, 7, 0);
-                return ((r[1] >> 5) & 1) != 0;
-#else
                 __builtin_cpu_init();
                 return __builtin_cpu_supports("avx2") && __builtin_cpu_supports("f16c");
-#endif
 #else
                 return false;
 #endif
@@ -1847,18 +1786,11 @@ namespace dlib
             )
             {
                 bool present = false;
-#ifdef _WIN32
-                std::string base = read_env_path("LOCALAPPDATA", present);
-                if (!present || base.empty()) base = read_env_path("TEMP", present);
-                if (!present || base.empty()) return std::string();
-                return base + "\\dlib\\npu_cache";
-#else
                 std::string base = read_env_path("XDG_CACHE_HOME", present);
                 if (present && !base.empty()) return base + "/dlib/npu_cache";
                 base = read_env_path("HOME", present);
                 if (!present || base.empty()) return std::string();
                 return base + "/.cache/dlib/npu_cache";
-#endif
             }
 
             runtime* make_runtime (

@@ -152,8 +152,7 @@
 #define SLM_AVX_VNNI
 #endif
 // The compilers that know the VNNI instructions.
-#if (defined(__clang__) && __clang_major__ >= 12) || (!defined(__clang__) && defined(__GNUC__) && __GNUC__ >= 11) \
-    || (defined(_MSC_VER) && _MSC_VER >= 1930)
+#if (defined(__clang__) && __clang_major__ >= 12) || (!defined(__clang__) && defined(__GNUC__) && __GNUC__ >= 11)
 #define SLM_VNNI_KERNELS 1
 #else
 #define SLM_VNNI_KERNELS 0
@@ -203,8 +202,6 @@
 */
 #if defined(__clang__)
 #pragma STDC FP_CONTRACT OFF
-#elif defined(_MSC_VER)
-#pragma fp_contract (off)
 #endif
 
 namespace tok_codec

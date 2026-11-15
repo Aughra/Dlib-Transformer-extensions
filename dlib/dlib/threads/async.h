@@ -19,9 +19,7 @@ namespace dlib
     {
         template <typename> struct result_of;
 
-#if (__cplusplus >= 201703L ||                          \
-     (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L)) && \
-    __cpp_lib_is_invocable >= 201703L
+#if __cplusplus >= 201703L && __cpp_lib_is_invocable >= 201703L
         template <typename F, typename... Args>
         struct result_of<F(Args...)> : std::invoke_result<F, Args...> {};
 #else

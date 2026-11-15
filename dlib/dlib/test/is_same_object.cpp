@@ -45,9 +45,7 @@ namespace
         DLIB_TEST(has_booya2_template<htest>::value  == true);
         DLIB_TEST(has_booya2_template<htest2>::value == false);
 
-#if _MSC_VER > 1600 // there is a bug in visual studio 2010 and older that prevents this test from working
         DLIB_TEST(has_booya_template<htest>::value  == true);
-#endif
 
         DLIB_TEST(has_booya_template<htest2>::value == false);
 

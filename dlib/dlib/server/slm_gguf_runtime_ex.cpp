@@ -23,16 +23,8 @@
 #include <algorithm>
 #include <csignal>
 
-#ifdef _WIN32
-#  define WIN32_LEAN_AND_MEAN
-#  ifndef NOMINMAX
-#    define NOMINMAX
-#  endif
-#  include <windows.h>
-#else
 #  include <sys/ioctl.h>
 #  include <unistd.h>
-#endif
 
 #include <atomic>
 #include <chrono>
@@ -142,15 +134,9 @@ static int pick_next(const tensor& logits, const std::vector<int>& recent,
 /* Width of the terminal, for the physical-row accounting of the erase sequences. */
 static long terminal_width()
 {
-#ifdef _WIN32
-    CONSOLE_SCREEN_BUFFER_INFO info;
-    if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info))
-        return info.srWindow.Right - info.srWindow.Left + 1;
-#else
     winsize w{};
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 && w.ws_col > 0)
         return w.ws_col;
-#endif
     return 80;
 }
 
@@ -279,25 +265,12 @@ static int chat_loop(runtime_transformer& rt, hf_tokenizer& tok, const chat_temp
    an atomic flag, the only operation that is safe inside a signal handler; the main
    thread polls it and performs the actual server shutdown. */
 static std::atomic<bool> g_stop_requested{ false };
-#ifdef _WIN32
-static BOOL WINAPI console_ctrl_handler(DWORD type)
-{
-    if (type == CTRL_C_EVENT || type == CTRL_BREAK_EVENT || type == CTRL_CLOSE_EVENT)
-    {
-        g_stop_requested = true;
-        return TRUE;   // handled: the process keeps running for the graceful stop
-    }
-    return FALSE;
-}
-static void install_stop_handler() { SetConsoleCtrlHandler(console_ctrl_handler, TRUE); }
-#else
 static void posix_stop_handler(int) { g_stop_requested = true; }
 static void install_stop_handler()
 {
     std::signal(SIGINT, posix_stop_handler);
     std::signal(SIGTERM, posix_stop_handler);
 }
-#endif
 
 /* One model served by the chat endpoint: the engine, its tokenizer and the chat
    template detected for it. Several can be loaded side by side; the request's
@@ -448,16 +421,6 @@ int main(int argc, char** argv)
 {
     try
     {
-#ifdef _WIN32
-        SetConsoleOutputCP(CP_UTF8);
-        SetConsoleCP(CP_UTF8);
-        {
-            HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-            DWORD mode = 0;
-            if (h != INVALID_HANDLE_VALUE && GetConsoleMode(h, &mode))
-                SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-        }
-#endif
         command_line_parser parser;
         parser.add_option("input", "Path to the source model: .gguf, or a runtime .dat archive", 1);
         parser.add_option("save-dat", "After loading a GGUF, write a self-contained runtime archive (model + tokenizer)", 1);

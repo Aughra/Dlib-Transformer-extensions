@@ -19,9 +19,6 @@
 #pragma warning (disable: 1125)
 #endif
 
-#if _MSC_VER
-#  pragma warning( disable: 4503 )
-#endif // _MSC_VER
 
 
 namespace dlib

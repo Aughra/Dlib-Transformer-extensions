@@ -217,15 +217,4 @@ int main()
 
 //  ----------------------------------------------------------------------------
 
-// Normally, if you built this application on MS Windows in Visual Studio you
-// would see a black console window pop up when you ran it.  The following
-// #pragma directives tell Visual Studio to not include a console window along
-// with your application.  However, if you prefer to have the console pop up as
-// well then simply remove these #pragma statements.
-#ifdef _MSC_VER
-#   pragma comment( linker, "/entry:mainCRTStartup" )
-#   pragma comment( linker, "/SUBSYSTEM:WINDOWS" )
-#endif
-
-//  ----------------------------------------------------------------------------
 
