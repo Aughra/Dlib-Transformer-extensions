@@ -2,6 +2,14 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.32.1 — 15 novembre 2026
+
+### Accès et documents
+
+- Le bouton de la page de l'interface de programmation (API) passe du bas du panneau latéral à la barre du haut, à côté de l'engrenage, dans toutes les vues. Il quitte le menu de l'engrenage, qui garde les onglets des paramètres et les notes de version.
+
+---
+
 ## 4.32.0 — 15 novembre 2026
 
 ### Accès et documents

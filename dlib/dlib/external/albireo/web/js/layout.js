@@ -69,9 +69,8 @@ export function buildLayout() {
       }), ui.incognitoButton),
     h('div', { class: 'search' }, h('span', { html: icon('search') }), search),
     ui.sideScroll,
-    // Les paramètres s'ouvrent par l'engrenage de la barre du haut, qui donne tous leurs onglets (fork pour macOS).
-    h('div', { class: 'sidebar-footer' }, ui.statusLine, ui.speedLine, ui.contextLine, h('div', { class: 'footer-buttons' },
-      h('button', { type: 'button', onclick: () => window.open('/docs/', '_blank'), html: icon('book') + '<span>' + escapeHtml(t('api')) + '</span>' }))));
+    // Les paramètres et la page de l'interface s'ouvrent par la barre du haut (fork pour macOS).
+    h('div', { class: 'sidebar-footer' }, ui.statusLine, ui.speedLine, ui.contextLine));
 
   ui.topbar = h('header', { class: 'topbar' });
   ui.banner = h('div', { class: 'banner hidden', html: icon('incognito') + '<span>' + escapeHtml(t('incognitoBanner')) + '</span>' });

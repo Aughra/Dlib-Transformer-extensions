@@ -10,7 +10,7 @@ const texts = {
     incognitoStart: 'Démarrer une discussion privée', search: 'Rechercher dans les discussions', projects: 'Projets',
     newProject: 'Nouveau projet', discussions: 'Discussions', pinned: 'Épinglées', today: 'Aujourd\'hui', yesterday: 'Hier',
     week: '7 derniers jours', month: '30 derniers jours', older: 'Plus anciennes', noDiscussions: 'Aucune discussion',
-    noResults: 'Aucun résultat', settings: 'Paramètres', api: 'API', about: 'À propos',
+    noResults: 'Aucun résultat', settings: 'Paramètres', about: 'À propos',
     collapse: 'Masquer le panneau latéral',
     role_general: 'Général', role_code: 'Code', role_security: 'Cybersécurité', role_embedding: 'RAG',
 

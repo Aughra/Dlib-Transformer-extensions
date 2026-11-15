@@ -83,6 +83,11 @@
   "expect": true
  },
  {
+  "name": "api button on top",
+  "eval": "return !!document.querySelector('.topbar .topbar-api') && ![...document.querySelectorAll('.sidebar button')].some(b=>b.innerText.trim()==='API')",
+  "expect": true
+ },
+ {
   "name": "pin",
   "eval": "T.btn('…',document.querySelector('.topbar')).click(); await T.sleep(400); T.btn('Épingler',document.querySelector('.menu')).click(); await T.sleep(600); return document.querySelector('.side-scroll').innerText.includes('ÉPINGLÉES')||document.querySelector('.side-scroll').innerText.includes('Épinglées')",
   "expect": true

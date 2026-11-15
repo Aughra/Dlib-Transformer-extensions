@@ -161,14 +161,6 @@ a { color: var(--blue); }
 .context-line .meter.full > div { background: var(--danger); }
 .context-line .count { font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* Les boutons prennent la largeur de leurs libellés et passent à la ligne plutôt que de les couper. */
-.footer-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
-.footer-buttons button {
-  flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 32px;
-  padding: 0 8px; border-radius: 9px; border: 1px solid var(--border); background: transparent; color: var(--text-soft);
-  font-size: 12.5px; white-space: nowrap;
-}
-.footer-buttons button:hover { background: var(--bg-hover); color: var(--text); }
-.footer-buttons svg { width: 15px; height: 15px; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 /* Barre du haut.  Elle se place au-dessus du fil, sur le fond uni de la page : elle reprend ce fond sans flou, que le

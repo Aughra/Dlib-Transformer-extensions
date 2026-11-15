@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-15 — Mettre le bouton API en haut (Albireo 4.32.1)
+
+- **Quoi** : `apiButton()` de `thread.js` (classe `topbar-api`, icône du livre, ouvre `/docs/` dans un nouvel onglet) dans la barre du haut de chaque vue, avant l'engrenage ; retiré du pied du panneau latéral (`layout.js`, `.footer-buttons` et son style retirés) et du menu de l'engrenage ; clé `api` des textes retirée. Banc : vérification « api button on top ».
+- **Fichiers** : `web/js/{thread.js,layout.js,i18n.js}`, `web/css/app.css`, `tools/page_test/scenarios/actions.json`, version, `web/openapi.json`, `web/changelog.md` (sous `dlib/dlib/external/albireo/`) ; `docs/{differences-mac-windows.md,memo-portage-macos-arm64.md}`, `logs/reprise.md`.
+- **Pourquoi** : demande de l'humain : « mets l'icône API en haut ». Retirée du menu de l'engrenage pour ne pas refaire un doublon, comme le bouton « Paramètres ».
+- **Étapes** : build sans avertissement ; banc de la page : **116**, lint ok (un premier essai de la nouvelle vérification échouait à cause des boutons « ? » du pied du panneau : vérification corrigée, pas le code) ; captures du bureau et du téléphone regardées.
+
 ## 2026-11-15 — Montrer le contexte de la prochaine question et tout mettre en français (Albireo 4.32.0, Pseudalis 2.0.1)
 
 - **Quoi** : Albireo : fenêtre « Contexte de la prochaine question » (`web/js/preview.js`, bouton `topbar-context` de `renderTopbar()` dans `thread.js`) : `systemPrompt`, `apiMessages` (images nommées, comme `compactInBackground`), `toolSet`, brouillon du champ de saisie ; total exact par `POST /albireo/v1/count`, estimation par message (`tokenEstimate`). Menu de l'engrenage avec tous les onglets ; bouton « Paramètres » du bas retiré (`layout.js`). Agent et Web : plus de `disabled`, classe `unavailable` ; un appui active le raisonnement quand le modèle en a besoin, ou explique l'absence d'outils (`reasoningTurnedOn`, `agentNoTools`). « ? » du contexte et du débit réécrits (mesure exacte). Page de l'interface en français : `make_openapi.py` traduit (agent), `web/docs/fr.js` traduit les libellés de Swagger UI. Pseudalis 2.0.1 : français seulement (`i18n.js`, `app.js`, `nav.js`, `index.html`, `docs/init.js` ; `service::language()` rend `fr`), `openapi.json` traduit (agent), « ? » du débit (`nav.js`), `fr.js` copié par la construction.

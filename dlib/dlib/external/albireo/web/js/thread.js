@@ -46,8 +46,14 @@ export function renderAll() {
   ui.banner.classList.toggle('hidden', !(state.view === 'chat' && state.current && state.current.incognito));
 }
 
-// L'engrenage de la barre du haut : chaque onglet des paramètres, dans leur ordre, puis les notes de version et la page
-// de l'interface (fork pour macOS : il remplace le bouton « Paramètres » du bas du panneau latéral).
+// La page de l'interface de programmation, dans un nouvel onglet (fork pour macOS : le bouton « API » était en bas du
+// panneau latéral).
+function apiButton() {
+  return iconButton('book', 'Interface de programmation (API)', () => window.open('/docs/', '_blank'), 'icon-button topbar-api');
+}
+
+// L'engrenage de la barre du haut : chaque onglet des paramètres, dans leur ordre, puis les notes de version (fork pour
+// macOS : il remplace le bouton « Paramètres » du bas du panneau latéral).
 function gearButton() {
   return iconButton('gear', t('settings'), (e) => showMenu(e.currentTarget, [
     { icon: 'gear', label: t('general'), action: () => settingsDialog('general') },
@@ -57,8 +63,7 @@ function gearButton() {
     { icon: 'archive', label: t('data'), action: () => settingsDialog('data') },
     { icon: 'cpu', label: t('serviceTab'), action: () => settingsDialog('serviceTab') },
     { icon: 'info', label: t('about'), action: () => settingsDialog('about') },
-    { icon: 'file', label: t('changelog'), action: () => changelogDialog() },
-    { icon: 'book', label: t('api'), action: () => window.open('/docs/', '_blank') }
+    { icon: 'file', label: t('changelog'), action: () => changelogDialog() }
   ]), 'icon-button topbar-gear');
 }
 
@@ -68,11 +73,11 @@ export function renderTopbar() {
   bar.append(iconButton('sidebar', t('collapse'), toggleSidebar));
   if (state.view === 'project') {
     const p = projectById(state.projectId);
-    bar.append(h('div', { class: 'title' }, p ? p.name : ''), gearButton());
+    bar.append(h('div', { class: 'title' }, p ? p.name : ''), apiButton(), gearButton());
     return;
   }
   if (state.view === 'licenses') {
-    bar.append(h('div', { class: 'title' }, t('licensesTitle')), gearButton());
+    bar.append(h('div', { class: 'title' }, t('licensesTitle')), apiButton(), gearButton());
     return;
   }
   const c = state.current;
@@ -113,7 +118,7 @@ export function renderTopbar() {
   // Le contexte que lirait le modèle pour la prochaine question (fork pour macOS).
   if (c) bar.append(iconButton('chat', 'Contexte de la prochaine question', () => contextPreview(), 'icon-button topbar-context'));
   if (c && c.messages.length) bar.append(iconButton('more', '…', (e) => conversationMenu(c, e.currentTarget)));
-  bar.append(gearButton());
+  bar.append(apiButton(), gearButton());
 }
 
 function toggleSidebar() {
