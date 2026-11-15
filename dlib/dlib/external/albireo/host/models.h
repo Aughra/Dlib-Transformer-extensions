@@ -514,7 +514,8 @@ namespace albireo
                   (expected_projector) ;
                 - les autres projecteurs vont avec un décodeur d'une architecture qui lit les
                   images dont la largeur de projection est la leur ("projection_width" de
-                  describe_gguf()) ; parmi plusieurs, celui dont le nom est le plus proche de
+                  describe_gguf()), et de la famille de leur type quand le moteur le connaît
+                  (gemma3, gemma4v, qwen3vl_merger) ; parmi plusieurs, celui dont le nom est le plus proche de
                   celui du projecteur : le même general.name dans les deux en-têtes d'abord,
                   puis le même nom de fichier une fois mis de côté le préfixe "mmproj", la
                   quantification et l'extension, puis le plus long début commun de ces noms ;

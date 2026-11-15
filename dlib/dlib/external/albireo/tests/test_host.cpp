@@ -318,6 +318,31 @@ int main(int argc, char** argv)
     const std::string inbox = albireo::join_path(albireo::data_dir(), "import");
     albireo::make_dirs(inbox);
 
+    {
+        // À largeur égale, un projecteur ne va qu'avec un décodeur de sa famille (Albireo 4.30.0) : le projecteur de
+        // Qwen3.5-4B et celui de Gemma 3 4B sortent tous deux 2 560 valeurs.
+        auto file = [](const std::string& name, const std::string& arch, const std::string& type) {
+            albireo::pairing_file f;
+            f.name = name;
+            f.description = json::object();
+            f.description["arch"] = arch;
+            f.description["projection_width"] = 2560;
+            if (type.empty()) f.description["reads_images"] = true;
+            else
+            {
+                f.description["projector"] = true;
+                f.description["projector_type"] = type;
+            }
+            return f;
+        };
+        const std::vector<albireo::pairing_file> decoders = { file("gemma-3-4b-it-Q4_K_M.gguf", "gemma3", "") };
+        const std::vector<albireo::pairing_file> projectors = { file("Qwen3.5-4B-mmproj-F16.gguf", "clip", "qwen3vl_merger"),
+            file("gemma-3-4b-it-mmproj-F16.gguf", "clip", "gemma3") };
+        const std::vector<int> pairs = albireo::pair_projectors(decoders, projectors);
+        check(pairs.size() == 2 && pairs[0] == -1 && pairs[1] == 0,
+            "a projector goes only with a decoder of its family, whatever the width they share");
+    }
+
     const std::string secured = albireo::join_path(data, "secure-test");
     std::string security_error;
     check(albireo::secure_folder(secured, security_error), "secure_folder creates a private folder");

@@ -2,6 +2,14 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.30.1 — 15 novembre 2026
+
+### Corrections
+
+- Un projecteur d'images d'un type connu du moteur (Gemma 3, Gemma 4, Qwen3-VL et Qwen 3.5) ne s'associe plus qu'à un modèle de sa famille. À largeur égale, le projecteur de Qwen3.5-4B était associé à Gemma 3 4B dans la bibliothèque du Mac, et le vrai projecteur de Gemma 3 restait seul ; la même règle vaut pour les imports.
+
+---
+
 ## 4.30.0 — 15 novembre 2026
 
 ### Accès et documents

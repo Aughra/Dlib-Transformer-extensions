@@ -256,6 +256,23 @@ namespace albireo
         return inputs_with(entry["inputs"], image && entry["projector"].is_object());
     }
 
+    namespace
+    {
+        /*
+            Un projecteur d'un type que le moteur connaît ne va qu'avec les architectures de sa famille (fork pour
+            macOS) : à largeur égale, le projecteur de Qwen3.5-4B (2 560) allait sinon avec Gemma 3 4B (2 560 aussi).
+            Les autres types ne restreignent rien.
+        */
+        bool projector_fits(const std::string& type, const std::string& arch)
+        {
+            if (type == "gemma3") return arch == "gemma3";
+            if (type == "gemma4v") return arch == "gemma4";
+            if (type == "qwen3vl_merger" || type == "qwen3vl")
+                return arch == "qwen3vl" || arch == "qwen3vlmoe" || arch == "qwen35" || arch == "qwen35moe";
+            return true;
+        }
+    }
+
     std::vector<int> pair_projectors(const std::vector<pairing_file>& decoders,
         const std::vector<pairing_file>& projectors)
     {
@@ -283,7 +300,9 @@ namespace albireo
             {
                 const json& dd = decoders[d].description;
                 const bool images = dd["reads_images"].as_bool(reads_images(dd["arch"].as_string()));
-                if (taken[d] || !images || dd["projection_width"].as_int(0) != width) continue;
+                if (taken[d] || !images || dd["projection_width"].as_int(0) != width
+                    || !projector_fits(projectors[p].description["projector_type"].as_string(), dd["arch"].as_string()))
+                    continue;
                 const long score = name_closeness(projectors[p], decoders[d]);
                 if (score > best)
                 {
