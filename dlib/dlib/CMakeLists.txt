@@ -358,82 +358,50 @@ if (NOT TARGET dlib)
          list (APPEND dlib_needed_private_libraries ${CMAKE_THREAD_LIBS_INIT})
       endif()
 
-      # we want to link to the right stuff depending on our platform.  
-      if (WIN32 AND NOT CYGWIN) ###############################################################################
-         if (DLIB_NO_GUI_SUPPORT)
-            list (APPEND dlib_needed_private_libraries ws2_32 winmm)
+      # macOS fork: the libraries of macOS (X11 through XQuartz for the GUI, when it is there).
+      set(CMAKE_MACOSX_RPATH 1)
+      if (NOT DLIB_NO_GUI_SUPPORT)
+         find_package(X11 QUIET)
+         if (X11_FOUND)
+            # If both X11 and anaconda are installed, it's possible for the
+            # anaconda path to appear before /opt/X11, so we remove anaconda.
+            foreach (ITR ${X11_INCLUDE_DIR})
+               if ("${ITR}" MATCHES "(.*)(Ana|ana|mini)conda(.*)")
+                  list (REMOVE_ITEM X11_INCLUDE_DIR ${ITR})
+               endif ()
+            endforeach(ITR)
+            list (APPEND dlib_needed_public_includes ${X11_INCLUDE_DIR})
+            list (APPEND dlib_needed_public_libraries ${X11_LIBRARIES})
          else()
-            list (APPEND dlib_needed_private_libraries ws2_32 winmm comctl32 gdi32 imm32)
-         endif()
-      elseif(APPLE) ############################################################################
-         set(CMAKE_MACOSX_RPATH 1)
-         if (NOT DLIB_NO_GUI_SUPPORT)
-            find_package(X11 QUIET)
-            if (X11_FOUND)
-               # If both X11 and anaconda are installed, it's possible for the
-               # anaconda path to appear before /opt/X11, so we remove anaconda.
-               foreach (ITR ${X11_INCLUDE_DIR})
-                  if ("${ITR}" MATCHES "(.*)(Ana|ana|mini)conda(.*)")
-                     list (REMOVE_ITEM X11_INCLUDE_DIR ${ITR})
-                  endif ()
-               endforeach(ITR)
-               list (APPEND dlib_needed_public_includes ${X11_INCLUDE_DIR})
-               list (APPEND dlib_needed_public_libraries ${X11_LIBRARIES})
-            else()
-               find_library(xlib X11)
-               # Make sure X11 is in the include path.  Note that we look for
-               # Xlocale.h rather than Xlib.h because it avoids finding a partial
-               # copy of the X11 headers on systems with anaconda installed.
-               find_path(xlib_path Xlocale.h
-                  PATHS 
-                  /Developer/SDKs/MacOSX10.4u.sdk/usr/X11R6/include
-                  /opt/local/include
-                  PATH_SUFFIXES X11
-                  )
-               if (xlib AND xlib_path)
-                  get_filename_component(x11_path ${xlib_path} PATH CACHE)
-                  list (APPEND dlib_needed_public_includes ${x11_path})
-                  list (APPEND dlib_needed_public_libraries ${xlib})
-                  set(X11_FOUND 1)
-               endif()
-            endif()
-            if (NOT X11_FOUND)
-               message(" *****************************************************************************")
-               message(" *** DLIB GUI SUPPORT DISABLED BECAUSE X11 DEVELOPMENT LIBRARIES NOT FOUND ***")
-               message(" *** Make sure XQuartz is installed if you want GUI support.               ***")
-               message(" *** You can download XQuartz from: https://www.xquartz.org/               ***")
-               message(" *****************************************************************************")
-               set(DLIB_NO_GUI_SUPPORT ON CACHE STRING ${DLIB_NO_GUI_SUPPORT_STR} FORCE )
-               enable_preprocessor_switch(DLIB_NO_GUI_SUPPORT)
+            find_library(xlib X11)
+            # Make sure X11 is in the include path.  Note that we look for
+            # Xlocale.h rather than Xlib.h because it avoids finding a partial
+            # copy of the X11 headers on systems with anaconda installed.
+            find_path(xlib_path Xlocale.h
+               PATHS 
+               /Developer/SDKs/MacOSX10.4u.sdk/usr/X11R6/include
+               /opt/local/include
+               PATH_SUFFIXES X11
+               )
+            if (xlib AND xlib_path)
+               get_filename_component(x11_path ${xlib_path} PATH CACHE)
+               list (APPEND dlib_needed_public_includes ${x11_path})
+               list (APPEND dlib_needed_public_libraries ${xlib})
+               set(X11_FOUND 1)
             endif()
          endif()
-
-         mark_as_advanced(xlib xlib_path x11_path)
-      else () ##################################################################################
-         # link to the socket library if it exists.  this is something you need on solaris
-         find_library(socketlib socket)
-         if (socketlib)
-            list (APPEND dlib_needed_private_libraries ${socketlib})
-         endif ()
-
-         if (NOT DLIB_NO_GUI_SUPPORT)
-            include(FindX11)
-            if (X11_FOUND)
-               list (APPEND dlib_needed_private_includes ${X11_INCLUDE_DIR})
-               list (APPEND dlib_needed_private_libraries ${X11_LIBRARIES})
-            else()
-               message(" *****************************************************************************")
-               message(" *** DLIB GUI SUPPORT DISABLED BECAUSE X11 DEVELOPMENT LIBRARIES NOT FOUND ***")
-               message(" *** Make sure libx11-dev is installed if you want GUI support.            ***")
-               message(" *** On Ubuntu run: sudo apt-get install libx11-dev                        ***")
-               message(" *****************************************************************************")
-               set(DLIB_NO_GUI_SUPPORT ON CACHE STRING ${DLIB_NO_GUI_SUPPORT_STR} FORCE )
-               enable_preprocessor_switch(DLIB_NO_GUI_SUPPORT)
-            endif()
+         if (NOT X11_FOUND)
+            message(" *****************************************************************************")
+            message(" *** DLIB GUI SUPPORT DISABLED BECAUSE X11 DEVELOPMENT LIBRARIES NOT FOUND ***")
+            message(" *** Make sure XQuartz is installed if you want GUI support.               ***")
+            message(" *** You can download XQuartz from: https://www.xquartz.org/               ***")
+            message(" *****************************************************************************")
+            set(DLIB_NO_GUI_SUPPORT ON CACHE STRING ${DLIB_NO_GUI_SUPPORT_STR} FORCE )
+            enable_preprocessor_switch(DLIB_NO_GUI_SUPPORT)
          endif()
+      endif()
 
-         mark_as_advanced(nsllib socketlib)
-      endif () ##################################################################################
+      mark_as_advanced(xlib xlib_path x11_path)
 
       if (NOT DLIB_NO_GUI_SUPPORT)
          set(source_files ${source_files}

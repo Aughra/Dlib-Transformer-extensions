@@ -10,52 +10,20 @@
 
 
 /*!
-    This file ensures that:
-        - if (we are compiling under a posix platform) then
-            - DLIB_POSIX will be defined
-            - if (this is also Mac OS X) then
-                - MACOSX will be defined
-            - if (this is also HP-UX) then
-                - HPUX will be defined
-        - if (we are compiling under an MS Windows platform) then
-            - WIN32 will be defined
+    This file ensures that DLIB_POSIX and MACOSX are defined.  The macOS fork of dlib builds for
+    macOS only (Apple Silicon): any other platform stops the build.
 !*/
 
-
-/*
-    A good reference for this sort of information is
-    http://predef.sourceforge.net/
-*/
-
-// Define WIN32 if this is MS Windows
-#ifndef WIN32
-    #if defined( _MSC_VER) || defined(__BORLANDC__) || defined(_WIN32) || defined(__WIN32__) || defined(__TOS_WIN__)
-    #define WIN32 
-    #endif 
+#if !defined(__APPLE__)
+    #error "This fork of dlib builds for macOS only"
 #endif
 
-#ifndef WIN32
-    // since this is the only other platform the library currently supports
-    // just assume it is DLIB_POSIX if it isn't WIN32
-    #ifndef DLIB_POSIX
-        #define DLIB_POSIX
-    #endif
- 
-    #ifndef HPUX
-       #if defined(__hpux ) || defined(hpux) || defined (_hpux)
-       #define HPUX
-       #endif	
-    #endif
+#ifndef DLIB_POSIX
+    #define DLIB_POSIX
+#endif
 
-    #ifndef MACOSX
-        #ifdef __MACOSX__
-        #define MACOSX
-        #endif 
-        #ifdef __APPLE__
-        #define MACOSX
-        #endif
-    #endif
-
+#ifndef MACOSX
+    #define MACOSX
 #endif
 
 

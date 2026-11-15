@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-15 — Faire de dlib une bibliothèque pour macOS seulement
+
+- **Quoi** : cinquième étape du nettoyage de dlib (groupe 2). `platform.h` : `DLIB_POSIX` et `MACOSX` toujours définis, `#error` hors de macOS, détection de Windows et de HP-UX retirée ; `assert.h` : contournement de la libstdc++ d'Apple 4.02 retiré ; `crypto/secure_random.h` : `arc4random_buf` seul (branches Windows et Linux retirées) ; `dlib/dlib/CMakeLists.txt` : la seule branche macOS des bibliothèques du système (Windows et Linux retirées) ; `dlib/CMakeLists.txt` (racine de `dlib/`), copie désynchronisée dont seul `setup.py` se servait, retiré. CLAUDE.md : dlib ne vise plus que macOS, ses bibliothèques embarquées d'autres projets restent telles quelles.
+- **Fichiers** : `dlib/dlib/{platform.h,assert.h,crypto/secure_random.h,CMakeLists.txt}`, `dlib/CMakeLists.txt`, `CLAUDE.md`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,memo-portage-macos-arm64.md}`, `logs/nuit-2026-11-15.md`.
+- **Pourquoi** : demande de l'humain ; le fork ne vise que le Mac.
+- **Étapes** : exemples, Albireo et Pseudalis : 0 erreur, 0 avertissement ; tests rapides : tout passe ; `test_macos.sh` d'Albireo **53 sur 53**, de Pseudalis **34 sur 34** ; `dtest` recompilé et `--test_tokenizer --test_image --test_matrix --test_matrix_lu --test_matrix_chol --test_md5 --test_base64 --test_sockets --test_threads` : 2 971 295 vérifications, toutes passent. Le build des tests échoue sur 31 fichiers (24 exemples, 7 d'`imglab`) : « unused parameter » en `-Werror` dans du code de l'original (`dnn/loss.h:3582` et `:3603`, quelques exemples), pas dans les fichiers touchés ici ; à corriger à la suite.
+
 ## 2026-11-15 — Retirer de dlib les conditions Apple ajoutées par le fork
 
 - **Quoi** : quatrième étape du nettoyage de dlib (groupe 1). `dlib/dlib/CMakeLists.txt` : `dlib_httplib` lie toujours les threads et les frameworks `CoreFoundation` et `Security` (branche Windows et `if (APPLE)` retirés) ; `dlib/examples/CMakeLists.txt` : `LINKER:-x` sans condition (branches MSVC et `-s` retirées).

@@ -48,11 +48,6 @@
 #   define DLIB_HAS_INITIALIZER_LISTS
 #endif
 
-#if defined(__APPLE__) && defined(__GNUC_LIBSTD__) && ((__GNUC_LIBSTD__-0) * 100 + __GNUC_LIBSTD_MINOR__-0 <= 402)
- // Apple has not updated libstdc++ in some time and anything under 4.02 does not have <initializer_list> for sure.
-#   undef DLIB_HAS_INITIALIZER_LISTS
-#endif
-
 // figure out if the compiler has static_assert. 
 #if defined(__clang__) 
 #   if __has_feature(cxx_static_assert)
