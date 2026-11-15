@@ -2,6 +2,14 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.26.2 — 15 novembre 2026
+
+### Plateforme
+
+- Albireo et Pseudalis se lient à la zlib de macOS au lieu d'en compiler une copie ; la licence de zlib n'est plus livrée avec les programmes, ni listée dans la page « Composants et licences ».
+
+---
+
 ## 4.26.1 — 14 novembre 2026
 
 ### Plateforme

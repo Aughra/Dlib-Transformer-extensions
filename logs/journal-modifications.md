@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-15 — Lier dlib, Albireo et Pseudalis à la zlib de macOS (Albireo 4.26.2)
+
+- **Quoi** : troisième étape du nettoyage de dlib. `dlib/dlib/CMakeLists.txt` : la copie de libpng compilée quand le système n'en a pas utilise `find_package(ZLIB REQUIRED)` au lieu des sources de zlib ; Albireo : `albireo_zlib` remplacée par `ZLIB::ZLIB` (moteur, service, `test_host`), licence de zlib plus livrée, ligne retirée de la page des licences (`settings.js`, `i18n.js`) ; Pseudalis : `pseudalis_zlib`, déclarée mais liée nulle part, retirée ; `external/zlib` supprimé. `libpng/pnglibconf.h` : `PNG_ZLIB_VERNUM` à 0, comme le fichier tout prêt de libpng.
+- **Fichiers** : `dlib/dlib/CMakeLists.txt`, `dlib/dlib/external/zlib/`, `dlib/dlib/external/libpng/pnglibconf.h`, `albireo/CMakeLists.txt`, `albireo/web/js/{settings.js,i18n.js}`, `pseudalis/CMakeLists.txt`, version et `albireo/web/changelog.md` ; `docs/{notes-pour-l-auteur.md,differences-mac-windows.md}`.
+- **Pourquoi** : Apple fournit zlib et la met à jour avec le système.
+- **Étapes** : premier essai : Albireo ne compilait plus (libpng : « The include path of <zlib.h> is incorrect », `pnglibconf.h` généré pour zlib 1.3.2, macOS fournit 1.2.12) ; corrigé par `PNG_ZLIB_VERNUM 0`. Puis exemples, Albireo et Pseudalis : 0 erreur, 0 avertissement ; `otool -L` : moteur et service liés à `/usr/lib/libz.1.dylib` ; tests rapides : tout passe ; image PNG (perroquet de macOS converti) décrite juste par Gemma 4 E2B (« a vibrant red macaw »). À noter : la zlib de macOS se déclare en 1.2.12, plus ancienne que la copie retirée ; Apple la corrige avec les mises à jour du système (non vérifié en détail ici).
+
 ## 2026-11-15 — Retirer de dlib sa copie de CBLAS
 
 - **Quoi** : deuxième étape du nettoyage de dlib. `external/cblas` retiré, avec le seul cas qui s'en servait dans `cmake_utils/find_blas.cmake` (construction de dlib comme extension de MATLAB, `BUILDING_MATLAB_MEX_FILE`, 27 lignes).

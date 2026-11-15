@@ -88,13 +88,6 @@ target_compile_definitions(pseudalis_sqlite PRIVATE SQLITE_THREADSAFE=1 SQLITE_D
    SQLITE_ENABLE_API_ARMOR SQLITE_OMIT_LOAD_EXTENSION)
 target_link_libraries(pseudalis_sqlite PUBLIC ${CMAKE_DL_LIBS} m)
 
-set(zlib_dir ${PSEUDALIS_DLIB_DIR}/external/zlib)
-add_library(pseudalis_zlib STATIC ${zlib_dir}/adler32.c ${zlib_dir}/compress.c ${zlib_dir}/crc32.c
-   ${zlib_dir}/deflate.c ${zlib_dir}/infback.c ${zlib_dir}/inffast.c ${zlib_dir}/inflate.c ${zlib_dir}/inftrees.c
-   ${zlib_dir}/trees.c ${zlib_dir}/uncompr.c ${zlib_dir}/zutil.c)
-target_include_directories(pseudalis_zlib PUBLIC ${zlib_dir})
-target_compile_options(pseudalis_zlib PRIVATE -w)
-
 # Code partagé par le service et les outils.
 add_library(pseudalis_common STATIC common/log.cpp common/platform.cpp)
 target_include_directories(pseudalis_common PUBLIC ${PSEUDALIS_INCLUDE_DIR})

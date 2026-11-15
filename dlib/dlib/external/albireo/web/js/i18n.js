@@ -280,7 +280,7 @@ const texts = {
     program_albireo: 'Le service et cette interface',
     program_dlib: 'Moteur d\'inférence et bibliothèque des modèles',
     program_mbedtls: 'Chiffrement du serveur HTTPS local, et empreintes',
-    program_httplib: 'Serveur web local et téléchargements', program_zlib: 'Compression des données',
+    program_httplib: 'Serveur web local et téléchargements',
     program_sqlite: 'Base de données du service',
     program_libpng: 'Lecture des images PNG par les moteurs',
     program_libjpeg: 'Lecture des images JPEG par les moteurs',

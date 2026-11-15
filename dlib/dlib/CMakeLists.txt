@@ -466,8 +466,10 @@ if (NOT TARGET dlib)
             list (APPEND dlib_needed_private_includes ${PNG_INCLUDE_DIR})
             list (APPEND dlib_needed_private_libraries ${PNG_LIBRARIES})
          else()
-            # If we can't find libpng then statically compile it in.
-            include_directories(external/libpng external/zlib)
+            # If we can't find libpng then statically compile it in, with the zlib of macOS (macOS fork).
+            find_package(ZLIB REQUIRED)
+            include_directories(external/libpng ${ZLIB_INCLUDE_DIRS})
+            list (APPEND dlib_needed_private_libraries ${ZLIB_LIBRARIES})
             set(source_files ${source_files}
                external/libpng/arm/arm_init.c
                external/libpng/arm/filter_neon_intrinsics.c
@@ -487,21 +489,6 @@ if (NOT TARGET dlib)
                external/libpng/pngwrite.c
                external/libpng/pngwtran.c
                external/libpng/pngwutil.c
-               external/zlib/adler32.c
-               external/zlib/compress.c
-               external/zlib/crc32.c
-               external/zlib/deflate.c
-               external/zlib/gzclose.c
-               external/zlib/gzlib.c
-               external/zlib/gzread.c
-               external/zlib/gzwrite.c
-               external/zlib/infback.c
-               external/zlib/inffast.c
-               external/zlib/inflate.c
-               external/zlib/inftrees.c
-               external/zlib/trees.c
-               external/zlib/uncompr.c
-               external/zlib/zutil.c
                )
 
             include(cmake_utils/check_if_neon_available.cmake)

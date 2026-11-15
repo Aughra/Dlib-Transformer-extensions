@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(albireo VERSION 4.26.1 LANGUAGES C CXX OBJCXX)
+project(albireo VERSION 4.26.2 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -91,12 +91,8 @@ configure_file(engine/metal_kernels.inc.in ${CMAKE_BINARY_DIR}/generated/metal_k
 set_source_files_properties(engine/metal_device.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
    INCLUDE_DIRECTORIES "${CMAKE_BINARY_DIR}/generated")
 
-# zlib, venu de dlib/external, pour les programmes et les décodeurs d'images du moteur.
-set(zlib_dir ${ALBIREO_DLIB_DIR}/external/zlib)
-add_library(albireo_zlib STATIC ${zlib_dir}/adler32.c ${zlib_dir}/compress.c ${zlib_dir}/crc32.c
-   ${zlib_dir}/deflate.c ${zlib_dir}/infback.c ${zlib_dir}/inffast.c ${zlib_dir}/inflate.c ${zlib_dir}/inftrees.c
-   ${zlib_dir}/trees.c ${zlib_dir}/uncompr.c ${zlib_dir}/zutil.c)
-target_include_directories(albireo_zlib PUBLIC ${zlib_dir})
+# zlib, celle de macOS (SDK), pour les programmes et les décodeurs d'images du moteur.
+find_package(ZLIB REQUIRED)
 
 # Les décodeurs PNG et JPEG du moteur, qui lisent les images des requêtes : les copies de libpng
 # et de libjpeg que dlib embarque, compilées dans le moteur, quoi que contienne le système.
@@ -114,9 +110,9 @@ add_library(albireo_image STATIC
    ${jpeg_dir}/jidctint.c ${jpeg_dir}/jmemmgr.c ${jpeg_dir}/jmemnobs.c ${jpeg_dir}/jquant1.c ${jpeg_dir}/jquant2.c
    ${jpeg_dir}/jutils.c)
 target_include_directories(albireo_image PRIVATE ${png_dir} ${jpeg_dir})
-target_link_libraries(albireo_image PUBLIC albireo_zlib)
+target_link_libraries(albireo_image PUBLIC ZLIB::ZLIB)
 # Compilé dans le moteur partagé, dont seuls les symboles propres sont visibles.
-set_target_properties(albireo_zlib albireo_image PROPERTIES POSITION_INDEPENDENT_CODE ON
+set_target_properties(albireo_image PROPERTIES POSITION_INDEPENDENT_CODE ON
    C_VISIBILITY_PRESET hidden)
 
 # Le moteur d'inférence.
@@ -159,7 +155,7 @@ if (ALBIREO_PROGRAMS)
 endif()
 
 if (ALBIREO_PROGRAMS)
-   # Bibliothèques compilées dans les programmes : SQLite et zlib (ci-dessus), venus de dlib/external.
+   # Bibliothèque compilée dans les programmes : SQLite, venue de dlib/external ; zlib est celle de macOS.
    add_library(albireo_sqlite STATIC ${ALBIREO_DLIB_DIR}/external/sqlite/sqlite3.c)
    target_include_directories(albireo_sqlite PUBLIC ${ALBIREO_DLIB_DIR}/external/sqlite)
    target_compile_definitions(albireo_sqlite PRIVATE SQLITE_THREADSAFE=1 SQLITE_DQS=0 SQLITE_DEFAULT_MEMSTATUS=0
@@ -179,7 +175,7 @@ if (ALBIREO_PROGRAMS)
       host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/crypto.cpp
       host/certificates.cpp host/web_access.cpp host/hub.cpp)
    target_include_directories(albireo-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
-   target_link_libraries(albireo-service PRIVATE albireo_common albireo_sqlite albireo_zlib dlib::httplib)
+   target_link_libraries(albireo-service PRIVATE albireo_common albireo_sqlite ZLIB::ZLIB dlib::httplib)
    target_compile_options(albireo-service PRIVATE ${ALBIREO_WARNINGS})
 
    # La préparation des modèles fournis avec Albireo : vérifiés et convertis avec le code
@@ -231,7 +227,6 @@ if (ALBIREO_PROGRAMS)
       dlib.txt        ${ALBIREO_INCLUDE_DIR}/LICENSE.txt
       mbedtls.txt     ${ALBIREO_DLIB_DIR}/external/mbedtls/LICENSE
       cpp-httplib.txt ${ALBIREO_DLIB_DIR}/external/httplib/LICENSE
-      zlib.txt        ${ALBIREO_DLIB_DIR}/external/zlib/README
       sqlite.txt      ${ALBIREO_DLIB_DIR}/external/sqlite/README.txt
       libpng.txt      ${ALBIREO_DLIB_DIR}/external/libpng/LICENSE
       libjpeg.txt     ${ALBIREO_DLIB_DIR}/external/libjpeg/README)
@@ -263,7 +258,7 @@ if (ALBIREO_TESTS AND ALBIREO_PROGRAMS)
    add_executable(test_host tests/test_host.cpp host/models.cpp host/store.cpp host/http_fetch.cpp
       host/crypto.cpp host/settings.cpp host/web_access.cpp)
    target_include_directories(test_host PRIVATE ${CMAKE_BINARY_DIR}/generated)
-   target_link_libraries(test_host PRIVATE albireo_common albireo_sqlite albireo_zlib dlib::httplib)
+   target_link_libraries(test_host PRIVATE albireo_common albireo_sqlite ZLIB::ZLIB dlib::httplib)
    target_compile_options(test_host PRIVATE ${ALBIREO_WARNINGS})
    albireo_output_dir(test_host ${CMAKE_BINARY_DIR}/tests)
    # test_model_file : fichiers de modèle abîmés ; test_engine_api : l'interface C d'une bibliothèque de moteur.

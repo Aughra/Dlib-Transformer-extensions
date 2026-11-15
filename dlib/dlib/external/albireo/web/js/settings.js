@@ -456,7 +456,7 @@ let licensesSequence = 0;
 const programTexts = {
   'albireo.txt': ['albireo', 'Boost Software License 1.0'], 'dlib.txt': ['dlib', 'Boost Software License 1.0'],
   'mbedtls.txt': ['mbedtls', 'Apache License 2.0 or GPL 2.0 or later'], 'cpp-httplib.txt': ['httplib', 'MIT License'],
-  'zlib.txt': ['zlib', 'zlib License'], 'sqlite.txt': ['sqlite', null],
+  'sqlite.txt': ['sqlite', null],
   'libpng.txt': ['libpng', 'PNG Reference Library License 2'], 'libjpeg.txt': ['libjpeg', 'IJG License']
 };
 
