@@ -16,7 +16,7 @@ window.PSEUDALIS_TEXTS = {
         'par le temps écoulé depuis le début de la plus ancienne d’entre elles. La page le relit chaque seconde ' +
         '(GET /v1/speed).',
       'Lecture : les documents et les textes donnés au moteur. Écriture : les copies protégées ou restaurées qu’il ' +
-        'produit ; une copie protégée est souvent plus grosse que l’original, ses balises portant les valeurs chiffrées.',
+        'produit.',
       'Un fichier compte quand son traitement se termine : pendant un gros fichier, les cases restent immobiles, puis ' +
         'montrent son débit d’un coup. Au repos, elles retombent à zéro au bout de cinq secondes, et la dernière ' +
         'valeur reste affichée, en plus pâle.'
@@ -26,13 +26,13 @@ window.PSEUDALIS_TEXTS = {
     api: "Documentation de l'interface",
     protect_title: 'Protéger des fichiers',
     protect_hint: 'Word, Excel, PowerPoint, PDF, textes de toute extension, CSV, images, leurs archives ZIP, TAR ou ' +
-      'TAR.GZ, et des dossiers entiers, rendus en archive ZIP. Chaque donnée personnelle est remplacée par une ' +
-      'balise que seul cet ordinateur peut restaurer.',
+      'TAR.GZ, et des dossiers entiers, rendus en archive ZIP. Chaque donnée personnelle est remplacée par un ' +
+      'pseudonyme, le même dans tout le document et un autre ailleurs, sans retour possible : seul l’original ' +
+      'conservé rend le fichier.',
     restore_title: 'Restaurer des fichiers',
-    restore_hint: 'Un fichier protégé, ou toute copie de celui-ci, rend son original ; un fichier protégé modifié ' +
-      'depuis, un fichier dont l’original a été oublié et un fichier écrit ailleurs à partir de valeurs protégées ' +
-      'retrouvent leurs valeurs par leurs balises, sans leurs images. Un fichier protégé sans balises revient tant ' +
-      'que son original est conservé.',
+    restore_hint: 'Un fichier protégé, ou toute copie de celui-ci, rend son original, tant que celui-ci est conservé ' +
+      'sur cet ordinateur. Les pseudonymes, eux, ne reviennent jamais à leurs valeurs : un fichier dont l’original ' +
+      'a été oublié, ou écrit ailleurs à partir d’un fichier protégé, ne peut pas être restauré.',
     drop: 'Déposez des fichiers ou des dossiers ici, ou cliquez pour choisir des fichiers',
     choose_folder: 'Choisir un dossier',
     folder_too_big: 'Le dossier contient trop de fichiers, ou trop d’octets, pour une archive.',
@@ -75,8 +75,7 @@ window.PSEUDALIS_TEXTS = {
     s_offline: 'Le service ne répond pas.',
     records_title: 'Originaux conservés',
     records_hint: 'Les originaux des fichiers protégés sur cet ordinateur, gardés en clair dans son coffre. Un original ' +
-      'oublié est supprimé avec ses images : son fichier protégé est alors restauré par ses balises, qui rendent ' +
-      'ses valeurs mais pas ses images ; protégé sans balises, il ne peut plus être restauré.',
+      'oublié est supprimé avec ses images, et son fichier protégé ne peut plus être restauré.',
     records_none: 'Aucun original conservé.',
     records_removed: 'retiré du lecteur, conservé jusqu’au {d}',
     records_more: 'Afficher plus',
@@ -91,7 +90,7 @@ window.PSEUDALIS_TEXTS = {
     btn_original: 'Original',
     btn_forget: 'Oublier',
     confirm_forget: 'Oublier l’original de {f} ? Il est supprimé du coffre avec ses images, et son fichier protégé ' +
-      'ne sera plus restauré que par ses balises, sans ses images.',
+      'ne pourra plus être restauré.',
     confirm_forget_untagged: 'Oublier l’original de {f} ? Il est supprimé du coffre avec ses images ; protégé sans ' +
       'balises, son fichier ne pourra plus être restauré.',
     forget_title: 'Oublier un original',
@@ -103,7 +102,7 @@ window.PSEUDALIS_TEXTS = {
     tags_option_hint: 'Avec elles, toute copie se restaure avec la clé de cet ordinateur. Cette case ne vaut ' +
       'que pour les fichiers déposés ici ; le réglage général, que suit le lecteur, est dans la ' +
       'section Réglages.',
-    no_restore_hint: 'Sans balises ni original conservé, les fichiers protégés ne pourront pas être restaurés.',
+    no_restore_hint: 'Sans original conservé, les fichiers protégés ne pourront pas être restaurés.',
     protected_untagged: 'sans balises',
     not_restorable: 'il ne pourra pas être restauré',
     text_tags: 'Écrire les balises dans ce texte',
@@ -114,8 +113,8 @@ window.PSEUDALIS_TEXTS = {
     set_tags_hint: 'Le lecteur suit ce réglage, l’interface l’applique aux requêtes sans paramètre tags, et ' +
       'les cases des encadrés Protéger des fichiers et Protéger un texte en partent. Sans balises, un fichier ne ' +
       'revient que tant que son original est conservé.',
-    err_tagless_forgotten: 'Ce fichier a été protégé sans balises et son original a été oublié le {date} : ses ' +
-      'valeurs ne peuvent plus revenir.',
+    err_tagless_forgotten: 'L’original de ce fichier a été oublié le {date} : ses pseudonymes ne reviennent pas à ' +
+      'leurs valeurs.',
     key_title: 'Clé de cet ordinateur',
     key_hint: 'Cette clé restaure tous les fichiers protégés ici. Son export est en clair, sans phrase secrète : ' +
       'quiconque lit le fichier peut restaurer vos copies protégées. Conservez-le en lieu sûr, hors de cet ' +

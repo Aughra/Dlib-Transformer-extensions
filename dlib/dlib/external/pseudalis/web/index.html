@@ -26,7 +26,6 @@
       <a href="#restore" data-card="restore-card"><span class="ico">↺</span><span data-t="restore_title"></span></a>
       <a href="#text" data-card="text-card"><span class="ico">¶</span><span data-t="text_title"></span></a>
       <a href="#records" data-card="records-card" hidden><span class="ico">☰</span><span data-t="records_title"></span></a>
-      <a href="#key" data-card="key-card" hidden><span class="ico">⚷</span><span data-t="key_title"></span></a>
       <a href="#settings" data-card="settings-card" hidden><span class="ico">⚙︎</span><span data-t="settings_title"></span></a>
       <a href="#terms" data-card="terms-card" hidden><span class="ico">≡</span><span data-t="terms_title"></span></a>
     </nav>
@@ -49,9 +48,9 @@
       <div class="buttons"><label class="button secondary file"><input type="file" id="protect-folder" webkitdirectory>
         <span data-t="choose_folder"></span></label></div>
       <label class="option"><input type="checkbox" id="keep" checked> <span data-t="keep"></span></label>
-      <!-- Les étiquettes de ces seuls fichiers, à partir du réglage des étiquettes par défaut. -->
-      <label class="option"><input type="checkbox" id="tags" checked> <span data-t="tags_option"></span></label>
-      <p class="hint sub" data-t="tags_option_hint"></p>
+      <!-- Plus de balises (fork pour macOS, 3.0.0) : des pseudonymes sans retour ; la case reste, masquée et décochée,
+           pour le code de la page. -->
+      <label class="option" hidden><input type="checkbox" id="tags"> <span data-t="tags_option"></span></label>
       <p class="hint warn" id="no-restore" data-t="no_restore_hint" hidden></p>
       <ul class="results" id="protect-results"></ul>
     </section>
@@ -86,12 +85,11 @@
       </p>
       <div class="buttons">
         <button id="text-protect" data-t="text_protect"></button>
-        <button id="text-restore" class="secondary" data-t="text_restore"></button>
+        <button id="text-restore" class="secondary" data-t="text_restore" hidden></button>
         <button id="text-detect" class="secondary" data-t="text_detect"></button>
       </div>
-      <!-- Les étiquettes de ce seul texte, le paramètre de l'interface essayé ici, à partir du réglage. -->
-      <label class="option"><input type="checkbox" id="text-tags" checked> <span data-t="text_tags"></span></label>
-      <p class="hint sub" data-t="text_tags_hint"></p>
+      <!-- Plus de balises (fork pour macOS, 3.0.0) : la case reste, masquée et décochée, pour le code de la page. -->
+      <label class="option" hidden><input type="checkbox" id="text-tags"> <span data-t="text_tags"></span></label>
       <p class="hint warn" id="text-untagged" data-t="text_untagged_hint" hidden></p>
       <pre id="text-result" class="output" hidden></pre>
     </section>
@@ -126,9 +124,8 @@
 
     <section class="card" id="settings-card" hidden>
       <h2 data-t="settings_title"></h2>
-      <!-- Les étiquettes par défaut : le lecteur les suit, l'interface et les cases des cartes en partent. -->
-      <label class="option"><input type="checkbox" id="set-tags"> <span data-t="set_tags"></span></label>
-      <p class="hint sub" data-t="set_tags_hint"></p>
+      <!-- Plus de balises (fork pour macOS, 3.0.0) : la case reste, masquée, pour le code de la page. -->
+      <label class="option" hidden><input type="checkbox" id="set-tags"> <span data-t="set_tags"></span></label>
       <div class="fields">
         <label><span data-t="set_drive"></span><input type="text" id="set-drive" maxlength="1" class="letter"></label>
         <label><span data-t="set_dates"></span>

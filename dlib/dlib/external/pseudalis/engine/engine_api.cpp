@@ -236,6 +236,10 @@ PSD_API int PSD_CALL psd_process(psd_engine* engine, const char* request, const 
         // déjà connus.
         const bool tags = req["tags"].as_bool(true);
         const std::vector<pseudalis::substitution> known = substitutions_in(req["substitutions"]);
+        // Une protection sous une clé jetable (fork pour macOS) : des pseudonymes qui ne reviennent plus.
+        std::unique_ptr<pseudalis::engine::one_time_key> one_time;
+        if (req["one_time_key"].as_bool(false) && op.compare(0, 9, "anonymize") == 0)
+            one_time.reset(new pseudalis::engine::one_time_key(*engine->e));
         if (op == "anonymize" || op == "restore")
         {
             pseudalis::engine_result r = op == "anonymize"

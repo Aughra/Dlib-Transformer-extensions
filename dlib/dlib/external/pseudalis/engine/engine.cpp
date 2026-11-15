@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <dlib/base64.h>
+#include <dlib/crypto/secure_random.h>
 #include <dlib/privacy.h>
 #include <dlib/privacy/pii_recognizers.h>
 
@@ -1014,9 +1015,18 @@ namespace pseudalis
 
 // ----------------------------------------------------------------------------------------
 
+    namespace
+    {
+        // Le pseudonymiseur de la clé jetable de ce thread, quand un engine::one_time_key vit.
+        thread_local const pseudonymizer* one_time = nullptr;
+    }
+
     struct engine::impl
     {
         std::unique_ptr<pseudonymizer> p;
+        pseudonymizer_options popt;
+        // Le pseudonymiseur de l'opération : celui de la clé jetable de ce thread, sinon celui de la clé du moteur.
+        const pseudonymizer& ps() const { return one_time ? *one_time : *p; }
         pii_detector_options dopt;
         model_set m;
         // La clé des identifiants des images, dérivée de la clé du moteur.
@@ -1085,10 +1095,10 @@ namespace pseudalis
             d.learn(line);
             std::vector<pii_entity> values;
             for (const pii_entity& e : d.detect(line))
-                if (!p->keeps_in_clear(e.type)) values.push_back(e);
+                if (!ps().keeps_in_clear(e.type)) values.push_back(e);
             if (known)
                 for (const pii_entity& e : known->detect(line))
-                    if (!p->keeps_in_clear(e.type)) values.push_back(e);
+                    if (!ps().keeps_in_clear(e.type)) values.push_back(e);
             // Les valeurs qui se chevauchent n'en font plus qu'une, dont l'étiquette les couvre toutes.
             std::sort(values.begin(), values.end(), [](const pii_entity& a, const pii_entity& b) {
                 return a.begin < b.begin || (a.begin == b.begin && a.end > b.end);
@@ -1110,7 +1120,7 @@ namespace pseudalis
                 // Sans étiquettes, les valeurs prennent leurs substituts, que l'appelant garde, tous en
                 // entier.
                 std::vector<pseudonymizer::substitution> made;
-                std::string out = p->apply_substitutes(line, joined, &made);
+                std::string out = ps().apply_substitutes(line, joined, &made);
                 size_t cut = out.size() > 1000 ? 1000 : out.size(), pos = 0;
                 std::size_t kept = 0;
                 for (const pseudonymizer::substitution& s : made)
@@ -1134,7 +1144,7 @@ namespace pseudalis
                 }
                 return out;
             }
-            std::string out = p->apply(line, joined);
+            std::string out = ps().apply(line, joined);
             if (out.size() > 1000)
             {
                 size_t cut = 1000;
@@ -1229,7 +1239,7 @@ namespace pseudalis
         {
             pii_detector d(options());
             attach(d);
-            document_anonymizer a(*p, d);
+            document_anonymizer a(ps(), d);
             a.set_substitute_resolver(resolver_of(lookup));
             return protect_base(a, r, base, made);
         }
@@ -1237,7 +1247,7 @@ namespace pseudalis
         std::string restore_alone(const std::string& base, const substitute_lookup& lookup, document_report& r) const
         {
             pii_detector d(options());
-            document_anonymizer a(*p, d);
+            document_anonymizer a(ps(), d);
             a.set_substitute_resolver(resolver_of(lookup));
             return restore_base(a, r, base);
         }
@@ -1304,7 +1314,7 @@ namespace pseudalis
             engine_result out;
             if (!restoring) attach(d);
             // Un PDF garde ses pages : son texte est remplacé sur place (le défaut de l'anonymiseur).
-            document_anonymizer a(*p, d);
+            document_anonymizer a(ps(), d);
             // Les propriétés du document prennent des substituts, qu'une fenêtre de propriétés montre tels
             // quels.
             a.set_untagged_properties(true);
@@ -1427,7 +1437,7 @@ namespace pseudalis
                         if (restoring)
                         {
                             pii_detector d(options());
-                            document_anonymizer a(*p, d);
+                            document_anonymizer a(ps(), d);
                             a.set_substitute_resolver(resolver_of(lookup));
                             changed = a.restore_name(part, r);
                         }
@@ -1435,7 +1445,7 @@ namespace pseudalis
                         {
                             pii_detector d(options());
                             attach(d);
-                            document_anonymizer a(*p, d);
+                            document_anonymizer a(ps(), d);
                             a.set_substitute_resolver(resolver_of(lookup));
                             // Un dossier n'a pas d'extension : son nom entier est lu.
                             const std::size_t first = r.substitutions.size();
@@ -1640,6 +1650,7 @@ namespace pseudalis
         popt.date_order = options.date_order == "mdy" ? numeric_date_order::month_day_year
                                                       : numeric_date_order::day_month_year;
         p_->p.reset(new pseudonymizer(pseudonymization_key::from_bytes(key), popt));
+        p_->popt = popt;
         p_->dopt.date_order = popt.date_order;
         p_->picture_key = hkdf_sha256(key, "pseudalis.pictures", "identifier", 32);
         try
@@ -1721,7 +1732,7 @@ namespace pseudalis
     {
         pii_detector d(p_->options());
         p_->attach(d);
-        document_anonymizer a(*p_->p, d);
+        document_anonymizer a(p_->ps(), d);
         a.set_untagged_text(!tags);
         document_report r;
         const std::string out = a.anonymize_text(text, r);
@@ -1736,7 +1747,7 @@ namespace pseudalis
                                      const std::vector<substitution>& substitutes) const
     {
         pii_detector d(p_->options());
-        document_anonymizer a(*p_->p, d);
+        document_anonymizer a(p_->ps(), d);
         a.set_text_substitute_resolver(resolver_of_list(substitutes));
         document_report r;
         const std::string out = a.restore(text, document_format::text, r);
@@ -1790,7 +1801,7 @@ namespace pseudalis
     {
         json spans = json::array();
         if (!privacy_impl::utf8_valid(text)) return spans;
-        for (const protected_value& o : protected_values(*p_->p, text, resolver_of_list(substitutes)))
+        for (const protected_value& o : protected_values(p_->ps(), text, resolver_of_list(substitutes)))
         {
             if (spans.size() == max_spans) return json::array();
             json s = json::object();
@@ -1809,7 +1820,7 @@ namespace pseudalis
         if (!privacy_impl::utf8_valid(restored)) return spans;
         std::string rebuilt;
         std::size_t pos = 0;
-        for (const protected_value& o : protected_values(*p_->p, tagged, resolver_of_list(substitutes)))
+        for (const protected_value& o : protected_values(p_->ps(), tagged, resolver_of_list(substitutes)))
         {
             if (o.begin < pos || spans.size() == max_spans) return json::array();
             rebuilt.append(tagged, pos, o.begin - pos);
@@ -1866,6 +1877,29 @@ namespace pseudalis
             spans.push_back(s);
         }
         return spans;
+    }
+
+    struct engine::one_time_key::state
+    {
+        std::unique_ptr<pseudonymizer> p;
+        const pseudonymizer* before = nullptr;
+    };
+
+    engine::one_time_key::one_time_key(const engine& e) : s_(new state)
+    {
+        std::string key = dlib::generate_secure_random_bytes(32);
+        // Les substituts connus, faits sous une autre clé jetable, restent tels quels : reconnus sans être ouverts.
+        pseudonymizer_options popt = e.p_->popt;
+        popt.opaque_substitutes = true;
+        s_->p.reset(new pseudonymizer(pseudonymization_key::from_bytes(key), popt));
+        secure_wipe(&key[0], key.size());
+        s_->before = one_time;
+        one_time = s_->p.get();
+    }
+
+    engine::one_time_key::~one_time_key()
+    {
+        one_time = s_->before;
     }
 
     std::string engine::key_fingerprint() const

@@ -1,6 +1,6 @@
 # Pseudalis sur Mac — guide
 
-Pseudalis protège les données personnelles des documents : chaque nom, adresse, numéro, identifiant ou date est remplacé par une balise que seule la clé de cet ordinateur sait rendre. Ce guide décrit la version du fork pour macOS à puce Apple (Pseudalis **2.2.0**) : la construire, la lancer, s'en servir, la tester. Il suit le code ; les choix et l'historique sont dans les [notes de version](../../dlib/dlib/external/pseudalis/web/changelog.md), le [tableau des différences avec Windows](differences-mac-windows.md) et le [blog de Pseudalis](../../blog/pseudalis/README.md).
+Pseudalis protège les données personnelles des documents : chaque nom, adresse, numéro, identifiant ou date est remplacé par un pseudonyme, le même dans tout le document et un autre ailleurs, sans retour possible ; seul l'original conservé rend un fichier (3.0.0). Ce guide décrit la version du fork pour macOS à puce Apple (Pseudalis **3.0.0**) : la construire, la lancer, s'en servir, la tester. Il suit le code ; les choix et l'historique sont dans les [notes de version](../../dlib/dlib/external/pseudalis/web/changelog.md), le [tableau des différences avec Windows](differences-mac-windows.md) et le [blog de Pseudalis](../../blog/pseudalis/README.md).
 
 Pseudalis vit dans le même dépôt qu'Albireo et repose, comme lui, sur dlib : sur [`dlib/privacy`](../../dlib/dlib/privacy.h) et sur les modèles de reconnaissance de l'exemple `slm_document_anonymizer_ex`, compilés dans le service.
 
@@ -39,10 +39,9 @@ Dans la section Réglages, « Ouvrir Pseudalis aux appareils de la maison » ouv
 | Section du menu | Ce qu'elle fait |
 |---|---|
 | Protéger des fichiers | Word, Excel, PowerPoint, PDF, textes, CSV, images, archives ZIP, TAR ou TAR.GZ, et dossiers entiers (rendus en archive ZIP) ; les originaux peuvent être conservés |
-| Restaurer des fichiers | Rend l'original d'un fichier protégé, ou d'une copie de celui-ci |
-| Protéger un texte | Protège ou restaure un texte collé, ou montre les valeurs trouvées, en couleurs |
+| Restaurer des fichiers | Rend l'original conservé d'un fichier protégé, ou d'une copie de celui-ci |
+| Protéger un texte | Protège un texte collé, ou montre les valeurs trouvées, en couleurs |
 | Originaux conservés | La liste des originaux gardés, à télécharger ou à oublier |
-| Clé de cet ordinateur | L'empreinte de la clé, son export (en clair, sans phrase secrète) et son import |
 | Réglages | Balises par défaut, lettre du lecteur, ordre des dates, taille maximale d'un fichier, durée et espace des originaux, description des images par Albireo |
 | Termes imposés | Des termes toujours protégés, quel que soit le détecteur |
 
@@ -66,7 +65,6 @@ Les routes principales, décrites en détail par `web/openapi.json` et la page d
 | `GET /v1/lookup` | Si un fichier est un fichier protégé connu de cette installation |
 | `GET /v1/records`, `GET /v1/records/{id}/original`, `DELETE /v1/records/{id}` | Les originaux conservés |
 | `GET`/`PUT /v1/settings`, `GET`/`PUT /v1/terms` | Réglages et termes imposés |
-| `POST /v1/key/export`, `/v1/key/import` | La clé |
 | `GET /v1/info`, `/v1/health`, `/v1/speed`, `/v1/drive`, `/v1/albireo`, `/v1/logs`, `/v1/events` | État, débit, lecteur, Albireo, journaux, événements |
 
 Exemple :
@@ -107,7 +105,7 @@ PSEUDALIS_TEST_PORT=18474 bash dlib/dlib/external/pseudalis/tools/test_macos.sh 
 
 ## Sécurité
 
-- **Plus de chiffrement en sortie** (2.2.0, décision de l'humain du 2026-11-15) : le coffre garde les originaux en clair (les blobs chiffrés d'une version antérieure sont réécrits en clair au démarrage), et l'export de la clé est la clé en clair. Tout programme du Mac qui lit le dossier de données lit les originaux ; quiconque lit un export de la clé peut restaurer les copies protégées. Un export protégé d'une version antérieure s'importe encore, avec sa phrase secrète, par l'interface. Les balises des copies protégées portent encore leurs valeurs chiffrées : leur passage à une table gardée sur le Mac est la prochaine étape.
+- **Plus de chiffrement en sortie** (2.2.0, décision de l'humain du 2026-11-15) : le coffre garde les originaux en clair (les blobs chiffrés d'une version antérieure sont réécrits en clair au démarrage), et l'export de la clé est la clé en clair. Tout programme du Mac qui lit le dossier de données lit les originaux ; quiconque lit un export de la clé peut restaurer les copies protégées. Un export protégé d'une version antérieure s'importe encore, avec sa phrase secrète, par l'interface. Depuis la 3.0.0, plus rien n'est chiffré en sortie : les copies portent des pseudonymes faits sous une clé jetable par document, effacée aussitôt ; la clé de `keys/` ne sert plus qu'à relire les copies et les blobs d'une version antérieure et aux identifiants des images. Plus d'export ni d'import de la clé.
 - Sans jeton d'administration, tout programme du Mac qui joint `https://localhost` au port du service peut lire les originaux conservés, exporter la clé avec une phrase de passe de son choix, et changer les réglages. C'est le choix de l'humain (2026-11-15), le même que pour Albireo ; il convient à un Mac à un seul utilisateur.
 - Restent les gardes de toutes les routes : l'en-tête Host doit nommer le serveur local, et une requête venue d'une page doit venir de ce serveur. Aucun site web ne peut donc piloter le service par le navigateur.
 - Sans l'accès réseau, le service n'écoute que sur `127.0.0.1` : les autres appareils ne le joignent pas.

@@ -744,33 +744,7 @@ namespace pseudalis
             send_json(res, 200, json::object());
             s->request_restart();
         });
-        srv.Post("/v1/key/export", [s, admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res)) return;
-            json body;
-            if (!parse_body(req, res, body)) return;
-            std::string exported;
-            user_error e;
-            if (!s->export_key(exported, e))
-            {
-                send_error(res, 422, e);
-                return;
-            }
-            json j = json::object();
-            j["key"] = exported;
-            send_json(res, 200, j);
-        });
-        srv.Post("/v1/key/import", [s, admin](const httplib::Request& req, httplib::Response& res) {
-            if (!admin(req, res)) return;
-            json body;
-            if (!parse_body(req, res, body)) return;
-            user_error e;
-            if (!s->import_key(body["key"].str(), body["passphrase"].str(), e))
-            {
-                send_error(res, 422, e);
-                return;
-            }
-            send_json(res, 200, json::object());
-        });
+        // Plus d'export ni d'import de la clé (fork pour macOS, 3.0.0) : les pseudonymes ne reviennent pas.
         srv.Get("/v1/logs", [admin](const httplib::Request& req, httplib::Response& res) {
             if (!admin(req, res)) return;
             json lines = json::array();

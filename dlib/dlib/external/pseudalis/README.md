@@ -343,8 +343,10 @@ fichiers non traités, `refused\`.
 > Dans le fork macOS (2.2.0 et suivantes), à la demande de son utilisateur, il n'y a plus de chiffrement en
 > sortie : le coffre garde les originaux, les images et les descriptions en clair (les blobs chiffrés d'une
 > version antérieure sont réécrits en clair au démarrage), et l'export de la clé est la clé en clair, sans
-> phrase secrète (un export protégé d'une version antérieure s'importe encore avec sa phrase). La clé maîtresse
-> est dans `keys/master.key`, en clair, permissions 0600. Les points ci-dessous décrivent l'original.
+> phrase secrète. Depuis la 3.0.0, les copies portent des pseudonymes sans retour, faits sous une clé jetable par
+> document, sans balise, et l'export et l'import de la clé sont retirés : seul l'original conservé rend un
+> fichier. La clé de `keys/master.key` (en clair, 0600) ne sert plus qu'aux copies et aux blobs d'une version
+> antérieure et aux identifiants des images. Les points ci-dessous décrivent l'original.
 
 - La clé maîtresse, 32 octets aléatoires, est chiffrée avec DPAPI pour le compte du service (LocalSystem)
   dans `keys\master.key`, dont les permissions n'admettent que SYSTEM et les administrateurs. HKDF-SHA-256

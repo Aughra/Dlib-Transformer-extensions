@@ -41,7 +41,7 @@ namespace pseudalis
             rend tant qu'il dure : le lecteur, l'application web et l'interface le prennent sauf si une
             requête le précise.
         */
-        bool tags = true;
+        bool tags = false;                      // depuis 2.3.0 (fork pour macOS) : toujours false, des pseudonymes sans retour
         bool trust_authority = true;            // l'autorité locale dans les racines de confiance (l'installateur)
         /*
             L'accès depuis le réseau de la maison (fork pour macOS, demande de l'humain du 2026-11-15) : un

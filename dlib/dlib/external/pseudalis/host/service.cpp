@@ -458,6 +458,9 @@ namespace pseudalis
     bool service::protect(const std::string& bytes, const std::string& name, const std::string& source, bool record,
                           bool tags, protect_result& out, user_error& error, long long previous)
     {
+        /* Des pseudonymes sans retour (fork pour macOS, décision de l'humain du 2026-11-15) : plus de tags, une clé
+           jetable par fichier ; seul l'original conservé rend le fichier. */
+        tags = false;
         std::shared_lock<std::shared_timed_mutex> work(work_m_);
         if (key_replaced_)
         {
@@ -520,6 +523,7 @@ namespace pseudalis
         request["operation"] = "anonymize";
         request["name"] = name;
         request["tags"] = tags;
+        request["one_time_key"] = true;
         /* Un fichier protégé ici sans tags, protégé de nouveau, par un moteur plus récent par exemple, ou
            modifié sur le lecteur : les substituts que garde son enregistrement restent tels quels, et le
            nouvel enregistrement en hérite, ce qui rend les valeurs de son original. */
@@ -978,6 +982,7 @@ namespace pseudalis
         json request = json::object(), result;
         request["operation"] = "anonymize_name";
         request["name"] = "name";
+        request["one_time_key"] = true;
         std::string e;
         if (!engine_->process(request, name, result, out, nullptr, e, substitute_lookup()))
         {
@@ -1007,10 +1012,13 @@ namespace pseudalis
             error.set("the engine is not ready", "engine");
             return false;
         }
+        // Un texte protégé : des pseudonymes sans retour, sous une clé jetable, sans tags (fork pour macOS).
+        if (operation == "anonymize_text") tags = false;
         json request = json::object();
         request["operation"] = operation;
         request["name"] = "text";
         request["tags"] = tags;
+        request["one_time_key"] = operation == "anonymize_text";
         if (substitutions.is_array()) request["substitutions"] = substitutions;
         json result;
         std::string output, e;
@@ -1220,58 +1228,6 @@ namespace pseudalis
         }
         terms_ = parsed;
         log_info("terms: " + std::to_string(parsed.size()) + " imposed term(s) set");
-        return true;
-    }
-
-    bool service::export_key(std::string& exported, user_error& error)
-    {
-        if (key_replaced_)
-        {
-            error.set("the service restarts with the key imported", "stopping");
-            return false;
-        }
-        std::lock_guard<std::mutex> lock(key_m_);
-        exported = export_master_key(master_);
-        log_info("keys: the master key was exported");
-        return true;
-    }
-
-    bool service::import_key(const std::string& exported, const std::string& passphrase, user_error& error)
-    {
-        // Aucune protection ne s'exécute de la vérification ci-dessous jusqu'au redémarrage (work_m_, key_replaced_).
-        std::unique_lock<std::shared_timed_mutex> work(work_m_);
-        if (key_replaced_)
-        {
-            error.set("the service restarts with the key imported", "stopping");
-            return false;
-        }
-        long long files = 0, bytes = 0;
-        db_->drive_usage(files, bytes);
-        if (db_->count_files() > 0 || files > 0)
-        {
-            error.set("the key of an earlier installation can only be imported while no file is recorded",
-                      "import_not_empty");
-            return false;
-        }
-        std::string key, e;
-        if (!import_master_key(exported, passphrase, key, e))
-        {
-            error.set(e, "import_failed");
-            return false;
-        }
-        {
-            std::lock_guard<std::mutex> lock(key_m_);
-            if (!save_master_key(join_path(data_dir_, "keys"), key, e))
-            {
-                wipe(key);
-                error.set(e, "import_failed");
-                return false;
-            }
-        }
-        wipe(key);
-        key_replaced_ = true;
-        log_info("keys: a master key was imported, the service restarts");
-        request_restart();
         return true;
     }
 }

@@ -160,6 +160,7 @@ namespace dlib
         date_policy dates = date_policy::shift;
         unsigned long max_shift_weeks = 260;
         numeric_date_order date_order = numeric_date_order::day_month_year;
+        bool opaque_substitutes = false;
     };
 
 // ----------------------------------------------------------------------------------------
@@ -820,7 +821,7 @@ namespace dlib
                         {
                             pii_type type;
                             std::string original;
-                            if (!decode(t, type, original))
+                            if (!decode(t, type, original) && !opaque_type(t, candidate, type, original))
                             {
                                 if (report) ++report->rejected;
                                 continue;
@@ -927,6 +928,20 @@ namespace dlib
         }
 
     private:
+        /* With opaque_substitutes, a tag that this key cannot decode still names the type of its
+           substitute: the keyword before ':'; the original is the substitute itself. */
+        bool opaque_type(const std::string& tag_text, const std::string& substitute, pii_type& type,
+                         std::string& original) const
+        {
+            if (!options_.opaque_substitutes || tag_text.size() < 9 || tag_text.compare(0, 2, "[[") != 0) return false;
+            const std::size_t colon = tag_text.find(':', 2);
+            if (colon == std::string::npos) return false;
+            type = pii_type_from_keyword(tag_text.substr(2, colon - 2));
+            if (type == pii_type::none) return false;
+            original = substitute;
+            return true;
+        }
+
         // The context is folded into every derivation through the HKDF salt.
         std::string derive(const pseudonymization_key& key, const char* purpose) const
         {

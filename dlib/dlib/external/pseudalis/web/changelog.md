@@ -2,6 +2,25 @@
 
 Pseudalis pour macOS sur puce Apple, version dérivée de Pseudalis Community (Cydral Technology), maintenue par TortueTech. Le fork numérote Pseudalis à part de l'original à partir de 2.0.0. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne ; avant 2.0.0, la section porte le numéro de la version de l'original sur laquelle reposait le fork.
 
+## 3.0.0 — 15 novembre 2026
+
+### Protection
+
+- Pseudonymes sans retour : chaque fichier, texte ou nom est protégé sous une clé tirée au hasard pour lui seul, puis effacée. Une même valeur reçoit le même pseudonyme dans tout le document (archive comprise), un autre dans un autre document, et aucun pseudonyme ne peut plus revenir à sa valeur. Les copies protégées ne contiennent plus de balises `[[TYPE:…]]`, seulement des pseudonymes lisibles.
+- Restaurer un fichier, c'est rendre son original conservé : un fichier dont l'original a été oublié, ou écrit ailleurs à partir d'un fichier protégé, ne peut plus être restauré. Un texte protégé ne se restaure pas. Les noms des dossiers du lecteur restent pseudonymisés.
+- Un pseudonyme déjà écrit (un dossier renommé par le lecteur, un fichier extrait d'une archive protégée, un fichier modifié sur le lecteur) est reconnu et laissé tel quel.
+- Les copies protégées par une version antérieure, avec leurs balises, se restaurent encore.
+
+### Accès et documents
+
+- La section « Clé de cet ordinateur », les routes `POST /v1/key/export` et `POST /v1/key/import`, les cases « Écrire les balises » et le bouton « Restaurer » d'un texte sont retirés ; le réglage `tags` vaut toujours `false`.
+
+### Rupture
+
+- Version majeure : deux routes et un comportement (la restauration à partir des balises, pour les nouvelles copies) disparaissent.
+
+---
+
 ## 2.2.0 — 15 novembre 2026
 
 ### Sécurité

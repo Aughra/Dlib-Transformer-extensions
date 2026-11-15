@@ -78,14 +78,6 @@ int main()
     bool created = false;
     CHECK(load_master_key(join_path(dir, "keys"), master, created, error) && created && master.size() == 32);
     CHECK(load_master_key(join_path(dir, "keys"), again, created, error) && !created && again == master);
-    // L'export en clair (version 2) : relu sans phrase de passe ; un export abîmé, ou protégé sans sa phrase, refusé.
-    const std::string exported = export_master_key(master);
-    std::string imported;
-    CHECK(exported.find("\"version\": 2") != std::string::npos && exported.find("passphrase") == std::string::npos);
-    CHECK(import_master_key(exported, std::string(), imported, error) && imported == master);
-    CHECK(!import_master_key("{\"format\": \"pseudalis-master-key\", \"version\": 2, \"key\": \"AAAA\"}", "", imported,
-                             error));
-    CHECK(!import_master_key("{\"format\": \"pseudalis-master-key\", \"version\": 1}", "", imported, error));
     const key_set keys = derive_keys(master);
     CHECK(keys.pseudonymization.size() == 32 && keys.vault_encryption != keys.vault_authentication);
     CHECK(aes256_ctr(keys.vault_encryption, std::string(16, '\1'),
@@ -175,7 +167,8 @@ int main()
         CHECK(host_settings::from_json(s.to_json()).removed_days == 90);
         // Les étiquettes par défaut : écrites sauf si le réglage dit le contraire, un fichier d'une version
         // antérieure les gardant.
-        CHECK(host_settings().tags && host_settings::from_json(earlier).tags);
+        // Plus de tags depuis 2.3.0 : false, même lu dans un fichier qui dit true.
+        CHECK(!host_settings().tags && !host_settings::from_json(earlier).tags);
         s.tags = false;
         CHECK(!host_settings::from_json(s.to_json()).tags);
     }
@@ -189,7 +182,7 @@ int main()
         host_settings changed;
         CHECK(damaged.update([](host_settings& s) { s.removed_days = 45; }, changed) && changed.removed_days == 45);
         settings_store again(path);
-        CHECK(again.get().removed_days == 45 && again.get().tags);
+        CHECK(again.get().removed_days == 45 && !again.get().tags);
         // Le réglage des étiquettes, enregistré, est relu quand le service redémarre.
         CHECK(again.update([](host_settings& s) { s.tags = false; }, changed) && !changed.tags);
         settings_store restarted(path);

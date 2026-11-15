@@ -75,7 +75,8 @@ namespace pseudalis
         s.history_mb = space >= 1 && space <= max_history_mb ? static_cast<int>(space) : max_history_mb;
         // L'espace contient au moins le plus gros fichier.
         if (s.history_mb < s.max_file_mb) s.history_mb = s.max_file_mb;
-        s.tags = j["tags"].as_bool(d.tags);
+        // Plus de tags (fork pour macOS, 2.3.0) : des pseudonymes sans retour, quel que soit le fichier.
+        s.tags = false;
         s.trust_authority = j["trust_authority"].as_bool(d.trust_authority);
         s.lan = j["lan"].as_bool(d.lan);
         const long long lan_port = j["lan_port"].as_int(d.lan_port);

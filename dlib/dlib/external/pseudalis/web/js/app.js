@@ -823,12 +823,13 @@
   /* Le réglage des étiquettes par défaut, que la page lit à son démarrage : les cases des cartes
      Protect files et Protect a text en partent, et chacune ne s'applique qu'à ses fichiers ou à son
      texte. */
-  let tagsDefault = true;
+  let tagsDefault = false;
   function applyTagsDefault(tags) {
     tagsDefault = tags;
     document.getElementById('tags').checked = tags;
     document.getElementById('text-tags').checked = tags;
-    document.getElementById('text-untagged').hidden = tags;
+    // Les pseudonymes ne reviennent pas : l'avertissement d'un texte sans balises n'a plus lieu d'être (3.0.0).
+    document.getElementById('text-untagged').hidden = true;
     protectOptions();
   }
 
@@ -953,7 +954,7 @@
 
   async function startAdmin() {
     if (!admin || !(await loadRecords(false))) return;
-    ['records-card', 'key-card', 'settings-card', 'terms-card'].forEach(function (id) {
+    ['records-card', 'settings-card', 'terms-card'].forEach(function (id) {
       document.getElementById(id).hidden = false;
     });
     const info = await fetch('v1/info', { cache: 'no-store' }).then(function (r) { return r.json(); })

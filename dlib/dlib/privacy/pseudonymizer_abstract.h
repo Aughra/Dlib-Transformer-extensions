@@ -142,11 +142,19 @@ namespace dlib
                 max_shift_weeks - the largest shift of date_policy::shift, in weeks into
                                   the past, clamped to [1, 5200]
                 date_order      - how numeric dates such as 03/04/2026 are read
+                opaque_substitutes - when true, find_substitutes() also reports a substitute
+                                  whose tag the resolver gives but this key cannot decode (a
+                                  tag made under another key): its type is read from the tag
+                                  keyword and its original is the substitute itself.  A
+                                  protection then leaves such substitutes as they are, while
+                                  nothing can restore them.  For pseudonyms that are not meant
+                                  to come back, made under a key used once.
         !*/
         std::string context;
         date_policy dates = date_policy::shift;
         unsigned long max_shift_weeks = 260;
         numeric_date_order date_order = numeric_date_order::day_month_year;
+        bool opaque_substitutes = false;
     };
 
 // ----------------------------------------------------------------------------------------

@@ -43,13 +43,6 @@ namespace pseudalis
     bool load_master_key(const std::string& keys_dir, std::string& master, bool& created, std::string& error);
     bool save_master_key(const std::string& keys_dir, const std::string& master, std::string& error);
 
-    /*
-        L'export de la clé maîtresse : un document JSON, la clé en clair (version 2, fork pour macOS).  L'import lit
-        aussi un export protégé par phrase de passe d'une version antérieure (version 1), avec cette phrase.
-    */
-    std::string export_master_key(const std::string& master);
-    bool import_master_key(const std::string& exported, const std::string& passphrase, std::string& master,
-        std::string& error);
 
     /*!
         ensures

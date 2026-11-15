@@ -222,6 +222,27 @@ namespace pseudalis
         // {"tagger", "span_model", "size"}
         static json models();
 
+        /*
+            Une clé jetable (fork pour macOS, décision de l'humain du 2026-11-15) : tant que cet objet vit, les
+            protections que fait ce thread prennent un pseudonymiseur neuf, sous une clé tirée au hasard puis
+            effacée.  Une même valeur reçoit le même pseudonyme dans ce qui est protégé pendant ce temps (un
+            document, ses noms, son archive), un autre ailleurs, et aucun pseudonyme ne peut plus être rendu à sa
+            valeur : l'original conservé est le seul retour.  Les restaurations gardent la clé du moteur, pour les
+            copies protégées par une version antérieure.
+        */
+        class one_time_key
+        {
+        public:
+            explicit one_time_key(const engine& e);
+            ~one_time_key();
+            one_time_key(const one_time_key&) = delete;
+            one_time_key& operator=(const one_time_key&) = delete;
+
+        private:
+            struct state;
+            std::unique_ptr<state> s_;
+        };
+
     private:
         struct impl;
         std::shared_ptr<impl> p_;
