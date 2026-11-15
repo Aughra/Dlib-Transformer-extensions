@@ -12,7 +12,7 @@ import { autoGrow, busyHere, liveMessage, regenerate, renderComposerState, sendM
 import { maxContextImages } from './context.js';
 import { attachmentIds, conversationMenu, deleteQuestion, exportAnswer, liveCopy, moveMenu,
   persist } from './conversations.js';
-import { showMenu } from './dialogs.js';
+import { showMenu, showPanel } from './dialogs.js';
 import { extension } from './documents.js';
 import { copyText, download, formatDecimal, formatDuration, formatNumber, formatShortDuration, formatSize, h,
   iconButton, mimeOf, toast } from './dom.js';
@@ -46,25 +46,36 @@ export function renderAll() {
   ui.banner.classList.toggle('hidden', !(state.view === 'chat' && state.current && state.current.incognito));
 }
 
-// La page de l'interface de programmation, dans un nouvel onglet (fork pour macOS : le bouton « API » était en bas du
-// panneau latéral).
-function apiButton() {
-  return iconButton('book', 'Interface de programmation (API)', () => window.open('/docs/', '_blank'), 'icon-button topbar-api');
-}
-
-// L'engrenage de la barre du haut : chaque onglet des paramètres, dans leur ordre, puis les notes de version (fork pour
-// macOS : il remplace le bouton « Paramètres » du bas du panneau latéral).
-function gearButton() {
-  return iconButton('gear', t('settings'), (e) => showMenu(e.currentTarget, [
-    { icon: 'gear', label: t('general'), action: () => settingsDialog('general') },
-    { icon: 'spark', label: t('modelsTab'), action: () => settingsDialog('modelsTab') },
-    { icon: 'edit', label: t('model'), action: () => settingsDialog('model') },
-    { icon: 'history', label: t('memoryTab'), action: () => settingsDialog('memoryTab') },
-    { icon: 'archive', label: t('data'), action: () => settingsDialog('data') },
-    { icon: 'cpu', label: t('serviceTab'), action: () => settingsDialog('serviceTab') },
-    { icon: 'info', label: t('about'), action: () => settingsDialog('about') },
-    { icon: 'file', label: t('changelog'), action: () => changelogDialog() }
-  ]), 'icon-button topbar-gear');
+/*
+    Le menu de la barre du haut (fork pour macOS : il remplace le bouton « Paramètres » du bas du panneau latéral,
+    puis l'engrenage, à la demande de l'humain) : trois traits, et un grand menu en colonnes sur le modèle de celui de
+    TortueTech.  Les onglets des paramètres, le contexte de la prochaine question, l'aide et la page de l'interface.
+*/
+function menuButton() {
+  const openApi = () => window.open('/docs/', '_blank');
+  return iconButton('menu', 'Menu', (e) => {
+    const inChat = state.view === 'chat' && !!state.current;
+    const context = { label: 'Contexte de la prochaine question', action: () => contextPreview(), disabled: !inChat,
+      hint: 'Ouvrez une discussion pour voir ce que le modèle lira.' };
+    showPanel(e.currentTarget, [
+      { title: 'Les réglages', entries: [
+        { label: t('general'), action: () => settingsDialog('general') },
+        { label: t('modelsTab'), action: () => settingsDialog('modelsTab') },
+        { label: t('model'), action: () => settingsDialog('model') },
+        { label: t('memoryTab'), action: () => settingsDialog('memoryTab') }] },
+      { title: 'Le Mac', entries: [
+        { label: t('serviceTab'), action: () => settingsDialog('serviceTab') },
+        { label: t('data'), action: () => settingsDialog('data') }] },
+      { title: 'Cette discussion', entries: [context] },
+      { title: 'En savoir plus', entries: [
+        { label: t('about'), action: () => settingsDialog('about') },
+        { label: t('changelog'), action: () => changelogDialog() },
+        { label: 'Interface de programmation (API)', action: openApi }] }
+    ], [
+      Object.assign({}, context, { label: 'Contexte', desc: 'ce que le modèle lira pour la prochaine question' }),
+      { label: 'API', desc: 'l’interface de programmation, dans un nouvel onglet', action: openApi }
+    ]);
+  }, 'icon-button topbar-menu');
 }
 
 export function renderTopbar() {
@@ -73,11 +84,11 @@ export function renderTopbar() {
   bar.append(iconButton('sidebar', t('collapse'), toggleSidebar));
   if (state.view === 'project') {
     const p = projectById(state.projectId);
-    bar.append(h('div', { class: 'title' }, p ? p.name : ''), apiButton(), gearButton());
+    bar.append(h('div', { class: 'title' }, p ? p.name : ''), menuButton());
     return;
   }
   if (state.view === 'licenses') {
-    bar.append(h('div', { class: 'title' }, t('licensesTitle')), apiButton(), gearButton());
+    bar.append(h('div', { class: 'title' }, t('licensesTitle')), menuButton());
     return;
   }
   const c = state.current;
@@ -115,10 +126,8 @@ export function renderTopbar() {
     }
   }
   // Le fork n'a plus de sélecteur de fonction : le modèle se choisit dans les paramètres (onglet Modèles).
-  // Le contexte que lirait le modèle pour la prochaine question (fork pour macOS).
-  if (c) bar.append(iconButton('chat', 'Contexte de la prochaine question', () => contextPreview(), 'icon-button topbar-context'));
   if (c && c.messages.length) bar.append(iconButton('more', '…', (e) => conversationMenu(c, e.currentTarget)));
-  bar.append(apiButton(), gearButton());
+  bar.append(menuButton());
 }
 
 function toggleSidebar() {

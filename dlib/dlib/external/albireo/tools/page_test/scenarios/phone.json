@@ -43,6 +43,19 @@
   "shot": "phone-chat.png"
  },
  {
+  "name": "phone menu fits",
+  "eval": "document.querySelector('.topbar-menu').click(); await new Promise(r=>setTimeout(r,250)); const m=document.querySelector('.menu.mega'); const r=m.getBoundingClientRect(); return r.left>=0 && r.right<=innerWidth && document.documentElement.scrollWidth<=innerWidth",
+  "expect": true
+ },
+ {
+  "shot": "phone-menu.png"
+ },
+ {
+  "name": "phone menu closes",
+  "eval": "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); return !document.querySelector('.menu.mega')",
+  "expect": true
+ },
+ {
   "name": "sidebar opens, and closes on choosing a discussion",
   "eval": "const sb=document.querySelector('.sidebar'); document.querySelector('.topbar button').click(); await new Promise(r=>setTimeout(r,600)); const opened=!sb.classList.contains('collapsed'); sb.querySelector('.side-section:last-of-type .item:not(.new-item), .item.active, .side-scroll .item:not(.new-item)').click(); await new Promise(r=>setTimeout(r,800)); return [opened, sb.classList.contains('collapsed')]",
   "expect": [
@@ -55,7 +68,7 @@
  },
  {
   "name": "settings fit",
-  "eval": "document.querySelector('.topbar-gear').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); await new Promise(r=>setTimeout(r,800)); const d=document.querySelector('.dialog').getBoundingClientRect(); return d.width<=innerWidth && d.left>=0",
+  "eval": "document.querySelector('.topbar-menu').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); await new Promise(r=>setTimeout(r,800)); const d=document.querySelector('.dialog').getBoundingClientRect(); return d.width<=innerWidth && d.left>=0",
   "expect": true
  },
  {

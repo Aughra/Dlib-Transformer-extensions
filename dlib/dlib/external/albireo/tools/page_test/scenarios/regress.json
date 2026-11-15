@@ -72,7 +72,7 @@
  },
  {
   "name": "open settings",
-  "eval": "document.querySelector('.topbar-gear').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); return true",
+  "eval": "document.querySelector('.topbar-menu').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); return true",
   "wait": 600
  },
  {
@@ -144,7 +144,7 @@
  },
  {
   "name": "changelog dialog",
-  "eval": "document.querySelector('.topbar-gear').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); await new Promise(r=>setTimeout(r,600)); [...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='À propos').click(); await new Promise(r=>setTimeout(r,1500)); [...document.querySelectorAll('.dialog a')].find(a=>a.innerText.trim()==='Notes de version').click(); await new Promise(r=>setTimeout(r,1500)); const ds=[...document.querySelectorAll('.dialog')]; return ds[ds.length-1].innerText.includes('4.11.0')",
+  "eval": "document.querySelector('.topbar-menu').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); await new Promise(r=>setTimeout(r,600)); [...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='À propos').click(); await new Promise(r=>setTimeout(r,1500)); [...document.querySelectorAll('.dialog a')].find(a=>a.innerText.trim()==='Notes de version').click(); await new Promise(r=>setTimeout(r,1500)); const ds=[...document.querySelectorAll('.dialog')]; return ds[ds.length-1].innerText.includes('4.11.0')",
   "expect": true
  },
  {
@@ -170,7 +170,7 @@
  },
  {
   "name": "memory and data tabs",
-  "eval": "location.hash='#/'; await new Promise(r=>setTimeout(r,600)); document.querySelector('.topbar-gear').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); await new Promise(r=>setTimeout(r,600)); const out=[]; for (const n of ['Mémoire','Données']){[...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()===n).click(); await new Promise(r=>setTimeout(r,1200)); out.push(document.querySelector('.dialog').innerText.length>200);} [...document.querySelectorAll('.dialog button')].find(b=>b.innerText.trim()==='Fermer').click(); return out",
+  "eval": "location.hash='#/'; await new Promise(r=>setTimeout(r,600)); document.querySelector('.topbar-menu').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); await new Promise(r=>setTimeout(r,600)); const out=[]; for (const n of ['Mémoire','Données']){[...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()===n).click(); await new Promise(r=>setTimeout(r,1200)); out.push(document.querySelector('.dialog').innerText.length>200);} [...document.querySelectorAll('.dialog button')].find(b=>b.innerText.trim()==='Fermer').click(); return out",
   "expect": [
    true,
    true
@@ -260,7 +260,7 @@
  },
  {
   "name": "memory learned",
-  "eval": "document.querySelector('.topbar-gear').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); await new Promise(r=>setTimeout(r,600)); [...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='Mémoire').click(); await new Promise(r=>setTimeout(r,1200)); const t=document.querySelector('.dialog').innerText; return t.slice(0,400)"
+  "eval": "document.querySelector('.topbar-menu').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); await new Promise(r=>setTimeout(r,600)); [...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='Mémoire').click(); await new Promise(r=>setTimeout(r,1200)); const t=document.querySelector('.dialog').innerText; return t.slice(0,400)"
  },
  {
   "shot": "memory.png"

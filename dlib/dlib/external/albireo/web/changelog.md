@@ -2,6 +2,15 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 5.1.0 — 15 novembre 2026
+
+### Accès et documents
+
+- L'engrenage de la barre du haut devient un bouton « Menu » à trois traits, qui ouvre un grand menu en colonnes : « Les réglages » (Général, Modèles, Génération, Mémoire), « Le Mac » (Service, Données), « Cette discussion » (Contexte de la prochaine question), « En savoir plus » (À propos, Notes de version, Interface de programmation), et une ligne de raccourcis vers le contexte et l'API. Sur un téléphone, les colonnes passent sur deux rangées.
+- Les boutons du contexte et de l'API quittent la barre du haut, qui ne garde que le panneau latéral, le titre, les actions de la discussion et le menu.
+
+---
+
 ## 5.0.0 — 15 novembre 2026
 
 ### Sécurité

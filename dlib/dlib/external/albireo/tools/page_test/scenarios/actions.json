@@ -79,12 +79,25 @@
  },
  {
   "name": "context preview",
-  "eval": "const a=document.querySelector('.composer .md-field'); a.value='Brouillon pour essai'; a.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('.topbar-context').click(); let d=null; for(let i=0;i<60;i++){ await T.sleep(250); d=document.querySelector('.dialog'); if(d && /jetons sur/.test(d.querySelector('.preview-head').innerText)) break; } const items=[...d.querySelectorAll('.preview-item')]; const ok=/jetons sur/.test(d.querySelector('.preview-head').innerText) && items[0].innerText.startsWith('Système') && items[items.length-1].innerText.includes('Brouillon pour essai'); T.btn('Fermer',d).click(); a.value=''; a.dispatchEvent(new Event('input',{bubbles:true})); await T.sleep(300); return ok && !document.querySelector('.dialog')",
+  "eval": "const a=document.querySelector('.composer .md-field'); a.value='Brouillon pour essai'; a.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('.topbar-menu').click(); [...document.querySelectorAll('.mega [role=menuitem]')].find(e=>e.innerText.trim()==='Contexte de la prochaine question').click(); let d=null; for(let i=0;i<60;i++){ await T.sleep(250); d=document.querySelector('.dialog'); if(d && /jetons sur/.test(d.querySelector('.preview-head').innerText)) break; } const items=[...d.querySelectorAll('.preview-item')]; const ok=/jetons sur/.test(d.querySelector('.preview-head').innerText) && items[0].innerText.startsWith('Système') && items[items.length-1].innerText.includes('Brouillon pour essai'); T.btn('Fermer',d).click(); a.value=''; a.dispatchEvent(new Event('input',{bubbles:true})); await T.sleep(300); return ok && !document.querySelector('.dialog')",
   "expect": true
  },
  {
-  "name": "api button on top",
-  "eval": "return !!document.querySelector('.topbar .topbar-api') && ![...document.querySelectorAll('.sidebar button')].some(b=>b.innerText.trim()==='API')",
+  "name": "hamburger menu",
+  "eval": "const b=document.querySelector('.topbar .topbar-menu'); if(!b||document.querySelector('.topbar-api,.topbar-context,.topbar-gear')) return 'old buttons'; b.click(); await T.sleep(200); const m=document.querySelector('.menu.mega'); if(!m) return 'no panel'; const heads=[...m.querySelectorAll('h3')].map(x=>x.innerText.trim().toUpperCase()).join('|'); const items=[...m.querySelectorAll('.mega-item')].map(x=>x.innerText.trim()); const foot=m.querySelectorAll('.mega-foot .mega-short').length; document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); await T.sleep(100); return heads+' '+(items.includes('Interface de programmation (API)')&&items.includes('Contexte de la prochaine question')&&items.includes('Service'))+' '+foot+' '+!document.querySelector('.menu.mega')",
+  "expect": "LES RÉGLAGES|LE MAC|CETTE DISCUSSION|EN SAVOIR PLUS true 2 true"
+ },
+ {
+  "name": "open menu for menu-mega.png",
+  "eval": "document.querySelector('.topbar-menu').click(); await new Promise(r=>setTimeout(r,250)); return !!document.querySelector('.menu.mega')",
+  "expect": true
+ },
+ {
+  "shot": "menu-mega.png"
+ },
+ {
+  "name": "close menu after menu-mega.png",
+  "eval": "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); return !document.querySelector('.menu.mega')",
   "expect": true
  },
  {
@@ -135,7 +148,7 @@
  },
  {
   "name": "clear all resets memory, name and instructions",
-  "eval": "document.querySelector('.topbar-gear').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); await T.sleep(600); [...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='Données').click(); await T.sleep(800); T.btn('Supprimer toutes les discussions et tous les projets').click(); await T.sleep(500); const ds=[...document.querySelectorAll('.dialog')]; const text=ds[ds.length-1].innerText; [...ds[ds.length-1].querySelectorAll('button')].find(b=>b.classList.contains('primary')).click(); await T.sleep(1500); const s=await (await import('/js/store.js')).getSettings(); const {state}=await import('/js/state.js'); return [text.includes('votre nom'), s.userName||'', s.systemPrompt||'', s.memory||'', (s.memoryReset||0)>0, state.settings.userName||'', document.querySelectorAll('.dialog').length]",
+  "eval": "document.querySelector('.topbar-menu').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); await T.sleep(600); [...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='Données').click(); await T.sleep(800); T.btn('Supprimer toutes les discussions et tous les projets').click(); await T.sleep(500); const ds=[...document.querySelectorAll('.dialog')]; const text=ds[ds.length-1].innerText; [...ds[ds.length-1].querySelectorAll('button')].find(b=>b.classList.contains('primary')).click(); await T.sleep(1500); const s=await (await import('/js/store.js')).getSettings(); const {state}=await import('/js/state.js'); return [text.includes('votre nom'), s.userName||'', s.systemPrompt||'', s.memory||'', (s.memoryReset||0)>0, state.settings.userName||'', document.querySelectorAll('.dialog').length]",
   "expect": [
    true,
    "",

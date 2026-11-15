@@ -30,6 +30,28 @@ export function showMenu(anchor, entries) {
   placeMenu(menu, anchor);
 }
 
+/*
+    Un grand menu en colonnes sous un bouton (fork pour macOS, sur le modèle du menu de TortueTech) : chaque colonne
+    a son titre et ses entrées { label, action, disabled, hint }, et la ligne du bas des raccourcis { label, desc,
+    action }.  Il se ferme comme un menu.
+*/
+export function showPanel(anchor, columns, shortcuts) {
+  closeMenu();
+  const entry = (e, cls) => {
+    const run = () => { if (e.disabled) return; closeMenu(); e.action(); };
+    return h('div', {
+      class: cls + (e.disabled ? ' disabled' : ''), role: 'menuitem', tabindex: '0',
+      'aria-disabled': e.disabled ? 'true' : null, title: e.disabled ? e.hint : null, onclick: run,
+      onkeydown: (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); run(); } }
+    }, cls === 'mega-short' ? [h('b', null, e.label), ' ', h('span', null, e.desc)] : e.label);
+  };
+  const panel = h('div', { class: 'menu mega', role: 'menu' },
+    h('div', { class: 'mega-cols' }, columns.map((c) => h('section', { class: 'mega-col' },
+      h('h3', null, c.title), c.entries.map((e) => entry(e, 'mega-item'))))),
+    shortcuts && shortcuts.length ? h('div', { class: 'mega-foot' }, shortcuts.map((e) => entry(e, 'mega-short'))) : null);
+  placeMenu(panel, anchor);
+}
+
 // Un panneau d'explications sous un bouton, qui se ferme comme un menu.
 export function showPopover(anchor, children) {
   closeMenu();
