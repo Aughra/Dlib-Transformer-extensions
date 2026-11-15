@@ -12,38 +12,106 @@
   --line: #d9e1e8;
   --bg: #f4f7fa;
   --card: #ffffff;
+  --field: #ffffff;
+  --soft: #eef3f7;
+  --side: #0f2a44;
+  --side-text: #dce8f3;
+  --side-faint: #8eaac4;
+  --heading: #0f2a44;
   --bad: #b3261e;
+  --shadow: 0 8px 28px rgba(15, 42, 68, 0.08);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+/* Le thème sombre (fork pour macOS) : celui du système, ou celui du bouton du menu. */
+:root.dark {
+  --text: #e3ebf3;
+  --faint: #9db1c4;
+  --line: rgba(190, 215, 240, 0.14);
+  --bg: #08131f;
+  --card: #0f1f30;
+  --field: #0b1826;
+  --soft: #15283c;
+  --teal-soft: rgba(25, 179, 162, 0.16);
+  --side: #061019;
+  --heading: #e3ebf3;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
-a { color: var(--navy-2); }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 var(--font); }
+a { color: var(--teal); }
+code { font-family: var(--mono); }
 
-.top { display: flex; align-items: center; gap: 12px; padding: 12px 24px; color: #fff;
-  background: linear-gradient(90deg, var(--navy-2), var(--navy)); }
-.top .mark { width: 34px; height: 34px; }
-.top .brand { font-size: 21px; font-weight: 600; }
-.top .tagline { color: #a9c3da; font-size: 14px; }
-.top nav { margin-left: auto; display: flex; align-items: center; gap: 16px; }
-.top nav a { color: #9fe3dc; text-decoration: none; }
-.top nav a:hover { text-decoration: underline; }
-.top select { border: 1px solid #3c6a93; background: var(--navy); color: #fff; border-radius: 6px; padding: 4px 6px; }
+/* La page : le menu à gauche, une section à la fois à droite (fork pour macOS). */
+.shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+.side { position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
+  padding: 18px 14px; background: var(--side); color: var(--side-text); }
+.side-brand { display: flex; align-items: center; gap: 10px; padding: 2px 6px; color: inherit; text-decoration: none; }
+.side-brand .mark { width: 36px; height: 36px; }
+.side-brand .brand { display: block; font-size: 20px; font-weight: 650; letter-spacing: -0.01em; color: #fff; }
+.side-brand .tagline { display: block; font-size: 12px; line-height: 1.35; color: var(--side-faint); }
+.app-switch { display: flex; padding: 3px; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 11px;
+  background: rgba(255, 255, 255, 0.05); }
+.app-switch > * { flex: 1; text-align: center; padding: 5px 8px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  color: var(--side-faint); text-decoration: none; }
+.app-switch .on { background: rgba(25, 179, 162, 0.22); color: #fff; }
+.app-switch a:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.side-nav { display: grid; gap: 2px; }
+.side-nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; color: var(--side-text);
+  text-decoration: none; font-size: 14.5px; }
+.side-nav a:hover { background: rgba(255, 255, 255, 0.06); }
+.side-nav a.on { background: rgba(25, 179, 162, 0.20); color: #fff; font-weight: 600; }
+.side-nav .ico { width: 20px; text-align: center; opacity: 0.85; }
+.side-hint { margin: 0; padding: 10px 12px; border-radius: 9px; background: rgba(255, 255, 255, 0.05);
+  color: var(--side-faint); font-size: 12.5px; line-height: 1.45; }
+.side-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.side-foot a { color: #9fe3dc; text-decoration: none; margin-right: auto; }
+.side-foot a:hover { text-decoration: underline; }
+.side-foot select { border: 1px solid rgba(255, 255, 255, 0.18); background: transparent; color: var(--side-text);
+  border-radius: 7px; padding: 4px 6px; font: inherit; }
+.side-foot select option { color: #1c2733; }
+button.ghost { background: transparent; border: 1px solid rgba(255, 255, 255, 0.18); color: var(--side-text);
+  padding: 3px 9px; }
 
-main { max-width: 980px; margin: 24px auto; padding: 0 16px; display: grid; gap: 18px; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
-.card h2 { margin: 0 0 4px; font-size: 18px; color: var(--navy); }
-.hint { margin: 0 0 12px; color: var(--faint); font-size: 14px; }
+main { padding: 28px 32px 24px; max-width: 1040px; width: 100%; display: grid; gap: 18px; align-content: start; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px;
+  box-shadow: var(--shadow); }
+.card.away { display: none; }
+.card h2 { margin: 0 0 6px; font-size: 21px; color: var(--heading); letter-spacing: -0.01em; }
+.hint { margin: 0 0 14px; color: var(--faint); font-size: 14px; }
 .note { color: var(--faint); font-size: 13px; }
 
-.status { display: flex; flex-wrap: wrap; gap: 10px; }
-.pill { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px;
-  font-size: 13px; }
-.pill b { color: var(--navy); font-weight: 600; }
-.pill.ok { border-color: #9ad9cf; background: var(--teal-soft); }
-.pill.off { color: var(--faint); }
+/* L'état du service, en lignes dans le menu. */
+.status { display: grid; gap: 4px; }
+.pill { display: flex; justify-content: space-between; gap: 10px; border-radius: 7px; padding: 3px 8px;
+  font-size: 12.5px; color: var(--side-faint); }
+.pill b { color: var(--side-text); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.pill.ok b { color: #7fe0d4; }
+.pill.off b { color: var(--side-faint); font-weight: 500; }
 
-.drop { display: block; position: relative; border: 2px dashed #a8bccd; border-radius: 10px; padding: 26px;
+/* Le débit du moteur en direct (fork pour macOS). */
+.speed { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.speed:empty { display: none; }
+.speed .gauge { display: grid; gap: 1px; padding: 6px 9px; border-radius: 9px; background: rgba(255, 255, 255, 0.05);
+  font-size: 11.5px; color: var(--side-faint); }
+.speed .gauge b { color: var(--side-text); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.speed .gauge.on { background: rgba(25, 179, 162, 0.20); }
+.speed .gauge.on b { color: #7fe0d4; }
+
+@media (max-width: 820px) {
+  .shell { grid-template-columns: 1fr; }
+  .side { position: static; height: auto; gap: 10px; padding: 12px 14px; }
+  .side-nav { display: flex; overflow-x: auto; gap: 4px; }
+  .side-nav a { white-space: nowrap; }
+  .status, .side-hint { display: none; }
+  main { padding: 16px; }
+}
+
+.drop { display: block; position: relative; border: 2px dashed var(--line); border-radius: 10px; padding: 26px;
   text-align: center; color: var(--faint); cursor: pointer; transition: background .15s, border-color .15s; }
 .drop:hover, .drop.over { border-color: var(--teal); background: var(--teal-soft); color: var(--text); }
 .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
@@ -61,15 +129,15 @@ main { max-width: 980px; margin: 24px auto; padding: 0 16px; display: grid; gap:
   animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px;
-  font: 14px/1.45 Consolas, monospace;
+textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px; color: var(--text);
+  font: 14px/1.45 var(--mono);
   resize: vertical; }
 /* Le texte de la carte par-dessus ses marques : même cadre, même police et même retour à la ligne, seules
    les marques visibles. */
 .editor { position: relative; }
 .editor textarea { position: relative; z-index: 1; display: block; background: transparent; }
-.marks { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: #fff;
-  border: 1px solid transparent; border-radius: 8px; padding: 10px; font: 14px/1.45 Consolas, monospace;
+.marks { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: var(--field);
+  border: 1px solid transparent; border-radius: 8px; padding: 10px; font: 14px/1.45 var(--mono);
   white-space: pre-wrap; overflow-wrap: break-word; color: transparent; }
 .marks mark { color: transparent; border-radius: 3px; }
 .marks mark.restored { background: transparent; border-bottom: 2px solid; border-radius: 0; }
@@ -85,10 +153,10 @@ textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; paddi
 .legend .key::before { content: ""; display: inline-block; width: 11px; height: 11px; margin-right: 5px;
   border-radius: 3px; vertical-align: -1px; background: var(--mark); border: 1px solid var(--line-mark); }
 .buttons { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-button, .button { border: 0; border-radius: 7px; padding: 7px 14px; background: var(--navy-2); color: #fff;
+button, .button { border: 0; border-radius: 9px; padding: 8px 16px; background: var(--navy-2); color: #fff; font-weight: 500;
   font: inherit;
   cursor: pointer; text-decoration: none; display: inline-block; }
-button.secondary, .button.secondary { background: #e7eef4; color: var(--navy); }
+button.secondary, .button.secondary { background: var(--soft); color: var(--heading); }
 button.danger { background: var(--bad); }
 .hint.warn { color: var(--bad); margin: 8px 0 0; }
 /* Ce que décide une case d'options, sous elle, aligné sur son libellé. */
@@ -99,16 +167,16 @@ button.danger { background: var(--bad); }
 dialog.modal { border: 0; border-radius: 12px; padding: 22px 24px 18px; width: calc(100% - 32px); max-width: 480px;
   color: var(--text); background: var(--card); box-shadow: 0 18px 50px rgba(15, 42, 68, .28); }
 dialog.modal::backdrop { background: rgba(15, 42, 68, .45); }
-dialog.modal h3 { margin: 0 0 8px; font-size: 17px; color: var(--navy); }
+dialog.modal h3 { margin: 0 0 8px; font-size: 17px; color: var(--heading); }
 dialog.modal p { margin: 0 0 18px; overflow-wrap: anywhere; }
 dialog.modal .buttons { justify-content: flex-end; margin-top: 0; }
 dialog.modal button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 button:disabled { opacity: .5; cursor: default; }
-.output { white-space: pre-wrap; overflow-wrap: anywhere; background: #f7fafc; border: 1px solid var(--line);
+.output { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 10px; margin: 12px 0 0; font: 13px/1.45 Consolas, monospace; }
+  padding: 10px; margin: 12px 0 0; font: 13px/1.45 var(--mono); }
 
-footer { max-width: 980px; margin: 8px auto 30px; padding: 0 16px; display: grid; gap: 4px; color: var(--faint);
+footer { margin: 4px 0 0; display: grid; gap: 4px; color: var(--faint);
   font-size: 12.5px; }
 
 .records { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -122,19 +190,23 @@ footer { max-width: 980px; margin: 8px auto 30px; padding: 0 16px; display: grid
 .fields { display: flex; flex-wrap: wrap; gap: 12px 18px; margin: 6px 0 4px; }
 .fields label { display: grid; gap: 4px; font-size: 14px; color: var(--faint); }
 .fields input, .fields select { border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font: inherit;
-  color: var(--text); background: #fff; min-width: 220px; }
+  color: var(--text); background: var(--field); min-width: 220px; }
 .fields input.letter { min-width: 0; width: 60px; text-transform: uppercase; }
 .fields input[type=number] { min-width: 0; width: 110px; }
 .button.file { position: relative; overflow: hidden; }
 .button.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.fingerprint code { background: #eef3f7; border-radius: 5px; padding: 2px 6px; }
-.message { margin: 10px 0 0; font-size: 14px; color: var(--navy); }
+.fingerprint code { background: var(--soft); border-radius: 5px; padding: 2px 6px; }
+.message { margin: 10px 0 0; font-size: 14px; color: var(--heading); }
 .message.bad { color: var(--bad); }
 section .option { display: flex; }
 .terms td input[type=text] { width: 100%; min-width: 180px; border: 1px solid var(--line); border-radius: 7px;
-  padding: 5px 8px; font: inherit; color: var(--text); }
+  padding: 5px 8px; font: inherit; color: var(--text); background: var(--field); }
 .terms td select { border: 1px solid var(--line); border-radius: 7px; padding: 5px 6px; font: inherit;
-  background: #fff; }
+  background: var(--field); color: var(--text); }
 .terms td.check { text-align: center; }
 .terms tr.bad td input[type=text] { border-color: var(--bad); }
 .count { align-self: center; color: var(--faint); font-size: 13px; }
+
+/* En sombre, les boutons principaux prennent la couleur de la marque, et les marques du texte une teinte plus sourde. */
+:root.dark button:not(.secondary):not(.danger):not(.ghost), :root.dark .button:not(.secondary) { background: #138f86; }
+:root.dark .marks mark { opacity: 0.55; }

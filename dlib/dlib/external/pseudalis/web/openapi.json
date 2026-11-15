@@ -3,7 +3,7 @@
  "info": {
   "title": "Pseudalis interface",
   "version": "1.0.5",
-  "description": "The local interface of Pseudalis, on this computer only (https://localhost:8444 by default). The files travel as they are, in the body of the requests. No account is needed; the operations of administration take the token of the data folder (%ProgramData%\\Pseudalis\\admin.token) in the X-Pseudalis-Admin header, which this page fills in by itself when the icon of Pseudalis opens it (Interface documentation), and which Authorize sets otherwise.",
+  "description": "The local interface of Pseudalis, on this computer only (https://localhost:8444 by default). The files travel as they are, in the body of the requests. No account is needed; the operations of administration take the token of the data folder (admin.token, in ~/.local/share/pseudalis or PSEUDALIS_HOME on macOS) in the X-Pseudalis-Admin header, which this page fills in by itself when tools/open_pseudalis.sh opens the application with it, and which Authorize sets otherwise.",
   "contact": {
    "name": "Cydral Technology",
    "email": "cydraltechnology@gmail.com",
@@ -837,6 +837,38 @@
      },
      "401": {
       "$ref": "#/components/responses/Error"
+     }
+    }
+   }
+  },
+  "/v1/speed": {
+   "get": {
+    "tags": [
+     "Service"
+    ],
+    "summary": "The live throughput of the engine",
+    "description": "The bytes that the engine read and wrote over the last five seconds, counted when each operation ends, per second, and the operations under way (macOS fork). Zero once the engine rests.",
+    "responses": {
+     "200": {
+      "description": "The throughput",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "read_bytes_per_second": {
+           "type": "number"
+          },
+          "written_bytes_per_second": {
+           "type": "number"
+          },
+          "active": {
+           "type": "integer"
+          }
+         }
+        }
+       }
+      }
      }
     }
    }

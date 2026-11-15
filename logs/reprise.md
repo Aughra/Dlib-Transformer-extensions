@@ -4,10 +4,10 @@
 
 ## État actuel
 
-- `main` = **Albireo 4.30.2** ; Pseudalis 1.0.5 avec les corrections du fork. Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
+- `main` = **Albireo 4.31.0** ; Pseudalis 1.0.5 avec les corrections du fork. Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
 - **Vrai service** : tourne en **4.30.2** (relancé le 2026-11-15 à 17 h 05, bibliothèque `build/albireo-home/library` remplie de clones de `build/models` ; port 18443, réseau 8444 sans mot de passe, journal `build/albireo-home/logs/console.log`).
 - **Tests** : `test_macos.sh` d'Albireo 57 sur 57 (4.30.2, 2026-11-15), de Pseudalis 34 sur 34 (2026-11-15, après le retrait des conditions Windows de dlib) ; banc de la page 114 vérifications (4.30.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
-- **Blog** : épisode 46 ; **notes pour l'auteur** : changement 23, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
+- **Blog** : épisode 47 ; **notes pour l'auteur** : changement 23, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
 - **Le M2 reste en mode économie d'énergie** (choix de l'humain) : aucune mesure de vitesse ; celles de 4.21.0 à 4.27.0 se feront sur le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
 - **Original** : détaché depuis le 2026-11-11, plus de fusion ; lu à `53ddfe4` (Albireo 1.0.20) pour la reprise à la main du 2026-11-14.
 - **Site des documents** : `macos/site-docs/serve.py`, port 8650 ; mot-clé « sitelog » (le lancer et donner l'URL).
@@ -18,7 +18,7 @@ Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les ex
 
 ## En cours
 
-Rien en cours. Ordre proposé à l'humain pour la suite : défaut de Qwen 3.5 sur le GPU, Mistral Small 3.2, boutons Agent, Web et Raisonnement selon les capacités des modèles.
+Rien en cours. Ordre demandé par l'humain (2026-11-15) : défaut de Qwen 3.5 sur le GPU, Mistral Small 3.2, boutons Agent, Web et Raisonnement selon les capacités des modèles. Pseudalis tourne aussi désormais (port 18444, voir les commandes).
 
 **Gemma 4 sur le GPU est complet** (dense) : étapes en 4.26.0, prompts en 4.27.0 (`attention_mtile` en deux tranches de 256 pour les têtes de 512, `SPLIT` ; deux listes de tuiles par largeur de tête). Sa vitesse reste à mesurer sur le Mac mini, en particulier celle des prompts, dont les couches de 512 calculent leurs scores deux fois. Pour comparer au processeur : le forcer en produits flottants (comme le contrôle), sinon ses activations arrondies sur 8 bits le font diverger tôt sur ce modèle.
 
@@ -36,6 +36,7 @@ Rien en cours. Ordre proposé à l'humain pour la suite : défaut de Qwen 3.5 su
 
 ### 2026-11-15
 
+- **Albireo 4.31.0 : les deux applications refaites** (demande de l'humain) : sélecteur Albireo | Pseudalis, débit en direct dans les deux (tokens/s, octets/s), pages d'interface refaites, application de Pseudalis à menu et thème sombre, `tools/open_pseudalis.sh` ; banc de la page 114, Pseudalis 34 sur 34 ; épisode 47.
 - **Albireo 4.30.2** : fiches de l'onglet Service relues (GPU, prompts sur le GPU, hors ligne) et avis de l'onglet Modèles sur les mélanges d'experts (`onGpu()`) ; banc de la page 114 ; épisode 46.
 - **Albireo 4.30.1** : appariement des projecteurs par famille (le projecteur de Qwen3.5-4B allait avec Gemma 3 4B) ; test ajouté à `test_host`.
 - **Albireo 4.30.0 : la bibliothèque du Mac** (demande de l'humain : un bouton télécharge depuis Hugging Face sur le Mac, l'autre rafraîchit la liste du Mac, l'affiche et permet de charger dans Albireo) : réglage `library_dir`, `GET /albireo/v1/library`, `POST /albireo/v1/library/load`, section « Sur ce Mac » ; clones APFS ; Gemma 3 et 4 reconnus comme lisant les images à l'import ; banc de la page 114 ; `test_host` passe.
@@ -132,6 +133,7 @@ Rien en cours. Ordre proposé à l'humain pour la suite : défaut de Qwen 3.5 su
 
 ## Décisions, de la plus récente à la plus ancienne
 
+- 2026-11-15 : le jeton d'administration de Pseudalis ne passe jamais par Albireo (ses routes sont ouvertes sans mot de passe sur le Mac : un autre compte du Mac aurait pu le lire) ; `tools/open_pseudalis.sh` le donne au navigateur par un fichier temporaire privé.
 - 2026-11-15 : les modèles présents sur le Mac sans être passés par Albireo vont dans la **bibliothèque du Mac** (`library_dir`), que le service lit sans y écrire ; le dossier d'import reste une boîte aux lettres vidée au démarrage (l'original), la réserve garde les modèles passés par Albireo.
 - 2026-11-15 : l'humain veut les images de Gemma 3 **et** le 26B-A4B (« fait les deux »), malgré la recommandation de ne faire que le second. Les tokens d'une image de Gemma 3 se voient les uns les autres, comme dans llama.cpp, et une passe qui contient une image reste sur le processeur (comme pour les autres familles). Le 26B-A4B commence sur le processeur ; le GPU viendra après les mesures sur le Mac mini.
 - 2026-11-15 : dlib ne vise plus que macOS : ses conditions Apple, Windows et Linux sont retirées ; les bibliothèques d'autres projets qu'il embarque restent telles qu'elles sont livrées.
@@ -175,8 +177,13 @@ build/macos-albireo/tests/test_metal                               # noyaux du G
 # Service d'Albireo (page : https://localhost:18443/ ; arrêt : Ctrl-C, kill -INT ou kill -TERM)
 ALBIREO_HOME=$PWD/build/albireo-home build/macos-albireo/bin/albireo-service --console
 # Lancé par Claude : détaché, sinon la fin de la session de Claude l'arrête
-(ALBIREO_HOME=$PWD/build/albireo-home nohup build/macos-albireo/bin/albireo-service --console \
+(ALBIREO_HOME=$PWD/build/albireo-home PSEUDALIS_HOME=$PWD/build/pseudalis-home nohup build/macos-albireo/bin/albireo-service --console \
   > build/albireo-home/logs/console.log 2>&1 &)
+
+# Pseudalis, avec ses données (port 18444) ; Albireo le trouve par PSEUDALIS_HOME, à lui donner aussi
+(PSEUDALIS_HOME=$PWD/build/pseudalis-home ALBIREO_HOME=$PWD/build/albireo-home nohup build/macos-pseudalis/bin/pseudalis-service \
+  --console > build/pseudalis-home/logs/console.log 2>&1 &)
+PSEUDALIS_HOME=$PWD/build/pseudalis-home bash dlib/dlib/external/pseudalis/tools/open_pseudalis.sh   # avec le jeton
 
 # Site des documents (« sitelog »)
 nohup python3 macos/site-docs/serve.py > build/site-docs.log 2>&1 &

@@ -1,21 +1,40 @@
 <!doctype html>
 <!-- Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
      License: Boost Software License   See LICENSE.txt for the full license. -->
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Albireo Community Edition interface</title>
+  <title>Albireo · interface de programmation</title>
   <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="swagger-ui.css">
   <link rel="stylesheet" href="docs.css">
+  <script src="theme.js"></script>
 </head>
 <body>
-  <header class="albireo-head">
+  <header class="docs-head">
     <img src="../img/albireo-mark.svg" alt="">
-    <span>Albireo</span>
-    <a href="../">Back to the application</a>
+    <span class="brand">Albireo</span>
+    <span class="what">Interface de programmation</span>
+    <span class="version" id="version"></span>
+    <nav>
+      <a href="../">← Retour à l’application</a>
+      <a href="#" class="switch" id="switch" hidden>API de Pseudalis</a>
+      <a href="../openapi.json" download>openapi.json</a>
+      <button type="button" id="theme" title="Thème clair, sombre ou celui du système">Thème</button>
+    </nav>
   </header>
+  <main class="docs-main">
+    <section class="quick">
+      <h1>Démarrage rapide</h1>
+      <p>Les routes sous <code>/v1</code> suivent l’interface d’OpenAI : n’importe quelle bibliothèque compatible
+        fonctionne avec cette adresse et une clé quelconque. Le modèle <code>albireo-general</code> est celui qui
+        répond dans l’application.</p>
+      <div class="tabs" id="tabs"><button type="button" class="copy" id="copy">Copier</button></div>
+      <div class="sample"><pre id="sample"></pre></div>
+      <div class="facts" id="facts"></div>
+    </section>
+  </main>
   <div id="swagger-ui"></div>
   <script src="swagger-ui-bundle.js"></script>
   <script src="init.js"></script>

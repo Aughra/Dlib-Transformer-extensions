@@ -100,6 +100,12 @@ namespace albireo
         engine_host& engine() { return engine_; }
 
         json status();
+        /*
+            Le débit du moteur en direct (fork pour macOS) : {"prompt_tokens_per_second",
+            "generation_tokens_per_second", "active", "waiting"}, les tokens lus et écrits des cinq dernières
+            secondes ; des zéros quand le moteur ne tourne pas.  Bien plus léger que status().
+        */
+        json speed();
         json engines();
         // L'étape du démarrage en cours : "engines" (décrits, puis celui choisi démarre),
         // "models" (les modèles actifs se chargent), ou vide une fois le service prêt.

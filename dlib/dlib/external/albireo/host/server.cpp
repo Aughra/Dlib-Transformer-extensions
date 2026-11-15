@@ -44,7 +44,9 @@
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <fstream>
 #include <mutex>
 
@@ -1071,6 +1073,41 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 && boolean("offline");
         }
 
+        /*
+            Pseudalis sur ce Mac (fork pour macOS) : son dossier de données (PSEUDALIS_HOME, sinon
+            ~/.local/share/pseudalis, comme platform.cpp de Pseudalis), le port de son settings.json (8444 par
+            défaut), et s'il répond sur 127.0.0.1 à ce port.  Rien de plus n'est lu ni renvoyé : ni son jeton
+            d'administration, ni ses fichiers.
+        */
+        json pseudalis_peer()
+        {
+            json o = json::object();
+            std::string home;
+            if (const char* h = std::getenv("PSEUDALIS_HOME")) home = h;
+            else if (const char* u = std::getenv("HOME")) home = join_path(join_path(join_path(u, ".local"), "share"), "pseudalis");
+            std::string text;
+            const bool found = !home.empty() && read_file(join_path(home, "settings.json"), text, 1u << 20);
+            const long long port = found ? json::parse_or_null(text)["port"].as_int(8444) : 0;
+            o["found"] = found && port > 0 && port < 65536;
+            o["port"] = port;
+            bool running = false;
+            if (o["found"].as_bool())
+            {
+                const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+                if (fd >= 0)
+                {
+                    sockaddr_in a{};
+                    a.sin_family = AF_INET;
+                    a.sin_port = htons(static_cast<uint16_t>(port));
+                    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+                    running = ::connect(fd, reinterpret_cast<const sockaddr*>(&a), sizeof(a)) == 0;
+                    ::close(fd);
+                }
+            }
+            o["running"] = running;
+            return o;
+        }
+
         // Les flottants de la forme base64 d'un vecteur.
         std::vector<float> floats_of(const std::string& text)
         {
@@ -1509,6 +1546,14 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             o["leaving"] = s->leaving_models();
             o["background"] = s->background_model();
             send_json(res, 200, o);
+        });
+        // Le débit du moteur, lu en direct par l'application (fork pour macOS).
+        srv.Get("/albireo/v1/speed", [s](const httplib::Request&, httplib::Response& res) {
+            send_json(res, 200, s->speed());
+        });
+        // Pseudalis sur ce Mac (fork pour macOS), pour passer d'une application à l'autre.
+        srv.Get("/albireo/v1/pseudalis", [](const httplib::Request&, httplib::Response& res) {
+            send_json(res, 200, pseudalis_peer());
         });
         // La réserve des modèles (fork pour macOS) : ce qu'elle garde, et son vidage.
         srv.Get("/albireo/v1/reserve", [s](const httplib::Request&, httplib::Response& res) {

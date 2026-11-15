@@ -831,6 +831,19 @@ namespace albireo
 
     }
 
+    json service::speed()
+    {
+        json query = json::object();
+        query["op"] = "stats";
+        const json stats = engine_.running() ? engine_.query(query) : json::object();
+        json o = json::object();
+        o["prompt_tokens_per_second"] = stats["prompt_tokens_per_second"].as_double(0);
+        o["generation_tokens_per_second"] = stats["generation_tokens_per_second"].as_double(0);
+        o["active"] = stats["active"].as_int(0);
+        o["waiting"] = stats["waiting"].as_int(0);
+        return o;
+    }
+
     json service::library(user_error& refusal)
     {
         const std::string folder = settings_->get().effective_library_dir();

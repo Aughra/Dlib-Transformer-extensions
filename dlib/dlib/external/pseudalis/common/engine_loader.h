@@ -3,9 +3,13 @@
 #ifndef PSEUDALIS_COMMON_ENGINE_LOADER_H_
 #define PSEUDALIS_COMMON_ENGINE_LOADER_H_
 
+#include <atomic>
+#include <deque>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "engine_api.h"
@@ -88,10 +92,20 @@ namespace pseudalis
         // La version et le build du moteur (psd_build()).
         std::string build() const;
         json models() const;
+        /*
+            Le débit des cinq dernières secondes (fork pour macOS) : {"read_bytes_per_second", "written_bytes_per_second",
+            "active"}, les octets que process() a lus et écrits, divisés par le temps écoulé depuis le début du plus
+            ancien appel terminé dans ces cinq secondes, et les appels en cours.  Rien une fois le moteur au repos, plutôt qu'un débit qui retombe lentement.
+        */
+        json speed() const;
 
     private:
         std::shared_ptr<engine_library> lib_;
         psd_engine* e_ = nullptr;
+        mutable std::mutex speed_m_;
+        // Chaque appel terminé : son début, sa fin, les octets lus et écrits.
+        mutable std::deque<std::tuple<double, double, unsigned long long, unsigned long long>> window_;
+        mutable std::atomic<int> active_{ 0 };
     };
 }
 

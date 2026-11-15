@@ -74,7 +74,7 @@ import { route } from './navigation.js';
 import { applyLanguage, applyTheme } from './preferences.js';
 import { requestPersistence } from './settings.js';
 import { defaults, state } from './state.js';
-import { refreshStatus } from './status.js';
+import { refreshStatus, startSpeed } from './status.js';
 import { broadcast } from './tabs.js';
 
 async function init() {
@@ -141,6 +141,7 @@ async function init() {
   */
   await refreshStatus();
   setInterval(refreshStatus, 4000);
+  startSpeed();
   // Les documents des projets sans passages sont indexés, par leurs mots sans modèle d'embedding ;
   // avec un, l'état a déjà lancé leur indexation.
   if (!rag.embeddingModel()) indexProjects();

@@ -106,13 +106,14 @@ target_link_libraries(pseudalis-service PRIVATE pseudalis_common pseudalis_sqlit
 target_compile_definitions(pseudalis-service PRIVATE PSEUDALIS_ENGINE_STATIC ${PSEUDALIS_ENGINE_DEFINITIONS})
 target_compile_options(pseudalis-service PRIVATE ${PSEUDALIS_WARNINGS})
 
-# L'application web et la documentation de l'interface, à côté du service ; Swagger UI provient
-# de la copie d'Albireo présente dans ce dépôt.
+# L'application web et la documentation de l'interface, à côté du service ; Swagger UI, la feuille de
+# style et le thème de la documentation (fork pour macOS) proviennent de la copie d'Albireo présente dans ce dépôt.
 set(swagger_dir ${PSEUDALIS_ALBIREO_DIR}/web/docs)
 add_custom_target(pseudalis-web ALL
    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/web ${CMAKE_BINARY_DIR}/bin/web
    COMMAND ${CMAKE_COMMAND} -E copy ${swagger_dir}/swagger-ui-bundle.js ${swagger_dir}/swagger-ui.css
-      ${swagger_dir}/LICENSE ${swagger_dir}/NOTICE ${CMAKE_BINARY_DIR}/bin/web/docs
+      ${swagger_dir}/LICENSE ${swagger_dir}/NOTICE ${swagger_dir}/docs.css ${swagger_dir}/theme.js
+      ${CMAKE_BINARY_DIR}/bin/web/docs
    COMMENT "Copying the web application")
 add_dependencies(pseudalis-service pseudalis-web)
 

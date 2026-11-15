@@ -143,6 +143,8 @@ namespace pseudalis
         work_slots& work() { return work_; }
 
         json status();
+        // Le débit du moteur (engine_client::speed()), ou des zéros avant qu'il soit prêt.
+        json speed();
         // L'état du lecteur à l'instant, sans la mise en cache de status().
         json drive_status();
         // La langue des descriptions et des messages : le réglage, sinon celle du système.

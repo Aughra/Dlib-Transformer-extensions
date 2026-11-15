@@ -36,4 +36,4 @@ Au passage, une petite erreur d'addition a été trouvée dans le mémo : le ban
 
 ## À suivre
 
-Le texte n'est pas fini : un défaut rare de Qwen 3.5 sur le GPU, le format de Mistral Small 3.2, et des boutons de la page qui devraient suivre ce que chaque modèle sait faire.
+Le texte n'est pas fini : un défaut rare de Qwen 3.5 sur le GPU, le format de Mistral Small 3.2, et des boutons de la page qui devraient suivre ce que chaque modèle sait faire. Mais d'abord, les pages des deux applications ([épisode 47](47-les-deux-vitrines.md)).

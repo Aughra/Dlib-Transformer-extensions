@@ -371,6 +371,16 @@ namespace pseudalis
         return drive_ ? drive_->status() : json::object();
     }
 
+    json service::speed()
+    {
+        if (engine_) return engine_->speed();
+        json j = json::object();
+        j["read_bytes_per_second"] = 0;
+        j["written_bytes_per_second"] = 0;
+        j["active"] = 0;
+        return j;
+    }
+
     json service::status()
     {
         json j = json::object();

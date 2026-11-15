@@ -2,6 +2,21 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.31.0 — 15 novembre 2026
+
+### Accès et documents
+
+- Passage entre Albireo et Pseudalis : un sélecteur « Albireo | Pseudalis » sous le logo de chacune des deux applications, montré sur le Mac lui-même quand l'autre application y tourne. Albireo trouve Pseudalis par son dossier de données (`PSEUDALIS_HOME`, sinon `~/.local/share/pseudalis`) et le port de ses réglages (route `GET /albireo/v1/pseudalis`) ; Pseudalis trouvait déjà Albireo. Aucun jeton d'administration ne passe d'une application à l'autre.
+- Débit du moteur en direct, en bas à gauche : les tokens lus (prompts, documents) et écrits (réponses) par seconde, sur les cinq dernières secondes, relus chaque seconde ; au repos, les dernières valeurs restent affichées en plus pâle (route légère `GET /albireo/v1/speed`).
+- La page de l'interface de programmation (bouton « API ») est refaite : en-tête en français avec le retour à l'application, le passage à l'interface de Pseudalis, le fichier `openapi.json` et un bouton de thème (système, clair, sombre) ; une carte « Démarrage rapide » avec des exemples curl, Python et JavaScript prêts à copier, remplis avec l'adresse et le certificat de ce service ; Swagger UI aux couleurs de l'application, en clair et en sombre, avec un filtre des sections.
+
+### Pseudalis
+
+- L'application de Pseudalis est réorganisée : un menu à gauche (protéger des fichiers, restaurer, protéger un texte, et l'administration quand le jeton est donné), une section à la fois, l'état du service et le débit en direct de son moteur (octets lus et écrits par seconde, route `GET /v1/speed`) dans le menu, un thème sombre, le sélecteur vers Albireo. Sa page d'interface prend le même habillage que celle d'Albireo, en anglais et en français.
+- `tools/open_pseudalis.sh` ouvre l'application avec son jeton d'administration, comme l'icône le fait sous Windows, sans que le jeton paraisse dans la liste des processus. La description de l'interface donne le chemin du jeton sur macOS.
+
+---
+
 ## 4.30.2 — 15 novembre 2026
 
 ### Réglages

@@ -50,3 +50,4 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 44. [Le passe-partout et la photo de groupe](44-le-passe-partout-et-la-photo-de-groupe.md)
 45. [L'orchestre et les solistes](45-l-orchestre-et-les-solistes.md)
 46. [L'étagère du Mac](46-l-etagere-du-mac.md)
+47. [Les deux vitrines](47-les-deux-vitrines.md)

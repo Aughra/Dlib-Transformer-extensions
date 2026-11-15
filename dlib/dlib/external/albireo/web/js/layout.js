@@ -34,6 +34,7 @@ export function buildLayout() {
   });
   ui.sideScroll = h('div', { class: 'side-scroll' });
   ui.statusLine = h('div', { class: 'status-line' });
+  ui.speedLine = h('div', { class: 'speed-line', title: 'Tokens par seconde du moteur, en direct : lus (prompts, documents) et écrits (réponses)' });
   ui.contextLine = h('div', { class: 'context-line hidden' });
   const search = h('input', { type: 'search', placeholder: t('search'), value: state.search });
   let searchTimer = 0;
@@ -60,6 +61,7 @@ export function buildLayout() {
       h('button', { class: 'brand-home', type: 'button', title: t('home'), 'aria-label': t('home'), onclick: goHome },
         h('img', { src: 'img/albireo-mark.svg', alt: '' }), h('div', { class: 'name', html: '<span>Albireo</span>' })),
       h('div', { class: 'spacer' })),
+    appSwitch(),
     h('div', { class: 'sidebar-actions' },
       h('button', {
         class: 'new-chat', type: 'button', html: icon('plus') + '<span>' + escapeHtml(t('newChat')) + '</span>',
@@ -67,7 +69,7 @@ export function buildLayout() {
       }), ui.incognitoButton),
     h('div', { class: 'search' }, h('span', { html: icon('search') }), search),
     ui.sideScroll,
-    h('div', { class: 'sidebar-footer' }, ui.statusLine, ui.contextLine, h('div', { class: 'footer-buttons' },
+    h('div', { class: 'sidebar-footer' }, ui.statusLine, ui.speedLine, ui.contextLine, h('div', { class: 'footer-buttons' },
       h('button', { type: 'button', onclick: () => settingsDialog('general'), html: icon('gear') + '<span>' + escapeHtml(t('settings')) + '</span>' }),
       h('button', { type: 'button', onclick: () => window.open('/docs/', '_blank'), html: icon('book') + '<span>' + escapeHtml(t('api')) + '</span>' }))));
 
@@ -171,4 +173,23 @@ export function buildLayout() {
   app.append(ui.sidebar, ui.main, ui.toasts);
   ui.composerHeight = -1;
   watchComposer();
+}
+
+/*
+    Le passage à Pseudalis (fork pour macOS) : un sélecteur « Albireo | Pseudalis » sous le logo, montré seulement sur
+    le Mac lui-même (https://localhost), quand le service dit que Pseudalis y tourne (GET /albireo/v1/pseudalis).
+    Pseudalis s'ouvre dans un autre onglet, à son adresse ; son propre sélecteur ramène ici.
+*/
+function appSwitch() {
+  const box = h('div', { class: 'app-switch', hidden: true, role: 'group', 'aria-label': 'Application' },
+    h('span', { class: 'on', 'aria-current': 'page' }, 'Albireo'));
+  const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (!local) return box;
+  fetch('/albireo/v1/pseudalis', { cache: 'no-store' }).then((r) => r.json()).then((p) => {
+    if (!p || !p.running || !p.port) return;
+    box.append(h('a', { href: 'https://localhost:' + p.port + '/', target: 'pseudalis', rel: 'noopener',
+      title: 'Protéger les données personnelles de vos documents' }, 'Pseudalis'));
+    box.hidden = false;
+  }).catch(() => { /* Pseudalis absent */ });
+  return box;
 }

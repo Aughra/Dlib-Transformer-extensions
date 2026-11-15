@@ -405,3 +405,37 @@ function renderHint() {
   fill(ui.hint, model ? [h('span', { class: 'hint-model' }, modelName(model)), ' ', modelInfo(model) ? modelHelp(model) : null,
     ' · '] : null, hintText());
 }
+
+/*
+    Le débit du moteur en direct (fork pour macOS), sous la ligne d'état : les tokens lus (prompts, documents) et
+    écrits (réponses) par seconde, sur les cinq dernières secondes (GET /albireo/v1/speed), relus chaque seconde
+    pendant que la page est visible.  Au repos, les dernières valeurs mesurées restent, en plus pâle.
+*/
+const lastSpeed = { read: 0, write: 0 };
+async function pollSpeed() {
+  if (!ui.speedLine || document.hidden) return;
+  let s;
+  try {
+    s = await api.getJSON('/albireo/v1/speed');
+  } catch (e) {
+    ui.speedLine.replaceChildren();
+    return;
+  }
+  const read = s.prompt_tokens_per_second || 0, write = s.generation_tokens_per_second || 0;
+  const live = read > 0.05 || write > 0.05 || (s.active || 0) > 0;
+  if (read > 0.05) lastSpeed.read = read;
+  if (write > 0.05) lastSpeed.write = write;
+  const value = (now, last) => now > 0.05 ? formatDecimal(now, now >= 100 ? 0 : 1) : last > 0 ? formatDecimal(last, last >= 100 ? 0 : 1) : '–';
+  ui.speedLine.classList.toggle('live', live);
+  ui.speedLine.replaceChildren(
+    h('span', { class: 'gauge' + (read > 0.05 ? ' on' : '') }, h('span', { class: 'label' }, 'Lecture'),
+      h('b', null, value(read, lastSpeed.read)), h('span', { class: 'unit' }, 'jetons/s')),
+    h('span', { class: 'gauge' + (write > 0.05 ? ' on' : '') }, h('span', { class: 'label' }, 'Écriture'),
+      h('b', null, value(write, lastSpeed.write)), h('span', { class: 'unit' }, 'jetons/s')));
+}
+
+export function startSpeed() {
+  pollSpeed();
+  setInterval(pollSpeed, 1000);
+  document.addEventListener('visibilitychange', pollSpeed);
+}

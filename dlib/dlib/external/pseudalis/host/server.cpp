@@ -512,6 +512,10 @@ namespace pseudalis
             j["events"] = s->db().events(std::atoll(req.get_param_value("since").c_str()));
             send_json(res, 200, j);
         });
+        // Le débit du moteur, lu en direct par l'application (fork pour macOS).
+        srv.Get("/v1/speed", [s](const httplib::Request&, httplib::Response& res) {
+            send_json(res, 200, s->speed());
+        });
         srv.Get("/v1/albireo", [s](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, s->albireo().status());
         });

@@ -8,25 +8,43 @@
   <title>Pseudalis</title>
   <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/app.css">
+  <script src="js/theme.js"></script>
 </head>
 <body>
-  <header class="top">
-    <img src="img/pseudalis-mark.svg" alt="" class="mark">
-    <span class="brand">Pseudalis</span>
-    <span class="tagline" data-t="tagline"></span>
-    <nav>
+  <div class="shell">
+  <!-- Le menu (fork pour macOS) : la marque, le passage à Albireo, les sections, l'état et les liens. -->
+  <aside class="side">
+    <a class="side-brand" href="#protect">
+      <img src="img/pseudalis-mark.svg" alt="" class="mark">
+      <span><span class="brand">Pseudalis</span><span class="tagline" data-t="tagline"></span></span>
+    </a>
+    <div class="app-switch" id="app-switch" role="group" aria-label="Application" hidden>
+      <a id="to-albireo" href="#" target="albireo" rel="noopener">Albireo</a><span class="on" aria-current="page">Pseudalis</span>
+    </div>
+    <nav class="side-nav" id="side-nav">
+      <a href="#protect" data-card="protect-card"><span class="ico">🛡︎</span><span data-t="protect_title"></span></a>
+      <a href="#restore" data-card="restore-card"><span class="ico">↺</span><span data-t="restore_title"></span></a>
+      <a href="#text" data-card="text-card"><span class="ico">¶</span><span data-t="text_title"></span></a>
+      <a href="#records" data-card="records-card" hidden><span class="ico">☰</span><span data-t="records_title"></span></a>
+      <a href="#key" data-card="key-card" hidden><span class="ico">⚷</span><span data-t="key_title"></span></a>
+      <a href="#settings" data-card="settings-card" hidden><span class="ico">⚙︎</span><span data-t="settings_title"></span></a>
+      <a href="#terms" data-card="terms-card" hidden><span class="ico">≡</span><span data-t="terms_title"></span></a>
+    </nav>
+    <p class="side-hint" id="admin-hint" data-t="admin_hint" hidden></p>
+    <div class="speed" id="speed"></div>
+    <section class="status" id="status" aria-live="polite"></section>
+    <div class="side-foot">
       <a href="docs/" data-t="api"></a>
       <select id="language" aria-label="Language">
         <option value="en">English</option>
         <option value="fr">Français</option>
       </select>
-    </nav>
-  </header>
+      <button type="button" class="ghost" id="theme" aria-label="Theme">◐</button>
+    </div>
+  </aside>
 
   <main>
-    <section class="status" id="status" aria-live="polite"></section>
-
-    <section class="card">
+    <section class="card" id="protect-card">
       <h2 data-t="protect_title"></h2>
       <p class="hint" data-t="protect_hint"></p>
       <label class="drop" id="protect-drop">
@@ -43,7 +61,7 @@
       <ul class="results" id="protect-results"></ul>
     </section>
 
-    <section class="card">
+    <section class="card" id="restore-card">
       <h2 data-t="restore_title"></h2>
       <p class="hint" data-t="restore_hint"></p>
       <label class="drop" id="restore-drop">
@@ -55,7 +73,7 @@
       <ul class="results" id="restore-results"></ul>
     </section>
 
-    <section class="card">
+    <section class="card" id="text-card">
       <h2 data-t="text_title"></h2>
       <!-- Le texte, par-dessus les marques qui colorent ses étiquettes et les valeurs restaurées. -->
       <div class="editor">
@@ -163,13 +181,14 @@
       </div>
       <p class="message" id="terms-message" hidden></p>
     </section>
-  </main>
-
-  <footer>
+    <footer>
     <span>Pseudalis <span id="version"></span>. Copyright (C) 2026 Cydral Technology. <span data-t="written_by"></span>
       Aldric Pierrain.</span>
-  </footer>
+    </footer>
+  </main>
+  </div>
   <script src="js/i18n.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/nav.js"></script>
 </body>
 </html>

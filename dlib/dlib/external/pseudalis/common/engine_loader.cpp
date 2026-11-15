@@ -2,6 +2,8 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 #include "engine_loader.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstring>
 
 #include "build_stamp.h"
@@ -122,8 +124,22 @@ namespace pseudalis
         }
         callback_context c = { &pictures, &lookup, lib_.get() };
         psd_buffer r = { nullptr, 0 }, o = { nullptr, 0 }, err = { nullptr, 0 };
+        const auto clock_now = []() {
+            return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        };
+        const double started = clock_now();
+        ++active_;
         const int ok = lib_->process(e_, request.dump().c_str(), data.data(), data.size(),
                                      pictures ? on_picture : nullptr, lookup ? on_lookup : nullptr, &c, &r, &o, &err);
+        --active_;
+        {
+            // Le débit : les octets lus et écrits par cet appel, à l'instant où il se termine.
+            const double t = clock_now();
+            std::lock_guard<std::mutex> lock(speed_m_);
+            window_.emplace_back(started, t, static_cast<unsigned long long>(data.size()),
+                ok == 1 ? static_cast<unsigned long long>(o.size) : 0ull);
+            while (!window_.empty() && std::get<1>(window_.front()) < t - 5) window_.pop_front();
+        }
         if (ok == 1)
         {
             result = json::parse_or_null(std::string(r.data ? r.data : "", r.size));
@@ -182,6 +198,29 @@ namespace pseudalis
         if (lib_ && lib_->models && lib_->models(&b) == 1 && b.data)
             j = json::parse_or_null(std::string(b.data, b.size));
         if (lib_ && b.data) lib_->free_buffer(&b);
+        return j;
+    }
+
+    json engine_client::speed() const
+    {
+        const double t = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        unsigned long long read = 0, written = 0;
+        double first = t;
+        {
+            std::lock_guard<std::mutex> lock(speed_m_);
+            for (const auto& e : window_)
+            {
+                if (std::get<1>(e) < t - 5) continue;
+                read += std::get<2>(e);
+                written += std::get<3>(e);
+                first = std::min(first, std::get<0>(e));
+            }
+        }
+        const double span = std::max(0.05, t - first);
+        json j = json::object();
+        j["read_bytes_per_second"] = static_cast<double>(read) / span;
+        j["written_bytes_per_second"] = static_cast<double>(written) / span;
+        j["active"] = active_.load();
         return j;
     }
 }

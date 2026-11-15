@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
      License: Boost Software License   See LICENSE.txt for the full license. -->
-<html lang="en">
+<html lang="en" class="pseudalis">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,13 +9,30 @@
   <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="swagger-ui.css">
   <link rel="stylesheet" href="docs.css">
+  <script src="theme.js"></script>
 </head>
 <body>
-  <header class="pseudalis-head">
+  <header class="docs-head">
     <img src="../img/pseudalis-mark.svg" alt="">
-    <span>Pseudalis</span>
-    <a href="../" id="back">Back to the application</a>
+    <span class="brand">Pseudalis</span>
+    <span class="what" data-t="what"></span>
+    <span class="version" id="version"></span>
+    <nav>
+      <a href="../" id="back" data-t="back"></a>
+      <a href="#" class="switch" id="switch" hidden data-t="switch"></a>
+      <a href="../openapi.json" download>openapi.json</a>
+      <button type="button" id="theme"></button>
+    </nav>
   </header>
+  <main class="docs-main">
+    <section class="quick">
+      <h1 data-t="quick"></h1>
+      <p data-t="quick_hint"></p>
+      <div class="tabs" id="tabs"><button type="button" class="copy" id="copy"></button></div>
+      <div class="sample"><pre id="sample"></pre></div>
+      <div class="facts" id="facts"></div>
+    </section>
+  </main>
   <div id="swagger-ui"></div>
   <script src="swagger-ui-bundle.js"></script>
   <script src="init.js"></script>

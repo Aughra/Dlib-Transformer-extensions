@@ -755,6 +755,21 @@ paths = {
         "requestBody": json_body({"type": "object", "required": ["path"], "properties": {"path": {"type": "string"}}}),
         "responses": {"200": reply("Imported files and errors", {"type": "object"}),
                       "400": reply("Refused", import_refusal)}}},
+    "/albireo/v1/speed": {"get": {
+        "tags": ["Service"], "summary": "The live throughput of the engine",
+        "description": "The tokens that the engine read (prompts) and wrote (answers) over the last five seconds, per "
+                       "second, and the requests under way and waiting; zero once the engine rests. Much lighter "
+                       "than /albireo/v1/status, for a display refreshed every second.",
+        "responses": {"200": reply("The throughput", {"type": "object", "properties": {
+            "prompt_tokens_per_second": {"type": "number"}, "generation_tokens_per_second": {"type": "number"},
+            "active": {"type": "integer"}, "waiting": {"type": "integer"}}})}}},
+    "/albireo/v1/pseudalis": {"get": {
+        "tags": ["Service"], "summary": "Pseudalis on this Mac",
+        "description": "Whether Pseudalis is installed on this Mac (its data folder: PSEUDALIS_HOME, or "
+                       "~/.local/share/pseudalis), the port of its settings, and whether it answers on 127.0.0.1, so "
+                       "that the web application offers to switch to it. Nothing else of Pseudalis is read.",
+        "responses": {"200": reply("Pseudalis", {"type": "object", "properties": {
+            "found": {"type": "boolean"}, "port": {"type": "integer"}, "running": {"type": "boolean"}}})}}},
     "/albireo/v1/library": {"get": {
         "tags": ["Service"], "summary": "The GGUF files of the library of the Mac",
         "description": "The folder of the library_dir setting (created at the first reading when it is the default "
