@@ -206,7 +206,7 @@ void display_sample_questions(size_t num_samples = 3)
     catch (...) {}
 }
 
-int run_fine_tune(const std::string& model_file, const std::string& tokenizer_file,
+int run_fine_tune(const std::string& model_file, const std::string& /*tokenizer_file*/,
     double learning_rate, long batch_size, long max_epochs, long patience,
     double weight_decay, double beta1, double beta2, std::vector<int>& gpus)
 {

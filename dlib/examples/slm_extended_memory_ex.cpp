@@ -210,7 +210,7 @@ template <typename net_type>
 void run_generation(
     const command_line_parser& parser,
     size_t steps,
-    size_t batch_size,
+    size_t /*batch_size*/,
     const std::chrono::steady_clock::time_point& started
 )
 {

@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-15 — Corriger les paramètres inutilisés de l'original qui cassaient le build des tests de dlib
+
+- **Quoi** : le build des tests de dlib (`dlib/test`, `-W -Werror`) compile aussi les exemples et `imglab` ; 31 fichiers échouaient sur « unused parameter » dans du code de l'original : `dnn/loss.h:3582` et `:3603` (`input_tensor`), `slm_cygnus_foundation_ex.cpp:563` et `slm_cygnus_instruct_ex.cpp:209` (`tokenizer_file`), `slm_embed_ex.cpp:470` (`truncate_dim`), `slm_extended_memory_ex.cpp:213` (`batch_size`). Noms mis en commentaire, signatures gardées. Notes pour l'auteur : entrée n° 5 et registre de dlib.
+- **Fichiers** : `dlib/dlib/dnn/loss.h`, `dlib/examples/{slm_cygnus_foundation_ex,slm_cygnus_instruct_ex,slm_embed_ex,slm_extended_memory_ex}.cpp`, `docs/notes-pour-l-auteur.md`, `logs/nuit-2026-11-15.md`.
+- **Pourquoi** : un build des tests qui échoue ne peut pas servir de filet pour la suite (retrait des conditions Windows de dlib).
+- **Étapes** : build des tests : 0 échec (31 avant) ; reste `ld: warning: -s is obsolete` dans `dlib/test/CMakeLists.txt`, traité avec les branches MSVC ; exemples : 0 avertissement.
+
 ## 2026-11-15 — Faire de dlib une bibliothèque pour macOS seulement
 
 - **Quoi** : cinquième étape du nettoyage de dlib (groupe 2). `platform.h` : `DLIB_POSIX` et `MACOSX` toujours définis, `#error` hors de macOS, détection de Windows et de HP-UX retirée ; `assert.h` : contournement de la libstdc++ d'Apple 4.02 retiré ; `crypto/secure_random.h` : `arc4random_buf` seul (branches Windows et Linux retirées) ; `dlib/dlib/CMakeLists.txt` : la seule branche macOS des bibliothèques du système (Windows et Linux retirées) ; `dlib/CMakeLists.txt` (racine de `dlib/`), copie désynchronisée dont seul `setup.py` se servait, retiré. CLAUDE.md : dlib ne vise plus que macOS, ses bibliothèques embarquées d'autres projets restent telles quelles.

@@ -467,7 +467,7 @@ static int run_index(const std::string& model_path, const std::string& input,
 // ---------------------------------------------------------------------------------------
 
 static int run_query(const std::string& model_path, const std::string& index_path,
-    const std::string& question, long top, long truncate_dim, long max_tokens,
+    const std::string& question, long top, long /*truncate_dim*/, long max_tokens,
     size_t chunk_chars, size_t overlap_chars)
 {
     embedding_index index;

@@ -3579,7 +3579,7 @@ namespace dlib
         double get_alpha() const { return alpha_; }
 
         template <typename SUB_TYPE, typename label_iterator>
-        void to_label(const tensor& input_tensor, const SUB_TYPE& sub,
+        void to_label(const tensor& /*input_tensor*/, const SUB_TYPE& sub,
             label_iterator iter) const
         {
             const tensor& output = sub.get_output();
@@ -3600,7 +3600,7 @@ namespace dlib
         }
 
         template <typename const_label_iterator, typename SUBNET>
-        double compute_loss_value_and_gradient(const tensor& input_tensor,
+        double compute_loss_value_and_gradient(const tensor& /*input_tensor*/,
             const_label_iterator truth, SUBNET& sub) const
         {
             const tensor& output = sub.get_output();

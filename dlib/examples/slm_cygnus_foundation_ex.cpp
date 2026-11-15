@@ -560,7 +560,7 @@ int run_build_tokenizer(const std::string& external_path, const std::string& tok
 template <typename TRANSFORMER_CONFIG>
 int run_pipeline(bool do_train, const double learning_rate, const size_t batch_size,
     const long patience, const size_t max_epochs, const double weight_decay, const double beta1, const double beta2,
-    const std::string& model_file, const std::string& tokenizer_file, const std::string& tokens_file,
+    const std::string& model_file, const std::string& /*tokenizer_file*/, const std::string& tokens_file,
     std::vector<std::string>& text_segments, bpe_tokenizer& tokenizer, std::vector<int>& gpus)
 {
     using my_transformer = TRANSFORMER_CONFIG;
