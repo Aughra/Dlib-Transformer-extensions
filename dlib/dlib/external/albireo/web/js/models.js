@@ -54,20 +54,32 @@ function tokens(n) {
   return n >= 1024 ? Math.round(n / 1024).toLocaleString('fr-FR') + ' K tokens' : n + ' tokens';
 }
 
-// Un mélange d'experts (MoE) : le GPU du fork ne le prend pas, le processeur le fait tourner.
+// Un mélange d'experts (MoE).
 function isMoe(m) {
   return /-a\d+b\b/i.test(m.id) || /moe/i.test(m.arch || '');
 }
 
 /*
-    Ce que le Mac peut attendre d'un modèle : le GPU (poids en Q4_K / Q6_K et modèle dense, que le contrôle du
-    chargement confirme), la vitesse d'écriture estimée d'après les mesures du M2, et un avis.
+    Les poids que prennent les noyaux Metal (cpu_runtime_metal.cpp) : Q4_K et Q6_K, et aussi Q5_K, Q8_0 et Q5_0 pour
+    Qwen 3.5, LFM2 et les mélanges d'experts (depuis Albireo 4.7.0 et 4.21.0 du fork) ; les experts de Gemma 4
+    (26B-A4B) restent sur le processeur.
+*/
+function onGpu(m, moe) {
+  if (moe && m.arch === 'gemma4') return false;
+  const wide = moe || /^(qwen35|lfm2)/.test(m.arch || '');
+  return (wide ? /^(Q4_K|Q5_K|Q6_K|Q5_0|Q8_0)/i : /^Q[46]_K/i).test(m.quantization || '');
+}
+
+/*
+    Ce que le Mac peut attendre d'un modèle : le GPU (onGpu(), que le contrôle du chargement confirme), la vitesse
+    d'écriture estimée d'après les mesures du M2 (pas pour un mélange d'experts, qui ne relit qu'une part de ses poids),
+    et un avis.
 */
 export function assess(m, status) {
   const ram = (status && status.host && status.host.memory && status.host.memory.total) || 0;
   const bytes = m.total_size || m.size || 0;
   const moe = isMoe(m);
-  const gpu = !moe && /^Q[46]_K/i.test(m.quantization || '');
+  const gpu = onGpu(m, moe);
   const speed = moe || !m.size ? null : (gpu ? measured.gpu : measured.cpu) * measured.bytes / m.size;
   let level = 'conseille', reason = 'tient largement dans la mémoire et écrit vite sur ce Mac';
   if (!ram) {
@@ -76,9 +88,9 @@ export function assess(m, status) {
   } else if (bytes > ram * 0.5) {
     level = 'deconseille';
     reason = 'occupe plus de la moitié de la mémoire du Mac (' + gb(ram) + ')';
-  } else if (moe) {
+  } else if (moe && !gpu) {
     level = 'possible';
-    reason = 'mélange d’experts : il tourne sur le processeur seulement, sans le GPU';
+    reason = 'mélange d’experts dont les experts tournent sur le processeur seulement, sans le GPU';
   } else if (bytes > ram * 0.25 || (speed && speed < 10)) {
     level = 'possible';
     reason = speed && speed < 10 ? 'plus lent : environ ' + Math.round(speed) + ' tokens/s attendus'
@@ -164,7 +176,8 @@ export function modelSheet(m, status) {
   if (!vision) cons.push('Ne lit pas les images.');
   if (reasoning) cons.push('Sa réflexion allonge le temps avant la réponse.');
   if (a.level !== 'conseille') cons.push(levelLabels[a.level] + ' sur ce Mac : ' + a.reason + '.');
-  if (a.moe) cons.push('Mélange d’experts : pas d’accélération par le GPU du fork.');
+  if (a.moe && !a.gpu) cons.push('Mélange d’experts sans accélération par le GPU : il tourne sur le processeur.');
+  if (a.moe && a.gpu) cons.push('Mélange d’experts : tout le fichier reste en mémoire, même si chaque mot n’en lit qu’une part.');
   if (/preview/i.test(m.id)) cons.push('Version de prévisualisation : moins éprouvée.');
   if (!cons.length) cons.push('Aucun défaut marquant pour ce Mac.');
 
@@ -175,9 +188,13 @@ export function modelSheet(m, status) {
     'quantification ' + (m.quantization || '?') + ' (poids sur 4 à 6 bits par groupe), fichier de ' + gb(m.size || 0) +
     (m.projector ? ' plus un projecteur d’images de ' + gb(m.projector.size || 0) + ' (' + (m.projector.quantization || '') + ')' : '') +
     ', contexte entraîné de ' + (m.context || 0).toLocaleString('fr-FR') + ' tokens. ' +
-    (a.moe ? 'Mélange d’experts : les noyaux Metal du fork ne couvrent que les modèles denses, les passes restent sur le ' +
-      'processeur. ' : a.gpu ? 'Poids Q4_K / Q6_K d’un modèle dense : pris par le GPU sans copie, si le contrôle du ' +
-      'chargement (logits à 1 % près du processeur) le confirme. ' : 'Format hors des noyaux Metal : processeur. ') +
+    (a.moe && !a.gpu ? 'Mélange d’experts que les noyaux Metal du fork ne couvrent pas (Gemma 4 26B-A4B, ou poids ' +
+      'd’un autre format) : les passes restent sur le processeur. '
+      : a.moe ? 'Mélange d’experts : les étapes passent par le GPU, les experts choisis lus par matvec ; les prompts ' +
+        'de Qwen 3.6 aussi, par produits groupés, ceux des autres sur le processeur ; contrôle du chargement à 25 % ' +
+        'près en clés 8 bits. '
+        : a.gpu ? 'Poids pris par le GPU sans copie, si le contrôle du chargement (logits à 1 % près du processeur, ' +
+          '5 % en clés 8 bits) le confirme. ' : 'Format hors des noyaux Metal : processeur. ') +
     (a.speed ? 'Vitesse estimée : ' + decimal(measured[a.gpu ? 'gpu' : 'cpu']) + ' tokens/s mesurés pour ' + gb(measured.bytes) +
       ' de poids sur le M2, à l’échelle de la taille des poids (chaque token les relit tous) : environ ' + decimal(a.speed) +
       ' tokens/s. ' : '') +

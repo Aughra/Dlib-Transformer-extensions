@@ -4,10 +4,10 @@
 
 ## État actuel
 
-- `main` = **Albireo 4.30.1** ; Pseudalis 1.0.5 avec les corrections du fork. Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
+- `main` = **Albireo 4.30.2** ; Pseudalis 1.0.5 avec les corrections du fork. Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
 - **Vrai service** : tourne en **4.30.1** (relancé le 2026-11-15 à 16 h 57, bibliothèque `build/albireo-home/library` remplie de clones de `build/models` ; port 18443, réseau 8444 sans mot de passe, journal `build/albireo-home/logs/console.log`).
 - **Tests** : `test_macos.sh` d'Albireo 57 sur 57 (4.29.0, 2026-11-15), de Pseudalis 34 sur 34 (2026-11-15, après le retrait des conditions Windows de dlib) ; banc de la page 114 vérifications (4.30.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
-- **Blog** : épisode 45 ; **notes pour l'auteur** : changement 23, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
+- **Blog** : épisode 46 ; **notes pour l'auteur** : changement 23, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
 - **Le M2 reste en mode économie d'énergie** (choix de l'humain) : aucune mesure de vitesse ; celles de 4.21.0 à 4.27.0 se feront sur le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
 - **Original** : détaché depuis le 2026-11-11, plus de fusion ; lu à `53ddfe4` (Albireo 1.0.20) pour la reprise à la main du 2026-11-14.
 - **Site des documents** : `macos/site-docs/serve.py`, port 8650 ; mot-clé « sitelog » (le lancer et donner l'URL).
@@ -18,7 +18,7 @@ Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les ex
 
 ## En cours
 
-**Mise à jour des fiches de l'onglet Service** (demande de l'humain du 2026-11-15 : « mets à jour les réglages des paramètres avec tout ce que tu as rajouté ou modifié depuis le début ») : chaque réglage a sa carte (vérifié), mais des fiches sont dépassées (celle du GPU dit encore que Gemma 4 lit ses prompts sur le processeur) ; relire chaque fiche et `recommended` contre le journal. Ensuite, l'ordre proposé à l'humain : défaut de Qwen 3.5 sur le GPU, Mistral Small 3.2, boutons selon les capacités des modèles.
+Rien en cours. Ordre proposé à l'humain pour la suite : défaut de Qwen 3.5 sur le GPU, Mistral Small 3.2, boutons Agent, Web et Raisonnement selon les capacités des modèles.
 
 **Gemma 4 sur le GPU est complet** (dense) : étapes en 4.26.0, prompts en 4.27.0 (`attention_mtile` en deux tranches de 256 pour les têtes de 512, `SPLIT` ; deux listes de tuiles par largeur de tête). Sa vitesse reste à mesurer sur le Mac mini, en particulier celle des prompts, dont les couches de 512 calculent leurs scores deux fois. Pour comparer au processeur : le forcer en produits flottants (comme le contrôle), sinon ses activations arrondies sur 8 bits le font diverger tôt sur ce modèle.
 
@@ -36,6 +36,7 @@ Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les ex
 
 ### 2026-11-15
 
+- **Albireo 4.30.2** : fiches de l'onglet Service relues (GPU, prompts sur le GPU, hors ligne) et avis de l'onglet Modèles sur les mélanges d'experts (`onGpu()`) ; banc de la page 114 ; épisode 46.
 - **Albireo 4.30.1** : appariement des projecteurs par famille (le projecteur de Qwen3.5-4B allait avec Gemma 3 4B) ; test ajouté à `test_host`.
 - **Albireo 4.30.0 : la bibliothèque du Mac** (demande de l'humain : un bouton télécharge depuis Hugging Face sur le Mac, l'autre rafraîchit la liste du Mac, l'affiche et permet de charger dans Albireo) : réglage `library_dir`, `GET /albireo/v1/library`, `POST /albireo/v1/library/load`, section « Sur ce Mac » ; clones APFS ; Gemma 3 et 4 reconnus comme lisant les images à l'import ; banc de la page 114 ; `test_host` passe.
 - **Albireo 4.29.0 : Gemma 4 26B-A4B sur le processeur** (`build/models/gemma-4-26B-A4B-it-UD-Q4_K_M.gguf`, 16,9 Go) : bloc dense et 128 experts côte à côte (`dense_beside_experts`), têtes de clés par couche (`kv_head_counts`), raisonnement vide quand le gabarit l'écrit (le 26B-A4B oui, le E2B non) ; mêmes tokens que llama.cpp (233 de raisonnement identiques avec `--budget -1`, journal de 2 820 tokens identique) ; le GPU le refuse ; `test_macos.sh` 57 sur 57 ; épisode 45.

@@ -45,4 +45,4 @@ Ce modèle tourne pour l'instant sur le processeur seulement ; le GPU le refuse 
 
 ## À suivre
 
-Les deux chantiers demandés sont faits. La suite attend en partie le Mac mini : mesurer, puis choisir ce qui mérite le GPU.
+Les deux chantiers demandés sont faits. La suite attend en partie le Mac mini : mesurer, puis choisir ce qui mérite le GPU. Avant cela, il fallait que ces modèles soient utilisables dans Albireo sans Internet ([épisode 46](46-l-etagere-du-mac.md)).

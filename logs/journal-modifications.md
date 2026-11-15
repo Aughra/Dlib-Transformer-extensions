@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-15 — Remettre à jour les fiches des réglages et l'avis sur les modèles (Albireo 4.30.2)
+
+- **Quoi** : `web/js/service.js` : fiche « GPU du Mac » (ce qui reste sur le processeur, d'après `set_gpu` de `cpu_runtime_metal.cpp` ; produits groupés de Qwen 3.6 ; têtes de 512 en deux tranches ; seuils du contrôle 1 %, 5 %, 25 %), « GPU : prompts jusqu'à » (tuiles de 8 lignes pour les têtes de 512, fenêtre glissante), « Hors ligne » (bibliothèque du Mac). `web/js/models.js` : `onGpu()` (formats du GPU par famille, experts de Gemma 4 sur le processeur) remplace « mélange d'experts : processeur seulement » dans l'avis, les défauts et la fiche du hibou de chaque modèle. Chaque clé de `validate_settings` a sa carte (vérifié, `library_dir` compris) ; `recommended` inchangé (aucune mesure nouvelle, mode économie d'énergie).
+- **Fichiers** : `web/js/{service.js,models.js}`, version, `web/openapi.json`, `web/changelog.md` (sous `dlib/dlib/external/albireo/`) ; `docs/memo-portage-macos-arm64.md`, `logs/{reprise.md,nuit-2026-11-15.md}`, `blog/46-l-etagere-du-mac.md`, `blog/README.md`.
+- **Pourquoi** : demande de l'humain : « mets à jour les réglages des paramètres avec tout ce que tu as rajouté ou modifié depuis le début ».
+- **Étapes** : relecture de chaque fiche contre le code et le journal ; banc de la page : lint ok, 114 vérifications sans erreur.
+
 ## 2026-11-15 — Apparier chaque projecteur à sa famille (Albireo 4.30.1)
 
 - **Quoi** : `pair_projectors()` (`host/models.cpp`) : `projector_fits()` écarte les décodeurs d'une autre famille que celle du type du projecteur (`gemma3` → `gemma3` ; `gemma4v` → `gemma4` ; `qwen3vl_merger` → `qwen3vl`, `qwen3vlmoe`, `qwen35`, `qwen35moe` ; les autres types sans restriction) ; `test_host` : deux projecteurs de 2 560, un décodeur Gemma 3.

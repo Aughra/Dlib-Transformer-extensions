@@ -292,10 +292,11 @@ const items = {
     pros: ['Écrit plus vite : 21 à 22 tokens/s au lieu de 18 à 19 pour le modèle de 4B, sur un M2.',
       'Lit les prompts de 24 tokens ou plus deux à trois fois plus vite, à toutes les longueurs.',
       'Contrôlé à chaque chargement : au moindre écart, le moteur repasse seul au processeur.'],
-    cons: ['Pas identique au dernier chiffre près au processeur (écart de 0,04 à 0,3 % sur les scores, même mot choisi).',
+    cons: ['Pas identique au dernier chiffre près au processeur (écart de 0,04 % à quelques % sur les scores, même mot choisi).',
       'Environ 200 Mo de mémoire en plus pour ses tampons.',
-      'Seuls les poids en Q4_K et Q6_K y passent (aussi Q5_K, Q8_0 et Q5_0 pour Qwen 3.5, LFM2 et les mélanges d’experts) ; ' +
-        'Gemma 3 1B et le modèle de recherche restent sur le processeur, et Gemma 4 y écrit ses réponses mais lit ses prompts sur le processeur.'],
+      'Seuls les poids en Q4_K et Q6_K y passent (aussi Q5_K, Q8_0 et Q5_0 pour Qwen 3.5, LFM2 et les mélanges d’experts).',
+      'Restent sur le processeur : Gemma 3 1B (largeur de 1 152), Gemma 4 26B-A4B (ses experts), le modèle de recherche, ' +
+        'les passes qui lisent une image, et les prompts des mélanges d’experts autres que Qwen 3.6.'],
     normal: "Le Mac a deux moteurs de calcul sur la même puce : le processeur, polyvalent, et le GPU, fait pour répéter " +
       "la même opération sur des milliers de nombres à la fois. Écrire une réponse, c’est relire tout le modèle pour " +
       "chaque mot : le GPU lit cette mémoire plus vite. Lire un long document, c’est surtout multiplier : le GPU calcule " +
@@ -305,8 +306,11 @@ const items = {
       "que la zone des clés et valeurs. Un pas d’écriture (1 à 8 tokens) est encodé en une seule commande : matvec Q4_K/Q6_K " +
       "en simdgroups, RMSNorm, RoPE, écriture des clés et valeurs q8 tournées (Walsh-Hadamard), attention en ligne par morceaux de 256 " +
       "positions puis fusion. Un prompt de 24 tokens ou plus décompresse chaque matrice en float32 puis passe par " +
-      "MPSMatrixMultiplication ; son attention multiplie des matrices 8 × 8 (simdgroup_matrix). Au chargement, une sonde de 29 tokens et deux pas sont comparés au processeur en produits " +
-      "flottants : logits à 1 % près (5 % pour un prompt en clés 8 bits), même argmax, sinon repli.",
+      "MPSMatrixMultiplication (les experts de Qwen 3.6 par produits groupés, matmul_id) ; son attention multiplie des " +
+      "matrices 8 × 8 (simdgroup_matrix), les têtes de 512 de Gemma 4 en deux tranches de 256 pour tenir dans les 32 Ko " +
+      "de mémoire de threadgroup. Au chargement, une sonde de 29 tokens et deux pas sont comparés au processeur en " +
+      "produits flottants : logits à 1 % près (5 % en clés 8 bits, 25 % pour un mélange d’experts en 8 bits), même " +
+      "argmax, sinon repli.",
     marmot: "Imagine une cuisine avec un chef et une brigade de commis. Le chef (le processeur) sait tout faire, mais " +
       "un à la fois. Les commis (le GPU) épluchent mille carottes en même temps. Comme ils partagent le même plan de " +
       "travail, personne ne transporte rien : on leur donne les carottes, et le repas est prêt plus vite.",
@@ -529,17 +533,19 @@ const items = {
     control: { kind: 'switch', on: true, off: false },
     restart: false,
     effect: 'Plus aucune connexion vers Internet : ni mise à jour du catalogue, ni téléchargement réseau, ni recherche web.',
-    principle: 'Le service coupe ses connexions sortantes ; les modèles viennent des imports ou de la réserve locale.',
+    principle: 'Le service coupe ses connexions sortantes ; les modèles viennent de la bibliothèque du Mac, des imports ou de la réserve locale.',
     pros: ['Rien ne sort du Mac : confidentialité totale.', 'Aucun téléchargement surprise.'],
     cons: ['Pas de modèles qui ne sont pas déjà sur le Mac, pas de bouton Web.',
       'Un téléchargement en cours s’arrête (sa progression est gardée).'],
     normal: "Albireo calcule déjà tout sur le Mac. Il ne va sur Internet que pour trois choses : le catalogue des " +
       "modèles, leur téléchargement, et la recherche du bouton Web. Hors ligne, il n’y va plus du tout. On peut " +
-      "toujours importer un modèle comme fichier ou restaurer celui dont tous les fichiers sont vérifiés dans la réserve.",
+      "toujours charger un modèle de la bibliothèque du Mac (« Rafraîchir depuis le Mac », section « Sur ce Mac »), " +
+      "importer un modèle comme fichier, ou restaurer celui dont tous les fichiers sont vérifiés dans la réserve.",
     owl: "offline = true annule à l’instant les transferts en cours (http_cancel_all, raison « offline mode »), refuse " +
       "les routes qui ont besoin du réseau (refuse_offline : 409, code offline) et ferme " +
       "l’accès web (403, code offline). Les restaurations de la réserve vérifient taille et SHA-256, sans aucun repli " +
-      "réseau, même si le réglage change pendant le travail. Le dossier d’import reste lu. Remis à faux, http_restore() " +
+      "réseau, même si le réglage change pendant le travail. Le dossier d’import et la bibliothèque du Mac " +
+      "(GET /albireo/v1/library) restent lus. Remis à faux, http_restore() " +
       "rouvre les transferts.",
     marmot: "C’est le mode avion de ton téléphone, mais pour Albireo. Tout ce qui est déjà sur le Mac marche toujours ; " +
       "seulement, plus rien ne part vers Internet, et rien n’en vient.",
@@ -620,9 +626,11 @@ const items = {
       "matrices : elle reste plus rapide que le processeur même sur de très longs textes. Ce réglage fixe une frontière, " +
       "par défaut au bout du modèle.",
     owl: "Le chemin des prompts sur le GPU (takes_gpu) exige que la séquence finisse dans gpu_prompt_context positions. " +
-      "L’attention de prompt (attention_mtile) prend 32 lignes de requête (16 pour des têtes de 256 valeurs) par tête " +
+      "L’attention de prompt (attention_mtile) prend 32 lignes de requête (16 pour des têtes de 256 valeurs, 8 pour " +
+      "celles de 512 de Gemma 4, coupées en deux tranches de 256 dont chacune calcule tous les scores) par tête " +
       "de clés, charge chaque tranche de 32 positions une fois en mémoire de threadgroup (8 valeurs par thread, une " +
-      "échelle par groupe) et calcule scores et sorties par simdgroup_matrix 8 x 8. Mesures alternées (bench_runtime, " +
+      "échelle par groupe) et calcule scores et sorties par simdgroup_matrix 8 x 8 ; la fenêtre glissante de Gemma 3 " +
+      "et 4 y est appliquée. Mesures alternées (bench_runtime, " +
       "clés q8, 2B, Albireo 4.11.0) : 4 096 tokens 423 à 424 tokens/s contre 170 à 177 sur le processeur ; 8 192 tokens " +
       "295 contre 115 à 117 ; 16 384 tokens 171 contre 67.",
     marmot: "C’est comme un livreur qui a appris à charger tout un carton au lieu d’un colis à la fois : même pour les " +

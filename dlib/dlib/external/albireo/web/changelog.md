@@ -2,6 +2,15 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.30.2 — 15 novembre 2026
+
+### Réglages
+
+- Les fiches de l'onglet Service décrivent l'état actuel du moteur : la fiche « GPU du Mac » liste ce qui reste sur le processeur (Gemma 3 1B, les experts de Gemma 4 26B-A4B, le modèle de recherche, les passes qui lisent une image, les prompts des mélanges d'experts autres que Qwen 3.6) au lieu d'annoncer que Gemma 4 lit ses prompts sur le processeur, et ses seuils de contrôle (1 %, 5 % en clés 8 bits, 25 % pour un mélange d'experts en 8 bits) ; la fiche « GPU : prompts jusqu'à » décrit les têtes de 512 de Gemma 4 et la fenêtre glissante ; la fiche « Hors ligne » cite la bibliothèque du Mac.
+- L'onglet Modèles ne dit plus qu'un mélange d'experts tourne sur le processeur seulement : les experts de Qwen 3.6 et de LFM2 passent par le GPU depuis les versions 4.7.0 et 4.21.0 ; seul Gemma 4 26B-A4B reste sur le processeur. Les formats acceptés par le GPU (Q5_K, Q8_0 et Q5_0 en plus pour Qwen 3.5, LFM2 et les mélanges d'experts) entrent dans l'avis donné sur chaque modèle.
+
+---
+
 ## 4.30.1 — 15 novembre 2026
 
 ### Corrections
