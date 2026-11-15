@@ -474,16 +474,28 @@ namespace
         }
         const unsigned parts = static_cast<unsigned>((L + metal_device::attention_part - 1) / metal_device::attention_part);
         metal_buffer PART = gpu.allocate(sizeof(float) * T * heads * parts * rep * (hd + 2));
+        // La même attention par les tuiles des prompts (attention_tiles), tile_tokens tokens au plus par tuile.
+        metal_buffer CT = gpu.allocate(sizeof(float) * q_stride * T), TILES = gpu.allocate(sizeof(int) * 2 * T);
+        const unsigned per_tile = metal_device::tile_tokens(rep, static_cast<unsigned>(hd));
+        unsigned n_tiles = 0;
+        for (unsigned t = 0; per_tile > 0 && t < T; t += per_tile, ++n_tiles)
+        {
+            static_cast<int*>(TILES.contents())[2 * n_tiles] = static_cast<int>(t);
+            static_cast<int*>(TILES.contents())[2 * n_tiles + 1] = static_cast<int>(std::min(per_tile, T - t));
+        }
         {
             auto c = gpu.begin();
             c->prepare_queries(Q, T, H, hd, q_stride, scale, q8);
             c->attention(Q, region, TABLE, LEN, table_stride, T, rep, parts, q_stride, PART, C, layout);
+            c->attention_tiles(Q, region, TABLE, LEN, table_stride, TILES, n_tiles, rep, q_stride, CT, layout);
             c->finish();
         }
+        check(per_tile > 0, "tiles of the prompts for heads of " + std::to_string(hd) + ", rep " + std::to_string(rep));
         // La référence : les clés et valeurs telles que le pool les contient, développées, en double
-        // précision.
-        double worst = 0;
+        // précision ; worst pour attention(), worst_tiles pour attention_tiles().
+        double worst = 0, worst_tiles = 0;
         const float* ctx = static_cast<const float*>(C.contents());
+        const float* ctx_tiles = static_cast<const float*>(CT.contents());
         for (unsigned t = 0; t < T; ++t)
             for (unsigned hq = 0; hq < H; ++hq)
             {
@@ -530,6 +542,7 @@ namespace
                         mag += std::fabs(w * vals[p][i]);
                     }
                     worst = std::max(worst, std::fabs(ctx[t * q_stride + hq * hd + i] - o) / (mag + 1e-6));
+                    worst_tiles = std::max(worst_tiles, std::fabs(ctx_tiles[t * q_stride + hq * hd + i] - o) / (mag + 1e-6));
                 }
             }
         check(worst < 1e-4, std::string("attention ") + (q8 ? "q8" : "f16") + ", heads of " + std::to_string(hd)
@@ -537,6 +550,10 @@ namespace
             + ", rep " + std::to_string(rep) + ", over " + std::to_string(L)
             + " positions in blocks of " + std::to_string(B) + ", " + std::to_string(T) + " tokens: largest error "
             + sci(worst));
+        // Les tuiles calculent en demi-précision (requêtes, clés, valeurs et poids du softmax), d'où la marge.
+        check(worst_tiles < 1e-3, std::string("attention in tiles ") + (q8 ? "q8" : "f16") + ", heads of " + std::to_string(hd)
+            + (pool_hd != hd ? " in a pool of " + std::to_string(pool_hd) : std::string())
+            + ", rep " + std::to_string(rep) + ", " + std::to_string(n_tiles) + " tiles: largest error " + sci(worst_tiles));
         if (q8)
         {
             // Les sorties sur des valeurs tournées, remises en place par le GPU comme par qk_unrotate_row().

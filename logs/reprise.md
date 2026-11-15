@@ -4,11 +4,11 @@
 
 ## État actuel
 
-- `main` = **Albireo 4.26.2** ; Pseudalis 1.0.5 avec les corrections du fork. Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
+- `main` = **Albireo 4.27.0** ; Pseudalis 1.0.5 avec les corrections du fork. Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
 - **Vrai service** : tourne en **4.26.2** (relancé le 2026-11-15 à 9 h 28 ; il s'était arrêté le 14 à 22 h 23 ; port 18443, réseau 8444 sans mot de passe, journal `build/albireo-home/logs/console.log`).
 - **Tests** : `test_macos.sh` d'Albireo 53 sur 53, de Pseudalis 34 sur 34 (encore le 2026-11-15, après le retrait des conditions Windows de dlib) ; banc de la page 113 vérifications ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
-- **Blog** : épisode 42 ; **notes pour l'auteur** : changement 22, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
-- **Le M2 reste en mode économie d'énergie** (choix de l'humain) : aucune mesure de vitesse ; celles de 4.21.0 à 4.26.0 se feront sur le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
+- **Blog** : épisode 43 ; **notes pour l'auteur** : changement 23, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
+- **Le M2 reste en mode économie d'énergie** (choix de l'humain) : aucune mesure de vitesse ; celles de 4.21.0 à 4.27.0 se feront sur le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
 - **Original** : détaché depuis le 2026-11-11, plus de fusion ; lu à `53ddfe4` (Albireo 1.0.20) pour la reprise à la main du 2026-11-14.
 - **Site des documents** : `macos/site-docs/serve.py`, port 8650 ; mot-clé « sitelog » (le lancer et donner l'URL).
 
@@ -18,24 +18,24 @@ Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les ex
 
 ## En cours
 
-**Gemma 4 sur le GPU, étape B : les prompts.** L'étape A est faite (4.25.1 et 4.26.0 : les étapes d'écriture sur le GPU). Les prompts de Gemma 4 restent sur le processeur (`gpu_state::steps_only`) : `attention_mtile` demanderait 64 Ko de mémoire de threadgroup pour des têtes de 512, le M2 en a 32. Pistes : tuiles de clés de 8 lignes au lieu de 32, ou tête coupée en deux moitiés de 256 ; les couches à fenêtre (têtes de 256) pourraient déjà passer par les tuiles existantes. Modèle d'essai `build/models/gemma-4-E2B-it-Q4_K_M.gguf` : 35 couches, largeur 1 536, 8 têtes de requête pour 1 de clés, têtes de 512 (7 couches globales) et de 256 (28 couches à fenêtre de 512), 20 couches à clés partagées (à partir de la 15), entrées par couche de 256, FFN de 6 144 puis 12 288, plafond des logits 30. Pour comparer au processeur : le forcer en produits flottants (comme le contrôle), sinon ses activations arrondies sur 8 bits le font diverger tôt sur ce modèle.
+Rien en cours. **Gemma 4 sur le GPU est complet** (dense) : étapes en 4.26.0, prompts en 4.27.0 (`attention_mtile` en deux tranches de 256 pour les têtes de 512, `SPLIT` ; deux listes de tuiles par largeur de tête). Sa vitesse reste à mesurer sur le Mac mini, en particulier celle des prompts, dont les couches de 512 calculent leurs scores deux fois. Pour comparer au processeur : le forcer en produits flottants (comme le contrôle), sinon ses activations arrondies sur 8 bits le font diverger tôt sur ce modèle.
 
 ## À faire, dans l'ordre proposé
 
-1. Étape B de Gemma 4 (ci-dessus).
-2. Images de Gemma 3.
-3. Reste de Gemma 4 : le 26B-A4B (mélange d'experts à expert dense parallèle, routeur à norme propre) ; E4B, 12B, 31B jamais essayés ; l'optimisation de llama.cpp (les couches à clés partagées ne calculent que les lignes dont on veut les logits).
-4. Reprises de l'original non choisies le 2026-11-14 : boutons Agent, Web et Raisonnement selon les capacités vérifiées de chaque modèle ; Mistral Small 3.2 (son format, ses outils) ; plusieurs tokens par pas (brouillons) ; Pseudalis 1.0.6 à 1.0.11.
-5. Sur le Mac mini : `tools/bench_macos.sh` en premier ; trancher le mélange d'experts sur le GPU ou le processeur (sur le M2, à peu près à égalité) ; Qwen3.6-35B-A3B (UD-Q4_K_M, 22,1 Go) et projecteurs de qwen35moe ; qwen3moe, mixtral, granitemoe sur le GPU (admis, jamais essayés) ; noyau Q4_K du GPU (54 Go/s contre 70 au plafond) ; relancer la sonde Metal ; régler `recommended` de `service.js` d'après les mesures.
-6. Reste de Qwen 3.5 : une erreur pendant l'exécution d'une étape sur le GPU (analyse du 2026-11-13 : le moteur devrait relire la séquence depuis un point sûr).
-7. Plus tard, pas à pas, à la demande de l'humain (accord de principe du 2026-11-11) : déplacer la logique de la page vers le service (conversations et documents gardés par le service et partagés entre appareils ; lecture et recherche des documents ; éventuellement assemblage des questions, mémoire et agent).
-8. Plus tard : noyaux NEON de génération pour Q8_0, Q5_K… ; essai de la page de Pseudalis par l'humain ; `dtest` complet (la liste du mémo passe ; les autres tests, dont les longs `dnn`, jamais lancés) et quelques exemples `slm_*` ; s'éloigner de dlib (décision du 2026-11-11).
-9. Pour l'humain, images du Qwen3.5-4B déjà installé : onglet Modèles, chercher « unsloth/Qwen3.5-4B-GGUF », cocher « Avec la lecture des images » et ajouter de nouveau le fichier Q4_K_M (seul le projecteur, 672 Mo, est téléchargé ; essayé sur le service d'essai, pas sur le vrai).
+1. Images de Gemma 3.
+2. Reste de Gemma 4 : le 26B-A4B (mélange d'experts à expert dense parallèle, routeur à norme propre) ; E4B, 12B, 31B jamais essayés ; l'optimisation de llama.cpp (les couches à clés partagées ne calculent que les lignes dont on veut les logits).
+3. Reprises de l'original non choisies le 2026-11-14 : boutons Agent, Web et Raisonnement selon les capacités vérifiées de chaque modèle ; Mistral Small 3.2 (son format, ses outils) ; plusieurs tokens par pas (brouillons) ; Pseudalis 1.0.6 à 1.0.11.
+4. Sur le Mac mini : `tools/bench_macos.sh` en premier ; trancher le mélange d'experts sur le GPU ou le processeur (sur le M2, à peu près à égalité) ; Qwen3.6-35B-A3B (UD-Q4_K_M, 22,1 Go) et projecteurs de qwen35moe ; qwen3moe, mixtral, granitemoe sur le GPU (admis, jamais essayés) ; noyau Q4_K du GPU (54 Go/s contre 70 au plafond) ; relancer la sonde Metal ; régler `recommended` de `service.js` d'après les mesures.
+5. Reste de Qwen 3.5 : une erreur pendant l'exécution d'une étape sur le GPU (analyse du 2026-11-13 : le moteur devrait relire la séquence depuis un point sûr).
+6. Plus tard, pas à pas, à la demande de l'humain (accord de principe du 2026-11-11) : déplacer la logique de la page vers le service (conversations et documents gardés par le service et partagés entre appareils ; lecture et recherche des documents ; éventuellement assemblage des questions, mémoire et agent).
+7. Plus tard : noyaux NEON de génération pour Q8_0, Q5_K… ; essai de la page de Pseudalis par l'humain ; `dtest` complet (la liste du mémo passe ; les autres tests, dont les longs `dnn`, jamais lancés) et quelques exemples `slm_*` ; s'éloigner de dlib (décision du 2026-11-11).
+8. Pour l'humain, images du Qwen3.5-4B déjà installé : onglet Modèles, chercher « unsloth/Qwen3.5-4B-GGUF », cocher « Avec la lecture des images » et ajouter de nouveau le fichier Q4_K_M (seul le projecteur, 672 Mo, est téléchargé ; essayé sur le service d'essai, pas sur le vrai).
 
 ## Fait, du plus récent au plus ancien
 
 ### 2026-11-15
 
+- **Albireo 4.27.0 : les prompts de Gemma 4 sur le GPU** : `attention_mtile` en deux tranches de 256 pour les têtes de 512 (8 Ko de requêtes, 16 Ko de clés ou valeurs), deux listes de tuiles, `steps_only` retiré ; `test_metal` vérifie maintenant l'attention en tuiles (1,4e-4 en 512) ; contrôle au chargement à 0,48 % ; long journal : PELICAN ; épisode 43.
 - **Conditions Windows retirées du code propre de dlib**, en quatre paquets testés un par un : versions Windows des cinq services de base (`b728dc9`), contournements de Visual Studio par `unifdef` (`bb23100`), branches des fichiers CMake et `-s` du build des tests (`6c4d429`), exemples, tests, CUDA et serveur (`496d3af`) ; 85 fichiers, 7 233 lignes retirées ; 0 avertissement. Au passage, un test de `is_same_object.cpp` désactivé hors de Visual Studio réactivé (notes pour l'auteur, n° 23).
 - **Paramètres inutilisés de l'original** (`loss.h`, quatre exemples) : le build des tests de dlib passe (`686326c`).
 - **dlib pour macOS seulement** (`ff874f8`) : `platform.h` (`#error` ailleurs), `assert.h`, `secure_random.h` (`arc4random_buf`), bloc des bibliothèques du système de CMake ; `CMakeLists.txt` de la racine de `dlib/` retiré.

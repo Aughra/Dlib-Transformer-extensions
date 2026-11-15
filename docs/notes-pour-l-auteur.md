@@ -770,6 +770,15 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : propre au Mac (noyaux Metal). L'endroit des échelles (`scales`) vaudrait pour tout pool dont les couches ont des têtes de largeurs différentes.
 
+### Changement 23 : les prompts de Gemma 4 sur le GPU (Albireo 4.27.0)
+
+- **Avant** : les prompts de Gemma 4 restaient sur le processeur (`gpu_state::steps_only`), parce que l'attention des prompts en tuiles (`attention_mtile`, instructions matricielles) aurait demandé, pour des têtes de 512 valeurs, 8 Ko de requêtes et 32 Ko de clés par threadgroup (le M2 en accorde 32 en tout), et 64 fragments de sortie de 8 × 8 par simdgroup.
+- **Changement** : `attention_mtile` reçoit un paramètre `SPLIT` qui coupe la tête en tranches de `HD / SPLIT` valeurs. La tuile des clés et valeurs ne garde qu'une tranche à la fois : les scores Q Kᵀ s'additionnent tranche par tranche, puis chaque threadgroup ne calcule que la tranche `tg.z` de la sortie. Pour 512 : 1 simdgroup (8 lignes de requête), deux tranches de 256, soit 8 Ko de requêtes, 16 Ko de clés ou de valeurs et moins de 2 Ko pour les scores, et autant de fragments de sortie que pour une tête de 256. Les scores sont calculés deux fois ; c'est le prix de la place. Instances `attention_mtile_{1,2,4,8}_512`. Dans la passe, deux listes de tuiles, une par largeur de tête (8 / rep tokens par tuile pour 512, 16 / rep pour 256), et `steps_only` retiré.
+- **Exactitude** : `test_metal` vérifie maintenant aussi l'attention en tuiles contre la double précision : têtes de 512, rep 8, erreur la plus grande 1,4e-4 en 8 bits et 8,0e-5 en demi-précision, du même ordre que les têtes de 256 (1,3e-4 et 7,3e-5) et de 128 (1,2e-4 et 7,7e-5) déjà en service. Contrôle au chargement de gemma-4-E2B-it Q4_K_M : prompt à 0,48 % du processeur, même token (Qwen3-VL 2B : 0,23 % ; Gemma 3 4B : 2,5 %). Journal de 2 622 tokens (2 823 tokens de prompt avec le gabarit de conversation), lu par le GPU : la réponse donne toujours PELICAN (et prend toujours l'enregistrement 3 pour celui d'Inès, comme le processeur).
+- **Vitesse** : à mesurer sur le Mac mini (le M2 reste en mode économie d'énergie).
+
+**Mac ou Windows** : propre au Mac (noyaux Metal). L'idée (couper la tête quand la mémoire partagée manque, au prix de scores recalculés) vaudrait pour un noyau CUDA aux mêmes limites.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

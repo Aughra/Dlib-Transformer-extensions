@@ -1084,16 +1084,22 @@ template [[host_name("attention_part_8_16")]] kernel void attention_part<8, 16>(
 // et leurs REP têtes (ligne = token x REP + tête), chaque simdgroup en prenant 8.  Par tranche de 32 positions : les
 // scores S (8 x 32) = Q K^T, le softmax en ligne (une position par voie), la remise à l'échelle des sorties par une
 // matrice diagonale, puis O += P V.  Entrées en demi-précision, sommes en floats.
-template <uint REP, uint HD, uint NSG>
+//
+// SPLIT coupe la tête en SPLIT tranches de HC = HD / SPLIT valeurs, pour les têtes de 512 (Gemma 4) : la tuile des
+// clés et valeurs ne garde qu'une tranche à la fois (les scores s'additionnent tranche par tranche), et chaque
+// threadgroup ne calcule que la tranche tg.z de la sortie.  Les scores sont alors calculés SPLIT fois, mais la mémoire
+// de threadgroup et les fragments de sortie restent ceux d'une tête de HC valeurs.
+template <uint REP, uint HD, uint NSG, uint SPLIT>
 kernel void attention_mtile(device const float* q [[buffer(0)]], device const uchar* region [[buffer(1)]],
     device const int* blocks [[buffer(2)]], device const int* lengths [[buffer(3)]], device const int* tiles [[buffer(4)]],
     constant attention_args& a [[buffer(5)]], device float* ctx [[buffer(6)]],
-    uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+    uint3 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
     uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]])
 {
-    constexpr uint M = NSG * 8, F = HD / 8;
+    constexpr uint M = NSG * 8, HC = HD / SPLIT, F = HC / 8;
+    const uint e_out = tg.z * HC;
     threadgroup half qs[M * HD];
-    threadgroup half kv[32 * HD];
+    threadgroup half kv[32 * HC];
     threadgroup float ss[NSG][8 * 32];
     threadgroup half ps[NSG][8 * 32];
     threadgroup float dd[NSG][64];
@@ -1120,11 +1126,12 @@ kernel void attention_mtile(device const float* q [[buffer(0)]], device const uc
     const long first = a.window > 0 ? max(0L, long(lengths[t0]) - long(a.window)) : 0;
     device const int* table = blocks + ulong(t0) * a.table_stride;
     // Huit valeurs consécutives par thread (un groupe de 32 n'a qu'une échelle) : une recherche dans la table des blocs,
-    // une échelle et une lecture de 8 octets (ou 16 en demi-précision) par huit valeurs.
-    auto load = [&](ulong slab, long p0, uint nk) {
-        for (uint idx = tid * 8; idx < 32 * HD; idx += NSG * 32 * 8)
+    // une échelle et une lecture de 8 octets (ou 16 en demi-précision) par huit valeurs ; la tranche de HC valeurs qui
+    // commence à e0.
+    auto load = [&](ulong slab, long p0, uint nk, uint e0) {
+        for (uint idx = tid * 8; idx < 32 * HC; idx += NSG * 32 * 8)
         {
-            const uint jj = idx / HD, e = idx % HD;
+            const uint jj = idx / HC, e = e0 + idx % HC;
             threadgroup half4* dst = (threadgroup half4*)(kv + idx);
             if (jj >= nk)
             {
@@ -1156,19 +1163,23 @@ kernel void attention_mtile(device const float* q [[buffer(0)]], device const uc
     for (long p0 = first; p0 < last; p0 += 32)
     {
         const uint nk = uint(min(32L, last - p0));
-        load(a.k_slab, p0, nk);
-        threadgroup_barrier(mem_flags::mem_threadgroup);
         simdgroup_float8x8 s[4];
         for (uint c = 0; c < 4; ++c) s[c] = make_filled_simdgroup_matrix<float, 8, 8>(0.0f);
-        for (uint k = 0; k < F; ++k)
+        for (uint part = 0; part < SPLIT; ++part)
         {
-            simdgroup_half8x8 qa;
-            simdgroup_load(qa, qs + (sg * 8) * HD + k * 8, HD);
-            for (uint c = 0; c < 4; ++c)
+            if (part > 0) threadgroup_barrier(mem_flags::mem_threadgroup);
+            load(a.k_slab, p0, nk, part * HC);
+            threadgroup_barrier(mem_flags::mem_threadgroup);
+            for (uint k = 0; k < F; ++k)
             {
-                simdgroup_half8x8 kb;
-                simdgroup_load(kb, kv + (c * 8) * HD + k * 8, HD, ulong2(0, 0), true);
-                simdgroup_multiply_accumulate(s[c], qa, kb, s[c]);
+                simdgroup_half8x8 qa;
+                simdgroup_load(qa, qs + (sg * 8) * HD + part * HC + k * 8, HD);
+                for (uint c = 0; c < 4; ++c)
+                {
+                    simdgroup_half8x8 kb;
+                    simdgroup_load(kb, kv + (c * 8) * HC + k * 8, HC, ulong2(0, 0), true);
+                    simdgroup_multiply_accumulate(s[c], qa, kb, s[c]);
+                }
             }
         }
         for (uint c = 0; c < 4; ++c) simdgroup_store(s[c], ss[sg] + c * 8, 32);
@@ -1199,7 +1210,7 @@ kernel void attention_mtile(device const float* q [[buffer(0)]], device const uc
         simdgroup_load(dm, dd[sg], 8);
         for (uint j = 0; j < F; ++j) simdgroup_multiply(o[j], dm, o[j]);
         threadgroup_barrier(mem_flags::mem_threadgroup);
-        load(a.v_slab, p0, nk);
+        load(a.v_slab, p0, nk, e_out);
         threadgroup_barrier(mem_flags::mem_threadgroup);
         simdgroup_half8x8 pa[4];
         for (uint c = 0; c < 4; ++c) simdgroup_load(pa[c], ps[sg] + c * 8, 32);
@@ -1207,7 +1218,7 @@ kernel void attention_mtile(device const float* q [[buffer(0)]], device const uc
             for (uint c = 0; c < 4; ++c)
             {
                 simdgroup_half8x8 vb;
-                simdgroup_load(vb, kv + (c * 8) * HD + j * 8, HD);
+                simdgroup_load(vb, kv + (c * 8) * HC + j * 8, HC);
                 simdgroup_multiply_accumulate(o[j], pa[c], vb, o[j]);
             }
         threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -1221,21 +1232,23 @@ kernel void attention_mtile(device const float* q [[buffer(0)]], device const uc
         {
             const uint r = idx / 8, row = sg * 8 + r, tt = row / REP, i = row % REP;
             if (int(tt) < count)
-                ctx[ulong(t0 + int(tt)) * a.q_stride + (kvh * REP + i) * HD + j * 8 + idx % 8] = dd[sg][idx] / l[r];
+                ctx[ulong(t0 + int(tt)) * a.q_stride + (kvh * REP + i) * HD + e_out + j * 8 + idx % 8] = dd[sg][idx] / l[r];
         }
         simdgroup_barrier(mem_flags::mem_threadgroup);
     }
 }
 
 // NSG : 4 simdgroups (32 lignes de requête) jusqu'à des têtes de 128 valeurs, 2 (16 lignes) pour 256, pour tenir
-// dans 32 Ko ; les tokens d'une tuile : 8 x NSG / REP.
-#define ATT_MTILE(R, H, N) template [[host_name("attention_mtile_" #R "_" #H)]] kernel void attention_mtile<R, H, N>( \
+// dans 32 Ko ; pour 512 (Gemma 4), 1 simdgroup (8 lignes) et deux tranches de 256 (SPLIT) : 8 Ko de requêtes, 16 Ko
+// de clés ou de valeurs, moins de 2 Ko pour les scores.  Les tokens d'une tuile : 8 x NSG / REP.
+#define ATT_MTILE(R, H, N, S) template [[host_name("attention_mtile_" #R "_" #H)]] kernel void attention_mtile<R, H, N, S>( \
     device const float*, device const uchar*, device const int*, device const int*, device const int*, \
-    constant attention_args&, device float*, uint2, uint, uint, uint);
-ATT_MTILE(1, 64, 4) ATT_MTILE(1, 128, 4) ATT_MTILE(1, 256, 2)
-ATT_MTILE(2, 64, 4) ATT_MTILE(2, 128, 4) ATT_MTILE(2, 256, 2)
-ATT_MTILE(4, 64, 4) ATT_MTILE(4, 128, 4) ATT_MTILE(4, 256, 2)
-ATT_MTILE(8, 64, 4) ATT_MTILE(8, 128, 4) ATT_MTILE(8, 256, 2)
+    constant attention_args&, device float*, uint3, uint, uint, uint);
+ATT_MTILE(1, 64, 4, 1) ATT_MTILE(1, 128, 4, 1) ATT_MTILE(1, 256, 2, 1)
+ATT_MTILE(2, 64, 4, 1) ATT_MTILE(2, 128, 4, 1) ATT_MTILE(2, 256, 2, 1)
+ATT_MTILE(4, 64, 4, 1) ATT_MTILE(4, 128, 4, 1) ATT_MTILE(4, 256, 2, 1)
+ATT_MTILE(8, 64, 4, 1) ATT_MTILE(8, 128, 4, 1) ATT_MTILE(8, 256, 2, 1)
+ATT_MTILE(1, 512, 1, 2) ATT_MTILE(2, 512, 1, 2) ATT_MTILE(4, 512, 1, 2) ATT_MTILE(8, 512, 1, 2)
 
 // Les parties de l'attention réunies : pour le token t et la tête de requête h, les parties qu'atteint
 // sa longueur, chacune pondérée par exp(son maximum - le plus grand), divisées par la somme totale,

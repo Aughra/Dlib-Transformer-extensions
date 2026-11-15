@@ -2,6 +2,14 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.27.0 — 15 novembre 2026
+
+### Performances
+
+- Les modèles Gemma 4 dense lisent aussi leurs prompts sur le GPU : l'attention des prompts en tuiles prend les têtes de 512 valeurs en deux tranches de 256, pour tenir dans la mémoire rapide du GPU. Au chargement, le contrôle trouve les logits du prompt à 0,48 % de ceux du processeur, avec le même token le plus probable. Sur un journal de 2 622 tokens, la réponse est la même que sur le processeur. Vitesse à mesurer sur le Mac mini.
+
+---
+
 ## 4.26.2 — 15 novembre 2026
 
 ### Plateforme

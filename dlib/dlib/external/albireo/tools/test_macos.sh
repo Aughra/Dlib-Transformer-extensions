@@ -245,12 +245,12 @@ else
     --max 60 "${GEMMA3_LOG%x}"
 fi
 
-# Gemma 4 sur le GPU (Albireo 4.26.0) : les étapes, ses prompts restant sur le processeur (les étapes « gemma 4 » plus haut
-# passent aussi par le GPU) ; le contrôle au chargement, puis le journal de 2 622 tokens, au-delà de la fenêtre de 512
-# positions.  Le E2B y lit PELICAN, et prend l'enregistrement 3 pour celui d'Inès, sur le processeur comme sur le GPU.
+# Gemma 4 sur le GPU : les étapes (Albireo 4.26.0) et les prompts (4.27.0, attention en tuiles en deux tranches de 256
+# pour les têtes de 512 ; les étapes « gemma 4 » plus haut passent aussi par le GPU) ; le contrôle au chargement, puis le
+# journal de 2 622 tokens, au-delà de la fenêtre de 512 positions.  Le E2B y lit PELICAN, et prend l'enregistrement 3 pour celui d'Inès, sur le processeur comme sur le GPU.
 if [ ! -f "$ENGINE" ] || [ ! -f "$GEMMA4" ]; then skip "gemma 4 on the GPU" "no $GEMMA4"
 else
-  step "gemma 4 on the GPU" "the generation steps run on it" "$CHAT" "$ENGINE" "$GEMMA4" --reasoning off --temperature 0 \
+  step "gemma 4 on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$GEMMA4" --reasoning off --temperature 0 \
     --max 20 "$QUESTION"
   GEMMA4_LOG=$(cat "$HERE/../tests/lfm2/long_prompt.txt"; printf x)
   # Le motif de la réponse, que le prompt affiché par engine_chat ne contient pas (« the secret code word is PELICAN. »).

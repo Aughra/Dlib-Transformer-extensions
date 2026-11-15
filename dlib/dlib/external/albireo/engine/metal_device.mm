@@ -48,7 +48,8 @@ namespace albireo
             "attention_mtile_4_64", "attention_mtile_4_128", "attention_mtile_4_256",
             "attention_mtile_8_64", "attention_mtile_8_128", "attention_mtile_8_256", "restore_outputs", "short_conv",
             "gelu_mul", "add_rows",
-            "attention_part_1_16", "attention_part_2_16", "attention_part_4_16", "attention_part_8_16" };
+            "attention_part_1_16", "attention_part_2_16", "attention_part_4_16", "attention_part_8_16",
+            "attention_mtile_1_512", "attention_mtile_2_512", "attention_mtile_4_512", "attention_mtile_8_512" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -60,7 +61,8 @@ namespace albireo
             k_dequant_q5_K, k_dequant_q8_0, k_dequant_q5_0,
             k_moe_group, k_moe_tiles, k_mm_id_q4_K, k_mm_id_q5_K, k_mm_id_q6_K, k_mm_id_q8_0, k_mm_id_q5_0,
             k_attention_part, k_attention_mtile = k_attention_part + 12, k_restore_outputs = k_attention_mtile + 12,
-            k_short_conv, k_gelu_mul, k_add_rows, k_attention_part_512, k_count = k_attention_part_512 + 4
+            k_short_conv, k_gelu_mul, k_add_rows, k_attention_part_512, k_attention_mtile_512 = k_attention_part_512 + 4,
+            k_count = k_attention_mtile_512 + 4
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -846,9 +848,9 @@ namespace albireo
     unsigned metal_device::tile_tokens(unsigned rep, unsigned hd)
     {
         // Comme les instances d'attention_mtile (metal_kernels.metal) : 32 lignes de requête (16 pour des têtes de 256
-        // valeurs), rep par token.
-        if ((rep != 1 && rep != 2 && rep != 4 && rep != 8) || (hd != 64 && hd != 128 && hd != 256)) return 0;
-        return (hd == 256 ? 16 : 32) / rep;
+        // valeurs, 8 pour 512), rep par token.
+        if ((rep != 1 && rep != 2 && rep != 4 && rep != 8) || (hd != 64 && hd != 128 && hd != 256 && hd != 512)) return 0;
+        return (hd == 512 ? 8 : hd == 256 ? 16 : 32) / rep;
     }
 
     void metal_device::commands::attention_tiles(metal_view q, metal_view region, metal_view blocks, metal_view lengths,
@@ -856,10 +858,11 @@ namespace albireo
         const kv_layout& l)
     {
         if (n_tiles == 0) return;
-        // attention_mtile n'existe pas pour les têtes de 512 valeurs (tile_tokens vaut 0).
-        const int base = l.hd == 512 ? -1 : attention_kernel(rep, l.hd);
+        const int base = attention_kernel(rep, l.hd);
         if (base < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
-        const int kernel = base - k_attention_part + k_attention_mtile;
+        // Les têtes de 512 valeurs ont leurs instances à part, en deux tranches de 256 (troisième dimension de la grille).
+        const bool wide = l.hd == 512;
+        const int kernel = wide ? base - k_attention_part_512 + k_attention_mtile_512 : base - k_attention_part + k_attention_mtile;
         const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, 0, 1, q_stride,
             table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l) };
         impl_->use(kernel);
@@ -870,8 +873,8 @@ namespace albireo
         impl_->bind(tiles, 4);
         impl_->args(a, 5);
         impl_->bind(ctx, 6);
-        // 4 simdgroups, 2 pour des têtes de 256 valeurs.
-        impl_->groups(n_tiles, l.heads, 1, l.hd == 256 ? 64 : 128);
+        // 4 simdgroups, 2 pour des têtes de 256 valeurs, 1 par tranche pour 512.
+        impl_->groups(n_tiles, l.heads, wide ? 2 : 1, wide ? 32 : l.hd == 256 ? 64 : 128);
     }
 
     void metal_device::commands::finish()

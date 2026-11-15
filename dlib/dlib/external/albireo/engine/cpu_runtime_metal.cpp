@@ -35,8 +35,6 @@ namespace albireo
         int wait = 0;
         // Les prompts d'un mélange d'experts passent au GPU (produits groupés, matmul_id) : qwen35moe seulement.
         bool moe_prompts = false;
-        // Gemma 4 : les étapes seules, ses prompts restant sur le processeur (pas d'attention de prompt en 512).
-        bool steps_only = false;
 
         // Les poids : tout le mappage du fichier, sans copie.
         metal_buffer weights;
@@ -158,8 +156,8 @@ namespace albireo
         /*
             Gemma 3 passe au GPU depuis Albireo 4.22.0, les étapes de Gemma 4 depuis Albireo 4.26.0 (têtes de 256 et
             de 512, clés et valeurs partagées, norme des valeurs, entrées par couche, échelle de sortie, plafond des
-            logits) ; les prompts de Gemma 4 restent sur le processeur (steps_only) : attention_mtile n'existe pas en
-            512.  Les mélanges d'experts de Gemma 4 (26B-A4B) restent sur le processeur.
+            logits), ses prompts depuis Albireo 4.27.0 (attention_mtile en deux tranches de 256 pour les têtes de 512).
+            Les mélanges d'experts de Gemma 4 (26B-A4B) restent sur le processeur.
         */
         const bool gemma4 = cfg_.gemma4 && !cfg_.gemma3;
         auto layer_widths = [&]() {
@@ -215,7 +213,6 @@ namespace albireo
         }
         std::unique_ptr<gpu_state> g(new gpu_state);
         g->device = &device;
-        g->steps_only = gemma4;
         if (cfg_.is_moe() && cfg_.recurrent())
         {
             // Les tuiles de matmul_id : 32 lignes, 64 colonnes.
@@ -315,7 +312,9 @@ namespace albireo
         g.blocks = need(device, T * sizeof(int));
         g.rows = need(device, T * sizeof(int));
         g.lengths = need(device, T * sizeof(int));
-        g.tiles = need(device, T * 2 * sizeof(int));
+        // Deux listes de tuiles (attention_tiles()) : pour les têtes du modèle, puis pour celles des couches à fenêtre
+        // quand elles sont d'une autre largeur (Gemma 4 : 512 et 256) ; au plus une tuile par token chacune.
+        g.tiles = need(device, T * 4 * sizeof(int));
         if (cfg_.gemma4)
         {
             g.cs_swa = need(device, T * std::max<long>(cfg_.rope_dims_swa, 2) * f);
@@ -388,10 +387,8 @@ namespace albireo
                 if (i >= sequences_.size() || !sequences_[i] || sequences_[i]->length + s.count > gpu_prompt_context_)
                     long_pass = false;
             }
-        // Les prompts des mélanges d'experts restent sur le processeur, sauf ceux de qwen35moe (produits groupés) ;
-        // ceux de Gemma 4 aussi (steps_only).
+        // Les prompts des mélanges d'experts restent sur le processeur, sauf ceux de qwen35moe (produits groupés).
         if (cfg_.is_moe() && !(gpu_ && gpu_->moe_prompts)) long_pass = false;
-        if (gpu_ && gpu_->steps_only) long_pass = false;
         return gpu_ && gpu_->state != gpu_state::dropped && (step || long_pass)
             && batch.embedding_rows.empty() && !batch.hidden_only
             && batch.logit_rows.size() <= metal_device::max_tokens;
@@ -499,7 +496,7 @@ namespace albireo
         };
         // Le prompt : sur le GPU pour la première séquence quand les prompts y vont, sur le processeur
         // sinon.
-        const bool gpu_prompt = (!cfg_.is_moe() || gpu_->moe_prompts) && !gpu_->steps_only && n >= gpu_prompt_min_
+        const bool gpu_prompt = (!cfg_.is_moe() || gpu_->moe_prompts) && n >= gpu_prompt_min_
             && n <= gpu_prompt_context_;
         prompt.logit_rows.assign(1, n - 1);
         prompt.segments.assign(1, { a, 0, n });
@@ -733,20 +730,27 @@ namespace albireo
             gl.eps = eps;
         }
         const unsigned n_segments = static_cast<unsigned>(batch.segments.size());
-        // Les prompts lisent leurs clés par tuiles de tokens consécutifs d'une même séquence (attention_tiles()).
-        const long per_tile = static_cast<long>(metal_device::tile_tokens(static_cast<unsigned>(rep),
-            static_cast<unsigned>(hd)));
-        const bool tiled = !step && per_tile > 0;
-        unsigned n_tiles = 0;
-        if (tiled)
+        /*
+            Les prompts lisent leurs clés par tuiles de tokens consécutifs d'une même séquence (attention_tiles()), dont
+            le nombre de tokens dépend de la largeur des têtes : une liste pour celles du modèle (hd), une seconde, à la
+            suite dans g.tiles, pour les couches à fenêtre quand leurs têtes sont d'une autre largeur (Gemma 4).
+        */
+        const long hd_swa = cfg_.head_dim_swa > 0 ? cfg_.head_dim_swa : hd;
+        bool tiled = !step;
+        unsigned n_tiles[2] = { 0, 0 };
+        for (int w = 0; w < 2 && tiled; ++w)
         {
-            int* tl = static_cast<int*>(g.tiles.contents());
+            if (w == 1 && hd_swa == hd) break;
+            const long per_tile = static_cast<long>(metal_device::tile_tokens(static_cast<unsigned>(rep),
+                static_cast<unsigned>(w == 0 ? hd : hd_swa)));
+            if (per_tile == 0) tiled = false;
+            int* tl = static_cast<int*>(g.tiles.contents()) + w * 2 * T;
             for (const auto& s : batch.segments)
-                for (long j = 0; j < s.count; j += per_tile)
+                for (long j = 0; j < s.count && tiled; j += per_tile)
                 {
-                    tl[2 * n_tiles] = static_cast<int>(s.start + j);
-                    tl[2 * n_tiles + 1] = static_cast<int>(std::min(per_tile, s.count - j));
-                    ++n_tiles;
+                    tl[2 * n_tiles[w]] = static_cast<int>(s.start + j);
+                    tl[2 * n_tiles[w] + 1] = static_cast<int>(std::min(per_tile, s.count - j));
+                    ++n_tiles[w];
                 }
         }
         const unsigned uT = static_cast<unsigned>(T);
@@ -870,8 +874,12 @@ namespace albireo
             if (owns) c->kv_store(g.k, g.v, lkvd, g.region, g.blocks, g.rows, uT, kl);
             c->prepare_queries(g.q, uT, H, lhd, lqd, lscale, q8);
             if (tiled)
-                c->attention_tiles(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), g.tiles, n_tiles,
-                    static_cast<unsigned>(rep), static_cast<unsigned>(lqd), g.ctx, kl);
+            {
+                const int w = lhd != hd ? 1 : 0;
+                c->attention_tiles(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride),
+                    at(g.tiles, sizeof(int) * static_cast<size_t>(w * 2 * T)), n_tiles[w], static_cast<unsigned>(rep),
+                    static_cast<unsigned>(lqd), g.ctx, kl);
+            }
             else
                 c->attention(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride), uT, rep, parts, lqd,
                     g.partial, g.ctx, kl, part_len);
