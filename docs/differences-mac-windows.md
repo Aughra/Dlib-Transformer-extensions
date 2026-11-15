@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version d'Albireo](../dlib/dlib/external/albireo/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.31.1, 15 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 4.32.0, 15 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -74,7 +74,9 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 
 | Ce qui change | Original (Windows) | Fork (Mac) | Pourquoi | Où |
 |---|---|---|---|---|
-| Langues | Anglais, français, allemand, italien, espagnol | Français seulement (Pseudalis : anglais et français) | Décision de l'humain | v. 2.0.0 |
+| Langues | Anglais, français, allemand, italien, espagnol | Français seulement, pages de l'interface de programmation comprises (descriptions des routes et libellés de Swagger UI) ; Pseudalis aussi | Décision de l'humain : « tout en français » | v. 2.0.0, v. 4.32.0 |
+| Contexte de la prochaine question | — | Bouton de la barre du haut : la consigne système, l'historique, le brouillon et les outils que lirait le modèle, comptés par le service | Voir ce que le modèle va lire (demande de l'humain) | v. 4.32.0 |
+| Accès aux paramètres | Bouton « Paramètres » en bas à gauche | Menu de l'engrenage en haut, avec tous les onglets ; le bouton du bas est retiré | Un seul accès, complet (demande de l'humain) | v. 4.32.0 |
 | Lecture des réponses à voix haute | Présente (SVOX Pico) | Retirée | « Ça alourdit le programme et ne sert pas » (l'humain) | v. 3.0.0 |
 | Réglages du service | Fichier `settings.json` et icône Windows | Onglet « Service » : chaque réglage avec sa fiche (normale, hibou, marmotte, abeille) et ses valeurs conseillées mesurées | Tout régler depuis la page, y compris depuis le téléphone | v. 2.0.0 |
 | Choix du modèle | Sélecteur de fonction (Général, Code, Cybersécurité) | Onglet « Modèles » : un modèle pour tout, avec un avis calculé pour ce Mac | Plus simple ; l'avis tient compte de la mémoire du Mac | v. 3.1.0 |

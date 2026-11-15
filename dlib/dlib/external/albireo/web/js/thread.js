@@ -23,6 +23,7 @@ import { language, t, tn } from './i18n.js';
 import { icon } from './icons.js';
 import { forgetDocument } from './indexing.js';
 import { projectById } from './lists.js';
+import { contextPreview } from './preview.js';
 import { attachCodeButtons, escapeHtml, renderMarkdown } from './markdown.js';
 import { drawMarkdown, markdownField } from './mdfield.js';
 import { go } from './navigation.js';
@@ -45,15 +46,19 @@ export function renderAll() {
   ui.banner.classList.toggle('hidden', !(state.view === 'chat' && state.current && state.current.incognito));
 }
 
-// L'engrenage de la barre du haut : les réglages, les réglages du service, l'onglet « À propos » et les notes de
-// version.
+// L'engrenage de la barre du haut : chaque onglet des paramètres, dans leur ordre, puis les notes de version et la page
+// de l'interface (fork pour macOS : il remplace le bouton « Paramètres » du bas du panneau latéral).
 function gearButton() {
   return iconButton('gear', t('settings'), (e) => showMenu(e.currentTarget, [
-    { icon: 'gear', label: t('settings'), action: () => settingsDialog('general') },
+    { icon: 'gear', label: t('general'), action: () => settingsDialog('general') },
     { icon: 'spark', label: t('modelsTab'), action: () => settingsDialog('modelsTab') },
+    { icon: 'edit', label: t('model'), action: () => settingsDialog('model') },
+    { icon: 'history', label: t('memoryTab'), action: () => settingsDialog('memoryTab') },
+    { icon: 'archive', label: t('data'), action: () => settingsDialog('data') },
     { icon: 'cpu', label: t('serviceTab'), action: () => settingsDialog('serviceTab') },
     { icon: 'info', label: t('about'), action: () => settingsDialog('about') },
-    { icon: 'file', label: t('changelog'), action: () => changelogDialog() }
+    { icon: 'file', label: t('changelog'), action: () => changelogDialog() },
+    { icon: 'book', label: t('api'), action: () => window.open('/docs/', '_blank') }
   ]), 'icon-button topbar-gear');
 }
 
@@ -105,6 +110,8 @@ export function renderTopbar() {
     }
   }
   // Le fork n'a plus de sélecteur de fonction : le modèle se choisit dans les paramètres (onglet Modèles).
+  // Le contexte que lirait le modèle pour la prochaine question (fork pour macOS).
+  if (c) bar.append(iconButton('chat', 'Contexte de la prochaine question', () => contextPreview(), 'icon-button topbar-context'));
   if (c && c.messages.length) bar.append(iconButton('more', '…', (e) => conversationMenu(c, e.currentTarget)));
   bar.append(gearButton());
 }

@@ -416,15 +416,24 @@ function contextHelp() {
 
 function speedHelp() {
   return [
-    'Le débit du moteur, en direct : combien de jetons il lit et écrit par seconde, sur les cinq dernières ' +
-      'secondes, relu chaque seconde. Ce n’est pas une moyenne de la session.',
-    'Lecture : les jetons lus avant de répondre (la question, la discussion, les documents). C’est rapide, ' +
-      'surtout sur le GPU, parce que tout le texte se lit d’un coup.',
-    'Écriture : les jetons de la réponse. C’est plus lent, parce que le modèle écrit un jeton à la fois et relit ' +
-      'tous ses poids pour chacun.',
-    'Une case s’allume pendant le travail. Au repos, la dernière valeur mesurée reste affichée, en plus pâle.',
-    'Image : la lecture, c’est parcourir une page d’un coup d’œil ; l’écriture, c’est la recopier à la main, ' +
-      'lettre par lettre.'
+    'Ce que montrent les deux cases : combien de jetons le moteur lit et écrit par seconde, en ce moment. Ce n’est ' +
+      'pas une moyenne de la session : seules comptent les cinq dernières secondes.',
+    'Comment c’est mesuré. Le moteur travaille par passes : à chaque passe, il lit un morceau de prompt et écrit ' +
+      'au plus un jeton par réponse en cours. À la fin de chaque passe, il note l’heure et le nombre de jetons lus et ' +
+      'écrits. Le débit est la somme des jetons des passes des cinq dernières secondes, divisée par le temps écoulé ' +
+      'depuis la plus ancienne de ces passes (une seconde au moins). La page le relit chaque seconde ' +
+      '(GET /albireo/v1/speed).',
+    'Lecture : les jetons de prompt que le moteur calcule, c’est-à-dire la question, la discussion et les documents, ' +
+      'y compris la relecture de l’historique en arrière-plan (réglage « Préparer la question suivante »). Les jetons ' +
+      'déjà en mémoire, repris d’une lecture précédente, ne sont pas relus, donc pas comptés. C’est rapide, surtout ' +
+      'sur le GPU, parce que tout un morceau se calcule d’un coup.',
+    'Écriture : les jetons des réponses. C’est plus lent, parce que chaque jeton demande de relire tous les poids du ' +
+      'modèle. Plusieurs réponses écrites ensemble s’additionnent.',
+    'Au tout début d’un travail, le chiffre se stabilise en une ou deux secondes. Quand plus rien ne passe, il ' +
+      'retombe à zéro au bout de cinq secondes ; la dernière valeur mesurée reste alors affichée, en plus pâle.',
+    'Image : la lecture, c’est parcourir une page d’un coup d’œil ; l’écriture, c’est la recopier à la main, lettre ' +
+      'par lettre. Le compteur regarde les cinq dernières secondes, comme le compteur de vitesse d’une voiture, pas ' +
+      'la moyenne du trajet.'
   ];
 }
 

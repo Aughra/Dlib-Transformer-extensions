@@ -7,25 +7,15 @@
     tourne.  Sur macOS, l'administration est ouverte sur le Mac, sans jeton.
 */
 window.addEventListener('load', function () {
-  const words = {
-    en: { what: 'Programming interface', back: '← Back to the application', switch: 'Albireo API',
-      quick: 'Quick start', copy: 'Copy', copied: 'Copied', refused: 'Copy refused',
-      quick_hint: 'Every route answers on this Mac only. The files travel as they are, in the body of the requests; ' +
-        'no account and no token are needed.',
-      address: 'Address',
-      theme: { auto: 'Theme: system', light: 'Theme: light', dark: 'Theme: dark' } },
-    fr: { what: 'Interface de programmation', back: '← Retour à l’application', switch: 'API d’Albireo',
+  // Le français seulement (fork pour macOS, demande de l'humain du 2026-11-15).
+  const w = { what: 'Interface de programmation', back: '← Retour à l’application', switch: 'API d’Albireo',
       quick: 'Démarrage rapide', copy: 'Copier', copied: 'Copié', refused: 'Copie refusée',
       quick_hint: 'Chaque route ne répond que sur ce Mac. Les fichiers voyagent tels quels, dans le corps des ' +
         'requêtes ; ni compte ni jeton ne sont nécessaires.',
       address: 'Adresse',
-      theme: { auto: 'Thème : système', light: 'Thème : clair', dark: 'Thème : sombre' } }
+      theme: { auto: 'Thème : système', light: 'Thème : clair', dark: 'Thème : sombre' }
   };
-  let language = null;
-  try { language = localStorage.getItem('pseudalis.language'); } catch (e) { /* stockage indisponible */ }
-  // Le français par défaut, comme l'application ; l'anglais quand l'application l'a choisi.
-  if (!words[language]) language = 'fr';
-  const w = words[language];
+  const language = 'fr';
   document.documentElement.lang = language;
   document.querySelectorAll('[data-t]').forEach(function (e) { e.textContent = w[e.dataset.t]; });
 
@@ -49,7 +39,7 @@ window.addEventListener('load', function () {
 
   // Le démarrage rapide : un texte et un fichier protégés, avec l'adresse de ce service.
   const base = location.origin;
-  let authority = '<data folder>/certificates/pseudalis-authority.crt';
+  let authority = '<dossier des données>/certificates/pseudalis-authority.crt';
   const samples = {
     'curl (texte)': function () {
       return 'curl --cacert "' + authority + '" \\\n  ' + base + '/v1/text/anonymize \\\n' +

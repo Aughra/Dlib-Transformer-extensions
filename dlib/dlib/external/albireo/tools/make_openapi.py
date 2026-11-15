@@ -26,29 +26,30 @@ def reply(description, schema=None):
 
 
 error_replies = {
-    "400": reply("Invalid request", ref("Error")),
-    "404": reply("Unknown or inactive model", ref("Error")),
-    "503": reply("The service starts (code starting), the model loads (code model_loading), or the values of the "
-                 "JSON bodies being read at once reach their budget (code busy, Retry-After: 2); the Retry-After "
-                 "header gives the seconds to wait", ref("Error")),
+    "400": reply("Requête invalide", ref("Error")),
+    "404": reply("Modèle inconnu ou inactif", ref("Error")),
+    "503": reply("Le service démarre (code starting), le modèle se charge (code model_loading), ou les valeurs des "
+                 "corps JSON lus en même temps atteignent leur budget (code busy, Retry-After: 2) ; l'en-tête "
+                 "Retry-After donne les secondes à attendre", ref("Error")),
 }
 # Les routes dont le moteur calcule la requête, qui peuvent échouer une fois qu'il a commencé ; un flux se termine alors par StreamError.
 engine_replies = dict(error_replies, **{
-    "500": reply("The engine failed the request, which was not streamed: type server_error, and code the reason "
-                 "the engine gives, such as out_of_memory", ref("Error")),
+    "500": reply("Le moteur a échoué sur la requête, qui n'était pas diffusée en flux : type server_error, et pour "
+                 "code la raison que donne le moteur, comme out_of_memory", ref("Error")),
 })
 # Les routes qui génèrent du texte, que le moteur refuse aussi pour un temps quand les images déjà en attente pour le
 # modèle occupent la mémoire qui leur est réservée.
 generation_replies = dict(engine_replies, **{
-    "503": reply("The service starts (code starting), the model loads (code model_loading), the values of the JSON "
-                 "bodies being read at once reach their budget (code busy, Retry-After: 2), or the engine refuses the "
-                 "request for a while because the images already queued for the model hold the memory kept for them "
-                 "(code engine_busy, Retry-After: 5); the Retry-After header gives the seconds to wait", ref("Error")),
+    "503": reply("Le service démarre (code starting), le modèle se charge (code model_loading), les valeurs des "
+                 "corps JSON lus en même temps atteignent leur budget (code busy, Retry-After: 2), ou le moteur "
+                 "refuse la requête pour un temps parce que les images déjà en attente pour le modèle occupent la "
+                 "mémoire qui leur est réservée (code engine_busy, Retry-After: 5) ; l'en-tête Retry-After donne les "
+                 "secondes à attendre", ref("Error")),
 })
-offline_reply = {"409": reply("Refused in offline mode", {"type": "object", "properties": {
+offline_reply = {"409": reply("Refusé en mode hors ligne", {"type": "object", "properties": {
     "ok": {"type": "boolean"}, "error": {"type": "string"}}})}
 model_id = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
-            "description": "Identifier of the model, as listed by /albireo/v1/models."}
+            "description": "Identifiant du modèle, tel que /albireo/v1/models le liste."}
 ok = {"type": "object", "properties": {"ok": {"type": "boolean"}, "error": {"type": "string"}}}
 # Les codes des refus des imports par chemin (service::import_folder() dans host/service.h).
 import_codes = ["import_path_relative", "import_path_network", "import_path_device", "import_path_invalid",
@@ -65,133 +66,138 @@ schemas = {
         "type": "object", "required": ["role"],
         "properties": {
             "role": {"type": "string", "enum": ["system", "developer", "user", "assistant", "tool"]},
-            "content": {"description": "Text, or a list of parts: text parts, and for a model that reads images "
-                                       "(inputs of /v1/models) image_url parts, 16 images per request at most.",
+            "content": {"description": "Du texte, ou une liste de parties : des parties de texte et, pour un modèle "
+                                       "qui lit les images (inputs de /v1/models), des parties image_url, 16 images "
+                                       "par requête au plus.",
                         "oneOf": [{"type": "string"}, {"type": "array", "items": ref("ContentPart")}],
                         "nullable": True},
-            "reasoning_content": {"type": "string", "description": "Reasoning of an earlier assistant message."},
+            "reasoning_content": {"type": "string", "description": "Raisonnement d'un message antérieur de "
+                                                                   "l'assistant."},
             "tool_calls": {"type": "array", "items": ref("ToolCall")},
-            "tool_call_id": {"type": "string", "description": "For a tool message: the call it answers."},
+            "tool_call_id": {"type": "string", "description": "Pour un message d'outil : l'appel auquel il répond."},
             "name": {"type": "string"}}},
     "ContentPart": {"type": "object", "required": ["type"], "properties": {
         "type": {"type": "string", "enum": ["text", "image_url", "input_audio"]},
         "text": {"type": "string"},
-        "image_url": {"description": "The image: an object with its url, or its url alone as a string.", "oneOf": [
-            {"type": "string", "description": "The data URL of the image, as url in the object form."},
+        "image_url": {"description": "L'image : un objet avec son url, ou son url seule sous forme de chaîne.", "oneOf": [
+            {"type": "string", "description": "L'URL data de l'image, comme url dans la forme objet."},
             {"type": "object", "required": ["url"], "properties": {
-                "url": {"type": "string", "description": "A PNG or JPEG file as a data URL, data:image/png;base64,... "
-                        "or data:image/jpeg;base64,...; the service fetches no address (code invalid_image_url), "
-                        "reads no other format (invalid_image_format), and refuses more than 20 MB, 8192 pixels on "
-                        "a side or 40 megapixels."},
+                "url": {"type": "string", "description": "Un fichier PNG ou JPEG en URL data, "
+                        "data:image/png;base64,... ou data:image/jpeg;base64,... ; le service ne va chercher aucune "
+                        "adresse (code invalid_image_url), ne lit aucun autre format (invalid_image_format) et refuse "
+                        "plus de 20 Mo, 8192 pixels de côté ou 40 mégapixels."},
                 "detail": {"type": "string", "enum": ["low", "auto", "high"], "default": "auto",
-                           "description": "The tokens an image takes at most: for Qwen3-VL 256, 576 or 1024 tokens "
-                                          "of 32 pixels square; for a LLaVA-NeXT model (EuroVLM) the whole image and "
-                                          "1, 2 or 4 tiles of 384 pixels."}}}]},
-        "input_audio": {"type": "object", "description": "A sound, for a model whose inputs list audio; a model "
-                        "that reads no sound refuses the request (code audio_input_not_supported).",
-                        "properties": {"data": {"type": "string", "description": "The sound in base64."},
+                           "description": "Les tokens qu'une image prend au plus : pour Qwen3-VL, 256, 576 ou 1024 "
+                                          "tokens de 32 pixels de côté ; pour un modèle LLaVA-NeXT (EuroVLM), l'image "
+                                          "entière et 1, 2 ou 4 tuiles de 384 pixels."}}}]},
+        "input_audio": {"type": "object", "description": "Un son, pour un modèle dont les entrées comprennent "
+                        "l'audio ; un modèle qui ne lit aucun son refuse la requête (code audio_input_not_supported).",
+                        "properties": {"data": {"type": "string", "description": "Le son en base64."},
                                        "format": {"type": "string", "example": "wav"}}}},
-        "description": "A part of the content of a message. A model that reads text only refuses the images (code "
-                       "image_input_not_supported), a model that reads no sound refuses the sounds (code "
-                       "audio_input_not_supported), and a request carries 16 images at most (too_many_images)."},
+        "description": "Une partie du contenu d'un message. Un modèle qui ne lit que du texte refuse les images (code "
+                       "image_input_not_supported), un modèle qui ne lit aucun son refuse les sons (code "
+                       "audio_input_not_supported), et une requête porte 16 images au plus (too_many_images)."},
     "ToolCall": {"type": "object", "properties": {
-        "index": {"type": "integer", "description": "Position of the call, in the chunks of a stream."},
+        "index": {"type": "integer", "description": "Position de l'appel, dans les fragments d'un flux."},
         "id": {"type": "string"}, "type": {"type": "string", "enum": ["function"]},
         "function": {"type": "object", "properties": {"name": {"type": "string"},
-                                                      "arguments": {"type": "string", "description": "JSON text."}}}}},
+                                                      "arguments": {"type": "string", "description": "Texte JSON."}}}}},
     "Tool": {"type": "object", "required": ["type", "function"], "properties": {
         "type": {"type": "string", "enum": ["function"]},
         "function": {"type": "object", "required": ["name"], "properties": {
             "name": {"type": "string"}, "description": {"type": "string"},
-            "parameters": {"type": "object", "description": "JSON Schema of the arguments."}}}}},
-    "Sampling": {"type": "object", "description": "A setting the request leaves out takes the value the authors of the "
-                 "family of the model advise, for a request of text alone or one with images: temperature 1, top_p "
-                 "0.95 and top_k 20 for the thinking variants of Qwen3-VL, with presence_penalty 1.5 over the whole "
-                 "answer for text alone, and temperature 0.7, top_p 0.8, top_k 20 and presence_penalty 1.5 when the "
-                 "engine ends their reasoning at once; for its instruct variants, temperature 1, top_p 1, top_k 40 and "
-                 "presence_penalty 2 for text alone, temperature 0.7, top_p 0.8, top_k 20 and presence_penalty 1.5 "
-                 "with images; temperature 0.3, top_p 0.8 and top_k 20 for CyberSecQwen-4B; temperature 0.7, top_p 0.8 "
-                 "and top_k 20 for Qwen3 without reasoning; the same with repeat_penalty 1.05 for Qwen2.5; temperature "
-                 "0.3, top_p 0.95 and top_k 20 for Foundation-Sec 1.1 8B Instruct and Foundation-Sec-8B-Reasoning; "
-                 "temperature 1 and top_p 0.95 without top_k for Granite 4.2, with and without reasoning; temperature "
-                 "0.1 for Ministral 3 and 0.15 for Devstral and the other Mistral models without reasoning, without "
-                 "top_p or top_k; temperature 0.6, top_p 0.95 and top_k 20 for the other models that reason, and 0.7, "
-                 "0.9 and 40 for the others; min_p 0 for all of them.",
+            "parameters": {"type": "object", "description": "JSON Schema des arguments."}}}}},
+    "Sampling": {"type": "object", "description": "Un réglage que la requête omet prend la valeur que conseillent les "
+                 "auteurs de la famille du modèle, pour une requête de texte seul ou avec images : temperature 1, "
+                 "top_p 0.95 et top_k 20 pour les variantes thinking de Qwen3-VL, avec presence_penalty 1.5 sur toute "
+                 "la réponse pour le texte seul, et temperature 0.7, top_p 0.8, top_k 20 et presence_penalty 1.5 quand "
+                 "le moteur termine aussitôt leur raisonnement ; pour leurs variantes instruct, temperature 1, top_p 1, "
+                 "top_k 40 et presence_penalty 2 pour le texte seul, temperature 0.7, top_p 0.8, top_k 20 et "
+                 "presence_penalty 1.5 avec des images ; temperature 0.3, top_p 0.8 et top_k 20 pour CyberSecQwen-4B ; "
+                 "temperature 0.7, top_p 0.8 et top_k 20 pour Qwen3 sans raisonnement ; les mêmes avec repeat_penalty "
+                 "1.05 pour Qwen2.5 ; temperature 0.3, top_p 0.95 et top_k 20 pour Foundation-Sec 1.1 8B Instruct et "
+                 "Foundation-Sec-8B-Reasoning ; temperature 1 et top_p 0.95 sans top_k pour Granite 4.2, avec et sans "
+                 "raisonnement ; temperature 0.1 pour Ministral 3 et 0.15 pour Devstral et les autres modèles Mistral "
+                 "sans raisonnement, sans top_p ni top_k ; temperature 0.6, top_p 0.95 et top_k 20 pour les autres "
+                 "modèles qui raisonnent, et 0.7, 0.9 et 40 pour les autres ; min_p 0 pour tous.",
                  "properties": {
         "max_tokens": {"type": "integer",
-                       "description": "Tokens to generate at most; by default up to the end of the context."},
+                       "description": "Tokens à générer au plus ; par défaut, jusqu'à la fin du contexte."},
         "max_completion_tokens": {"type": "integer"},
         "temperature": {"type": "number", "minimum": 0, "maximum": 2},
         "top_p": {"type": "number"},
         "top_k": {"type": "integer", "minimum": 0, "maximum": 1024,
-                  "description": "Keeps the k most likely tokens, among which top_p and min_p then choose; 0 sets "
-                                 "no limit, and the 1024 most likely tokens are kept. A value outside 0 to 1024 is "
-                                 "refused (400). Without effect at temperature 0, which takes the most likely "
-                                 "token."},
+                  "description": "Garde les k tokens les plus probables, parmi lesquels top_p et min_p choisissent "
+                                 "ensuite ; 0 ne fixe aucune limite, et les 1024 tokens les plus probables sont "
+                                 "gardés. Une valeur hors de 0 à 1024 est refusée (400). Sans effet à temperature 0, "
+                                 "qui prend le token le plus probable."},
         "min_p": {"type": "number"},
         "presence_penalty": {"type": "number"}, "frequency_penalty": {"type": "number"},
         "repeat_penalty": {"type": "number"},
-        "repetition_penalty": {"type": "number", "description": "The same setting as repeat_penalty, under the "
-                               "name other clients give it."},
+        "repetition_penalty": {"type": "number", "description": "Le même réglage que repeat_penalty, sous le nom que "
+                               "lui donnent d'autres clients."},
         "repeat_last_n": {"type": "integer", "minimum": -1,
-                          "description": "The tokens the penalties read, the last ones, the end of the prompt "
-                                         "included; -1 reads the whole answer alone, without the prompt and "
-                                         "without the end of a reasoning the engine writes. Without it, 64, or "
-                                         "the whole answer for a model whose authors advise a presence "
-                                         "penalty."},
+                          "description": "Les tokens que lisent les pénalités, les derniers, fin du prompt comprise ; "
+                                         "-1 lit la réponse entière seule, sans le prompt et sans la fin d'un "
+                                         "raisonnement que le moteur écrit. Sans lui, 64, ou la réponse entière pour "
+                                         "un modèle dont les auteurs conseillent une pénalité de présence."},
         "seed": {"type": "integer"},
         "stop": {"oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}, "maxItems": 16}]},
         "logit_bias": {"type": "object", "additionalProperties": {"type": "number"},
-                       "description": "Bias added to the logits of tokens, keyed by token identifiers of the "
-                                      "vocabulary of the model; another key is refused."}}},
+                       "description": "Biais ajouté aux logits des tokens, indexé par les identifiants de tokens du "
+                                      "vocabulaire du modèle ; une autre clé est refusée."}}},
     "ChatCompletionRequest": {"allOf": [ref("Sampling"), {
         "type": "object", "required": ["messages"],
         "properties": {
             "model": {"type": "string",
-                      "description": "A model identifier, a function (albireo-general, albireo-code, "
-                                     "albireo-security), albireo-background or auto. A function without a model "
-                                     "of its own is served by the general model; albireo-background, the work done "
-                                     "in the background (titles, summaries, memory), by the model that comes with "
-                                     "Albireo, else the general one.",
+                      "description": "Un identifiant de modèle, une fonction (albireo-general, albireo-code, "
+                                     "albireo-security), albireo-background ou auto. Une fonction sans modèle propre "
+                                     "est servie par le modèle général ; albireo-background, le travail fait en "
+                                     "arrière-plan (titres, résumés, mémoire), par le modèle livré avec Albireo, "
+                                     "sinon par le général.",
                       "example": "albireo-general"},
             "messages": {"type": "array", "items": ref("Message")},
             "stream": {"type": "boolean", "default": False},
             "stream_options": {"type": "object", "properties": {"include_usage": {"type": "boolean"}}},
             "tools": {"type": "array", "items": ref("Tool")},
-            "tool_choice": {"description": "none disables the tools.",
+            "tool_choice": {"description": "none désactive les outils.",
                             "oneOf": [{"type": "string"}, {"type": "object"}]},
-            "reasoning": {"type": "boolean", "description": "Enables or disables the reasoning of the models that "
-                          "support both modes. The reasoning streams in reasoning_content. A model whose template "
-                          "opens the reasoning of every answer (reasoning_always in the description of the model: "
-                          "the thinking variants of Qwen3 and Qwen3-VL, Foundation-Sec-8B-Reasoning) has that "
-                          "reasoning opened whatever the request asks; without reasoning, the engine ends it at once "
-                          "and the model answers directly (reasoning_budget)."},
-            "think": {"type": "boolean", "description": "The same setting as reasoning, under the name other "
-                      "clients give it; when both are given, think applies."},
+            "reasoning": {"type": "boolean", "description": "Active ou désactive le raisonnement des modèles qui "
+                          "offrent les deux modes. Le raisonnement arrive en flux dans reasoning_content. Un modèle "
+                          "dont le gabarit ouvre le raisonnement de chaque réponse (reasoning_always dans la "
+                          "description du modèle : les variantes thinking de Qwen3 et Qwen3-VL, "
+                          "Foundation-Sec-8B-Reasoning) a ce raisonnement ouvert quoi que demande la requête ; sans "
+                          "raisonnement, le moteur le termine aussitôt et le modèle répond directement "
+                          "(reasoning_budget)."},
+            "think": {"type": "boolean", "description": "Le même réglage que reasoning, sous le nom que lui donnent "
+                      "d'autres clients ; quand les deux sont donnés, think s'applique."},
             "reasoning_effort": {"type": "string", "enum": ["none", "low", "medium", "high"],
-                                 "description": "none disables the reasoning; low gives it the budget of a short "
-                                                "reasoning, high lifts its bound by default (reasoning_budget)."},
+                                 "description": "none désactive le raisonnement ; low lui donne le budget d'un "
+                                                "raisonnement court, high lève sa borne par défaut "
+                                                "(reasoning_budget)."},
             "reasoning_budget": {"type": "integer", "minimum": -1, "nullable": True,
-                                 "description": "The tokens the reasoning may take: beyond them, the engine ends it "
-                                                "with a sentence that asks the model to answer from what it has "
-                                                "thought, then the marker that closes the reasoning; that end counts "
-                                                "among the tokens of the answer and stays out of reasoning_content. "
-                                                "-1 or null sets no limit, 0 ends the reasoning at once. Without it, "
-                                                "the reasoning takes half of max_tokens at most (half of the room "
-                                                "the context leaves to the answer when the request gives no "
-                                                "max_tokens), 32768 tokens at most, so that the answer keeps room "
-                                                "after it, and the effort high sets no limit; a model that always "
-                                                "reasons asked for no reasoning has its reasoning ended at once, and "
-                                                "the effort low gives it 512 tokens, 256 for the work in the "
-                                                "background (albireo-background). "
-                                                "The answer of a model asked for no reasoning receives max_tokens "
-                                                "once its reasoning ends, and the stop sequences apply to that answer "
-                                                "alone. A reasoning whose last 384 tokens repeat, for nine tenths of "
-                                                "them, passages of 16 tokens it wrote twice before ends in the same "
-                                                "way."},
+                                 "description": "Les tokens que le raisonnement peut prendre : au-delà, le moteur le "
+                                                "termine par une phrase qui demande au modèle de répondre à partir de "
+                                                "ce qu'il a pensé, puis par la marque qui ferme le raisonnement ; "
+                                                "cette fin compte parmi les tokens de la réponse et reste hors de "
+                                                "reasoning_content. -1 ou null ne fixe aucune limite, 0 termine le "
+                                                "raisonnement aussitôt. Sans lui, le raisonnement prend au plus la "
+                                                "moitié de max_tokens (la moitié de la place que le contexte laisse à "
+                                                "la réponse quand la requête ne donne pas de max_tokens), 32768 "
+                                                "tokens au plus, pour que la réponse garde de la place après lui, et "
+                                                "l'effort high ne fixe aucune limite ; un modèle qui raisonne "
+                                                "toujours, à qui l'on ne demande pas de raisonnement, voit son "
+                                                "raisonnement terminé aussitôt, et l'effort low lui donne 512 tokens, "
+                                                "256 pour le travail en arrière-plan (albireo-background). "
+                                                "La réponse d'un modèle à qui l'on ne demande pas de raisonnement "
+                                                "reçoit max_tokens une fois son raisonnement terminé, et les séquences "
+                                                "d'arrêt ne s'appliquent qu'à cette réponse. Un raisonnement dont les "
+                                                "384 derniers tokens répètent, pour neuf dixièmes d'entre eux, des "
+                                                "passages de 16 tokens déjà écrits deux fois se termine de la même "
+                                                "façon."},
             "chat_template_kwargs": {"type": "object", "properties": {"enable_thinking": {"type": "boolean"}}},
             "n": {"type": "integer", "enum": [1]}}}],
-        "example": {"model": "albireo-general", "messages": [{"role": "user", "content": "Hello!"}],
+        "example": {"model": "albireo-general", "messages": [{"role": "user", "content": "Bonjour !"}],
                     "max_tokens": 200}},
     "Usage": {"type": "object", "properties": {
         "prompt_tokens": {"type": "integer"}, "completion_tokens": {"type": "integer"},
@@ -206,16 +212,17 @@ schemas = {
         "choices": {"type": "array", "items": {"type": "object", "properties": {
             "index": {"type": "integer"}, "message": ref("Message"),
             "finish_reason": {"type": "string", "enum": ["stop", "length", "tool_calls", "cancelled"]}}}},
-        "repetition": {"type": "boolean", "description": "Present and true when the engine stopped the answer "
-                       "because it repeated itself (finish_reason length): nine tenths of its last 384 tokens "
-                       "repeated passages of 16 tokens it had written twice before."},
+        "repetition": {"type": "boolean", "description": "Présent et vrai quand le moteur a arrêté la réponse parce "
+                       "qu'elle se répétait (finish_reason length) : neuf dixièmes de ses 384 derniers tokens "
+                       "répétaient des passages de 16 tokens déjà écrits deux fois."},
         "usage": ref("Usage"), "timings": ref("Timings"), "system_fingerprint": {"type": "string"}}},
-    "ChatCompletionChunk": {"type": "object", "description": "One event of a stream (text/event-stream), as "
-                            "'data: <chunk>' lines ended by 'data: [DONE]'. With stream_options.include_usage, a "
-                            "last chunk before [DONE] carries usage and timings and no choice. An error once the "
-                            "stream has started ends it with a last event 'data: {\"error\": {\"message\": ..., "
-                            "\"type\": \"server_error\", \"code\": ...}}' (StreamError), without [DONE]. Comment "
-                            "lines (': keep-alive', ': progress {...}') may come between the events.",
+    "ChatCompletionChunk": {"type": "object", "description": "Un événement d'un flux (text/event-stream), en lignes "
+                            "'data: <chunk>' terminées par 'data: [DONE]'. Avec stream_options.include_usage, un "
+                            "dernier fragment avant [DONE] porte usage et timings, et aucun choix. Une erreur survenue "
+                            "une fois le flux commencé le termine par un dernier événement 'data: {\"error\": "
+                            "{\"message\": ..., \"type\": \"server_error\", \"code\": ...}}' (StreamError), sans "
+                            "[DONE]. Des lignes de commentaire (': keep-alive', ': progress {...}') peuvent venir "
+                            "entre les événements.",
                             "properties": {
         "id": {"type": "string"}, "object": {"type": "string", "enum": ["chat.completion.chunk"]},
         "created": {"type": "integer"}, "model": {"type": "string"},
@@ -224,16 +231,16 @@ schemas = {
             "delta": {"type": "object", "properties": {"role": {"type": "string"}, "content": {"type": "string"},
                                                        "reasoning_content": {"type": "string"},
                                                        "tool_calls": {"type": "array", "items": ref("ToolCall")}}},
-            "logprobs": {"nullable": True, "description": "Always null."},
+            "logprobs": {"nullable": True, "description": "Toujours null."},
             "finish_reason": {"type": "string", "nullable": True}}}},
-        "repetition": {"type": "boolean", "description": "In the chunk of the finish_reason, present and true when "
-                       "the engine stopped the answer because it repeated itself."},
+        "repetition": {"type": "boolean", "description": "Dans le fragment du finish_reason, présent et vrai quand le "
+                       "moteur a arrêté la réponse parce qu'elle se répétait."},
         "usage": ref("Usage"), "timings": ref("Timings")}},
-    "StreamError": {"type": "object", "description": "The last event of a stream that an error ended, without "
-                    "'data: [DONE]' after it.", "properties": {"error": {"type": "object", "properties": {
+    "StreamError": {"type": "object", "description": "Le dernier événement d'un flux qu'une erreur a terminé, sans "
+                    "'data: [DONE]' après lui.", "properties": {"error": {"type": "object", "properties": {
                         "message": {"type": "string"}, "type": {"type": "string", "enum": ["server_error"]},
                         "code": {"type": "string", "nullable": True,
-                                 "description": "The code of the engine, such as out_of_memory."}}}}},
+                                 "description": "Le code du moteur, comme out_of_memory."}}}}},
     "CompletionRequest": {"allOf": [ref("Sampling"), {"type": "object", "required": ["prompt"], "properties": {
         "model": {"type": "string", "example": "albireo-general"}, "prompt": {"type": "string"},
         "stream": {"type": "boolean"}}}]},
@@ -243,25 +250,26 @@ schemas = {
             "index": {"type": "integer"}, "text": {"type": "string"}, "finish_reason": {"type": "string"}}}},
         "usage": ref("Usage")}},
     "EmbeddingRequest": {"type": "object", "required": ["input"], "properties": {
-        "model": {"type": "string", "description": "albireo-embedding, auto, or the identifier of an active embedding "
-                                                   "model.", "example": "albireo-embedding"},
-        "input": {"description": "A text, a list of texts, or token lists.", "oneOf": [
+        "model": {"type": "string", "description": "albireo-embedding, auto, ou l'identifiant d'un modèle d'embedding "
+                                                   "actif.", "example": "albireo-embedding"},
+        "input": {"description": "Un texte, une liste de textes, ou des listes de tokens.", "oneOf": [
             {"type": "string"}, {"type": "array", "items": {"type": "string"}, "maxItems": 2048},
             {"type": "array", "items": {"type": "integer"}},
             {"type": "array", "items": {"type": "array", "items": {"type": "integer"}}}]},
         "encoding_format": {"type": "string", "enum": ["float", "base64"], "default": "float",
-                            "description": "base64: the little-endian float32 values of each vector."},
-        "dimensions": {"type": "integer", "minimum": 1, "description": "Keeps the leading dimensions of each "
-                       "vector, normalized again, for the models trained to keep their meaning when shortened "
-                       "(Qwen3 Embedding: 32 to 1024)."},
-        "user": {"type": "string", "description": "Accepted and ignored."}},
-        "example": {"model": "albireo-embedding", "input": ["The service runs on this computer.",
-                                                            "Where does the service run?"]}},
+                            "description": "base64 : les valeurs float32 petit-boutistes (little-endian) de chaque "
+                                           "vecteur."},
+        "dimensions": {"type": "integer", "minimum": 1, "description": "Garde les premières dimensions de chaque "
+                       "vecteur, normalisé à nouveau, pour les modèles entraînés à garder leur sens une fois "
+                       "raccourcis (Qwen3 Embedding : 32 à 1024)."},
+        "user": {"type": "string", "description": "Accepté et ignoré."}},
+        "example": {"model": "albireo-embedding", "input": ["Le service tourne sur cet ordinateur.",
+                                                            "Où le service tourne-t-il ?"]}},
     "EmbeddingList": {"type": "object", "properties": {
         "object": {"type": "string", "enum": ["list"]}, "model": {"type": "string"},
         "data": {"type": "array", "items": {"type": "object", "properties": {
             "object": {"type": "string", "enum": ["embedding"]}, "index": {"type": "integer"},
-            "embedding": {"description": "Unit vector: numbers, or a base64 string.",
+            "embedding": {"description": "Vecteur unitaire : des nombres, ou une chaîne base64.",
                           "oneOf": [{"type": "array", "items": {"type": "number"}}, {"type": "string"}]}}}},
         "usage": {"type": "object", "properties": {"prompt_tokens": {"type": "integer"},
                                                    "total_tokens": {"type": "integer"}}}}},
@@ -272,674 +280,701 @@ schemas = {
                                          "alias_of": {"type": "string"},
                                          "inputs": {"type": "array", "items": {"type": "string",
                                                                               "enum": ["text", "image", "audio"]},
-                                                    "description": "What the model reads, text and images; an "
-                                                                   "alias gives those of its model."},
+                                                    "description": "Ce que le modèle lit, texte et images ; un alias "
+                                                                   "donne les entrées de son modèle."},
                                          "publisher": {"type": "string",
-                                                       "description": "The company that made the model, empty when "
-                                                                      "unknown."}}}}}},
-    "Settings": {"type": "object", "description": "Settings the web application may change (its Service tab); a "
-                 "change of port, of the GPU, of the network access or of memory restarts the service.", "properties": {
+                                                       "description": "L'entreprise qui a fait le modèle, vide quand "
+                                                                      "elle est inconnue."}}}}}},
+    "Settings": {"type": "object", "description": "Les réglages que l'application web peut changer (son onglet "
+                 "« Service ») ; un changement de port, de GPU, d'accès réseau ou de mémoire redémarre le service.",
+                 "properties": {
         "port": {"type": "integer", "minimum": 1024, "maximum": 65535},
         "language": {"type": "string", "enum": ["auto", "fr"]},
         "engine": {"type": "string", "enum": ["auto"],
                    "description": "Valeur acceptée : auto. Albireo utilise le moteur CPU disponible ; "
                    "l'accélération Metal se règle avec accelerator."},
         "accelerator": {"type": "string", "enum": ["auto", "none"],
-                        "description": "none: every pass of the engine on the processor, the GPU of the Mac unused; "
-                        "auto lets the engine give the generation steps and the prompts to the GPU (Metal)."},
-        "device_mb": {"type": "integer", "description": "Memory of the device for the copies of the weights of "
-                      "the models, in megabytes, 0 for automatic."},
+                        "description": "none : chaque passe du moteur sur le processeur, le GPU du Mac inutilisé ; "
+                        "auto laisse le moteur confier au GPU (Metal) les étapes de génération et les prompts."},
+        "device_mb": {"type": "integer", "description": "Mémoire du périphérique de calcul pour les copies des poids "
+                      "des modèles, en mégaoctets, 0 pour automatique."},
         "threads": {"type": "integer"},
-        "context": {"type": "integer", "description": "Context of the language models, 0 for the context each "
-                    "model was trained for, which the memory the system can commit (its physical memory and its "
-                    "paging file or swap) reduces when it cannot hold the keys and values of one full context."},
+        "context": {"type": "integer", "description": "Contexte des modèles de langage, 0 pour le contexte sur lequel "
+                    "chaque modèle a été entraîné, que réduit la mémoire que le système peut engager (sa mémoire "
+                    "physique et son fichier d'échange ou swap) quand elle ne peut pas contenir les clés et valeurs "
+                    "d'un contexte complet."},
         "max_sequences": {"type": "integer", "minimum": 1, "maximum": 64},
-        "kv_mb": {"type": "integer", "description": "Memory of the keys and values of each language model, in "
-                  "megabytes, 0 for two full contexts within the memory the system can commit less a reserve."},
+        "kv_mb": {"type": "integer", "description": "Mémoire des clés et valeurs de chaque modèle de langage, en "
+                  "mégaoctets, 0 pour deux contextes complets dans la mémoire que le système peut engager, moins une "
+                  "réserve."},
         "kv_type": {"type": "string", "enum": ["auto", "q8", "f16"], "default": "auto",
-                    "description": "Storage of the keys and values of the language models: q8, 8-bit integers by "
-                                   "groups of 32 values with a scale, the keys rotated; f16, half precision. auto "
-                                   "takes q8 for the models whose heads hold whole groups."},
-        "offline": {"type": "boolean", "description": "No access to the network: the catalog comes from its cache "
-                    "or imports, and models come from imports or the verified local reserve."},
+                    "description": "Stockage des clés et valeurs des modèles de langage : q8, entiers de 8 bits par "
+                                   "groupes de 32 valeurs avec un facteur d'échelle, les clés après rotation ; f16, "
+                                   "demi-précision. auto prend q8 pour les modèles dont les têtes contiennent des "
+                                   "groupes entiers."},
+        "offline": {"type": "boolean", "description": "Aucun accès au réseau : le catalogue vient de son cache ou des "
+                    "imports, et les modèles viennent des imports ou de la réserve locale vérifiée."},
         "proxy": {"type": "string",
-                  "description": "Proxy of the downloads: empty for the proxy of the system, none for a direct "
-                                 "connection, or http://[user:password@]host:port.  The settings give the password "
-                                 "as ********; that value sent back keeps the stored password when the user, the "
-                                 "host and the port stay the same, and is refused (code proxy_password) otherwise."},
+                  "description": "Proxy des téléchargements : vide pour le proxy du système, none pour une connexion "
+                                 "directe, ou http://[user:password@]host:port. Les réglages donnent le mot de passe "
+                                 "sous la forme ******** ; cette valeur renvoyée garde le mot de passe enregistré "
+                                 "quand l'utilisateur, l'hôte et le port restent les mêmes, et elle est refusée sinon "
+                                 "(code proxy_password)."},
         "web_access": {"type": "boolean", "default": True,
-                       "description": "The web access of the Web button, /albireo/v1/web/search and "
-                                      "/albireo/v1/web/fetch; false turns it off."},
-        "lan": {"type": "boolean", "default": False, "description": "The access from the local network: a server in "
-                "plain HTTP on every address of the Mac at lan_port, behind the password of lan_password when "
-                "there is one, open to the network otherwise."},
+                       "description": "L'accès au web du bouton Web, de /albireo/v1/web/search et de "
+                                      "/albireo/v1/web/fetch ; false le coupe."},
+        "lan": {"type": "boolean", "default": False, "description": "L'accès depuis le réseau local : un serveur en "
+                "HTTP simple sur chaque adresse du Mac, au port lan_port, derrière le mot de passe de lan_password "
+                "quand il y en a un, ouvert au réseau sinon."},
         "lan_port": {"type": "integer", "minimum": 1024, "maximum": 65535, "default": 8444,
-                     "description": "The port of the network access, other than port."},
+                     "description": "Le port de l'accès réseau, différent de port."},
         "lan_password": {"type": "string", "maxLength": 128, "writeOnly": True,
-                         "description": "The password of the network access, 4 to 128 characters, kept as its "
-                                        "PBKDF2 hash only; a new one ends the sessions of every device, an empty one "
-                                        "removes it."},
-        "warm_history": {"type": "boolean", "default": True, "description": "The history of an answer read in the "
-                         "background, as the next request will render it, so that the next question computes its "
-                         "own tokens only."},
+                         "description": "Le mot de passe de l'accès réseau, de 4 à 128 caractères, gardé seulement "
+                                        "sous la forme de son hachage PBKDF2 ; un nouveau met fin aux sessions de "
+                                        "chaque appareil, un vide le retire."},
+        "warm_history": {"type": "boolean", "default": True, "description": "L'historique d'une réponse lu en "
+                         "arrière-plan, tel que la requête suivante le rendra, pour que la question suivante ne "
+                         "calcule que ses propres tokens."},
         "spin_us": {"type": "integer", "minimum": 0, "maximum": 100000, "default": 2000,
-                    "description": "How long the threads of the engine wait awake after a pass, in microseconds."},
+                    "description": "Combien de temps les threads du moteur attendent éveillés après une passe, en "
+                                   "microsecondes."},
         "gpu_prompt_tokens": {"type": "integer", "minimum": 9, "default": 24,
-                              "description": "The prompts of so many tokens or more go to the GPU of the Mac."},
+                              "description": "Les prompts d'au moins autant de tokens vont au GPU du Mac."},
         "gpu_prompt_context": {"type": "integer", "minimum": 0, "default": 262144,
-                               "description": "...while their context ends within so many positions; 0 leaves "
-                                              "every prompt to the processor."},
-        "models_dir": {"type": "string", "description": "The folder of the models, an existing one, or empty for "
-                       "the models folder of the data."},
-        "library_dir": {"type": "string", "description": "The library of the Mac: a folder of GGUF files that "
-                        "/albireo/v1/library lists and the service never writes in, an existing one named by its "
-                        "full path, or empty for the library folder of the data."},
+                               "description": "... tant que leur contexte se termine dans autant de positions ; 0 "
+                                              "laisse chaque prompt au processeur."},
+        "models_dir": {"type": "string", "description": "Le dossier des modèles, un dossier existant, ou vide pour le "
+                       "dossier des modèles dans les données."},
+        "library_dir": {"type": "string", "description": "La bibliothèque du Mac : un dossier de fichiers GGUF que "
+                        "/albireo/v1/library liste et dans lequel le service n'écrit jamais, un dossier existant "
+                        "désigné par son chemin complet, ou vide pour le dossier de la bibliothèque dans les "
+                        "données."},
         "reserve_gb": {"type": "integer", "minimum": 0, "maximum": 100000, "default": 200,
-                       "description": "The limit of the reserve, in GB: the copies of the models that are no longer "
-                                      "installed; beyond it, the least recently kept or restored copies leave first. "
-                                      "0 keeps nothing beyond the clones of the installed models."},
+                       "description": "La limite de la réserve, en Go : les copies des modèles qui ne sont plus "
+                                      "installés ; au-delà, les copies gardées ou restaurées le moins récemment "
+                                      "partent les premières. 0 ne garde rien au-delà des clones des modèles "
+                                      "installés."},
         "web_search": {"type": "string", "enum": ["wikipedia", "none"], "default": "wikipedia",
-                       "description": "The provider of /albireo/v1/web/search: wikipedia, the REST interface of "
-                                      "Wikipedia; or none, which turns the search off while /albireo/v1/web/fetch "
-                                      "stays available. A settings.json of an earlier version that names another "
-                                      "provider is read as wikipedia."}}},
+                       "description": "Le fournisseur de /albireo/v1/web/search : wikipedia, l'interface REST de "
+                                      "Wikipedia ; ou none, qui coupe la recherche tandis que /albireo/v1/web/fetch "
+                                      "reste disponible. Un settings.json d'une version antérieure qui nomme un autre "
+                                      "fournisseur est lu comme wikipedia."}}},
     "WebSearchRequest": {"type": "object", "required": ["query"], "properties": {
         "query": {"type": "string", "minLength": 1, "maxLength": 400,
-                  "description": "The text searched, 1 to 400 characters once the spaces at its ends are removed."},
-        "count": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5, "description": "Results at most."},
+                  "description": "Le texte cherché, de 1 à 400 caractères une fois retirées les espaces à ses "
+                                 "extrémités."},
+        "count": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5,
+                  "description": "Nombre de résultats au plus."},
         "language": {"type": "string", "pattern": "^[a-z]{2,3}(-([A-Z]{2}|[0-9]{3}))?$", "example": "fr",
-                     "description": "The language of the results: the site of Wikipedia of that language (en "
-                                    "without one)."}},
+                     "description": "La langue des résultats : le site de Wikipedia de cette langue (en sans "
+                                    "elle)."}},
         "example": {"query": "Albireo étoile double", "count": 5, "language": "fr"}},
     "WebSearchResults": {"type": "object", "properties": {
         "provider": {"type": "string", "enum": ["wikipedia"]},
-        "results": {"type": "array", "description": "The results whose address is http or https, count at most.",
+        "results": {"type": "array", "description": "Les résultats dont l'adresse est en http ou https, count au "
+                    "plus.",
                     "items": {"type": "object", "properties": {
                         "title": {"type": "string"},
-                        "url": {"type": "string", "description": "An http or https address; for Wikipedia, "
-                                "https://<language>.wikipedia.org/wiki/<key of the page>."},
-                        "snippet": {"type": "string", "description": "The excerpt of Wikipedia without its tags "
-                                    "and entities, else the description of the page."}}}}}},
+                        "url": {"type": "string", "description": "Une adresse http ou https ; pour Wikipedia, "
+                                "https://<langue>.wikipedia.org/wiki/<clé de la page>."},
+                        "snippet": {"type": "string", "description": "L'extrait de Wikipedia sans ses balises ni "
+                                    "ses entités, sinon la description de la page."}}}}}},
     "WebFetchRequest": {"type": "object", "required": ["url"], "properties": {
-        "url": {"type": "string", "description": "An http or https address of a public host, without user "
-                "information.", "example": "https://en.wikipedia.org/wiki/Albireo"},
+        "url": {"type": "string", "description": "Une adresse http ou https d'un hôte public, sans informations "
+                "d'utilisateur.", "example": "https://en.wikipedia.org/wiki/Albireo"},
         "language": {"type": "string", "pattern": "^[a-z]{2,3}(-([A-Z]{2}|[0-9]{3}))?$",
-                     "description": "Sent as Accept-Language."}}},
+                     "description": "Envoyée comme Accept-Language."}}},
     "WebPage": {"type": "object", "properties": {
-        "url": {"type": "string", "description": "The address asked."},
-        "final_url": {"type": "string", "description": "The address that answered, after the redirections."},
-        "status": {"type": "integer", "description": "The status of the site, 4xx and 5xx included, with their "
-                   "body."},
-        "content_type": {"type": "string", "description": "The media type of the Content-Type of the site, in "
-                         "lowercase, without its parameters.", "example": "text/html"},
-        "charset": {"type": "string", "description": "The charset of the Content-Type, empty without one.",
+        "url": {"type": "string", "description": "L'adresse demandée."},
+        "final_url": {"type": "string", "description": "L'adresse qui a répondu, après les redirections."},
+        "status": {"type": "integer", "description": "Le statut du site, 4xx et 5xx compris, avec leur corps."},
+        "content_type": {"type": "string", "description": "Le type de média du Content-Type du site, en minuscules, "
+                         "sans ses paramètres.", "example": "text/html"},
+        "charset": {"type": "string", "description": "Le charset du Content-Type, vide sans lui.",
                     "example": "utf-8"},
-        "size": {"type": "integer", "description": "The bytes read."},
-        "truncated": {"type": "boolean", "description": "True when a text was cut at 2 MB."},
-        "data": {"type": "string", "format": "byte", "description": "The bytes read, in base64: the web "
-                 "application decodes a text with TextDecoder and the charset, HTML with DOMParser, PDF with its "
-                 "reader."}}},
+        "size": {"type": "integer", "description": "Les octets lus."},
+        "truncated": {"type": "boolean", "description": "Vrai quand un texte a été coupé à 2 Mo."},
+        "data": {"type": "string", "format": "byte", "description": "Les octets lus, en base64 : l'application web "
+                 "décode un texte avec TextDecoder et le charset, le HTML avec DOMParser, le PDF avec son lecteur."}}},
     "Engines": {"type": "object", "properties": {
-        "starting": {"type": "boolean", "description": "True while the engines are being described."},
+        "starting": {"type": "boolean", "description": "Vrai pendant que les moteurs sont décrits."},
         "engines": {"type": "array", "items": {"type": "object", "properties": {
             "variant": {"type": "string"}, "path": {"type": "string"}, "usable": {"type": "boolean"},
             "version": {"type": "string"}, "build": {"type": "string"}, "current": {"type": "boolean"},
             "devices": {"type": "array", "items": {"type": "object", "properties": {
                 "type": {"type": "string", "enum": ["cpu"]}, "id": {"type": "string"},
                 "name": {"type": "string"}}}},
-            "reason": {"type": "string", "description": "Why the engine cannot run here, in English."},
-            "reason_code": {"type": "string", "description": "The code of the reason: library_failed, "
+            "reason": {"type": "string", "description": "Pourquoi le moteur ne peut pas tourner ici, en anglais."},
+            "reason_code": {"type": "string", "description": "Le code de la raison : library_failed, "
                             "probe_timeout."},
             "reason_args": {"type": "object", "additionalProperties": {"type": "string"}},
-            "missing": {"type": "string", "description": "For an engine that runs: why its runtime left out the "
-                        "other devices it looks for, such as the message of a plugin of OpenVINO."}}}},
-        "options": {"type": "array", "description": "The choices of engine and device.", "items": {
+            "missing": {"type": "string", "description": "Pour un moteur qui tourne : pourquoi son environnement "
+                        "d'exécution a laissé de côté les autres périphériques qu'il cherche ; le moteur du Mac n'en "
+                        "écrit pas aujourd'hui."}}}},
+        "options": {"type": "array", "description": "Les choix de moteur et de périphérique.", "items": {
             "type": "object", "properties": {
                 "key": {"type": "string", "example": "cpu"}, "variant": {"type": "string"},
                 "device": {"type": "string"}, "current": {"type": "boolean"},
                 "kind": {"type": "string", "enum": ["cpu"]},
                 "names": {"type": "array", "items": {"type": "string"},
-                          "description": "The names of the devices of the choice."},
-                "measure": {"type": "object", "description": "The last measure of the choice."}}}},
-        "current": {"type": "string", "description": "The key of the choice in use."},
+                          "description": "Les noms des périphériques du choix."},
+                "measure": {"type": "object", "description": "La dernière mesure du choix."}}}},
+        "current": {"type": "string", "description": "La clé du choix en usage."},
         "setting": {"type": "string"}, "accelerator": {"type": "string"}}},
-    "Refusal": {"type": "object", "description": "A refused operation, with the code of its reason and its values.",
+    "Refusal": {"type": "object", "description": "Une opération refusée, avec le code de sa raison et ses valeurs.",
                 "properties": {"ok": {"type": "boolean", "enum": [False]}, "error": {"type": "string"},
                                "code": {"type": "string"},
                                "args": {"type": "object", "additionalProperties": {"type": "string"}}}},
 }
 
 paths = {
-    "/v1/models": {"get": {"tags": ["OpenAI"], "summary": "Models of the engine and aliases of the functions",
-                           "responses": {"200": reply("The models", ref("ModelList"))}}},
+    "/v1/models": {"get": {"tags": ["OpenAI"], "summary": "Modèles du moteur et alias des fonctions",
+                           "responses": {"200": reply("Les modèles", ref("ModelList"))}}},
     "/v1/chat/completions": {"post": {
-        "tags": ["OpenAI"], "summary": "Chat completion, streamed or not",
-        "description": "Compatible with the OpenAI interface. Requests from several clients are computed together. "
-                       "A stream also carries ': progress {...}' comment lines while a long prompt is read, and "
-                       "': keep-alive' lines while no token comes. An error once the stream has started ends it "
-                       "with a last event 'data: {\"error\": {...}}' (StreamError) instead of 'data: [DONE]'.",
+        "tags": ["OpenAI"], "summary": "Complétion de chat, en flux ou non",
+        "description": "Compatible avec l'interface d'OpenAI. Les requêtes de plusieurs clients sont calculées "
+                       "ensemble. Un flux porte aussi des lignes de commentaire ': progress {...}' pendant la lecture "
+                       "d'un long prompt, et des lignes ': keep-alive' tant qu'aucun token ne vient. Une erreur "
+                       "survenue une fois le flux commencé le termine par un dernier événement 'data: {\"error\": "
+                       "{...}}' (StreamError) au lieu de 'data: [DONE]'.",
         "requestBody": json_body(ref("ChatCompletionRequest")),
-        "responses": dict({"200": {"description": "The completion, or a stream of chunks", "content": {
+        "responses": dict({"200": {"description": "La complétion, ou un flux de fragments", "content": {
             "application/json": {"schema": ref("ChatCompletion")},
             "text/event-stream": {"schema": {"oneOf": [ref("ChatCompletionChunk"), ref("StreamError")]}}}}},
             **generation_replies)}},
     "/v1/completions": {"post": {
-        "tags": ["OpenAI"], "summary": "Text completion of a raw prompt",
-        "description": "A stream gives text_completion events ended by 'data: [DONE]', or by a StreamError event "
-                       "after an error.",
+        "tags": ["OpenAI"], "summary": "Complétion de texte d'un prompt brut",
+        "description": "Un flux donne des événements text_completion terminés par 'data: [DONE]', ou par un "
+                       "événement StreamError après une erreur.",
         "requestBody": json_body(ref("CompletionRequest")),
-        "responses": dict({"200": reply("The completion", ref("Completion"))}, **generation_replies)}},
+        "responses": dict({"200": reply("La complétion", ref("Completion"))}, **generation_replies)}},
     "/v1/embeddings": {"post": {
-        "tags": ["OpenAI"], "summary": "Vectors of texts, for search and comparison",
-        "description": "Computed by the embedding model of the service, which the search in the documents of the "
-                       "web application uses. The inputs of every client are computed together, and the passes of "
-                       "the embedding model stay short while a conversation is being answered.",
+        "tags": ["OpenAI"], "summary": "Vecteurs de textes, pour la recherche et la comparaison",
+        "description": "Calculés par le modèle d'embedding du service, celui qu'utilise la recherche dans les "
+                       "documents de l'application web. Les entrées de tous les clients sont calculées ensemble, et "
+                       "les passes du modèle d'embedding restent courtes pendant qu'une conversation reçoit sa "
+                       "réponse.",
         "requestBody": json_body(ref("EmbeddingRequest")),
-        "responses": dict({"200": reply("One vector per input, in the order of the inputs", ref("EmbeddingList"))},
+        "responses": dict({"200": reply("Un vecteur par entrée, dans l'ordre des entrées", ref("EmbeddingList"))},
                           **engine_replies)}},
     "/albireo/v1/status": {"get": {
-        "tags": ["Service"], "summary": "State of the service, of the engine and of the models",
-        "description": "The server answers while the service starts: state is \"starting\" and starting names the "
-                       "step in progress, \"engines\" then \"models\", until the service is \"ready\".",
-        "responses": {"200": reply("The state", {"type": "object", "properties": {
+        "tags": ["Service"], "summary": "État du service, du moteur et des modèles",
+        "description": "Le serveur répond pendant que le service démarre : state vaut \"starting\" et starting nomme "
+                       "l'étape en cours, \"engines\" puis \"models\", jusqu'à ce que le service soit \"ready\".",
+        "responses": {"200": reply("L'état", {"type": "object", "properties": {
             "product": {"type": "string", "example": "Albireo"},
-            "edition": {"type": "string", "description": "The edition, Community Edition."},
+            "edition": {"type": "string", "description": "L'édition, Community Edition."},
             "version": {"type": "string"},
             "author": {"type": "string"}, "email": {"type": "string"}, "copyright": {"type": "string"},
-            "project": {"type": "string", "description": "The address of the source code of Albireo."},
-            "settings": {"type": "object", "description": "The settings of the service that the web application "
-                         "follows, such as the language of the interface.", "properties": {
+            "project": {"type": "string", "description": "L'adresse du code source d'Albireo."},
+            "settings": {"type": "object", "description": "Les réglages du service que suit l'application web, comme "
+                         "la langue de l'interface.", "properties": {
                              "language": {"type": "string", "enum": ["auto", "fr"]},
                              "engine": {"type": "string"}, "accelerator": {"type": "string"},
                              "device_mb": {"type": "integer"},
                              "offline": {"type": "boolean"}}},
-            "engine": {"type": "object", "description": "The engine running.", "properties": {
+            "engine": {"type": "object", "description": "Le moteur en marche.", "properties": {
                 "running": {"type": "boolean"}, "variant": {"type": "string", "example": "cpu"},
                 "key": {"type": "string"}, "device": {"type": "string"}, "error": {"type": "string"},
                 "description": {"type": "string"},
-                "stats": {"type": "object", "nullable": True, "description": "Null while no engine runs.",
+                "stats": {"type": "object", "nullable": True, "description": "Null tant qu'aucun moteur ne tourne.",
                           "properties": {
-                              "active": {"type": "integer", "description": "Requests being computed."},
+                              "active": {"type": "integer", "description": "Requêtes en cours de calcul."},
                               "waiting": {"type": "integer"},
                               "generation_tokens_per_second": {"type": "number",
-                                                               "description": "Over the last five seconds."},
+                                                               "description": "Sur les cinq dernières secondes."},
                               "prompt_tokens_per_second": {"type": "number"},
-                              "gpu": {"type": "object", "description": "The GPU of the Mac: its name, or "
-                                      "disabled (accelerator setting none), or the reason Metal is missing.",
+                              "gpu": {"type": "object", "description": "Le GPU du Mac : son nom, ou disabled "
+                                      "(réglage accelerator à none), ou la raison de l'absence de Metal.",
                                       "properties": {"name": {"type": "string", "example": "Apple M2"},
                                                      "disabled": {"type": "boolean"},
                                                      "reason": {"type": "string"}}},
-                              "models": {"type": "array", "description": "The loaded models.", "items": {
+                              "models": {"type": "array", "description": "Les modèles chargés.", "items": {
                                   "type": "object", "properties": {
                                       "id": {"type": "string"},
-                                      "gpu": {"type": "object", "description": "What the passes of the model do "
-                                              "with the GPU.", "properties": {
+                                      "gpu": {"type": "object", "description": "Ce que les passes du modèle font du "
+                                              "GPU.", "properties": {
                                                   "state": {"type": "string", "enum": ["on", "checking", "off"]},
-                                                  "reason": {"type": "string", "description": "Why off, when "
-                                                             "the model or its check refused the GPU."},
-                                                  "bytes": {"type": "integer", "description": "Its own "
-                                                            "buffers; the weights and the keys and values, "
-                                                            "shared with the processor, are not counted."}}}}}}}}}},
-            "host": {"type": "object", "description": "The computer.", "properties": {
+                                                  "reason": {"type": "string", "description": "Pourquoi off, quand "
+                                                             "le modèle ou sa vérification a refusé le GPU."},
+                                                  "bytes": {"type": "integer", "description": "Ses propres "
+                                                            "tampons ; les poids et les clés et valeurs, partagés "
+                                                            "avec le processeur, ne sont pas comptés."}}}}}}}}}},
+            "host": {"type": "object", "description": "L'ordinateur.", "properties": {
                 "name": {"type": "string"}, "os": {"type": "string"},
                 "cpu": {"type": "object", "properties": {
                     "name": {"type": "string"}, "cores": {"type": "integer"}, "threads": {"type": "integer"},
                     "features": {"type": "array", "items": {"type": "string"}}}},
                 "memory": {"type": "object", "properties": {
                     "total": {"type": "integer"}, "available": {"type": "integer"},
-                    "commit_total": {"type": "integer", "description": "The memory the system can commit, its "
-                                     "physical memory and its paging file or swap together."},
+                    "commit_total": {"type": "integer", "description": "La mémoire que le système peut engager, sa "
+                                     "mémoire physique et son fichier d'échange ou swap ensemble."},
                     "commit_available": {"type": "integer"}}}}},
-            "usage": {"type": "object", "description": "The requests and the tokens since the service started.",
+            "usage": {"type": "object", "description": "Les requêtes et les tokens depuis le démarrage du service.",
                       "properties": {"requests": {"type": "integer"}, "prompt_tokens": {"type": "integer"},
                                      "completion_tokens": {"type": "integer"}}},
             "state": {"type": "string", "enum": ["starting", "ready"]},
             "starting": {"type": "string", "enum": ["engines", "models"]},
             "active": {"type": "object", "additionalProperties": {"type": "string"},
-                       "description": "The model of each function: general, code, security, embedding. A "
-                                      "function without a model chosen for it takes the general model, else the "
-                                      "model that comes with Albireo."},
+                       "description": "Le modèle de chaque fonction : general, code, security, embedding. Une "
+                                      "fonction sans modèle choisi pour elle prend le modèle général, sinon le "
+                                      "modèle livré avec Albireo."},
             "selected": {"type": "object", "additionalProperties": {"type": "string"},
-                         "description": "The models chosen for the functions, which Deactivate gives back."},
+                         "description": "Les modèles choisis pour les fonctions, que la désactivation rétablit."},
             "background": {"type": "string",
-                           "description": "The model that comes with Albireo and serves albireo-background, which "
-                                          "stays loaded; empty without one."},
+                           "description": "Le modèle livré avec Albireo, qui sert albireo-background et reste "
+                                          "chargé ; vide s'il n'y en a pas."},
             "loaded_models": {"type": "array", "items": {"type": "object"},
-                              "description": "The models of the engine, with their context and capabilities: "
-                                             "context, trained_context, kv_bytes_per_token, kv_type (q8 or f16), "
-                                             "and the speeds measured on their answers, prompt_tokens_per_second "
-                                             "and generation_tokens_per_second, 0 until they answered."},
+                              "description": "Les modèles du moteur, avec leur contexte et leurs capacités : "
+                                             "context, trained_context, kv_bytes_per_token, kv_type (q8 ou f16), et "
+                                             "les vitesses mesurées sur leurs réponses, prompt_tokens_per_second et "
+                                             "generation_tokens_per_second, 0 tant qu'ils n'ont pas répondu."},
             "models_state": {"type": "object", "additionalProperties": {"type": "string"},
-                             "description": "loading, ready, unloading, removing, or the error of a load."},
-            "web": {"type": "object", "description": "The web access of the Web button, which the web application "
-                    "reads at its start: available while the administrator leaves it on (web_access) and the "
-                    "service is not offline, and the provider of /albireo/v1/web/search, wikipedia, or none when "
-                    "the search is unavailable while /albireo/v1/web/fetch stays available.",
+                             "description": "loading, ready, unloading, removing, ou l'erreur d'un chargement."},
+            "web": {"type": "object", "description": "L'accès au web du bouton Web, que l'application web lit à son "
+                    "démarrage : disponible tant que l'administrateur le laisse activé (web_access) et que le service "
+                    "n'est pas hors ligne, et le fournisseur de /albireo/v1/web/search, wikipedia, ou none quand la "
+                    "recherche est indisponible alors que /albireo/v1/web/fetch reste disponible.",
                     "properties": {
                         "available": {"type": "boolean"},
                         "search": {"type": "string", "enum": ["wikipedia", "none"]}}}}})}}},
     "/albireo/v1/models": {"get": {
-        "tags": ["Service"], "summary": "Catalog, installed models, downloads and active models",
-        "description": "The language models: those that come with Albireo first (builtin), then the catalog and "
-                       "the imports. The embedding models serve the document search and are given apart.",
+        "tags": ["Service"], "summary": "Catalogue, modèles installés, téléchargements et modèles actifs",
+        "description": "Les modèles de langage : ceux livrés avec Albireo d'abord (builtin), puis le catalogue et les "
+                       "imports. Les modèles d'embedding servent la recherche dans les documents et sont donnés à "
+                       "part.",
         "parameters": [{"name": "lang", "in": "query",
                         "schema": {"type": "string", "enum": ["auto", "fr"]},
-                        "description": "Language of the descriptions; auto, or no value, gives French (the fork for macOS speaks French only)."}],
-        "responses": {"200": reply("The models", {"type": "object", "properties": {
-            "free": {"type": "integer", "description": "The free bytes of the disk of the models folder."},
-            "offline": {"type": "boolean", "description": "True when the service is set offline: models come "
-                        "from imports or the verified local reserve."},
+                        "description": "Langue des descriptions ; auto, ou aucune valeur, donne le français (le fork "
+                                       "pour macOS ne parle que français)."}],
+        "responses": {"200": reply("Les modèles", {"type": "object", "properties": {
+            "free": {"type": "integer", "description": "Les octets libres du disque du dossier des modèles."},
+            "offline": {"type": "boolean", "description": "Vrai quand le service est réglé hors ligne : les modèles "
+                        "viennent des imports ou de la réserve locale vérifiée."},
             "models": {"type": "array", "items": {"type": "object", "properties": {
                 "id": {"type": "string"}, "name": {"type": "string"},
                 "roles": {"type": "array", "items": {"type": "string"}},
                 "inputs": {"type": "array", "items": {"type": "string", "enum": ["text", "image", "audio"]},
-                           "description": "What the model reads; the attachments of the web application follow."},
+                           "description": "Ce que lit le modèle ; les pièces jointes de l'application web suivent."},
                 "installed": {"type": "boolean"},
-                "builtin": {"type": "boolean", "description": "Comes with Albireo: it cannot be deleted."},
+                "builtin": {"type": "boolean", "description": "Livré avec Albireo : il ne peut pas être supprimé."},
                 "size": {"type": "integer"}, "quantization": {"type": "string"},
-                "total_size": {"type": "integer", "description": "The bytes of the files of the model, its "
-                               "projector included."},
-                "projector": {"type": "object", "description": "The image encoder of a model that reads images, a "
-                              "second file downloaded with the decoder: its size, SHA-256 and quantization, and "
-                              "its file once installed.", "properties": {
+                "total_size": {"type": "integer", "description": "Les octets des fichiers du modèle, son projecteur "
+                               "compris."},
+                "projector": {"type": "object", "description": "L'encodeur d'images d'un modèle qui lit les images, "
+                              "un second fichier téléchargé avec le décodeur : sa taille, son SHA-256 et sa "
+                              "quantification, et son fichier une fois installé.", "properties": {
                                   "file": {"type": "string"}, "size": {"type": "integer"},
                                   "sha256": {"type": "string"}, "quantization": {"type": "string"}}},
                 "description": {"type": "string"}, "publisher": {"type": "string"},
-                "license": {"type": "string", "description": "The license of the entry of the model in the catalog, "
-                            "or in the manifest of the models that come with Albireo; absent for a file imported "
-                            "without an entry."}}}},
-            "background": {"type": "string", "description": "The model of albireo-background, empty without one."},
+                "license": {"type": "string", "description": "La licence de l'entrée du modèle dans le catalogue, ou "
+                            "dans le manifeste des modèles livrés avec Albireo ; absente pour un fichier importé sans "
+                            "entrée."}}}},
+            "background": {"type": "string", "description": "Le modèle d'albireo-background, vide s'il n'y en a "
+                                                             "pas."},
             "embedding_models": {"type": "array", "items": {"type": "object", "properties": {
                 "id": {"type": "string"}, "name": {"type": "string"},
                 "source": {"type": "string", "enum": ["builtin", "catalog", "import"]},
                 "size": {"type": "integer"}, "publisher": {"type": "string"},
-                "license": {"type": "string", "description": "As for the language models."}}},
-                "description": "The installed embedding models."},
-            "downloads": {"type": "array", "description": "Asynchronous downloads and local restorations; "
-                          "an error includes its code and message.", "items": {"type": "object", "properties": {
+                "license": {"type": "string", "description": "Comme pour les modèles de langage."}}},
+                "description": "Les modèles d'embedding installés."},
+            "downloads": {"type": "array", "description": "Téléchargements asynchrones et restaurations locales ; "
+                          "une erreur comprend son code et son message.", "items": {"type": "object", "properties": {
                               "id": {"type": "string"}, "state": {"type": "string"},
                               "code": {"type": "string"}, "error": {"type": "string"},
                               "received": {"type": "integer"}, "total": {"type": "integer"}}}},
-            "pending_projectors": {"type": "array", "description": "The projectors imported without their decoder, "
-                                   "which wait for it.", "items": {"type": "object", "properties": {
+            "pending_projectors": {"type": "array", "description": "Les projecteurs importés sans leur décodeur, qui "
+                                   "l'attendent.", "items": {"type": "object", "properties": {
                                        "name": {"type": "string"}, "size": {"type": "integer"},
                                        "sha256": {"type": "string"}, "projector_type": {"type": "string"},
                                        "projection_width": {"type": "integer"}}}},
             "active": {"type": "object", "additionalProperties": {"type": "string"},
-                       "description": "The model of each function, as in the status."},
+                       "description": "Le modèle de chaque fonction, comme dans l'état (status)."},
             "selected": {"type": "object", "additionalProperties": {"type": "string"},
-                         "description": "The models chosen for the functions."},
-            "loaded": {"type": "array", "items": {"type": "string"}, "description": "Models of the engine."},
+                         "description": "Les modèles choisis pour les fonctions."},
+            "loaded": {"type": "array", "items": {"type": "string"}, "description": "Modèles du moteur."},
             "leaving": {"type": "object", "additionalProperties": {"type": "string", "enum": ["unloading",
                                                                                             "removing"]},
-                        "description": "Models waiting for their requests before they leave the engine."}}})}}},
+                        "description": "Modèles qui attendent la fin de leurs requêtes avant de quitter le "
+                                       "moteur."}}})}}},
     "/albireo/v1/reserve": {
-        "get": {"tags": ["Service"], "summary": "The reserve of the models on the Mac",
-                "description": "Every verified file of a model is kept under its hash when its download ends and "
-                               "when the model is removed; on APFS the copy is a clone, which takes no room while "
-                               "the model stays installed. A model whose files are all in the reserve is restored "
-                               "without the network (in_reserve in /albireo/v1/models).",
-                "responses": {"200": reply("The reserve", {"type": "object", "properties": {
-                    "limit": {"type": "integer", "description": "The limit in bytes (reserve_gb)."},
-                    "used": {"type": "integer", "description": "Bytes of the copies of models no longer installed."},
-                    "shared": {"type": "integer", "description": "Bytes of the clones of installed models."},
+        "get": {"tags": ["Service"], "summary": "La réserve des modèles sur le Mac",
+                "description": "Chaque fichier vérifié d'un modèle est gardé sous son hachage à la fin de son "
+                               "téléchargement et quand le modèle est retiré ; sur APFS, la copie est un clone, qui "
+                               "ne prend pas de place tant que le modèle reste installé. Un modèle dont tous les "
+                               "fichiers sont dans la réserve est restauré sans le réseau (in_reserve dans "
+                               "/albireo/v1/models).",
+                "responses": {"200": reply("La réserve", {"type": "object", "properties": {
+                    "limit": {"type": "integer", "description": "La limite en octets (reserve_gb)."},
+                    "used": {"type": "integer", "description": "Octets des copies de modèles qui ne sont plus "
+                                                               "installés."},
+                    "shared": {"type": "integer", "description": "Octets des clones de modèles installés."},
                     "files": {"type": "array", "items": {"type": "object", "properties": {
                         "sha256": {"type": "string"}, "size": {"type": "integer"},
-                        "saved": {"type": "integer", "description": "When it was kept or last restored, in Unix "
-                                                                     "seconds."},
+                        "saved": {"type": "integer", "description": "Quand il a été gardé ou restauré pour la "
+                                                                     "dernière fois, en secondes Unix."},
                         "installed": {"type": "boolean"}, "model": {"type": "string"}, "name": {"type": "string"},
                         "projector": {"type": "boolean"}}}}}})}},
-        "delete": {"tags": ["Administration"], "summary": "Empties the reserve",
-                   "responses": {"200": reply("Result", {"type": "object", "properties": {
+        "delete": {"tags": ["Administration"], "summary": "Vide la réserve",
+                   "responses": {"200": reply("Résultat", {"type": "object", "properties": {
                        "ok": {"type": "boolean"}, "removed": {"type": "integer"},
-                       "freed": {"type": "integer", "description": "Bytes the removed copies counted."}}})}}},
-    "/albireo/v1/usage": {"get": {"tags": ["Service"], "summary": "Usage per day over 30 days",
-                                  "responses": {"200": reply("The figures", {"type": "object", "properties": {
-                                      "days": {"type": "array", "description": "The days with a use, 30 at most, the "
-                                               "most recent first.", "items": {"type": "object", "properties": {
+                       "freed": {"type": "integer", "description": "Octets que comptaient les copies retirées."}}})}}},
+    "/albireo/v1/usage": {"get": {"tags": ["Service"], "summary": "Usage par jour sur 30 jours",
+                                  "responses": {"200": reply("Les chiffres", {"type": "object", "properties": {
+                                      "days": {"type": "array", "description": "Les jours avec un usage, 30 au plus, "
+                                               "le plus récent d'abord.", "items": {"type": "object", "properties": {
                                                    "day": {"type": "string", "format": "date",
                                                            "example": "2026-11-01"},
                                                    "prompt_tokens": {"type": "integer"},
                                                    "generated_tokens": {"type": "integer"},
                                                    "requests": {"type": "integer"}}}}}})}}},
-    "/albireo/v1/engines": {"get": {"tags": ["Service"], "summary": "Engines found, their devices and measures",
-                                    "responses": {"200": reply("The engines", ref("Engines"))}}},
+    "/albireo/v1/engines": {"get": {"tags": ["Service"], "summary": "Moteurs trouvés, leurs périphériques et leurs "
+                                                                    "mesures",
+                                    "responses": {"200": reply("Les moteurs", ref("Engines"))}}},
     "/albireo/v1/licenses": {"get": {
-        "tags": ["Service"], "summary": "License texts of the installation",
-        "description": "The texts of the licenses folder of the programs, which the installer fills: those of the "
-                       "components of the programs (Albireo, dlib, Mbed TLS, cpp-httplib, zlib, SQLite) and of the "
-                       "runtimes of the engine. The list is empty without that folder, as "
-                       "in a build folder. The components of the web application are listed by "
+        "tags": ["Service"], "summary": "Textes des licences de l'installation",
+        "description": "Les textes du dossier des licences des programmes, que remplit l'installateur : ceux des "
+                       "composants des programmes (Albireo, dlib, Mbed TLS, cpp-httplib, zlib, SQLite) et des "
+                       "environnements d'exécution du moteur. La liste est vide sans ce dossier, comme dans un "
+                       "dossier de build. Les composants de l'application web sont listés par "
                        "/vendor/components.json.",
-        "responses": {"200": reply("The texts, by the names of their files", {"type": "array", "items": {
+        "responses": {"200": reply("Les textes, par les noms de leurs fichiers", {"type": "array", "items": {
             "type": "object", "properties": {
                 "file": {"type": "string", "example": "mbedtls.txt"},
                 "name": {"type": "string", "example": "Mbed TLS"}, "size": {"type": "integer"},
-                "version": {"type": "string", "description": "The version the service was built with, when it "
-                            "knows it."}}}})}}},
+                "version": {"type": "string", "description": "La version avec laquelle le service a été construit, "
+                            "quand il la connaît."}}}})}}},
     "/albireo/v1/licenses/{file}": {"get": {
-        "tags": ["Service"], "summary": "A license text of the installation",
-        "description": "Only the files the folder lists, read through no link: a link, a file with several names "
-                       "(hard links) or a text of more than 1 MB is not served.",
+        "tags": ["Service"], "summary": "Un texte de licence de l'installation",
+        "description": "Seulement les fichiers que le dossier liste, lus sans passer par aucun lien : un lien, un "
+                       "fichier à plusieurs noms (liens physiques) ou un texte de plus de 1 Mo n'est pas servi.",
         "parameters": [{"name": "file", "in": "path", "required": True, "schema": {"type": "string"},
-                        "description": "A file listed by /albireo/v1/licenses."}],
-        "responses": {"200": {"description": "The text", "content": {"text/plain": {"schema": {"type": "string"}}}},
-                      "400": reply("A name with a separator, a colon, a control character or a leading dot (code "
-                                   "invalid_license)", ref("Error")),
-                      "404": reply("No such text (code license_not_found)", ref("Error"))}}},
+                        "description": "Un fichier listé par /albireo/v1/licenses."}],
+        "responses": {"200": {"description": "Le texte", "content": {"text/plain": {"schema": {"type": "string"}}}},
+                      "400": reply("Un nom avec un séparateur, deux-points, un caractère de contrôle ou un point "
+                                   "initial (code invalid_license)", ref("Error")),
+                      "404": reply("Aucun texte de ce nom (code license_not_found)", ref("Error"))}}},
     "/albireo/v1/count": {"post": {
-        "tags": ["Service"], "summary": "Tokens of messages, or of a text, for a model",
+        "tags": ["Service"], "summary": "Tokens de messages, ou d'un texte, pour un modèle",
         "requestBody": json_body({"type": "object", "properties": {
             "model": {"type": "string"}, "messages": {"type": "array", "items": ref("Message")},
             "tools": {"type": "array", "items": ref("Tool")}, "text": {"type": "string"}}}),
-        "responses": {"200": reply("The count and the context of the model", {"type": "object", "properties": {
+        "responses": {"200": reply("Le compte et le contexte du modèle", {"type": "object", "properties": {
             "tokens": {"type": "integer"}, "context": {"type": "integer"}}}),
-                      "400": reply("The engine refused the count, such as for a model that is not loaded: error "
-                                   "gives the reason, as a text", {"type": "object", "properties": {
+                      "400": reply("Le moteur a refusé le compte, par exemple pour un modèle qui n'est pas chargé : "
+                                   "error donne la raison, sous forme de texte", {"type": "object", "properties": {
                                        "error": {"type": "string"}}})}}},
     "/albireo/v1/web/search": {"post": {
-        "tags": ["Web access"], "summary": "Searches Wikipedia",
-        "description": "The tool web_search of the Web button, through the REST interface of Wikipedia (GET "
-                       "https://<language>.wikipedia.org/w/rest.php/v1/search/page, with a User-Agent that gives a "
-                       "contact, as the policy of Wikimedia asks), unless the setting web_search is none. The log "
-                       "names the provider and the number of results, never the query.",
+        "tags": ["Accès au web"], "summary": "Cherche dans Wikipedia",
+        "description": "L'outil web_search du bouton Web, par l'interface REST de Wikipedia (GET "
+                       "https://<langue>.wikipedia.org/w/rest.php/v1/search/page, avec un User-Agent qui donne un "
+                       "contact, comme le demande la politique de Wikimedia), sauf si le réglage web_search vaut "
+                       "none. Le journal nomme le fournisseur et le nombre de résultats, jamais la requête.",
         "requestBody": json_body(ref("WebSearchRequest")),
         "responses": {
-            "200": reply("The results", ref("WebSearchResults")),
-            "400": reply("An invalid query, count or language (codes invalid_query, invalid_count, "
+            "200": reply("Les résultats", ref("WebSearchResults")),
+            "400": reply("Une requête, un count ou une langue invalides (codes invalid_query, invalid_count, "
                          "invalid_language)", ref("Error")),
-            "403": reply("The service works offline (code offline), the administrator turned the web access off "
-                         "(web_access_off), or the setting web_search is none (no_search_provider)", ref("Error")),
-            "429": reply("Wikipedia limits the rate of the anonymous requests (code rate_limited); Retry-After "
-                         "gives the delay it asks for", ref("Error")),
-            "502": reply("Wikipedia answers with another status or another answer than its interface "
-                         "(search_failed), or cannot be reached (unreachable, tls_failed, proxy_failed)",
+            "403": reply("Le service travaille hors ligne (code offline), l'administrateur a coupé l'accès au web "
+                         "(web_access_off), ou le réglage web_search vaut none (no_search_provider)", ref("Error")),
+            "429": reply("Wikipedia limite le débit des requêtes anonymes (code rate_limited) ; Retry-After donne le "
+                         "délai qu'il demande", ref("Error")),
+            "502": reply("Wikipedia répond avec un autre statut ou une autre réponse que celle de son interface "
+                         "(search_failed), ou ne peut pas être joint (unreachable, tls_failed, proxy_failed)",
                          ref("Error")),
-            "503": reply("Three requests of the web access run already (code busy, Retry-After: 2), or the service "
-                         "stops (cancelled)", ref("Error")),
-            "504": reply("The provider did not answer in time (code timeout)", ref("Error"))}}},
+            "503": reply("Trois requêtes de l'accès au web tournent déjà (code busy, Retry-After: 2), ou le service "
+                         "s'arrête (cancelled)", ref("Error")),
+            "504": reply("Le fournisseur n'a pas répondu à temps (code timeout)", ref("Error"))}}},
     "/albireo/v1/web/fetch": {"post": {
-        "tags": ["Web access"], "summary": "Reads a page of the web at a public address",
-        "description": "The tool fetch_page of the Web button. The address is http or https, without user "
-                       "information; its host is refused when it names this computer or a local network "
-                       "(localhost, *.localhost, *.local, *.internal, *.home.arpa, a name of a single label) or "
-                       "when one of its addresses is not public (loopback, private, link-local, shared, "
-                       "documentation, multicast and reserved ranges, and the IPv4 addresses that IPv6 embeds), "
-                       "the decimal, hexadecimal and shortened forms of IPv4 included. The connection goes to the "
-                       "address checked, the name keeping the server name of TLS and the check of the certificate. "
-                       "The service follows five redirections at most, each address checked again. A text "
-                       "(text/<subtype>, XML, JSON) is read up to 2 MB and cut beyond (truncated), a PDF file up to "
-                       "20 MB. A request takes 10 s to connect, 15 s for each wait for data and 30 s in all, and "
-                       "keeps no cookie. Behind a proxy, the check applies to the addresses this computer resolves "
-                       "and the proxy resolves the name again. The log names the host, the status and the size, "
-                       "never the path or the query.",
+        "tags": ["Accès au web"], "summary": "Lit une page du web à une adresse publique",
+        "description": "L'outil fetch_page du bouton Web. L'adresse est en http ou https, sans informations "
+                       "d'utilisateur ; son hôte est refusé quand il désigne cet ordinateur ou un réseau local "
+                       "(localhost, *.localhost, *.local, *.internal, *.home.arpa, un nom d'une seule étiquette) ou "
+                       "quand l'une de ses adresses n'est pas publique (plages de bouclage, privées, lien-local, "
+                       "partagées, de documentation, multicast et réservées, et les adresses IPv4 qu'embarque IPv6), "
+                       "formes décimales, hexadécimales et abrégées d'IPv4 comprises. La connexion va à l'adresse "
+                       "vérifiée, le nom gardant le nom de serveur de TLS et la vérification du certificat. Le "
+                       "service suit cinq redirections au plus, chaque adresse vérifiée à nouveau. Un texte "
+                       "(text/<sous-type>, XML, JSON) est lu jusqu'à 2 Mo et coupé au-delà (truncated), un fichier "
+                       "PDF jusqu'à 20 Mo. Une requête prend 10 s pour se connecter, 15 s pour chaque attente de "
+                       "données et 30 s en tout, et ne garde aucun cookie. Derrière un proxy, la vérification "
+                       "s'applique aux adresses que résout cet ordinateur, et le proxy résout le nom à nouveau. Le "
+                       "journal nomme l'hôte, le statut et la taille, jamais le chemin ni la requête.",
         "requestBody": json_body(ref("WebFetchRequest")),
         "responses": {
-            "200": reply("The page, whatever the status of the site", ref("WebPage")),
-            "400": reply("An invalid address (code invalid_url): another scheme, user information, no host, an "
-                         "invalid port; or an invalid language (invalid_language)", ref("Error")),
-            "403": reply("An address that is local or private (code address_refused), the service offline "
-                         "(offline), or the web access turned off (web_access_off)", ref("Error")),
-            "413": reply("A PDF file above 20 MB (code too_large)", ref("Error")),
-            "415": reply("A type other than text/<subtype>, application/xhtml+xml, application/xml, "
-                         "application/<name>+xml, application/json, application/<name>+json and application/pdf "
-                         "(code unsupported_type), named in the message", ref("Error")),
-            "502": reply("The site cannot be reached (code unreachable), its TLS connection fails (tls_failed), the "
-                         "proxy does not open the connection (proxy_failed), more than five redirections "
-                         "(too_many_redirects), or a redirection to an address that is not http or https "
+            "200": reply("La page, quel que soit le statut du site", ref("WebPage")),
+            "400": reply("Une adresse invalide (code invalid_url) : un autre schéma, des informations d'utilisateur, "
+                         "aucun hôte, un port invalide ; ou une langue invalide (invalid_language)", ref("Error")),
+            "403": reply("Une adresse locale ou privée (code address_refused), le service hors ligne (offline), ou "
+                         "l'accès au web coupé (web_access_off)", ref("Error")),
+            "413": reply("Un fichier PDF de plus de 20 Mo (code too_large)", ref("Error")),
+            "415": reply("Un type autre que text/<sous-type>, application/xhtml+xml, application/xml, "
+                         "application/<nom>+xml, application/json, application/<nom>+json et application/pdf "
+                         "(code unsupported_type), nommé dans le message", ref("Error")),
+            "502": reply("Le site ne peut pas être joint (code unreachable), sa connexion TLS échoue (tls_failed), "
+                         "le proxy n'ouvre pas la connexion (proxy_failed), plus de cinq redirections "
+                         "(too_many_redirects), ou une redirection vers une adresse qui n'est ni http ni https "
                          "(invalid_redirect)", ref("Error")),
-            "503": reply("Three requests of the web access run already (code busy, Retry-After: 2), or the service "
-                         "stops (cancelled)", ref("Error")),
-            "504": reply("The site did not answer in time (code timeout)", ref("Error"))}}},
-    "/albireo/v1/models/refresh": {"post": {"tags": ["Administration"], "summary": "Fetches the catalog again, in the background",
-                                            "responses": dict({"202": reply("Started", {"type": "object"})},
+            "503": reply("Trois requêtes de l'accès au web tournent déjà (code busy, Retry-After: 2), ou le service "
+                         "s'arrête (cancelled)", ref("Error")),
+            "504": reply("Le site n'a pas répondu à temps (code timeout)", ref("Error"))}}},
+    "/albireo/v1/models/refresh": {"post": {"tags": ["Administration"],
+                                            "summary": "Récupère à nouveau le catalogue, en arrière-plan",
+                                            "responses": dict({"202": reply("Lancé", {"type": "object"})},
                                                               **offline_reply)}},
     "/albireo/v1/models/{id}/download": {
-        "post": {"tags": ["Administration"], "summary": "Starts or resumes the download of a model",
-                 "description": "In offline mode, starts a local-only restoration of all verified files from the "
-                                "reserve, with no network fallback even if the setting changes. If the reserve "
-                                "cannot supply them, the asynchronous job reports state error and code "
-                                "reserve_unavailable in GET /albireo/v1/models. A network job already running "
-                                "for this model is refused with code download_busy.",
+        "post": {"tags": ["Administration"], "summary": "Lance ou reprend le téléchargement d'un modèle",
+                 "description": "En mode hors ligne, lance une restauration purement locale de tous les fichiers "
+                                "vérifiés depuis la réserve, sans repli sur le réseau même si le réglage change. Si "
+                                "la réserve ne peut pas les fournir, la tâche asynchrone signale l'état error et le "
+                                "code reserve_unavailable dans GET /albireo/v1/models. Une tâche réseau déjà en cours "
+                                "pour ce modèle est refusée avec le code download_busy.",
                  "parameters": [model_id],
-                 "responses": {"202": reply("Started", ok), "400": reply("Refused", ok)}},
-        "delete": {"tags": ["Administration"], "summary": "Cancels a download",
-                   "parameters": [model_id], "responses": {"200": reply("Cancelled", ok)}}},
+                 "responses": {"202": reply("Lancé", ok), "400": reply("Refusé", ok)}},
+        "delete": {"tags": ["Administration"], "summary": "Annule un téléchargement",
+                   "parameters": [model_id], "responses": {"200": reply("Annulé", ok)}}},
     "/albireo/v1/models/{id}/activate": {"post": {
-        "tags": ["Administration"], "summary": "Activates a model for a function",
+        "tags": ["Administration"], "summary": "Active un modèle pour une fonction",
         "parameters": [model_id],
         "requestBody": json_body({"type": "object", "properties": {
             "role": {"type": "string", "enum": ["general", "code", "security", "embedding"], "default": "general",
-                     "description": "embedding takes an embedding model only, the other functions a language "
-                                    "model."}}}),
-        "responses": {"200": reply("Activated", ok), "400": reply("Refused", ok)}}},
+                     "description": "embedding ne prend qu'un modèle d'embedding, les autres fonctions un modèle de "
+                                    "langage."}}}),
+        "responses": {"200": reply("Activé", ok), "400": reply("Refusé", ok)}}},
     "/albireo/v1/models/{id}/deactivate": {"post": {
-        "tags": ["Administration"], "summary": "Deactivates a model for every function",
-        "description": "The model leaves the engine once its requests in progress and waiting are served; an "
-                       "activation meanwhile keeps it loaded. The model of the document search is replaced by "
-                       "the activation of another embedding model.",
-        "parameters": [model_id], "responses": {"200": reply("Deactivated", ok), "400": reply("Refused", ok)}}},
+        "tags": ["Administration"], "summary": "Désactive un modèle pour toutes les fonctions",
+        "description": "Le modèle quitte le moteur une fois servies ses requêtes en cours et en attente ; une "
+                       "activation entre-temps le garde chargé. Le modèle de la recherche dans les documents est "
+                       "remplacé par l'activation d'un autre modèle d'embedding.",
+        "parameters": [model_id], "responses": {"200": reply("Désactivé", ok), "400": reply("Refusé", ok)}}},
     "/albireo/v1/models/{id}/verify": {"post": {
-        "tags": ["Administration"], "summary": "Recomputes the hash of an installed model",
-        "parameters": [model_id], "responses": {"200": reply("Result", {"type": "object"})}}},
+        "tags": ["Administration"], "summary": "Recalcule le hachage d'un modèle installé",
+        "parameters": [model_id], "responses": {"200": reply("Résultat", {"type": "object"})}}},
     "/albireo/v1/models/{id}": {"delete": {
-        "tags": ["Administration"], "summary": "Deletes an installed model",
-        "description": "A model of the engine is deleted once its requests are served and it left the engine: "
-                       "pending is then true, and the model is listed under leaving until then. A model that "
-                       "comes with Albireo is refused with the code builtin_model.",
+        "tags": ["Administration"], "summary": "Supprime un modèle installé",
+        "description": "Un modèle du moteur est supprimé une fois ses requêtes servies et une fois qu'il a quitté le "
+                       "moteur : pending vaut alors true, et le modèle est listé sous leaving jusque-là. Un modèle "
+                       "livré avec Albireo est refusé avec le code builtin_model.",
         "parameters": [model_id],
-        "responses": {"200": reply("Deleted, or to be deleted", {"type": "object", "properties": {
-            "ok": {"type": "boolean"}, "pending": {"type": "boolean"}}}), "400": reply("Refused", ok)}}},
+        "responses": {"200": reply("Supprimé, ou à supprimer", {"type": "object", "properties": {
+            "ok": {"type": "boolean"}, "pending": {"type": "boolean"}}}), "400": reply("Refusé", ok)}}},
     "/albireo/v1/import": {"post": {
-        "tags": ["Administration"], "summary": "Imports an offline bundle, or the content of the import folder",
-        "description": "For a computer without network: a memory card or a disk brought to the machine. The "
-                       "service reads with its own rights, so that it accepts two kinds of paths: an offline "
-                       "bundle on a local drive (a folder holding a catalog.json), of "
-                       "which it reads only the catalog and the models it lists, by their names, sizes and "
-                       "hashes; and a folder or a file of the import folder of the data folder. Every file is read "
-                       "through no link. A model file of the user is sent through /albireo/v1/models/upload. An "
-                       "older catalog never replaces a newer one, and a model installed already is listed under "
-                       "already.",
+        "tags": ["Administration"], "summary": "Importe un lot hors ligne, ou le contenu du dossier d'import",
+        "description": "Pour un ordinateur sans réseau : une carte mémoire ou un disque apporté à la machine. Le "
+                       "service lit avec ses propres droits, si bien qu'il accepte deux sortes de chemins : un lot "
+                       "hors ligne sur un disque local (un dossier qui contient un catalog.json), dont il ne lit que "
+                       "le catalogue et les modèles qu'il liste, par leurs noms, tailles et hachages ; et un dossier "
+                       "ou un fichier du dossier d'import du dossier des données. Chaque fichier est lu sans passer "
+                       "par aucun lien. Un fichier de modèle de l'utilisateur s'envoie par "
+                       "/albireo/v1/models/upload. Un catalogue plus ancien ne remplace jamais un plus récent, et un "
+                       "modèle déjà installé est listé sous already.",
         "requestBody": json_body({"type": "object", "required": ["path"], "properties": {"path": {"type": "string"}}}),
-        "responses": {"200": reply("Imported models, catalog and errors", {"type": "object", "properties": {
+        "responses": {"200": reply("Modèles importés, catalogue et erreurs", {"type": "object", "properties": {
             "imported": {"type": "array", "items": {"type": "string"}},
             "already": {"type": "array", "items": {"type": "string"},
-                        "description": "The installed models whose content the files repeat."},
+                        "description": "Les modèles installés dont les fichiers répètent le contenu."},
             "errors": {"type": "array", "items": {"type": "string"}},
             "catalog": {"type": "object"}}}),
-                      "400": reply("The path is refused before anything of it is read; the code is the same "
-                                   "whether a folder outside the import folder is missing, unreadable or "
-                                   "reached through a link (import_not_bundle)", import_refusal)}}},
+                      "400": reply("Le chemin est refusé avant que rien n'en soit lu ; le code est le même, qu'un "
+                                   "dossier hors du dossier d'import soit absent, illisible ou atteint par un lien "
+                                   "(import_not_bundle)", import_refusal)}}},
     "/albireo/v1/models/import": {"post": {
-        "tags": ["Administration"], "summary": "Same as /albireo/v1/import",
+        "tags": ["Administration"], "summary": "Identique à /albireo/v1/import",
         "requestBody": json_body({"type": "object", "required": ["path"], "properties": {"path": {"type": "string"}}}),
-        "responses": {"200": reply("Imported files and errors", {"type": "object"}),
-                      "400": reply("Refused", import_refusal)}}},
+        "responses": {"200": reply("Fichiers importés et erreurs", {"type": "object"}),
+                      "400": reply("Refusé", import_refusal)}}},
     "/albireo/v1/speed": {"get": {
-        "tags": ["Service"], "summary": "The live throughput of the engine",
-        "description": "The tokens that the engine read (prompts) and wrote (answers) over the last five seconds, per "
-                       "second, and the requests under way and waiting; zero once the engine rests. Much lighter "
-                       "than /albireo/v1/status, for a display refreshed every second.",
-        "responses": {"200": reply("The throughput", {"type": "object", "properties": {
+        "tags": ["Service"], "summary": "Le débit du moteur en direct",
+        "description": "Les tokens que le moteur a lus (prompts) et écrits (réponses) sur les cinq dernières "
+                       "secondes, par seconde, et les requêtes en cours et en attente ; zéro une fois le moteur au "
+                       "repos. Bien plus léger que /albireo/v1/status, pour un affichage rafraîchi chaque seconde.",
+        "responses": {"200": reply("Le débit", {"type": "object", "properties": {
             "prompt_tokens_per_second": {"type": "number"}, "generation_tokens_per_second": {"type": "number"},
             "active": {"type": "integer"}, "waiting": {"type": "integer"}}})}}},
     "/albireo/v1/pseudalis": {"get": {
-        "tags": ["Service"], "summary": "Pseudalis on this Mac",
-        "description": "Whether Pseudalis is installed on this Mac (its data folder: PSEUDALIS_HOME, or "
-                       "~/.local/share/pseudalis), the port of its settings, and whether it answers on 127.0.0.1, so "
-                       "that the web application offers to switch to it. Nothing else of Pseudalis is read.",
+        "tags": ["Service"], "summary": "Pseudalis sur ce Mac",
+        "description": "Si Pseudalis est installé sur ce Mac (son dossier de données : PSEUDALIS_HOME, ou "
+                       "~/.local/share/pseudalis), le port de ses réglages, et s'il répond sur 127.0.0.1, pour que "
+                       "l'application web propose d'y passer. Rien d'autre de Pseudalis n'est lu.",
         "responses": {"200": reply("Pseudalis", {"type": "object", "properties": {
             "found": {"type": "boolean"}, "port": {"type": "integer"}, "running": {"type": "boolean"}}})}}},
     "/albireo/v1/library": {"get": {
-        "tags": ["Service"], "summary": "The GGUF files of the library of the Mac",
-        "description": "The folder of the library_dir setting (created at the first reading when it is the default "
-                       "one), read without the network and never written: every GGUF file of the folder itself, "
-                       "opened through no link and by a single name, described by its header; the projectors go "
-                       "with the models of the folder as an import pairs them. A folder that other accounts than "
-                       "the administrators can write in is refused (library_insecure).",
-        "responses": {"200": reply("The files", {"type": "object", "properties": {
+        "tags": ["Service"], "summary": "Les fichiers GGUF de la bibliothèque du Mac",
+        "description": "Le dossier du réglage library_dir (créé à la première lecture quand c'est celui par défaut), "
+                       "lu sans le réseau et jamais écrit : chaque fichier GGUF du dossier lui-même, ouvert sans "
+                       "passer par aucun lien et sous un seul nom, décrit par son en-tête ; les projecteurs vont avec "
+                       "les modèles du dossier comme un import les apparie. Un dossier où d'autres comptes que les "
+                       "administrateurs peuvent écrire est refusé (library_insecure).",
+        "responses": {"200": reply("Les fichiers", {"type": "object", "properties": {
             "folder": {"type": "string"},
             "models": {"type": "array", "items": {"type": "object", "properties": {
                 "file": {"type": "string"}, "size": {"type": "integer"}, "name": {"type": "string"},
                 "arch": {"type": "string"}, "quantization": {"type": "string"}, "parameters": {"type": "integer"},
-                "supported": {"type": "boolean", "description": "The engine reads its architecture."},
+                "supported": {"type": "boolean", "description": "Le moteur lit son architecture."},
                 "reason": {"type": "string"},
-                "projector": {"type": ["object", "null"], "description": "The projector of the folder that goes "
-                              "with it: {file, size}."},
-                "installed": {"type": "string", "description": "An installed model of the same size and "
-                              "architecture, or empty."}}}},
-            "projectors": {"type": "array", "description": "The projectors that go with no model of the folder.",
+                "projector": {"type": ["object", "null"], "description": "Le projecteur du dossier qui va avec "
+                              "lui : {file, size}."},
+                "installed": {"type": "string", "description": "Un modèle installé de même taille et de même "
+                              "architecture, ou vide."}}}},
+            "projectors": {"type": "array", "description": "Les projecteurs qui ne vont avec aucun modèle du dossier.",
                            "items": {"type": "object"}},
-            "skipped": {"type": "array", "description": "Links, files of several names and unreadable files: "
+            "skipped": {"type": "array", "description": "Liens, fichiers à plusieurs noms et fichiers illisibles : "
                         "{file, reason}.", "items": {"type": "object"}}}}),
-                      "400": reply("The folder cannot be created or is not secure (library_unavailable, "
+                      "400": reply("Le dossier ne peut pas être créé ou n'est pas sûr (library_unavailable, "
                                    "library_insecure)", {"type": "object"})}}},
     "/albireo/v1/library/load": {"post": {
-        "tags": ["Administration"], "summary": "Loads a file of the library of the Mac into Albireo",
-        "description": "Imports the file, with the projector that /albireo/v1/library pairs with it, without the "
-                       "network and without moving them: the copy is an APFS clone on the same volume.",
+        "tags": ["Administration"], "summary": "Charge dans Albireo un fichier de la bibliothèque du Mac",
+        "description": "Importe le fichier, avec le projecteur que /albireo/v1/library lui apparie, sans le réseau et "
+                       "sans les déplacer : la copie est un clone APFS sur le même volume.",
         "requestBody": json_body({"type": "object", "required": ["file"], "properties": {"file": {"type": "string"}}}),
-        "responses": {"200": reply("The result of the import", {"type": "object", "properties": {
+        "responses": {"200": reply("Le résultat de l'import", {"type": "object", "properties": {
             "ok": {"type": "boolean"}, "imported": {"type": "array", "items": {"type": "string"}},
             "already": {"type": "array", "items": {"type": "string"}},
             "pending": {"type": "array", "items": {"type": "string"}},
             "errors": {"type": "array", "items": {"type": "string"}}}}),
-                      "400": reply("A file the library does not list (library_not_found), or a folder refused",
-                                   {"type": "object"})}}},
+                      "400": reply("Un fichier que la bibliothèque ne liste pas (library_not_found), ou un dossier "
+                                   "refusé", {"type": "object"})}}},
     "/albireo/v1/models/upload": {"post": {
-        "tags": ["Administration"], "summary": "Installs a GGUF file sent in the body",
-        "description": "The body is the file, of the length its Content-Length header gives: a body without length, "
-                       "or sent in chunks (Transfer-Encoding), is refused (400). The size limit of the JSON bodies "
-                       "does not apply.",
+        "tags": ["Administration"], "summary": "Installe un fichier GGUF envoyé dans le corps",
+        "description": "Le corps est le fichier, de la longueur que donne son en-tête Content-Length : un corps sans "
+                       "longueur, ou envoyé par morceaux (Transfer-Encoding), est refusé (400). La limite de taille "
+                       "des corps JSON ne s'applique pas.",
         "parameters": [{"name": "name", "in": "query", "required": True, "schema": {"type": "string"}}],
         "requestBody": {"required": True, "content": {
             "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}},
-        "responses": {"200": reply("Imported", {"type": "object"}),
-                      "400": reply("Refused: no name or no length, a transfer that did not complete, or a file that "
-                                   "is not a model", {"type": "object"}),
-                      "500": reply("The file cannot be created in the models folder", ref("Error")),
-                      "507": reply("The disk of the models folder lacks the size of the file and 256 MB",
+        "responses": {"200": reply("Importé", {"type": "object"}),
+                      "400": reply("Refusé : pas de nom ou pas de longueur, un transfert inachevé, ou un fichier qui "
+                                   "n'est pas un modèle", {"type": "object"}),
+                      "500": reply("Le fichier ne peut pas être créé dans le dossier des modèles", ref("Error")),
+                      "507": reply("Il manque au disque du dossier des modèles la taille du fichier plus 256 Mo",
                                    ref("Error"))}}},
     "/albireo/v1/settings": {
-        "get": {"tags": ["Administration"], "summary": "Settings of the service",
-                "responses": {"200": reply("The settings, the password of the proxy given as ********, the "
-                                           "password of the network access as lan_password_set only, and the IPv4 "
-                                           "addresses of the Mac (lan_addresses)", {"type": "object"})}},
-        "put": {"tags": ["Administration"], "summary": "Changes settings",
-                "description": "A new port is opened once before it is saved.",
+        "get": {"tags": ["Administration"], "summary": "Réglages du service",
+                "responses": {"200": reply("Les réglages, le mot de passe du proxy donné sous la forme ********, "
+                                           "celui de l'accès réseau sous la seule forme de lan_password_set, et les "
+                                           "adresses IPv4 du Mac (lan_addresses)", {"type": "object"})}},
+        "put": {"tags": ["Administration"], "summary": "Change des réglages",
+                "description": "Un nouveau port est ouvert une fois avant d'être enregistré.",
                 "requestBody": json_body(ref("Settings")),
-                "responses": {"200": reply("Saved; restart tells whether the service restarts", {"type": "object"}),
-                              "400": reply("A value out of range, the masked password of the proxy with another "
-                                           "user, host or port (code proxy_password), the network port equal to the "
-                                           "port of the Mac (code lan_port_same)", ref("Error")),
-                              "409": reply("The new port is in use or cannot be opened (code port_unavailable)",
-                                           ref("Error"))}}},
-    "/albireo/v1/hub/search": {"get": {"tags": ["Hugging Face"], "summary": "Searches the GGUF models of Hugging Face",
-        "description": "Every answer is kept on the Mac (the 30 latest searches). In offline mode, with local=1, or "
-                       "when Hugging Face does not answer, the kept answer of the same words is given, with its date "
-                       "in cached_at.",
-        "parameters": [{"name": "q", "in": "query", "schema": {"type": "string"}, "description": "Words of the search; "
-                        "empty: the most downloaded models."},
+                "responses": {"200": reply("Enregistré ; restart indique si le service redémarre", {"type": "object"}),
+                              "400": reply("Une valeur hors limites, le mot de passe masqué du proxy avec un autre "
+                                           "utilisateur, hôte ou port (code proxy_password), le port réseau égal au "
+                                           "port du Mac (code lan_port_same)", ref("Error")),
+                              "409": reply("Le nouveau port est occupé ou ne peut pas être ouvert (code "
+                                           "port_unavailable)", ref("Error"))}}},
+    "/albireo/v1/hub/search": {"get": {"tags": ["Hugging Face"], "summary": "Cherche les modèles GGUF de Hugging Face",
+        "description": "Chaque réponse est gardée sur le Mac (les 30 dernières recherches). En mode hors ligne, avec "
+                       "local=1, ou quand Hugging Face ne répond pas, la réponse gardée pour les mêmes mots est "
+                       "donnée, avec sa date dans cached_at.",
+        "parameters": [{"name": "q", "in": "query", "schema": {"type": "string"}, "description": "Mots de la "
+                        "recherche ; vide : les modèles les plus téléchargés."},
                        {"name": "local", "in": "query", "schema": {"type": "string", "enum": ["1"]},
-                        "description": "1: the answer kept on the Mac, without the network."}],
+                        "description": "1 : la réponse gardée sur le Mac, sans le réseau."}],
         "responses": {"200": reply("{models: [{repo, architecture, parameters, context, downloads, likes, updated, "
-                                   "compatible, reason, moe}], cached_at}, at most 40, the most downloaded first; "
-                                   "cached_at (Unix seconds) when the answer comes from the Mac",
+                                   "compatible, reason, moe}], cached_at}, 40 au plus, les plus téléchargés "
+                                   "d'abord ; cached_at (secondes Unix) quand la réponse vient du Mac",
                                    {"type": "object"}),
-                      "404": reply("Offline or local=1, and this search was never kept (code hub_not_cached)",
-                                   ref("Error")),
-                      "502": reply("Hugging Face cannot be reached and nothing is kept (code hub_unreachable)",
+                      "404": reply("Hors ligne ou local=1, et cette recherche n'a jamais été gardée (code "
+                                   "hub_not_cached)", ref("Error")),
+                      "502": reply("Hugging Face ne peut pas être joint et rien n'est gardé (code hub_unreachable)",
                                    ref("Error"))}}},
-    "/albireo/v1/hub/files": {"get": {"tags": ["Hugging Face"], "summary": "The GGUF files of a repository",
-        "description": "Kept on the Mac like the searches (the 30 latest repositories).",
+    "/albireo/v1/hub/files": {"get": {"tags": ["Hugging Face"], "summary": "Les fichiers GGUF d'un dépôt",
+        "description": "Gardés sur le Mac comme les recherches (les 30 derniers dépôts).",
         "parameters": [{"name": "repo", "in": "query", "required": True, "schema": {"type": "string"},
-                        "description": "owner/name"},
+                        "description": "propriétaire/nom"},
                        {"name": "local", "in": "query", "schema": {"type": "string", "enum": ["1"]},
-                        "description": "1: the answer kept on the Mac, without the network."}],
+                        "description": "1 : la réponse gardée sur le Mac, sans le réseau."}],
         "responses": {"200": reply("{repo, architecture, parameters, context, license, files: [{file, size, "
                                    "quantization, compatible, reason, moe, gpu}], projectors: [{file, size, "
                                    "quantization}], cached_at}", {"type": "object"}),
-                      "404": reply("Offline or local=1, and this repository was never kept (code hub_not_cached)",
+                      "404": reply("Hors ligne ou local=1, et ce dépôt n'a jamais été gardé (code hub_not_cached)",
                                    ref("Error")),
-                      "502": reply("Hugging Face cannot be reached, or the repository is invalid, and nothing is "
-                                   "kept (code hub_unreachable)", ref("Error"))}}},
-    "/albireo/v1/hub/recent": {"get": {"tags": ["Hugging Face"], "summary": "The searches kept on the Mac",
-        "responses": {"200": reply("{searches: [{query, at}]}, the most recent first", {"type": "object"})}}},
+                      "502": reply("Hugging Face ne peut pas être joint, ou le dépôt est invalide, et rien n'est "
+                                   "gardé (code hub_unreachable)", ref("Error"))}}},
+    "/albireo/v1/hub/recent": {"get": {"tags": ["Hugging Face"], "summary": "Les recherches gardées sur le Mac",
+        "responses": {"200": reply("{searches: [{query, at}]}, la plus récente d'abord", {"type": "object"})}}},
     "/albireo/v1/hub/add": {"post": {"tags": ["Hugging Face"],
-        "summary": "Adds a file to the personal list and starts its download",
-        "description": "The entry is made from the repository (size and SHA-256 of Git LFS, architecture, context, "
-                       "license) and kept beside the catalog; the model then installs and activates as the others.",
+        "summary": "Ajoute un fichier à la liste personnelle et lance son téléchargement",
+        "description": "L'entrée est faite à partir du dépôt (taille et SHA-256 de Git LFS, architecture, contexte, "
+                       "licence) et gardée à côté du catalogue ; le modèle s'installe et s'active ensuite comme les "
+                       "autres.",
         "requestBody": json_body({"type": "object", "required": ["repo", "file"], "properties": {
             "repo": {"type": "string"}, "file": {"type": "string"},
-            "projector": {"type": "string", "description": "A mmproj file of the repository, for the images; empty: none."}}}),
+            "projector": {"type": "string", "description": "Un fichier mmproj du dépôt, pour les images ; vide : "
+                                                           "aucun."}}}),
         "responses": {"200": reply("{ok, id, name}", {"type": "object"}),
-                      "400": reply("Invalid repository or file, unsupported architecture (code hub_entry)", ref("Error"))}}},
+                      "400": reply("Dépôt ou fichier invalide, architecture non prise en charge (code hub_entry)",
+                                   ref("Error"))}}},
     "/albireo/v1/settings/profiles": {
-        "get": {"tags": ["Administration"], "summary": "The saved settings",
+        "get": {"tags": ["Administration"], "summary": "Les réglages enregistrés",
                 "responses": {"200": reply("{profiles: [{label, saved, settings}]}", {"type": "object"})}},
-        "post": {"tags": ["Administration"], "summary": "Saves the current settings under a label",
-                 "description": "The settings the web application changes, without the password of the network "
-                                "access; a label saved again is replaced. Restoring them is a PUT of their "
-                                "settings to /albireo/v1/settings.",
+        "post": {"tags": ["Administration"], "summary": "Enregistre les réglages actuels sous une étiquette",
+                 "description": "Les réglages que change l'application web, sans le mot de passe de l'accès réseau ; "
+                                "une étiquette enregistrée à nouveau est remplacée. Les restaurer, c'est faire un PUT "
+                                "de leurs settings vers /albireo/v1/settings.",
                  "requestBody": json_body({"type": "object", "required": ["label"], "properties": {
                      "label": {"type": "string", "minLength": 1, "maxLength": 120}}}),
-                 "responses": {"200": reply("The saved settings", {"type": "object"}),
-                               "400": reply("No label, or a longer one (code label)", ref("Error"))}},
-        "delete": {"tags": ["Administration"], "summary": "Deletes saved settings",
+                 "responses": {"200": reply("Les réglages enregistrés", {"type": "object"}),
+                               "400": reply("Pas d'étiquette, ou une étiquette trop longue (code label)",
+                                            ref("Error"))}},
+        "delete": {"tags": ["Administration"], "summary": "Supprime des réglages enregistrés",
                    "parameters": [{"name": "label", "in": "query", "required": True, "schema": {"type": "string"}}],
-                   "responses": {"200": reply("Deleted", ok),
-                                 "404": reply("No saved settings of that label (code label)", ref("Error"))}}},
+                   "responses": {"200": reply("Supprimé", ok),
+                                 "404": reply("Aucun réglage enregistré sous cette étiquette (code label)",
+                                              ref("Error"))}}},
     "/albireo/v1/documents": {
-        "get": {"tags": ["Documents"], "summary": "The documents of the Mac",
-                "description": "The files of the documents folder of the data, its folders and hidden files apart.",
+        "get": {"tags": ["Documents"], "summary": "Les documents du Mac",
+                "description": "Les fichiers du dossier des documents des données, hors de ses dossiers et de ses "
+                               "fichiers cachés.",
                 "responses": {"200": reply("{folder, documents: [{name, size, modified}]}", {"type": "object"})}},
-        "post": {"tags": ["Documents"], "summary": "Sends a document to the Mac",
-                 "description": "The bytes of the file, with their length, 512 MB at most. The same bytes under "
-                                "the same name are kept once (already); another file of that name takes "
-                                "\"name (2).ext\".",
+        "post": {"tags": ["Documents"], "summary": "Envoie un document au Mac",
+                 "description": "Les octets du fichier, avec leur longueur, 512 Mo au plus. Les mêmes octets sous le "
+                                "même nom sont gardés une seule fois (already) ; un autre fichier de ce nom prend "
+                                "\"nom (2).ext\".",
                  "parameters": [{"name": "name", "in": "query", "required": True, "schema": {"type": "string"},
-                                 "description": "A plain file name: no folder, not hidden."}],
+                                 "description": "Un simple nom de fichier : pas de dossier, pas de fichier caché."}],
                  "requestBody": {"required": True, "content": {"application/octet-stream": {
                      "schema": {"type": "string", "format": "binary"}}}},
                  "responses": {"200": reply("{ok, name, already}", {"type": "object"}),
-                               "400": reply("Another name, no length or a longer file (code document_name), or "
-                                            "an incomplete transfer", ref("Error"))}}},
+                               "400": reply("Un autre nom, pas de longueur ou un fichier plus long (code "
+                                            "document_name), ou un transfert incomplet", ref("Error"))}}},
     "/albireo/v1/documents/{name}": {
-        "get": {"tags": ["Documents"], "summary": "Reads a document of the Mac",
+        "get": {"tags": ["Documents"], "summary": "Lit un document du Mac",
                 "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
-                "responses": {"200": {"description": "Its bytes, with the type of its extension"},
-                              "404": reply("No such document (code document_not_found)", ref("Error"))}},
-        "delete": {"tags": ["Documents"], "summary": "Deletes a document of the Mac",
+                "responses": {"200": {"description": "Ses octets, avec le type de son extension"},
+                              "404": reply("Aucun document de ce nom (code document_not_found)", ref("Error"))}},
+        "delete": {"tags": ["Documents"], "summary": "Supprime un document du Mac",
                    "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
-                   "responses": {"200": reply("Deleted", ok),
-                                 "404": reply("No such document (code document_not_found)", ref("Error"))}}},
-    "/albireo/v1/lan/login": {"post": {"tags": ["Administration"], "summary": "Opens the network access to a device",
-        "description": "The password of the network access (setting lan_password) gives the cookie albireo_lan for 30 "
-                       "days (HttpOnly, SameSite=Strict); a new password ends every session. A wrong password waits a "
-                       "second.",
+                   "responses": {"200": reply("Supprimé", ok),
+                                 "404": reply("Aucun document de ce nom (code document_not_found)", ref("Error"))}}},
+    "/albireo/v1/lan/login": {"post": {"tags": ["Administration"], "summary": "Ouvre l'accès réseau à un appareil",
+        "description": "Le mot de passe de l'accès réseau (réglage lan_password) donne le cookie albireo_lan pour 30 "
+                       "jours (HttpOnly, SameSite=Strict) ; un nouveau mot de passe met fin à chaque session. Un "
+                       "mauvais mot de passe fait attendre une seconde.",
         "requestBody": json_body({"type": "object", "required": ["password"],
                                   "properties": {"password": {"type": "string"}}}),
-        "responses": {"200": reply("The cookie is set", ok),
-                      "401": reply("Wrong password, or none chosen (code lan_password_wrong)", ref("Error"))}}},
-    "/albireo/v1/lan/logout": {"post": {"tags": ["Administration"], "summary": "Ends the session of this device",
-                                        "responses": {"200": reply("The cookie is removed", ok)}}},
-    "/albireo/v1/restart": {"post": {"tags": ["Administration"], "summary": "Restarts the service",
-                                     "responses": {"202": reply("Restarting", ok)}}},
-    "/albireo/v1/engines/benchmark": {"post": {"tags": ["Administration"], "summary": "Measures every usable engine on this machine",
-                                               "description": "One measure runs at a time.",
+        "responses": {"200": reply("Le cookie est posé", ok),
+                      "401": reply("Mauvais mot de passe, ou aucun choisi (code lan_password_wrong)", ref("Error"))}}},
+    "/albireo/v1/lan/logout": {"post": {"tags": ["Administration"], "summary": "Met fin à la session de cet appareil",
+                                        "responses": {"200": reply("Le cookie est retiré", ok)}}},
+    "/albireo/v1/restart": {"post": {"tags": ["Administration"], "summary": "Redémarre le service",
+                                     "responses": {"202": reply("Redémarrage en cours", ok)}}},
+    "/albireo/v1/engines/benchmark": {"post": {"tags": ["Administration"],
+                                               "summary": "Mesure chaque moteur utilisable sur cette machine",
+                                               "description": "Une seule mesure tourne à la fois.",
                                                "responses": {
-                                                   "200": reply("The measures", {"type": "object"}),
-                                                   "409": reply("A measure is already running (code "
+                                                   "200": reply("Les mesures", {"type": "object"}),
+                                                   "409": reply("Une mesure tourne déjà (code "
                                                                 "benchmark_running)", {"type": "object", "properties": {
                                                                     "error": {"type": "string"},
                                                                     "code": {"type": "string",
                                                                              "enum": ["benchmark_running"]}}})}}},
-    "/albireo/v1/logs": {"get": {"tags": ["Administration"], "summary": "Last lines of the log",
-                                 "responses": {"200": reply("The lines", {"type": "object"})}}},
+    "/albireo/v1/logs": {"get": {"tags": ["Administration"], "summary": "Dernières lignes du journal",
+                                 "responses": {"200": reply("Les lignes", {"type": "object"})}}},
 }
 
 # Sur le serveur du réseau local, chaque route sauf la connexion répond 401 sans le cookie de la connexion.
-lan_unauthorized = reply("On the server of the local network, without the cookie of /albireo/v1/lan/login (code "
+lan_unauthorized = reply("Sur le serveur du réseau local, sans le cookie de /albireo/v1/lan/login (code "
                          "lan_login)", ref("Error"))
 for path, operations in paths.items():
     for operation in operations.values():
@@ -953,37 +988,39 @@ with open(os.path.join(here, "..", "common", "version.h"), encoding="utf-8") as 
 doc = {
     "openapi": "3.0.3",
     "info": {
-        "title": "Albireo Community Edition local interface",
+        "title": "Interface locale d'Albireo Community Edition",
         "version": version,
-        "description": "The interface of the Albireo service, served on https://localhost (port 8443 unless changed in "
-                       "the Service tab of the web application), and, once the network access is on, in plain HTTP "
-                       "on every address of the Mac at its network port (8444 by default). The routes under /v1 follow the OpenAI interface, so that its client libraries "
-                       "work with base_url https://localhost:8443/v1 and any API key. The functions albireo-general, "
-                       "albireo-code and albireo-security name the models activated for each function, "
-                       "albireo-background the model that comes with Albireo, which the web application uses for its "
-                       "work in the background, and albireo-embedding the embedding model of the search in "
+        "description": "L'interface du service Albireo, servie sur https://localhost (port 8443 sauf changement dans "
+                       "l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple "
+                       "sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent "
+                       "l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url "
+                       "https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions albireo-general, "
+                       "albireo-code et albireo-security désignent les modèles activés pour chaque fonction, "
+                       "albireo-background le modèle livré avec Albireo, que l'application web utilise pour son "
+                       "travail en arrière-plan, et albireo-embedding le modèle d'embedding de la recherche dans les "
                        "documents.\n\n"
-                       "A personal version for macOS: on the Mac, every route is open, without a token. On the "
-                       "network port, when a password is chosen, every route but /albireo/v1/lan/login asks for the "
-                       "cookie albireo_lan that the login gives; without one, the network port is open too.\n\n"
-                       "Requests carry JSON bodies of 64 MB and 524,288 values at most, with their length: a body "
-                       "without length is refused with 411, a longer one with 413, another type with 415. GET, HEAD, "
-                       "DELETE and OPTIONS take no body (400). While the JSON bodies being read at once hold the "
-                       "values of their budget, a route that reads one answers 503 with the code busy and a "
-                       "Retry-After of 2 seconds. An answer being written whose model has no memory left "
-                       "for its keys and values ends with the error code out_of_memory.\n\n"
-                       "Before any route, the server refuses, as plain text, a body of more than 8 MB while four "
-                       "such bodies are being read (503, with a Retry-After header).",
+                       "Une version personnelle pour macOS : sur le Mac, chaque route est ouverte, sans jeton. Sur le "
+                       "port réseau, quand un mot de passe est choisi, chaque route sauf /albireo/v1/lan/login "
+                       "demande le cookie albireo_lan que donne la connexion ; sans mot de passe, le port réseau est "
+                       "ouvert lui aussi.\n\n"
+                       "Les requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : "
+                       "un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. "
+                       "GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en "
+                       "même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le "
+                       "code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a "
+                       "plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\n"
+                       "Avant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que "
+                       "quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
         "license": {"name": "Boost Software License 1.0", "url": "https://www.boost.org/LICENSE_1_0.txt"},
         "contact": {"name": "Aldric Pierrain", "email": "cydraltechnology@gmail.com",
                     "url": "https://github.com/Cydral/Dlib-Transformer-extensions"}},
     "servers": [{"url": "/"}],
-    "tags": [{"name": "OpenAI", "description": "Compatible with the OpenAI interface"},
-             {"name": "Service", "description": "State of the service"},
-             {"name": "Web access", "description": "The search and the pages of the web for the Web button"},
-             {"name": "Documents", "description": "The documents folder of the Mac, which the web application attaches"},
-             {"name": "Hugging Face", "description": "Every GGUF model of Hugging Face, beyond the catalog"},
-             {"name": "Administration", "description": "Settings, models, restart and the network access"}],
+    "tags": [{"name": "OpenAI", "description": "Compatible avec l'interface d'OpenAI"},
+             {"name": "Service", "description": "État du service"},
+             {"name": "Accès au web", "description": "La recherche et les pages du web pour le bouton Web"},
+             {"name": "Documents", "description": "Le dossier des documents du Mac, que l'application web joint"},
+             {"name": "Hugging Face", "description": "Tous les modèles GGUF de Hugging Face, au-delà du catalogue"},
+             {"name": "Administration", "description": "Réglages, modèles, redémarrage et accès réseau"}],
     "paths": paths,
     "components": {"schemas": schemas},
 }

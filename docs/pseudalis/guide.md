@@ -1,6 +1,6 @@
 # Pseudalis sur Mac — guide
 
-Pseudalis protège les données personnelles des documents : chaque nom, adresse, numéro, identifiant ou date est remplacé par une balise que seule la clé de cet ordinateur sait rendre. Ce guide décrit la version du fork pour macOS à puce Apple (Pseudalis **2.0.0**) : la construire, la lancer, s'en servir, la tester. Il suit le code ; les choix et l'historique sont dans les [notes de version](../../dlib/dlib/external/pseudalis/web/changelog.md), le [tableau des différences avec Windows](differences-mac-windows.md) et le [blog de Pseudalis](../../blog/pseudalis/README.md).
+Pseudalis protège les données personnelles des documents : chaque nom, adresse, numéro, identifiant ou date est remplacé par une balise que seule la clé de cet ordinateur sait rendre. Ce guide décrit la version du fork pour macOS à puce Apple (Pseudalis **2.0.1**) : la construire, la lancer, s'en servir, la tester. Il suit le code ; les choix et l'historique sont dans les [notes de version](../../dlib/dlib/external/pseudalis/web/changelog.md), le [tableau des différences avec Windows](differences-mac-windows.md) et le [blog de Pseudalis](../../blog/pseudalis/README.md).
 
 Pseudalis vit dans le même dépôt qu'Albireo et repose, comme lui, sur dlib : sur [`dlib/privacy`](../../dlib/dlib/privacy.h) et sur les modèles de reconnaissance de l'exemple `slm_document_anonymizer_ex`, compilés dans le service.
 
@@ -39,10 +39,10 @@ L'application s'ouvre à `https://localhost:18444/`, la page de l'interface à `
 | Protéger un texte | Protège ou restaure un texte collé, ou montre les valeurs trouvées, en couleurs |
 | Originaux conservés | La liste des originaux gardés, à télécharger ou à oublier |
 | Clé de cet ordinateur | L'empreinte de la clé, son export et son import protégés par une phrase de passe |
-| Réglages | Balises par défaut, langue, lettre du lecteur, ordre des dates, taille maximale d'un fichier, durée et espace des originaux, description des images par Albireo |
+| Réglages | Balises par défaut, lettre du lecteur, ordre des dates, taille maximale d'un fichier, durée et espace des originaux, description des images par Albireo |
 | Termes imposés | Des termes toujours protégés, quel que soit le détecteur |
 
-Le menu donne aussi l'état du service, le débit du moteur en direct (documents lus et copies protégées écrites, en Ko/s, sur les cinq dernières secondes), le lien vers la page de l'interface, la langue (français par défaut) et le thème (système, clair, sombre). Le sélecteur « Albireo | Pseudalis » mène à Albireo quand il tourne sur le Mac.
+Le menu donne aussi l'état du service, le débit du moteur en direct (documents lus et copies protégées écrites, en Ko/s, sur les cinq dernières secondes, avec un « ? » qui explique la mesure), le lien vers la page de l'interface et le thème (système, clair, sombre). L'application et la page de l'interface sont en français seulement ; le service répond en français (descriptions d'images comprises), et son ancien réglage `language` n'a plus d'effet. Le sélecteur « Albireo | Pseudalis » mène à Albireo quand il tourne sur le Mac.
 
 Depuis la 2.0.0, il n'y a plus de jeton d'administration : toutes les sections s'affichent, et toutes les routes répondent sur le Mac sans en-tête particulier.
 

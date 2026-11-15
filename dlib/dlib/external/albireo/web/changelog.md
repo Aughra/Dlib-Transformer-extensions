@@ -2,6 +2,21 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.32.0 — 15 novembre 2026
+
+### Accès et documents
+
+- Un bouton dans la barre du haut d'une discussion ouvre « Contexte de la prochaine question » : ce que le modèle lirait si l'on envoyait maintenant ce qui est tapé, assemblé comme pour un envoi réel (consigne système, mémoire, historique, brouillon, outils de l'agent et de la recherche web quand ils sont actifs). Le service en compte le total exact (`POST /albireo/v1/count`), rapporté à la taille du contexte du modèle ; chaque message montre une estimation de ses jetons et son texte. La fenêtre rappelle qu'à l'envoi des extraits de documents peuvent s'ajouter et que les échanges les plus anciens peuvent être résumés.
+- Le menu de l'engrenage, en haut à droite, donne accès à tous les onglets des paramètres (Général, Modèles, Modèle, Mémoire, Données, Service, À propos), aux notes de version et à la page de l'interface. Le bouton « Paramètres » en bas à gauche, qui faisait double emploi, est retiré.
+- Les explications « ? » du contexte et du débit décrivent la mesure exacte : fenêtre de cinq secondes, passes du moteur, préchauffage compté, tokens repris du cache non comptés.
+- La page de l'interface de programmation est entièrement en français : descriptions des routes, et libellés de Swagger UI (« Essayer », « Paramètres », « Réponses », filtre des sections).
+
+### Corrections
+
+- Les boutons « Agent » et « Web » ne sont plus grisés sans explication quand le raisonnement approfondi est coupé : un appui les active et active le raisonnement quand le modèle en a besoin pour agir, avec un message qui le dit ; sans outils dans le modèle, un message explique pourquoi l'agent est indisponible. Ils restent pâles tant qu'ils ne peuvent pas servir.
+
+---
+
 ## 4.31.1 — 15 novembre 2026
 
 ### Accès et documents

@@ -7,7 +7,7 @@
 import { hintText } from './background.js';
 import { addPending, autoGrow, onSend, renderComposerState } from './composer.js';
 import { persist } from './conversations.js';
-import { h, iconButton, narrowScreen } from './dom.js';
+import { h, iconButton, narrowScreen, toast } from './dom.js';
 import { saveDraft } from './drafts.js';
 import { attachMenu, pastedFiles } from './files.js';
 import { t } from './i18n.js';
@@ -16,9 +16,9 @@ import { searchDelay } from './lists.js';
 import { escapeHtml } from './markdown.js';
 import { markdownField } from './mdfield.js';
 import { goHome, leaveCurrent, newChat, newConversation, showDiscussion } from './navigation.js';
-import { settingsDialog } from './settings.js';
 import { agentHelp, renderSidebar } from './sidebar.js';
 import { state, ui } from './state.js';
+import { roleCapabilities, webUnavailable } from './status.js';
 import { refreshViews } from './tabs.js';
 import { hideJump, jumpDelay, jumpTo, renderAll, threadScrolled, watchComposer } from './thread.js';
 
@@ -69,8 +69,8 @@ export function buildLayout() {
       }), ui.incognitoButton),
     h('div', { class: 'search' }, h('span', { html: icon('search') }), search),
     ui.sideScroll,
+    // Les paramètres s'ouvrent par l'engrenage de la barre du haut, qui donne tous leurs onglets (fork pour macOS).
     h('div', { class: 'sidebar-footer' }, ui.statusLine, ui.speedLine, ui.contextLine, h('div', { class: 'footer-buttons' },
-      h('button', { type: 'button', onclick: () => settingsDialog('general'), html: icon('gear') + '<span>' + escapeHtml(t('settings')) + '</span>' }),
       h('button', { type: 'button', onclick: () => window.open('/docs/', '_blank'), html: icon('book') + '<span>' + escapeHtml(t('api')) + '</span>' }))));
 
   ui.topbar = h('header', { class: 'topbar' });
@@ -114,7 +114,14 @@ export function buildLayout() {
     class: 'toggle', type: 'button', title: t('agentHint'), html: icon('tool') + '<span>' + escapeHtml(t('agent')) + '</span>',
     onclick: async () => {
       const c = state.current;
+      const caps = roleCapabilities(c.role);
+      if (!caps.tools) return toast(t('agentNoTools'), true);
       c.agent = !c.agent;
+      // Un modèle qui raisonne avant d'agir : l'agent allume son raisonnement approfondi.
+      if (c.agent && caps.reasoning && !c.reasoning) {
+        c.reasoning = true;
+        toast(t('reasoningTurnedOn'));
+      }
       renderComposerState();
       if (c.messages.length) await persist(c);
       refreshViews();
@@ -130,7 +137,15 @@ export function buildLayout() {
     html: icon('globe') + '<span>' + escapeHtml(t('web')) + '</span>',
     onclick: async () => {
       const c = state.current;
+      const caps = roleCapabilities(c.role);
+      const blocked = webUnavailable(caps, true);
+      if (blocked) return toast(blocked, true);
       c.web = !c.web;
+      // Un modèle qui raisonne avant de chercher : le web allume son raisonnement approfondi.
+      if (c.web && caps.reasoning && !c.reasoning) {
+        c.reasoning = true;
+        toast(t('reasoningTurnedOn'));
+      }
       renderComposerState();
       if (c.messages.length) await persist(c);
       refreshViews();

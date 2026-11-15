@@ -2,7 +2,7 @@
 
 Un tableau par thème. Chaque ligne dit ce que fait l'original (Pseudalis pour Windows, de Cydral), ce que fait le fork sur Mac, pourquoi, et le gain mesuré quand il y en a un. Le détail se trouve dans les [notes de version de Pseudalis](../../dlib/dlib/external/pseudalis/web/changelog.md) (« v. x.y.z »), les [notes pour l'auteur de Pseudalis](notes-pour-l-auteur.md) et le [journal](../../logs/journal-modifications.md). Ce qui touche dlib et Albireo est dans le [tableau général](../differences-mac-windows.md).
 
-Base de comparaison : l'original au commit `184ea00` (Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Pseudalis 2.0.0, 15 novembre 2026.
+Base de comparaison : l'original au commit `184ea00` (Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Pseudalis 2.0.1, 15 novembre 2026.
 
 ## 1. Système
 
@@ -21,7 +21,7 @@ Base de comparaison : l'original au commit `184ea00` (Pseudalis 1.0.5), dernièr
 |---|---|---|---|---|---|
 | Administration | Jeton d'administration (`admin.token`), donné par l'icône dans l'adresse de la page | Plus de jeton : l'administration est ouverte sur le Mac, comme Albireo ; gardes Host et origine conservées | Demande de l'humain : rien sur le Mac n'ouvrait la page avec le jeton | — | v. 2.0.0 |
 | Port par défaut | 8444 | 8444, réglé à 18444 sur le Mac du fork | L'accès réseau d'Albireo prend aussi 8444 | — | guide |
-| Langues | Anglais, français, allemand, italien, espagnol | Français par défaut, anglais au choix ; les détecteurs lisent toujours les autres langues | Le fork ne fait que du français ; l'anglais reste (règle de CLAUDE.md) | — | v. 1.0.5 (fork), v. 2.0.0 |
+| Langues | Anglais, français, allemand, italien, espagnol | Français seulement, page de l'interface comprise ; les détecteurs lisent toujours les autres langues | Le fork ne fait que du français (demande de l'humain : « tout en français ») | — | v. 1.0.5 (fork), v. 2.0.0, v. 2.0.1 |
 
 ## 3. Interface
 

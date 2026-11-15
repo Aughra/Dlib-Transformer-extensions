@@ -8,8 +8,8 @@
 */
 (function () {
   const texts = window.PSEUDALIS_TEXTS || {};
-  const language = function () { const s = document.getElementById('language'); return (s && s.value) || 'en'; };
-  const word = function (key) { return (texts[language()] || texts.en || {})[key] || (texts.en || {})[key] || key; };
+  const language = function () { return 'fr'; };
+  const word = function (key) { return (texts.fr || {})[key] || key; };
   const links = Array.prototype.slice.call(document.querySelectorAll('#side-nav a[data-card]'));
   const cards = links.map(function (a) { return document.getElementById(a.dataset.card); });
 
@@ -49,7 +49,6 @@
     apply();
   });
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply);
-  document.getElementById('language').addEventListener('change', apply);
   apply();
 
   // Albireo sur ce Mac : seulement depuis le Mac lui-même.
@@ -67,7 +66,7 @@
   const speed = document.getElementById('speed');
   const last = { read: 0, write: 0 };
   function rate(bytes) {
-    const fr = language() === 'fr';
+    const fr = true;
     if (bytes >= 1048576) return (bytes / 1048576).toLocaleString(language(), { maximumFractionDigits: 1 }) + (fr ? ' Mo/s' : ' MB/s');
     return Math.round(bytes / 1024).toLocaleString(language()) + (fr ? ' Ko/s' : ' KB/s');
   }
@@ -89,11 +88,40 @@
       if (read > 0) last.read = read;
       if (write > 0) last.write = write;
       speed.title = word('speed_title');
-      speed.replaceChildren(gauge('speed_read', read, last.read), gauge('speed_write', write, last.write));
+      speed.replaceChildren(gauge('speed_read', read, last.read), gauge('speed_write', write, last.write), helpButton);
     } catch (e) {
       speed.replaceChildren();
     }
   }
+  // Le « ? » du débit : une fenêtre qui explique comment il est mesuré.
+  const helpButton = document.createElement('button');
+  helpButton.type = 'button';
+  helpButton.className = 'help';
+  helpButton.textContent = '?';
+  helpButton.addEventListener('click', function () {
+    const box = document.createElement('dialog');
+    box.className = 'modal';
+    const title = document.createElement('h3');
+    title.textContent = word('speed_help');
+    box.appendChild(title);
+    const paragraphs = (texts.fr || {}).speed_help_text || [];
+    paragraphs.forEach(function (text) {
+      const p = document.createElement('p');
+      p.textContent = text;
+      box.appendChild(p);
+    });
+    const actions = document.createElement('div');
+    actions.className = 'buttons';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = word('close');
+    close.addEventListener('click', function () { box.close(); });
+    actions.appendChild(close);
+    box.appendChild(actions);
+    box.addEventListener('close', function () { box.remove(); });
+    document.body.appendChild(box);
+    box.showModal();
+  });
   pollSpeed();
   setInterval(pollSpeed, 1000);
   document.addEventListener('visibilitychange', pollSpeed);

@@ -55,7 +55,7 @@
  },
  {
   "name": "settings fit",
-  "eval": "[...document.querySelectorAll('button')].find(b=>b.title==='Paramètres'||b.innerText.trim()==='Paramètres').click(); await new Promise(r=>setTimeout(r,800)); const d=document.querySelector('.dialog').getBoundingClientRect(); return d.width<=innerWidth && d.left>=0",
+  "eval": "document.querySelector('.topbar-gear').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); await new Promise(r=>setTimeout(r,800)); const d=document.querySelector('.dialog').getBoundingClientRect(); return d.width<=innerWidth && d.left>=0",
   "expect": true
  },
  {

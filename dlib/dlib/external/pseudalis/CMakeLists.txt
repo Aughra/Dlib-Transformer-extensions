@@ -11,7 +11,7 @@
 # l'application web.
 
 cmake_minimum_required(VERSION 3.16)
-project(pseudalis VERSION 2.0.0 LANGUAGES C CXX)
+project(pseudalis VERSION 2.0.1 LANGUAGES C CXX)
 
 option(PSEUDALIS_TESTS "Build the test programs" ON)
 
@@ -112,7 +112,7 @@ set(swagger_dir ${PSEUDALIS_ALBIREO_DIR}/web/docs)
 add_custom_target(pseudalis-web ALL
    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/web ${CMAKE_BINARY_DIR}/bin/web
    COMMAND ${CMAKE_COMMAND} -E copy ${swagger_dir}/swagger-ui-bundle.js ${swagger_dir}/swagger-ui.css
-      ${swagger_dir}/LICENSE ${swagger_dir}/NOTICE ${swagger_dir}/docs.css ${swagger_dir}/theme.js
+      ${swagger_dir}/LICENSE ${swagger_dir}/NOTICE ${swagger_dir}/docs.css ${swagger_dir}/theme.js ${swagger_dir}/fr.js
       ${CMAKE_BINARY_DIR}/bin/web/docs
    COMMENT "Copying the web application")
 add_dependencies(pseudalis-service pseudalis-web)

@@ -19,6 +19,7 @@ const texts = {
     answerRepeated: 'Réponse arrêtée : le modèle se répétait.',
     agent: 'Agent', agentHint: 'Le modèle peut utiliser des outils : calcul, code, documents, fichiers',
     agentNoTools: 'Le modèle de cette fonction ne peut pas appeler d\'outils',
+    reasoningTurnedOn: 'Raisonnement approfondi activé : ce modèle raisonne avant d\'agir ou de chercher.',
     agentNeedsReasoning: 'Activez d\'abord le raisonnement approfondi : ce modèle raisonne avant d\'appeler ses ' +
       'outils',
     attach: 'Joindre des fichiers', send: 'Envoyer', stop: 'Arrêter', placeholder: 'Posez votre question à Albireo…',

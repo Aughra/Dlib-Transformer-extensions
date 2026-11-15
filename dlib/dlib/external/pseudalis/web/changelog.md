@@ -2,12 +2,22 @@
 
 Pseudalis pour macOS sur puce Apple, version dérivée de Pseudalis Community (Cydral Technology), maintenue par TortueTech. Le fork numérote Pseudalis à part de l'original à partir de 2.0.0. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne ; avant 2.0.0, la section porte le numéro de la version de l'original sur laquelle reposait le fork.
 
+## 2.0.1 — 15 novembre 2026
+
+### Accès et documents
+
+- L'application est en français seulement : le choix de la langue et les textes anglais sont retirés, le service répond toujours en français (descriptions d'images comprises), et le réglage `language` n'a plus d'effet.
+- La page de l'interface de programmation est en français : descriptions des routes et libellés de Swagger UI.
+- Le débit du moteur a un bouton « ? » qui explique comment il est mesuré.
+
+---
+
 ## 2.0.0 — 15 novembre 2026
 
 ### Accès et documents
 
 - L'administration n'a plus de jeton : les originaux conservés, la clé de l'ordinateur, les réglages et les termes imposés s'affichent toujours dans l'application, et leurs routes répondent sur le Mac sans l'en-tête `X-Pseudalis-Admin`, comme celles d'Albireo. Le service ne crée plus le fichier `admin.token`.
-- L'application est en français par défaut, quelle que soit la langue du navigateur ; l'anglais reste au choix du menu.
+- L'application est en français par défaut, quelle que soit la langue du navigateur.
 - L'application est réorganisée : un menu à gauche (protéger des fichiers, restaurer des fichiers, protéger un texte, originaux conservés, clé, réglages, termes imposés), une section à la fois, l'état du service dans le menu, un thème sombre (celui du système, ou celui du bouton du menu).
 - Le débit du moteur s'affiche en direct dans le menu : les documents lus et les copies protégées écrites, en kilo-octets par seconde, sur les cinq dernières secondes (route `GET /v1/speed`).
 - Un sélecteur « Albireo | Pseudalis » mène à Albireo quand il tourne sur le même Mac.

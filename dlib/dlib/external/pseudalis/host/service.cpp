@@ -119,11 +119,9 @@ namespace pseudalis
 
     std::string service::language() const
     {
-        const std::string l = settings_ ? settings_->get().language : std::string("auto");
-        if (l != "auto") return l;
-        const char* lang = std::getenv("LANG");
-        const std::string s = lang ? std::string(lang).substr(0, 2) : std::string();
-        return s == "fr" ? s : "en";
+        // Le français seulement (fork pour macOS, demande de l'humain du 2026-11-15) : le réglage language,
+        // encore accepté pour les fichiers de réglages antérieurs, n'a plus d'effet.
+        return "fr";
     }
 
     bool service::start_engine(std::string& error)

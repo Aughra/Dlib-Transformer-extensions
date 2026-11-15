@@ -910,3 +910,15 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .speed-line .gauge.on { background: var(--bg-active); }
 .speed-line .gauge.on b { color: var(--blue-strong); }
 :root[data-theme="dark"] .speed-line .gauge.on b { color: var(--blue); }
+
+/* Un bouton de la zone de saisie qui ne peut pas servir : grisé, mais touchable, pour dire pourquoi (fork pour macOS). */
+.toggle.unavailable { opacity: 0.45; }
+
+/* Le contexte de la prochaine question (fork pour macOS). */
+.preview-head { font-weight: 600; color: var(--text); }
+.preview-list { display: grid; gap: 6px; max-height: 60vh; overflow-y: auto; margin: 8px 0 12px; }
+.preview-item { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-elevated); }
+.preview-item summary { cursor: pointer; padding: 8px 12px; font-size: 13px; color: var(--text-soft); }
+.preview-item summary b { color: var(--text); }
+.preview-text { margin: 0; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--bg-code);
+  font: 12.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow-y: auto; }

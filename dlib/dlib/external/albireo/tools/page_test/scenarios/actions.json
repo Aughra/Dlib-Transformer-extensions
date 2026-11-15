@@ -78,6 +78,11 @@
   "expect": true
  },
  {
+  "name": "context preview",
+  "eval": "const a=document.querySelector('.composer .md-field'); a.value='Brouillon pour essai'; a.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('.topbar-context').click(); let d=null; for(let i=0;i<60;i++){ await T.sleep(250); d=document.querySelector('.dialog'); if(d && /jetons sur/.test(d.querySelector('.preview-head').innerText)) break; } const items=[...d.querySelectorAll('.preview-item')]; const ok=/jetons sur/.test(d.querySelector('.preview-head').innerText) && items[0].innerText.startsWith('Système') && items[items.length-1].innerText.includes('Brouillon pour essai'); T.btn('Fermer',d).click(); a.value=''; a.dispatchEvent(new Event('input',{bubbles:true})); await T.sleep(300); return ok && !document.querySelector('.dialog')",
+  "expect": true
+ },
+ {
   "name": "pin",
   "eval": "T.btn('…',document.querySelector('.topbar')).click(); await T.sleep(400); T.btn('Épingler',document.querySelector('.menu')).click(); await T.sleep(600); return document.querySelector('.side-scroll').innerText.includes('ÉPINGLÉES')||document.querySelector('.side-scroll').innerText.includes('Épinglées')",
   "expect": true
@@ -125,7 +130,7 @@
  },
  {
   "name": "clear all resets memory, name and instructions",
-  "eval": "T.btn('Paramètres').click(); await T.sleep(600); [...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='Données').click(); await T.sleep(800); T.btn('Supprimer toutes les discussions et tous les projets').click(); await T.sleep(500); const ds=[...document.querySelectorAll('.dialog')]; const text=ds[ds.length-1].innerText; [...ds[ds.length-1].querySelectorAll('button')].find(b=>b.classList.contains('primary')).click(); await T.sleep(1500); const s=await (await import('/js/store.js')).getSettings(); const {state}=await import('/js/state.js'); return [text.includes('votre nom'), s.userName||'', s.systemPrompt||'', s.memory||'', (s.memoryReset||0)>0, state.settings.userName||'', document.querySelectorAll('.dialog').length]",
+  "eval": "document.querySelector('.topbar-gear').click(); [...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Général').click(); await T.sleep(600); [...document.querySelectorAll('.dialog .tabs button')].find(b=>b.innerText.trim()==='Données').click(); await T.sleep(800); T.btn('Supprimer toutes les discussions et tous les projets').click(); await T.sleep(500); const ds=[...document.querySelectorAll('.dialog')]; const text=ds[ds.length-1].innerText; [...ds[ds.length-1].querySelectorAll('button')].find(b=>b.classList.contains('primary')).click(); await T.sleep(1500); const s=await (await import('/js/store.js')).getSettings(); const {state}=await import('/js/state.js'); return [text.includes('votre nom'), s.userName||'', s.systemPrompt||'', s.memory||'', (s.memoryReset||0)>0, state.settings.userName||'', document.querySelectorAll('.dialog').length]",
   "expect": [
    true,
    "",

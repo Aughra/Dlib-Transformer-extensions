@@ -1,9 +1,9 @@
 {
  "openapi": "3.0.3",
  "info": {
-  "title": "Pseudalis interface",
-  "version": "2.0.0",
-  "description": "The local interface of Pseudalis, on this Mac only (https://localhost:8444 by default). The files travel as they are, in the body of the requests. No account and no token are needed: on macOS, the operations of administration are open on the Mac, like the routes of Albireo; every request must still name the local server in its Host header, and a request that comes from a page must come from the local server.",
+  "title": "Interface de Pseudalis",
+  "version": "2.0.1",
+  "description": "L'interface locale de Pseudalis, sur ce Mac seulement (https://localhost:8444 par défaut). Les fichiers voyagent tels quels, dans le corps des requêtes. Aucun compte ni jeton n'est nécessaire : sur macOS, les opérations d'administration sont ouvertes sur le Mac, comme les routes d'Albireo ; chaque requête doit toutefois nommer le serveur local dans son en-tête Host, et une requête venue d'une page doit venir du serveur local.",
   "contact": {
    "name": "Cydral Technology",
    "email": "cydraltechnology@gmail.com",
@@ -21,22 +21,22 @@
  ],
  "tags": [
   {
-   "name": "Files"
+   "name": "Fichiers"
   },
   {
-   "name": "Texts"
+   "name": "Textes"
   },
   {
-   "name": "Names"
+   "name": "Noms"
   },
   {
-   "name": "Drive"
+   "name": "Lecteur"
   },
   {
    "name": "Service"
   },
   {
-   "name": "Updates"
+   "name": "Mises à jour"
   },
   {
    "name": "Administration"
@@ -48,7 +48,7 @@
     "tags": [
      "Service"
     ],
-    "summary": "Whether the service answers",
+    "summary": "Indique si le service répond",
     "responses": {
      "200": {
       "description": "{\"status\": \"ok\", \"version\"}",
@@ -68,11 +68,11 @@
     "tags": [
      "Service"
     ],
-    "summary": "The state of the service",
-    "description": "Product, edition (\"Community\"), version, engine (variant, models), fingerprint of the key, drive, Albireo, the number of originals kept (records) and the space they take: {\"bytes\", \"limit\"} in history, limit being history_mb of the settings. tags tells whether the files take their tags unless a request says otherwise.",
+    "summary": "L'état du service",
+    "description": "Produit, édition (\"Community\"), version, moteur (variante, modèles), empreinte de la clé, lecteur, Albireo, nombre d'originaux conservés (records) et place qu'ils occupent : {\"bytes\", \"limit\"} dans history, limit étant le history_mb des réglages. tags indique si les fichiers reçoivent leurs balises lorsqu'une requête ne dit pas le contraire.",
     "responses": {
      "200": {
-      "description": "The state",
+      "description": "L'état",
       "content": {
        "application/json": {
         "schema": {
@@ -87,16 +87,16 @@
   "/v1/anonymize": {
    "post": {
     "tags": [
-     "Files"
+     "Fichiers"
     ],
-    "summary": "Protect a file",
-    "description": "Protects a document (Word, Excel, PowerPoint, PDF, text, CSV, markup), a picture or an archive (ZIP, TAR, TAR.GZ) sent as the body, whose name gives the kind that its content must have. A file of any other extension, or without extension, is protected as a text when its content is text through and through: no binary signature, the measures of a text, every character decoded with no control character but the tabulation, the ends of lines and the form feed, and no encoded part: a block of base64, base64url or hexadecimal digits (1024 characters in a row, or 16 runs in a row of 60, the lines of a block, in a string of JSON or of a program too), data or JSON in base64, bytes in hexadecimal, a dump or an array (64 in a row, or 4 lines of 8, with letters or marks among them), a message with parts in base64, quoted-printable or uuencode or with encoded words, an RTF document, a vCard or an iCalendar, LDIF in base64, a block armored by PEM or OpenPGP, its header and its body, in a string too, uuencode or ASCII85, and, by its first line, a PostScript program or an export of the registry; without extension, a picture, an Office document, an archive or a PDF is also taken by its signature. A file of another kind, or whose content is not the kind its name gives, is refused (422, code unsupported or kind_mismatch), and so is a text of another extension that holds an encoded part (code encoded_content). Their content would come out half protected. A folder travels as a ZIP archive of its tree, which comes back anonymized. Each personal value becomes a tag [[TYPE:body#CCC]] encrypted under the key of this installation. A picture becomes the text file <name>.txt holding \"[Image@<id> : <description>]\", the description written by Albireo when it is installed, its values replaced by tags as those of the text of its document; the pictures of Word documents, slides and PDF pages are replaced in place the same way. The entries of an archive of another kind are left out, and listed in the report (dropped). The name of the file, the names of the entries and folders of an archive and the properties of the documents (title, authors, subject, keywords, company of Office documents, the document information of a PDF) take substitutes: each value written without its tag, whose tag the service records so that a restoration gives it back. With tags=false, every value of the file takes its substitute in the same way, the descriptions of its pictures included, and the file holds no tag: its record keeps the substitutes of its text with their tags, and its values come back only while that record lasts (/v1/restore); without record, nothing gives them back, which the report tells (\"tags\": false, \"restorable\": false). Without the parameter, the setting tags decides. A protected file protected again, by a newer engine for instance, keeps the values protected before as they are, the substitutes that its record keeps included; with tags=false, its tags give way to the substitutes of their values, which its record keeps. The protected name is in X-Pseudalis-Name and in Content-Disposition. With record (the default), the original is kept, encrypted, so that /v1/restore gives it back from any copy of the protected file; the originals first kept are forgotten when the originals would take more than history_mb of the settings, or leave less than 256 MB free on the disk when forgetting them gives that room; a file larger than history_mb is protected without keeping its original (record 0). The imposed terms (/v1/terms) are replaced before any other value is read. A body that cannot be read is refused (400, code bad_request). A body larger than the route takes is refused before it is read (413): the files up to max_file_mb of the settings, the JSON bodies up to 16 MB. When every slot of work stays taken for a minute, the answer is 503 with Retry-After (code busy).",
+    "summary": "Protéger un fichier",
+    "description": "Protège un document (Word, Excel, PowerPoint, PDF, texte, CSV, balisage), une image ou une archive (ZIP, TAR, TAR.GZ) envoyés comme corps de la requête, dont le nom donne la nature que doit avoir son contenu. Un fichier d'une autre extension, ou sans extension, est protégé comme un texte lorsque son contenu est du texte de bout en bout : aucune signature binaire, les mesures d'un texte, chaque caractère décodé sans autre caractère de contrôle que la tabulation, les fins de ligne et le saut de page, et aucune partie encodée : un bloc de chiffres base64, base64url ou hexadécimaux (1024 caractères d'affilée, ou 16 suites d'affilée de 60, les lignes d'un bloc, y compris dans une chaîne JSON ou d'un programme), des données ou du JSON en base64, des octets en hexadécimal, un vidage ou un tableau (64 d'affilée, ou 4 lignes de 8, avec des lettres ou des signes parmi eux), un message comportant des parties en base64, quoted-printable ou uuencode ou des mots encodés, un document RTF, une vCard ou un iCalendar, du LDIF en base64, un bloc armé PEM ou OpenPGP, son en-tête comme son corps, y compris dans une chaîne, du uuencode ou de l'ASCII85, et, d'après sa première ligne, un programme PostScript ou un export du registre ; sans extension, une image, un document Office, une archive ou un PDF est aussi reconnu à sa signature. Un fichier d'une autre nature, ou dont le contenu n'est pas de la nature que donne son nom, est refusé (422, code unsupported ou kind_mismatch), de même qu'un texte d'une autre extension qui contient une partie encodée (code encoded_content) : leur contenu ressortirait à moitié protégé. Un dossier voyage sous forme d'archive ZIP de son arborescence, qui revient anonymisée. Chaque valeur personnelle devient une balise [[TYPE:body#CCC]] chiffrée avec la clé de cette installation. Une image devient le fichier texte <name>.txt contenant \"[Image@<id> : <description>]\", la description étant écrite par Albireo lorsqu'il est installé, et ses valeurs remplacées par des balises comme celles du texte de son document ; les images des documents Word, des diapositives et des pages PDF sont remplacées sur place de la même façon. Les entrées d'une archive qui sont d'une autre nature sont écartées et listées dans le rapport (dropped). Le nom du fichier, les noms des entrées et des dossiers d'une archive et les propriétés des documents (titre, auteurs, sujet, mots-clés, société des documents Office, informations du document d'un PDF) reçoivent des substituts : chaque valeur est écrite sans sa balise, et le service enregistre cette balise pour qu'une restauration rende la valeur. Avec tags=false, chaque valeur du fichier reçoit de même son substitut, descriptions de ses images comprises, et le fichier ne contient aucune balise : son enregistrement garde les substituts de son texte avec leurs balises, et ses valeurs ne reviennent que tant que cet enregistrement dure (/v1/restore) ; sans enregistrement, rien ne les rend, ce qu'indique le rapport (\"tags\": false, \"restorable\": false). Sans ce paramètre, c'est le réglage tags qui décide. Un fichier protégé que l'on protège de nouveau, par un moteur plus récent par exemple, garde telles quelles les valeurs déjà protégées, y compris les substituts que garde son enregistrement ; avec tags=false, ses balises cèdent la place aux substituts de leurs valeurs, que garde son enregistrement. Le nom protégé figure dans X-Pseudalis-Name et dans Content-Disposition. Avec record (par défaut), l'original est conservé, chiffré, pour que /v1/restore le rende à partir de n'importe quelle copie du fichier protégé ; les originaux conservés en premier sont oubliés lorsque les originaux occuperaient plus que le history_mb des réglages, ou laisseraient moins de 256 Mo libres sur le disque, si les oublier libère cette place ; un fichier plus grand que history_mb est protégé sans que son original soit conservé (record 0). Les termes imposés (/v1/terms) sont remplacés avant la lecture de toute autre valeur. Un corps illisible est refusé (400, code bad_request). Un corps plus grand que ce qu'accepte la route est refusé avant d'être lu (413) : les fichiers jusqu'au max_file_mb des réglages, les corps JSON jusqu'à 16 Mo. Lorsque tous les emplacements de travail restent occupés pendant une minute, la réponse est 503 avec Retry-After (code busy).",
     "parameters": [
      {
       "name": "name",
       "in": "query",
       "required": false,
-      "description": "The name of the file, whose extension tells its kind when its content does not",
+      "description": "Le nom du fichier, dont l'extension donne la nature lorsque le contenu ne la donne pas",
       "schema": {
        "type": "string"
       }
@@ -105,7 +105,7 @@
       "name": "record",
       "in": "query",
       "required": false,
-      "description": "Keep the original to restore it exactly",
+      "description": "Conserver l'original pour le restaurer à l'identique",
       "schema": {
        "type": "boolean",
        "default": true
@@ -115,7 +115,7 @@
       "name": "tags",
       "in": "query",
       "required": false,
-      "description": "false writes the values without their tags, their substitutes alone; true writes the tags. Without it, the setting tags (true by default) decides",
+      "description": "false écrit les valeurs sans leurs balises, leurs substituts seuls ; true écrit les balises. Sans ce paramètre, c'est le réglage tags (true par défaut) qui décide",
       "schema": {
        "type": "boolean"
       }
@@ -124,7 +124,7 @@
       "name": "source",
       "in": "query",
       "required": false,
-      "description": "Who asks: \"web\", \"shell\" or \"api\"",
+      "description": "Qui fait la demande : \"web\", \"shell\" ou \"api\"",
       "schema": {
        "type": "string",
        "enum": [
@@ -139,7 +139,7 @@
       "name": "format",
       "in": "query",
       "required": false,
-      "description": "\"json\" for a JSON answer holding the file in base64",
+      "description": "\"json\" pour une réponse JSON contenant le fichier en base64",
       "schema": {
        "type": "string",
        "enum": [
@@ -174,11 +174,11 @@
        }
       }
      },
-     "description": "The file, as the body of the request, or as the first file of a multipart form, whose file name serves when the parameter name is absent."
+     "description": "Le fichier, comme corps de la requête, ou comme premier fichier d'un formulaire multipart, dont le nom de fichier sert lorsque le paramètre name est absent."
     },
     "responses": {
      "200": {
-      "description": "The file written, its name in Content-Disposition and X-Pseudalis-Name, its report in X-Pseudalis-Report; with format=json, a JSON object whose \"data\" holds it in base64.",
+      "description": "Le fichier écrit, son nom dans Content-Disposition et X-Pseudalis-Name, son rapport dans X-Pseudalis-Report ; avec format=json, un objet JSON dont \"data\" le contient en base64.",
       "content": {
        "application/octet-stream": {
         "schema": {
@@ -211,16 +211,16 @@
   "/v1/restore": {
    "post": {
     "tags": [
-     "Files"
+     "Fichiers"
     ],
-    "summary": "Restore a file",
-    "description": "Gives back the original of a protected file: the original kept when the body is a protected file this installation recorded, or an entry of a protected archive that it recorded, extracted from that archive (X-Pseudalis-restored: original), the picture of a text file holding the marker of a picture the vault keeps (picture), else the file with the values of its tags put back (tags), and those of the substitutes of its name and of its properties that the service recorded. A file protected without tags gives back its original while its record lasts, a copy edited since, known by its object identifier, the values of the substitutes that its record keeps (tags then counts them with the tags, in \"substitutes_restored\"). The original of a file protected again is a protected file itself: the original that its own record keeps comes back in its place, and the values of its tags otherwise, so that the values of both protections come back. A protected file whose original was forgotten, at the request of a user, at the end of its time after the file left the drive or to make room for newer originals, and a file written elsewhere from protected values, an answer of a language model for instance, are restored from their tags; the report then gives \"original_forgotten\": {\"date\", \"reason\"} for the first, the reason \"forgotten\", \"expired\" or \"space\". A restoration from the tags cannot give a picture back: the markers of the pictures leave the document (its runs, the gray text boxes of its slides, the texts over the gray boxes of a PDF, which stay), the text files of pictures leave an archive, and \"pictures_removed\" counts them. The original name is in X-Pseudalis-Name. A restoration reads the tags of a text under any name, and keeps the entries of an archive that it cannot read as they are, under their names restored. 404 when the file holds no value this key protected (code not_protected), or when it is the text file of a picture the vault does not keep (code picture_missing); 410 when that picture was forgotten (code picture_forgotten), its date in args.date. 410 too when the file was protected without tags and its original was forgotten, its values gone with its record (code tagless_forgotten), the date in args.date. A body that cannot be read is refused (400, code bad_request). A body larger than the route takes is refused before it is read (413): the files up to max_file_mb of the settings, the JSON bodies up to 16 MB. When every slot of work stays taken for a minute, the answer is 503 with Retry-After (code busy).",
+    "summary": "Restaurer un fichier",
+    "description": "Rend l'original d'un fichier protégé : l'original conservé lorsque le corps est un fichier protégé que cette installation a enregistré, ou une entrée d'une archive protégée qu'elle a enregistrée, extraite de cette archive (X-Pseudalis-restored: original), l'image d'un fichier texte contenant le marqueur d'une image que garde le coffre (picture), sinon le fichier où sont remises les valeurs de ses balises (tags), ainsi que celles des substituts de son nom et de ses propriétés que le service a enregistrés. Un fichier protégé sans balises rend son original tant que son enregistrement dure, et une copie modifiée depuis, reconnue à son identifiant d'objet, rend les valeurs des substituts que garde son enregistrement (tags les compte alors avec les balises, dans \"substitutes_restored\"). L'original d'un fichier protégé de nouveau est lui-même un fichier protégé : c'est l'original que garde son propre enregistrement qui revient à sa place, et à défaut les valeurs de ses balises, de sorte que les valeurs des deux protections reviennent. Un fichier protégé dont l'original a été oublié, à la demande d'un utilisateur, au terme de son délai après la sortie du fichier du lecteur ou pour faire place à des originaux plus récents, et un fichier écrit ailleurs à partir de valeurs protégées, la réponse d'un modèle de langage par exemple, sont restaurés à partir de leurs balises ; le rapport donne alors \"original_forgotten\": {\"date\", \"reason\"} pour le premier, la raison étant \"forgotten\", \"expired\" ou \"space\". Une restauration à partir des balises ne peut pas rendre une image : les marqueurs des images quittent le document (ses segments de texte, les zones de texte grises de ses diapositives, les textes posés sur les cadres gris d'un PDF, qui restent), les fichiers texte des images quittent une archive, et \"pictures_removed\" les compte. Le nom d'origine figure dans X-Pseudalis-Name. Une restauration lit les balises d'un texte sous n'importe quel nom, et garde telles quelles, sous leurs noms restaurés, les entrées d'une archive qu'elle ne sait pas lire. 404 lorsque le fichier ne contient aucune valeur protégée par cette clé (code not_protected), ou lorsqu'il est le fichier texte d'une image que le coffre ne garde pas (code picture_missing) ; 410 lorsque cette image a été oubliée (code picture_forgotten), sa date dans args.date. 410 aussi lorsque le fichier a été protégé sans balises et que son original a été oublié, ses valeurs étant parties avec son enregistrement (code tagless_forgotten), la date dans args.date. Un corps illisible est refusé (400, code bad_request). Un corps plus grand que ce qu'accepte la route est refusé avant d'être lu (413) : les fichiers jusqu'au max_file_mb des réglages, les corps JSON jusqu'à 16 Mo. Lorsque tous les emplacements de travail restent occupés pendant une minute, la réponse est 503 avec Retry-After (code busy).",
     "parameters": [
      {
       "name": "name",
       "in": "query",
       "required": false,
-      "description": "The name of the file",
+      "description": "Le nom du fichier",
       "schema": {
        "type": "string"
       }
@@ -229,7 +229,7 @@
       "name": "object_id",
       "in": "query",
       "required": false,
-      "description": "The NTFS object identifier of the file, when known (32 hexadecimal digits)",
+      "description": "L'identifiant d'objet NTFS du fichier, s'il est connu (32 chiffres hexadécimaux)",
       "schema": {
        "type": "string"
       }
@@ -238,7 +238,7 @@
       "name": "format",
       "in": "query",
       "required": false,
-      "description": "\"json\" for a JSON answer holding the file in base64",
+      "description": "\"json\" pour une réponse JSON contenant le fichier en base64",
       "schema": {
        "type": "string",
        "enum": [
@@ -273,11 +273,11 @@
        }
       }
      },
-     "description": "The file, as the body of the request, or as the first file of a multipart form, whose file name serves when the parameter name is absent."
+     "description": "Le fichier, comme corps de la requête, ou comme premier fichier d'un formulaire multipart, dont le nom de fichier sert lorsque le paramètre name est absent."
     },
     "responses": {
      "200": {
-      "description": "The file written, its name in Content-Disposition and X-Pseudalis-Name, its report in X-Pseudalis-Report; with format=json, a JSON object whose \"data\" holds it in base64.",
+      "description": "Le fichier écrit, son nom dans Content-Disposition et X-Pseudalis-Name, son rapport dans X-Pseudalis-Report ; avec format=json, un objet JSON dont \"data\" le contient en base64.",
       "content": {
        "application/octet-stream": {
         "schema": {
@@ -316,15 +316,15 @@
   "/v1/lookup": {
    "get": {
     "tags": [
-     "Files"
+     "Fichiers"
     ],
-    "summary": "Whether a file is a protected file this installation recorded",
+    "summary": "Indique si un fichier est un fichier protégé que cette installation a enregistré",
     "parameters": [
      {
       "name": "sha256",
       "in": "query",
       "required": false,
-      "description": "The SHA-256 of the file, in hexadecimal",
+      "description": "Le SHA-256 du fichier, en hexadécimal",
       "schema": {
        "type": "string"
       }
@@ -333,7 +333,7 @@
       "name": "object_id",
       "in": "query",
       "required": false,
-      "description": "Its NTFS object identifier",
+      "description": "Son identifiant d'objet NTFS",
       "schema": {
        "type": "string"
       }
@@ -341,7 +341,7 @@
     ],
     "responses": {
      "200": {
-      "description": "{\"known\", \"record\", \"output_name\", \"exact\"}; for a file not known whose original was forgotten, \"forgotten\": {\"time\", \"reason\"}, the reason \"forgotten\" (a user asked for it), \"expired\" (its time after the file left the drive was over) or \"space\" (it made room for newer originals): its restoration puts back the values of its tags",
+      "description": "{\"known\", \"record\", \"output_name\", \"exact\"} ; pour un fichier inconnu dont l'original a été oublié, \"forgotten\": {\"time\", \"reason\"}, la raison étant \"forgotten\" (un utilisateur l'a demandé), \"expired\" (son délai après la sortie du fichier du lecteur était écoulé) ou \"space\" (il a fait place à des originaux plus récents) : sa restauration remet les valeurs de ses balises",
       "content": {
        "application/json": {
         "schema": {
@@ -356,9 +356,9 @@
   "/v1/records/{id}/location": {
    "post": {
     "tags": [
-     "Files"
+     "Fichiers"
     ],
-    "summary": "Record where a protected file was written",
+    "summary": "Enregistrer l'endroit où un fichier protégé a été écrit",
     "parameters": [
      {
       "name": "id",
@@ -389,7 +389,7 @@
     },
     "responses": {
      "200": {
-      "description": "Recorded",
+      "description": "Enregistré",
       "content": {
        "application/json": {
         "schema": {
@@ -410,9 +410,9 @@
   "/v1/text/anonymize": {
    "post": {
     "tags": [
-     "Texts"
+     "Textes"
     ],
-    "summary": "Protect a text",
+    "summary": "Protéger un texte",
     "requestBody": {
      "required": true,
      "content": {
@@ -425,7 +425,7 @@
          },
          "tags": {
           "type": "boolean",
-          "description": "false writes the values without their tags, their substitutes alone, listed in the answer (substitutions); without it, the setting tags decides."
+          "description": "false écrit les valeurs sans leurs balises, leurs substituts seuls, listés dans la réponse (substitutions) ; sans ce champ, c'est le réglage tags qui décide."
          }
         },
         "required": [
@@ -440,7 +440,7 @@
     },
     "responses": {
      "200": {
-      "description": "{\"text\", \"report\", \"tags\": [{\"begin\", \"end\", \"type\"}], \"substitutions\": [{\"substitute\", \"tag\", \"text\"}] without tags}",
+      "description": "{\"text\", \"report\", \"tags\": [{\"begin\", \"end\", \"type\"}], \"substitutions\": [{\"substitute\", \"tag\", \"text\"}] sans balises}",
       "content": {
        "application/json": {
         "schema": {
@@ -448,11 +448,11 @@
          "properties": {
           "text": {
            "type": "string",
-           "description": "The protected text."
+           "description": "Le texte protégé."
           },
           "report": {
            "type": "object",
-           "description": "The counts by type, without personal values."
+           "description": "Les décomptes par type, sans valeurs personnelles."
           },
           "tags": {
            "type": "array",
@@ -461,19 +461,19 @@
             "properties": {
              "begin": {
               "type": "integer",
-              "description": "Byte offset of the UTF-8 text where the span begins."
+              "description": "Position, en octets dans le texte UTF-8, où commence le passage."
              },
              "end": {
               "type": "integer",
-              "description": "Byte offset where the span ends."
+              "description": "Position, en octets, où finit le passage."
              },
              "type": {
               "type": "string",
-              "description": "The type of the value: PERSON, ORG, LOCATION, ADDRESS, EMAIL..."
+              "description": "Le type de la valeur : PERSON, ORG, LOCATION, ADDRESS, EMAIL..."
              }
             }
            },
-           "description": "The tags written in the text, or without tags its substitutes, in their order. Empty when the text is not UTF-8 or holds more than 100000 of them."
+           "description": "Les balises écrites dans le texte, ou, sans balises, ses substituts, dans leur ordre. Vide lorsque le texte n'est pas en UTF-8 ou en contient plus de 100000."
           },
           "substitutions": {
            "type": "array",
@@ -482,18 +482,18 @@
             "properties": {
              "substitute": {
               "type": "string",
-              "description": "The value as written, without its tag."
+              "description": "La valeur telle qu'elle est écrite, sans sa balise."
              },
              "tag": {
               "type": "string",
-              "description": "The tag it stands for, encrypted under the key of this installation."
+              "description": "La balise que remplace ce substitut, chiffrée avec la clé de cette installation."
              },
              "text": {
               "type": "boolean"
              }
             }
            },
-           "description": "Without tags: each substitute written, with its tag. Nothing else keeps them: /v1/text/restore gives the values back when they come with the text."
+           "description": "Sans balises : chaque substitut écrit, avec sa balise. Rien d'autre ne les garde : /v1/text/restore rend les valeurs lorsqu'ils accompagnent le texte."
           }
          }
         }
@@ -513,15 +513,15 @@
       "$ref": "#/components/responses/Error"
      }
     },
-    "description": "The body is {\"text\"}, with \"tags\" false for a text without tags: a JSON object, refused otherwise (400, code bad_request). A body larger than the route takes is refused before it is read (413): the files up to max_file_mb of the settings, the JSON bodies up to 16 MB. When every slot of work stays taken for a minute, the answer is 503 with Retry-After (code busy). The imposed terms (/v1/terms) are replaced before any other value is read. The answer gives the places of the tags written (\"tags\"), which the web application colours by type."
+    "description": "Le corps est {\"text\"}, avec \"tags\" à false pour un texte sans balises : un objet JSON, refusé sinon (400, code bad_request). Un corps plus grand que ce qu'accepte la route est refusé avant d'être lu (413) : les fichiers jusqu'au max_file_mb des réglages, les corps JSON jusqu'à 16 Mo. Lorsque tous les emplacements de travail restent occupés pendant une minute, la réponse est 503 avec Retry-After (code busy). Les termes imposés (/v1/terms) sont remplacés avant la lecture de toute autre valeur. La réponse donne la place des balises écrites (\"tags\"), que l'application web colore selon leur type."
    }
   },
   "/v1/text/restore": {
    "post": {
     "tags": [
-     "Texts"
+     "Textes"
     ],
-    "summary": "Restore the tags and the substitutes of a text",
+    "summary": "Restaurer les balises et les substituts d'un texte",
     "requestBody": {
      "required": true,
      "content": {
@@ -545,7 +545,7 @@
             }
            }
           },
-          "description": "The substitutes of a text protected without tags, as /v1/text/anonymize listed them: their values come back with those of the tags. A list that is not an array is refused (400, code bad_request)."
+          "description": "Les substituts d'un texte protégé sans balises, tels que /v1/text/anonymize les a listés : leurs valeurs reviennent avec celles des balises. Une liste qui n'est pas un tableau est refusée (400, code bad_request)."
          }
         },
         "required": [
@@ -565,11 +565,11 @@
          "properties": {
           "text": {
            "type": "string",
-           "description": "The restored text."
+           "description": "Le texte restauré."
           },
           "report": {
            "type": "object",
-           "description": "The counts of the tags restored and refused."
+           "description": "Les décomptes des balises restaurées et refusées."
           },
           "restored": {
            "type": "array",
@@ -578,19 +578,19 @@
             "properties": {
              "begin": {
               "type": "integer",
-              "description": "Byte offset of the UTF-8 text where the span begins."
+              "description": "Position, en octets dans le texte UTF-8, où commence le passage."
              },
              "end": {
               "type": "integer",
-              "description": "Byte offset where the span ends."
+              "description": "Position, en octets, où finit le passage."
              },
              "type": {
               "type": "string",
-              "description": "The type of the value: PERSON, ORG, LOCATION, ADDRESS, EMAIL..."
+              "description": "Le type de la valeur : PERSON, ORG, LOCATION, ADDRESS, EMAIL..."
              }
             }
            },
-           "description": "The values written in place of the tags, in the restored text. Empty when a tag that a link encodes was restored too, the places being then unknown, when the text is not UTF-8, or beyond 100000 values."
+           "description": "Les valeurs écrites à la place des balises, dans le texte restauré. Vide lorsqu'une balise encodée dans un lien a aussi été restaurée, les places étant alors inconnues, lorsque le texte n'est pas en UTF-8, ou au-delà de 100000 valeurs."
           }
          }
         }
@@ -610,15 +610,15 @@
       "$ref": "#/components/responses/Error"
      }
     },
-    "description": "The body is {\"text\"}, with \"substitutions\" for a text protected without tags: a JSON object, refused otherwise (400, code bad_request). A body larger than the route takes is refused before it is read (413): the files up to max_file_mb of the settings, the JSON bodies up to 16 MB. When every slot of work stays taken for a minute, the answer is 503 with Retry-After (code busy). The answer gives the places of the values restored (\"restored\"), which the web application underlines."
+    "description": "Le corps est {\"text\"}, avec \"substitutions\" pour un texte protégé sans balises : un objet JSON, refusé sinon (400, code bad_request). Un corps plus grand que ce qu'accepte la route est refusé avant d'être lu (413) : les fichiers jusqu'au max_file_mb des réglages, les corps JSON jusqu'à 16 Mo. Lorsque tous les emplacements de travail restent occupés pendant une minute, la réponse est 503 avec Retry-After (code busy). La réponse donne la place des valeurs restaurées (\"restored\"), que l'application web souligne."
    }
   },
   "/v1/text/detect": {
    "post": {
     "tags": [
-     "Texts"
+     "Textes"
     ],
-    "summary": "The personal values of a text",
+    "summary": "Les valeurs personnelles d'un texte",
     "requestBody": {
      "required": true,
      "content": {
@@ -664,16 +664,16 @@
       "$ref": "#/components/responses/Error"
      }
     },
-    "description": "The body is {\"text\"}: a JSON object, refused otherwise (400, code bad_request). A body larger than the route takes is refused before it is read (413): the files up to max_file_mb of the settings, the JSON bodies up to 16 MB. When every slot of work stays taken for a minute, the answer is 503 with Retry-After (code busy). The imposed terms (/v1/terms) come first, with a confidence of 1."
+    "description": "Le corps est {\"text\"} : un objet JSON, refusé sinon (400, code bad_request). Un corps plus grand que ce qu'accepte la route est refusé avant d'être lu (413) : les fichiers jusqu'au max_file_mb des réglages, les corps JSON jusqu'à 16 Mo. Lorsque tous les emplacements de travail restent occupés pendant une minute, la réponse est 503 avec Retry-After (code busy). Les termes imposés (/v1/terms) viennent en premier, avec une confiance de 1."
    }
   },
   "/v1/names/anonymize": {
    "post": {
     "tags": [
-     "Names"
+     "Noms"
     ],
-    "summary": "Anonymize a name",
-    "description": "The name of a folder, or any name without its folder: its values become substitutes written without tags, which Windows takes in a name, and which the service records for their restoration. A name without personal data comes back as it is.",
+    "summary": "Anonymiser un nom",
+    "description": "Le nom d'un dossier, ou tout nom sans son dossier : ses valeurs deviennent des substituts écrits sans balises, que Windows accepte dans un nom, et que le service enregistre pour leur restauration. Un nom sans donnée personnelle revient tel quel.",
     "requestBody": {
      "required": true,
      "content": {
@@ -694,7 +694,7 @@
     },
     "responses": {
      "200": {
-      "description": "{\"name\"}: the name anonymized",
+      "description": "{\"name\"} : le nom anonymisé",
       "content": {
        "application/json": {
         "schema": {
@@ -723,10 +723,10 @@
   "/v1/names/restore": {
    "post": {
     "tags": [
-     "Names"
+     "Noms"
     ],
-    "summary": "Restore a name",
-    "description": "Puts back the values of the substitutes that the service recorded in a name; a name without them comes back as it is.",
+    "summary": "Restaurer un nom",
+    "description": "Remet dans un nom les valeurs des substituts que le service a enregistrés ; un nom qui n'en contient pas revient tel quel.",
     "requestBody": {
      "required": true,
      "content": {
@@ -747,7 +747,7 @@
     },
     "responses": {
      "200": {
-      "description": "{\"name\"}: the name restored",
+      "description": "{\"name\"} : le nom restauré",
       "content": {
        "application/json": {
         "schema": {
@@ -776,12 +776,12 @@
   "/v1/drive": {
    "get": {
     "tags": [
-     "Drive"
+     "Lecteur"
     ],
-    "summary": "The state of the drive",
+    "summary": "L'état du lecteur",
     "responses": {
      "200": {
-      "description": "{\"letter\", \"mounted\", \"folder\", \"files\", \"bytes\", \"error\", \"refused_folder\", \"scans\", \"idle\"}: the drive, the folder that holds the files the drive did not process, one folder per user, where each file keeps its place in the tree of the drive, the number of scans of the drive done so far, and whether nothing is changing, waiting or being processed",
+      "description": "{\"letter\", \"mounted\", \"folder\", \"files\", \"bytes\", \"error\", \"refused_folder\", \"scans\", \"idle\"} : le lecteur, le dossier qui contient les fichiers que le lecteur n'a pas traités, un dossier par utilisateur, où chaque fichier garde sa place dans l'arborescence du lecteur, le nombre d'analyses du lecteur faites jusqu'ici, et l'indication que plus rien ne change, n'attend ni n'est en cours de traitement",
       "content": {
        "application/json": {
         "schema": {
@@ -796,15 +796,15 @@
   "/v1/events": {
    "get": {
     "tags": [
-     "Drive"
+     "Lecteur"
     ],
-    "summary": "The events of the drive: files protected or refused",
+    "summary": "Les événements du lecteur : fichiers protégés ou refusés",
     "parameters": [
      {
       "name": "since",
       "in": "query",
       "required": false,
-      "description": "The identifier of the last event read",
+      "description": "L'identifiant du dernier événement lu",
       "schema": {
        "type": "integer",
        "default": 0
@@ -813,7 +813,7 @@
     ],
     "responses": {
      "200": {
-      "description": "{\"events\": [{\"id\", \"time\", \"kind\", \"path\", \"message\"}]}: kind is \"protected\" or \"refused\" (a file of another kind or that cannot be protected, moved out of the drive)",
+      "description": "{\"events\": [{\"id\", \"time\", \"kind\", \"path\", \"message\"}]} : kind vaut \"protected\" ou \"refused\" (un fichier d'une autre nature, ou qui ne peut pas être protégé, sorti du lecteur)",
       "content": {
        "application/json": {
         "schema": {
@@ -830,11 +830,11 @@
     "tags": [
      "Service"
     ],
-    "summary": "The live throughput of the engine",
-    "description": "The bytes that the engine read and wrote over the last five seconds, counted when each operation ends, per second, and the operations under way (macOS fork). Zero once the engine rests.",
+    "summary": "Le débit du moteur en direct",
+    "description": "Les octets que le moteur a lus et écrits par seconde au cours des cinq dernières secondes, comptés à la fin de chaque opération, et les opérations en cours (fork macOS). Zéro dès que le moteur est au repos.",
     "responses": {
      "200": {
-      "description": "The throughput",
+      "description": "Le débit",
       "content": {
        "application/json": {
         "schema": {
@@ -862,7 +862,7 @@
     "tags": [
      "Service"
     ],
-    "summary": "Whether Albireo describes the pictures",
+    "summary": "Indique si Albireo décrit les images",
     "responses": {
      "200": {
       "description": "{\"enabled\", \"found\", \"port\", \"model\", \"reason\"}",
@@ -882,13 +882,13 @@
     "tags": [
      "Administration"
     ],
-    "summary": "The originals kept",
+    "summary": "Les originaux conservés",
     "parameters": [
      {
       "name": "limit",
       "in": "query",
       "required": false,
-      "description": "At most",
+      "description": "Nombre maximal d'enregistrements",
       "schema": {
        "type": "integer",
        "default": 100
@@ -898,7 +898,7 @@
       "name": "offset",
       "in": "query",
       "required": false,
-      "description": "From",
+      "description": "Rang du premier enregistrement",
       "schema": {
        "type": "integer",
        "default": 0
@@ -908,7 +908,7 @@
       "name": "source",
       "in": "query",
       "required": false,
-      "description": "Only those of a source",
+      "description": "Seulement ceux d'une source",
       "schema": {
        "type": "string",
        "enum": [
@@ -932,7 +932,7 @@
       }
      }
     },
-    "description": "Each record gives its file (original_name, output_name, sizes, kind, output_sha256, object_id, path), whether its protected file holds tags (tags, false for a file protected without tags, whose values come back from this record alone) and, when its file left the drive, the time it left (removed) and the time its original is forgotten (forgotten), removed_days later, empty when removed_days is 0 and the original stays without limit of time. total counts the records of the source asked, or all of them. The originals first kept are forgotten whatever their time when they take more than history_mb, or when a new original would leave less than 256 MB free on the disk and forgetting them gives that room."
+    "description": "Chaque enregistrement donne son fichier (original_name, output_name, sizes, kind, output_sha256, object_id, path), indique si son fichier protégé contient des balises (tags, false pour un fichier protégé sans balises, dont les valeurs ne reviennent que par cet enregistrement) et, lorsque son fichier a quitté le lecteur, le moment de ce départ (removed) et le moment où son original est oublié (forgotten), removed_days plus tard, vide lorsque removed_days vaut 0 et que l'original reste conservé sans limite de temps. total compte les enregistrements de la source demandée, ou tous. Les originaux conservés en premier sont oubliés, quel que soit leur âge, lorsqu'ils occupent plus que history_mb, ou lorsqu'un nouvel original laisserait moins de 256 Mo libres sur le disque et que les oublier libère cette place."
    }
   },
   "/v1/records/{id}/original": {
@@ -940,8 +940,8 @@
     "tags": [
      "Administration"
     ],
-    "summary": "An original kept",
-    "description": "The original of the record as a restoration gives it: a document edited on the drive and anonymized again comes back with the values of its tags.",
+    "summary": "Un original conservé",
+    "description": "L'original de l'enregistrement, tel qu'une restauration le rend : un document modifié sur le lecteur puis anonymisé de nouveau revient avec les valeurs de ses balises.",
     "parameters": [
      {
       "name": "id",
@@ -968,7 +968,7 @@
     ],
     "responses": {
      "200": {
-      "description": "The file written, its name in Content-Disposition and X-Pseudalis-Name, its report in X-Pseudalis-Report; with format=json, a JSON object whose \"data\" holds it in base64.",
+      "description": "Le fichier écrit, son nom dans Content-Disposition et X-Pseudalis-Name, son rapport dans X-Pseudalis-Report ; avec format=json, un objet JSON dont \"data\" le contient en base64.",
       "content": {
        "application/octet-stream": {
         "schema": {
@@ -994,8 +994,8 @@
     "tags": [
      "Administration"
     ],
-    "summary": "Forget an original, and the pictures no other file shows",
-    "description": "Deletes the original of the record from the vault and remembers its protected file as forgotten, with the entries of a protected archive: their restoration is refused from then on, and the drive keeps such a file as it is when it comes back. A file extracted on the drive from a protected archive has a record and an original of its own, which this route forgets alone.",
+    "summary": "Oublier un original, et les images qu'aucun autre fichier ne montre",
+    "description": "Supprime du coffre l'original de l'enregistrement et retient son fichier protégé comme oublié, avec les entrées d'une archive protégée : leur restauration est désormais refusée, et le lecteur garde un tel fichier tel quel lorsqu'il revient. Un fichier extrait d'une archive protégée sur le lecteur a son propre enregistrement et son propre original, que cette route oublie à part, sans toucher à ceux de l'archive.",
     "parameters": [
      {
       "name": "id",
@@ -1008,7 +1008,7 @@
     ],
     "responses": {
      "200": {
-      "description": "Forgotten",
+      "description": "Oublié",
       "content": {
        "application/json": {
         "schema": {
@@ -1028,10 +1028,10 @@
     "tags": [
      "Administration"
     ],
-    "summary": "The settings",
+    "summary": "Les réglages",
     "responses": {
      "200": {
-      "description": "The settings",
+      "description": "Les réglages",
       "content": {
        "application/json": {
         "schema": {
@@ -1041,14 +1041,14 @@
       }
      }
     },
-    "description": "The address of the feed appears only when it differs from the one of the build."
+    "description": "L'adresse du flux n'apparaît que lorsqu'elle diffère de celle de la compilation."
    },
    "put": {
     "tags": [
      "Administration"
     ],
-    "summary": "Change settings",
-    "description": "The members given replace those of settings.json, the others keep their values; the service restarts when the port, the letter of the drive, the date order, the proxy or the address of the feed change (\"restart\": true). The feed must be an https address, the proxy empty, \"none\" or http://host:port (400, code settings_publication otherwise), the letter A, B or D to Z (code settings_drive); a number out of its range, a choice out of its list or a flag that is not true or false is refused (400, code settings_value, with field, and min and max for a number), and so is a history_mb smaller than max_file_mb (field history_mb, min being max_file_mb). Fewer days or less space forget at once, in the background, the originals beyond them. The changes apply in one step against concurrent ones; 500 (code settings) when settings.json cannot be written.",
+    "summary": "Modifier les réglages",
+    "description": "Les membres fournis remplacent ceux de settings.json, les autres gardent leur valeur ; le service redémarre lorsque le port, la lettre du lecteur, l'ordre des dates, le proxy ou l'adresse du flux changent (\"restart\": true). Le flux doit être une adresse https, le proxy vide, \"none\" ou http://host:port (400, code settings_publication sinon), la lettre A, B ou D à Z (code settings_drive) ; un nombre hors de sa plage, un choix hors de sa liste ou un indicateur qui n'est ni true ni false est refusé (400, code settings_value, avec field, et min et max pour un nombre), de même qu'un history_mb inférieur à max_file_mb (field history_mb, min valant max_file_mb). Moins de jours ou moins de place font oublier aussitôt, en arrière-plan, les originaux qui les dépassent. Les changements s'appliquent en une seule étape, à l'abri des changements concurrents ; 500 (code settings) lorsque settings.json ne peut pas être écrit.",
     "requestBody": {
      "required": true,
      "content": {
@@ -1061,7 +1061,7 @@
     },
     "responses": {
      "200": {
-      "description": "The settings written",
+      "description": "Les réglages écrits",
       "content": {
        "application/json": {
         "schema": {
@@ -1084,11 +1084,11 @@
     "tags": [
      "Administration"
     ],
-    "summary": "The imposed terms",
-    "description": "Each occurrence of an imposed term is replaced with the tag of its type before any other value is read, in the files, the texts and the names: its words and numbers in the same order, as whole words, separated by at most two characters of one line (\"Projet Alpha\", \"PROJET-ALPHA\"). An occurrence inside an e-mail address, a web address, a date or a number stays protected with that value; any other value that overlaps it keeps its parts outside it. The terms are kept in the database of the service, which only SYSTEM and the administrators read.",
+    "summary": "Les termes imposés",
+    "description": "Chaque occurrence d'un terme imposé est remplacée par la balise de son type avant la lecture de toute autre valeur, dans les fichiers, les textes et les noms : ses mots et ses nombres dans le même ordre, en mots entiers, séparés par au plus deux caractères d'une même ligne (\"Projet Alpha\", \"PROJET-ALPHA\"). Une occurrence située à l'intérieur d'une adresse e-mail, d'une adresse web, d'une date ou d'un nombre reste protégée avec cette valeur ; toute autre valeur qui la chevauche garde ses parties situées hors de l'occurrence. Les termes sont conservés dans la base de données du service, que seuls SYSTEM et les administrateurs lisent.",
     "responses": {
      "200": {
-      "description": "The terms, with the limits and the types the service takes",
+      "description": "Les termes, avec les limites et les types que le service accepte",
       "content": {
        "application/json": {
         "schema": {
@@ -1103,8 +1103,8 @@
     "tags": [
      "Administration"
     ],
-    "summary": "Replace the imposed terms",
-    "description": "The list given replaces the imposed terms, whole, at once for the files and texts processed afterwards; an empty list removes them. A list the service does not take changes nothing (400): terms_invalid (a term empty, longer than 200 characters, on several lines, with a control character or without a letter or a digit), terms_too_many (more than 100), terms_type (a type out of the list) or terms_duplicate (a term given twice with the same case sensitivity), the position of the term at fault in args.index; 500 (codes engine, database) when the engine or the database cannot take them.",
+    "summary": "Remplacer les termes imposés",
+    "description": "La liste fournie remplace les termes imposés en entier, aussitôt, pour les fichiers et les textes traités ensuite ; une liste vide les supprime. Une liste que le service n'accepte pas ne change rien (400) : terms_invalid (un terme vide, de plus de 200 caractères, sur plusieurs lignes, avec un caractère de contrôle ou sans lettre ni chiffre), terms_too_many (plus de 100), terms_type (un type hors de la liste) ou terms_duplicate (un terme donné deux fois avec la même sensibilité à la casse), la position du terme fautif dans args.index ; 500 (codes engine, database) lorsque le moteur ou la base de données ne peut pas les prendre en compte.",
     "requestBody": {
      "required": true,
      "content": {
@@ -1129,7 +1129,7 @@
     },
     "responses": {
      "200": {
-      "description": "{\"terms\"}: the terms kept, trimmed",
+      "description": "{\"terms\"} : les termes conservés, débarrassés de leurs espaces de début et de fin",
       "content": {
        "application/json": {
         "schema": {
@@ -1161,10 +1161,10 @@
     "tags": [
      "Administration"
     ],
-    "summary": "Restart the service",
+    "summary": "Redémarrer le service",
     "responses": {
      "200": {
-      "description": "Restarting",
+      "description": "Redémarrage en cours",
       "content": {
        "application/json": {
         "schema": {
@@ -1181,8 +1181,8 @@
     "tags": [
      "Administration"
     ],
-    "summary": "Export the master key, protected by a passphrase",
-    "description": "Keep the export apart: with its passphrase, it restores every file this installation protected, on another computer too.",
+    "summary": "Exporter la clé maîtresse, protégée par une phrase secrète",
+    "description": "Conservez l'export à part : avec sa phrase secrète, il restaure tous les fichiers que cette installation a protégés, y compris sur un autre ordinateur.",
     "requestBody": {
      "required": true,
      "content": {
@@ -1204,7 +1204,7 @@
     },
     "responses": {
      "200": {
-      "description": "{\"key\": exported document}",
+      "description": "{\"key\": document exporté}",
       "content": {
        "application/json": {
         "schema": {
@@ -1227,8 +1227,8 @@
     "tags": [
      "Administration"
     ],
-    "summary": "Import the master key of an earlier installation",
-    "description": "Accepted while no file is recorded; the service restarts with the key.",
+    "summary": "Importer la clé maîtresse d'une installation précédente",
+    "description": "Accepté tant qu'aucun fichier n'est enregistré ; le service redémarre avec la clé.",
     "requestBody": {
      "required": true,
      "content": {
@@ -1253,7 +1253,7 @@
     },
     "responses": {
      "200": {
-      "description": "Imported",
+      "description": "Importée",
       "content": {
        "application/json": {
         "schema": {
@@ -1276,7 +1276,7 @@
     "tags": [
      "Administration"
     ],
-    "summary": "The last lines of the log",
+    "summary": "Les dernières lignes du journal",
     "responses": {
      "200": {
       "description": "{\"lines\"}",
@@ -1295,7 +1295,7 @@
  "components": {
   "responses": {
    "Error": {
-    "description": "The error: its English text, its code and its values",
+    "description": "L'erreur : son texte en anglais, son code et ses valeurs",
     "content": {
      "application/json": {
       "schema": {
@@ -1364,12 +1364,13 @@
        "auto",
        "en",
        "fr"
-      ]
+      ],
+      "description": "Ancien réglage de la langue du service, encore accepté pour les fichiers de réglages antérieurs : sans effet, le service répond toujours en français (fork pour macOS)."
      },
      "drive_letter": {
       "type": "string",
       "example": "A",
-      "description": "The letter of the drive, A, B or D to Z; empty: no drive"
+      "description": "La lettre du lecteur, A, B ou D à Z ; vide : aucun lecteur"
      },
      "date_order": {
       "type": "string",
@@ -1390,25 +1391,25 @@
       "minimum": 1,
       "maximum": 2048,
       "default": 150,
-      "description": "The largest file processed, in MB"
+      "description": "La taille du plus grand fichier traité, en Mo"
      },
      "removed_days": {
       "type": "integer",
       "minimum": 0,
       "maximum": 3650,
       "default": 45,
-      "description": "The days the original of a file removed from the drive stays kept; 0 keeps it without limit of time, within history_mb"
+      "description": "Le nombre de jours pendant lesquels l'original d'un fichier retiré du lecteur reste conservé ; 0 le conserve sans limite de temps, dans la limite de history_mb"
      },
      "history_mb": {
       "type": "integer",
       "minimum": 1,
       "maximum": 1048576,
       "default": 10240,
-      "description": "The space the originals kept may take, in MB, max_file_mb at least: beyond it, the originals first kept are forgotten, the oldest first (reason space), and so they are when a new original would leave less than 256 MB free on the disk of the data folder and forgetting them would give that room; an original larger than the space is not kept. A settings.json of a version before 1.0.2, without this member, takes the maximum, and its 30 days of removed_days become 45"
+      "description": "La place que peuvent occuper les originaux conservés, en Mo, au moins max_file_mb : au-delà, les originaux conservés en premier sont oubliés, les plus anciens d'abord (raison space), et ils le sont aussi lorsqu'un nouvel original laisserait moins de 256 Mo libres sur le disque du dossier de données et que les oublier libérerait cette place ; un original plus grand que cette place n'est pas conservé. Un settings.json d'une version antérieure à 1.0.2, sans ce membre, prend le maximum, et ses 30 jours de removed_days deviennent 45"
      },
      "tags": {
       "type": "boolean",
-      "description": "Write the tags by default, at the top of the Settings card of the web application: whether the values of the files of the drive and of the requests of the interface without the parameter tags take their tags (true by default); false writes their substitutes alone, which the record of a file alone gives back while it lasts. The parameter tags of a request decides for it, and the boxes of the cards of the web application start from it."
+      "description": "« Écrire les balises par défaut », en haut de la carte Réglages de l'application web : indique si les valeurs des fichiers du lecteur et des requêtes de l'interface sans paramètre tags reçoivent leurs balises (true par défaut) ; false écrit leurs substituts seuls, que seul l'enregistrement d'un fichier rend, tant qu'il dure. Le paramètre tags d'une requête décide pour elle, et les cases des cartes de l'application web partent de ce réglage."
      },
      "trust_authority": {
       "type": "boolean"
@@ -1429,7 +1430,7 @@
       "minLength": 1,
       "maxLength": 200,
       "example": "Projet Alpha",
-      "description": "The term, trimmed of its spaces: one line of 1 to 200 characters with a letter or a digit"
+      "description": "Le terme, débarrassé de ses espaces de début et de fin : une ligne de 1 à 200 caractères comportant une lettre ou un chiffre"
      },
      "type": {
       "type": "string",
@@ -1444,12 +1445,12 @@
        "URL"
       ],
       "default": "ORG",
-      "description": "The type of the tag of each occurrence"
+      "description": "Le type de la balise de chaque occurrence"
      },
      "case_sensitive": {
       "type": "boolean",
       "default": false,
-      "description": "true: the case and the accents of each word must match; false: both are ignored"
+      "description": "true : la casse et les accents de chaque mot doivent correspondre ; false : les deux sont ignorés"
      }
     }
    },
@@ -1465,18 +1466,18 @@
      },
      "max": {
       "type": "integer",
-      "description": "The most terms that may be imposed: 100"
+      "description": "Le nombre maximal de termes imposés : 100"
      },
      "max_length": {
       "type": "integer",
-      "description": "The longest term, in characters: 200"
+      "description": "La longueur maximale d'un terme, en caractères : 200"
      },
      "types": {
       "type": "array",
       "items": {
        "type": "string"
       },
-      "description": "The types a term may take"
+      "description": "Les types qu'un terme peut prendre"
      }
     }
    }

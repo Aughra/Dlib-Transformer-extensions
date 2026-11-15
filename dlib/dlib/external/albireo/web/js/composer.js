@@ -45,7 +45,13 @@ export function renderComposerState() {
   ui.reasonButton.title = t('reasoningHint');
   ui.agentButton.classList.toggle('on', agent);
   ui.agentButton.setAttribute('aria-pressed', String(agent));
-  ui.agentButton.disabled = !ready;
+  /*
+      Au doigt, un bouton grisé n'explique rien (fork pour macOS) : Agent et Web restent touchables quand seul le
+      raisonnement approfondi manque (le toucher l'allume, layout.js), et un bouton qui ne peut pas servir le dit par un
+      message quand on le touche, au lieu d'être désactivé.
+  */
+  ui.agentButton.classList.toggle('unavailable', !caps.tools);
+  ui.agentButton.setAttribute('aria-disabled', String(!caps.tools));
   ui.agentButton.title = ready ? t('agentHint') : caps.tools ? t('agentNeedsReasoning') : t('agentNoTools');
   // Le bouton Web est désactivé et grisé, avec la raison comme titre, tant que le modèle n'appelle aucun outil, tant
   // qu'un modèle capable de raisonner n'a pas son raisonnement approfondi, ou tant que le service ne donne pas d'accès
@@ -54,7 +60,9 @@ export function renderComposerState() {
   const webOn = !!(c && c.web && !reason);
   ui.webButton.classList.toggle('on', webOn);
   ui.webButton.setAttribute('aria-pressed', String(webOn));
-  ui.webButton.disabled = !!reason;
+  const blocked = webUnavailable(caps, true);
+  ui.webButton.classList.toggle('unavailable', !!blocked);
+  ui.webButton.setAttribute('aria-disabled', String(!!blocked));
   ui.webButton.title = reason || t('webHint');
   // Les pièces jointes que lit le modèle de la fonction, les images tant que le contexte a des places pour elles.
   const role = c ? c.role : 'general';

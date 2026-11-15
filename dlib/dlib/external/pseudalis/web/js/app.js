@@ -6,24 +6,13 @@
   'use strict';
 
   const texts = window.PSEUDALIS_TEXTS;
-  let language = 'en';
+  // Le français seulement (fork pour macOS, demande de l'humain du 2026-11-15).
+  const language = 'fr';
   // La carte du texte est prête : ses marques suivent la langue (renderMarks()).
   let textReady = false;
 
-  /* La langue de la page : celle choisie dans son menu, sinon la première langue du navigateur,
-     qui suit le système à moins que son utilisateur n'en ait décidé autrement, que l'application
-     connaisse, sinon l'anglais. */
-  function pick() {
-    let saved = null;
-    try { saved = localStorage.getItem('pseudalis.language'); } catch (e) { /* stockage indisponible */ }
-    // Le français par défaut (fork pour macOS, demande de l'humain du 2026-11-15), quelle que soit la langue du
-    // navigateur ; l'anglais reste au choix du menu.
-    if (saved && texts[saved]) return saved;
-    return 'fr';
-  }
-
   function t(key, values) {
-    let s = (texts[language] && texts[language][key]) || texts.en[key] || key;
+    let s = texts.fr[key] || key;
     if (values) Object.keys(values).forEach(function (k) { s = s.split('{' + k + '}').join(values[k]); });
     return s;
   }
@@ -170,7 +159,7 @@
      (une date écrite à la manière de la langue, des tailles en mégaoctets), sinon le texte
      anglais du service. */
   function errorText(body, status) {
-    if (body && body.code && texts.en['err_' + body.code]) {
+    if (body && body.code && texts.fr['err_' + body.code]) {
       const values = { e: body.error || '' };
       const args = body.args || {};
       Object.keys(args).forEach(function (k) { values[k] = String(args[k]); });
@@ -783,7 +772,6 @@
     if (!r.ok) return;
     const s = await r.json().catch(function () { return null; });
     if (!s) return;
-    document.getElementById('set-language').value = s.language || 'auto';
     document.getElementById('set-drive').value = s.drive_letter || '';
     document.getElementById('set-dates').value = s.date_order === 'mdy' ? 'mdy' : 'dmy';
     document.getElementById('set-max').value = s.max_file_mb;
@@ -795,7 +783,7 @@
 
   // Les réglages que la carte affiche, par leur nom dans l'interface, avec la clé de leur libellé.
   const settingLabels = {
-    language: 'set_language', drive_letter: 'set_drive', date_order: 'set_dates', max_file_mb: 'set_max',
+    drive_letter: 'set_drive', date_order: 'set_dates', max_file_mb: 'set_max',
     removed_days: 'set_removed', history_mb: 'set_history', albireo: 'set_albireo',
     tags: 'set_tags'
   };
@@ -808,7 +796,6 @@
 
   async function saveSettings() {
     const r = await sendJson('v1/settings', {
-      language: document.getElementById('set-language').value,
       drive_letter: document.getElementById('set-drive').value.trim().toUpperCase(),
       date_order: document.getElementById('set-dates').value,
       max_file_mb: wholeNumber('set-max'),
@@ -988,14 +975,6 @@
   document.getElementById('terms-add').addEventListener('click', addTerm);
   document.getElementById('terms-save').addEventListener('click', saveTerms);
 
-  const select = document.getElementById('language');
-  language = pick();
-  select.value = language;
-  select.addEventListener('change', function () {
-    language = select.value;
-    try { localStorage.setItem('pseudalis.language', language); } catch (e) { /* stockage indisponible */ }
-    translate();
-  });
   translate();
   fetch('v1/info', { cache: 'no-store' }).then(function (r) { return r.json(); })
     .then(function (info) { if (info && info.tags === false) applyTagsDefault(false); })

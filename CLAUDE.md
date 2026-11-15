@@ -189,7 +189,7 @@ Le fork numérote Albireo à part de l'original, à partir de **2.0.0** (2026-11
 
 ### Français seulement
 
-Le fork ne fait que du français (décision de l'humain, 2026-11-11) : l'interface d'Albireo est en français seulement, sans choix de langue (la lecture à voix haute a été retirée en 3.0.0). Tout nouveau texte visible par l'utilisateur s'écrit en français, sans traduction. Pseudalis garde le français, par défaut, et l'anglais, au choix du menu, et rien d'autre ; ses détecteurs de données personnelles, qui vivent dans dlib, reconnaissent toujours les autres langues. Les commentaires du code sont en français (voir « Langue et communication ») ; les consignes internes envoyées au modèle restent en anglais.
+Le fork ne fait que du français (décision de l'humain, 2026-11-11) : l'interface d'Albireo est en français seulement, sans choix de langue (la lecture à voix haute a été retirée en 3.0.0). Tout nouveau texte visible par l'utilisateur s'écrit en français, sans traduction. Pseudalis est en français seulement, comme Albireo (demande de l'humain, 2026-11-15 : « ne fais pas d'anglais, tout en français »), pages de l'interface (API) comprises ; ses détecteurs de données personnelles, qui vivent dans dlib, reconnaissent toujours les autres langues. Les commentaires du code sont en français (voir « Langue et communication ») ; les consignes internes envoyées au modèle restent en anglais.
 
 ### La page des réglages d'Albireo
 
