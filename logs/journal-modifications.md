@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-15 — Retirer de dlib sa copie de CBLAS
+
+- **Quoi** : deuxième étape du nettoyage de dlib. `external/cblas` retiré, avec le seul cas qui s'en servait dans `cmake_utils/find_blas.cmake` (construction de dlib comme extension de MATLAB, `BUILDING_MATLAB_MEX_FILE`, 27 lignes).
+- **Fichiers** : `dlib/dlib/external/cblas/`, `dlib/dlib/cmake_utils/find_blas.cmake`, `docs/notes-pour-l-auteur.md`.
+- **Pourquoi** : sur Mac, dlib trouve Accelerate ; la copie de CBLAS ne servait qu'à MATLAB.
+- **Étapes** : exemples, Albireo et Pseudalis recompilés : 0 erreur, 0 avertissement ; tests rapides (`test_qkernels`, `test_host` d'Albireo, `test_engine` et `test_host` de Pseudalis) : tout passe. `dtest` (le seul build avec `DLIB_USE_BLAS`) : à la fin du nettoyage.
+
 ## 2026-11-15 — Retirer de dlib son interface Python (pybind11)
 
 - **Quoi** : première étape du nettoyage de dlib demandé par l'humain (pybind11, cblas, zlib du système, conditions Apple du fork et de dlib lui-même ; les bibliothèques embarquées sqlite, httplib, mbedtls, libpng, libjpeg restent). Retirés : `external/pybind11`, `dlib/python/`, `dlib/python.h`, `tools/python/`, `python_examples/`, `setup.py`, `pyproject.toml`, `MANIFEST.in` (132 fichiers) ; blocs pybind11 et `BUILDING_PYTHON_IN_MSVC` des CMake (`dlib/CMakeLists.txt`, `dlib/dlib/CMakeLists.txt`, `set_compiler_specific_options.cmake`, `find_libpng.cmake`, `find_libjpeg.cmake`) ; section Python du README de dlib remplacée par une phrase.

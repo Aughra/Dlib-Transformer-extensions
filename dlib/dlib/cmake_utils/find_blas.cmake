@@ -35,35 +35,6 @@ INCLUDE(CheckFunctionExists)
 if (UNIX OR MINGW)
    message(STATUS "Searching for BLAS and LAPACK")
 
-   if (BUILDING_MATLAB_MEX_FILE)
-      # # This commented out stuff would link directly to MATLAB's built in
-      # BLAS and LAPACK. But it's better to not link to anything and do a
-      #find_library(MATLAB_BLAS_LIBRARY mwblas  PATHS ${MATLAB_LIB_FOLDERS} )
-      #find_library(MATLAB_LAPACK_LIBRARY mwlapack  PATHS ${MATLAB_LIB_FOLDERS} )
-      #if (MATLAB_BLAS_LIBRARY AND MATLAB_LAPACK_LIBRARY)
-      #    add_subdirectory(external/cblas)
-      #    set(blas_libraries  ${MATLAB_BLAS_LIBRARY} cblas  )
-      #    set(lapack_libraries  ${MATLAB_LAPACK_LIBRARY} )
-      #    set(blas_found 1)
-      #    set(lapack_found 1)
-      #    message(STATUS "Found MATLAB's BLAS and LAPACK libraries")
-      #endif()
-
-      # We need cblas since MATLAB doesn't provide cblas symbols.
-      add_subdirectory(external/cblas)
-      set(blas_libraries  cblas  )
-      set(blas_found 1)
-      set(lapack_found 1)
-      message(STATUS "Will link with MATLAB's BLAS and LAPACK at runtime (hopefully!)")
-
-
-      ## Don't try to link to anything other than MATLAB's own internal blas
-      ## and lapack libraries because doing so generally upsets MATLAB.  So
-      ## we just end here no matter what.
-      return()
-   endif()
-
-   
    # First, search for libraries via pkg-config, which is the cleanest path
    find_package(PkgConfig)
    pkg_check_modules(BLAS_REFERENCE cblas)
