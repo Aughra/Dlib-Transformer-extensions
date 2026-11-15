@@ -1,6 +1,6 @@
 # Notes pour l'auteur — retour du portage sur Mac Apple Silicon
 
-Ces notes viennent d'un fork de Dlib-Transformer-extensions, [Aughra/Dlib-Transformer-extensions](https://github.com/Aughra/Dlib-Transformer-extensions). Son seul but est de faire tourner le projet sur les Mac à puce Apple. En le portant, on a rencontré quelques défauts dans le code d'origine :
+Ces notes viennent d'un fork de Dlib-Transformer-extensions, [Aughra/Dlib-Transformer-extensions](https://github.com/Aughra/Dlib-Transformer-extensions). Son seul but est de faire tourner le projet sur les Mac à puce Apple. Elles portent sur dlib et Albireo ; Pseudalis a [ses propres notes](pseudalis/notes-pour-l-auteur.md), et les entrées communes aux deux applications restent ici. En le portant, on a rencontré quelques défauts dans le code d'origine :
 
 - certains sont de vrais bugs, sur toutes les plateformes ;
 - d'autres n'apparaissent que sur macOS ;
@@ -28,7 +28,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | N° | Nature | Où | En une ligne | Mac ou Windows |
 |---|---|---|---|---|
 | 1 | Bug, toutes plateformes | `albireo/tests/bench_runtime.cpp:92` | Un prompt de moins de 64 tokens fait lire le banc d'essai au-delà de son tableau (corrigé dans le fork, Albireo 4.22.1). | **Aussi sous Windows** |
-| 2 | Test fragile | `pseudalis/tools/test_linux.sh:202, 315, 328, 330` | Deux étapes attendent un temps fixe au lieu d'attendre le résultat, et échouent sur une machine lente (corrigé dans le fork). | Linux et Mac (script non lancé sous Windows) |
+| 2 | Test fragile | `pseudalis/tools/test_linux.sh:202, 315, 328, 330` | Déplacée dans [les notes de Pseudalis](pseudalis/notes-pour-l-auteur.md) (P1). | Linux et Mac (script non lancé sous Windows) |
 | 3 | Réglage du serveur | espace de publication d'Albireo | Le catalogue et chaque téléchargement reçoivent « This link is password protected. » et retombent sur leurs adresses officielles. | **Aussi sous Windows** (côté serveur) |
 | 4 | Robustesse | `albireo/host/main.cpp:315`, `pseudalis/host/main.cpp:307` | En `--console`, un service lancé en arrière-plan par un script ne s'arrête pas par SIGINT sur macOS (corrigé dans le fork, Albireo 4.22.1). | Propre au Mac |
 | 5 | Avertissements | exemples de dlib, Pseudalis | Cinq avertissements du compilateur et un de l'éditeur de liens avec Apple clang (corrigés dans le fork). | Code commun, avertissements propres à clang ; voir l'entrée |
@@ -121,24 +121,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 
 ### 2. Deux étapes du test de Pseudalis attendent un temps fixe
 
-- **Où** : `dlib/dlib/external/pseudalis/tools/test_linux.sh` :
-  - ligne 202 (`sleep 8`), avant « drive signatures » ;
-  - lignes 315 (`sleep 8`), 328 (`sleep 6`) et 330 (`sleep 4`), avant « copies on the drive ».
-- **Ce qui se passe** : toutes les autres étapes du lecteur attendent leur résultat avec `wait_for <secondes> <vérification>`, en réessayant chaque seconde. Ces deux-là dorment un temps fixe, puis ne vérifient qu'une fois. Sur une machine lente, le lecteur n'a pas fini au moment de la vérification, et l'étape échoue alors que le service fonctionne.
-- **Constaté sur le Mac** : un premier passage a donné 26 étapes sur 28, avec « drive signatures » et « copies on the drive » en échec. Il a très probablement tourné avec le mode économie d'énergie de macOS actif (voir la remarque 18), qui rend la machine environ dix fois plus lente. Ce n'est pas vérifié pour ce passage précis, mais le mode était actif lors des mesures faites juste après. Mode coupé : 28 sur 28, avec et sans les modifications du fork.
-- **Correction suggérée au départ** (non testée) : remplacer chaque `sleep` fixe par un `wait_for` sur la condition que l'étape vérifie ensuite. **Elle ne suffit pas**, et c'est une erreur de ces notes : ces étapes vérifient qu'il ne se passe *rien* (l'archive renommée reste en place, l'archive oubliée revient telle quelle, une copie ne crée pas de nouvel original). Attendre que « rien ne se passe » réussit dès le premier essai, avant même que le lecteur ait vu le fichier. Il faut un signe que le lecteur a fini son travail.
-- **Corrigé dans le fork** (2026-11-14, commit [eb83ae4](https://github.com/Aughra/Dlib-Transformer-extensions/commit/eb83ae4)) : le lecteur compte ses parcours et dit s'il est au repos. Dans `pseudalis/host/drive_folders.cpp`, `drive_host::status()` donne deux champs de plus, `scans` (parcours finis, comptés dans `scanner_loop`) et `idle` (rien en changement, en attente, dans la file ni en cours de traitement : `pending`, `seen_folders`, `busy` et `queue` vides). `GET /v1/drive` les lit à l'instant (`service::drive_status()`), sans la mise en cache de deux secondes de `status()`. Le script remplace les quatre `sleep` par `settle`, qui attend deux parcours de plus qu'au moment de l'appel, puis le repos (60 s au plus) :
-
-  ```sh
-  drive_state() { api "$URL/v1/drive" | python3 -c 'import json, sys
-  d = json.load(sys.stdin); print(d.get("scans", 0), 1 if d.get("idle") else 0)'; }
-  settled() { set -- "$1" $(drive_state); [ "${2:-0}" -ge $(( $1 + 2 )) ] && [ "$3" = 1 ]; }
-  settle() { wait_for 60 settled "$(drive_state | cut -d' ' -f1)"; }
-  ```
-
-  Deux parcours, parce que celui qui est en cours au moment de l'appel a pu lister le dossier avant le changement ; le suivant le voit forcément, et le fichier vu reste « en attente » jusqu'à son traitement, donc `idle` ne peut pas être vrai trop tôt. Le script du fork est `pseudalis/tools/test_macos.sh` (le `test_linux.sh` de l'original, adapté au Mac).
-- **Un second délai trop court, trouvé grâce à cette correction** : avant de renommer l'archive, l'étape « drive signatures » attend sa protection par `wait_for 90 archive_done` (ligne 199 de `test_linux.sh` au commit `184ea00`), sans vérifier que l'attente a réussi. Sur le Mac en mode économie d'énergie, la protection de cette archive de 421 595 octets a pris plus de deux minutes : le test a renommé l'archive d'origine, que le lecteur a refusée (`refused/files/grosse.zip.bak`, identique à l'original), puis le lecteur a écrit l'archive protégée sous son ancien nom. L'ancien `sleep 8` masquait ce défaut, puisqu'il vérifiait avant le passage du lecteur. Le fork porte l'attente à 300 s (elle s'arrête dès que l'archive est prête) et fait échouer l'étape avec la raison quand elle expire. Vérifié : `test_macos.sh` de Pseudalis passe **34 sur 34** sur le Mac en mode économie d'énergie (le premier passage, avec 90 s, avait donné 33 sur 34).
-- **Mac ou Windows** : Linux et Mac. Le script ne tourne pas sous Windows, et Pseudalis n'a pas de script de test pour Windows. Sur une machine Linux lente ou chargée, l'échec devrait se reproduire, d'après le code (non vérifié).
+Cette entrée, propre à Pseudalis, est désormais dans [les notes pour l'auteur de Pseudalis](pseudalis/notes-pour-l-auteur.md) (entrée P1), avec le reste de ce que le portage révèle sur Pseudalis.
 
 ### 3. L'espace de publication d'Albireo répond « protégé par mot de passe »
 

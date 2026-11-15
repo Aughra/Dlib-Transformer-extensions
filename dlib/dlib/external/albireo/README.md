@@ -1,846 +1,846 @@
 # Albireo
 
-> **macOS fork** (TortueTech, version 2.0.0 and later): Albireo for Apple Silicon Macs only, its
-> interface in French only, without speech synthesis (removed in 3.0.0). Since 4.0.0 it holds no key:
-> the catalog is not signed and comes from its address in the repository of the original or from a
-> folder, and the publication space, the signed feed, the updates and the signing tools are removed.
-> See `web/changelog.md` for its changes; the rest of this document describes the original, for Windows.
+> **Fork macOS** (TortueTech, version 2.0.0 et suivantes) : Albireo pour les Mac Apple Silicon seulement, son
+> interface en français seulement, sans synthèse vocale (retirée en 3.0.0). Depuis 4.0.0, il ne détient aucune clé :
+> le catalogue n'est pas signé et vient de son adresse dans le dépôt de l'original ou d'un
+> dossier, et l'espace de publication, le flux signé, les mises à jour et les outils de signature sont retirés.
+> Voir `web/changelog.md` pour ses changements ; le reste de ce document décrit l'original, pour Windows.
 
-Albireo runs language models on the computer where it is installed. It is a Windows 11
-program built on dlib and Dlib-Transformer-extensions: an inference engine for quantized GGUF
-models, a Windows service that serves it on a local HTTPS address with an interface compatible
-with the OpenAI one, a web application served by that service, an icon in the notification area
-to manage it, and an installer. The conversations, the documents and the models stay on the
-machine, and nothing asks for an account.
+Albireo exécute des modèles de langage sur l'ordinateur où il est installé. C'est un programme
+Windows 11 construit sur dlib et Dlib-Transformer-extensions : un moteur d'inférence pour les modèles
+GGUF quantifiés, un service Windows qui le sert sur une adresse HTTPS locale avec une interface compatible
+avec celle d'OpenAI, une application web servie par ce service, une icône dans la zone de notification
+pour le gérer, et un installateur. Les conversations, les documents et les modèles restent sur la
+machine, et rien ne demande de compte.
 
-![A question about a chart in the web application of Albireo, answered by the model that comes with it](docs/images/chat.png)
+![Une question sur un graphique dans l'application web d'Albireo, à laquelle répond le modèle livré avec lui](docs/images/chat.png)
 
-Albireo was created by Aldric Pierrain (cydraltechnology@gmail.com). Its name is that
-of a double star of the constellation Cygnus, one gold and one blue, which its icon draws. This
-version is the Community Edition: the installer, the About windows of the icon and of the web
-application, the description of the interface and the list of the programs of Windows name it
-"Albireo Community Edition".
+Albireo a été créé par Aldric Pierrain (cydraltechnology@gmail.com). Son nom est celui
+d'une étoile double de la constellation du Cygne, l'une dorée et l'autre bleue, que dessine son icône. Cette
+version est la Community Edition : l'installateur, les fenêtres « À propos » de l'icône et de l'application
+web, la description de l'interface et la liste des programmes de Windows la nomment
+« Albireo Community Edition ».
 
-## Contents
+## Sommaire
 
-- [What it does](#what-it-does)
-- [Screenshots](#screenshots)
-- [How it is built](#how-it-is-built)
-- [Source tree](#source-tree)
-- [Building on Windows](#building-on-windows)
-- [Building on Linux](#building-on-linux)
+- [Ce qu'il fait](#ce-quil-fait)
+- [Captures d'écran](#captures-décran)
+- [Comment il est construit](#comment-il-est-construit)
+- [Arborescence des sources](#arborescence-des-sources)
+- [Construire sous Windows](#construire-sous-windows)
+- [Construire sous Linux](#construire-sous-linux)
 - [Tests](#tests)
 - [Installation](#installation)
-- [Settings](#settings)
+- [Réglages](#réglages)
 - [Interfaces](#interfaces)
-- [Web access](#web-access)
-- [Models](#models)
-- [Models that come with Albireo](#models-that-come-with-albireo)
-- [Computers without network](#computers-without-network)
-- [Publishing a version](#publishing-a-version)
-- [Security](#security)
-- [Data folders](#data-folders)
+- [Accès au web](#accès-au-web)
+- [Modèles](#modèles)
+- [Modèles livrés avec Albireo](#modèles-livrés-avec-albireo)
+- [Ordinateurs sans réseau](#ordinateurs-sans-réseau)
+- [Publier une version](#publier-une-version)
+- [Sécurité](#sécurité)
+- [Dossiers de données](#dossiers-de-données)
 
-## What it does
+## Ce qu'il fait
 
-- **Chat** in the web application, with the discussions kept in the browser (IndexedDB), an
-  incognito mode that keeps them in memory only, a search over the discussions, and the reasoning
-  of the models that reason shown while they think, then folded once the answer starts. Each
-  question and each answer keeps its time, shown beside its buttons ("3 hours ago" during a day,
-  then the short date with its hours and minutes); a past question can be asked again at the end
-  of the discussion, and a question edited restarts the discussion from it, what followed it
-  deleted. The buttons of an answer act once the answer is written, a regenerated answer
-  included, and the Stop button pulses while it is prepared and written. An answer goes on while
-  another discussion is shown or a new one starts; the side panel marks its discussion with a
-  blinking dot, which turns blue once the answer is written and stays until the discussion is
-  opened, and an incognito discussion stops its answer when it is left. While the user scrolls a
-  discussion longer than the window, two buttons over its bottom right corner go at once to its
-  start and to its end. The model that comes with Albireo names each discussion in
-  the language of its first question, the first words standing for the title until it arrives,
-  and keeps a memory of the user, written in the language of the interface whatever the language
-  of the discussions. The application asks the browser to keep its database, and its settings
-  show whether the browser does and the room used, with the advice of a regular export otherwise.
-- **Documents** attached to a message or to a project: Word, Excel, PowerPoint, OpenDocument,
-  PDF, RTF, HTML, text, CSV, Markdown and source code. The browser extracts the text of every page
-  of a document, of every sheet of a workbook in the order of its tabs, and of every slide of a
-  presentation in the order of the show. Each file appears as a thumbnail with its format, which
-  can be removed before sending, and the edition of a question keeps, removes or adds its files.
-- **Images** given to the models that read them: a question carries PNG or JPEG images (the
-  browser converts the other formats it shows), attached, pasted or dropped, shown as thumbnails
-  that open whole in a viewer, ten at most in the context of a discussion, the images of the
-  exchanges that a compression summarized leaving the context with them. The knowledge of a project
-  holds 100 items at most, documents and images together, of which ten images, which the model that
-  comes with Albireo describes in the background; their descriptions are searched with its
-  documents, and a question that finds one receives the image, four at most.
-  A model that reads text only receives the names of the images.
-- **Reading aloud**: each answer has a button that reads it aloud, in English, French, German,
-  Italian or Spanish as its words show, with the speech synthesis that comes with Albireo, which
-  needs no network and no voice of Windows (see [Service](#service)).
-- **Projects**: discussions grouped with instructions and documents that form their shared
-  context, read whole when they fit, searched otherwise by meaning and by words, the search and
-  its index running in the browser (see [Documents and context](#documents-and-context)).
-- **Three functions**, general, code and security, each served by a language model of the
-  catalog, chosen in the Models window or by the service when a model arrives, and an embedding
-  model for the search in documents, which the service installs in every case.
-- **Models that come with Albireo**: the complete installer carries Qwen3-VL-4B-Thinking-albireo,
-  which reads images and text, reasons before its answer when deep reasoning is on and answers
-  directly otherwise, and serves the three functions as soon as Albireo is installed, and Qwen3-Embedding-0.6B-albireo for the
-  search, both retrieved and checked by the build (see
-  [Models that come with Albireo](#models-that-come-with-albireo)).
-- **Agent mode**: the model calls tools that run in the page (calculator, JavaScript in a
-  sandboxed frame, outline, reading and search of the documents, search of the other
-  discussions, date, files to download), up to 100 steps per answer, the context fitted before
-  each step. The help next to its button describes the tools; each step of an answer shows
-  its tool, its arguments, its result, its state and its duration. The calculator reads the
-  percentages ("17,5 % de 2 340"), the decimal commas and the thousands written with spaces.
-- **Web access**: the Web button of the composer, off in each new discussion as the deep
-  reasoning and the agent are, gives the model a search of Wikipedia and the reading of the pages and PDF files of public addresses, which the
-  service fetches; the model reads only the addresses that the discussion holds (see
-  [Web access](#web-access)).
-- **Several conversations at once**: the requests of every client are computed together, one
-  forward pass serving the next token of each, and the keys and values of a finished request stay
-  cached so that the next turn of a conversation starts where the previous one ended; once an
-  answer ends, the engine reads its history in the background as the next question renders it,
-  without the reasoning of the earlier turns, so that the next question computes its own tokens
-  only.
-- **An interface for other programs**: `/v1/chat/completions`, `/v1/completions`,
-  `/v1/embeddings`, `/v1/audio/speech` and `/v1/models` follow the OpenAI interface, streaming
-  and images included, with its documentation as a Swagger page at `/docs/`.
-- **Engines for each kind of processor**: portable, AVX2, AVX-VNNI, Intel NPU and integrated
-  GPU through OpenVINO, NVIDIA GPU through CUDA, behind a single C interface. The automatic choice
-  runs the accelerator of the computer, the processor computing what its device does not take, and
-  the Accelerator menu of the icon chooses it, the processor alone, or a device by its name, and
-  measures the engines on the machine.
-- **Models from a catalog** (unsigned in the macOS fork), downloaded in parallel parts from their
-  official sources, checked against their hashes, or imported from a disk or a memory card.
-- **Updates** announced by a signed feed of the publication space, their installers published
-  there, downloaded in the background and installed when the service restarts (removed in the
-  macOS fork).
-- **An offline mode** for the computers without network: the service opens no connection, and
-  the catalog, the models and the updates come from an offline bundle brought on a disk.
-- **Five languages** in every window: English, French, German, Italian and Spanish, the language
-  of Windows by default.
+- **Discussion** dans l'application web, avec les discussions conservées dans le navigateur (IndexedDB), un
+  mode navigation privée qui ne les garde qu'en mémoire, une recherche dans les discussions, et le raisonnement
+  des modèles qui raisonnent affiché pendant qu'ils réfléchissent, puis replié dès que la réponse commence. Chaque
+  question et chaque réponse garde son heure, affichée à côté de ses boutons (« il y a 3 heures » pendant une journée,
+  puis la date courte avec ses heures et ses minutes) ; une question passée peut être reposée à la fin
+  de la discussion, et une question modifiée fait repartir la discussion d'elle, ce qui la suivait étant
+  supprimé. Les boutons d'une réponse agissent une fois la réponse écrite, réponse régénérée
+  comprise, et le bouton Arrêter pulse pendant qu'elle est préparée et écrite. Une réponse continue pendant
+  qu'une autre discussion est affichée ou qu'une nouvelle commence ; le panneau latéral marque sa discussion d'un
+  point clignotant, qui devient bleu une fois la réponse écrite et reste jusqu'à ce que la discussion soit
+  ouverte, et une discussion en navigation privée arrête sa réponse quand on la quitte. Quand l'utilisateur fait défiler une
+  discussion plus longue que la fenêtre, deux boutons au-dessus de son coin inférieur droit mènent d'un coup à son
+  début et à sa fin. Le modèle livré avec Albireo nomme chaque discussion dans
+  la langue de sa première question, les premiers mots tenant lieu de titre jusqu'à son arrivée,
+  et garde une mémoire de l'utilisateur, écrite dans la langue de l'interface quelle que soit la langue
+  des discussions. L'application demande au navigateur de conserver sa base de données, et ses réglages
+  indiquent si le navigateur le fait et la place occupée, avec le conseil d'un export régulier sinon.
+- **Documents** joints à un message ou à un projet : Word, Excel, PowerPoint, OpenDocument,
+  PDF, RTF, HTML, texte, CSV, Markdown et code source. Le navigateur extrait le texte de chaque page
+  d'un document, de chaque feuille d'un classeur dans l'ordre de ses onglets, et de chaque diapositive d'une
+  présentation dans l'ordre du diaporama. Chaque fichier apparaît sous forme de vignette avec son format, qui
+  peut être retirée avant l'envoi, et la modification d'une question garde, retire ou ajoute ses fichiers.
+- **Images** données aux modèles qui les lisent : une question porte des images PNG ou JPEG (le
+  navigateur convertit les autres formats qu'il affiche), jointes, collées ou déposées, affichées en vignettes
+  qui s'ouvrent en entier dans une visionneuse, dix au plus dans le contexte d'une discussion, les images des
+  échanges qu'une compression a résumés quittant le contexte avec eux. La base de connaissances d'un projet
+  contient 100 éléments au plus, documents et images ensemble, dont dix images, que le modèle
+  livré avec Albireo décrit en arrière-plan ; leurs descriptions sont cherchées avec ses
+  documents, et une question qui en trouve une reçoit l'image, quatre au plus.
+  Un modèle qui ne lit que du texte ne reçoit que les noms des images.
+- **Lecture à voix haute** : chaque réponse a un bouton qui la lit à voix haute, en anglais, français, allemand,
+  italien ou espagnol selon ce que montrent ses mots, avec la synthèse vocale livrée avec Albireo, qui
+  n'a besoin ni de réseau ni d'une voix de Windows (voir [Service](#service)).
+- **Projets** : des discussions regroupées avec des instructions et des documents qui forment leur
+  contexte commun, lus en entier quand ils tiennent, cherchés sinon par le sens et par les mots, la recherche et
+  son index tournant dans le navigateur (voir [Documents et contexte](#documents-et-contexte)).
+- **Trois fonctions**, générale, code et sécurité, chacune servie par un modèle de langage du
+  catalogue, choisi dans la fenêtre Modèles ou par le service quand un modèle arrive, et un modèle
+  d'embedding pour la recherche dans les documents, que le service installe dans tous les cas.
+- **Modèles livrés avec Albireo** : l'installateur complet porte Qwen3-VL-4B-Thinking-albireo,
+  qui lit les images et le texte, raisonne avant sa réponse quand le raisonnement approfondi est activé et répond
+  directement sinon, et sert les trois fonctions dès qu'Albireo est installé, et Qwen3-Embedding-0.6B-albireo pour la
+  recherche, tous deux récupérés et vérifiés par le build (voir
+  [Modèles livrés avec Albireo](#modèles-livrés-avec-albireo)).
+- **Mode agent** : le modèle appelle des outils qui tournent dans la page (calculatrice, JavaScript dans un
+  cadre isolé, plan, lecture et recherche des documents, recherche dans les autres
+  discussions, date, fichiers à télécharger), jusqu'à 100 étapes par réponse, le contexte ajusté avant
+  chaque étape. L'aide à côté de son bouton décrit les outils ; chaque étape d'une réponse montre
+  son outil, ses arguments, son résultat, son état et sa durée. La calculatrice lit les
+  pourcentages (« 17,5 % de 2 340 »), les virgules décimales et les milliers écrits avec des espaces.
+- **Accès au web** : le bouton Web de la zone de saisie, désactivé dans chaque nouvelle discussion comme le
+  raisonnement approfondi et l'agent, donne au modèle une recherche dans Wikipédia et la lecture des pages et des fichiers PDF d'adresses publiques, que le
+  service récupère ; le modèle ne lit que les adresses que contient la discussion (voir
+  [Accès au web](#accès-au-web)).
+- **Plusieurs conversations à la fois** : les requêtes de tous les clients sont calculées ensemble, une
+  seule passe avant servant le token suivant de chacune, et les clés et valeurs d'une requête terminée restent
+  en cache pour que le tour suivant d'une conversation commence là où le précédent s'est arrêté ; une fois une
+  réponse terminée, le moteur lit son historique en arrière-plan tel que la question suivante le présentera,
+  sans le raisonnement des tours précédents, pour que la question suivante ne calcule que ses propres
+  tokens.
+- **Une interface pour les autres programmes** : `/v1/chat/completions`, `/v1/completions`,
+  `/v1/embeddings`, `/v1/audio/speech` et `/v1/models` suivent l'interface d'OpenAI, streaming
+  et images compris, avec sa documentation sous forme de page Swagger à `/docs/`.
+- **Des moteurs pour chaque type de processeur** : portable, AVX2, AVX-VNNI, NPU Intel et GPU
+  intégré via OpenVINO, GPU NVIDIA via CUDA, derrière une seule interface C. Le choix automatique
+  fait tourner l'accélérateur de l'ordinateur, le processeur calculant ce que son périphérique ne prend pas, et
+  le menu Accélérateur de l'icône le choisit, ou le processeur seul, ou un périphérique par son nom, et
+  mesure les moteurs sur la machine.
+- **Des modèles issus d'un catalogue** (non signé dans le fork macOS), téléchargés en parties parallèles depuis leurs
+  sources officielles, vérifiés par rapport à leurs empreintes, ou importés depuis un disque ou une carte mémoire.
+- **Des mises à jour** annoncées par un flux signé de l'espace de publication, leurs installateurs publiés
+  là, téléchargées en arrière-plan et installées au redémarrage du service (retirées dans le
+  fork macOS).
+- **Un mode hors ligne** pour les ordinateurs sans réseau : le service n'ouvre aucune connexion, et
+  le catalogue, les modèles et les mises à jour viennent d'un paquet hors ligne apporté sur un disque.
+- **Cinq langues** dans chaque fenêtre : anglais, français, allemand, italien et espagnol, la langue
+  de Windows par défaut.
 
-## Screenshots
+## Captures d'écran
 
-The web application served by the service, the windows of the icon and the installer, with the
-model that comes with Albireo (Qwen3-VL-4B-Thinking-albireo) on a processor of two cores.
+L'application web servie par le service, les fenêtres de l'icône et l'installateur, avec le
+modèle livré avec Albireo (Qwen3-VL-4B-Thinking-albireo) sur un processeur à deux cœurs.
 
 | | |
 |---|---|
-| ![The page of a project](docs/images/project.png) | ![A discussion of the project](docs/images/project-chat.png) |
-| A project: its instructions, its documents and its images with their descriptions | A discussion of the project, which cites the policy and the scan given as an image |
-| ![Code in the dark theme](docs/images/code-dark.png) | ![The memory of the discussions](docs/images/memory.png) |
-| Code, in the dark theme | The memory of the discussions, written in the background |
-| ![The Models window](docs/images/models.png) | ![The About tab](docs/images/about.png) |
-| The Models window of the icon | Version, engine, processor and use of the service |
-| ![The installer](docs/images/setup.png) | ![The documentation of the interface](docs/images/api.png) |
-| The installer, which carries the models | The documentation of the interface, at `/docs/` |
+| ![La page d'un projet](docs/images/project.png) | ![Une discussion du projet](docs/images/project-chat.png) |
+| Un projet : ses instructions, ses documents et ses images avec leurs descriptions | Une discussion du projet, qui cite la politique et le document numérisé donné sous forme d'image |
+| ![Du code dans le thème sombre](docs/images/code-dark.png) | ![La mémoire des discussions](docs/images/memory.png) |
+| Du code, dans le thème sombre | La mémoire des discussions, écrite en arrière-plan |
+| ![La fenêtre Modèles](docs/images/models.png) | ![L'onglet À propos](docs/images/about.png) |
+| La fenêtre Modèles de l'icône | Version, moteur, processeur et utilisation du service |
+| ![L'installateur](docs/images/setup.png) | ![La documentation de l'interface](docs/images/api.png) |
+| L'installateur, qui porte les modèles | La documentation de l'interface, à `/docs/` |
 
-## How it is built
+## Comment il est construit
 
-### Engines
+### Moteurs
 
-An engine is a library (`engines\albireo-engine-<variant>.dll`) that exports the functions of
-[`common/engine_api.h`](common/engine_api.h): describe, create, load and unload a model, submit a
-request whose tokens come back as events, cancel it, and answer queries (statistics, tokens,
-models). Every variant is built from the same sources:
+Un moteur est une bibliothèque (`engines\albireo-engine-<variant>.dll`) qui exporte les fonctions de
+[`common/engine_api.h`](common/engine_api.h) : décrire, créer, charger et décharger un modèle, soumettre une
+requête dont les tokens reviennent sous forme d'événements, l'annuler, et répondre à des interrogations (statistiques, tokens,
+modèles). Chaque variante est construite à partir des mêmes sources :
 
-| Variant       | Products with the weights                                             | Built with                   |
+| Variante      | Produits avec les poids                                               | Construite avec              |
 |---------------|-----------------------------------------------------------------------|------------------------------|
-| `cpu`         | quantized kernels, every x86-64 processor                             | the main build tree          |
-| `cpu-avx2`    | quantized kernels, AVX2, FMA and F16C (Intel Haswell, AMD Zen and later) | the main build tree       |
-| `cpu-avxvnni` | `cpu-avx2` with the dot products of AVX-VNNI (Intel Core from Alder Lake on, Intel Xeon from Sapphire Rapids on, AMD Zen 5) | the main build tree |
-| `openvino`    | NPU and integrated GPU of Intel processors, kernels of `cpu-avx2`     | `ALBIREO_ENGINE_OPENVINO=ON` |
-| `openvino-avxvnni` | `openvino` with the kernels of `cpu-avxvnni`                     | `ALBIREO_ENGINE_OPENVINO=ON` |
-| `cuda`        | NVIDIA graphics processors, AVX2 kernels                              | `ALBIREO_ENGINE_CUDA=ON`     |
+| `cpu`         | noyaux quantifiés, tout processeur x86-64                             | l'arbre de build principal   |
+| `cpu-avx2`    | noyaux quantifiés, AVX2, FMA et F16C (Intel Haswell, AMD Zen et suivants) | l'arbre de build principal |
+| `cpu-avxvnni` | `cpu-avx2` avec les produits scalaires d'AVX-VNNI (Intel Core à partir d'Alder Lake, Intel Xeon à partir de Sapphire Rapids, AMD Zen 5) | l'arbre de build principal |
+| `openvino`    | NPU et GPU intégré des processeurs Intel, noyaux de `cpu-avx2`        | `ALBIREO_ENGINE_OPENVINO=ON` |
+| `openvino-avxvnni` | `openvino` avec les noyaux de `cpu-avxvnni`                      | `ALBIREO_ENGINE_OPENVINO=ON` |
+| `cuda`        | processeurs graphiques NVIDIA, noyaux AVX2                            | `ALBIREO_ENGINE_CUDA=ON`     |
 
-A processor with AVX-512 and without AVX-VNNI (Intel Core Ice Lake, Tiger Lake and Rocket Lake,
-Intel Xeon of Cascade Lake and Ice Lake, AMD Zen 4) runs `cpu-avx2`; an update removes from the
-installation the libraries of the engines of AVX-512 that earlier versions installed.
+Un processeur doté d'AVX-512 et sans AVX-VNNI (Intel Core Ice Lake, Tiger Lake et Rocket Lake,
+Intel Xeon Cascade Lake et Ice Lake, AMD Zen 4) exécute `cpu-avx2` ; une mise à jour retire de
+l'installation les bibliothèques des moteurs AVX-512 qu'installaient les versions précédentes.
 
-The half precision conversions of F16C belong to `cpu-avx2`: every processor with AVX2 has them,
-and the scales of the keys and values of the attention, and these keys and values themselves when
-the settings keep them in half precision, go through them. The variants
-differ in their quantized kernels only ([`engine/qkernels.cpp`](engine/qkernels.cpp)), compiled for
-the instructions of each variant (`/arch:AVX2` and the macro `ALBIREO_AVX_VNNI` with Visual Studio;
-`-mavxvnni` with GCC and Clang) while the rest of the library stays at AVX2: the description of a
-library runs on any processor with AVX2 and reports the instructions the processor lacks, so that the
-service passes to the next variant. VNNI adds up four products of bytes, or two products of 16-bit
-integers, in one instruction (`vpdpbusd`, `vpdpwssd`): the kernels of Q4_0 and Q8_0 take the offsets
-of their weights from the sums of the activations, and those of Q4_K, Q5_K and Q6_K apply their
-scales with `vpdpwssd`. The AVX-VNNI intrinsics need Visual Studio 2022 (GCC 11, Clang 12); an older
-compiler builds the other variants.
+Les conversions en demi-précision de F16C appartiennent à `cpu-avx2` : tout processeur doté d'AVX2 les possède,
+et les échelles des clés et des valeurs de l'attention, ainsi que ces clés et valeurs elles-mêmes quand
+les réglages les gardent en demi-précision, passent par elles. Les variantes
+ne diffèrent que par leurs noyaux quantifiés ([`engine/qkernels.cpp`](engine/qkernels.cpp)), compilés pour
+les instructions de chaque variante (`/arch:AVX2` et la macro `ALBIREO_AVX_VNNI` avec Visual Studio ;
+`-mavxvnni` avec GCC et Clang) tandis que le reste de la bibliothèque reste en AVX2 : la description d'une
+bibliothèque s'exécute sur tout processeur doté d'AVX2 et signale les instructions qui manquent au processeur, pour que le
+service passe à la variante suivante. VNNI additionne quatre produits d'octets, ou deux produits d'entiers
+de 16 bits, en une seule instruction (`vpdpbusd`, `vpdpwssd`) : les noyaux de Q4_0 et Q8_0 tirent les décalages
+de leurs poids des sommes des activations, et ceux de Q4_K, Q5_K et Q6_K appliquent leurs
+échelles avec `vpdpwssd`. Les intrinsèques AVX-VNNI demandent Visual Studio 2022 (GCC 11, Clang 12) ; un
+compilateur plus ancien construit les autres variantes.
 
-The products the NPU or the graphics processor does not take, and every product the routing of
-dlib leaves to the processor, run on the quantized kernels of the engine. The OpenVINO engine is
-therefore built once per family of kernels, so that a processor with AVX-VNNI keeps its kernels
-when the NPU or the GPU serves the models. The service describes the OpenVINO engine of the
-richest family the processor runs and offers its devices (`openvino:npu`, `openvino:gpu`,
-`openvino:both`); the setting `"engine": "openvino"` names that engine. A library whose kernels
-need instructions the processor lacks is reported as such without being loaded, since the runtime
-of a device takes seconds to start.
+Les produits que le NPU ou le processeur graphique ne prend pas, et tout produit que le routage de
+dlib laisse au processeur, s'exécutent sur les noyaux quantifiés du moteur. Le moteur OpenVINO est
+donc construit une fois par famille de noyaux, pour qu'un processeur doté d'AVX-VNNI garde ses noyaux
+quand le NPU ou le GPU sert les modèles. Le service décrit le moteur OpenVINO de la
+famille la plus riche qu'exécute le processeur et propose ses périphériques (`openvino:npu`, `openvino:gpu`,
+`openvino:both`) ; le réglage `"engine": "openvino"` désigne ce moteur. Une bibliothèque dont les noyaux
+demandent des instructions qui manquent au processeur est signalée comme telle sans être chargée, car l'environnement d'exécution
+d'un périphérique met des secondes à démarrer.
 
-The forward pass ([`engine/cpu_runtime.cpp`](engine/cpu_runtime.cpp)) keeps the weights in the
-memory mapping of the GGUF file, in their quantized form, and multiplies them with kernels that
-quantize the activations to 8 bits per block, so that a generated token reads each weight once.
-When several answers are written together, the Q4_K and Q6_K kernels of AVX2 and AVX-VNNI compute
-two to four tokens for each weight they unpack, each token with the arithmetic it would get
-alone: with four answers at once, a step takes 32 to 40 % less time (Qwen3 0.6B and 1.7B, two
-cores). A pass of eight tokens or more computes in single precision, with a packed matrix product
-from 256 tokens; the weights of Q6_K are expanded by a
-vector kernel of their own, bit for bit with dlib; the work buffers lie on lines of 64 bytes.
-These paths keep each result within the tolerances of the tests, and the numbers of a pass
-depend on its size: at temperature 0, the first answer to a prompt, whose last token is read
-within the whole prompt, may differ from the next ones, which take the prompt from the cache.
-The keys and values live in pages of 256 positions, one sequence per request, in 8 bits by default
-(`kv_type`): groups of 32 values that share a scale in half precision, 34 bytes against 64 in half
-precision ([`engine/kv_cache.h`](engine/kv_cache.h)). The keys are rotated before their rounding,
-the signs of a fixed pattern then the normalized Walsh-Hadamard transform, and the queries alike,
-which keeps their products: a few channels of the keys of Qwen3 hold values ten times larger than
-the others, which the groups would round with a coarse step, and the rotation spreads them over the
-row. Against half precision, the 8-bit keys and values gave the same next token on the 210
-positions of a text with Qwen3-VL 4B, with a mean divergence of 6.5e-5 (KL), twenty-five times
-below the differences of the integer products of the generation; without the rotation, the keys
-alone gave 1.1e-2 with Qwen3 0.6B, and 7e-4 with it. The conversations that start with the same
-text share the full pages of that text, and a sequence copies a shared page before writing in it.
-The attention runs on the processor in every variant, by tiles: up to 64 rows of queries, the
-heads that share one key/value head for consecutive tokens of a prompt, read the pages one after
-the other with a running maximum and sum, as FlashAttention does, so that each key and value
-taken from memory serves the whole tile instead of a single row. On two cores, the 2,900 tokens
-of a question that a project adds to a discussion of 3,200 tokens took 80 s instead of 228 s with
-Qwen3 0.6B. While a single answer is generated, the positions of each tile are split into ranges
-of 256 positions at least, each read by one task for all the heads of its group, and the partial
-sums of the ranges are merged (the split of FlashDecoding): every thread takes part, and the keys
-and values of a long context are read once per token instead of once per head. On two cores, a
-step of Qwen3 0.6B after 8,192 positions took 102 ms with the 8-bit keys and values, against
-116 ms in half precision. The sums of the ranges come in another order than in a single task, so
-that the logits of a step differ by the rounding of the floats from one number of threads to
-another.
+La passe avant ([`engine/cpu_runtime.cpp`](engine/cpu_runtime.cpp)) garde les poids dans la
+projection en mémoire du fichier GGUF, sous leur forme quantifiée, et les multiplie avec des noyaux qui
+quantifient les activations sur 8 bits par bloc, pour qu'un token généré lise chaque poids une seule fois.
+Quand plusieurs réponses sont écrites ensemble, les noyaux Q4_K et Q6_K d'AVX2 et d'AVX-VNNI calculent
+deux à quatre tokens pour chaque poids qu'ils décompressent, chaque token avec l'arithmétique qu'il aurait
+seul : avec quatre réponses à la fois, une étape prend 32 à 40 % de temps en moins (Qwen3 0.6B et 1.7B, deux
+cœurs). Une passe de huit tokens ou plus calcule en simple précision, avec un produit matriciel compacté
+à partir de 256 tokens ; les poids de Q6_K sont dépliés par un
+noyau vectoriel qui leur est propre, bit pour bit identique à dlib ; les tampons de travail sont alignés sur des lignes de 64 octets.
+Ces chemins gardent chaque résultat dans les tolérances des tests, et les nombres d'une passe
+dépendent de sa taille : à température 0, la première réponse à un prompt, dont le dernier token est lu
+au sein du prompt entier, peut différer des suivantes, qui prennent le prompt dans le cache.
+Les clés et les valeurs vivent dans des pages de 256 positions, une séquence par requête, sur 8 bits par défaut
+(`kv_type`) : des groupes de 32 valeurs qui partagent une échelle en demi-précision, 34 octets contre 64 en demi-précision
+([`engine/kv_cache.h`](engine/kv_cache.h)). Les clés sont tournées avant leur arrondi,
+par les signes d'un motif fixe puis la transformée de Walsh-Hadamard normalisée, et les requêtes de même,
+ce qui conserve leurs produits : quelques canaux des clés de Qwen3 portent des valeurs dix fois plus grandes que
+les autres, que les groupes arrondiraient avec un pas grossier, et la rotation les répartit sur la
+ligne. Par rapport à la demi-précision, les clés et valeurs sur 8 bits ont donné le même token suivant sur les 210
+positions d'un texte avec Qwen3-VL 4B, avec une divergence moyenne de 6.5e-5 (KL), vingt-cinq fois
+inférieure aux différences des produits entiers de la génération ; sans la rotation, les clés
+seules donnaient 1.1e-2 avec Qwen3 0.6B, et 7e-4 avec elle. Les conversations qui commencent par le même
+texte partagent les pages pleines de ce texte, et une séquence copie une page partagée avant d'y écrire.
+L'attention s'exécute sur le processeur dans toutes les variantes, par tuiles : jusqu'à 64 lignes de requêtes, les
+têtes qui partagent une même tête clé/valeur pour des tokens consécutifs d'un prompt, lisent les pages l'une après
+l'autre avec un maximum et une somme courants, comme le fait FlashAttention, pour que chaque clé et valeur
+tirée de la mémoire serve la tuile entière au lieu d'une seule ligne. Sur deux cœurs, les 2 900 tokens
+d'une question qu'un projet ajoute à une discussion de 3 200 tokens ont pris 80 s au lieu de 228 s avec
+Qwen3 0.6B. Pendant qu'une seule réponse est générée, les positions de chaque tuile sont découpées en plages
+de 256 positions au moins, chacune lue par une tâche pour toutes les têtes de son groupe, et les sommes
+partielles des plages sont fusionnées (le découpage de FlashDecoding) : chaque thread y prend part, et les clés
+et valeurs d'un long contexte sont lues une fois par token au lieu d'une fois par tête. Sur deux cœurs, une
+étape de Qwen3 0.6B après 8 192 positions a pris 102 ms avec les clés et valeurs sur 8 bits, contre
+116 ms en demi-précision. Les sommes des plages arrivent dans un autre ordre que dans une seule tâche, si
+bien que les logits d'une étape diffèrent de l'arrondi des flottants d'un nombre de threads à
+l'autre.
 
-The context of a model is the one it was trained for, which the engine brings down only when the
-keys and values of a full context exceed the memory the system can commit, its physical memory and
-its paging file or swap together, less a reserve left to the system (an eighth of the physical
-memory, 1 GB at least) and the weights of the model, which a generation reads at every token; the
-setting `context` chooses another one. The pages are allocated as the sequences grow, within a
-budget of two full contexts in that memory, and beyond the pages of the first 4,096 positions a
-guard refuses a new page once the memory the system can still commit comes down to that reserve,
-the request then waiting or ending as when the budget runs out. The memory of the keys and values follows the text actually
-held: the 262,144 positions of Qwen3-VL 4B take 20.5 GB in 8 bits (38.6 GB in half precision), which
-only a conversation of that length reaches, the paging file or the swap holding what the physical
-memory does not. The keys and values stay in the memory of the computer with every engine: the
-graphics engines keep the attention on the processor, and V²RAM extends the memory of the card for
-the weights. The web application sizes its own choices within that context (see the prompt of a
-question below). The scheduler ([`engine/engine.cpp`](engine/engine.cpp)) builds each pass from
-the next token of every request being generated and a slice of the prompts being read, and draws
-the next tokens of the pass in parallel. When the pages run out, a prompt being read gives its
-pages back to the answers being written and is read again once there is room; the context of a
-model never exceeds the positions its pages can hold, so a prompt the engine accepts can always
-be read to its end.
+Le contexte d'un modèle est celui pour lequel il a été entraîné, que le moteur ne réduit que lorsque les
+clés et valeurs d'un contexte plein dépassent la mémoire que le système peut engager, sa mémoire physique et
+son fichier d'échange ou son swap ensemble, moins une réserve laissée au système (un huitième de la mémoire
+physique, 1 Go au moins) et les poids du modèle, qu'une génération lit à chaque token ; le
+réglage `context` en choisit un autre. Les pages sont allouées à mesure que les séquences grandissent, dans un
+budget de deux contextes pleins dans cette mémoire, et au-delà des pages des 4 096 premières positions une
+garde refuse une nouvelle page dès que la mémoire que le système peut encore engager descend à cette réserve,
+la requête attendant alors ou se terminant comme quand le budget s'épuise. La mémoire des clés et valeurs suit le texte réellement
+contenu : les 262 144 positions de Qwen3-VL 4B prennent 20,5 Go sur 8 bits (38,6 Go en demi-précision), ce que
+seule une conversation de cette longueur atteint, le fichier d'échange ou le swap contenant ce que la mémoire
+physique ne contient pas. Les clés et valeurs restent dans la mémoire de l'ordinateur avec tous les moteurs : les
+moteurs graphiques gardent l'attention sur le processeur, et V²RAM étend la mémoire de la carte pour
+les poids. L'application web dimensionne ses propres choix dans ce contexte (voir le prompt d'une
+question ci-dessous). L'ordonnanceur ([`engine/engine.cpp`](engine/engine.cpp)) construit chaque passe à partir
+du token suivant de chaque requête en cours de génération et d'une tranche des prompts en cours de lecture, et tire
+les tokens suivants de la passe en parallèle. Quand les pages s'épuisent, un prompt en cours de lecture rend ses
+pages aux réponses en cours d'écriture et est relu dès qu'il y a de la place ; le contexte d'un
+modèle ne dépasse jamais les positions que ses pages peuvent contenir, si bien qu'un prompt accepté par le moteur peut toujours
+être lu jusqu'au bout.
 
-The processor engines take no BLAS: their products start from the quantized weights of the mapped
-file, and the packed kernel of the prompt passes reaches 66 to 77 % of the peak of the AVX2 units
-of two cores. Measured there, oneMKL 2026.2 bounded to AVX2 and called per tile of expanded rows
-read a prompt of 2,182 tokens 1 to 6 % faster with Qwen3 0.6B and 7 to 11 % faster with
-Qwen3-VL 4B, for 283 MB of libraries in the installation. The engines of CUDA multiply on the card
-with cuBLAS, whose libraries the installers carry.
+Les moteurs processeur ne prennent aucune BLAS : leurs produits partent des poids quantifiés du fichier
+projeté, et le noyau compacté des passes de prompt atteint 66 à 77 % de la crête des unités AVX2
+de deux cœurs. Mesuré là, oneMKL 2026.2 limité à AVX2 et appelé par tuile de lignes dépliées
+lisait un prompt de 2 182 tokens 1 à 6 % plus vite avec Qwen3 0.6B et 7 à 11 % plus vite avec
+Qwen3-VL 4B, pour 283 Mo de bibliothèques dans l'installation. Les moteurs CUDA multiplient sur la carte
+avec cuBLAS, dont les installateurs portent les bibliothèques.
 
-The engines of the devices add a `matmul_offload` ([`engine/offload.h`](engine/offload.h)) that
-receives each product with the way to compute it on the processor
-([`engine/tensor_backend.cpp`](engine/tensor_backend.cpp)). The product goes to the device through
-the tensors of dlib, with a copy of the weight matrix kept while the copies of all the models fit
-in a budget:
+Les moteurs des périphériques ajoutent un `matmul_offload` ([`engine/offload.h`](engine/offload.h)) qui
+reçoit chaque produit avec la façon de le calculer sur le processeur
+([`engine/tensor_backend.cpp`](engine/tensor_backend.cpp)). Le produit part vers le périphérique par
+les tenseurs de dlib, avec une copie de la matrice des poids conservée tant que les copies de tous les modèles tiennent
+dans un budget :
 
-- with OpenVINO, the copies hold floats in single precision, and the routing of the NPU module of
-  dlib times the processor kernels against the NPU and the GPU, shape by shape, and keeps the
-  faster;
-- with CUDA, a copy holds the blocks of the GGUF format of its matrix as the file holds them, for
-  F32, F16, BF16, Q4_0, Q4_1, Q5_0, Q5_1, Q8_0, IQ4_NL, Q4_K, Q5_K and Q6_K, and floats in single
-  precision for the other formats. The kernels of dlib
-  ([`dlib/cuda/cuda_gguf.cu`](../../cuda/cuda_gguf.cu)) read the blocks in place for a product of
-  fewer than 64 tokens, a warp per row decoding each group of 32 weights once for up to eight
-  tokens, and expand them from 64 tokens on by tiles of 64 MB that cuBLAS multiplies. Before a new
-  copy serves, its first 64 rows multiply probe activations and are expanded on the card, against
-  the same work of the processor: a format whose results differ keeps its matrices in single
-  precision. The engine measures the
-  products of each shape on two matrices and on the processor, and checks its choice at growing
-  intervals. The blocks cross the bus from the mapping of the file, without an image in the memory
-  of the host, and the copies stay within the memory of the card that the extended device memory
-  of dlib (V²RAM) manages, less 1 GiB (a quarter of it on a smaller card) for the hidden states of
-  the passes, the tiles and cuBLAS. A matrix left out of the copies is computed by the processor
-  from its quantized weights for a product of fewer than 128 tokens, a generated token among them,
-  and crosses the bus in its format for that product alone from 128 tokens on. A size given to the
-  file of V²RAM (`v2ram_max_mb`) lets the copies go beyond the card into it, the blocks that do not
-  fit moving to the memory of the host or to that file and coming back ahead of their use; once
-  the copies exceed the memory of the card, the products of fewer than eight tokens stay on the
-  processor. Only the rows of a product cross the bus.
+- avec OpenVINO, les copies contiennent des flottants en simple précision, et le routage du module NPU de
+  dlib chronomètre les noyaux du processeur contre le NPU et le GPU, forme par forme, et garde le
+  plus rapide ;
+- avec CUDA, une copie contient les blocs au format GGUF de sa matrice tels que le fichier les contient, pour
+  F32, F16, BF16, Q4_0, Q4_1, Q5_0, Q5_1, Q8_0, IQ4_NL, Q4_K, Q5_K et Q6_K, et des flottants en simple
+  précision pour les autres formats. Les noyaux de dlib
+  ([`dlib/cuda/cuda_gguf.cu`](../../cuda/cuda_gguf.cu)) lisent les blocs sur place pour un produit de
+  moins de 64 tokens, un warp par ligne décodant chaque groupe de 32 poids une seule fois pour jusqu'à huit
+  tokens, et les déplient à partir de 64 tokens par tuiles de 64 Mo que cuBLAS multiplie. Avant qu'une nouvelle
+  copie serve, ses 64 premières lignes multiplient des activations de sonde et sont dépliées sur la carte, comparées
+  au même travail du processeur : un format dont les résultats diffèrent garde ses matrices en simple
+  précision. Le moteur mesure les
+  produits de chaque forme sur deux matrices et sur le processeur, et vérifie son choix à des
+  intervalles croissants. Les blocs traversent le bus depuis la projection du fichier, sans image dans la mémoire
+  de l'hôte, et les copies restent dans la mémoire de la carte que gère la mémoire de périphérique étendue
+  de dlib (V²RAM), moins 1 Gio (un quart de celle-ci sur une carte plus petite) pour les états cachés des
+  passes, les tuiles et cuBLAS. Une matrice laissée hors des copies est calculée par le processeur
+  à partir de ses poids quantifiés pour un produit de moins de 128 tokens, dont un token généré,
+  et traverse le bus dans son format pour ce seul produit à partir de 128 tokens. Une taille donnée au
+  fichier de V²RAM (`v2ram_max_mb`) permet aux copies de dépasser la carte pour s'y étendre, les blocs qui ne
+  tiennent pas passant dans la mémoire de l'hôte ou dans ce fichier et revenant avant leur utilisation ; dès que
+  les copies dépassent la mémoire de la carte, les produits de moins de huit tokens restent sur le
+  processeur. Seules les lignes d'un produit traversent le bus.
 
-With CUDA, the layers of a dense model run on the card as a whole (`layer_pass`): the hidden states
-of a pass stay on the card from the first layer to the last, the card computes the normalizations,
-the seven products, the SwiGLU gate and the residual sums of each layer, and the processor keeps
-the attention over the paged keys and values, the biases, the normalizations of queries and keys
-and the rotary positions. A layer crosses the bus once each way, the queries, keys and values of
-its tokens to the processor and the outputs of their attention back, through pinned memory and
-asynchronous copies, where the products alone crossed it twice per product. Before its first use,
-a pass of the card over 8 probe tokens, whose products read the blocks in place, and a pass over
-64, whose products go through the tiles, must give the logits of the processor alone within 1 %,
-the most likely token differing for one of the 8 probe tokens and four of the 64 at most, or the
-layers stay with the products; a check that the keys and values or the card put off is made
-again 64 passes later. A failure of the card brings the pass back to the processor, which
-computes it again. A model with a mixture of experts, and the passes that add the DeepStack
-slices of an image, keep the products.
+Avec CUDA, les couches d'un modèle dense s'exécutent sur la carte d'un seul tenant (`layer_pass`) : les états cachés
+d'une passe restent sur la carte de la première couche à la dernière, la carte calcule les normalisations,
+les sept produits, la porte SwiGLU et les sommes résiduelles de chaque couche, et le processeur garde
+l'attention sur les clés et valeurs paginées, les biais, les normalisations des requêtes et des clés
+et les positions rotatives. Une couche traverse le bus une fois dans chaque sens, les requêtes, clés et valeurs de
+ses tokens vers le processeur et les sorties de leur attention au retour, par de la mémoire épinglée et
+des copies asynchrones, là où les produits seuls le traversaient deux fois par produit. Avant sa première utilisation,
+une passe de la carte sur 8 tokens de sonde, dont les produits lisent les blocs sur place, et une passe sur
+64, dont les produits passent par les tuiles, doivent donner les logits du processeur seul à 1 % près,
+le token le plus probable différant pour un des 8 tokens de sonde et quatre des 64 au plus, sinon les
+couches restent avec les produits ; une vérification que les clés et valeurs ou la carte ont reportée est refaite
+64 passes plus tard. Une défaillance de la carte ramène la passe au processeur, qui
+la recalcule. Un modèle à mélange d'experts, et les passes qui ajoutent les tranches DeepStack
+d'une image, gardent les produits.
 
-With OpenVINO, the products of a single token often stay on the processor, which serves them from
-the compact weights; the products of the prompts go to the device. The image encoder of a model sends its
-products to the device of the engine too, its copies leaving the device for the decoder between
-two images.
+Avec OpenVINO, les produits d'un seul token restent souvent sur le processeur, qui les sert à partir
+des poids compacts ; les produits des prompts vont au périphérique. L'encodeur d'images d'un modèle envoie lui aussi ses
+produits au périphérique du moteur, ses copies quittant le périphérique pour le décodeur entre
+deux images.
 
-The models loaded together share the budget of the device (`device_mb`, automatic by default:
-80 % of the free memory of the card without V²RAM, the memory of the card V²RAM manages less its
-reserve with it, and its file too when `v2ram_max_mb` gives it a size, a quarter of the memory of
-the host with OpenVINO). A model with requests in progress or waiting keeps its
-copies. When it needs room, the models without requests give theirs, the least recently used model
-first, each giving the room asked and keeping its other copies; those copies come back when their
-model answers again. The embedding model takes part like the language models: while no document is
-being indexed or searched, its room goes to the models that answer. When every model has requests
-and the budget is full, a matrix without room is computed by the processor, or crosses the bus for
-a product of 128 tokens or more (CUDA), so that the requests of all the models go on together. The statistics of the device
-count the copies that left (`evictions`, `evicted_bytes`).
+Les modèles chargés ensemble partagent le budget du périphérique (`device_mb`, automatique par défaut :
+80 % de la mémoire libre de la carte sans V²RAM, la mémoire de la carte que gère V²RAM moins sa
+réserve avec lui, et aussi son fichier quand `v2ram_max_mb` lui donne une taille, un quart de la mémoire de
+l'hôte avec OpenVINO). Un modèle qui a des requêtes en cours ou en attente garde ses
+copies. Quand il lui faut de la place, les modèles sans requêtes donnent la leur, le modèle utilisé le moins récemment
+en premier, chacun donnant la place demandée et gardant ses autres copies ; ces copies reviennent quand leur
+modèle répond de nouveau. Le modèle d'embedding y prend part comme les modèles de langage : tant qu'aucun document n'est
+en cours d'indexation ou de recherche, sa place va aux modèles qui répondent. Quand tous les modèles ont des requêtes
+et que le budget est plein, une matrice sans place est calculée par le processeur, ou traverse le bus pour
+un produit de 128 tokens ou plus (CUDA), pour que les requêtes de tous les modèles avancent ensemble. Les statistiques du périphérique
+comptent les copies qui sont parties (`evictions`, `evicted_bytes`).
 
-A model replaced or deactivated in the Models window leaves the engine once its requests are served
-(`engine_host::unload_model`): from that moment the service routes no new request to it, the
-requests in progress and waiting end normally, possibly computed together with those of the other
-models, and the model is unloaded after the last one (the requests still running after 30 minutes
-end with the unloading). The window shows it as unloading meanwhile; activated again before it
-leaves, the model stays loaded. A model deleted while it answers is deleted the same way, once its
-requests are served, and is shown as being deleted until then.
+Un modèle remplacé ou désactivé dans la fenêtre Modèles quitte le moteur une fois ses requêtes servies
+(`engine_host::unload_model`) : à partir de ce moment, le service ne lui envoie plus aucune nouvelle requête, les
+requêtes en cours et en attente se terminent normalement, éventuellement calculées avec celles des autres
+modèles, et le modèle est déchargé après la dernière (les requêtes encore en cours après 30 minutes
+se terminent avec le déchargement). La fenêtre l'affiche comme en cours de déchargement entre-temps ; réactivé avant de
+partir, le modèle reste chargé. Un modèle supprimé pendant qu'il répond est supprimé de la même façon, une fois ses
+requêtes servies, et est affiché comme en cours de suppression jusque-là.
 
-### Measures of the engines
+### Mesures des moteurs
 
-"Measure the engines", in the Accelerator menu (`POST /albireo/v1/engines/benchmark`), measures each
-engine the computer runs, each device of an engine that has several, in a process of its own
-(`--bench-engine`) with the general model, or the smallest installed one: a first request of 16
-tokens reads the model from the disk, lets a device compile its graphs and make its copies, and
-lets the routing of the products settle; two requests of 64 tokens follow, and the faster of the
-two gives the measure, in tokens generated per second. The engine of the service computes nothing
-meanwhile: each measure waits until it serves no request, two minutes at most, and is made again
-once when the service received a request during it, so that a discussion, an indexing of documents
-or the work in the background does not share the processor with the engine measured. The automatic
-choice then gives the processor engine the place of an accelerator measured slower than it, and
-the service restarts when its choice changes. The Accelerator menu and the window of the computer
-give the measures in the language of the interface ("23.5 tokens/s", "23,5 jetons/s").
+« Mesurer les moteurs », dans le menu Accélérateur (`POST /albireo/v1/engines/benchmark`), mesure chaque
+moteur que l'ordinateur exécute, chaque périphérique d'un moteur qui en a plusieurs, dans un processus à part
+(`--bench-engine`) avec le modèle général, ou le plus petit modèle installé : une première requête de 16
+tokens lit le modèle sur le disque, laisse un périphérique compiler ses graphes et faire ses copies, et
+laisse le routage des produits se stabiliser ; deux requêtes de 64 tokens suivent, et la plus rapide des
+deux donne la mesure, en tokens générés par seconde. Le moteur du service ne calcule rien
+pendant ce temps : chaque mesure attend qu'il ne serve plus aucune requête, deux minutes au plus, et est refaite
+une fois quand le service a reçu une requête pendant celle-ci, pour qu'une discussion, une indexation de documents
+ou le travail en arrière-plan ne partage pas le processeur avec le moteur mesuré. Le choix automatique
+donne ensuite au moteur processeur la place d'un accélérateur mesuré plus lent que lui, et
+le service redémarre quand son choix change. Le menu Accélérateur et la fenêtre de l'ordinateur
+donnent les mesures dans la langue de l'interface (« 23.5 tokens/s », « 23,5 jetons/s »).
 
-The CUDA engine keeps the weights on the card in their GGUF formats and computes there the layers
-of a dense model, the attention staying on the processor: a generated token crosses the bus once
-each way per layer and reads 1.1 GB of weights on the card for Qwen3-VL 2B in Q4_K_M, where it read
-them in single precision, six times as many bytes, and crossed the bus twice for each of the 197
-products of its pass. The products the card lacks room for run on the processor from their
-quantized weights.
+Le moteur CUDA garde les poids sur la carte dans leurs formats GGUF et y calcule les couches
+d'un modèle dense, l'attention restant sur le processeur : un token généré traverse le bus une fois
+dans chaque sens par couche et lit 1,1 Go de poids sur la carte pour Qwen3-VL 2B en Q4_K_M, là où il les lisait
+en simple précision, six fois plus d'octets, et traversait le bus deux fois pour chacun des 197
+produits de sa passe. Les produits pour lesquels la carte manque de place s'exécutent sur le processeur à partir de leurs
+poids quantifiés.
 
-The conversation formats are written natively ([`engine/chat_format.cpp`](engine/chat_format.cpp)),
-the chat template of a model naming its format: ChatML (Qwen2.5, Qwen3, Qwen3-VL, EuroLLM, with the
-reasoning between `<think>` and `</think>`), Mistral (Ministral 3, Devstral Small 2), Llama 3,
-Granite 3, Granite 4.2 (ChatML with the tool calls in the XML form `<function=...>`), Phi-4-mini,
-the format of Foundation-Sec-8B-Reasoning and that of Foundation-Sec 1.1 8B Instruct, whose role
-markers `<|system|>`, `<|user|>` and `<|assistant|>` are plain text of its vocabulary: its GGUF files
-carry no template, the engine takes the one of the repository of the model, and these markers end
-its answer as its end of text token does. The instructions of the tools of Qwen2.5 keep the doubled
-braces of the example of its template, and CyberSecQwen 4B receives a system message in the turn of
-the user, as the template of its training writes it. The tests compare the prompts with those of the reference
-templates rendered by Jinja, byte for byte, as the libraries that apply chat templates render them,
-the line break after each tag and the spaces before it removed: the template of
-Foundation-Sec-8B-Reasoning, written over several lines, gives its turns one after the other, the
-answer right after `<|assistant|>`. The tokenizer of dlib reads the byte-level BPE vocabularies,
-with the pre-tokenizers of GPT-2, Llama 3, Qwen2, tekken and GPT-4o (Phi-4-mini) among others, and
-the SentencePiece ones (EuroLLM), whose leading space it puts after each control token as the
-reference tokenizers do; the token identifiers of the tests are those of llama.cpp.
+Les formats de conversation sont écrits nativement ([`engine/chat_format.cpp`](engine/chat_format.cpp)),
+le modèle de discussion (chat template) d'un modèle désignant son format : ChatML (Qwen2.5, Qwen3, Qwen3-VL, EuroLLM, avec le
+raisonnement entre `<think>` et `</think>`), Mistral (Ministral 3, Devstral Small 2), Llama 3,
+Granite 3, Granite 4.2 (ChatML avec les appels d'outils sous la forme XML `<function=...>`), Phi-4-mini,
+le format de Foundation-Sec-8B-Reasoning et celui de Foundation-Sec 1.1 8B Instruct, dont les marqueurs de rôle
+`<|system|>`, `<|user|>` et `<|assistant|>` sont du texte ordinaire de son vocabulaire : ses fichiers GGUF
+ne portent aucun template, le moteur prend celui du dépôt du modèle, et ces marqueurs terminent
+sa réponse comme le fait son token de fin de texte. Les instructions des outils de Qwen2.5 gardent les accolades
+doublées de l'exemple de son template, et CyberSecQwen 4B reçoit un message système dans le tour de
+l'utilisateur, comme l'écrit le template de son entraînement. Les tests comparent les prompts avec ceux des templates
+de référence rendus par Jinja, octet pour octet, comme les rendent les bibliothèques qui appliquent les chat templates,
+le saut de ligne après chaque balise et les espaces qui le précèdent retirés : le template de
+Foundation-Sec-8B-Reasoning, écrit sur plusieurs lignes, donne ses tours l'un après l'autre, la
+réponse juste après `<|assistant|>`. Le tokenizer de dlib lit les vocabulaires BPE au niveau de l'octet,
+avec entre autres les pré-tokenizers de GPT-2, Llama 3, Qwen2, tekken et GPT-4o (Phi-4-mini), et
+ceux de SentencePiece (EuroLLM), dont il place l'espace initial après chaque token de contrôle comme le font
+les tokenizers de référence ; les identifiants de tokens des tests sont ceux de llama.cpp.
 
-A model whose template opens the reasoning of every answer, the Thinking variants of Qwen3 and
-Qwen3-VL and Foundation-Sec-8B-Reasoning, was trained to reason before each answer, and its prompt
-opens that reasoning whatever the request asks. When the request asks for no reasoning, the engine
-ends it at once by writing in place of the model the sentence its authors give for the budget of a
-reasoning ("Considering the limited time by the user, I have to give the solution based on the
-thinking directly now.") and the marker `</think>`; the model then answers directly, the prompt
-staying within what it learned, where a reasoning closed empty before it starts led its answer to
-take up the corrections and returns of a reasoning, which could loop. With the effort `low`, the
-engine ends the reasoning after 512 tokens, 256 for the work in the background; without a budget
-or a high effort, the reasoning takes half of `max_tokens` at most, 32,768 tokens at most, so that
-the answer keeps room after it; and `reasoning_budget` sets that limit for any request, -1 or null
-lifting it. The end the engine writes counts
-among the tokens of the answer and stays out of the `reasoning_content` the client receives; the
-answer of a request that asked for no reasoning receives its `max_tokens` once the reasoning ends,
-and its stop sequences apply to that answer alone. The prompt of
-Foundation-Sec-8B-Reasoning opens its reasoning with `<think>`, as the current template of the model
-does; the template of its GGUF file, an earlier one, leaves that marker to the model.
+Un modèle dont le template ouvre le raisonnement de chaque réponse, les variantes Thinking de Qwen3 et de
+Qwen3-VL et Foundation-Sec-8B-Reasoning, a été entraîné à raisonner avant chaque réponse, et son prompt
+ouvre ce raisonnement quoi que demande la requête. Quand la requête ne demande aucun raisonnement, le moteur
+le termine aussitôt en écrivant à la place du modèle la phrase que ses auteurs donnent pour le budget d'un
+raisonnement (« Considering the limited time by the user, I have to give the solution based on the
+thinking directly now. ») et le marqueur `</think>` ; le modèle répond alors directement, le prompt
+restant dans ce qu'il a appris, là où un raisonnement fermé vide avant de commencer amenait sa réponse à
+reprendre les corrections et les retours d'un raisonnement, ce qui pouvait tourner en boucle. Avec l'effort `low`, le
+moteur termine le raisonnement après 512 tokens, 256 pour le travail en arrière-plan ; sans budget
+ni effort élevé, le raisonnement prend au plus la moitié de `max_tokens`, 32 768 tokens au plus, pour que
+la réponse garde de la place après lui ; et `reasoning_budget` fixe cette limite pour toute requête, -1 ou null
+la levant. La fin qu'écrit le moteur compte
+parmi les tokens de la réponse et reste hors du `reasoning_content` que reçoit le client ; la
+réponse d'une requête qui ne demandait aucun raisonnement reçoit son `max_tokens` une fois le raisonnement terminé,
+et ses séquences d'arrêt ne s'appliquent qu'à cette réponse. Le prompt de
+Foundation-Sec-8B-Reasoning ouvre son raisonnement par `<think>`, comme le fait le template actuel du modèle ;
+le template de son fichier GGUF, plus ancien, laisse ce marqueur au modèle.
 
-The engine watches the repetitions of the reasoning and of the answer apart: a part loops when nine
-tenths of its last 384 tokens end a passage of 16 tokens that it wrote twice before. A reasoning
-that loops ends as a reasoning that reached its budget, and the model answers; an answer that loops
-ends with the reason `length` and the field `repetition`, and the web application says that the
-model repeated itself. A passage written again once, a code shown before and after its correction,
-does not count; nor do the passages of the prompt, so that an answer that takes up a document or
-code given to it goes on, nor those of the reasoning for the answer, which may take up its draft.
+Le moteur surveille séparément les répétitions du raisonnement et de la réponse : une partie tourne en boucle quand neuf
+dixièmes de ses 384 derniers tokens terminent un passage de 16 tokens qu'elle a déjà écrit deux fois. Un raisonnement
+qui tourne en boucle se termine comme un raisonnement qui a atteint son budget, et le modèle répond ; une réponse qui tourne en boucle
+se termine avec la raison `length` et le champ `repetition`, et l'application web indique que le
+modèle s'est répété. Un passage réécrit une fois, un code montré avant et après sa correction,
+ne compte pas ; ni les passages du prompt, pour qu'une réponse qui reprend un document ou
+du code qu'on lui a donné continue, ni ceux du raisonnement pour la réponse, qui peut reprendre son brouillon.
 
 ### Images
 
-A model reads images when its decoder takes the tokens of an image encoder, the projector: a
-second GGUF file (`mmproj`, architecture `clip`) that the catalog downloads with the decoder and
-that the engine loads with it (option `projector` of the model). The engine reads three families
-([`engine/vision_encoder.cpp`](engine/vision_encoder.cpp)):
+Un modèle lit les images quand son décodeur prend les tokens d'un encodeur d'images, le projecteur : un
+second fichier GGUF (`mmproj`, architecture `clip`) que le catalogue télécharge avec le décodeur et
+que le moteur charge avec lui (option `projector` du modèle). Le moteur lit trois familles
+([`engine/vision_encoder.cpp`](engine/vision_encoder.cpp)) :
 
-- Qwen3-VL (projector `qwen3vl_merger`): the image, resized to multiples of 32 pixels, is cut into
-  patches of 16 pixels, merged by squares of four into the tokens of the decoder; the learned
-  positions are interpolated to the grid of the patches, and each head of the attention rotates
-  its pairs by the row and the column of its patch. The decoder places these tokens by
-  multimodal rotary positions (time, row, column) and adds the outputs of three DeepStack mergers
-  to its hidden states after its first layers. The detail of an image gives the tokens it takes
-  at most: 256 (`low`), 576 (`auto`) or 1024 (`high`).
-- LLaVA-NeXT (projector `mlp` with pinpoints, EuroVLM): a SigLIP encoder reads the whole image
-  resized to 384 pixels square, then the tiles of 384 pixels of the image resized into the
-  resolution of the pinpoints that keeps the most of it, its aspect ratio kept; the tokens are
-  those of the whole image, then the grid of the tiles without its black bands, each row ended by
-  a newline embedding. The detail of an image gives the tiles it takes at most, and its tokens: 1
-  tile and 1,485 tokens (`low`), 2 and 2,241 (`auto`) or 4 and 3,753 (`high`).
-- Pixtral (projector `pixtral`, Ministral 3 and Devstral Small 2): the image, its longest edge
-  brought within 1,540 pixels and its sides rounded up to multiples of 28 pixels, is cut into
-  patches of 14 pixels; each head of the attention rotates its pairs of consecutive dimensions by
-  the row and the column of its patch, the blocks normalize by their root mean square and use a
-  SiLU gate, and the projector merges the squares of four patches into the tokens of the decoder,
-  each row of tokens followed by the `[IMG_BREAK]` embedding and the image by the token
-  `[IMG_END]`. The detail of an image gives the merged tokens it takes at most: 256 (`low`), 576
-  (`auto`) or 1024 (`high`). A message of one text and one image puts the image first, as the
-  chat templates of these models do. The projectors stored in bfloat16 are converted to half
-  precision when they load, which keeps their values.
+- Qwen3-VL (projecteur `qwen3vl_merger`) : l'image, redimensionnée à des multiples de 32 pixels, est découpée en
+  patchs de 16 pixels, fusionnés par carrés de quatre en tokens du décodeur ; les positions
+  apprises sont interpolées sur la grille des patchs, et chaque tête de l'attention fait tourner
+  ses paires selon la ligne et la colonne de son patch. Le décodeur place ces tokens par des
+  positions rotatives multimodales (temps, ligne, colonne) et ajoute les sorties de trois fusionneurs DeepStack
+  à ses états cachés après ses premières couches. Le niveau de détail d'une image donne le nombre de tokens qu'elle prend
+  au plus : 256 (`low`), 576 (`auto`) ou 1024 (`high`).
+- LLaVA-NeXT (projecteur `mlp` avec pinpoints, EuroVLM) : un encodeur SigLIP lit l'image entière
+  redimensionnée en carré de 384 pixels, puis les tuiles de 384 pixels de l'image redimensionnée dans la
+  résolution des pinpoints qui en garde le plus, son rapport d'aspect conservé ; les tokens sont
+  ceux de l'image entière, puis la grille des tuiles sans ses bandes noires, chaque ligne terminée par
+  un embedding de saut de ligne. Le niveau de détail d'une image donne le nombre de tuiles qu'elle prend au plus, et ses tokens : 1
+  tuile et 1 485 tokens (`low`), 2 et 2 241 (`auto`) ou 4 et 3 753 (`high`).
+- Pixtral (projecteur `pixtral`, Ministral 3 et Devstral Small 2) : l'image, son plus long côté
+  ramené à 1 540 pixels au plus et ses côtés arrondis au multiple de 28 pixels supérieur, est découpée en
+  patchs de 14 pixels ; chaque tête de l'attention fait tourner ses paires de dimensions consécutives selon
+  la ligne et la colonne de son patch, les blocs normalisent par leur moyenne quadratique et utilisent une
+  porte SiLU, et le projecteur fusionne les carrés de quatre patchs en tokens du décodeur,
+  chaque ligne de tokens suivie de l'embedding `[IMG_BREAK]` et l'image du token
+  `[IMG_END]`. Le niveau de détail d'une image donne le nombre de tokens fusionnés qu'elle prend au plus : 256 (`low`), 576
+  (`auto`) ou 1024 (`high`). Un message d'un texte et d'une image met l'image en premier, comme le font les
+  chat templates de ces modèles. Les projecteurs stockés en bfloat16 sont convertis en demi-précision
+  à leur chargement, ce qui conserve leurs valeurs.
 
-The service reads nothing from the network or the disk for a request: an image comes as a data URL
-of a PNG or JPEG file (20 MB, 8,192 pixels on a side and 40 megapixels at most), decoded by the
-libpng and libjpeg copies of dlib, its EXIF orientation applied and its transparency composited
-onto white, then resized as the reference preprocessing does (the bicubic filter of Pillow for
-Qwen3-VL and Pixtral, its bilinear filter for LLaVA-NeXT, in fixed point). A request carries 16
-images at most. The encoding of an image runs between the passes of the other requests, one block
-of the encoder at a time, so that the answers being written go on after each block (a few seconds
-at most for a large image on two cores), and is kept by the digest of its pixels
-(256 MB of encodings per model): the next turns of a discussion read the image without encoding it
-again, and the tokens of the image enter the cache of the prompts under keys made of that digest,
-so that a conversation that repeats its images takes their keys and values from the cache. On two
-cores, Qwen3-VL-2B encodes an image of 576 tokens in 9.4 s (llama.cpp: 9.1 s) and describes it as
-llama.cpp does at temperature 0; Ministral 3 3B encodes an image of 414 merged tokens in 16.7 s
-(llama.cpp: 14.4 s) and reads its shapes, their colors and its word as llama.cpp does.
+Le service ne lit rien sur le réseau ni sur le disque pour une requête : une image arrive sous forme de data URL
+d'un fichier PNG ou JPEG (20 Mo, 8 192 pixels de côté et 40 mégapixels au plus), décodée par les
+copies de libpng et de libjpeg de dlib, son orientation EXIF appliquée et sa transparence composée
+sur du blanc, puis redimensionnée comme le fait le prétraitement de référence (le filtre bicubique de Pillow pour
+Qwen3-VL et Pixtral, son filtre bilinéaire pour LLaVA-NeXT, en virgule fixe). Une requête porte 16
+images au plus. L'encodage d'une image s'exécute entre les passes des autres requêtes, un bloc
+de l'encodeur à la fois, pour que les réponses en cours d'écriture avancent après chaque bloc (quelques secondes
+au plus pour une grande image sur deux cœurs), et est conservé selon l'empreinte de ses pixels
+(256 Mo d'encodages par modèle) : les tours suivants d'une discussion lisent l'image sans l'encoder
+de nouveau, et les tokens de l'image entrent dans le cache des prompts sous des clés faites de cette empreinte,
+pour qu'une conversation qui répète ses images prenne leurs clés et valeurs dans le cache. Sur deux
+cœurs, Qwen3-VL-2B encode une image de 576 tokens en 9,4 s (llama.cpp : 9,1 s) et la décrit comme
+le fait llama.cpp à température 0 ; Ministral 3 3B encode une image de 414 tokens fusionnés en 16,7 s
+(llama.cpp : 14,4 s) et lit ses formes, leurs couleurs et son mot comme le fait llama.cpp.
 
 ### Service
 
-`albireo-service.exe` runs as the Windows service `Albireo` (LocalSystem, delayed automatic start)
-and, for development, in a console with `--console`. It:
+`albireo-service.exe` s'exécute en tant que service Windows `Albireo` (LocalSystem, démarrage automatique différé)
+et, pour le développement, dans une console avec `--console`. Il :
 
-- reads the answers aloud with `albireo-speech.exe`, a program that holds the SVOX Pico
-  synthesizer and nothing else, and its voices of six languages (the `speech` folder of the
-  installation, 6.5 MB). The service starts it for each reading in the `speech` folder, without
-  console, with a token of low integrity and without privileges, in a job bounded to 256 MB that
-  refuses it any child process, so that a fault of the synthesizer never reaches the service;
-  the program loads no library of the windows of Windows, which a process of low integrity
-  started by a service could not initialize. The text it reads keeps the letters, the digits
-  and the usual punctuation alone, so that no markup of the synthesizer reaches it, and two such
-  programs run at a time;
-- describes each engine library in a child process (`--probe-engine`), so that a library that
-  cannot load leaves the service running, and measures them the same way (`--bench-engine`, see
-  [Measures of the engines](#measures-of-the-engines)); a
-  description takes 60 seconds at most, and its log line gives the devices each engine found and,
-  for those its runtime left out, the reason that runtime gives (the message of each plugin of
-  OpenVINO, for instance);
-- starts the chosen engine and the active models, and serves `https://localhost:<port>/` with
-  cpp-httplib and Mbed TLS, with a certificate issued by its own authority, which it adds to the
-  trusted roots of the machine when the installation chose so (see [Security](#security));
-- keeps its settings in `settings.json`, the models, the downloads and the usage in an SQLite
-  database, and its log in `logs\service.log`;
-- restarts itself when a setting requires it, in a new process once the engine of a device has
-  run, since that library stays loaded with the threads of its runtime. A process that loaded the
-  engine of a device, the child processes of the descriptions and of the measures included, ends
-  without unloading it: Windows unloads a library under its loader lock, where the plugins of
-  OpenVINO would wait forever for threads of their runtime.
+- lit les réponses à voix haute avec `albireo-speech.exe`, un programme qui contient le synthétiseur SVOX Pico
+  et rien d'autre, et ses voix de six langues (le dossier `speech` de
+  l'installation, 6,5 Mo). Le service le lance pour chaque lecture dans le dossier `speech`, sans
+  console, avec un jeton de faible intégrité et sans privilèges, dans un job limité à 256 Mo qui
+  lui refuse tout processus enfant, pour qu'une faute du synthétiseur n'atteigne jamais le service ;
+  le programme ne charge aucune bibliothèque des fenêtres de Windows, qu'un processus de faible intégrité
+  lancé par un service ne pourrait pas initialiser. Le texte qu'il lit ne garde que les lettres, les chiffres
+  et la ponctuation usuelle, pour qu'aucun balisage du synthétiseur ne l'atteigne, et deux de ces
+  programmes tournent à la fois ;
+- décrit chaque bibliothèque de moteur dans un processus enfant (`--probe-engine`), pour qu'une bibliothèque qui
+  ne peut pas se charger laisse le service tourner, et les mesure de la même façon (`--bench-engine`, voir
+  [Mesures des moteurs](#mesures-des-moteurs)) ; une
+  description prend 60 secondes au plus, et sa ligne de journal donne les périphériques que chaque moteur a trouvés et,
+  pour ceux que son environnement d'exécution a écartés, la raison qu'il donne (le message de chaque plugin
+  d'OpenVINO, par exemple) ;
+- démarre le moteur choisi et les modèles actifs, et sert `https://localhost:<port>/` avec
+  cpp-httplib et Mbed TLS, avec un certificat émis par sa propre autorité, qu'il ajoute aux
+  racines de confiance de la machine quand l'installation l'a choisi (voir [Sécurité](#sécurité)) ;
+- garde ses réglages dans `settings.json`, les modèles, les téléchargements et l'utilisation dans une base
+  SQLite, et son journal dans `logs\service.log` ;
+- redémarre de lui-même quand un réglage l'exige, dans un nouveau processus dès que le moteur d'un périphérique a
+  tourné, puisque cette bibliothèque reste chargée avec les threads de son environnement d'exécution. Un processus qui a chargé le
+  moteur d'un périphérique, processus enfants des descriptions et des mesures compris, se termine
+  sans le décharger : Windows décharge une bibliothèque sous son verrou de chargeur, où les plugins
+  d'OpenVINO attendraient indéfiniment des threads de leur environnement d'exécution.
 
-The server answers as soon as its port is open: the engines are described and the chosen one
-starts in the background, then the active models load. Until then `/albireo/v1/status` gives the state
-`starting` with the step in progress (`engines`, then `models`), the requests for a model answer
-503 with the code `starting` or `model_loading` and a `Retry-After` header, and the web application
-says that the service is starting. A request whose images the engine cannot hold yet, those already
-queued for its model holding the memory kept for them (1 GiB of decoded pixels), answers 503 with
-the code `engine_busy` and a `Retry-After` of 5 seconds. A slow computer, after an installation or at the start of the
-session, thus shows a start in progress instead of a failure.
+Le serveur répond dès que son port est ouvert : les moteurs sont décrits et celui qui est choisi
+démarre en arrière-plan, puis les modèles actifs se chargent. Jusque-là, `/albireo/v1/status` donne l'état
+`starting` avec l'étape en cours (`engines`, puis `models`), les requêtes destinées à un modèle répondent
+503 avec le code `starting` ou `model_loading` et un en-tête `Retry-After`, et l'application web
+indique que le service démarre. Une requête dont le moteur ne peut pas encore contenir les images, celles déjà
+en file pour son modèle occupant la mémoire qui leur est réservée (1 Gio de pixels décodés), répond 503 avec
+le code `engine_busy` et un `Retry-After` de 5 secondes. Un ordinateur lent, après une installation ou au début de la
+session, montre ainsi un démarrage en cours au lieu d'un échec.
 
-### Tray, installer and web application
+### Icône, installateur et application web
 
-`albireo-tray.exe` places the icon in the notification area and opens the windows of the models,
-of the computer (processor, engine, extended memory with its usage, models folder, port, language,
-proxy) and of the product. While the service does not answer, the icon reads its state in the
-Service Control Manager: a service starting, or a delayed automatic start that has not come yet
-at the opening of the session, shows the icon of a start in progress, and the icon warns that the
-service does not answer, once per episode, only after a grace period adapted to that state: 10
-minutes for a service in its start, 5 minutes for a running service that has not answered yet, 15
-minutes for a delayed automatic start during the first 15 minutes after the boot, 2 minutes for a
-service that stops, 30 seconds for a service that answered before, one minute for a stopped
-service. The application opened
-from the icon during a start opens once the service answers. The service gives its errors with a code and its values
-([`host/user_error.h`](host/user_error.h)), and the engines the reasons for which they cannot run
-(`reason_code`), which the windows explain in the language of the interface; a default model
-that could not be downloaded shows its download in error, with the reason, in the Models window.
-The settings of the extended memory apply to the CUDA engine and are grayed without it. The
-Accelerator menu always offers the automatic choice and the processor alone, then one entry per
-device the engines found, named after it and its runtime ("GPU NVIDIA GeForce RTX 5070 Ti Laptop
-GPU (CUDA)", "GPU Intel(R) Graphics (OpenVINO)", "NPU Intel(R) AI Boost (OpenVINO)", "NPU + GPU
-Intel (OpenVINO)"), which sets the engine and the accelerator of the settings; a device engine
-that cannot run here, or a device its runtime left out, shows grayed with its reason, as the
-window of the computer does. The Models window gives for each model its name, the company that
-made it, its functions, what it reads, the size of its files (a projector included) and its
-state; a click on the title of a column sorts the list by it, an arrow showing the order, which a
-second click reverses and which the next start keeps (`HKCU\Software\Albireo`), the models
-ranked alike staying in the order of the catalog. The window of the computer, the Models window
-and the menu update their lists in place, without flicker, and the tray keeps its connection to
-the service between two polls. `albireo-setup.exe` carries the programs as a ZIP payload, installs them
-with a wizard or silently, registers the service and the entry of Apps & Features, and removes them.
-The web application ([`web/`](web)) is plain ES modules with its libraries in
-[`web/vendor`](web/vendor), served by the service with a content security policy that allows no
-other origin. The browser checks every file of the application at each load (`Cache-Control:
-no-cache`, answered by 304 while the file is unchanged), so that the pages and the scripts of an
-update show at once. The application runs without any network: it loads nothing from another
-origin, its fonts, styles, scripts, the character maps of pdf.js and the page of the interface
-(`/docs/`) included, and an image that the markdown of an answer would take from another site is
-shown as a link. The answer being written is drawn ten times a second at most, block by block: the
-blocks and the steps of the agent already written stay as they are, a code block is highlighted
-once its fence closes, the reasoning receives its new text in place, and the animations of the page
-change only the opacity and the position of their elements, which the compositor of the browser
-draws without painting the page again. The thread keeps its last lines above the composer whatever
-the height of the composer. Each discussion keeps its own draft in the composer, its text and the
-documents and images waiting to be sent, while another discussion is shown, and "New chat" keeps
-its own until its first question creates the discussion: the texts stay across a reload of the page
-in the storage of the browser (`localStorage`, one key per discussion, removed once its question is
-sent or the discussion deleted), the files for the tab, and an incognito discussion keeps none.
+`albireo-tray.exe` place l'icône dans la zone de notification et ouvre les fenêtres des modèles,
+de l'ordinateur (processeur, moteur, mémoire étendue avec son utilisation, dossier des modèles, port, langue,
+proxy) et du produit. Tant que le service ne répond pas, l'icône lit son état dans le
+gestionnaire de contrôle des services (Service Control Manager) : un service qui démarre, ou un démarrage automatique différé qui n'est pas encore venu
+à l'ouverture de la session, affiche l'icône d'un démarrage en cours, et l'icône avertit que le
+service ne répond pas, une fois par épisode, seulement après un délai de grâce adapté à cet état : 10
+minutes pour un service en cours de démarrage, 5 minutes pour un service en marche qui n'a pas encore répondu, 15
+minutes pour un démarrage automatique différé pendant les 15 premières minutes après l'amorçage, 2 minutes pour un
+service qui s'arrête, 30 secondes pour un service qui a déjà répondu, une minute pour un service
+arrêté. L'application ouverte
+depuis l'icône pendant un démarrage s'ouvre dès que le service répond. Le service donne ses erreurs avec un code et ses valeurs
+([`host/user_error.h`](host/user_error.h)), et les moteurs les raisons pour lesquelles ils ne peuvent pas s'exécuter
+(`reason_code`), que les fenêtres expliquent dans la langue de l'interface ; un modèle par défaut
+qui n'a pas pu être téléchargé montre son téléchargement en erreur, avec la raison, dans la fenêtre Modèles.
+Les réglages de la mémoire étendue s'appliquent au moteur CUDA et sont grisés sans lui. Le
+menu Accélérateur propose toujours le choix automatique et le processeur seul, puis une entrée par
+périphérique trouvé par les moteurs, nommée d'après lui et son environnement d'exécution (« GPU NVIDIA GeForce RTX 5070 Ti Laptop
+GPU (CUDA) », « GPU Intel(R) Graphics (OpenVINO) », « NPU Intel(R) AI Boost (OpenVINO) », « NPU + GPU
+Intel (OpenVINO) »), qui fixe le moteur et l'accélérateur des réglages ; un moteur de périphérique
+qui ne peut pas s'exécuter ici, ou un périphérique que son environnement d'exécution a écarté, apparaît grisé avec sa raison, comme dans la
+fenêtre de l'ordinateur. La fenêtre Modèles donne pour chaque modèle son nom, l'entreprise qui
+l'a fait, ses fonctions, ce qu'il lit, la taille de ses fichiers (projecteur compris) et son
+état ; un clic sur le titre d'une colonne trie la liste selon elle, une flèche montrant l'ordre, qu'un
+second clic inverse et que le démarrage suivant conserve (`HKCU\Software\Albireo`), les modèles
+classés à égalité restant dans l'ordre du catalogue. La fenêtre de l'ordinateur, la fenêtre Modèles
+et le menu mettent à jour leurs listes sur place, sans scintillement, et l'icône garde sa connexion au
+service entre deux interrogations. `albireo-setup.exe` porte les programmes sous forme de charge utile ZIP, les installe
+avec un assistant ou en silence, enregistre le service et l'entrée d'Applications et fonctionnalités, et les désinstalle.
+L'application web ([`web/`](web)) est faite de simples modules ES avec ses bibliothèques dans
+[`web/vendor`](web/vendor), servie par le service avec une politique de sécurité du contenu qui n'autorise aucune
+autre origine. Le navigateur vérifie chaque fichier de l'application à chaque chargement (`Cache-Control:
+no-cache`, auquel répond 304 tant que le fichier est inchangé), pour que les pages et les scripts d'une
+mise à jour apparaissent aussitôt. L'application fonctionne sans aucun réseau : elle ne charge rien d'une autre
+origine, ses polices, styles, scripts, les tables de caractères de pdf.js et la page de l'interface
+(`/docs/`) compris, et une image que le markdown d'une réponse prendrait sur un autre site est
+affichée sous forme de lien. La réponse en cours d'écriture est dessinée dix fois par seconde au plus, bloc par bloc : les
+blocs et les étapes de l'agent déjà écrits restent tels quels, un bloc de code est coloré
+dès que sa clôture se ferme, le raisonnement reçoit son nouveau texte sur place, et les animations de la page
+ne changent que l'opacité et la position de leurs éléments, que le compositeur du navigateur
+dessine sans repeindre la page. Le fil garde ses dernières lignes au-dessus de la zone de saisie quelle que soit
+la hauteur de celle-ci. Chaque discussion garde son propre brouillon dans la zone de saisie, son texte et les
+documents et images en attente d'envoi, pendant qu'une autre discussion est affichée, et « Nouvelle discussion » garde
+le sien jusqu'à ce que sa première question crée la discussion : les textes restent après un rechargement de la page
+dans le stockage du navigateur (`localStorage`, une clé par discussion, retirée dès que sa question est
+envoyée ou la discussion supprimée), les fichiers pour l'onglet, et une discussion en navigation privée n'en garde aucun.
 
-### Documents and context
+### Documents et contexte
 
-The text of a document is extracted in the browser ([`web/js/documents.js`](web/js/documents.js)):
-the Office and OpenDocument formats are ZIP archives of XML, read with the decompression of the
-browser within 256 MiB of extracted XML per document (an entry that expands more than 200 times
-is refused), and PDF goes through pdf.js. The text marks each page, slide and sheet with a line that
-starts with `## `, which names the passages of the search and lets the tools of the agent read a
-document part by part. Nothing leaves the browser but the text placed in the messages.
+Le texte d'un document est extrait dans le navigateur ([`web/js/documents.js`](web/js/documents.js)) :
+les formats Office et OpenDocument sont des archives ZIP de XML, lues avec la décompression du
+navigateur dans la limite de 256 Mio de XML extrait par document (une entrée qui grossit de plus de 200 fois
+est refusée), et le PDF passe par pdf.js. Le texte marque chaque page, diapositive et feuille d'une ligne qui
+commence par `## `, qui nomme les passages de la recherche et permet aux outils de l'agent de lire un
+document partie par partie. Rien ne quitte le navigateur, sauf le texte placé dans les messages.
 
-PDF files are read by the legacy build of pdf.js, which runs in Edge and Chrome 125 and later,
-with the character maps of Adobe for the fonts of Chinese, Japanese and Korean that the files do
-not embed ([`web/vendor/pdfjs`](web/vendor/pdfjs)). A file encrypted with an empty password reads
-like any other; a file protected by a password, or damaged, is refused with a message. A PDF made
-of images only, such as a scan, has no text to extract: for a model that reads images, the
-application offers to attach its pages as images, within the places the discussion has left; for
-another model, a dialog says that its text cannot be read. A PDF where some pages hold images only
-is added with a notice of the number of these pages, whose text is missing. The same rules apply
-to the files attached to a question and to the knowledge of a project. A document of more than
-100 MB and an image of more than 15 MB, attached to a question or added to a project, are refused
-before they are read, with a message that names the file and the limit. The knowledge of a project
-takes 100 items at most, documents and images together: its card shows their count, its button
-turns off once they are there, and the files of a choice or of a drop beyond them are left out with
-a message that counts them and names the first ones. A project of an earlier version that holds
-more keeps them, and takes no other until it holds fewer than 100. The additions of a page apply
-one after the other, each to the project as the previous one left it.
+Les fichiers PDF sont lus par la version héritée (legacy) de pdf.js, qui fonctionne dans Edge et dans Chrome 125 et suivants,
+avec les tables de caractères d'Adobe pour les polices chinoises, japonaises et coréennes que les fichiers
+n'embarquent pas ([`web/vendor/pdfjs`](web/vendor/pdfjs)). Un fichier chiffré avec un mot de passe vide se lit
+comme n'importe quel autre ; un fichier protégé par un mot de passe, ou endommagé, est refusé avec un message. Un PDF fait
+uniquement d'images, comme un document numérisé, n'a pas de texte à extraire : pour un modèle qui lit les images, l'application
+propose de joindre ses pages sous forme d'images, dans la limite des places que la discussion a laissées ; pour
+un autre modèle, une boîte de dialogue indique que son texte ne peut pas être lu. Un PDF dont certaines pages ne contiennent que des images
+est ajouté avec un avertissement donnant le nombre de ces pages, dont le texte manque. Les mêmes règles s'appliquent
+aux fichiers joints à une question et à la base de connaissances d'un projet. Un document de plus de
+100 Mo et une image de plus de 15 Mo, joints à une question ou ajoutés à un projet, sont refusés
+avant d'être lus, avec un message qui nomme le fichier et la limite. La base de connaissances d'un projet
+prend 100 éléments au plus, documents et images ensemble : sa carte en affiche le nombre, son bouton
+se désactive une fois ce nombre atteint, et les fichiers d'une sélection ou d'un dépôt au-delà sont écartés avec
+un message qui les compte et nomme les premiers. Un projet d'une version antérieure qui en contient
+davantage les garde, et n'en prend aucun autre tant qu'il n'en contient pas moins de 100. Les ajouts d'une page s'appliquent
+l'un après l'autre, chacun au projet tel que l'a laissé le précédent.
 
-The images of a question ([`web/js/images.js`](web/js/images.js)) are reduced in the browser to
-1,536 pixels on their longest side at most and kept in its database; the message gives them before
-its text. A discussion keeps ten images at most in its context: the composer shows the places left,
-and the images of the exchanges that a compression summarized leave the context with them and
-free their places. The images of a project, ten at most, are described by the background model as
-they arrive, their kind and subject in a sentence, then the text they show; these descriptions
-are searched with the documents, and a question whose excerpts come from an image receives the
-image itself, four at most, when its model reads images. A model that reads text only receives
-the names of the images.
+Les images d'une question ([`web/js/images.js`](web/js/images.js)) sont réduites dans le navigateur à
+1 536 pixels au plus sur leur plus long côté et conservées dans sa base de données ; le message les donne avant
+son texte. Une discussion garde au plus dix images dans son contexte : la zone de saisie montre les places restantes,
+et les images des échanges qu'une compression a résumés quittent le contexte avec eux et
+libèrent leurs places. Les images d'un projet, dix au plus, sont décrites par le modèle d'arrière-plan à
+leur arrivée, leur nature et leur sujet en une phrase, puis le texte qu'elles montrent ; ces descriptions
+sont cherchées avec les documents, et une question dont les extraits viennent d'une image reçoit
+l'image elle-même, quatre au plus, quand son modèle lit les images. Un modèle qui ne lit que du texte reçoit
+les noms des images.
 
-The search ([`web/js/rag.js`](web/js/rag.js)) cuts the documents into passages of 1,200
-characters overlapping by 240, named after their document and their part. The embedding model of
-the service computes the vector of each passage once, through `/v1/embeddings`, and the passages
-are kept with their vectors in the database of the browser (IndexedDB), or in memory for an
-incognito discussion. A heading starts a passage of its own, without the overlap of the previous
-one, and names the section of the passages that follow; a short line that does not fit, such as a
-row of a sheet, starts the next passage whole. A question is compared with the passages by meaning
-(cosine of the vectors) and by words (BM25), each ranking over the passages near its best one: a
-cosine of 0.35 at least and within 0.2 of the best, measured with Qwen3-Embedding (0.2 to 0.3
-for passages that do not answer, 0.6 and more for the one that does), and a score in words of 30%
-of the best at least, so that "Thanks, that is perfect!" receives no excerpt. The two rankings are
-fused (reciprocal rank fusion), the passages chosen so that they do not repeat each other
-(maximal marginal relevance), the passage that follows each of the three best ones added within
-the budget, the consecutive passages of a document merged into one excerpt that gives the names
-of the columns of a sheet once, and the documents given in the order of their best excerpt. The
-passages that the questions of the context already brought are not given again, and a question of
-fewer than six words is searched with the beginning of the previous one ("and in 2025?"). A
-document attached to a question is indexed before its answer for 15 seconds at most: the passages
-whose vectors are not computed yet are searched by their words while the queue computes them, and
-an indexing that stopped (an answer stopped, a service busy, a new embedding model) goes on later
-from the vectors already computed. The engine computes the vectors of every client in the same
-passes and keeps these passes short while a conversation is answered, so that indexing documents
-never delays an answer. The page of a project lists each document with its format, the estimate of
-its tokens and the number of its passages ("MD · ≈ 265 tokens · 3 passages", "(by words)" while
-they have no vectors of the embedding model), and its card of the knowledge takes the files dropped
-on it as its button does; a file dropped where nothing takes it is refused instead of being opened
-by the browser. The counts of the interface take their singular and their plural in each language
-(`tn()` of [`web/js/i18n.js`](web/js/i18n.js), through `Intl.PluralRules`), and its decimals and its
-sizes the forms of the language ("23,5 jetons/s", "2,4 Mo").
+La recherche ([`web/js/rag.js`](web/js/rag.js)) découpe les documents en passages de 1 200
+caractères qui se chevauchent de 240, nommés d'après leur document et leur partie. Le modèle d'embedding du
+service calcule le vecteur de chaque passage une seule fois, par `/v1/embeddings`, et les passages
+sont conservés avec leurs vecteurs dans la base de données du navigateur (IndexedDB), ou en mémoire pour une
+discussion en navigation privée. Un titre commence un passage à part, sans le chevauchement du
+précédent, et nomme la section des passages qui suivent ; une ligne courte qui ne tient pas, comme une
+ligne d'une feuille de calcul, commence entière le passage suivant. Une question est comparée aux passages par le sens
+(cosinus des vecteurs) et par les mots (BM25), chaque classement portant sur les passages proches de son meilleur : un
+cosinus de 0,35 au moins et à moins de 0,2 du meilleur, mesuré avec Qwen3-Embedding (0,2 à 0,3
+pour les passages qui ne répondent pas, 0,6 et plus pour celui qui répond), et un score en mots d'au moins 30 %
+du meilleur, pour que « Merci, c'est parfait ! » ne reçoive aucun extrait. Les deux classements sont
+fusionnés (fusion des rangs réciproques), les passages choisis de façon à ne pas se répéter
+(pertinence marginale maximale), le passage qui suit chacun des trois meilleurs ajouté dans
+la limite du budget, les passages consécutifs d'un document fusionnés en un seul extrait qui donne une seule fois les noms
+des colonnes d'une feuille, et les documents donnés dans l'ordre de leur meilleur extrait. Les
+passages que les questions du contexte ont déjà apportés ne sont pas redonnés, et une question de
+moins de six mots est cherchée avec le début de la précédente (« et en 2025 ? »). Un
+document joint à une question est indexé avant sa réponse pendant 15 secondes au plus : les passages
+dont les vecteurs ne sont pas encore calculés sont cherchés par leurs mots pendant que la file les calcule, et
+une indexation interrompue (une réponse arrêtée, un service occupé, un nouveau modèle d'embedding) reprend plus tard
+à partir des vecteurs déjà calculés. Le moteur calcule les vecteurs de tous les clients dans les mêmes
+passes et garde ces passes courtes pendant qu'une conversation reçoit sa réponse, pour que l'indexation de documents
+ne retarde jamais une réponse. La page d'un projet liste chaque document avec son format, l'estimation de
+ses tokens et le nombre de ses passages (« MD · ≈ 265 tokens · 3 passages », « (by words) » tant
+qu'ils n'ont pas de vecteurs du modèle d'embedding), et sa carte de la base de connaissances prend les fichiers déposés
+sur elle comme le fait son bouton ; un fichier déposé là où rien ne le prend est refusé au lieu d'être ouvert
+par le navigateur. Les nombres de l'interface prennent leur singulier et leur pluriel dans chaque langue
+(`tn()` de [`web/js/i18n.js`](web/js/i18n.js), via `Intl.PluralRules`), et ses décimales et ses
+tailles les formes de la langue (« 23,5 jetons/s », « 2,4 Mo »).
 
-The prompt of a question is built for the cache of the engine, which keeps the keys and values of
-each conversation and computes again only the tokens that differ from what it already read
-([`web/js/app.js`](web/js/app.js)):
+Le prompt d'une question est construit pour le cache du moteur, qui garde les clés et valeurs de
+chaque conversation et ne recalcule que les tokens qui diffèrent de ce qu'il a déjà lu
+([`web/js/app.js`](web/js/app.js)) :
 
-The application sizes its choices from the working context of the model: its context, as the
-engine gives it, within what the computer reads in four minutes at the speed the engine measured
-on the answers of the model (`prompt_tokens_per_second` of the loaded models, rounded down to a
-power of two, 128 tokens per second for the processor engines until the model answered), 16,384
-tokens at least, rounded to a power of two, so that a new measure changes the choices only when
-the speed doubles or halves: 32,768 tokens at 128 tokens per second, 65,536 at 256, and the
-262,144 of Qwen3-VL 4B from 1,024. The engine keeps the keys and values of the discussions read,
-so that a discussion reads its whole context again only when they left the memory; the documents
-read whole and the excerpts have times of reading of their own, since a question waits for them.
-A document can still be longer than these shares: the context of the model stays the limit of
-what a question holds.
+L'application dimensionne ses choix à partir du contexte de travail du modèle : son contexte, tel que le
+moteur le donne, dans la limite de ce que l'ordinateur lit en quatre minutes à la vitesse que le moteur a mesurée
+sur les réponses du modèle (`prompt_tokens_per_second` des modèles chargés, arrondi à la
+puissance de deux inférieure, 128 tokens par seconde pour les moteurs processeur tant que le modèle n'a pas répondu), 16 384
+tokens au moins, arrondi à une puissance de deux, pour qu'une nouvelle mesure ne change les choix que lorsque
+la vitesse double ou diminue de moitié : 32 768 tokens à 128 tokens par seconde, 65 536 à 256, et les
+262 144 de Qwen3-VL 4B à partir de 1 024. Le moteur garde les clés et valeurs des discussions lues,
+si bien qu'une discussion ne relit tout son contexte que lorsqu'elles ont quitté la mémoire ; les documents
+lus en entier et les extraits ont leurs propres temps de lecture, puisqu'une question les attend.
+Un document peut encore être plus long que ces parts : le contexte du modèle reste la limite de
+ce que contient une question.
 
-| Part of the prompt | Content | Share of the working context |
+| Partie du prompt | Contenu | Part du contexte de travail |
 |---|---|---|
-| System message | documents of the project read whole, the day the discussion started, instructions, memory | 30% and 60 s of reading at most, else the project is searched |
-| Memory | short sentences on the user, as they were when the discussion started | 4% at most, 400 words |
-| Summary | the exchanges that left the context, compressed by the background model | 15% and 60 s of writing at most |
-| Attached document | read whole | 25% and 40 s of reading at most, else indexed and searched |
-| Excerpts of a question | the passages found for it, kept with the message once sent | 20% and 20 s of reading, 2,000 to 12,000 tokens, 4 to 24 passages |
-| Exchanges | the conversation, a question asked on a later day with its date | the rest; the oldest leave in one step, down to 30% of the room left by the system message and the tools |
-| Answer | the room kept for it | the longest answer of the settings, else 8,192 tokens with the deep reasoning and 2,048 without, a quarter of the context at most |
+| Message système | documents du projet lus en entier, le jour où la discussion a commencé, instructions, mémoire | 30 % et 60 s de lecture au plus, sinon le projet est cherché |
+| Mémoire | courtes phrases sur l'utilisateur, telles qu'elles étaient au début de la discussion | 4 % au plus, 400 mots |
+| Résumé | les échanges qui ont quitté le contexte, compressés par le modèle d'arrière-plan | 15 % et 60 s d'écriture au plus |
+| Document joint | lu en entier | 25 % et 40 s de lecture au plus, sinon indexé et cherché |
+| Extraits d'une question | les passages trouvés pour elle, gardés avec le message une fois envoyé | 20 % et 20 s de lecture, 2 000 à 12 000 tokens, 4 à 24 passages |
+| Échanges | la conversation, une question posée un jour ultérieur avec sa date | le reste ; les plus anciens partent d'un coup, jusqu'à 30 % de la place laissée par le message système et les outils |
+| Réponse | la place qui lui est réservée | la réponse la plus longue des réglages, sinon 8 192 tokens avec le raisonnement approfondi et 2 048 sans, un quart du contexte au plus |
 
-The tokens of a document are estimated from its characters: 3.6 characters a token in the
-alphabets of Latin, three tokens for four characters of the ideographs, the kana and the hangul,
-and 2.2 characters a token for the other scripts. A question that does not fit beside
-the documents of its project read whole has them searched, in its discussion from then on.
+Les tokens d'un document sont estimés d'après ses caractères : 3,6 caractères par token dans les
+alphabets latins, trois tokens pour quatre caractères des idéogrammes, des kana et du hangul,
+et 2,2 caractères par token pour les autres écritures. Une question qui ne tient pas à côté
+des documents de son projet lus en entier les fait chercher, dans sa discussion à partir de ce moment.
 
-The system message starts with the project and its documents, then keeps the day the discussion
-started, in English, and a question asked on a later day carries its own date, so that a
-discussion continued the next day keeps the beginning of its prompt. The beginning of the prompt
-therefore stays the same from one question to the next: each question costs its own tokens only
-(the engine reads the previous answer, as the template renders it in the history, while the user
-reads it), the discussions of a project share the reading of its documents whatever their day and
-their memory (the engine shares the pages of the cached prefix between the sequences), the images
-of a project found for a question stay with it at the next questions, and
-the compression of the oldest exchanges happens once every several questions. On the tests, the
-second question of a discussion found 954 tokens in the cache and read its context in 0.5 s,
-against 6.4 s for the first question. The service serves several sessions at once,
-each with its own context: the requests of every session are computed together, one forward pass
-serving the next token of each.
+Le message système commence par le projet et ses documents, puis garde le jour où la discussion
+a commencé, en anglais, et une question posée un jour ultérieur porte sa propre date, pour qu'une
+discussion poursuivie le lendemain garde le début de son prompt. Le début du prompt
+reste donc le même d'une question à la suivante : chaque question ne coûte que ses propres tokens
+(le moteur lit la réponse précédente, telle que le template la rend dans l'historique, pendant que l'utilisateur
+la lit), les discussions d'un projet partagent la lecture de ses documents quels que soient leur jour et
+leur mémoire (le moteur partage les pages du préfixe en cache entre les séquences), les images
+d'un projet trouvées pour une question restent avec elle aux questions suivantes, et
+la compression des échanges les plus anciens n'a lieu qu'une fois toutes les quelques questions. Lors des tests, la
+deuxième question d'une discussion a trouvé 954 tokens dans le cache et lu son contexte en 0,5 s,
+contre 6,4 s pour la première question. Le service sert plusieurs sessions à la fois,
+chacune avec son propre contexte : les requêtes de toutes les sessions sont calculées ensemble, une seule passe avant
+servant le token suivant de chacune.
 
-A discussion has no length limit. Once its exchanges take half of the room that the system
-message and the tools leave in the working context, as the service counts them after each answer
-and when the discussion is opened, the oldest exchanges are compressed in the background, down to
-30% of that room, the last question staying with its answer: the background model rewrites the
-summary of the discussion with them, in parts that fit its working context, oldest first, keeping
-the facts, figures, names, decisions, requests and open questions, and the discussion then starts
-with the summary, given with its first remaining question. The documents read whole of the
-questions that left the context are indexed, so that the excerpts of the next questions can come
-from them, and an answer written in another tab keeps the beginning of its prompt. A question that
-comes before the summary waits for it only when it does not fit without it, and a summary written
-while an answer is being written in the discussion applies once that answer ends; a summary that
-cannot be written lets the exchanges leave without it. One tab compresses a discussion at a time.
-When the last question alone does not fit, the oldest texts lose their beginnings, at the end of a
-sentence: the summary first, then the documents and the texts of the earlier questions with the
-results of the tools of their answers, then the reasoning and the results of the tools of the steps
-of the answer being written, then these steps whole, the oldest first and the last one staying,
-and the documents and the text of the question last. An answer of the agent fits its context
-before each of its steps, and a compression of the oldest exchanges happens there when it is
-needed; the cuts stay from one step to the next, and a quarter of the room is freed beyond what is
-needed once its steps are cut, so that the next steps keep the beginning of their prompt. A
-question deleted from a discussion leaves with its answer and the documents attached to it; when
-it was already compressed, the summary is written again without it.
+Une discussion n'a pas de limite de longueur. Dès que ses échanges prennent la moitié de la place que le message
+système et les outils laissent dans le contexte de travail, tels que le service les compte après chaque réponse
+et à l'ouverture de la discussion, les échanges les plus anciens sont compressés en arrière-plan, jusqu'à
+30 % de cette place, la dernière question restant avec sa réponse : le modèle d'arrière-plan réécrit le
+résumé de la discussion avec eux, en parties qui tiennent dans son contexte de travail, les plus anciennes d'abord, en gardant
+les faits, les chiffres, les noms, les décisions, les demandes et les questions ouvertes, et la discussion commence alors
+par le résumé, donné avec sa première question restante. Les documents lus en entier des
+questions qui ont quitté le contexte sont indexés, pour que les extraits des questions suivantes puissent en
+venir, et une réponse écrite dans un autre onglet garde le début de son prompt. Une question qui
+arrive avant le résumé ne l'attend que lorsqu'elle ne tient pas sans lui, et un résumé écrit
+pendant qu'une réponse s'écrit dans la discussion s'applique une fois cette réponse terminée ; un résumé qui
+ne peut pas être écrit laisse les échanges partir sans lui. Un seul onglet compresse une discussion à la fois.
+Quand la dernière question seule ne tient pas, les textes les plus anciens perdent leur début, à la fin d'une
+phrase : le résumé d'abord, puis les documents et les textes des questions précédentes avec les
+résultats des outils de leurs réponses, puis le raisonnement et les résultats des outils des étapes
+de la réponse en cours d'écriture, puis ces étapes entières, les plus anciennes d'abord et la dernière restant,
+et les documents et le texte de la question en dernier. Une réponse de l'agent ajuste son contexte
+avant chacune de ses étapes, et une compression des échanges les plus anciens s'y produit quand elle est
+nécessaire ; les coupes restent d'une étape à la suivante, et un quart de la place est libéré au-delà de ce qui est
+nécessaire dès que ses étapes sont coupées, pour que les étapes suivantes gardent le début de leur prompt. Une
+question supprimée d'une discussion part avec sa réponse et les documents qui y étaient joints ; quand
+elle était déjà compressée, le résumé est réécrit sans elle.
 
-A summary changes the beginning of the prompt, which the engine has not read yet. Once it applies
-and no answer is being written in the discussion, the tab that wrote it asks the background model
-for one token after that beginning (system message, summary and exchanges kept, built as the next
-question builds them), so that the engine reads it in the background and the next question
-computes its own tokens only; on the tests, the first question after a summary read 852 of its 869
-tokens from the cache, in 0.8 s instead of 13.8 s. The request is sent only when the background
-model is the model of the function of the discussion; a question, a deletion or a new compression
-of the discussion stops it, and its failure is silent.
+Un résumé change le début du prompt, que le moteur n'a pas encore lu. Dès qu'il s'applique
+et qu'aucune réponse ne s'écrit dans la discussion, l'onglet qui l'a écrit demande au modèle d'arrière-plan
+un token après ce début (message système, résumé et échanges gardés, construits comme les construit la question
+suivante), pour que le moteur le lise en arrière-plan et que la question suivante
+ne calcule que ses propres tokens ; lors des tests, la première question après un résumé a lu 852 de ses 869
+tokens dans le cache, en 0,8 s au lieu de 13,8 s. La requête n'est envoyée que lorsque le modèle d'arrière-plan
+est le modèle de la fonction de la discussion ; une question, une suppression ou une nouvelle compression
+de la discussion l'arrête, et son échec est silencieux.
 
-The work the application does in the background, the titles, the summaries and the memory, goes
-to the background model: the model that comes with Albireo (`albireo-background`), which the
-service keeps loaded whatever the functions, without reasoning, the reasoning of a model that
-always reasons ended at once; without it, the general model serves it. It samples as its authors
-advise, without the presence penalty some of them give, so that the titles, the summaries and the
-quotes of the memory take up the words of the discussion, and a summary that repeats its lines keeps
-each of them once.
+Le travail que l'application fait en arrière-plan, les titres, les résumés et la mémoire, va
+au modèle d'arrière-plan : le modèle livré avec Albireo (`albireo-background`), que le
+service garde chargé quelles que soient les fonctions, sans raisonnement, le raisonnement d'un modèle qui
+raisonne toujours étant terminé aussitôt ; sans lui, le modèle général s'en charge. Il échantillonne comme le conseillent
+ses auteurs, sans la pénalité de présence que certains d'entre eux donnent, pour que les titres, les résumés et les
+citations de la mémoire reprennent les mots de la discussion, et un résumé qui répète ses lignes ne garde
+chacune d'elles qu'une fois.
 
-The memory of the discussions holds short sentences on the user, one after the other in one
-paragraph, the lasting facts the user states about themselves that help in other discussions:
-role, profession and field, organization, projects and their goals, languages, tools, frameworks,
-systems and computers, level of expertise, habits of work, the way to answer (language, length,
-format, style) and the standing instructions ("always…", "never…"), without the requests and the
-topics of the discussions; the notes that an earlier version wrote as a list become sentences at
-the next opening. It reads the questions it has not read yet, each discussion from its mark, the
-discussions changed least recently first, in one pass once they are enough (three questions or
-1,200 characters) and the user has been quiet for 20 seconds, at the opening of the application
-included, what the background model reads in 30 seconds at most, the next questions waiting for
-the next pass: the background model writes the new facts only, in the language of the interface
-whatever the language of the discussions, which join the memory unless it holds them already in
-other words. The memory comes to the model numbered, and a new fact that changes one of it (a new
-role, another preference) names its number and takes its place; a fact said again moves to the
-end, so that the facts the questions no longer bring leave first when the memory outgrows its size
-(400 words), after a rewriting as a whole that fails. The sentences the user adds or changes in the
-settings stay, unless the words of the user in a discussion change one of them, and the facts the
-model learns keep half of the memory at least beside them. The facts written in
-another language are rewritten first in the language of the interface, sentence by sentence and
-numbered, a sentence the model left out staying as it was, and a change of that language plans an
-update. A new fact joins only when it comes with the words of the user it rests on, which the
-application finds in the questions read, accents aside and the pieces of a quote shortened with an
-ellipsis in their order, in a sentence that asks nothing, or in a clause of a question that starts
-by saying what the user is or does ("As a C++ developer, how do I…?", "Je suis enseignant,
-comment…?"), and in a clause that does not
-start with a request ("Write…", "Crée…", "Explique-moi…") unless it holds a standing instruction
-("Please always answer in French"), three words or 12 characters at least, each quote serving one
-fact: on the questions of the tests, the facts invented by the model that comes with Albireo went
-from 7 of 16 to none of 9.
-A notification, which disappears by itself, says how many facts joined, and a new question stops
-an update in progress, which comes back once the user is quiet again. One tab updates the memory
-at a time, by a lease of three minutes in the database of the browser: a tab closed in the middle
-of an update holds nothing, the service stops the request within two seconds, and the next update
-reads the same questions again, since the marks move only once the memory is saved; the lease is
-renewed before each request of the background model. The tabs tell
-each other the changes of the settings; an update reads the memory again before saving it and
-drops its result when another tab edited, reset or turned off the memory meanwhile. The notes
-leave out sensitive information (health, finances, opinions, identifiers, other people) unless
-the settings keep it, and the sentences that hold a password, a key or a payment number never enter
-the memory unless they do. A discussion receives the memory as it was when it started, so that its
-prompt keeps the same beginning; the private discussions neither read nor feed it. The settings
-show the memory, let the user edit it, turn it off and reset it. The background model also names
-each discussion from its first question, in the language of that question, unless the user
-renames it: the first words of the question stand for the title until it arrives, a title that
-repeats the question is asked again in other words, and a title that could not be written (a
-model that loads, a service away, a page reloaded) is asked again for two minutes, then at the
-next opening of the application. One tab names a discussion at a time.
+La mémoire des discussions contient de courtes phrases sur l'utilisateur, l'une après l'autre en un seul
+paragraphe, les faits durables que l'utilisateur énonce sur lui-même et qui aident dans d'autres discussions :
+rôle, profession et domaine, organisation, projets et leurs objectifs, langues, outils, frameworks,
+systèmes et ordinateurs, niveau d'expertise, habitudes de travail, la façon de répondre (langue, longueur,
+format, style) et les instructions permanentes (« toujours… », « jamais… »), sans les demandes ni les
+sujets des discussions ; les notes qu'une version antérieure écrivait sous forme de liste deviennent des phrases à
+l'ouverture suivante. Elle lit les questions qu'elle n'a pas encore lues, chaque discussion à partir de sa marque, les
+discussions modifiées le moins récemment d'abord, en une seule passe dès qu'il y en a assez (trois questions ou
+1 200 caractères) et que l'utilisateur est resté inactif pendant 20 secondes, à l'ouverture de l'application
+comprise, ce que le modèle d'arrière-plan lit en 30 secondes au plus, les questions suivantes attendant
+la passe suivante : le modèle d'arrière-plan n'écrit que les faits nouveaux, dans la langue de l'interface
+quelle que soit la langue des discussions, qui rejoignent la mémoire à moins qu'elle ne les contienne déjà en
+d'autres mots. La mémoire arrive au modèle numérotée, et un fait nouveau qui en change un (un nouveau
+rôle, une autre préférence) donne son numéro et prend sa place ; un fait redit passe à la
+fin, pour que les faits que les questions n'apportent plus partent en premier quand la mémoire dépasse sa taille
+(400 mots), après une réécriture d'ensemble qui échoue. Les phrases que l'utilisateur ajoute ou modifie dans les
+réglages restent, à moins que les mots de l'utilisateur dans une discussion n'en changent une, et les faits que le
+modèle apprend gardent au moins la moitié de la mémoire à côté d'elles. Les faits écrits dans
+une autre langue sont d'abord réécrits dans la langue de l'interface, phrase par phrase et
+numérotés, une phrase que le modèle a omise restant telle quelle, et un changement de cette langue programme une
+mise à jour. Un fait nouveau n'entre que lorsqu'il vient avec les mots de l'utilisateur sur lesquels il repose, que
+l'application retrouve dans les questions lues, accents mis à part et les morceaux d'une citation raccourcis par des
+points de suspension dans leur ordre, dans une phrase qui ne demande rien, ou dans une proposition d'une question qui commence
+par dire ce que l'utilisateur est ou fait (« As a C++ developer, how do I…? », « Je suis enseignant,
+comment…? »), et dans une proposition qui ne
+commence pas par une demande (« Write… », « Crée… », « Explique-moi… ») à moins qu'elle ne contienne une instruction permanente
+(« Please always answer in French »), trois mots ou 12 caractères au moins, chaque citation servant un seul
+fait : sur les questions des tests, les faits inventés par le modèle livré avec Albireo sont passés
+de 7 sur 16 à aucun sur 9.
+Une notification, qui disparaît d'elle-même, indique combien de faits ont été ajoutés, et une nouvelle question arrête
+une mise à jour en cours, qui revient dès que l'utilisateur est de nouveau inactif. Un seul onglet met à jour la mémoire
+à la fois, par un bail de trois minutes dans la base de données du navigateur : un onglet fermé au milieu
+d'une mise à jour ne retient rien, le service arrête la requête en moins de deux secondes, et la mise à jour suivante
+relit les mêmes questions, puisque les marques ne bougent qu'une fois la mémoire enregistrée ; le bail est
+renouvelé avant chaque requête du modèle d'arrière-plan. Les onglets se signalent
+les uns aux autres les changements des réglages ; une mise à jour relit la mémoire avant de l'enregistrer et
+abandonne son résultat quand un autre onglet a modifié, réinitialisé ou désactivé la mémoire entre-temps. Les notes
+écartent les informations sensibles (santé, finances, opinions, identifiants, autres personnes) à moins que
+les réglages ne les gardent, et les phrases qui contiennent un mot de passe, une clé ou un numéro de paiement n'entrent jamais
+dans la mémoire, à moins que les réglages ne les gardent. Une discussion reçoit la mémoire telle qu'elle était à son début, pour que son
+prompt garde le même début ; les discussions privées ne la lisent ni ne l'alimentent. Les réglages
+montrent la mémoire, permettent à l'utilisateur de la modifier, de la désactiver et de la réinitialiser. Le modèle d'arrière-plan nomme aussi
+chaque discussion d'après sa première question, dans la langue de cette question, à moins que l'utilisateur
+ne la renomme : les premiers mots de la question tiennent lieu de titre jusqu'à son arrivée, un titre qui
+répète la question est redemandé en d'autres mots, et un titre qui n'a pas pu être écrit (un
+modèle qui se charge, un service absent, une page rechargée) est redemandé pendant deux minutes, puis à la
+prochaine ouverture de l'application. Un seul onglet nomme une discussion à la fois.
 
-The lists of the side panel show the 20 most recent projects and discussions; the search window
-of each finds the others, the words in any case and accents, complete or not, in the titles first,
-then in the content (questions, answers, descriptions, instructions and documents of the projects),
-and shows where it found them. The About window shows the tokens read and generated each day over
-30 days, each bar giving its date and its figures in the language of the interface, and, while
-the web access offers the search, a line that names Wikipedia ("Web search" and "Wikipedia", in
-French "Recherche Web" and "Wikipédia"); the help next to the buttons of the composer names it too
-("Web search: Wikipedia"), and nothing names it while the web access is unavailable. Each answer
-exports to Markdown or JSON with its question, as the
-whole discussion does. The interface takes the language of Albireo, set in the window of the
-computer, unless its own settings choose another. The Generation tab of the settings gives the
-temperature, `top_p`, `top_k` and the length of the answers, each with a sentence that says what
-it changes; a value left on automatic keeps the choice of the service, and the work in the
-background keeps its own values.
+Les listes du panneau latéral montrent les 20 projets et discussions les plus récents ; la fenêtre de recherche
+de chacune trouve les autres, les mots quels que soient la casse et les accents, complets ou non, dans les titres d'abord,
+puis dans le contenu (questions, réponses, descriptions, instructions et documents des projets),
+et montre où elle les a trouvés. La fenêtre À propos montre les tokens lus et générés chaque jour sur
+30 jours, chaque barre donnant sa date et ses chiffres dans la langue de l'interface, et, tant que
+l'accès au web propose la recherche, une ligne qui nomme Wikipédia (« Web search » et « Wikipedia », en
+français « Recherche Web » et « Wikipédia ») ; l'aide à côté des boutons de la zone de saisie la nomme aussi
+(« Web search: Wikipedia »), et rien ne la nomme tant que l'accès au web est indisponible. Chaque réponse
+s'exporte en Markdown ou en JSON avec sa question, comme la
+discussion entière. L'interface prend la langue d'Albireo, réglée dans la fenêtre de
+l'ordinateur, à moins que ses propres réglages n'en choisissent une autre. L'onglet Génération des réglages donne la
+température, `top_p`, `top_k` et la longueur des réponses, chacun avec une phrase qui dit ce
+qu'il change ; une valeur laissée sur automatique garde le choix du service, et le travail en
+arrière-plan garde ses propres valeurs.
 
-The page of the third-party components, opened from About, lists the components of the web
-application ([`web/vendor/components.json`](web/vendor/components.json), which
-[`tools/update_web_vendor.sh`](tools/update_web_vendor.sh) keeps up to date with their versions),
-those of the programs and of the engines, from the `licenses` folder of the installation, and the
-installed models, each with its version, its role and its license, whose text opens in the page.
+La page des composants tiers, ouverte depuis À propos, liste les composants de l'application
+web ([`web/vendor/components.json`](web/vendor/components.json), que
+[`tools/update_web_vendor.sh`](tools/update_web_vendor.sh) tient à jour avec leurs versions),
+ceux des programmes et des moteurs, depuis le dossier `licenses` de l'installation, et les
+modèles installés, chacun avec sa version, son rôle et sa licence, dont le texte s'ouvre dans la page.
 
-## Source tree
+## Arborescence des sources
 
-| Folder                   | Content                                                                      |
+| Dossier                  | Contenu                                                                      |
 |--------------------------|------------------------------------------------------------------------------|
-| [`engine/`](engine)      | the inference engine: runtime, kernels, scheduler, chat formats, devices      |
-| [`host/`](host)          | the service: server, settings, store, models, updates, certificates, web access |
-| [`common/`](common)      | the C interface of the engines, JSON, logs, platform and processor details    |
-| [`windows/`](windows)    | the tray, the installer, their windows and their texts in five languages      |
-| [`web/`](web)            | the web application, the Swagger page and the OpenAPI description            |
-| [`resources/`](resources)| icons, images, license, version resources, models that come with Albireo      |
-| [`cmake/`](cmake)        | MinGW-w64 toolchain, payload of the installer, runtime libraries of devices, downloads of the models |
-| [`tests/`](tests)        | kernel, runtime, tokenizer and device tests, engine driver, benchmark          |
-| [`tools/`](tools)        | build and test scripts, preparation of the models that come with Albireo, catalog, feed, publication, offline bundle, images |
+| [`engine/`](engine)      | le moteur d'inférence : environnement d'exécution, noyaux, ordonnanceur, formats de conversation, périphériques |
+| [`host/`](host)          | le service : serveur, réglages, stockage, modèles, mises à jour, certificats, accès au web |
+| [`common/`](common)      | l'interface C des moteurs, JSON, journaux, détails de la plateforme et du processeur |
+| [`windows/`](windows)    | l'icône, l'installateur, leurs fenêtres et leurs textes en cinq langues       |
+| [`web/`](web)            | l'application web, la page Swagger et la description OpenAPI                  |
+| [`resources/`](resources)| icônes, images, licence, ressources de version, modèles livrés avec Albireo   |
+| [`cmake/`](cmake)        | chaîne de compilation MinGW-w64, charge utile de l'installateur, bibliothèques d'exécution des périphériques, téléchargements des modèles |
+| [`tests/`](tests)        | tests des noyaux, de l'environnement d'exécution, du tokenizer et des périphériques, pilote du moteur, banc de mesure |
+| [`tools/`](tools)        | scripts de build et de test, préparation des modèles livrés avec Albireo, catalogue, flux, publication, paquet hors ligne, images |
 
-## Building on Windows
+## Construire sous Windows
 
-Requirements: Windows 10 or 11 on x64, an access to the Internet, directly or through a proxy, and
-the free space given below. The script [`tools/build_windows.ps1`](tools/build_windows.ps1) begins
-with a stage, "checking the prerequisites", which checks what the build needs, installs what is
-missing and prints a table of what it found and installed:
+Prérequis : Windows 10 ou 11 sur x64, un accès à Internet, direct ou par un proxy, et
+l'espace libre indiqué ci-dessous. Le script [`tools/build_windows.ps1`](tools/build_windows.ps1) commence
+par une étape, « vérification des prérequis », qui vérifie ce dont le build a besoin, installe ce qui
+manque et affiche un tableau de ce qu'il a trouvé et installé :
 
-- Visual Studio 2022 or its Build Tools with the C++ workload (the x64 tools, a Windows SDK, the
-  redistributable files of the C++ runtime), found through vswhere. Without an installation, the
-  script downloads the Build Tools from `https://aka.ms/vs/17/release/vs_BuildTools.exe`, checks
-  the signature of Microsoft and installs them; an installation that lacks a component receives it
-  from its installer (`setup.exe modify`). Both need the rights of an administrator, which Windows
-  asks for once the script has said so, and after a new installation the script stops, to be run
-  again from a new Developer PowerShell for VS 2022.
-- CMake 3.21 or later: the one of the PATH, else the C++ CMake tools of Visual Studio, installed
-  with it.
-- Python 3.10 or later, an interpreter that runs, the alias of the Microsoft Store passed over:
-  `winget install --id Python.Python.3.12 --scope user`, else the installer of python.org 3.12.10,
-  whose SHA-256 is checked, both for the user alone.
-- The runtime of OpenVINO, unless `-NoOpenVINO`: the package of that interpreter, installed with
-  `pip install --user "openvino>=2025.0,<2027"`, or the archive of OpenVINO with
-  `INTEL_OPENVINO_DIR` set.
-- CUDA and cuDNN, unless `-NoCuda`: an installed CUDA toolkit 12.8 or later with its integration
-  with Visual Studio and cuDNN 9, else the redistributable archives of NVIDIA, laid out in a cache
-  (below). Without Visual Studio, the installer of the CUDA toolkit adds its integration to the
+- Visual Studio 2022 ou ses Build Tools avec la charge de travail C++ (les outils x64, un SDK Windows, les
+  fichiers redistribuables de l'environnement d'exécution C++), trouvés par vswhere. Sans installation, le
+  script télécharge les Build Tools depuis `https://aka.ms/vs/17/release/vs_BuildTools.exe`, vérifie
+  la signature de Microsoft et les installe ; une installation à laquelle il manque un composant le reçoit
+  de son installateur (`setup.exe modify`). Les deux demandent les droits d'administrateur, que Windows
+  demande une fois que le script l'a annoncé, et après une nouvelle installation le script s'arrête, pour être relancé
+  depuis un nouveau Developer PowerShell for VS 2022.
+- CMake 3.21 ou suivant : celui du PATH, sinon les outils CMake C++ de Visual Studio, installés
+  avec lui.
+- Python 3.10 ou suivant, un interpréteur qui fonctionne, l'alias du Microsoft Store étant ignoré :
+  `winget install --id Python.Python.3.12 --scope user`, sinon l'installateur de python.org 3.12.10,
+  dont le SHA-256 est vérifié, tous deux pour l'utilisateur seul.
+- L'environnement d'exécution d'OpenVINO, sauf avec `-NoOpenVINO` : le paquet de cet interpréteur, installé avec
+  `pip install --user "openvino>=2025.0,<2027"`, ou l'archive d'OpenVINO avec
+  `INTEL_OPENVINO_DIR` défini.
+- CUDA et cuDNN, sauf avec `-NoCuda` : une boîte à outils CUDA 12.8 ou suivante installée avec son intégration
+  à Visual Studio et cuDNN 9, sinon les archives redistribuables de NVIDIA, disposées dans un cache
+  (ci-dessous). Sans Visual Studio, l'installateur de la boîte à outils CUDA ajoute son intégration aux
   Build Tools.
-- The free space of each volume that receives the build trees and the caches, estimated at 7 GB
-  for the tree of the programs and of the installers, 1 GB for the one of OpenVINO, 2 GB for the
-  one of CUDA, 6.8 GB for the models that come with Albireo in their cache and 4.2 GB for the
-  archives of NVIDIA (1.5 GB for cuDNN alone), less what these folders hold already; the script
-  stops when a volume is short.
+- L'espace libre de chaque volume qui reçoit les arbres de build et les caches, estimé à 7 Go
+  pour l'arbre des programmes et des installateurs, 1 Go pour celui d'OpenVINO, 2 Go pour
+  celui de CUDA, 6,8 Go pour les modèles livrés avec Albireo dans leur cache et 4,2 Go pour les
+  archives de NVIDIA (1,5 Go pour cuDNN seul), moins ce que ces dossiers contiennent déjà ; le script
+  s'arrête quand un volume manque de place.
 
-An installation that fails stops the build with the place of its log. `-NoInstall` installs
-nothing; the table then gives the command that installs each missing item, for a computer where an
-administrator installs them, and the build stops when one is missing. Visual Studio alone needs the
-rights of an administrator; Python, OpenVINO and the archives of NVIDIA install for the user. The
-downloads take the proxy of `HTTPS_PROXY`, else the one of the system, which the script gives to
-CMake and pip through `HTTPS_PROXY`, and Windows checks the servers with its certificate store, so
-that a proxy of the company that inspects TLS is accepted.
+Une installation qui échoue arrête le build en indiquant l'emplacement de son journal. `-NoInstall` n'installe
+rien ; le tableau donne alors la commande qui installe chaque élément manquant, pour un ordinateur où un
+administrateur les installe, et le build s'arrête quand l'un d'eux manque. Seul Visual Studio demande les
+droits d'administrateur ; Python, OpenVINO et les archives de NVIDIA s'installent pour l'utilisateur. Les
+téléchargements prennent le proxy de `HTTPS_PROXY`, sinon celui du système, que le script transmet à
+CMake et à pip par `HTTPS_PROXY`, et Windows vérifie les serveurs avec son magasin de certificats, si
+bien qu'un proxy d'entreprise qui inspecte le TLS est accepté.
 
-The CUDA engine needs no NVIDIA card, no CUDA toolkit and no rights of an administrator. When
-the toolkit, its integration with Visual Studio or cuDNN is missing, the script takes the
-redistributable archives that NVIDIA publishes for Windows: CUDA 12.9.1 (the compiler, the
-runtime, the headers of CCCL, cuBLAS, cuRAND, cuSOLVER and the integration with Visual Studio) and
-cuDNN 9.11.0, the versions that keep the GeForce GTX 900 and 10 series.
-[`cmake/cuda_redist.cmake`](cmake/cuda_redist.cmake) downloads them once, 1.6 GB, into
-`%LOCALAPPDATA%\Albireo\build-cache\cuda` (`-CudaCache <folder>` puts this cache elsewhere),
-checks each against the SHA-256 of the manifests of NVIDIA, downloads again an archive that does
-not match, and lays them out there as a toolkit and a cuDNN folder, 4.2 GB with the archives; a
-stamp in each folder makes the next builds download and extract nothing. The CUDA tree is then
-configured with this toolkit as a standalone one, through the toolset `cuda=<folder>` of Visual
-Studio. An installed toolkit with its
-integration and cuDNN is taken first; it installs without a card too, as a custom installation
-without the driver. nvcc compiles the engine for every architecture of the table below, and only
-its tests on a card are skipped. A build machine thus produces an installer that carries every
-engine, whatever its own hardware.
+Le moteur CUDA n'a besoin ni d'une carte NVIDIA, ni d'une boîte à outils CUDA, ni des droits d'administrateur. Quand
+la boîte à outils, son intégration à Visual Studio ou cuDNN manque, le script prend les
+archives redistribuables que NVIDIA publie pour Windows : CUDA 12.9.1 (le compilateur, l'environnement
+d'exécution, les en-têtes de CCCL, cuBLAS, cuRAND, cuSOLVER et l'intégration à Visual Studio) et
+cuDNN 9.11.0, les versions qui gardent les séries GeForce GTX 900 et 10.
+[`cmake/cuda_redist.cmake`](cmake/cuda_redist.cmake) les télécharge une seule fois, 1,6 Go, dans
+`%LOCALAPPDATA%\Albireo\build-cache\cuda` (`-CudaCache <folder>` place ce cache ailleurs),
+vérifie chacune par rapport au SHA-256 des manifestes de NVIDIA, retélécharge une archive qui ne
+correspond pas, et les y dispose sous forme d'une boîte à outils et d'un dossier cuDNN, 4,2 Go avec les archives ; une
+marque dans chaque dossier fait que les builds suivants ne téléchargent et n'extraient rien. L'arbre CUDA est alors
+configuré avec cette boîte à outils comme boîte autonome, par le jeu d'outils `cuda=<folder>` de Visual
+Studio. Une boîte à outils installée avec son
+intégration et cuDNN est prise en premier ; elle s'installe aussi sans carte, en installation personnalisée
+sans le pilote. nvcc compile le moteur pour chaque architecture du tableau ci-dessous, et seuls
+ses tests sur une carte sont sautés. Une machine de build produit ainsi un installateur qui porte tous les
+moteurs, quel que soit son propre matériel.
 
-dlib is configured for one device per build tree, so the engines of the devices are built in their
-own trees and join the installer through `ALBIREO_EXTRA_ENGINE_DIRS`. The script
-[`tools/build_windows.ps1`](tools/build_windows.ps1) runs the whole sequence from the root of the
-repository:
+dlib est configuré pour un périphérique par arbre de build, si bien que les moteurs des périphériques sont construits dans leurs
+propres arbres et rejoignent l'installateur par `ALBIREO_EXTRA_ENGINE_DIRS`. Le script
+[`tools/build_windows.ps1`](tools/build_windows.ps1) exécute toute la séquence depuis la racine du
+dépôt :
 
 ```
 powershell -ExecutionPolicy Bypass -File dlib\dlib\external\albireo\tools\build_windows.ps1
 ```
 
-The OpenVINO engines are built by default, so that every installation reaches the NPU and the
-graphics processor of an Intel machine; the check of the prerequisites installs the runtime of
-OpenVINO, and `-NoOpenVINO` builds without these engines (`-OpenVINO`, which earlier
-versions required, is still accepted). The CUDA engine is built with the installed toolkit, else
-with the archives of NVIDIA; when a download, a hash or an extraction fails, the script says why
-and goes on without the engine. `-Cuda` makes that an error and `-NoCuda` leaves
-the engine out. On a machine with a supported NVIDIA card, the service prefers the CUDA engine in
-its automatic choice, since the card takes every product. The engines of CUDA, with cuBLAS and
-cuDNN, add several hundred megabytes to the installers. A build tree
-configured by a Visual Studio installation removed since, such as Visual Studio Community
-replaced by the Build Tools, is deleted and configured again, as is the CUDA tree configured for
-another CUDA integration (an installed toolkit, then the archives). `-NoBuiltinModels` builds without
-the models that come with Albireo and `-ModelCache <folder>` puts their cache on another drive.
-`-Tests` adds the test programs, `-Jobs <n>` bounds the compilations run at once on a machine with
-little memory, `-CudaVersion 12.9` picks one of several installed CUDA toolkits (the archives serve
-without it, or with 12.9), `-Cudnn <folder>` one cuDNN installation for an installed toolkit
-(`C:\Program Files\NVIDIA\CUDNN\v9.11` for instance), and
-`-CudaArchitectures` replaces the list of architectures of the CUDA engine. Of several cuDNN
-versions in `C:\Program Files\NVIDIA\CUDNN`, the script takes the latest before 9.12 that serves
-the toolkit, else the latest; when the cuDNN found is 9.12 or later, a CUDA 12 toolkit receives
-cuDNN 9.11.0 from the archives of NVIDIA instead, 0.6 GB downloaded once and 1.4 GB in the cache,
-unless `-Cudnn` or `-CudaArchitectures` is given. Each configuration sets the architectures, the
-list given or the default one, never a list an earlier configuration kept, and the configuration
-and the end of the script warn when the CUDA engine leaves out the GTX 900 and 10 series. After a
-device tree is rebuilt by hand, delete `build-albireo/payload` so that the installer packs its
-engines again. The script amounts to:
+Les moteurs OpenVINO sont construits par défaut, pour que chaque installation atteigne le NPU et le
+processeur graphique d'une machine Intel ; la vérification des prérequis installe l'environnement d'exécution
+d'OpenVINO, et `-NoOpenVINO` construit sans ces moteurs (`-OpenVINO`, qu'exigeaient les versions
+antérieures, est toujours accepté). Le moteur CUDA est construit avec la boîte à outils installée, sinon
+avec les archives de NVIDIA ; quand un téléchargement, une empreinte ou une extraction échoue, le script dit pourquoi
+et continue sans le moteur. `-Cuda` en fait une erreur et `-NoCuda` laisse
+le moteur de côté. Sur une machine dotée d'une carte NVIDIA prise en charge, le service préfère le moteur CUDA dans
+son choix automatique, puisque la carte prend tous les produits. Les moteurs CUDA, avec cuBLAS et
+cuDNN, ajoutent plusieurs centaines de mégaoctets aux installateurs. Un arbre de build
+configuré par une installation de Visual Studio supprimée depuis, comme Visual Studio Community
+remplacé par les Build Tools, est supprimé et reconfiguré, de même que l'arbre CUDA configuré pour
+une autre intégration CUDA (une boîte à outils installée, puis les archives). `-NoBuiltinModels` construit sans
+les modèles livrés avec Albireo et `-ModelCache <folder>` place leur cache sur un autre disque.
+`-Tests` ajoute les programmes de test, `-Jobs <n>` limite les compilations lancées à la fois sur une machine avec
+peu de mémoire, `-CudaVersion 12.9` choisit une boîte à outils CUDA parmi plusieurs installées (les archives servent
+sans cette option, ou avec 12.9), `-Cudnn <folder>` une installation de cuDNN pour une boîte à outils installée
+(`C:\Program Files\NVIDIA\CUDNN\v9.11` par exemple), et
+`-CudaArchitectures` remplace la liste des architectures du moteur CUDA. Parmi plusieurs versions de cuDNN
+dans `C:\Program Files\NVIDIA\CUDNN`, le script prend la plus récente antérieure à 9.12 qui sert
+la boîte à outils, sinon la plus récente ; quand le cuDNN trouvé est 9.12 ou suivant, une boîte à outils CUDA 12 reçoit
+à la place cuDNN 9.11.0 des archives de NVIDIA, 0,6 Go téléchargés une fois et 1,4 Go dans le cache,
+sauf si `-Cudnn` ou `-CudaArchitectures` est donné. Chaque configuration fixe les architectures, la
+liste donnée ou celle par défaut, jamais une liste qu'une configuration antérieure aurait gardée, et la configuration
+et la fin du script avertissent quand le moteur CUDA laisse de côté les séries GTX 900 et 10. Après qu'un
+arbre de périphérique a été reconstruit à la main, supprimer `build-albireo/payload` pour que l'installateur réemballe ses
+moteurs. Le script revient à :
 
 ```
 cmake -S dlib/dlib/external/albireo -B build-albireo-ov -G "Visual Studio 17 2022" -A x64 -DALBIREO_PROGRAMS=OFF -DALBIREO_ENGINE_OPENVINO=ON
@@ -851,73 +851,73 @@ cmake -S dlib/dlib/external/albireo -B build-albireo -G "Visual Studio 17 2022" 
 cmake --build build-albireo --config Release
 ```
 
-With the archives of NVIDIA, `cmake -DCACHE=<cache> -P dlib/dlib/external/albireo/cmake/cuda_redist.cmake`
-lays them out first, and the CUDA tree is configured with `-T cuda=<cache>\cuda-12.9.1`,
+Avec les archives de NVIDIA, `cmake -DCACHE=<cache> -P dlib/dlib/external/albireo/cmake/cuda_redist.cmake`
+les dispose d'abord, et l'arbre CUDA est configuré avec `-T cuda=<cache>\cuda-12.9.1`,
 `-DCUDAToolkit_ROOT=<cache>/cuda-12.9.1`, `-DCUDNN_INCLUDE_PATH=<cache>/cudnn-9.11.0-cuda12/include`
-and `-DCUDNN_LIBRARY_PATH=<cache>/cudnn-9.11.0-cuda12/lib/x64/cudnn.lib`.
+et `-DCUDNN_LIBRARY_PATH=<cache>/cudnn-9.11.0-cuda12/lib/x64/cudnn.lib`.
 
-The installers are `build-albireo\bin\albireo-setup.exe`, complete with the models that come with
-Albireo, and `build-albireo\bin\albireo-setup-online.exe`, the one of the updates; the script
-prints their size and SHA-256. The device trees copy beside their engine
-the libraries it loads (OpenVINO with the plugins of the NPU and of the GPU, the compiler of the
-NPU plugin and the runtime of its graphs, the table of the tuned kernels of the GPU plugin and the
-library with which TBB reads the cores of a hybrid processor, or the runtime of CUDA, cuBLAS and
-the parts of cuDNN the engine uses, with the Visual C++ runtime) and their licenses,
-which the installer places in its `licenses` folder; the same libraries go beside
-`tests\test_offload.exe`, with the CPU plugin of OpenVINO for a machine without NPU or Intel
-graphics, and the test then runs from its folder. The random numbers and the solvers of
-CUDA, which dlib links and the engine never calls, are loaded on first use only and are left out of
-the installation. The configuration stops when the folder of the OpenVINO runtime or the Visual C++
-runtime of Visual Studio is missing, and the build of a device engine stops when a library the
-installer carries (OpenVINO, TBB, cuDNN, cuBLAS, the CUDA runtime, the Visual C++ runtime) is found
-in none of its folders; with the archive of OpenVINO, TBB comes from `runtime\3rdparty\tbb\bin`.
+Les installateurs sont `build-albireo\bin\albireo-setup.exe`, complet avec les modèles livrés avec
+Albireo, et `build-albireo\bin\albireo-setup-online.exe`, celui des mises à jour ; le script
+affiche leur taille et leur SHA-256. Les arbres des périphériques copient à côté de leur moteur
+les bibliothèques qu'il charge (OpenVINO avec les plugins du NPU et du GPU, le compilateur du
+plugin NPU et l'environnement d'exécution de ses graphes, la table des noyaux réglés du plugin GPU et la
+bibliothèque avec laquelle TBB lit les cœurs d'un processeur hybride, ou l'environnement d'exécution de CUDA, cuBLAS et
+les parties de cuDNN qu'utilise le moteur, avec l'environnement d'exécution Visual C++) et leurs licences,
+que l'installateur place dans son dossier `licenses` ; les mêmes bibliothèques vont à côté de
+`tests\test_offload.exe`, avec le plugin CPU d'OpenVINO pour une machine sans NPU ni carte graphique
+Intel, et le test s'exécute alors depuis son dossier. Les nombres aléatoires et les solveurs de
+CUDA, que dlib lie et que le moteur n'appelle jamais, ne sont chargés qu'à leur première utilisation et sont laissés hors de
+l'installation. La configuration s'arrête quand le dossier de l'environnement d'exécution d'OpenVINO ou l'environnement d'exécution Visual C++
+de Visual Studio manque, et le build d'un moteur de périphérique s'arrête quand une bibliothèque que porte
+l'installateur (OpenVINO, TBB, cuDNN, cuBLAS, l'environnement d'exécution CUDA, l'environnement d'exécution Visual C++) n'est trouvée
+dans aucun de ses dossiers ; avec l'archive d'OpenVINO, TBB vient de `runtime\3rdparty\tbb\bin`.
 
-The CUDA engine carries the machine code of the cards of desktops and laptops from the GeForce GTX
-900 series on, and the intermediate code of the newest architecture, which the driver compiles for
-the cards that follow:
+Le moteur CUDA porte le code machine des cartes des ordinateurs de bureau et des portables à partir de la série GeForce GTX
+900, et le code intermédiaire de l'architecture la plus récente, que le pilote compile pour
+les cartes qui suivront :
 
-| Toolkit         | Architectures (`CMAKE_CUDA_ARCHITECTURES`)                             | Cards                         |
+| Boîte à outils  | Architectures (`CMAKE_CUDA_ARCHITECTURES`)                             | Cartes                        |
 |-----------------|------------------------------------------------------------------------|-------------------------------|
-| CUDA 12.8, 12.9 | `50-real 61-real 70-real 75-real 86-real 89-real 120-real 120-virtual` | GTX 900, 10, 16, RTX 20 to 50 |
-| CUDA 13         | `75-real 86-real 89-real 120-real 120-virtual`                         | GTX 16, RTX 20 to 50          |
+| CUDA 12.8, 12.9 | `50-real 61-real 70-real 75-real 86-real 89-real 120-real 120-virtual` | GTX 900, 10, 16, RTX 20 à 50  |
+| CUDA 13         | `75-real 86-real 89-real 120-real 120-virtual`                         | GTX 16, RTX 20 à 50           |
 
-cuDNN 9.12 and later run on Turing and later cards only (GTX 16 and RTX series). A build for the
-GTX 900 and 10 series therefore takes CUDA 12.8 or 12.9 with cuDNN 9.11 or earlier, the version
-copied beside the engine, which the archives of NVIDIA provide (CUDA 12.9.1, cuDNN 9.11.0). The
-headers and the libraries of the cuDNN given to the configuration come before those of the
-toolkit, whose folder may carry another version of cuDNN. The configuration prints the toolkit,
-the cuDNN version and the oldest
-compute capability of the result, which the engine also checks at its start: a card below it is
-reported as unusable, with its compute capability, and the other engines serve the models.
+cuDNN 9.12 et suivants ne fonctionnent que sur les cartes Turing et suivantes (séries GTX 16 et RTX). Un build pour les
+séries GTX 900 et 10 prend donc CUDA 12.8 ou 12.9 avec cuDNN 9.11 ou antérieur, la version
+copiée à côté du moteur, que fournissent les archives de NVIDIA (CUDA 12.9.1, cuDNN 9.11.0). Les
+en-têtes et les bibliothèques du cuDNN donné à la configuration passent avant ceux de la
+boîte à outils, dont le dossier peut porter une autre version de cuDNN. La configuration affiche la boîte à outils,
+la version de cuDNN et la plus ancienne
+capacité de calcul (compute capability) du résultat, que le moteur vérifie aussi à son démarrage : une carte en dessous est
+signalée comme inutilisable, avec sa capacité de calcul, et les autres moteurs servent les modèles.
 
-| CMake option              | Default | Effect                                                            |
+| Option CMake              | Défaut  | Effet                                                             |
 |---------------------------|---------|-------------------------------------------------------------------|
-| `ALBIREO_PROGRAMS`        | ON      | service, tray, installer, processor engines                       |
-| `ALBIREO_ENGINE_OPENVINO` | OFF     | OpenVINO engines (dlib with `DLIB_USE_NPU`), one per family of kernels |
-| `ALBIREO_ENGINE_CUDA`     | OFF     | CUDA engine (dlib with `DLIB_USE_CUDA`)                           |
-| `ALBIREO_ENGINE_DLIB`     | OFF     | engine whose products go through the host code of dlib (tests)     |
-| `ALBIREO_TESTS`           | ON      | test programs, in `<build>/tests`                                 |
-| `ALBIREO_EXTRA_ENGINE_DIRS` |       | folders of engines built in other trees, added to the installer   |
-| `ALBIREO_COPY_RUNTIME`    | ON on Windows | copy of the runtime libraries beside the device engines      |
-| `ALBIREO_BUILTIN_MODELS`  | ON on Windows | models that come with Albireo, in `bin/models` and the complete installer |
-| `ALBIREO_MODEL_CACHE`     | user cache | downloaded and converted models that come with Albireo         |
-| `ALBIREO_BUILTIN_MANIFEST`| `resources/builtin_models.json` | the models that come with Albireo           |
-| `ALBIREO_BUILTIN_TOOL`    |         | `albireo-builtin` of the build machine, for a cross build         |
-| `ALBIREO_RUNTIME_LICENSES`|         | more license files for the `licenses` folder                      |
+| `ALBIREO_PROGRAMS`        | ON      | service, icône, installateur, moteurs processeur                  |
+| `ALBIREO_ENGINE_OPENVINO` | OFF     | moteurs OpenVINO (dlib avec `DLIB_USE_NPU`), un par famille de noyaux |
+| `ALBIREO_ENGINE_CUDA`     | OFF     | moteur CUDA (dlib avec `DLIB_USE_CUDA`)                           |
+| `ALBIREO_ENGINE_DLIB`     | OFF     | moteur dont les produits passent par le code hôte de dlib (tests) |
+| `ALBIREO_TESTS`           | ON      | programmes de test, dans `<build>/tests`                          |
+| `ALBIREO_EXTRA_ENGINE_DIRS` |       | dossiers de moteurs construits dans d'autres arbres, ajoutés à l'installateur |
+| `ALBIREO_COPY_RUNTIME`    | ON sous Windows | copie des bibliothèques d'exécution à côté des moteurs des périphériques |
+| `ALBIREO_BUILTIN_MODELS`  | ON sous Windows | modèles livrés avec Albireo, dans `bin/models` et l'installateur complet |
+| `ALBIREO_MODEL_CACHE`     | cache de l'utilisateur | modèles livrés avec Albireo téléchargés et convertis |
+| `ALBIREO_BUILTIN_MANIFEST`| `resources/builtin_models.json` | les modèles livrés avec Albireo     |
+| `ALBIREO_BUILTIN_TOOL`    |         | `albireo-builtin` de la machine de build, pour un build croisé    |
+| `ALBIREO_RUNTIME_LICENSES`|         | fichiers de licence supplémentaires pour le dossier `licenses`    |
 
-The programs link their C and C++ runtime statically and depend on system libraries only; the
-OpenVINO engine uses the shared runtime of OpenVINO's own libraries, installed beside it.
+Les programmes lient leur environnement d'exécution C et C++ de façon statique et ne dépendent que de bibliothèques du système ; le
+moteur OpenVINO utilise l'environnement d'exécution partagé des propres bibliothèques d'OpenVINO, installé à côté de lui.
 
-## Building on Linux
+## Construire sous Linux
 
-The service, the processor engines and the tests build on Linux, which serves for development
-(`--console` runs the service in the terminal, `ALBIREO_HOME` names its data folder).
-[`tools/prerequisites_linux.sh`](tools/prerequisites_linux.sh) checks the tools of the build first,
-CMake 3.21 or later, a C++14 compiler, make or ninja, Python 3.8 or later, git and curl, and
-installs those that are missing with apt-get (Debian, Ubuntu) or dnf (Fedora), through sudo, after
-naming the packages; `--dry-run` prints the command without running it, and
-`tools/test_linux.sh` runs the script as its first step. The same check serves before the build of
-the publication under WSL:
+Le service, les moteurs processeur et les tests se construisent sous Linux, qui sert au développement
+(`--console` lance le service dans le terminal, `ALBIREO_HOME` désigne son dossier de données).
+[`tools/prerequisites_linux.sh`](tools/prerequisites_linux.sh) vérifie d'abord les outils du build,
+CMake 3.21 ou suivant, un compilateur C++14, make ou ninja, Python 3.8 ou suivant, git et curl, et
+installe ceux qui manquent avec apt-get (Debian, Ubuntu) ou dnf (Fedora), via sudo, après
+avoir nommé les paquets ; `--dry-run` affiche la commande sans la lancer, et
+`tools/test_linux.sh` lance le script comme première étape. La même vérification sert avant le build de
+la publication sous WSL :
 
 ```
 bash dlib/dlib/external/albireo/tools/prerequisites_linux.sh
@@ -926,8 +926,8 @@ cmake --build build-albireo -j
 ALBIREO_HOME=$HOME/albireo-data build-albireo/bin/albireo-service --console
 ```
 
-The Windows programs can also be cross-compiled from Linux with MinGW-w64 (POSIX threads), for
-the processor engines:
+Les programmes Windows peuvent aussi être compilés en croisé depuis Linux avec MinGW-w64 (threads POSIX), pour
+les moteurs processeur :
 
 ```
 cmake -S dlib/dlib/external/albireo -B build-albireo-win -DCMAKE_TOOLCHAIN_FILE=dlib/dlib/external/albireo/cmake/mingw-w64.cmake
@@ -936,61 +936,61 @@ cmake --build build-albireo-win -j
 
 ## Tests
 
-| Program          | Checks                                                                               |
+| Programme        | Vérifie                                                                              |
 |------------------|--------------------------------------------------------------------------------------|
-| `test_qkernels`  | every quantized kernel against its portable version and a reference in floats, the attention by tiles against a reference in double precision, and the expansion of Q6_K bit for bit with dlib; `test_qkernels_avxvnni` checks the kernels of AVX-VNNI, and skips the processors without its instructions, and `test_qkernels_vnni256` (GCC, Clang) runs the 256-bit VNNI kernels through the AVX-512 form of their instructions |
-| `test_runtime`   | the logits of a model against `tests/reference_forward.py`, and the same results whatever the cut of the batches |
-| `test_tokenizer` | the tokenizer of a GGUF file against reference token sequences                     |
-| `test_offload`   | the products and the layers of a device against the processor kernels, the small budget path and the measured routing |
-| `test_device_ops` | the operations of dlib on the weights in their GGUF formats (`tt::gguf_matvec`, `tt::gguf_dequantize`, `tt::rms_norm_rows`, `tt::silu_multiply`) against the processor kernels, for every format, with activations on 16 bytes and off them, then the time of the products of a generated token on the matrices of a 2B model |
-| `test_model_file` | a small Qwen3 model built in memory and 144 damaged forms of it (names given twice and tensors off the alignment among them), which the loader must all refuse without allocating more than 256 MB, then a sparse file of more than 2 GiB whose last tensor lies beyond 2 GiB, read mapped and streamed, each value of that tensor checked and the logits compared with those of the same model in a small file |
-| `test_engine_api` | the refusals of the C interface, three threads of requests with cancellations under the pressure of the keys and values, the unloading and the destruction during requests, one final event per request, and the history of an answer read ahead of the next question |
-| `test_chat_format` | the prompts of the agent mode and of each chat format against those of its template rendered by Jinja, the marker tokens and the parsing of the tool calls, whole or cut in pieces, the calls of Mistral with and without their identifier, the Llama 3 answers that are no call and an earlier answer holding `</think>` |
-| `test_host`      | in a data folder of its own: the files of the downloads and of the imports through no link, the refusals of the import route, the copies of models already installed, the identifiers of the imports, the replacement of a model file, the ranges of the downloads, a damaged database, the downloads through a local interface of pCloud and a local server of official addresses (the listing of the space and the copies it holds; a part it lacks, a copy of another size or of other bytes, a web page in place of a copy, an interface that refuses the connections and a space not set, each taken from its official address, the segments that follow a failure of the space sent there at once and one line of the log for each change of source; a file that neither source holds failing with the name of the file in the space, the official address and the failure of each; a download from an official address cancelled at once; the catalog from the space, or from its official address when the space refuses it, lacks it or holds it with another signature; the feed of the updates from the space alone, with no request to an official address; a refused password), each failure of the space with the bounds of the tests shortened (web pages with 200 and 403 and a proxy that asks for its authentication from each method of the interface and from a content server, connections reset or refused, a JSON cut short or of other types, sizes of another type, negative or beyond the integers, a server that stalls or answers byte by byte) failing with its message, without exception, the local server still answering, and no message or line of the log naming pCloud, the link or its code, the last guard of the messages and of the log files of an earlier version, the settings of an earlier version written again without the link and the search providers, and the web access through a local server (the public addresses on both sides of each range, the addresses refused before any connection, a page, a text cut at 2 MB, a type refused, the PDF files above 20 MB, a redirection to a private address, the search of Wikipedia, the refusals offline, with the web access turned off and without provider) |
-| `engine_chat`    | drives an engine library through its C interface: chat, images with their projector (`--image`, `--detail`), tools, the results of the tool calls given back to the model as the agent mode gives them (`--tools --tool-result`), reasoning and its budget (`--budget`), the sampling the authors of the model advise (`--temperature auto`) and a presence penalty (`--presence`), parallel requests, turns with pauses (`--turns --pause`), embeddings compared with a reference; it ends without unloading the engine of a device, as the service does |
-| `bench_runtime`  | tokens per second of the prompt and of the generation, also as `bench_runtime_avxvnni` and `bench_runtime_vnni256` |
+| `test_qkernels`  | chaque noyau quantifié par rapport à sa version portable et à une référence en flottants, l'attention par tuiles par rapport à une référence en double précision, et le dépliage de Q6_K bit pour bit identique à dlib ; `test_qkernels_avxvnni` vérifie les noyaux d'AVX-VNNI, et saute les processeurs dépourvus de ses instructions, et `test_qkernels_vnni256` (GCC, Clang) exécute les noyaux VNNI de 256 bits par la forme AVX-512 de leurs instructions |
+| `test_runtime`   | les logits d'un modèle par rapport à `tests/reference_forward.py`, et les mêmes résultats quel que soit le découpage des lots |
+| `test_tokenizer` | le tokenizer d'un fichier GGUF par rapport à des séquences de tokens de référence  |
+| `test_offload`   | les produits et les couches d'un périphérique par rapport aux noyaux du processeur, le chemin à petit budget et le routage mesuré |
+| `test_device_ops` | les opérations de dlib sur les poids dans leurs formats GGUF (`tt::gguf_matvec`, `tt::gguf_dequantize`, `tt::rms_norm_rows`, `tt::silu_multiply`) par rapport aux noyaux du processeur, pour chaque format, avec des activations alignées sur 16 octets et non alignées, puis le temps des produits d'un token généré sur les matrices d'un modèle 2B |
+| `test_model_file` | un petit modèle Qwen3 construit en mémoire et 144 formes endommagées de celui-ci (dont des noms donnés deux fois et des tenseurs hors de l'alignement), que le chargeur doit toutes refuser sans allouer plus de 256 Mo, puis un fichier creux de plus de 2 Gio dont le dernier tenseur se trouve au-delà de 2 Gio, lu projeté en mémoire et en flux, chaque valeur de ce tenseur vérifiée et les logits comparés à ceux du même modèle dans un petit fichier |
+| `test_engine_api` | les refus de l'interface C, trois threads de requêtes avec des annulations sous la pression des clés et valeurs, le déchargement et la destruction pendant des requêtes, un seul événement final par requête, et l'historique d'une réponse lu en avance sur la question suivante |
+| `test_chat_format` | les prompts du mode agent et de chaque format de conversation par rapport à ceux de son template rendu par Jinja, les tokens marqueurs et l'analyse des appels d'outils, entiers ou découpés en morceaux, les appels de Mistral avec et sans leur identifiant, les réponses de Llama 3 qui ne sont pas des appels et une réponse antérieure contenant `</think>` |
+| `test_host`      | dans un dossier de données à part : les fichiers des téléchargements et des imports par aucun lien, les refus de la route d'import, les copies de modèles déjà installés, les identifiants des imports, le remplacement d'un fichier de modèle, les plages des téléchargements, une base de données endommagée, les téléchargements par une interface locale de pCloud et un serveur local d'adresses officielles (le listing de l'espace et les copies qu'il contient ; une partie qui lui manque, une copie d'une autre taille ou d'autres octets, une page web à la place d'une copie, une interface qui refuse les connexions et un espace non configuré, chacun pris à son adresse officielle, les segments qui suivent un échec de l'espace envoyés là aussitôt et une ligne du journal pour chaque changement de source ; un fichier qu'aucune des deux sources ne contient échouant avec le nom du fichier dans l'espace, l'adresse officielle et l'échec de chacune ; un téléchargement depuis une adresse officielle annulé aussitôt ; le catalogue pris dans l'espace, ou à son adresse officielle quand l'espace le refuse, ne l'a pas ou le contient avec une autre signature ; le flux des mises à jour pris dans l'espace seul, sans aucune requête vers une adresse officielle ; un mot de passe refusé), chaque échec de l'espace avec les délais des tests raccourcis (pages web avec 200 et 403 et un proxy qui demande son authentification depuis chaque méthode de l'interface et depuis un serveur de contenu, connexions réinitialisées ou refusées, un JSON tronqué ou d'autres types, des tailles d'un autre type, négatives ou au-delà des entiers, un serveur qui se bloque ou répond octet par octet) échouant avec son message, sans exception, le serveur local répondant toujours, et aucun message ni aucune ligne du journal ne nommant pCloud, le lien ou son code, la dernière garde des messages et des fichiers journaux d'une version antérieure, les réglages d'une version antérieure réécrits sans le lien et les fournisseurs de recherche, et l'accès au web par un serveur local (les adresses publiques de part et d'autre de chaque plage, les adresses refusées avant toute connexion, une page, un texte coupé à 2 Mo, un type refusé, les fichiers PDF au-delà de 20 Mo, une redirection vers une adresse privée, la recherche dans Wikipédia, les refus hors ligne, avec l'accès au web désactivé et sans fournisseur) |
+| `engine_chat`    | pilote une bibliothèque de moteur par son interface C : discussion, images avec leur projecteur (`--image`, `--detail`), outils, les résultats des appels d'outils rendus au modèle comme les rend le mode agent (`--tools --tool-result`), raisonnement et son budget (`--budget`), l'échantillonnage que conseillent les auteurs du modèle (`--temperature auto`) et une pénalité de présence (`--presence`), requêtes parallèles, tours avec pauses (`--turns --pause`), embeddings comparés à une référence ; il se termine sans décharger le moteur d'un périphérique, comme le fait le service |
+| `bench_runtime`  | tokens par seconde du prompt et de la génération, aussi sous la forme `bench_runtime_avxvnni` et `bench_runtime_vnni256` |
 
-`test_offload model.gguf CPU` validates the OpenVINO engine on a machine without NPU, with the CPU
-plugin of OpenVINO; `ALBIREO_ENGINE_DLIB=ON` builds the same tests on the host code of dlib, which
-runs the layers of a dense model as the card does. A fourth argument gives the megabytes of the
-copies of its first pass, so that the layers of a larger model run there on a computer whose
-automatic budget does not hold them: `test_offload qwen3-vl-4b-thinking-albireo.gguf "" 2 2400`.
+`test_offload model.gguf CPU` valide le moteur OpenVINO sur une machine sans NPU, avec le plugin
+CPU d'OpenVINO ; `ALBIREO_ENGINE_DLIB=ON` construit les mêmes tests sur le code hôte de dlib, qui
+exécute les couches d'un modèle dense comme le fait la carte. Un quatrième argument donne les mégaoctets des
+copies de sa première passe, pour que les couches d'un modèle plus grand s'y exécutent sur un ordinateur dont
+le budget automatique ne les contient pas : `test_offload qwen3-vl-4b-thinking-albireo.gguf "" 2 2400`.
 
-Two scripts run these programs and the service, then print one line per step with its result:
+Deux scripts lancent ces programmes et le service, puis affichent une ligne par étape avec son résultat :
 
 ```
 bash dlib/dlib/external/albireo/tools/test_linux.sh
 powershell -ExecutionPolicy Bypass -File dlib\dlib\external\albireo\tools\test_windows.ps1
 ```
 
-They take `~/models/Qwen3-0.6B-Q4_K_M.gguf` and `~/models/Qwen3-Embedding-0.6B-Q8_0.gguf` by
-default and skip the steps whose model or build tree is missing. The Linux script runs a service
-offline in a data folder of its own, on the port `ALBIREO_TEST_PORT` (18443 by default), sends it
-the model through the upload route, checks that the route of the paths refuses a plain file, runs
-the tests of the service (`test_host`), asks a question through the OpenAI interface and has a
-sentence read aloud; the Windows script asks the installed service a question, the vectors of two
-texts and a sentence read aloud, and tests the OpenVINO and CUDA engines when their trees exist
-(`-Device GPU` or `-Device NPU` for `test_offload`, CPU by default). Both have a sentence read by
-`albireo-speech` of the build tree. The engine steps of the Windows script run with the `PATH` of
-the service, System32 and the Windows folder only; the Linux script gives the service 30 seconds
-to stop, then kills it. Their exit code is the number of failed steps.
+Ils prennent `~/models/Qwen3-0.6B-Q4_K_M.gguf` et `~/models/Qwen3-Embedding-0.6B-Q8_0.gguf` par
+défaut et sautent les étapes dont le modèle ou l'arbre de build manque. Le script Linux lance un service
+hors ligne dans un dossier de données à part, sur le port `ALBIREO_TEST_PORT` (18443 par défaut), lui envoie
+le modèle par la route d'envoi, vérifie que la route des chemins refuse un fichier ordinaire, lance
+les tests du service (`test_host`), pose une question par l'interface OpenAI et fait lire
+une phrase à voix haute ; le script Windows demande au service installé une question, les vecteurs de deux
+textes et une phrase lue à voix haute, et teste les moteurs OpenVINO et CUDA quand leurs arbres existent
+(`-Device GPU` ou `-Device NPU` pour `test_offload`, CPU par défaut). Les deux font lire une phrase par
+`albireo-speech` de l'arbre de build. Les étapes de moteur du script Windows s'exécutent avec le `PATH` du
+service, System32 et le dossier de Windows seulement ; le script Linux laisse 30 secondes au service
+pour s'arrêter, puis le tue. Leur code de sortie est le nombre d'étapes échouées.
 
 ## Installation
 
-A build gives two installers. `albireo-setup.exe` is complete: it carries the models that come
-with Albireo and installs a computer that answers at once, without network. `albireo-setup-online.exe`
-is the same program without them: the updates take it, and on a new computer the service
-downloads the default models of the catalog. Windows runs no program of 4 GiB or more: when the
-program and its models would reach that size, as the complete installer does with the libraries of
-CUDA and of OpenVINO, its models lie beside it in `albireo-setup.models`, which the installer reads
-when it carries none; the two files travel together and are renamed together
-(`albireo-setup-complete-<version>.exe` and `albireo-setup-complete-<version>.models`).
+Un build donne deux installateurs. `albireo-setup.exe` est complet : il porte les modèles livrés
+avec Albireo et installe un ordinateur qui répond aussitôt, sans réseau. `albireo-setup-online.exe`
+est le même programme sans eux : les mises à jour le prennent, et sur un nouvel ordinateur le service
+télécharge les modèles par défaut du catalogue. Windows n'exécute aucun programme de 4 Gio ou plus : quand le
+programme et ses modèles atteindraient cette taille, comme le fait l'installateur complet avec les bibliothèques de
+CUDA et d'OpenVINO, ses modèles se trouvent à côté de lui dans `albireo-setup.models`, que l'installateur lit
+quand il n'en porte aucun ; les deux fichiers voyagent ensemble et sont renommés ensemble
+(`albireo-setup-complete-<version>.exe` et `albireo-setup-complete-<version>.models`).
 
-The wizard asks for the language, the license, the folders of the programs, of the data and of
-the models, the options (start with Windows, desktop shortcut, trust of the local certificate,
-download of the default model, which the complete installer does not need, port), then installs,
-registers the service and starts the tray. The command line covers the other cases; the options
-it does not give keep the values of the installation in place:
+L'assistant demande la langue, la licence, les dossiers des programmes, des données et des
+modèles, les options (démarrage avec Windows, raccourci sur le bureau, confiance dans le certificat local,
+téléchargement du modèle par défaut, dont l'installateur complet n'a pas besoin, port), puis installe,
+enregistre le service et lance l'icône. La ligne de commande couvre les autres cas ; les options
+qu'elle ne donne pas gardent les valeurs de l'installation en place :
 
 ```
 albireo-setup /silent [/dir <folder>] [/data-dir <folder>] [/models <folder>] [/port <port>] [/offline]
@@ -1000,303 +1000,302 @@ albireo-setup /service start|stop|restart
 albireo-setup /lang en|fr|de|it|es
 ```
 
-The data folder, `C:\ProgramData\Albireo` by default, may be placed elsewhere at the
-installation. Its place is recorded for the machine (`DataDir` under `HKLM\Software\Albireo`,
-which the programs read before the system variable `ALBIREO_HOME`), with the place of the models
-(`ModelsDir`) and whether the installer made that folder (`ModelsDirOwned`), so that the
-service, the tray, the updates and the uninstallation find them; an update keeps them. A silent installation that
-refuses a folder says why in `%TEMP%\albireo-setup.log` and leaves nothing behind; a new installation
-that fails, the start of its service included, removes the folders it created and empties those it
-found empty, its log then going to `%TEMP%\albireo-setup.log`. The end of
-each installation, update or removal is written in `<data>\logs\setup-result.json`, which a
-tray restarted by the installer reports (`--setup-result`).
+Le dossier des données, `C:\ProgramData\Albireo` par défaut, peut être placé ailleurs à
+l'installation. Son emplacement est enregistré pour la machine (`DataDir` sous `HKLM\Software\Albireo`,
+que les programmes lisent avant la variable système `ALBIREO_HOME`), avec l'emplacement des modèles
+(`ModelsDir`) et le fait que l'installateur a créé ce dossier ou non (`ModelsDirOwned`), pour que le
+service, l'icône, les mises à jour et la désinstallation les trouvent ; une mise à jour les garde. Une installation silencieuse qui
+refuse un dossier dit pourquoi dans `%TEMP%\albireo-setup.log` et ne laisse rien derrière elle ; une nouvelle installation
+qui échoue, démarrage de son service compris, retire les dossiers qu'elle a créés et vide ceux qu'elle
+a trouvés vides, son journal allant alors dans `%TEMP%\albireo-setup.log`. La fin de
+chaque installation, mise à jour ou désinstallation est écrite dans `<data>\logs\setup-result.json`, que
+l'icône relancée par l'installateur signale (`--setup-result`).
 
-The installer started from an offline bundle (see [Computers without network](#computers-without-network))
-copies into the import folder, which the service reads at its first start, the catalog of the
-bundle (unsigned in the macOS fork) and the models this catalog lists, each checked
-against its hash. The option "This computer has no Internet access" of the wizard, or `/offline`,
-sets the service offline from the start.
+L'installateur lancé depuis un paquet hors ligne (voir [Ordinateurs sans réseau](#ordinateurs-sans-réseau))
+copie dans le dossier d'import, que le service lit à son premier démarrage, le catalogue du
+paquet (non signé dans le fork macOS) et les modèles que liste ce catalogue, chacun vérifié
+par rapport à son empreinte. L'option « Cet ordinateur n'a pas d'accès à Internet » de l'assistant, ou `/offline`,
+met le service hors ligne dès le départ.
 
-The folder of the data must lie on a local fixed drive, which most external hard drives and SSDs
-are and most USB keys are not (`folder_not_fixed`), those of the programs and of the models on a
-local drive, each on a drive that answers (`folder_drive_unavailable` for a drive locked by
-BitLocker, empty or not ready) and whose file system keeps permissions, NTFS or ReFS; the installer
-refuses a folder of an exFAT or FAT32 drive (`folder_no_permissions`, which names the file system),
-a drive root, the folders of Windows and of the users, a folder that holds them, a link made by
-another account, a program or data folder on whose path another account could rename a folder
-(`folder_parent_unsafe`, which names that folder), or whose drive root belongs to another account
-or lets other accounts delete or rename what it holds, as a root open to everyone does
-(`folder_root_unsafe`), a program or data folder that is neither empty nor an installation of
-Albireo, or that lies inside Windows or the profiles of the users, and a models folder inside the
-folder of the programs, or that holds it (`folder_overlap`), in the wizard as with
-`/silent /models` and `/models-dir`. On an external NTFS drive whose root keeps the permissions Windows
-gives a drive it formats, the folders of the programs, of the data and of the models can lie below
-a new folder at the root, `E:\Albireo` for instance, which the installer creates with them. It
-gives the folders it creates or takes over, and the parent folders it creates for the programs,
-the data and the models, the rights of the data folder (writing for the administrators and the
-service only), checks the path of the programs and of the data again once their folders exist, so
-that a folder another account made on it meanwhile stops the installation, and records the files
-it installs in `albireo-files.json`. The service refuses the same drives without permissions for
-its data folder and its models folder, a models folder there leaving the models to the data
-folder, and loads a model only from a folder that SYSTEM and the administrators alone may change,
-its projector included: a model left in a folder that another account may write in, or in a
-folder put in the place of the models folder, stays unloaded with that reason.
+Le dossier des données doit se trouver sur un disque local fixe, ce que sont la plupart des disques durs et SSD externes
+et pas la plupart des clés USB (`folder_not_fixed`), ceux des programmes et des modèles sur un
+disque local, chacun sur un disque qui répond (`folder_drive_unavailable` pour un disque verrouillé par
+BitLocker, vide ou pas prêt) et dont le système de fichiers conserve les permissions, NTFS ou ReFS ; l'installateur
+refuse un dossier d'un disque exFAT ou FAT32 (`folder_no_permissions`, qui nomme le système de fichiers),
+une racine de disque, les dossiers de Windows et des utilisateurs, un dossier qui les contient, un lien créé par
+un autre compte, un dossier de programmes ou de données sur le chemin duquel un autre compte pourrait renommer un dossier
+(`folder_parent_unsafe`, qui nomme ce dossier), ou dont la racine du disque appartient à un autre compte
+ou permet à d'autres comptes de supprimer ou de renommer ce qu'elle contient, comme le fait une racine ouverte à tous
+(`folder_root_unsafe`), un dossier de programmes ou de données qui n'est ni vide ni une installation
+d'Albireo, ou qui se trouve dans Windows ou dans les profils des utilisateurs, et un dossier de modèles à l'intérieur du
+dossier des programmes, ou qui le contient (`folder_overlap`), dans l'assistant comme avec
+`/silent /models` et `/models-dir`. Sur un disque NTFS externe dont la racine garde les permissions que Windows
+donne à un disque qu'il formate, les dossiers des programmes, des données et des modèles peuvent se trouver sous
+un nouveau dossier à la racine, `E:\Albireo` par exemple, que l'installateur crée avec eux. Il
+donne aux dossiers qu'il crée ou dont il prend possession, et aux dossiers parents qu'il crée pour les programmes,
+les données et les modèles, les droits du dossier des données (écriture pour les administrateurs et le
+service seulement), revérifie le chemin des programmes et des données une fois leurs dossiers créés, pour
+qu'un dossier qu'un autre compte y aurait créé entre-temps arrête l'installation, et enregistre les fichiers
+qu'il installe dans `albireo-files.json`. Le service refuse les mêmes disques sans permissions pour
+son dossier de données et son dossier de modèles, un dossier de modèles placé là laissant les modèles au dossier
+des données, et ne charge un modèle que depuis un dossier que seuls SYSTEM et les administrateurs peuvent modifier,
+projecteur compris : un modèle laissé dans un dossier où un autre compte peut écrire, ou dans un
+dossier mis à la place du dossier des modèles, reste non chargé avec cette raison.
 
-The uninstallation stops the tray of every session, the service and the programs of the
-installation folder, removes the trust of the local authority and the certificates, then
-deletes the whole installation folder, the files added there since included, and itself, through
-a copy that ends the work once it has quit. It then deletes the whole data folder, unless the
-box of the uninstallation page, or `/keep-data`, keeps the models, the settings and the logs for
-a later installation, which finds them again (`/purge`, which earlier versions needed, is
-accepted and is the default). The entry of the installed programs is removed last, so that an
-interrupted uninstallation can run again. A models
-folder placed elsewhere goes whole when the installer made it or found it empty, else only the
-models Albireo put there. The uninstallation removes only the folders recorded at the
-installation, never a drive root or a folder of Windows or of the users, and takes the links
-and junctions it finds away without following them. The copy of the installer kept in the folder
-of the programs only uninstalls, and the installer refuses to uninstall when no installation is
-registered.
+La désinstallation arrête l'icône de chaque session, le service et les programmes du
+dossier d'installation, retire la confiance dans l'autorité locale et les certificats, puis
+supprime tout le dossier d'installation, fichiers ajoutés depuis compris, et elle-même, par
+une copie qui termine le travail une fois qu'elle s'est fermée. Elle supprime ensuite tout le dossier des données, sauf si la
+case de la page de désinstallation, ou `/keep-data`, garde les modèles, les réglages et les journaux pour
+une installation ultérieure, qui les retrouve (`/purge`, dont avaient besoin les versions antérieures, est
+accepté et correspond au comportement par défaut). L'entrée des programmes installés est retirée en dernier, pour qu'une
+désinstallation interrompue puisse être relancée. Un dossier de
+modèles placé ailleurs part en entier quand l'installateur l'a créé ou l'a trouvé vide, sinon seuls les
+modèles qu'Albireo y a mis partent. La désinstallation ne retire que les dossiers enregistrés à
+l'installation, jamais une racine de disque ni un dossier de Windows ou des utilisateurs, et enlève les liens
+et jonctions qu'elle trouve sans les suivre. La copie de l'installateur gardée dans le dossier
+des programmes ne fait que désinstaller, et l'installateur refuse de désinstaller quand aucune installation n'est
+enregistrée.
 
-### Updates
+### Mises à jour
 
-The installer finds the installation in place through the entry of the installed programs and its
-service, and updates it instead of installing a second copy: the wizard opens on "Albireo
-<version> is installed in <folder>", goes from the license to the update, and keeps the folder of
-the programs, the settings, the models, the certificates and their trust, the token of the tray,
-the shortcuts and the start of the icon; the entry of the installed programs and the service are
-rewritten in place. A newer version in place is left as it is. `/silent` updates the same way,
-the options given joining the settings, and `/update /silent` is the update the service starts.
-The installer checks the free space before it stops the service, writes every new file beside
-the old one, then swaps them all, setting aside the files of the engines, of the web application,
-of the licenses and of the voices that the new version no longer carries; the new service must
-then run and listen on its port within two minutes. Until then the previous files stay aside, and
-a failure, the start of the new service included, puts them back with the entry of the installed
-programs and restarts the service that was running, whose recovery actions are suspended during
-the update; once the new service answers, the files set aside are deleted, with the folders they
-leave empty. A models folder that an earlier version accepted inside these folders keeps its files.
-An update keeps the start type an administrator chose, and a disabled service stays stopped.
-`/update /silent` updates only an installation in place, never with an older version, and a
-service waiting for its deletion stops the installer before anything changes.
-The models that come with Albireo are copied only when they differ from those in place, their
-hash checked; an update by the installer without models keeps them.
+L'installateur trouve l'installation en place par l'entrée des programmes installés et son
+service, et la met à jour au lieu d'installer une seconde copie : l'assistant s'ouvre sur « Albireo
+<version> est installé dans <folder> », passe de la licence à la mise à jour, et garde le dossier des
+programmes, les réglages, les modèles, les certificats et leur confiance, le jeton de l'icône,
+les raccourcis et le démarrage de l'icône ; l'entrée des programmes installés et le service sont
+réécrits sur place. Une version plus récente en place est laissée telle quelle. `/silent` met à jour de la même façon,
+les options données rejoignant les réglages, et `/update /silent` est la mise à jour que lance le service.
+L'installateur vérifie l'espace libre avant d'arrêter le service, écrit chaque nouveau fichier à côté
+de l'ancien, puis les échange tous, en mettant de côté les fichiers des moteurs, de l'application web,
+des licences et des voix que la nouvelle version ne porte plus ; le nouveau service doit
+alors tourner et écouter sur son port dans les deux minutes. Jusque-là, les fichiers précédents restent de côté, et
+un échec, démarrage du nouveau service compris, les remet en place avec l'entrée des programmes
+installés et relance le service qui tournait, dont les actions de récupération sont suspendues pendant
+la mise à jour ; dès que le nouveau service répond, les fichiers mis de côté sont supprimés, avec les dossiers qu'ils
+laissent vides. Un dossier de modèles qu'une version antérieure acceptait à l'intérieur de ces dossiers garde ses fichiers.
+Une mise à jour garde le type de démarrage qu'a choisi un administrateur, et un service désactivé reste arrêté.
+`/update /silent` ne met à jour qu'une installation en place, jamais avec une version plus ancienne, et un
+service en attente de suppression arrête l'installateur avant que quoi que ce soit ne change.
+Les modèles livrés avec Albireo ne sont copiés que lorsqu'ils diffèrent de ceux en place, leur
+empreinte vérifiée ; une mise à jour par l'installateur sans modèles les garde.
 
-Two ways to update an installed computer:
+Deux façons de mettre à jour un ordinateur installé :
 
-- by hand: start the new `albireo-setup.exe`, or `albireo-setup-online.exe`, and follow the
-  update wizard;
-- automatically (removed in the macOS fork): once a version is published (see [Publishing a version](#publishing-a-version)),
-  the service reads the signed feed at its start and every six hours in the public link,
-  downloads the installer without models in the background from the link as well, checks
-  its size, its SHA-256 and the signature of the feed,
-  and the menu of the icon offers "Install version <version> and restart"; otherwise the update is
-  installed at the next start of the service. "Check for updates" asks the feed at once.
+- à la main : lancer le nouveau `albireo-setup.exe`, ou `albireo-setup-online.exe`, et suivre
+  l'assistant de mise à jour ;
+- automatiquement (retiré dans le fork macOS) : une fois une version publiée (voir [Publier une version](#publier-une-version)),
+  le service lit le flux signé à son démarrage et toutes les six heures dans le lien public,
+  télécharge l'installateur sans modèles en arrière-plan depuis le lien également, vérifie
+  sa taille, son SHA-256 et la signature du flux,
+  et le menu de l'icône propose « Installer la version <version> et redémarrer » ; sinon la mise à jour est
+  installée au prochain démarrage du service. « Rechercher des mises à jour » interroge aussitôt le flux.
 
-## Settings
+## Réglages
 
-`settings.json`, in the data folder, holds the settings, the password of the proxy apart; the tray
-changes them through the administration interface, a new port being opened once before it is saved,
-and the service restarts when a change requires it. A `settings.json` of an earlier version is read
-without error: the settings this version lacks (`public_link`, `web_search_url`, `web_search_key`)
-and another provider of the search, read as `wikipedia`, leave it at the next start, and
-`web_search.secret` is deleted.
+`settings.json`, dans le dossier des données, contient les réglages, à part le mot de passe du proxy ; l'icône
+les modifie par l'interface d'administration, un nouveau port étant ouvert une fois avant d'être enregistré,
+et le service redémarre quand un changement l'exige. Un `settings.json` d'une version antérieure est lu
+sans erreur : les réglages qui manquent à cette version (`public_link`, `web_search_url`, `web_search_key`)
+et un autre fournisseur de recherche, lu comme `wikipedia`, en disparaissent au démarrage suivant, et
+`web_search.secret` est supprimé.
 
-| Key             | Default | Meaning                                                                   |
+| Clé             | Défaut  | Signification                                                             |
 |-----------------|---------|---------------------------------------------------------------------------|
-| `port`          | 8443    | port of `https://localhost`; a port the service cannot open at its start gives way to the last one it served on |
-| `models_dir`    | `""`    | folder of the models, `<data>\models` when empty                          |
+| `port`          | 8443    | port de `https://localhost` ; un port que le service ne peut pas ouvrir à son démarrage cède la place au dernier sur lequel il a servi |
+| `models_dir`    | `""`    | dossier des modèles, `<data>\models` quand il est vide                    |
 | `language`      | `auto`  | `auto`, `en`, `fr`, `de`, `it`, `es`                                      |
-| `engine`        | `auto`  | `auto` (the accelerator of the computer: cuda, else `openvino:both`, `openvino:gpu` or `openvino:npu`, the processor computing what its device does not take; the processor engine, the fastest measured or the one of the richest kernels, when no accelerator is usable or when a measure found the accelerator slower), `best` (the fastest measured), or a variant |
-| `accelerator`   | `auto`  | `none` (the processor engine), `npu`, `gpu`, `both`: the device of the engines that have several |
-| `v2ram`         | true    | extended device memory of the CUDA engine                                  |
-| `v2ram_max_mb`  | 0       | size of its file in megabytes, 0 for automatic; a size lets the copies of the weights go beyond the card into it; on a volume without sparse files (exFAT, FAT32), the budget and half of the free space at most |
-| `device_mb`     | 0       | memory of the device for the copies of the weights, 0 for automatic       |
-| `threads`       | 0       | threads of the engine, 0 for the physical cores                           |
-| `context`       | 0       | context of the models, 0 for the trained one, brought down when the memory the system can commit cannot hold its keys and values |
-| `max_sequences` | 4       | requests computed together per model                                      |
-| `kv_mb`         | 0       | memory of the keys and values, 0 for two contexts within the memory the system can commit, a reserve left |
-| `kv_type`       | `auto`  | keys and values: `q8` (8 bits, the keys rotated), `f16` (half precision), `auto` (`q8` for the language models whose heads hold whole groups of 32 values) |
-| `check_updates` | true    | checks the feed at each start and every six hours                          |
-| `default_model` | true    | downloads the default language model of the catalog at the first start    |
-| `offline`       | false   | no connection: catalog, models and updates come from imports              |
-| `proxy`         | `""`    | `""` for the proxy of the system (`HTTPS_PROXY`, then WinHTTP), `none`, or `http://[user:password@]host:port`; the settings give the password as `********`, kept in `proxy.secret` |
-| `web_access`    | true    | the web access of the Web button, `false` turns it off (see [Web access](#web-access)) |
-| `web_search`    | `wikipedia` | provider of the search: `wikipedia`, or `none` to turn the search off |
-| `active`        |         | the model of each function: `general`, `code`, `security`, `embedding`     |
+| `engine`        | `auto`  | `auto` (l'accélérateur de l'ordinateur : cuda, sinon `openvino:both`, `openvino:gpu` ou `openvino:npu`, le processeur calculant ce que son périphérique ne prend pas ; le moteur processeur, le plus rapide mesuré ou celui des noyaux les plus riches, quand aucun accélérateur n'est utilisable ou quand une mesure a trouvé l'accélérateur plus lent), `best` (le plus rapide mesuré), ou une variante |
+| `accelerator`   | `auto`  | `none` (le moteur processeur), `npu`, `gpu`, `both` : le périphérique des moteurs qui en ont plusieurs |
+| `v2ram`         | true    | mémoire de périphérique étendue du moteur CUDA                            |
+| `v2ram_max_mb`  | 0       | taille de son fichier en mégaoctets, 0 pour automatique ; une taille permet aux copies des poids de dépasser la carte pour s'y étendre ; sur un volume sans fichiers creux (exFAT, FAT32), le budget et la moitié de l'espace libre au plus |
+| `device_mb`     | 0       | mémoire du périphérique pour les copies des poids, 0 pour automatique     |
+| `threads`       | 0       | threads du moteur, 0 pour les cœurs physiques                             |
+| `context`       | 0       | contexte des modèles, 0 pour celui de l'entraînement, réduit quand la mémoire que le système peut engager ne peut pas contenir ses clés et valeurs |
+| `max_sequences` | 4       | requêtes calculées ensemble par modèle                                    |
+| `kv_mb`         | 0       | mémoire des clés et valeurs, 0 pour deux contextes dans la mémoire que le système peut engager, une réserve laissée |
+| `kv_type`       | `auto`  | clés et valeurs : `q8` (8 bits, les clés tournées), `f16` (demi-précision), `auto` (`q8` pour les modèles de langage dont les têtes contiennent des groupes entiers de 32 valeurs) |
+| `check_updates` | true    | vérifie le flux à chaque démarrage et toutes les six heures               |
+| `default_model` | true    | télécharge le modèle de langage par défaut du catalogue au premier démarrage |
+| `offline`       | false   | aucune connexion : catalogue, modèles et mises à jour viennent d'imports  |
+| `proxy`         | `""`    | `""` pour le proxy du système (`HTTPS_PROXY`, puis WinHTTP), `none`, ou `http://[user:password@]host:port` ; les réglages donnent le mot de passe sous la forme `********`, conservé dans `proxy.secret` |
+| `web_access`    | true    | l'accès au web du bouton Web, `false` le désactive (voir [Accès au web](#accès-au-web)) |
+| `web_search`    | `wikipedia` | fournisseur de la recherche : `wikipedia`, ou `none` pour désactiver la recherche |
+| `active`        |         | le modèle de chaque fonction : `general`, `code`, `security`, `embedding` |
 
 ## Interfaces
 
-The interface compatible with OpenAI takes no key: the service listens on the loopback interface
-(and, in the macOS fork, on the network port once the network access is on, behind a password when one
-is chosen).
-The `model` field takes
-the identifier of a loaded model, a function (`general`, `code`, `security`, or `albireo-code` and
-its siblings), `albireo-background` for the model that comes with Albireo, or `auto`; the `model`
-of `/v1/embeddings` takes `albireo-embedding`.
+L'interface compatible avec OpenAI ne prend aucune clé : le service écoute sur l'interface de bouclage
+(et, dans le fork macOS, sur le port réseau une fois l'accès réseau activé, derrière un mot de passe quand il en a été
+choisi un).
+Le champ `model` prend
+l'identifiant d'un modèle chargé, une fonction (`general`, `code`, `security`, ou `albireo-code` et
+ses semblables), `albireo-background` pour le modèle livré avec Albireo, ou `auto` ; le `model`
+de `/v1/embeddings` prend `albireo-embedding`.
 
-| Route                                    | Use                                                       |
+| Route                                    | Usage                                                     |
 |------------------------------------------|-----------------------------------------------------------|
-| `GET /v1/models`                         | loaded models and the aliases of the functions, `albireo-background` included |
-| `POST /v1/chat/completions`              | chat, streaming, tools, `reasoning_content`, images       |
-| `POST /v1/completions`                   | completion of a prompt                                    |
-| `POST /v1/embeddings`                    | vectors of texts, float or base64, `dimensions` to shorten them |
-| `POST /v1/audio/speech`                  | a text read aloud, WAVE or PCM, 16-bit mono at 16 kHz     |
-| `GET /albireo/v1/speech/voices`          | voices of the speech synthesis                            |
-| `GET /albireo/v1/status`                 | host, engine, statistics, models, downloads, updates      |
-| `GET /albireo/v1/models?lang=fr`         | catalog and installed models                              |
-| `GET /albireo/v1/engines`                | engine libraries, options and measures                    |
-| `POST /albireo/v1/count`                 | tokens of a conversation for a model                      |
-| `POST /albireo/v1/web/search`            | a search of Wikipedia (see [Web access](#web-access))     |
-| `POST /albireo/v1/web/fetch`             | a page of the web at a public address, its bytes in base64 |
-| `GET /albireo/v1/licenses`               | license texts of the `licenses` folder of the installation, with the versions the service knows |
-| `GET /albireo/v1/licenses/<file>`        | one of these texts, 1 MB at most, a file of that folder only |
-| `/docs/`                                 | Swagger page of the interface                             |
+| `GET /v1/models`                         | modèles chargés et alias des fonctions, `albireo-background` compris |
+| `POST /v1/chat/completions`              | discussion, streaming, outils, `reasoning_content`, images |
+| `POST /v1/completions`                   | complétion d'un prompt                                    |
+| `POST /v1/embeddings`                    | vecteurs de textes, en flottants ou en base64, `dimensions` pour les raccourcir |
+| `POST /v1/audio/speech`                  | un texte lu à voix haute, WAVE ou PCM, 16 bits mono à 16 kHz |
+| `GET /albireo/v1/speech/voices`          | voix de la synthèse vocale                                |
+| `GET /albireo/v1/status`                 | hôte, moteur, statistiques, modèles, téléchargements, mises à jour |
+| `GET /albireo/v1/models?lang=fr`         | catalogue et modèles installés                            |
+| `GET /albireo/v1/engines`                | bibliothèques de moteurs, options et mesures              |
+| `POST /albireo/v1/count`                 | tokens d'une conversation pour un modèle                  |
+| `POST /albireo/v1/web/search`            | une recherche dans Wikipédia (voir [Accès au web](#accès-au-web)) |
+| `POST /albireo/v1/web/fetch`             | une page du web à une adresse publique, ses octets en base64 |
+| `GET /albireo/v1/licenses`               | textes de licence du dossier `licenses` de l'installation, avec les versions que connaît le service |
+| `GET /albireo/v1/licenses/<file>`        | l'un de ces textes, 1 Mo au plus, un fichier de ce dossier seulement |
+| `/docs/`                                 | page Swagger de l'interface                               |
 
-The sampling of every model goes through the sampler of Albireo, whatever the architecture of
-the model and the engine: `temperature`, `top_p`, `top_k`, `min_p` and the penalties apply the
-same way to all of them. The settings a request leaves out take the values the authors of the
-family of the model advise on its card, for a request of text alone or with images as the cards of
-Qwen3-VL distinguish them, or the temperature of the use and of the evaluations their cards describe
-for CyberSecQwen 4B and the Foundation-Sec models, `min_p` being 0 for all of them. A Thinking model
-of Qwen3-VL whose reasoning the engine ends at once answers as a model without reasoning, with the
-values the authors of Qwen3 advise for that mode. The "Generation" tab of the web application leaves
-them out while its settings stay on automatic:
+L'échantillonnage de chaque modèle passe par l'échantillonneur d'Albireo, quels que soient l'architecture du
+modèle et le moteur : `temperature`, `top_p`, `top_k`, `min_p` et les pénalités s'appliquent de la
+même façon à tous. Les réglages qu'une requête omet prennent les valeurs que les auteurs de la
+famille du modèle conseillent sur sa fiche, pour une requête de texte seul ou avec images comme les distinguent les fiches de
+Qwen3-VL, ou la température d'usage et des évaluations que décrivent leurs fiches
+pour CyberSecQwen 4B et les modèles Foundation-Sec, `min_p` valant 0 pour tous. Un modèle Thinking
+de Qwen3-VL dont le moteur termine aussitôt le raisonnement répond comme un modèle sans raisonnement, avec les
+valeurs que conseillent les auteurs de Qwen3 pour ce mode. L'onglet « Génération » de l'application web les
+omet tant que ses réglages restent sur automatique :
 
-| Models                                   | `temperature` | `top_p` | `top_k` | Penalty                                   |
+| Modèles                                  | `temperature` | `top_p` | `top_k` | Pénalité                                  |
 |------------------------------------------|---------------|---------|---------|-------------------------------------------|
-| Qwen3-VL Thinking, text alone            | 1             | 0.95    | 20      | `presence_penalty` 1.5 over the answer    |
-| Qwen3-VL Thinking, with images           | 1             | 0.95    | 20      | none                                      |
-| Qwen3-VL Thinking, reasoning ended at once | 0.7         | 0.8     | 20      | `presence_penalty` 1.5 over the answer    |
-| Qwen3-VL Instruct, text alone            | 1             | 1       | 40      | `presence_penalty` 2 over the answer      |
-| Qwen3-VL Instruct, with images           | 0.7           | 0.8     | 20      | `presence_penalty` 1.5 over the answer    |
-| CyberSecQwen 4B                          | 0.3           | 0.8     | 20      | none                                      |
-| Qwen3 without reasoning                  | 0.7           | 0.8     | 20      | none                                      |
-| Qwen2.5                                  | 0.7           | 0.8     | 20      | `repeat_penalty` 1.05 over 64 tokens      |
-| Foundation-Sec 1.1 8B and 8B Reasoning   | 0.3           | 0.95    | 20      | none                                      |
-| Granite 4.2, with and without reasoning  | 1             | 0.95    | none    | none                                      |
-| Ministral 3                              | 0.1           | 1       | none    | none                                      |
-| Devstral, other Mistral without reasoning | 0.15         | 1       | none    | none                                      |
-| Other models, while they reason          | 0.6           | 0.95    | 20      | none                                      |
-| Other models                             | 0.7           | 0.9     | 40      | none                                      |
+| Qwen3-VL Thinking, texte seul            | 1             | 0.95    | 20      | `presence_penalty` 1.5 sur la réponse     |
+| Qwen3-VL Thinking, avec images           | 1             | 0.95    | 20      | aucune                                    |
+| Qwen3-VL Thinking, raisonnement terminé aussitôt | 0.7   | 0.8     | 20      | `presence_penalty` 1.5 sur la réponse     |
+| Qwen3-VL Instruct, texte seul            | 1             | 1       | 40      | `presence_penalty` 2 sur la réponse       |
+| Qwen3-VL Instruct, avec images           | 0.7           | 0.8     | 20      | `presence_penalty` 1.5 sur la réponse     |
+| CyberSecQwen 4B                          | 0.3           | 0.8     | 20      | aucune                                    |
+| Qwen3 sans raisonnement                  | 0.7           | 0.8     | 20      | aucune                                    |
+| Qwen2.5                                  | 0.7           | 0.8     | 20      | `repeat_penalty` 1.05 sur 64 tokens       |
+| Foundation-Sec 1.1 8B et 8B Reasoning    | 0.3           | 0.95    | 20      | aucune                                    |
+| Granite 4.2, avec et sans raisonnement   | 1             | 0.95    | aucun   | aucune                                    |
+| Ministral 3                              | 0.1           | 1       | aucun   | aucune                                    |
+| Devstral, autres Mistral sans raisonnement | 0.15        | 1       | aucun   | aucune                                    |
+| Autres modèles, pendant qu'ils raisonnent | 0.6          | 0.95    | 20      | aucune                                    |
+| Autres modèles                           | 0.7           | 0.9     | 40      | aucune                                    |
 
-`top_k` keeps the most likely tokens, at most 1,024 even with 0; a value outside 0 to 1024, or
-one that is not a whole number, is refused with 400. At temperature 0, the most likely token is
-taken, which `top_k` 1 gives too. `repeat_last_n` gives the tokens the penalties read: the last 64
-by default, the end of the prompt included as the reference servers read it, and -1 for the whole
-answer alone, neither the prompt nor the end of a reasoning the engine writes. The engine refuses the other values out of their
-bounds: `temperature` 0 to 10,000, `top_p` and `min_p` 0 to 1, `repeat_penalty` above 0 and up to
-100, `presence_penalty`, `frequency_penalty` and the values of `logit_bias` -100 to 100, each stop
-sequence 1,024 bytes at most. A pass that the memory of the system cannot hold ends its requests
-with `out_of_memory` and gives back the pages of the cache.
+`top_k` garde les tokens les plus probables, 1 024 au plus même avec 0 ; une valeur hors de 0 à 1024, ou
+qui n'est pas un nombre entier, est refusée avec 400. À température 0, le token le plus probable est
+pris, ce que donne aussi `top_k` 1. `repeat_last_n` donne les tokens que lisent les pénalités : les 64 derniers
+par défaut, fin du prompt comprise comme la lisent les serveurs de référence, et -1 pour la réponse
+entière seule, sans le prompt ni la fin d'un raisonnement qu'écrit le moteur. Le moteur refuse les autres valeurs hors de leurs
+bornes : `temperature` de 0 à 10 000, `top_p` et `min_p` de 0 à 1, `repeat_penalty` au-dessus de 0 et jusqu'à
+100, `presence_penalty`, `frequency_penalty` et les valeurs de `logit_bias` de -100 à 100, chaque séquence
+d'arrêt de 1 024 octets au plus. Une passe que la mémoire du système ne peut pas contenir termine ses requêtes
+avec `out_of_memory` et rend les pages du cache.
 
-With `tools`, the calls a model writes in the form of its template come back as `tool_calls`,
-whole, with the arguments as the model wrote them, a line break left raw in a string repaired;
-the parser of Qwen3 also takes a call between code fences, several objects in one call, a closing
-character in excess and a call left open at the end of the answer. The calls of Granite 4.2, in
-the XML form, come back as JSON arguments, each value typed by the definition of the tool. The
-calls of the Mistral models keep the identifier the model gives them (`[CALL_ID]`), and arguments
-that are not a JSON object leave the text as the model wrote it. A Llama 3 answer is a call only
-when it is a JSON object, or a list of them, naming tools of the request; any other answer, JSON or
-not, comes back as its text, as the model wrote it.
+Avec `tools`, les appels qu'un modèle écrit dans la forme de son template reviennent sous forme de `tool_calls`,
+entiers, avec les arguments tels que le modèle les a écrits, un saut de ligne laissé brut dans une chaîne étant réparé ;
+l'analyseur de Qwen3 accepte aussi un appel entre des clôtures de code, plusieurs objets dans un seul appel, un caractère
+fermant en trop et un appel laissé ouvert à la fin de la réponse. Les appels de Granite 4.2, sous
+la forme XML, reviennent sous forme d'arguments JSON, chaque valeur typée par la définition de l'outil. Les
+appels des modèles Mistral gardent l'identifiant que le modèle leur donne (`[CALL_ID]`), et des arguments
+qui ne sont pas un objet JSON laissent le texte tel que le modèle l'a écrit. Une réponse de Llama 3 n'est un appel que
+lorsqu'elle est un objet JSON, ou une liste d'objets, nommant des outils de la requête ; toute autre réponse, JSON ou
+non, revient sous forme de son texte, tel que le modèle l'a écrit.
 
-A message of a model that reads images (`inputs` of `/v1/models`) takes parts `image_url`, whose
-`url` is a data URL of a PNG or JPEG file and whose `detail` is `low`, `auto` or `high`. The
-service fetches no address (`invalid_image_url`), reads no other format
-(`invalid_image_format`), refuses more than 16 images in a request (`too_many_images`) and the
-images sent to a model that reads text only (`image_input_not_supported`).
+Un message d'un modèle qui lit les images (`inputs` de `/v1/models`) prend des parties `image_url`, dont
+l'`url` est une data URL d'un fichier PNG ou JPEG et dont le `detail` est `low`, `auto` ou `high`. Le
+service ne récupère aucune adresse (`invalid_image_url`), ne lit aucun autre format
+(`invalid_image_format`), refuse plus de 16 images dans une requête (`too_many_images`) et les
+images envoyées à un modèle qui ne lit que du texte (`image_input_not_supported`).
 
-The administration routes (`/albireo/v1/settings`, `/albireo/v1/models/<id>/download`,
+Les routes d'administration (`/albireo/v1/settings`, `/albireo/v1/models/<id>/download`,
 `/activate`, `/deactivate`, `DELETE /albireo/v1/models/<id>`, `/verify`, `/import`,
 `/models/upload`, `/updates/check`, `/updates/apply`, `/restart`, `/engines/benchmark`, `/logs`)
-take no token in the macOS fork, a personal version: on the Mac every route is open, and on the
-network port, when a password is chosen, every route asks for the cookie of `/albireo/v1/lan/login`
-first. A measure of the
-engines runs alone: `/engines/benchmark` answers 409 `benchmark_running` meanwhile. A model
-deactivated, replaced or deleted while it answers leaves the engine once its requests are served:
-`/albireo/v1/models` lists it under `leaving` (`unloading` or `removing`) meanwhile, and the
-deletion answers `"pending": true`. The errors these routes return carry a `code` with its `args`
-and `sizes` (`disk_space`, `not_installed`, `being_deleted`, `embedding_needed`, `load_failed`...),
-which the windows explain in the language of the user.
+ne prennent aucun jeton dans le fork macOS, une version personnelle : sur le Mac, toutes les routes sont ouvertes, et sur le
+port réseau, quand un mot de passe a été choisi, toutes les routes demandent d'abord le cookie de `/albireo/v1/lan/login`.
+Une mesure des
+moteurs s'exécute seule : `/engines/benchmark` répond 409 `benchmark_running` pendant ce temps. Un modèle
+désactivé, remplacé ou supprimé pendant qu'il répond quitte le moteur une fois ses requêtes servies :
+`/albireo/v1/models` le liste sous `leaving` (`unloading` ou `removing`) pendant ce temps, et la
+suppression répond `"pending": true`. Les erreurs que renvoient ces routes portent un `code` avec ses `args`
+et ses `sizes` (`disk_space`, `not_installed`, `being_deleted`, `embedding_needed`, `load_failed`...),
+que les fenêtres expliquent dans la langue de l'utilisateur.
 
-## Web access
+## Accès au web
 
-The Web button of the composer gives the model two tools that reach the web through the service
-([`host/web_access.h`](host/web_access.h)): `web_search`, which searches Wikipedia, and
-`fetch_page`, which reads a page at an address, one of the results or one the user gave. The
-service makes the requests, so that the application still loads nothing from another origin, and
-gives back the bytes it read, which the application decodes ([`web/js/web.js`](web/js/web.js)): a
-text with `TextDecoder` and its charset, HTML with `DOMParser`, PDF with its reader.
+Le bouton Web de la zone de saisie donne au modèle deux outils qui atteignent le web par le service
+([`host/web_access.h`](host/web_access.h)) : `web_search`, qui cherche dans Wikipédia, et
+`fetch_page`, qui lit une page à une adresse, l'un des résultats ou une adresse que l'utilisateur a donnée. Le
+service fait les requêtes, pour que l'application ne charge toujours rien d'une autre origine, et
+rend les octets qu'il a lus, que l'application décode ([`web/js/web.js`](web/js/web.js)) : un
+texte avec `TextDecoder` et son jeu de caractères, le HTML avec `DOMParser`, le PDF avec son lecteur.
 
-| Route | Body | Answer |
-|-------|------|--------|
-| `POST /albireo/v1/web/search` | `{"query", "count", "language"}`: 1 to 400 characters, 1 to 10 results (5 by default), a language such as `fr` or `pt-BR` | `{"provider", "results": [{"title", "url", "snippet"}]}`, the results of http and https addresses only |
-| `POST /albireo/v1/web/fetch` | `{"url", "language"}`: an http or https address, the language sent as `Accept-Language` | `{"url", "final_url", "status", "content_type", "charset", "size", "truncated", "data"}`, the bytes in base64 |
+| Route | Corps | Réponse |
+|-------|-------|---------|
+| `POST /albireo/v1/web/search` | `{"query", "count", "language"}` : 1 à 400 caractères, 1 à 10 résultats (5 par défaut), une langue comme `fr` ou `pt-BR` | `{"provider", "results": [{"title", "url", "snippet"}]}`, les résultats d'adresses http et https seulement |
+| `POST /albireo/v1/web/fetch` | `{"url", "language"}` : une adresse http ou https, la langue envoyée comme `Accept-Language` | `{"url", "final_url", "status", "content_type", "charset", "size", "truncated", "data"}`, les octets en base64 |
 
-These routes take no administration token: they belong to the interface of the web application,
-of the same origin as its other routes, which the server refuses to any other site (see
-[Security](#security)). `/albireo/v1/status`, which the application reads at its start, gives
-`"web": {"available": true, "search": "wikipedia"}`: `available` while the administrator leaves
-the web access on and the service is not offline, and the provider of the search, `none` when the
-search is turned off, the reading of pages staying available. Both routes answer 403 while the
-service works offline (`offline`) or once the administrator turned the web access off
+Ces routes ne prennent aucun jeton d'administration : elles appartiennent à l'interface de l'application web,
+de la même origine que ses autres routes, que le serveur refuse à tout autre site (voir
+[Sécurité](#sécurité)). `/albireo/v1/status`, que l'application lit à son démarrage, donne
+`"web": {"available": true, "search": "wikipedia"}` : `available` tant que l'administrateur laisse
+l'accès au web activé et que le service n'est pas hors ligne, et le fournisseur de la recherche, `none` quand la
+recherche est désactivée, la lecture des pages restant disponible. Les deux routes répondent 403 tant que le
+service fonctionne hors ligne (`offline`) ou une fois que l'administrateur a désactivé l'accès au web
 (`web_access_off`).
 
-The setting `web_search` names the provider of the search:
+Le réglage `web_search` désigne le fournisseur de la recherche :
 
-- `wikipedia`, by default: the search of the REST interface of Wikipedia in the language of the
-  request, English without one (`GET https://<language>.wikipedia.org/w/rest.php/v1/search/page`),
-  each result an article of that Wikipedia with its excerpt, its markup removed, or else its
-  description. The requests carry the User-Agent that the policy of Wikimedia asks for, with a
-  contact: `Albireo/<version> (https://github.com/Cydral/Dlib-Transformer-extensions;
-  cydraltechnology@gmail.com)`. Wikimedia limits the rate of the anonymous requests per minute
-  and per client, 200 requests a minute for a client that names itself so and 10 for a client
-  known by its address alone, limits introduced in 2026 that may change, and the computers behind
-  one public address share them. The route reports the limit with 429 (`rate_limited`) and the
-  delay Wikimedia gives (`Retry-After`);
-- `none`: no search, `fetch_page` staying available.
+- `wikipedia`, par défaut : la recherche de l'interface REST de Wikipédia dans la langue de la
+  requête, l'anglais à défaut (`GET https://<language>.wikipedia.org/w/rest.php/v1/search/page`),
+  chaque résultat étant un article de ce Wikipédia avec son extrait, son balisage retiré, ou sinon sa
+  description. Les requêtes portent le User-Agent que demande la politique de Wikimedia, avec un
+  contact : `Albireo/<version> (https://github.com/Cydral/Dlib-Transformer-extensions;
+  cydraltechnology@gmail.com)`. Wikimedia limite le débit des requêtes anonymes par minute
+  et par client, 200 requêtes par minute pour un client qui se nomme ainsi et 10 pour un client
+  connu par sa seule adresse, des limites introduites en 2026 qui peuvent changer, et les ordinateurs derrière
+  une même adresse publique les partagent. La route signale la limite par 429 (`rate_limited`) et le
+  délai que donne Wikimedia (`Retry-After`) ;
+- `none` : pas de recherche, `fetch_page` restant disponible.
 
-The service reads no page of results meant for people and sends no User-Agent of a browser; a
-limit of rate or a check of bots of Wikipedia comes back as the error of the route. The address
-of Wikipedia is fixed, and the rule of the public addresses that follows applies to the pages
-alone.
+Le service ne lit aucune page de résultats destinée aux personnes et n'envoie aucun User-Agent de navigateur ; une
+limite de débit ou une vérification anti-robots de Wikipédia revient sous forme d'erreur de la route. L'adresse
+de Wikipédia est fixe, et la règle des adresses publiques qui suit ne s'applique qu'aux pages.
 
-A page is read at a public address only. The service refuses with 403 (`address_refused`) the
-names of this computer and of the local networks, `localhost`, `*.localhost`, `*.local`,
-`*.internal`, `*.home.arpa` and the names of a single label, then resolves the name and refuses
-the page when one of its addresses is not public: 0.0.0.0/8, 10/8, 100.64/10, 127/8, 169.254/16,
+Une page n'est lue qu'à une adresse publique. Le service refuse avec 403 (`address_refused`) les
+noms de cet ordinateur et des réseaux locaux, `localhost`, `*.localhost`, `*.local`,
+`*.internal`, `*.home.arpa` et les noms d'un seul libellé, puis résout le nom et refuse
+la page quand l'une de ses adresses n'est pas publique : 0.0.0.0/8, 10/8, 100.64/10, 127/8, 169.254/16,
 172.16/12, 192.0.0/24, 192.0.2/24, 192.88.99/24, 192.168/16, 198.18/15, 198.51.100/24,
-203.0.113/24, 224/4 and 240/4 in IPv4; ::/96 (`::`, `::1` and the IPv4-compatible addresses),
-64:ff9b:1::/48, 100::/64, 2001::/32, 2001:db8::/32, fc00::/7, fe80::/10, fec0::/10 and ff00::/8
-in IPv6, with the IPv4 addresses that ::ffff:0:0/96, 64:ff9b::/96 and 2002::/16 carry, checked
-as IPv4. The decimal, hexadecimal and shortened forms of IPv4
-(`http://2130706433/`, `http://0x7f.1/`) are read as the resolvers read them and checked the same
-way. The connection goes to the address checked, so that the name is not resolved again between
-the check and the connection, while the `Host` header, the server name of TLS and the check of the
-certificate keep the name. The service follows the redirections itself, five at most, each address
-checked as the first one, and gives the address that answered (`final_url`). An address of another
-scheme than http and https, with a user name or a password, or without host is refused with 400
+203.0.113/24, 224/4 et 240/4 en IPv4 ; ::/96 (`::`, `::1` et les adresses compatibles IPv4),
+64:ff9b:1::/48, 100::/64, 2001::/32, 2001:db8::/32, fc00::/7, fe80::/10, fec0::/10 et ff00::/8
+en IPv6, avec les adresses IPv4 que portent ::ffff:0:0/96, 64:ff9b::/96 et 2002::/16, vérifiées
+comme IPv4. Les formes décimale, hexadécimale et abrégée d'IPv4
+(`http://2130706433/`, `http://0x7f.1/`) sont lues comme les lisent les résolveurs et vérifiées de la même
+façon. La connexion va à l'adresse vérifiée, pour que le nom ne soit pas résolu de nouveau entre
+la vérification et la connexion, tandis que l'en-tête `Host`, le nom de serveur de TLS et la vérification du
+certificat gardent le nom. Le service suit lui-même les redirections, cinq au plus, chaque adresse
+vérifiée comme la première, et donne l'adresse qui a répondu (`final_url`). Une adresse d'un autre
+schéma que http et https, avec un nom d'utilisateur ou un mot de passe, ou sans hôte est refusée avec 400
 (`invalid_url`).
 
-A text (`text/...`, XML and the `+xml` types, JSON and the `+json` types) is read up to 2 MB and
-cut beyond (`truncated`), a PDF file up to 20 MB and refused beyond (413), and any other type is
-refused with its name (415). The answer gives the status of the site, 404 or 500 included, with
-its body. A request takes 10 s at most to connect, 15 s for each wait for data and 30 s in all
-(504), sends `Albireo/<version> (+https://github.com/Cydral/Dlib-Transformer-extensions)` as
-User-Agent and `Accept-Language` when the request gives a language, and keeps no cookie. Three
-requests of the web access run at once, as Wikimedia asks of its clients (503 `busy` beyond, with
-`Retry-After: 2`), and the stop of the service or its offline mode ends those in progress. The log
-names the host read, the status and the size (`web: en.wikipedia.org read (200, 81234 bytes)`),
-and the provider of a search with the number of its results, never a path, a query or the text
-searched.
+Un texte (`text/...`, XML et les types `+xml`, JSON et les types `+json`) est lu jusqu'à 2 Mo et
+coupé au-delà (`truncated`), un fichier PDF jusqu'à 20 Mo et refusé au-delà (413), et tout autre type est
+refusé avec son nom (415). La réponse donne le statut du site, 404 ou 500 compris, avec
+son corps. Une requête prend 10 s au plus pour se connecter, 15 s pour chaque attente de données et 30 s en tout
+(504), envoie `Albireo/<version> (+https://github.com/Cydral/Dlib-Transformer-extensions)` comme
+User-Agent et `Accept-Language` quand la requête donne une langue, et ne garde aucun cookie. Trois
+requêtes de l'accès au web s'exécutent à la fois, comme Wikimedia le demande à ses clients (503 `busy` au-delà, avec
+`Retry-After: 2`), et l'arrêt du service ou son mode hors ligne termine celles en cours. Le journal
+nomme l'hôte lu, le statut et la taille (`web: en.wikipedia.org read (200, 81234 bytes)`),
+et le fournisseur d'une recherche avec le nombre de ses résultats, jamais un chemin, une requête ou le texte
+cherché.
 
-Behind a proxy, the one of the setting `proxy` or of the system, the requests go through the
-proxy, which resolves the name again on its own: the check applies to the addresses this computer
-resolves, and the proxy may reach other addresses for the same name. A name this computer cannot
-resolve is refused, which leaves the reading of pages out on the networks where the proxy alone
-resolves the names of the Internet; the search, whose address is not checked, goes through the
-proxy there.
+Derrière un proxy, celui du réglage `proxy` ou du système, les requêtes passent par le
+proxy, qui résout de nouveau le nom de son côté : la vérification s'applique aux adresses que cet ordinateur
+résout, et le proxy peut atteindre d'autres adresses pour le même nom. Un nom que cet ordinateur ne peut pas
+résoudre est refusé, ce qui exclut la lecture des pages sur les réseaux où seul le proxy
+résout les noms d'Internet ; la recherche, dont l'adresse n'est pas vérifiée, passe par le
+proxy sur ces réseaux.
 
-The administrator sets the web access through the settings route of the administration interface
-(`PUT /albireo/v1/settings` with the token), for instance with one of these bodies:
+L'administrateur règle l'accès au web par la route des réglages de l'interface d'administration
+(`PUT /albireo/v1/settings` avec le jeton), par exemple avec l'un de ces corps :
 
 ```
 {"web_access": false}
@@ -1304,341 +1303,341 @@ The administrator sets the web access through the settings route of the administ
 {"web_search": "wikipedia"}
 ```
 
-In the web application, the Web button stands beside Agent. The buttons of the deep reasoning, of
-the agent and of the web are off in every new discussion, in a project or not, whatever the earlier
-ones chose: their state belongs to their discussion, which keeps it with its messages, after an
-answer, a regeneration, an edit and a reload and in the other tabs, so that another discussion may
-show another state. With a model that can reason, Agent and Web come with the deep reasoning, so
-that the model reasons before each call of a tool: they are disabled while it is off, and turning
-it off turns them off; a model that calls tools without reasoning (Qwen3-VL Instruct, Ministral 3,
-Devstral Small 2, Qwen2.5 Coder) takes them alone. The Web button is disabled, with the reason as
-its title, while the model of the function calls no tools, while it lacks the deep reasoning it
-needs, while the service works offline and once the administrator turned the web access off. With Web on, each question carries `web_search`, when the service offers the search of
-Wikipedia, and `fetch_page`, after the tools of the agent while Agent is on, and the answer runs the
-calls of the tools even with Agent off. The tools and the system message stay the same from one
-question to the next while the buttons and the provider do not change, so that the beginning of
-the prompt stays in the cache of the engine. The help next to the buttons describes the web tools
-with those of the agent.
+Dans l'application web, le bouton Web se trouve à côté d'Agent. Les boutons du raisonnement approfondi, de
+l'agent et du web sont désactivés dans chaque nouvelle discussion, dans un projet ou non, quoi qu'aient choisi les
+précédentes : leur état appartient à leur discussion, qui le garde avec ses messages, après une
+réponse, une régénération, une modification et un rechargement et dans les autres onglets, si bien qu'une autre discussion peut
+montrer un autre état. Avec un modèle capable de raisonner, Agent et Web vont avec le raisonnement approfondi, pour
+que le modèle raisonne avant chaque appel d'un outil : ils sont désactivés tant qu'il est éteint, et l'éteindre
+les éteint ; un modèle qui appelle des outils sans raisonner (Qwen3-VL Instruct, Ministral 3,
+Devstral Small 2, Qwen2.5 Coder) les prend seuls. Le bouton Web est désactivé, avec la raison comme
+titre, tant que le modèle de la fonction n'appelle aucun outil, tant qu'il lui manque le raisonnement approfondi dont il
+a besoin, tant que le service fonctionne hors ligne et une fois que l'administrateur a désactivé l'accès au web. Avec Web activé, chaque question porte `web_search`, quand le service propose la recherche dans
+Wikipédia, et `fetch_page`, après les outils de l'agent tant qu'Agent est activé, et la réponse exécute les
+appels des outils même avec Agent désactivé. Les outils et le message système restent les mêmes d'une
+question à la suivante tant que les boutons et le fournisseur ne changent pas, pour que le début du
+prompt reste dans le cache du moteur. L'aide à côté des boutons décrit les outils web
+avec ceux de l'agent.
 
-`fetch_page` reads only an address of the discussion: one that a question of the user holds
-(`http://`, `https://`, or `www.` for both schemes), an address of a result of `web_search`, or a
-link of a page already read, compared without their fragment. Any other address, which the model
-would compose, is refused with that reason as the result of the call, so that a page read cannot
-have the model send the data of the discussion to an address of its choice. The results of the
-searches and the links of the pages stay with their calls in the discussion, so that the rule
-holds after a reload of the page and in another tab.
+`fetch_page` ne lit qu'une adresse de la discussion : une adresse que contient une question de l'utilisateur
+(`http://`, `https://`, ou `www.` pour les deux schémas), une adresse d'un résultat de `web_search`, ou un
+lien d'une page déjà lue, comparées sans leur fragment. Toute autre adresse, que le modèle
+composerait, est refusée avec cette raison comme résultat de l'appel, pour qu'une page lue ne puisse pas
+faire envoyer par le modèle les données de la discussion à une adresse de son choix. Les résultats des
+recherches et les liens des pages restent avec leurs appels dans la discussion, pour que la règle
+tienne après un rechargement de la page et dans un autre onglet.
 
-An HTML page is read in an inert document of `DOMParser`, which runs no script and loads nothing,
-without its scripts, styles, frames, drawings, forms, navigation, headers, footers and asides, in
-its `main` element, else its only `article`, else its body: its title, its headings as `#` lines,
-its list items as `- ` lines, its tables as rows of cells separated by ` | `, its preformatted
-blocks as they are, and its links, made absolute, http and https only, 50 at most, listed at the
-end. A PDF file goes through the reader of the documents, JSON, XML and text stay as they are. The
-model receives a page by parts of 8,000 characters, each with the address, the status and the
-title, and the start of the next part when the text goes on; the text of the last pages read stays
-in memory for their discussion, 30 pages per discussion, 60 pages and 8 million characters in all,
-so that the next parts need no second download, and leaves with a deleted or incognito discussion.
+Une page HTML est lue dans un document inerte de `DOMParser`, qui n'exécute aucun script et ne charge rien,
+sans ses scripts, styles, cadres, dessins, formulaires, navigation, en-têtes, pieds de page et encadrés, dans
+son élément `main`, sinon son unique `article`, sinon son corps : son titre, ses titres de section sous forme de lignes `#`,
+ses éléments de liste sous forme de lignes `- `, ses tableaux sous forme de lignes de cellules séparées par ` | `, ses blocs
+préformatés tels quels, et ses liens, rendus absolus, http et https seulement, 50 au plus, listés à la
+fin. Un fichier PDF passe par le lecteur des documents, JSON, XML et le texte restent tels quels. Le
+modèle reçoit une page par parties de 8 000 caractères, chacune avec l'adresse, le statut et le
+titre, et le début de la partie suivante quand le texte continue ; le texte des dernières pages lues reste
+en mémoire pour leur discussion, 30 pages par discussion, 60 pages et 8 millions de caractères en tout,
+pour que les parties suivantes n'aient pas besoin d'un second téléchargement, et part avec une discussion supprimée ou en navigation privée.
 
-A search that finds fewer than three articles in the Wikipedia of the language of the interface, or
-fewer than it asks when it asks for less, goes on in the English Wikipedia, its articles following
-those of the first one. Each call also reads the pages it leads to, one level deep and no further,
-so that the model receives the text of these pages with their titles and snippets. `web_search`
-reads the pages of its first five results, and `fetch_page`, the first time it gives the first part
-of a page, the first four links of the text of that page that lead to other pages of text. A link to
-a file of another kind (images, archives, programs, styles, scripts, PDF files), to the pages of the
-accounts or of the rules of a site (sign-in, registration, privacy, terms, sharing), or, on a wiki
-of Wikimedia, to a page outside the articles (a name with a namespace, the history, the edition) is
-left out. The result ends with the first 1,200 characters of each page read with it, with its title
-and its address, and the model reads the rest with `fetch_page` from the memory of the discussion,
-the links of these pages included. The pages read with a call go two at a time, so that the
-discussions answered at the same time keep their share of the three requests the service runs, and
-within 25 seconds in all: a page that fails, answers with an error or is still being read then is
-left out of the result. The addresses where these pages answered join the addresses that
-`fetch_page` reads.
+Une recherche qui trouve moins de trois articles dans le Wikipédia de la langue de l'interface, ou
+moins qu'elle n'en demande quand elle en demande moins, continue dans le Wikipédia anglais, ses articles suivant
+ceux du premier. Chaque appel lit aussi les pages vers lesquelles il mène, sur un niveau de profondeur et pas plus,
+pour que le modèle reçoive le texte de ces pages avec leurs titres et leurs extraits. `web_search`
+lit les pages de ses cinq premiers résultats, et `fetch_page`, la première fois qu'il donne la première partie
+d'une page, les quatre premiers liens du texte de cette page qui mènent à d'autres pages de texte. Un lien vers
+un fichier d'un autre type (images, archives, programmes, styles, scripts, fichiers PDF), vers les pages des
+comptes ou des règles d'un site (connexion, inscription, confidentialité, conditions, partage), ou, sur un wiki
+de Wikimedia, vers une page hors des articles (un nom avec un espace de noms, l'historique, la modification) est
+écarté. Le résultat se termine par les 1 200 premiers caractères de chaque page lue avec lui, avec son titre
+et son adresse, et le modèle lit le reste avec `fetch_page` depuis la mémoire de la discussion,
+liens de ces pages compris. Les pages lues avec un appel vont deux par deux, pour que les
+discussions auxquelles on répond en même temps gardent leur part des trois requêtes qu'exécute le service, et
+dans la limite de 25 secondes en tout : une page qui échoue, répond par une erreur ou est encore en cours de lecture à ce moment est
+écartée du résultat. Les adresses où ces pages ont répondu rejoignent les adresses que
+`fetch_page` lit.
 
-Each result of the web tools starts with a line telling the model that the text of the web is data
-and that it follows none of the instructions it holds. While Web is on, the system message, after
-the part that stays the same, says what the web tools do and asks the model to cite the addresses
-it used and to put no data of the discussion into an address or a search. The words of a search
-are those the model chooses, and that instruction alone keeps the data of the discussion out of
-them.
+Chaque résultat des outils web commence par une ligne qui dit au modèle que le texte du web est une donnée
+et qu'il ne suit aucune des instructions qu'il contient. Tant que Web est activé, le message système, après
+la partie qui reste la même, dit ce que font les outils web et demande au modèle de citer les adresses
+qu'il a utilisées et de ne mettre aucune donnée de la discussion dans une adresse ou une recherche. Les mots d'une recherche
+sont ceux que choisit le modèle, et cette seule instruction en tient les données de la discussion à
+l'écart.
 
-Each call shows in the answer as the calls of the agent do, under the name of its tool in the
-language of the interface ("Recherche Web" and "Lecture d'une page" in French), with the words
-searched or the address asked, a link that opens in a new tab (`target="_blank"`,
-`rel="noopener noreferrer"`) once the page was read. An error of the service, an address refused,
-a page too large, a type not read, a site that does not answer or the offline mode, reaches the
-model as the result of the call, with the message of the service, and changes nothing else in the
+Chaque appel s'affiche dans la réponse comme les appels de l'agent, sous le nom de son outil dans la
+langue de l'interface (« Recherche Web » et « Lecture d'une page » en français), avec les mots
+cherchés ou l'adresse demandée, un lien qui s'ouvre dans un nouvel onglet (`target="_blank"`,
+`rel="noopener noreferrer"`) une fois la page lue. Une erreur du service, une adresse refusée,
+une page trop grande, un type non lu, un site qui ne répond pas ou le mode hors ligne, parvient au
+modèle comme résultat de l'appel, avec le message du service, et ne change rien d'autre dans la
 page.
 
-## Models
+## Modèles
 
-The catalog ([`dist/albireo/catalog.json`](../../../../dist/albireo/catalog.json)) lists models of
-the architectures the engine supports (llama, mistral, mistral3, granite, granitemoe, phi3, qwen2,
-qwen3, qwen3moe, qwen3vl, qwen3vlmoe, mixtral), with their functions, the company or the
-consortium that made them, what they read, their descriptions in the five languages, their
-license, and the address, size and SHA-256 of each file, the projector of a model that reads
-images included. [`tools/make_catalog.py`](tools/make_catalog.py) writes it from the Hugging Face
-hub, the addresses pinned to a commit so that a file never changes under its hash. In the macOS
-fork, the service downloads each file directly from the address of the catalog, the official
-source of the model, with three attempts per segment; a download that fails ends with the code
-`download_failed`, whose message names the address and its failure. The catalog, unsigned, comes
-from its address in the repository of the original, `dist/albireo/catalog.json`, or from a folder.
-The hashes check the bytes. The sizes below count the decoder and its projector.
+Le catalogue ([`dist/albireo/catalog.json`](../../../../dist/albireo/catalog.json)) liste des modèles des
+architectures que prend en charge le moteur (llama, mistral, mistral3, granite, granitemoe, phi3, qwen2,
+qwen3, qwen3moe, qwen3vl, qwen3vlmoe, mixtral), avec leurs fonctions, l'entreprise ou le
+consortium qui les a faits, ce qu'ils lisent, leurs descriptions dans les cinq langues, leur
+licence, et l'adresse, la taille et le SHA-256 de chaque fichier, projecteur d'un modèle qui lit les
+images compris. [`tools/make_catalog.py`](tools/make_catalog.py) l'écrit à partir du hub Hugging Face,
+les adresses épinglées à un commit pour qu'un fichier ne change jamais sous son empreinte. Dans le fork
+macOS, le service télécharge chaque fichier directement depuis l'adresse du catalogue, la source officielle
+du modèle, avec trois tentatives par segment ; un téléchargement qui échoue se termine avec le code
+`download_failed`, dont le message nomme l'adresse et son échec. Le catalogue, non signé, vient
+de son adresse dans le dépôt de l'original, `dist/albireo/catalog.json`, ou d'un dossier.
+Les empreintes vérifient les octets. Les tailles ci-dessous comptent le décodeur et son projecteur.
 
-| Model                          | Publisher          | Functions               | Inputs        | Size     | License |
+| Modèle                         | Éditeur            | Fonctions               | Entrées       | Taille   | Licence |
 |--------------------------------|--------------------|-------------------------|---------------|----------|---------|
-| Qwen3-VL 4B Thinking (default) | Alibaba            | general, code, security | text, image   | 2.95 GB  | Apache-2.0 |
-| Qwen3 Embedding 0.6B (default) | Alibaba            | embedding               | text          | 0.64 GB  | Apache-2.0 |
-| Qwen3-VL 2B Thinking           | Alibaba            | general, code, security | text, image   | 1.55 GB  | Apache-2.0 |
-| Qwen3-VL 2B Instruct           | Alibaba            | general                 | text, image   | 1.55 GB  | Apache-2.0 |
-| Qwen3-VL 4B Instruct           | Alibaba            | general, code           | text, image   | 2.95 GB  | Apache-2.0 |
-| Qwen3-VL 8B Instruct           | Alibaba            | general, code, security | text, image   | 5.78 GB  | Apache-2.0 |
-| Qwen3-VL 8B Thinking           | Alibaba            | general, code, security | text, image   | 5.78 GB  | Apache-2.0 |
-| EuroVLM 9B Preview             | EuroLLM consortium | general                 | text, image   | 6.42 GB  | Apache-2.0 |
-| Phi-4-mini                     | Microsoft          | general                 | text          | 2.49 GB  | MIT |
-| Ministral 3 3B                 | Mistral AI         | general                 | text, image   | 2.99 GB  | Apache-2.0 |
-| Ministral 3 8B                 | Mistral AI         | general                 | text, image   | 6.06 GB  | Apache-2.0 |
-| EuroLLM 9B Instruct            | EuroLLM consortium | general                 | text          | 5.58 GB  | Apache-2.0 |
-| Granite 4.2 3B                 | IBM                | general, code           | text          | 2.24 GB  | Apache-2.0 |
-| Granite 4.2 8B                 | IBM                | general, code           | text          | 5.35 GB  | Apache-2.0 |
-| Qwen3-VL 30B A3B Thinking      | Alibaba            | general, code, security | text, image   | 19.27 GB | Apache-2.0 |
-| Qwen2.5 Coder 1.5B             | Alibaba            | code                    | text          | 1.12 GB  | Apache-2.0 |
-| Qwen2.5 Coder 7B               | Alibaba            | code                    | text          | 4.68 GB  | Apache-2.0 |
-| Devstral Small 2               | Mistral AI         | code                    | text, image   | 15.21 GB | Apache-2.0 |
-| CyberSecQwen 4B                | athena129 (lablab.ai) | security             | text          | 2.50 GB  | Apache-2.0 |
-| Foundation-Sec 1.1 8B          | Cisco              | security                | text          | 4.92 GB  | Llama 3.1 Community License |
-| Foundation-Sec 8B Reasoning    | Cisco              | security                | text          | 4.92 GB  | Llama 3.1 Community License |
+| Qwen3-VL 4B Thinking (par défaut) | Alibaba         | général, code, sécurité | texte, image  | 2,95 Go  | Apache-2.0 |
+| Qwen3 Embedding 0.6B (par défaut) | Alibaba         | embedding               | texte         | 0,64 Go  | Apache-2.0 |
+| Qwen3-VL 2B Thinking           | Alibaba            | général, code, sécurité | texte, image  | 1,55 Go  | Apache-2.0 |
+| Qwen3-VL 2B Instruct           | Alibaba            | général                 | texte, image  | 1,55 Go  | Apache-2.0 |
+| Qwen3-VL 4B Instruct           | Alibaba            | général, code           | texte, image  | 2,95 Go  | Apache-2.0 |
+| Qwen3-VL 8B Instruct           | Alibaba            | général, code, sécurité | texte, image  | 5,78 Go  | Apache-2.0 |
+| Qwen3-VL 8B Thinking           | Alibaba            | général, code, sécurité | texte, image  | 5,78 Go  | Apache-2.0 |
+| EuroVLM 9B Preview             | consortium EuroLLM | général                 | texte, image  | 6,42 Go  | Apache-2.0 |
+| Phi-4-mini                     | Microsoft          | général                 | texte         | 2,49 Go  | MIT |
+| Ministral 3 3B                 | Mistral AI         | général                 | texte, image  | 2,99 Go  | Apache-2.0 |
+| Ministral 3 8B                 | Mistral AI         | général                 | texte, image  | 6,06 Go  | Apache-2.0 |
+| EuroLLM 9B Instruct            | consortium EuroLLM | général                 | texte         | 5,58 Go  | Apache-2.0 |
+| Granite 4.2 3B                 | IBM                | général, code           | texte         | 2,24 Go  | Apache-2.0 |
+| Granite 4.2 8B                 | IBM                | général, code           | texte         | 5,35 Go  | Apache-2.0 |
+| Qwen3-VL 30B A3B Thinking      | Alibaba            | général, code, sécurité | texte, image  | 19,27 Go | Apache-2.0 |
+| Qwen2.5 Coder 1.5B             | Alibaba            | code                    | texte         | 1,12 Go  | Apache-2.0 |
+| Qwen2.5 Coder 7B               | Alibaba            | code                    | texte         | 4,68 Go  | Apache-2.0 |
+| Devstral Small 2               | Mistral AI         | code                    | texte, image  | 15,21 Go | Apache-2.0 |
+| CyberSecQwen 4B                | athena129 (lablab.ai) | sécurité             | texte         | 2,50 Go  | Apache-2.0 |
+| Foundation-Sec 1.1 8B          | Cisco              | sécurité                | texte         | 4,92 Go  | Llama 3.1 Community License |
+| Foundation-Sec 8B Reasoning    | Cisco              | sécurité                | texte         | 4,92 Go  | Llama 3.1 Community License |
 
-The list gives each function models that read images and models that read text, from 2 to 6 GB
-for the computers of 8 and 16 GB of memory, one mixture of experts for those of 24 GB and a
-programming agent for those of 32 GB:
+La liste donne à chaque fonction des modèles qui lisent les images et des modèles qui lisent le texte, de 2 à 6 Go
+pour les ordinateurs de 8 et 16 Go de mémoire, un mélange d'experts pour ceux de 24 Go et un
+agent de programmation pour ceux de 32 Go :
 
-| Function | Text and images | Text |
-|----------|-----------------|------|
-| General  | Qwen3-VL 2B, 4B and 8B, Qwen3-VL 30B A3B Thinking, Ministral 3 3B and 8B, EuroVLM 9B | Phi-4-mini, EuroLLM 9B, Granite 4.2 3B and 8B |
-| Code     | Qwen3-VL 2B Thinking, Qwen3-VL 4B (Thinking and Instruct), Qwen3-VL 8B (Instruct and Thinking), Qwen3-VL 30B A3B Thinking, Devstral Small 2 | Granite 4.2 3B and 8B, Qwen2.5 Coder 1.5B and 7B |
-| Security | Qwen3-VL 2B and 4B Thinking, Qwen3-VL 8B (Instruct and Thinking), Qwen3-VL 30B A3B Thinking | CyberSecQwen 4B, Foundation-Sec 1.1 8B and 8B Reasoning |
+| Fonction | Texte et images | Texte |
+|----------|-----------------|-------|
+| Générale | Qwen3-VL 2B, 4B et 8B, Qwen3-VL 30B A3B Thinking, Ministral 3 3B et 8B, EuroVLM 9B | Phi-4-mini, EuroLLM 9B, Granite 4.2 3B et 8B |
+| Code     | Qwen3-VL 2B Thinking, Qwen3-VL 4B (Thinking et Instruct), Qwen3-VL 8B (Instruct et Thinking), Qwen3-VL 30B A3B Thinking, Devstral Small 2 | Granite 4.2 3B et 8B, Qwen2.5 Coder 1.5B et 7B |
+| Sécurité | Qwen3-VL 2B et 4B Thinking, Qwen3-VL 8B (Instruct et Thinking), Qwen3-VL 30B A3B Thinking | CyberSecQwen 4B, Foundation-Sec 1.1 8B et 8B Reasoning |
 
-The choices follow the published measures: Qwen3-VL gives the best scores of the models that read
-images and that the engine runs (MMMU 67.4 for the 4B Instruct, 74.1 for the 8B Thinking, OCRBench
-881 and 896); Granite 4.2 gives the best scores of reasoning and code under 6 GB (LiveCodeBench v6
-69.7 for the 3B and 73.2 for the 8B); Foundation-Sec 8B Reasoning maps the vulnerabilities to their
-weaknesses best among the models of 8B (CTIBench-RCM 0.753), and CyberSecQwen 4B, fine-tuned from
-Qwen3-4B-Instruct-2507, keeps 97 % of the score of Foundation-Sec 8B Instruct on that task at half
-its size (CTI-RCM 0.666) and exceeds it on the questions of threat intelligence (CTI-MCQ 0.587,
-measured by its authors under the protocol of Cisco). Qwen3-VL 30B A3B Thinking, a mixture of 128
-experts of which 8 compute each token, reads images and reasons as the other Qwen3-VL Thinking
-models do, at the pace of a model of 3B. Ministral 3,
-which Mistral AI trained in partnership with NVIDIA, reads images through its Pixtral encoder, as
-does Devstral Small 2, the programming agent of 24B of Mistral AI, which reads screenshots and
-diagrams; Phi-4-mini is the latest small model of Microsoft with a standard decoder. EuroLLM 9B
-Instruct translates and writes the 24 official languages of the European Union best of the list
-(FLORES 88.9), and EuroVLM 9B Preview, built on it, reads images in these languages; its
-publishers give it as a preview version.
+Les choix suivent les mesures publiées : Qwen3-VL donne les meilleurs scores des modèles qui lisent les
+images et que le moteur exécute (MMMU 67,4 pour le 4B Instruct, 74,1 pour le 8B Thinking, OCRBench
+881 et 896) ; Granite 4.2 donne les meilleurs scores de raisonnement et de code sous 6 Go (LiveCodeBench v6
+69,7 pour le 3B et 73,2 pour le 8B) ; Foundation-Sec 8B Reasoning relie le mieux les vulnérabilités à leurs
+faiblesses parmi les modèles de 8B (CTIBench-RCM 0,753), et CyberSecQwen 4B, affiné à partir de
+Qwen3-4B-Instruct-2507, garde 97 % du score de Foundation-Sec 8B Instruct sur cette tâche pour la moitié de
+sa taille (CTI-RCM 0,666) et le dépasse sur les questions de renseignement sur les menaces (CTI-MCQ 0,587,
+mesuré par ses auteurs selon le protocole de Cisco). Qwen3-VL 30B A3B Thinking, un mélange de 128
+experts dont 8 calculent chaque token, lit les images et raisonne comme les autres modèles Qwen3-VL Thinking,
+au rythme d'un modèle de 3B. Ministral 3,
+que Mistral AI a entraîné en partenariat avec NVIDIA, lit les images par son encodeur Pixtral, comme
+Devstral Small 2, l'agent de programmation de 24B de Mistral AI, qui lit les captures d'écran et les
+diagrammes ; Phi-4-mini est le dernier petit modèle de Microsoft avec un décodeur standard. EuroLLM 9B
+Instruct traduit et écrit les 24 langues officielles de l'Union européenne le mieux de la liste
+(FLORES 88,9), et EuroVLM 9B Preview, construit sur lui, lit les images dans ces langues ; ses
+éditeurs le donnent comme version préliminaire.
 
-Without the models that come with the complete installer, the service downloads the default
-language model at its first start, unless the installation said otherwise, and the default
-embedding model in every case, since the search in documents relies on it. A language model that
-arrives takes the functions its entry names that no model holds; an embedding model serves the
-`embedding` function alone. A function without a model chosen for it is served by the general
-model, else by the model that comes with Albireo: once every choice is undone in the Models window,
-that model serves the three functions again, and the status gives the model each function uses
-(`active`) apart from the ones chosen (`selected`). The engine computes an embedding model as
-it computes a language model, then takes the hidden state of the last token of each text,
-normalized, as its vector (`pooling_type` 3 of the GGUF file); its keys and values are given back
-as soon as each text is read.
+Sans les modèles livrés avec l'installateur complet, le service télécharge le modèle de langage
+par défaut à son premier démarrage, sauf si l'installation en a décidé autrement, et le modèle
+d'embedding par défaut dans tous les cas, puisque la recherche dans les documents repose sur lui. Un modèle de langage qui
+arrive prend les fonctions que nomme son entrée et qu'aucun modèle ne tient ; un modèle d'embedding ne sert que
+la fonction `embedding`. Une fonction sans modèle choisi pour elle est servie par le modèle
+général, sinon par le modèle livré avec Albireo : dès que tous les choix sont annulés dans la fenêtre Modèles,
+ce modèle sert de nouveau les trois fonctions, et l'état donne le modèle qu'utilise chaque fonction
+(`active`) à part de ceux qui ont été choisis (`selected`). Le moteur calcule un modèle d'embedding comme
+il calcule un modèle de langage, puis prend l'état caché du dernier token de chaque texte,
+normalisé, comme vecteur (`pooling_type` 3 du fichier GGUF) ; ses clés et valeurs sont rendues
+dès que chaque texte est lu.
 
-A model can also be imported from any GGUF file: the Models window sends it to the service
-(`/albireo/v1/models/upload`), read with the rights of the user who chose it, or the service
-imports the files placed in `<data>\import`. A file prepared by the build of Albireo keeps its
-identity (`albireo.id`, `albireo.name`, `albireo.roles`, `albireo.inputs` in its metadata). A file
-whose content is the one of a model already installed or of a model that comes with Albireo is not
-copied again: the answer lists it under `already` and it leaves the import folder. A file never
-takes the identifier of another installed model (it becomes `<id>-import`, `<id>-import-2`...),
-except the newer version of a model of the catalog, which replaces it once the engine has let the
-loaded model go; the download of a model that comes with Albireo is refused (`builtin_installed`).
+Un modèle peut aussi être importé depuis n'importe quel fichier GGUF : la fenêtre Modèles l'envoie au service
+(`/albireo/v1/models/upload`), lu avec les droits de l'utilisateur qui l'a choisi, ou le service
+importe les fichiers placés dans `<data>\import`. Un fichier préparé par le build d'Albireo garde son
+identité (`albireo.id`, `albireo.name`, `albireo.roles`, `albireo.inputs` dans ses métadonnées). Un fichier
+dont le contenu est celui d'un modèle déjà installé ou d'un modèle livré avec Albireo n'est pas
+recopié : la réponse le liste sous `already` et il quitte le dossier d'import. Un fichier ne
+prend jamais l'identifiant d'un autre modèle installé (il devient `<id>-import`, `<id>-import-2`...),
+sauf la version plus récente d'un modèle du catalogue, qui le remplace une fois que le moteur a libéré le
+modèle chargé ; le téléchargement d'un modèle livré avec Albireo est refusé (`builtin_installed`).
 
-The route `/albireo/v1/import` reads a folder given by its path only when it is the import folder,
-or an offline bundle (a folder with a `catalog.json`, unsigned in the macOS fork), whose files are read by name, size and hash as its catalog lists them
-before anything is copied. Every other path is refused with a code (`import_use_upload` for a
-plain file, `import_path_relative`, `import_path_network`, `import_path_device`,
-`import_path_invalid`), and a folder that is neither gives the same answer whatever it holds
-(`import_not_bundle`), so that the service, which reads every file of the machine, reveals
-nothing of the folders of another account. The files are opened folder by folder from a trusted
-folder, through no link, junction or mount point, and a hard link is refused.
+La route `/albireo/v1/import` ne lit un dossier donné par son chemin que lorsqu'il s'agit du dossier d'import,
+ou d'un paquet hors ligne (un dossier avec un `catalog.json`, non signé dans le fork macOS), dont les fichiers sont lus par nom, taille et empreinte tels que les liste son catalogue
+avant que quoi que ce soit ne soit copié. Tout autre chemin est refusé avec un code (`import_use_upload` pour un
+fichier ordinaire, `import_path_relative`, `import_path_network`, `import_path_device`,
+`import_path_invalid`), et un dossier qui n'est ni l'un ni l'autre donne la même réponse quel que soit son contenu
+(`import_not_bundle`), pour que le service, qui lit tous les fichiers de la machine, ne révèle
+rien des dossiers d'un autre compte. Les fichiers sont ouverts dossier par dossier à partir d'un dossier
+de confiance, sans passer par aucun lien, jonction ou point de montage, et un lien physique est refusé.
 
-The Models window lists the language models, with their functions, their inputs and their state;
-the embedding model serves the document search and is given apart (`embedding_models` of
-`/albireo/v1/models`). The inputs of a model (`inputs`: `text`, and `image` or `audio` for the
-models that read them, text when the catalog does not say) decide the attachments of the web
-application: the documents, whose text the browser extracts, go to every model, and an image or
-a sound only to a model that reads it; the attachment button of each conversation names the inputs
-of the model of its function, and the file picker offers what it reads. A model that reads images
-comes as two files, the decoder and its projector, which the Models window counts together. A
-projector imported alone waits for its decoder (`pending_projectors`), then goes with the decoder
-whose catalog entry names its SHA-256, else with the decoder of an architecture that reads images
-whose width is the width of its tokens, the closest names deciding between several.
+La fenêtre Modèles liste les modèles de langage, avec leurs fonctions, leurs entrées et leur état ;
+le modèle d'embedding sert la recherche dans les documents et est donné à part (`embedding_models` de
+`/albireo/v1/models`). Les entrées d'un modèle (`inputs` : `text`, et `image` ou `audio` pour les
+modèles qui les lisent, le texte quand le catalogue ne dit rien) décident des pièces jointes de l'application
+web : les documents, dont le navigateur extrait le texte, vont à tous les modèles, et une image ou
+un son seulement à un modèle qui le lit ; le bouton de pièce jointe de chaque conversation nomme les entrées
+du modèle de sa fonction, et le sélecteur de fichiers propose ce qu'il lit. Un modèle qui lit les images
+se présente en deux fichiers, le décodeur et son projecteur, que la fenêtre Modèles compte ensemble. Un
+projecteur importé seul attend son décodeur (`pending_projectors`), puis va avec le décodeur
+dont l'entrée du catalogue nomme son SHA-256, sinon avec le décodeur d'une architecture qui lit les images
+dont la largeur est la largeur de ses tokens, les noms les plus proches départageant plusieurs candidats.
 
-## Models that come with Albireo
+## Modèles livrés avec Albireo
 
-[`resources/builtin_models.json`](resources/builtin_models.json) names the models the complete
-installer carries, the file each one comes from, pinned to a commit with its size and its SHA-256,
-and the quantization Albireo ships:
+[`resources/builtin_models.json`](resources/builtin_models.json) nomme les modèles que porte l'installateur
+complet, le fichier dont chacun provient, épinglé à un commit avec sa taille et son SHA-256,
+et la quantification que livre Albireo :
 
-| Model                        | From                                                     | Shipped         | Functions               |
+| Modèle                       | Origine                                                  | Livré           | Fonctions               |
 |------------------------------|----------------------------------------------------------|-----------------|-------------------------|
-| Qwen3-VL-4B-Thinking-albireo | Qwen3VL-4B-Thinking-Q4_K_M.gguf of Qwen, 2.50 GB, and its projector mmproj-Qwen3VL-4B-Thinking-Q8_0.gguf, 0.45 GB | Q4_K_M and Q8_0, 2.95 GB | general, code, security |
-| Qwen3-Embedding-0.6B-albireo | Qwen3-Embedding-0.6B-Q8_0.gguf, 0.64 GB                  | Q8_0, 0.64 GB   | document search         |
+| Qwen3-VL-4B-Thinking-albireo | Qwen3VL-4B-Thinking-Q4_K_M.gguf de Qwen, 2,50 Go, et son projecteur mmproj-Qwen3VL-4B-Thinking-Q8_0.gguf, 0,45 Go | Q4_K_M et Q8_0, 2,95 Go | général, code, sécurité |
+| Qwen3-Embedding-0.6B-albireo | Qwen3-Embedding-0.6B-Q8_0.gguf, 0,64 Go                  | Q8_0, 0,64 Go   | recherche dans les documents |
 
-The build retrieves and converts them as the import example of dlib reads a GGUF file
-([`examples/slm_gguf_import_ex.cpp`](../../../../examples/slm_gguf_import_ex.cpp)), with the code
-of the engine:
+Le build les récupère et les convertit de la même façon que l'exemple d'import de dlib lit un fichier GGUF
+([`examples/slm_gguf_import_ex.cpp`](../../../../examples/slm_gguf_import_ex.cpp)), avec le code
+du moteur :
 
-1. [`cmake/builtin_models.cmake`](cmake/builtin_models.cmake) downloads each file once into the
-   cache, `%LOCALAPPDATA%\Albireo\build-cache` (`~/.cache/albireo` on Linux, `ALBIREO_MODEL_CACHE`
-   or `-ModelCache` otherwise), named by its SHA-256, which it checks; a file already there is kept
-   only when its size and SHA-256 match, and a download stops after two minutes without data;
-   behind a proxy, the download takes the one of `HTTPS_PROXY`. `build_windows.ps1` first gives the cache the files already on
-   the computer, in the models folder of an installation of Albireo or in `$HOME\models`, whose
-   SHA-256 matches;
-2. [`tools/albireo_builtin.cpp`](tools/albireo_builtin.cpp) reads it with the GGUF reader of dlib,
-   resolves its geometry as the engine does, which rejects an architecture or a configuration the
-   engine does not run, checks that its tokenizer gives back a text it encoded and that the engine
-   recognizes its chat template;
-3. it converts the model: a model published in Q8_0 is quantized again to the Q4_K_M mix of the
-   GGUF format (Q4_K, with Q6_K for the shared embeddings, the values of the attention and the
-   down projections of the first and last eighths of the layers and of one layer in three between
-   them), with the search and the mix of the reference quantizer of the format, whose output it
-   matches byte for byte, and the first and last rows of each matrix are checked against their
-   source; a model published in Q4_K_M, as Qwen3-VL-4B-Thinking is, keeps its weights. The
-   metadata receive the identity of the model in Albireo. The projector of a model that reads
-   images is checked against its SHA-256, read by the image encoder of the engine and installed
-   beside its model (`<id>.mmproj.gguf`);
-4. the converted file is read and checked again, then kept in the cache under the name of its
-   conversion, so that the next builds reuse it; it reaches `bin/models` of the build tree by a
-   hard link, with its manifest `builtin.json`, and the complete installer as the overlay that
-   follows its program ([`common/builtin_models.h`](common/builtin_models.h)), or in
-   `albireo-setup.models` beside it when both would reach the 4 GiB Windows runs; the overlay is
-   read back before it takes its name.
+1. [`cmake/builtin_models.cmake`](cmake/builtin_models.cmake) télécharge chaque fichier une seule fois dans le
+   cache, `%LOCALAPPDATA%\Albireo\build-cache` (`~/.cache/albireo` sous Linux, `ALBIREO_MODEL_CACHE`
+   ou `-ModelCache` sinon), nommé d'après son SHA-256, qu'il vérifie ; un fichier déjà présent n'est gardé
+   que si sa taille et son SHA-256 correspondent, et un téléchargement s'arrête après deux minutes sans données ;
+   derrière un proxy, le téléchargement prend celui de `HTTPS_PROXY`. `build_windows.ps1` donne d'abord au cache les fichiers déjà présents sur
+   l'ordinateur, dans le dossier des modèles d'une installation d'Albireo ou dans `$HOME\models`, dont le
+   SHA-256 correspond ;
+2. [`tools/albireo_builtin.cpp`](tools/albireo_builtin.cpp) le lit avec le lecteur GGUF de dlib,
+   résout sa géométrie comme le fait le moteur, ce qui rejette une architecture ou une configuration que le
+   moteur n'exécute pas, vérifie que son tokenizer restitue un texte qu'il a encodé et que le moteur
+   reconnaît son chat template ;
+3. il convertit le modèle : un modèle publié en Q8_0 est requantifié selon le mélange Q4_K_M du
+   format GGUF (Q4_K, avec Q6_K pour les embeddings partagés, les valeurs de l'attention et les
+   projections descendantes du premier et du dernier huitième des couches et d'une couche sur trois entre
+   les deux), avec la recherche et le mélange du quantificateur de référence du format, dont il reproduit la sortie
+   octet pour octet, et les premières et dernières lignes de chaque matrice sont vérifiées par rapport à leur
+   source ; un modèle publié en Q4_K_M, comme l'est Qwen3-VL-4B-Thinking, garde ses poids. Les
+   métadonnées reçoivent l'identité du modèle dans Albireo. Le projecteur d'un modèle qui lit les
+   images est vérifié par rapport à son SHA-256, lu par l'encodeur d'images du moteur et installé
+   à côté de son modèle (`<id>.mmproj.gguf`) ;
+4. le fichier converti est relu et revérifié, puis gardé dans le cache sous le nom de sa
+   conversion, pour que les builds suivants le réutilisent ; il atteint `bin/models` de l'arbre de build par un
+   lien physique, avec son manifeste `builtin.json`, et l'installateur complet comme la surcouche qui
+   suit son programme ([`common/builtin_models.h`](common/builtin_models.h)), ou dans
+   `albireo-setup.models` à côté de lui quand les deux atteindraient les 4 Gio qu'exécute Windows ; la surcouche est
+   relue avant de prendre son nom.
 
-The conversion takes a few minutes and the cache holds about 6.8 GB, the downloaded files and the
-converted ones; the models of the complete installer weigh about 3.6 GB. `-DALBIREO_BUILTIN_MODELS=OFF`, or
-`-NoBuiltinModels` of `build_windows.ps1`, builds without them; a cross build gives
-`ALBIREO_BUILTIN_TOOL`, the `albireo-builtin` of the build machine.
+La conversion prend quelques minutes et le cache contient environ 6,8 Go, les fichiers téléchargés et les
+fichiers convertis ; les modèles de l'installateur complet pèsent environ 3,6 Go. `-DALBIREO_BUILTIN_MODELS=OFF`, ou
+`-NoBuiltinModels` de `build_windows.ps1`, construit sans eux ; un build croisé donne
+`ALBIREO_BUILTIN_TOOL`, l'`albireo-builtin` de la machine de build.
 
-The installer copies the models to the `models` folder of the programs, checks their hashes, and
-writes their manifest last; the service registers them at each start (source `builtin`, the
-suffix `-albireo` in their names). A model that comes with Albireo takes the functions no model
-holds, which on a new computer means every function; it can leave them to other models, and it
-cannot be deleted (code `builtin_model`). The catalog entry of the file it was made from
-(`source_sha256` of the manifest) leaves the Models window and its download is refused
-(`builtin_installed`): the model that comes with Albireo stands for it. The language model among
-them serves the work in the background (`albireo-background`) and stays loaded whatever the
-functions. Albireo runs these models with its own engine, the
-quantized kernels over the mapped file, as every other model: the compiled networks of dlib
-(`slm_gguf_import_ex --convert`) compute in single precision and remain the tool of training and
-fine tuning.
+L'installateur copie les modèles dans le dossier `models` des programmes, vérifie leurs empreintes, et
+écrit leur manifeste en dernier ; le service les enregistre à chaque démarrage (source `builtin`, le
+suffixe `-albireo` dans leurs noms). Un modèle livré avec Albireo prend les fonctions qu'aucun modèle
+ne tient, ce qui sur un nouvel ordinateur veut dire toutes les fonctions ; il peut les laisser à d'autres modèles, et il
+ne peut pas être supprimé (code `builtin_model`). L'entrée du catalogue du fichier dont il a été fait
+(`source_sha256` du manifeste) quitte la fenêtre Modèles et son téléchargement est refusé
+(`builtin_installed`) : le modèle livré avec Albireo le remplace. Le modèle de langage parmi
+eux sert le travail en arrière-plan (`albireo-background`) et reste chargé quelles que soient les
+fonctions. Albireo exécute ces modèles avec son propre moteur, les
+noyaux quantifiés sur le fichier projeté, comme tout autre modèle : les réseaux compilés de dlib
+(`slm_gguf_import_ex --convert`) calculent en simple précision et restent l'outil de l'entraînement et de
+l'affinage.
 
-## Computers without network
+## Ordinateurs sans réseau
 
-The `offline` setting, set by the installer (option "This computer has no Internet access",
-`/offline`) or by the window of the computer, makes the service open no connection: the catalog,
-the updates, the downloads and the web access are refused with the reason, and the menu of the
-icon greys "Check for updates". What the service needs then comes from an offline bundle,
-prepared on a computer with network:
+Le réglage `offline`, fixé par l'installateur (option « Cet ordinateur n'a pas d'accès à Internet »,
+`/offline`) ou par la fenêtre de l'ordinateur, fait que le service n'ouvre aucune connexion : le catalogue,
+les mises à jour, les téléchargements et l'accès au web sont refusés avec la raison, et le menu de
+l'icône grise « Rechercher des mises à jour ». Ce dont le service a besoin vient alors d'un paquet hors ligne,
+préparé sur un ordinateur doté d'un réseau :
 
-> In the macOS fork, `make_offline_bundle.py`, the installers and the feed are removed: a bundle is
-> a folder holding a `catalog.json`, unsigned, and the models it lists, in the folder or in its
-> `models` subfolder; each one is checked by its name, size and SHA-256. The rest of this section
-> describes the original.
+> Dans le fork macOS, `make_offline_bundle.py`, les installateurs et le flux sont retirés : un paquet est
+> un dossier contenant un `catalog.json`, non signé, et les modèles qu'il liste, dans le dossier ou dans son
+> sous-dossier `models` ; chacun est vérifié par son nom, sa taille et son SHA-256. Le reste de cette section
+> décrit l'original.
 
 ```
 python3 dlib/dlib/external/albireo/tools/make_offline_bundle.py <folder> [--models qwen3-4b,qwen3-embedding-0.6b] [--from ~/models]
 ```
 
-The bundle holds the signed catalog and the signed update feed of `dist/albireo`, the installer the
-feed announces, taken from `--installer` or else from the folder `dist` of the public link alone, a
-`models` folder with the models chosen, each model that reads images with its
-projector (the two default models when `--models` is absent) and a `README.txt`. `--complete build-albireo/bin/albireo-setup.exe` adds the complete
-installer, which carries the models that come with Albireo: the bundle then needs no models. Each
-file is checked against the hashes of the signed files when it enters the bundle, and again by the
-service when it installs it; the signatures are checked with `albireo-sign` (`--sign`, else
-`build-albireo/bin`, else the `PATH`), and `--no-verify` leaves that check to the service. The bundle is used in one of
-three ways:
+Le paquet contient le catalogue signé et le flux de mises à jour signé de `dist/albireo`, l'installateur qu'annonce le
+flux, pris dans `--installer` ou sinon dans le seul dossier `dist` du lien public, un
+dossier `models` avec les modèles choisis, chaque modèle qui lit les images avec son
+projecteur (les deux modèles par défaut quand `--models` est absent) et un `README.txt`. `--complete build-albireo/bin/albireo-setup.exe` ajoute l'installateur
+complet, qui porte les modèles livrés avec Albireo : le paquet n'a alors besoin d'aucun modèle. Chaque
+fichier est vérifié par rapport aux empreintes des fichiers signés quand il entre dans le paquet, et de nouveau par le
+service quand il l'installe ; les signatures sont vérifiées avec `albireo-sign` (`--sign`, sinon
+`build-albireo/bin`, sinon le `PATH`), et `--no-verify` laisse cette vérification au service. Le paquet s'utilise de l'une de
+ces trois façons :
 
-- `albireo-setup-<version>.exe` started from the bundle installs Albireo with its models;
-- the Import button of the Models window, given the folder of the bundle, installs the catalog,
-  the models and the update of an installed computer;
-- the content of the bundle copied into `C:\ProgramData\Albireo\import` is installed by the service
-  within a minute; a file that cannot be installed is renamed with the suffix `.rejected`.
+- `albireo-setup-<version>.exe` lancé depuis le paquet installe Albireo avec ses modèles ;
+- le bouton Importer de la fenêtre Modèles, à qui l'on donne le dossier du paquet, installe le catalogue,
+  les modèles et la mise à jour d'un ordinateur installé ;
+- le contenu du paquet copié dans `C:\ProgramData\Albireo\import` est installé par le service
+  en moins d'une minute ; un fichier qui ne peut pas être installé est renommé avec le suffixe `.rejected`.
 
-A catalog older than the one in place is never installed, and an update is installed at the next
-start of the service.
+Un catalogue plus ancien que celui en place n'est jamais installé, et une mise à jour est installée au prochain
+démarrage du service.
 
-On a computer with network, every request of the service runs on a thread of its own and is
-bounded in time: 10 seconds to resolve the name of the server and to connect to it, including the
-TLS handshake, then 20 seconds without data for the catalog and the feed. The requests of the users
-never wait for the network. When the service stops or goes offline, the transfers in progress stop
-at once and no new connection opens; a connection that httplib is opening ends within its bounds,
-10 seconds for the connection and its TLS handshake and, behind a proxy, the answer of the proxy,
-while the service tells the Windows service manager that its stop goes on.
+Sur un ordinateur doté d'un réseau, chaque requête du service s'exécute sur un thread à part et est
+limitée dans le temps : 10 secondes pour résoudre le nom du serveur et s'y connecter, poignée de main
+TLS comprise, puis 20 secondes sans données pour le catalogue et le flux. Les requêtes des utilisateurs
+n'attendent jamais le réseau. Quand le service s'arrête ou passe hors ligne, les transferts en cours s'arrêtent
+aussitôt et aucune nouvelle connexion ne s'ouvre ; une connexion qu'httplib est en train d'ouvrir se termine dans ses limites,
+10 secondes pour la connexion et sa poignée de main TLS et, derrière un proxy, la réponse du proxy,
+pendant que le service indique au gestionnaire des services de Windows que son arrêt se poursuit.
 
-## Publishing a version
+## Publier une version
 
-> In the macOS fork (4.0.0 and later) none of this section applies: there is no key, no signed feed
-> or catalog, no publication space and no update. `albireo-sign`, `publish_release.py`,
-> `fill_public_link.py`, `public_link.py`, `host/public_link.h` and the CMake option of its
-> password are removed; the catalog is read unsigned from its address in the repository of the
-> original. The section is kept as the description of the original.
+> Dans le fork macOS (4.0.0 et suivantes), rien de cette section ne s'applique : il n'y a ni clé, ni flux
+> ou catalogue signé, ni espace de publication, ni mise à jour. `albireo-sign`, `publish_release.py`,
+> `fill_public_link.py`, `public_link.py`, `host/public_link.h` et l'option CMake de son
+> mot de passe sont retirés ; le catalogue est lu non signé depuis son adresse dans le dépôt de
+> l'original. La section est conservée comme description de l'original.
 
-The feed and the catalog live in [`dist/albireo`](../../../../dist/albireo) of the repository, each
-with a detached signature (ECDSA P-256 over its exact bytes) that the programs check with the public
-key built into [`host/crypto.cpp`](host/crypto.cpp). The private key stays with the publisher;
-`albireo-sign keygen` refuses a path that exists, so that the key of the feed is never replaced, and
-gives the private key to the account that runs it alone. The programs travel in the installer, which
-carries the service, the tray, every engine with the runtime libraries of its device, and the web
-application.
+Le flux et le catalogue vivent dans [`dist/albireo`](../../../../dist/albireo) du dépôt, chacun
+avec une signature détachée (ECDSA P-256 sur ses octets exacts) que les programmes vérifient avec la clé
+publique intégrée à [`host/crypto.cpp`](host/crypto.cpp). La clé privée reste chez l'éditeur ;
+`albireo-sign keygen` refuse un chemin qui existe, pour que la clé du flux ne soit jamais remplacée, et
+ne donne la clé privée qu'au compte qui l'exécute. Les programmes voyagent dans l'installateur, qui
+porte le service, l'icône, chaque moteur avec les bibliothèques d'exécution de son périphérique, et l'application
+web.
 
-The published files lie in the publication space of Albireo, the public link of a public folder of
-pCloud read only, a constant of the build that no setting, route or document gives
-([`host/public_link.h`](host/public_link.h)), protected by a password that the service carries. Its
-folder `dist` holds `feed.json`, `catalog.json`, their signatures, the installer of the updates,
-`albireo-setup-online-<version>.exe`, and the complete installer,
-`albireo-setup-complete-<version>.exe`; its folder `models` holds each file of the catalog at
-`<identifier>/<file name of its official address>`. The service reads the feed and the installer
-there alone, through the API of pCloud: a space that does not answer or that does not hold a file
-makes the update fail with a message that names the file in the space and the kind of failure ("the
-publication space of Albireo cannot be reached for dist/feed.json: the request is answered with the
-status 403"). The catalog and the model files come from there first, and from their official
-addresses when the space does not serve them (see [Models](#models)), the message of a failure of
-both naming the file in the space, its failure, the official address and its failure. The
-signatures and the hashes check every file. No message, window or log of the service, the tray
-or the installer names the link, its code, an address of the API or of a content server, or a host
-of pCloud: the messages name the files of the space, and the log, the errors of the routes, the
-windows of the tray and the log of the installer pass their texts through a last guard that
-replaces any such word with "the publication space of Albireo" ([`common/log.h`](common/log.h)),
-the log files of an earlier version included. [`dist/albireo`](../../../../dist/albireo) of the
-repository keeps the signed feed and catalog that the publisher places in the link.
+Les fichiers publiés se trouvent dans l'espace de publication d'Albireo, le lien public d'un dossier public de
+pCloud en lecture seule, une constante du build qu'aucun réglage, aucune route ni aucun document ne donne
+([`host/public_link.h`](host/public_link.h)), protégé par un mot de passe que porte le service. Son
+dossier `dist` contient `feed.json`, `catalog.json`, leurs signatures, l'installateur des mises à jour,
+`albireo-setup-online-<version>.exe`, et l'installateur complet,
+`albireo-setup-complete-<version>.exe` ; son dossier `models` contient chaque fichier du catalogue à
+`<identifier>/<file name of its official address>`. Le service y lit le flux et l'installateur
+et seulement là, par l'API de pCloud : un espace qui ne répond pas ou qui ne contient pas un fichier
+fait échouer la mise à jour avec un message qui nomme le fichier dans l'espace et le type d'échec (« l'espace
+de publication d'Albireo est injoignable pour dist/feed.json : la requête reçoit pour réponse le
+statut 403 »). Le catalogue et les fichiers des modèles viennent de là d'abord, et de leurs adresses
+officielles quand l'espace ne les sert pas (voir [Modèles](#modèles)), le message d'un échec des
+deux nommant le fichier dans l'espace, son échec, l'adresse officielle et son échec. Les
+signatures et les empreintes vérifient chaque fichier. Aucun message, aucune fenêtre ni aucun journal du service, de l'icône
+ou de l'installateur ne nomme le lien, son code, une adresse de l'API ou d'un serveur de contenu, ou un hôte
+de pCloud : les messages nomment les fichiers de l'espace, et le journal, les erreurs des routes, les
+fenêtres de l'icône et le journal de l'installateur font passer leurs textes par une dernière garde qui
+remplace tout mot de ce genre par « l'espace de publication d'Albireo » ([`common/log.h`](common/log.h)),
+fichiers journaux d'une version antérieure compris. [`dist/albireo`](../../../../dist/albireo) du
+dépôt garde le flux et le catalogue signés que l'éditeur place dans le lien.
 
-The password is read at the configuration from `ALBIREO_PUBLIC_LINK_PASSWORD_FILE`, by default
-`keys\albireo-public-link.txt` in the folder of the user (`~/keys` on Linux), outside the
-repository, and built into the service masked; a service built without that file reaches the link
-without password, which the link refuses while it is protected. The tools of the publisher read the
-same file, or the variable `ALBIREO_PUBLIC_LINK_PASSWORD`.
+Le mot de passe est lu à la configuration depuis `ALBIREO_PUBLIC_LINK_PASSWORD_FILE`, par défaut
+`keys\albireo-public-link.txt` dans le dossier de l'utilisateur (`~/keys` sous Linux), hors du
+dépôt, et intégré au service sous forme masquée ; un service construit sans ce fichier atteint le lien
+sans mot de passe, ce que le lien refuse tant qu'il est protégé. Les outils de l'éditeur lisent le
+même fichier, ou la variable `ALBIREO_PUBLIC_LINK_PASSWORD`.
 
-[`tools/publish_release.py`](tools/publish_release.py) writes the feed of a version from its
-installer without models: it checks that the installer carries the version of
-[`common/version.h`](common/version.h), writes the feed with the name of the installer in the link,
-its size and its SHA-256, signs it, checks the signature, puts the feed and its signature in place
-and prints the commands that push them. [`tools/fill_public_link.py`](tools/fill_public_link.py)
-then fills the local copy of the link, the folder the storage service synchronizes: `dist` copies the
-signed feed and catalog with their signatures, checked with `albireo-sign`, and both installers
-under their names, checked against the feed, with the file of models of the complete installer
-when it has one, the feed last; `models` places the files of the
-catalog, kept when they are in place, copied from the folders of `--from` when a file has their size
-and SHA-256, else downloaded from their official addresses, resumed after a cut and checked; `check`
-reads the listing of the link and reports the files it lacks or holds at another size:
+[`tools/publish_release.py`](tools/publish_release.py) écrit le flux d'une version à partir de son
+installateur sans modèles : il vérifie que l'installateur porte la version de
+[`common/version.h`](common/version.h), écrit le flux avec le nom de l'installateur dans le lien,
+sa taille et son SHA-256, le signe, vérifie la signature, met en place le flux et sa signature
+et affiche les commandes qui les envoient. [`tools/fill_public_link.py`](tools/fill_public_link.py)
+remplit ensuite la copie locale du lien, le dossier que synchronise le service de stockage : `dist` copie le
+flux et le catalogue signés avec leurs signatures, vérifiés avec `albireo-sign`, et les deux installateurs
+sous leurs noms, vérifiés par rapport au flux, avec le fichier des modèles de l'installateur complet
+quand il en a un, le flux en dernier ; `models` place les fichiers du
+catalogue, gardés quand ils sont en place, copiés depuis les dossiers de `--from` quand un fichier a leur taille
+et leur SHA-256, sinon téléchargés depuis leurs adresses officielles, repris après une coupure et vérifiés ; `check`
+lit le listing du lien et signale les fichiers qui lui manquent ou qu'il contient avec une autre taille :
 
 ```
 python3 dlib/dlib/external/albireo/tools/publish_release.py build-albireo/bin/albireo-setup-online.exe --complete build-albireo/bin/albireo-setup.exe --key ~/keys/albireo-feed-signing.key --notes notes.json
@@ -1647,132 +1646,132 @@ python dlib\dlib\external\albireo\tools\fill_public_link.py models <copy of the 
 python dlib\dlib\external\albireo\tools\fill_public_link.py check
 ```
 
-The feed names the installer by its file in the link alone, with no address of another site. A
-model published outside the hub, a model converted for the engine for instance, is cut into parts
-of less than 2 GiB and attached to the release `albireo-models` of GitHub by
-[`tools/publish_model.py`](tools/publish_model.py), whose output is the entry of the catalog, with
-the architecture, the parameters and the context read from the file; these release files are the
-official addresses of its parts, from which `fill_public_link.py models` copies them to the link,
-and the token of GitHub comes from `GITHUB_TOKEN`, `GH_TOKEN` or `gh auth token`:
+Le flux nomme l'installateur par son seul fichier dans le lien, sans adresse d'un autre site. Un
+modèle publié hors du hub, un modèle converti pour le moteur par exemple, est découpé en parties
+de moins de 2 Gio et joint à la release `albireo-models` de GitHub par
+[`tools/publish_model.py`](tools/publish_model.py), dont la sortie est l'entrée du catalogue, avec
+l'architecture, les paramètres et le contexte lus dans le fichier ; ces fichiers de release sont les
+adresses officielles de ses parties, d'où `fill_public_link.py models` les copie vers le lien,
+et le jeton de GitHub vient de `GITHUB_TOKEN`, `GH_TOKEN` ou `gh auth token` :
 
 ```
 python3 dlib/dlib/external/albireo/tools/publish_model.py model.gguf my-model parts --release albireo-models --gzip
 ```
 
-[`dist/albireo/README.md`](../../../../dist/albireo/README.md) gives every step, the catalog
-included. A feed announcing a higher version makes the services download the installer, check its
-size and its SHA-256, and run it in update mode at their next start.
+[`dist/albireo/README.md`](../../../../dist/albireo/README.md) donne chaque étape, catalogue
+compris. Un flux qui annonce une version supérieure fait télécharger l'installateur aux services, qui vérifient sa
+taille et son SHA-256, et l'exécutent en mode mise à jour à leur démarrage suivant.
 
-## Security
+## Sécurité
 
-- The service listens on `127.0.0.1` only (the macOS fork adds the network port, in plain HTTP,
-  behind an optional password, and no longer checks `Host` nor `Origin`), takes JSON bodies only, of 64 MB and
-  524,288 values at most, and no body on `GET`, `HEAD`, `DELETE` and `OPTIONS`, and answers with
-  `nosniff`, `no-referrer`, a content security policy and frame protections. It reads at most four
-  bodies above 8 MB at once, each counted until its answer is written, and holds about 2 million
-  parsed values at once across the requests (503 `busy` with `Retry-After` beyond), waits 30
-  seconds at most for a client that reads or writes, closes an idle connection after 5 seconds,
-  serves 64 connections at once with 128 more waiting, and ends a stream whose client lets more
-  than 16,384 events wait.
-- The administration routes compare the token in constant time; the token and the password of
-  the proxy are files with restricted rights, and the data folder grants writing to the
-  administrators and the service only: on Windows, the service secures it again at each start,
-  and the import folder too when another account could write in it.
-- A database the service cannot open as SQLite, or whose pages fail the check of its start, is set
-  aside as `albireo.db.corrupt-<time>`, and a new one records again the models of the models
-  folder; a database opened read only is opened again at the next write that fails, and a database
-  locked by another program is waited for 5 seconds: the service recovers without a restart once
-  the cause is gone. The files the service writes reach the disk before they replace the previous
-  ones, and `settings.json` has a copy, `settings.json.bak`, which the service reads when the file
-  is damaged.
-- The certificate of the local server comes from an authority of this computer alone, made by
-  the service under LocalSystem with an ECDSA P-256 key, whose name constraints limit it to
-  `localhost`, `127.0.0.0/8` and `::1`: Windows and the browsers refuse any certificate it would
-  sign for another site. Its private key signs the certificate of the server once, in memory,
-  and is never written. Both certificates last 397 days; 30 days before their end, or when the
-  key of the server does not open, the service makes a new authority and a new certificate and
-  replaces the authority in the trusted roots of the machine, after checking its constraints,
-  when the installation chose to trust it. The authority is limited to the authentication of
-  servers, and an authority whose key a version before 1.0.8 left on the disk is replaced at the
-  start of the service. The private key of the server is encrypted with
-  DPAPI for the LocalSystem account, in a file that SYSTEM and the administrators alone may open:
-  a copy of that file opens under no other account and on no other computer. The service
-  decrypts it in memory for the TLS server, without a file in clear. An update keeps the
-  certificates and their trust, deletes the key of the authority of a version before 1.0.8 and
-  encrypts its key of the server; an uninstallation removes the authority from the trusted roots
-  and deletes the certificates and the keys.
-- A staged update keeps the signed feed that announced it beside its installer; the service checks
-  the version, the path, the size and the SHA-256 of the installer against it again, the file held
-  open, right before running it.
-- The feed, the catalog and every downloaded file are checked against signatures and hashes (in
-  the macOS fork, against hashes only: the catalog is unsigned, so a folder to import must come
-  from a trusted source). The
-  files of the models folder, of the import folder, of the downloads and of the updates are
-  opened and created through no link, junction or mount point, their path checked again before
-  each opening, renaming and deletion; the route of the paths reads only the import folder and
-  the signed offline bundles (see [Models](#models)). Every error of the updates carries a code
-  with its values (`update_signature`, `update_installer_mismatch`, `update_package_manager`...),
-  which the tray explains in the language of the user.
-- The publication space (removed in the macOS fork), the only source of the updates and the first one of the catalog and of the
-  models, brings nothing the signed feed and catalog do not name, at the size and with the SHA-256
-  they give: a file of the space that differs is refused, and only the official address of the
-  catalog or of the model, checked the same way, takes its place. A web page that a proxy or a
-  filter of the network sends in place of an answer, a body cut short, a JSON of other types, a
-  stalled server and a connection reset end the attempt with its message, bounded in time, and no
-  exception leaves the threads of the downloads and of the checks. The password of its link never
-  lies in the repository: the configuration reads it from a file of the publisher and builds it into
-  the service masked, and the messages and the logs never name the link, its code or the addresses
-  of pCloud. It keeps the link from being read outside Albireo, not from someone who studies the
-  program.
-- The JavaScript the agent mode runs executes in a sandboxed frame of opaque origin, in a worker
-  stopped after 15 s; the page builds its own copy of each answer of the frame, with checked and
-  shortened fields, and gives up on a frame silent for 20 s.
-- The web access reads the pages of public addresses only, the names and the addresses of this
-  computer and of the local networks refused, its connection going to the address checked; it
-  follows the redirections itself, each address checked again, and reads 2 MB of text and 20 MB of
-  PDF at most. The application reads only the addresses of the discussion, reads the pages
-  in an inert document, and gives their text to the model as untrusted data (see
-  [Web access](#web-access)).
-- The text read aloud reaches the synthesizer through `albireo-speech.exe` alone, started for each
-  reading with a token of low integrity and without privileges, which cannot write in the folders
-  of the service, of the programs or of the users, in a job of 256 MB that ends it with the service
-  and refuses it any child process; the text is first reduced to the letters of the Latin scripts,
-  the digits and the usual punctuation, so that no markup of the synthesizer, some of which names
-  files, reaches it.
-- The engine libraries are loaded from the `engines` folder of the installation, with their
-  dependencies searched in that folder first. The service searches the libraries it loads by
-  name in its own folder, in `engines` and in System32 only, never in the `PATH` or in the current
-  folder, and loads the parts of cuDNN from `engines` by their full paths, so that another copy of
-  CUDA, cuDNN or OpenVINO on the machine is never taken.
-- A model file is read within bounds, checked before anything is allocated: 2^20 entries and
-  arrays of 2^24 values at most in the GGUF file, an alignment that is a power of two up to 65,536,
-  1,024 layers at most and no more than its tensors, 1,024 heads, a width of 2^17, a feed-forward
-  width of 2^20, heads of 4,096 values, a context of 2^26 positions, a vocabulary of 2^24 tokens,
-  4,096 experts, the tokens of beginning and end within the vocabulary, each integer checked
-  before it narrows and each real finite. The options of a load and the settings of the engine
-  are numbers within bounds too (a context of 2^26 positions, 256 sequences, 65,536 tokens per
-  pass, 2^24 MB of keys and values at most). A file outside these bounds is refused at once,
-  whatever it declares.
+- Le service n'écoute que sur `127.0.0.1` (le fork macOS ajoute le port réseau, en HTTP simple,
+  derrière un mot de passe facultatif, et ne vérifie plus ni `Host` ni `Origin`), ne prend que des corps JSON, de 64 Mo et
+  524 288 valeurs au plus, et aucun corps sur `GET`, `HEAD`, `DELETE` et `OPTIONS`, et répond avec
+  `nosniff`, `no-referrer`, une politique de sécurité du contenu et des protections contre l'intégration en cadre. Il lit au plus quatre
+  corps de plus de 8 Mo à la fois, chacun compté jusqu'à ce que sa réponse soit écrite, et tient environ 2 millions
+  de valeurs analysées à la fois sur l'ensemble des requêtes (503 `busy` avec `Retry-After` au-delà), attend 30
+  secondes au plus un client qui lit ou écrit, ferme une connexion inactive après 5 secondes,
+  sert 64 connexions à la fois avec 128 de plus en attente, et termine un flux dont le client laisse plus
+  de 16 384 événements en attente.
+- Les routes d'administration comparent le jeton en temps constant ; le jeton et le mot de passe du
+  proxy sont des fichiers aux droits restreints, et le dossier des données n'accorde l'écriture qu'aux
+  administrateurs et au service : sous Windows, le service le sécurise de nouveau à chaque démarrage,
+  et le dossier d'import aussi quand un autre compte pourrait y écrire.
+- Une base de données que le service ne peut pas ouvrir en SQLite, ou dont les pages échouent à la vérification de son démarrage, est mise
+  de côté sous le nom `albireo.db.corrupt-<time>`, et une nouvelle base enregistre de nouveau les modèles du dossier des
+  modèles ; une base ouverte en lecture seule est rouverte à la prochaine écriture qui échoue, et une base
+  verrouillée par un autre programme est attendue 5 secondes : le service se rétablit sans redémarrage dès que
+  la cause a disparu. Les fichiers qu'écrit le service atteignent le disque avant de remplacer les
+  précédents, et `settings.json` a une copie, `settings.json.bak`, que le service lit quand le fichier
+  est endommagé.
+- Le certificat du serveur local vient d'une autorité propre à cet ordinateur, créée par
+  le service sous LocalSystem avec une clé ECDSA P-256, dont les contraintes de nom la limitent à
+  `localhost`, `127.0.0.0/8` et `::1` : Windows et les navigateurs refusent tout certificat qu'elle
+  signerait pour un autre site. Sa clé privée signe le certificat du serveur une seule fois, en mémoire,
+  et n'est jamais écrite. Les deux certificats durent 397 jours ; 30 jours avant leur fin, ou quand la
+  clé du serveur ne s'ouvre pas, le service crée une nouvelle autorité et un nouveau certificat et
+  remplace l'autorité dans les racines de confiance de la machine, après avoir vérifié ses contraintes,
+  quand l'installation a choisi de lui faire confiance. L'autorité est limitée à l'authentification des
+  serveurs, et une autorité dont une version antérieure à 1.0.8 a laissé la clé sur le disque est remplacée au
+  démarrage du service. La clé privée du serveur est chiffrée avec
+  DPAPI pour le compte LocalSystem, dans un fichier que seuls SYSTEM et les administrateurs peuvent ouvrir :
+  une copie de ce fichier ne s'ouvre sous aucun autre compte ni sur aucun autre ordinateur. Le service
+  la déchiffre en mémoire pour le serveur TLS, sans fichier en clair. Une mise à jour garde les
+  certificats et leur confiance, supprime la clé de l'autorité d'une version antérieure à 1.0.8 et
+  chiffre sa clé du serveur ; une désinstallation retire l'autorité des racines de confiance
+  et supprime les certificats et les clés.
+- Une mise à jour préparée garde à côté de son installateur le flux signé qui l'a annoncée ; le service revérifie
+  par rapport à lui la version, le chemin, la taille et le SHA-256 de l'installateur, le fichier maintenu
+  ouvert, juste avant de l'exécuter.
+- Le flux, le catalogue et chaque fichier téléchargé sont vérifiés par rapport à des signatures et à des empreintes (dans
+  le fork macOS, par rapport aux empreintes seulement : le catalogue n'est pas signé, si bien qu'un dossier à importer doit venir
+  d'une source de confiance). Les
+  fichiers du dossier des modèles, du dossier d'import, des téléchargements et des mises à jour sont
+  ouverts et créés sans passer par aucun lien, jonction ou point de montage, leur chemin revérifié avant
+  chaque ouverture, chaque renommage et chaque suppression ; la route des chemins ne lit que le dossier d'import et
+  les paquets hors ligne signés (voir [Modèles](#modèles)). Chaque erreur des mises à jour porte un code
+  avec ses valeurs (`update_signature`, `update_installer_mismatch`, `update_package_manager`...),
+  que l'icône explique dans la langue de l'utilisateur.
+- L'espace de publication (retiré dans le fork macOS), seule source des mises à jour et première source du catalogue et des
+  modèles, n'apporte rien que le flux et le catalogue signés ne nomment pas, à la taille et avec le SHA-256
+  qu'ils donnent : un fichier de l'espace qui diffère est refusé, et seule l'adresse officielle du
+  catalogue ou du modèle, vérifiée de la même façon, prend sa place. Une page web qu'un proxy ou un
+  filtre du réseau envoie à la place d'une réponse, un corps tronqué, un JSON d'autres types, un
+  serveur bloqué et une connexion réinitialisée terminent la tentative avec son message, dans un temps limité, et aucune
+  exception ne sort des threads des téléchargements et des vérifications. Le mot de passe de son lien ne
+  se trouve jamais dans le dépôt : la configuration le lit dans un fichier de l'éditeur et l'intègre au
+  service sous forme masquée, et les messages et les journaux ne nomment jamais le lien, son code ni les adresses
+  de pCloud. Cela empêche de lire le lien en dehors d'Albireo, pas quelqu'un qui étudie le
+  programme de le faire.
+- Le JavaScript qu'exécute le mode agent tourne dans un cadre isolé d'origine opaque, dans un worker
+  arrêté après 15 s ; la page construit sa propre copie de chaque réponse du cadre, avec des champs vérifiés et
+  raccourcis, et abandonne un cadre resté silencieux pendant 20 s.
+- L'accès au web ne lit que les pages d'adresses publiques, les noms et les adresses de cet
+  ordinateur et des réseaux locaux étant refusés, sa connexion allant à l'adresse vérifiée ; il
+  suit lui-même les redirections, chaque adresse revérifiée, et lit 2 Mo de texte et 20 Mo de
+  PDF au plus. L'application ne lit que les adresses de la discussion, lit les pages
+  dans un document inerte, et donne leur texte au modèle comme donnée non fiable (voir
+  [Accès au web](#accès-au-web)).
+- Le texte lu à voix haute n'atteint le synthétiseur que par `albireo-speech.exe`, lancé pour chaque
+  lecture avec un jeton de faible intégrité et sans privilèges, qui ne peut écrire ni dans les dossiers
+  du service, ni dans ceux des programmes ou des utilisateurs, dans un job de 256 Mo qui le termine avec le service
+  et lui refuse tout processus enfant ; le texte est d'abord réduit aux lettres des écritures latines,
+  aux chiffres et à la ponctuation usuelle, pour qu'aucun balisage du synthétiseur, dont une partie nomme des
+  fichiers, ne l'atteigne.
+- Les bibliothèques des moteurs sont chargées depuis le dossier `engines` de l'installation, leurs
+  dépendances étant cherchées d'abord dans ce dossier. Le service cherche les bibliothèques qu'il charge par
+  nom dans son propre dossier, dans `engines` et dans System32 seulement, jamais dans le `PATH` ni dans le dossier
+  courant, et charge les parties de cuDNN depuis `engines` par leurs chemins complets, pour qu'une autre copie de
+  CUDA, de cuDNN ou d'OpenVINO présente sur la machine ne soit jamais prise.
+- Un fichier de modèle est lu dans des limites, vérifiées avant toute allocation : 2^20 entrées et
+  des tableaux de 2^24 valeurs au plus dans le fichier GGUF, un alignement qui est une puissance de deux jusqu'à 65 536,
+  1 024 couches au plus et pas plus que ses tenseurs, 1 024 têtes, une largeur de 2^17, une largeur
+  feed-forward de 2^20, des têtes de 4 096 valeurs, un contexte de 2^26 positions, un vocabulaire de 2^24 tokens,
+  4 096 experts, les tokens de début et de fin dans le vocabulaire, chaque entier vérifié
+  avant d'être réduit et chaque réel fini. Les options d'un chargement et les réglages du moteur
+  sont aussi des nombres bornés (un contexte de 2^26 positions, 256 séquences, 65 536 tokens par
+  passe, 2^24 Mo de clés et valeurs au plus). Un fichier hors de ces limites est refusé aussitôt,
+  quoi qu'il déclare.
 
-## Data folders
+## Dossiers de données
 
-| Path (Windows)                         | Content                                                      |
+| Chemin (Windows)                       | Contenu                                                      |
 |----------------------------------------|--------------------------------------------------------------|
-| `C:\Program Files\Albireo`             | programs, engines, web application, licenses, `albireo-files.json` |
-| `C:\Program Files\Albireo\models`      | the models that come with Albireo and their `builtin.json`   |
-| `C:\Program Files\Albireo\speech`      | the voices of the speech synthesis                           |
-| `C:\ProgramData\Albireo\settings.json` | settings, and their last copy `settings.json.bak`            |
-| `C:\ProgramData\Albireo\proxy.secret`  | password of the proxy, readable by the administrators and the service |
-| `C:\ProgramData\Albireo\albireo.db`    | installed models, downloads, usage, catalog                   |
-| `C:\ProgramData\Albireo\models`        | models (or the folder chosen at installation)                |
-| `C:\ProgramData\Albireo\import`        | offline bundles and models, installed within a minute        |
-| `C:\ProgramData\Albireo\certificates`  | certificates of the local authority and of the server, key of the server encrypted for LocalSystem |
-| `C:\ProgramData\Albireo\engine-cache`  | compiled graphs of OpenVINO, file of the extended memory     |
-| `C:\ProgramData\Albireo\logs`          | logs of the service and of the installer                     |
-| `C:\ProgramData\Albireo\updates`       | installer of the next version, with the signed feed that announced it |
+| `C:\Program Files\Albireo`             | programmes, moteurs, application web, licences, `albireo-files.json` |
+| `C:\Program Files\Albireo\models`      | les modèles livrés avec Albireo et leur `builtin.json`       |
+| `C:\Program Files\Albireo\speech`      | les voix de la synthèse vocale                               |
+| `C:\ProgramData\Albireo\settings.json` | réglages, et leur dernière copie `settings.json.bak`         |
+| `C:\ProgramData\Albireo\proxy.secret`  | mot de passe du proxy, lisible par les administrateurs et le service |
+| `C:\ProgramData\Albireo\albireo.db`    | modèles installés, téléchargements, utilisation, catalogue   |
+| `C:\ProgramData\Albireo\models`        | modèles (ou le dossier choisi à l'installation)              |
+| `C:\ProgramData\Albireo\import`        | paquets hors ligne et modèles, installés en moins d'une minute |
+| `C:\ProgramData\Albireo\certificates`  | certificats de l'autorité locale et du serveur, clé du serveur chiffrée pour LocalSystem |
+| `C:\ProgramData\Albireo\engine-cache`  | graphes compilés d'OpenVINO, fichier de la mémoire étendue   |
+| `C:\ProgramData\Albireo\logs`          | journaux du service et de l'installateur                     |
+| `C:\ProgramData\Albireo\updates`       | installateur de la version suivante, avec le flux signé qui l'a annoncée |
 
-The data folder is the one the installer recorded (`DataDir` under `HKLM\Software\Albireo`),
-`C:\ProgramData\Albireo` by default, which may be chosen at the installation; `ALBIREO_HOME`
-replaces it when no folder is recorded, and for the development on Linux. On Windows the
-variable is read from the environment of the machine (the system variables), which the service
-receives; the variable of a user's own environment is ignored.
+Le dossier des données est celui qu'a enregistré l'installateur (`DataDir` sous `HKLM\Software\Albireo`),
+`C:\ProgramData\Albireo` par défaut, qui peut être choisi à l'installation ; `ALBIREO_HOME`
+le remplace quand aucun dossier n'est enregistré, et pour le développement sous Linux. Sous Windows, la
+variable est lue dans l'environnement de la machine (les variables système), que reçoit le
+service ; la variable de l'environnement propre d'un utilisateur est ignorée.

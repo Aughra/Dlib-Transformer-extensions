@@ -133,7 +133,6 @@ namespace pseudalis
 
         std::string program_dir() const { return program_dir_; }
         std::string data_dir() const { return data_dir_; }
-        std::string admin_token() const { return admin_token_; }
         int port() const { return port_; }
 
         settings_store& settings() { return *settings_; }
@@ -263,7 +262,7 @@ namespace pseudalis
         json text_substitutes_of(long long record, bool inherited_only = false);
         json text_substitutes_of_inherited(long long record) { return text_substitutes_of(record, true); }
 
-        std::string program_dir_, data_dir_, admin_token_;
+        std::string program_dir_, data_dir_;
         int port_ = 8444;
         std::unique_ptr<settings_store> settings_;
         std::unique_ptr<store> db_;

@@ -16,14 +16,10 @@
   function pick() {
     let saved = null;
     try { saved = localStorage.getItem('pseudalis.language'); } catch (e) { /* stockage indisponible */ }
+    // Le français par défaut (fork pour macOS, demande de l'humain du 2026-11-15), quelle que soit la langue du
+    // navigateur ; l'anglais reste au choix du menu.
     if (saved && texts[saved]) return saved;
-    const wanted = navigator.languages && navigator.languages.length ? navigator.languages
-      : [navigator.language || 'en'];
-    for (let i = 0; i < wanted.length; ++i) {
-      const code = String(wanted[i] || '').slice(0, 2).toLowerCase();
-      if (texts[code]) return code;
-    }
-    return 'en';
+    return 'fr';
   }
 
   function t(key, values) {
@@ -51,24 +47,12 @@
     }
   }
 
-  /* Le jeton d'administration, que l'icône donne dans le fragment de l'adresse qu'elle ouvre : le
-     navigateur n'envoie jamais un fragment, et l'adresse le perd aussitôt. */
-  let admin = '';
-  (function () {
-    const m = /(?:^#|&)admin=([0-9A-Za-z_-]+)/.exec(location.hash || '');
-    try {
-      if (m) sessionStorage.setItem('pseudalis.admin', m[1]);
-      admin = sessionStorage.getItem('pseudalis.admin') || '';
-    } catch (e) {
-      admin = m ? m[1] : '';
-    }
-    if (m) history.replaceState(null, '', location.pathname + location.search);
-  })();
+  /* L'administration : sur macOS, ses routes sont ouvertes sur le Mac, sans jeton (fork pour macOS, décision de
+     l'humain du 2026-11-15) ; la page la montre toujours. */
+  const admin = true;
 
   function adminFetch(route, options) {
-    const o = Object.assign({ cache: 'no-store' }, options || {});
-    o.headers = Object.assign({}, o.headers || {}, { 'X-Pseudalis-Admin': admin });
-    return fetch(route, o);
+    return fetch(route, Object.assign({ cache: 'no-store' }, options || {}));
   }
 
   function el(tag, cls, text) {

@@ -11,7 +11,7 @@
 # l'application web.
 
 cmake_minimum_required(VERSION 3.16)
-project(pseudalis VERSION 1.0.5 LANGUAGES C CXX)
+project(pseudalis VERSION 2.0.0 LANGUAGES C CXX)
 
 option(PSEUDALIS_TESTS "Build the test programs" ON)
 

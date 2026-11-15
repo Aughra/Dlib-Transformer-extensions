@@ -28,7 +28,8 @@ VENDOR = RACINE / "dlib/dlib/external/albireo/web/vendor"
 # Les fichiers servis : motifs relatifs à la racine du dépôt. Liste fermée.
 MOTIFS = [
     "docs/*.md", "docs/*.pdf", "docs/captures/*.md", "docs/captures/*.jpg", "docs/captures/*.png",
-    "blog/*.md", "blog/images/*",
+    "docs/pseudalis/*.md",
+    "blog/*.md", "blog/images/*", "blog/pseudalis/*.md",
     "logs/*.md",
     "CLAUDE.md",
     "macos/metal-sonde/README.md",
@@ -37,6 +38,7 @@ MOTIFS = [
     "dlib/dlib/external/albireo/web/changelog.md",
     "dlib/dlib/external/albireo/tools/page_test/README.md",
     "dlib/dlib/external/pseudalis/README.md",
+    "dlib/dlib/external/pseudalis/web/changelog.md",
 ]
 VENDOR_FICHIERS = {
     "marked.esm.js": VENDOR / "marked/marked.esm.js",
@@ -62,12 +64,19 @@ SOMMAIRE = [
         ("logs/nuit-2026-11-12.md", "Pendant la nuit (12-13 nov.)", "Les choix faits seul."),
         ("logs/nuit-2026-11-15.md", "Pendant la nuit (15 nov.)", "Les choix faits seul."),
     ]),
-    ("Albireo et Pseudalis", [
+    ("Albireo", [
         ("dlib/dlib/external/albireo/web/changelog.md", "Notes de version d'Albireo", "Ce que chaque version apporte."),
         ("docs/captures/README.md", "Captures d'écran", "Albireo sur le Mac et sur le téléphone."),
         ("dlib/dlib/external/albireo/tools/page_test/README.md", "Tests de la page", "Le banc d'essai de l'interface."),
-        ("dlib/dlib/external/albireo/README.md", "README d'Albireo", "De l'original, en anglais."),
-        ("dlib/dlib/external/pseudalis/README.md", "README de Pseudalis", "De l'original, en anglais."),
+        ("dlib/dlib/external/albireo/README.md", "README d'Albireo", "De l'original, traduit en français."),
+    ]),
+    ("Pseudalis", [
+        ("docs/pseudalis/guide.md", "Guide de Pseudalis", "Construire, lancer, utiliser et tester sur le Mac."),
+        ("dlib/dlib/external/pseudalis/web/changelog.md", "Notes de version de Pseudalis", "Ce que chaque version apporte."),
+        ("docs/pseudalis/notes-pour-l-auteur.md", "Notes pour l'auteur (Pseudalis)", "Ce que le portage révèle sur Pseudalis."),
+        ("docs/pseudalis/differences-mac-windows.md", "Différences avec Windows (Pseudalis)", "Ce que le fork change dans Pseudalis."),
+        ("blog/pseudalis/README.md", "Blog de Pseudalis", "Son carnet de portage, à part."),
+        ("dlib/dlib/external/pseudalis/README.md", "README de Pseudalis", "De l'original, traduit en français."),
     ]),
     ("Articles de l'original (anglais)", [
         ("docs/01-introduction.md", "A Small Language Model Stack", "La chaîne complète, du corpus au modèle servi."),
@@ -139,6 +148,13 @@ def sommaire(permis):
     for c in episodes:
         t = re.sub(r"^Dlib Transformer Extensions sur macOS, épisode \d+ : ", "", titre_md(c))
         blocs.append(f'<li value="{int(c[5:7])}"><a href="{lien(c)}">{html.escape(t)}</a></li>')
+    blocs.append("</ol>")
+    # Le blog de Pseudalis, à part.
+    episodes_p = sorted(c for c in permis if re.match(r"blog/pseudalis/\d+-.*\.md$", c))
+    blocs.append(f"<h2>Le blog de Pseudalis ({len(episodes_p)} épisodes)</h2><ol class=\"episodes\">")
+    for c in episodes_p:
+        t = re.sub(r"^Pseudalis sur macOS, épisode \d+ : ", "", titre_md(c))
+        blocs.append(f'<li value="{int(c[15:17])}"><a href="{lien(c)}">{html.escape(t)}</a></li>')
     blocs.append("</ol>")
     return page("Documents du fork Mac", "".join(blocs), barre=False)
 

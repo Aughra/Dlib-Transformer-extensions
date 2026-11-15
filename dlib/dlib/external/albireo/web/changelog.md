@@ -2,6 +2,16 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.31.1 — 15 novembre 2026
+
+### Accès et documents
+
+- La ligne « Contexte » et le débit du moteur, en bas à gauche, ont chacun un bouton « ? » qui ouvre une explication : ce que mesure la ligne, ses chiffres du moment, et, pour le contexte, les couleurs de la barre et le résumé des échanges les plus anciens au-delà de la moitié du contexte.
+- Le README d'Albireo est traduit en français.
+- Pseudalis a désormais sa propre numérotation (2.0.0) et ses propres notes de version, dans sa propre documentation ; les changements de Pseudalis n'apparaissent plus ici.
+
+---
+
 ## 4.31.0 — 15 novembre 2026
 
 ### Accès et documents

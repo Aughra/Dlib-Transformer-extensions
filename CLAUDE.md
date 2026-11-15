@@ -6,7 +6,7 @@
 - **Tout en français, sans exception** (demande de l'humain, 2026-11-14) : les réponses, mais aussi les messages intermédiaires entre deux actions, les comptes rendus d'avancement, les descriptions des commandes et les explications en cours de travail. Ne jamais passer à l'anglais, même au fil d'une longue tâche ; les citations de code, de logs ou de messages d'erreur restent telles quelles.
 - Expliquer simplement : chaque mot technique avec une comparaison de la vie courante, comme pour un ado. Sections courtes, tableaux quand ça aide.
 - Expliquer brièvement l'intention d'une modification avant d'en montrer les détails, et nommer les fichiers et sections exacts qu'elle touche.
-- Les messages de commit sont en français. Les fichiers propres au fork (ce fichier, `logs/`, le mémo de portage) sont en français ; le blog est en français seulement. **Les commentaires du code d'Albireo et de Pseudalis sont en français** (décision de l'humain, 2026-11-11) : tout commentaire nouveau ou modifié s'y écrit en français. Restent en anglais : les consignes internes envoyées au modèle, les identifiants, les messages de log, dlib, et les documents de l'original (README).
+- Les messages de commit sont en français. Les fichiers propres au fork (ce fichier, `logs/`, le mémo de portage) sont en français ; le blog est en français seulement. **Les commentaires du code d'Albireo et de Pseudalis sont en français** (décision de l'humain, 2026-11-11) : tout commentaire nouveau ou modifié s'y écrit en français. Restent en anglais : les consignes internes envoyées au modèle, les identifiants, les messages de log, dlib, et les autres documents de l'original. Les README d'Albireo et de Pseudalis sont traduits en français (demande de l'humain, 2026-11-15) : ils s'écrivent en français.
 - Si une question est ambiguë, poser **une seule** question de clarification, précise.
 - Quand il y a plusieurs options, les présenter avec leurs pour et leurs contre, et dire laquelle est recommandée.
 - Pas de flatterie, pas de résumé de la question avant de répondre.
@@ -46,6 +46,7 @@ La référence des commandes et des résultats est [docs/memo-portage-macos-arm6
 - **dlib + exemples** : `cmake -S dlib/examples -B build/macos-arm64-cpu` (options CPU seules, voir le mémo), puis `cmake --build build/macos-arm64-cpu`.
 - **Tests dlib** : `cmake -S dlib/dlib/test -B build/macos-arm64-tests`, puis `build/macos-arm64-tests/dtest`.
 - **Albireo / Pseudalis** : `cmake -S dlib/dlib/external/<app> -B build/macos-<app> -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64`.
+- **Service de Pseudalis** : `PSEUDALIS_HOME=$PWD/build/pseudalis-home ALBIREO_HOME=$PWD/build/albireo-home build/macos-pseudalis/bin/pseudalis-service --console` (port 18444, réglé dans ses données : le port par défaut, 8444, est celui de l'accès réseau d'Albireo) ; Albireo se lance avec `PSEUDALIS_HOME` aussi, pour son sélecteur. Ne jamais lancer `pseudalis-service` sans `PSEUDALIS_HOME` (il n'a pas d'option `--help` et crée un dossier de données par défaut). Test complet : `PSEUDALIS_TEST_PORT=18474 bash dlib/dlib/external/pseudalis/tools/test_macos.sh` quand le vrai service tourne. Détails : [docs/pseudalis/guide.md](docs/pseudalis/guide.md).
 - **Sonde Metal** (GPU du Mac, hors moteur) : `macos/metal-sonde/`, propre au fork ; commandes dans son README.
 - **Site des documents** (lecture sur le téléphone, réseau de la maison, port 8650) : `macos/site-docs/serve.py` ; à mettre à jour (`SOMMAIRE`) quand un document du fork est ajouté. Détails dans son README.
 - **Mot-clé « sitelog »** : quand l'humain l'écrit, lancer le site s'il ne tourne pas (`lsof -nP -iTCP:8650 -sTCP:LISTEN`, sinon `nohup python3 macos/site-docs/serve.py > build/site-docs.log 2>&1 &`) et lui donner l'URL lue dans `build/site-docs.log`, sans autre question.
@@ -111,6 +112,7 @@ Documents du fork qui doivent toujours rester **vrais** :
 - [logs/reprise.md](logs/reprise.md) ;
 - [docs/notes-pour-l-auteur.md](docs/notes-pour-l-auteur.md) (voir ci-dessous).
 - [docs/differences-mac-windows.md](docs/differences-mac-windows.md) (voir ci-dessous).
+- les documents de Pseudalis : [docs/pseudalis/guide.md](docs/pseudalis/guide.md), [docs/pseudalis/notes-pour-l-auteur.md](docs/pseudalis/notes-pour-l-auteur.md), [docs/pseudalis/differences-mac-windows.md](docs/pseudalis/differences-mac-windows.md), ses notes de version (voir « La documentation de Pseudalis »).
 
 **À la fin de chaque sous-étape**, avant de la déclarer terminée : relire ces documents et corriger ce que le changement rend faux ou incomplet. Une doc qui décrit un état dépassé est un défaut, au même titre qu'un test qui ment. Critère vérifiable : aucune commande, option, cible ou résultat cité dans ces documents ne contredit le code ni le dernier build.
 
@@ -164,6 +166,18 @@ Le blog raconte le portage **épisode par épisode**, comme un billet de carnet,
 - **Changements de dlib** : l'épisode d'une étape qui modifie dlib le dit (ce qui change, pourquoi), avec la liste des fichiers dans sa section « Pour les curieux ».
 - Critère vérifiable : chaque `blog/NN-*.md` figure au sommaire, commence par le titre « Dlib Transformer Extensions sur macOS, épisode N » suivi de sa ligne « Repère de vitesse », et ne contient ni adresse e-mail ni chemin `/Users/`.
 
+### La documentation de Pseudalis
+
+Pseudalis partage le dépôt d'Albireo, mais a son propre suivi (demande de l'humain, 2026-11-15), sur le modèle d'Albireo. Le journal (`logs/journal-modifications.md`), la reprise et ce fichier restent communs ; les documents de produit sont à part :
+
+- **Version** : le fork numérote Pseudalis à part de l'original à partir de **2.0.0** (2026-11-15), en `x.y.z`. Chaque modification de Pseudalis livrée par un commit l'incrémente (`python3 dlib/dlib/external/pseudalis/tools/bump_version.py patch|minor|major`, qui met à jour `common/version.h`, `project()` et `web/openapi.json`), selon la même règle qu'Albireo.
+- **Notes de version** : [dlib/dlib/external/pseudalis/web/changelog.md](dlib/dlib/external/pseudalis/web/changelog.md), en français, ton professionnel, une section par version de la plus récente à la plus ancienne, mises à jour dans le même commit que le changement.
+- **Guide** : [docs/pseudalis/guide.md](docs/pseudalis/guide.md) : construire, lancer, utiliser, interface, données, tests, sécurité ; il suit le code.
+- **Notes pour l'auteur** : [docs/pseudalis/notes-pour-l-auteur.md](docs/pseudalis/notes-pour-l-auteur.md), entrées numérotées P1, P2…, avec les mêmes exigences que les notes générales ; les points communs à Albireo et Pseudalis restent dans les notes générales, avec un renvoi.
+- **Différences avec Windows** : [docs/pseudalis/differences-mac-windows.md](docs/pseudalis/differences-mac-windows.md), mêmes règles que le tableau général.
+- **Blog** : [blog/pseudalis/](blog/pseudalis/README.md), `NN-titre.md`, titre « Pseudalis sur macOS, épisode N : <sujet> », suivi d'une ligne en citation **« Repère de débit »** (le débit mesuré de la protection, ou « pas encore de mesure »), même forme et même ton que le blog du portage ; au sommaire de `blog/pseudalis/README.md`.
+- Critère vérifiable : le numéro de `pseudalis/common/version.h` a sa section dans son `changelog.md` ; chaque `blog/pseudalis/NN-*.md` est au sommaire et commence par son titre et sa ligne « Repère de débit » ; le site des documents liste ces documents.
+
 ### Version et notes de version d'Albireo
 
 Le fork numérote Albireo à part de l'original, à partir de **2.0.0** (2026-11-11), en gestion sémantique des versions.
@@ -175,7 +189,7 @@ Le fork numérote Albireo à part de l'original, à partir de **2.0.0** (2026-11
 
 ### Français seulement
 
-Le fork ne fait que du français (décision de l'humain, 2026-11-11) : l'interface d'Albireo est en français seulement, sans choix de langue (la lecture à voix haute a été retirée en 3.0.0). Tout nouveau texte visible par l'utilisateur s'écrit en français, sans traduction. Pseudalis garde l'anglais et le français, et rien d'autre ; ses détecteurs de données personnelles, qui vivent dans dlib, reconnaissent toujours les autres langues. Les commentaires du code sont en français (voir « Langue et communication ») ; les consignes internes envoyées au modèle restent en anglais.
+Le fork ne fait que du français (décision de l'humain, 2026-11-11) : l'interface d'Albireo est en français seulement, sans choix de langue (la lecture à voix haute a été retirée en 3.0.0). Tout nouveau texte visible par l'utilisateur s'écrit en français, sans traduction. Pseudalis garde le français, par défaut, et l'anglais, au choix du menu, et rien d'autre ; ses détecteurs de données personnelles, qui vivent dans dlib, reconnaissent toujours les autres langues. Les commentaires du code sont en français (voir « Langue et communication ») ; les consignes internes envoyées au modèle restent en anglais.
 
 ### La page des réglages d'Albireo
 

@@ -12,9 +12,9 @@
     Les fichiers vont tels quels dans le corps des requêtes (application/octet-stream), et
     reviennent de même, leur nom et leur rapport dans des en-têtes, ou en JSON avec
     format=json.  Les opérations qui modifient l'installation ou révèlent ses enregistrements
-    (réglages, redémarrage, mises à jour, enregistrements, clé, journaux) exigent le jeton
-    d'administration du dossier de données dans l'en-tête X-Pseudalis-Admin ; la zone de
-    notification et le shell l'y lisent.  Chaque requête doit nommer le serveur local dans
+    (réglages, redémarrage, mises à jour, enregistrements, clé, journaux) exigeaient le jeton
+    d'administration du dossier de données ; le fork pour macOS les ouvre sur le Mac, sans jeton.
+    Chaque requête doit nommer le serveur local dans
     son en-tête Host, et une requête qui vient d'une page doit venir aussi du serveur local,
     pour qu'aucun site web ne puisse piloter le service par le navigateur.
 */
@@ -59,14 +59,6 @@ namespace pseudalis
         {
             for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
             return s;
-        }
-
-        bool same_secret(const std::string& a, const std::string& b)
-        {
-            if (a.size() != b.size()) return false;
-            unsigned char d = 0;
-            for (size_t i = 0; i < a.size(); ++i) d |= static_cast<unsigned char>(a[i] ^ b[i]);
-            return d == 0;
         }
 
         bool is_local_host(const std::string& host, int port)
@@ -309,13 +301,12 @@ namespace pseudalis
             send_error(res, 500, "the service could not process the request", "server_error");
         });
 
-        auto admin = [s](const httplib::Request& req, httplib::Response& res) {
-            const std::string token = s->admin_token();
-            if (!token.empty() && same_secret(req.get_header_value("X-Pseudalis-Admin"), token)) return true;
-            res.set_header("Connection", "close");
-            send_error(res, 401, "this operation requires the administration token", "authentication");
-            return false;
-        };
+        /*
+            L'administration (fork pour macOS) : ses routes sont ouvertes sur le Mac, sans jeton, comme celles
+            d'Albireo (décision de l'humain du 2026-11-15).  Restent les gardes de toutes les routes : l'en-tête Host
+            doit nommer le serveur local, et une requête venue d'une page doit venir de ce serveur.
+        */
+        auto admin = [](const httplib::Request&, httplib::Response&) { return true; };
 
         srv.Get("/v1/health", [](const httplib::Request&, httplib::Response& res) {
             json j = json::object();

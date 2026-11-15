@@ -2,8 +2,8 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Pseudalis interface",
-  "version": "1.0.5",
-  "description": "The local interface of Pseudalis, on this computer only (https://localhost:8444 by default). The files travel as they are, in the body of the requests. No account is needed; the operations of administration take the token of the data folder (admin.token, in ~/.local/share/pseudalis or PSEUDALIS_HOME on macOS) in the X-Pseudalis-Admin header, which this page fills in by itself when tools/open_pseudalis.sh opens the application with it, and which Authorize sets otherwise.",
+  "version": "2.0.0",
+  "description": "The local interface of Pseudalis, on this Mac only (https://localhost:8444 by default). The files travel as they are, in the body of the requests. No account and no token are needed: on macOS, the operations of administration are open on the Mac, like the routes of Albireo; every request must still name the local server in its Host header, and a request that comes from a page must come from the local server.",
   "contact": {
    "name": "Cydral Technology",
    "email": "cydraltechnology@gmail.com",
@@ -359,11 +359,6 @@
      "Files"
     ],
     "summary": "Record where a protected file was written",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "parameters": [
      {
       "name": "id",
@@ -404,9 +399,6 @@
       }
      },
      "400": {
-      "$ref": "#/components/responses/Error"
-     },
-     "401": {
       "$ref": "#/components/responses/Error"
      },
      "404": {
@@ -807,11 +799,6 @@
      "Drive"
     ],
     "summary": "The events of the drive: files protected or refused",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "parameters": [
      {
       "name": "since",
@@ -834,9 +821,6 @@
         }
        }
       }
-     },
-     "401": {
-      "$ref": "#/components/responses/Error"
      }
     }
    }
@@ -899,11 +883,6 @@
      "Administration"
     ],
     "summary": "The originals kept",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "parameters": [
      {
       "name": "limit",
@@ -951,9 +930,6 @@
         }
        }
       }
-     },
-     "401": {
-      "$ref": "#/components/responses/Error"
      }
     },
     "description": "Each record gives its file (original_name, output_name, sizes, kind, output_sha256, object_id, path), whether its protected file holds tags (tags, false for a file protected without tags, whose values come back from this record alone) and, when its file left the drive, the time it left (removed) and the time its original is forgotten (forgotten), removed_days later, empty when removed_days is 0 and the original stays without limit of time. total counts the records of the source asked, or all of them. The originals first kept are forgotten whatever their time when they take more than history_mb, or when a new original would leave less than 256 MB free on the disk and forgetting them gives that room."
@@ -966,11 +942,6 @@
     ],
     "summary": "An original kept",
     "description": "The original of the record as a restoration gives it: a document edited on the drive and anonymized again comes back with the values of its tags.",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "parameters": [
      {
       "name": "id",
@@ -1012,9 +983,6 @@
        }
       }
      },
-     "401": {
-      "$ref": "#/components/responses/Error"
-     },
      "404": {
       "$ref": "#/components/responses/Error"
      }
@@ -1028,11 +996,6 @@
     ],
     "summary": "Forget an original, and the pictures no other file shows",
     "description": "Deletes the original of the record from the vault and remembers its protected file as forgotten, with the entries of a protected archive: their restoration is refused from then on, and the drive keeps such a file as it is when it comes back. A file extracted on the drive from a protected archive has a record and an original of its own, which this route forgets alone.",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "parameters": [
      {
       "name": "id",
@@ -1054,9 +1017,6 @@
        }
       }
      },
-     "401": {
-      "$ref": "#/components/responses/Error"
-     },
      "404": {
       "$ref": "#/components/responses/Error"
      }
@@ -1069,11 +1029,6 @@
      "Administration"
     ],
     "summary": "The settings",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "responses": {
      "200": {
       "description": "The settings",
@@ -1084,9 +1039,6 @@
         }
        }
       }
-     },
-     "401": {
-      "$ref": "#/components/responses/Error"
      }
     },
     "description": "The address of the feed appears only when it differs from the one of the build."
@@ -1097,11 +1049,6 @@
     ],
     "summary": "Change settings",
     "description": "The members given replace those of settings.json, the others keep their values; the service restarts when the port, the letter of the drive, the date order, the proxy or the address of the feed change (\"restart\": true). The feed must be an https address, the proxy empty, \"none\" or http://host:port (400, code settings_publication otherwise), the letter A, B or D to Z (code settings_drive); a number out of its range, a choice out of its list or a flag that is not true or false is refused (400, code settings_value, with field, and min and max for a number), and so is a history_mb smaller than max_file_mb (field history_mb, min being max_file_mb). Fewer days or less space forget at once, in the background, the originals beyond them. The changes apply in one step against concurrent ones; 500 (code settings) when settings.json cannot be written.",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "requestBody": {
      "required": true,
      "content": {
@@ -1126,9 +1073,6 @@
      "400": {
       "$ref": "#/components/responses/Error"
      },
-     "401": {
-      "$ref": "#/components/responses/Error"
-     },
      "500": {
       "$ref": "#/components/responses/Error"
      }
@@ -1142,11 +1086,6 @@
     ],
     "summary": "The imposed terms",
     "description": "Each occurrence of an imposed term is replaced with the tag of its type before any other value is read, in the files, the texts and the names: its words and numbers in the same order, as whole words, separated by at most two characters of one line (\"Projet Alpha\", \"PROJET-ALPHA\"). An occurrence inside an e-mail address, a web address, a date or a number stays protected with that value; any other value that overlaps it keeps its parts outside it. The terms are kept in the database of the service, which only SYSTEM and the administrators read.",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "responses": {
      "200": {
       "description": "The terms, with the limits and the types the service takes",
@@ -1157,9 +1096,6 @@
         }
        }
       }
-     },
-     "401": {
-      "$ref": "#/components/responses/Error"
      }
     }
    },
@@ -1169,11 +1105,6 @@
     ],
     "summary": "Replace the imposed terms",
     "description": "The list given replaces the imposed terms, whole, at once for the files and texts processed afterwards; an empty list removes them. A list the service does not take changes nothing (400): terms_invalid (a term empty, longer than 200 characters, on several lines, with a control character or without a letter or a digit), terms_too_many (more than 100), terms_type (a type out of the list) or terms_duplicate (a term given twice with the same case sensitivity), the position of the term at fault in args.index; 500 (codes engine, database) when the engine or the database cannot take them.",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "requestBody": {
      "required": true,
      "content": {
@@ -1219,9 +1150,6 @@
      "400": {
       "$ref": "#/components/responses/Error"
      },
-     "401": {
-      "$ref": "#/components/responses/Error"
-     },
      "500": {
       "$ref": "#/components/responses/Error"
      }
@@ -1234,11 +1162,6 @@
      "Administration"
     ],
     "summary": "Restart the service",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "responses": {
      "200": {
       "description": "Restarting",
@@ -1249,9 +1172,6 @@
         }
        }
       }
-     },
-     "401": {
-      "$ref": "#/components/responses/Error"
      }
     }
    }
@@ -1263,11 +1183,6 @@
     ],
     "summary": "Export the master key, protected by a passphrase",
     "description": "Keep the export apart: with its passphrase, it restores every file this installation protected, on another computer too.",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "requestBody": {
      "required": true,
      "content": {
@@ -1301,9 +1216,6 @@
      "400": {
       "$ref": "#/components/responses/Error"
      },
-     "401": {
-      "$ref": "#/components/responses/Error"
-     },
      "422": {
       "$ref": "#/components/responses/Error"
      }
@@ -1317,11 +1229,6 @@
     ],
     "summary": "Import the master key of an earlier installation",
     "description": "Accepted while no file is recorded; the service restarts with the key.",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "requestBody": {
      "required": true,
      "content": {
@@ -1358,9 +1265,6 @@
      "400": {
       "$ref": "#/components/responses/Error"
      },
-     "401": {
-      "$ref": "#/components/responses/Error"
-     },
      "422": {
       "$ref": "#/components/responses/Error"
      }
@@ -1373,11 +1277,6 @@
      "Administration"
     ],
     "summary": "The last lines of the log",
-    "security": [
-     {
-      "admin": []
-     }
-    ],
     "responses": {
      "200": {
       "description": "{\"lines\"}",
@@ -1388,23 +1287,12 @@
         }
        }
       }
-     },
-     "401": {
-      "$ref": "#/components/responses/Error"
      }
     }
    }
   }
  },
  "components": {
-  "securitySchemes": {
-   "admin": {
-    "type": "apiKey",
-    "in": "header",
-    "name": "X-Pseudalis-Admin",
-    "description": "The administration token of the data folder, which the users of this computer read."
-   }
-  },
   "responses": {
    "Error": {
     "description": "The error: its English text, its code and its values",

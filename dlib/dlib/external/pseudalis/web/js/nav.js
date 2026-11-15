@@ -3,7 +3,7 @@
 
 /*
     Le menu de la page (fork pour macOS) : une section à la fois, choisie par l'adresse (#protect, #restore…) ; les
-    entrées de l'administration suivent les sections qu'app.js montre quand l'icône donne le jeton ; le bouton du
+    entrées de l'administration suivent les sections qu'app.js montre une fois chargées ; le bouton du
     thème ; le passage à Albireo, quand Pseudalis le trouve sur ce Mac.
 */
 (function () {
@@ -23,13 +23,7 @@
     });
   }
   function sync() {
-    let admin = false;
-    links.forEach(function (a, i) {
-      const isAdmin = ['records-card', 'key-card', 'settings-card', 'terms-card'].indexOf(a.dataset.card) >= 0;
-      a.hidden = cards[i].hidden;
-      if (isAdmin && !cards[i].hidden) admin = true;
-    });
-    document.getElementById('admin-hint').hidden = admin;
+    links.forEach(function (a, i) { a.hidden = cards[i].hidden; });
     show();
   }
   // app.js montre ou cache les sections de l'administration par leur attribut hidden.

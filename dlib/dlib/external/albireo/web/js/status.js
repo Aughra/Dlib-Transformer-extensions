@@ -381,7 +381,51 @@ export function renderContextLine() {
   ui.contextLine.replaceChildren(h('span', { class: 'label' }, t('contextLabel')),
     h('div', { class: 'meter' + level, role: 'meter', 'aria-valuemin': 0, 'aria-valuemax': contextUse.context,
       'aria-valuenow': contextUse.tokens, 'aria-valuetext': ui.contextLine.title, 'aria-label': t('contextLabel') },
-    h('div', { style: { width: (100 * share).toFixed(1) + '%' } })), h('span', { class: 'count' }, label));
+    h('div', { style: { width: (100 * share).toFixed(1) + '%' } })), h('span', { class: 'count' }, label),
+    helpButton('Le contexte', contextHelp));
+}
+
+/*
+    Les « ? » de la ligne du contexte et du débit (fork pour macOS) : une fenêtre qui explique ce que montre la ligne,
+    avec la même image simple que les fiches des réglages.
+*/
+function helpButton(title, text) {
+  return h('button', { type: 'button', class: 'svc-help', title, 'aria-label': title,
+    onclick: () => dialog((box, close) => {
+      box.append(h('h2', null, title), ...text().map((p) => h('p', null, p)), h('div', { class: 'actions' },
+        h('button', { class: 'button primary', type: 'button', onclick: () => close(true) }, 'Compris')));
+    }, true) }, '?');
+}
+
+function contextHelp() {
+  const tokens = contextUse.tokens || 0, total = contextUse.context || 0;
+  return [
+    'Le contexte, c’est la mémoire de travail du modèle : tout ce qu’il relit pour écrire le mot suivant, ' +
+      'c’est-à-dire la discussion, les documents joints et sa réponse. Il se compte en jetons, des morceaux de mots ' +
+      '(un mot français fait en moyenne un peu plus d’un jeton).',
+    'Ici, la discussion affichée occupe ' + formatNumber(tokens) + ' jetons sur les ' + formatNumber(total) +
+      ' que ce modèle peut garder en tête' + (total ? ' (' + Math.round(100 * Math.min(1, tokens / total)) + ' %)' : '') +
+      '. La barre devient orange aux trois quarts et rouge à 90 %.',
+    'Au-delà de la moitié, Albireo résume les échanges les plus anciens pour garder de la place à la réponse ; ' +
+      'le modèle en garde l’essentiel, pas chaque détail. Pour un nouveau sujet, une nouvelle discussion repart ' +
+      'd’un contexte vide.',
+    'Image : c’est la taille du bureau du modèle. Il ne travaille que sur ce qui tient dessus ; quand le bureau ' +
+      'se remplit, il range les plus vieilles feuilles dans un résumé.'
+  ];
+}
+
+function speedHelp() {
+  return [
+    'Le débit du moteur, en direct : combien de jetons il lit et écrit par seconde, sur les cinq dernières ' +
+      'secondes, relu chaque seconde. Ce n’est pas une moyenne de la session.',
+    'Lecture : les jetons lus avant de répondre (la question, la discussion, les documents). C’est rapide, ' +
+      'surtout sur le GPU, parce que tout le texte se lit d’un coup.',
+    'Écriture : les jetons de la réponse. C’est plus lent, parce que le modèle écrit un jeton à la fois et relit ' +
+      'tous ses poids pour chacun.',
+    'Une case s’allume pendant le travail. Au repos, la dernière valeur mesurée reste affichée, en plus pâle.',
+    'Image : la lecture, c’est parcourir une page d’un coup d’œil ; l’écriture, c’est la recopier à la main, ' +
+      'lettre par lettre.'
+  ];
 }
 
 // Où calcule le modèle : le GPU du Mac quand ses passes y vont, le processeur sinon (état du moteur).
@@ -431,7 +475,8 @@ async function pollSpeed() {
     h('span', { class: 'gauge' + (read > 0.05 ? ' on' : '') }, h('span', { class: 'label' }, 'Lecture'),
       h('b', null, value(read, lastSpeed.read)), h('span', { class: 'unit' }, 'jetons/s')),
     h('span', { class: 'gauge' + (write > 0.05 ? ' on' : '') }, h('span', { class: 'label' }, 'Écriture'),
-      h('b', null, value(write, lastSpeed.write)), h('span', { class: 'unit' }, 'jetons/s')));
+      h('b', null, value(write, lastSpeed.write)), h('span', { class: 'unit' }, 'jetons/s')),
+    helpButton('Le débit', speedHelp));
 }
 
 export function startSpeed() {

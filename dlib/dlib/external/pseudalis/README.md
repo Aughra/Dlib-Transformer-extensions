@@ -1,443 +1,459 @@
 # Pseudalis
 
-> **macOS fork** (TortueTech): Pseudalis for Apple Silicon Macs only. Its web application speaks
-> English and French only; the recognizers of dlib still read the other languages listed below. The
-> rest of this document describes the original, for Windows.
+> **Fork macOS** (TortueTech) : Pseudalis pour les Mac Apple Silicon seulement. Son application web parle
+> anglais et français seulement ; les modèles de reconnaissance de dlib lisent toujours les autres langues
+> citées plus bas. Le reste de ce document décrit l'original, pour Windows.
 
-Pseudalis protects the personal data of documents on a Windows computer, on that computer alone.
-A service anonymizes the files and the folders it receives through a drive, through commands of the
-Explorer, through a web application and through a local interface, and keeps their originals encrypted,
-so that each one comes back on demand from any copy of its anonymized file, through the same commands,
-application and interface. It is built on [`dlib/privacy`](../../privacy.h) and on the recognizers
-trained for the example [`slm_document_anonymizer_ex`](../../../examples/slm_document_anonymizer_ex.cpp),
-which its engines carry.
+Pseudalis protège les données personnelles des documents sur un ordinateur Windows, sur cet ordinateur seul.
+Un service anonymise les fichiers et les dossiers qu'il reçoit par un lecteur, par des commandes de
+l'Explorateur, par une application web et par une interface locale, et garde leurs originaux chiffrés, pour
+que chacun revienne à la demande depuis n'importe quelle copie de son fichier anonymisé, par les mêmes
+commandes, la même application et la même interface. Il repose sur [`dlib/privacy`](../../privacy.h) et sur
+les modèles de reconnaissance entraînés pour l'exemple
+[`slm_document_anonymizer_ex`](../../../examples/slm_document_anonymizer_ex.cpp), que ses moteurs embarquent.
 
-Pseudalis Community, the edition published here, is written by Aldric Pierrain, Copyright (C) 2026
-Cydral Technology, and distributed under the Boost Software License 1.0
-([`resources/license.txt`](resources/license.txt)). It installs no driver: its drive is a folder of its
-data folder, which the service watches and Windows shows under its letter. The installer of each version
-lies in [`dist/pseudalis`](../../../../dist/pseudalis), where anyone downloads it.
+Pseudalis Community, l'édition publiée ici, est écrite par Aldric Pierrain, Copyright (C) 2026
+Cydral Technology, et distribuée sous la Boost Software License 1.0
+([`resources/license.txt`](resources/license.txt)). Elle n'installe aucun pilote : son lecteur est un dossier
+de son dossier de données, que le service surveille et que Windows montre sous sa lettre. L'installateur de
+chaque version se trouve dans [`dist/pseudalis`](../../../../dist/pseudalis), où chacun le télécharge.
 
-## What it does
+## Ce qu'il fait
 
-Each personal value of a document (names, addresses, telephone numbers, e-mail addresses, identifiers,
-bank details, dates and the rest of the types of `dlib/privacy`) is replaced by a tag such as
-`[[PERSON:Xoydoeh Nuggwdfsorn#EKR]]`, which carries the value encrypted with FF1 over AES-256 and a
-check. The key of the computer alone restores the document, or any text derived from it. Word, Excel,
-PowerPoint, PDF, text, CSV, Markdown, HTML, XML, JSON and YAML files keep their layout; a PDF keeps its
-pages, its text drawn again in place.
+Chaque valeur personnelle d'un document (noms, adresses, numéros de téléphone, adresses e-mail,
+identifiants, coordonnées bancaires, dates et les autres types de `dlib/privacy`) est remplacée par une
+balise comme `[[PERSON:Xoydoeh Nuggwdfsorn#EKR]]`, qui porte la valeur chiffrée par FF1 sur AES-256 et un
+contrôle. La clé de l'ordinateur seule restaure le document, ou tout texte qui en dérive. Les fichiers Word,
+Excel, PowerPoint, PDF, texte, CSV, Markdown, HTML, XML, JSON et YAML gardent leur mise en page ; un PDF
+garde ses pages, son texte redessiné en place.
 
-The places that a tag would spoil take the value in its protected form without the tag, its
-substitute: `Xoydoeh Nuggwdfsorn` for `Jean Dupont`, a date shifted in the form of the original. They
-are the name of the file (`Contrat Jean Dupont.docx` becomes `Contrat Xoydoeh Nuggwdfsorn.docx`), the
-names of the entries and folders of an archive, and the properties that the windows of properties show:
-title, subject, authors, keywords, description, category, company, manager and custom properties of
-Word, Excel and PowerPoint, title, author, subject, keywords and creator of a PDF. A substitute holds no
-character that Windows refuses in a name. The database records each substitute with its tag, never with
-its value in clear; a restoration gives back the original name and the original properties, those of a
-copy edited since included, as long as the substitutes stay in place.
+Les endroits qu'une balise abîmerait reçoivent la valeur sous sa forme protégée sans la balise, son
+substitut : `Xoydoeh Nuggwdfsorn` pour `Jean Dupont`, une date décalée, écrite dans la forme de l'originale.
+Ce sont le nom du fichier (`Contrat Jean Dupont.docx` devient `Contrat Xoydoeh Nuggwdfsorn.docx`), les noms
+des entrées et des dossiers d'une archive, et les propriétés que montrent les fenêtres de propriétés :
+titre, sujet, auteurs, mots-clés, description, catégorie, société, responsable et propriétés personnalisées
+de Word, Excel et PowerPoint, titre, auteur, sujet, mots-clés et créateur d'un PDF. Un substitut ne contient
+aucun caractère que Windows refuse dans un nom. La base de données enregistre chaque substitut avec sa
+balise, jamais avec sa valeur en clair ; une restauration rend le nom original et les propriétés
+originales, y compris celles d'une copie modifiée depuis, tant que les substituts restent en place.
 
-### Without tags
+### Sans balises
 
-The values can also be written without their tags, their substitutes alone, as the names already are:
-the file then reads as an ordinary document, for a prompt sent to an assistant, test or training data,
-or a file sent outside, but nothing in it tells a value from its substitute any more, and its record
-alone gives its values back. The setting Write the tags by default, at the top of the Settings card
-of the web application (`tags`, on by default, kept with the other settings when the service starts
-again), decides for the drive and for the requests of the interface that do not say it (`tags=false`
-or `true`); the boxes of the cards Protect files and Protect a text start from it, and each applies to
-its files or to its text alone, which tries the interface live; the commands of the Explorer offer
-both.
+Les valeurs peuvent aussi s'écrire sans leurs balises, par leurs seuls substituts, comme le sont déjà les
+noms : le fichier se lit alors comme un document ordinaire, pour une consigne envoyée à un assistant, des
+données de test ou d'entraînement, ou un fichier envoyé à l'extérieur, mais plus rien n'y distingue une
+valeur de son substitut, et seul son enregistrement rend ses valeurs. Le réglage « Écrire les balises par
+défaut », en haut de la carte « Réglages » de l'application web (`tags`, activé par défaut, gardé avec les
+autres réglages quand le service redémarre), décide pour le lecteur et pour les requêtes de l'interface qui
+ne le précisent pas (`tags=false` ou `true`) ; les cases des cartes « Protéger des fichiers » et « Protéger
+un texte » partent de lui, et chacune ne s'applique qu'à ses fichiers ou à son texte, ce qui essaie
+l'interface en direct ; les commandes de l'Explorateur proposent les deux.
 
-- The record of a file protected without tags keeps its original, as any record, and the substitutes of
-  its text with the tags they stand for, never its values in clear: its copies give back the original,
-  and a copy edited since, known by its NTFS object identifier, its values from those substitutes,
-  without its pictures. The list of the originals kept says which files were protected without tags.
-- Once its original is forgotten, at the request of a user, at the end of its time or to make room, its
-  values cannot come back: Restore refuses the file (HTTP 410, code `tagless_forgotten`) and tells the
-  date of the forgetting, and Forget says so before it forgets. A file protected without tags and
-  without record (Keep the originals unchecked) never comes back, which its report says
-  (`"restorable": false`).
-- A text protected without tags in the web application keeps the list of its substitutes in the page,
-  which gives back the text, or the answer of an assistant that quotes them, while the page stays open;
-  the interface gives that list in `substitutions`, which `/v1/text/restore` takes back.
-- A protected file protected again, by a newer version that finds more values in it for instance, keeps
-  the values protected before: with tags, as they are, the substitutes that its record keeps included,
-  which its new record inherits; without tags, its tags give way to the substitutes of their values,
-  which its new record keeps. A file of the drive protected without tags and edited there is protected
-  again the same way. Its restoration gives back the values of both protections, with or without tags:
-  the original of each record of the chain that still keeps it, the values of the tags and of the
-  inherited substitutes of the others, without any warning.
+- L'enregistrement d'un fichier protégé sans balises garde son original, comme tout enregistrement, et les
+  substituts de son texte avec les balises qu'ils remplacent, jamais ses valeurs en clair : ses copies
+  rendent l'original, et une copie modifiée depuis, reconnue par son identifiant d'objet NTFS, ses valeurs
+  à partir de ces substituts, sans ses images. La liste des originaux conservés indique quels fichiers ont
+  été protégés sans balises.
+- Une fois son original oublié, à la demande d'un utilisateur, au terme de sa durée ou pour faire de la
+  place, ses valeurs ne peuvent plus revenir : « Restaurer » refuse le fichier (HTTP 410, code
+  `tagless_forgotten`) et indique la date de l'oubli, et « Oublier » le signale avant d'oublier. Un fichier
+  protégé sans balises et sans enregistrement (« Conserver les originaux » décoché) ne revient jamais, ce
+  que dit son rapport (`"restorable": false`).
+- Un texte protégé sans balises dans l'application web garde la liste de ses substituts dans la page, qui
+  rend le texte, ou la réponse d'un assistant qui les cite, tant que la page reste ouverte ; l'interface
+  donne cette liste dans `substitutions`, que `/v1/text/restore` reprend.
+- Un fichier protégé qui est protégé à nouveau, par une version plus récente qui y trouve plus de valeurs
+  par exemple, garde les valeurs protégées auparavant : avec balises, telles quelles, y compris les
+  substituts que garde son enregistrement, dont hérite son nouvel enregistrement ; sans balises, ses
+  balises cèdent la place aux substituts de leurs valeurs, que garde son nouvel enregistrement. Un fichier
+  du lecteur protégé sans balises et modifié sur place est protégé à nouveau de la même façon. Sa
+  restauration rend les valeurs des deux protections, avec ou sans balises : l'original de chaque
+  enregistrement de la chaîne qui le garde encore, les valeurs des balises et des substituts hérités des
+  autres, sans aucun avertissement.
 
-### The kinds of files
+### Les types de fichiers
 
-A file is processed when its extension names one of the kinds of Pseudalis and its content is of that
-kind, or, of any other extension or without one, when its content is text through and through:
+Un fichier est traité quand son extension nomme l'un des types de Pseudalis et que son contenu est de ce
+type, ou, avec toute autre extension ou sans extension, quand son contenu est du texte de bout en bout :
 
-| Kind | Extensions |
+| Type | Extensions |
 |---|---|
 | Word, Excel, PowerPoint | `.docx` `.docm` `.dotx` `.dotm` `.xlsx` `.xlsm` `.xltx` `.xltm` `.pptx` `.pptm` `.potx` `.potm` `.ppsx` `.ppsm` |
 | PDF | `.pdf` |
-| Texts | `.txt` `.text` `.log` `.md` `.markdown` `.rst` `.csv` `.tsv` `.tab` `.json` `.jsonl` `.ndjson` `.xml` `.html` `.htm` `.xhtml` `.svg` `.yaml` `.yml` `.toml` `.ini` `.cfg` `.conf` `.properties` `.sql` `.tex` `.srt` `.vtt` |
-| Pictures | `.png` `.jpg` `.jpeg` `.jpe` `.jfif` `.gif` `.bmp` `.tif` `.tiff` `.webp` |
+| Textes | `.txt` `.text` `.log` `.md` `.markdown` `.rst` `.csv` `.tsv` `.tab` `.json` `.jsonl` `.ndjson` `.xml` `.html` `.htm` `.xhtml` `.svg` `.yaml` `.yml` `.toml` `.ini` `.cfg` `.conf` `.properties` `.sql` `.tex` `.srt` `.vtt` |
+| Images | `.png` `.jpg` `.jpeg` `.jpe` `.jfif` `.gif` `.bmp` `.tif` `.tiff` `.webp` |
 | Archives | `.zip` `.tar` `.tgz` `.tar.gz` |
 
-A file of any other extension, or without extension, `journal.log2` or `README` for instance, is
-processed as a text when its content is text through and through, which the engine checks with the
-detection of dlib (`dlib/data_io`): no binary signature (pictures, sounds, videos, programs, archives,
-PDF), the proportion of printable characters and the entropy of a text over its start and over its whole
-content, every character decoded, in UTF-8, UTF-16 or Windows-1252, with no control character but the
-tabulation, the ends of lines and the form feed, and no encoded part that would keep values from the
-detector. An encoded part is a block of base64, base64url or hexadecimal digits (1024 characters in a
-row, or 16 runs in a row of 60 or more, the lines of a block, in a string of JSON or of a program too,
-which a line of dashes or a path does not make), data or JSON in base64 (the tokens of OpenID Connect,
-`eyJ...`), bytes written in hexadecimal, a dump or an array (64 in a row, or 4 lines in a row of 8 or
-more, with letters or marks among them, `4a 65`, `0x4a`, `\x4a`, the groups of 4 or 8 digits of xxd or
-od counting in the lines that open with an offset), or a format that writes its values encoded: a
-message with parts in base64, quoted-printable or uuencode, or with encoded words in its headers
-(`=?UTF-8?B?...?=`), an RTF document, a vCard or an iCalendar, LDIF with values in base64 (`cn:: ...`),
-a block armored by PEM or OpenPGP (`-----BEGIN ...-----` and its body), in a string too, a block of
-uuencode or of ASCII85, and, by its first line, a PostScript program or an export of the registry of
-Windows. The interface refuses such a text with the code `encoded_content`. Without extension, a
-picture, an Office document, an archive or a PDF is also taken by its signature. A file of an extension
-of the table keeps its rules: its content must be of the kind of its extension, and a text is read as it
-lies. For a file of an extension of no kind, the drive and the commands read the first 64 KB first, and
-leave a file whose start is not a text without reading the rest, unless the drive holds a protected file
-of that size, which may be one renamed.
+Un fichier de toute autre extension, ou sans extension, `journal.log2` ou `README` par exemple, est traité
+comme un texte quand son contenu est du texte de bout en bout, ce que le moteur vérifie avec la détection de
+dlib (`dlib/data_io`) : aucune signature binaire (images, sons, vidéos, programmes, archives, PDF), la
+proportion de caractères imprimables et l'entropie d'un texte sur son début et sur tout son contenu, chaque
+caractère décodé, en UTF-8, UTF-16 ou Windows-1252, sans autre caractère de contrôle que la tabulation, les
+fins de ligne et le saut de page, et sans partie encodée qui soustrairait des valeurs au détecteur. Une
+partie encodée est un bloc de chiffres base64, base64url ou hexadécimaux (1024 caractères d'affilée, ou
+16 suites d'affilée de 60 ou plus, les lignes d'un bloc, dans une chaîne de JSON ou d'un programme aussi,
+ce que ne forment ni une ligne de tirets ni un chemin), des données ou du JSON en base64 (les jetons
+d'OpenID Connect, `eyJ...`), des octets écrits en hexadécimal, un vidage ou un tableau (64 d'affilée, ou
+4 lignes d'affilée de 8 ou plus, avec des lettres ou des signes parmi eux, `4a 65`, `0x4a`, `\x4a`, les
+groupes de 4 ou 8 chiffres de xxd ou od comptant dans les lignes qui commencent par un décalage), ou un
+format qui écrit ses valeurs encodées : un message avec des parties en base64, quoted-printable ou
+uuencode, ou avec des mots encodés dans ses en-têtes (`=?UTF-8?B?...?=`), un document RTF, une vCard ou un
+iCalendar, du LDIF avec des valeurs en base64 (`cn:: ...`), un bloc en armure PEM ou OpenPGP
+(`-----BEGIN ...-----` et son corps), dans une chaîne aussi, un bloc d'uuencode ou d'ASCII85, et, par sa
+première ligne, un programme PostScript ou un export du registre de Windows. L'interface refuse un tel texte
+avec le code `encoded_content`. Sans extension, une image, un document Office, une archive ou un PDF est
+aussi reconnu par sa signature. Un fichier d'une extension du tableau garde ses règles : son contenu doit
+être du type de son extension, et un texte est lu tel quel. Pour un fichier d'une extension qui n'appartient
+à aucun type, le lecteur et les commandes lisent d'abord les 64 premiers Ko, et laissent un fichier dont le
+début n'est pas un texte sans lire le reste, sauf si le lecteur contient un fichier protégé de cette
+taille, qui peut être un fichier renommé.
 
-Any other file is of another kind, and so is a file whose content is not the kind its name gives: an
-OpenDocument, a document of an older Office format, a program, a text named `.docx`. Its content would
-come out half protected, compressed or encoded as it lies, so Pseudalis never writes it in an anonymized
-place: the drive moves it out, the commands leave it as it is, an anonymized archive or copy of a folder
-leaves it out, and the interface refuses it with the code `unsupported` or `kind_mismatch`. A ZIP
-archive named `.zip` is an archive whatever it holds, an Office document renamed included.
+Tout autre fichier est d'un autre type, et c'est aussi le cas d'un fichier dont le contenu n'est pas du
+type que donne son nom : un document OpenDocument, un document d'un ancien format Office, un programme, un
+texte nommé `.docx`. Son contenu sortirait à moitié protégé, compressé ou encodé tel quel, donc Pseudalis ne
+l'écrit jamais dans un endroit anonymisé : le lecteur le déplace ailleurs, les commandes le laissent tel
+quel, une archive ou une copie de dossier anonymisée l'écarte, et l'interface le refuse avec le code
+`unsupported` ou `kind_mismatch`. Une archive ZIP nommée `.zip` est une archive quel que soit son contenu,
+y compris un document Office renommé.
 
-A folder goes through whole, its subfolders and their files included, on the drive, through the
-commands of the Explorer, and through the web application, which sends it as a ZIP archive and gives
-back the anonymized archive. The archives and the folders keep their tree: their documents are
-anonymized, their pictures become text files, the names of their files and of their folders take
-substitutes, the same in all the entries that share a folder, and their files of another kind are left
-out and listed. A restoration keeps every file it cannot read as it is, under its name restored, and
-reads the tags of a text under any name.
+Un dossier passe en entier, sous-dossiers et leurs fichiers compris, sur le lecteur, par les commandes de
+l'Explorateur, et par l'application web, qui l'envoie sous forme d'archive ZIP et rend l'archive
+anonymisée. Les archives et les dossiers gardent leur arborescence : leurs documents sont anonymisés, leurs
+images deviennent des fichiers texte, les noms de leurs fichiers et de leurs dossiers reçoivent des
+substituts, les mêmes dans toutes les entrées qui partagent un dossier, et leurs fichiers d'un autre type
+sont écartés et listés. Une restauration garde tel quel chaque fichier qu'elle ne peut pas lire, sous son
+nom restauré, et lit les balises d'un texte sous n'importe quel nom.
 
-### The drive
+### Le lecteur
 
-The installer gives the drive a letter chosen among the free ones, `A:` when it is free. It is the
-folder `drive` of the data folder, which the service shows under its letter for every session of the
-computer, as the command `subst` would, and watches: it works as any folder, from the Explorer and from
-the prompt (`dir`, `copy`, `xcopy`, `move`, `del`, `ren`, `md`, `rd /s`, `type`, any editor), with one
-difference: a file is anonymized once its writer closed it and it rested two seconds, its name
-included. The anonymized file takes its place, the original goes to the encrypted vault, and the file
-written is deleted.
+L'installateur donne au lecteur une lettre choisie parmi les lettres libres, `A:` quand elle est libre.
+C'est le dossier `drive` du dossier de données, que le service montre sous sa lettre pour chaque session de
+l'ordinateur, comme le ferait la commande `subst`, et qu'il surveille : il fonctionne comme n'importe quel
+dossier, depuis l'Explorateur et depuis l'invite de commandes (`dir`, `copy`, `xcopy`, `move`, `del`,
+`ren`, `md`, `rd /s`, `type`, n'importe quel éditeur), à une différence près : un fichier est anonymisé, nom
+compris, une fois que le programme qui l'écrit l'a fermé et qu'il est resté deux secondes sans changer. Le
+fichier anonymisé prend sa place, l'original part dans le coffre chiffré, et le fichier écrit est supprimé.
 
-- A document keeps its kind and its layout, its values replaced by tags in its content, or by their
-  substitutes alone when the setting Write the tags by default is off, and by substitutes in its name and
-  its properties.
-- A picture becomes `<name>.txt`, its marker `[Image@<id> : <description>]`, or `[Image@<id>]` when no
-  description is available, and the picture goes to the vault.
-- A ZIP, TAR or TAR.GZ archive keeps its kind, the values of its name replaced; its documents are
-  anonymized, its pictures become text files, the names of its entries and folders take substitutes,
-  and its other entries are left out, which its report says.
-- A folder that comes in takes its name, its values replaced, once nothing changed under it for six
-  seconds: a copy in progress keeps its folders.
-- A file of another kind, or whose content cannot be read, a damaged document for instance, leaves the
-  drive for the folder of the files not processed of the user who wrote it (`refused\<user>` in the
-  data folder, which only that user, SYSTEM and the administrators read), at the place it had in the
-  tree of the drive, and the icon says it; its menu opens that folder.
-- A file that a program still holds, a document open in its editor for instance, waits until the
-  program closes it: a document edited on the drive is anonymized again when its editor closes it, and
-  its version before leaves the list of the files of the drive. While the service processes a file, no
-  other program opens it (sharing violation), a few seconds for most documents. The lock and temporary
-  files of the editors, whose names start with `~` or end with `.tmp`, are left as they are.
-- Deleting a file, a folder or the whole tree removes them from the drive. The original of a file
-  deleted or replaced by a new version stays restorable from the copies of the file for 45 days (the
-  setting `removed_days`, 0 for no limit of time) once the last copy of the drive left it, then leaves
-  the vault with the pictures no other file shows. A file moved, renamed or copied within the drive keeps
-  its original, which all its copies share.
-- Whatever their time, the originals kept, those of the drive and of every other source, stay within
-  10 GB (the setting `history_mb`, 10240 MB, never below `max_file_mb`): the originals first kept are
-  forgotten to make room, the oldest first, before a new one is written, every hour and at once when the
-  settings lower the days or the space. A new original also leaves 256 MB free on the disk of the data
-  folder: the oldest make room for it when forgetting them gives that room, and stay when other files
-  fill the disk. An installation updated from version 1.0.1 keeps every original: its settings, without
-  `history_mb`, take the largest space (1048576 MB) and the 30 days of its default become 45, until an
-  administrator sets them; a damaged `settings.json` keeps them the same way.
-- A file extracted on the drive from an anonymized archive that the service recorded stays as it is, and
-  the list of the originals kept shows it under its original name, its original being the entry of the
-  original archive, which the vault keeps apart: the archive and each file extracted from it are
-  restored and forgotten alone. A file extracted elsewhere is restored from the original of the archive
-  while the service keeps it.
-- An anonymized file whose original was forgotten, or left the vault once its time was over, stays as it
-  is when it comes back to the drive, unrecorded: it is not anonymized again, which would keep the
-  anonymized file itself as a new original. Its restoration puts back the values of its tags, as for
-  the files extracted from such an archive. A document edited on the drive and anonymized again, or
-  written elsewhere from anonymized values and copied to the drive, keeps its name in clear in the list
-  of the originals, and its original comes back with the values of its tags, without the markers of
-  its pictures.
+- Un document garde son type et sa mise en page, ses valeurs remplacées par des balises dans son contenu,
+  ou par leurs seuls substituts quand le réglage « Écrire les balises par défaut » est désactivé, et par
+  des substituts dans son nom et ses propriétés.
+- Une image devient `<name>.txt`, son repère `[Image@<id> : <description>]`, ou `[Image@<id>]` quand aucune
+  description n'est disponible, et l'image part dans le coffre.
+- Une archive ZIP, TAR ou TAR.GZ garde son type, les valeurs de son nom remplacées ; ses documents sont
+  anonymisés, ses images deviennent des fichiers texte, les noms de ses entrées et de ses dossiers
+  reçoivent des substituts, et ses autres entrées sont écartées, ce que dit son rapport.
+- Un dossier qui arrive prend son nom, ses valeurs remplacées, une fois que rien n'a changé à l'intérieur
+  pendant six secondes : une copie en cours garde ses dossiers.
+- Un fichier d'un autre type, ou dont le contenu ne peut pas être lu, un document abîmé par exemple, quitte
+  le lecteur pour le dossier des fichiers non traités de l'utilisateur qui l'a écrit (`refused\<user>` dans
+  le dossier de données, que seuls cet utilisateur, SYSTEM et les administrateurs lisent), à la place qu'il
+  avait dans l'arborescence du lecteur, et l'icône le signale ; son menu ouvre ce dossier.
+- Un fichier qu'un programme tient encore, un document ouvert dans son éditeur par exemple, attend que le
+  programme le ferme : un document modifié sur le lecteur est anonymisé à nouveau quand son éditeur le
+  ferme, et sa version précédente quitte la liste des fichiers du lecteur. Pendant que le service traite un
+  fichier, aucun autre programme ne l'ouvre (violation de partage), quelques secondes pour la plupart des
+  documents. Les fichiers de verrou et les fichiers temporaires des éditeurs, dont les noms commencent par
+  `~` ou finissent par `.tmp`, sont laissés tels quels.
+- Supprimer un fichier, un dossier ou toute l'arborescence les retire du lecteur. L'original d'un fichier
+  supprimé ou remplacé par une nouvelle version reste restaurable depuis les copies du fichier pendant
+  45 jours (le réglage `removed_days`, 0 pour aucune limite de durée) une fois que la dernière copie du
+  lecteur l'a quitté, puis quitte le coffre avec les images qu'aucun autre fichier ne montre. Un fichier
+  déplacé, renommé ou copié à l'intérieur du lecteur garde son original, que toutes ses copies partagent.
+- Quelle que soit leur durée, les originaux conservés, ceux du lecteur et de toutes les autres sources,
+  restent dans la limite de 10 Go (le réglage `history_mb`, 10240 Mo, jamais en dessous de `max_file_mb`) :
+  les premiers originaux conservés sont oubliés pour faire de la place, les plus anciens d'abord, avant
+  qu'un nouveau soit écrit, toutes les heures et aussitôt quand les réglages abaissent les jours ou
+  l'espace. Un nouvel original laisse aussi 256 Mo libres sur le disque du dossier de données : les plus
+  anciens lui font de la place quand les oublier libère cette place, et restent quand d'autres fichiers
+  remplissent le disque. Une installation mise à jour depuis la version 1.0.1 garde chaque original : ses
+  réglages, sans `history_mb`, prennent l'espace le plus grand (1048576 Mo) et les 30 jours de sa valeur par
+  défaut deviennent 45, jusqu'à ce qu'un administrateur les règle ; un `settings.json` abîmé les garde de la
+  même façon.
+- Un fichier extrait sur le lecteur d'une archive anonymisée que le service a enregistrée reste tel quel,
+  et la liste des originaux conservés le montre sous son nom original, son original étant l'entrée de
+  l'archive originale, que le coffre garde à part : l'archive et chaque fichier qui en est extrait sont
+  restaurés et oubliés séparément. Un fichier extrait ailleurs est restauré depuis l'original de l'archive
+  tant que le service le garde.
+- Un fichier anonymisé dont l'original a été oublié, ou a quitté le coffre au terme de sa durée, reste tel
+  quel quand il revient sur le lecteur, sans enregistrement : il n'est pas anonymisé à nouveau, ce qui
+  garderait le fichier anonymisé lui-même comme nouvel original. Sa restauration remet les valeurs de ses
+  balises, comme pour les fichiers extraits d'une telle archive. Un document modifié sur le lecteur et
+  anonymisé à nouveau, ou écrit ailleurs à partir de valeurs anonymisées puis copié sur le lecteur, garde
+  son nom en clair dans la liste des originaux, et son original revient avec les valeurs de ses balises,
+  sans les repères de ses images.
 
-The drive never gives back an original: the originals come back through Restore in the Explorer, the
-web application and the interface, from any copy of the anonymized file.
+Le lecteur ne rend jamais un original : les originaux reviennent par « Restaurer » dans l'Explorateur,
+l'application web et l'interface, depuis n'importe quelle copie du fichier anonymisé.
 
-### The commands of the Explorer
+### Les commandes de l'Explorateur
 
-A right click on a file of one of the extensions above, or on a folder, shows, under Show more options
-on Windows 11, a menu Pseudalis with six commands, which `pseudalis.exe` carries out through the
-service; a text of another extension goes through the commands of its folder, the drive, the web
-application or the interface, the menu staying off the programs, sounds and videos:
+Un clic droit sur un fichier de l'une des extensions ci-dessus, ou sur un dossier, affiche, sous « Afficher
+d'autres options » sur Windows 11, un menu Pseudalis de six commandes, que `pseudalis.exe` exécute par
+l'intermédiaire du service ; un texte d'une autre extension passe par les commandes de son dossier, le
+lecteur, l'application web ou l'interface, le menu restant absent des programmes, des sons et des vidéos :
 
-| Command | On a file | On a folder |
+| Commande | Sur un fichier | Sur un dossier |
 |---|---|---|
-| Anonymize with tags, Anonymize without tags | the file is replaced by its anonymized version; a picture by its text file | each file, then each folder under its anonymized name |
-| Anonymize as a copy, with tags or without tags | `name (anonymized).ext` is written beside the file | `name (anonymized)` receives the tree anonymized |
-| Restore the original | the original takes the place of the file, under its original name | each file and each folder takes back its original |
-| Restore as a copy | `<original name> (restored).ext` is written beside the file | `<original name> (restored)` receives the tree restored |
+| Anonymiser avec les balises, Anonymiser sans les balises | le fichier est remplacé par sa version anonymisée ; une image par son fichier texte | chaque fichier, puis chaque dossier sous son nom anonymisé |
+| Anonymiser en copie, avec ou sans les balises | `name (anonymized).ext` est écrit à côté du fichier | `name (anonymized)` reçoit l'arborescence anonymisée |
+| Restaurer l'original | l'original prend la place du fichier, sous son nom original | chaque fichier et chaque dossier reprend son original |
+| Restaurer en copie | `<original name> (restored).ext` est écrit à côté du fichier | `<original name> (restored)` reçoit l'arborescence restaurée |
 
-The commands without tags write the values as their substitutes alone (see Without tags above). A
-selection of up to 100 files or folders takes the commands, which the Explorer starts once for each:
-they take their turn, two at a time, and the icon notifies together the results that come within a
-second and a half.
+Les commandes sans balises écrivent les valeurs par leurs seuls substituts (voir « Sans balises » plus
+haut). Une sélection de 100 fichiers ou dossiers au plus reçoit les commandes, que l'Explorateur lance une
+fois pour chacun : elles passent à tour de rôle, deux à la fois, et l'icône notifie ensemble les résultats
+qui arrivent en moins d'une seconde et demie.
 
-The suffixes follow the language of the installation, and ` (2)` is added to a name already taken. In a
-folder, a file of another kind stays as it is in its place, out of an anonymized copy, and as it is in a
-restored copy, which also takes the files that hold nothing to restore; a file anonymized already is
-counted as such. The symbolic links and the junctions are passed, the hidden files of the system and the
-lock files of the editors (`~$...`) stay as they are, and a folder stops at 100 000 files or 64 levels.
-One notification tells the files processed, those anonymized already, those of another kind, named, and
-the first failure. The original of an anonymized file is found by the SHA-256 of its content, and by the
-NTFS object identifier of the file, which the command records with its place; a file edited since its
-anonymization gets its values back from its tags, and its name and its properties from the substitutes
-the database recorded. A file whose original was forgotten, from the web application, at the end of
-its time once its file left the drive or to make room for newer originals, and a file written elsewhere
-from anonymized values, a document that a language model wrote from an anonymized prompt for instance,
-are restored from their tags the same way, as long as the key stays: Restore tells the date of the
-forgetting. Such a restoration cannot give a picture back: the marker of a picture leaves the document,
-its runs in Word, its gray text box on a slide, its text over the gray box of a PDF, which stays, and
-the text file of a picture leaves an archive; Restore counts them. The text file of a picture alone
-gives back its picture while the vault keeps it, and is refused once it was forgotten (HTTP 410, code
-`picture_forgotten`). A file saved by another
-program while a command processes it stays as it is, and the command says so. A file of the drive is
-anonymized already: Restore asks where to save its original, outside the drive, which would anonymize it
-again, and the folder where the originals of a folder of the drive go. The same program runs from a
-prompt, `pseudalis protect [--copy] [--no-tags] <file or folder>...` and
-`pseudalis restore [--copy] <file or folder>...`, its results printed there (`start /wait pseudalis ...`
-waits for them).
+Les suffixes suivent la langue de l'installation, et ` (2)` est ajouté à un nom déjà pris. Dans un dossier,
+un fichier d'un autre type reste tel quel à sa place, hors d'une copie anonymisée, et tel quel dans une
+copie restaurée, qui prend aussi les fichiers qui n'ont rien à restaurer ; un fichier déjà anonymisé est
+compté comme tel. Les liens symboliques et les jonctions sont ignorés, les fichiers cachés du système et les
+fichiers de verrou des éditeurs (`~$...`) restent tels quels, et un dossier s'arrête à 100 000 fichiers ou
+64 niveaux. Une notification indique les fichiers traités, ceux déjà anonymisés, ceux d'un autre type,
+nommés, et le premier échec. L'original d'un fichier anonymisé est retrouvé par le SHA-256 de son contenu,
+et par l'identifiant d'objet NTFS du fichier, que la commande enregistre avec son emplacement ; un fichier
+modifié depuis son anonymisation retrouve ses valeurs par ses balises, et son nom et ses propriétés par les
+substituts que la base de données a enregistrés. Un fichier dont l'original a été oublié, depuis
+l'application web, au terme de sa durée une fois que son fichier a quitté le lecteur ou pour faire de la
+place à des originaux plus récents, et un fichier écrit ailleurs à partir de valeurs anonymisées, un
+document qu'un modèle de langage a écrit à partir d'une consigne anonymisée par exemple, sont restaurés par
+leurs balises de la même façon, tant que la clé demeure : « Restaurer » indique la date de l'oubli. Une
+telle restauration ne peut pas rendre une image : le repère d'une image quitte le document, ses passages
+dans Word, sa zone de texte grise sur une diapositive, son texte sur la zone grise d'un PDF, qui reste, et
+le fichier texte d'une image quitte une archive ; « Restaurer » les compte. Le fichier texte d'une image
+seule rend son image tant que le coffre la garde, et il est refusé une fois qu'elle a été oubliée
+(HTTP 410, code `picture_forgotten`). Un fichier enregistré par un autre programme pendant qu'une commande
+le traite reste tel quel, et la commande le signale. Un fichier du lecteur est déjà anonymisé :
+« Restaurer » demande où enregistrer son original, hors du lecteur, qui l'anonymiserait à nouveau, ainsi
+que le dossier où vont les originaux d'un dossier du lecteur. Le même programme se lance depuis une invite
+de commandes, `pseudalis protect [--copy] [--no-tags] <file or folder>...` et
+`pseudalis restore [--copy] <file or folder>...`, ses résultats s'affichant là (`start /wait pseudalis ...`
+les attend).
 
-### The web application and the interface
+### L'application web et l'interface
 
-The icon opens the web application of the service, `https://localhost:8444`: files dropped there are
-anonymized or restored and downloaded back, a folder dropped or chosen there as the ZIP archive of its
-tree, texts are anonymized or restored in place, their tags highlighted and their values restored
-underlined in the color of their kind, or analyzed, the values found listed below them, and, opened from
-the icon, it lists the originals kept (download, forget), exports and imports the key, and changes the
-settings and the imposed terms. Its files and its texts take their tags or not as the box of their card
-says, which starts from the setting Write the tags by default, and it asks and tells in a window of its
-own, over the page, Escape or a click beside it cancelling. The interface it uses is described with
-Swagger UI at `https://localhost:8444/docs/` (Interface documentation in the menu of the icon), without
-account: the operations of administration take the token of the data folder in the header
-`X-Pseudalis-Admin`, which the pages opened by the icon receive in the fragment of their address and use
-by themselves.
+L'icône ouvre l'application web du service, `https://localhost:8444` : les fichiers qu'on y dépose sont
+anonymisés ou restaurés puis téléchargés en retour, un dossier déposé ou choisi là sous forme d'archive ZIP
+de son arborescence, les textes sont anonymisés ou restaurés sur place, leurs balises surlignées et leurs
+valeurs restaurées soulignées dans la couleur de leur type, ou analysés, les valeurs trouvées listées
+dessous, et, ouverte depuis l'icône, elle liste les originaux conservés (télécharger, oublier), exporte et
+importe la clé, et change les réglages et les termes imposés. Ses fichiers et ses textes reçoivent ou non
+leurs balises selon la case de leur carte, qui part du réglage « Écrire les balises par défaut », et elle
+pose ses questions et donne ses informations dans une fenêtre à elle, par-dessus la page, la touche Échap
+ou un clic à côté annulant. L'interface qu'elle utilise est décrite avec Swagger UI à
+`https://localhost:8444/docs/` (« Documentation de l'interface » dans le menu de l'icône), sans compte : les
+opérations d'administration demandent le jeton du dossier de données dans l'en-tête `X-Pseudalis-Admin`,
+que les pages ouvertes par l'icône reçoivent dans le fragment de leur adresse et utilisent d'elles-mêmes.
 
-| Route | Purpose |
+| Route | Rôle |
 |---|---|
-| `GET /v1/health`, `GET /v1/info` | the state of the service, of its engine, of the drive and of Albireo |
-| `POST /v1/anonymize?name=&record=&tags=&format=` | anonymizes the file of the body, without tags with `tags=false`; the answer is the file, or JSON with `format=json` |
-| `POST /v1/restore?name=&object_id=&format=` | restores the file of the body: its original, its picture or its tags |
-| `GET /v1/lookup?sha256=&object_id=` | whether a file is an anonymized file of this computer |
-| `POST /v1/records/{id}/location` | records where an anonymized file was written (token) |
-| `POST /v1/text/anonymize`, `/restore`, `/detect` | the same protection on a text, `{"text": ...}`, `"tags": false` without tags, whose `substitutions` `/restore` takes back; the places of the tags written (`tags`) or of the values restored (`restored`) come back with it |
-| `POST /v1/names/anonymize`, `/restore` | a name alone, the one of a folder, `{"name": ...}`, its substitutes recorded |
-| `GET /v1/drive`, `GET /v1/events?since=` | the drive, the files it protected or refused (token for the events) |
-| `GET /v1/albireo` | whether Albireo describes the pictures |
-| `GET /v1/records`, `GET /v1/records/{id}/original`, `DELETE /v1/records/{id}` | the originals kept (token) |
-| `GET /v1/settings`, `PUT /v1/settings`, `POST /v1/restart` | the settings and the restart (token) |
-| `GET /v1/terms`, `PUT /v1/terms` | the imposed terms (token) |
-| `GET /v1/updates`, `POST /v1/updates/check`, `POST /v1/updates/apply` | the updates |
-| `POST /v1/key/export`, `POST /v1/key/import` | the key, protected by a passphrase (token) |
-| `GET /v1/logs` | the last lines of the log (token) |
+| `GET /v1/health`, `GET /v1/info` | l'état du service, de son moteur, du lecteur et d'Albireo |
+| `POST /v1/anonymize?name=&record=&tags=&format=` | anonymise le fichier du corps, sans balises avec `tags=false` ; la réponse est le fichier, ou du JSON avec `format=json` |
+| `POST /v1/restore?name=&object_id=&format=` | restaure le fichier du corps : son original, son image ou ses balises |
+| `GET /v1/lookup?sha256=&object_id=` | si un fichier est un fichier anonymisé de cet ordinateur |
+| `POST /v1/records/{id}/location` | enregistre où un fichier anonymisé a été écrit (jeton) |
+| `POST /v1/text/anonymize`, `/restore`, `/detect` | la même protection sur un texte, `{"text": ...}`, `"tags": false` sans balises, dont `/restore` reprend les `substitutions` ; les emplacements des balises écrites (`tags`) ou des valeurs restaurées (`restored`) reviennent avec lui |
+| `POST /v1/names/anonymize`, `/restore` | un nom seul, celui d'un dossier, `{"name": ...}`, ses substituts enregistrés |
+| `GET /v1/drive`, `GET /v1/events?since=` | le lecteur, les fichiers qu'il a protégés ou refusés (jeton pour les événements) |
+| `GET /v1/albireo` | si Albireo décrit les images |
+| `GET /v1/records`, `GET /v1/records/{id}/original`, `DELETE /v1/records/{id}` | les originaux conservés (jeton) |
+| `GET /v1/settings`, `PUT /v1/settings`, `POST /v1/restart` | les réglages et le redémarrage (jeton) |
+| `GET /v1/terms`, `PUT /v1/terms` | les termes imposés (jeton) |
+| `GET /v1/updates`, `POST /v1/updates/check`, `POST /v1/updates/apply` | les mises à jour |
+| `POST /v1/key/export`, `POST /v1/key/import` | la clé, protégée par une phrase secrète (jeton) |
+| `GET /v1/logs` | les dernières lignes du journal (jeton) |
 
-### The icon
+### L'icône
 
-The icon in the notification area follows the service: its tooltip gives the version, the drive and
-the number of originals kept, and it notifies the files the drive anonymized or did not process, the
-results of the commands of the Explorer, the updates and a service that stops answering. It tells the
-Explorer of the drive that comes and goes. Its menu opens Pseudalis (the web application), the drive
-and the folder of the files not processed of its user, checks for updates and installs them, manages the
-service, opens the documentation of the interface and the About window. Service management restarts
-the service, and stops it while it runs or starts it while it is stopped: a service stopped there stays
-stopped, without the warning of the icon, until the computer starts again, its start with the system
-unchanged, or until a user starts it.
+L'icône de la zone de notification suit le service : son info-bulle donne la version, le lecteur et le
+nombre d'originaux conservés, et elle notifie les fichiers que le lecteur a anonymisés ou n'a pas traités,
+les résultats des commandes de l'Explorateur, les mises à jour et un service qui cesse de répondre. Elle
+signale à l'Explorateur le lecteur qui apparaît et disparaît. Son menu ouvre Pseudalis (l'application web),
+le lecteur et le dossier des fichiers non traités de son utilisateur, cherche les mises à jour et les
+installe, gère le service, ouvre la documentation de l'interface et la fenêtre « À propos ». « Gestion du
+service » redémarre le service, et l'arrête pendant qu'il tourne ou le démarre pendant qu'il est arrêté :
+un service arrêté là reste arrêté, sans l'avertissement de l'icône, jusqu'au prochain démarrage de
+l'ordinateur, son démarrage avec le système restant inchangé, ou jusqu'à ce qu'un utilisateur le démarre.
 
-### Imposed terms
+### Termes imposés
 
-The administrators give up to 100 terms that Pseudalis replaces in every file, text and name before
-anything else is read: the name of a client, of a project, of a contract or of an organisation that the
-detector does not know, each with the tag of its type (ORG, PERSON, LOCATION, ADDRESS, ID, EMAIL, PHONE
-or URL) and, when asked, its case. A term is found as whole words, its words and numbers in the same
-order, separated by at most two characters of one line ("Projet Alpha", "PROJET-ALPHA"); without case
-sensitivity, its case and its accents are ignored. Its occurrences outrank every other value found: a
-name or an organisation read over a term keeps its parts outside it, while a term inside an e-mail
-address, a web address, a date or a number stays protected with that value. The web application edits
-the list in its Imposed terms card, the interface through `GET` and `PUT /v1/terms`; the service keeps it
-in its database, which only SYSTEM and the administrators read, and the engine applies a new list at
-once, to the files processed afterwards.
+Les administrateurs donnent jusqu'à 100 termes que Pseudalis remplace dans chaque fichier, texte et nom
+avant de lire quoi que ce soit d'autre : le nom d'un client, d'un projet, d'un contrat ou d'une
+organisation que le détecteur ne connaît pas, chacun avec la balise de son type (ORG, PERSON, LOCATION,
+ADDRESS, ID, EMAIL, PHONE ou URL) et, sur demande, sa casse. Un terme est trouvé en mots entiers, ses mots et
+ses nombres dans le même ordre, séparés par deux caractères au plus d'une même ligne (« Projet Alpha »,
+« PROJET-ALPHA ») ; sans respect de la casse, sa casse et ses accents sont ignorés. Ses occurrences
+l'emportent sur toute autre valeur trouvée : un nom ou une organisation lu par-dessus un terme garde ses
+parties hors de lui, tandis qu'un terme à l'intérieur d'une adresse e-mail, d'une adresse web, d'une date ou
+d'un nombre reste protégé avec cette valeur. L'application web modifie la liste dans sa carte « Termes
+imposés », l'interface par `GET` et `PUT /v1/terms` ; le service la garde dans sa base de données, que
+seuls SYSTEM et les administrateurs lisent, et le moteur applique aussitôt une nouvelle liste, aux fichiers
+traités ensuite.
 
-### Pictures and Albireo
+### Les images et Albireo
 
-When Albireo, the local inference service, is installed on the same computer and one of its models reads
-images, Pseudalis finds it through its interface (its data folder, its port, its local authority) and
-asks it to describe each picture, in the language of the installation, naming no person and copying no
-name, address, number or identifier the picture shows. A description may still name what the picture
-shows: the engine reads it with the detector before it writes it, with what the text of the document
-taught the detector besides, a name that the description repeats bare for instance, its values replaced
-by tags and counted in the report with those of the file, so that it brings no personal data back into
-the anonymized file; only then is it cut at 1000 bytes, outside its tags. A picture alone becomes
-`<name>.txt` holding `[Image@<id> : <description>]`, and a picture inside a document gives the same text
-in its place (a run of Word, a text box of PowerPoint at the place of the picture, the caption of a gray
-box in a PDF). The identifier is a digest of the picture keyed by the key of the installation, which
-tells nothing of the picture to whoever does not hold the key and links no picture from one installation
-to another; it is recorded in the database with the picture and its description in the vault, both
-encrypted, so that restoring the text file gives the picture back and a picture met again keeps its
-description, protected again each time it is written. The setting `albireo` turns the descriptions off,
-those kept included.
+Quand Albireo, le service d'inférence local, est installé sur le même ordinateur et que l'un de ses modèles
+lit les images, Pseudalis le trouve par son interface (son dossier de données, son port, son autorité
+locale) et lui demande de décrire chaque image, dans la langue de l'installation, sans nommer personne ni
+recopier aucun nom, adresse, numéro ou identifiant que l'image montre. Une description peut tout de même
+nommer ce que montre l'image : le moteur la lit avec le détecteur avant de l'écrire, avec ce que le texte du
+document a appris en plus au détecteur, un nom que la description répète seul par exemple, ses valeurs
+remplacées par des balises et comptées dans le rapport avec celles du fichier, pour qu'elle ne ramène
+aucune donnée personnelle dans le fichier anonymisé ; c'est seulement ensuite qu'elle est coupée à
+1000 octets, hors de ses balises. Une image seule devient `<name>.txt` contenant
+`[Image@<id> : <description>]`, et une image à l'intérieur d'un document donne le même texte à sa place (un
+passage de Word, une zone de texte de PowerPoint à l'emplacement de l'image, la légende d'une zone grise
+dans un PDF). L'identifiant est une empreinte de l'image calculée avec la clé de l'installation, qui ne dit
+rien de l'image à qui ne détient pas la clé et ne relie aucune image d'une installation à une autre ; il est
+enregistré dans la base de données avec l'image et sa description dans le coffre, toutes deux chiffrées,
+pour que restaurer le fichier texte rende l'image et qu'une image rencontrée de nouveau garde sa
+description, protégée à nouveau chaque fois qu'elle est écrite. Le réglage `albireo` désactive les
+descriptions, y compris celles qui sont conservées.
 
-### Languages
+### Langues
 
-The installer, the icon, the commands of the Explorer and the web application speak English, French,
-German, Italian and Spanish, and English for any other language. They follow the language of the
-system: the icon and the commands of each user take the language of that user's Windows, the web
-application the first language of the browser that it speaks (its menu chooses another one, kept by the
-browser), and the installer the language of Windows, which its first page changes. The setting
-`language`, `auto` by default, sets one language for every user instead; a language chosen in the
-installer other than the one of Windows becomes that setting. The errors of the service reach the web
-application and the windows as codes, written in their language.
+L'installateur, l'icône, les commandes de l'Explorateur et l'application web parlent anglais, français,
+allemand, italien et espagnol, et anglais pour toute autre langue. Ils suivent la langue du système :
+l'icône et les commandes de chaque utilisateur prennent la langue du Windows de cet utilisateur,
+l'application web la première langue du navigateur qu'elle parle (son menu en choisit une autre, gardée par
+le navigateur), et l'installateur la langue de Windows, que sa première page permet de changer. Le réglage
+`language`, `auto` par défaut, fixe à la place une seule langue pour tous les utilisateurs ; une langue
+choisie dans l'installateur, autre que celle de Windows, devient ce réglage. Les erreurs du service
+parviennent à l'application web et aux fenêtres sous forme de codes, écrits dans leur langue.
 
-## Programs and data
+## Programmes et données
 
-| File | Role |
+| Fichier | Rôle |
 |---|---|
-| `pseudalis-service.exe` | the service (LocalSystem): the engine, the drive, the vault, the database, the interface on `127.0.0.1` |
-| `pseudalis-engine.dll`, `pseudalis-engine-avx2.dll` | the engine, for every x64 processor and for those with AVX2, chosen at the start of the service |
-| `pseudalis-tray.exe` | the icon, started at the sign in of each user |
-| `pseudalis.exe` | the commands of the Explorer |
-| `pseudalis-setup.exe` | the installer, kept in the folder of the programs as the uninstaller |
-| `web\` | the web application and the documentation of the interface |
-| `licenses\` | the licenses of the components |
+| `pseudalis-service.exe` | le service (LocalSystem) : le moteur, le lecteur, le coffre, la base de données, l'interface sur `127.0.0.1` |
+| `pseudalis-engine.dll`, `pseudalis-engine-avx2.dll` | le moteur, pour tout processeur x64 et pour ceux qui ont AVX2, choisi au démarrage du service |
+| `pseudalis-tray.exe` | l'icône, lancée à l'ouverture de session de chaque utilisateur |
+| `pseudalis.exe` | les commandes de l'Explorateur |
+| `pseudalis-setup.exe` | l'installateur, gardé dans le dossier des programmes pour servir de programme de désinstallation |
+| `web\` | l'application web et la documentation de l'interface |
+| `licenses\` | les licences des composants |
 
-The data lie in `%ProgramData%\Pseudalis`, or in the folder chosen at the installation, recorded in
-`HKLM\Software\Pseudalis`: `settings.json`, `admin.token`, `keys\master.key`, `vault\`, `db\pseudalis.db`,
-`certificates\`, `logs\`, `updates\`, the folder of the drive, `drive\`, and the folder of the files not
-processed, `refused\`.
+Les données se trouvent dans `%ProgramData%\Pseudalis`, ou dans le dossier choisi à l'installation,
+enregistré dans `HKLM\Software\Pseudalis` : `settings.json`, `admin.token`, `keys\master.key`, `vault\`,
+`db\pseudalis.db`, `certificates\`, `logs\`, `updates\`, le dossier du lecteur, `drive\`, et le dossier des
+fichiers non traités, `refused\`.
 
-## Security
+## Sécurité
 
-- The master key, 32 random bytes, is encrypted with DPAPI for the account of the service (LocalSystem)
-  in `keys\master.key`, whose permissions admit SYSTEM and the administrators alone. HKDF-SHA-256
-  derives from it the key of the pseudonymization and the two keys of the vault.
-- Each original, each picture and each description of a picture by Albireo is kept in the vault
-  encrypted with AES-256-CTR and authenticated with HMAC-SHA-256; the database holds the names, the
-  sizes, the hashes and the places of the files, never their content nor a description: those that a
-  database of an earlier build kept in clear are erased when the service opens it.
-- The programs and the engines link the runtime of the compiler statically and import the libraries of
-  Windows alone, which the build checks. Built with Visual C++, the service, the icon, the commands and
-  the installer take the libraries they import from System32 alone (`/DEPENDENTLOADFLAG`), never from
-  the folder of the program, a folder of downloads for the installer for instance, and their later loads
-  from System32, and from its own folder for the service (`SetDefaultDllDirectories()`). The service
-  loads only the engine of its own build, by its full path, in the folder of the programs, whose
-  permissions admit SYSTEM and the administrators alone for any change: a library of the same name that
-  another installation placed elsewhere is never loaded.
-- The key can be exported, protected by a passphrase of 12 characters or more (PBKDF2-SHA-256 with
-  600 000 iterations, AES-256-CTR and HMAC-SHA-256), and imported into a new installation that keeps no
-  original yet. Without its key, an anonymized document cannot be restored anywhere: the export is the
-  backup of the installation.
-- The interface listens on the loopback address only, over HTTPS with a certificate of the local
-  authority "Pseudalis Local Authority", restricted by name constraints to the local names and
-  addresses, whose key is never written and whose server key is encrypted with DPAPI. Requests whose
-  `Host` is not local, and requests of another origin, are refused, so that no web page reads or changes
-  anything through the browser.
-- The service serves several sessions and users at once: each request is processed on a thread of its
-  own, the files of the drive on up to four threads of their own, the engine runs its recognizers for
-  several files at once, and the locks of the service are taken in one order, without wait on the
-  network or on a client while held.
-  The files and texts of the interface processed at once are bounded by the processors and the memory
-  (half the processors, 2 to 8): a request that finds no free slot within a minute gets 503 and
-  `Retry-After`. A body larger than its route takes is refused before it is read (413).
-- An archive or an Office document may decompress 64 times its size at most, from 16 MB to 2 GB, all
-  levels together, and each part of an Office document 32 times the document at most, from 32 MB: a
-  small file that would hold gigabytes of text is refused. A text is analyzed in pieces of 64 KB, so
-  that its memory stays bounded whatever its length.
-- The trust model is the computer: every user of the computer shares its key, its originals and its
-  administration. Every program of the users reaches the interface, and the token of administration
-  lies in the data folder, readable by the interactive users: a user of the computer can restore any
-  anonymized file, read the records and export the key. People who must not see each other's documents
-  need an installation each, on computers of their own.
-- The folder of the drive gives its files to the interactive users, SYSTEM and the administrators; the
-  users read, write and delete there, and change no permission, the owners of the files included. The
-  folder of the files not processed of a user, and each file moved there, admit that user, SYSTEM and
-  the administrators alone.
-- The service opens every file of the drive alone, through no link, checks where its handle lies, and
-  deletes or moves it through that handle; it neither follows nor processes a link, a junction or a
-  mount point placed in the drive, so that no user leads it elsewhere with its rights.
-- The icon and the commands reach the service on 127.0.0.1 alone, and open its pages at
-  `https://127.0.0.1:8444`: `localhost` may resolve to `::1` first, where another account could
-  listen.
-- Albireo describes the pictures only when its data folder is the one its installer recorded in
-  `HKLM\Software\Albireo`, and when that folder, its certificates, its authority and its settings
-  belong to SYSTEM or the administrators: any user can create a folder in `%ProgramData%`, which would
-  otherwise receive the pictures of every user.
-- The messages, the answers and the logs of the updates never name the places of the publication; the
-  settings name them only when they differ from those of the build.
+- La clé maîtresse, 32 octets aléatoires, est chiffrée avec DPAPI pour le compte du service (LocalSystem)
+  dans `keys\master.key`, dont les permissions n'admettent que SYSTEM et les administrateurs. HKDF-SHA-256
+  en dérive la clé de la pseudonymisation et les deux clés du coffre.
+- Chaque original, chaque image et chaque description d'une image par Albireo est gardé dans le coffre,
+  chiffré avec AES-256-CTR et authentifié avec HMAC-SHA-256 ; la base de données contient les noms, les
+  tailles, les empreintes et les emplacements des fichiers, jamais leur contenu ni une description : celles
+  qu'une base de données d'une version antérieure gardait en clair sont effacées quand le service l'ouvre.
+- Les programmes et les moteurs lient statiquement la bibliothèque d'exécution du compilateur et
+  n'importent que les bibliothèques de Windows, ce que le build vérifie. Construits avec Visual C++, le
+  service, l'icône, les commandes et l'installateur ne prennent les bibliothèques qu'ils importent que dans
+  System32 (`/DEPENDENTLOADFLAG`), jamais dans le dossier du programme, un dossier de téléchargements pour
+  l'installateur par exemple, et font leurs chargements ultérieurs dans System32, et dans son propre dossier
+  pour le service (`SetDefaultDllDirectories()`). Le service ne charge que le moteur de son propre build,
+  par son chemin complet, dans le dossier des programmes, dont les permissions n'admettent que SYSTEM et les
+  administrateurs pour toute modification : une bibliothèque du même nom qu'une autre installation a placée
+  ailleurs n'est jamais chargée.
+- La clé peut être exportée, protégée par une phrase secrète de 12 caractères ou plus (PBKDF2-SHA-256 avec
+  600 000 itérations, AES-256-CTR et HMAC-SHA-256), et importée dans une nouvelle installation qui ne garde
+  encore aucun original. Sans sa clé, un document anonymisé ne peut être restauré nulle part : l'export est
+  la sauvegarde de l'installation.
+- L'interface n'écoute que sur l'adresse de bouclage, en HTTPS avec un certificat de l'autorité locale
+  « Pseudalis Local Authority », restreinte par des contraintes de noms aux noms et adresses locaux, dont la
+  clé n'est jamais écrite et dont la clé de serveur est chiffrée avec DPAPI. Les requêtes dont le `Host`
+  n'est pas local, et les requêtes d'une autre origine, sont refusées, pour qu'aucune page web ne lise ni ne
+  change quoi que ce soit par l'intermédiaire du navigateur.
+- Le service sert plusieurs sessions et plusieurs utilisateurs à la fois : chaque requête est traitée sur
+  un thread à elle, les fichiers du lecteur sur quatre threads au plus qui leur sont propres, le moteur fait
+  tourner ses modèles de reconnaissance pour plusieurs fichiers à la fois, et les verrous du service sont
+  pris dans un ordre unique, sans attente sur le réseau ni sur un client tant qu'ils sont tenus.
+  Les fichiers et les textes de l'interface traités en même temps sont bornés par les processeurs et la
+  mémoire (la moitié des processeurs, de 2 à 8) : une requête qui ne trouve aucune place libre en une
+  minute reçoit 503 et `Retry-After`. Un corps plus grand que ce que sa route accepte est refusé avant
+  d'être lu (413).
+- Une archive ou un document Office peut se décompresser à 64 fois sa taille au plus, de 16 Mo à 2 Go,
+  tous niveaux confondus, et chaque partie d'un document Office à 32 fois le document au plus, à partir de
+  32 Mo : un petit fichier qui contiendrait des gigaoctets de texte est refusé. Un texte est analysé par
+  morceaux de 64 Ko, pour que sa mémoire reste bornée quelle que soit sa longueur.
+- Le modèle de confiance est l'ordinateur : tous les utilisateurs de l'ordinateur partagent sa clé, ses
+  originaux et son administration. Tous les programmes des utilisateurs atteignent l'interface, et le jeton
+  d'administration se trouve dans le dossier de données, lisible par les utilisateurs interactifs : un
+  utilisateur de l'ordinateur peut restaurer n'importe quel fichier anonymisé, lire les enregistrements et
+  exporter la clé. Des personnes qui ne doivent pas voir les documents les unes des autres ont besoin
+  chacune d'une installation, sur des ordinateurs distincts.
+- Le dossier du lecteur donne ses fichiers aux utilisateurs interactifs, à SYSTEM et aux administrateurs ;
+  les utilisateurs y lisent, y écrivent et y suppriment, et n'y changent aucune permission, propriétaires
+  des fichiers compris. Le dossier des fichiers non traités d'un utilisateur, et chaque fichier qui y est
+  déplacé, n'admettent que cet utilisateur, SYSTEM et les administrateurs.
+- Le service ouvre lui-même chaque fichier du lecteur, sans passer par aucun lien, vérifie où se trouve son
+  handle, et le supprime ou le déplace par ce handle ; il ne suit ni ne traite un lien, une jonction ou un
+  point de montage placé dans le lecteur, pour qu'aucun utilisateur ne l'entraîne ailleurs avec ses droits.
+- L'icône et les commandes ne joignent le service que sur 127.0.0.1, et ouvrent ses pages à
+  `https://127.0.0.1:8444` : `localhost` peut se résoudre d'abord en `::1`, où un autre compte pourrait
+  écouter.
+- Albireo ne décrit les images que si son dossier de données est celui que son installateur a enregistré
+  dans `HKLM\Software\Albireo`, et si ce dossier, ses certificats, son autorité et ses réglages
+  appartiennent à SYSTEM ou aux administrateurs : n'importe quel utilisateur peut créer un dossier dans
+  `%ProgramData%`, qui recevrait sinon les images de tous les utilisateurs.
+- Les messages, les réponses et les journaux des mises à jour ne nomment jamais les emplacements de la
+  publication ; les réglages ne les nomment que lorsqu'ils diffèrent de ceux du build.
 
-## Choices made from the specification
+## Choix faits à partir de la spécification
 
-- The drive needs no driver. A drive whose reads and writes reach a program needs a driver of the
-  kernel of Windows, which Windows 10 and 11 load only once Microsoft signed it (an EV certificate and
-  an attestation for each version). Without driver, the drive is a folder that the service watches: the
-  file a program writes lies in the folder of the drive in clear, from its last write to its
-  processing, a few seconds for most documents, under the permissions of the drive, before its original
-  goes encrypted to the vault and the file is deleted, its sectors freed but not overwritten; BitLocker,
-  where it is on, keeps them encrypted on the disk. A file of another kind cannot be refused at its
-  creation: it leaves the drive for the folder of the files not processed of its user.
-- Windows copies a file out of a drive, then deletes it: a move out of the drive cannot be told from a
-  copy followed by a deletion. The drive therefore never gives back an original, which would otherwise
-  reach any program that reads it; the originals come back through Restore, the web application or the
-  interface, from any copy of the anonymized file, and no second drive restores them, since it would
-  give them to any program as well. For the same reason, the original of a file that leaves the drive
-  stays in the vault for `removed_days` days, 45 by default, which the records of the web application
-  show, then goes, or at once when it is forgotten there; with 0 days it stays without limit of time.
-  Gone with its file, it would leave the copy restorable from its tags alone, without its pictures and
-  the parts the protection removed. The space of the originals is bounded all the same, `history_mb`
-  and the free space of the disk: when it is full, the oldest originals go first, whatever their time.
-  Once an original is forgotten, Restore gives its protected file back from its tags alone and tells the
-  date of the forgetting: the database keeps the SHA-256 and the object identifier of the file, never
-  its content.
-- The names and the properties take substitutes rather than tags, which a name cannot hold and a window
-  of properties would show as they are; the database keeps their tags. A substitute is found again in a
-  name or a property edited since as long as it keeps its form, a run of up to twelve words; one of four
-  characters or fewer, a year for instance, is too common to be read back there, and comes back only
-  with the original kept in the vault.
-- The record of a file protected without tags keeps the substitutes of its text with their tags rather
-  than their places in the file: the places of an Office document or of a PDF lie in its compressed
-  parts, which give back nothing more than the original that its exact copies receive, while the
-  substitutes, each a distinct code with its length, are found again in a copy edited since, and in the
-  original of a file protected again, whose new record inherits them.
-- A picture becomes a text file of the same name with `.txt` added, which the Explorer and the prompt
-  show as text; its picture comes back through Restore, the web application and the interface.
-- A file of another kind is never written in an anonymized place, since its content would come out
-  half protected: the drive moves it out, keeping its place in the tree, and an anonymized archive or
-  copy of a folder leaves it out and names it. The kinds are those whose whole content Pseudalis reads.
-- On Windows 11, the commands of the Explorer lie under Show more options: the first menu of Windows 11
-  only takes the commands of packaged applications.
-- The service listens on port 8444, beside Albireo on 8443, with the same stack: dlib, cpp-httplib and
+- Le lecteur n'a besoin d'aucun pilote. Un lecteur dont les lectures et les écritures parviennent à un
+  programme a besoin d'un pilote du noyau de Windows, que Windows 10 et 11 ne chargent qu'une fois signé par
+  Microsoft (un certificat EV et une attestation pour chaque version). Sans pilote, le lecteur est un
+  dossier que le service surveille : le fichier qu'un programme écrit se trouve en clair dans le dossier du
+  lecteur, de sa dernière écriture à son traitement, quelques secondes pour la plupart des documents, sous
+  les permissions du lecteur, avant que son original parte chiffré dans le coffre et que le fichier soit
+  supprimé, ses secteurs libérés mais non écrasés ; BitLocker, là où il est activé, les garde chiffrés sur
+  le disque. Un fichier d'un autre type ne peut pas être refusé à sa création : il quitte le lecteur pour le
+  dossier des fichiers non traités de son utilisateur.
+- Windows copie un fichier hors d'un lecteur, puis le supprime : un déplacement hors du lecteur ne peut pas
+  se distinguer d'une copie suivie d'une suppression. Le lecteur ne rend donc jamais un original, qui
+  parviendrait sinon à tout programme qui le lit ; les originaux reviennent par « Restaurer », l'application
+  web ou l'interface, depuis n'importe quelle copie du fichier anonymisé, et aucun second lecteur ne les
+  restaure, puisqu'il les donnerait lui aussi à n'importe quel programme. Pour la même raison, l'original
+  d'un fichier qui quitte le lecteur reste dans le coffre pendant `removed_days` jours, 45 par défaut, ce
+  que montrent les enregistrements de l'application web, puis s'en va, ou aussitôt quand il y est oublié ;
+  avec 0 jour, il reste sans limite de durée. Parti avec son fichier, il laisserait la copie restaurable par
+  ses seules balises, sans ses images ni les parties que la protection a retirées. L'espace des originaux
+  est tout de même borné, par `history_mb` et par l'espace libre du disque : quand il est plein, les
+  originaux les plus anciens partent en premier, quelle que soit leur durée. Une fois un original oublié,
+  « Restaurer » rend son fichier protégé à partir de ses seules balises et indique la date de l'oubli : la
+  base de données garde le SHA-256 et l'identifiant d'objet du fichier, jamais son contenu.
+- Les noms et les propriétés reçoivent des substituts plutôt que des balises, qu'un nom ne peut pas
+  contenir et qu'une fenêtre de propriétés montrerait telles quelles ; la base de données garde leurs
+  balises. Un substitut est retrouvé dans un nom ou une propriété modifiés depuis tant qu'il garde sa forme,
+  une suite de douze mots au plus ; un substitut de quatre caractères ou moins, une année par exemple, est
+  trop courant pour y être relu, et ne revient qu'avec l'original gardé dans le coffre.
+- L'enregistrement d'un fichier protégé sans balises garde les substituts de son texte avec leurs balises
+  plutôt que leurs emplacements dans le fichier : les emplacements d'un document Office ou d'un PDF se
+  trouvent dans ses parties compressées, qui ne rendent rien de plus que l'original que reçoivent ses copies
+  exactes, tandis que les substituts, chacun un code distinct avec sa longueur, se retrouvent dans une copie
+  modifiée depuis, et dans l'original d'un fichier protégé à nouveau, dont le nouvel enregistrement en
+  hérite.
+- Une image devient un fichier texte du même nom, `.txt` ajouté, que l'Explorateur et l'invite de commandes
+  montrent comme du texte ; son image revient par « Restaurer », l'application web et l'interface.
+- Un fichier d'un autre type n'est jamais écrit dans un endroit anonymisé, puisque son contenu sortirait à
+  moitié protégé : le lecteur le déplace ailleurs, en gardant sa place dans l'arborescence, et une archive
+  ou une copie de dossier anonymisée l'écarte et le nomme. Les types sont ceux dont Pseudalis lit tout le
+  contenu.
+- Sur Windows 11, les commandes de l'Explorateur se trouvent sous « Afficher d'autres options » : le premier
+  menu de Windows 11 ne prend que les commandes des applications empaquetées.
+- Le service écoute sur le port 8444, à côté d'Albireo sur le 8443, avec la même pile : dlib, cpp-httplib et
   Mbed TLS.
-- A PDF always keeps its pages: the text is drawn again in place, the option of a PDF rebuilt as text
-  alone is gone.
+- Un PDF garde toujours ses pages : le texte est redessiné en place, et l'option d'un PDF reconstruit en
+  texte seul a disparu.
 
-## Installing
+## Installation
 
-`pseudalis-setup.exe` installs the programs, the service, the icon, the commands of the Explorer, the
-shortcuts and the entry of the installed applications of Windows; started again over an installation,
-it updates it and keeps the data, the key, the drive and the options. The wizard asks for the
-language, the license, the folders, the letter of the drive and the options. Without window:
+`pseudalis-setup.exe` installe les programmes, le service, l'icône, les commandes de l'Explorateur, les
+raccourcis et l'entrée dans les applications installées de Windows ; relancé sur une installation, il la
+met à jour et garde les données, la clé, le lecteur et les options. L'assistant demande la langue, la
+licence, les dossiers, la lettre du lecteur et les options. Sans fenêtre :
 
 ```
 pseudalis-setup /silent [/dir <folder>] [/data-dir <folder>] [/drive <letter>|none] [/port <port>] [/no-context-menu]
@@ -445,90 +461,91 @@ pseudalis-setup /uninstall [/silent] [/purge]
 pseudalis-setup /service start|stop|restart
 ```
 
-The uninstallation removes the programs and keeps the key, the originals, the files of the drive and
-the settings for a later installation, unless the option of the wizard is unticked or `/purge` is given:
-the files of the drive go with the data folder, and the documents anonymized with that key can then no
-longer be restored. A tool of deployment that uninstalls before it installs again
-(`QuietUninstallString`) therefore never takes them. The uninstaller left in the folder of the
-programs is a copy of the very program that installed them, held from its start so that no other
-account replaces it meanwhile.
+La désinstallation retire les programmes et garde la clé, les originaux, les fichiers du lecteur et les
+réglages pour une installation ultérieure, sauf si l'option de l'assistant est décochée ou si `/purge` est
+donné : les fichiers du lecteur partent alors avec le dossier de données, et les documents anonymisés avec
+cette clé ne peuvent plus être restaurés. Un outil de déploiement qui désinstalle avant de réinstaller
+(`QuietUninstallString`) ne les emporte donc jamais. Le programme de désinstallation laissé dans le dossier
+des programmes est une copie du programme même qui les a installés, tenu ouvert dès son démarrage pour
+qu'aucun autre compte ne le remplace entre-temps.
 
-## Building
+## Construction
 
 ### Windows
 
-With Visual Studio 2022 or its Build Tools (C++ workload, CMake 3.21 or later), from the root of the
-copy of the repository of the production chain, `%USERPROFILE%\work\Dlib-Transformer-extensions`, the
-only one the script builds and the publication reads (`-AnyFolder` builds another copy, which is not
-published):
+Avec Visual Studio 2022 ou ses Build Tools (charge de travail C++, CMake 3.21 ou plus récent), depuis la
+racine de la copie du dépôt de la chaîne de production, `%USERPROFILE%\work\Dlib-Transformer-extensions`, la
+seule que le script construit et que la publication lit (`-AnyFolder` construit une autre copie, qui n'est
+pas publiée) :
 
 ```
 powershell -ExecutionPolicy Bypass -File dlib\dlib\external\pseudalis\tools\build_windows.ps1
 ```
 
-The script builds every program into `build-pseudalis\bin`; the installer,
-`build-pseudalis\bin\pseudalis-setup.exe`, carries them all, with the runtime linked statically. The
-engines compile the models of the header
+Le script construit chaque programme dans `build-pseudalis\bin` ; l'installateur,
+`build-pseudalis\bin\pseudalis-setup.exe`, les embarque tous, avec la bibliothèque d'exécution liée
+statiquement. Les moteurs compilent les modèles de l'en-tête
 [`examples/slm_document_anonymizer_ex.h`](../../../examples/slm_document_anonymizer_ex.h)
-(`PSEUDALIS_MODELS_HEADER`). `-Tests` also builds and runs the tests.
+(`PSEUDALIS_MODELS_HEADER`). `-Tests` construit et lance aussi les tests.
 
-The build checks, before it packs the installer and once it is linked, that each program and each engine
-imports the libraries of Windows alone, found in System32, or its API sets
-([`tools/check_imports.cpp`](tools/check_imports.cpp)): a runtime of the compiler (`vcruntime`, `msvcp`,
-`ucrtbase`, the sets `api-ms-win-crt`) or any other library stops the build, so that the installer
-carries no library of a third party and the programs run on Windows as it is installed. Each
-configuration of the build tree gives the programs and the engines a build stamp of their own
-(`psd_build()` of the engines): the service loads its engine by its full path, beside it in the folder
-of the programs, and refuses an engine of another version or of another build.
+Le build vérifie, avant d'empaqueter l'installateur et une fois l'édition de liens faite, que chaque
+programme et chaque moteur n'importe que les bibliothèques de Windows, trouvées dans System32, ou ses
+ensembles d'API ([`tools/check_imports.cpp`](tools/check_imports.cpp)) : une bibliothèque d'exécution du
+compilateur (`vcruntime`, `msvcp`, `ucrtbase`, les ensembles `api-ms-win-crt`) ou toute autre bibliothèque
+arrête le build, pour que l'installateur n'embarque aucune bibliothèque d'un tiers et que les programmes
+tournent sur Windows tel qu'il est installé. Chaque configuration de l'arbre de build donne aux programmes
+et aux moteurs une marque de build qui leur est propre (`psd_build()` des moteurs) : le service charge son
+moteur par son chemin complet, à côté de lui dans le dossier des programmes, et refuse un moteur d'une autre
+version ou d'un autre build.
 
 ### Linux
 
-The service builds on Linux with its engine inside and its drive as a folder without letter, for the
-tests of the engine, of the host, of the interface and of the drive:
+Le service se construit sur Linux avec son moteur intégré et son lecteur sous forme de dossier sans lettre,
+pour les tests du moteur, de l'hôte, de l'interface et du lecteur :
 
 ```
 bash dlib/dlib/external/pseudalis/tools/test_linux.sh
 ```
 
-### Cross compilation
+### Compilation croisée
 
 ```
 cmake -S dlib/dlib/external/pseudalis -B build-pseudalis-win -DCMAKE_TOOLCHAIN_FILE=dlib/dlib/external/pseudalis/cmake/mingw-w64.cmake
 cmake --build build-pseudalis-win
 ```
 
-A cross build checks the libraries of the programs only when it can run a program of Windows:
-`-DCMAKE_CROSSCOMPILING_EMULATOR=<wine>` gives it one; without it, the configuration says that the check
-is left out.
+Une compilation croisée ne vérifie les bibliothèques des programmes que lorsqu'elle peut lancer un
+programme de Windows : `-DCMAKE_CROSSCOMPILING_EMULATOR=<wine>` lui en donne un ; sans lui, la
+configuration indique que la vérification est omise.
 
-## Publishing a version
+## Publier une version
 
-A version is published on GitHub alone, in [`dist/pseudalis`](../../../../dist/pseudalis): its
-installer, `pseudalis-setup-<version>.exe`, which anyone downloads there, and the update feed that names
-it, with its signature (ECDSA P-256), which the installed copies read there. The programs check the
-signature with the public key of `resources/feed-public-key.pem`, built into them. The publisher makes
-the pair once, on Linux, the private key in a folder of its own outside the repository, readable by its
-owner alone, and commits the public key before the installer is built; the copies installed before trust
-the former key alone, and are installed again by hand. A copy of the private key kept apart is the only
-way to publish an update that the installed copies take.
+Une version est publiée sur GitHub seulement, dans [`dist/pseudalis`](../../../../dist/pseudalis) : son
+installateur, `pseudalis-setup-<version>.exe`, que chacun y télécharge, et le flux de mises à jour qui le
+nomme, avec sa signature (ECDSA P-256), que les copies installées y lisent. Les programmes vérifient la
+signature avec la clé publique de `resources/feed-public-key.pem`, intégrée en eux. L'éditeur crée la paire
+de clés une fois, sur Linux, la clé privée dans un dossier à part hors du dépôt, lisible par son seul
+propriétaire, et commite la clé publique avant que l'installateur soit construit ; les copies installées
+auparavant ne font confiance qu'à l'ancienne clé, et sont réinstallées à la main. Une copie de la clé privée
+gardée à part est le seul moyen de publier une mise à jour que les copies installées acceptent.
 
 ```
 python3 dlib/dlib/external/pseudalis/tools/publish_release.py --create-key --key ~/keys/pseudalis-feed-signing.key
 ```
 
-Each version goes through three steps, each on the system that holds what it needs, each stopping at its
-first failure:
+Chaque version passe par trois étapes, chacune sur le système qui détient ce dont elle a besoin, chacune
+s'arrêtant à son premier échec :
 
-1. Linux: the sources change and are tested there (`tools/test_linux.sh`), the key is checked, then the
-   sources are committed and pushed. `PSEUDALIS_VERSION` of [`common/version.h`](common/version.h)
-   increases for each version that the installed copies are to receive: a feed that announces the
-   version a copy holds installs nothing.
-2. Windows, in the copy of the production chain, `%USERPROFILE%\work\Dlib-Transformer-extensions`:
-   the installer is built from the sources pushed, tested and installed in place
-   (`tools/build_windows.ps1 -Tests -Install`), which prints its size, its SHA-256 and its path under WSL.
-3. Linux, where the private key lies: the installer of that copy, which Linux reads under
-   `/mnt/c/Users/<user>/work`, goes into `dist/pseudalis` with the feed written and signed for it, then
-   both are committed and pushed, and the publication ends once GitHub serves them.
+1. Linux : les sources changent et y sont testées (`tools/test_linux.sh`), la clé est vérifiée, puis les
+   sources sont commitées et poussées. `PSEUDALIS_VERSION` de [`common/version.h`](common/version.h)
+   augmente pour chaque version que les copies installées doivent recevoir : un flux qui annonce la version
+   qu'une copie a déjà n'installe rien.
+2. Windows, dans la copie de la chaîne de production, `%USERPROFILE%\work\Dlib-Transformer-extensions` :
+   l'installateur est construit à partir des sources poussées, testé et installé sur place
+   (`tools/build_windows.ps1 -Tests -Install`), ce qui affiche sa taille, son SHA-256 et son chemin sous WSL.
+3. Linux, où se trouve la clé privée : l'installateur de cette copie, que Linux lit sous
+   `/mnt/c/Users/<user>/work`, entre dans `dist/pseudalis` avec le flux écrit et signé pour lui, puis tous
+   deux sont commités et poussés, et la publication se termine une fois que GitHub les sert.
 
 ```
 bash dlib/dlib/external/pseudalis/tools/test_linux.sh &&
@@ -545,56 +562,59 @@ git pull --ff-only &&
 python3 dlib/dlib/external/pseudalis/tools/publish_release.py --key ~/keys/pseudalis-feed-signing.key --notes notes.json --push
 ```
 
-Without an installer named, `publish_release.py` takes the one of the copy of the production chain,
-`build-pseudalis\bin\pseudalis-setup.exe` under `%USERPROFILE%\work\Dlib-Transformer-extensions`, and it
-refuses an installer of another folder unless `--any-folder` is given.
+Sans installateur nommé, `publish_release.py` prend celui de la copie de la chaîne de production,
+`build-pseudalis\bin\pseudalis-setup.exe` sous `%USERPROFILE%\work\Dlib-Transformer-extensions`, et refuse
+un installateur d'un autre dossier sauf si `--any-folder` est donné.
 
-`publish_release.py` checks that the installer carries the version of
-[`common/version.h`](common/version.h), that the feed announces no later one, that the installer stays
-under the limits of GitHub (it refuses 95 MB and more, and warns from 50 MB) and that the key is the one
-of the public key of the sources, copies the installer as `pseudalis-setup-<version>.exe`, writes the
-feed with its name, its size, its SHA-256 and the notes of each language
-(`{"en": "...", "fr": "...", "de": "...", "it": "...", "es": "..."}`), signs it, checks the signature
-with the public key of the sources, then puts the installer, the signature and the feed in place of the
-published ones; the installers of the earlier versions leave the folder and stay in the history of the
-repository. With `--push`, it first checks that the branch lags behind its remote one in nothing, then
-commits and pushes the folder, and ends once GitHub serves the feed and its signature as they were
-written and the installer by its size and its SHA-256, as the installed copies will read them; a step
-that fails prints the commands that end the publication, and `--check` makes the last check again. A
-failure before the writing leaves the published files as they are, and `--dry-run` checks everything
-without writing. The services read the feed and its signature on GitHub five minutes after their start,
-then every day, check the signature, download the installer beside the feed in the background, check its
-size and its SHA-256, and install it at the next start of the service, or at once from the menu of the
-icon. Their messages and logs never name the places they read.
+`publish_release.py` vérifie que l'installateur porte la version de
+[`common/version.h`](common/version.h), que le flux n'en annonce aucune plus récente, que l'installateur
+reste sous les limites de GitHub (il refuse 95 Mo et plus, et avertit à partir de 50 Mo) et que la clé
+correspond à la clé publique des sources, copie l'installateur sous le nom `pseudalis-setup-<version>.exe`,
+écrit le flux avec son nom, sa taille, son SHA-256 et les notes de chaque langue
+(`{"en": "...", "fr": "...", "de": "...", "it": "...", "es": "..."}`), le signe, vérifie la signature avec la
+clé publique des sources, puis met l'installateur, la signature et le flux à la place des fichiers publiés ;
+les installateurs des versions antérieures quittent le dossier et restent dans l'historique du dépôt. Avec
+`--push`, il vérifie d'abord que la branche n'est en retard en rien sur sa branche distante, puis commite et
+pousse le dossier, et se termine une fois que GitHub sert le flux et sa signature tels qu'ils ont été écrits,
+et l'installateur avec sa taille et son SHA-256, comme les copies installées les liront ; une étape qui
+échoue affiche les commandes qui terminent la publication, et `--check` refait la dernière vérification. Un
+échec avant l'écriture laisse les fichiers publiés tels quels, et `--dry-run` vérifie tout sans écrire. Les
+services lisent le flux et sa signature sur GitHub cinq minutes après leur démarrage, puis chaque jour,
+vérifient la signature, téléchargent en arrière-plan l'installateur qui se trouve à côté du flux, vérifient
+sa taille et son SHA-256, et l'installent au prochain démarrage du service, ou aussitôt depuis le menu de
+l'icône. Leurs messages et leurs journaux ne nomment jamais les emplacements qu'ils lisent.
 
-## Editions and licenses
+## Éditions et licences
 
-- Pseudalis Community is free and open source software under the Boost Software License 1.0, as dlib
-  and Dlib-Transformer-extensions are; its components keep their licenses: Mbed TLS (Apache 2.0),
-  cpp-httplib (MIT), SQLite (public domain), zlib (zlib License), Swagger UI (Apache 2.0).
-- No component of Pseudalis is under a copyleft license, the drive needing no driver: an edition under a
-  proprietary license, an edition for companies sold under its own terms for instance, may take every
-  component as it is.
+- Pseudalis Community est un logiciel libre et open source sous la Boost Software License 1.0, comme dlib
+  et Dlib-Transformer-extensions ; ses composants gardent leurs licences : Mbed TLS (Apache 2.0),
+  cpp-httplib (MIT), SQLite (domaine public), zlib (licence zlib), Swagger UI (Apache 2.0).
+- Aucun composant de Pseudalis n'est sous une licence copyleft, puisque le lecteur n'a besoin d'aucun
+  pilote : une édition sous licence propriétaire, une édition pour les entreprises vendue selon ses propres
+  conditions par exemple, peut prendre chaque composant tel quel.
 
-## Limitations
+## Limites
 
-- The recognizers read French, English, Italian, Spanish and German; a document in another language
-  keeps more values in clear. A protected document should be read again before it is shared.
-- A scanned page without text layer is kept as a gray box: no OCR is performed.
-- A description of Albireo is read as the text of its document is, with the same limits: a value that
-  the detector misses stays in clear in it. The setting `albireo` turns the descriptions off.
-- The drive takes files of 150 MB at most by default (`max_file_mb`): a larger file goes to the folder
-  of the files not processed. A folder sent by the web application is one archive, under the same limit.
-- A file written to the drive lies there in clear until its processing, a few seconds for most
-  documents (see the choices above).
-- A value written encoded stays as it is: in a text of an extension of the table, whose content is
-  read as it lies (a message saved as `.txt`, a key in a `.md`), and in a text of another extension
-  when its encoding escapes the rules of the kinds of files (a block of base64 shorter than their
-  thresholds, bytes in hexadecimal written with digits alone, the percent-encoding of an address). A
-  text that may hold such values should be read again before it is shared.
-- A restored archive gives back its pictures as their text files, unless the archive is the one the
-  service made: its original then comes back whole from the vault.
-- The analysis reads some tens of kilobytes per second on each processor when nearly every word is
-  personal data: a text file of tens of megabytes takes minutes.
-- The protection is a pseudonymization in the sense of the GDPR: the key restores the data, which stay
-  personal data for its holder.
+- Les modèles de reconnaissance lisent le français, l'anglais, l'italien, l'espagnol et l'allemand ; un
+  document dans une autre langue garde plus de valeurs en clair. Un document protégé doit être relu avant
+  d'être partagé.
+- Une page numérisée sans couche de texte est gardée sous forme de zone grise : aucune reconnaissance de
+  caractères (OCR) n'est effectuée.
+- Une description d'Albireo est lue comme l'est le texte de son document, avec les mêmes limites : une
+  valeur que le détecteur manque y reste en clair. Le réglage `albireo` désactive les descriptions.
+- Le lecteur accepte des fichiers de 150 Mo au plus par défaut (`max_file_mb`) : un fichier plus grand va
+  dans le dossier des fichiers non traités. Un dossier envoyé par l'application web forme une seule archive,
+  sous la même limite.
+- Un fichier écrit sur le lecteur s'y trouve en clair jusqu'à son traitement, quelques secondes pour la
+  plupart des documents (voir les choix plus haut).
+- Une valeur écrite encodée reste telle quelle : dans un texte d'une extension du tableau, dont le contenu
+  est lu tel quel (un message enregistré en `.txt`, une clé dans un `.md`), et dans un texte d'une autre
+  extension quand son encodage échappe aux règles des types de fichiers (un bloc de base64 plus court que
+  leurs seuils, des octets en hexadécimal écrits avec des chiffres seuls, l'encodage par pourcentage d'une
+  adresse). Un texte qui peut contenir de telles valeurs doit être relu avant d'être partagé.
+- Une archive restaurée rend ses images sous forme de leurs fichiers texte, sauf si l'archive est celle que
+  le service a produite : son original revient alors entier du coffre.
+- L'analyse lit quelques dizaines de kilo-octets par seconde sur chaque processeur quand presque chaque mot
+  est une donnée personnelle : un fichier texte de plusieurs dizaines de mégaoctets prend des minutes.
+- La protection est une pseudonymisation au sens du RGPD : la clé restaure les données, qui restent des
+  données personnelles pour son détenteur.

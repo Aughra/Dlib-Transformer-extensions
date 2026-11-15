@@ -2,37 +2,29 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    La description de l'interface du service local, affichée par Swagger UI sans réseau.  L'icône ouvre cette page
-    avec le jeton d'administration dans le fragment de son adresse, que le navigateur n'envoie jamais : le jeton
-    autorise les routes d'administration, puis quitte l'adresse.  Le fork pour macOS y ajoute le thème, un
-    démarrage rapide rempli avec l'adresse de ce service, et le passage à l'interface d'Albireo quand il tourne.
+    La description de l'interface du service local, affichée par Swagger UI sans réseau, avec (fork pour macOS) le
+    thème, un démarrage rapide rempli avec l'adresse de ce service, et le passage à l'interface d'Albireo quand il
+    tourne.  Sur macOS, l'administration est ouverte sur le Mac, sans jeton.
 */
 window.addEventListener('load', function () {
   const words = {
     en: { what: 'Programming interface', back: '← Back to the application', switch: 'Albireo API',
       quick: 'Quick start', copy: 'Copy', copied: 'Copied', refused: 'Copy refused',
       quick_hint: 'Every route answers on this Mac only. The files travel as they are, in the body of the requests; ' +
-        'no account is needed. The administration routes take the token of the data folder (Authorize).',
-      address: 'Address', admin: 'Administration', admin_on: 'token given', admin_off: 'token needed',
+        'no account and no token are needed.',
+      address: 'Address',
       theme: { auto: 'Theme: system', light: 'Theme: light', dark: 'Theme: dark' } },
     fr: { what: 'Interface de programmation', back: '← Retour à l’application', switch: 'API d’Albireo',
       quick: 'Démarrage rapide', copy: 'Copier', copied: 'Copié', refused: 'Copie refusée',
       quick_hint: 'Chaque route ne répond que sur ce Mac. Les fichiers voyagent tels quels, dans le corps des ' +
-        'requêtes ; aucun compte n’est nécessaire. Les routes d’administration demandent le jeton du dossier de ' +
-        'données (Authorize).',
-      address: 'Adresse', admin: 'Administration', admin_on: 'jeton donné', admin_off: 'jeton nécessaire',
+        'requêtes ; ni compte ni jeton ne sont nécessaires.',
+      address: 'Adresse',
       theme: { auto: 'Thème : système', light: 'Thème : clair', dark: 'Thème : sombre' } }
   };
   let language = null;
   try { language = localStorage.getItem('pseudalis.language'); } catch (e) { /* stockage indisponible */ }
-  if (!words[language]) {
-    language = 'en';
-    const wanted = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
-    for (let i = 0; i < wanted.length; ++i) {
-      const code = String(wanted[i] || '').slice(0, 2).toLowerCase();
-      if (words[code]) { language = code; break; }
-    }
-  }
+  // Le français par défaut, comme l'application ; l'anglais quand l'application l'a choisi.
+  if (!words[language]) language = 'fr';
   const w = words[language];
   document.documentElement.lang = language;
   document.querySelectorAll('[data-t]').forEach(function (e) { e.textContent = w[e.dataset.t]; });
@@ -54,15 +46,6 @@ window.addEventListener('load', function () {
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply);
   apply();
 
-  let admin = '';
-  const m = /(?:^#|&)admin=([0-9A-Za-z_-]+)/.exec(location.hash || '');
-  try {
-    if (m) sessionStorage.setItem('pseudalis.admin', m[1]);
-    admin = sessionStorage.getItem('pseudalis.admin') || '';
-  } catch (e) {
-    admin = m ? m[1] : '';
-  }
-  if (m) history.replaceState(null, '', location.pathname + location.search);
 
   // Le démarrage rapide : un texte et un fichier protégés, avec l'adresse de ce service.
   const base = location.origin;
@@ -113,7 +96,6 @@ window.addEventListener('load', function () {
     document.getElementById('facts').appendChild(s);
   }
   fact(w.address, base);
-  fact(w.admin, admin ? w.admin_on : w.admin_off);
   fetch('../v1/info', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (info) {
     document.getElementById('version').textContent = info.version || '';
     if (info.drive && info.drive.folder) {
@@ -140,9 +122,6 @@ window.addEventListener('load', function () {
     defaultModelsExpandDepth: 0,
     docExpansion: 'list',
     filter: true,
-    persistAuthorization: false,
-    onComplete: function () {
-      if (admin) window.ui.preauthorizeApiKey('admin', admin);
-    }
+    persistAuthorization: false
   });
 });

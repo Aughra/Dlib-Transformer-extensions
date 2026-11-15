@@ -185,20 +185,6 @@ namespace pseudalis
         const host_settings st = settings_->get();
         port_ = st.port;
 
-        // Le jeton de l'interface d'administration, que lisent la zone de notification et le shell.
-        const std::string token_path = join_path(data_dir_, "admin.token");
-        std::string token;
-        if (!read_file(token_path, token, 4096) || trim(token).size() < 32)
-        {
-            token = random_hex(48);
-            if (!write_file_restricted(token_path, token, true))
-            {
-                error = "cannot write " + token_path;
-                return false;
-            }
-        }
-        admin_token_ = trim(token);
-
         // Les clés, le coffre et la base de données sont rangés dans des dossiers privés (0700).
         bool created = false;
         if (!load_master_key(join_path(data_dir_, "keys"), master_, created, error)) return false;

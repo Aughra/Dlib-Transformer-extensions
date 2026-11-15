@@ -5,8 +5,6 @@
 window.PSEUDALIS_TEXTS = {
   en: {
     tagline: 'Personal data protection for your documents',
-    admin_hint: 'The originals kept, the key, the settings and the imposed terms appear when Pseudalis opens with ' +
-      'its administration token: on this Mac, run tools/open_pseudalis.sh.',
     theme_auto: 'Theme: system', theme_light: 'Theme: light', theme_dark: 'Theme: dark',
     speed_read: 'Read', speed_write: 'Written', speed_title: 'Throughput of the engine, live: the documents read and the protected copies written',
     api: 'Interface documentation',
@@ -191,8 +189,6 @@ window.PSEUDALIS_TEXTS = {
   },
   fr: {
     tagline: 'Protection des données personnelles de vos documents',
-    admin_hint: 'Les originaux conservés, la clé, les réglages et les termes imposés s’affichent quand Pseudalis ' +
-      's’ouvre avec son jeton d’administration : sur ce Mac, lancez tools/open_pseudalis.sh.',
     theme_auto: 'Thème : système', theme_light: 'Thème : clair', theme_dark: 'Thème : sombre',
     speed_read: 'Lecture', speed_write: 'Écriture', speed_title: 'Débit du moteur en direct : les documents lus et les copies protégées écrites',
     api: "Documentation de l'interface",

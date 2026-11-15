@@ -21,9 +21,9 @@ namespace pseudalis
                 ~/.local/share/albireo, le port de son settings.json (8443 par défaut) et son
                 autorité locale (certificates/albireo-authority.crt), qui vérifie son
                 certificat ; puis GET /v1/models, dont les "inputs" désignent les modèles qui
-                lisent les images.  Sur macOS, les contrôles d'appartenance employés ici sont
-                actuellement des fonctions sans vérification : ils ne garantissent pas que
-                ces fichiers soient protégés contre leur modification par un autre compte.
+                lisent les images.  Sur macOS, les contrôles d'appartenance employés ici
+                vérifient le propriétaire, les droits POSIX et les ACL de ces fichiers et de
+                leurs dossiers (common/platform.cpp, fork pour macOS).
                 Le résultat est gardé une minute, vérifié de nouveau par un seul appelant à la
                 fois, hors du verrou de l'état.
 
