@@ -815,8 +815,9 @@ namespace albireo
         /*
             Les tokens d'un prompt rendu.  Une marque d'image dans le texte d'un message devient
             le balisage <|vision_start|><|image_pad|><|vision_end|> (Qwen3-VL), <image>
-            (LLaVA-NeXT), [IMG][IMG_END] (Pixtral) ou <|image><|image|><image|> (Gemma 4, comme
-            mtmd.cpp de llama.cpp), de sorte que le texte qui l'entoure est
+            (LLaVA-NeXT), [IMG][IMG_END] (Pixtral), <|image><|image|><image|> (Gemma 4) ou
+            <start_of_image><image_soft_token><end_of_image> (Gemma 3), ces deux derniers comme
+            mtmd.cpp de llama.cpp, de sorte que le texte qui l'entoure est
             encodé à part, comme le tokenizer de référence coupe sur ces tokens ; le token
             d'image est ensuite répété pour chaque token de l'image, et images[i].start reçoit
             l'indice de son premier token.
@@ -863,6 +864,7 @@ namespace albireo
                     mark.text = kind == vision_encoder::family::llava_next ? "<image>"
                         : kind == vision_encoder::family::pixtral ? "[IMG][IMG_END]"
                         : kind == vision_encoder::family::gemma4 ? "<|image><|image|><image|>"
+                        : kind == vision_encoder::family::gemma3 ? "<start_of_image><image_soft_token><end_of_image>"
                         : "<|vision_start|><|image_pad|><|vision_end|>";
                     mark.markup = true;
                     parts.push_back(mark);
@@ -1149,6 +1151,16 @@ namespace albireo
                 m->vision_start = m->tok.token_id("<|image>");
                 m->image_pad = m->tok.token_id("<|image|>");
                 m->vision_end = m->tok.token_id("<image|>");
+                if (m->vision_start < 0 || m->image_pad < 0 || m->vision_end < 0)
+                    throw std::invalid_argument("the vocabulary of the model lacks the tokens of the images");
+            }
+            else if (kind == vision_encoder::family::gemma3)
+            {
+                // <image_soft_token> tient lieu de chaque token de l'image, entre <start_of_image> et <end_of_image>
+                // (mtmd.cpp de llama.cpp).
+                m->vision_start = m->tok.token_id("<start_of_image>");
+                m->image_pad = m->tok.token_id("<image_soft_token>");
+                m->vision_end = m->tok.token_id("<end_of_image>");
                 if (m->vision_start < 0 || m->image_pad < 0 || m->vision_end < 0)
                     throw std::invalid_argument("the vocabulary of the model lacks the tokens of the images");
             }
@@ -2122,13 +2134,21 @@ namespace albireo
         // La séquence en cache qui partage le plus long préfixe avec le prompt, un token de prompt
         // au moins restant à calculer : ses logits commencent la réponse.
         const long limit = static_cast<long>(r.prompt.size()) - 1;
+        // Une image de Gemma 3 se lit en une seule passe (step()) : un préfixe qui en couperait une s'arrête avant elle.
+        auto whole_images = [&](long n) {
+            if (m.vision && m.vision->bidirectional())
+                for (const request_image& im : r.images)
+                    if (im.start < n && n < im.start + im.tokens) n = im.start;
+            return n;
+        };
         long best_len = 0;
         size_t best = m.idle.size();
         for (size_t i = 0; i < m.idle.size(); ++i)
         {
             // Un modèle à état récurrent ne reprend une séquence qu'à sa longueur ou à un point de reprise
             // (runtime::resume_point()).
-            const long n = m.runtime->resume_point(m.idle[i].seq, std::min(limit, common_prefix(m.idle[i].tokens, r.keys)));
+            const long n = m.runtime->resume_point(m.idle[i].seq,
+                whole_images(std::min(limit, common_prefix(m.idle[i].tokens, r.keys))));
             if (n > best_len)
             {
                 best_len = n;
@@ -2370,6 +2390,18 @@ namespace albireo
                 }
                 n = std::min<long>(n, std::max<long>(0, im.start - done));
             }
+            /*
+                Les tokens d'une image de Gemma 3 se voient les uns les autres : une même passe les lit tous.
+                La tranche s'arrête avant une image qu'elle couperait, ou, quand elle commence par l'image,
+                la lit entière, au-delà de most s'il le faut.
+            */
+            if (m.vision && m.vision->bidirectional())
+                for (const request_image& im : r.images)
+                {
+                    if (!im.features || im.start < done || im.start >= done + n || im.start + im.tokens <= done + n)
+                        continue;
+                    n = im.start > done ? im.start - done : im.tokens;
+                }
             return n;
         };
         // Ajoute à la passe n tokens du prompt de r.
@@ -2396,6 +2428,9 @@ namespace albireo
                     const float* row = im.features->data() + static_cast<size_t>(t - im.start) * width;
                     b.embeddings.insert(b.embeddings.end(), row, row + width);
                 }
+                // L'image entière est dans la tranche (slice()) : ses tokens se voient les uns les autres.
+                if (m.vision->bidirectional() && to - from > 1)
+                    b.bidirectional.push_back({ row0 + from - done, row0 + to - done });
             }
             rows.push_back({ &r, n, last });
             budget -= n;

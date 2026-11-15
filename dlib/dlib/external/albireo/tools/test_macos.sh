@@ -243,6 +243,22 @@ else
   GEMMA3_LOG=$(cat "$HERE/../tests/lfm2/long_prompt.txt"; printf x)
   step "gemma 3 long prompt on the GPU" "Record 3 was travelled by Gaëlle" "$CHAT" "$ENGINE" "$GEMMA3_GPU" --temperature 0 \
     --max 60 "${GEMMA3_LOG%x}"
+  # Ses images (Albireo 4.28.0), quand son projecteur est là : le perroquet carré, puis le zèbre recadré en largeur, posé
+  # entre deux bandes noires dans la vue de 896 pixels.  Les 256 tokens d'une image s'y voient les uns les autres (sans
+  # cela, la description du perroquet s'écarte de celle de llama.cpp dès son quatorzième token).
+  GEMMA3_PROJECTOR=${GEMMA3_PROJECTOR:-$ROOT/build/models/gemma-3-4b-it-mmproj-F16.gguf}
+  PARROT="/Library/User Pictures/Animals/Parrot.heic" ZEBRA="/Library/User Pictures/Animals/Zebra.heic"
+  if [ -f "$GEMMA3_PROJECTOR" ] && [ -f "$PARROT" ] && [ -f "$ZEBRA" ] \
+    && sips -s format jpeg -Z 512 "$PARROT" --out "$WORK/gemma3-parrot.jpg" > /dev/null 2>&1 \
+    && sips -s format jpeg -Z 640 "$ZEBRA" --out "$WORK/gemma3-zebra.jpg" > /dev/null 2>&1 \
+    && sips -c 360 640 "$WORK/gemma3-zebra.jpg" --out "$WORK/gemma3-zebra-wide.jpg" > /dev/null 2>&1
+  then
+    step "gemma 3 image" "scarlet macaw" "$CHAT" "$ENGINE" "$GEMMA3_GPU" --projector "$GEMMA3_PROJECTOR" \
+      --image "$WORK/gemma3-parrot.jpg" --temperature 0 --max 60 "Describe this image in two sentences."
+    step "gemma 3 wide image" "zebra" "$CHAT" "$ENGINE" "$GEMMA3_GPU" --projector "$GEMMA3_PROJECTOR" \
+      --image "$WORK/gemma3-zebra-wide.jpg" --temperature 0 --max 60 "Describe this image in two sentences."
+  else skip "gemma 3 image" "no $GEMMA3_PROJECTOR"
+  fi
 fi
 
 # Gemma 4 sur le GPU : les étapes (Albireo 4.26.0) et les prompts (4.27.0, attention en tuiles en deux tranches de 256

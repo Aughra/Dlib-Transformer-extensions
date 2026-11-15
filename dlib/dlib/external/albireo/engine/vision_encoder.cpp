@@ -76,15 +76,18 @@ namespace albireo
             kind_ = family::pixtral;
         else if (type == "gemma4v")
             kind_ = family::gemma4;
+        else if (type == "gemma3")
+            kind_ = family::gemma3;
         else
             throw std::runtime_error(type.empty() ? std::string("the file holds no image encoder (clip.projector_type)")
                 : "the image encoder of type '" + type + "' is not supported by this engine, which reads those of "
-                  "Qwen3-VL (qwen3vl_merger), of LLaVA-NeXT (mlp with pinpoints), of Pixtral (pixtral) and of Gemma 4 "
-                  "(gemma4v)");
+                  "Qwen3-VL (qwen3vl_merger), of LLaVA-NeXT (mlp with pinpoints), of Pixtral (pixtral), of Gemma 4 "
+                  "(gemma4v) and of Gemma 3 (gemma3)");
         if (!present(f)) throw std::runtime_error("the file holds no vision tensors (v.patch_embd.weight)");
         const bool llava = kind_ == family::llava_next;
         const bool pixtral = kind_ == family::pixtral;
         const bool gemma = kind_ == family::gemma4;
+        const bool gemma3 = kind_ == family::gemma3;
 
         hidden_ = metadata_int(g, "clip.vision.embedding_length", 16, 1 << 14);
         heads_ = metadata_int(g, "clip.vision.attention.head_count", 1, 256);
@@ -97,6 +100,10 @@ namespace albireo
         if (gemma)
             merge_ = g.has("clip.vision.projector.scale_factor")
                 ? metadata_int(g, "clip.vision.projector.scale_factor", 1, 8) : 3;
+        // Gemma 3 : 4, la valeur de toute la famille, quand le fichier ne le donne pas (clip.cpp de llama.cpp).
+        if (gemma3)
+            merge_ = g.has("clip.vision.projector.scale_factor")
+                ? metadata_int(g, "clip.vision.projector.scale_factor", 1, 16) : 4;
         // La largeur de sortie de Pixtral est celle de sa dernière couche : son projection_dim en nomme une autre.
         if (kind_ == family::qwen3vl) out_dim_ = metadata_int(g, "clip.vision.projection_dim", 1, 1 << 17);
         const double eps = g.get_double("clip.vision.attention.layer_norm_epsilon", 1e-6);
@@ -106,7 +113,8 @@ namespace albireo
             throw std::runtime_error("the width of the image encoder is not a multiple of its heads");
         head_dim_ = hidden_ / heads_;
         // Les deux axes prennent chacun un quart des dimensions, tournées par moitiés.
-        if (!llava && head_dim_ % 4 != 0) throw std::runtime_error("unsupported head geometry of the image encoder");
+        if (!llava && !gemma3 && head_dim_ % 4 != 0)
+            throw std::runtime_error("unsupported head geometry of the image encoder");
         /*
             Les blocs par lesquels passe un patch : tous, ou pour LLaVA-NeXT ceux jusqu'à la
             couche de caractéristiques du fichier (la valeur par défaut de la référence,
@@ -143,6 +151,13 @@ namespace albireo
         }
         // Le plus long côté d'une image lue par Pixtral.
         if (pixtral) image_size_ = metadata_int(g, "clip.vision.image_size", factor(), 16384);
+        // La vue carrée de Gemma 3, un nombre entier de carrés regroupés par côté.
+        if (gemma3)
+        {
+            image_size_ = metadata_int(g, "clip.vision.image_size", factor(), 4096);
+            if (image_size_ % factor() != 0)
+                throw std::runtime_error("the view of the Gemma 3 image encoder is not a whole number of pooled squares");
+        }
         for (int c = 0; c < 3; ++c)
         {
             if (g.has("clip.vision.image_mean") && g.at("clip.vision.image_mean").arr_float.size() == 3)
@@ -213,7 +228,7 @@ namespace albireo
             side_ = static_cast<long>(std::lround(std::sqrt(static_cast<double>(cells))));
             if (side_ < 1 || side_ * side_ != cells)
                 throw std::runtime_error("the position table is not a square grid");
-            if (llava && side_ != image_size_ / patch_)
+            if ((llava || gemma3) && side_ != image_size_ / patch_)
                 throw std::runtime_error("the position table of the image encoder does not cover its views");
             const weight_matrix pm = f.matrix("v.position_embd.weight", cells, hidden_);
             pos_.resize(static_cast<size_t>(cells * hidden_));
@@ -432,6 +447,40 @@ namespace albireo
                 throw std::runtime_error("the Gemma 4 image encoder standardizes its output, which this engine does "
                     "not do");
         }
+        else if (gemma3)
+        {
+            /*
+                La norme finale des patchs, celle des carrés regroupés, puis la projection, sans biais.  Le
+                fichier range la projection transposée, D lignes de la largeur du modèle de langage (llama.cpp
+                la transpose dans son graphe) : elle est remise ici à l'endroit, une ligne par sortie, en
+                demi-précision, sur le thread de chargement.
+            */
+            final_.norm_w = f.floats("v.post_ln.weight", static_cast<size_t>(D));
+            final_.norm_b = f.floats("v.post_ln.bias", static_cast<size_t>(D));
+            soft_norm_ = f.floats("mm.soft_emb_norm.weight", static_cast<size_t>(D));
+            const tensor_view* proj = f.find("mm.input_projection.weight");
+            if (!proj || proj->dims.size() < 2 || static_cast<long>(proj->dims[1]) != D)
+                throw std::runtime_error("the Gemma 3 image encoder lacks its projection (mm.input_projection)");
+            out_dim_ = static_cast<long>(proj->dims[0]);
+            if (out_dim_ < 1 || out_dim_ > (1 << 17))
+                throw std::runtime_error("the projector of the image encoder has an invalid width");
+            const weight_matrix pm = f.matrix("mm.input_projection.weight", D, out_dim_);
+            owned_.emplace_back(static_cast<size_t>(out_dim_ * D));
+            uint16_t* half = owned_.back().data();
+            std::vector<float> row(static_cast<size_t>(out_dim_)), col(static_cast<size_t>(D * out_dim_));
+            for (long i = 0; i < D; ++i)
+            {
+                qk_dequantize_row(pm.type, pm.data + static_cast<size_t>(i) * pm.row_bytes, row.data(), out_dim_);
+                for (long o = 0; o < out_dim_; ++o) col[static_cast<size_t>(o * D + i)] = row[static_cast<size_t>(o)];
+            }
+            for (long o = 0; o < out_dim_; ++o) qk_float_to_half_row(col.data() + o * D, half + o * D, D);
+            input_proj_.type = dlib::ggml_type::F16;
+            input_proj_.data = reinterpret_cast<const uint8_t*>(half);
+            input_proj_.rows = out_dim_;
+            input_proj_.cols = D;
+            input_proj_.row_bytes = static_cast<size_t>(D) * sizeof(uint16_t);
+            count(input_proj_);
+        }
         else if (pixtral)
         {
             // La norme après l'embedding des patchs, puis le projecteur des tokens fusionnés.
@@ -520,6 +569,13 @@ namespace albireo
               << " heads, patch " << patch_ << ", views of " << image_size_ << " pixels, " << pinpoints_.size()
               << " pinpoints, output " << out_dim_ << (newline_.empty() ? "" : ", newline") << ", " << weight_type_
               << ")";
+            return o.str();
+        }
+        if (kind_ == family::gemma3)
+        {
+            o << "image encoder Gemma 3 (" << blocks_.size() << " blocks, width " << hidden_ << ", " << heads_
+              << " heads, patch " << patch_ << ", view of " << image_size_ << " pixels, pooling " << merge_ << "x"
+              << merge_ << ", output " << out_dim_ << ", " << weight_type_ << ")";
             return o.str();
         }
         if (kind_ == family::gemma4)
@@ -806,6 +862,7 @@ namespace albireo
             p.tokens = gw * gh + gh - 1;
             return p;
         }
+        // Gemma 3 n'a qu'une vue : le détail n'y change rien, mais il doit être l'un des trois.
         const long tiles = max_tiles(detail);
         if (static_cast<double>(std::max(width, height)) / static_cast<double>(std::min(width, height)) > 200.0)
             throw std::invalid_argument("the sides of the image differ by a ratio over 200");
@@ -819,6 +876,13 @@ namespace albireo
             p.width = std::max<long>(1, static_cast<long>(std::lround(static_cast<double>(width) * s)));
             p.height = std::max<long>(1, static_cast<long>(std::lround(static_cast<double>(height) * s)));
         }
+        if (kind_ == family::gemma3)
+        {
+            // Un token par carré regroupé de la vue, ligne par ligne.
+            p.grid_w = p.grid_h = image_size_ / factor();
+            p.tokens = p.grid_w * p.grid_h;
+            return p;
+        }
         const tile_layout t = best_layout(p.width, p.height, tiles);
         p.tokens = t.tokens;
         p.grid_w = t.tokens;
@@ -831,6 +895,7 @@ namespace albireo
     long vision_encoder::most_tokens(const std::string& detail) const
     {
         if (kind_ == family::gemma4) return gemma_tokens(detail);
+        if (kind_ == family::gemma3) return (image_size_ / factor()) * (image_size_ / factor());
         if (kind_ == family::qwen3vl)
             return detail == "min" ? 64 : detail == "low" ? 256 : detail == "high" ? 1024 : 576;
         if (kind_ == family::pixtral)
@@ -861,7 +926,7 @@ namespace albireo
         const long n = j.n_, D = hidden_, K = 3 * patch_ * patch_, half = head_dim_ / 2, quarter = head_dim_ / 4;
         const long m2 = merge_ * merge_;
         const long grid_w = j.pw_ / merge_;
-        const bool rotary = kind_ != family::llava_next;
+        const bool rotary = kind_ != family::llava_next && kind_ != family::gemma3;
 
         if (kind_ == family::gemma4)
         {
@@ -921,7 +986,10 @@ namespace albireo
             return;
         }
 
-        // La ligne et la colonne du patch i, les patchs pris carré par carré de merge x merge.
+        /*
+            La ligne et la colonne du patch i, les patchs pris carré par carré de merge x merge (Gemma 3 aussi :
+            l'attention de SigLIP ne dépend pas de l'ordre des patchs, et les carrés à regrouper se suivent).
+        */
         auto place = [&](long i, long& row, long& col) {
             const long square = i / m2, within = i % m2;
             row = square / grid_w * merge_ + within / merge_;
@@ -967,7 +1035,7 @@ namespace albireo
             if (!patch_b_.empty()) qk_add(x, patch_b_.data(), D);
             if (!rotary)
             {
-                // Une vue couvre exactement la table des positions.
+                // Une vue (LLaVA-NeXT, Gemma 3) couvre exactement la table des positions.
                 qk_add(x, pos_.data() + (row * side_ + col) * D, D);
                 return;
             }
@@ -1021,6 +1089,18 @@ namespace albireo
         if (image.width <= 0 || image.height <= 0
             || image.pixels.size() != static_cast<size_t>(image.width * image.height * 3))
             throw std::invalid_argument("vision_encoder: the image has no pixels");
+        if (kind_ == family::gemma3)
+        {
+            if (image.width != plan.width || image.height != plan.height)
+                throw std::invalid_argument("vision_encoder: the image does not match its plan");
+            const rgb_image view = gemma3_view(image);
+            j->grid_w_ = j->grid_h_ = image_size_ / factor();
+            j->tokens_ = j->grid_w_ * j->grid_h_;
+            embed_patches(*j, view);
+            j->out_.assign(static_cast<size_t>(j->tokens_ * out_dim_), 0.0f);
+            j->seconds_ += seconds_since(t0);
+            return j;
+        }
         if (kind_ != family::llava_next)
         {
             const long fct = factor();
@@ -1098,7 +1178,7 @@ namespace albireo
         const long n = j.n_, D = hidden_, H = heads_, hd = head_dim_, half = hd / 2;
         const long C = std::min(chunk_rows, n);
         const float scale = 1.0f / std::sqrt(static_cast<float>(hd));
-        const bool rotary = kind_ != family::llava_next;
+        const bool rotary = kind_ != family::llava_next && kind_ != family::gemma3;
         // Pixtral fait tourner des paires de dimensions consécutives, Qwen3-VL des dimensions distantes d'une
         // demi-tête.
         const bool pairs = kind_ == family::pixtral;
@@ -1508,6 +1588,56 @@ namespace albireo
         product(input_proj_, m_.data(), T, D, j.out_.data(), O);
     }
 
+    rgb_image vision_encoder::gemma3_view(const rgb_image& image) const
+    {
+        /*
+            img_tool::resize() de llama.cpp avec PAD_CEIL, que prend son prétraitement à taille fixe : l'image
+            redimensionnée dans le carré, son rapport d'aspect gardé, le côté qui ne le remplit pas arrondi
+            au-dessus (en flottants, comme lui), au filtre bilinéaire de Pillow, collée au milieu d'un carré noir,
+            l'écart arrondi vers le bas.  Une image déjà à la taille du carré reste telle quelle.
+        */
+        const long S = image_size_;
+        if (image.width == S && image.height == S) return image;
+        const float sw = static_cast<float>(S) / static_cast<float>(image.width);
+        const float sh = static_cast<float>(S) / static_cast<float>(image.height);
+        const float s = std::min(sw, sh);
+        const long fw = std::max<long>(1, std::min<long>(static_cast<long>(std::ceil(static_cast<float>(image.width) * s)), S));
+        const long fh = std::max<long>(1, std::min<long>(static_cast<long>(std::ceil(static_cast<float>(image.height) * s)), S));
+        const rgb_image fitted = resize_bilinear(image, fw, fh);
+        rgb_image v;
+        v.width = S;
+        v.height = S;
+        v.pixels.assign(static_cast<size_t>(S * S * 3), 0);
+        const long left = (S - fw) / 2, top = (S - fh) / 2;
+        for (long y = 0; y < fh; ++y)
+            std::memcpy(v.pixels.data() + (static_cast<size_t>(top + y) * S + left) * 3,
+                fitted.pixels.data() + static_cast<size_t>(y) * fw * 3, static_cast<size_t>(fw) * 3);
+        return v;
+    }
+
+    void vision_encoder::project_gemma3(job& j)
+    {
+        /*
+            Le projecteur de Gemma 3, comme clip_graph_siglip de llama.cpp : la norme finale de chaque patch, la
+            moyenne de chaque carré de merge x merge patchs (ses patchs se suivent, les carrés ligne par ligne),
+            une norme par moyenne quadratique avec les poids du fichier, puis la projection.
+        */
+        const long n = j.n_, D = hidden_, m2 = merge_ * merge_, T = n / m2, O = out_dim_;
+        layer_norm_rows(j.x_.data(), final_.norm_w, final_.norm_b, j.x_.data(), n, D);
+        const float inv = 1.0f / static_cast<float>(m2);
+        const float eps = eps_;
+        m_.resize(static_cast<size_t>(T * D));
+        pool_.parallel_for(T, [&](long t, int) {
+            float* dst = m_.data() + t * D;
+            std::fill(dst, dst + D, 0.0f);
+            for (long k = 0; k < m2; ++k) qk_add(dst, j.x_.data() + (t * m2 + k) * D, D);
+            for (long i = 0; i < D; ++i) dst[i] *= inv;
+            const float s = 1.0f / std::sqrt(qk_dot_f32(dst, dst, D) / static_cast<float>(D) + eps);
+            for (long i = 0; i < D; ++i) dst[i] *= s * soft_norm_[static_cast<size_t>(i)];
+        });
+        product(input_proj_, m_.data(), T, D, j.out_.data(), O);
+    }
+
     bool vision_encoder::advance(job& j, double seconds)
     {
         const auto t0 = std::chrono::steady_clock::now();
@@ -1544,6 +1674,12 @@ namespace albireo
                     std::vector<float>().swap(j.features_);
                     std::vector<rgb_image>().swap(j.views_);
                 }
+            }
+            else if (kind_ == family::gemma3)
+            {
+                project_gemma3(j);
+                j.done_ = true;
+                aligned_floats().swap(j.x_);
             }
             else if (kind_ == family::gemma4)
             {

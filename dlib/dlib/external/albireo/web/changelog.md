@@ -2,6 +2,14 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.28.0 — 15 novembre 2026
+
+### Modèles
+
+- Les modèles Gemma 3 qui lisent des images (à partir du 4B) les lisent avec leur projecteur (type `gemma3`) : l'image est redimensionnée dans un carré de 896 pixels, son rapport d'aspect gardé et le reste rempli de noir, lue par un encodeur SigLIP de 27 blocs, puis ses patchs sont regroupés par carrés de 4 × 4, ce qui donne toujours 256 tokens par image. Comme dans llama.cpp, les 256 tokens d'une image se voient les uns les autres dans le modèle de langage, au lieu de ne voir que ceux qui les précèdent ; une image est donc toujours lue en une seule passe. Vérification par rapport à llama.cpp 0.9.0, sur le processeur et en choix glouton, avec gemma-3-4b-it Q4_K_M et son projecteur F16 : même nombre de tokens de prompt (274) ; avec les clés et valeurs en demi-précision, une description identique mot pour mot et, pour une image en PNG, des écarts seulement sur des quasi-égalités de la référence (0,444 contre 0,415 ; 0,466 contre 0,37). Une passe qui contient une image reste sur le processeur. Encodage d'une image sur MacBook Air M2 en mode économie d'énergie : 26 à 30 s, à mesurer hors de ce mode.
+
+---
+
 ## 4.27.0 — 15 novembre 2026
 
 ### Performances

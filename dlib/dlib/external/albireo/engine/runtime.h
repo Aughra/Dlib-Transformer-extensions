@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "model_config.h"
@@ -49,6 +50,12 @@ namespace albireo
                 config().input_width() flottants dans embeddings, à partir de
                 i * config().input_width() : son embedding suivi des tranches qu'un modèle
                 avec DeepStack ajoute à son état caché après ses premières couches.
+
+                bidirectional liste des plages [début, fin) de lignes du lot, chacune dans un
+                seul segment, dont les tokens se voient les uns les autres dans l'attention :
+                un token d'une plage voit les emplacements jusqu'au dernier de la plage, et non
+                jusqu'au sien seulement (les images de Gemma 3, comme llama.cpp les décode sans
+                masque causal ; fork pour macOS).
         !*/
         struct segment
         {
@@ -66,6 +73,7 @@ namespace albireo
         std::vector<long> positions;
         std::vector<long> embedding_rows;
         std::vector<float> embeddings;
+        std::vector<std::pair<long, long>> bidirectional;
 
         void clear()
         {
@@ -76,6 +84,7 @@ namespace albireo
             positions.clear();
             embedding_rows.clear();
             embeddings.clear();
+            bidirectional.clear();
         }
     };
 

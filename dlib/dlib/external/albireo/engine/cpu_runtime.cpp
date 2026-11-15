@@ -797,6 +797,8 @@ namespace albireo
         const float scale = cfg_.attention_scale > 0.0
             ? static_cast<float>(cfg_.attention_scale)
             : 1.0f / std::sqrt(static_cast<float>(hd));
+        // La dernière position que voit chaque token (reach_), croissante dans un segment comme les positions.
+        const std::vector<long>& reach = reach_.empty() ? positions : reach_;
 
         // Les tuiles : des tokens consécutifs d'un segment, dont les positions sont consécutives aussi.
         const long per_tile = std::max<long>(1, tile_rows / rep);
@@ -807,7 +809,7 @@ namespace albireo
             {
                 const long count = std::min(per_tile, s.count - j);
                 tiles_.push_back({ s.sequence, s.start + j, count });
-                span = std::max(span, positions[static_cast<size_t>(s.start + j + count - 1)] + 1);
+                span = std::max(span, reach[static_cast<size_t>(s.start + j + count - 1)] + 1);
             }
         // Une tuile d'une couche à fenêtre lit au plus window + per_tile positions.
         if (window > 0) span = std::min(span, window + per_tile);
@@ -835,7 +837,7 @@ namespace albireo
             const kv_sequence& seq = *sequences_[static_cast<size_t>(tile.sequence)];
             attention_work& w = attention_work_[static_cast<size_t>(thread)];
             const long rows = tile.count * rep;
-            const long last = positions[static_cast<size_t>(tile.start + tile.count - 1)];
+            const long last = reach[static_cast<size_t>(tile.start + tile.count - 1)];
             // Avec une fenêtre, les positions que voit le premier token de la tuile sont les premières lues.
             const long low = window > 0
                 ? std::max<long>(0, positions[static_cast<size_t>(tile.start)] - window + 1) : 0;
@@ -873,10 +875,11 @@ namespace albireo
                         w.s.data(), B, w.scratch.data());
                 for (long a = 0; a < tile.count; ++a)
                 {
-                    // Chaque token voit les positions jusqu'à la sienne, et, avec une fenêtre, à partir de
-                    // own - window + 1 : les scores [from, seen) du morceau comptent.
+                    // Chaque token voit les positions jusqu'à la sienne (jusqu'à la fin de sa plage, dans une plage
+                    // bidirectionnelle), et, avec une fenêtre, à partir de own - window + 1 : les scores
+                    // [from, seen) du morceau comptent.
                     const long own = positions[static_cast<size_t>(tile.start + a)];
-                    const long seen = std::max<long>(0, std::min(m, own + 1 - p));
+                    const long seen = std::max<long>(0, std::min(m, reach[static_cast<size_t>(tile.start + a)] + 1 - p));
                     const long from = window > 0 ? std::max<long>(0, std::min(seen, own - window + 1 - p)) : 0;
                     for (long i = 0; i < rep; ++i)
                     {
@@ -1500,6 +1503,26 @@ namespace albireo
             }
         }
         if (!batch.embedding_rows.empty()) check_given_embeddings(batch, T);
+        /*
+            La dernière position que voit chaque token : la sienne, ou, dans une plage dont les tokens se voient
+            les uns les autres (forward_batch::bidirectional, les images de Gemma 3), la dernière de la plage.
+            Les clés et valeurs de tout le lot sont écrites avant que l'attention ne les lise.
+        */
+        reach_.clear();
+        if (!batch.bidirectional.empty())
+        {
+            reach_ = positions_;
+            for (const auto& span : batch.bidirectional)
+            {
+                bool inside = false;
+                for (const auto& s : batch.segments)
+                    inside = inside || (span.first >= s.start && span.second <= s.start + s.count);
+                if (span.first < 0 || span.second > T || span.first >= span.second || !inside)
+                    throw std::runtime_error("cpu_runtime: a bidirectional span of the batch lies outside one segment");
+                const long last = positions_[static_cast<size_t>(span.second - 1)];
+                for (long t = span.first; t < span.second; ++t) reach_[static_cast<size_t>(t)] = last;
+            }
+        }
         ensure_rope(max_pos + 1);
         if (given) prepare_given_positions(batch, T);
 

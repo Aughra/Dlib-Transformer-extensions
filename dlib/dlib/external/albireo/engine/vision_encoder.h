@@ -23,7 +23,7 @@ namespace albireo
             WHAT THIS OBJECT REPRESENTS
                 L'encodeur d'images d'un modèle qui lit des images, lu depuis un fichier GGUF
                 de projecteur (architecture "clip"), ou depuis les tenseurs de vision et les
-                métadonnées clip du fichier du modèle lui-même.  Quatre familles sont lues.
+                métadonnées clip du fichier du modèle lui-même.  Cinq familles sont lues.
 
                 Qwen3-VL (clip.projector_type "qwen3vl_merger") : un vision transformer dont
                 les patchs sont fusionnés par carrés de merge_size() x merge_size() en tokens
@@ -85,7 +85,18 @@ namespace albireo
                 ligne par ligne, multipliés par la racine de la largeur, normalisés sans poids et
                 projetés à la largeur du modèle de langage.
 
-                Les blocs de Qwen3-VL et de LLaVA-NeXT normalisent avant l'attention et avant
+                Gemma 3 (clip.projector_type "gemma3", fork pour macOS) : un vision transformer
+                SigLIP lit une seule vue carrée de image_size() pixels : l'image redimensionnée
+                dans ce carré, son rapport d'aspect gardé (l'autre côté arrondi au-dessus), au
+                filtre bilinéaire, centrée sur du noir, comme le prétraitement à taille fixe de
+                llama.cpp.  Chaque patch reçoit la ligne de sa case dans la table de positions.
+                Après les blocs et la norme finale, les patchs sont regroupés par moyenne en carrés
+                de merge_size() x merge_size() (4 par défaut), ligne par ligne, normalisés par leur
+                moyenne quadratique avec les poids du fichier, puis projetés à la largeur du
+                modèle de langage, sans biais.  Le décodeur lit les tokens d'une image dans les
+                deux sens (llama.cpp : mtmd_decode_use_non_causal).
+
+                Les blocs de Qwen3-VL, de LLaVA-NeXT et de Gemma 3 normalisent avant l'attention et avant
                 la couche feed-forward, avec une moyenne et un biais ; l'attention lit chaque
                 patch de la vue ; la couche feed-forward active avec la forme tanh de GELU.  Les
                 matrices stockées en bfloat16 sont converties en demi-précision au chargement de
@@ -112,7 +123,7 @@ namespace albireo
                 fonctions const peuvent être appelées depuis n'importe quel thread.
         !*/
     public:
-        enum class family { qwen3vl, llava_next, pixtral, gemma4 };
+        enum class family { qwen3vl, llava_next, pixtral, gemma4, gemma3 };
 
         vision_encoder(std::shared_ptr<model_file> file, thread_pool& pool);
 
@@ -125,8 +136,10 @@ namespace albireo
         // Pixels par côté d'un token fusionné, le facteur dont les côtés d'une image sont des multiples
         // (Qwen3-VL, Pixtral).
         long factor() const { return patch_ * merge_; }
-        // Pixels par côté d'une vue (LLaVA-NeXT), le plus long côté d'une image (Pixtral).
+        // Pixels par côté d'une vue (LLaVA-NeXT, Gemma 3), le plus long côté d'une image (Pixtral).
         long image_size() const { return image_size_; }
+        // Les tokens d'une image se voient les uns les autres dans le décodeur (Gemma 3).
+        bool bidirectional() const { return kind_ == family::gemma3; }
         long output_dim() const { return out_dim_; }
         long deepstack_count() const { return static_cast<long>(deepstack_.size()); }
         long output_width() const { return out_dim_ * (1 + deepstack_count()); }
@@ -158,7 +171,9 @@ namespace albireo
                   multiples de factor(), puis réduite, quand elle en contient plus, à 256, 576 ou
                   1024 tokens fusionnés ; pour Gemma 4, la taille arrondie à des multiples de
                   factor(), son rapport d'aspect gardé, entre 70 et 140, 280 ou 1120 tokens (la
-                  règle calc_size_preserved_ratio de llama.cpp).
+                  règle calc_size_preserved_ratio de llama.cpp) ; pour Gemma 3, la taille de
+                  l'image dans la limite de 4096 pixels par côté, et toujours les mêmes tokens,
+                  quel que soit le détail.
                 - Lève std::invalid_argument pour un autre détail ou une taille inutilisable.
         !*/
         image_plan plan(long width, long height, const std::string& detail) const;
@@ -205,9 +220,9 @@ namespace albireo
 
         /*!
             requires
-                - Pour Qwen3-VL et Pixtral, image.width et image.height sont des multiples
-                  positifs de factor() ; pour LLaVA-NeXT, image est l'image dont plan() a reçu
-                  la taille, décodée en plan.width x plan.height.
+                - Pour Qwen3-VL, Pixtral et Gemma 4, image.width et image.height sont des
+                  multiples positifs de factor() ; pour LLaVA-NeXT et Gemma 3, image est l'image
+                  dont plan() a reçu la taille, décodée en plan.width x plan.height.
             ensures
                 - Renvoie un encodage de l'image avec son premier embedding de patchs calculé.
         !*/
@@ -283,6 +298,9 @@ namespace albireo
         void project_pixtral(job& j);
         void run_block_gemma(job& j, const block& b);
         void project_gemma(job& j);
+        void project_gemma3(job& j);
+        // La vue de Gemma 3 : l'image dans le carré de image_size() pixels, centrée sur du noir.
+        rgb_image gemma3_view(const rgb_image& image) const;
         // Un produit de Gemma 4 : son entrée écrêtée (copiée dans cl_ quand ses bornes sont finies), sa sortie écrêtée.
         void clamped_product(const weight_matrix& w, const clamp& c, const float* x, long n, long x_stride, float* y,
             long y_stride);
@@ -322,6 +340,9 @@ namespace albireo
         // fichier, et la projection vers le modèle de langage.
         weight_matrix pos_table_, input_proj_;
         long pos_cells_ = 0;
+        // Gemma 3 : la norme finale des patchs (v.post_ln, dans final_.norm_w et final_.norm_b) et celle des carrés
+        // regroupés ; sa projection, transposée au chargement, est input_proj_.
+        std::vector<float> soft_norm_;
         // Les matrices converties au chargement de l'encodeur.
         std::vector<std::vector<uint16_t>> owned_;
 

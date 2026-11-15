@@ -23,8 +23,8 @@ namespace albireo
             "lfm2moe" };
         // Les architectures dont le moteur lit les images avec un projecteur : qwen3vl_merger pour Qwen3-VL, et
         // qwen35 depuis Albireo 4.13.0 du fork (qwen35moe, dont aucun projecteur n'a encore été essayé, attend) ;
-        // gemma4v pour Gemma 4 depuis Albireo 4.16.0 du fork.
-        const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe", "qwen35", "gemma4" };
+        // gemma4v pour Gemma 4 depuis Albireo 4.16.0 du fork, gemma3 pour Gemma 3 depuis Albireo 4.28.0.
+        const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe", "qwen35", "gemma4", "gemma3" };
         // Les architectures dont les passes restent sur le processeur : aucune depuis Albireo 4.26.0 du fork, où les
         // étapes de Gemma 4 vont au GPU (LFM2 depuis Albireo 4.20.0, LFM2-MoE depuis 4.21.0, Gemma 3 depuis 4.22.0 ;
         // un modèle dont la largeur n'est pas un multiple de 256, comme Gemma 3 1B, reste sur le processeur, ce que le

@@ -396,6 +396,8 @@ namespace albireo
         aligned_floats partial_;
         std::vector<int> token_sequences_;
         std::vector<long> positions_;
+        // La dernière position que voit chaque token, quand le lot a des plages bidirectionnelles (vide sinon).
+        std::vector<long> reach_;
     };
 
 }
