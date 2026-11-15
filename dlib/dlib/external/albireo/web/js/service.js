@@ -212,7 +212,13 @@ const schemas = {
     box(300, 60, 170, 84, 'Réserve', 's-gold', 'gardés par empreinte') + arrow(300, 124, 170, 124, 'restaure') +
     box(500, 70, 80, 64, 'HF', 's-soft') + arrow(500, 102, 470, 102) +
     text(300, 178, 'clone d’un modèle installé : aucune place ; plafond : les copies des modèles supprimés', 's-f') +
-    text(300, 198, 'au-delà du plafond, les plus anciennes partent d’abord', 's-f'), 215)
+    text(300, 198, 'au-delà du plafond, les plus anciennes partent d’abord', 's-f'), 215),
+  library_dir: schema('La bibliothèque : une étagère que le service consulte',
+    box(20, 70, 170, 64, 'Bibliothèque', 's-gold', 'vos fichiers .gguf') + arrow(190, 102, 330, 102, 'clone') +
+    box(330, 70, 150, 64, 'Albireo', 's-blue', 'modèles installés') +
+    box(510, 70, 70, 64, 'HF', 's-soft') + arrow(510, 102, 480, 102) +
+    text(300, 172, 'lue sans réseau, jamais modifiée ; « Rafraîchir depuis le Mac » en donne la liste', 's-f') +
+    text(300, 192, 'une copie par clone APFS : aucune place prise sur le même disque', 's-f'), 210)
 };
 
 // ---------------------------------------------------------------------------------------------------
@@ -261,8 +267,8 @@ const groups = [
   },
   {
     title: 'Modèles',
-    note: 'Le dossier des modèles demande un redémarrage ; la réserve s’applique tout de suite.',
-    items: ['models_dir', 'reserve_gb']
+    note: 'Le dossier des modèles demande un redémarrage ; la bibliothèque et la réserve s’appliquent tout de suite.',
+    items: ['models_dir', 'library_dir', 'reserve_gb']
   },
   {
     title: 'Accès depuis le réseau',
@@ -688,6 +694,35 @@ const items = {
       "tu ouvres un placard vide.",
     bee: "Un dossier vide ou un disque débranché, et le service démarre sans modèle : plus de réponses jusqu’à ce que " +
       "les fichiers reviennent."
+  },
+  library_dir: {
+    title: 'Bibliothèque du Mac',
+    control: { kind: 'text', placeholder: 'vide : le dossier « library » des données du service' },
+    restart: false,
+    effect: 'Le dossier de fichiers .gguf que « Rafraîchir depuis le Mac » liste dans l’onglet Modèles, pour les charger sans réseau.',
+    principle: 'Des modèles déjà présents sur le Mac, venus d’ailleurs qu’Albireo, deviennent utilisables même sans Hugging Face.',
+    pros: ['Un modèle se charge sans Internet, en quelques secondes : le temps de vérifier son empreinte.',
+      'La copie ne prend pas de place sur le même disque (clone APFS), et le fichier reste dans la bibliothèque.',
+      'Chaque modèle vient avec son projecteur d’images, quand le dossier le contient.'],
+    cons: ['Sur un autre disque que celui des modèles, la copie prend vraiment sa taille.',
+      'Le service refuse un dossier que d’autres comptes du Mac peuvent modifier.'],
+    normal: "Dépose des fichiers .gguf dans ce dossier avec le Finder, puis clique « Rafraîchir depuis le Mac » dans " +
+      "l’onglet Modèles : la section « Sur ce Mac » les liste, avec leur architecture, leur taille et le projecteur " +
+      "qui va avec chacun. « Charger dans Albireo » en fait une copie dans le dossier des modèles. Le service ne " +
+      "déplace, ne renomme et n’efface jamais rien dans la bibliothèque. Vide : <données>/library, créé à la première " +
+      "lecture. Un autre dossier doit exister et être nommé par son chemin complet.",
+    owl: "library_dir vide : <données>/library (effective_library_dir), créé par make_dirs. GET /albireo/v1/library : " +
+      "le dossier doit passer folder_admin_only (propriétaire, permissions POSIX, ACL) ; chaque .gguf du dossier, sans " +
+      "sous-dossier, est ouvert par link_free_file (aucun lien, un seul nom) et décrit par describe_gguf ; les " +
+      "projecteurs sont appariés par pair_projectors, comme un import. POST /albireo/v1/library/load {file} : " +
+      "model_manager::import_files(fichier et projecteur, move = false), SHA-256 par CommonCrypto, copie par " +
+      "fclonefileat. « Déjà dans Albireo » : un modèle installé de même taille et de même architecture ; l’import " +
+      "tranche par l’empreinte.",
+    marmot: "C’est l’étagère de ta chambre où tu ranges des jeux que tu as eus ailleurs. Le service regarde l’étagère " +
+      "et te montre ce qu’il y a ; si tu choisis un jeu, il en fait une photocopie magique qui ne prend pas de place, " +
+      "et laisse l’original sur l’étagère.",
+    bee: "Un dossier que n’importe quel compte du Mac peut modifier, et le service ne le lit plus : quelqu’un pourrait " +
+      "y glisser un faux modèle. Un dossier sur une clé USB débranchée, et la liste est vide."
   },
   reserve_gb: {
     title: 'Réserve des modèles',

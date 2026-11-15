@@ -1000,7 +1000,7 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
             static const char* const keys[] = { "port", "language", "engine", "accelerator",
                 "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "offline",
                 "proxy", "web_access", "web_search", "lan", "lan_port", "lan_password", "warm_history", "spin_us",
-                "gpu_prompt_tokens", "gpu_prompt_context", "models_dir", "reserve_gb" };
+                "gpu_prompt_tokens", "gpu_prompt_context", "models_dir", "reserve_gb", "library_dir" };
             for (const auto& kv : body.items())
             {
                 if (std::find_if(std::begin(keys), std::end(keys), [&](const char* k) { return kv.first == k; })
@@ -1046,6 +1046,15 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
                 && (models_dir.as_string().empty() || dir_exists(models_dir.as_string()))))
             {
                 error = "invalid value for models_dir: an existing folder, or empty for the folder of the data";
+                return false;
+            }
+            // La bibliothèque du Mac : un dossier existant, nommé par son chemin complet, ou vide.
+            const json& library_dir = body["library_dir"];
+            if (body.contains("library_dir") && !(library_dir.is_string() && (library_dir.as_string().empty()
+                || (library_dir.as_string()[0] == '/' && dir_exists(library_dir.as_string())))))
+            {
+                error = "invalid value for library_dir: an existing folder named by its full path, or empty for the "
+                    "folder of the data";
                 return false;
             }
             return one_of("web_search", { "wikipedia", "none" }) && boolean("web_access") && boolean("lan")
@@ -1713,6 +1722,28 @@ document.getElementById('f').addEventListener('submit', async (ev) => {
         };
         srv.Post("/albireo/v1/import", import);
         srv.Post("/albireo/v1/models/import", import);
+        // La bibliothèque du Mac (fork pour macOS) : ses fichiers, et le chargement de l'un d'eux, sans réseau.
+        srv.Get("/albireo/v1/library", [s](const httplib::Request&, httplib::Response& res) {
+            user_error refusal;
+            const json r = s->library(refusal);
+            if (!refusal.code.empty()) send_json(res, 400, ok_result(false, refusal));
+            else send_json(res, 200, r);
+        });
+        srv.Post("/albireo/v1/library/load", [s](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            user_error refusal;
+            json r;
+            if (body["file"].is_string()) r = s->load_from_library(body["file"].as_string(), refusal);
+            else refusal.set("the body names no file", "library_not_found").arg("path", "");
+            if (!refusal.code.empty())
+            {
+                send_json(res, 400, ok_result(false, refusal));
+                return;
+            }
+            r["ok"] = true;
+            send_json(res, 200, r);
+        });
         // Un fichier de modèle envoyé par la page, lu avec les droits de son utilisateur, pour les fichiers
         // que le service ne lit jamais.
         srv.Post(upload_route, [s](const httplib::Request& req, httplib::Response& res,

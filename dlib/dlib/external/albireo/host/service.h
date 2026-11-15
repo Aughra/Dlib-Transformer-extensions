@@ -204,6 +204,30 @@ namespace albireo
         !*/
         json import_folder(const std::string& path, user_error& refusal);
 
+        /*!
+            La bibliothèque du Mac (fork pour macOS) : le dossier de fichiers GGUF du réglage library_dir
+            (<data>/library par défaut, créé à la première lecture), que le service lit sans y écrire.
+
+            library() ensures
+                - Renvoie {"folder", "models": [{"file", "size", "name", "arch", "quantization",
+                  "parameters", "supported", "reason", "projector": {"file", "size"} ou null,
+                  "installed": identifiant du modèle installé de même taille et de même
+                  architecture, ou ""}], "projectors": [les projecteurs qui ne vont avec aucun
+                  modèle du dossier], "skipped": [fichiers écartés : liens, plusieurs noms,
+                  illisibles]}, les modèles par nom de fichier.  Rien n'est lu au-delà du dossier
+                  lui-même, ni par un lien.
+                - Refuse un dossier que d'autres comptes que les administrateurs peuvent modifier
+                  (library_insecure).
+
+            load_from_library(file) ensures
+                - Charge dans Albireo le fichier file de la bibliothèque, et le projecteur que
+                  library() lui associe, en un seul import (model_manager::import_files()), sans
+                  les déplacer ; renvoie le résultat de l'import.
+                - Refuse un nom que library() ne liste pas (library_not_found).
+        !*/
+        json library(user_error& refusal);
+        json load_from_library(const std::string& file, user_error& refusal);
+
         // Applique aussitôt les réglages du réseau : le proxy, et le mode hors ligne, qui
         // met fin aux requêtes en cours.
         void apply_network_settings(const host_settings& s);

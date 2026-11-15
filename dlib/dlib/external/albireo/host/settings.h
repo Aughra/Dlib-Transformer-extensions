@@ -38,6 +38,12 @@ namespace albireo
         !*/
         int port = 8443;
         std::string models_dir;                 // vide : <data>/models
+        /*
+            La bibliothèque du Mac (fork pour macOS) : un dossier de fichiers GGUF que le service lit sans
+            jamais y écrire, que l'onglet Modèles liste (« Rafraîchir depuis le Mac ») et dont il charge un
+            modèle dans Albireo par une copie, un clone APFS sur le même volume.  Vide : <data>/library.
+        */
+        std::string library_dir;
         std::string language = "auto";          // auto, en, fr, de, it, es
         std::string engine = "auto";            // auto : moteur CPU construit pour le Mac
         std::string accelerator = "auto";       // auto : le GPU du Mac (Metal), none : le processeur seul
@@ -94,6 +100,7 @@ namespace albireo
         json to_json() const;
         void from_json(const json& j);
         std::string effective_models_dir() const;
+        std::string effective_library_dir() const;
     };
 
     class settings_store

@@ -105,7 +105,10 @@ const modelErrors = {
   builtin_model: 'Ce modèle fourni avec Albireo ne peut pas être supprimé.',
   delete_failed: 'La suppression a échoué. Vérifiez la réserve et les fichiers du modèle.',
   offline: 'Cette opération demande une connexion au réseau.',
-  stopping: 'Le service est en cours d’arrêt.'
+  stopping: 'Le service est en cours d’arrêt.',
+  library_insecure: 'D’autres comptes que les administrateurs peuvent modifier la bibliothèque du Mac : le service ne la lit pas.',
+  library_unavailable: 'La bibliothèque du Mac ne peut pas être créée. Vérifiez son dossier dans l’onglet Service.',
+  library_not_found: 'Ce fichier n’est plus dans la bibliothèque du Mac. Rafraîchissez la liste.'
 };
 
 function modelError(result) {
@@ -388,9 +391,10 @@ export function modelsTab(body, env) {
     // depuis GitHub, la dernière recherche depuis Hugging Face).
     const refresh = h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
       h('button', { class: 'button', type: 'button',
-        title: 'Relit la liste, la réserve et la dernière recherche gardées sur le Mac, sans réseau',
+        title: 'Relit sans réseau la liste, la réserve, la bibliothèque du Mac et la dernière recherche gardée',
         onclick: async () => {
           await load();
+          await loadLibrary();
           if (lastQuery !== null) search(true);
           toast('Liste relue depuis le Mac.');
         } }, 'Rafraîchir depuis le Mac'),
@@ -417,8 +421,69 @@ export function modelsTab(body, env) {
       h('section', { class: 'svc-group' }, h('h4', null, 'Les modèles'),
         h('p', { class: 'help' }, 'Installés d’abord, puis du plus conseillé au moins conseillé pour ce Mac. Ceux ajoutés ' +
           'depuis Hugging Face y figurent aussi.'), cards),
+      library,
       hub);
   }
+
+  /*
+      La bibliothèque du Mac (fork pour macOS) : les fichiers GGUF d'un dossier du Mac, que le service lit sans réseau et
+      sans y écrire ; « Charger dans Albireo » en fait une copie (un clone, sans place prise), avec son projecteur.
+  */
+  const billionsOf = (n) => n ? billions(n) + ' de paramètres' : 'taille inconnue';
+  const library = h('section', { class: 'svc-group' }, h('h4', null, 'Sur ce Mac'),
+    h('p', { class: 'help' }, 'Lecture de la bibliothèque du Mac…'));
+  const loading = new Set();
+  async function loadLibrary() {
+    let r;
+    try {
+      r = await api.getJSON('/albireo/v1/library');
+    } catch (e) {
+      library.replaceChildren(h('h4', null, 'Sur ce Mac'), h('p', { class: 'error-box', role: 'alert' },
+        modelErrors[e.code] || 'La bibliothèque du Mac ne se lit pas : ' + e.message));
+      return;
+    }
+    const intro = h('p', { class: 'help' }, 'Les fichiers GGUF du dossier ', h('code', null, r.folder || ''), ', lus sans ' +
+      'réseau. « Charger dans Albireo » en fait une copie qui ne prend pas de place sur le disque, avec le projecteur ' +
+      'd’images qui va avec le modèle. Le dossier se change dans l’onglet Service ; on y dépose les fichiers dans le ' +
+      'Finder.');
+    const models = r.models || [], lone = r.projectors || [];
+    const card = (f, model) => {
+      const busy = loading.has(f.file);
+      const parts = [model ? (f.name && f.name !== f.file ? f.name + ' · ' : '') + (f.arch || '?') + ' · ' +
+        (f.quantization || '?') + ' · ' + billionsOf(f.parameters) + ' · ' + gb(f.size || 0)
+        : 'projecteur d’images · ' + (f.arch || '?') + ' · ' + gb(f.size || 0)];
+      if (model && f.projector) parts.push('avec son projecteur ' + f.projector.file + ' (' + gb(f.projector.size) + ')');
+      if (model && f.installed) parts.push('déjà dans Albireo (' + f.installed + ')');
+      if (model && !f.supported) parts.push('le moteur ne lit pas cette architecture');
+      const action = model && !f.supported ? null : h('button', { class: 'button', type: 'button', disabled: busy,
+        onclick: async () => {
+          loading.add(f.file);
+          loadLibrary();
+          try {
+            const done = await api.postJSON('/albireo/v1/library/load', { file: f.file });
+            const ids = (done.imported || []).concat(done.already || []);
+            toast(done.imported && done.imported.length ? f.file + ' est chargé dans Albireo.'
+              : done.already && done.already.length ? f.file + ' était déjà dans Albireo (' + ids.join(', ') + ').'
+                : done.pending && done.pending.length ? 'Le projecteur attend son modèle.'
+                  : (done.errors && done.errors[0]) || 'Rien n’a été chargé.', !ids.length && !(done.pending || []).length);
+          } catch (e) {
+            toast(modelErrors[e.code] || e.message, true);
+          }
+          loading.delete(f.file);
+          load();
+          loadLibrary();
+        } }, busy ? 'Chargement…' : f.installed ? 'Charger de nouveau' : 'Charger dans Albireo');
+      return h('div', { class: 'svc-card hub-card' + (model && !f.supported ? ' incompatible' : '') },
+        h('div', { class: 'svc-head' }, h('div', { class: 'svc-title' }, h('span', null, f.file)), action),
+        h('p', { class: 'svc-where' }, parts.join(' · ')));
+    };
+    library.replaceChildren(h('h4', null, 'Sur ce Mac'), intro,
+      ...(models.length || lone.length ? [] : [h('p', { class: 'help' }, 'Aucun fichier GGUF dans ce dossier.')]),
+      ...models.map((f) => card(f, true)), ...lone.map((f) => card(f, false)),
+      ...((r.skipped || []).length ? [h('p', { class: 'help' }, 'Écartés : ' + r.skipped.map((s) => s.file + ' (' +
+        (s.reason === 'link' ? 'lien' : s.reason === 'several names' ? 'plusieurs noms' : 'illisible') + ')').join(', '))] : []));
+  }
+  loadLibrary();
 
   /*
       Hugging Face : tous les modèles GGUF publiés, au-delà du catalogue.  Les compatibles d'abord ; ceux que le moteur
@@ -455,7 +520,6 @@ export function modelsTab(body, env) {
   loadRecent();
   hubInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
 
-  const billionsOf = (n) => n ? billions(n) + ' de paramètres' : 'taille inconnue';
   const byCompat = (a, b) => (b.compatible === true) - (a.compatible === true);
 
   // local : la réponse gardée sur le Mac, sans réseau.  Hors ligne, le service la donne de lui-même.

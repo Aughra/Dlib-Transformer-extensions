@@ -70,6 +70,12 @@ if [ ! -f "$HOME_DIR/settings.json" ]; then
   chmod 600 "$HOME_DIR/import/catalog/catalog.json"
   echo "{\"port\": $PORT, \"offline\": true, \"default_model\": false}" > "$HOME_DIR/settings.json"
 fi
+# La bibliothèque du Mac (Albireo 4.30.0) : un clone du petit Qwen 3.5, que la page charge dans Albireo.
+LIBRARY_MODEL=$ROOT/build/models/Qwen3.5-0.8B-Q8_0.gguf
+mkdir -p "$HOME_DIR/library" && chmod 700 "$HOME_DIR/library"
+if [ -f "$LIBRARY_MODEL" ] && [ ! -f "$HOME_DIR/library/Qwen3.5-0.8B-Q8_0.gguf" ]; then
+  cp -c "$LIBRARY_MODEL" "$HOME_DIR/library/"
+fi
 ALBIREO_HOME=$HOME_DIR "$BIN/albireo-service" --console > "$WORK/service.log" 2>&1 &
 SERVICE=$!
 stop() { [ "${PAGE_TEST_KEEP:-0}" = 1 ] || kill -TERM "$SERVICE" 2>/dev/null; }

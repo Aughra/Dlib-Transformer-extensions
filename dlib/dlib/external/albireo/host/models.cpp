@@ -369,14 +369,16 @@ namespace albireo
             d["experts"] = static_cast<long long>(g.get_int(arch + ".expert_count", 0));
             /*
                 Un décodeur qui lit les images : Qwen3-VL, un décodeur LLaVA, dont le vocabulaire contient
-                <image>, ou un décodeur Mistral, dont le vocabulaire contient [IMG] et [IMG_END].
+                <image>, un décodeur Mistral, dont le vocabulaire contient [IMG] et [IMG_END], ou un décodeur
+                Gemma 3 ou Gemma 4 (fork pour macOS), dont le vocabulaire contient <start_of_image> ou <|image|>.
             */
             bool images = reads_images(arch);
             if (!images && g.has("tokenizer.ggml.tokens"))
             {
                 const std::vector<std::string>& tokens = g.at("tokenizer.ggml.tokens").arr_str;
                 auto holds = [&](const char* t) { return std::find(tokens.begin(), tokens.end(), t) != tokens.end(); };
-                images = holds("<image>") || (holds("[IMG]") && holds("[IMG_END]"));
+                images = holds("<image>") || (holds("[IMG]") && holds("[IMG_END]"))
+                    || ((arch == "gemma3" || arch == "gemma4") && (holds("<start_of_image>") || holds("<|image|>")));
             }
             d["reads_images"] = images;
             if (images)
@@ -2948,6 +2950,11 @@ namespace albireo
         {
             files.push_back(path);
         }
+        return import_files(files, base, move);
+    }
+
+    json model_manager::import_files(const std::vector<std::string>& files, const std::string& base, bool move)
+    {
         std::vector<import_item> items;
         for (const auto& f : files)
         {

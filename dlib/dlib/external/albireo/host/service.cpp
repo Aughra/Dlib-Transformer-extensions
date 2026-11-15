@@ -24,6 +24,7 @@
 #include "certificates.h"
 #include "crypto.h"
 #include "http_fetch.h"
+#include "hub.h"
 #include "web_access.h"
 
 namespace albireo
@@ -828,6 +829,128 @@ namespace albireo
         }
         if (stopping_) return;
 
+    }
+
+    json service::library(user_error& refusal)
+    {
+        const std::string folder = settings_->get().effective_library_dir();
+        json o = json::object();
+        o["folder"] = folder;
+        o["models"] = json::array();
+        o["projectors"] = json::array();
+        o["skipped"] = json::array();
+        if (!dir_exists(folder) && !make_dirs(folder))
+        {
+            refusal.set("the library folder " + folder + " cannot be created", "library_unavailable").arg("path", folder);
+            return json::object();
+        }
+        if (!folder_admin_only(folder))
+        {
+            refusal.set("the library folder " + folder + " lets other accounts than the administrators write in it",
+                "library_insecure").arg("path", folder);
+            return json::object();
+        }
+        // Les fichiers GGUF du dossier, ouverts sans lien et par un seul nom, décrits par leur en-tête.
+        std::vector<std::string> names;
+        for (const auto& n : list_dir(folder))
+            if (ends_with(n, ".gguf")) names.push_back(n);
+        std::sort(names.begin(), names.end());
+        std::vector<pairing_file> decoders, projectors;
+        std::vector<json> decoder_rows, projector_rows;
+        for (const auto& n : names)
+        {
+            const std::string path = join_path(folder, n);
+            link_free_file f;
+            std::string why;
+            if (!f.open(path, folder, why) || f.links() != 1)
+            {
+                json s = json::object();
+                s["file"] = n;
+                s["reason"] = why == "link" ? "link" : f.is_open() ? "several names" : "unreadable";
+                o["skipped"].push_back(s);
+                continue;
+            }
+            const uint64_t size = f.size();
+            f.close();
+            const json d = describe_gguf(path);
+            if (d.contains("error"))
+            {
+                json s = json::object();
+                s["file"] = n;
+                s["reason"] = "unreadable";
+                o["skipped"].push_back(s);
+                continue;
+            }
+            pairing_file p;
+            p.name = n;
+            p.description = d;
+            json row = json::object();
+            row["file"] = n;
+            row["size"] = static_cast<unsigned long long>(size);
+            row["name"] = d["name"];
+            row["arch"] = d["arch"];
+            if (d["projector"].as_bool(false))
+            {
+                projectors.push_back(p);
+                projector_rows.push_back(row);
+                continue;
+            }
+            const std::string arch = d["arch"].as_string();
+            row["quantization"] = d["quantization"];
+            row["parameters"] = d["parameters"];
+            const bool supported = engine_reads_architecture(arch);
+            row["supported"] = supported;
+            row["reason"] = supported ? "" : "the engine does not read the architecture " + arch;
+            row["projector"] = json();
+            row["installed"] = "";
+            for (const auto& m : db_->models())
+                if (m.size == size && m.descriptor["arch"].as_string() == arch) row["installed"] = m.id;
+            decoders.push_back(p);
+            decoder_rows.push_back(row);
+        }
+        // Chaque projecteur va avec le modèle du dossier que choisit l'appariement des imports.
+        const std::vector<int> pairs = pair_projectors(decoders, projectors);
+        std::vector<bool> paired(projectors.size(), false);
+        for (size_t k = 0; k < pairs.size(); ++k)
+        {
+            if (pairs[k] < 0) continue;
+            json& row = decoder_rows[static_cast<size_t>(pairs[k])];
+            if (!engine_reads_images_of(row["arch"].as_string())) continue;
+            json pr = json::object();
+            pr["file"] = projector_rows[k]["file"];
+            pr["size"] = projector_rows[k]["size"];
+            row["projector"] = pr;
+            paired[k] = true;
+        }
+        for (auto& row : decoder_rows) o["models"].push_back(row);
+        for (size_t k = 0; k < projector_rows.size(); ++k)
+            if (!paired[k]) o["projectors"].push_back(projector_rows[k]);
+        return o;
+    }
+
+    json service::load_from_library(const std::string& file, user_error& refusal)
+    {
+        const json list = library(refusal);
+        if (!refusal.code.empty()) return json::object();
+        const std::string folder = list["folder"].as_string();
+        std::vector<std::string> files;
+        for (const auto& m : list["models"].elements())
+            if (m["file"].as_string() == file)
+            {
+                files.push_back(join_path(folder, file));
+                if (m["projector"].is_object()) files.push_back(join_path(folder, m["projector"]["file"].as_string()));
+            }
+        for (const auto& p : list["projectors"].elements())
+            if (p["file"].as_string() == file) files.push_back(join_path(folder, file));
+        if (files.empty())
+        {
+            refusal.set("the library holds no model file " + file, "library_not_found").arg("path", file);
+            return json::object();
+        }
+        std::lock_guard<std::mutex> serial(import_m_);
+        const json r = models_->import_files(files, folder, false);
+        log_info("library: " + file + ", " + std::to_string(r["imported"].size()) + " models imported");
+        return r;
     }
 
     bool service::secure_inbox(std::string& error)
@@ -1656,6 +1779,7 @@ namespace albireo
         s["data_dir"] = data_dir_;
         s["models_dir"] = st.effective_models_dir();
         s["models_dir_free"] = static_cast<unsigned long long>(free_disk_space(st.effective_models_dir()));
+        s["library_dir"] = st.effective_library_dir();
 
         json host = json::object();
         const cpu_info cpu = read_cpu_info();

@@ -2,6 +2,19 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 4.30.0 — 15 novembre 2026
+
+### Accès et documents
+
+- La bibliothèque du Mac : un dossier de fichiers GGUF (réglage « Bibliothèque du Mac » de l'onglet Service, par défaut le dossier « library » des données du service) que le service lit sans réseau et sans jamais y écrire. Le bouton « Rafraîchir depuis le Mac » de l'onglet Modèles la liste dans une section « Sur ce Mac » : chaque modèle avec son architecture, sa quantification, sa taille, le projecteur d'images qui va avec lui et la mention « déjà dans Albireo » ; ceux que le moteur ne lit pas sont en gris. « Charger dans Albireo » installe le modèle et son projecteur par une copie, un clone APFS qui ne prend pas de place sur le même disque, après vérification de leur empreinte ; le fichier reste dans la bibliothèque. Routes `GET /albireo/v1/library` et `POST /albireo/v1/library/load`. Un dossier que d'autres comptes du Mac peuvent modifier est refusé.
+- Les modèles Gemma 3 et Gemma 4 dont le vocabulaire contient les tokens d'image sont reconnus comme lisant les images, ce qui leur associe leur projecteur lors d'un import.
+
+### Corrections
+
+- Le mémo du portage annonçait 113 vérifications du banc de la page ; il y en avait 112. Le banc en compte 114 avec les deux vérifications de la bibliothèque.
+
+---
+
 ## 4.29.0 — 15 novembre 2026
 
 ### Modèles

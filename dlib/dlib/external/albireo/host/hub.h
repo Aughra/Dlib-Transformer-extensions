@@ -24,6 +24,10 @@ namespace albireo
     // Les fichiers GGUF du dépôt repo, les projecteurs d'images (mmproj) à part : {"files": [...], "projectors": [...]}.
     bool hub_files(const std::string& repo, json& out, std::string& error);
 
+    // Indique si le moteur lit l'architecture arch, et s'il en lit les images avec un projecteur.
+    bool engine_reads_architecture(const std::string& arch);
+    bool engine_reads_images_of(const std::string& arch);
+
     // L'entrée de catalogue du fichier file du dépôt repo, avec le projecteur projector (vide : aucun).
     bool hub_entry(const std::string& repo, const std::string& file, const std::string& projector, json& entry,
         std::string& error);

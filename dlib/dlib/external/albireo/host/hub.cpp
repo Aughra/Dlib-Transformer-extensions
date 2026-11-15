@@ -336,4 +336,15 @@ namespace albireo
         }
         return true;
     }
+
+    bool engine_reads_architecture(const std::string& arch)
+    {
+        return engine_architectures.count(arch) > 0;
+    }
+
+    bool engine_reads_images_of(const std::string& arch)
+    {
+        return vision_architectures.count(arch) > 0;
+    }
+
 }

@@ -331,6 +331,9 @@ schemas = {
                                               "every prompt to the processor."},
         "models_dir": {"type": "string", "description": "The folder of the models, an existing one, or empty for "
                        "the models folder of the data."},
+        "library_dir": {"type": "string", "description": "The library of the Mac: a folder of GGUF files that "
+                        "/albireo/v1/library lists and the service never writes in, an existing one named by its "
+                        "full path, or empty for the library folder of the data."},
         "reserve_gb": {"type": "integer", "minimum": 0, "maximum": 100000, "default": 200,
                        "description": "The limit of the reserve, in GB: the copies of the models that are no longer "
                                       "installed; beyond it, the least recently kept or restored copies leave first. "
@@ -752,6 +755,42 @@ paths = {
         "requestBody": json_body({"type": "object", "required": ["path"], "properties": {"path": {"type": "string"}}}),
         "responses": {"200": reply("Imported files and errors", {"type": "object"}),
                       "400": reply("Refused", import_refusal)}}},
+    "/albireo/v1/library": {"get": {
+        "tags": ["Service"], "summary": "The GGUF files of the library of the Mac",
+        "description": "The folder of the library_dir setting (created at the first reading when it is the default "
+                       "one), read without the network and never written: every GGUF file of the folder itself, "
+                       "opened through no link and by a single name, described by its header; the projectors go "
+                       "with the models of the folder as an import pairs them. A folder that other accounts than "
+                       "the administrators can write in is refused (library_insecure).",
+        "responses": {"200": reply("The files", {"type": "object", "properties": {
+            "folder": {"type": "string"},
+            "models": {"type": "array", "items": {"type": "object", "properties": {
+                "file": {"type": "string"}, "size": {"type": "integer"}, "name": {"type": "string"},
+                "arch": {"type": "string"}, "quantization": {"type": "string"}, "parameters": {"type": "integer"},
+                "supported": {"type": "boolean", "description": "The engine reads its architecture."},
+                "reason": {"type": "string"},
+                "projector": {"type": ["object", "null"], "description": "The projector of the folder that goes "
+                              "with it: {file, size}."},
+                "installed": {"type": "string", "description": "An installed model of the same size and "
+                              "architecture, or empty."}}}},
+            "projectors": {"type": "array", "description": "The projectors that go with no model of the folder.",
+                           "items": {"type": "object"}},
+            "skipped": {"type": "array", "description": "Links, files of several names and unreadable files: "
+                        "{file, reason}.", "items": {"type": "object"}}}}),
+                      "400": reply("The folder cannot be created or is not secure (library_unavailable, "
+                                   "library_insecure)", {"type": "object"})}}},
+    "/albireo/v1/library/load": {"post": {
+        "tags": ["Administration"], "summary": "Loads a file of the library of the Mac into Albireo",
+        "description": "Imports the file, with the projector that /albireo/v1/library pairs with it, without the "
+                       "network and without moving them: the copy is an APFS clone on the same volume.",
+        "requestBody": json_body({"type": "object", "required": ["file"], "properties": {"file": {"type": "string"}}}),
+        "responses": {"200": reply("The result of the import", {"type": "object", "properties": {
+            "ok": {"type": "boolean"}, "imported": {"type": "array", "items": {"type": "string"}},
+            "already": {"type": "array", "items": {"type": "string"}},
+            "pending": {"type": "array", "items": {"type": "string"}},
+            "errors": {"type": "array", "items": {"type": "string"}}}}),
+                      "400": reply("A file the library does not list (library_not_found), or a folder refused",
+                                   {"type": "object"})}}},
     "/albireo/v1/models/upload": {"post": {
         "tags": ["Administration"], "summary": "Installs a GGUF file sent in the body",
         "description": "The body is the file, of the length its Content-Length header gives: a body without length, "

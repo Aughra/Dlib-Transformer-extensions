@@ -99,6 +99,16 @@
   "shot": "settings-models.png"
  },
  {
+  "name": "library of the Mac listed",
+  "eval": "await new Promise(r=>setTimeout(r,800)); const t=document.querySelector('.dialog').innerText; return t.includes('Sur ce Mac') && t.includes('Qwen3.5-0.8B-Q8_0.gguf')",
+  "expect": true
+ },
+ {
+  "name": "library model loaded into Albireo",
+  "eval": "const card=[...document.querySelectorAll('.dialog .svc-card')].find(c=>c.innerText.includes('Qwen3.5-0.8B-Q8_0.gguf')&&c.querySelector('button')); card.querySelector('button').click(); for(let i=0;i<120;i++){await new Promise(r=>setTimeout(r,500)); const j=await (await fetch('/albireo/v1/library')).json(); const m=j.models.find(x=>x.file==='Qwen3.5-0.8B-Q8_0.gguf'); if(m&&m.installed) return true;} return false",
+  "expect": true
+ },
+ {
   "name": "close settings",
   "eval": "[...document.querySelectorAll('.dialog button')].find(b=>b.innerText.trim()==='Fermer').click(); await new Promise(r=>setTimeout(r,400)); return !document.querySelector('.dialog')",
   "expect": true

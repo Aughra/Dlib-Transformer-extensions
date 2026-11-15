@@ -259,6 +259,10 @@ namespace albireo
                   pour chaque fichier lu}.
         !*/
         json import_path(const std::string& path, const std::string& base, bool move = false);
+
+        // La même chose pour les fichiers files, chacun sous base, en un seul import, pour qu'un projecteur aille
+        // avec son décodeur (la bibliothèque du Mac, fork pour macOS).
+        json import_files(const std::vector<std::string>& files, const std::string& base, bool move = false);
         /*!
             ensures
                 - Installe les modèles du paquet hors ligne de folder que liste catalog, son

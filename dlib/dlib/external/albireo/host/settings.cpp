@@ -106,6 +106,7 @@ namespace albireo
         json j = json::object();
         j["port"] = port;
         j["models_dir"] = models_dir;
+        j["library_dir"] = library_dir;
         j["language"] = language;
         j["engine"] = engine;
         j["accelerator"] = accelerator;
@@ -142,6 +143,7 @@ namespace albireo
         port = static_cast<int>(j["port"].as_int(d.port));
         if (port < 1 || port > 65535) port = d.port;
         models_dir = j["models_dir"].str(d.models_dir);
+        library_dir = j["library_dir"].str(d.library_dir);
         language = j["language"].str(d.language);
         engine = j["engine"].str(d.engine);
         if (engine != "auto") engine = d.engine;
@@ -189,6 +191,11 @@ namespace albireo
     std::string host_settings::effective_models_dir() const
     {
         return models_dir.empty() ? join_path(data_dir(), "models") : models_dir;
+    }
+
+    std::string host_settings::effective_library_dir() const
+    {
+        return library_dir.empty() ? join_path(data_dir(), "library") : library_dir;
     }
 
     settings_store::settings_store(const std::string& path) : path_(path)
