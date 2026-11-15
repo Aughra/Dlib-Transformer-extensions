@@ -5,7 +5,7 @@
 ## État actuel
 
 - `main` = **Albireo 4.27.0** ; Pseudalis 1.0.5 avec les corrections du fork. Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
-- **Vrai service** : tourne en **4.26.2** (relancé le 2026-11-15 à 9 h 28 ; il s'était arrêté le 14 à 22 h 23 ; port 18443, réseau 8444 sans mot de passe, journal `build/albireo-home/logs/console.log`).
+- **Vrai service** : tourne en **4.27.0** (relancé le 2026-11-15 à 10 h 59 ; port 18443, réseau 8444 sans mot de passe, journal `build/albireo-home/logs/console.log`).
 - **Tests** : `test_macos.sh` d'Albireo 53 sur 53, de Pseudalis 34 sur 34 (encore le 2026-11-15, après le retrait des conditions Windows de dlib) ; banc de la page 113 vérifications ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
 - **Blog** : épisode 43 ; **notes pour l'auteur** : changement 23, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
 - **Le M2 reste en mode économie d'énergie** (choix de l'humain) : aucune mesure de vitesse ; celles de 4.21.0 à 4.27.0 se feront sur le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
