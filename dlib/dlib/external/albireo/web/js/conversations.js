@@ -18,7 +18,7 @@ import { imageIds } from './files.js';
 import { applyCompaction, cancelCompaction, compactions } from './generation.js';
 import { t } from './i18n.js';
 import { forgetDocument, forgetOwner } from './indexing.js';
-import { go } from './navigation.js';
+import { afterDeletion } from './navigation.js';
 import { newProject } from './projects.js';
 import { answering } from './sidebar.js';
 import { state } from './state.js';
@@ -135,7 +135,7 @@ async function setProject(c, projectId) {
   refreshViews();
 }
 
-async function removeConversation(c) {
+export async function removeConversation(c) {
   const ok = await confirmDialog(t('deleteDiscussion'), t('deleteDiscussionText', { title: c.title || t('untitled') }));
   if (!ok) return;
   deleted.add(c.id);
@@ -153,8 +153,7 @@ async function removeConversation(c) {
   await images.removeOwner(c.id).catch(() => {});
   broadcast({ type: 'deleted', id: c.id });
   state.conversations = state.conversations.filter((x) => x.id !== c.id);
-  if (state.current && state.current.id === c.id) go('#/');
-  else refreshViews();
+  afterDeletion(c.id);
 }
 
 // Le nom du fichier d'une discussion : son titre sans les caractères qu'un nom de fichier ne peut pas contenir.

@@ -9,6 +9,7 @@ import * as rag from './rag.js';
 import * as store from './store.js';
 import { generations } from './composer.js';
 import { estimateTokens, maxProjectImages, maxProjectItems } from './context.js';
+import { liveCopy, removeConversation } from './conversations.js';
 import { confirmDialog, promptDialog } from './dialogs.js';
 import { documentAccept } from './documents.js';
 import { formatNumber, h, iconButton, storageFailed, toast } from './dom.js';
@@ -239,7 +240,12 @@ export function renderProject(p) {
   for (const c of convs) {
     convList.append(h('div', { class: 'row click', onclick: () => go('#/c/' + c.id) },
       h('span', { html: icon('chat') }), h('span', { class: 'label' }, c.title || t('untitled')),
-      h('span', { class: 'faint' }, new Date(c.updated).toLocaleDateString(language()))));
+      h('span', { class: 'faint' }, new Date(c.updated).toLocaleDateString(language())),
+      // Une discussion quitte son projet comme la liste des discussions, une fois confirmé (original, Albireo 1.0.23).
+      iconButton('trash', t('delete'), (ev) => {
+        ev.stopPropagation();
+        removeConversation(liveCopy(c));
+      })));
   }
   if (!convs.length) convList.append(h('div', { class: 'empty-note' }, t('noDiscussions')));
   // La carte de la connaissance, qui prend aussi les fichiers déposés sur elle, avec le nombre de ses éléments.

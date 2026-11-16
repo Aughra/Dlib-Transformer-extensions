@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version d'Albireo](../dlib/dlib/external/albireo/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 5.8.0, 16 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Albireo 5.9.0, 16 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -103,6 +103,8 @@ Le fork ne fusionne plus l'original, mais en reprend à la main ce qui lui sert 
 | Champs qui dessinent le markdown à la frappe (`mdfield.js`), questions dessinées, `==surligné==` | 1.0.15 (`1a77523`) | Les mêmes ; le banc de la page cherche la zone de saisie par `.composer .md-field` | v. 4.25.0 |
 | Boutons Raisonnement, Agent et Web selon les capacités vérifiées de chaque modèle | 1.0.16 (`320ae18`) | Les mêmes, dans `status.js` ; les entrées venues de Hugging Face (propres au fork), aux capacités devinées, ne restreignent rien, comme les imports | v. 5.6.0 |
 | Format de Mistral Small 3.2 : prompt système par défaut avec les dates, outils avant la dernière question, identifiants des appels et des résultats | 1.0.14 (`2f67de2`) | Le même (`chat_format.cpp`, test repris dans `test_chat_format`) ; essayé sur le vrai modèle | v. 5.7.0 |
+| Niveau d'effort du modèle extérieur du relais, choisi dans la discussion | 1.0.23 (`37c6304`) | Le même menu du bouton du raisonnement (`composer.js`, `layout.js`) | v. 5.9.0 |
+| Supprimer une discussion depuis la page de son projet | 1.0.23 (`37c6304`) | La même corbeille ; la page du projet reste affichée (`afterDeletion()`, `navigation.js`) | v. 5.9.0 |
 | Relais vers un moteur extérieur (`albireo-relay` : OpenAI et compatibles, Ollama, Claude et sa recherche web), pseudonymisé par Pseudalis, hors ligne limité au réseau local | 1.0.22 (`dd858d5`), 1.0.23 (`37c6304`), lus au commit `3bea372` | Le même service (`host/relay.cpp`, `host/pseudonyms.cpp`, commentaires traduits). Différences : Pseudalis donne les valeurs en un seul appel sous sa clé de séance (3.1.0), au lieu d'étiquettes ou d'un second appel à `/v1/text/restore` que ses pseudonymes sans retour ne permettent plus, et un Pseudalis qui ne les donne pas garde le texte ; plus de réglage `tags` ; la clé dans `relay.secret` en 0600 au lieu de DPAPI ; le dossier de Pseudalis vérifié par propriétaire et droits du Mac au lieu des ACL de SYSTEM ; les réglages dans l'onglet Service de la page au lieu de l'icône de notification ; `/albireo/v1/relay/test` sans jeton d'administration, comme toutes les routes du fork. Le cadenas de la zone de saisie comme dans l'original, sans le choix du niveau d'effort (le relais choisit celui du modèle) ; messages d'erreur du relais en français. Réglages et essai du relais depuis le Mac seul (adresse locale, Host local, origine de la page ou aucune), là où l'original les réserve à l'administrateur par son jeton : le fork n'a plus de jeton, et son accès réseau n'a pas de mot de passe | v. 5.3.0, v. 5.4.0, v. 5.4.1 |
 
 ## Ce qui reste comme dans l'original

@@ -16,7 +16,7 @@ import { narrowScreen, storageFailed } from './dom.js';
 import { cancelDraftSave, draftKey, drafts, forgetDraft, imageIdsOf, storedDraft, storeDraft } from './drafts.js';
 import { forgetOwner, indexAttachments } from './indexing.js';
 import { state, ui } from './state.js';
-import { answeredElsewhere } from './tabs.js';
+import { answeredElsewhere, refreshViews } from './tabs.js';
 import { renderAll } from './thread.js';
 
 /*
@@ -91,6 +91,23 @@ export function leaveCurrent() {
   const c = state.current;
   if (c && c.incognito) stopGeneration(c.id);
   forgetIncognito();
+}
+
+/*
+    Les pages suivent la suppression d'une discussion, ici ou dans un autre onglet (repris de l'original, Albireo
+    1.0.23) : la discussion affichée, quand c'est elle, cède la place à une nouvelle discussion ; une page de projet ou
+    des licences qui la cache reste affichée.
+*/
+export function afterDeletion(id) {
+  if (!(state.current && state.current.id === id)) {
+    refreshViews();
+  } else if (state.view !== 'chat') {
+    leaveCurrent();
+    showDiscussion(newConversation(null));
+    refreshViews();
+  } else {
+    go('#/');
+  }
 }
 
 // Une nouvelle discussion, que remplit le brouillon de "New chat".

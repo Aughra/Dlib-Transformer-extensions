@@ -340,5 +340,24 @@
   "name": "relay off again",
   "eval": "const put=(o)=>fetch('/albireo/v1/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({relay:o})}); await put({enabled:false,url:'',model:'',auth:'key'}); for(let i=0;i<60&&document.querySelector('.composer .toggle.relay:not(.hidden)');i++) await new Promise(r=>setTimeout(r,500)); return !document.querySelector('.composer .toggle.relay:not(.hidden)')",
   "expect": true
+ },
+ {
+  "name": "relay effort menu",
+  "eval": "const put=(o)=>fetch('/albireo/v1/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({relay:o})}); await put({enabled:true,provider:'openai',url:'http://127.0.0.1:9/v1',auth:'none',model:'essai',reasoning:true}); T.btn('Nouvelle discussion').click(); let lock=null; for(let i=0;i<60;i++){ lock=document.querySelector('.composer .toggle.relay:not(.hidden)'); if(lock) break; await new Promise(r=>setTimeout(r,500)); } if(!lock) return 'no padlock'; lock.click(); await new Promise(r=>setTimeout(r,300)); const reason=document.querySelector('.composer .toggle.reason'); const before=reason.innerText.trim(); reason.click(); await new Promise(r=>setTimeout(r,300)); const items=[...document.querySelectorAll('.menu [role=menuitem]')].map(e=>e.innerText.trim()); const high=[...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Élevé'); if(high) high.click(); await new Promise(r=>setTimeout(r,300)); const after=document.querySelector('.composer .toggle.reason').innerText.trim(); const orig=window.fetch; let sent=null; window.fetch=(u,o)=>{ if(String(u).includes('/v1/chat/completions')&&o&&o.body){ try{ const b=JSON.parse(o.body); if(b.model==='albireo-relay') sent=b; }catch(e){} } return orig(u,o); }; T.ask('Bonjour.'); for(let i=0;i<60&&!(sent&&!document.querySelector('.message.assistant.live'));i++) await new Promise(r=>setTimeout(r,500)); window.fetch=orig; await put({enabled:false,url:'',model:'',auth:'key',reasoning:false}); return [before, items.join('|'), after, sent?sent.reasoning_effort:'']",
+  "expect": [
+   "Effort · Par défaut",
+   "Par défaut|Faible|Moyen|Élevé",
+   "Effort · Élevé",
+   "high"
+  ]
+ },
+ {
+  "name": "delete a discussion from its project",
+  "eval": "const st=(await import('/js/state.js')).state; const p=st.projects.find(x=>x.name==='Projet essai'); if(!p) return 'no project'; const nav=await import('/js/navigation.js'); const conv=await import('/js/conversations.js'); const c=nav.newConversation(p.id); c.title='À supprimer'; c.messages=[{id:'q1',role:'user',content:'x',created:Date.now()}]; await conv.persist(c); location.hash='#/p/'+p.id; await new Promise(r=>setTimeout(r,900)); const row=[...document.querySelectorAll('main .row')].find(r=>r.innerText.includes('À supprimer')); if(!row) return 'no row'; row.querySelector('button').click(); await new Promise(r=>setTimeout(r,400)); [...document.querySelectorAll('.dialog button')].find(b=>b.classList.contains('primary')).click(); await new Promise(r=>setTimeout(r,900)); return [location.hash==='#/p/'+p.id, ![...document.querySelectorAll('main .row')].some(r=>r.innerText.includes('À supprimer')), !st.conversations.some(x=>x.id===c.id)]",
+  "expect": [
+   true,
+   true,
+   true
+  ]
  }
 ]

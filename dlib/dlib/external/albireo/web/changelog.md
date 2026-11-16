@@ -2,6 +2,18 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 5.9.0 — 16 novembre 2026
+
+### Moteurs extérieurs
+
+- Le niveau d'effort d'un modèle extérieur du relais se choisit dans la discussion, repris de l'original (Albireo 1.0.23) : quand ce modèle prend des niveaux d'effort (Claude, gpt-oss chez Ollama, un moteur OpenAI qui raisonne), le bouton du raisonnement devient « Effort · … » et ouvre leur menu, celui par défaut d'abord ; le niveau choisi part avec chaque question de la discussion (`reasoning_effort`).
+
+### Accès et documents
+
+- Une discussion se supprime depuis la page de son projet, par la corbeille de sa ligne, une fois confirmé, repris de l'original (Albireo 1.0.23). La page du projet reste affichée ; une discussion supprimée alors qu'elle était ouverte cède la place à une nouvelle discussion.
+
+---
+
 ## 5.8.0 — 16 novembre 2026
 
 ### Performances

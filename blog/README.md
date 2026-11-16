@@ -53,5 +53,6 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 47. [Les deux vitrines](47-les-deux-vitrines.md)
 48. [Le messager et les surnoms](48-le-messager-et-les-surnoms.md)
 49. [Les étages qui ne servent à personne](49-les-etages-qui-ne-servent-a-personne.md)
+50. [La liste d'attente](50-la-liste-d-attente.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).

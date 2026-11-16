@@ -21,7 +21,7 @@ import { cancelBackground, cancelIndex } from './indexing.js';
 import { buildLayout } from './layout.js';
 import { projectById, reloadLists } from './lists.js';
 import { forgetMemory, memoryAbort, rememberLater, tabId } from './memory.js';
-import { go } from './navigation.js';
+import { afterDeletion, go } from './navigation.js';
 import { applyLanguage, applyTheme } from './preferences.js';
 import { renderSidebar } from './sidebar.js';
 import { clearedSettings, defaults, state, ui } from './state.js';
@@ -203,8 +203,7 @@ function conversationDeleted(id) {
   web.forgetPages(id);
   forgetDraft(id);
   state.conversations = state.conversations.filter((x) => x.id !== id);
-  if (state.current && state.current.id === id) go('#/');
-  else refreshViews();
+  afterDeletion(id);
 }
 
 // Toutes les discussions et tous les projets supprimés dans un autre onglet ; le brouillon de "New chat" reste.

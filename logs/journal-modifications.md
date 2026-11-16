@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-16 — Choisir l'effort du relais et supprimer une discussion depuis son projet (Albireo 5.9.0)
+
+- **Quoi** : piste F, partie Albireo, reprise de l'original 1.0.23 (`37c6304`). Menu de l'effort : `effortMenu()` (`composer.js`), le bouton du raisonnement en « Effort · … » pour un modèle extérieur qui a des niveaux (`relayCapabilities()` donne `efforts` et `defaultEffort`), `reasoning_effort` dans la requête (`generation.js`), textes dans `i18n.js`. Suppression depuis un projet : corbeille sur chaque ligne (`projects.js`), `removeConversation` exportée, `afterDeletion()` (`navigation.js`) commun à cet onglet et aux autres (`tabs.js`). Blog : épisode 50 (pistes B à F).
+- **Fichiers** : `albireo/web/js/{status,composer,layout,generation,i18n,conversations,navigation,projects,tabs}.js`, `albireo/tools/page_test/scenarios/regress.json`, `albireo/web/{changelog.md,openapi.json}`, version ; `blog/{50-la-liste-d-attente.md,README.md}`, `docs/{differences-mac-windows.md,memo-portage-macos-arm64.md}`, `logs/reprise.md`.
+- **Pourquoi** : piste F (« petites choses ») de la liste.
+- **Étapes** : ESLint passe (un import devenu inutile retiré) ; banc de la page : **131 vérifications** (deux de plus : menu « Par défaut | Faible | Moyen | Élevé », « Effort · Élevé » et `reasoning_effort: "high"` envoyé ; discussion supprimée depuis « Projet essai », page du projet gardée).
+
 ## 2026-11-16 — Écrire les modèles en Q5_K avec un noyau NEON (Albireo 5.8.0)
 
 - **Quoi** : piste E. `dot_q5_K_neon` (`engine/qkernels_neon.inc`), sur le modèle de `dot_q4_K_neon`, le cinquième bit pris dans `qh` par `vtstq_u8` ; `qk_dot` l'emploie pour Q5_K. `test_qkernels` vérifie désormais que chaque noyau vectoriel rend le résultat du code portable bit pour bit. Un `dot_q8_0_neon` écrit en même temps a été retiré : aucun gain.

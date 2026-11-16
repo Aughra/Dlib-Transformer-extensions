@@ -13,6 +13,7 @@ import { attachmentSeconds, attachmentShare, estimateTokens, excerptBudget, keep
 import { persist } from './conversations.js';
 import { searchPassages, terms } from './documents.js';
 import { fill, h, toast } from './dom.js';
+import { showMenu } from './dialogs.js';
 import { cancelDraftSave, draftKey, drafts, forgetDraft, imageIdsOf, storedDraft } from './drafts.js';
 import { contextImages, imageLimitText, imageRecord, imageRoom, imageThumb, readFiles } from './files.js';
 import { runTurn } from './generation.js';
@@ -56,6 +57,23 @@ function renderRelayButton(c) {
   ui.relayButton.setAttribute('aria-label', title);
 }
 
+// Les niveaux d'effort du modèle extérieur de c, celui par défaut d'abord (repris de l'original, Albireo 1.0.23).
+export function effortMenu(anchor, c, caps) {
+  const pick = async (level) => {
+    c.effort = level;
+    renderComposerState();
+    if (c.messages.length) await persist(c);
+    refreshViews();
+  };
+  const def = caps.defaultEffort ? t('effortDefaultIs', { level: t('effort_' + caps.defaultEffort) })
+    : t('effortDefault');
+  const entries = [{ label: def, checked: !caps.efforts.includes(c.effort), action: () => pick('') }];
+  for (const level of caps.efforts) {
+    entries.push({ label: t('effort_' + level), checked: c.effort === level, action: () => pick(level) });
+  }
+  showMenu(anchor, entries);
+}
+
 // Zone de saisie.
 export function renderComposerState() {
   if (!ui.input) return;
@@ -65,11 +83,24 @@ export function renderComposerState() {
   // L'agent et le web d'un modèle capable de raisonner viennent avec son raisonnement approfondi (toolsAvailable()).
   const ready = toolsAvailable(caps, reasoning);
   const agent = !!(c && c.agent && ready);
-  ui.reasonButton.classList.toggle('on', reasoning);
-  ui.reasonButton.setAttribute('aria-pressed', String(reasoning));
+  /*
+      Un modèle extérieur du relais qui prend des niveaux d'effort les a dans le menu du bouton du raisonnement, celui
+      par défaut d'abord ; les autres modèles allument ou éteignent leur raisonnement approfondi.
+  */
+  const efforts = !!caps.relay && (caps.efforts || []).length > 0;
+  const level = efforts && c && caps.efforts.includes(c.effort) ? c.effort : '';
+  const label = efforts ? t('effort') + ' · ' + (level ? t('effort_' + level) : t('effortDefault')) : t('reasoning');
+  if (ui.reasonButton.dataset.label !== label) {
+    ui.reasonButton.dataset.label = label;
+    ui.reasonButton.replaceChildren();
+    ui.reasonButton.insertAdjacentHTML('beforeend', icon('spark'));
+    ui.reasonButton.append(h('span', null, label));
+  }
+  ui.reasonButton.classList.toggle('on', efforts ? !!level : reasoning);
+  ui.reasonButton.setAttribute('aria-pressed', String(efforts ? !!level : reasoning));
   ui.reasonButton.disabled = !caps.reasoning;
   // Un modèle entraîné à raisonner avant chaque réponse répond directement sans le bouton, comme les autres modèles.
-  ui.reasonButton.title = t('reasoningHint');
+  ui.reasonButton.title = efforts ? t('effortHint') : t('reasoningHint');
   ui.agentButton.classList.toggle('on', agent);
   ui.agentButton.setAttribute('aria-pressed', String(agent));
   /*

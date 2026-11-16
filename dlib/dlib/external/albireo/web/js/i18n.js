@@ -27,6 +27,10 @@ const texts = {
     relayImagesDescribed: 'Images envoyées en description.',
     relayNoTools: 'Réservé aux modèles de ce Mac',
     relayWebHint: 'Claude cherche sur le web pour cette discussion ; Anthropic facture chaque recherche.',
+    // Les niveaux d'effort d'un modèle extérieur du relais (repris de l'original, Albireo 1.0.23).
+    effort: 'Effort', effortDefault: 'Par défaut', effortDefaultIs: 'Par défaut ({level})',
+    effortHint: 'L\'effort que le modèle extérieur met dans sa réflexion et sa réponse',
+    effort_low: 'Faible', effort_medium: 'Moyen', effort_high: 'Élevé', effort_xhigh: 'Très élevé', effort_max: 'Maximal',
     reasoningTurnedOn: 'Raisonnement approfondi activé : ce modèle raisonne avant d\'agir ou de chercher.',
     agentNeedsReasoning: 'Activez d\'abord le raisonnement approfondi : ce modèle raisonne avant d\'appeler ses ' +
       'outils',

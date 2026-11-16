@@ -86,7 +86,8 @@ function relayCapabilities() {
   const thinking = r.thinking || 'none';
   const context = r.context || 0;
   return { reasoning: thinking !== 'none', reasoningAlways: thinking === 'always', tools: false, context,
-    working: context, read: relayReadRate, write: relayWriteRate, relay: true, webSearch: !!r.web };
+    working: context, read: relayReadRate, write: relayWriteRate, relay: true, webSearch: !!r.web,
+    efforts: Array.isArray(r.efforts) ? r.efforts : [], defaultEffort: r.default_effort || '' };
 }
 
 /*

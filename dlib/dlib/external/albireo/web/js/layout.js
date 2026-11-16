@@ -5,7 +5,7 @@
 // zone de saisie et leurs boutons, construits une fois au démarrage et de nouveau après un changement de langue.
 
 import { hintText } from './background.js';
-import { addPending, autoGrow, onSend, renderComposerState } from './composer.js';
+import { addPending, autoGrow, effortMenu, onSend, renderComposerState } from './composer.js';
 import { persist } from './conversations.js';
 import { h, iconButton, narrowScreen, toast } from './dom.js';
 import { saveDraft } from './drafts.js';
@@ -96,8 +96,11 @@ export function buildLayout() {
   ui.fileInput = fileInput;
   ui.reasonButton = h('button', {
     class: 'toggle reason', type: 'button', title: t('reasoningHint'), html: icon('spark') + '<span>' + escapeHtml(t('reasoning')) + '</span>',
-    onclick: async () => {
+    onclick: async (e) => {
       const c = state.current;
+      // Le modèle extérieur du relais qui prend des niveaux d'effort : leur menu.
+      const caps = roleCapabilities(chatRole(c));
+      if (caps.relay && (caps.efforts || []).length) return effortMenu(e.currentTarget, c, caps);
       c.reasoning = !c.reasoning;
       // L'agent et le web d'un modèle capable de raisonner se terminent avec son raisonnement approfondi ; la recherche
       // du modèle extérieur d'une discussion relayée n'en dépend pas.

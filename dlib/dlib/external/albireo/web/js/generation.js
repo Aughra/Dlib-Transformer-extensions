@@ -481,6 +481,8 @@ export async function runTurn(c, abort, turn) {
       if (stepTools) body.tools = stepTools;
       // Le Web d'une discussion relayée : le modèle extérieur cherche lui-même (Claude), sans les outils de la page.
       if (set.webSearch) body.web_search = true;
+      // Le niveau d'effort du modèle extérieur choisi pour la discussion (repris de l'original, Albireo 1.0.23).
+      if (caps.relay && (caps.efforts || []).includes(c.effort)) body.reasoning_effort = c.effort;
       if (state.settings.temperature != null) body.temperature = state.settings.temperature;
       if (state.settings.topP != null) body.top_p = state.settings.topP;
       if (state.settings.topK != null) body.top_k = state.settings.topK;
