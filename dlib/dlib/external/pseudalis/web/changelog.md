@@ -2,6 +2,19 @@
 
 Pseudalis pour macOS sur puce Apple, version dérivée de Pseudalis Community (Cydral Technology), maintenue par TortueTech. Le fork numérote Pseudalis à part de l'original à partir de 2.0.0. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne ; avant 2.0.0, la section porte le numéro de la version de l'original sur laquelle reposait le fork.
 
+## 3.3.0 — 16 novembre 2026
+
+### Protection
+
+- Détecteurs réentraînés, repris de l'original (Pseudalis 1.0.11) : l'étiqueteur de séquences à neuf et le modèle d'empans à partir de celui de 1.0.5, sur un complément d'exports sans en-tête, de pages de titre, de courriers de santé, de rapports économiques et de fichiers source dans les cinq langues. Mieux reconnus : les noms et les villes seuls dans les cellules d'un fichier sans en-tête, une ville après une date, les caisses de santé et les cabinets, les nationalités après leurs indices italiens, espagnols et allemands, les numéros de médecins après leurs libellés (LANR, BSNR, GMC) et leurs ordres, le numéro de sécurité sociale espagnol, le numéro NHS, et la fin de validité d'une carte après ses mots (« expiry date 07/29 »), décalée comme un mois et son année. Laissés lisibles : les identifiants, mots-clés et littéraux du code (True, False, None, null), les médicaments, examens et termes de statistique, les étapes numérotées des diapositives.
+- Débit inchangé : un texte de 30 000 octets protégé en 1,46 à 1,48 s (1,44 à 1,46 s avec les détecteurs de 3.2.0, mesures non alternées).
+
+### Corrections
+
+- Une liste de mots de dlib, reprise de l'original, faisait refuser l'exemple de l'anonymiseur par clang (concaténation de chaînes prise pour une virgule oubliée) : l'entrée est mise entre parenthèses.
+
+---
+
 ## 3.2.0 — 16 novembre 2026
 
 ### Protection

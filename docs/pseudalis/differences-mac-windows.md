@@ -2,7 +2,7 @@
 
 Un tableau par thème. Chaque ligne dit ce que fait l'original (Pseudalis pour Windows, de Cydral), ce que fait le fork sur Mac, pourquoi, et le gain mesuré quand il y en a un. Le détail se trouve dans les [notes de version de Pseudalis](../../dlib/dlib/external/pseudalis/web/changelog.md) (« v. x.y.z »), les [notes pour l'auteur de Pseudalis](notes-pour-l-auteur.md) et le [journal](../../logs/journal-modifications.md). Ce qui touche dlib et Albireo est dans le [tableau général](../differences-mac-windows.md).
 
-Base de comparaison : l'original au commit `184ea00` (Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Pseudalis 3.2.0, 16 novembre 2026.
+Base de comparaison : l'original au commit `184ea00` (Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Pseudalis 3.3.0, 16 novembre 2026.
 
 ## 1. Système
 
@@ -23,6 +23,7 @@ Base de comparaison : l'original au commit `184ea00` (Pseudalis 1.0.5), dernièr
 | Port par défaut | 8444 | 8444, réglé à 18444 sur le Mac du fork | L'accès réseau d'Albireo prend aussi 8444 | — | guide |
 | Pseudonymes | Balises `[[TYPE:valeur chiffrée#contrôle]]` (FF1 sur AES-256), restaurables avec la clé de l'installation | Pseudonymes sans balise, sous une clé jetable par document : les mêmes dans un document, d'autres ailleurs, sans retour ; seul l'original conservé rend un fichier | Décision de l'humain : « la pseudo n'a pas besoin d'être inversée », « plus besoin de clé » | — | v. 3.0.0 |
 | Textes du relais d'Albireo | Balises ou substituts sous la clé de l'installation ; Albireo demande leurs valeurs par `/v1/text/restore` | `"session": true` : clé de séance tirée au démarrage, en mémoire seulement ; les valeurs viennent dans la réponse (`values`), en un seul appel | Les pseudonymes sans retour (3.0.0) ne permettaient plus au relais de rendre les vrais noms | — | v. 3.1.0 |
+| Détecteurs réentraînés (1.0.11) | Les mêmes | Les mêmes poids et règles, repris tels quels ; une entrée de liste de dlib mise entre parenthèses pour clang | Reprise à la main des versions de l'original non fusionnées | Débit inchangé (1,46-1,48 s pour 30 000 octets) | v. 3.3.0 |
 | Colonnes imposées des CSV, colonne IP des deux formes (1.0.8 à 1.0.10) | Avec balises ou substituts au choix, restaurables par la clé ; carte dans l'application | Les mêmes colonnes, leurs valeurs en pseudonymes sans retour (clé jetable du fork) ; section du menu de la page ; code de dlib repris tel quel | Reprise à la main des versions de l'original non fusionnées | — | v. 3.2.0 |
 | Code mort retiré (1.0.6) | Retiré dans l'original avec l'icône de Windows et la langue du navigateur | Dix-sept fonctions inutilisées retirées ; le reste de 1.0.6 ne concerne pas le fork | Même nettoyage | — | v. 3.1.1 |
 | Coffre des originaux | Chiffré (AES-256-CTR, HMAC-SHA-256) | En clair ; les anciens blobs sont réécrits en clair au démarrage | Décision de l'humain : plus de chiffrement en sortie | — | v. 2.2.0 |

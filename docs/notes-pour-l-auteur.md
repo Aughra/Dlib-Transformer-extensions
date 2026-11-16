@@ -36,6 +36,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 16 à 20 | Remarques | noyaux, pool de fils, mode économie d'énergie, seuil des produits en flottants, nombre de fils sur un processeur hybride | Pas de défaut, mais bon à savoir. | Voir chaque remarque |
 | 21 | Remarque, sécurité | `albireo/common/platform.cpp:622, 663, 735`, `pseudalis/common/platform.cpp:622, 636, 700` | Hors de Windows, les trois contrôles de dossiers répondent toujours « oui ». | **Propre à Linux** (et au Mac) ; Windows non concerné |
 | 23 | Test qui ne teste pas | `dlib/test/is_same_object.cpp:48` | `#if _MSC_VER > 1600` désactive une vérification avec tout compilateur autre que Visual Studio (corrigé dans le fork). | Aussi sous Windows (clang, gcc) et Linux, déduit du code |
+| 24 | Avertissement | `dlib/privacy/pii_lexicons.h:2110` | Une entrée de liste écrite en deux littéraux, prise par clang pour une virgule oubliée : l'exemple de l'anonymiseur ne compile plus avec `-Werror` (corrigé dans le fork). | Aussi sous Windows avec clang ; gcc et Visual Studio ne disent rien |
 | Registre | dlib | `dlib/dlib`, `dlib/examples` | Tout ce que le fork change dans dlib, fichier par fichier (partie 5). | Voir chaque ligne |
 | 22 | Remarque, exactitude | `albireo/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant (corrigé dans le fork). | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
 
@@ -203,6 +204,31 @@ Cette entrée, propre à Pseudalis, est désormais dans [les notes pour l'auteur
 
   ```cpp
           DLIB_TEST(has_booya_template<htest>::value  == true);
+  ```
+
+### 24. clang refuse une entrée de liste écrite sur deux lignes dans `pii_lexicons.h`
+
+- **Où** : `dlib/dlib/privacy/pii_lexicons.h:2110-2111` (`upstream/main`, ajouté par Pseudalis 1.0.11, `40bd030`), dans la liste `frequent` des mots courants.
+- **Ce qui se passe** : la dernière entrée de la liste, les mots-clés du code source, est écrite en deux littéraux de chaîne qui se suivent sans virgule (`"… constexpr typename "` puis `"namespace typedef"`). La concaténation est voulue et correcte (l'espace final sépare les mots), mais clang la prend pour une virgule oubliée : « error: suspicious concatenation of string literals in an array initialization; did you mean to separate the elements with a comma? [-Werror,-Wstring-concatenation] ». L'exemple `slm_document_anonymizer_ex`, compilé avec `-W -Werror`, ne compile plus.
+- **Reproduire** : compiler `dlib/examples` ou les tests de dlib avec Apple clang, l'exemple `slm_document_anonymizer_ex` compris.
+- **Correction du fork** : l'entrée entre parenthèses, ce qui dit à clang que la concaténation est voulue, sans changer la liste ; un commentaire l'explique.
+- **Vérifié** : sur le Mac, tests et exemples de dlib compilés sans avertissement ; `dtest --test_privacy` : 1 407 vérifications. **Non vérifié** : gcc (qui n'a pas cet avertissement) et Visual Studio.
+- **Mac ou Windows** : aussi sous Windows avec clang ou clang-cl, et sous Linux avec clang (déduit du code, non vérifié) ; Visual Studio et gcc ne signalent rien.
+- **Fichier, avant** (`upstream/main`, lignes 2109 à 2111) :
+
+  ```cpp
+                      // The literals and keywords of source code: "('Ordinateur', False)" names no place.
+                      "true false none null nullptr undefined args kwargs def lambda constexpr typename "
+                      "namespace typedef"
+  ```
+
+- **Après** (fork, commit de ce paquet) :
+
+  ```cpp
+                      // The literals and keywords of source code: "('Ordinateur', False)" names no place.
+                      // In parentheses: one element written on two lines, which clang would take for a missing comma.
+                      ("true false none null nullptr undefined args kwargs def lambda constexpr typename "
+                       "namespace typedef")
   ```
 
 ---
@@ -840,6 +866,9 @@ Le fork modifie aussi dlib depuis le 2026-11-14, quand le portage le demande. Ch
 | `dlib/dlib/privacy/pseudonymizer.h`, `pseudonymizer_abstract.h` | Option `pseudonymizer_options::opaque_substitutes` (désactivée par défaut) : `find_substitutes()` reconnaît aussi un substitut dont le résolveur donne une balise que cette clé ne déchiffre pas (faite sous une autre clé) ; son type vient du mot-clé de la balise, son original est le substitut lui-même (`opaque_type()`) | Pseudalis 3.0.0 pseudonymise chaque document sous une clé jetable : un nom déjà protégé (un dossier du lecteur, un fichier extrait d'une archive) doit être reconnu et laissé tel quel sans pouvoir être déchiffré, sinon il serait pseudonymisé de nouveau à chaque passage | [463fe69](https://github.com/Aughra/Dlib-Transformer-extensions/commit/463fe69) | `dtest --test_privacy` passe (option désactivée par défaut) ; Pseudalis `test_macos.sh` 34 sur 34 | Choix du fork ; rien à reprendre sauf besoin de pseudonymes sans retour |
 | `dlib/dlib/privacy/pii_detector_abstract.h`, `dlib/dlib/test/privacy.cpp` | Repris de l'original tel quel (`61da899`) : les tests des codes qui gardent les chiffres de contrôle d'une carte de paiement et d'un numéro de sécurité sociale français (Corse comprise), et la priorité des canaux du détecteur décrite | Reprise à la main des versions 1.0.6 à 1.0.11 de Pseudalis ; ces deux fichiers s'appliquent sans conflit | [13f6c6b](https://github.com/Aughra/Dlib-Transformer-extensions/commit/13f6c6b) | `dtest --test_privacy` : 1 262 vérifications | Aussi sous Windows (code commun, déjà dans l'original) |
 | `dlib/dlib/privacy/document_anonymizer.h`, `document_anonymizer_abstract.h`, `document_report.h`, `document_report_abstract.h`, `pii_detector.h`, `pii_detector_abstract.h`, `dlib/dlib/test/privacy.cpp` | Repris de l'original tel quel (Pseudalis 1.0.8 `b2d9bf4`, 1.0.9 `1c9318d`, 1.0.10 `5408cbc`) : colonnes imposées des fichiers CSV à en-tête (`set_imposed_columns`, en-tête cherché parmi les 16 premières lignes, sous un titre ou `sep=`), colonne IP des deux formes, `learn_value` du détecteur, restauration en Windows-1252 d'un texte en ASCII pur (`set_ascii_windows_1252`) | Reprise à la main des colonnes imposées dans Pseudalis 3.2.0 ; ces fichiers s'appliquent sans conflit, par-dessus l'option `opaque_substitutes` du fork | [13f6c6b](https://github.com/Aughra/Dlib-Transformer-extensions/commit/13f6c6b) | `dtest --test_privacy` : 1 377 vérifications ; tests du moteur et du service de Pseudalis | Aussi sous Windows (code commun, déjà dans l'original) |
+
+| `dlib/dlib/privacy/date_formats_abstract.h`, `document_anonymizer.h`, `document_anonymizer_abstract.h`, `id_checks.h`, `pii_detector.h`, `pii_detector_abstract.h`, `pii_lexicons.h`, `pseudonymizer.h`, `pseudonymizer_abstract.h`, `dlib/dlib/test/privacy.cpp`, `dlib/examples/slm_document_anonymizer_ex.h` | Repris de l'original tel quel (Pseudalis 1.0.11, `40bd030`) : les reconnaisseurs réentraînés (poids compressés dans `slm_document_anonymizer_ex.h`) et les règles du détecteur (noms et villes seuls dans les cellules, numéros de médecins après leurs libellés, dates d'expiration d'une carte, littéraux de code jamais pris pour des noms…) ; `shift_date_serial()` retiré, que rien n'appelait | Reprise à la main de Pseudalis 1.0.11 (3.3.0) ; s'applique sans conflit | (ce commit) | `dtest --test_privacy` : 1 407 vérifications ; tests de Pseudalis, 37 sur 37 | Aussi sous Windows (code commun, déjà dans l'original) |
+| `dlib/dlib/privacy/pii_lexicons.h` | Une entrée de la liste `frequent` mise entre parenthèses | clang refusait l'exemple de l'anonymiseur (entrée n° 24) | (ce commit) | Tests et exemples de dlib sans avertissement | Aussi sous Windows avec clang |
 
 ---
 
