@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-16 — Faire suivre aux boutons les capacités vérifiées de chaque modèle (Albireo 5.6.0)
+
+- **Quoi** : piste C, reprise à la main de l'original 1.0.16 (`320ae18`). `status.js` : `roleCapabilities()` restreint le raisonnement et les outils d'un modèle chargé par son entrée (catalogue, modèles livrés), sauf une entrée importée (`source` « import ») ou ajoutée depuis Hugging Face (`origin` « huggingface », propre au fork, capacités devinées par `hub.cpp`) ; un modèle qui raisonne toujours garde son raisonnement. `readCatalog()` et `catalogMissed` ; la date du catalogue entre dans la clé qui décide de redessiner ; `renderComposerState()` quand l'état change ou que la liste est relue. `api.js` : liste des modèles lue en 8 s au plus. Le catalogue de l'original, que lit le service, porte déjà Qwen2.5 Coder sans outils.
+- **Fichiers** : `albireo/web/js/{status,api}.js`, `albireo/tools/page_test/scenarios/regress.json`, `albireo/web/{changelog.md,openapi.json}`, version ; `docs/{differences-mac-windows.md,memo-portage-macos-arm64.md}`, `logs/reprise.md`.
+- **Pourquoi** : piste C de la liste ; sans restriction, Qwen2.5 Coder avait Agent et Web allumés et leurs requêtes finissaient sans appel. Les entrées de Hugging Face sont exclues : Qwen3.5-4B y est marqué sans raisonnement, à tort.
+- **Étapes** : ESLint passe ; banc de la page : **129 vérifications** (une de plus : outils d'un modèle chargé éteints par une entrée vérifiée, gardés avec une entrée de Hugging Face ou un import).
+
 ## 2026-11-16 — Relire depuis un point de reprise une étape de Qwen 3.5 qui échoue sur le GPU (Albireo 5.5.1)
 
 - **Quoi** : piste B. `cpu_runtime` tient, pour chaque séquence d'un modèle à état récurrent, le carnet des tokens lus depuis son dernier point de reprise (`token_log` : début, tokens, positions données ; `log_pass()` après chaque passe réussie, entretenu par la création, la libération, la troncature et la copie des séquences, la copie emportant le point de reprise d'où part le carnet). Une passe non découpée qui échoue sur le GPU (`forward()`) remet chaque séquence à son point de reprise et relit son carnet sur le processeur (`replay_logs()`) avant de calculer la passe ; un carnet inutilisable (image lue depuis, positions dans un bloc partagé, point de reprise perdu) laisse le comportement d'avant, écrit dans le journal du moteur.

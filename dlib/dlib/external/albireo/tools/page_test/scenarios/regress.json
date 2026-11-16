@@ -15,6 +15,16 @@
   ]
  },
  {
+  "name": "capabilities narrowed by verified entries",
+  "eval": "const st=(await import('/js/state.js')).state; const s=await import('/js/status.js'); const id=s.roleModel('general'); const m=(st.catalog.models||[]).find(x=>x.id===id); if(!m) return 'no entry for '+id; const saved={tools:m.tools,source:m.source,origin:m.origin}; const format=s.roleCapabilities('general').tools; m.tools=false; m.source='https://huggingface.co/essai'; delete m.origin; const verified=s.roleCapabilities('general').tools; m.origin='huggingface'; const hub=s.roleCapabilities('general').tools; m.source='import'; delete m.origin; const imported=s.roleCapabilities('general').tools; m.tools=saved.tools; m.source=saved.source; if(saved.origin===undefined) delete m.origin; else m.origin=saved.origin; return [format, verified, hub, imported]",
+  "expect": [
+   true,
+   false,
+   true,
+   true
+  ]
+ },
+ {
   "name": "no cuDNN in licenses",
   "eval": "const r=await fetch('/albireo/v1/licenses'); const j=await r.json(); return JSON.stringify(j).includes('cuDNN')",
   "expect": false

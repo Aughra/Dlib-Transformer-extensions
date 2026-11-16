@@ -134,8 +134,10 @@ export function status() {
   return getJSON('/albireo/v1/status', timeout(8000));
 }
 
+// Les modèles du service et de son catalogue, lus dans le délai de l'état (repris de l'original, Albireo 1.0.16) : la
+// page s'ouvre et l'état se relit même quand le service ne répond pas.
 export function models(lang) {
-  return getJSON('/albireo/v1/models?lang=' + encodeURIComponent(lang || 'en'));
+  return getJSON('/albireo/v1/models?lang=' + encodeURIComponent(lang || 'en'), timeout(8000));
 }
 
 export function usage() {

@@ -2,6 +2,15 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 5.6.0 — 16 novembre 2026
+
+### Réglages
+
+- Les boutons Raisonnement approfondi, Agent et Web suivent les capacités vérifiées de chaque modèle, repris de l'original (Albireo 1.0.16) : le format d'un modèle chargé donne son raisonnement et ses outils, et son entrée dans le catalogue de l'original ou dans les modèles livrés les restreint. Qwen2.5 Coder 1.5B et 7B, dont le gabarit décrit des outils qu'ils n'appellent pas, ont désormais Agent et Web éteints. Un modèle importé, ou ajouté depuis Hugging Face, dont les capacités ne sont que devinées, garde celles de son format.
+- La liste des modèles se relit quand le service adopte un catalogue plus récent, ou après une lecture manquée, et en 8 secondes au plus ; les boutons de la zone de saisie suivent, avant même la première discussion.
+
+---
+
 ## 5.5.1 — 16 novembre 2026
 
 ### Corrections

@@ -10,7 +10,7 @@ import * as rag from './rag.js';
 import * as tools from './tools.js';
 import * as web from './web.js';
 import { hintText, namePending, serviceReady } from './background.js';
-import { generations } from './composer.js';
+import { generations, renderComposerState } from './composer.js';
 import { apiMessages, estimateMedia, imageTokenCache, readRate, systemPrompt, tokenEstimate, workingContext,
   writeRate } from './context.js';
 import { dialog } from './dialogs.js';
@@ -159,7 +159,13 @@ export function acceptFor(role, room) {
     Les capacités du modèle d'une fonction : reasoning, reasoningAlways pour un modèle entraîné à raisonner avant chaque
     réponse (sans le raisonnement approfondi, le moteur termine aussitôt son raisonnement), tools, son contexte et son
     contexte de travail (workingContext), 0 tant qu'il n'est pas chargé, et ses vitesses de lecture et d'écriture
-    (readRate, writeRate).
+    (readRate, writeRate).  Le format d'un modèle chargé dans le moteur donne son raisonnement et ses outils, et son
+    entrée dans la liste du service les restreint (repris de l'original, Albireo 1.0.16) : les entrées du catalogue et
+    des modèles livrés avec Albireo disent ce que fait chaque modèle, vérifié modèle par modèle, de sorte qu'un modèle
+    dont le format offre des outils qu'il n'appelle pas (Qwen2.5 Coder) a les boutons Agent et Web éteints, et un modèle
+    qui ne raisonne pas, celui du raisonnement approfondi.  Un modèle importé, ou ajouté depuis Hugging Face (fork pour
+    macOS), dont l'entrée devine ses capacités, garde celles de son format ; un modèle qui raisonne avant chaque
+    réponse garde son raisonnement approfondi, que ses outils attendent.
 */
 export function roleCapabilities(role) {
   if (role === 'relay') return relayCapabilities();
@@ -167,12 +173,15 @@ export function roleCapabilities(role) {
   const loaded = loadedModel(id);
   const read = readRate(id);
   const write = writeRate(id);
+  const m = modelInfo(id);
   if (loaded) {
     const context = loaded.context || 0;
-    return { reasoning: loaded.reasoning !== false, reasoningAlways: loaded.reasoning_always === true,
-      tools: loaded.tools !== false, context, working: context ? workingContext(id, context) : 0, read, write };
+    const entry = m && m.source !== 'import' && m.origin !== 'huggingface' ? m : null;
+    const always = loaded.reasoning_always === true;
+    return { reasoning: loaded.reasoning !== false && (always || !(entry && entry.reasoning === false)),
+      reasoningAlways: always, tools: loaded.tools !== false && !(entry && entry.tools === false), context,
+      working: context ? workingContext(id, context) : 0, read, write };
   }
-  const m = modelInfo(id);
   return { reasoning: m ? m.reasoning !== false : true, reasoningAlways: !!(m && m.reasoning_always === true),
     tools: m ? m.tools !== false : true, context: 0, working: 0, read, write };
 }
@@ -314,6 +323,22 @@ let serviceWasReady = false;
     ou après qu'il n'a pas répondu, le travail qu'une visite précédente ou un onglet fermé a laissé
     reprend : les titres laissés en attente, la mémoire, et les descriptions des images.
 */
+// Si la dernière lecture de la liste des modèles a échoué, pour que la lecture suivante de l'état la redemande.
+let catalogMissed = false;
+
+/*
+    Lit la liste des modèles du service dans la langue de l'interface (state.catalog), dont les entrées donnent les noms,
+    les entrées et les capacités des modèles ; un échec garde la liste lue avant.
+*/
+async function readCatalog() {
+  try {
+    state.catalog = await api.models(language());
+    catalogMissed = false;
+  } catch (e) {
+    catalogMissed = true;
+  }
+}
+
 async function pollStatus() {
   let changed = false;
   let back = false;
@@ -323,13 +348,20 @@ async function pollStatus() {
     // suivante ; le relais, son cadenas, son modèle et ses capacités (pas les compteurs de sa mémoire, qui bougent).
     const relay = (r) => r ? [r.ready, r.provider, r.model, r.name, r.context, r.thinking, r.pseudonymize,
       r.keep_substitutes, r.image_mode, r.web, r.scope] : null;
+    // Un catalogue plus récent change aussi les capacités que la liste des modèles donne aux modèles (original 1.0.16).
     const key = (x) => JSON.stringify([x.active, x.loaded_models, x.state, x.background, x.web, x.offline,
-      relay(x.relay)]);
+      relay(x.relay), x.catalog ? x.catalog.updated : null]);
     changed = !state.status || key(state.status) !== key(s);
     back = state.statusError;
     state.status = s;
     state.statusError = false;
-    if (changed || !state.catalog) state.catalog = await api.models(language()).catch(() => state.catalog);
+    let listed = false;
+    if (changed || !state.catalog || catalogMissed) {
+      await readCatalog();
+      listed = true;
+    }
+    // Les boutons de la zone de saisie suivent le modèle de la fonction et son entrée, avant la première discussion aussi.
+    if (changed || listed) renderComposerState();
     // Les tokens des images ont été mesurés pour les modèles des fonctions tels qu'ils étaient.
     if (changed) imageTokenCache.clear();
     // Une langue choisie entre-temps dans Albireo, que cette interface suit.
