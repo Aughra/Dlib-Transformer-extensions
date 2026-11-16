@@ -574,7 +574,8 @@ namespace albireo
     {
         gpu_state& g = *gpu_;
         metal_device& dev = *g.device;
-        const long T = static_cast<long>(batch.tokens.size());
+        // Le nombre de lignes de la passe, que les couches à clés partagées réduisent (comme run()).
+        long T = static_cast<long>(batch.tokens.size());
         const long d = cfg_.d_model, qd = cfg_.q_dim(), kvd = cfg_.kv_dim(), hd = cfg_.head_dim;
         const long H = cfg_.n_heads, KVH = cfg_.n_kv_heads, rep = H / KVH, B = kv_.block_positions();
         const long half = cfg_.rope_dims / 2;
@@ -685,7 +686,7 @@ namespace albireo
         }
         // L'attention d'une étape se fait par parties de attention_part positions ; un prompt a assez de
         // tokens pour remplir le GPU avec une partie chacun.
-        const bool step = T <= static_cast<long>(metal_device::max_tokens);
+        bool step = T <= static_cast<long>(metal_device::max_tokens);
         const unsigned part_len = step ? metal_device::attention_part : static_cast<unsigned>(max_pos + 1);
         const unsigned parts = static_cast<unsigned>((max_pos + 1 + part_len - 1) / part_len);
         const size_t partial = parts > 1 ? static_cast<size_t>(T) * KVH * parts * rep * (hd + 2) : 1;
@@ -753,8 +754,77 @@ namespace albireo
                     ++n_tiles[w];
                 }
         }
-        const unsigned uT = static_cast<unsigned>(T);
+        unsigned uT = static_cast<unsigned>(T);
         auto c = dev.begin();
+        /*
+            Les couches qui lisent les clés et valeurs d'une autre (Gemma 4) ne servent que les lignes dont la passe
+            rend les logits (voir run()) : à la première d'entre elles, les commandes déjà écrites s'exécutent, ces
+            lignes passent en tête des tampons, que le processeur lit et écrit en place (mémoire unifiée), et la
+            passe continue sur elles seules ; un morceau de prompt qui n'en demande aucune s'arrête là (fork pour
+            macOS).  out_rows donne la ligne de chaque logit demandé.
+        */
+        const long first_shared = cfg_.n_layers - cfg_.n_kv_shared;
+        const bool narrowing = cfg_.n_kv_shared > 0 && !given && !cfg_.recurrent();
+        std::vector<long> out_rows = batch.logit_rows;
+        bool stopped = false;
+        auto narrow = [&]() {
+            std::vector<long> kept = batch.logit_rows;
+            std::sort(kept.begin(), kept.end());
+            kept.erase(std::unique(kept.begin(), kept.end()), kept.end());
+            if (kept.empty())
+            {
+                stopped = true;
+                return;
+            }
+            const long n = static_cast<long>(kept.size());
+            if (n == T) return;
+            c->finish();
+            const long P = cfg_.d_per_layer, hs = cfg_.rope_dims_swa / 2;
+            float* xs = static_cast<float*>(g.x.contents());
+            float* csw = cfg_.gemma4 ? static_cast<float*>(g.cs_swa.contents()) : nullptr;
+            float* pl = P > 0 ? static_cast<float*>(g.ple.contents()) : nullptr;
+            for (long i = 0; i < n; ++i)
+            {
+                const long t = kept[static_cast<size_t>(i)];
+                if (t < 0 || t >= T) throw std::runtime_error("cpu_runtime: a logit row lies outside the batch");
+                if (t == i) continue;
+                std::memcpy(xs + i * d, xs + t * d, sizeof(float) * d);
+                std::memcpy(cs + i * 2 * half, cs + t * 2 * half, sizeof(float) * 2 * half);
+                if (csw) std::memcpy(csw + i * 2 * hs, csw + t * 2 * hs, sizeof(float) * 2 * hs);
+                blk[i] = blk[t];
+                row[i] = row[t];
+                len[i] = len[t];
+                std::memcpy(table + i * table_stride, table + t * table_stride, sizeof(int) * table_stride);
+                positions_[static_cast<size_t>(i)] = positions_[static_cast<size_t>(t)];
+                seq_of[static_cast<size_t>(i)] = seq_of[static_cast<size_t>(t)];
+            }
+            /*
+                Les entrées par couche des couches restantes, rangées couche par couche pour n lignes : chaque
+                destination (l n + i) précède sa source (l T + t), et toute source encore à lire la suit.
+            */
+            if (pl)
+                for (long l = first_shared; l < cfg_.n_layers; ++l)
+                    for (long i = 0; i < n; ++i)
+                        std::memmove(pl + (l * n + i) * P, pl + (l * T + kept[static_cast<size_t>(i)]) * P,
+                            sizeof(float) * P);
+            // Une tuile par ligne gardée, chacune seule de sa séquence dans la passe.
+            for (int w = 0; w < 2 && tiled; ++w)
+            {
+                if (w == 1 && hd_swa == hd) break;
+                int* tl = static_cast<int*>(g.tiles.contents()) + w * 2 * n;
+                for (long i = 0; i < n; ++i)
+                {
+                    tl[2 * i] = static_cast<int>(i);
+                    tl[2 * i + 1] = 1;
+                }
+                n_tiles[w] = static_cast<unsigned>(n);
+            }
+            for (long& r : out_rows) r = std::lower_bound(kept.begin(), kept.end(), r) - kept.begin();
+            T = n;
+            uT = static_cast<unsigned>(n);
+            step = T <= static_cast<long>(metal_device::max_tokens);
+            c = dev.begin();
+        };
         auto at = [&](const metal_buffer& b, size_t offset) { return metal_view(b, offset); };
         // Un produit de la passe : par blocs en place pour une étape, développé puis via MPS pour un prompt.
         auto product = [&](const weight_matrix& M, const metal_buffer& x, long x_stride, const metal_buffer& y, long y_stride,
@@ -776,6 +846,11 @@ namespace albireo
         };
         for (long li = 0; li < cfg_.n_layers; ++li)
         {
+            if (narrowing && li == first_shared)
+            {
+                narrow();
+                if (stopped) break;
+            }
             const layer& L = layers_[static_cast<size_t>(li)];
             const gpu_state::layer_vectors& lv = g.layers[static_cast<size_t>(li)];
             const long slot = kv_slot_[static_cast<size_t>(li)];
@@ -998,7 +1073,7 @@ namespace albireo
         // Normalisation finale et logits des seules lignes demandées.
         const long R = static_cast<long>(batch.logit_rows.size());
         for (long r = 0; r < R; ++r)
-            c->rms_norm(at(g.x, sizeof(float) * batch.logit_rows[static_cast<size_t>(r)] * d), at(g.vectors, g.output_norm),
+            c->rms_norm(at(g.x, sizeof(float) * out_rows[static_cast<size_t>(r)] * d), at(g.vectors, g.output_norm),
                 at(g.hidden, sizeof(float) * r * d), 1, d, d, d, eps);
         const float logit = cfg_.logit_scale != 1.0 ? static_cast<float>(1.0 / cfg_.logit_scale) : 1.0f;
         if (R > 0)

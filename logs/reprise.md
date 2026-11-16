@@ -4,10 +4,10 @@
 
 ## État actuel
 
-- `main` = **Albireo 5.4.1** ; **Pseudalis 3.1.0** (numérotation du fork, documentation à part : `docs/pseudalis/`, `blog/pseudalis/`, `pseudalis/web/changelog.md`). Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
+- `main` = **Albireo 5.5.0** ; **Pseudalis 3.1.0** (numérotation du fork, documentation à part : `docs/pseudalis/`, `blog/pseudalis/`, `pseudalis/web/changelog.md`). Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
 - **Vrai service** : Albireo tourne en **5.4.1** et Pseudalis en **3.1.0** (relancés le 2026-11-16, Albireo vers 7 h 25 : réglages du relais refusés par l'accès réseau (403), acceptés en local ; Pseudalis vers 6 h 25 ; relais coupé, essayé de bout en bout sur lui-même avec Pseudalis : pseudonymes au départ, vraies valeurs au retour). Pseudalis sur 18444 (accès réseau 8445), Albireo sur 18443 (réseau 8444 sans mot de passe), bibliothèque `build/albireo-home/library` remplie de clones de `build/models` ; journal `build/albireo-home/logs/console.log`.
-- **Tests** : `test_macos.sh` d'Albireo 60 sur 60 (5.4.1, 2026-11-16), de Pseudalis 35 sur 35 (3.1.0, 2026-11-16) ; banc de la page 128 vérifications (5.4.1 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
-- **Blog** : épisode 48 ; **blog de Pseudalis** : épisode 2 ; **notes pour l'auteur** : changement 23, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
+- **Tests** : `test_macos.sh` d'Albireo 60 sur 60 (5.5.0, 2026-11-16), de Pseudalis 35 sur 35 (3.1.0, 2026-11-16) ; banc de la page 128 vérifications (5.4.1 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
+- **Blog** : épisode 49 ; **blog de Pseudalis** : épisode 2 ; **notes pour l'auteur** : changement 24, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
 - **Le mode économie d'énergie du M2 est coupé** (2026-11-15) : les mesures redeviennent possibles sur le M2 (vérifier `pmset -g | grep lowpowermode` avant) ; les réglages fins attendent le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
 - **Original** : détaché depuis le 2026-11-11, plus de fusion ; lu à `53ddfe4` (Albireo 1.0.20) pour la reprise à la main du 2026-11-14, puis à `3bea372` (Albireo 1.0.23, 37 commits depuis la dernière fusion) pour le relais.
 - **Documents du portage** : dans Albireo, `/carnet/` (menu ☰) ; sommaire `macos/site-docs/sommaire.json` ; mot-clé « sitelog » (donner l'adresse du carnet). L'ancien site à part (`serve.py`, port 8650) est retiré.
@@ -32,7 +32,9 @@ Reprise terminée (blog : épisode 48). Réglages du relais réservés au Mac se
 
 ## À faire, dans l'ordre proposé
 
-1. Reste de Gemma 4 : le 26B-A4B sur le GPU (après mesure sur le Mac mini) ; E4B, 12B, 31B jamais essayés ; l'optimisation de llama.cpp (les couches à clés partagées ne calculent que les lignes dont on veut les logits).
+**Liste en cours, dans l'ordre (2026-11-16, « dans l'ordre fait tout »)** : ~~A. Gemma 4, lignes utiles des couches partagées (5.5.0)~~ ; B. panne d'une étape de Qwen 3.5 sur le GPU (copie de l'état avant chaque passe GPU des modèles récurrents ; code prêt, à mesurer) ; C. boutons Agent, Web, Raisonnement selon les capacités vérifiées ; D. Mistral Small 3.2 ; E. noyaux NEON Q8_0 et Q5_K ; F. petites choses (effort du relais, supprimer une discussion de son projet, Pseudalis 1.0.6 à 1.0.11).
+
+1. Reste de Gemma 4 : le 26B-A4B sur le GPU (après mesure sur le Mac mini) ; E4B, 12B, 31B jamais essayés.
 2. Reprises de l'original non choisies le 2026-11-14 : boutons Agent, Web et Raisonnement selon les capacités vérifiées de chaque modèle ; Mistral Small 3.2 (son format, ses outils) ; plusieurs tokens par pas (brouillons) ; Pseudalis 1.0.6 à 1.0.11.
 3. Sur le Mac mini : `tools/bench_macos.sh` en premier ; trancher le mélange d'experts sur le GPU ou le processeur (sur le M2, à peu près à égalité) ; Qwen3.6-35B-A3B (UD-Q4_K_M, 22,1 Go) et projecteurs de qwen35moe ; qwen3moe, mixtral, granitemoe sur le GPU (admis, jamais essayés) ; noyau Q4_K du GPU (54 Go/s contre 70 au plafond) ; relancer la sonde Metal ; régler `recommended` de `service.js` d'après les mesures.
 4. Reste de Qwen 3.5 : une erreur pendant l'exécution d'une étape sur le GPU (analyse du 2026-11-13 : le moteur devrait relire la séquence depuis un point sûr).
@@ -44,6 +46,7 @@ Reprise terminée (blog : épisode 48). Réglages du relais réservés au Mac se
 
 ### 2026-11-16
 
+- **Albireo 5.5.0** (piste A, liste « en attendant le Mac mini », faite dans l'ordre à la demande de l'humain) : couches à clés partagées de Gemma 4 sur les seules lignes utiles ; lecture ×2,6 à ×3,0, réponses identiques ; épisode 49.
 - **Albireo 5.4.1** : réglages et essai du relais depuis le Mac seul (403 `relay_mac_only` ailleurs) ; 60 sur 60.
 - **Albireo 5.4.0** : cadenas du relais dans la zone de saisie (une discussion part vers le moteur extérieur), erreurs du relais en français ; banc de la page 128 ; épisode 48.
 - **Albireo 5.3.0** : relais vers un moteur extérieur repris de l'original (OpenAI, Ollama, Claude et sa recherche web, pseudonymisation par Pseudalis, hors ligne limité au réseau local), carte de l'onglet Service ; 59 sur 59, banc de la page 125.

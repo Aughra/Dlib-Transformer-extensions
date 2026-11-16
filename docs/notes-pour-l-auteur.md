@@ -765,6 +765,15 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : propre au Mac (noyaux Metal). L'idée (couper la tête quand la mémoire partagée manque, au prix de scores recalculés) vaudrait pour un noyau CUDA aux mêmes limites.
 
+### Changement 24 : les couches à clés partagées de Gemma 4 ne calculent que les lignes utiles (Albireo 5.5.0)
+
+- **Avant** : une passe de prompt calculait toutes ses lignes dans toutes les couches. Or les `n_kv_shared` dernières couches de Gemma 4 (20 des 35 du E2B) n'ont pas de clés et valeurs à elles : elles lisent celles d'une couche précédente, et n'écrivent rien que les tokens suivants liront. Leurs calculs ne servent qu'aux lignes dont la passe rend les logits, en général le dernier token du prompt ; un morceau de prompt qui n'en rend aucune n'en a pas besoin du tout.
+- **Changement** : à l'entrée de la première couche partagée, la passe ne garde que les lignes de `logit_rows` (triées, sans doublon) et continue sur elles seules ; un morceau sans logits s'arrête là. Sur le processeur (`cpu_runtime::narrow_rows()`) : les états cachés, les entrées par couche et les positions de ces lignes passent en tête, et l'attention reçoit un lot d'un segment d'un token par ligne, chacune dans sa séquence, aux mêmes positions absolues. Sur le GPU (`run_gpu`) : les commandes déjà écrites s'exécutent, puis le processeur resserre en place (mémoire unifiée) les tampons des états, des cosinus et sinus, des longueurs, des blocs et des entrées par couche des couches restantes, et la passe reprend avec une tuile d'attention par ligne et, pour 8 lignes au plus, les produits par blocs des étapes. Pas avec des positions données ni des plages bidirectionnelles.
+- **Exactitude** : sur le processeur, réponses identiques au token près avant et après (question courte, et journal de 2 823 tokens de prompt : les mêmes 134 tokens de réponse). Sur le GPU, réponses identiques aussi ; le contrôle au chargement passe de 0,482 % à 0,484 % d'écart avec le processeur (les lignes gardées passent par les produits par blocs au lieu des poids développés en flottants), même token.
+- **Vitesse** (M2, 8 fils, gemma-4-E2B-it Q4_K_M, clés en 8 bits, `bench_runtime`, avant et après en alternance, deux fois chacun) : lecture de 512 tokens 154-156 → 463-471 tokens/s sur le processeur, 233-237 → 671-685 sur le GPU ; de 4 096 tokens 129-134 → 371-383 sur le processeur, 93-95 → 241-249 sur le GPU. L'écriture ne change pas (une ligne par étape, demandée).
+
+**Mac ou Windows** : l'original ne lit pas Gemma 4 ; l'idée vaut pour tout moteur qui lit un modèle à clés partagées (Gemma 3n, Gemma 4), sur toute plateforme.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -784,7 +793,7 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | Qwen3.5-4B Q4_K_M, lecture d'un prompt de 783 tokens | non lu par le moteur | 148 à 149 tokens/s sur le GPU ; 86 sur le processeur (changement 12) |
 | Qwen 3.6 11B-A3B Q4_K_M (mélange d'experts, fork seulement), génération | non lu par le moteur | 26,1 à 26,3 tokens/s sur le GPU ; 24,4 à 25,0 sur le processeur (changement 12) |
 | Qwen 3.6 11B-A3B Q4_K_M, lecture d'un prompt de 512 tokens | non lu par le moteur | 196 à 198 tokens/s sur le GPU (changement 15) ; 107 à 112 sur le processeur |
-| Gemma 4 E2B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 20,9 à 23,8 tokens/s ; lecture de 512 tokens 143 à 153 tokens/s (changement 16) |
+| Gemma 4 E2B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 20,9 à 23,8 tokens/s ; lecture de 512 tokens 463 à 471 tokens/s avec le changement 24 (143 à 156 avant), 671 à 685 sur le GPU (233 à 237 avant) ; de 4 096 tokens 371 à 383 sur le processeur, 241 à 249 sur le GPU (changements 16 et 24) |
 | LFM2.5-8B-A1B Q4_K_M (mélange d'experts, fork seulement), processeur | non lu par le moteur | écriture 34,2 à 34,3 tokens/s ; lecture de 512 tokens 141 à 149 tokens/s (changement 17) ; le 1.2B en Q8_0 : 35,3 à 36,1 et 253 à 281, et sur le GPU 40,4 et 433 à 462 (changement 19) |
 | Gemma 3 4B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 16,3 à 17,2 tokens/s ; lecture de 512 tokens 88 à 92 tokens/s (changement 18) ; le 1B : 25,0 à 28,2 et 396 à 436 |
 

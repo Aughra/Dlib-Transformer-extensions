@@ -2,6 +2,16 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 5.5.0 — 16 novembre 2026
+
+### Performances
+
+- Gemma 4 lit les prompts environ trois fois plus vite. Ses dernières couches (20 des 35 du E2B) relisent les clés et valeurs de couches précédentes sans en écrire : elles ne calculent plus que les lignes dont la réponse a besoin, en général le dernier token, et un morceau de prompt qui n'en demande aucune s'arrête avant elles. Sur le processeur et sur le GPU.
+- Mesures sur le MacBook Air M2 (gemma-4-E2B-it Q4_K_M, 8 threads, avant et après en alternance) : 512 tokens, de 154-156 à 463-471 tokens/s sur le processeur et de 233-237 à 671-685 sur le GPU ; 4 096 tokens, de 129-134 à 371-383 et de 93-95 à 241-249. L'écriture des réponses ne change pas.
+- Les réponses restent identiques au token près, sur le processeur comme sur le GPU.
+
+---
+
 ## 5.4.1 — 16 novembre 2026
 
 ### Sécurité

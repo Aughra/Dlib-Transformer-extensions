@@ -1550,9 +1550,62 @@ namespace albireo
         product(L.w_ssm_out, lin_out_.data(), T, VD, tmp_.data(), d);
     }
 
+    /*
+        Ne garde, pour les couches à clés partagées, que les lignes de batch dont la passe rend les logits
+        (fork pour macOS) : leurs états cachés (x_), leurs entrées par couche (ple_) et leurs positions
+        (positions_) passent en tête, T devient leur nombre, et narrowed décrit ces lignes, chacune dans un
+        segment d'un token de sa séquence, logit_rows donnant la place de chaque ligne demandée.  narrowed
+        reste vide quand toutes les lignes sont demandées ; renvoie false quand aucune ne l'est.
+    */
+    bool cpu_runtime::narrow_rows(const forward_batch& batch, forward_batch& narrowed, long& T)
+    {
+        narrowed.clear();
+        std::vector<long> kept = batch.logit_rows;
+        std::sort(kept.begin(), kept.end());
+        kept.erase(std::unique(kept.begin(), kept.end()), kept.end());
+        if (kept.empty()) return false;
+        const long n = static_cast<long>(kept.size());
+        if (n == T) return true;
+        const long d = cfg_.d_model, P = cfg_.d_per_layer * cfg_.n_layers;
+        // Les lignes gardées sont croissantes : chacune descend à une place qu'aucune ligne restante n'occupe.
+        for (long i = 0; i < n; ++i)
+        {
+            const long t = kept[static_cast<size_t>(i)];
+            if (t < 0 || t >= T) throw std::runtime_error("cpu_runtime: a logit row lies outside the batch");
+            if (t == i) continue;
+            std::copy(x_.data() + t * d, x_.data() + (t + 1) * d, x_.data() + i * d);
+            if (P > 0) std::copy(ple_.data() + t * P, ple_.data() + (t + 1) * P, ple_.data() + i * P);
+            positions_[static_cast<size_t>(i)] = positions_[static_cast<size_t>(t)];
+        }
+        x_.resize(static_cast<size_t>(n * d));
+        positions_.resize(static_cast<size_t>(n));
+        narrowed.tokens.assign(static_cast<size_t>(n), 0);
+        for (long i = 0; i < n; ++i)
+        {
+            const long t = kept[static_cast<size_t>(i)];
+            for (const auto& s : batch.segments)
+                if (t >= s.start && t < s.start + s.count)
+                {
+                    forward_batch::segment one;
+                    one.sequence = s.sequence;
+                    one.start = i;
+                    one.count = 1;
+                    narrowed.segments.push_back(one);
+                    break;
+                }
+        }
+        if (static_cast<long>(narrowed.segments.size()) != n)
+            throw std::runtime_error("cpu_runtime: a logit row lies outside the segments of the batch");
+        for (long t : batch.logit_rows)
+            narrowed.logit_rows.push_back(std::lower_bound(kept.begin(), kept.end(), t) - kept.begin());
+        T = n;
+        return true;
+    }
+
     bool cpu_runtime::run(const forward_batch& batch, std::vector<float>& logits, bool on_device)
     {
-        const long T = static_cast<long>(batch.tokens.size());
+        // Le nombre de lignes que la passe calcule, que les couches à clés partagées réduisent (narrow_rows).
+        long T = static_cast<long>(batch.tokens.size());
         if (T == 0) { logits.clear(); return true; }
         const long d = cfg_.d_model;
         const long qd = cfg_.q_dim();
@@ -1660,17 +1713,34 @@ namespace albireo
                         token_checkpoint_[static_cast<size_t>(s.start + j)] = pending_checkpoints_[k++].second.state.data();
         }
 
+        /*
+            Les couches qui lisent les clés et valeurs d'une autre (Gemma 4, model_config::n_kv_shared) n'écrivent
+            rien que les tokens suivants liront : à partir de la première d'entre elles, seules servent encore les
+            lignes dont la passe rend les logits, comme llama.cpp le fait pour ces couches.  La passe continue sur
+            ces lignes seules, et un morceau de prompt qui n'en demande aucune s'arrête avant elles (fork pour
+            macOS).  Pas avec la passe du périphérique, ni avec des positions données ou des plages
+            bidirectionnelles, que ces lignes devraient suivre aussi.
+        */
+        const long first_shared = cfg_.n_layers - cfg_.n_kv_shared;
+        const bool narrowing = cfg_.n_kv_shared > 0 && !on_device && !given && reach_.empty() && cfg_.n_deepstack == 0;
+        forward_batch narrowed;
+        const forward_batch* active = &batch;
         for (long li = 0; li < cfg_.n_layers; ++li)
         {
             const layer& L = layers_[static_cast<size_t>(li)];
             const long slot = kv_slot_[static_cast<size_t>(li)];
+            if (narrowing && li == first_shared)
+            {
+                if (!narrow_rows(batch, narrowed, T)) break;
+                if (!narrowed.segments.empty()) active = &narrowed;
+            }
 
             if (slot < 0)
             {
                 // Couche linéaire : Gated DeltaNet (qwen35) ou convolution courte (lfm2), puis la somme résiduelle.
                 rms_norm_rows(x_.data(), L.attn_norm.data(), xn_.data(), T, d, eps);
-                if (cfg_.lfm2) short_convolution(L, linear_slot_[static_cast<size_t>(li)], batch);
-                else linear_attention(L, linear_slot_[static_cast<size_t>(li)], batch);
+                if (cfg_.lfm2) short_convolution(L, linear_slot_[static_cast<size_t>(li)], *active);
+                else linear_attention(L, linear_slot_[static_cast<size_t>(li)], *active);
                 for (size_t i = 0; i < x_.size(); ++i) x_[i] += rs * tmp_[i];
             }
             else
@@ -1746,9 +1816,9 @@ namespace albireo
 
             // Les clés et valeurs du lot vont dans les séquences avant que l'attention ne les lise,
             // pour que chaque token voie les tokens précédents de son propre morceau.
-            if (owns) store_keys_values(slot, batch, li);
+            if (owns) store_keys_values(slot, *active, li);
 
-            attention(slot, batch, positions_, li);
+            attention(slot, *active, positions_, li);
             // Les valeurs 8 bits sont stockées tournées : leur moyenne pondérée, la sortie de chaque tête, l'est aussi.
             if (kv_.format() == kv_format::q8)
             {
@@ -1811,12 +1881,13 @@ namespace albireo
             sequences_[static_cast<size_t>(s.sequence)]->length += s.count;
         if (!pending_checkpoints_.empty()) keep_checkpoints();
 
-        // Normalisation finale et logits des seules lignes demandées.
+        // Normalisation finale et logits des seules lignes demandées, à leur place après narrow_rows().
         const long R = static_cast<long>(batch.logit_rows.size());
         hidden_out_.resize(static_cast<size_t>(R * d));
         for (long r = 0; r < R; ++r)
         {
-            const long t = batch.logit_rows[static_cast<size_t>(r)];
+            const long t = active == &narrowed ? narrowed.logit_rows[static_cast<size_t>(r)]
+                                               : batch.logit_rows[static_cast<size_t>(r)];
             rms_norm_rows(x_.data() + t * d, output_norm_.data(), hidden_out_.data() + r * d, 1, d, eps);
         }
         if (batch.hidden_only)

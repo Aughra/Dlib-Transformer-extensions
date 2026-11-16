@@ -268,6 +268,8 @@ namespace albireo
             true ; false quand le périphérique n'a pas pris la passe, qui n'a alors rien fait.
         */
         bool run(const forward_batch& batch, std::vector<float>& logits, bool on_device);
+        // Les lignes que gardent les couches à clés partagées (Gemma 4) : celles des logits (fork pour macOS).
+        bool narrow_rows(const forward_batch& batch, forward_batch& narrowed, long& T);
         bool takes_layer_pass(const forward_batch& batch) const;
         int probe_layer_pass(long n, std::string& detail);
         void check_layer_pass();
