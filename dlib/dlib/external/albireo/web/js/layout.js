@@ -18,7 +18,7 @@ import { markdownField } from './mdfield.js';
 import { goHome, leaveCurrent, newChat, newConversation, showDiscussion } from './navigation.js';
 import { agentHelp, renderSidebar } from './sidebar.js';
 import { state, ui } from './state.js';
-import { roleCapabilities, webUnavailable } from './status.js';
+import { chatRole, relayKey, relayStatus, roleCapabilities, webChosen, webUnavailable } from './status.js';
 import { refreshViews } from './tabs.js';
 import { hideJump, jumpDelay, jumpTo, renderAll, threadScrolled, watchComposer } from './thread.js';
 
@@ -99,8 +99,9 @@ export function buildLayout() {
     onclick: async () => {
       const c = state.current;
       c.reasoning = !c.reasoning;
-      // L'agent et le web d'un modèle capable de raisonner se terminent avec son raisonnement approfondi.
-      if (!c.reasoning) {
+      // L'agent et le web d'un modèle capable de raisonner se terminent avec son raisonnement approfondi ; la recherche
+      // du modèle extérieur d'une discussion relayée n'en dépend pas.
+      if (!c.reasoning && chatRole(c) !== 'relay') {
         c.agent = false;
         c.web = false;
       }
@@ -113,8 +114,8 @@ export function buildLayout() {
     class: 'toggle', type: 'button', title: t('agentHint'), html: icon('tool') + '<span>' + escapeHtml(t('agent')) + '</span>',
     onclick: async () => {
       const c = state.current;
-      const caps = roleCapabilities(c.role);
-      if (!caps.tools) return toast(t('agentNoTools'), true);
+      const caps = roleCapabilities(chatRole(c));
+      if (!caps.tools) return toast(caps.relay ? t('relayNoTools') : t('agentNoTools'), true);
       c.agent = !c.agent;
       // Un modèle qui raisonne avant d'agir : l'agent allume son raisonnement approfondi.
       if (c.agent && caps.reasoning && !c.reasoning) {
@@ -136,12 +137,14 @@ export function buildLayout() {
     html: icon('globe') + '<span>' + escapeHtml(t('web')) + '</span>',
     onclick: async () => {
       const c = state.current;
-      const caps = roleCapabilities(c.role);
+      const caps = roleCapabilities(chatRole(c));
       const blocked = webUnavailable(caps, true);
       if (blocked) return toast(blocked, true);
-      c.web = !c.web;
-      // Un modèle qui raisonne avant de chercher : le web allume son raisonnement approfondi.
-      if (c.web && caps.reasoning && !c.reasoning) {
+      // Le choix vaut pour le modèle qui répond : celui du relais, ou ceux du Mac (webChosen()).
+      c.web = !webChosen(c);
+      c.webRelay = c.web && caps.relay ? c.relay : '';
+      // Un modèle qui raisonne avant de chercher : le web allume son raisonnement approfondi (pas le relais).
+      if (c.web && !caps.relay && caps.reasoning && !c.reasoning) {
         c.reasoning = true;
         toast(t('reasoningTurnedOn'));
       }
@@ -155,12 +158,29 @@ export function buildLayout() {
     class: 'help-button', type: 'button', title: t('agentHelpTitle'), 'aria-label': t('agentHelpTitle'),
     html: icon('info'), onclick: (e) => agentHelp(e.currentTarget)
   });
+  /*
+      Le relais de la discussion affichée, éteint dans chaque nouvelle discussion : le cadenas s'ouvre, rouge, tant que
+      ses questions vont au modèle extérieur ; l'agent reste aux modèles du Mac, et le Web de chacun se rallume à part.
+  */
+  ui.relayButton = h('button', {
+    class: 'toggle relay hidden', type: 'button', 'aria-pressed': 'false',
+    onclick: async () => {
+      const c = state.current;
+      const r = relayStatus();
+      c.relay = chatRole(c) === 'relay' || !r ? '' : relayKey(r);
+      if (c.relay) c.agent = false;
+      c.web = false;
+      renderComposerState();
+      if (c.messages.length) await persist(c);
+      refreshViews();
+    }
+  });
   ui.sendButton = h('button', { class: 'send', type: 'button', onclick: onSend });
   ui.pendingBox = h('div', { class: 'composer-attachments hidden' });
   ui.attachButton = iconButton('clip', t('attach'), (e) => attachMenu(e.currentTarget, fileInput, addPending));
   const composer = h('div', { class: 'composer' }, ui.pendingBox, ui.input, h('div', { class: 'row' },
     ui.attachButton, fileInput, ui.reasonButton, ui.agentButton, ui.webButton, ui.agentHelp,
-    h('span', { class: 'grow' }), ui.sendButton));
+    h('span', { class: 'grow' }), ui.relayButton, ui.sendButton));
   for (const ev of ['dragenter', 'dragover']) composer.addEventListener(ev, (e) => { e.preventDefault(); composer.classList.add('drag'); });
   for (const ev of ['dragleave', 'drop']) composer.addEventListener(ev, () => composer.classList.remove('drag'));
   composer.addEventListener('drop', (e) => {

@@ -24,16 +24,43 @@ import { memoryAbort } from './memory.js';
 import { keepImages } from './navigation.js';
 import { renderSidebar } from './sidebar.js';
 import { state, ui } from './state.js';
-import { acceptFor, inputsLabel, readsImages, roleCapabilities, roleInputs, roleModel, toolsAvailable,
-  webUnavailable } from './status.js';
+import { acceptFor, chatRole, inputsLabel, readsImages, relayName, relayStatus, roleCapabilities, roleInputs, roleModel,
+  toolsAvailable, webChosen, webUnavailable } from './status.js';
 import { announceBusy, answeredElsewhere, refreshViews } from './tabs.js';
 import { attachmentChip, lockThread, renderMain } from './thread.js';
+
+/*
+    Le cadenas du relais, montré tant que le relais du service est prêt : fermé tant que la discussion reçoit ses
+    réponses sur ce Mac, ouvert et rouge, avec le nom du modèle extérieur, tant que ses questions le quittent.
+*/
+function renderRelayButton(c) {
+  if (!ui.relayButton) return;
+  const r = relayStatus();
+  ui.relayButton.classList.toggle('hidden', !r);
+  if (!r) return;
+  const on = chatRole(c) === 'relay';
+  const label = on ? r.name || r.model : '';
+  if (ui.relayButton.dataset.on !== String(on) || ui.relayButton.dataset.label !== label) {
+    ui.relayButton.dataset.on = String(on);
+    ui.relayButton.dataset.label = label;
+    ui.relayButton.replaceChildren();
+    ui.relayButton.insertAdjacentHTML('beforeend', icon(on ? 'unlock' : 'lock'));
+    if (on) ui.relayButton.append(h('span', null, label));
+  }
+  ui.relayButton.classList.toggle('on', on);
+  ui.relayButton.setAttribute('aria-pressed', String(on));
+  let title = t(on ? 'relayOn' : 'relayOff', { model: relayName(r) });
+  if (r.pseudonymize) title += ' ' + t(r.keep_substitutes ? 'relaySubstitutes' : 'relayPseudonymized');
+  if (r.image_mode === 'described') title += ' ' + t('relayImagesDescribed');
+  ui.relayButton.title = title;
+  ui.relayButton.setAttribute('aria-label', title);
+}
 
 // Zone de saisie.
 export function renderComposerState() {
   if (!ui.input) return;
   const c = state.current;
-  const caps = roleCapabilities(c ? c.role : 'general');
+  const caps = roleCapabilities(chatRole(c));
   const reasoning = !!(c && c.reasoning && caps.reasoning);
   // L'agent et le web d'un modèle capable de raisonner viennent avec son raisonnement approfondi (toolsAvailable()).
   const ready = toolsAvailable(caps, reasoning);
@@ -52,20 +79,22 @@ export function renderComposerState() {
   */
   ui.agentButton.classList.toggle('unavailable', !caps.tools);
   ui.agentButton.setAttribute('aria-disabled', String(!caps.tools));
-  ui.agentButton.title = ready ? t('agentHint') : caps.tools ? t('agentNeedsReasoning') : t('agentNoTools');
+  ui.agentButton.title = ready ? t('agentHint') : caps.relay ? t('relayNoTools') : caps.tools ? t('agentNeedsReasoning')
+    : t('agentNoTools');
   // Le bouton Web est désactivé et grisé, avec la raison comme titre, tant que le modèle n'appelle aucun outil, tant
   // qu'un modèle capable de raisonner n'a pas son raisonnement approfondi, ou tant que le service ne donne pas d'accès
   // au web.
   const reason = webUnavailable(caps, reasoning);
-  const webOn = !!(c && c.web && !reason);
+  const webOn = !!(webChosen(c) && !reason);
   ui.webButton.classList.toggle('on', webOn);
   ui.webButton.setAttribute('aria-pressed', String(webOn));
   const blocked = webUnavailable(caps, true);
   ui.webButton.classList.toggle('unavailable', !!blocked);
   ui.webButton.setAttribute('aria-disabled', String(!!blocked));
-  ui.webButton.title = reason || t('webHint');
+  ui.webButton.title = reason || (caps.relay ? t('relayWebHint') : t('webHint'));
+  renderRelayButton(c);
   // Les pièces jointes que lit le modèle de la fonction, les images tant que le contexte a des places pour elles.
-  const role = c ? c.role : 'general';
+  const role = chatRole(c);
   const room = imageRoom(c);
   if (ui.fileInput) ui.fileInput.accept = acceptFor(role, room);
   if (ui.attachButton) {
@@ -130,7 +159,7 @@ export function autoGrow() {
 */
 export async function addPending(files) {
   const c = state.current;
-  let added = await readFiles(files, c ? c.role : 'general', imageRoom(c));
+  let added = await readFiles(files, chatRole(c), imageRoom(c));
   const key = draftKey(c);
   const shown = state.current === c || (key !== '' && draftKey(state.current) === key);
   const draft = shown || !key ? null : drafts.get(key) || { text: storedDraft(key), files: [] };
@@ -239,7 +268,7 @@ function beginTurn(c) {
 
 // Une nouvelle réponse de la discussion c, dessinée en direct à partir de maintenant.
 function newTurn(c) {
-  const turn = { id: store.uid(), role: 'assistant', steps: [], created: Date.now(), model: roleModel(c.role) || '' };
+  const turn = { id: store.uid(), role: 'assistant', steps: [], created: Date.now(), model: roleModel(chatRole(c)) || '' };
   c.messages.push(turn);
   const g = generations.get(c.id);
   if (g) g.turn = turn;
@@ -345,7 +374,7 @@ const indexWait = 15000;
 // Comment le modèle lit les documents d'une question : en entier tant qu'ils tiennent dans leur part du contexte de
 // travail et dans leur temps de lecture, par recherche au-delà.
 function attachmentModes(c, m) {
-  const limit = wholeTokens(roleCapabilities(c.role), attachmentShare, attachmentSeconds);
+  const limit = wholeTokens(roleCapabilities(chatRole(c)), attachmentShare, attachmentSeconds);
   for (const a of m.attachments || []) {
     if (!a.mode) a.mode = estimateTokens(a.text) <= limit ? 'whole' : 'search';
   }
@@ -358,7 +387,7 @@ function attachmentModes(c, m) {
     signal arrête les vecteurs des documents, alors cherchés par leurs mots, et la recherche.
 */
 export async function prepareQuestion(c, m, signal) {
-  const caps = roleCapabilities(c.role);
+  const caps = roleCapabilities(chatRole(c));
   const owners = [];
   attachmentModes(c, m);
   for (const a of m.attachments || []) {

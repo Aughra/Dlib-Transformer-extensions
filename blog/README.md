@@ -51,5 +51,6 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 45. [L'orchestre et les solistes](45-l-orchestre-et-les-solistes.md)
 46. [L'étagère du Mac](46-l-etagere-du-mac.md)
 47. [Les deux vitrines](47-les-deux-vitrines.md)
+48. [Le messager et les surnoms](48-le-messager-et-les-surnoms.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).

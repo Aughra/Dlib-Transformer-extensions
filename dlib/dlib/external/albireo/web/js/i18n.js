@@ -19,6 +19,14 @@ const texts = {
     answerRepeated: 'Réponse arrêtée : le modèle se répétait.',
     agent: 'Agent', agentHint: 'Le modèle peut utiliser des outils : calcul, code, documents, fichiers',
     agentNoTools: 'Le modèle de cette fonction ne peut pas appeler d\'outils',
+    // Le cadenas du relais vers un moteur extérieur (repris de l'original, Albireo 1.0.23).
+    relayOff: 'Réponse sur ce Mac. Cliquer pour relayer vers {model}.',
+    relayOn: 'Relayée vers {model}, hors de ce Mac. Cliquer pour répondre ici.',
+    relayPseudonymized: 'Valeurs personnelles pseudonymisées par Pseudalis.',
+    relaySubstitutes: 'Réponses laissées pseudonymisées (contrôle).',
+    relayImagesDescribed: 'Images envoyées en description.',
+    relayNoTools: 'Réservé aux modèles de ce Mac',
+    relayWebHint: 'Claude cherche sur le web pour cette discussion ; Anthropic facture chaque recherche.',
     reasoningTurnedOn: 'Raisonnement approfondi activé : ce modèle raisonne avant d\'agir ou de chercher.',
     agentNeedsReasoning: 'Activez d\'abord le raisonnement approfondi : ce modèle raisonne avant d\'appeler ses ' +
       'outils',
@@ -155,6 +163,15 @@ const texts = {
     tokensCount_one: '{n} jeton', tokensCount_other: '{n} jetons',
     errTooManyImages: 'La requête contient plus d\'images que le service n\'en lit à la fois (16).',
     errImageFormat: 'Une image n\'est pas un fichier PNG ou JPEG, les formats que lit le service.',
+    // Les échecs du relais vers un moteur extérieur, d'après leur code.
+    errRelayRefused: 'Le moteur extérieur refuse la question : la clé, le crédit du compte ou ses limites (onglet Service, ' +
+      '« Relais vers un moteur extérieur », bouton « Tester »).',
+    errRelayFailed: 'Le moteur extérieur a échoué, ou sa réponse a été coupée.',
+    errRelayUnreachable: 'Le moteur extérieur ne répond pas : vérifiez son adresse, le réseau ou le proxy.',
+    errRelayOffline: 'Hors ligne : ce moteur extérieur n’est ni sur ce Mac ni sur le réseau de la maison.',
+    errPseudonymization: 'Pseudalis ne répond pas : la question n’est pas partie, pour ne pas envoyer de données ' +
+      'personnelles en clair.',
+    errRelayUnavailable: 'Le relais n’est pas prêt : voir l’onglet Service.',
     errEngineBusy: 'Le modèle est occupé par d\'autres images : envoyez de nouveau la question dans un instant.',
     errBusy: 'Le service lit trop de grandes requêtes à la fois : envoyez de nouveau la question dans un instant.',
     errZipInvalid: 'le fichier est endommagé, ou n\'est pas le document qu\'indique son nom',

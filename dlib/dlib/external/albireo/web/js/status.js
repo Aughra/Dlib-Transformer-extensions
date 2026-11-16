@@ -27,9 +27,78 @@ import { lockThread } from './thread.js';
 
 // État du service et modèles.
 export function roleModel(role) {
+  if (role === 'relay') return relayStatus() ? relayModel : null;
   const s = state.status;
   if (!s || !s.active) return null;
   return s.active[role] || s.active.general || null;
+}
+
+/*
+    Le relais du service vers un moteur extérieur (status.relay, repris de l'original, Albireo 1.0.23), une fois prêt :
+    une discussion l'allume par le cadenas de la zone de saisie, ouvert tant que ses questions quittent le Mac.  Son
+    modèle, albireo-relay, tient lieu du modèle extérieur ; l'agent reste aux modèles du Mac, et le Web d'une discussion
+    relayée est la recherche du modèle extérieur lui-même (Claude), sans les outils de la page.
+*/
+export const relayModel = 'albireo-relay';
+
+export function relayStatus() {
+  const s = state.status;
+  return s && s.relay && s.relay.ready ? s.relay : null;
+}
+
+/*
+    Ce pour quoi une discussion a allumé le relais : le fournisseur, le modèle, la pseudonymisation et l'empreinte de
+    l'adresse du relais d'alors.  Un autre réglage depuis éteint le relais de la discussion, jusqu'à un nouveau clic.
+*/
+export function relayKey(r) {
+  return [r.provider, r.model, r.pseudonymize ? 1 : 0, r.scope || ''].join('|');
+}
+
+/*
+    La fonction dont le modèle répond à c : la sienne, ou 'relay' tant que la discussion passe par le relais.  Les
+    fonctions, leurs modèles, leurs entrées et leurs capacités prennent 'relay' comme l'une d'elles.
+*/
+export function chatRole(c) {
+  const r = relayStatus();
+  return c && r && c.relay === relayKey(r) ? 'relay' : (c ? c.role : 'general');
+}
+
+/*
+    Si Web est allumé pour c avec le modèle qui lui répond : le choix fait pour le modèle extérieur du relais ne vaut que
+    pour lui, et celui fait pour les modèles du Mac que pour eux, pour qu'un relais qui s'éteint ne confie aucune
+    recherche à un modèle du Mac qui ne l'a pas demandée.
+*/
+export function webChosen(c) {
+  return !!(c && c.web && (c.webRelay || '') === (chatRole(c) === 'relay' ? c.relay : ''));
+}
+
+// Le nom du modèle extérieur avec son fournisseur.
+export function relayName(r) {
+  return (r.name || r.model) + ' · ' + r.provider_name;
+}
+
+// Les vitesses d'un moteur extérieur, qui lit et écrit bien plus vite que le Mac, pour les parts de son contexte.
+const relayReadRate = 2000;
+const relayWriteRate = 60;
+
+function relayCapabilities() {
+  const r = relayStatus() || {};
+  const thinking = r.thinking || 'none';
+  const context = r.context || 0;
+  return { reasoning: thinking !== 'none', reasoningAlways: thinking === 'always', tools: false, context,
+    working: context, read: relayReadRate, write: relayWriteRate, relay: true, webSearch: !!r.web };
+}
+
+/*
+    Pourquoi le bouton Web d'une discussion relayée est éteint : '' quand son modèle extérieur cherche lui-même sur le
+    web (Claude) et que le service donne l'accès au web, la raison sinon.
+*/
+function relayWebUnavailable(caps) {
+  if (!caps.webSearch) return t('relayNoTools');
+  const s = state.status;
+  if (!s || !s.web || typeof s.web !== 'object') return t('webUnavailable');
+  if (s.web.available) return '';
+  return s.offline ? t('webOffline') : t('webOff');
 }
 
 function modelInfo(id) {
@@ -39,6 +108,9 @@ function modelInfo(id) {
 }
 
 export function modelName(id) {
+  // Le modèle extérieur d'une réponse du relais garde le nom qu'il avait alors.
+  if (typeof id === 'string' && id.startsWith('relay:')) return id.slice(6);
+  if (id === relayModel) return relayStatus() ? relayName(relayStatus()) : id;
   const m = modelInfo(id);
   return m && m.name ? m.name : id;
 }
@@ -51,6 +123,7 @@ export function loadedModel(id) {
 // Ce que lit un modèle : "text", et "image" ou "audio" pour les modèles qui les lisent, comme le
 // disent le moteur ou le catalogue.
 function modelInputs(id) {
+  if (id === relayModel) return relayStatus() && relayStatus().images ? ['text', 'image'] : ['text'];
   const loaded = loadedModel(id);
   if (loaded && Array.isArray(loaded.inputs) && loaded.inputs.length) return loaded.inputs;
   const m = modelInfo(id);
@@ -89,6 +162,7 @@ export function acceptFor(role, room) {
     (readRate, writeRate).
 */
 export function roleCapabilities(role) {
+  if (role === 'relay') return relayCapabilities();
   const id = roleModel(role);
   const loaded = loadedModel(id);
   const read = readRate(id);
@@ -120,6 +194,7 @@ export function toolsAvailable(caps, reasoning) {
     coupé (le membre "web" de l'état), ou un état qui ne le contient pas.
 */
 export function webUnavailable(caps, reasoning) {
+  if (caps.relay) return relayWebUnavailable(caps);
   if (!caps.tools) return t('webNoTools');
   if (!toolsAvailable(caps, reasoning)) return t('webNeedsReasoning');
   const s = state.status;
@@ -148,7 +223,9 @@ export function searchProvider() {
 export function toolSet(c, caps) {
   const reasoning = !!(c.reasoning && caps.reasoning);
   const agent = !!(c.agent && toolsAvailable(caps, reasoning));
-  const webOn = !!(c.web && !webUnavailable(caps, reasoning));
+  const webOn = !!(webChosen(c) && !webUnavailable(caps, reasoning));
+  // Le relais ne prend aucun outil : son Web est la recherche du modèle extérieur (web_search de la requête).
+  if (caps.relay) return { agent: false, web: false, search: false, definitions: null, webSearch: webOn };
   const search = webOn && state.status.web.search === 'wikipedia';
   const definitions = (agent ? tools.definitions : []).concat(webOn ? web.definitions(search) : []);
   return { agent, web: webOn, search, definitions: definitions.length ? definitions : null };
@@ -243,8 +320,11 @@ async function pollStatus() {
   try {
     const s = await api.status();
     // L'accès au web et le mode hors ligne changent le bouton Web de la zone de saisie et les outils de la question
-    // suivante.
-    const key = (x) => JSON.stringify([x.active, x.loaded_models, x.state, x.background, x.web, x.offline]);
+    // suivante ; le relais, son cadenas, son modèle et ses capacités (pas les compteurs de sa mémoire, qui bougent).
+    const relay = (r) => r ? [r.ready, r.provider, r.model, r.name, r.context, r.thinking, r.pseudonymize,
+      r.keep_substitutes, r.image_mode, r.web, r.scope] : null;
+    const key = (x) => JSON.stringify([x.active, x.loaded_models, x.state, x.background, x.web, x.offline,
+      relay(x.relay)]);
     changed = !state.status || key(state.status) !== key(s);
     back = state.statusError;
     state.status = s;
@@ -292,7 +372,7 @@ export function renderStatusLine() {
   if (s && !state.statusError) {
     const stats = s.engine && s.engine.stats;
     const loading = Object.values(s.models_state || {}).some((v) => v === 'loading');
-    const model = roleModel(state.current ? state.current.role : 'general');
+    const model = roleModel(state.current ? chatRole(state.current) : 'general');
     if (s.state === 'starting') {
       led = 'busy';
       text = t('serviceStarting');
@@ -305,7 +385,8 @@ export function renderStatusLine() {
     } else {
       led = stats && stats.active > 0 ? 'busy' : 'ok';
       const tps = stats ? stats.generation_tokens_per_second : 0;
-      text = modelName(model) + ' · ' + computeUnit(model)
+      // Le modèle extérieur du relais calcule hors du Mac : ni GPU ni débit du moteur local.
+      text = model === relayModel ? modelName(model) + ' · hors du Mac' : modelName(model) + ' · ' + computeUnit(model)
         + (tps > 0.05 ? ' · ' + t('tokensPerSecond', { n: formatDecimal(tps, 1) }) : '');
     }
   }
@@ -331,9 +412,10 @@ const contextRetry = 30000;
 function contextKey(c) {
   const last = c.messages[c.messages.length - 1];
   // Les outils et le raisonnement que permettent les capacités du modèle changent le prompt, comme les boutons.
-  const caps = roleCapabilities(c.role);
-  return [c.id, c.role, roleModel(c.role), c.messages.length, last ? last.id : '',
-    last && last.steps ? last.steps.length : 0, c.contextStart || 0, c.agent ? 1 : 0, c.web ? 1 : 0,
+  const role = chatRole(c);
+  const caps = roleCapabilities(role);
+  return [c.id, role, roleModel(role), c.messages.length, last ? last.id : '',
+    last && last.steps ? last.steps.length : 0, c.contextStart || 0, c.agent ? 1 : 0, webChosen(c) ? 1 : 0,
     c.reasoning ? 1 : 0, caps.tools ? 1 : 0, caps.reasoning ? 1 : 0, c.updated || 0].join('|');
 }
 
@@ -341,14 +423,15 @@ async function measureContext(c, key) {
   contextUse.pending = true;
   let tokens = 0, context = 0;
   try {
-    const caps = roleCapabilities(c.role);
+    const role = chatRole(c);
+    const caps = roleCapabilities(role);
     const set = toolSet(c, caps);
     const system = systemPrompt(c, caps, set);
-    const model = 'albireo-' + c.role;
+    const model = 'albireo-' + role;
     const text = apiMessages(c, system, null, { read: false, url: () => null });
     const r = await api.count(model, text, set.definitions);
     if (r && typeof r.tokens === 'number' && r.context) {
-      tokens = Math.round(tokenEstimate(text, r.tokens, model).of(apiMessages(c, system, null, estimateMedia(c.role))));
+      tokens = Math.round(tokenEstimate(text, r.tokens, model).of(apiMessages(c, system, null, estimateMedia(role))));
       context = r.context;
     }
   } catch (e) {
@@ -363,7 +446,7 @@ async function measureContext(c, key) {
 export function renderContextLine() {
   if (!ui.contextLine) return;
   const c = state.view === 'chat' ? state.current : null;
-  const ready = !!(c && serviceReady() && roleModel(c.role));
+  const ready = !!(c && serviceReady() && roleModel(chatRole(c)));
   const waiting = ready && contextUse.id === c.id && Date.now() - contextUse.failed < contextRetry;
   if (ready && !contextUse.pending && !generations.has(c.id) && !waiting) {
     const key = contextKey(c);
@@ -454,7 +537,9 @@ function modelHelp(id) {
 // Sous la zone de saisie : le modèle qui répond, son « ? », et l'avertissement.
 function renderHint() {
   if (!ui.hint) return;
-  const model = state.status && !state.statusError ? roleModel('general') : null;
+  // Le modèle général, ou le modèle extérieur quand la discussion affichée passe par le relais.
+  const relayed = !!(state.current && chatRole(state.current) === 'relay');
+  const model = state.status && !state.statusError ? roleModel(relayed ? 'relay' : 'general') : null;
   fill(ui.hint, model ? [h('span', { class: 'hint-model' }, modelName(model)), ' ', modelInfo(model) ? modelHelp(model) : null,
     ' · '] : null, hintText());
 }

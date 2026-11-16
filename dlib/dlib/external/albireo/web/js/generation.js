@@ -21,7 +21,7 @@ import { knowledgeMode, queueIndex } from './indexing.js';
 import { projectById, searchConversations } from './lists.js';
 import { rememberLater } from './memory.js';
 import { maxAgentSteps, state, ui } from './state.js';
-import { modelName, roleCapabilities, roleModel, toolSet } from './status.js';
+import { chatRole, modelName, relayName, relayStatus, roleCapabilities, roleModel, toolSet } from './status.js';
 import { announceBusy, refreshViews } from './tabs.js';
 import { fillAssistant, lockThread, renderMain, scrollToEnd } from './thread.js';
 
@@ -181,7 +181,7 @@ async function fitContext(c, build, toolDefs, reserve, signal, onCompact, model,
   // est demandée.
   const answer = c.messages[c.messages.length - 1];
   let spare = answer && answer.role === 'assistant' && (answer.steps || []).length > 1 ? 0.25 : 0;
-  const counted = model || 'albireo-' + c.role;
+  const counted = model || 'albireo-' + chatRole(c);
   for (let attempt = 0; attempt < 12; ++attempt) {
     const list = build(cuts);
     // Les images que le service n'a pas encore mesurées pour ce modèle, une fois.
@@ -399,10 +399,11 @@ function answerElement(c, m) {
 */
 export async function runTurn(c, abort, turn) {
   const g = generationOf(c);
-  // La fonction, le raisonnement et l'agent de la réponse restent ceux de son début.
-  const role = c.role;
+  // La fonction, le raisonnement et l'agent de la réponse restent ceux de son début, relais compris.
+  const role = chatRole(c);
   const model = roleModel(role);
-  turn.model = model || '';
+  // Une réponse du relais garde le nom du modèle extérieur d'alors.
+  turn.model = role === 'relay' ? 'relay:' + relayName(relayStatus()) : model || '';
   const signal = abort.signal;
   const caps = roleCapabilities(role);
   const reasoning = !!(c.reasoning && caps.reasoning);
@@ -478,6 +479,8 @@ export async function runTurn(c, abort, turn) {
       }
       const body = { model: 'albireo-' + role, messages: fitted.messages, reasoning };
       if (stepTools) body.tools = stepTools;
+      // Le Web d'une discussion relayée : le modèle extérieur cherche lui-même (Claude), sans les outils de la page.
+      if (set.webSearch) body.web_search = true;
       if (state.settings.temperature != null) body.temperature = state.settings.temperature;
       if (state.settings.topP != null) body.top_p = state.settings.topP;
       if (state.settings.topK != null) body.top_k = state.settings.topK;

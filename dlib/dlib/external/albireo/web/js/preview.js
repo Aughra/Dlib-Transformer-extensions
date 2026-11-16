@@ -15,7 +15,7 @@ import { apiMessages, systemPrompt, tokenEstimate } from './context.js';
 import { dialog } from './dialogs.js';
 import { formatNumber, h } from './dom.js';
 import { state, ui } from './state.js';
-import { modelName, roleCapabilities, roleModel, toolSet } from './status.js';
+import { chatRole, modelName, roleCapabilities, roleModel, toolSet } from './status.js';
 
 const roles = { system: 'Système', user: 'Vous', assistant: 'Albireo', tool: 'Résultat d’outil' };
 
@@ -37,7 +37,7 @@ function textOf(m) {
 export async function contextPreview() {
   const c = state.current;
   if (!c) return;
-  const role = c.role;
+  const role = chatRole(c);
   const model = roleModel(role);
   const caps = roleCapabilities(role);
   const set = toolSet(c, caps);

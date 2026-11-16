@@ -299,5 +299,36 @@
  },
  {
   "shot": "memory.png"
+ },
+ {
+  "name": "relay padlock",
+  "eval": "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})); for(const b of document.querySelectorAll('.dialog .close, .dialog [aria-label=Fermer]')) b.click(); await new Promise(r=>setTimeout(r,300)); const put=(o)=>fetch('/albireo/v1/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({relay:o})}); await put({enabled:true,provider:'openai',url:'http://127.0.0.1:18491/v1',auth:'none',model:'essai'}); T.btn('Nouvelle discussion').click(); let lock=null; for(let i=0;i<60;i++){ lock=document.querySelector('.composer .toggle.relay:not(.hidden)'); if(lock) break; await new Promise(r=>setTimeout(r,500)); } if(!lock) return 'no padlock'; const off=lock.getAttribute('aria-pressed'); lock.click(); await new Promise(r=>setTimeout(r,200)); const btn=document.querySelector('.composer .toggle.relay'); return [off, btn.getAttribute('aria-pressed'), btn.innerText.trim(), btn.title.startsWith('Relayée vers essai · OpenAI'), document.querySelector('.composer .toggle.web').classList.contains('unavailable')]",
+  "expect": [
+   "false",
+   "true",
+   "essai",
+   true,
+   true
+  ]
+ },
+ {
+  "name": "relay question sent",
+  "eval": "const orig=window.fetch; let sent=null; window.fetch=(u,o)=>{ if(String(u).includes('/v1/chat/completions')&&o&&o.body){ try{ const b=JSON.parse(o.body); if(b.model==='albireo-relay') sent=b; }catch(e){} } return orig(u,o); }; T.ask('Bonjour, réponds en un mot.'); for(let i=0;i<60&&!(sent&&!document.querySelector('.message.assistant.live'));i++) await new Promise(r=>setTimeout(r,500)); window.fetch=orig; const last=[...document.querySelectorAll('.message.assistant')].pop(); return [sent?sent.model:'', !!(sent&&sent.tools), !!(sent&&sent.web_search), !!last && /Le moteur extérieur/.test(last.innerText), document.querySelector('.status-line').innerText.includes('essai · OpenAI · hors du Mac'), document.querySelector('.hint-model').innerText]",
+  "expect": [
+   "albireo-relay",
+   false,
+   false,
+   true,
+   true,
+   "essai · OpenAI"
+  ]
+ },
+ {
+  "shot": "relay-padlock.png"
+ },
+ {
+  "name": "relay off again",
+  "eval": "const put=(o)=>fetch('/albireo/v1/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({relay:o})}); await put({enabled:false,url:'',model:'',auth:'key'}); for(let i=0;i<60&&document.querySelector('.composer .toggle.relay:not(.hidden)');i++) await new Promise(r=>setTimeout(r,500)); return !document.querySelector('.composer .toggle.relay:not(.hidden)')",
+  "expect": true
  }
 ]

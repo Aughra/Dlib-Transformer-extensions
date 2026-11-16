@@ -15,7 +15,7 @@ import { compactions, currentVersion, keptTokens, nextStart, settleCompaction } 
 import { t } from './i18n.js';
 import { fold, languageNames, textLanguage } from './lists.js';
 import { state } from './state.js';
-import { backgroundChat, backgroundModel, backgroundTimeout, roleCapabilities, roleModel, toolSet } from './status.js';
+import { backgroundChat, backgroundModel, backgroundTimeout, chatRole, roleCapabilities, roleModel, toolSet } from './status.js';
 import { answeredElsewhere, refreshViews } from './tabs.js';
 import { lockThread } from './thread.js';
 
@@ -27,8 +27,14 @@ export function errorText(e) {
   const known = { model_not_found: 'errModelNotFound', context_length_exceeded: 'errContextLength', unloaded: 'errUnloaded',
     starting: 'errStarting', model_loading: 'modelLoading',
     too_many_images: 'errTooManyImages', invalid_image_format: 'errImageFormat',
-    engine_busy: 'errEngineBusy', busy: 'errBusy' };
+    engine_busy: 'errEngineBusy', busy: 'errBusy', relay_refused: 'errRelayRefused', relay_failed: 'errRelayFailed',
+    relay_no_answer: 'errRelayFailed', relay_not_interface: 'errRelayFailed', relay_unreachable: 'errRelayUnreachable',
+    relay_proxy: 'errRelayUnreachable', relay_certificate: 'errRelayUnreachable', offline: 'errRelayOffline',
+    relay_offline: 'errRelayOffline', relay_offline_remote: 'errRelayOffline', relay_offline_unresolved: 'errRelayOffline',
+    pseudonymization_failed: 'errPseudonymization', relay_unavailable: 'errRelayUnavailable' };
   if (e && known[e.code]) return t(known[e.code]);
+  // Les refus du moteur extérieur que relay.cpp nomme par leur statut HTTP (relay_http_*).
+  if (e && typeof e.code === 'string' && e.code.startsWith('relay_http_')) return t('errRelayRefused');
   const reading = {
     'zip-invalid': 'errZipInvalid', 'zip-compression': 'errZipCompression', 'xml-invalid': 'errXmlInvalid'
   };
@@ -348,6 +354,8 @@ export function cancelWarmup(id) {
 */
 export async function warmBeginning(c) {
   if (!c || deleted.has(c.id) || generations.has(c.id) || !c.messages.length || !serviceReady()) return;
+  // Le moteur extérieur du relais garde ses prompts lui-même.
+  if (chatRole(c) === 'relay') return;
   const model = roleModel(c.role);
   const s = state.status;
   if (!model || ((s && s.background) || roleModel('general')) !== model) return;

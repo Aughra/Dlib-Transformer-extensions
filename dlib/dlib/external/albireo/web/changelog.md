@@ -2,6 +2,23 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 5.4.0 — 16 novembre 2026
+
+### Moteurs extérieurs
+
+- Les discussions passent par le relais depuis la page : un cadenas apparaît à côté du bouton d'envoi tant que le relais est prêt. Fermé, la discussion reçoit ses réponses sur le Mac ; ouvert, il devient rouge et affiche le nom du modèle extérieur, et les questions de cette discussion seule partent vers lui (modèle `albireo-relay`). Chaque nouvelle discussion commence cadenas fermé. Son titre dit si les valeurs personnelles sont pseudonymisées, si les réponses gardent les pseudonymes (contrôle) et si les images partent en description.
+- Une discussion relayée prend la fenêtre de contexte, les images et le raisonnement du modèle extérieur. L'agent reste réservé aux modèles du Mac ; le bouton Web demande à Claude de chercher lui-même sur le web (`web_search`), et reste éteint pour les autres fournisseurs. Le choix du Web fait pour le relais ne passe pas aux modèles du Mac, et inversement.
+- Une réponse du relais garde le nom du modèle extérieur qui l'a écrite. La ligne d'état indique « hors du Mac » au lieu du processeur ou du GPU, et le pied de page nomme le modèle extérieur.
+- Un réglage du relais changé depuis (fournisseur, modèle, adresse, pseudonymisation) referme le cadenas des discussions qui l'avaient ouvert, jusqu'à un nouveau clic.
+- La relecture d'avance de l'historique, faite par le moteur du Mac, ne s'applique pas aux discussions relayées.
+
+### Corrections
+
+- Les échecs du relais s'affichent en français, selon leur code : clé ou crédit refusés, moteur injoignable, réponse coupée, mode hors ligne, Pseudalis absent (la question ne part pas), relais pas prêt.
+- La page se redessine quand l'état du relais change (prêt, modèle, pseudonymisation), sans tenir compte des compteurs de la mémoire de pseudonymisation.
+
+---
+
 ## 5.3.0 — 16 novembre 2026
 
 ### Moteurs extérieurs

@@ -32,7 +32,7 @@ import { renderProject } from './projects.js';
 import { changelogDialog, renderLicenses, settingsDialog } from './settings.js';
 import { renderSidebar } from './sidebar.js';
 import { maxAgentSteps, state, ui } from './state.js';
-import { acceptFor, modelName, renderStatusLine, roleCapabilities, roleModel, toolsAvailable } from './status.js';
+import { acceptFor, chatRole, modelName, renderStatusLine, roleCapabilities, roleModel, toolsAvailable } from './status.js';
 import { answeredElsewhere, refreshViews } from './tabs.js';
 
 // Zone principale.
@@ -197,9 +197,9 @@ function renderWelcome() {
   const p = c.projectId ? projectById(c.projectId) : null;
   let notice = null;
   if (state.statusError) notice = h('div', { class: 'error-box' }, t('serviceDown'));
-  else if (state.status && !roleModel(c.role)) notice = h('div', { class: 'error-box' }, t('noModel'));
+  else if (state.status && !roleModel(chatRole(c))) notice = h('div', { class: 'error-box' }, t('noModel'));
   // Avec l'agent activé, ce qu'il fait et les outils dont il dispose.
-  const caps = roleCapabilities(c.role);
+  const caps = roleCapabilities(chatRole(c));
   const agent = c.agent && toolsAvailable(caps, c.reasoning && caps.reasoning)
     ? h('div', { class: 'agent-note' }, h('span', { html: icon('tool') }), h('span', null, t('agentHelp'))) : null;
   ui.content.replaceChildren(h('div', { class: 'welcome' },
@@ -501,10 +501,10 @@ function editMessage(c, m, index, el) {
     const pictures = attachments.filter((a) => a.kind === 'image');
     chips.replaceChildren(...pictures.map((a) => imageThumb(a, { list: pictures, onremove: () => remove(a) })),
       ...attachments.filter((a) => a.kind !== 'image').map((a) => attachmentChip(a, true, () => remove(a))));
-    fileInput.accept = acceptFor(c.role, room());
+    fileInput.accept = acceptFor(chatRole(c), room());
   };
   const add = async (files) => {
-    const added = await readFiles(files, c.role, room());
+    const added = await readFiles(files, chatRole(c), room());
     for (const a of added) if (a.kind === 'image') prepared.add(a.id);
     attachments = attachments.concat(added);
     showChips();

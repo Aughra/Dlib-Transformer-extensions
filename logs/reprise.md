@@ -1,13 +1,13 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-16 vers 6 h 30, sur le Mac M2. Ce fichier va **du plus récent au plus ancien** : l'état actuel, ce qui est en cours et à faire, puis ce qui est fait et les décisions (antéchronologiques), les problèmes ouverts et les commandes. Le détail de chaque étape est dans `logs/journal-modifications.md`.
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-16 vers 6 h 50, sur le Mac M2. Ce fichier va **du plus récent au plus ancien** : l'état actuel, ce qui est en cours et à faire, puis ce qui est fait et les décisions (antéchronologiques), les problèmes ouverts et les commandes. Le détail de chaque étape est dans `logs/journal-modifications.md`.
 
 ## État actuel
 
-- `main` = **Albireo 5.3.0** ; **Pseudalis 3.1.0** (numérotation du fork, documentation à part : `docs/pseudalis/`, `blog/pseudalis/`, `pseudalis/web/changelog.md`). Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
+- `main` = **Albireo 5.4.0** ; **Pseudalis 3.1.0** (numérotation du fork, documentation à part : `docs/pseudalis/`, `blog/pseudalis/`, `pseudalis/web/changelog.md`). Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
 - **Vrai service** : Albireo tourne en **5.3.0** et Pseudalis en **3.1.0** (relancés le 2026-11-16 vers 6 h 25 ; relais coupé, essayé de bout en bout sur lui-même avec Pseudalis : pseudonymes au départ, vraies valeurs au retour). Pseudalis sur 18444 (accès réseau 8445), Albireo sur 18443 (réseau 8444 sans mot de passe), bibliothèque `build/albireo-home/library` remplie de clones de `build/models` ; journal `build/albireo-home/logs/console.log`.
-- **Tests** : `test_macos.sh` d'Albireo 59 sur 59 (5.3.0, 2026-11-16), de Pseudalis 35 sur 35 (3.1.0, 2026-11-16) ; banc de la page 125 vérifications (5.3.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
-- **Blog** : épisode 47 ; **blog de Pseudalis** : épisode 2 ; **notes pour l'auteur** : changement 23, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
+- **Tests** : `test_macos.sh` d'Albireo 59 sur 59 (5.3.0, 2026-11-16), de Pseudalis 35 sur 35 (3.1.0, 2026-11-16) ; banc de la page 128 vérifications (5.4.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
+- **Blog** : épisode 48 ; **blog de Pseudalis** : épisode 2 ; **notes pour l'auteur** : changement 23, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
 - **Le mode économie d'énergie du M2 est coupé** (2026-11-15) : les mesures redeviennent possibles sur le M2 (vérifier `pmset -g | grep lowpowermode` avant) ; les réglages fins attendent le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
 - **Original** : détaché depuis le 2026-11-11, plus de fusion ; lu à `53ddfe4` (Albireo 1.0.20) pour la reprise à la main du 2026-11-14, puis à `3bea372` (Albireo 1.0.23, 37 commits depuis la dernière fusion) pour le relais.
 - **Documents du portage** : dans Albireo, `/carnet/` (menu ☰) ; sommaire `macos/site-docs/sommaire.json` ; mot-clé « sitelog » (donner l'adresse du carnet). L'ancien site à part (`serve.py`, port 8650) est retiré.
@@ -18,13 +18,13 @@ Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les ex
 
 ## En cours
 
-**Reprise du relais de l'original** (choix de l'humain, 2026-11-16 : piste B) : Albireo envoie une discussion à un moteur extérieur (OpenAI et compatibles, Ollama, Claude), pseudonymisée par Pseudalis, et remet les vraies valeurs dans la réponse ; mode hors ligne limité au Mac et au réseau de la maison ; recherche web de Claude. Source : `upstream/main` à `3bea372` (Albireo 1.0.22 `dd858d5` et 1.0.23 `37c6304`), fichiers `host/relay.{h,cpp}`, `host/pseudonyms.{h,cpp}`, parties de `server.cpp`, `service.cpp`, `settings.cpp`, `http_fetch`, `certificates`, `test_host.cpp`, `make_openapi.py`, page.
+**Reprise du relais de l'original, terminée** (choix de l'humain, 2026-11-16 : piste B) : Albireo envoie une discussion à un moteur extérieur (OpenAI et compatibles, Ollama, Claude), pseudonymisée par Pseudalis, et remet les vraies valeurs dans la réponse ; mode hors ligne limité au Mac et au réseau de la maison ; recherche web de Claude. Source : `upstream/main` à `3bea372` (Albireo 1.0.22 `dd858d5` et 1.0.23 `37c6304`), fichiers `host/relay.{h,cpp}`, `host/pseudonyms.{h,cpp}`, parties de `server.cpp`, `service.cpp`, `settings.cpp`, `http_fetch`, `certificates`, `test_host.cpp`, `make_openapi.py`, page.
 
 1. ~~Pseudalis 3.1.0 : clé de séance (`"session": true` sur `/v1/text/anonymize`, réponse `values`)~~ fait.
 2. ~~Albireo 5.3.0 : le service, et la carte de l'onglet Service~~ fait.
-3. **Albireo 5.4.0, les discussions par le relais dans la page** : le cadenas de la zone de saisie (`relayButton` de l'original, `app.js` vers la ligne 7540 de `upstream/main`), `chatRole()` qui rend 'relay', `relayCapabilities()`, `modelName()` pour `relay:<nom>`, niveaux d'effort, bouton Web pour Claude (`web_search`), pas d'agent ni d'outils ; le service et l'interface sont prêts. Code de l'original à lire : `relayStatus`, `relayKey`, `chatRole`, `webChosen`, `relayName`, `relayCapabilities`, `relayWebUnavailable`, `renderRelayButton`, et l'envoi (`body.reasoning_effort`, `body.web_search`).
+3. ~~Albireo 5.4.0 : les discussions par le relais dans la page (cadenas)~~ fait. Non repris : le choix du niveau d'effort (menu de l'original).
 
-Ensuite : blog (épisode 48), notes de version, tableau des différences, notes pour l'auteur si l'original y montre des défauts.
+Reprise terminée (blog : épisode 48). **En attente de l'humain** : réserver ou non les réglages du relais au Mac seul (risque ci-dessous, « Relais, même choix »). Essai avec une vraie clé Claude ou Ollama : quand l'humain en donnera une, dans l'onglet Service.
 
 **Question ouverte** (2026-11-15) : le lecteur de Pseudalis est sur le Mac un dossier ordinaire (`build/pseudalis-home/drive`) ; proposé à l'humain : l'ajouter aux favoris du Finder ou le monter comme un volume « Pseudalis ».
 
@@ -44,6 +44,7 @@ Ensuite : blog (épisode 48), notes de version, tableau des différences, notes 
 
 ### 2026-11-16
 
+- **Albireo 5.4.0** : cadenas du relais dans la zone de saisie (une discussion part vers le moteur extérieur), erreurs du relais en français ; banc de la page 128 ; épisode 48.
 - **Albireo 5.3.0** : relais vers un moteur extérieur repris de l'original (OpenAI, Ollama, Claude et sa recherche web, pseudonymisation par Pseudalis, hors ligne limité au réseau local), carte de l'onglet Service ; 59 sur 59, banc de la page 125.
 - **Pseudalis 3.1.0** : clé de séance pour le relais d'Albireo (`"session": true` sur `/v1/text/anonymize`, valeurs dans `values`) ; 35 sur 35.
 
