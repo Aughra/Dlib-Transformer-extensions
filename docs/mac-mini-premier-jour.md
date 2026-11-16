@@ -1,6 +1,6 @@
 # Premier jour sur le Mac mini M5 Pro
 
-Ce qu'il faut faire, dans l'ordre, pour reprendre le portage sur le Mac mini (M5 Pro, 64 Go) et le comparer au MacBook Air M2. Écrit le 2026-11-13, Albireo 4.13.0. Les commandes se lancent depuis la racine du dépôt.
+Ce qu'il faut faire, dans l'ordre, pour reprendre le portage sur le Mac mini (M5 Pro, 64 Go) et le comparer au MacBook Air M2. Écrit le 2026-11-13 (Albireo 4.13.0), mis à jour le 2026-11-16 (Albireo 5.4.1, Pseudalis 3.1.0). Les commandes se lancent depuis la racine du dépôt.
 
 ## 1. Installer les outils
 
@@ -22,34 +22,31 @@ cmake -S dlib/dlib/external/pseudalis -B build/macos-pseudalis -G Ninja -DCMAKE_
 cmake --build build/macos-pseudalis -- -k 0
 ```
 
-## 3. Copier les modèles du M2
+## 3. Copier les modèles et les données du M2
 
-Les tests et les mesures cherchent les modèles à ces places (`build/` n'est pas dans git). Les copier du M2 (disque externe, AirDrop ou partage de fichiers) évite 16 Go de téléchargements.
+Les tests et les mesures cherchent les modèles à ces places (`build/` n'est pas dans git). Les copier du M2 (disque externe, AirDrop ou partage de fichiers) évite environ 45 Go de téléchargements.
 
-| Fichier | Taille | Sert à |
+| Dossier ou fichier | Taille | Sert à |
 |---|---|---|
-| `build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf` | 1,1 Go | tests, mesures, banc de la page |
-| `build/models/Qwen3.5-0.8B-Q8_0.gguf` | 0,8 Go | étapes Qwen 3.5 sur le processeur |
-| `build/models/Qwen3.5-4B-mmproj-F16.gguf` | 0,7 Go | images de Qwen 3.5 |
-| `build/models/Qwen3.6-11B-A3B-Niwaki-Q4_K_M.gguf` | 7,0 Go | mélange d'experts |
-| `build/models/gemma-4-E2B-it-Q4_K_M.gguf` | 3,1 Go | Gemma 4 (tokenizer, raisonnement ; écriture et prompts sur le GPU) |
-| `build/models/gemma-4-26B-A4B-it-UD-Q4_K_M.gguf` | 16,9 Go | Gemma 4 à experts, sur le processeur (Albireo 4.29.0) |
-| `build/models/gemma-3-4b-it-mmproj-F16.gguf` | 0,9 Go | images de Gemma 3 (Albireo 4.28.0) |
-| `build/albireo-home/models/qwen3-vl-4b-thinking.gguf` et `.mmproj.gguf` | 2,9 Go | modèle du service, images |
-| `build/albireo-home/models/hf-unsloth-qwen3.5-4b-q4_k_m.gguf` | 2,7 Go | Qwen 3.5 sur le GPU, outils, images |
-| `build/albireo-home/models/qwen3-embedding-0.6b.gguf` | 0,6 Go | modèle de recherche |
+| `build/models/` en entier | 39 Go | tous les tests et les mesures : Qwen3-VL 2B, Qwen 3.5 0.8B et son projecteur 4B, Qwen 3.6 11B-A3B, Gemma 3 1B et 4B (et son projecteur), Gemma 4 E2B (et son projecteur) et 26B-A4B, LFM2.5 1.2B et 8B-A1B |
+| `build/albireo-home/models/` | 6,4 Go | le modèle du service (Qwen3-VL 4B Thinking et son projecteur), Qwen 3.5 4B, le modèle de recherche |
+| `build/albireo-home/settings.json`, `albireo.db` | < 1 Mo | les réglages du service (ports, réseau, relais) et ses modèles installés |
+| `build/albireo-home/relay.secret` | — | la clé du relais, s'il y en a une : la copier seulement par un moyen privé (pas un nuage partagé), ou la retaper dans l'onglet Service |
+| `build/pseudalis-home/` | < 1 Mo | les réglages de Pseudalis (port 18444, accès réseau 8445) et ses originaux conservés |
 
-Le dossier `build/albireo-home` contient aussi les réglages du service : le copier en entier garde le service tel qu'il est ; sinon le service retélécharge ses modèles par défaut au premier lancement. Les discussions, elles, sont dans le navigateur, pas dans ce dossier.
+Ne pas copier `build/albireo-home/library/` (39 Go) ni `reserve/` (6,4 Go) : sur le M2, ce sont des clones APFS de `build/models` et des modèles installés, qui ne prennent pas de place ; copiés vers une autre machine, ils deviendraient de vraies copies. Sur le Mac mini, remplir la bibliothèque par des clones : `cp -c build/models/*.gguf build/albireo-home/library/`. La réserve se refait seule.
+
+Les certificats (`certificates/` des deux applications) se regénèrent au premier lancement ; ne pas les copier. Les discussions, elles, sont dans le navigateur, pas dans ces dossiers.
 
 Pour le grand modèle à experts, le télécharger directement sur le Mac mini dans `build/bench-models/` (22,1 Go, `unsloth/Qwen3.6-35B-A3B-GGUF`, fichier UD-Q4_K_M), avec son projecteur s'il y en a un.
 
 ## 4. Vérifier que tout marche
 
 ```sh
-ALBIREO_TEST_PORT=18453 bash dlib/dlib/external/albireo/tools/test_macos.sh      # 29 étapes sur le M2
-PSEUDALIS_TEST_PORT=18454 bash dlib/dlib/external/pseudalis/tools/test_macos.sh   # 34 étapes
+ALBIREO_TEST_PORT=18453 bash dlib/dlib/external/albireo/tools/test_macos.sh      # 60 étapes sur le M2 (accès réseau d'essai sur 18454)
+PSEUDALIS_TEST_PORT=18456 bash dlib/dlib/external/pseudalis/tools/test_macos.sh   # 35 étapes
 build/macos-albireo/tests/test_metal                                             # noyaux Metal contre le processeur
-bash dlib/dlib/external/albireo/tools/page_test/page_test.sh                      # ESLint et 108 vérifications de la page
+bash dlib/dlib/external/albireo/tools/page_test/page_test.sh                      # ESLint et 128 vérifications de la page
 ```
 
 Un écart entre le GPU et le processeur au chargement d'un modèle (« its check disagrees ») renvoie seul le modèle au processeur : le journal du service le dit. Sur une nouvelle puce, c'est la première chose à regarder.
@@ -75,6 +72,7 @@ Le script mesure chaque modèle présent (y compris ceux de `build/bench-models/
 | Les prompts de Gemma 4 vont-ils plus vite sur le GPU (Albireo 4.27.0) ? | `attention_mtile` en deux tranches de 256 (`SPLIT`, `metal_kernels.metal`) ; à défaut, renvoyer ces prompts au processeur | `bench_runtime` sur gemma-4-E2B, 512 et 4 096 tokens, processeur contre GPU, en alternance : les couches de 512 calculent leurs scores deux fois |
 | Combien écrit et lit Gemma 4 26B-A4B sur le processeur (Albireo 4.29.0), et faut-il le porter au GPU ? | moteur (`set_gpu`, `cpu_runtime_metal.cpp`, qui le refuse) | `engine_chat` et `bench_runtime` sur le 26B-A4B ; le comparer au Qwen 3.6 35B-A3B sur le GPU |
 | Combien de temps prend l'encodage d'une image de Gemma 3 (Albireo 4.28.0) ? | — (sur le M2 en mode économie d'énergie : 26 à 30 s) | `engine_chat --projector … --image …`, ligne « image of 16x16 tokens encoded in » |
+| Les modèles jamais essayés tiennent-ils dans 64 Go ? | Gemma 4 E4B, 12B, 31B ; qwen3moe, mixtral, granitemoe sur le GPU (admis, jamais lancés) | `engine_chat` sur chacun, réponses comparées à llama.cpp |
 | Le projecteur du 35B-A3B marche-t-il ? | `vision_architectures` de `host/hub.cpp` (ajouter `qwen35moe`) | description d'une image comparée à llama.cpp |
 
 Chaque réglage changé met à jour sa valeur conseillée et sa fiche dans l'onglet Service, avec la mesure en commentaire (règle de CLAUDE.md).
