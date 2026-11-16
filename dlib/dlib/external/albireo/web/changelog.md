@@ -2,6 +2,15 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 5.7.0 — 16 novembre 2026
+
+### Modèles
+
+- Mistral Small 3.2 24B (déjà au catalogue de l'original) a son format de conversation, repris de l'original (Albireo 1.0.14) : le prompt système par défaut de son gabarit, avec la date du jour et celle de la veille ; les outils écrits juste avant la dernière question, comme le fait l'encodage de référence de Mistral ; l'identifiant de chaque appel d'outil après `[CALL_ID]` et celui de l'appel auquel répond un résultat avant `[TOOL_CONTENT]`, en 9 lettres ou chiffres. Ministral 3 et Devstral Small 2 gardent leur format.
+- Vérifié sur le MacBook Air M2 avec le fichier Q4_K_M d'Unsloth (14,3 Go) : réponse juste, appel d'outil lu, résultat d'outil utilisé. Sur ce Mac, le modèle ne tient pas dans la mémoire que macOS accorde au GPU (13,6 Go) et reste sur le processeur, à environ 3,5 tokens/s d'écriture, services arrêtés ; il est fait pour une machine de 32 Go ou plus.
+
+---
+
 ## 5.6.0 — 16 novembre 2026
 
 ### Réglages

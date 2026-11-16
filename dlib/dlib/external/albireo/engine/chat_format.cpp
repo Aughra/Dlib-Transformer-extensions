@@ -768,9 +768,14 @@ namespace albireo
             return std::string();
         }
 
-        /*  Le littéral de chaîne qu'un template affecte à une variable, comme dans
-            {%- set default_system_message = '...' %}, ses échappements résolus ; vide
-            quand le template n'a pas d'affectation de ce genre.  */
+        /*  La chaîne qu'un template affecte à une variable, comme dans
+            {%- set default_system_message = '...' %} : des littéraux de chaîne, leurs
+            échappements résolus, joints par +, les variables de la date du jour et de la veille
+            (today et yesterday, today_date et yesterday_date) tenant lieu de {today} et
+            {yesterday}, que les formats remplacent, comme Unsloth écrit le template de Mistral
+            Small 3.2 (repris de l'original, Albireo 1.0.14).  Vide quand le template n'a pas
+            d'affectation de ce genre, ou que la valeur contient une autre expression ou une autre
+            variable.  */
         std::string template_string(const std::string& tmpl, const std::string& variable)
         {
             size_t pos = tmpl.find("set " + variable);
@@ -778,23 +783,122 @@ namespace albireo
             pos = tmpl.find('=', pos);
             if (pos == std::string::npos) return std::string();
             ++pos;
-            while (pos < tmpl.size() && tmpl[pos] == ' ') ++pos;
-            if (pos >= tmpl.size() || (tmpl[pos] != '\'' && tmpl[pos] != '"')) return std::string();
-            const char quote = tmpl[pos++];
+            const auto skip_spaces = [&]() {
+                while (pos < tmpl.size() && std::isspace(static_cast<unsigned char>(tmpl[pos]))) ++pos;
+            };
             std::string out;
-            for (; pos < tmpl.size(); ++pos)
+            for (;;)
             {
+                skip_spaces();
+                if (pos >= tmpl.size()) return std::string();
                 const char c = tmpl[pos];
-                if (c == '\\' && pos + 1 < tmpl.size())
+                if (c == '\'' || c == '"')
                 {
-                    const char e = tmpl[++pos];
-                    out += e == 'n' ? '\n' : e == 't' ? '\t' : e;
+                    const char quote = tmpl[pos++];
+                    bool closed = false;
+                    for (; pos < tmpl.size() && !closed; ++pos)
+                    {
+                        const char d = tmpl[pos];
+                        if (d == '\\' && pos + 1 < tmpl.size())
+                        {
+                            const char e = tmpl[++pos];
+                            out += e == 'n' ? '\n' : e == 't' ? '\t' : e;
+                        }
+                        else if (d == quote)
+                            closed = true;
+                        else
+                            out += d;
+                    }
+                    if (!closed) return std::string();
+                }
+                else if (std::isalpha(static_cast<unsigned char>(c)) || c == '_')
+                {
+                    const size_t start = pos;
+                    while (pos < tmpl.size()
+                        && (std::isalnum(static_cast<unsigned char>(tmpl[pos])) || tmpl[pos] == '_'))
+                        ++pos;
+                    const std::string name = tmpl.substr(start, pos - start);
+                    if (name == "yesterday" || name == "yesterday_date") out += "{yesterday}";
+                    else if (name == "today" || name == "today_date") out += "{today}";
+                    else return std::string();
+                }
+                else
+                    return std::string();
+                skip_spaces();
+                if (pos < tmpl.size() && tmpl[pos] == '+')
+                {
+                    ++pos;
                     continue;
                 }
-                if (c == quote) return out;
-                out += c;
+                if (tmpl.compare(pos, 2, "%}") == 0 || tmpl.compare(pos, 3, "-%}") == 0) return out;
+                return std::string();
             }
-            return std::string();
+        }
+
+        /*  Si un template Mistral écrit les outils dans sa boucle sur les messages, comme celui des
+            fichiers GGUF de Mistral Small 3.2, plutôt qu'une fois après le prompt système, comme
+            ceux de Ministral 3 et de Devstral Small 2 : l'endroit où il écrit le texte de
+            [AVAILABLE_TOOLS], ou la variable qui le contient, comparé à la première boucle sur les
+            messages (repris de l'original, Albireo 1.0.14).  */
+        bool tools_before_last_question(const std::string& tmpl)
+        {
+            const size_t loop = tmpl.find("for message in");
+            const size_t literal = tmpl.find("[AVAILABLE_TOOLS]");
+            if (loop == std::string::npos || literal == std::string::npos) return false;
+            size_t written = literal;
+            const size_t statement = tmpl.rfind("{%", literal);
+            const size_t expression = tmpl.rfind("{{", literal);
+            if (statement != std::string::npos && (expression == std::string::npos || statement > expression))
+            {
+                // Pour {%- set nom = '[AVAILABLE_TOOLS]' ... %}, le premier {{ nom }} qui le suit.
+                size_t at = tmpl.find("set ", statement);
+                if (at == std::string::npos || at > literal) return false;
+                at += 4;
+                const size_t start = at;
+                while (at < tmpl.size() && (std::isalnum(static_cast<unsigned char>(tmpl[at])) || tmpl[at] == '_'))
+                    ++at;
+                const std::string name = tmpl.substr(start, at - start);
+                if (name.empty()) return false;
+                written = std::string::npos;
+                for (size_t open = tmpl.find("{{", literal); open != std::string::npos && written == std::string::npos;
+                     open = tmpl.find("{{", open + 2))
+                {
+                    size_t i = open + 2;
+                    while (i < tmpl.size() && (tmpl[i] == '-' || tmpl[i] == ' ')) ++i;
+                    if (tmpl.compare(i, name.size(), name) != 0) continue;
+                    i += name.size();
+                    while (i < tmpl.size() && tmpl[i] == ' ') ++i;
+                    if (tmpl.compare(i, 2, "}}") == 0 || tmpl.compare(i, 3, "-}}") == 0) written = open;
+                }
+            }
+            return written != std::string::npos && written > loop;
+        }
+
+        /*  L'identifiant d'un appel tel que l'écrivent les templates de Mistral Small 3.2, 9 lettres
+            ou chiffres : l'identifiant lui-même quand il a cette forme, sinon 9 caractères tirés de
+            lui, les mêmes pour un appel et pour le résultat qui le nomme (repris de l'original,
+            Albireo 1.0.14).  */
+        std::string mistral_call_id(const std::string& id)
+        {
+            bool usable = id.size() == 9;
+            for (size_t i = 0; usable && i < id.size(); ++i)
+                usable = std::isalnum(static_cast<unsigned char>(id[i])) != 0;
+            if (usable) return id;
+            // FNV-1a sur les octets de l'identifiant, écrit en base 62.
+            unsigned long long h = 1469598103934665603ull;
+            for (char c : id)
+            {
+                h ^= static_cast<unsigned char>(c);
+                h *= 1099511628211ull;
+            }
+            static const char* alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            std::string out;
+            for (int i = 0; i < 9; ++i)
+            {
+                out += alphabet[h % 62];
+                h /= 62;
+            }
+            return out;
         }
 
         struct piece_writer
@@ -2081,6 +2185,18 @@ namespace albireo
                 reasoning_ = tok.token_id("[THINK]") >= 0 && tmpl.find("[THINK]") != std::string::npos;
                 default_system_ = template_string(tmpl, "default_system_message");
                 add_markers(tok, { "[TOOL_CALLS]", "[ARGS]", "[CALL_ID]", "[THINK]", "[/THINK]" });
+                /*
+                    Le template de Mistral Small 3.2 écrit les outils dans sa boucle sur les messages,
+                    l'identifiant de chaque appel après [CALL_ID] et celui de l'appel auquel répond un
+                    résultat avant [TOOL_CONTENT], comme la version 11 de son tokenizer ; ceux de
+                    Ministral 3 et de Devstral Small 2 écrivent les outils après le prompt système, les
+                    appels et les résultats sans identifiants.  Les outils viennent alors avant la
+                    dernière question, où mistral-common, l'encodage de référence de ces modèles, les
+                    écrit (repris de l'original, Albireo 1.0.14).
+                */
+                tools_last_ = tools_before_last_question(tmpl);
+                call_ids_ = tok.token_id("[CALL_ID]") >= 0 && tmpl.find("[CALL_ID]") != std::string::npos;
+                result_ids_ = tok.token_id("[TOOL_CONTENT]") >= 0 && tmpl.find("[TOOL_CONTENT]") != std::string::npos;
             }
 
             const char* name() const override { return "mistral"; }
@@ -2114,17 +2230,28 @@ namespace albireo
                     w.text(s);
                     w.markup("[/SYSTEM_PROMPT]");
                 }
-                if (opt.tools.is_array() && !opt.tools.empty())
-                {
+                const bool tools = opt.tools.is_array() && !opt.tools.empty();
+                // La dernière question, avant laquelle la version 11 du tokenizer de Mistral écrit les outils.
+                size_t last_question = messages.size();
+                if (tools && tools_last_)
+                    for (size_t i = messages.size(); i-- > first;)
+                        if (messages[i].role == "user")
+                        {
+                            last_question = i;
+                            break;
+                        }
+                const auto write_tools = [&]() {
                     w.markup("[AVAILABLE_TOOLS]");
                     w.text(opt.tools.dump_formatted());
                     w.markup("[/AVAILABLE_TOOLS]");
-                }
+                };
+                if (tools && last_question == messages.size()) write_tools();
                 for (size_t i = first; i < messages.size(); ++i)
                 {
                     const chat_message& m = messages[i];
                     if (m.role == "user")
                     {
+                        if (i == last_question) write_tools();
                         w.markup("[INST]");
                         w.text(m.content);
                         w.markup("[/INST]");
@@ -2148,6 +2275,11 @@ namespace albireo
                         {
                             w.markup("[TOOL_CALLS]");
                             w.text(call.name);
+                            if (call_ids_)
+                            {
+                                w.markup("[CALL_ID]");
+                                w.text(mistral_call_id(call.id));
+                            }
                             w.markup("[ARGS]");
                             w.text(call.arguments.empty() ? std::string("{}") : call.arguments);
                         }
@@ -2156,6 +2288,11 @@ namespace albireo
                     else if (m.role == "tool")
                     {
                         w.markup("[TOOL_RESULTS]");
+                        if (result_ids_)
+                        {
+                            w.text(mistral_call_id(m.tool_call_id));
+                            w.markup("[TOOL_CONTENT]");
+                        }
                         w.text(m.content);
                         w.markup("[/TOOL_RESULTS]");
                     }
@@ -2181,6 +2318,9 @@ namespace albireo
             std::string bos_, eos_;
             bool reasoning_ = false;
             std::string default_system_;
+            bool tools_last_ = false;
+            bool call_ids_ = false;
+            bool result_ids_ = false;
         };
 
         // Llama 3

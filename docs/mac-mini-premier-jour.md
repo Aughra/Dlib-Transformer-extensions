@@ -73,6 +73,7 @@ Le script mesure chaque modèle présent (y compris ceux de `build/bench-models/
 | Combien écrit et lit Gemma 4 26B-A4B sur le processeur (Albireo 4.29.0), et faut-il le porter au GPU ? | moteur (`set_gpu`, `cpu_runtime_metal.cpp`, qui le refuse) | `engine_chat` et `bench_runtime` sur le 26B-A4B ; le comparer au Qwen 3.6 35B-A3B sur le GPU |
 | Combien de temps prend l'encodage d'une image de Gemma 3 (Albireo 4.28.0) ? | — (sur le M2 en mode économie d'énergie : 26 à 30 s) | `engine_chat --projector … --image …`, ligne « image of 16x16 tokens encoded in » |
 | Les modèles jamais essayés tiennent-ils dans 64 Go ? | Gemma 4 E4B, 12B, 31B ; qwen3moe, mixtral, granitemoe sur le GPU (admis, jamais lancés) | `engine_chat` sur chacun, réponses comparées à llama.cpp |
+| Mistral Small 3.2 24B (`build/models/Mistral-Small-3.2-24B-Instruct-2506-Q4_K_M.gguf`, 14,3 Go) passe-t-il sur le GPU, et à quelle vitesse ? | sur le M2, refusé par le GPU (13,6 Go de tampons au plus) et lent sur le processeur (3,5 tokens/s, services arrêtés) | `engine_chat` et `bench_runtime`, processeur contre GPU ; un appel d'outil et un résultat |
 | Le projecteur du 35B-A3B marche-t-il ? | `vision_architectures` de `host/hub.cpp` (ajouter `qwen35moe`) | description d'une image comparée à llama.cpp |
 
 Chaque réglage changé met à jour sa valeur conseillée et sa fiche dans l'onglet Service, avec la mesure en commentaire (règle de CLAUDE.md).

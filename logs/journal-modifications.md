@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-16 — Reprendre le format de Mistral Small 3.2 (Albireo 5.7.0)
+
+- **Quoi** : piste D, reprise à la main de l'original 1.0.14 (`2f67de2`), partie Mistral seulement (la réparation des guillemets était déjà reprise en 4.24.0). `chat_format.cpp` : `template_string()` lit un prompt système fait de littéraux joints par + et des variables de dates ; `tools_before_last_question()` ; `mistral_call_id()` ; `mistral_format` écrit les outils avant la dernière question, `[CALL_ID]` et `[TOOL_CONTENT]` quand le gabarit et le tokenizer les ont. `test_chat_format` : cas de Mistral Small 3.2 repris de l'original (rendus de Jinja), commentaires traduits.
+- **Fichiers** : `albireo/engine/chat_format.cpp`, `albireo/tests/test_chat_format.cpp`, `albireo/web/{changelog.md,openapi.json}`, version ; `docs/{differences-mac-windows.md,mac-mini-premier-jour.md}`, `logs/reprise.md`.
+- **Pourquoi** : piste D de la liste ; le modèle est au catalogue de l'original que lit le service.
+- **Étapes** : `test_chat_format` passe. Fichier `unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF` Q4_K_M (14 333 922 848 octets) dans `build/models` : lu comme `llama` (40 couches, largeur 5 120, têtes 32/8 de 128), format `mistral` ; « The capital of France is Paris. » ; appel `get_weather` `{"city": "Paris"}` ; avec le résultat, « The weather in Paris is sunny with a temperature of 21 degrees Celsius. ». GPU refusé (« the weights cannot be taken without copy » : 13 639 Mo de tampons au plus) ; sur le processeur, 0,04 token/s avec les services en marche (mémoire échangée avec le disque), 3,5 tokens/s d'écriture et 13 de lecture le service d'Albireo arrêté (puis relancé). À mesurer sur le Mac mini.
+
 ## 2026-11-16 — Faire suivre aux boutons les capacités vérifiées de chaque modèle (Albireo 5.6.0)
 
 - **Quoi** : piste C, reprise à la main de l'original 1.0.16 (`320ae18`). `status.js` : `roleCapabilities()` restreint le raisonnement et les outils d'un modèle chargé par son entrée (catalogue, modèles livrés), sauf une entrée importée (`source` « import ») ou ajoutée depuis Hugging Face (`origin` « huggingface », propre au fork, capacités devinées par `hub.cpp`) ; un modèle qui raisonne toujours garde son raisonnement. `readCatalog()` et `catalogMissed` ; la date du catalogue entre dans la clé qui décide de redessiner ; `renderComposerState()` quand l'état change ou que la liste est relue. `api.js` : liste des modèles lue en 8 s au plus. Le catalogue de l'original, que lit le service, porte déjà Qwen2.5 Coder sans outils.

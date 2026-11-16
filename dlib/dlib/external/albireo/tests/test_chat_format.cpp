@@ -4,7 +4,7 @@
     Vérifie les formats de chat du moteur sur les conversations d'un agent : le prompt d'une
     conversation avec outils, appels d'outils et résultats d'outils, tel que l'écrit le template de chat de
     chaque modèle (les prompts attendus sont ceux que Jinja produit à partir des templates de Qwen3,
-    Qwen2.5-Coder, SmolLM2, Devstral Small 2 et Ministral 3), et la lecture des appels qu'un modèle
+    Qwen2.5-Coder, SmolLM2, Devstral Small 2, Ministral 3 et Mistral Small 3.2), et la lecture des appels qu'un modèle
     écrit, en entier ou token par token.
 
         test_chat_format
@@ -698,6 +698,83 @@ int main()
         {
             const parsed n = read_all_ways(*d, mopt, answer, "no Mistral call");
             expect(n.calls.empty() && n.content == answer, "text kept: " + n.content);
+        }
+
+        /*
+            Mistral Small 3.2, tel que l'écrit le template de ses fichiers GGUF par Unsloth (repris de
+            l'original, Albireo 1.0.14) : un prompt système par défaut joint aux variables des dates,
+            les outils avant la dernière question, l'identifiant de chaque appel après [CALL_ID] et
+            celui de l'appel auquel répond un résultat avant [TOOL_CONTENT].
+        */
+        const dlib::hf_tokenizer stok = tokenizer({ "<s>", "</s>", "[INST]", "[/INST]", "[SYSTEM_PROMPT]",
+            "[/SYSTEM_PROMPT]", "[AVAILABLE_TOOLS]", "[/AVAILABLE_TOOLS]", "[TOOL_RESULTS]", "[/TOOL_RESULTS]",
+            "[TOOL_CALLS]", "[ARGS]", "[CALL_ID]", "[TOOL_CONTENT]" }, {});
+        const std::string small_template =
+            "{%- set today_date = strftime_now('%Y-%m-%d') %}"
+            "{%- set default_system_message = \"You are Mistral Small.\\nThe current date is \" + today_date + "
+            "\".\\nYou resolve dates (e.g. \\\"yesterday\\\" is \" + yesterday_date + \").\" %}"
+            "{{- bos_token }}{{- '[SYSTEM_PROMPT]' + system_message + '[/SYSTEM_PROMPT]' }}"
+            "{%- set tools_description = \"[AVAILABLE_TOOLS]\" + (tools | tojson) + \"[/AVAILABLE_TOOLS]\" %}"
+            "{%- for message in loop_messages %}{%- if message['role'] == 'assistant' %}"
+            "{%- set ns.append_tools_index = loop.index0 %}{%- endif %}{%- endfor %}"
+            "{%- for message in loop_messages %}{%- if message['role'] == 'user' %}"
+            "{%- if has_tools and loop.last %}{{- tools_description }}{%- endif %}"
+            "{{- '[INST]' + message['content'] + '[/INST]' }}{%- elif message['role'] == 'assistant' %}"
+            "{{- \"[TOOL_CALLS]\" + tool['function']['name'] + \"[CALL_ID]\" + tool_call_id + \"[ARGS]\" + arguments }}"
+            "{%- else %}{{- \"[TOOL_RESULTS]\" + tool_call_id + \"[TOOL_CONTENT]\" + content|string "
+            "+ \"[/TOOL_RESULTS]\" }}{%- endif %}{%- endfor %}";
+        const std::unique_ptr<chat_format> small = chat_format::detect(stok, small_template);
+        expect(std::string(small->name()) == "mistral" && small->supports_tools() && !small->supports_reasoning(),
+            "Mistral Small 3.2 detected");
+        render_options vopt;
+        vopt.tools = weather;
+        vopt.today = "2026-10-29";
+        vopt.yesterday = "2026-10-28";
+        const std::string tools_text = "[AVAILABLE_TOOLS][{\"type\": \"function\", \"function\": {\"name\": "
+            "\"get_weather\", \"description\": \"Weather of a city.\", \"parameters\": {\"type\": \"object\", "
+            "\"properties\": {\"city\": {\"type\": \"string\"}}, \"required\": [\"city\"]}}}][/AVAILABLE_TOOLS]";
+        const std::string system_text = "<s>[SYSTEM_PROMPT]You are Mistral Small.\nThe current date is "
+            "2026-10-29.\nYou resolve dates (e.g. \"yesterday\" is 2026-10-28).[/SYSTEM_PROMPT]";
+        // Tel que Jinja rend le template de Mistral Small 3.2 pour cette conversation.
+        const std::string small_expected = system_text + "[INST]What is the weather in Paris?[/INST]"
+            "[TOOL_CALLS]get_weather[CALL_ID]a1B2c3D4e[ARGS]{\"city\": \"Paris\"}</s>[TOOL_RESULTS]a1B2c3D4e"
+            "[TOOL_CONTENT]Sunny, 21 C[/TOOL_RESULTS]It is sunny in Paris.</s>" + tools_text
+            + "[INST]And in Rome?[/INST]";
+        const std::string got_small = render(*small, m, vopt);
+        expect(got_small == small_expected, "Mistral Small 3.2 prompt:\n" + got_small);
+
+        // Une conversation qui se termine par le résultat d'un appel : les outils viennent avant sa seule question.
+        std::vector<chat_message> r3(m.begin(), m.begin() + 3);
+        const std::string ending = system_text + tools_text + "[INST]What is the weather in Paris?[/INST]"
+            "[TOOL_CALLS]get_weather[CALL_ID]a1B2c3D4e[ARGS]{\"city\": \"Paris\"}</s>[TOOL_RESULTS]a1B2c3D4e"
+            "[TOOL_CONTENT]Sunny, 21 C[/TOOL_RESULTS]";
+        const std::string got_ending = render(*small, r3, vopt);
+        expect(got_ending == ending, "Mistral Small 3.2 prompt after a result:\n" + got_ending);
+
+        // Un identifiant d'une autre forme : les mêmes 9 lettres ou chiffres pour l'appel et pour son résultat.
+        r3[1].tool_calls[0].id = "call_TUSKiBwtfNWMfq43Fz1Xb6BT";
+        r3[2].tool_call_id = r3[1].tool_calls[0].id;
+        const std::string drawn = render(*small, r3, vopt);
+        const size_t at = drawn.find("[CALL_ID]"), result = drawn.find("[TOOL_RESULTS]");
+        const std::string call_id = at == std::string::npos ? std::string() : drawn.substr(at + 9, 9);
+        bool alnum = call_id.size() == 9;
+        for (char c : call_id) alnum = alnum && std::isalnum(static_cast<unsigned char>(c));
+        expect(alnum && drawn.compare(at + 18, 6, "[ARGS]") == 0 && result != std::string::npos
+            && drawn.compare(result + 14, 9 + 14, call_id + "[TOOL_CONTENT]") == 0,
+            "identifiers of 9 characters for the call and its result:\n" + drawn);
+
+        // Un prompt système par défaut joint à une autre variable que les dates, une partie de date
+        // comprise, est laissé de côté.
+        std::vector<chat_message> hello(1);
+        hello[0].role = "user";
+        hello[0].content = "Hello";
+        for (const char* variable : { "model_name", "yesterday_year" })
+        {
+            const std::unique_ptr<chat_format> unknown = chat_format::detect(stok,
+                std::string("{%- set default_system_message = \"You are \" + ") + variable
+                    + " + \".\" %}[INST][CALL_ID]");
+            expect(render(*unknown, hello, vopt) == "<s>" + tools_text + "[INST]Hello[/INST]",
+                std::string("no default system prompt with ") + variable + ":\n" + render(*unknown, hello, vopt));
         }
     }
 
