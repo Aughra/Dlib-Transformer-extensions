@@ -452,7 +452,7 @@ namespace albireo
             (local_network_address()), ou un nom dont toutes les adresses le sont.  Sinon, why et
             code le disent.  address reçoit l'adresse vérifiée à laquelle la requête se connecte,
             pour qu'aucune résolution ultérieure du nom ne mène ailleurs : 127.0.0.1 pour un nom
-            de boucle locale, auquel le résolveur de Windows peut répondre autrement, et pour un
+            de boucle locale, auquel un résolveur peut répondre autrement, et pour un
             autre nom une adresse IPv4 d'abord, là où les moteurs écoutent le plus souvent, sinon
             une adresse IPv6 avec sa zone.  Elle reste vide pour une adresse, à laquelle le client
             se connecte telle quelle.
@@ -1162,7 +1162,6 @@ namespace albireo
             j["model"] = r.model;
         }
         j["pseudonymize"] = r.pseudonymize;
-        j["tags"] = r.tags;
         j["keep_substitutes"] = r.pseudonymize && r.keep_substitutes;
         // Ce pour quoi le relais a été réglé, adresse comprise, que cette empreinte représente sans le nommer.
         j["scope"] = sha256_hex(r.secret_scope()).substr(0, 16);
@@ -1408,7 +1407,7 @@ namespace albireo
                 {
                     if (p.image || p.text.empty()) continue;
                     std::string out, error;
-                    if (j->control.cancelled() || !memory_.protect(p.text, r.tags, pseudalis_, &j->control, out,
+                    if (j->control.cancelled() || !memory_.protect(p.text, false, pseudalis_, &j->control, out,
                             values, error))
                     {
                         const bool cancelled = j->control.cancelled();

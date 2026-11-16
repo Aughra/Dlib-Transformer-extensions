@@ -46,6 +46,29 @@ generation_replies = dict(engine_replies, **{
                  "mémoire qui leur est réservée (code engine_busy, Retry-After: 5) ; l'en-tête Retry-After donne les "
                  "secondes à attendre", ref("Error")),
 })
+# Les complétions de chat, auxquelles le relais peut aussi répondre (albireo-relay), et ses échecs une fois commencé.
+relay_replies = dict(generation_replies, **{
+    "400": reply("Requête invalide ; pour albireo-relay, des outils, des sons, plusieurs choix, des images que ni le "
+                 "modèle extérieur ni un modèle du Mac ne peuvent prendre (code image_input_not_supported), ou une "
+                 "recherche sur le web demandée à un autre fournisseur que Claude (web_search_not_supported)",
+                 ref("Error")),
+    "403": reply("albireo-relay : une recherche sur le web demandée alors que l'accès au web des réglages est coupé "
+                 "(code web_access_off)", ref("Error")),
+    "404": reply("Modèle inconnu ou inactif ; pour albireo-relay, un relais coupé, incomplet ou hors de portée du "
+                 "mode hors ligne (code relay_unavailable)", ref("Error")),
+    "502": reply("albireo-relay, hors flux : le moteur extérieur a refusé la requête (code relay_refused, sa raison "
+                 "sans la clé ni l'adresse), a échoué (relay_failed) ou n'a pas pu être joint (relay_unreachable)",
+                 ref("Error")),
+})
+relay_replies["503"] = reply(generation_replies["503"]["description"] + " ; pour albireo-relay, un moteur trouvé "
+                             "hors de portée du mode hors ligne par la requête elle-même, son nom résolu (code "
+                             "offline), huit réponses en cours (engine_busy), ou Pseudalis absent alors que le relais "
+                             "pseudonymise (pseudonymization_failed)", ref("Error"))
+# Pourquoi Pseudalis n'est pas joint (pseudalis_client::status() dans host/pseudonyms.h), vide une fois trouvé.
+pseudalis_code = {"type": "string", "enum": ["", "not_installed", "no_authority", "unprotected", "failed"],
+                  "description": "Pourquoi Pseudalis n'est pas joint : absent du Mac, son autorité locale manquante, "
+                                 "son dossier modifiable par un autre compte, ou un autre échec nommé par reason ; "
+                                 "vide une fois trouvé."}
 offline_reply = {"409": reply("Refusé en mode hors ligne", {"type": "object", "properties": {
     "ok": {"type": "boolean"}, "error": {"type": "string"}}})}
 model_id = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
@@ -151,10 +174,12 @@ schemas = {
         "properties": {
             "model": {"type": "string",
                       "description": "Un identifiant de modèle, une fonction (albireo-general, albireo-code, "
-                                     "albireo-security), albireo-background ou auto. Une fonction sans modèle propre "
-                                     "est servie par le modèle général ; albireo-background, le travail fait en "
-                                     "arrière-plan (titres, résumés, mémoire), par le modèle livré avec Albireo, "
-                                     "sinon par le général.",
+                                     "albireo-security), albireo-background, albireo-relay ou auto. Une fonction "
+                                     "sans modèle propre est servie par le modèle général ; albireo-background, le "
+                                     "travail fait en arrière-plan (titres, résumés, mémoire), par le modèle livré "
+                                     "avec Albireo, sinon par le général ; albireo-relay, une fois le relais prêt, "
+                                     "par le moteur extérieur du relais (/albireo/v1/relay), qui ne prend ni outil, "
+                                     "ni son, ni d'autre choix que n = 1.",
                       "example": "albireo-general"},
             "messages": {"type": "array", "items": ref("Message")},
             "stream": {"type": "boolean", "default": False},
@@ -171,10 +196,16 @@ schemas = {
                           "(reasoning_budget)."},
             "think": {"type": "boolean", "description": "Le même réglage que reasoning, sous le nom que lui donnent "
                       "d'autres clients ; quand les deux sont donnés, think s'applique."},
-            "reasoning_effort": {"type": "string", "enum": ["none", "low", "medium", "high"],
+            "reasoning_effort": {"type": "string", "enum": ["none", "low", "medium", "high", "xhigh", "max"],
                                  "description": "none désactive le raisonnement ; low lui donne le budget d'un "
                                                 "raisonnement court, high lève sa borne par défaut "
-                                                "(reasoning_budget)."},
+                                                "(reasoning_budget). Pour albireo-relay, le niveau d'effort du "
+                                                "modèle extérieur parmi ceux qu'il prend (efforts dans "
+                                                "/albireo/v1/relay), le sien sans niveau donné."},
+            "web_search": {"type": "boolean", "description": "albireo-relay avec Claude : le modèle extérieur cherche "
+                           "sur le web, cinq recherches au plus, qu'Anthropic facture ; ses requêtes viennent avec le "
+                           "raisonnement, ses sources en liens après les textes qui les citent, et usage donne "
+                           "web_search_requests. L'accès au web des réglages doit le permettre."},
             "reasoning_budget": {"type": "integer", "minimum": -1, "nullable": True,
                                  "description": "Les tokens que le raisonnement peut prendre : au-delà, le moteur le "
                                                 "termine par une phrase qui demande au modèle de répondre à partir de "
@@ -354,7 +385,74 @@ schemas = {
                        "description": "Le fournisseur de /albireo/v1/web/search : wikipedia, l'interface REST de "
                                       "Wikipedia ; ou none, qui coupe la recherche tandis que /albireo/v1/web/fetch "
                                       "reste disponible. Un settings.json d'une version antérieure qui nomme un autre "
-                                      "fournisseur est lu comme wikipedia."}}},
+                                      "fournisseur est lu comme wikipedia."},
+        "relay": ref("RelaySettings")}},
+    "RelaySettings": {"type": "object", "description": "Le relais vers un moteur extérieur, le modèle albireo-relay. "
+                      "Un changement donne les membres qu'il change ; les autres restent.", "properties": {
+        "enabled": {"type": "boolean", "default": False},
+        "provider": {"type": "string", "enum": ["openai", "ollama", "claude"], "default": "openai",
+                     "description": "openai : un moteur de l'interface d'OpenAI à url ; ollama : le nuage d'Ollama ; "
+                                    "claude : l'interface d'Anthropic."},
+        "url": {"type": "string", "maxLength": 2048, "description": "openai : la base de son interface, http:// ou "
+                "https://, sans requête, où se trouvent /chat/completions et /models ; sans /v1, le relais l'ajoute "
+                "quand les modèles ne répondent que là."},
+        "model": {"type": "string", "maxLength": 256},
+        "auth": {"type": "string", "enum": ["key", "basic", "none"], "default": "key",
+                 "description": "openai : une clé « bearer », un utilisateur et un mot de passe, ou rien ; les autres "
+                                "prennent une clé."},
+        "user": {"type": "string", "maxLength": 256, "description": "basic : l'utilisateur, sans ':'."},
+        "secret": {"type": "string", "maxLength": 4096,
+                   "description": "La clé ou le mot de passe, sans caractère de contrôle, gardé dans relay.secret "
+                                  "(lisible par le compte du service seul) et donné sous la forme ******** ; cette "
+                                  "valeur renvoyée garde le secret enregistré quand le fournisseur, l'adresse et "
+                                  "l'utilisateur restent les mêmes, et elle est refusée sinon (code relay_secret)."},
+        "context": {"type": "integer", "minimum": 1024, "maximum": 16777216, "default": 131072,
+                    "description": "openai : la fenêtre de contexte de son modèle."},
+        "max_output": {"type": "integer", "minimum": 16, "maximum": 1048576, "default": 16384,
+                       "description": "openai : les tokens d'une réponse au plus."},
+        "images": {"type": "boolean", "default": False, "description": "openai : le modèle lit les images."},
+        "reasoning": {"type": "boolean", "default": False,
+                      "description": "openai : le modèle prend reasoning_effort (low, medium, high)."},
+        "pseudonymize": {"type": "boolean", "default": False,
+                         "description": "Les textes partent par Pseudalis (3.1.0 ou plus, sa clé de séance), les "
+                                        "images décrites sur le Mac."},
+        "keep_substitutes": {"type": "boolean", "default": False,
+                             "description": "Les réponses gardent les pseudonymes, sans leurs valeurs : un contrôle "
+                                            "de ce qui a quitté le Mac."}}},
+    "RelayModel": {"type": "object", "properties": {
+        "id": {"type": "string"}, "name": {"type": "string"}, "context": {"type": "integer"},
+        "max_output": {"type": "integer"}, "images": {"type": "boolean"},
+        "thinking": {"type": "string", "enum": ["none", "toggle", "always"],
+                     "description": "Aucun, activé ou coupé par la requête, ou toujours actif."},
+        "efforts": {"type": "array", "items": {"type": "string"}},
+        "default_effort": {"type": "string", "description": "Le niveau que le modèle prend sans niveau donné, s'il "
+                           "est connu."}}},
+    "RelayState": {"type": "object", "description": "Le relais sans son adresse ni son secret.", "properties": {
+        "enabled": {"type": "boolean"}, "ready": {"type": "boolean"},
+        "reason": {"type": "string", "description": "Ce qui manque au relais tant qu'il n'est pas prêt."},
+        "provider": {"type": "string"}, "provider_name": {"type": "string"}, "model": {"type": "string"},
+        "name": {"type": "string"}, "context": {"type": "integer"}, "max_output": {"type": "integer"},
+        "images": {"type": "boolean"}, "thinking": {"type": "string"},
+        "efforts": {"type": "array", "items": {"type": "string"}}, "default_effort": {"type": "string"},
+        "pseudonymize": {"type": "boolean"},
+        "keep_substitutes": {"type": "boolean", "description": "Avec la pseudonymisation, les réponses gardent les "
+                             "pseudonymes."},
+        "web": {"type": "boolean", "description": "Le modèle extérieur cherche sur le web quand une requête le "
+                "demande (web_search) : Claude."},
+        "offline": {"type": "boolean", "description": "Le mode hors ligne, qui ne garde qu'un moteur de l'interface "
+                    "d'OpenAI sur ce Mac ou sur le réseau de la maison : ready vaut false pour les autres "
+                    "fournisseurs et pour une adresse publique."},
+        "scope": {"type": "string", "description": "Une empreinte du fournisseur, de l'adresse, de l'authentification "
+                  "et de l'utilisateur du relais, qui change avec eux sans les nommer."},
+        "image_mode": {"type": "string", "enum": ["sent", "described", "none"],
+                       "description": "Les images vont au modèle extérieur, sont décrites par un modèle du Mac qui "
+                                      "lit les images, ou ne peuvent pas être prises."},
+        "pseudalis": {"type": "object", "description": "Avec la pseudonymisation : si Pseudalis répond, et les "
+                      "valeurs gardées en mémoire.", "properties": {
+                          "found": {"type": "boolean"}, "port": {"type": "integer"}, "reason": {"type": "string"},
+                          "code": pseudalis_code,
+                          "memory": {"type": "object", "properties": {"texts": {"type": "integer"},
+                              "values": {"type": "integer"}, "bytes": {"type": "integer"}}}}}}},
     "WebSearchRequest": {"type": "object", "required": ["query"], "properties": {
         "query": {"type": "string", "minLength": 1, "maxLength": 400,
                   "description": "Le texte cherché, de 1 à 400 caractères une fois retirées les espaces à ses "
@@ -437,7 +535,7 @@ paths = {
         "responses": dict({"200": {"description": "La complétion, ou un flux de fragments", "content": {
             "application/json": {"schema": ref("ChatCompletion")},
             "text/event-stream": {"schema": {"oneOf": [ref("ChatCompletionChunk"), ref("StreamError")]}}}}},
-            **generation_replies)}},
+            **relay_replies)}},
     "/v1/completions": {"post": {
         "tags": ["OpenAI"], "summary": "Complétion de texte d'un prompt brut",
         "description": "Un flux donne des événements text_completion terminés par 'data: [DONE]', ou par un "
@@ -525,6 +623,7 @@ paths = {
                                              "context, trained_context, kv_bytes_per_token, kv_type (q8 ou f16), et "
                                              "les vitesses mesurées sur leurs réponses, prompt_tokens_per_second et "
                                              "generation_tokens_per_second, 0 tant qu'ils n'ont pas répondu."},
+            "relay": ref("RelayState"),
             "models_state": {"type": "object", "additionalProperties": {"type": "string"},
                              "description": "loading, ready, unloading, removing, ou l'erreur d'un chargement."},
             "web": {"type": "object", "description": "L'accès au web du bouton Web, que l'application web lit à son "
@@ -652,6 +751,9 @@ paths = {
                       "404": reply("Aucun texte de ce nom (code license_not_found)", ref("Error"))}}},
     "/albireo/v1/count": {"post": {
         "tags": ["Service"], "summary": "Tokens de messages, ou d'un texte, pour un modèle",
+        "description": "Pour albireo-relay, une estimation (estimated: true) des tokens du modèle extérieur : comptés "
+                       "par le modèle général du Mac, ou environ quatre octets par token sans lui, dans le contexte "
+                       "du modèle extérieur.",
         "requestBody": json_body({"type": "object", "properties": {
             "model": {"type": "string"}, "messages": {"type": "array", "items": ref("Message")},
             "tools": {"type": "array", "items": ref("Tool")}, "text": {"type": "string"}}}),
@@ -681,6 +783,41 @@ paths = {
             "503": reply("Trois requêtes de l'accès au web tournent déjà (code busy, Retry-After: 2), ou le service "
                          "s'arrête (cancelled)", ref("Error")),
             "504": reply("Le fournisseur n'a pas répondu à temps (code timeout)", ref("Error"))}}},
+    "/albireo/v1/relay": {"get": {
+        "tags": ["Service"], "summary": "Les fournisseurs du relais, leurs modèles et l'état du relais",
+        "responses": {"200": reply("Les fournisseurs et le relais", {"type": "object", "properties": {
+            "providers": {"type": "array", "items": {"type": "object", "properties": {
+                "id": {"type": "string"}, "name": {"type": "string"}, "url": {"type": "string"},
+                "auths": {"type": "array", "items": {"type": "string"}},
+                "models": {"type": "array", "items": ref("RelayModel")}}}},
+            "relay": ref("RelayState"),
+            "pseudalis": {"type": "object", "description": "Si Pseudalis répond sur ce Mac, et les valeurs que le "
+                          "relais garde en mémoire.", "properties": {
+                              "found": {"type": "boolean"}, "port": {"type": "integer"},
+                              "reason": {"type": "string"}, "code": pseudalis_code,
+                              "memory": {"type": "object"}}}}})}}},
+    "/albireo/v1/relay/test": {"post": {
+        "tags": ["Service"], "summary": "Liste les modèles d'un fournisseur du relais",
+        "description": "Les réglages donnés, par-dessus ceux qui sont enregistrés, interrogent la route des modèles du "
+                       "fournisseur, pour un moteur d'OpenAI à l'adresse saisie, puis avec /v1 ; le secret masqué "
+                       "tient lieu du secret enregistré selon la règle des réglages.",
+        "requestBody": json_body(ref("RelaySettings")),
+        "responses": {"200": reply("Si le fournisseur a répondu", {"type": "object", "properties": {
+            "ok": {"type": "boolean"}, "models": {"type": "array", "items": {"type": "string"}},
+            "url": {"type": "string", "description": "La base où répond l'interface d'un moteur d'OpenAI, quand elle "
+                    "diffère de l'adresse saisie."},
+            "error": {"type": "string"},
+            "code": {"type": "string", "enum": ["relay_address", "relay_key_missing", "relay_password_missing",
+                                                "relay_offline", "relay_offline_remote", "relay_offline_unresolved",
+                                                "relay_unreachable", "relay_proxy", "relay_certificate",
+                                                "relay_no_answer", "relay_http_key", "relay_http_credit",
+                                                "relay_http_address", "relay_http_size", "relay_http_limit",
+                                                "relay_http_failing", "relay_http_refused", "relay_not_interface"],
+                     "description": "L'échec, que la page dit en français."},
+            "args": {"type": "object", "description": "s : le statut HTTP du moteur."},
+            "detail": {"type": "string", "description": "Le message du moteur avec son statut."}}}),
+            "400": reply("Réglages invalides, ou un secret masqué donné pour un autre fournisseur, une autre adresse "
+                         "ou un autre utilisateur (code relay_secret)", ref("Error"))}}},
     "/albireo/v1/web/fetch": {"post": {
         "tags": ["Accès au web"], "summary": "Lit une page du web à une adresse publique",
         "description": "L'outil fetch_page du bouton Web. L'adresse est en http ou https, sans informations "

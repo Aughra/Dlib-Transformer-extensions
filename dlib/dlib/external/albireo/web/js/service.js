@@ -175,6 +175,14 @@ const schemas = {
     box(240, 80, 120, 56, 'Proxy', 's-gold', 'relais') + arrow(360, 108, 460, 108) +
     box(460, 80, 120, 56, 'Internet', 's-soft') +
     text(300, 170, 'vide : les variables HTTPS_PROXY ; « none » : en direct', 's-f'), 190),
+  relay: schema('Le relais : la question part pseudonymisée, la réponse revient en clair',
+    box(16, 62, 120, 56, 'Albireo', 's-blue', 'la discussion') + arrow(136, 90, 236, 90, 'texte') +
+    box(236, 62, 128, 56, 'Pseudalis', 's-gold', 'clé de séance') + arrow(364, 90, 464, 90, 'pseudonymes') +
+    box(464, 62, 120, 56, 'Moteur', 's-soft', 'Claude, Ollama…') +
+    `<line x1="524" y1="118" x2="524" y2="176" class="s-line"/>` +
+    arrow(524, 176, 136, 176, 'réponse : les vrais noms remis au fil du flux') +
+    box(16, 154, 120, 44, 'Réponse', 's-blue') +
+    text(300, 222, 'les images restent sur le Mac : un modèle local les décrit, la description part protégée', 's-f'), 235),
   warm_history: schema('Pendant que tu lis, le moteur prépare la suite',
     box(20, 70, 130, 56, 'Réponse finie', 's-blue') + arrow(150, 98, 250, 98) +
     box(250, 70, 150, 56, 'Relecture', 's-gold', 'en arrière-plan') + arrow(400, 98, 480, 98) +
@@ -273,6 +281,11 @@ const groups = [
     title: 'Internet',
     note: "Ces réglages s'appliquent tout de suite, sans redémarrage.",
     items: ['offline', 'web_access', 'web_search', 'proxy']
+  },
+  {
+    title: 'Moteurs extérieurs',
+    note: 'Pour envoyer une discussion à un modèle qui ne tourne pas sur le Mac. S’applique tout de suite.',
+    items: ['relay']
   }
 ];
 
@@ -742,6 +755,50 @@ const items = {
       "porte donne directement sur la rue, et tu n’en as pas besoin.",
     bee: "Une adresse fausse coupe Albireo d’Internet sans prévenir : téléchargements et recherches échouent avec " +
       "« the proxy refuses the connection ». Vide-le pour revenir au réglage normal."
+  },
+  relay: {
+    title: 'Relais vers un moteur extérieur',
+    control: { kind: 'relay' },
+    restart: false,
+    effect: 'Envoie les discussions qui le demandent à Claude, à Ollama ou à un autre moteur, et rend leur réponse ici.',
+    principle: 'Le service sert d’intermédiaire : il envoie la discussion au moteur extérieur avec ta clé, et rend sa ' +
+      'réponse comme celle d’un modèle du Mac.',
+    pros: ['Des modèles bien plus grands que ceux qui tiennent dans le Mac (Claude : un million de tokens de contexte).',
+      'Avec Pseudalis, les noms, adresses et numéros partent remplacés par des pseudonymes, et la réponse revient ' +
+        'avec les vrais.',
+      'La clé reste dans le service : la page et les autres programmes ne la voient jamais.',
+      'Hors ligne, un moteur du réseau de la maison (un autre ordinateur) reste joignable.'],
+    cons: ['La discussion quitte le Mac : seule la pseudonymisation en retire les données personnelles, et elle ne ' +
+        'reconnaît pas tout (un détail qui identifie quelqu’un sans être un nom, par exemple).',
+      'Payant chez Claude et Ollama : chaque question consomme le crédit du compte.',
+      'Ni outils, ni sons ; la recherche sur le web n’existe qu’avec Claude.',
+      'Avec l’accès depuis le réseau ouvert, tout appareil du Wi-Fi peut s’en servir, donc utiliser ton crédit.'],
+    normal: "Un modèle du Mac répond sans que rien ne sorte. Pour une question difficile, on peut préférer un modèle " +
+      "beaucoup plus grand, qui tourne chez Anthropic (Claude), chez Ollama, ou sur un autre ordinateur. Le relais " +
+      "envoie alors la discussion à ce moteur, avec ta clé, puis rend sa réponse dans Albireo. Avec la " +
+      "pseudonymisation, Pseudalis remplace d’abord chaque donnée personnelle par un pseudonyme ; le moteur ne voit " +
+      "que les pseudonymes, et Albireo remet les vrais noms dans la réponse pendant qu’elle s’écrit. Les images ne " +
+      "partent pas : un modèle du Mac qui lit les images les décrit, et la description part protégée elle aussi.",
+    owl: "Le modèle albireo-relay de l’interface (POST /v1/chat/completions) passe par relay_service (host/relay.cpp, " +
+      "repris de l’original 1.0.23) : huit réponses à la fois au plus, chacune sur son thread. OpenAI : " +
+      "/chat/completions à l’adresse donnée (/v1 ajouté si seuls ses modèles y répondent) ; Ollama : " +
+      "https://ollama.com/v1 ; Claude : /v1/messages, système à part, raisonnement adaptatif, effort, 64 000 tokens " +
+      "de réponse sans borne de la requête, web_search à cinq recherches au plus. La clé ne va que dans les en-têtes " +
+      "(x-api-key ou Authorization), et vit dans relay.secret (0600) ; settings.json n’a que ********, valable pour le " +
+      "même fournisseur, la même adresse et le même utilisateur. Pseudonymisation : POST /v1/text/anonymize de " +
+      "Pseudalis avec session: true (sa clé de séance, 3.1.0), réponse values ; une mémoire de 2 h (4 096 textes, " +
+      "16 384 valeurs) évite de reprotéger les messages renvoyés à chaque tour ; stream_restorer remet les valeurs au " +
+      "fil des fragments, mots seuls de quatre octets ou plus compris. Les séquences d’arrêt ne partent pas avec la " +
+      "pseudonymisation. Hors ligne : seules les adresses de bouclage, privées et lien-local, vérifiées avant la " +
+      "connexion.",
+    marmot: "Imagine que tu demandes de l’aide pour un devoir à un prof d’une autre école. Le relais, c’est le " +
+      "messager qui porte ta question et te rapporte la réponse. La pseudonymisation, c’est comme si le messager " +
+      "remplaçait ton nom et celui de tes potes par des surnoms avant de partir, puis remettait les vrais noms en " +
+      "revenant : le prof aide sans savoir de qui on parle.",
+    bee: "Coupé, tout reste sur le Mac. Allumé sans pseudonymisation, la discussion part telle quelle chez le " +
+      "fournisseur. Pseudalis arrêté ou trop ancien alors que la pseudonymisation est demandée : la question ne part " +
+      "pas du tout, plutôt que de partir en clair. Une clé fausse ou un compte sans crédit donnent une erreur, sans " +
+      "jamais montrer la clé."
   }
 };
 
@@ -869,6 +926,10 @@ export function serviceTab(body, env) {
           onclick: () => change(key, value)
         }, label)));
     }
+    if (c.kind === 'relay') {
+      const r = current.relay || {};
+      return h('span', { class: 'svc-badge' + (r.enabled ? ' changed' : '') }, r.enabled ? 'allumé' : 'coupé');
+    }
     if (c.kind === 'number' || c.kind === 'text') {
       const input = h('input', {
         type: c.kind === 'number' ? 'number' : 'text', value: v == null ? '' : v, min: c.min, max: c.max,
@@ -921,6 +982,7 @@ export function serviceTab(body, env) {
       advice(key),
       key === 'lan' ? lanAddresses() : null,
       key === 'reserve_gb' ? reserveBox() : null,
+      key === 'relay' ? relayBox() : null,
       h('div', { class: 'svc-bubble', role: 'tooltip' }, item.principle),
       sheet(item, key));
     return el;
@@ -1027,6 +1089,193 @@ export function serviceTab(body, env) {
         await fetch('/albireo/v1/settings/profiles?label=' + encodeURIComponent(p.label), { method: 'DELETE' });
         loadProfiles();
       } }, 'Supprimer'))) : [h('p', { class: 'help' }, 'Aucune sauvegarde pour l’instant.')]));
+  }
+
+  /*
+      Le relais vers un moteur extérieur (fork, repris de l'original 1.0.23) : son état, ses réglages et leur essai.
+      Le secret ne revient jamais du service (********) : un champ vide garde celui qui est enregistré.
+  */
+  const relayReasons = {
+    'the relay is turned off': 'le relais est coupé',
+    'the relay has no valid address': 'il manque une adresse valable (http:// ou https://)',
+    'the relay has no model': 'il manque le modèle',
+    'the model of the relay is not one of its provider here': 'ce modèle n’est pas l’un de ceux de ce fournisseur',
+    'the relay has no user': 'il manque l’utilisateur',
+    'the relay has no password': 'il manque le mot de passe',
+    'the relay has no key': 'il manque la clé',
+    'offline mode: Claude needs the Internet': 'hors ligne : Claude a besoin d’Internet',
+    'offline mode: Ollama needs the Internet': 'hors ligne : Ollama a besoin d’Internet',
+    'offline mode: the address of the engine is neither on this computer nor on its local network':
+      'hors ligne : l’adresse du moteur n’est ni sur ce Mac ni sur le réseau de la maison',
+    'Pseudalis is not installed': 'Pseudalis n’est pas trouvé sur ce Mac',
+    'the local authority of Pseudalis is missing': 'l’autorité locale de Pseudalis manque',
+    'the data folder of Pseudalis is not protected': 'le dossier de Pseudalis pourrait être modifié par un autre compte'
+  };
+  const relayCodes = {
+    relay_address: 'adresse refusée : un hôte et un port seulement, sans utilisateur, requête ni fragment',
+    relay_key_missing: 'il manque la clé', relay_password_missing: 'il manque le mot de passe',
+    relay_offline: 'hors ligne : ce fournisseur a besoin d’Internet',
+    relay_offline_remote: 'hors ligne : l’adresse n’est pas sur le réseau de la maison',
+    relay_offline_unresolved: 'hors ligne : le nom du moteur n’a pas d’adresse sur ce réseau',
+    relay_unreachable: 'le moteur ne répond pas à cette adresse', relay_proxy: 'le proxy ne répond pas',
+    relay_certificate: 'le certificat du moteur n’est pas reconnu', relay_no_answer: 'le moteur a cessé de répondre',
+    relay_http_key: 'le moteur refuse la clé ou l’utilisateur', relay_http_credit: 'le compte n’a plus de crédit',
+    relay_http_address: 'le moteur ne connaît pas cette adresse', relay_http_size: 'requête trop grande',
+    relay_http_limit: 'le moteur limite les requêtes ou le crédit', relay_http_failing: 'le moteur est surchargé ou en panne',
+    relay_http_refused: 'le moteur refuse la requête', relay_not_interface: 'cette adresse ne répond pas comme une interface OpenAI',
+    relay_secret: 'la clé enregistrée ne vaut que pour l’ancien fournisseur, adresse et utilisateur : retape-la'
+  };
+  const relayWhy = (why) => relayReasons[why] || why;
+  // Une fenêtre de contexte : « 1 M tokens », « 256 K tokens ».
+  const relayTokens = (n) => n >= 1000000 ? (n / 1000000).toLocaleString('fr-FR') + ' M tokens'
+    : Math.round(n / 1024) + ' K tokens';
+
+  function relayBox() {
+    const box = h('div', { class: 'svc-relay' }, h('p', { class: 'help' }, 'Lecture du relais…'));
+    (async () => {
+      let info;
+      try {
+        info = await api.getJSON('/albireo/v1/relay');
+      } catch (e) {
+        box.replaceChildren(h('p', { class: 'help' }, e.message));
+        return;
+      }
+      const saved = current.relay || {};
+      const draft = Object.assign({}, saved);
+      delete draft.secret;
+      let typedSecret = '';
+      let found = [];
+      const providers = info.providers || [];
+      const result = h('p', { class: 'svc-where' });
+
+      const field = (label, input, note) => h('label', { class: 'svc-field' }, h('span', null, label), input,
+        note ? h('small', null, note) : null);
+      const check = (key, label) => {
+        const input = h('input', { type: 'checkbox', checked: !!draft[key] });
+        input.addEventListener('change', () => { draft[key] = input.checked; paint(); });
+        return h('label', { class: 'svc-check' }, input, h('span', null, label));
+      };
+      const textInput = (key, placeholder, type) => {
+        const input = h('input', { type: type || 'text', value: draft[key] == null ? '' : draft[key], placeholder,
+          spellcheck: 'false', autocomplete: 'off' });
+        input.addEventListener('change', () => {
+          draft[key] = type === 'number' ? Number(input.value) : input.value.trim();
+        });
+        return input;
+      };
+
+      // Ce que le service enverrait : le secret seulement s'il vient d'être tapé.
+      function body() {
+        const b = {};
+        for (const k of ['enabled', 'provider', 'url', 'model', 'auth', 'user', 'context', 'max_output', 'images',
+          'reasoning', 'pseudonymize', 'keep_substitutes']) if (k in draft) b[k] = draft[k];
+        if (typedSecret) b.secret = typedSecret;
+        return b;
+      }
+
+      function stateLine() {
+        const st = info.relay || {};
+        if (!saved.enabled) return h('p', { class: 'svc-where' }, 'Coupé : toutes les discussions restent sur le Mac.');
+        if (!st.ready) return h('p', { class: 'svc-where' }, 'Pas prêt : ' + relayWhy(st.reason) + '.');
+        return h('p', { class: 'svc-where' }, 'Prêt : ', h('b', null, (st.name || st.model) + ' (' + st.provider_name + ')'),
+          st.pseudonymize ? ', pseudonymisé par Pseudalis' : ', sans pseudonymisation : la discussion part telle quelle',
+          st.image_mode === 'described' ? ' ; images décrites sur le Mac' : st.image_mode === 'sent'
+            ? ' ; images envoyées' : ' ; pas d’images', '.');
+      }
+
+      function pseudalisLine() {
+        const p = info.pseudalis || {};
+        if (p.found) return h('small', null, 'Pseudalis répond sur ce Mac (port ' + p.port + ').');
+        return h('small', null, 'Pseudalis : ' + relayWhy(p.reason || '') + '. Sans lui, aucune question ne part.');
+      }
+
+      function paint() {
+        const provider = providers.find((p) => p.id === draft.provider) || providers[0] || { id: 'openai', models: [] };
+        draft.provider = provider.id;
+        const openai = provider.id === 'openai';
+        const auth = openai ? (draft.auth || 'key') : 'key';
+        const enabled = check('enabled', 'Allumer le relais');
+        const choose = h('select', null, providers.map((p) => h('option', { value: p.id, selected: p.id === provider.id },
+          p.id === 'openai' ? 'Interface OpenAI (autre moteur, ordinateur de la maison)' : p.name)));
+        choose.addEventListener('change', () => {
+          draft.provider = choose.value;
+          const next = providers.find((p) => p.id === draft.provider);
+          if (next && next.models && next.models.length) draft.model = next.models[0].id;
+          paint();
+        });
+        let model;
+        if (!openai) {
+          model = h('select', null, (provider.models || []).map((m) => h('option', { value: m.id, selected: m.id === draft.model },
+            m.name + ' · ' + relayTokens(m.context) + (m.images ? ' · images' : ''))));
+          if (!draft.model && provider.models && provider.models.length) draft.model = provider.models[0].id;
+          model.addEventListener('change', () => { draft.model = model.value; });
+        } else {
+          model = textInput('model', 'le nom du modèle chez ce moteur');
+          model.setAttribute('list', 'svc-relay-models');
+        }
+        const models = h('datalist', { id: 'svc-relay-models' }, found.map((m) => h('option', { value: m })));
+        const authChoice = h('select', null, [['key', 'Une clé'], ['basic', 'Utilisateur et mot de passe'], ['none', 'Aucune']]
+          .map(([v, l]) => h('option', { value: v, selected: v === auth }, l)));
+        authChoice.addEventListener('change', () => { draft.auth = authChoice.value; paint(); });
+        const secret = h('input', { type: 'password', autocomplete: 'off', value: typedSecret,
+          placeholder: saved.secret ? 'enregistrée (********) : vide pour la garder' : 'colle-la ici' });
+        secret.addEventListener('input', () => { typedSecret = secret.value; });
+        const test = h('button', { class: 'button', type: 'button', onclick: async () => {
+          result.textContent = 'Essai…';
+          try {
+            const r = await api.postJSON('/albireo/v1/relay/test', body());
+            if (r.ok) {
+              found = r.models || [];
+              if (r.url && openai) draft.url = r.url;
+              result.textContent = 'Le moteur répond : ' + found.length + (found.length > 1 ? ' modèles' : ' modèle') +
+                (r.url && openai ? ', à l’adresse ' + r.url : '') + '.';
+              paint();
+            } else {
+              result.textContent = 'Échec : ' + (relayCodes[r.code] || r.error || r.code) +
+                (r.args && r.args.s ? ' (HTTP ' + r.args.s + ')' : '') + (r.detail ? ' : ' + r.detail : '') + '.';
+            }
+          } catch (e) {
+            result.textContent = 'Échec : ' + (relayCodes[e.code] || e.message);
+          }
+        } }, 'Tester');
+        const save = h('button', { class: 'button primary', type: 'button', onclick: async () => {
+          try {
+            await api.putJSON('/albireo/v1/settings', { relay: body() });
+            current = await api.getJSON('/albireo/v1/settings');
+            toast('Relais enregistré.');
+            if (env.refreshStatus) env.refreshStatus();
+            render();
+            // Le rendu remonte en haut de l'onglet : la vue revient sur la carte du relais.
+            const again = list.querySelector('.svc-card[data-key="relay"]');
+            if (again) again.scrollIntoView({ block: 'start' });
+          } catch (e) {
+            toast(relayCodes[e.code] || e.message, true);
+          }
+        } }, 'Enregistrer');
+        box.replaceChildren(
+          stateLine(),
+          enabled,
+          field('Fournisseur', choose),
+          openai ? field('Adresse', textInput('url', 'http://192.168.1.20:8000/v1'),
+            'La base de son interface ; sans /v1, le service l’ajoute si besoin.') : null,
+          openai ? field('Authentification', authChoice) : null,
+          openai && auth === 'basic' ? field('Utilisateur', textInput('user', '')) : null,
+          auth !== 'none' ? field(auth === 'basic' ? 'Mot de passe' : 'Clé', secret,
+            'Gardée par le service seul (relay.secret), jamais renvoyée à la page.') : null,
+          field('Modèle', model), models,
+          openai ? field('Contexte du modèle (tokens)', textInput('context', '131072', 'number')) : null,
+          openai ? field('Réponse au plus (tokens)', textInput('max_output', '16384', 'number')) : null,
+          openai ? check('images', 'Le modèle lit les images') : null,
+          openai ? check('reasoning', 'Le modèle raisonne (reasoning_effort)') : null,
+          check('pseudonymize', 'Pseudonymiser par Pseudalis avant l’envoi'),
+          draft.pseudonymize ? pseudalisLine() : null,
+          draft.pseudonymize ? check('keep_substitutes', 'Laisser les pseudonymes dans les réponses (contrôle)') : null,
+          h('div', { class: 'svc-input', style: { marginTop: '8px', flexWrap: 'wrap' } }, test, save),
+          result);
+      }
+      paint();
+    })();
+    return box;
   }
 
   // La place que prend la réserve, et son vidage.

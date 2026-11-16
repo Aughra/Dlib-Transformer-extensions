@@ -58,14 +58,15 @@ namespace albireo
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                Pseudalis tel que le relais le joint, quand il est installé sur le même
-                ordinateur : son dossier de données (DataDir de HKLM\Software\Pseudalis, que
-                note son installateur), le port de son settings.json (8444 par défaut) et son
-                autorité locale (certificates\pseudalis-authority.crt), qui vérifie son
-                certificat, joint en 127.0.0.1 sous le nom localhost.  Sous Windows, le dossier,
-                son dossier de certificats, l'autorité et les réglages doivent être ceux de
-                SYSTEM ou des administrateurs, pour qu'aucun autre compte ne place un service à
-                lui sur le chemin des textes.  L'état trouvé est gardé une minute, vérifié de
+                Pseudalis tel que le relais le joint, quand il tourne sur le même Mac : son
+                dossier de données (PSEUDALIS_HOME, sinon ~/.local/share/pseudalis, fork pour
+                macOS), le port de son settings.json (8444 par défaut) et son autorité locale
+                (certificates/pseudalis-authority.crt), qui vérifie son certificat, joint en
+                127.0.0.1 sous le nom localhost.  Le dossier, son dossier de certificats,
+                l'autorité et les réglages doivent appartenir au compte du service ou à root, sans
+                droit d'écriture pour les autres comptes, ni par leurs permissions ni par une ACL
+                (owned_by_system()), pour qu'aucun autre compte ne place un service à lui sur le
+                chemin des textes.  L'état trouvé est gardé une minute, vérifié de
                 nouveau par un seul appelant à la fois, hors du verrou de l'état, les autres
                 appelants attendant son résultat.
         !*/
@@ -79,11 +80,14 @@ namespace albireo
 
         /*!
             ensures
-                - Donne dans out le texte protégé par Pseudalis (/v1/text/anonymize) : chaque
-                  valeur personnelle remplacée par son étiquette, ou par son substitut quand
-                  tags vaut false.
-                - Donne dans values chaque étiquette ou substitut écrit dans out avec la valeur
-                  qu'il représente, que /v1/text/restore rend, dans l'ordre de out.
+                - Donne dans out le texte protégé par Pseudalis (/v1/text/anonymize, avec
+                  "session": true) : chaque valeur personnelle remplacée par son pseudonyme, sous
+                  la clé de séance de Pseudalis (fork pour macOS, Pseudalis 3.1.0).  tags est
+                  ignoré : Pseudalis n'écrit plus d'étiquettes.
+                - Donne dans values chaque pseudonyme écrit dans out avec la valeur qu'il
+                  représente, telle que la réponse de Pseudalis la donne (values), dans l'ordre
+                  de out.  Un Pseudalis qui ne donne pas ces valeurs (antérieur à 3.1.0) fait
+                  échouer la protection.
                 - Attend Pseudalis tant qu'il est occupé à un autre travail, jusqu'à ce que
                   cancel, s'il est donné, soit annulé, ce qui arrête aussi la requête en cours.
                 - Renvoie false avec error quand Pseudalis n'est pas trouvé, ne répond pas ou

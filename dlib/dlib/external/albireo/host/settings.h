@@ -27,6 +27,53 @@ namespace albireo
     // Indique si le mot de passe d'un réglage de proxy est proxy_password_mask.
     bool proxy_password_masked(const std::string& proxy);
 
+    // Le texte qui tient lieu de la clé ou du mot de passe du relais dans settings.json et dans les
+    // réponses de l'interface d'administration ; settings_store garde le secret lui-même à part.
+    extern const char* const relay_secret_mask;   // "********"
+
+    struct relay_settings
+    {
+        /*!
+            WHAT THIS OBJECT REPRESENTS
+                Le relais de l'inférence (relay.h, repris de l'original, Albireo 1.0.23) : le
+                moteur extérieur auquel le modèle albireo-relay envoie les discussions qui le
+                demandent, les modèles du Mac restant en place pour les autres.
+
+                provider vaut "openai", un moteur de l'interface d'OpenAI à url (sa base,
+                "https://hôte/v1", où se trouvent /chat/completions et /models, ou la même sans
+                /v1, que relay.cpp ajoute alors), "ollama", le nuage d'Ollama, ou "claude",
+                l'interface d'Anthropic : les deux derniers ont leur adresse et leurs modèles
+                dans relay.cpp.  auth vaut "key" (une clé « bearer », la seule des deux
+                derniers), "basic" (utilisateur et secret) ou "none".  context, max_output,
+                images et reasoning décrivent le modèle d'un moteur "openai", que le programme
+                ne peut pas connaître ; relay.cpp connaît ceux des autres.
+
+                pseudonymize fait passer les textes par Pseudalis avant leur départ
+                (pseudonyms.h), sous sa clé de séance : des pseudonymes seuls, sans balises
+                (fork pour macOS, Pseudalis 3.1.0).  keep_substitutes laisse les pseudonymes
+                dans les réponses, sans leurs valeurs : un contrôle de ce qui a quitté le Mac.
+        !*/
+        bool enabled = false;
+        std::string provider = "openai";        // openai, ollama ou claude
+        std::string url;                        // openai : la base de son interface
+        std::string model;
+        std::string auth = "key";               // key, basic ou none
+        std::string user;                       // basic
+        std::string secret;                     // la clé ou le mot de passe, gardé dans relay.secret
+        long context = 131072;                  // openai : la fenêtre de contexte du modèle
+        long max_output = 16384;                // openai : les tokens d'une réponse au plus
+        bool images = false;                    // openai : le modèle lit les images
+        bool reasoning = false;                 // openai : le modèle prend reasoning_effort
+        bool pseudonymize = false;
+        bool keep_substitutes = false;          // les réponses gardent les pseudonymes, un contrôle
+
+        // Ce pour quoi le secret a été donné : un secret ne va jamais à un autre fournisseur, une autre adresse
+        // ou un autre utilisateur.
+        std::string secret_scope() const;
+        json to_json() const;                   // le secret masqué
+        void from_json(const json& j);
+    };
+
     struct host_settings
     {
         /*!
@@ -87,6 +134,7 @@ namespace albireo
         */
         bool lan = false;
         int lan_port = 8444;
+        relay_settings relay;
 
         /*
             Les réglages tels que settings.json et l'interface d'administration les donnent, le
@@ -116,7 +164,11 @@ namespace albireo
                 de passe du proxy sous la forme proxy_password_mask. Le proxy avec son mot de
                 passe est gardé à côté, dans proxy.secret, lisible par le compte du service
                 seul. Un mot de passe trouvé dans settings.json, écrit par
-                une version antérieure ou à la main, passe aussitôt dans proxy.secret.
+                une version antérieure ou à la main, passe aussitôt dans proxy.secret.  La clé
+                ou le mot de passe du relais va de même dans relay.secret, lisible par le compte
+                du service seul (droits 0600), avec le fournisseur, l'adresse et l'utilisateur
+                pour lesquels il a été donné : un settings.json qui en nomme d'autres ne lit
+                aucun secret.
 
                 Un settings.json d'une version antérieure qui contient des réglages que cette
                 version n'a pas, ou un autre fournisseur de recherche, est réécrit au démarrage
@@ -139,7 +191,7 @@ namespace albireo
         const std::string& path() const { return path_; }
 
     private:
-        // Écrit proxy.secret, puis settings.json ; m_ est tenu.
+        // Écrit proxy.secret et relay.secret, puis settings.json ; m_ est tenu.
         bool write();
 
         std::string path_;

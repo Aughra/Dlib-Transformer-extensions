@@ -781,6 +781,13 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .svc-choice button { border: 0; background: transparent; padding: 6px 12px; cursor: pointer; color: var(--text-soft); font: inherit; font-size: 13px; }
 .svc-choice button.on { background: var(--bg-active); color: var(--blue); font-weight: 600; }
 .svc-input { display: flex; gap: 8px; align-items: center; }
+.svc-relay { margin-top: 10px; display: grid; gap: 8px; }
+.svc-field { display: grid; gap: 4px; font-size: 13px; }
+.svc-field > span { font-weight: 600; }
+.svc-field small, .svc-relay > small { color: var(--text-soft); }
+.svc-field input, .svc-field select { padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border-strong);
+  background: var(--bg-input); color: var(--text); font: inherit; font-size: 13.5px; max-width: 100%; }
+.svc-check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
 .svc-input input { padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border-strong); background: var(--bg-input);
   color: var(--text); font: inherit; font-size: 13.5px; width: 210px; max-width: 100%; }
 .svc-detail { margin-top: 12px; display: grid; gap: 12px; }

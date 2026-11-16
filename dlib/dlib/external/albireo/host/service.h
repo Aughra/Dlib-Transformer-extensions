@@ -22,6 +22,7 @@
 #include "store.h"
 
 namespace httplib { class SSLServer; class Server; }
+namespace albireo { class relay_service; }
 
 namespace albireo
 {
@@ -143,6 +144,24 @@ namespace albireo
                   a fait le modèle, d'après son entrée, vide quand elle est inconnue.
         !*/
         std::map<std::string, json> loaded_traits();
+        // Le relais de l'inférence vers un moteur extérieur (relay.h, repris de l'original 1.0.23), fait par run().
+        relay_service& relay() { return *relay_; }
+        /*
+            Le relais tel que l'interface le donne (relay_description()), avec image_mode : "sent"
+            quand les images partent vers le modèle extérieur, "described" quand un modèle du Mac
+            les décrit pour lui, "none" quand ni l'un ni l'autre ne le peut ; et avec l'état de
+            Pseudalis quand le relais pseudonymise.
+        */
+        json relay_status();
+        /*
+            Décrit une image (une URL data) pour le relais avec un modèle du moteur qui lit les
+            images, celui de la fonction générale d'abord ; renvoie false avec error quand aucun
+            n'est chargé, quand le moteur échoue, ou une fois cancelled devenu vrai.
+        */
+        bool describe_image(const std::string& data_url, const std::atomic<bool>& cancelled, std::string& description,
+            std::string& error);
+        // Le modèle du moteur qui lit les images, celui de la fonction générale d'abord ; vide s'il n'y en a pas.
+        std::string image_model();
         /*!
             ensures
                 - Donne la fonction role au modèle id, en le chargeant si besoin.  Le modèle
@@ -327,6 +346,8 @@ namespace albireo
         std::unique_ptr<store> db_;
         std::unique_ptr<model_manager> models_;
         engine_host engine_;
+        // Fait après les réglages par run(), et détruit avant le moteur, dont ses images se servent.
+        std::unique_ptr<relay_service> relay_;
         // Écrit une fois par start_engines(), puis lu par les routes une fois engines_ready_
         // vrai.
         std::vector<engine_candidate> candidates_;
@@ -339,8 +360,8 @@ namespace albireo
         // Fixé par run() quand une base abîmée a été mise de côté et qu'une nouvelle a commencé.
         bool database_restarted_ = false;
 
-        // Protège le serveur et le gestionnaire de modèles pendant que run() les crée et les
-        // libère, pour stop(), qu'un thread du système peut appeler à tout moment.
+        // Protège le serveur, le gestionnaire de modèles et le relais pendant que run() les crée et
+        // les libère, pour stop(), qu'un thread du système peut appeler à tout moment.
         std::mutex server_m_;
         std::unique_ptr<httplib::SSLServer> server_;
         // Le serveur HTTP du réseau local (réglages lan, lan_port), et son thread.

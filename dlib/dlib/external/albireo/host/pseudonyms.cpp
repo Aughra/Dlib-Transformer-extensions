@@ -221,11 +221,13 @@ namespace albireo
             return false;
         }
         /*
-            Un dossier, une autorité ou des réglages qu'un autre compte que SYSTEM ou les
-            administrateurs aurait pu écrire ne sont pas ceux de Pseudalis : les textes iraient à
-            celui qui les a placés.
+            Un dossier, une autorité ou des réglages qu'un autre compte que celui du service ou root
+            aurait pu écrire ne sont pas ceux de Pseudalis : les textes iraient à celui qui les a
+            placés.  Sur le Mac (fork pour macOS), le dossier et ses certificats sont vérifiés
+            eux-mêmes, avec leurs parents (owned_by_system()), sans parcourir le lecteur ni le
+            coffre de Pseudalis, comme le ferait folder_admin_only().
         */
-        if (!folder_admin_only(dir) || !folder_admin_only(join_path(dir, "certificates")) || !owned_by_system(e.ca)
+        if (!owned_by_system(dir) || !owned_by_system(join_path(dir, "certificates")) || !owned_by_system(e.ca)
             || (file_exists(settings_path) && !owned_by_system(settings_path)))
         {
             reason = pseudalis_unprotected;
@@ -381,6 +383,8 @@ namespace albireo
     bool pseudalis_client::protect(const std::string& text, bool tags, cancellable* cancel, std::string& out,
         std::vector<std::pair<std::string, std::string>>& values, std::string& error)
     {
+        // Des pseudonymes seuls, sans étiquettes (fork pour macOS, Pseudalis 3.1.0) : tags est toujours faux ici.
+        (void)tags;
         values.clear();
         endpoint e;
         if (!reach(e, error))
@@ -388,72 +392,36 @@ namespace albireo
             error = "the pseudonymization is unavailable: " + error;
             return false;
         }
+        /*
+            La clé de séance de Pseudalis (fork pour macOS) : une même valeur garde le même
+            pseudonyme d'un texte à l'autre tant que Pseudalis tourne, et la réponse donne la valeur
+            de chaque pseudonyme écrit, en un seul appel.  L'original demandait ces valeurs par un
+            second appel à /v1/text/restore, que les pseudonymes sans retour de Pseudalis 3.0.0 ne
+            permettent plus.
+        */
         json body = json::object();
         body["text"] = text;
-        body["tags"] = tags;
+        body["session"] = true;
         json answer;
         if (!post(e, "/v1/text/anonymize", body, cancel, answer, error)) return false;
         out = answer["text"].as_string();
-        // Les étiquettes ou substituts écrits, chacun une fois, dans l'ordre du texte.
-        std::vector<std::string> tokens;
-        for (const json& span : answer["tags"].elements())
+        if (!answer["values"].is_array())
         {
-            const long long b = span["begin"].as_int(-1), en = span["end"].as_int(-1);
-            if (b < 0 || en <= b || static_cast<size_t>(en) > out.size()) continue;
-            const std::string token = out.substr(static_cast<size_t>(b), static_cast<size_t>(en - b));
-            if (std::find(tokens.begin(), tokens.end(), token) == tokens.end()) tokens.push_back(token);
+            /*
+                Un Pseudalis antérieur à 3.1.0 ignore session : ses pseudonymes ne reviendraient pas,
+                et une réponse les montrerait.  Le texte ne part pas.
+            */
+            out.clear();
+            error = "the pseudonymization is unavailable: Pseudalis 3.1.0 or later is needed for the relay";
+            return false;
         }
-        if (tokens.empty()) return true;
-        /*
-            Leurs valeurs, que la restauration des tokens, un par ligne, rend aux places qu'elle
-            nomme : les substituts écrits sans étiquettes ont besoin de leur liste, les étiquettes
-            portent leurs valeurs.
-        */
-        std::string joined;
-        for (const std::string& t : tokens) joined += t + "\n";
-        json restore = json::object();
-        restore["text"] = joined;
-        restore["tags"] = tags;
-        if (answer["substitutions"].is_array()) restore["substitutions"] = answer["substitutions"];
-        json restored;
-        if (!post(e, "/v1/text/restore", restore, cancel, restored, error)) return false;
-        const std::string back = restored["text"].as_string();
-        const json& places = restored["restored"];
-        if (places.size() == tokens.size())
+        for (const json& v : answer["values"].elements())
         {
-            size_t last = 0;
-            for (size_t i = 0; i < tokens.size(); ++i)
-            {
-                const long long b = places[i]["begin"].as_int(-1), en = places[i]["end"].as_int(-1);
-                if (b < static_cast<long long>(last) || en <= b || static_cast<size_t>(en) > back.size()) break;
-                values.emplace_back(tokens[i], back.substr(static_cast<size_t>(b), static_cast<size_t>(en - b)));
-                last = static_cast<size_t>(en);
-            }
-            if (values.size() == tokens.size()) return true;
-            values.clear();
+            const std::string substitute = v["substitute"].as_string(), value = v["value"].as_string();
+            if (!substitute.empty() && !value.empty() && substitute != value
+                && out.find(substitute) != std::string::npos)
+                values.emplace_back(substitute, value);
         }
-        // Sinon, les lignes du texte restauré, quand chaque token a rendu une ligne.
-        std::vector<std::string> lines;
-        size_t i = 0;
-        while (i < back.size())
-        {
-            const size_t eol = std::min(back.find('\n', i), back.size());
-            lines.push_back(back.substr(i, eol - i));
-            i = eol + 1;
-        }
-        bool one_line = true;
-        for (const std::string& t : tokens) one_line = one_line && t.find('\n') == std::string::npos;
-        if (one_line && lines.size() == tokens.size())
-        {
-            for (size_t k = 0; k < tokens.size(); ++k)
-                if (lines[k] != tokens[k]) values.emplace_back(tokens[k], lines[k]);
-            return true;
-        }
-        /*
-            Le texte protégé reste valable et part ; la réponse montre alors les substituts que la
-            restauration n'a pas su associer à leur valeur.
-        */
-        log_warning("relay: the values of " + std::to_string(tokens.size()) + " substitutes cannot be matched");
         return true;
     }
 

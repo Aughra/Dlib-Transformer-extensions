@@ -4,9 +4,11 @@
 #include "settings.h"
 
 #include <algorithm>
+#include <initializer_list>
 
 #include "../common/log.h"
 #include "../common/platform.h"
+#include "certificates.h"
 
 namespace albireo
 {
@@ -14,6 +16,7 @@ namespace albireo
     const char* const model_roles[3] = { "general", "code", "security" };
     const char* const embedding_role = "embedding";
     const char* const proxy_password_mask = "********";
+    const char* const relay_secret_mask = "********";
 
     namespace
     {
@@ -44,6 +47,20 @@ namespace albireo
         std::string secret_path(const std::string& settings_path)
         {
             return join_path(parent_path(settings_path), "proxy.secret");
+        }
+
+        // Le fichier du secret du relais, avec ce pour quoi il a été donné, à côté de settings.json.
+        std::string relay_secret_path(const std::string& settings_path)
+        {
+            return join_path(parent_path(settings_path), "relay.secret");
+        }
+
+        // value si elle est l'une de allowed, sinon fallback.
+        std::string one_of(const std::string& value, std::initializer_list<const char*> allowed, const char* fallback)
+        {
+            for (const char* a : allowed)
+                if (value == a) return value;
+            return fallback;
         }
 
         // Le fichier de la clé d'un fournisseur de recherche que les versions antérieures gardaient à côté
@@ -101,6 +118,55 @@ namespace albireo
         return password_span(proxy, from, length) && proxy.compare(from, length, proxy_password_mask) == 0;
     }
 
+    std::string relay_settings::secret_scope() const
+    {
+        json j = json::object();
+        j["provider"] = provider;
+        j["url"] = url;
+        j["auth"] = auth;
+        j["user"] = user;
+        return j.dump();
+    }
+
+    json relay_settings::to_json() const
+    {
+        json j = json::object();
+        j["enabled"] = enabled;
+        j["provider"] = provider;
+        j["url"] = url;
+        j["model"] = model;
+        j["auth"] = auth;
+        j["user"] = user;
+        j["secret"] = secret.empty() ? std::string() : std::string(relay_secret_mask);
+        j["context"] = static_cast<long long>(context);
+        j["max_output"] = static_cast<long long>(max_output);
+        j["images"] = images;
+        j["reasoning"] = reasoning;
+        j["pseudonymize"] = pseudonymize;
+        j["keep_substitutes"] = keep_substitutes;
+        return j;
+    }
+
+    void relay_settings::from_json(const json& j)
+    {
+        const relay_settings d;
+        enabled = j["enabled"].as_bool(d.enabled);
+        provider = one_of(j["provider"].str(d.provider), { "openai", "ollama", "claude" }, "openai");
+        url = j["url"].str(d.url);
+        model = j["model"].str(d.model);
+        auth = one_of(j["auth"].str(d.auth), { "key", "basic", "none" }, "key");
+        user = j["user"].str(d.user);
+        secret = j["secret"].str(d.secret);
+        const long long c = j["context"].as_int(d.context);
+        context = c >= 1024 && c <= (1LL << 24) ? static_cast<long>(c) : d.context;
+        const long long m = j["max_output"].as_int(d.max_output);
+        max_output = m >= 16 && m <= (1LL << 20) ? static_cast<long>(m) : d.max_output;
+        images = j["images"].as_bool(d.images);
+        reasoning = j["reasoning"].as_bool(d.reasoning);
+        pseudonymize = j["pseudonymize"].as_bool(d.pseudonymize);
+        keep_substitutes = j["keep_substitutes"].as_bool(d.keep_substitutes);
+    }
+
     json host_settings::to_json() const
     {
         json j = json::object();
@@ -133,6 +199,7 @@ namespace albireo
         if (trust_authority >= 0) j["trust_authority"] = trust_authority > 0;
         j["lan"] = lan;
         j["lan_port"] = lan_port;
+        j["relay"] = relay.to_json();
         return j;
     }
 
@@ -184,6 +251,7 @@ namespace albireo
         lan = j["lan"].as_bool(d.lan);
         lan_port = static_cast<int>(j["lan_port"].as_int(d.lan_port));
         if (lan_port < 1024 || lan_port > 65535) lan_port = d.lan_port;
+        relay.from_json(j["relay"]);
     }
 
     std::string host_settings::effective_models_dir() const
@@ -251,6 +319,21 @@ namespace albireo
         {
             log_warning("settings: the password of the proxy cannot move from " + path_ + " to proxy.secret");
         }
+        if (s_.relay.secret == relay_secret_mask)
+        {
+            // Le secret enregistré pour ce fournisseur, cette adresse et cet utilisateur.
+            std::string text;
+            json record;
+            const bool read = read_file(relay_secret_path(path_), text, 64 * 1024) && json::parse(text, record)
+                && record["scope"].as_string() == s_.relay.secret_scope();
+            s_.relay.secret = read ? record["secret"].as_string() : std::string();
+            if (!read) log_warning("settings: the secret of the relay is not stored, the relay goes without it");
+            wipe_secret(text);
+        }
+        else if (!s_.relay.secret.empty() && !write())
+        {
+            log_warning("settings: the secret of the relay cannot move from " + path_ + " to relay.secret");
+        }
         // Réécrit une fois le mot de passe du proxy revenu dans les réglages : à partir de sa copie, ou sans les
         // réglages d'une version antérieure ni la clé de son fournisseur de recherche.
         if ((restored || obsolete || file_exists(obsolete_key_path(path_))) && !write())
@@ -264,11 +347,24 @@ namespace albireo
         const std::string secret = secret_path(path_);
         const bool password = masked_proxy(s_.proxy) != s_.proxy;
         if (password && !write_file_restricted(secret, s_.proxy)) return false;
+        const std::string relay_secret = relay_secret_path(path_);
+        const bool relay_key = !s_.relay.secret.empty();
+        if (relay_key)
+        {
+            json record = json::object();
+            record["scope"] = s_.relay.secret_scope();
+            record["secret"] = s_.relay.secret;
+            std::string text = record.dump();
+            const bool kept = write_file_restricted(relay_secret, text);
+            wipe_secret(text);
+            if (!kept) return false;
+        }
         const std::string text = s_.to_json().dump_formatted(2) + "\n";
         if (!write_file_atomic(path_, text)) return false;
         // La copie lue quand settings.json est abîmé, écrite une fois settings.json en place.
         if (!write_file_atomic(backup_path(path_), text)) log_warning("settings: its copy cannot be written");
         if (!password && file_exists(secret)) remove_file(secret);
+        if (!relay_key && file_exists(relay_secret)) remove_file(relay_secret);
         if (file_exists(obsolete_key_path(path_))) remove_file(obsolete_key_path(path_));
         return true;
     }

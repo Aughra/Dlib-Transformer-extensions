@@ -32,6 +32,7 @@
 #include <cctype>
 #include <chrono>
 #include <functional>
+#include <memory>
 #include <ctime>
 #include <cmath>
 #include <condition_variable>
@@ -58,6 +59,7 @@
 #include "crypto.h"
 #include "http_fetch.h"
 #include "hub.h"
+#include "relay.h"
 #include "service.h"
 #include "web_access.h"
 
@@ -467,27 +469,27 @@ namespace albireo
         }
 
         /*
-            Termine la requête moteur id d'une réponse envoyée en entier quand le service
+            Termine la requête d'une réponse envoyée en entier, par cancel, quand le service
             s'arrête, avec 503, ou quand son client est parti.  Les examine au plus une fois par
             seconde, que les événements du moteur arrivent ou non ; renvoie true quand elle a
             terminé la requête.
         */
-        bool end_abandoned(service& svc, const httplib::Request& req, httplib::Response& res, uint64_t id,
-            std::chrono::steady_clock::time_point& next_look)
+        bool end_abandoned(service& svc, const httplib::Request& req, httplib::Response& res,
+            const std::function<void()>& cancel, std::chrono::steady_clock::time_point& next_look)
         {
             const auto now = std::chrono::steady_clock::now();
             if (now < next_look) return false;
             next_look = now + std::chrono::seconds(1);
             if (svc.stopping())
             {
-                svc.engine().cancel(id);
+                cancel();
                 send_error(res, 503, "server_error", "the service is stopping");
                 return true;
             }
             // Un client parti termine sa requête, dont les autres prennent la place dans le moteur.
             if (client_left(req))
             {
-                svc.engine().cancel(id);
+                cancel();
                 return true;
             }
             return false;
@@ -649,10 +651,297 @@ namespace albireo
             return call;
         }
 
+        /*
+            Écrit la réponse dont ch reçoit les événements, en entier ou en flux d'événements, sous
+            la forme de l'interface OpenAI : la réponse du moteur, ou celle du relais (relay.h).
+            cancel termine sa requête quand le client part ou que le service s'arrête ; count_usage
+            ajoute ses tokens à l'usage du moteur.
+        */
+        void write_answer(service& svc, const httplib::Request& req, httplib::Response& res,
+            const std::shared_ptr<event_channel>& ch, const std::string& model_name, bool chat, bool stream,
+            bool include_usage, const std::function<void()>& cancel, bool count_usage)
+        {
+            const std::string cid = std::string(chat ? "chatcmpl-" : "cmpl-") + random_hex(24);
+            const long long created = static_cast<long long>(now_unix());
+
+            if (!stream)
+            {
+                std::string content, reasoning;
+                json calls = json::array();
+                json done;
+                bool failed = false;
+                auto next_look = std::chrono::steady_clock::now();
+                for (;;)
+                {
+                    std::pair<int, std::string> e;
+                    if (ch->pop(e, 1000))
+                    {
+                        if (e.first == ALBIREO_EVENT_CONTENT) content += e.second;
+                        else if (e.first == ALBIREO_EVENT_REASONING) reasoning += e.second;
+                        else if (e.first == ALBIREO_EVENT_TOOL_CALL)
+                            calls.push_back(tool_call_of(json::parse_or_null(e.second), -1));
+                        else if (e.first == ALBIREO_EVENT_DONE || e.first == ALBIREO_EVENT_ERROR)
+                        {
+                            done = json::parse_or_null(e.second);
+                            failed = e.first == ALBIREO_EVENT_ERROR;
+                            break;
+                        }
+                    }
+                    if (end_abandoned(svc, req, res, cancel, next_look)) return;
+                }
+                if (failed)
+                {
+                    /*
+                        Les échecs du moteur extérieur du relais sont ceux d'une passerelle ; un
+                        Pseudalis absent ou un moteur hors de portée du mode hors ligne rendent le
+                        relais indisponible, et une image qu'aucun modèle du Mac ne décrit est
+                        refusée comme une image du moteur.
+                    */
+                    const std::string code = done["code"].as_string();
+                    const int status = code.compare(0, 6, "relay_") == 0 ? 502
+                        : code == "pseudonymization_failed" || code == "offline" ? 503
+                        : code == "image_input_not_supported" ? 400 : 500;
+                    send_error(res, status, status == 400 ? "invalid_request_error" : "server_error",
+                        done["message"].as_string(), code);
+                    return;
+                }
+                if (count_usage)
+                    svc.record_usage(static_cast<long>(done["usage"]["prompt_tokens"].as_int(0)),
+                        static_cast<long>(done["usage"]["completion_tokens"].as_int(0)));
+                json out = json::object();
+                out["id"] = cid;
+                out["object"] = chat ? "chat.completion" : "text_completion";
+                out["created"] = created;
+                out["model"] = model_name;
+                json choice = json::object();
+                choice["index"] = 0;
+                if (chat)
+                {
+                    json msg = json::object();
+                    msg["role"] = "assistant";
+                    msg["content"] = content.empty() && !calls.empty() ? json() : json(content);
+                    if (!reasoning.empty()) msg["reasoning_content"] = reasoning;
+                    if (!calls.empty()) msg["tool_calls"] = calls;
+                    choice["message"] = msg;
+                }
+                else
+                {
+                    choice["text"] = content;
+                }
+                choice["logprobs"] = nullptr;
+                choice["finish_reason"] = done["finish_reason"];
+                json choices = json::array();
+                choices.push_back(choice);
+                out["choices"] = choices;
+                out["usage"] = usage_of(done);
+                out["timings"] = done["timings"];
+                // Une réponse que le moteur a arrêtée parce qu'elle se répétait.
+                if (done["repetition"].as_bool(false)) out["repetition"] = true;
+                out["system_fingerprint"] = std::string("albireo-") + ALBIREO_VERSION;
+                send_json(res, 200, out);
+                return;
+            }
+
+            // Le gestionnaire post-routage marque les réponses de l'interface "no-store".
+            res.set_header("X-Accel-Buffering", "no");
+            auto first = std::make_shared<bool>(true);
+            auto tool_index = std::make_shared<int>(0);
+            service* s = &svc;
+            res.set_chunked_content_provider("text/event-stream",
+                [ch, cid, created, model_name, chat, include_usage, first, tool_index, s, cancel, count_usage](
+                    size_t, httplib::DataSink& sink) {
+                    auto chunk = [&](const json& delta, const json& finish, bool repetition) {
+                        json c = json::object();
+                        c["id"] = cid;
+                        c["object"] = chat ? "chat.completion.chunk" : "text_completion";
+                        c["created"] = created;
+                        c["model"] = model_name;
+                        // Le dernier morceau d'une réponse que le moteur a arrêtée parce qu'elle se répétait.
+                        if (repetition) c["repetition"] = true;
+                        json choice = json::object();
+                        choice["index"] = 0;
+                        if (chat) choice["delta"] = delta;
+                        else choice["text"] = delta["content"].is_string() ? delta["content"] : json("");
+                        choice["logprobs"] = nullptr;
+                        choice["finish_reason"] = finish;
+                        json choices = json::array();
+                        choices.push_back(choice);
+                        c["choices"] = choices;
+                        const std::string line = "data: " + c.dump() + "\n\n";
+                        return sink.write(line.data(), line.size());
+                    };
+                    /*
+                        Un service qui s'arrête termine les réponses en cours, dont les tokens
+                        peuvent couler sans pause, et un client qui lit bien plus lentement que le
+                        moteur n'écrit termine la sienne : les événements qui l'attendent restent
+                        bornés, et sa place dans le moteur va aux autres requêtes.
+                    */
+                    if (s->stopping() || ch->pending() > max_backlog)
+                    {
+                        cancel();
+                        return false;
+                    }
+                    std::pair<int, std::string> e;
+                    if (!ch->pop(e, 2000))
+                    {
+                        if (!sink.is_writable() || s->stopping())
+                        {
+                            cancel();
+                            return false;
+                        }
+                        static const char ping[] = ": keep-alive\n\n";
+                        return sink.write(ping, sizeof(ping) - 1);
+                    }
+                    if (*first && chat)
+                    {
+                        *first = false;
+                        json delta = json::object();
+                        delta["role"] = "assistant";
+                        delta["content"] = "";
+                        if (!chunk(delta, json(), false)) return false;
+                    }
+                    json delta = json::object();
+                    switch (e.first)
+                    {
+                    case ALBIREO_EVENT_CONTENT:
+                        delta["content"] = e.second;
+                        return chunk(delta, json(), false);
+                    case ALBIREO_EVENT_REASONING:
+                        delta["reasoning_content"] = e.second;
+                        return chunk(delta, json(), false);
+                    case ALBIREO_EVENT_TOOL_CALL:
+                    {
+                        json list = json::array();
+                        list.push_back(tool_call_of(json::parse_or_null(e.second), (*tool_index)++));
+                        delta["tool_calls"] = list;
+                        return chunk(delta, json(), false);
+                    }
+                    case ALBIREO_EVENT_PROGRESS:
+                    {
+                        // La progression d'un long prompt, sous forme d'une ligne de commentaire que
+                        // les clients du standard ignorent et que l'application web affiche.
+                        const std::string line = ": progress " + e.second + "\n\n";
+                        return sink.write(line.data(), line.size());
+                    }
+                    case ALBIREO_EVENT_DONE:
+                    {
+                        const json done = json::parse_or_null(e.second);
+                        if (count_usage)
+                            s->record_usage(static_cast<long>(done["usage"]["prompt_tokens"].as_int(0)),
+                                static_cast<long>(done["usage"]["completion_tokens"].as_int(0)));
+                        const bool repetition = done["repetition"].as_bool(false);
+                        if (!chunk(json::object(), done["finish_reason"], repetition)) return false;
+                        if (include_usage)
+                        {
+                            json c = json::object();
+                            c["id"] = cid;
+                            c["object"] = chat ? "chat.completion.chunk" : "text_completion";
+                            c["created"] = created;
+                            c["model"] = model_name;
+                            c["choices"] = json::array();
+                            c["usage"] = usage_of(done);
+                            c["timings"] = done["timings"];
+                            const std::string line = "data: " + c.dump() + "\n\n";
+                            if (!sink.write(line.data(), line.size())) return false;
+                        }
+                        static const char end[] = "data: [DONE]\n\n";
+                        sink.write(end, sizeof(end) - 1);
+                        sink.done();
+                        return true;
+                    }
+                    default:
+                    {
+                        const json err = json::parse_or_null(e.second);
+                        json body = json::object();
+                        json inner = json::object();
+                        inner["message"] = err["message"];
+                        inner["type"] = "server_error";
+                        inner["code"] = err["code"];
+                        body["error"] = inner;
+                        const std::string line = "data: " + body.dump() + "\n\n";
+                        sink.write(line.data(), line.size());
+                        sink.done();
+                        return true;
+                    }
+                    }
+                },
+                [ch, cancel](bool) {
+                    // Annulée hors du verrou des événements, que la réponse prend pour donner les siens.
+                    bool finished = false;
+                    {
+                        std::lock_guard<std::mutex> lock(ch->m);
+                        finished = ch->finished;
+                    }
+                    if (!finished) cancel();
+                });
+        }
+
+        /*
+            Une complétion de chat du modèle albireo-relay, que le relais envoie à son moteur
+            extérieur (relay.h) : ses images vérifiées comme celles du moteur, sa réponse écrite
+            comme les réponses du moteur, ses tokens laissés hors de l'usage du moteur.
+        */
+        void handle_relay(service& svc, const httplib::Request& req, httplib::Response& res, json& body, bool chat)
+        {
+            if (!chat)
+            {
+                send_error(res, 400, "invalid_request_error", "the relay serves the chat completions "
+                    "(/v1/chat/completions) only", "relay_chat_only");
+                return;
+            }
+            if (!body["messages"].is_array())
+            {
+                send_error(res, 400, "invalid_request_error", "messages must be an array");
+                return;
+            }
+            size_t images = 0, sounds = 0;
+            refusal refused;
+            if (!check_media(body["messages"], images, sounds, refused))
+            {
+                send_error(res, 400, "invalid_request_error", refused.message, refused.code, refused.param);
+                return;
+            }
+            // Un relais coupé ou incomplet, puis des images que ni le modèle extérieur ni un modèle du Mac ne prennent.
+            const json relay = svc.relay_status();
+            if (!relay["ready"].as_bool(false))
+            {
+                send_error(res, 404, "invalid_request_error", relay["reason"].as_string(), "relay_unavailable");
+                return;
+            }
+            if (images > 0 && relay["image_mode"].as_string() == "none")
+            {
+                send_error(res, 400, "invalid_request_error", "the model of the relay reads no image, and no model of "
+                    "this computer that reads images can describe them", "image_input_not_supported", "messages");
+                return;
+            }
+            const bool stream = body["stream"].as_bool(false);
+            const bool include_usage = body["stream_options"]["include_usage"].as_bool(false);
+            auto ch = std::make_shared<event_channel>();
+            uint64_t id = 0;
+            std::string error, code;
+            int status = 0;
+            if (!svc.relay().submit(body, [ch](int kind, const std::string& data) { ch->push(kind, data); }, id, error,
+                    status, code))
+            {
+                send_error(res, status, status >= 500 ? "server_error" : "invalid_request_error", error, code);
+                if (status == 503) res.set_header("Retry-After", "5");
+                return;
+            }
+            body = json();
+            release_values();
+            write_answer(svc, req, res, ch, relay_model_id, chat, stream, include_usage,
+                [&svc, id]() { svc.relay().cancel(id); }, false);
+        }
+
         void handle_completion(service& svc, const httplib::Request& req, httplib::Response& res, bool chat)
         {
             json body;
             if (!parse_body(req, res, body)) return;
+            if (body["model"].as_string() == relay_model_id)
+            {
+                handle_relay(svc, req, res, body, chat);
+                return;
+            }
             json request;
             std::string error, model_name;
             if (!engine_request(svc, body, request, error, model_name))
@@ -733,201 +1022,90 @@ namespace albireo
             body = json();
             request = json();
             release_values();
-            const std::string cid = std::string(chat ? "chatcmpl-" : "cmpl-") + random_hex(24);
-            const long long created = static_cast<long long>(now_unix());
+            write_answer(svc, req, res, ch, model_name, chat, stream, include_usage,
+                [&svc, id]() { svc.engine().cancel(id); }, true);
+        }
 
-            if (!stream)
+        // Indique si un texte des réglages du relais est court et ne contient aucun caractère de contrôle.
+        bool plain_text(const json& v, size_t max_bytes)
+        {
+            if (!v.is_string() || v.as_string().size() > max_bytes) return false;
+            for (const char c : v.as_string())
+                if (static_cast<unsigned char>(c) < 0x20 || c == 0x7F) return false;
+            return true;
+        }
+
+        /*
+            Vérifie les membres du relais (relay_settings) que donne un changement : le secret et
+            l'utilisateur vont dans les en-têtes des requêtes, où aucun caractère de contrôle ne
+            peut se trouver.
+        */
+        bool validate_relay(const json& r, std::string& error)
+        {
+            static const char* const keys[] = { "enabled", "provider", "url", "model", "auth", "user", "secret",
+                "context", "max_output", "images", "reasoning", "pseudonymize", "keep_substitutes" };
+            if (!r.is_object())
             {
-                std::string content, reasoning;
-                json calls = json::array();
-                json done;
-                bool failed = false;
-                auto next_look = std::chrono::steady_clock::now();
-                for (;;)
-                {
-                    std::pair<int, std::string> e;
-                    if (ch->pop(e, 1000))
-                    {
-                        if (e.first == ALBIREO_EVENT_CONTENT) content += e.second;
-                        else if (e.first == ALBIREO_EVENT_REASONING) reasoning += e.second;
-                        else if (e.first == ALBIREO_EVENT_TOOL_CALL)
-                            calls.push_back(tool_call_of(json::parse_or_null(e.second), -1));
-                        else if (e.first == ALBIREO_EVENT_DONE || e.first == ALBIREO_EVENT_ERROR)
-                        {
-                            done = json::parse_or_null(e.second);
-                            failed = e.first == ALBIREO_EVENT_ERROR;
-                            break;
-                        }
-                    }
-                    if (end_abandoned(svc, req, res, id, next_look)) return;
-                }
-                if (failed)
-                {
-                    send_error(res, 500, "server_error", done["message"].as_string(), done["code"].as_string());
-                    return;
-                }
-                svc.record_usage(static_cast<long>(done["usage"]["prompt_tokens"].as_int(0)),
-                    static_cast<long>(done["usage"]["completion_tokens"].as_int(0)));
-                json out = json::object();
-                out["id"] = cid;
-                out["object"] = chat ? "chat.completion" : "text_completion";
-                out["created"] = created;
-                out["model"] = model_name;
-                json choice = json::object();
-                choice["index"] = 0;
-                if (chat)
-                {
-                    json msg = json::object();
-                    msg["role"] = "assistant";
-                    msg["content"] = content.empty() && !calls.empty() ? json() : json(content);
-                    if (!reasoning.empty()) msg["reasoning_content"] = reasoning;
-                    if (!calls.empty()) msg["tool_calls"] = calls;
-                    choice["message"] = msg;
-                }
-                else
-                {
-                    choice["text"] = content;
-                }
-                choice["logprobs"] = nullptr;
-                choice["finish_reason"] = done["finish_reason"];
-                json choices = json::array();
-                choices.push_back(choice);
-                out["choices"] = choices;
-                out["usage"] = usage_of(done);
-                out["timings"] = done["timings"];
-                // Une réponse que le moteur a arrêtée parce qu'elle se répétait.
-                if (done["repetition"].as_bool(false)) out["repetition"] = true;
-                out["system_fingerprint"] = std::string("albireo-") + ALBIREO_VERSION;
-                send_json(res, 200, out);
-                return;
+                error = "relay must be an object";
+                return false;
             }
+            for (const auto& kv : r.items())
+                if (std::find_if(std::begin(keys), std::end(keys), [&](const char* k) { return kv.first == k; })
+                    == std::end(keys))
+                {
+                    error = "the setting 'relay." + kv.first + "' does not exist";
+                    return false;
+                }
+            auto fail = [&](const char* key) {
+                error = std::string("invalid value for relay.") + key;
+                return false;
+            };
+            for (const char* key : { "enabled", "images", "reasoning", "pseudonymize", "keep_substitutes" })
+                if (r.contains(key) && !r[key].is_bool()) return fail(key);
+            const std::string provider = r["provider"].as_string();
+            if (r.contains("provider") && provider != "openai" && provider != "ollama" && provider != "claude")
+                return fail("provider");
+            const std::string auth = r["auth"].as_string();
+            if (r.contains("auth") && auth != "key" && auth != "basic" && auth != "none") return fail("auth");
+            if (r.contains("url") && !(plain_text(r["url"], 2048)
+                    && (r["url"].as_string().empty() || valid_relay_url(r["url"].as_string()))))
+                return fail("url");
+            if (r.contains("model") && !plain_text(r["model"], 256)) return fail("model");
+            if (r.contains("user")
+                && !(plain_text(r["user"], 256) && r["user"].as_string().find(':') == std::string::npos))
+                return fail("user");
+            if (r.contains("secret") && !plain_text(r["secret"], 4096)) return fail("secret");
+            const json& context = r["context"];
+            if (r.contains("context")
+                && !(context.is_integer() && context.as_int() >= 1024 && context.as_int() <= (1 << 24)))
+                return fail("context");
+            const json& output = r["max_output"];
+            if (r.contains("max_output")
+                && !(output.is_integer() && output.as_int() >= 16 && output.as_int() <= (1 << 20)))
+                return fail("max_output");
+            return true;
+        }
 
-            // Le gestionnaire post-routage marque les réponses de l'interface "no-store".
-            res.set_header("X-Accel-Buffering", "no");
-            auto first = std::make_shared<bool>(true);
-            auto tool_index = std::make_shared<int>(0);
-            service* s = &svc;
-            res.set_chunked_content_provider("text/event-stream",
-                [ch, cid, created, model_name, chat, include_usage, first, tool_index, s, id](
-                    size_t, httplib::DataSink& sink) {
-                    auto chunk = [&](const json& delta, const json& finish, bool repetition) {
-                        json c = json::object();
-                        c["id"] = cid;
-                        c["object"] = chat ? "chat.completion.chunk" : "text_completion";
-                        c["created"] = created;
-                        c["model"] = model_name;
-                        // Le dernier morceau d'une réponse que le moteur a arrêtée parce qu'elle se répétait.
-                        if (repetition) c["repetition"] = true;
-                        json choice = json::object();
-                        choice["index"] = 0;
-                        if (chat) choice["delta"] = delta;
-                        else choice["text"] = delta["content"].is_string() ? delta["content"] : json("");
-                        choice["logprobs"] = nullptr;
-                        choice["finish_reason"] = finish;
-                        json choices = json::array();
-                        choices.push_back(choice);
-                        c["choices"] = choices;
-                        const std::string line = "data: " + c.dump() + "\n\n";
-                        return sink.write(line.data(), line.size());
-                    };
-                    /*
-                        Un service qui s'arrête termine les réponses en cours, dont les tokens
-                        peuvent couler sans pause, et un client qui lit bien plus lentement que le
-                        moteur n'écrit termine la sienne : les événements qui l'attendent restent
-                        bornés, et sa place dans le moteur va aux autres requêtes.
-                    */
-                    if (s->stopping() || ch->pending() > max_backlog)
-                    {
-                        s->engine().cancel(id);
-                        return false;
-                    }
-                    std::pair<int, std::string> e;
-                    if (!ch->pop(e, 2000))
-                    {
-                        if (!sink.is_writable() || s->stopping())
-                        {
-                            s->engine().cancel(id);
-                            return false;
-                        }
-                        static const char ping[] = ": keep-alive\n\n";
-                        return sink.write(ping, sizeof(ping) - 1);
-                    }
-                    if (*first && chat)
-                    {
-                        *first = false;
-                        json delta = json::object();
-                        delta["role"] = "assistant";
-                        delta["content"] = "";
-                        if (!chunk(delta, json(), false)) return false;
-                    }
-                    json delta = json::object();
-                    switch (e.first)
-                    {
-                    case ALBIREO_EVENT_CONTENT:
-                        delta["content"] = e.second;
-                        return chunk(delta, json(), false);
-                    case ALBIREO_EVENT_REASONING:
-                        delta["reasoning_content"] = e.second;
-                        return chunk(delta, json(), false);
-                    case ALBIREO_EVENT_TOOL_CALL:
-                    {
-                        json list = json::array();
-                        list.push_back(tool_call_of(json::parse_or_null(e.second), (*tool_index)++));
-                        delta["tool_calls"] = list;
-                        return chunk(delta, json(), false);
-                    }
-                    case ALBIREO_EVENT_PROGRESS:
-                    {
-                        // La progression d'un long prompt, sous forme d'une ligne de commentaire que
-                        // les clients du standard ignorent et que l'application web affiche.
-                        const std::string line = ": progress " + e.second + "\n\n";
-                        return sink.write(line.data(), line.size());
-                    }
-                    case ALBIREO_EVENT_DONE:
-                    {
-                        const json done = json::parse_or_null(e.second);
-                        s->record_usage(static_cast<long>(done["usage"]["prompt_tokens"].as_int(0)),
-                            static_cast<long>(done["usage"]["completion_tokens"].as_int(0)));
-                        const bool repetition = done["repetition"].as_bool(false);
-                        if (!chunk(json::object(), done["finish_reason"], repetition)) return false;
-                        if (include_usage)
-                        {
-                            json c = json::object();
-                            c["id"] = cid;
-                            c["object"] = chat ? "chat.completion.chunk" : "text_completion";
-                            c["created"] = created;
-                            c["model"] = model_name;
-                            c["choices"] = json::array();
-                            c["usage"] = usage_of(done);
-                            c["timings"] = done["timings"];
-                            const std::string line = "data: " + c.dump() + "\n\n";
-                            if (!sink.write(line.data(), line.size())) return false;
-                        }
-                        static const char end[] = "data: [DONE]\n\n";
-                        sink.write(end, sizeof(end) - 1);
-                        sink.done();
-                        return true;
-                    }
-                    default:
-                    {
-                        const json err = json::parse_or_null(e.second);
-                        json body = json::object();
-                        json inner = json::object();
-                        inner["message"] = err["message"];
-                        inner["type"] = "server_error";
-                        inner["code"] = err["code"];
-                        body["error"] = inner;
-                        const std::string line = "data: " + body.dump() + "\n\n";
-                        sink.write(line.data(), line.size());
-                        sink.done();
-                        return true;
-                    }
-                    }
-                },
-                [ch, s, id](bool) {
-                    std::lock_guard<std::mutex> lock(ch->m);
-                    if (!ch->finished) s->engine().cancel(id);
-                });
+        /*
+            Le relais de current avec les membres que donne changes.  Le masque du secret tient lieu
+            du secret enregistré seulement avec le fournisseur, l'adresse et l'utilisateur pour
+            lesquels il a été donné, pour qu'il n'aille jamais à un autre serveur : false quand ils
+            ont changé.
+        */
+        bool merge_relay(const relay_settings& current, const json& changes, relay_settings& out)
+        {
+            json merged = current.to_json();
+            for (const auto& kv : changes.items()) merged[kv.first] = kv.second;
+            out.from_json(merged);
+            if (out.provider == "openai" && out.auth == "none")
+            {
+                out.secret.clear();
+                return true;
+            }
+            if (out.secret != relay_secret_mask) return true;
+            if (current.secret.empty() || out.secret_scope() != current.secret_scope()) return false;
+            out.secret = current.secret;
+            return true;
         }
 
         // Vérifie un changement des réglages envoyé par l'application web ; les clés hors de cette
@@ -937,7 +1115,7 @@ namespace albireo
             static const char* const keys[] = { "port", "language", "engine", "accelerator",
                 "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "offline",
                 "proxy", "web_access", "web_search", "lan", "lan_port", "warm_history", "spin_us",
-                "gpu_prompt_tokens", "gpu_prompt_context", "models_dir", "reserve_gb", "library_dir" };
+                "gpu_prompt_tokens", "gpu_prompt_context", "models_dir", "reserve_gb", "library_dir", "relay" };
             for (const auto& kv : body.items())
             {
                 if (std::find_if(std::begin(keys), std::end(keys), [&](const char* k) { return kv.first == k; })
@@ -987,6 +1165,7 @@ namespace albireo
                     "folder of the data";
                 return false;
             }
+            if (body.contains("relay") && !validate_relay(body["relay"], error)) return false;
             return one_of("web_search", { "wikipedia", "none" }) && boolean("web_access") && boolean("lan")
                 && in_range("lan_port", 1024, 65535) && boolean("warm_history") && in_range("spin_us", 0, 100000)
                 && in_range("gpu_prompt_tokens", 9, 1 << 20) && in_range("gpu_prompt_context", 0, 1 << 20)
@@ -1098,10 +1277,11 @@ namespace albireo
             release_values();
             std::pair<int, std::string> e;
             auto next_look = std::chrono::steady_clock::now();
+            const std::function<void()> cancel = [&svc, id]() { svc.engine().cancel(id); };
             for (;;)
             {
                 if (ch->pop(e, 1000) && (e.first == ALBIREO_EVENT_DONE || e.first == ALBIREO_EVENT_ERROR)) break;
-                if (end_abandoned(svc, req, res, id, next_look)) return;
+                if (end_abandoned(svc, req, res, cancel, next_look)) return;
             }
             const json done = json::parse_or_null(e.second);
             if (e.first == ALBIREO_EVENT_ERROR)
@@ -1424,6 +1604,24 @@ namespace albireo
                 add_traits(m, embedder);
                 list.push_back(m);
             }
+            // Le modèle extérieur du relais, une fois le relais prêt, sans son adresse.
+            const json relay = s->relay_status();
+            if (relay["ready"].as_bool(false))
+            {
+                json m = json::object();
+                m["id"] = relay_model_id;
+                m["object"] = "model";
+                m["created"] = now;
+                m["owned_by"] = relay["provider"];
+                m["relay_of"] = relay["model"];
+                json inputs = json::array();
+                inputs.push_back("text");
+                if (relay["image_mode"].as_string() != "none") inputs.push_back("image");
+                m["inputs"] = inputs;
+                m["publisher"] = relay["provider_name"];
+                m["context_length"] = relay["context"];
+                list.push_back(m);
+            }
             json out = json::object();
             out["object"] = "list";
             out["data"] = list;
@@ -1536,6 +1734,37 @@ namespace albireo
             if (!parse_body(req, res, body)) return;
             json q = json::object();
             q["op"] = body["messages"].is_array() ? "count" : "tokenize";
+            if (body["model"].as_string() == relay_model_id)
+            {
+                /*
+                    Les tokens d'une discussion du relais tels que le modèle général du Mac les compte,
+                    ou environ quatre octets par token sans lui, dans le contexte du modèle extérieur.
+                */
+                const json r = s->relay_status();
+                if (!r["ready"].as_bool(false))
+                {
+                    send_error(res, 404, "invalid_request_error", r["reason"].as_string(), "relay_unavailable");
+                    return;
+                }
+                q["model"] = s->resolve_model("general");
+                if (body["messages"].is_array()) q["messages"] = body["messages"];
+                if (body["text"].is_string()) q["text"] = body["text"];
+                json counted = q["model"].as_string().empty() ? json() : s->engine().query(q);
+                json out = json::object();
+                long long tokens = counted["tokens"].is_array() ? static_cast<long long>(counted["tokens"].size())
+                    : counted["tokens"].as_int(-1);
+                if (tokens < 0 || counted.contains("error"))
+                {
+                    const size_t bytes = body["messages"].is_array() ? body["messages"].dump().size()
+                        : body["text"].as_string().size();
+                    tokens = static_cast<long long>((bytes + 3) / 4);
+                }
+                out["tokens"] = tokens;
+                out["context"] = r["context"];
+                out["estimated"] = true;
+                send_json(res, 200, out);
+                return;
+            }
             q["model"] = s->resolve_model(body["model"].as_string());
             if (body["messages"].is_array()) q["messages"] = body["messages"];
             if (body["tools"].is_array()) q["tools"] = body["tools"];
@@ -1559,6 +1788,36 @@ namespace albireo
             json body;
             if (!parse_body(req, res, body)) return;
             send_web_reply(res, web_fetch(body, s->settings().get()));
+        });
+        /*
+            Le relais (relay.h) : les fournisseurs et les modèles qu'il connaît, et son état, sans son
+            adresse ni son secret, pour l'application web ; l'essai d'un fournisseur avec les réglages
+            que l'application web s'apprête à enregistrer.
+        */
+        srv.Get("/albireo/v1/relay", [s](const httplib::Request&, httplib::Response& res) {
+            json o = relay_catalog();
+            o["relay"] = s->relay_status();
+            // Si Pseudalis répond sur ce Mac, pour l'application web, qui propose la pseudonymisation.
+            o["pseudalis"] = s->relay().pseudonymization_status();
+            send_json(res, 200, o);
+        });
+        srv.Post("/albireo/v1/relay/test", [s](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            std::string error;
+            if (!validate_relay(body, error))
+            {
+                send_error(res, 400, "invalid_request_error", error);
+                return;
+            }
+            relay_settings r;
+            if (!merge_relay(s->settings().get().relay, body, r))
+            {
+                send_error(res, 400, "invalid_request_error", "the masked key of the relay applies to its stored "
+                    "provider, address and user only: type the key or the password again", "relay_secret");
+                return;
+            }
+            send_json(res, 200, s->relay().test(r));
         });
 
         // Le catalogue est téléchargé en arrière-plan ; son état est dans /albireo/v1/models.
@@ -1993,7 +2252,7 @@ namespace albireo
                 return;
             }
             host_settings before;
-            bool masked_elsewhere = false;
+            bool masked_elsewhere = false, relay_masked_elsewhere = false;
             const host_settings after = s->settings().update([&](host_settings& current) {
                 before = current;
                 // Le masque du mot de passe tient lieu du mot de passe enregistré, seulement avec l'adresse et
@@ -2004,10 +2263,18 @@ namespace albireo
                     masked_elsewhere = true;
                     return;
                 }
+                relay_settings relay = current.relay;
+                if (changes.contains("relay") && !merge_relay(current.relay, changes["relay"], relay))
+                {
+                    relay_masked_elsewhere = true;
+                    return;
+                }
                 json merged = current.to_json();
-                for (const auto& kv : body.items()) merged[kv.first] = kv.second;
+                for (const auto& kv : body.items())
+                    if (kv.first != "relay") merged[kv.first] = kv.second;
                 current.from_json(merged);
                 if (current.proxy == masked_proxy(before.proxy)) current.proxy = before.proxy;
+                current.relay = relay;
             });
             if (masked_elsewhere)
             {
@@ -2015,7 +2282,15 @@ namespace albireo
                     "stored address and user only: type the password again", "proxy_password");
                 return;
             }
+            if (relay_masked_elsewhere)
+            {
+                send_error(res, 400, "invalid_request_error", "the masked key of the relay applies to its stored "
+                    "provider, address and user only: type the key or the password again", "relay_secret");
+                return;
+            }
             s->apply_network_settings(after);
+            // Les valeurs gardées pour la pseudonymisation s'en vont dès que le relais ou sa pseudonymisation s'arrête.
+            if (!(after.relay.enabled && after.relay.pseudonymize)) s->relay().forget_pseudonyms();
             // Ce que le moteur ou le serveur en marche ne peut pas prendre sans redémarrage.
             const bool restart = after.port != before.port || after.engine != before.engine
                 || after.accelerator != before.accelerator || after.device_mb != before.device_mb

@@ -132,6 +132,22 @@ namespace albireo
     !*/
     bool http_resolve(const std::string& host, std::vector<std::string>& addresses, std::string& error);
 
+    /*!
+        ensures
+            - Donne un client de origin ("https://hôte:port") fait comme ceux des
+              téléchargements : le proxy que donne http_proxy_for(), le serveur ou son proxy
+              joint dans le délai de connexion, chaque attente de données bornée par
+              timeout_seconds, les redirections laissées à l'appelant, et l'annulation de
+              http_cancel_all() : une requête du client sur le point de se connecter une fois les
+              téléchargements annulés en sort par une exception, que son appelant attrape quel
+              que soit son type.  Le client s'inscrit auprès de http_registration comme les autres.
+            - Renvoie null avec error quand le serveur ou son proxy ne peuvent pas être joints,
+              ou quand les téléchargements sont annulés.
+            - Repris de l'original (Albireo 1.0.22), pour le relais (relay.h).
+    !*/
+    std::shared_ptr<httplib::Client> http_client(const std::string& origin, int timeout_seconds,
+        std::string& error);
+
     class http_registration
     {
         /*!

@@ -16,6 +16,7 @@
 #include <iostream>
 
 #include "../common/builtin_models.h"
+#include "../common/engine_api.h"
 #include "../common/engine_loader.h"
 #include "../common/log.h"
 #include "../common/platform.h"
@@ -25,6 +26,7 @@
 #include "crypto.h"
 #include "http_fetch.h"
 #include "hub.h"
+#include "relay.h"
 #include "web_access.h"
 
 namespace albireo
@@ -235,6 +237,13 @@ namespace albireo
         const std::string settings_path = join_path(data_dir_, "settings.json");
         const bool first_run = !file_exists(settings_path);
         settings_.reset(new settings_store(settings_path));
+        {
+            // Sous le verrou de stop(), qu'un thread du système peut appeler à tout moment.
+            std::lock_guard<std::mutex> lock(server_m_);
+            relay_.reset(new relay_service([this]() { return settings_->get(); },
+                [this](const std::string& data_url, const std::atomic<bool>& cancelled, std::string& description,
+                    std::string& error) { return describe_image(data_url, cancelled, description, error); }));
+        }
         const host_settings st = settings_->get();
         if (first_run) settings_->set(st);
         port_ = st.port;
@@ -511,6 +520,8 @@ namespace albireo
         std::lock_guard<std::mutex> lock(server_m_);
         // Les téléchargements, les imports et les vérifications s'arrêtent aussitôt ; leur progression est gardée.
         http_cancel_all(stopping_reason);
+        // Les réponses du relais finissent, pour que les requêtes du serveur qui les attendent finissent aussi.
+        if (relay_) relay_->stop();
         if (models_) models_->stop();
         if (server_) server_->stop();
         if (lan_server_) lan_server_->stop();
@@ -553,8 +564,13 @@ namespace albireo
         {
             std::lock_guard<std::mutex> lock(server_m_);
             if (stopping_) return;
-            if (s.offline) http_cancel_all(offline_reason);
-            else http_restore();
+            /*
+                Les téléchargements sont annulés quand le mode hors ligne commence ; un autre
+                enregistrement des réglages laisse aller les requêtes du mode hors ligne, celles du
+                relais et de Pseudalis.
+            */
+            if (s.offline && !http_cancelled()) http_cancel_all(offline_reason);
+            else if (!s.offline) http_restore();
         }
         // Les tâches de fond commencent ou arrêtent aussitôt leur travail réseau.
         cv_.notify_all();
@@ -828,6 +844,133 @@ namespace albireo
         }
         if (stopping_) return;
 
+    }
+
+    std::string service::image_model()
+    {
+        const std::map<std::string, json> traits = loaded_traits();
+        auto reads_images = [&traits](const std::string& id) {
+            const auto t = traits.find(id);
+            if (t == traits.end()) return false;
+            for (const json& input : t->second["inputs"].elements())
+                if (input.as_string() == "image") return true;
+            return false;
+        };
+        const std::string general = resolve_model("general");
+        if (!general.empty() && reads_images(general)) return general;
+        for (const auto& kv : traits)
+            if (reads_images(kv.first)) return kv.first;
+        return std::string();
+    }
+
+    bool service::describe_image(const std::string& data_url, const std::atomic<bool>& cancelled,
+        std::string& description, std::string& error)
+    {
+        const std::string model = image_model();
+        if (model.empty())
+        {
+            error = "no model of the computer that reads images is loaded";
+            return false;
+        }
+        json request = json::object();
+        request["model"] = model;
+        request["max_tokens"] = 1024;
+        request["temperature"] = 0.2;
+        request["reasoning"] = false;
+        json messages = json::array();
+        json system = json::object();
+        system["role"] = "system";
+        system["content"] = "You describe pictures for another assistant, which cannot see them, so that it can "
+            "answer questions about them. Write in English what the picture shows and its kind (photograph, diagram, "
+            "chart, table, screenshot, scanned page, form...), then the text it shows, copied in full, its numbers "
+            "and its layout. Write the description alone.";
+        messages.push_back(system);
+        json user = json::object();
+        user["role"] = "user";
+        json content = json::array();
+        json text = json::object();
+        text["type"] = "text";
+        text["text"] = "Describe this picture.";
+        content.push_back(text);
+        json image = json::object();
+        image["type"] = "image_url";
+        json url = json::object();
+        url["url"] = data_url;
+        image["image_url"] = url;
+        content.push_back(image);
+        user["content"] = content;
+        messages.push_back(user);
+        request["messages"] = messages;
+
+        // La réponse du moteur, que le thread du relais attend.
+        struct answer
+        {
+            std::mutex m;
+            std::condition_variable cv;
+            std::string text, message;
+            bool finished = false, failed = false;
+        };
+        auto a = std::make_shared<answer>();
+        uint64_t id = 0;
+        if (!engine_.submit(request, [a](int kind, const std::string& data) {
+                std::lock_guard<std::mutex> lock(a->m);
+                if (kind == ALBIREO_EVENT_CONTENT) a->text += data;
+                if (kind == ALBIREO_EVENT_DONE || kind == ALBIREO_EVENT_ERROR)
+                {
+                    a->finished = true;
+                    a->failed = kind == ALBIREO_EVENT_ERROR;
+                    if (a->failed) a->message = json::parse_or_null(data)["message"].as_string();
+                    a->cv.notify_all();
+                }
+            }, id, error))
+            return false;
+        std::unique_lock<std::mutex> lock(a->m);
+        while (!a->finished)
+        {
+            if (cancelled || stopping_)
+            {
+                lock.unlock();
+                engine_.cancel(id);
+                error = "the description was cancelled";
+                return false;
+            }
+            a->cv.wait_for(lock, std::chrono::milliseconds(200));
+        }
+        if (a->failed)
+        {
+            error = a->message.empty() ? std::string("the engine failed") : a->message;
+            return false;
+        }
+        const size_t first = a->text.find_first_not_of(" \t\r\n");
+        description = first == std::string::npos ? std::string()
+            : a->text.substr(first, a->text.find_last_not_of(" \t\r\n") - first + 1);
+        if (description.empty()) error = "the model gave no description";
+        return !description.empty();
+    }
+
+    json service::relay_status()
+    {
+        const host_settings st = settings_->get();
+        json r = relay_description(st.relay);
+        // Le mode hors ligne ne garde que les moteurs du Mac et du réseau de la maison.
+        std::string why;
+        r["offline"] = st.offline;
+        if (st.offline && r["ready"].as_bool(false) && !relay_offline_ready(st.relay, why))
+        {
+            r["ready"] = false;
+            r["reason"] = why;
+        }
+        relay_model m;
+        const bool known = relay_model_of(st.relay, m);
+        std::string mode = "none";
+        if (known && m.images && !st.relay.pseudonymize) mode = "sent";
+        else if (r["enabled"].as_bool(false) && !image_model().empty()) mode = "described";
+        r["image_mode"] = mode;
+        r["images"] = mode != "none";
+        // Claude cherche lui-même sur le web quand une requête le demande (web_search), si l'accès au web le permet.
+        r["web"] = st.relay.provider == "claude";
+        if (st.relay.enabled && st.relay.pseudonymize && relay_) r["pseudalis"] = relay_->pseudonymization_status();
+        return r;
     }
 
     json service::speed()
@@ -1843,6 +1986,7 @@ namespace albireo
             for (const auto& kv : load_state_) loading[kv.first] = kv.second;
         }
         s["models_state"] = loading;
+        s["relay"] = relay_status();
         json usage = json::object();
         usage["requests"] = usage_requests_.load();
         usage["prompt_tokens"] = usage_prompt_.load();

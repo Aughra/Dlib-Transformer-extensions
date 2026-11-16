@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(albireo VERSION 5.2.0 LANGUAGES C CXX OBJCXX)
+project(albireo VERSION 5.3.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -173,7 +173,7 @@ if (ALBIREO_PROGRAMS)
    # Le service.
    add_executable(albireo-service host/main.cpp host/service.cpp host/server.cpp host/settings.cpp host/store.cpp
       host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/crypto.cpp
-      host/certificates.cpp host/web_access.cpp host/hub.cpp host/carnet.cpp)
+      host/certificates.cpp host/web_access.cpp host/hub.cpp host/carnet.cpp host/relay.cpp host/pseudonyms.cpp)
    target_include_directories(albireo-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
    # Le carnet du portage lit les documents du dépôt où le service est construit (host/carnet.h).
    get_filename_component(ALBIREO_FORK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
@@ -256,10 +256,10 @@ endif()
 
 if (ALBIREO_TESTS AND ALBIREO_PROGRAMS)
    # Les fichiers que le service écrit dans son dossier de modèles et lit dans ses imports, les
-   # téléchargements, les réglages et l'accès web, avec
-   # un serveur local.
+   # téléchargements, les réglages, l'accès web et le relais, avec des serveurs locaux.
    add_executable(test_host tests/test_host.cpp host/models.cpp host/store.cpp host/http_fetch.cpp
-      host/crypto.cpp host/settings.cpp host/web_access.cpp)
+      host/crypto.cpp host/settings.cpp host/web_access.cpp host/certificates.cpp host/relay.cpp
+      host/pseudonyms.cpp)
    target_include_directories(test_host PRIVATE ${CMAKE_BINARY_DIR}/generated)
    target_link_libraries(test_host PRIVATE albireo_common albireo_sqlite ZLIB::ZLIB dlib::httplib)
    target_compile_options(test_host PRIVATE ${ALBIREO_WARNINGS})

@@ -2,6 +2,24 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 5.3.0 — 16 novembre 2026
+
+### Moteurs extérieurs
+
+- Relais vers un moteur extérieur, repris de l'original (Albireo 1.0.22 et 1.0.23) : le modèle `albireo-relay` de l'interface envoie une discussion à un moteur de l'interface d'OpenAI (adresse, clé, utilisateur et mot de passe, ou rien), au nuage d'Ollama ou à l'interface de Claude, et rend sa réponse comme le moteur du Mac rend la sienne : texte, raisonnement, usage, en flux ou en entier. Les autres modèles restent sur le Mac. Les clients ne voient ni l'adresse ni la clé du moteur extérieur.
+- Modèles connus : sept modèles de Claude (fenêtre d'un million de tokens, images, raisonnement adaptatif, cinq niveaux d'effort) et cinq d'Ollama ; pour un moteur d'OpenAI, la fenêtre, la longueur des réponses, les images et le raisonnement se règlent. Une adresse sans `/v1`, ou avec le chemin d'une opération, est complétée.
+- Recherche sur le web de Claude (`web_search: true`), cinq recherches au plus par réponse, facturées par Anthropic ; ses requêtes viennent avec le raisonnement et ses sources en liens après le texte. L'accès au web des réglages doit le permettre.
+- Pseudonymisation par Pseudalis (3.1.0 ou plus, sa clé de séance) : les textes partent avec des pseudonymes, et la réponse revient avec les vraies valeurs, remises au fil du flux, y compris un nom de famille cité seul. Les images ne partent pas : un modèle du Mac qui lit les images les décrit, et la description part protégée. Un Pseudalis absent ou trop ancien arrête la requête : le texte ne part jamais en clair. Le réglage `keep_substitutes` laisse les pseudonymes dans la réponse, pour contrôler ce qui a quitté le Mac.
+- Mode hors ligne : seul un moteur du Mac ou du réseau de la maison reste joignable (adresses de bouclage, privées et lien-local ; un nom dont une adresse est publique est refusé) ; Ollama et Claude sont refusés avant toute connexion.
+- Routes `GET /albireo/v1/relay` (fournisseurs, modèles, état du relais et de Pseudalis) et `POST /albireo/v1/relay/test` (liste les modèles du fournisseur, pour vérifier l'adresse et la clé) ; réglage `relay` de `PUT /albireo/v1/settings` ; `albireo-relay` dans `/v1/models` une fois le relais prêt, et dans `/albireo/v1/count` (estimation).
+
+### Sécurité
+
+- La clé ou le mot de passe du relais est gardé dans `relay.secret`, lisible par le compte du service seul (droits 0600), jamais dans `settings.json` ni dans les réponses (`********`). Le masque ne vaut que pour le fournisseur, l'adresse et l'utilisateur pour lesquels la clé a été donnée : changer l'un d'eux demande de la retaper. La clé ne passe que dans les en-têtes des requêtes, jamais dans le journal ni dans un message d'erreur, même quand le moteur extérieur la recopie.
+- Avec l'accès depuis le réseau de la maison ouvert (sans mot de passe), tout appareil du Wi-Fi peut utiliser le relais, donc la clé et le crédit du compte extérieur, et changer ses réglages ; il ne peut pas lire la clé.
+
+---
+
 ## 5.2.0 — 15 novembre 2026
 
 ### Accès et documents

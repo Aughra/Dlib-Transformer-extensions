@@ -41,12 +41,22 @@
     privée refusée.  La recherche de Wikipédia répond depuis le même serveur avec ses documents.  Les
     deux routes refusent de travailler hors ligne ou avec l'accès web désactivé, et une recherche
     sans fournisseur est refusée.
+    Le relais (repris de l'original, Albireo 1.0.23) garde son secret dans relay.secret (0600),
+    jamais dans settings.json, pour le fournisseur, l'adresse et l'utilisateur pour lesquels il a
+    été donné ; il rend les pseudonymes d'une réponse coupée n'importe où, aux limites des mots, sa
+    mémoire de la pseudonymisation sert un texte de nouveau sans Pseudalis et oublie les valeurs
+    les plus anciennes et inutilisées, et ses requêtes joignent un serveur local qui répond comme
+    un moteur de l'interface d'OpenAI, comme Ollama et comme Claude, et comme Pseudalis 3.1.0 : les
+    textes et les descriptions des images partent pseudonymisés, les réponses reviennent avec leurs
+    valeurs, un Pseudalis qui ne donne pas les valeurs garde le texte, et un refus de la clé ne
+    nomme ni la clé ni l'adresse.
 */
 
 #include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <ctime>
 #include <cstdlib>
@@ -72,12 +82,15 @@
 #include <dlib/external/httplib/httplib.h>
 
 #include "../common/builtin_models.h"
+#include "../common/engine_api.h"
 #include "../common/log.h"
 #include "../common/platform.h"
 #include "../common/version.h"
 #include "../host/crypto.h"
 #include "../host/http_fetch.h"
 #include "../host/models.h"
+#include "../host/pseudonyms.h"
+#include "../host/relay.h"
 #include "../host/settings.h"
 #include "../host/store.h"
 #include "../host/web_access.h"
@@ -1665,6 +1678,719 @@ int main(int argc, char** argv)
         }
         check(!leaked && read_line && search_line, "the log names the hosts and the provider, never a path or a "
             "query");
+    }
+
+    {
+        // Le relais (repris de l'original, Albireo 1.0.23) : son secret dans les réglages, la restauration des
+        // pseudonymes, la mémoire de la pseudonymisation, et les requêtes de ses trois fournisseurs à un serveur
+        // local qui répond comme chacun.
+        const std::string folder = albireo::join_path(work, "relay-settings");
+        albireo::make_dirs(folder);
+        const std::string file = albireo::join_path(folder, "settings.json");
+        const std::string secret_file = albireo::join_path(folder, "relay.secret");
+        const std::string key = "sk-ant-test-0123456789";
+        {
+            albireo::settings_store store(file);
+            store.update([&](albireo::host_settings& s) {
+                s.relay.enabled = true;
+                s.relay.provider = "claude";
+                s.relay.model = "claude-opus-5-5";
+                s.relay.secret = key;
+            });
+        }
+        const std::string text = read_text(file);
+        bool reread = false;
+        {
+            albireo::settings_store store(file);
+            reread = store.get().relay.secret == key && store.get().relay.to_json()["secret"].as_string() == "********";
+        }
+        // Sur le Mac, relay.secret garde la clé telle quelle, lisible par le compte du service seul (0600).
+        struct stat secret_stat;
+        const bool sealed = ::stat(secret_file.c_str(), &secret_stat) == 0 && (secret_stat.st_mode & 0077) == 0;
+        check(text.find(key) == std::string::npos && text.find("\"secret\": \"********\"") != std::string::npos
+            && read_text(file + ".bak").find(key) == std::string::npos && albireo::file_exists(secret_file) && reread
+            && sealed, "the key of the relay stays out of settings.json and its copy, kept in relay.secret and read "
+            "again");
+        json edited = json::parse_or_null(text);
+        edited["relay"]["provider"] = "ollama";
+        write_text(file, edited.dump());
+        bool elsewhere = false;
+        {
+            albireo::settings_store store(file);
+            elsewhere = store.get().relay.secret.empty();
+            store.update([](albireo::host_settings& s) { s.relay.enabled = false; });
+        }
+        check(elsewhere && !albireo::file_exists(secret_file),
+            "a settings.json that names another provider reads no key, and relay.secret goes with the key");
+
+        // Les valeurs reviennent dans une réponse coupée n'importe où, aux limites des mots seulement.
+        std::map<std::string, std::string> values;
+        values["Xoydoeh Nuggwdfsorn"] = "Jean Dupont";
+        values["Qbspm"] = "Paris";
+        values["[[PERSON:Xoydoeh Nuggwdfsorn#EKR]]"] = "Jean Dupont";
+        {
+            albireo::stream_restorer r(values);
+            std::string out;
+            for (const char* chunk : { "Bonjour Xoy", "doeh Nugg", "wdfsorn, de Qbs", "pm et Qbspmx. ",
+                     "M. Nuggwdfsorn", " et [[PERSON:Xoydoeh", " Nuggwdfsorn#EKR]], d\xE2\x80\x99Xoydoeh" })
+                out += r.feed(chunk);
+            out += r.finish();
+            check(out == "Bonjour Jean Dupont, de Paris et Qbspmx. M. Dupont et Jean Dupont, d\xE2\x80\x99Jean",
+                "the substitutes of an answer cut anywhere come back as their values, their words alone too ("
+                + out + ")");
+            std::map<std::string, std::string> both;
+            both["Mxrtin"] = "Durand";
+            both["Jxan Mxrtin"] = "Paul Dupont";
+            albireo::stream_restorer w(both);
+            const std::string kept = w.feed("Ask Mxrtin, then Jxan Mxrtin.") + w.finish();
+            check(kept == "Ask Durand, then Paul Dupont.", "a whole substitute keeps its value when it is also a word "
+                "of another one (" + kept + ")");
+        }
+
+        // Un serveur local qui répond comme Pseudalis et comme les fournisseurs.
+        struct relay_mock
+        {
+            std::mutex m;
+            int anonymized = 0;
+            std::string mode = "ok";
+            json body;
+            httplib::Headers headers;
+        } mock;
+        const std::vector<std::pair<std::string, std::string>> people = { { "Jean Dupont", "Xoydoeh Nuggwdfsorn" },
+            { "Paris", "Qbspm" }, { "Marie Curie", "Lsyiq Bfksz" }, { "Lyon", "Wpzq" } };
+        httplib::Server relay_server;
+        relay_server.Post("/v1/text/anonymize", [&](const httplib::Request& req, httplib::Response& res) {
+            // Comme Pseudalis 3.1.0 (fork pour macOS) : avec session, des pseudonymes seuls et leurs valeurs.
+            const json in = json::parse_or_null(req.body);
+            const bool session = in["session"].as_bool(false);
+            std::string text = in["text"].as_string(), out;
+            json spans = json::array(), values = json::array();
+            for (size_t i = 0; i < text.size();)
+            {
+                bool hit = false;
+                for (const auto& p : people)
+                    if (text.compare(i, p.first.size(), p.first) == 0)
+                    {
+                        json span = json::object();
+                        span["begin"] = static_cast<long long>(out.size());
+                        out += p.second;
+                        span["end"] = static_cast<long long>(out.size());
+                        span["type"] = "PERSON";
+                        spans.push_back(span);
+                        json v = json::object();
+                        v["substitute"] = p.second;
+                        v["value"] = p.first;
+                        values.push_back(v);
+                        i += p.first.size();
+                        hit = true;
+                        break;
+                    }
+                if (!hit) out += text[i++];
+            }
+            json o = json::object();
+            o["text"] = out;
+            o["tags"] = spans;
+            std::string mode;
+            {
+                std::lock_guard<std::mutex> lock(mock.m);
+                ++mock.anonymized;
+                mode = mock.mode;
+            }
+            // Un Pseudalis antérieur à 3.1.0 ignore session et ne donne aucune valeur.
+            if (session && mode != "old_pseudalis") o["values"] = values;
+            res.set_content(o.dump(), "application/json");
+        });
+        auto event = [](const json& data) { return "data: " + data.dump() + "\n\n"; };
+        auto record = [&](const httplib::Request& req) {
+            std::lock_guard<std::mutex> lock(mock.m);
+            mock.body = json::parse_or_null(req.body);
+            mock.headers = req.headers;
+            return mock.mode;
+        };
+        relay_server.Post("/v1/chat/completions", [&](const httplib::Request& req, httplib::Response& res) {
+            const std::string mode = record(req);
+            if (mode == "unauthorized")
+            {
+                // Une passerelle qui recopie l'en-tête de l'authentification dans son refus.
+                json refusal = json::object(), inner = json::object();
+                inner["message"] = "invalid key: " + req.get_header_value("Authorization");
+                refusal["error"] = inner;
+                res.status = 401;
+                res.set_content(refusal.dump(), "application/json");
+                return;
+            }
+            if (mode == "credit")
+            {
+                res.status = 402;
+                res.set_content("{\"error\": {\"message\": \"insufficient credits\"}}", "application/json");
+                return;
+            }
+            if (mode == "whole")
+            {
+                res.set_content("{\"choices\": [{\"message\": {\"content\": \"Xoydoeh Nuggwdfsorn habite Qbspm.\"}, "
+                    "\"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 5, \"completion_tokens\": 6}}",
+                    "application/json");
+                return;
+            }
+            if (mode == "page")
+            {
+                res.set_content("<html><body>Sign in</body></html>", "text/html");
+                return;
+            }
+            std::string sse;
+            for (const char* r : { "Xoydoeh vit \xC3\xA0 Qbs", "pm." })
+            {
+                json d = json::object(), c = json::object(), e = json::object();
+                d["reasoning"] = r;
+                c["delta"] = d;
+                e["choices"] = json::array();
+                e["choices"].push_back(c);
+                sse += event(e);
+            }
+            for (const char* t : { "Xoydoeh Nugg", "wdfsorn habite Qbspm." })
+            {
+                json d = json::object(), c = json::object(), e = json::object();
+                d["content"] = t;
+                c["delta"] = d;
+                e["choices"] = json::array();
+                e["choices"].push_back(c);
+                sse += event(e);
+            }
+            json c = json::object(), e = json::object(), u = json::object(), last = json::object();
+            c["delta"] = json::object();
+            c["finish_reason"] = "stop";
+            e["choices"] = json::array();
+            e["choices"].push_back(c);
+            sse += event(e);
+            u["prompt_tokens"] = 12;
+            u["completion_tokens"] = 7;
+            last["choices"] = json::array();
+            last["usage"] = u;
+            sse += event(last) + "data: [DONE]\n\n";
+            res.set_content(sse, "text/event-stream");
+        });
+        relay_server.Post("/v1/messages", [&](const httplib::Request& req, httplib::Response& res) {
+            record(req);
+            // Une recherche sur le web : sa requête en morceaux, ses résultats, puis un texte qui en cite un.
+            if (json::parse_or_null(req.body)["tools"].is_array())
+            {
+                const char* const searched[] = {
+                    "{\"type\": \"message_start\", \"message\": {\"usage\": {\"input_tokens\": 30}}}",
+                    "{\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": "
+                        "\"server_tool_use\", \"id\": \"srvtoolu_1\", \"name\": \"web_search\"}}",
+                    "{\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"input_json_delta\", "
+                        "\"partial_json\": \"{\\\"query\\\": \\\"capitale\"}}",
+                    "{\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"input_json_delta\", "
+                        "\"partial_json\": \" Italie\\\"}\"}}",
+                    "{\"type\": \"content_block_stop\", \"index\": 0}",
+                    "{\"type\": \"content_block_start\", \"index\": 1, \"content_block\": {\"type\": "
+                        "\"web_search_tool_result\", \"tool_use_id\": \"srvtoolu_1\", \"content\": [{\"type\": "
+                        "\"web_search_result\", \"title\": \"Rome\", \"url\": "
+                        "\"https://fr.wikipedia.org/wiki/Rome\"}]}}",
+                    "{\"type\": \"content_block_stop\", \"index\": 1}",
+                    "{\"type\": \"content_block_start\", \"index\": 2, \"content_block\": {\"type\": \"text\", "
+                        "\"text\": \"\"}}",
+                    "{\"type\": \"content_block_delta\", \"index\": 2, \"delta\": {\"type\": \"citations_delta\", "
+                        "\"citation\": {\"type\": \"web_search_result_location\", \"url\": "
+                        "\"https://www.fr.wikipedia.org/wiki/Rome_(ville)\", \"title\": \"Rome\"}}}",
+                    "{\"type\": \"content_block_delta\", \"index\": 2, \"delta\": {\"type\": \"text_delta\", "
+                        "\"text\": \"Rome est la capitale.\"}}",
+                    "{\"type\": \"content_block_stop\", \"index\": 2}",
+                    "{\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\"}, \"usage\": "
+                        "{\"output_tokens\": 12, \"server_tool_use\": {\"web_search_requests\": 1}}}",
+                    "{\"type\": \"message_stop\"}" };
+                std::string sse;
+                for (const char* e : searched)
+                    sse += "event: " + json::parse_or_null(e)["type"].as_string() + "\ndata: " + e + "\n\n";
+                res.set_content(sse, "text/event-stream");
+                return;
+            }
+            const char* const events[] = {
+                "{\"type\": \"message_start\", \"message\": {\"usage\": {\"input_tokens\": 20, "
+                    "\"cache_read_input_tokens\": 5}}}",
+                "{\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"thinking\"}}",
+                "{\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"thinking_delta\", "
+                    "\"thinking\": \"Let me think.\"}}",
+                "{\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"signature_delta\", "
+                    "\"signature\": \"abc\"}}",
+                "{\"type\": \"content_block_stop\", \"index\": 0}",
+                "{\"type\": \"content_block_delta\", \"index\": 1, \"delta\": {\"type\": \"text_delta\", "
+                    "\"text\": \"Bonjour\"}}",
+                "{\"type\": \"content_block_delta\", \"index\": 1, \"delta\": {\"type\": \"text_delta\", "
+                    "\"text\": \" !\"}}",
+                "{\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\"}, \"usage\": "
+                    "{\"output_tokens\": 9}}",
+                "{\"type\": \"message_stop\"}" };
+            std::string sse;
+            for (const char* e : events)
+                sse += "event: " + json::parse_or_null(e)["type"].as_string() + "\ndata: " + e + "\n\n";
+            res.set_content(sse, "text/event-stream");
+        });
+        relay_server.Get("/v1/models", [&](const httplib::Request& req, httplib::Response& res) {
+            if (req.get_header_value("Authorization") != "Bearer sk-test-secret")
+            {
+                res.status = 401;
+                res.set_content("{\"error\": \"unauthorized\"}", "application/json");
+                return;
+            }
+            res.set_content("{\"data\": [{\"id\": \"m1\"}, {\"id\": \"m2\"}]}", "application/json");
+        });
+        const int relay_port = port + 7;
+        const bool relay_listening = relay_server.bind_to_port("127.0.0.1", relay_port);
+        std::thread relay_listener([&]() { if (relay_listening) relay_server.listen_after_bind(); });
+        const std::string origin = "http://127.0.0.1:" + std::to_string(relay_port);
+        check(relay_listening, "the server of the relay listens on the port " + std::to_string(relay_port));
+        albireo::pseudalis_client::endpoint_for_tests(origin);
+        albireo::relay_origin_for_tests("claude", origin);
+        albireo::relay_origin_for_tests("ollama", origin);
+
+        // La mémoire de la pseudonymisation : un texte servi de nouveau sans Pseudalis, ses valeurs oubliées.
+        {
+            albireo::pseudalis_client client;
+            albireo::pseudonym_memory::limits limits;
+            limits.values = 3;
+            limits.max_idle = 100;
+            albireo::pseudonym_memory memory(limits);
+            memory.set_time_for_tests(1000);
+            std::map<std::string, std::string> found;
+            std::string out, error;
+            const bool first = memory.protect("Jean Dupont habite Paris.", false, client, nullptr, out, found, error);
+            const int calls = mock.anonymized;
+            std::map<std::string, std::string> again;
+            std::string out2;
+            const bool second = memory.protect("Jean Dupont habite Paris.", false, client, nullptr, out2, again, error);
+            check(first && out == "Xoydoeh Nuggwdfsorn habite Qbspm." && found["Xoydoeh Nuggwdfsorn"] == "Jean Dupont"
+                && found["Qbspm"] == "Paris" && second && out2 == out && again == found && mock.anonymized == calls,
+                "a text is protected once, its substitutes known with their values, and served again from memory ("
+                + out + ", " + error + ")");
+            memory.protect("Marie Curie habite Lyon.", false, client, nullptr, out, found, error);
+            const bool bounded = memory.stats()["values"].as_int() == 3;
+            memory.protect("Jean Dupont habite Paris.", false, client, nullptr, out, found, error);
+            const bool again_asked = mock.anonymized == calls + 2;
+            memory.set_time_for_tests(1000 + 200);
+            const bool idle = memory.stats()["values"].as_int() == 0 && memory.stats()["texts"].as_int() == 0;
+            check(bounded && again_asked && idle, "the memory keeps its bounds, protects again a text whose values "
+                "went, and forgets what stays unused");
+            // Un Pseudalis qui ne donne pas les valeurs (antérieur à 3.1.0) : le texte ne part pas.
+            {
+                std::lock_guard<std::mutex> lock(mock.m);
+                mock.mode = "old_pseudalis";
+            }
+            std::map<std::string, std::string> none;
+            std::string out3, old_error;
+            const bool old = memory.protect("Marie Curie habite Lyon.", false, client, nullptr, out3, none, old_error);
+            {
+                std::lock_guard<std::mutex> lock(mock.m);
+                mock.mode = "ok";
+            }
+            check(!old && out3.empty() && old_error.find("3.1.0") != std::string::npos,
+                "a Pseudalis that gives no values refuses the text, which does not leave (" + old_error + ")");
+        }
+
+        // Le relais avec chaque fournisseur.
+        struct answer
+        {
+            std::mutex m;
+            std::condition_variable cv;
+            std::string content, reasoning, done, error;
+            bool finished = false;
+        };
+        std::mutex settings_m;
+        albireo::host_settings hs;
+        int described = 0;
+        albireo::relay_service relay(
+            [&]() {
+                std::lock_guard<std::mutex> lock(settings_m);
+                return hs;
+            },
+            [&](const std::string&, const std::atomic<bool>&, std::string& description, std::string&) {
+                ++described;
+                description = "Une photo de Jean Dupont devant la tour Eiffel.";
+                return true;
+            });
+        auto ask = [&](const json& request, std::shared_ptr<answer>& a, int& status, std::string& code) {
+            a = std::make_shared<answer>();
+            const std::shared_ptr<answer> target = a;
+            uint64_t id = 0;
+            std::string error;
+            if (!relay.submit(request, [target](int kind, const std::string& data) {
+                    std::lock_guard<std::mutex> lock(target->m);
+                    if (kind == ALBIREO_EVENT_CONTENT) target->content += data;
+                    if (kind == ALBIREO_EVENT_REASONING) target->reasoning += data;
+                    if (kind == ALBIREO_EVENT_DONE) target->done = data;
+                    if (kind == ALBIREO_EVENT_ERROR) target->error = data;
+                    if (kind == ALBIREO_EVENT_DONE || kind == ALBIREO_EVENT_ERROR)
+                    {
+                        target->finished = true;
+                        target->cv.notify_all();
+                    }
+                }, id, error, status, code))
+                return false;
+            std::unique_lock<std::mutex> lock(a->m);
+            return a->cv.wait_for(lock, std::chrono::seconds(30), [&]() { return a->finished; });
+        };
+        auto set_relay = [&](const std::function<void(albireo::relay_settings&)>& change) {
+            std::lock_guard<std::mutex> lock(settings_m);
+            hs.relay = albireo::relay_settings();
+            hs.relay.enabled = true;
+            change(hs.relay);
+        };
+        const json picture = json::parse_or_null("{\"type\": \"image_url\", \"image_url\": {\"url\": "
+            "\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==\"}}");
+
+        // Un moteur de l'interface d'OpenAI, les textes pseudonymisés, l'image décrite ici.
+        set_relay([&](albireo::relay_settings& r) {
+            r.provider = "openai";
+            r.url = origin + "/v1/";
+            r.model = "local-test";
+            r.secret = "sk-test-secret";
+            r.pseudonymize = true;
+        });
+        json request = json::object();
+        request["model"] = albireo::relay_model_id;
+        request["stream"] = true;
+        request["messages"] = json::parse_or_null("[{\"role\": \"system\", \"content\": \"Tu aides Jean Dupont.\"}, "
+            "{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": "
+            "\"O\u00f9 habite Jean Dupont, Paris ?\"}]}]");
+        request["messages"].at(1)["content"].push_back(picture);
+        request["stop"] = "\nJean Dupont:";
+        request["temperature"] = "Jean Dupont";
+        request["top_p"] = 0.9;
+        std::shared_ptr<answer> a;
+        int status = 0;
+        std::string code;
+        bool answered = ask(request, a, status, code);
+        std::string sent;
+        std::string authorization;
+        {
+            std::lock_guard<std::mutex> lock(mock.m);
+            sent = mock.body.dump();
+            const auto h = mock.headers.find("Authorization");
+            authorization = h == mock.headers.end() ? std::string() : h->second;
+        }
+        check(answered && a->error.empty() && a->content == "Jean Dupont habite Paris."
+            && a->reasoning == "Jean vit \xC3\xA0 Paris."
+            && json::parse_or_null(a->done)["usage"]["prompt_tokens"].as_int() == 12,
+            "the answer of an engine of the interface of OpenAI streams back with its values (" + a->content + " | "
+            + a->reasoning + " | " + a->error + ")");
+        check(sent.find("Jean") == std::string::npos && sent.find("Paris") == std::string::npos
+            && sent.find("\"stop\"") == std::string::npos && sent.find("\"temperature\"") == std::string::npos
+            && sent.find("\"top_p\":0.9") != std::string::npos
+            && sent.find("Xoydoeh Nuggwdfsorn") != std::string::npos
+            && sent.find("image_url") == std::string::npos && sent.find("[Picture 1, described") != std::string::npos
+            && described == 1 && authorization == "Bearer sk-test-secret" && sent.find("sk-test") == std::string::npos,
+            "the texts, the description of the image and no stop sequence leave pseudonymized, the sampling as "
+            "numbers alone, the key in its header alone");
+        ask(request, a, status, code);
+        check(described == 1 && a->content == "Jean Dupont habite Paris.", "the description of an image serves again");
+
+        // Une clé refusée : l'erreur ne nomme ni la clé ni l'adresse.
+        {
+            std::lock_guard<std::mutex> lock(mock.m);
+            mock.mode = "unauthorized";
+        }
+        answered = ask(request, a, status, code);
+        check(answered && json::parse_or_null(a->error)["code"].as_string() == "relay_refused"
+            && a->error.find("refuses the key") != std::string::npos && a->error.find("sk-test") == std::string::npos
+            && a->error.find("127.0.0.1") == std::string::npos, "a refused key ends the answer with its reason, the "
+            "key that the engine echoes masked (" + a->error + ")");
+        // Une réponse envoyée en entier malgré le flux, puis une page web à la place d'une réponse.
+        {
+            std::lock_guard<std::mutex> lock(mock.m);
+            mock.mode = "whole";
+        }
+        const bool whole = ask(request, a, status, code) && a->content == "Jean Dupont habite Paris."
+            && json::parse_or_null(a->done)["usage"]["completion_tokens"].as_int() == 6;
+        {
+            std::lock_guard<std::mutex> lock(mock.m);
+            mock.mode = "page";
+        }
+        const bool page = ask(request, a, status, code)
+            && json::parse_or_null(a->error)["code"].as_string() == "relay_failed";
+        check(whole && page, "an answer sent whole comes back with its values, a web page ends the answer with an "
+            "error");
+        {
+            std::lock_guard<std::mutex> lock(mock.m);
+            mock.mode = "ok";
+        }
+        albireo::relay_settings tested = hs.relay;
+        const json listed = relay.test(tested);
+        tested.secret = "wrong";
+        const json refused_test = relay.test(tested);
+        check(listed["ok"].as_bool(false) && listed["models"].size() == 2 && !refused_test["ok"].as_bool(true),
+            "the test of the relay lists the models of the engine, and fails with a wrong key");
+
+        // Un compte sans crédit, puis les pseudonymes laissés dans la réponse, un contrôle de ce qui est parti.
+        {
+            std::lock_guard<std::mutex> lock(mock.m);
+            mock.mode = "credit";
+        }
+        const bool credit = ask(request, a, status, code)
+            && json::parse_or_null(a->error)["message"].as_string().find("no credit left") != std::string::npos
+            && a->error.find("insufficient credits") != std::string::npos;
+        {
+            std::lock_guard<std::mutex> lock(mock.m);
+            mock.mode = "ok";
+        }
+        set_relay([&](albireo::relay_settings& r) {
+            r.provider = "openai";
+            r.url = origin + "/v1/";
+            r.model = "local-test";
+            r.secret = "sk-test-secret";
+            r.pseudonymize = true;
+            r.keep_substitutes = true;
+        });
+        const bool kept = ask(request, a, status, code) && a->content == "Xoydoeh Nuggwdfsorn habite Qbspm."
+            && a->reasoning == "Xoydoeh vit \xC3\xA0 Qbspm."
+            && albireo::relay_description(hs.relay)["keep_substitutes"].as_bool(false);
+        check(credit && kept, "an account without credit ends the answer with its reason, and the check of what "
+            "left keeps the substitutes in the answer (" + a->content + ")");
+
+        // Une adresse sans /v1, que le relais complète, une autre avec le chemin d'une opération, et leurs échecs.
+        set_relay([&](albireo::relay_settings& r) {
+            r.provider = "openai";
+            r.url = origin;
+            r.model = "local-test";
+            r.secret = "sk-test-secret";
+        });
+        json plain = json::object();
+        plain["model"] = albireo::relay_model_id;
+        plain["stream"] = true;
+        plain["messages"] = json::parse_or_null("[{\"role\": \"user\", \"content\": \"Bonjour\"}]");
+        const bool completed = ask(plain, a, status, code) && a->error.empty()
+            && a->content == "Xoydoeh Nuggwdfsorn habite Qbspm.";
+        albireo::relay_settings bare = hs.relay;
+        const json found = relay.test(bare);
+        bare.url = origin + "/v1/chat/completions";
+        const json pasted = relay.test(bare);
+        bare.url = origin + "/nothing";
+        const json nowhere = relay.test(bare);
+        bare.url = origin + "/v1";
+        bare.secret = "wrong";
+        const json refused_key = relay.test(bare);
+        check(completed && found["ok"].as_bool(false) && found["url"].as_string() == origin + "/v1"
+            && pasted["ok"].as_bool(false) && pasted["url"].as_string() == origin + "/v1"
+            && !nowhere["ok"].as_bool(true) && nowhere["code"].as_string() == "relay_http_address"
+            && nowhere["args"]["s"].as_string() == "404" && refused_key["code"].as_string() == "relay_http_key"
+            && refused_key["args"]["s"].as_string() == "401" && refused_key["detail"].as_string() == "unauthorized"
+            && !refused_key.contains("url"),
+            "an address without /v1 or with the path of an operation reaches the interface at /v1, and the failures "
+            "of the test give their code, their status and the message of the engine (" + nowhere.dump() + ")");
+        // Un utilisateur, une requête ou un fragment à côté de l'hôte est refusé ; un moteur hors de portée est
+        // nommé par son code.
+        bare.url = "http://evil.example?.localhost/v1";
+        const json hidden = relay.test(bare);
+        bare.url = "http://user@127.0.0.1:" + std::to_string(relay_port) + "/v1";
+        const json with_user = relay.test(bare);
+        bare.url = "http://127.0.0.1:1/v1";
+        const json closed = relay.test(bare);
+        check(hidden["code"].as_string() == "relay_address" && with_user["code"].as_string() == "relay_address"
+            && albireo::valid_relay_url("http://gpu_box.lan:8000/v1") && albireo::valid_relay_url("http://[::1]:8080")
+            && !albireo::valid_relay_url("http://host:70000/v1") && !albireo::valid_relay_url("http://host#x/v1")
+            && closed["code"].as_string() == "relay_unreachable",
+            "an address whose host carries a user, a query or a fragment is refused, and an engine out of reach gives "
+            "its code (" + closed.dump() + ")");
+
+        // Claude : le système à part, le raisonnement résumé avec son effort, pas de température, l'image telle quelle.
+        set_relay([&](albireo::relay_settings& r) {
+            r.provider = "claude";
+            r.model = "claude-opus-5-5";
+            r.secret = key;
+        });
+        json claude = json::object();
+        claude["model"] = albireo::relay_model_id;
+        claude["temperature"] = 0.7;
+        claude["reasoning_effort"] = "high";
+        claude["messages"] = json::parse_or_null("[{\"role\": \"system\", \"content\": \"Be brief.\"}, "
+            "{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"Hello\"}]}]");
+        claude["messages"].at(1)["content"].push_back(picture);
+        answered = ask(claude, a, status, code);
+        json body;
+        std::string api_key;
+        {
+            std::lock_guard<std::mutex> lock(mock.m);
+            body = mock.body;
+            const auto h = mock.headers.find("x-api-key");
+            api_key = h == mock.headers.end() ? std::string() : h->second;
+        }
+        const json done = json::parse_or_null(a->done);
+        check(answered && a->content == "Bonjour !" && a->reasoning == "Let me think."
+            && done["usage"]["prompt_tokens"].as_int() == 25 && done["usage"]["completion_tokens"].as_int() == 9
+            && done["finish_reason"].as_string() == "stop", "the answer of Claude streams back with its reasoning and "
+            "its usage (" + a->content + " | " + a->error + ")");
+        check(body["system"].as_string() == "Be brief." && body["thinking"]["type"].as_string() == "adaptive"
+            && body["thinking"]["display"].as_string() == "summarized"
+            && body["output_config"]["effort"].as_string() == "high" && !body.contains("temperature")
+            && static_cast<const json&>(body)["messages"][0]["content"][1]["source"]["media_type"].as_string()
+                == "image/png"
+            && body["max_tokens"].as_int() == 64000 && api_key == key,
+            "the request of Claude has its system, its reasoning, its effort, its image and 64000 tokens of answer "
+            "without a bound of the request, no temperature, the key in x-api-key");
+
+        // La recherche sur le web de Claude : son outil, sa requête avec le raisonnement, sa source après le texte.
+        json searching = claude;
+        searching["web_search"] = true;
+        answered = ask(searching, a, status, code);
+        {
+            std::lock_guard<std::mutex> lock(mock.m);
+            body = mock.body;
+        }
+        const json searched_done = json::parse_or_null(a->done);
+        const json tool = static_cast<const json&>(body)["tools"][0];
+        const bool searched = answered && tool["type"].as_string() == "web_search_20250305"
+            && tool["max_uses"].as_int() == 5
+            && a->content
+                == "Rome est la capitale. ([fr.wikipedia.org](https://www.fr.wikipedia.org/wiki/Rome_%28ville%29))"
+            && a->reasoning.find("web_search: capitale Italie") != std::string::npos
+            && searched_done["usage"]["web_search_requests"].as_int() == 1;
+        {
+            std::lock_guard<std::mutex> lock(settings_m);
+            hs.web_access = false;
+        }
+        const bool web_off = !ask(searching, a, status, code) && status == 403 && code == "web_access_off";
+        {
+            std::lock_guard<std::mutex> lock(settings_m);
+            hs.web_access = true;
+        }
+        check(searched && web_off, "Claude searches the web when the request asks for it, its query shown with the "
+            "reasoning and its source as a link after the text, and the web access turned off refuses it ("
+            + a->content + " | " + a->reasoning + ")");
+
+        // Ollama : le raisonnement d'un modèle qui l'active ou le coupe, l'image telle quelle.
+        set_relay([&](albireo::relay_settings& r) {
+            r.provider = "ollama";
+            r.model = "gemma4:31b";
+            r.secret = "sk-test-secret";
+        });
+        json ollama = request;
+        ollama["reasoning"] = false;
+        answered = ask(ollama, a, status, code);
+        {
+            std::lock_guard<std::mutex> lock(mock.m);
+            body = mock.body;
+        }
+        check(answered && body["reasoning_effort"].as_string() == "none" && body["model"].as_string() == "gemma4:31b"
+            && body.dump().find("image_url") != std::string::npos
+            && body.dump().find("Jean Dupont") != std::string::npos,
+            "Ollama receives the reasoning turned off and the image itself without pseudonymization");
+        json ollama_web = ollama;
+        ollama_web["web_search"] = true;
+        check(!ask(ollama_web, a, status, code) && status == 400 && code == "web_search_not_supported",
+            "the search of the web of the relay takes Claude alone");
+
+        // Les refus avant toute requête.
+        json tools = request;
+        tools["tools"] = json::parse_or_null("[{\"type\": \"function\"}]");
+        const bool no_tools = !ask(tools, a, status, code) && status == 400 && code == "tools_not_supported";
+        {
+            std::lock_guard<std::mutex> lock(settings_m);
+            hs.offline = true;
+        }
+        const bool offline = !ask(request, a, status, code) && status == 503 && code == "offline";
+        set_relay([&](albireo::relay_settings& r) {
+            r.provider = "claude";
+            r.model = "claude-opus-5-5";
+        });
+        const bool no_key = !ask(request, a, status, code) && status == 404 && code == "relay_unavailable";
+        check(no_tools && offline && no_key, "the relay refuses the tools, the offline mode and a missing key");
+
+        /*
+            Hors ligne, un moteur de ce Mac répond, joint directement quelle que soit l'annulation des
+            téléchargements que tient le mode hors ligne, Pseudalis compris ; les fournisseurs
+            d'Internet et une adresse publique sont refusés avant toute connexion.
+        */
+        albireo::http_cancel_all("offline mode");
+        set_relay([&](albireo::relay_settings& r) {
+            r.provider = "openai";
+            r.url = origin + "/v1";
+            r.model = "local-test";
+            r.secret = "sk-test-secret";
+            r.pseudonymize = true;
+        });
+        const bool local = ask(request, a, status, code) && a->error.empty()
+            && a->content == "Jean Dupont habite Paris.";
+        const std::string local_error = a ? a->error : std::string();
+        std::string why;
+        albireo::relay_settings remote = hs.relay;
+        remote.url = "http://93.184.215.14/v1";
+        const bool remote_refused = !albireo::relay_offline_ready(remote, why)
+            && why.find("neither") != std::string::npos;
+        const json remote_test = relay.test(remote);
+        remote.url = "http://[2606:4700:4700::1111]/v1";
+        const bool remote6_refused = !albireo::relay_offline_ready(remote, why);
+        albireo::relay_settings loopback6 = hs.relay;
+        loopback6.url = "http://[::1]:8080/v1";
+        albireo::relay_settings cloud = hs.relay;
+        cloud.provider = "claude";
+        cloud.model = "claude-opus-5-5";
+        cloud.secret = key;
+        const bool cloud_refused = !albireo::relay_offline_ready(cloud, why)
+            && why.find("Internet") != std::string::npos;
+        const json cloud_test = relay.test(cloud);
+        albireo::relay_settings named = hs.relay;
+        named.url = "http://localhost:" + std::to_string(relay_port) + "/v1";
+        const json named_test = relay.test(named);
+        /*
+            Un nom du réseau local mène la requête à l'adresse vérifiée, un nom que le résolveur du
+            système ne connaît pas ici ; un nom qui a une adresse publique parmi les siennes est refusé.
+        */
+        albireo::relay_name_for_tests("engine.albireo-test", { "127.0.0.1" });
+        albireo::relay_name_for_tests("mixed.albireo-test", { "10.0.0.5", "93.184.215.14" });
+        albireo::relay_settings pinned = hs.relay;
+        pinned.url = "http://Engine.Albireo-Test:" + std::to_string(relay_port) + "/v1";
+        const json pinned_test = relay.test(pinned);
+        albireo::relay_settings mixed = hs.relay;
+        mixed.url = "http://mixed.albireo-test:" + std::to_string(relay_port) + "/v1";
+        const json mixed_test = relay.test(mixed);
+        albireo::relay_name_for_tests("engine.albireo-test", {});
+        albireo::relay_name_for_tests("mixed.albireo-test", {});
+        // Un nom sous .localhost joint 127.0.0.1 quel que soit le résolveur ; seul le réseau local reste à portée.
+        albireo::relay_settings dotted = hs.relay;
+        dotted.url = "http://engine.localhost:" + std::to_string(relay_port) + "/v1";
+        const json dotted_test = relay.test(dotted);
+        albireo::relay_settings nearby = hs.relay;
+        nearby.url = "http://100.64.1.1:8080/v1";
+        const bool shared_refused = !albireo::relay_offline_ready(nearby, why);
+        nearby.url = "http://[64:ff9b:1::1]:8080/v1";
+        const bool translated_refused = !albireo::relay_offline_ready(nearby, why);
+        nearby.url = "http://192.168.1.20:8080/v1";
+        const bool lan_ready = albireo::relay_offline_ready(nearby, why);
+        nearby.url = "http://[fd00::1]:8080/v1";
+        const bool unique_local_ready = albireo::relay_offline_ready(nearby, why);
+        check(pinned_test["ok"].as_bool(false) && mixed_test["code"].as_string() == "relay_offline_remote"
+            && dotted_test["ok"].as_bool(false) && shared_refused && translated_refused && lan_ready
+            && unique_local_ready,
+            "offline, a name of the local network leads the request to the address checked, a name under .localhost "
+            "to 127.0.0.1, and the addresses outside the local network are refused (" + pinned_test.dump() + " | "
+            + mixed_test.dump() + " | " + dotted_test.dump() + ")");
+        albireo::http_restore();
+        check(local && remote_refused && remote6_refused && remote_test["code"].as_string() == "relay_offline_remote"
+            && albireo::relay_offline_ready(loopback6, why) && cloud_refused
+            && cloud_test["code"].as_string() == "relay_offline" && named_test["ok"].as_bool(false),
+            "offline, the relay answers through an engine of this computer and Pseudalis whatever the cancellation of "
+            "the downloads, and refuses the providers of the Internet and a public address before any connection ("
+            + local_error + " | " + named_test.dump() + ")");
+        bool leaked = false;
+        for (const auto& line : albireo::log_file::instance().recent())
+            leaked = leaked || line.find("sk-test") != std::string::npos || line.find(key) != std::string::npos
+                || line.find("Jean Dupont") != std::string::npos;
+        check(!leaked, "the log names no key and no value of the discussions");
+        relay.stop();
+        albireo::pseudalis_client::endpoint_for_tests("");
+        // L'état de Pseudalis nomme par un code pourquoi il n'est pas joint, qu'il soit sur ce Mac ou non.
+        {
+            albireo::pseudalis_client client;
+            const json s = client.status();
+            const std::string code = s["code"].as_string();
+            const bool coherent = s["found"].as_bool(false) ? code.empty() && s["reason"].as_string().empty()
+                : (code == "not_installed" || code == "no_authority" || code == "unprotected" || code == "failed")
+                    && !s["reason"].as_string().empty();
+            check(coherent, "the state of Pseudalis names by a code why it is not reached (" + s.dump() + ")");
+        }
+        albireo::relay_origin_for_tests("claude", "");
+        albireo::relay_origin_for_tests("ollama", "");
+        relay_server.stop();
+        relay_listener.join();
     }
 
     server.stop();
