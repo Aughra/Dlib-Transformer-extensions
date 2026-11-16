@@ -82,6 +82,24 @@ if [ $ready -eq 1 ]; then
   api -X POST -H "Content-Type: application/json" --data "$PROTECTED" "$URL/v1/text/restore" |
     python3 -c 'import json, sys; print(json.load(sys.stdin).get("text", ""))' > "$WORK/text.back.txt"
   step "text not restorable" '^pseudonymized$' pseudonymized "$WORK/text.back.txt"
+  # Le relais d'Albireo (3.1.0) : sous la clé de séance, les mêmes pseudonymes d'un texte à l'autre,
+  # rendus avec leurs valeurs ; sans session, aucune valeur.
+  for n in 1 2; do
+    api -X POST -H "Content-Type: application/json" --data "{\"text\": \"$TEXT\", \"session\": true}" \
+      "$URL/v1/text/anonymize" > "$WORK/session.$n.json"
+  done
+  api -X POST -H "Content-Type: application/json" --data "{\"text\": \"$TEXT\"}" "$URL/v1/text/anonymize" \
+    > "$WORK/session.none.json"
+  step "relay session" '^session ok' python3 -c '
+import json, sys
+a, b, c = (json.load(open(p)) for p in sys.argv[1:4])
+values = {v["substitute"]: v["value"] for v in a.get("values", [])}
+back = a["text"]
+for s in sorted(values, key=len, reverse=True): back = back.replace(s, values[s])
+ok = ("Dupont" not in a["text"] and a["text"] == b["text"] and "Jean Dupont" in values.values()
+      and back == sys.argv[4] and "values" not in c and c["text"] != a["text"])
+print(("session ok " if ok else "session wrong ") + str(len(values)) + " values, " + a["text"][:80])
+' "$WORK/session.1.json" "$WORK/session.2.json" "$WORK/session.none.json" "$TEXT"
   printf 'nom;prenom;email;telephone\nDupont;Jean;jean.dupont@exemple.fr;06 12 34 56 78\n' > "$WORK/sample.csv"
   api -X POST --data-binary @"$WORK/sample.csv" -o "$WORK/sample.anon.csv" "$URL/v1/anonymize?name=sample.csv"
   step "file anonymized" '^pseudonymized$' pseudonymized "$WORK/sample.anon.csv"

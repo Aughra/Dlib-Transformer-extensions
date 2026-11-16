@@ -238,7 +238,12 @@ PSD_API int PSD_CALL psd_process(psd_engine* engine, const char* request, const 
         const std::vector<pseudalis::substitution> known = substitutions_in(req["substitutions"]);
         // Une protection sous une clé jetable (fork pour macOS) : des pseudonymes qui ne reviennent plus.
         std::unique_ptr<pseudalis::engine::one_time_key> one_time;
-        if (req["one_time_key"].as_bool(false) && op.compare(0, 9, "anonymize") == 0)
+        // Un texte du relais d'Albireo (fork pour macOS) : sous la clé de séance, ses valeurs rendues avec lui.
+        const bool session = req["session"].as_bool(false) && op == "anonymize_text";
+        std::unique_ptr<pseudalis::engine::session_key> session_scope;
+        if (session)
+            session_scope.reset(new pseudalis::engine::session_key(*engine->e));
+        else if (req["one_time_key"].as_bool(false) && op.compare(0, 9, "anonymize") == 0)
             one_time.reset(new pseudalis::engine::one_time_key(*engine->e));
         if (op == "anonymize" || op == "restore")
         {
@@ -275,7 +280,8 @@ PSD_API int PSD_CALL psd_process(psd_engine* engine, const char* request, const 
             if (op == "anonymize_text")
             {
                 res["tags"] = engine->e->tag_spans(out, made);
-                if (!tags) res["substitutions"] = substitutions_of(made);
+                if (session) res["values"] = engine->e->session_values(made);
+                else if (!tags) res["substitutions"] = substitutions_of(made);
             }
             else
             {

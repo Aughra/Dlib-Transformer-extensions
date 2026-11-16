@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface de Pseudalis",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "L'interface locale de Pseudalis, sur ce Mac (https://localhost:8444 par défaut) et, une fois l'accès réseau activé (réglage lan), en HTTP simple sur chaque adresse du Mac, au port lan_port (8445 par défaut), sans mot de passe. Les fichiers voyagent tels quels, dans le corps des requêtes. Aucun compte ni jeton n'est nécessaire : sur macOS, les opérations d'administration sont ouvertes sur le Mac, comme les routes d'Albireo ; chaque requête doit toutefois nommer le serveur local dans son en-tête Host, et une requête venue d'une page doit venir du serveur local. Depuis la 3.0.0 (fork pour macOS), chaque protection écrit des pseudonymes sans retour, faits sous une clé jetable par document : ni balise, ni restauration à partir des pseudonymes ; /v1/restore rend l'original conservé, et le paramètre ou réglage tags est sans effet.",
   "contact": {
    "name": "Cydral Technology",
@@ -426,6 +426,10 @@
          "tags": {
           "type": "boolean",
           "description": "false écrit les valeurs sans leurs balises, leurs substituts seuls, listés dans la réponse (substitutions) ; sans ce champ, c'est le réglage tags qui décide."
+         },
+         "session": {
+          "type": "boolean",
+          "description": "true pour le relais d'Albireo : les pseudonymes sont faits sous la clé de séance, tirée au démarrage du moteur et gardée en mémoire seulement ; une même valeur garde le même pseudonyme d'un texte à l'autre, et la réponse donne leurs valeurs (values). Sans ce champ, la clé jetable des documents : aucun pseudonyme ne revient."
          }
         },
         "required": [
@@ -440,7 +444,7 @@
     },
     "responses": {
      "200": {
-      "description": "{\"text\", \"report\", \"tags\": [{\"begin\", \"end\", \"type\"}], \"substitutions\": [{\"substitute\", \"tag\", \"text\"}] sans balises}",
+      "description": "{\"text\", \"report\", \"tags\": [{\"begin\", \"end\", \"type\"}], \"substitutions\": [{\"substitute\", \"tag\", \"text\"}] sans balises, \"values\": [{\"substitute\", \"value\"}] avec session}",
       "content": {
        "application/json": {
         "schema": {
@@ -494,6 +498,23 @@
             }
            },
            "description": "Sans balises : chaque substitut écrit, avec sa balise. Rien d'autre ne les garde : /v1/text/restore rend les valeurs lorsqu'ils accompagnent le texte."
+          },
+          "values": {
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "substitute": {
+              "type": "string",
+              "description": "Le pseudonyme écrit dans le texte."
+             },
+             "value": {
+              "type": "string",
+              "description": "La valeur qu’il remplace."
+             }
+            }
+           },
+           "description": "Avec session seulement : la valeur de chaque pseudonyme écrit, une fois chacun, dans l'ordre du texte. Le relais d'Albireo les garde en mémoire pour les remettre dans la réponse du moteur extérieur."
           }
          }
         }

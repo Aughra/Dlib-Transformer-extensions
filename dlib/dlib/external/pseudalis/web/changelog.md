@@ -2,6 +2,16 @@
 
 Pseudalis pour macOS sur puce Apple, version dérivée de Pseudalis Community (Cydral Technology), maintenue par TortueTech. Le fork numérote Pseudalis à part de l'original à partir de 2.0.0. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne ; avant 2.0.0, la section porte le numéro de la version de l'original sur laquelle reposait le fork.
 
+## 3.1.0 — 16 novembre 2026
+
+### Protection
+
+- Clé de séance pour le relais d'Albireo : `POST /v1/text/anonymize` accepte le champ `session`. Le texte est alors protégé sous une clé tirée au hasard au démarrage du moteur, gardée en mémoire seulement et jamais écrite. Une même valeur garde le même pseudonyme d'un texte à l'autre tant que le service tourne, et la réponse donne la valeur de chaque pseudonyme écrit (`values`). Albireo s'en sert pour envoyer une discussion à un moteur extérieur sans ses données personnelles, puis remettre les vraies valeurs dans la réponse.
+- Les documents, les noms et les textes protégés sans ce champ gardent leur clé jetable : leurs pseudonymes ne reviennent pas, comme en 3.0.0. Un pseudonyme fait sous une clé jetable, présent dans un texte du relais, est reconnu et laissé tel quel.
+- Un redémarrage du service change la clé de séance : une même valeur reçoit alors un autre pseudonyme.
+
+---
+
 ## 3.0.0 — 15 novembre 2026
 
 ### Protection

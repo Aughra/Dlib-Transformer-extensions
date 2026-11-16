@@ -193,10 +193,12 @@ namespace pseudalis
         /*
             operation : "anonymize_text", "restore_text" ou "detect".  Sans tags, le texte ne garde
             aucun tag et out["substitutions"] liste les substituts écrits, que restore_text rend
-            quand substitutions les contient : rien d'autre ne les garde.
+            quand substitutions les contient : rien d'autre ne les garde.  Avec session (le relais
+            d'Albireo, fork pour macOS), une protection prend la clé de séance du moteur et
+            out["values"] donne la valeur de chaque substitut écrit : [{"substitute", "value"}].
         */
         bool text(const std::string& operation, const std::string& text, json& out, user_error& error,
-            bool tags = true, const json& substitutions = json());
+            bool tags = true, const json& substitutions = json(), bool session = false);
         /*!
             Supprime un enregistrement, son original et les images qu'aucun autre
             enregistrement ne montre.  Avec une raison, "forgotten" quand un utilisateur l'a

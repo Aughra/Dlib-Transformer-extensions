@@ -1025,6 +1025,8 @@ namespace pseudalis
     {
         std::unique_ptr<pseudonymizer> p;
         pseudonymizer_options popt;
+        // Le pseudonymiseur de la clé de séance du relais (engine::session_key), sous une clé jamais écrite.
+        std::unique_ptr<pseudonymizer> session;
         // Le pseudonymiseur de l'opération : celui de la clé jetable de ce thread, sinon celui de la clé du moteur.
         const pseudonymizer& ps() const { return one_time ? *one_time : *p; }
         pii_detector_options dopt;
@@ -1651,6 +1653,14 @@ namespace pseudalis
                                                       : numeric_date_order::day_month_year;
         p_->p.reset(new pseudonymizer(pseudonymization_key::from_bytes(key), popt));
         p_->popt = popt;
+        {
+            // La clé de séance : les substituts faits sous une autre clé restent tels quels, reconnus sans être ouverts.
+            std::string session = dlib::generate_secure_random_bytes(32);
+            pseudonymizer_options sopt = popt;
+            sopt.opaque_substitutes = true;
+            p_->session.reset(new pseudonymizer(pseudonymization_key::from_bytes(session), sopt));
+            secure_wipe(&session[0], session.size());
+        }
         p_->dopt.date_order = popt.date_order;
         p_->picture_key = hkdf_sha256(key, "pseudalis.pictures", "identifier", 32);
         try
@@ -1900,6 +1910,37 @@ namespace pseudalis
     engine::one_time_key::~one_time_key()
     {
         one_time = s_->before;
+    }
+
+    engine::session_key::session_key(const engine& e) : before_(one_time)
+    {
+        one_time = e.p_->session.get();
+    }
+
+    engine::session_key::~session_key()
+    {
+        one_time = static_cast<const pseudonymizer*>(before_);
+    }
+
+    json engine::session_values(const std::vector<substitution>& made) const
+    {
+        json list = json::array();
+        // Seulement sous la clé de séance : la clé du moteur ou une clé jetable n'ont pas à rendre leurs valeurs.
+        if (one_time != p_->session.get()) return list;
+        std::set<std::string> seen;
+        for (const substitution& m : made)
+        {
+            if (m.substitute.empty() || !seen.insert(m.substitute).second) continue;
+            pii_type type;
+            std::string value;
+            if (!p_->session->decode(m.tag, type, value) || value.empty() || value == m.substitute) continue;
+            json one = json::object();
+            one["substitute"] = m.substitute;
+            one["value"] = value;
+            list.push_back(one);
+            secure_wipe(&value[0], value.size());
+        }
+        return list;
     }
 
     std::string engine::key_fingerprint() const

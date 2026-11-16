@@ -243,6 +243,33 @@ namespace pseudalis
             std::unique_ptr<state> s_;
         };
 
+        /*
+            La clé de séance du relais d'Albireo (fork pour macOS, 2026-11-16) : tant que cet objet vit, les
+            protections que fait ce thread prennent le pseudonymiseur de séance du moteur, sous une clé tirée au
+            hasard quand le moteur est créé, gardée en mémoire seulement et jamais écrite.  Une même valeur reçoit
+            le même pseudonyme d'un texte à l'autre tant que le moteur vit (les messages d'une discussion envoyée
+            plusieurs fois), et session_values() rend les valeurs de ces pseudonymes, que le relais remet dans la
+            réponse du moteur extérieur.  Les documents gardent leur clé jetable.
+        */
+        class session_key
+        {
+        public:
+            explicit session_key(const engine& e);
+            ~session_key();
+            session_key(const session_key&) = delete;
+            session_key& operator=(const session_key&) = delete;
+
+        private:
+            const void* before_;
+        };
+
+        /*
+            Les valeurs des substituts de made, faits sous la clé de séance par ce thread pendant qu'un
+            session_key vit : [{"substitute", "value"}], chaque substitut une fois, dans l'ordre de made.
+            Un substitut que la clé de séance ne sait pas ouvrir (fait sous une autre clé) n'y est pas.
+        */
+        json session_values(const std::vector<substitution>& made) const;
+
     private:
         struct impl;
         std::shared_ptr<impl> p_;

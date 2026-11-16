@@ -1005,7 +1005,7 @@ namespace pseudalis
     }
 
     bool service::text(const std::string& operation, const std::string& text, json& out, user_error& error,
-                       bool tags, const json& substitutions)
+                       bool tags, const json& substitutions, bool session)
     {
         if (!engine_)
         {
@@ -1018,7 +1018,9 @@ namespace pseudalis
         request["operation"] = operation;
         request["name"] = "text";
         request["tags"] = tags;
-        request["one_time_key"] = operation == "anonymize_text";
+        session = session && operation == "anonymize_text";
+        request["one_time_key"] = operation == "anonymize_text" && !session;
+        request["session"] = session;
         if (substitutions.is_array()) request["substitutions"] = substitutions;
         json result;
         std::string output, e;
@@ -1039,6 +1041,7 @@ namespace pseudalis
             if (result.contains("tags")) out["tags"] = result["tags"];
             if (result.contains("restored")) out["restored"] = result["restored"];
             if (result.contains("substitutions")) out["substitutions"] = result["substitutions"];
+            if (result.contains("values")) out["values"] = result["values"];
         }
         return true;
     }

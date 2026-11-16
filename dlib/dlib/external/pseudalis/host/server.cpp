@@ -473,7 +473,9 @@ namespace pseudalis
                     return;
                 }
                 user_error e;
-                if (!s->text(operation, body["text"].str(), out, e, tags, body["substitutions"]))
+                // Un texte du relais d'Albireo : pseudonymes de la clé de séance, rendus avec leurs valeurs.
+                const bool session = body["session"].as_bool(false);
+                if (!s->text(operation, body["text"].str(), out, e, tags, body["substitutions"], session))
                 {
                     send_error(res, 422, e);
                     return;

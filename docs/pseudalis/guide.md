@@ -60,7 +60,7 @@ Les routes principales, décrites en détail par `web/openapi.json` et la page d
 | Route | Rôle |
 |---|---|
 | `POST /v1/anonymize`, `POST /v1/restore` | Protéger ou restaurer un fichier, envoyé tel quel dans le corps |
-| `POST /v1/text/anonymize`, `/v1/text/restore`, `/v1/text/detect` | La même chose pour un texte, en JSON |
+| `POST /v1/text/anonymize`, `/v1/text/restore`, `/v1/text/detect` | La même chose pour un texte, en JSON ; avec `"session": true`, la clé de séance du relais d'Albireo (3.1.0), et les valeurs des pseudonymes dans la réponse (`values`) |
 | `POST /v1/names/anonymize`, `/v1/names/restore` | Les noms de fichiers |
 | `GET /v1/lookup` | Si un fichier est un fichier protégé connu de cette installation |
 | `GET /v1/records`, `GET /v1/records/{id}/original`, `DELETE /v1/records/{id}` | Les originaux conservés |
@@ -98,14 +98,15 @@ Un `admin.token` laissé par une version antérieure n'est plus lu.
 ```sh
 build/macos-pseudalis/tests/test_engine            # le moteur
 build/macos-pseudalis/tests/test_host <dossier>    # le service et ses fichiers
-PSEUDALIS_TEST_PORT=18474 bash dlib/dlib/external/pseudalis/tools/test_macos.sh   # 34 étapes
+PSEUDALIS_TEST_PORT=18474 bash dlib/dlib/external/pseudalis/tools/test_macos.sh   # 35 étapes
 ```
 
-`test_macos.sh` lance un service d'essai isolé ; il prend le port 18444 par défaut, celui du vrai service : quand celui-ci tourne, `PSEUDALIS_TEST_PORT` en donne un autre. Résultat attendu : **34 étapes sur 34**.
+`test_macos.sh` lance un service d'essai isolé ; il prend le port 18444 par défaut, celui du vrai service : quand celui-ci tourne, `PSEUDALIS_TEST_PORT` en donne un autre. Résultat attendu : **35 étapes sur 35**.
 
 ## Sécurité
 
 - **Plus de chiffrement en sortie** (2.2.0, décision de l'humain du 2026-11-15) : le coffre garde les originaux en clair (les blobs chiffrés d'une version antérieure sont réécrits en clair au démarrage), et l'export de la clé est la clé en clair. Tout programme du Mac qui lit le dossier de données lit les originaux ; quiconque lit un export de la clé peut restaurer les copies protégées. Un export protégé d'une version antérieure s'importe encore, avec sa phrase secrète, par l'interface. Depuis la 3.0.0, plus rien n'est chiffré en sortie : les copies portent des pseudonymes faits sous une clé jetable par document, effacée aussitôt ; la clé de `keys/` ne sert plus qu'à relire les copies et les blobs d'une version antérieure et aux identifiants des images. Plus d'export ni d'import de la clé.
+- **Clé de séance du relais d'Albireo** (3.1.0) : un texte envoyé avec `"session": true` est protégé sous une clé tirée au démarrage du moteur, gardée en mémoire seulement, et la réponse donne la valeur de chaque pseudonyme. Ces pseudonymes-là reviennent donc, le temps que le service tourne : c'est ce qui permet au relais de remettre les vrais noms dans la réponse d'un moteur extérieur. La route ne rend que les valeurs du texte qu'on lui envoie : elle n'ouvre aucun pseudonyme d'un document.
 - Sans jeton d'administration, tout programme du Mac qui joint `https://localhost` au port du service peut lire les originaux conservés, exporter la clé avec une phrase de passe de son choix, et changer les réglages. C'est le choix de l'humain (2026-11-15), le même que pour Albireo ; il convient à un Mac à un seul utilisateur.
 - Restent les gardes de toutes les routes : l'en-tête Host doit nommer le serveur local, et une requête venue d'une page doit venir de ce serveur. Aucun site web ne peut donc piloter le service par le navigateur.
 - Sans l'accès réseau, le service n'écoute que sur `127.0.0.1` : les autres appareils ne le joignent pas.

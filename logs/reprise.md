@@ -1,15 +1,15 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-15 vers 18 h 45, sur le Mac M2. Ce fichier va **du plus récent au plus ancien** : l'état actuel, ce qui est en cours et à faire, puis ce qui est fait et les décisions (antéchronologiques), les problèmes ouverts et les commandes. Le détail de chaque étape est dans `logs/journal-modifications.md`.
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-16 vers 6 h, sur le Mac M2. Ce fichier va **du plus récent au plus ancien** : l'état actuel, ce qui est en cours et à faire, puis ce qui est fait et les décisions (antéchronologiques), les problèmes ouverts et les commandes. Le détail de chaque étape est dans `logs/journal-modifications.md`.
 
 ## État actuel
 
-- `main` = **Albireo 5.2.0** ; **Pseudalis 3.0.0** (numérotation du fork, documentation à part : `docs/pseudalis/`, `blog/pseudalis/`, `pseudalis/web/changelog.md`). Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
+- `main` = **Albireo 5.2.0** ; **Pseudalis 3.1.0** (numérotation du fork, documentation à part : `docs/pseudalis/`, `blog/pseudalis/`, `pseudalis/web/changelog.md`). Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
 - **Vrai service** : Albireo tourne en **5.2.0** (relancé à 19 h 57 ; réseau 8444 vérifié : page et API répondent 200 sans mot de passe) et Pseudalis en **3.0.0** (relancé le 2026-11-15 vers 21 h 40, accès réseau ouvert sur 8445 ; Pseudalis sur 18444, bibliothèque `build/albireo-home/library` remplie de clones de `build/models` ; port 18443, réseau 8444 sans mot de passe, journal `build/albireo-home/logs/console.log`).
-- **Tests** : `test_macos.sh` d'Albireo 59 sur 59 (5.2.0, 2026-11-15), de Pseudalis 34 sur 34 (2.1.0, 2026-11-15) ; banc de la page 121 vérifications (5.2.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
+- **Tests** : `test_macos.sh` d'Albireo 59 sur 59 (5.2.0, 2026-11-15), de Pseudalis 35 sur 35 (3.1.0, 2026-11-16) ; banc de la page 121 vérifications (5.2.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
 - **Blog** : épisode 47 ; **blog de Pseudalis** : épisode 2 ; **notes pour l'auteur** : changement 23, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
 - **Le mode économie d'énergie du M2 est coupé** (2026-11-15) : les mesures redeviennent possibles sur le M2 (vérifier `pmset -g | grep lowpowermode` avant) ; les réglages fins attendent le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
-- **Original** : détaché depuis le 2026-11-11, plus de fusion ; lu à `53ddfe4` (Albireo 1.0.20) pour la reprise à la main du 2026-11-14.
+- **Original** : détaché depuis le 2026-11-11, plus de fusion ; lu à `53ddfe4` (Albireo 1.0.20) pour la reprise à la main du 2026-11-14, puis à `3bea372` (Albireo 1.0.23, 37 commits depuis la dernière fusion) pour le relais.
 - **Documents du portage** : dans Albireo, `/carnet/` (menu ☰) ; sommaire `macos/site-docs/sommaire.json` ; mot-clé « sitelog » (donner l'adresse du carnet). L'ancien site à part (`serve.py`, port 8650) est retiré.
 
 ## Objectif
@@ -18,7 +18,15 @@ Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les ex
 
 ## En cours
 
-Rien en cours. **Question ouverte** (2026-11-15) : le lecteur de Pseudalis est sur le Mac un dossier ordinaire (`build/pseudalis-home/drive`) ; proposé à l'humain : l'ajouter aux favoris du Finder ou le monter comme un volume « Pseudalis ».
+**Reprise du relais de l'original** (choix de l'humain, 2026-11-16 : piste B) : Albireo envoie une discussion à un moteur extérieur (OpenAI et compatibles, Ollama, Claude), pseudonymisée par Pseudalis, et remet les vraies valeurs dans la réponse ; mode hors ligne limité au Mac et au réseau de la maison ; recherche web de Claude. Source : `upstream/main` à `3bea372` (Albireo 1.0.22 `dd858d5` et 1.0.23 `37c6304`), fichiers `host/relay.{h,cpp}`, `host/pseudonyms.{h,cpp}`, parties de `server.cpp`, `service.cpp`, `settings.cpp`, `http_fetch`, `certificates`, `test_host.cpp`, `make_openapi.py`, page.
+
+1. ~~Pseudalis 3.1.0 : clé de séance (`"session": true` sur `/v1/text/anonymize`, réponse `values`)~~ fait.
+2. **Albireo 5.3.0, le service** : les quatre fichiers traduits sont dans `albireo/host/` (pas encore compilés) ; à faire : `pseudalis_client` adapté (un seul appel avec `session`, plus de `/v1/text/restore` ; contrôles de dossier du Mac déjà dans `platform.cpp`), `relay_settings` (secret dans `relay.secret`, droits 0600, comme `proxy.secret`), `http_client()`, `seal_secret()`/`open_secret()`, routes et service, tests de `test_host` repris de l'original, `make_openapi.py`.
+3. **Albireo 5.4.0, la page** : modèle `albireo-relay` dans le sélecteur, réglages du relais dans l'onglet Service avec leurs fiches.
+
+Ensuite : blog (épisode 48), notes de version, tableau des différences, notes pour l'auteur si l'original y montre des défauts.
+
+Question ouverte (2026-11-15) : **Question ouverte** (2026-11-15) : le lecteur de Pseudalis est sur le Mac un dossier ordinaire (`build/pseudalis-home/drive`) ; proposé à l'humain : l'ajouter aux favoris du Finder ou le monter comme un volume « Pseudalis ».
 
 **Gemma 4 sur le GPU est complet** (dense) : étapes en 4.26.0, prompts en 4.27.0 (`attention_mtile` en deux tranches de 256 pour les têtes de 512, `SPLIT` ; deux listes de tuiles par largeur de tête). Sa vitesse reste à mesurer sur le Mac mini, en particulier celle des prompts, dont les couches de 512 calculent leurs scores deux fois. Pour comparer au processeur : le forcer en produits flottants (comme le contrôle), sinon ses activations arrondies sur 8 bits le font diverger tôt sur ce modèle.
 
@@ -33,6 +41,10 @@ Rien en cours. **Question ouverte** (2026-11-15) : le lecteur de Pseudalis est s
 7. Pour l'humain, images du Qwen3.5-4B déjà installé : onglet Modèles, chercher « unsloth/Qwen3.5-4B-GGUF », cocher « Avec la lecture des images » et ajouter de nouveau le fichier Q4_K_M (seul le projecteur, 672 Mo, est téléchargé ; essayé sur le service d'essai, pas sur le vrai).
 
 ## Fait, du plus récent au plus ancien
+
+### 2026-11-16
+
+- **Pseudalis 3.1.0** : clé de séance pour le relais d'Albireo (`"session": true` sur `/v1/text/anonymize`, valeurs dans `values`) ; 35 sur 35.
 
 ### 2026-11-15
 

@@ -2,7 +2,7 @@
 
 Un tableau par thème. Chaque ligne dit ce que fait l'original (Pseudalis pour Windows, de Cydral), ce que fait le fork sur Mac, pourquoi, et le gain mesuré quand il y en a un. Le détail se trouve dans les [notes de version de Pseudalis](../../dlib/dlib/external/pseudalis/web/changelog.md) (« v. x.y.z »), les [notes pour l'auteur de Pseudalis](notes-pour-l-auteur.md) et le [journal](../../logs/journal-modifications.md). Ce qui touche dlib et Albireo est dans le [tableau général](../differences-mac-windows.md).
 
-Base de comparaison : l'original au commit `184ea00` (Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Pseudalis 3.0.0, 15 novembre 2026.
+Base de comparaison : l'original au commit `184ea00` (Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Pseudalis 3.1.0, 16 novembre 2026.
 
 ## 1. Système
 
@@ -22,6 +22,7 @@ Base de comparaison : l'original au commit `184ea00` (Pseudalis 1.0.5), dernièr
 | Administration | Jeton d'administration (`admin.token`), donné par l'icône dans l'adresse de la page | Plus de jeton : l'administration est ouverte sur le Mac, comme Albireo ; gardes Host et origine conservées | Demande de l'humain : rien sur le Mac n'ouvrait la page avec le jeton | — | v. 2.0.0 |
 | Port par défaut | 8444 | 8444, réglé à 18444 sur le Mac du fork | L'accès réseau d'Albireo prend aussi 8444 | — | guide |
 | Pseudonymes | Balises `[[TYPE:valeur chiffrée#contrôle]]` (FF1 sur AES-256), restaurables avec la clé de l'installation | Pseudonymes sans balise, sous une clé jetable par document : les mêmes dans un document, d'autres ailleurs, sans retour ; seul l'original conservé rend un fichier | Décision de l'humain : « la pseudo n'a pas besoin d'être inversée », « plus besoin de clé » | — | v. 3.0.0 |
+| Textes du relais d'Albireo | Balises ou substituts sous la clé de l'installation ; Albireo demande leurs valeurs par `/v1/text/restore` | `"session": true` : clé de séance tirée au démarrage, en mémoire seulement ; les valeurs viennent dans la réponse (`values`), en un seul appel | Les pseudonymes sans retour (3.0.0) ne permettaient plus au relais de rendre les vrais noms | — | v. 3.1.0 |
 | Coffre des originaux | Chiffré (AES-256-CTR, HMAC-SHA-256) | En clair ; les anciens blobs sont réécrits en clair au démarrage | Décision de l'humain : plus de chiffrement en sortie | — | v. 2.2.0 |
 | Export de la clé | Protégé par une phrase secrète (PBKDF2, 600 000 itérations) | En clair en 2.2.0, puis retiré en 3.0.0 avec la section de la clé : plus aucune clé à garder | Décision de l'humain : plus de chiffrement, plus de clé | — | v. 2.2.0, v. 3.0.0 |
 | Accès depuis le réseau | Aucun : le service n'écoute que sur 127.0.0.1 | Réglage `lan` : second serveur en http au port `lan_port` (8445), sans mot de passe, adresses du Mac seulement (IPv4 ou `.local`) | Ouvrir Pseudalis depuis l'iPad (demande de l'humain) | — | v. 2.1.0 |
