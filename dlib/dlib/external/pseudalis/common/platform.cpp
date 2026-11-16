@@ -135,12 +135,6 @@ namespace pseudalis
         return stat(p.c_str(), &st) == 0 ? static_cast<uint64_t>(st.st_size) : 0;
     }
 
-    bool file_being_written(const std::string& p)
-    {
-        struct stat st;
-        return stat(p.c_str(), &st) == 0 && std::time(nullptr) - st.st_mtime < 30;
-    }
-
     bool remove_file(const std::string& p)
     {
         return std::remove(p.c_str()) == 0;
@@ -151,28 +145,6 @@ namespace pseudalis
         return std::rename(from.c_str(), to.c_str()) == 0;
     }
 
-
-    bool copy_file(const std::string& from, const std::string& to, const std::atomic<bool>* cancel)
-    {
-        bool ok = false;
-        {
-            std::ifstream in(from, std::ios::binary);
-            std::ofstream out(to, std::ios::binary | std::ios::trunc);
-            if (!in || !out) return false;
-            std::vector<char> buf(1 << 20);
-            ok = true;
-            while (ok && in)
-            {
-                in.read(buf.data(), static_cast<std::streamsize>(buf.size()));
-                const std::streamsize n = in.gcount();
-                ok = !(cancel && *cancel) && (n == 0 || static_cast<bool>(out.write(buf.data(), n)));
-            }
-            out.close();
-            ok = ok && !in.bad() && static_cast<bool>(out);
-        }
-        if (!ok) std::remove(to.c_str());
-        return ok;
-    }
 
     std::vector<std::string> list_dir(const std::string& p)
     {
@@ -215,13 +187,6 @@ namespace pseudalis
         const std::string out = r;
         std::free(r);
         return out;
-    }
-
-    bool direct_path(const std::string& p)
-    {
-        std::string q = p;
-        while (q.size() > 1 && q.back() == '/') q.pop_back();
-        return !q.empty() && final_path(q) == q;
     }
 
     bool path_inside(const std::string& path, const std::string& folder)
@@ -514,40 +479,6 @@ namespace pseudalis
         identity_.clear();
     }
 
-    bool read_file_link_free(const std::string& path, const std::string& folder, std::string& data,
-        uint64_t max_bytes)
-    {
-        link_free_file f;
-        std::string why;
-        if (!f.open(path, folder, why) || f.size() > max_bytes) return false;
-        data.resize(static_cast<size_t>(f.size()));
-        size_t done = 0;
-        while (done < data.size())
-        {
-            const long long n = f.read(&data[done], data.size() - done);
-            if (n <= 0) return false;
-            done += static_cast<size_t>(n);
-        }
-        return true;
-    }
-
-    bool link_free_folder(const std::string& path, const std::string& folder)
-    {
-        std::string why;
-        const int fd = open_link_free(path, folder, true, why);
-        if (fd < 0) return false;
-        ::close(fd);
-        return true;
-    }
-
-    std::string file_identity(const std::string& p)
-    {
-        struct stat st;
-        if (lstat(p.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) return std::string();
-        return std::to_string(static_cast<unsigned long long>(st.st_dev)) + ":"
-            + std::to_string(static_cast<unsigned long long>(st.st_ino));
-    }
-
     bool handle_at(int fd, const std::string& path)
     {
         struct stat a, b;
@@ -702,20 +633,6 @@ namespace pseudalis
         return buf;
     }
 
-    int compare_versions(const std::string& a, const std::string& b)
-    {
-        std::istringstream sa(a), sb(b);
-        for (int i = 0; i < 4; ++i)
-        {
-            long x = 0, y = 0;
-            std::string pa, pb;
-            if (std::getline(sa, pa, '.')) x = std::atol(pa.c_str());
-            if (std::getline(sb, pb, '.')) y = std::atol(pb.c_str());
-            if (x != y) return x < y ? -1 : 1;
-        }
-        return 0;
-    }
-
     std::string random_hex(size_t n)
     {
         static const char* hex = "0123456789abcdef";
@@ -736,146 +653,5 @@ namespace pseudalis
         return out;
     }
 
-
-    int run_process(const std::string& program, const std::vector<std::string>& args, std::string* output,
-        unsigned timeout_ms, const std::atomic<bool>* stop, const process_options* options)
-    {
-        const std::string* input = options ? options->input : nullptr;
-        // Les attentes durent au plus un dixième de seconde, pour que stop arrête aussitôt le
-        // programme.
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
-        auto remaining_ms = [&]() {
-            const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(
-                deadline - std::chrono::steady_clock::now()).count();
-            return left > 0 && !(stop && stop->load()) ? static_cast<int>(std::min<long long>(left, 100)) : 0;
-        };
-        int fds[2] = { -1, -1 }, ins[2] = { -1, -1 };
-        if (output && pipe(fds) != 0) return -1;
-        if (input && pipe(ins) != 0)
-        {
-            if (output)
-            {
-                close(fds[0]);
-                close(fds[1]);
-            }
-            return -1;
-        }
-        /*
-            Ce dont l'enfant a besoin est préparé avant le fork : entre le fork et le démarrage
-            du programme, l'enfant d'un processus à plusieurs threads ne peut faire que des
-            appels système, un verrou de l'allocateur pouvant être tenu par un thread qui
-            n'existe pas chez lui.
-        */
-        std::vector<char*> argv;
-        argv.push_back(const_cast<char*>(program.c_str()));
-        for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
-        argv.push_back(nullptr);
-        long max_fd = sysconf(_SC_OPEN_MAX);
-        if (max_fd < 0 || max_fd > 65536) max_fd = 65536;
-        const char* folder = options && !options->directory.empty() ? options->directory.c_str() : nullptr;
-        const bool restricted = options && options->restricted;
-        const size_t memory_limit = options ? options->memory_limit : 0;
-        const pid_t pid = fork();
-        if (pid < 0)
-        {
-            for (int fd : { fds[0], fds[1], ins[0], ins[1] })
-                if (fd >= 0) close(fd);
-            return -1;
-        }
-        if (pid == 0)
-        {
-            if (output)
-            {
-                dup2(fds[1], 1);
-                dup2(fds[1], 2);
-            }
-            if (input) dup2(ins[0], 0);
-            if (folder && chdir(folder) != 0) _exit(127);
-            // Un enfant restreint est borné en mémoire, n'écrit aucun fichier et ne laisse aucun
-            // fichier core.
-            if (restricted)
-            {
-                rlimit limit;
-                if (memory_limit)
-                {
-                    limit.rlim_cur = limit.rlim_max = static_cast<rlim_t>(memory_limit);
-                    setrlimit(RLIMIT_AS, &limit);
-                }
-                limit.rlim_cur = limit.rlim_max = 0;
-                setrlimit(RLIMIT_FSIZE, &limit);
-                setrlimit(RLIMIT_CORE, &limit);
-            }
-            // L'enfant ne garde que ses flux standard.
-            for (long fd = 3; fd < max_fd; ++fd) close(static_cast<int>(fd));
-            execv(program.c_str(), argv.data());
-            _exit(127);
-        }
-        // L'entrée part vers l'enfant depuis un thread, pour que sa sortie soit lue pendant ce
-        // temps.
-        std::thread writer;
-        if (input)
-        {
-            close(ins[0]);
-            const int w = ins[1];
-            writer = std::thread([w, input]() {
-                size_t at = 0;
-                while (at < input->size())
-                {
-                    const ssize_t n = write(w, input->data() + at, input->size() - at);
-                    if (n < 0 && errno == EINTR) continue;
-                    if (n <= 0) break;
-                    at += static_cast<size_t>(n);
-                }
-                close(w);
-            });
-        }
-        bool ended = false;
-        if (output)
-        {
-            close(fds[1]);
-            char buf[4096];
-            for (;;)
-            {
-                pollfd p = { fds[0], POLLIN, 0 };
-                const int wait = remaining_ms();
-                if (wait == 0)
-                {
-                    ended = true;
-                    break;
-                }
-                const int r = poll(&p, 1, wait);
-                if (r < 0 && errno == EINTR) continue;
-                if (r < 0) break;
-                if (r == 0) continue;
-                const ssize_t n = read(fds[0], buf, sizeof(buf));
-                if (n < 0 && errno == EINTR) continue;
-                if (n <= 0) break;
-                output->append(buf, static_cast<size_t>(n));
-            }
-            close(fds[0]);
-        }
-        int status = 0;
-        for (;;)
-        {
-            const pid_t r = waitpid(pid, &status, WNOHANG);
-            if (r == pid) break;
-            if (ended || remaining_ms() == 0)
-            {
-                kill(pid, SIGKILL);
-                waitpid(pid, &status, 0);
-                if (writer.joinable()) writer.join();
-                return -1;
-            }
-            usleep(10000);
-        }
-        if (writer.joinable()) writer.join();
-        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-    }
-
-    void end_process(int code)
-    {
-        std::fflush(nullptr);
-        _exit(code);
-    }
 
 }

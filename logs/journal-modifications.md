@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-16 — Retirer le code mort de Pseudalis, comme l'original 1.0.6 (Pseudalis 3.1.1)
+
+- **Quoi** : piste F, Pseudalis 1.0.6 de l'original (`ca9b33d`). Parmi les fonctions que 1.0.6 retire, celles que le fork gardait sans aucun appel (déclaration et définition seules) : `certificate_thumbprint`, `copy_file`, `copy_open_file`, `direct_path`, `end_process`, `file_being_written`, `file_identity`, `http_proxy_for`, `http_resolve`, `link_free_folder`, `pictures_of`, `read_file_link_free`, `run_process`, `term_count`, puis `compare_versions` (elle servait au programme de mise à jour, déjà retiré du fork) et la structure `process_options` ; ensuite `resolve_unbounded` et `numeric_address`, que le compilateur a signalées orphelines. Non repris : l'icône de Windows, la langue du navigateur (français seul), le programme de mise à jour (absent du fork), le rapport d'architecture en PDF.
+- **Fichiers** : `pseudalis/common/{platform.h,platform.cpp}`, `pseudalis/engine/{engine.h,engine.cpp}`, `pseudalis/host/{certificates,crypto,http_fetch,store}.{h,cpp}`, `pseudalis/web/changelog.md`, version ; `logs/reprise.md`.
+- **Pourquoi** : reprise des versions 1.0.6 à 1.0.11 de Pseudalis, dans l'ordre.
+- **Étapes** : chaque fonction vérifiée à deux occurrences exactement avant retrait ; build de Pseudalis sans avertissement ; `test_macos.sh` (`PSEUDALIS_TEST_PORT=18476`) : **35 sur 35**.
+
 ## 2026-11-16 — Choisir l'effort du relais et supprimer une discussion depuis son projet (Albireo 5.9.0)
 
 - **Quoi** : piste F, partie Albireo, reprise de l'original 1.0.23 (`37c6304`). Menu de l'effort : `effortMenu()` (`composer.js`), le bouton du raisonnement en « Effort · … » pour un modèle extérieur qui a des niveaux (`relayCapabilities()` donne `efforts` et `defaultEffort`), `reasoning_effort` dans la requête (`generation.js`), textes dans `i18n.js`. Suppression depuis un projet : corbeille sur chaque ligne (`projects.js`), `removeConversation` exportée, `afterDeletion()` (`navigation.js`) commun à cet onglet et aux autres (`tabs.js`). Blog : épisode 50 (pistes B à F).

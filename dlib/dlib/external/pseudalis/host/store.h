@@ -184,7 +184,6 @@ namespace pseudalis
         // Supprime les images qu'aucun fichier ne nomme, dont le coffre abandonne alors les blobs ; leur nombre.
         size_t remove_unlinked_pictures();
         void link_picture(long long file, const std::string& picture);
-        std::vector<std::string> pictures_of(long long file);
 
         // Les fichiers du dossier du lecteur tels que le service les a laissés ; leurs chemins se comparent sans casse.
         std::vector<folder_file> folder_files(const std::string& folder);

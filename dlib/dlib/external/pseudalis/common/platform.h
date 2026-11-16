@@ -49,15 +49,9 @@ namespace pseudalis
     bool dir_exists(const std::string& p);
     bool make_dirs(const std::string& p);
     uint64_t file_size(const std::string& p);
-    // Indique si un autre programme écrit encore un fichier : tenu ouvert en écriture sous
-    // Windows, modifié au cours des 30 dernières secondes ailleurs.
-    bool file_being_written(const std::string& p);
     bool remove_file(const std::string& p);
     // Déplace un fichier, en remplaçant la destination.
     bool rename_file(const std::string& from, const std::string& to);
-    // Copie un fichier, en remplaçant la destination ; une copie interrompue par cancel ne
-    // laisse aucune destination derrière elle.
-    bool copy_file(const std::string& from, const std::string& to, const std::atomic<bool>* cancel = nullptr);
     // Supprime un dossier et tout ce qu'il contient ; un lien part seul, ce vers quoi il mène reste.
     bool remove_tree(const std::string& p);
     std::vector<std::string> list_dir(const std::string& p);
@@ -71,10 +65,6 @@ namespace pseudalis
         chaîne vide quand p ne peut pas être ouvert.
     */
     std::string final_path(const std::string& p);
-
-    // Indique si p atteint son fichier ou son dossier sans passer par un lien : son chemin final
-    // est p lui-même.
-    bool direct_path(const std::string& p);
 
     // Indique si path, liens résolus, est folder ou se trouve dessous ; path peut ne pas exister
     // encore.
@@ -162,18 +152,6 @@ namespace pseudalis
         std::string identity_;
     };
 
-    // Lit un fichier d'au plus max_bytes sans passer par aucun lien, comme link_free_file l'ouvre.
-    bool read_file_link_free(const std::string& path, const std::string& folder, std::string& data,
-        uint64_t max_bytes);
-
-    // Indique si le dossier path, sous folder, est atteint sans aucun lien, comme link_free_file
-    // ouvre un fichier.
-    bool link_free_folder(const std::string& path, const std::string& folder);
-
-    // L'identité du fichier p lui-même, sans suivre de lien, telle que link_free_file::identity() la
-    // donne, ou une chaîne vide pour un lien, un dossier ou une entrée manquante.
-    std::string file_identity(const std::string& p);
-
     // Indique si un fichier ouvert, un handle sous Windows et un descripteur ailleurs, se trouve à path
     // atteint sans aucun lien : un dossier de path remplacé par un lien après une vérification se voit.
     bool handle_at(int fd, const std::string& path);
@@ -232,45 +210,6 @@ namespace pseudalis
 
     // Une chaîne hexadécimale aléatoire de n caractères, tirée du générateur du système.
     std::string random_hex(size_t n);
-
-    // Compare des versions "1.2.3" : négatif, nul ou positif selon que a est plus ancienne,
-    // égale ou plus récente.
-    int compare_versions(const std::string& a, const std::string& b);
-
-    struct process_options
-    {
-        // Écrit sur l'entrée standard du programme, qui se ferme une fois l'écriture faite.
-        const std::string* input = nullptr;
-        /*
-            Sous Windows, le programme tourne sans console, avec une copie du jeton de ce
-            processus sans ses privilèges et de faible intégrité, seul dans un job qui l'arrête
-            au-delà de memory_limit octets et quand le job se ferme, et qui lui refuse tout
-            processus enfant ; il ne tourne pas quand Windows refuse l'une de ces étapes.
-            Ailleurs, son espace d'adressage est borné par memory_limit, il n'écrit aucun
-            fichier et ne laisse aucun fichier core, et sous Linux il ne gagne aucun privilège
-            en lançant un autre programme.
-        */
-        bool restricted = false;
-        size_t memory_limit = 0;
-        // Le dossier dans lequel le programme démarre, celui de ce processus quand il est vide.
-        std::string directory;
-    };
-
-    /*
-        Lance un programme avec des arguments et l'attend ; renvoie son code de sortie, ou -1.
-        Le programme est arrêté quand il tourne au-delà de timeout_ms, ou dès que stop devient
-        vrai.  output reçoit ce que le programme écrit sur sa sortie standard et sa sortie
-        d'erreur.
-    */
-    int run_process(const std::string& program, const std::vector<std::string>& args, std::string* output = nullptr,
-        unsigned timeout_ms = 60000, const std::atomic<bool>* stop = nullptr, const process_options* options = nullptr);
-
-    /*
-        Termine le processus avec code une fois ses sorties standard vidées, sans décharger ses
-        bibliothèques et sans les destructeurs de ses objets statiques, dont les threads seraient
-        sinon attendus sous le verrou du chargeur de Windows.
-    */
-    [[noreturn]] void end_process(int code);
 
 }
 

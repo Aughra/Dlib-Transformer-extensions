@@ -4,7 +4,7 @@
 
 ## État actuel
 
-- `main` = **Albireo 5.9.0** ; **Pseudalis 3.1.0** (numérotation du fork, documentation à part : `docs/pseudalis/`, `blog/pseudalis/`, `pseudalis/web/changelog.md`). Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
+- `main` = **Albireo 5.9.0** ; **Pseudalis 3.1.1** (numérotation du fork, documentation à part : `docs/pseudalis/`, `blog/pseudalis/`, `pseudalis/web/changelog.md`). Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
 - **Vrai service** : Albireo tourne en **5.9.0** et Pseudalis en **3.1.0** (relancés le 2026-11-16 au soir, après le redémarrage du Mac par une mise à jour de macOS ; relais coupé). Pseudalis sur 18444 (accès réseau 8445), Albireo sur 18443 (réseau 8444 sans mot de passe), bibliothèque `build/albireo-home/library` remplie de clones de `build/models` ; journal `build/albireo-home/logs/console.log`.
 - **Tests** : `test_macos.sh` d'Albireo 60 sur 60 (5.8.0, 2026-11-16), de Pseudalis 35 sur 35 (3.1.0, 2026-11-16) ; banc de la page 131 vérifications (5.9.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
 - **Blog** : épisode 50 ; **blog de Pseudalis** : épisode 2 ; **notes pour l'auteur** : changement 25, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
@@ -34,7 +34,7 @@ Reprise terminée (blog : épisode 48). Réglages du relais réservés au Mac se
 
 **Ensuite, demandé par l'humain (2026-11-16)** : le backend Metal des tenseurs de dlib, phases 1 à 8 sur 8, une par une, consignes recopiées dans `logs/consignes-backend-metal-dlib.md` ; la phase 1 commence par un plan court **à faire valider avant toute modification**.
 
-**Liste en cours, dans l'ordre (2026-11-16, « dans l'ordre fait tout »)** : ~~A. Gemma 4, lignes utiles des couches partagées (5.5.0)~~ ; ~~B. panne d'une étape de Qwen 3.5 sur le GPU (5.5.1, carnet et relecture)~~ ; ~~C. boutons selon les capacités vérifiées (5.6.0)~~ ; ~~D. Mistral Small 3.2 (5.7.0)~~ ; ~~E. noyau NEON Q5_K (5.8.0 ; Q8_0 sans gain, non gardé)~~ ; ~~F. effort du relais, suppression depuis un projet (5.9.0)~~ ; **en cours : Pseudalis 1.0.6 à 1.0.11** de l'original (1.0.6 : surtout Windows ; 1.0.8 à 1.0.10 : colonnes imposées des CSV, adresses IP ; 1.0.11 : détecteurs réentraînés, dans `dlib/privacy` et `slm_document_anonymizer_ex.h`), en sous-étapes de Pseudalis.
+**Liste en cours, dans l'ordre (2026-11-16, « dans l'ordre fait tout »)** : ~~A. Gemma 4, lignes utiles des couches partagées (5.5.0)~~ ; ~~B. panne d'une étape de Qwen 3.5 sur le GPU (5.5.1, carnet et relecture)~~ ; ~~C. boutons selon les capacités vérifiées (5.6.0)~~ ; ~~D. Mistral Small 3.2 (5.7.0)~~ ; ~~E. noyau NEON Q5_K (5.8.0 ; Q8_0 sans gain, non gardé)~~ ; ~~F. effort du relais, suppression depuis un projet (5.9.0)~~ ; **en cours : Pseudalis 1.0.6 à 1.0.11** de l'original (~~1.0.6 : code mort retiré, 3.1.1~~ ; 1.0.8 à 1.0.10 : colonnes imposées des CSV, adresses IP ; 1.0.11 : détecteurs réentraînés, dans `dlib/privacy` et `slm_document_anonymizer_ex.h`), en sous-étapes de Pseudalis.
 
 1. Reste de Gemma 4 : le 26B-A4B sur le GPU (après mesure sur le Mac mini) ; E4B, 12B, 31B jamais essayés.
 2. Reprise de l'original non choisie le 2026-11-14 : plusieurs tokens par pas (brouillons).
@@ -47,6 +47,7 @@ Reprise terminée (blog : épisode 48). Réglages du relais réservés au Mac se
 
 ### 2026-11-16
 
+- **Pseudalis 3.1.1** : code mort retiré comme l'original 1.0.6 (451 lignes) ; 35 sur 35.
 - **Albireo 5.9.0** (piste F) : menu de l'effort du relais, suppression d'une discussion depuis son projet ; banc de la page 131 ; épisode 50.
 - **Albireo 5.8.0** (piste E) : noyau NEON de Q5_K, Q5_K_M ×1,8 à l'écriture ; Q8_0 sans gain, non gardé ; 60 sur 60.
 - **Albireo 5.7.0** (piste D) : format de Mistral Small 3.2 (dates, outils avant la dernière question, identifiants) ; vrai modèle essayé, trop gros pour le GPU du M2.

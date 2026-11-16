@@ -86,28 +86,6 @@ namespace pseudalis
     bool http_get_range(const std::string& url, uint64_t from, int64_t to,
         const std::function<bool(const char*, size_t)>& receiver, std::string& error, uint64_t* total = nullptr);
 
-    /*!
-        ensures
-            - Donne dans host et port le proxy par lequel les téléchargements joignent origin
-              ("https://host:port"), tel que set_http_proxy() le choisit, avec son
-              utilisateur et son mot de passe quand il en a.
-            - Renvoie false quand origin est joint directement : le réglage "none", aucun
-              proxy du système, une adresse locale ou un hôte de NO_PROXY.
-    !*/
-    bool http_proxy_for(const std::string& origin, std::string& host, int& port, std::string& user,
-        std::string& password);
-
-    /*!
-        ensures
-            - Donne dans addresses les adresses IPv4 et IPv6 du nom host, sous forme de texte
-              ("93.184.215.14", "2606:2800:21f:cb07:6820:80da:af6b:8b2c"), dans l'ordre du
-              résolveur du système. Sa durée dépend de ce résolveur ; l'annulation est vérifiée
-              avant et après l'appel, mais ne l'interrompt pas.
-            - Renvoie false avec error quand le nom n'est pas résolu ou quand les
-              téléchargements ont été annulés.
-    !*/
-    bool http_resolve(const std::string& host, std::vector<std::string>& addresses, std::string& error);
-
     class http_registration
     {
         /*!

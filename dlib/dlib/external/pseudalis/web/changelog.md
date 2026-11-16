@@ -2,6 +2,14 @@
 
 Pseudalis pour macOS sur puce Apple, version dérivée de Pseudalis Community (Cydral Technology), maintenue par TortueTech. Le fork numérote Pseudalis à part de l'original à partir de 2.0.0. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne ; avant 2.0.0, la section porte le numéro de la version de l'original sur laquelle reposait le fork.
 
+## 3.1.1 — 16 novembre 2026
+
+### Corrections
+
+- Code que plus rien n'appelait retiré, comme dans l'original (Pseudalis 1.0.6) : seize fonctions et une structure (copie et identité de fichiers, lecture sans lien, lancement de processus, comparaison de versions, empreinte de certificat, résolution de noms, liste des images d'un enregistrement, nombre de termes imposés), soit 451 lignes, sans changement visible. Le reste de 1.0.6 (icône de Windows, langue du navigateur, import d'une mise à jour depuis un dossier) ne concerne pas le fork, en français seul et sans programme de mise à jour.
+
+---
+
 ## 3.1.0 — 16 novembre 2026
 
 ### Protection

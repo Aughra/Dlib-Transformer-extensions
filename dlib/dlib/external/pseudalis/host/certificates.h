@@ -57,9 +57,6 @@ namespace pseudalis
     // Supprime les certificats et les clés de dir ; false quand l'un d'eux subsiste.
     bool remove_certificate_files(const std::string& dir);
 
-    // SHA-256 de la forme DER d'un certificat PEM, en hexadécimal minuscule.
-    std::string certificate_thumbprint(const std::string& pem_path);
-
     // Octets DER du premier certificat d'un fichier PEM, vide en cas d'échec.
     std::string certificate_der(const std::string& pem_path);
 

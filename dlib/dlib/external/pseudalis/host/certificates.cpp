@@ -408,21 +408,5 @@ namespace pseudalis
         return der;
     }
 
-    std::string certificate_thumbprint(const std::string& pem_path)
-    {
-        const std::string der = certificate_der(pem_path);
-        if (der.empty()) return std::string();
-        unsigned char h[32];
-        mbedtls_sha256(reinterpret_cast<const unsigned char*>(der.data()), der.size(), h, 0);
-        static const char* hex = "0123456789abcdef";
-        std::string out;
-        for (unsigned char b : h)
-        {
-            out += hex[b >> 4];
-            out += hex[b & 15];
-        }
-        return out;
-    }
-
 
 }

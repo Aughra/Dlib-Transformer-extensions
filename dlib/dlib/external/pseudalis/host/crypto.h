@@ -49,17 +49,6 @@ namespace pseudalis
     !*/
     std::string sha256_open_file(link_free_file& f, const std::atomic<bool>* cancel = nullptr);
 
-    /*!
-        ensures
-            - Copie les size() octets d'un fichier ouvert depuis son début vers to, un nouveau
-              fichier (new_file), et renvoie le SHA-256 de ce qui a été écrit.
-            - Renvoie une chaîne vide, et supprime to, quand la copie échoue ou est annulée,
-              ou quand expected est fourni et diffère de ce hachage.  Un nom to déjà pris est
-              laissé tel quel.
-    !*/
-    std::string copy_open_file(link_free_file& from, const std::string& to, const std::string& expected,
-        const std::atomic<bool>* cancel = nullptr);
-
     std::string base64_encode(const std::string& data);
     std::string base64_decode(const std::string& text);
 
