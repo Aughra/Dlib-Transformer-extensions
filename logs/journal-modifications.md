@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-16 — Écrire les modèles en Q5_K avec un noyau NEON (Albireo 5.8.0)
+
+- **Quoi** : piste E. `dot_q5_K_neon` (`engine/qkernels_neon.inc`), sur le modèle de `dot_q4_K_neon`, le cinquième bit pris dans `qh` par `vtstq_u8` ; `qk_dot` l'emploie pour Q5_K. `test_qkernels` vérifie désormais que chaque noyau vectoriel rend le résultat du code portable bit pour bit. Un `dot_q8_0_neon` écrit en même temps a été retiré : aucun gain.
+- **Fichiers** : `albireo/engine/{qkernels.cpp,qkernels_neon.inc}`, `albireo/tests/test_qkernels.cpp`, `albireo/web/{changelog.md,openapi.json}`, version ; `docs/{notes-pour-l-auteur.md,differences-mac-windows.md}`, `logs/reprise.md`.
+- **Pourquoi** : piste E de la liste (« noyaux NEON de génération pour Q8_0, Q5_K »).
+- **Étapes** : `test_qkernels` passe (égalité exacte). Mesure directe d'un produit (programme provisoire du dossier temporaire, 4 096 lignes de 4 096 valeurs) : Q8_0 0,6 ms portable comme NEON, Q5_K 2,9 → 0,5 ms, Q4_K 1,0 → 0,4. Écriture sur le processeur, en alternance avec l'ancien moteur (`build/wt-avant-build`), deux fois : Qwen3.5-0.8B Q8_0 63-64 tokens/s avant comme après, LFM2.5-1.2B Q8_0 45,6-46,2 avant comme après (d'où le retrait du noyau Q8_0) ; Gemma 4 26B-A4B UD-Q4_K_M (service d'Albireo arrêté le temps de la mesure) 9,2-9,8 avant comme après ; Qwen3.5-0.8B **Q5_K_M** (`unsloth/Qwen3.5-0.8B-GGUF`, 590 Mo, téléchargé dans `build/bench-models`) 38,7-40,1 → 71,6-72,0, réponse identique. `test_macos.sh` : **60 sur 60**. Notes pour l'auteur : changement 25 (l'original a `dot_q5_K_avx2` pour x86).
+
 ## 2026-11-16 — Reprendre le format de Mistral Small 3.2 (Albireo 5.7.0)
 
 - **Quoi** : piste D, reprise à la main de l'original 1.0.14 (`2f67de2`), partie Mistral seulement (la réparation des guillemets était déjà reprise en 4.24.0). `chat_format.cpp` : `template_string()` lit un prompt système fait de littéraux joints par + et des variables de dates ; `tools_before_last_question()` ; `mistral_call_id()` ; `mistral_format` écrit les outils avant la dernière question, `[CALL_ID]` et `[TOOL_CONTENT]` quand le gabarit et le tokenizer les ont. `test_chat_format` : cas de Mistral Small 3.2 repris de l'original (rendus de Jinja), commentaires traduits.

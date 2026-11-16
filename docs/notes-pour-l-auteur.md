@@ -774,6 +774,15 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : l'original ne lit pas Gemma 4 ; l'idée vaut pour tout moteur qui lit un modèle à clés partagées (Gemma 3n, Gemma 4), sur toute plateforme.
 
+### Changement 25 : un noyau NEON pour Q5_K (Albireo 5.8.0)
+
+- **Avant** : en génération, Q5_K passait par le code portable de `qk_dot` (`dot_q5_K_ref`), qui décode le cinquième bit de chaque valeur octet par octet.
+- **Changement** : `dot_q5_K_neon` (`engine/qkernels_neon.inc`), sur le modèle de `dot_q4_K_neon` : mêmes échelles et minimums décodés d'un coup, le cinquième bit pris dans `qh` par `vtstq_u8` (bit 2 j pour les quatre bits de poids faible du groupe j, 2 j + 1 pour ceux de poids fort) et ajouté sous forme de 16, puis `vdotq_s32`. Mêmes sommes entières, même expression flottante finale que la référence : résultat identique au bit près, que `test_qkernels` vérifie désormais pour chaque format qui a un noyau vectoriel. Un noyau `dot_q8_0_neon` écrit de la même façon ne gagnait rien (0,6 ms dans les deux cas sur 4 096 lignes de 4 096 valeurs : clang vectorise déjà la boucle portable) et n'a pas été gardé.
+- **Exactitude** : `test_qkernels` (égalité exacte avec le code portable) ; réponse de Qwen3.5-0.8B Q5_K_M identique avant et après.
+- **Vitesse** (M2, 8 fils, `bench_runtime … q8`, processeur, avant et après en alternance, deux fois) : Qwen3.5-0.8B Q5_K_M, écriture 38,7-40,1 → 71,6-72,0 tokens/s. Produit d'une ligne de 4 096 valeurs : 2,9 → 0,5 ms (Q4_K, pour comparaison : 1,0 → 0,4). Gemma 4 26B-A4B UD-Q4_K_M, quelques couches en Q5_K : 9,2-9,8 tokens/s avant comme après.
+
+**Mac ou Windows** : propre au Mac (NEON). Sous Windows x86, l'original a déjà son noyau AVX2 pour Q5_K (`dot_q5_K_avx2`, `engine/qkernels.cpp:949` au commit `184ea00`) ; ce noyau-ci servirait aux PC Windows à processeur ARM (non testé).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -783,6 +792,7 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | Prompt de 512 tokens | pas mesuré | 418 à 422 tokens/s sur le GPU ; 217 à 224 sur le processeur (64 à 72 avec les changements 1 à 3) |
 | Prompt de 4 096 tokens | pas mesuré | 156 à 166 tokens/s, en demi-précision ou, avec le changement 7, en 8 bits (36 à 38 en 8 bits sans lui ; 50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |
 | Génération après 4 096 tokens | pas mesuré | 26,5 à 28,5 tokens/s sur le GPU ; 20 à 23 sur le processeur (9 en 8 bits sans le changement 7 ; 7,5 à 9 avec les changements 1 et 2 seuls) |
+| Qwen3.5-0.8B Q5_K_M (fork seulement), écriture sur le processeur | non lu par le moteur | 71,6 à 72,0 tokens/s avec le changement 25 (38,7 à 40,1 avant) |
 | Modèle de recherche (Q8_0), 512 tokens | pas mesuré | 573 à 601 tokens/s (184 à 213 avec les changements 1 à 3) |
 | Encodage d'une image 512 × 512, projecteur du 4B | pas mesuré | 1,8 à 2,2 s (8,9 à 10,3 avec les changements 1 à 3) |
 | 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 21,3 à 21,7 tokens/s sur le GPU ; 18,2 à 18,6 sur le processeur (17,6 à 18,1 sans le changement 8 ; 16,4 à 16,6 sans les changements 6 à 8) |

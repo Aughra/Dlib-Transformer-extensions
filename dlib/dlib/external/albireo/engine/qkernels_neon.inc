@@ -58,6 +58,63 @@ namespace
         return sum;
     }
 
+    /*
+        Q5_K (fork pour macOS, 5.8.0) : comme Q4_K, avec le cinquième bit de chaque valeur, pris dans qh
+        (bit 2 j pour les quatre bits de poids faible du groupe j, bit 2 j + 1 pour ceux de poids fort),
+        qui ajoute 16.
+    */
+    float dot_q5_K_neon(const uint8_t* w, const block_q8_K* y, long n)
+    {
+        const uint8x16_t m4 = vdupq_n_u8(0x0F);
+        const uint8x16_t sixteen = vdupq_n_u8(16);
+        float sum = 0.0f;
+        for (long b = 0; b < n / 256; ++b, w += 176)
+        {
+            const float d = h2f(w) * y[b].d;
+            const float dmin = h2f(w + 2) * y[b].d;
+            // Les échelles et les minimums, décodés comme pour Q4_K.
+            uint32_t u[4];
+            std::memcpy(u, w + 4, 12);
+            u[3] = ((u[2] >> 4) & 0x0F0F0F0F) | (((u[1] >> 6) & 0x03030303) << 4);
+            const uint32_t low_mins = u[1] & 0x3F3F3F3F;
+            u[1] = (u[2] & 0x0F0F0F0F) | (((u[0] >> 6) & 0x03030303) << 4);
+            u[2] = low_mins;
+            u[0] &= 0x3F3F3F3F;
+            const uint8_t* sc = reinterpret_cast<const uint8_t*>(u);
+            const int16x8_t pairs = vpaddq_s16(vld1q_s16(y[b].bsums), vld1q_s16(y[b].bsums + 8));
+            const int16x8_t mins = vreinterpretq_s16_u16(vmovl_u8(vld1_u8(sc + 8)));
+            const int summ = vaddvq_s32(vmlal_high_s16(vmull_s16(vget_low_s16(pairs), vget_low_s16(mins)), pairs, mins));
+            const uint8x16_t h0 = vld1q_u8(w + 16);
+            const uint8x16_t h1 = vld1q_u8(w + 32);
+            const uint8_t* qs = w + 48;
+            const int8_t* q8 = y[b].qs;
+            int32x4_t acc1 = vdupq_n_s32(0), acc2 = vdupq_n_s32(0);
+            for (int j = 0; j < 4; ++j)
+            {
+                const uint8x16_t u1 = vdupq_n_u8(static_cast<uint8_t>(1u << (2 * j)));
+                const uint8x16_t u2 = vdupq_n_u8(static_cast<uint8_t>(2u << (2 * j)));
+                const uint8x16_t q0 = vld1q_u8(qs);
+                const uint8x16_t q1 = vld1q_u8(qs + 16);
+                // 16 quand le bit de la valeur est mis, 0 sinon.
+                const uint8x16_t lo0 = vorrq_u8(vandq_u8(q0, m4), vandq_u8(vtstq_u8(h0, u1), sixteen));
+                const uint8x16_t lo1 = vorrq_u8(vandq_u8(q1, m4), vandq_u8(vtstq_u8(h1, u1), sixteen));
+                const uint8x16_t hi0 = vorrq_u8(vshrq_n_u8(q0, 4), vandq_u8(vtstq_u8(h0, u2), sixteen));
+                const uint8x16_t hi1 = vorrq_u8(vshrq_n_u8(q1, 4), vandq_u8(vtstq_u8(h1, u2), sixteen));
+                int32x4_t a1 = vdotq_s32(vdupq_n_s32(0), vreinterpretq_s8_u8(lo0), vld1q_s8(q8));
+                a1 = vdotq_s32(a1, vreinterpretq_s8_u8(lo1), vld1q_s8(q8 + 16));
+                int32x4_t a2 = vdotq_s32(vdupq_n_s32(0), vreinterpretq_s8_u8(hi0), vld1q_s8(q8 + 32));
+                a2 = vdotq_s32(a2, vreinterpretq_s8_u8(hi1), vld1q_s8(q8 + 48));
+                acc1 = vmlaq_n_s32(acc1, a1, sc[2 * j]);
+                acc2 = vmlaq_n_s32(acc2, a2, sc[2 * j + 1]);
+                qs += 32;
+                q8 += 64;
+            }
+            const int isum = vaddvq_s32(vaddq_s32(acc1, acc2));
+            sum += d * static_cast<float>(isum) - dmin * static_cast<float>(summ);
+        }
+        return sum;
+    }
+
     float dot_q6_K_neon(const uint8_t* w, const block_q8_K* y, long n)
     {
         const uint8x16_t m4 = vdupq_n_u8(0x0F);

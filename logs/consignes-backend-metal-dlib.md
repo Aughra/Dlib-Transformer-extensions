@@ -1,4 +1,4 @@
-# Consignes de l'humain : backend Metal pour les tenseurs de dlib (phases 1 à 5 sur 8)
+# Consignes de l'humain : backend Metal pour les tenseurs de dlib (phases 1 à 8 sur 8)
 
 > Reçues le 2026-11-16, à intégrer **une par une**, une fois terminée la liste en cours (pistes A à F, « en attendant le Mac mini »). Recopiées telles que l'humain les a données. La phase 1 commence par un plan court **soumis à sa validation avant toute modification**.
 
@@ -102,3 +102,60 @@ Contraintes :
 Critère de fin :
 - Tests de parité de l'attention verts.
 - Le rapport précise les formes supportées, le masque traité ou non, et ce qui reste (tuiles, performances).
+
+---
+
+## Phase 6 sur 8
+
+> Reçue le 2026-11-16 (avec un nouvel envoi de la phase 5, déjà notée plus haut). Même remarque : son contexte dit les phases précédentes terminées ; elle vient après elles.
+
+Contexte : fork de Dlib, backend Metal. Phases 1 à 5 terminées. Cette session ne porte que la phase 6 sur 8.
+
+Tâche :
+1. Lis dans le code d'import GGUF existant le format des blocs Q4_0 et Q8_0 (blocs de 32 valeurs, facteur d'échelle par bloc).
+2. Écris un kernel qui dequantifie à la volée pendant le produit matriciel, pour ne pas matérialiser les poids en float32 au chargement.
+3. Test de parité avec la dequantification CPU existante. La tolérance est plus large que pour float32 ; justifie-la dans le rapport.
+4. Mesure la mémoire occupée par un petit modèle en Q4 contre sa version float32, avec la méthode utilisée.
+
+Contraintes :
+- Si le GGUF contient un cas non géré, lève une erreur claire plutôt que de deviner.
+- Pas de repli silencieux. Ne copie aucun code d'un autre projet.
+
+Critère de fin :
+- Tests de parité Q4_0 et Q8_0 verts.
+- Mesure de mémoire chiffrée avec sa méthode.
+- Le rapport liste ce qui n'est pas couvert : autres formats GGUF, performances.
+
+---
+
+## Phase 7 sur 8
+
+Contexte : fork de Dlib, backend Metal. Phases 1 à 6 terminées : toutes les opérations forward sont portées et testées. Cette session ne porte que la phase 7 sur 8.
+
+Tâche :
+1. Pour chaque opération forward déjà portée, écris la passe arrière en Metal.
+2. Test de gradient : comparaison au gradient CPU, et vérification par différences finies sur quelques éléments choisis.
+3. Si une passe arrière n'est pas implémentée, lève une erreur explicite. Ne renvoie jamais de zéros silencieusement.
+
+Critère de fin :
+- Tous les tests de gradient verts, y compris les différences finies.
+- Le rapport liste les opérations sans passe arrière.
+
+---
+
+## Phase 8 sur 8
+
+Contexte : fork de Dlib, backend Metal. Phases 1 à 7 terminées : forward et backward testés. Cette session ne porte que la phase 8 sur 8.
+
+Tâche :
+1. Porte SGD puis Adam en Metal, avec test de parité sur plusieurs pas.
+2. Sur un petit modèle, compare la trajectoire de perte Metal et CPU avec la même graine, sur quelques dizaines de pas.
+3. Ne porte ni LoRA ni la distillation ; liste-les comme suite.
+
+Contraintes :
+- Pas de repli silencieux. Ne copie aucun code d'un autre projet.
+
+Critère de fin :
+- Tests d'optimiseurs verts.
+- Trajectoires Metal et CPU concordantes à la tolérance documentée.
+- Le rapport liste ce qui reste : LoRA, distillation, performances, grands modèles.

@@ -719,10 +719,14 @@ namespace albireo
 
     float qk_dot(ggml_type t, const uint8_t* w, const void* act, long n)
     {
-        // Les noyaux NEON pour Q4_K et Q6_K ; les autres formats par le code portable.
+        /*
+            Les noyaux NEON pour Q4_K, Q5_K et Q6_K ; les autres formats par le code portable.  Un noyau NEON pour
+            Q8_0, essayé en 5.8.0, ne gagnait rien : le compilateur vectorise déjà sa boucle portable.
+        */
         switch (t)
         {
         case ggml_type::Q4_K: return dot_q4_K_neon(w, static_cast<const block_q8_K*>(act), n);
+        case ggml_type::Q5_K: return dot_q5_K_neon(w, static_cast<const block_q8_K*>(act), n);
         case ggml_type::Q6_K: return dot_q6_K_neon(w, static_cast<const block_q8_K*>(act), n);
         default: break;
         }

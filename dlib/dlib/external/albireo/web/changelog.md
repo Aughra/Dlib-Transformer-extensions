@@ -2,6 +2,15 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 5.8.0 — 16 novembre 2026
+
+### Performances
+
+- Les modèles en Q5_K (les fichiers « Q5_K_M » de Hugging Face, et les couches en Q5_K des autres) écrivent avec un noyau NEON sur le processeur, au lieu du code portable, avec le même résultat au bit près. Qwen 3.5 0.8B en Q5_K_M sur le MacBook Air M2 : de 38,7-40,1 à 71,6-72,0 tokens/s, réponse identique. Sur une ligne de 4 096 valeurs, le produit passe de 2,9 à 0,5 ms.
+- Un noyau NEON pour Q8_0, essayé en même temps, ne gagnait rien (le compilateur vectorise déjà le code portable de ce format) et n'a pas été gardé. Gemma 4 26B-A4B, dont seules quelques couches sont en Q5_K, écrit à la même vitesse qu'avant.
+
+---
+
 ## 5.7.0 — 16 novembre 2026
 
 ### Modèles

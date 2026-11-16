@@ -194,6 +194,8 @@ namespace
                 check(err < 2e-5, f.name, got, ref);
                 const double port = qk_dot_portable(f.type, w.data(), act.data(), n);
                 check(std::fabs(port - ref) / (mag + 1e-12) < 2e-5, "portable kernel", port, ref);
+                // Les noyaux vectoriels (Q4_K, Q5_K, Q6_K) rendent le résultat du code portable, bit pour bit.
+                check(got == port, "vector kernel bit for bit with the portable one", got, port);
             }
             std::printf("  dot %-7s worst relative error %.3g\n", f.name, worst);
         }
