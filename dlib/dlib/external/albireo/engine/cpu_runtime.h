@@ -362,6 +362,31 @@ namespace albireo
         std::vector<std::vector<checkpoint>> checkpoints_;
         size_t checkpoint_bytes_ = 0;
         uint64_t checkpoint_stamp_ = 0;
+        /*
+            Le carnet de chaque séquence d'un modèle à état récurrent (fork pour macOS, 5.5.1) : les tokens
+            lus depuis son dernier point de reprise, à partir de la position start (0 : l'état de départ), avec
+            leurs positions données quand le lot en donne (trois par token).  start vaut -1 quand le carnet ne
+            permet pas de relire (une image lue depuis ce point de reprise).  Une passe qui échoue sur le GPU
+            après avoir écrit l'état repart du point de reprise et relit le carnet (replay_logs()).
+        */
+        struct token_log
+        {
+            long start = 0;
+            std::vector<int> tokens;
+            std::vector<long> positions;
+        };
+        std::vector<token_log> logs_;
+        static const size_t max_log_tokens = 8192;
+        // Ajoute les tokens d'une passe réussie aux carnets, puis les fait partir du dernier point de reprise.
+        void log_pass(const forward_batch& batch);
+        // Le point de reprise de seq à position, nullptr s'il n'y en a pas.
+        const checkpoint* checkpoint_at(int seq, long position) const;
+        /*
+            Après l'échec d'une passe sur le GPU qui a pu écrire l'état des séquences de batch : remet chacune
+            à son point de reprise et relit son carnet sur le processeur.  Renvoie le nombre de séquences relues,
+            ou -1 sans rien toucher quand un carnet ne le permet pas.
+        */
+        long replay_logs(const forward_batch& batch);
         // Pendant une passe : l'état à remplir après le token t (nullptr sinon), et les points en cours.
         std::vector<float*> token_checkpoint_;
         std::vector<std::pair<int, checkpoint>> pending_checkpoints_;

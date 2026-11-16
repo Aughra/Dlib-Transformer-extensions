@@ -365,6 +365,8 @@ namespace albireo
             std::memset(state_of(s), 0, state_slot_bytes_);
             if (checkpoints_.size() < sequences_.size()) checkpoints_.resize(sequences_.size());
             drop_checkpoints(s, -1);
+            if (logs_.size() < sequences_.size()) logs_.resize(sequences_.size());
+            logs_[static_cast<size_t>(s)] = token_log();
         }
         return s;
     }
@@ -376,7 +378,11 @@ namespace albireo
         sequences_[static_cast<size_t>(seq)].reset();
         // La mémoire de son état revient au système.
         if (cfg_.recurrent() && seq < max_state_slots) madvise(state_of(seq), state_slot_bytes_, MADV_FREE);
-        if (cfg_.recurrent()) drop_checkpoints(seq, -1);
+        if (cfg_.recurrent())
+        {
+            drop_checkpoints(seq, -1);
+            if (static_cast<size_t>(seq) < logs_.size()) logs_[static_cast<size_t>(seq)] = token_log();
+        }
         free_sequences_.push_back(seq);
     }
 
@@ -455,6 +461,12 @@ namespace albireo
             if (from) std::memcpy(state_of(seq), from->state.data(), from->state.size() * sizeof(float));
             else std::memset(state_of(seq), 0, state_slot_bytes_);
             drop_checkpoints(seq, length);
+            // Le carnet repart du point de reprise, ou de l'état de départ.
+            if (static_cast<size_t>(seq) < logs_.size())
+            {
+                logs_[static_cast<size_t>(seq)] = token_log();
+                logs_[static_cast<size_t>(seq)].start = length;
+            }
         }
         s.truncate(kv_, length);
     }
@@ -480,6 +492,42 @@ namespace albireo
             if (length == 0) std::memset(state_of(dst), 0, state_slot_bytes_);
             else if (length == s.length) std::memcpy(state_of(dst), state_of(src), state_slot_bytes_);
             else std::memcpy(state_of(dst), from->state.data(), from->state.size() * sizeof(float));
+            /*
+                Le carnet de dst, pour qu'une passe qui échoue sur le GPU puisse le relire (log_pass()) : celui de
+                src à sa longueur, ou un carnet vide au point de reprise ; le point de reprise d'où part le carnet
+                est copié dans dst avec lui.
+            */
+            if (logs_.size() < sequences_.size()) logs_.resize(sequences_.size());
+            token_log& dl = logs_[static_cast<size_t>(dst)];
+            dl = token_log();
+            const token_log* sl = static_cast<size_t>(src) < logs_.size() ? &logs_[static_cast<size_t>(src)] : nullptr;
+            if (length == 0)
+                dl.start = 0;
+            else if (length == s.length)
+            {
+                // Le carnet de src, qui part de l'état de départ ou d'un point de reprise encore gardé.
+                if (sl && sl->start >= 0) dl = *sl;
+                else dl.start = -1;
+                from = dl.start > 0 ? checkpoint_at(src, dl.start) : nullptr;
+                if (dl.start > 0 && !from)
+                {
+                    dl = token_log();
+                    dl.start = -1;
+                }
+            }
+            else
+                dl.start = length;      // from est le point de reprise à length
+            if (from && dl.start > 0)
+            {
+                checkpoint c;
+                c.position = from->position;
+                c.stamp = ++checkpoint_stamp_;
+                c.state = from->state;
+                checkpoint_bytes_ += c.state.size() * sizeof(float);
+                checkpoints_[static_cast<size_t>(dst)].push_back(std::move(c));
+                // Les limites du nombre de points de reprise et de leur mémoire (aucune passe n'est en cours).
+                keep_checkpoints();
+            }
         }
         // Les blocs pleins sont partagés ; chaque séquence copie un bloc partagé avant d'y écrire.
         return d.share_prefix(kv_, s, length);
@@ -1283,6 +1331,117 @@ namespace albireo
         layer_pass_->report(true, details);
     }
 
+    const cpu_runtime::checkpoint* cpu_runtime::checkpoint_at(int seq, long position) const
+    {
+        if (static_cast<size_t>(seq) >= checkpoints_.size()) return nullptr;
+        for (const checkpoint& c : checkpoints_[static_cast<size_t>(seq)])
+            if (c.position == position) return &c;
+        return nullptr;
+    }
+
+    void cpu_runtime::log_pass(const forward_batch& batch)
+    {
+        if (!cfg_.recurrent()) return;
+        if (logs_.size() < sequences_.size()) logs_.resize(sequences_.size());
+        const bool given = !batch.positions.empty();
+        const long PC = forward_batch::position_components;
+        for (const auto& seg : batch.segments)
+        {
+            token_log& L = logs_[static_cast<size_t>(seg.sequence)];
+            const long end = sequences_[static_cast<size_t>(seg.sequence)]->length;
+            const long first = end - seg.count;
+            bool image = false;
+            for (long r : batch.embedding_rows) image = image || (r >= seg.start && r < seg.start + seg.count);
+            // Un token d'image vient d'un encodeur : le carnet ne le relit pas, jusqu'au prochain point de reprise.
+            if (image || (L.start >= 0 && !L.tokens.empty() && given == L.positions.empty()))
+            {
+                L = token_log();
+                L.start = -1;
+            }
+            else if (L.start >= 0)
+            {
+                L.tokens.insert(L.tokens.end(), batch.tokens.begin() + seg.start, batch.tokens.begin() + seg.start + seg.count);
+                if (given)
+                    L.positions.insert(L.positions.end(), batch.positions.begin() + seg.start * PC,
+                        batch.positions.begin() + (seg.start + seg.count) * PC);
+            }
+            // Le carnet repart du dernier point de reprise de la séquence, s'il est plus récent que son début.
+            long latest = -1;
+            if (static_cast<size_t>(seg.sequence) < checkpoints_.size())
+                for (const checkpoint& c : checkpoints_[static_cast<size_t>(seg.sequence)])
+                    latest = std::max(latest, c.position);
+            if (latest >= 0 && latest > L.start && latest <= end)
+            {
+                if (L.start >= 0)
+                {
+                    const size_t cut = static_cast<size_t>(latest - L.start);
+                    L.tokens.erase(L.tokens.begin(), L.tokens.begin() + static_cast<long>(cut));
+                    if (!L.positions.empty())
+                        L.positions.erase(L.positions.begin(), L.positions.begin() + static_cast<long>(cut) * PC);
+                    L.start = latest;
+                }
+                else if (!image && latest >= first)
+                {
+                    // Un carnet perdu reprend au point de reprise que cette passe a posé, avec ses tokens d'après.
+                    const long from = seg.start + (latest - first);
+                    L = token_log();
+                    L.start = latest;
+                    L.tokens.assign(batch.tokens.begin() + from, batch.tokens.begin() + seg.start + seg.count);
+                    if (given)
+                        L.positions.assign(batch.positions.begin() + from * PC,
+                            batch.positions.begin() + (seg.start + seg.count) * PC);
+                }
+            }
+            if (L.start >= 0 && L.tokens.size() > max_log_tokens)
+            {
+                L = token_log();
+                L.start = -1;
+            }
+        }
+    }
+
+    long cpu_runtime::replay_logs(const forward_batch& batch)
+    {
+        if (!cfg_.recurrent()) return 0;
+        std::vector<int> seqs;
+        for (const auto& seg : batch.segments)
+            if (std::find(seqs.begin(), seqs.end(), seg.sequence) == seqs.end()) seqs.push_back(seg.sequence);
+        // Chaque carnet doit mener de son point de reprise à la longueur de sa séquence.
+        for (int seq : seqs)
+        {
+            if (static_cast<size_t>(seq) >= logs_.size()) return -1;
+            const token_log& L = logs_[static_cast<size_t>(seq)];
+            if (L.start < 0 || (L.start > 0 && !checkpoint_at(seq, L.start))) return -1;
+            const kv_sequence& s = *sequences_[static_cast<size_t>(seq)];
+            if (L.start + static_cast<long>(L.tokens.size()) != s.length) return -1;
+            /*
+                La relecture réécrit les clés et valeurs des positions du carnet, les mêmes : pas dans un bloc que
+                d'autres séquences partagent (un long prompt système commun), où le runtime refuse d'écrire.
+            */
+            const long B = kv_.block_positions();
+            for (long b = L.start / B; b * B < s.length; ++b)
+                if (kv_.shared(s.blocks[static_cast<size_t>(b)])) return -1;
+        }
+        std::vector<float> unused;
+        for (int seq : seqs)
+        {
+            const token_log L = logs_[static_cast<size_t>(seq)];
+            const checkpoint* c = L.start > 0 ? checkpoint_at(seq, L.start) : nullptr;
+            if (c) std::memcpy(state_of(seq), c->state.data(), c->state.size() * sizeof(float));
+            else std::memset(state_of(seq), 0, state_slot_bytes_);
+            drop_checkpoints(seq, L.start);
+            kv_sequence& s = *sequences_[static_cast<size_t>(seq)];
+            s.length = L.start;
+            if (L.tokens.empty()) continue;
+            forward_batch again;
+            again.tokens = L.tokens;
+            again.positions = L.positions;
+            again.segments.push_back({ seq, 0, static_cast<long>(L.tokens.size()) });
+            run(again, unused, false);
+        }
+        return static_cast<long>(seqs.size());
+    }
+
     void cpu_runtime::forward(const forward_batch& batch, std::vector<float>& logits)
     {
         // Une passe de moins de tokens que n'en prennent les produits en floats, comme une étape de la
@@ -1295,7 +1454,9 @@ namespace albireo
                 morceau échoue après d'autres, l'état et la longueur de sa séquence ont déjà avancé, alors que le
                 processeur relit tout le lot.  Leur copie d'avant la passe est rendue en cas d'échec (fork pour
                 macOS).  Une étape, d'une seule commande, ne touche à rien quand son encodage échoue ; une erreur
-                pendant l'exécution d'une étape sur le GPU, rare, laisserait l'état à moitié écrit.
+                pendant son exécution peut laisser l'état écrit : chaque séquence repart alors de son point de
+                reprise et relit son carnet (replay_logs(), 5.5.1).  Une copie de l'état à chaque étape aurait
+                coûté 6 à 9 % de la vitesse d'écriture.
             */
             std::vector<std::pair<int, long>> before;
             std::vector<std::vector<float>> saved;
@@ -1314,11 +1475,20 @@ namespace albireo
             {
                 if (chunked) run_gpu_checkpointed(batch, logits);
                 else run_gpu(batch, logits);
+                log_pass(batch);
                 return;
             }
             catch (const std::exception& e)
             {
                 // La passe est recalculée ci-dessous ; ses clés et valeurs sont réécrites, l'état rendu.
+                std::string why = std::string("the GPU failed: ") + e.what();
+                if (cfg_.recurrent() && !chunked)
+                {
+                    pending_checkpoints_.clear();
+                    const long read = replay_logs(batch);
+                    why += read < 0 ? "; the state of its sequences cannot be read again from a checkpoint"
+                                    : "; the state of " + std::to_string(read) + " sequence(s) read again from a checkpoint";
+                }
                 for (size_t i = 0; i < before.size(); ++i)
                 {
                     const int seq = before[i].first;
@@ -1328,7 +1498,7 @@ namespace albireo
                     sequences_.at(static_cast<size_t>(seq))->length = before[i].second;
                 }
                 pending_checkpoints_.clear();
-                drop_gpu(std::string("the GPU failed: ") + e.what());
+                drop_gpu(why);
             }
         }
         if (layer_pass_ && !batch.tokens.empty() && takes_layer_pass(batch))
@@ -1346,6 +1516,7 @@ namespace albireo
                 if (layer_pass_ && layer_pass_checked_ && run(batch, logits, true))
                 {
                     layer_pass_memory_failures_ = 0;
+                    log_pass(batch);
                     return;
                 }
             }
@@ -1359,6 +1530,7 @@ namespace albireo
             }
         }
         run(batch, logits, false);
+        log_pass(batch);
     }
 
     /*

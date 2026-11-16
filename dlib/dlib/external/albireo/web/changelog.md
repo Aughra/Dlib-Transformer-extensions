@@ -2,6 +2,16 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 5.5.1 — 16 novembre 2026
+
+### Corrections
+
+- Qwen 3.5 et 3.6 (modèles à état récurrent) : une étape qui échoue sur le GPU après avoir écrit l'état de ses séquences ne laisse plus cet état faussé. Le moteur tient, pour chaque séquence, le carnet des tokens lus depuis son dernier point de reprise ; en cas d'échec, chaque séquence repart de ce point et relit son carnet sur le processeur, puis la réponse continue. Auparavant, le même token pouvait compter deux fois dans l'état, et la suite de la réponse dériver.
+- Le carnet ne coûte rien à l'écriture (19,7 à 19,8 tokens/s pour Qwen 3.5 4B sur le GPU, avant comme après). Une copie de l'état avant chaque étape, essayée d'abord, coûtait 6 à 9 % et n'a pas été gardée.
+- Quand le carnet ne permet pas de relire (une image lue depuis le point de reprise, ou des positions partagées avec une autre séquence), le moteur continue comme avant et l'écrit dans son journal.
+
+---
+
 ## 5.5.0 — 16 novembre 2026
 
 ### Performances
