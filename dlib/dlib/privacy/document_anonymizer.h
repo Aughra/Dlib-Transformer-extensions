@@ -6,12 +6,15 @@
 #include "document_anonymizer_abstract.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <map>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include "../data_io/language_model_data.h"
@@ -57,6 +60,12 @@ namespace dlib
             default: return "unknown";
         }
     }
+
+    struct pii_imposed_column
+    {
+        std::string name;
+        pii_type type = pii_type::none;
+    };
 
 // ----------------------------------------------------------------------------------------
 
@@ -159,6 +168,33 @@ namespace dlib
             return out;
         }
 
+        inline const char* text_encoding_name(text_encoding enc)
+        {
+            switch (enc)
+            {
+                case text_encoding::utf8: return "utf-8";
+                case text_encoding::utf8_bom: return "utf-8-bom";
+                case text_encoding::utf16le: return "utf-16le";
+                case text_encoding::utf16be: return "utf-16be";
+                case text_encoding::utf16le_plain: return "utf-16le-nobom";
+                case text_encoding::utf16be_plain: return "utf-16be-nobom";
+                case text_encoding::cp1252: return "windows-1252";
+            }
+            return "";
+        }
+
+        // Whether Windows-1252 writes every character of a text, which encode_text() would replace by '?'.
+        inline bool cp1252_writes(const std::string& utf8)
+        {
+            std::size_t i = 0;
+            while (i < utf8.size())
+            {
+                if ((utf8[i] & 0x80) == 0) { ++i; continue; }
+                if (unicode_to_cp1252(static_cast<std::uint32_t>(utf8_next(utf8, i))) < 0) return false;
+            }
+            return true;
+        }
+
         inline std::string encode_text(const std::string& utf8, text_encoding enc)
         {
             switch (enc)
@@ -226,13 +262,14 @@ namespace dlib
             return document_format::unknown;
         }
 
-        // Counts the occurrences of delim outside quotes in each of the first records.
-        inline std::vector<std::size_t> delimiter_counts(const std::string& text, char delim, std::size_t max_records)
+        // Counts the occurrences of delim outside quotes in each of the first records from start.
+        inline std::vector<std::size_t> delimiter_counts(const std::string& text, char delim, std::size_t max_records,
+                                                         std::size_t start = 0)
         {
             std::vector<std::size_t> counts;
             std::size_t count = 0;
             bool quoted = false, any = false;
-            for (std::size_t i = 0; i < text.size() && counts.size() < max_records; ++i)
+            for (std::size_t i = start; i < text.size() && counts.size() < max_records; ++i)
             {
                 const char c = text[i];
                 if (c == '"') quoted = !quoted;
@@ -284,6 +321,175 @@ namespace dlib
                 }
             }
             return best;
+        }
+
+        // The cells of one record of a delimited file, each without its quotes, a quote opening a cell alone.
+        inline std::vector<std::string> split_record(const std::string& line, char delim)
+        {
+            std::vector<std::string> cells;
+            std::size_t i = 0;
+            for (;;)
+            {
+                std::string cell;
+                if (i < line.size() && line[i] == '"')
+                {
+                    for (++i; i < line.size(); ++i)
+                    {
+                        if (line[i] != '"') { cell.push_back(line[i]); continue; }
+                        if (i + 1 < line.size() && line[i + 1] == '"') { cell.push_back('"'); ++i; continue; }
+                        ++i;
+                        break;
+                    }
+                }
+                while (i < line.size() && line[i] != delim) cell.push_back(line[i++]);
+                cells.push_back(cell);
+                if (i >= line.size()) break;
+                ++i;
+            }
+            return cells;
+        }
+
+        /*
+            The address of a value of an IP column, with what may surround it: a prefix length
+            ("10.0.0.0/8", "2001:db8::/32"), a port ("192.0.2.1:443", "[2001:db8::1]:443") or a
+            zone ("fe80::1%eth0").  Returns ipv4 or ipv6 with the bounds [b, e) of the address in
+            v, or none for a value of another form.
+        */
+        inline pii_type ip_address_in(const std::string& v, std::size_t& b, std::size_t& e)
+        {
+            // A number of 1 to digits digits, from i to the end of v, of at most limit.
+            const auto number_to_end = [&v](std::size_t i, std::size_t digits, unsigned long limit) {
+                if (i >= v.size() || v.size() - i > digits) return false;
+                unsigned long n = 0;
+                for (std::size_t k = i; k < v.size(); ++k)
+                {
+                    if (!is_ascii_digit_char(v[k])) return false;
+                    n = n * 10 + static_cast<unsigned long>(v[k] - '0');
+                }
+                return n <= limit;
+            };
+            std::uint32_t a4 = 0;
+            std::array<unsigned char, 16> a6;
+            if (!v.empty() && v[0] == '[')
+            {
+                const std::size_t close = v.find(']');
+                if (close == std::string::npos || !parse_ipv6(v.substr(1, close - 1), a6)) return pii_type::none;
+                if (close + 1 != v.size() && (v[close + 1] != ':' || !number_to_end(close + 2, 5, 65535)))
+                    return pii_type::none;
+                b = 1;
+                e = close;
+                return pii_type::ipv6;
+            }
+            const std::size_t slash = v.find('/');
+            const std::string head = v.substr(0, slash);
+            if (parse_ipv4(head, a4))
+            {
+                if (slash != std::string::npos && !number_to_end(slash + 1, 2, 32)) return pii_type::none;
+                b = 0;
+                e = head.size();
+                return pii_type::ipv4;
+            }
+            const std::size_t colon = head.find(':');
+            if (slash == std::string::npos && colon != std::string::npos &&
+                head.find(':', colon + 1) == std::string::npos && parse_ipv4(head.substr(0, colon), a4))
+            {
+                if (!number_to_end(colon + 1, 5, 65535)) return pii_type::none;
+                b = 0;
+                e = colon;
+                return pii_type::ipv4;
+            }
+            const std::size_t zone = head.find('%');
+            const std::string address = head.substr(0, zone);
+            if (!parse_ipv6(address, a6)) return pii_type::none;
+            if (zone != std::string::npos)
+            {
+                if (slash != std::string::npos || zone + 1 >= head.size()) return pii_type::none;
+                for (std::size_t k = zone + 1; k < head.size(); ++k)
+                {
+                    const char c = head[k];
+                    if (!is_ascii_digit_char(c) && !((c | 0x20) >= 'a' && (c | 0x20) <= 'z') && c != '.' && c != '_' &&
+                        c != '-')
+                        return pii_type::none;
+                }
+            }
+            if (slash != std::string::npos && !number_to_end(slash + 1, 3, 128)) return pii_type::none;
+            b = 0;
+            e = address.size();
+            return pii_type::ipv6;
+        }
+
+        /*
+            The delimiter of a text whose header names a column of keys (fold_key() of the names
+            of the imposed columns), or 0.  The header is the first of the first 16 lines that are
+            not blank to hold such a name in a cell, a first line "sep=;" of Excel giving the
+            delimiter it names first; the delimiter that makes the most cells named, then the
+            most cells, wins.  A file named .csv, .tsv or .tab may hold a column alone, its name
+            alone on its line; it is then read with a delimiter that the text does not hold, the
+            unit separator of ASCII first.  In another text, the header holds the delimiter, and
+            the two records that follow it hold it as many times.
+        */
+        inline char imposed_delimiter(const std::string& text, const std::vector<std::string>& keys,
+                                      const std::string& name_hint)
+        {
+            if (keys.empty()) return 0;
+            const bool tsv = ends_with_ci(name_hint, ".tsv") || ends_with_ci(name_hint, ".tab");
+            const bool named = tsv || ends_with_ci(name_hint, ".csv");
+            char hinted = 0;
+            std::size_t pos = 0, lines = 0;
+            while (pos < text.size() && lines < 16)
+            {
+                std::size_t end = text.find('\n', pos);
+                if (end == std::string::npos) end = text.size();
+                const std::size_t next = end + 1;
+                if (end > pos && text[end - 1] == '\r') --end;
+                // A header is short: a longer line is no header, and is not split.
+                if (end - pos > 65536)
+                {
+                    ++lines;
+                    pos = next;
+                    continue;
+                }
+                const std::string line = text.substr(pos, end - pos);
+                pos = next;
+                if (line.find_first_not_of(" \t") == std::string::npos) continue;
+                ++lines;
+                if (lines == 1 && line.size() == 5 && fold_key(line.substr(0, 4)) == "sep=")
+                {
+                    hinted = line[4];
+                    continue;
+                }
+                char best = 0;
+                std::size_t best_named = 0, best_cells = 0;
+                for (char d : { hinted, '\t', ';', ',', '|' })
+                {
+                    if (!d) continue;
+                    const std::vector<std::string> cells = split_record(line, d);
+                    std::size_t found = 0;
+                    for (const std::string& c : cells)
+                        if (std::find(keys.begin(), keys.end(), fold_key(c)) != keys.end()) ++found;
+                    if (found > best_named || (found == best_named && found > 0 && cells.size() > best_cells))
+                    {
+                        best = d;
+                        best_named = found;
+                        best_cells = cells.size();
+                    }
+                }
+                if (best_named == 0) continue;
+                if (best_cells >= 2)
+                {
+                    if (named) return best;
+                    const std::vector<std::size_t> after = delimiter_counts(text, best, 2, pos);
+                    return after.size() == 2 && after[0] == best_cells - 1 && after[1] == best_cells - 1 ? best : 0;
+                }
+                /* A column alone: a delimiter that no value holds, the protected text and its
+                   restoration included, so that each line stays one cell. */
+                if (!named) return 0;
+                if (tsv) return '\t';
+                for (char d : { '\x1f', ',', ';', '\t', '|' })
+                    if (text.find(d) == std::string::npos) return d;
+                return ',';
+            }
+            return 0;
         }
 
         inline bool looks_like_markup(const std::string& text)
@@ -431,6 +637,26 @@ namespace dlib
         {
             text_resolve_ = resolve;
         }
+
+        void set_ascii_windows_1252(bool yes) { ascii_1252_ = yes; }
+
+        bool ascii_windows_1252() const { return ascii_1252_; }
+
+        void set_imposed_columns(const std::vector<pii_imposed_column>& columns)
+        {
+            columns_.clear();
+            column_keys_.clear();
+            for (const pii_imposed_column& c : columns)
+            {
+                const std::string key = privacy_impl::fold_key(c.name);
+                if (c.type == pii_type::none || key.empty()) continue;
+                if (std::find(column_keys_.begin(), column_keys_.end(), key) != column_keys_.end()) continue;
+                columns_.push_back(c);
+                column_keys_.push_back(key);
+            }
+        }
+
+        const std::vector<pii_imposed_column>& imposed_columns() const { return columns_; }
 
         void set_picture_text_finder(const document_picture_text_finder& find) { pictures_ = find; }
 
@@ -606,15 +832,35 @@ namespace dlib
                     if (enc == text_encoding::cp1252)
                         report.note("text decoded as Windows-1252 and written back in that encoding");
                     std::string out;
+                    // A text whose header names an imposed column is a delimited file, a title above it.
+                    if (format == document_format::text && imposed_delimiter(text, column_keys_, name_hint_))
+                    {
+                        format = document_format::delimited;
+                        report.format = document_format_name(format);
+                    }
                     if (format == document_format::delimited) out = delimited(text, report, restoring);
                     else if (format == document_format::markup) out = markup(text, report, restoring);
                     else out = plain_text(text, report, restoring);
                     const bool ascii = std::all_of(out.begin(), out.end(), [](char c) { return (c & 0x80) == 0; });
                     if (!restoring && enc == text_encoding::cp1252 && ascii)
-                        report.note("the protected text is plain ASCII: its restoration will be written in UTF-8");
+                        report.note("the protected text is plain ASCII: its restoration will be written in UTF-8, "
+                                    "unless the caller knows its original was written in Windows-1252");
                     if (restoring && enc == text_encoding::utf8 && !ascii &&
                         std::all_of(text.begin(), text.end(), [](char c) { return (c & 0x80) == 0; }))
-                        report.note("the restored text is written in UTF-8, the encoding of ASCII input is unknown");
+                    {
+                        /* A text of plain ASCII says nothing of the encoding of its original: the caller
+                           that knows it was Windows-1252 has it written so, when that encoding writes
+                           every character restored. */
+                        if (ascii_1252_ && cp1252_writes(out))
+                        {
+                            enc = text_encoding::cp1252;
+                            report.note("the restored text is written in Windows-1252, the encoding of its original");
+                        }
+                        else
+                            report.note("the restored text is written in UTF-8, the encoding of ASCII input is "
+                                        "unknown");
+                    }
+                    report.encoding = text_encoding_name(enc);
                     return encode_text(out, enc);
                 }
                 case document_format::legacy_office:
@@ -792,9 +1038,148 @@ namespace dlib
             return true;
         }
 
+        // The type of the imposed column that a cell of a header names, or none.
+        pii_type column_named(const std::string& value) const
+        {
+            if (columns_.empty()) return pii_type::none;
+            const std::string key = privacy_impl::fold_key(value);
+            for (std::size_t i = 0; i < column_keys_.size(); ++i)
+                if (column_keys_[i] == key) return columns_[i].type;
+            return pii_type::none;
+        }
+
+        // The bounds of a value of a cell without the spaces and the line breaks at its ends.
+        static std::pair<std::size_t, std::size_t> value_bounds(const std::string& v)
+        {
+            const std::size_t b = v.find_first_not_of(" \t\r\n");
+            if (b == std::string::npos) return std::make_pair(v.size(), v.size());
+            return std::make_pair(b, v.find_last_not_of(" \t\r\n") + 1);
+        }
+
+        // Whether a value of type known stands in a column of type: an IP column takes both forms.
+        static bool column_family(pii_type known, pii_type type)
+        {
+            const auto ip = [](pii_type t) { return t == pii_type::ipv4 || t == pii_type::ipv6; };
+            return known == type || (ip(known) && ip(type));
+        }
+
+        // Whether s is an address of the form given, ipv4 or ipv6.
+        static bool address_of_form(const std::string& s, pii_type form)
+        {
+            std::uint32_t a4 = 0;
+            std::array<unsigned char, 16> a6;
+            return form == pii_type::ipv4 ? privacy_impl::parse_ipv4(s, a4) : privacy_impl::parse_ipv6(s, a6);
+        }
+
+        // Whether the text resolver knows candidate as a substitute of the family of type, and its value.
+        bool known_substitute(const std::string& candidate, pii_type type, std::string* original) const
+        {
+            if (!text_resolve_ || candidate.empty()) return false;
+            for (const std::string& tag : text_resolve_(candidate))
+            {
+                pii_type known = pii_type::none;
+                std::string value;
+                if (!p_.decode(tag, known, value) || !column_family(known, type)) continue;
+                if (original) *original = value;
+                return true;
+            }
+            return false;
+        }
+
+        /*
+            The protected form of the value of a cell of an imposed column: its substitute, with or
+            without untagged text, the spaces at its ends kept; listed in report.substitutions once
+            for each value, made is the substitute of each value already written.  A substitute
+            that the text resolver knows for the type, written by a protection before, stays, and
+            a tag stands for its value.  An IP column takes the IPv4 and the IPv6 addresses alike,
+            each by its form, and keeps what surrounds the address: a prefix length, a zone, the
+            brackets and the port.  An address whose substitute is no address, written with
+            capitals or leading zeros, takes an opaque code with what surrounds it, so that the
+            restoration finds that code whole.
+        */
+        std::string column_value(const std::string& value, pii_type type, document_report& report,
+                                 std::unordered_map<std::string, std::string>& made) const
+        {
+            const std::pair<std::size_t, std::size_t> r = value_bounds(value);
+            if (r.first >= r.second || p_.keeps_in_clear(type)) return value;
+            std::string core = value.substr(r.first, r.second - r.first);
+            if (known_substitute(core, type, nullptr)) return value;
+            pii_type tagged = pii_type::none;
+            std::string original;
+            if (p_.decode(core, tagged, original)) core = original;
+            std::size_t ab = 0, ae = core.size();
+            pii_type form = type;
+            if (type == pii_type::ipv4 || type == pii_type::ipv6)
+            {
+                std::size_t b = 0, e = 0;
+                const pii_type found = privacy_impl::ip_address_in(core, b, e);
+                if (found != pii_type::none)
+                {
+                    const std::string part = core.substr(b, e - b);
+                    if (known_substitute(part, type, nullptr)) return value;
+                    form = found;
+                    if (address_of_form(p_.substitute(found, part), found))
+                    {
+                        ab = b;
+                        ae = e;
+                    }
+                }
+            }
+            const std::string address = core.substr(ab, ae - ab);
+            const std::string before = value.substr(0, r.first) + core.substr(0, ab);
+            const std::string after = core.substr(ae) + value.substr(r.second);
+            report.count(form);
+            // A civility, a sex or a nationality takes another substitute at each place, as its tags do.
+            const bool varying = form == pii_type::title || form == pii_type::gender || form == pii_type::nationality;
+            const std::string key = std::string(pii_type_keyword(form)) + '\x1f' + address;
+            if (!varying)
+            {
+                const auto it = made.find(key);
+                if (it != made.end()) return before + it->second + after;
+            }
+            document_substitution s;
+            s.substitute = p_.substitute(form, address, &s.tag);
+            s.text = true;
+            report.substitutions.push_back(s);
+            if (!varying && made.size() < 262144) made[key] = s.substitute;
+            return before + s.substitute + after;
+        }
+
+        /*
+            The value of a cell of an imposed column that the text resolver knows as a substitute of
+            its type, whole or, in an IP column, as the address that a prefix length, a zone or a port
+            surrounds.
+        */
+        bool column_original(const std::string& value, pii_type type, std::string& out, document_report& report) const
+        {
+            const std::pair<std::size_t, std::size_t> r = value_bounds(value);
+            if (r.first >= r.second || !text_resolve_) return false;
+            const std::string core = value.substr(r.first, r.second - r.first);
+            std::size_t ab = 0, ae = core.size();
+            std::string original;
+            bool found = known_substitute(core, type, &original);
+            if (!found && (type == pii_type::ipv4 || type == pii_type::ipv6))
+            {
+                std::size_t b = 0, e = 0;
+                if (privacy_impl::ip_address_in(core, b, e) != pii_type::none &&
+                    known_substitute(core.substr(b, e - b), type, &original))
+                {
+                    found = true;
+                    ab = b;
+                    ae = e;
+                }
+            }
+            if (!found) return false;
+            out = value.substr(0, r.first) + core.substr(0, ab) + original + core.substr(ae) + value.substr(r.second);
+            ++report.substitutes_restored;
+            return true;
+        }
+
         std::string delimited(const std::string& text, document_report& report, bool restoring)
         {
-            const char delim = privacy_impl::sniff_delimiter(text, name_hint_.empty() ? ".csv" : name_hint_);
+            const std::string hint = name_hint_.empty() ? ".csv" : name_hint_;
+            char delim = privacy_impl::imposed_delimiter(text, column_keys_, hint);
+            if (!delim) delim = privacy_impl::sniff_delimiter(text, hint);
             std::vector<cell> cells;
             if (!delim || !parse_delimited(text, delim, cells))
             {
@@ -803,38 +1188,70 @@ namespace dlib
                 return plain_text(text, report, restoring);
             }
 
+            /* The imposed columns, named by a header among the first 16 rows: every value below
+               their names is personal data of their types, replaced whole, without detection. */
+            std::vector<pii_type> imposed(cells.size(), pii_type::none);
+            std::vector<bool> names(cells.size(), false);
+            std::size_t first = 0;
+            bool named = false;
+            {
+                std::map<std::size_t, pii_type> typed;
+                for (std::size_t k = 0; k < cells.size() && cells[k].row < 16; ++k)
+                {
+                    if (named && cells[k].row != first) break;
+                    const pii_type t = column_named(cells[k].value);
+                    if (t == pii_type::none) continue;
+                    if (!named) first = cells[k].row;
+                    named = true;
+                    names[k] = true;
+                    typed[cells[k].col] = t;
+                }
+                for (std::size_t k = 0; named && k < cells.size(); ++k)
+                {
+                    const auto it = typed.find(cells[k].col);
+                    if (cells[k].row > first && it != typed.end()) imposed[k] = it->second;
+                }
+            }
+
             std::vector<std::string> values(cells.size());
             if (restoring)
             {
                 pseudonymizer::restore_report rr;
                 for (std::size_t k = 0; k < cells.size(); ++k)
+                {
+                    if (imposed[k] != pii_type::none && column_original(cells[k].value, imposed[k], values[k], report))
+                        continue;
                     values[k] =
                         with_text_substitutes(p_.restore(without_pictures(cells[k].value, report), &rr), report);
+                }
                 report.tags_restored += rr.restored;
                 report.tags_rejected += rr.rejected;
             }
             else
             {
-                /* Column types from a header row, made of labels; a label on the left of a
-                   cell types it too, as in key and value files ("Nom;Dupont"). */
+                /* Column types from a header row, made of labels or naming an imposed column; a
+                   label on the left of a cell types it too, as in key and value files
+                   ("Nom;Dupont"). */
                 std::vector<pii_type> labels(cells.size(), pii_type::none);
                 for (std::size_t k = 0; k < cells.size(); ++k)
-                    labels[k] = detector_.label_type(cells[k].value);
+                    if (imposed[k] == pii_type::none) labels[k] = detector_.label_type(cells[k].value);
                 std::map<std::size_t, pii_type> columns;
                 std::size_t header_cells = 0, header_labels = 0;
-                for (std::size_t k = 0; k < cells.size() && cells[k].row == 0; ++k)
+                for (std::size_t k = 0; k < cells.size() && cells[k].row <= first; ++k)
                 {
-                    if (cells[k].value.empty()) continue;
+                    if (cells[k].row != first || cells[k].value.empty()) continue;
                     ++header_cells;
                     if (labels[k] != pii_type::none) { columns[cells[k].col] = labels[k]; ++header_labels; }
                 }
-                const bool header = header_labels >= 2 || (header_labels == 1 && header_cells == 1);
+                const bool header = named || header_labels >= 2 || (header_labels == 1 && header_cells == 1);
+                // A name of a header is no value of the label on its left.
                 auto context_of = [&](std::size_t k) {
                     detection_context ctx;
                     const cell& c = cells[k];
-                    if (k > 0 && cells[k - 1].row == c.row && labels[k - 1] != pii_type::none && labels[k] == pii_type::none)
+                    if (k > 0 && cells[k - 1].row == c.row && labels[k - 1] != pii_type::none &&
+                        labels[k] == pii_type::none && !(header && c.row == first))
                         ctx.label = labels[k - 1];
-                    else if (header && c.row > 0)
+                    else if (header && c.row > first)
                     {
                         const auto it = columns.find(c.col);
                         if (it != columns.end()) ctx.label = it->second;
@@ -842,23 +1259,47 @@ namespace dlib
                     return ctx;
                 };
                 /* Learning reads whole rows, where names have their context; detection
-                   runs cell by cell, so that a value never spills over a column. */
+                   runs cell by cell, so that a value never spills over a column.  The values of
+                   the imposed columns are not read: each is recorded once as a value of its
+                   type (pii_detector::learn_value()), so that the other cells give it up too. */
                 detector_.begin_document();
                 std::string row_text;
                 std::size_t row = 0;
+                std::unordered_set<std::string> learned;
                 for (std::size_t k = 0; k < cells.size(); ++k)
                 {
                     const cell& c = cells[k];
                     if (c.row != row) { detector_.learn(row_text); row_text.clear(); row = c.row; }
-                    row_text += (row_text.empty() ? "" : "\t") + c.value;
-                    detector_.learn(c.value, context_of(k));
+                    if (imposed[k] == pii_type::none)
+                    {
+                        row_text += (row_text.empty() ? "" : "\t") + c.value;
+                        detector_.learn(c.value, context_of(k));
+                        continue;
+                    }
+                    const std::pair<std::size_t, std::size_t> r = value_bounds(c.value);
+                    if (r.first >= r.second) continue;
+                    const std::string v = c.value.substr(r.first, r.second - r.first);
+                    if (learned.size() >= 262144 || learned.insert(pii_type_keyword(imposed[k]) + ('\x1f' + v)).second)
+                        detector_.learn_value(v, imposed[k]);
                 }
                 detector_.learn(row_text);
+                std::unordered_map<std::string, std::string> made;
                 for (std::size_t k = 0; k < cells.size(); ++k)
                 {
                     const cell& c = cells[k];
+                    // The names of the imposed columns stay as they are, the header that tells them.
+                    if (names[k])
+                    {
+                        values[k] = c.value;
+                        continue;
+                    }
+                    if (imposed[k] != pii_type::none)
+                    {
+                        values[k] = column_value(c.value, imposed[k], report, made);
+                        continue;
+                    }
                     // Labels stay as they are; every other cell is read, header row included.
-                    if (labels[k] != pii_type::none && (c.row == 0 || context_of(k).label == pii_type::none))
+                    if (labels[k] != pii_type::none && (c.row <= first || context_of(k).label == pii_type::none))
                     {
                         values[k] = c.value;
                         continue;
@@ -878,16 +1319,16 @@ namespace dlib
             {
                 const cell& c = cells[k];
                 if (values[k] == c.value) continue;
+                /* A cell written without quotes keeps the quotes it holds as they are, as it was read,
+                   unless its new value needs quotes: a delimiter, a line break or a quote at its start. */
+                bool quote = c.quoted || (!values[k].empty() && values[k][0] == '"');
+                for (char ch : values[k])
+                    if (ch == delim || ch == '\n' || ch == '\r') quote = true;
                 std::string raw;
-                bool quote = c.quoted;
                 for (char ch : values[k])
                 {
-                    if (ch == '"') { raw += "\"\""; quote = true; }
-                    else
-                    {
-                        if (ch == delim || ch == '\n' || ch == '\r') quote = true;
-                        raw.push_back(ch);
-                    }
+                    if (ch == '"' && quote) raw += "\"\"";
+                    else raw.push_back(ch);
                 }
                 out.append(text, pos, c.raw_begin - pos);
                 if (quote && !c.quoted) out += "\"" + raw + "\"";
@@ -1417,6 +1858,10 @@ namespace dlib
         bool untagged_text_ = false;
         pseudonymizer::substitute_resolver text_resolve_;
         document_picture_text_finder pictures_;
+        std::vector<pii_imposed_column> columns_;
+        // fold_key() of the names of columns_, in the same order.
+        std::vector<std::string> column_keys_;
+        bool ascii_1252_ = false;
     };
 
 // ----------------------------------------------------------------------------------------

@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface de Pseudalis",
-  "version": "3.1.1",
+  "version": "3.2.0",
   "description": "L'interface locale de Pseudalis, sur ce Mac (https://localhost:8444 par défaut) et, une fois l'accès réseau activé (réglage lan), en HTTP simple sur chaque adresse du Mac, au port lan_port (8445 par défaut), sans mot de passe. Les fichiers voyagent tels quels, dans le corps des requêtes. Aucun compte ni jeton n'est nécessaire : sur macOS, les opérations d'administration sont ouvertes sur le Mac, comme les routes d'Albireo ; chaque requête doit toutefois nommer le serveur local dans son en-tête Host, et une requête venue d'une page doit venir du serveur local. Depuis la 3.0.0 (fork pour macOS), chaque protection écrit des pseudonymes sans retour, faits sous une clé jetable par document : ni balise, ni restauration à partir des pseudonymes ; /v1/restore rend l'original conservé, et le paramètre ou réglage tags est sans effet.",
   "contact": {
    "name": "Cydral Technology",
@@ -1216,6 +1216,83 @@
      }
     }
    }
+  },
+  "/v1/columns": {
+   "get": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "Les colonnes imposées",
+    "description": "Repris de l'original (Pseudalis 1.0.8 à 1.0.10). Dans un fichier CSV à en-tête, chaque valeur d'une colonne imposée prend le pseudonyme du type de la colonne, sans détection : l'en-tête est cherché par ces noms parmi les 16 premières lignes, sous un titre ou la ligne sep= d'Excel, et un texte d'un autre nom est lu comme un CSV quand son en-tête et les deux lignes qui le suivent contiennent autant de fois le séparateur. Les valeurs de ces colonnes, apprises comme valeurs de leur type, sont remplacées aussi dans les autres cellules. Une colonne IP prend les adresses IPv4 et IPv6, chacune avec le pseudonyme de sa forme, sa longueur de préfixe, ses crochets et son port gardés.",
+    "responses": {
+     "200": {
+      "description": "Les colonnes, avec les limites et les types que le service accepte",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Columns"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Administration"
+    ],
+    "summary": "Remplacer les colonnes imposées",
+    "description": "La liste fournie remplace les colonnes imposées en entier, aussitôt, pour les fichiers traités ensuite ; une liste vide les supprime. Une liste que le service n'accepte pas ne change rien (400) : columns_invalid (pas une liste, une entrée sans nom, un nom vide, de plus de 200 caractères, sur plusieurs lignes, avec un caractère de contrôle ou sans lettre ni chiffre), columns_too_many (plus de 100), columns_type (un type hors de la liste ; IPV4 et IPV6 sont refusés, IP les prend tous deux) ou columns_duplicate (un nom donné deux fois, sans tenir compte de la casse ni des accents), la position de l'entrée fautive dans args.index ; 500 (codes engine, database) lorsque le moteur ou la base de données ne peut pas les prendre en compte.",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "columns"
+        ],
+        "properties": {
+         "columns": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+           "$ref": "#/components/schemas/ImposedColumn"
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "{\"columns\"} : les colonnes conservées",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "columns": {
+           "type": "array",
+           "maxItems": 100,
+           "items": {
+            "$ref": "#/components/schemas/ImposedColumn"
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/Error"
+     },
+     "500": {
+      "$ref": "#/components/responses/Error"
+     }
+    }
+   }
   }
  },
  "components": {
@@ -1416,6 +1493,73 @@
        "type": "string"
       },
       "description": "Les types qu'un terme peut prendre"
+     }
+    }
+   },
+   "ImposedColumn": {
+    "type": "object",
+    "required": [
+     "column"
+    ],
+    "properties": {
+     "column": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Le nom de la colonne dans l'en-tête, sans tenir compte de la casse ni des accents ; ses espaces de début et de fin sont retirés."
+     },
+     "type": {
+      "type": "string",
+      "enum": [
+       "PERSON",
+       "ORG",
+       "LOCATION",
+       "ADDRESS",
+       "EMAIL",
+       "PHONE",
+       "ID",
+       "DATE",
+       "IBAN",
+       "CARD",
+       "NIR",
+       "SIRET",
+       "URL",
+       "IP",
+       "MAC",
+       "PLATE",
+       "GEO",
+       "TITLE",
+       "GENDER",
+       "NATIONALITY"
+      ],
+      "default": "PERSON",
+      "description": "Le type de ses valeurs, dont elles prennent le pseudonyme. IP prend les adresses IPv4 et IPv6."
+     }
+    }
+   },
+   "Columns": {
+    "type": "object",
+    "properties": {
+     "columns": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+       "$ref": "#/components/schemas/ImposedColumn"
+      }
+     },
+     "max": {
+      "type": "integer",
+      "description": "Le nombre de colonnes au plus : 100."
+     },
+     "max_length": {
+      "type": "integer",
+      "description": "La longueur d'un nom au plus : 200."
+     },
+     "types": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Les types que le service accepte."
      }
     }
    }

@@ -44,6 +44,7 @@ Dans la section Réglages, « Ouvrir Pseudalis aux appareils de la maison » ouv
 | Originaux conservés | La liste des originaux gardés, à télécharger ou à oublier |
 | Réglages | Balises par défaut, lettre du lecteur, ordre des dates, taille maximale d'un fichier, durée et espace des originaux, description des images par Albireo |
 | Termes imposés | Des termes toujours protégés, quel que soit le détecteur |
+| Colonnes imposées | Dans un fichier CSV à en-tête, les colonnes nommées (et leur type : personne, e-mail, IP…) dont chaque valeur prend un pseudonyme sans détection (3.2.0) |
 
 Le menu donne aussi l'état du service, le débit du moteur en direct (documents lus et copies protégées écrites, en Ko/s, sur les cinq dernières secondes, avec un « ? » qui explique la mesure), le lien vers la page de l'interface et le thème (système, clair, sombre). L'application et la page de l'interface sont en français seulement ; le service répond en français (descriptions d'images comprises), et son ancien réglage `language` n'a plus d'effet. Le sélecteur « Albireo | Pseudalis » mène à Albireo quand il tourne sur le Mac.
 
@@ -64,7 +65,7 @@ Les routes principales, décrites en détail par `web/openapi.json` et la page d
 | `POST /v1/names/anonymize`, `/v1/names/restore` | Les noms de fichiers |
 | `GET /v1/lookup` | Si un fichier est un fichier protégé connu de cette installation |
 | `GET /v1/records`, `GET /v1/records/{id}/original`, `DELETE /v1/records/{id}` | Les originaux conservés |
-| `GET`/`PUT /v1/settings`, `GET`/`PUT /v1/terms` | Réglages et termes imposés |
+| `GET`/`PUT /v1/settings`, `GET`/`PUT /v1/terms`, `GET`/`PUT /v1/columns` | Réglages, termes imposés et colonnes imposées |
 | `GET /v1/info`, `/v1/health`, `/v1/speed`, `/v1/drive`, `/v1/albireo`, `/v1/logs`, `/v1/events` | État, débit, lecteur, Albireo, journaux, événements |
 
 Exemple :
@@ -98,10 +99,10 @@ Un `admin.token` laissé par une version antérieure n'est plus lu.
 ```sh
 build/macos-pseudalis/tests/test_engine            # le moteur
 build/macos-pseudalis/tests/test_host <dossier>    # le service et ses fichiers
-PSEUDALIS_TEST_PORT=18474 bash dlib/dlib/external/pseudalis/tools/test_macos.sh   # 35 étapes
+PSEUDALIS_TEST_PORT=18474 bash dlib/dlib/external/pseudalis/tools/test_macos.sh   # 37 étapes
 ```
 
-`test_macos.sh` lance un service d'essai isolé ; il prend le port 18444 par défaut, celui du vrai service : quand celui-ci tourne, `PSEUDALIS_TEST_PORT` en donne un autre. Résultat attendu : **35 étapes sur 35**.
+`test_macos.sh` lance un service d'essai isolé ; il prend le port 18444 par défaut, celui du vrai service : quand celui-ci tourne, `PSEUDALIS_TEST_PORT` en donne un autre. Résultat attendu : **37 étapes sur 37**.
 
 ## Sécurité
 

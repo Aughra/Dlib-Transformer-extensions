@@ -412,6 +412,47 @@ PY
   else record "imposed terms" FAIL "$SET / $BAD / $TERMS_TEXT"
   fi
   admin_json PUT /v1/terms '{"terms": []}' > /dev/null
+  # Les colonnes imposées (3.2.0, repris de l'original 1.0.8 à 1.0.10) : sous leurs noms, un titre au-dessus de
+  # l'en-tête, des pseudonymes seuls à la place des valeurs, les autres valeurs détectées ; l'original revient par
+  # son enregistrement.  Pas de retour depuis un fichier modifié : les pseudonymes du fork ne reviennent pas.
+  COLS=$(admin_json PUT /v1/columns '{"columns": [{"column": "Nom", "type": "PERSON"},
+    {"column": "Courriel", "type": "EMAIL"}]}')
+  BAD_COLS=$(admin_json PUT /v1/columns '{"columns": [{"column": "Nom", "type": "NONE"}]}')
+  LISTED_COLS=$(api "$URL/v1/columns")
+  printf 'Export du 12/03/2024\nNOM;Courriel;Ville\nLemoine;paul.lemoine@exemple.fr;Rennes\n' > "$WORK/export.csv"
+  api -X POST --data-binary @"$WORK/export.csv" -D "$WORK/export.headers" -o "$WORK/export.anon.csv" \
+    "$URL/v1/anonymize?name=export.csv&record=true"
+  restore_to "$WORK/export.anon.csv" "$WORK/export.back.csv"
+  if printf '%s' "$COLS" | grep -q '"column":"Nom"' && printf '%s' "$BAD_COLS" | grep -q '"code":"columns_type"' &&
+     printf '%s' "$LISTED_COLS" | grep -q '"max":100' &&
+     sed -n 2p "$WORK/export.anon.csv" | grep -q '^NOM;Courriel;Ville$' &&
+     ! grep -q -e Lemoine -e paul.lemoine -e '\[\[' "$WORK/export.anon.csv" &&
+     [ "$(sed -n 3p "$WORK/export.anon.csv" | awk -F';' '{print NF}')" = 3 ] &&
+     sed -n 3p "$WORK/export.anon.csv" | awk -F';' '{print $2}' | grep -q '@' &&
+     cmp -s "$WORK/export.csv" "$WORK/export.back.csv"
+  then
+    record "imposed columns" PASS "pseudonyms below their names, the header under a title kept, the original back"
+  else record "imposed columns" FAIL "$(sed -n 3p "$WORK/export.anon.csv" | head -c 100) / $BAD_COLS / $LISTED_COLS"
+  fi
+  # Une colonne IP prend les deux formes d'adresse, le mot-clé d'une forme n'étant pas un type de colonne : chaque
+  # adresse prend le pseudonyme de sa forme, sa longueur de préfixe et son port gardés ; l'original revient.
+  BAD_IP=$(admin_json PUT /v1/columns '{"columns": [{"column": "ip_address", "type": "IPV4"}]}')
+  IP_COLS=$(admin_json PUT /v1/columns '{"columns": [{"column": "ip_address", "type": "IP"}]}')
+  printf 'host;ip_address\nweb;192.168.1.5\ndb;2001:db8::1\nnet;10.0.0.0/8\napi;[2001:db8::1]:443\n' \
+    > "$WORK/hosts.csv"
+  api -X POST --data-binary @"$WORK/hosts.csv" -D "$WORK/hosts.headers" -o "$WORK/hosts.anon.csv" \
+    "$URL/v1/anonymize?name=hosts.csv&record=true"
+  restore_to "$WORK/hosts.anon.csv" "$WORK/hosts.back.csv"
+  admin_json PUT /v1/columns '{"columns": []}' > /dev/null
+  if printf '%s' "$BAD_IP" | grep -q '"code":"columns_type"' && printf '%s' "$IP_COLS" | grep -q '"type":"IP"' &&
+     ! grep -q -F -e 192.168.1.5 -e 2001:db8::1 -e 10.0.0.0 "$WORK/hosts.anon.csv" &&
+     grep -q '/8$' "$WORK/hosts.anon.csv" && grep -q ']:443$' "$WORK/hosts.anon.csv" &&
+     sed -n 3p "$WORK/hosts.anon.csv" | grep -q ':' && ! grep -q -F '[[' "$WORK/hosts.anon.csv" &&
+     cmp -s "$WORK/hosts.csv" "$WORK/hosts.back.csv"
+  then
+    record "IP column" PASS "IPv4 and IPv6 in one column, prefix and port kept, the original back"
+  else record "IP column" FAIL "$(head -c 160 "$WORK/hosts.anon.csv") / $BAD_IP / $IP_COLS"
+  fi
   # L'espace des originaux : avec 1 Mo, les originaux les plus anciens font de la place aux plus
   # récents ; un espace plus petit que le plus gros fichier est refusé.
   SMALL=$(admin_json PUT /v1/settings '{"history_mb": 1}')

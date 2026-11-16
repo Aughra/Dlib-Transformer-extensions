@@ -249,7 +249,7 @@ PSD_API int PSD_CALL psd_process(psd_engine* engine, const char* request, const 
         {
             pseudalis::engine_result r = op == "anonymize"
                 ? engine->e->anonymize(bytes, name, handler, tags_of, tags, known)
-                : engine->e->restore(bytes, name, tags_of, known);
+                : engine->e->restore(bytes, name, tags_of, known, req["ascii_encoding"].str() == "windows-1252");
             res = result_of(r);
             out = std::move(r.bytes);
         }
@@ -371,6 +371,44 @@ PSD_API int PSD_CALL psd_set_terms(psd_engine* engine, const char* terms, size_t
             return 0;
         }
         engine->e->set_terms(parsed);
+        return 1;
+    }
+    catch (const std::exception& x)
+    {
+        put(error, x.what());
+    }
+    catch (...)
+    {
+        put(error, "unexpected error");
+    }
+    return 0;
+}
+
+PSD_API int PSD_CALL psd_set_columns(psd_engine* engine, const char* columns, size_t size, psd_buffer* error)
+{
+    clear(error);
+    if (!engine || !engine->e)
+    {
+        put(error, "no engine");
+        return 0;
+    }
+    try
+    {
+        pseudalis::json list;
+        if (!pseudalis::json::parse(std::string(columns ? columns : "", columns ? size : 0), list))
+        {
+            put(error, "the columns are not JSON");
+            return 0;
+        }
+        std::vector<pseudalis::imposed_column> parsed;
+        std::string message, code;
+        long long index = -1;
+        if (!pseudalis::parse_imposed_columns(list, parsed, message, code, index))
+        {
+            put(error, message);
+            return 0;
+        }
+        engine->e->set_columns(parsed);
         return 1;
     }
     catch (const std::exception& x)

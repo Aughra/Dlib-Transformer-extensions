@@ -28,6 +28,7 @@
       <a href="#records" data-card="records-card" hidden><span class="ico">☰</span><span data-t="records_title"></span></a>
       <a href="#settings" data-card="settings-card" hidden><span class="ico">⚙︎</span><span data-t="settings_title"></span></a>
       <a href="#terms" data-card="terms-card" hidden><span class="ico">≡</span><span data-t="terms_title"></span></a>
+      <a href="#columns" data-card="columns-card" hidden><span class="ico">▦</span><span data-t="columns_title"></span></a>
     </nav>
     <div class="speed" id="speed"></div>
     <section class="status" id="status" aria-live="polite"></section>
@@ -167,6 +168,24 @@
         <span class="count" id="terms-count"></span>
       </div>
       <p class="message" id="terms-message" hidden></p>
+    </section>
+
+    <section class="card" id="columns-card" hidden>
+      <h2 data-t="columns_title"></h2>
+      <p class="hint" data-t="columns_hint"></p>
+      <table class="records terms">
+        <thead>
+          <tr><th data-t="col_column"></th><th data-t="col_type"></th><th></th></tr>
+        </thead>
+        <tbody id="columns"></tbody>
+      </table>
+      <p class="hint" id="columns-none" data-t="columns_none" hidden></p>
+      <div class="buttons">
+        <button class="secondary" id="columns-add" data-t="columns_add"></button>
+        <button id="columns-save" data-t="columns_save"></button>
+        <span class="count" id="columns-count"></span>
+      </div>
+      <p class="message" id="columns-message" hidden></p>
     </section>
     <footer>
     <span>Pseudalis <span id="version"></span>. Copyright (C) 2026 Cydral Technology. <span data-t="written_by"></span>

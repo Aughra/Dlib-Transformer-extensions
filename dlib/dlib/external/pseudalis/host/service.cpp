@@ -190,6 +190,27 @@ namespace pseudalis
             terms_ = kept;
             if (!kept.empty()) log_info("terms: " + std::to_string(kept.size()) + " imposed term(s)");
         }
+        // Les colonnes imposées que garde la base de données, lues de la même façon.
+        {
+            std::vector<imposed_column> kept;
+            std::string message, code;
+            long long index = -1;
+            const json list = json::parse_or_null(db_->value("imposed_columns"));
+            if (!list.is_null() && !parse_imposed_columns(list, kept, message, code, index))
+            {
+                log_warning("columns: the imposed columns of the database are left aside: " + message);
+                kept.clear();
+            }
+            std::string ce;
+            if (!engine_->set_columns(imposed_columns_json(kept), ce))
+            {
+                error = "the engine refuses the imposed columns: " + ce;
+                return false;
+            }
+            std::lock_guard<std::mutex> lock(terms_m_);
+            columns_ = kept;
+            if (!kept.empty()) log_info("columns: " + std::to_string(kept.size()) + " imposed column(s)");
+        }
         log_info("engine: " + library_->path() + " (" + engine_->variant() + ", " + engine_->build() + "), key " +
                  key_fingerprint_);
         return true;
@@ -524,14 +545,15 @@ namespace pseudalis
         request["name"] = name;
         request["tags"] = tags;
         request["one_time_key"] = true;
-        /* Un fichier protégé ici sans tags, protégé de nouveau, par un moteur plus récent par exemple, ou
-           modifié sur le lecteur : les substituts que garde son enregistrement restent tels quels, et le
-           nouvel enregistrement en hérite, ce qui rend les valeurs de son original. */
+        /* Un fichier protégé ici sans tags, ou avec des colonnes imposées, protégé de nouveau, par un
+           moteur plus récent par exemple, ou modifié sur le lecteur : les substituts que garde son
+           enregistrement restent tels quels, et le nouvel enregistrement en hérite, ce qui rend les
+           valeurs de son original. */
         std::vector<long long> sources;
         {
             file_record before;
-            if (db_->find_by_output(sha256_hex(bytes), before) && !before.tags) sources.push_back(before.id);
-            if (previous > 0 && db_->get_file(previous, before) && !before.tags &&
+            if (db_->find_by_output(sha256_hex(bytes), before)) sources.push_back(before.id);
+            if (previous > 0 && db_->get_file(previous, before) &&
                 std::find(sources.begin(), sources.end(), previous) == sources.end())
                 sources.push_back(previous);
             json known = json::array();
@@ -595,6 +617,20 @@ namespace pseudalis
             r.output_size = static_cast<long long>(out.bytes.size());
             r.kind = out.kind;
             r.tags = tags;
+            /* L'encodage d'un texte, selon lequel sa restauration écrit un texte en ASCII pur : un original
+               en ASCII pur, un fichier protégé modifié sur le lecteur par exemple, prend celui de
+               l'enregistrement dont il vient. */
+            r.encoding = result["report"]["encoding"].str();
+            if (std::all_of(bytes.begin(), bytes.end(), [](char c) { return (c & 0x80) == 0; }))
+                for (long long id : sources)
+                {
+                    file_record source_record;
+                    if (db_->get_file(id, source_record) && source_record.encoding == "windows-1252")
+                    {
+                        r.encoding = source_record.encoding;
+                        break;
+                    }
+                }
             std::vector<entry_record> entries;
             for (const json& w : result["entries"].elements())
             {
@@ -623,9 +659,9 @@ namespace pseudalis
                 return false;
             }
         }
-        // Sans tags et sans enregistrement, rien ne rend les valeurs du fichier.
+        // Sans tags, ou avec des substituts dans des colonnes imposées, et sans enregistrement, rien ne les rend.
         out.report["tags"] = tags;
-        out.report["restorable"] = tags || out.record > 0;
+        out.report["restorable"] = (tags && text_made.empty()) || out.record > 0;
         return true;
     }
 
@@ -689,6 +725,8 @@ namespace pseudalis
             request["operation"] = "restore";
             request["name"] = r.original_name;
             if (!inherited.empty()) request["substitutions"] = inherited;
+            // Un texte en ASCII pur revient dans l'encodage de l'original qu'il représente.
+            if (text && r.encoding == "windows-1252") request["ascii_encoding"] = r.encoding;
             std::string restored, e;
             const bool done =
                 engine_->process(request, out.bytes, result, restored, nullptr, e, substitute_lookup());
@@ -780,8 +818,9 @@ namespace pseudalis
             // Une archive extraite de l'archive garde les entrées qu'elle contient, pour les fichiers qui en sont
             // extraits.
             db_->add_entries(record, db_->entries_inside(e));
-            // Sans tags, les substituts de l'archive, qui contiennent ceux de l'entrée.
-            if (!archive.tags) db_->copy_text_substitutes(archive.id, record);
+            // Sans tags, ou avec des colonnes imposées, les substituts de l'archive, qui contiennent ceux
+            // de l'entrée.
+            db_->copy_text_substitutes(archive.id, record);
             counts_changed();
         }
         catch (const std::exception& x)
@@ -869,8 +908,15 @@ namespace pseudalis
         json request = json::object();
         request["operation"] = "restore";
         request["name"] = name;
-        // Un fichier protégé sans tags et modifié depuis, reconnu par son identifiant d'objet : ses substituts.
-        if (tracked && !r.tags) request["substitutions"] = text_substitutes_of(r.id);
+        /* Un fichier protégé sans tags, ou avec des colonnes imposées, et modifié depuis, reconnu par son
+           identifiant d'objet : ses substituts. */
+        if (tracked)
+        {
+            const json known = text_substitutes_of(r.id);
+            if (!known.empty()) request["substitutions"] = known;
+            // Un texte en ASCII pur revient dans l'encodage de son original.
+            if (r.encoding == "windows-1252") request["ascii_encoding"] = r.encoding;
+        }
         json result;
         std::string e;
         if (!engine_->process(request, bytes, result, out.bytes, nullptr, e, substitute_lookup()))
@@ -1231,6 +1277,48 @@ namespace pseudalis
         }
         terms_ = parsed;
         log_info("terms: " + std::to_string(parsed.size()) + " imposed term(s) set");
+        return true;
+    }
+
+    json service::columns()
+    {
+        std::lock_guard<std::mutex> lock(terms_m_);
+        return imposed_columns_json(columns_);
+    }
+
+    bool service::set_columns(const json& list, user_error& error)
+    {
+        std::vector<imposed_column> parsed;
+        std::string message, code;
+        long long index = -1;
+        if (!parse_imposed_columns(list, parsed, message, code, index))
+        {
+            error.set(message, code);
+            if (index >= 0) error.arg("index", std::to_string(index));
+            return false;
+        }
+        const json canonical = imposed_columns_json(parsed);
+        std::lock_guard<std::mutex> lock(terms_m_);
+        std::string e;
+        if (!engine_ || !engine_->set_columns(canonical, e))
+        {
+            error.set(e.empty() ? "the engine is not ready" : e, "engine");
+            return false;
+        }
+        try
+        {
+            db_->set_value("imposed_columns", canonical.dump());
+        }
+        catch (const std::exception& x)
+        {
+            // Le moteur garde les colonnes qu'il avait : celles de la base, que lit le prochain démarrage.
+            std::string ignored;
+            engine_->set_columns(imposed_columns_json(columns_), ignored);
+            error.set(x.what(), "database");
+            return false;
+        }
+        columns_ = parsed;
+        log_info("columns: " + std::to_string(parsed.size()) + " imposed column(s) set");
         return true;
     }
 }

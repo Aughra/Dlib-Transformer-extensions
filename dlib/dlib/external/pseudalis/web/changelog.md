@@ -2,11 +2,25 @@
 
 Pseudalis pour macOS sur puce Apple, version dérivée de Pseudalis Community (Cydral Technology), maintenue par TortueTech. Le fork numérote Pseudalis à part de l'original à partir de 2.0.0. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne ; avant 2.0.0, la section porte le numéro de la version de l'original sur laquelle reposait le fork.
 
+## 3.2.0 — 16 novembre 2026
+
+### Protection
+
+- Colonnes imposées, reprises de l'original (Pseudalis 1.0.8 à 1.0.10) : dans un fichier CSV à en-tête, chaque valeur d'une colonne nommée par l'administrateur prend le pseudonyme du type de la colonne, sans détection. L'en-tête est cherché par ces noms parmi les 16 premières lignes, sous un titre ou la ligne `sep=` d'Excel, sans tenir compte de la casse ni des accents ; un texte d'un autre nom est lu comme un CSV quand son en-tête et les deux lignes qui le suivent contiennent autant de fois le séparateur. Les valeurs de ces colonnes, apprises comme valeurs de leur type, sont remplacées aussi ailleurs dans le fichier.
+- Une colonne de type IP prend les adresses IPv4 et IPv6 mélangées, chacune avec le pseudonyme de sa forme, sa longueur de préfixe, ses crochets et son port gardés ; IPV4 et IPV6 ne sont pas des types de colonne.
+- Un texte protégé dont les octets sont devenus de l'ASCII pur garde la trace de l'encodage de son original (Windows-1252 par exemple), pour qu'une restauration le rende dans cet encodage.
+
+### Accès et documents
+
+- Section « Colonnes imposées » dans le menu de la page : nom de la colonne, type, ajout, retrait, enregistrement, erreurs en français. Routes `GET` et `PUT /v1/columns` (100 colonnes au plus, noms de 200 caractères au plus).
+
+---
+
 ## 3.1.1 — 16 novembre 2026
 
 ### Corrections
 
-- Code que plus rien n'appelait retiré, comme dans l'original (Pseudalis 1.0.6) : seize fonctions et une structure (copie et identité de fichiers, lecture sans lien, lancement de processus, comparaison de versions, empreinte de certificat, résolution de noms, liste des images d'un enregistrement, nombre de termes imposés), soit 451 lignes, sans changement visible. Le reste de 1.0.6 (icône de Windows, langue du navigateur, import d'une mise à jour depuis un dossier) ne concerne pas le fork, en français seul et sans programme de mise à jour.
+- Code que plus rien n'appelait retiré, comme dans l'original (Pseudalis 1.0.6) : dix-sept fonctions et une structure (copie et identité de fichiers, lecture sans lien, lancement de processus, comparaison de versions, empreinte de certificat, résolution de noms, liste des images d'un enregistrement, nombre de termes imposés), soit 451 lignes, sans changement visible. Le reste de 1.0.6 (icône de Windows, langue du navigateur, import d'une mise à jour depuis un dossier) ne concerne pas le fork, en français seul et sans programme de mise à jour.
 
 ---
 

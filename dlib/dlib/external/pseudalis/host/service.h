@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "../common/engine_loader.h"
+#include "../common/imposed_columns.h"
 #include "../common/imposed_terms.h"
 #include "../common/json.h"
 #include "albireo_client.h"
@@ -115,7 +116,9 @@ namespace pseudalis
                 fichier rendent leur original, et une copie modifiée depuis, reconnue par son
                 identifiant NTFS, ses valeurs à partir de ces substituts.  Une fois
                 l'enregistrement oublié, ses valeurs ne peuvent plus revenir, et un fichier
-                protégé sans enregistrement ne les rend jamais.  Un fichier protégé protégé de
+                protégé sans enregistrement ne les rend jamais.  Les valeurs des colonnes imposées
+                d'un fichier CSV prennent ainsi leurs substituts, avec ou sans tags pour le reste
+                du fichier.  Un fichier protégé protégé de
                 nouveau, par un moteur plus récent par exemple, garde tels quels les valeurs
                 protégées auparavant : sa restauration rend l'original de chaque
                 enregistrement de la chaîne qui le garde encore, et les valeurs des tags des
@@ -151,12 +154,13 @@ namespace pseudalis
 
         /*
             Protège un fichier ; avec record, garde son original (out.record), sauf s'il dépasse
-            history_mb ; sans tags, ses valeurs prennent leurs substituts, que l'enregistrement garde.
+            history_mb ; sans tags, ses valeurs prennent leurs substituts, que l'enregistrement garde, comme
+            les valeurs des colonnes imposées d'un fichier CSV, même avec tags.
             out.report["tags"] dit lequel, out.report["restorable"] si le fichier peut être restauré.
-            Un fichier protégé sans tags et protégé de nouveau, une copie de son fichier protégé ou,
-            avec previous, l'enregistrement de la version qu'il remplace sur le lecteur, garde tels
-            quels les substituts de cet enregistrement, et son enregistrement en hérite, ce qui rend
-            les valeurs de son original.
+            Un fichier protégé sans tags ou avec des colonnes imposées et protégé de nouveau, une copie de son
+            fichier protégé ou, avec previous, l'enregistrement de la version qu'il remplace sur le lecteur, garde
+            tels quels les substituts de cet enregistrement, et son enregistrement en hérite, ce qui rend les
+            valeurs de son original.
         */
         bool protect(const std::string& bytes, const std::string& name, const std::string& source, bool record,
             bool tags, protect_result& out, user_error& error, long long previous = 0);
@@ -240,6 +244,14 @@ namespace pseudalis
         !*/
         json terms();
         bool set_terms(const json& list, user_error& error);
+        /*!
+            Les colonnes imposées (common/imposed_columns.h), gardées dans la base de données et
+            données au moteur : set_columns() prend une liste [{"column", "type"}] entière, ou la
+            refuse avec sa raison (codes columns_invalid, columns_too_many, columns_type,
+            columns_duplicate, avec la position de la colonne fautive dans "index").
+        !*/
+        json columns();
+        bool set_columns(const json& list, user_error& error);
 
 
     private:
@@ -283,8 +295,10 @@ namespace pseudalis
         std::atomic<bool> cleanup_{false};
         // make_room() s'exécute pour un seul appelant à la fois.
         std::mutex room_m_;
+        // Les termes et les colonnes imposés.
         std::mutex terms_m_;
         std::vector<imposed_term> terms_;
+        std::vector<imposed_column> columns_;
         std::atomic<bool> stopping_{false};
         std::atomic<bool> restart_{false};
         std::mutex key_m_;

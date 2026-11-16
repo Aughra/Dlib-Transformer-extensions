@@ -821,6 +821,77 @@ int main()
               restored.find("Jean Dupont") != std::string::npos);
     }
 
+    // Les colonnes imposées : les valeurs d'un fichier CSV sous leur nom prennent des substituts, avec des
+    // étiquettes ailleurs.
+    {
+        const std::string columns = "[{\"column\": \"Nom\", \"type\": \"PERSON\"}, "
+                                    "{\"column\": \"courriel\", \"type\": \"EMAIL\"}, "
+                                    "{\"column\": \"N° client\", \"type\": \"ID\"}]";
+        CHECK(psd_set_columns(e, columns.data(), columns.size(), &err) == 1);
+        psd_free(&err);
+        const std::string csv = "Export du 12/03/2024\n"
+                                "NOM;Courriel;N° client;Commentaire\n"
+                                "Dupont;jean.dupont@exemple.fr;CL-2024-0042;Rappeler M. Dupont\n"
+                                "Martin;h.martin@exemple.fr;CL-2024-0043;RAS\n";
+        std::string bare, restored;
+        CHECK(process(e, "anonymize", "clients.csv", csv, res, bare));
+        CHECK(bare.find("NOM;Courriel;N° client;Commentaire\n") != std::string::npos);
+        CHECK(bare.find("Dupont") == std::string::npos && bare.find("Martin") == std::string::npos &&
+              bare.find("CL-2024-0042") == std::string::npos && bare.find("[[PERSON:") != std::string::npos);
+        const json kept = text_substitutes(res);
+        CHECK(kept.size() == 6 && res["report"]["values"]["ID"].as_int() == 2);
+        // Les cellules ne contiennent que les substituts, que l'enregistrement rend.
+        for (const json& s : kept.elements())
+            CHECK(bare.find(";" + s["substitute"].str() + ";") != std::string::npos ||
+                  bare.find("\n" + s["substitute"].str() + ";") != std::string::npos);
+        CHECK(process(e, "restore", "clients.csv", bare, res, restored) && restored != csv &&
+              restored.find("Rappeler M. Dupont") != std::string::npos);
+        json known = json::object();
+        known["substitutions"] = kept;
+        CHECK(process(e, "restore", "clients.csv", bare, res, restored, false, false, known) && restored == csv);
+        CHECK(res["report"]["substitutes_restored"].as_int() == 6);
+        // Un fichier Windows-1252 protégé en ASCII pur revient dans cet encodage quand l'appelant le dit.
+        const std::string accents = "Nom;Ville\nH\xE9l\xE8ne;Rennes\n";
+        std::string ascii, back;
+        CHECK(process(e, "anonymize", "accents.csv", accents, res, ascii) &&
+              res["report"]["encoding"].str() == "windows-1252" &&
+              std::all_of(ascii.begin(), ascii.end(), [](char c) { return (c & 0x80) == 0; }));
+        json told = json::object();
+        told["substitutions"] = text_substitutes(res);
+        CHECK(process(e, "restore", "accents.csv", ascii, res, back, false, false, told) &&
+              back == "Nom;Ville\nH\xC3\xA9l\xC3\xA8ne;Rennes\n" && res["report"]["encoding"].str() == "utf-8");
+        told["ascii_encoding"] = "windows-1252";
+        CHECK(process(e, "restore", "accents.csv", ascii, res, back, false, false, told) && back == accents &&
+              res["report"]["encoding"].str() == "windows-1252");
+        // Une liste que le moteur n'accepte pas ne change rien ; une liste vide retire les colonnes.
+        const std::string wrong = "[{\"column\": \"Nom\", \"type\": \"NONE\"}]";
+        CHECK(psd_set_columns(e, wrong.data(), wrong.size(), &err) == 0 && err.data);
+        psd_free(&err);
+        CHECK(process(e, "anonymize", "clients.csv", csv, res, bare) && text_substitutes(res).size() == 6);
+        CHECK(psd_set_columns(e, "[]", 2, &err) == 1);
+        psd_free(&err);
+        CHECK(process(e, "anonymize", "clients.csv", csv, res, bare) && text_substitutes(res).size() == 0);
+        // Une colonne IP prend les deux formes, chaque adresse gardant sa forme, sa longueur de préfixe et son port.
+        const std::string ip = "[{\"column\": \"ip_address\", \"type\": \"IP\"}]";
+        CHECK(psd_set_columns(e, ip.data(), ip.size(), &err) == 1);
+        psd_free(&err);
+        const std::string hosts = "host;ip_address\nweb;192.168.1.5\ndb;2001:db8::1\nnet;10.0.0.0/8\n"
+                                  "api;[2001:db8::1]:443\nnone;N/A\n";
+        std::string hidden, shown;
+        CHECK(process(e, "anonymize", "hosts.csv", hosts, res, hidden));
+        const json ip_known = text_substitutes(res);
+        // Une valeur sans forme d'IP prend un substitut du type de la colonne, comme toute valeur de la colonne.
+        CHECK(ip_known.size() == 4 && res["report"]["values"]["IPV4"].as_int() == 3 &&
+              res["report"]["values"]["IPV6"].as_int() == 2);
+        CHECK(hidden.find("192.168.1.5") == std::string::npos && hidden.find("2001:db8::1") == std::string::npos &&
+              hidden.find("/8\n") != std::string::npos && hidden.find("]:443\n") != std::string::npos);
+        json ip_told = json::object();
+        ip_told["substitutions"] = ip_known;
+        CHECK(process(e, "restore", "hosts.csv", hidden, res, shown, false, false, ip_told) && shown == hosts);
+        CHECK(psd_set_columns(e, "[]", 2, &err) == 1);
+        psd_free(&err);
+    }
+
     psd_buffer fp = { nullptr, 0 };
     CHECK(psd_key_fingerprint(e, &fp) == 1 && fp.size > 0);
     psd_free(&fp);

@@ -26,17 +26,22 @@
         "substitutions" [{"substitute", "tag"}] : les substituts du texte d'un fichier ou d'un
                         texte protégé sans étiquettes, que "restore" et "restore_text" rendent
                         et que "anonymize" laisse tels quels
+        "ascii_encoding" "restore" : "windows-1252" écrit dans cet encodage un fichier texte dont
+                        les octets sont de l'ASCII pur, son original ayant été écrit ainsi
+                        (l'"encoding" du rapport de sa protection) ; UTF-8 sinon
     result reçoit un objet JSON : "name" (le nom de la sortie, protégée ou restaurée :
     "photo.png.txt" pour une image), "kind" ("txt", "csv", "xml", "docx", "xlsx", "pptx",
     "pdf", "image", "zip", "tar", "tar.gz" ou "text"), "report" ({"values": {type: nombre},
     "removed": [...], "notes": [...], "dropped": [entrées d'une archive laissées de côté],
     "tags_restored", "tags_rejected", "substitutes", "substitutes_restored", "pictures_removed"
     (les marqueurs d'image que "restore" a retirés, qu'aucune restauration ne remet dans un
-    document)}), "pictures"
+    document), "encoding" (un fichier texte : l'encodage écrit, "utf-8", "utf-8-bom",
+    "utf-16le", "utf-16be", "utf-16le-nobom", "utf-16be-nobom" ou "windows-1252")}), "pictures"
     (les identifiants des images trouvées) et, pour "anonymize" et "anonymize_name",
     "substitutions" ([{"substitute", "tag"}] : les valeurs écrites sans leurs étiquettes dans
     les noms et les propriétés, que l'appelant enregistre pour "restore", et, avec "text": true,
-    dans le texte sans étiquettes, une fois par emplacement) ; "substitutions" aussi pour
+    dans le texte sans étiquettes, une fois par emplacement, et dans les colonnes imposées d'un
+    fichier CSV, une fois par valeur) ; "substitutions" aussi pour
     "anonymize_text" sans étiquettes ; "spans" pour "detect".  output reçoit les octets du fichier
     écrit.  "anonymize_name" et "restore_name" prennent un nom seul en données, un dossier par
     exemple, et donnent le nouveau nom en sortie et dans "name".
@@ -72,7 +77,7 @@
 #define PSD_API __attribute__((visibility("default")))
 #define PSD_CALL
 
-#define PSEUDALIS_ENGINE_API_VERSION 4
+#define PSEUDALIS_ENGINE_API_VERSION 5
 
 #ifdef __cplusplus
 extern "C" {
@@ -128,6 +133,15 @@ PSD_API int PSD_CALL psd_key_fingerprint(psd_engine* engine, psd_buffer* fingerp
     le service n'accepte pas, les termes du moteur restant alors inchangés.
 */
 PSD_API int PSD_CALL psd_set_terms(psd_engine* engine, const char* terms, size_t size, psd_buffer* error);
+/*
+    Remplace les colonnes imposées du moteur (common/imposed_columns.h) : columns est une liste
+    JSON [{"column", "type"}] de size octets, que les appels qui démarrent ensuite lisent dans les
+    fichiers CSV : chaque valeur sous le nom d'une telle colonne dans l'en-tête prend son
+    substitut, listé dans "substitutions" avec "text": true, une fois par valeur, et "restore" la
+    rend à partir des "substitutions" de sa requête.  0, avec la raison dans error, pour une liste
+    que le service n'accepte pas, les colonnes du moteur restant alors inchangées.
+*/
+PSD_API int PSD_CALL psd_set_columns(psd_engine* engine, const char* columns, size_t size, psd_buffer* error);
 
 PSD_API char* PSD_CALL psd_alloc(size_t size);
 PSD_API void PSD_CALL psd_free(psd_buffer* buffer);

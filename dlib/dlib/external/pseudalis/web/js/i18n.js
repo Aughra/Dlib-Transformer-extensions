@@ -204,6 +204,35 @@ window.PSEUDALIS_TEXTS = {
       'ou un chiffre.',
     err_terms_too_many: '{max} termes au plus peuvent être imposés.',
     err_terms_type: 'Terme {n} : son étiquette n’est pas une de celles que le service accepte.',
-    err_terms_duplicate: 'Le terme {n} figure deux fois.'
+    err_terms_duplicate: 'Le terme {n} figure deux fois.',
+    // Les colonnes imposées des fichiers CSV (repris de l'original, Pseudalis 1.0.8 à 1.0.10).
+    columns_title: 'Colonnes imposées',
+    columns_hint: 'Dans un fichier CSV à en-tête, chaque valeur d’une colonne nommée ici prend le pseudonyme du type ' +
+      'de la colonne, sans détection. L’en-tête est cherché parmi les 16 premières lignes ; la casse et les accents ' +
+      'des noms ne comptent pas.',
+    col_column: 'Nom de la colonne',
+    col_type: 'Type',
+    columns_none: 'Aucune colonne imposée.',
+    columns_add: 'Ajouter une colonne',
+    columns_save: 'Enregistrer les colonnes',
+    columns_count: '{n} colonne(s) sur {max}',
+    columns_saved: 'Enregistré : {n} colonne(s) imposée(s).',
+    tag_DATE: 'Date (DATE)',
+    tag_IBAN: 'IBAN (IBAN)',
+    tag_CARD: 'Carte bancaire (CARD)',
+    tag_NIR: 'Numéro de sécurité sociale (NIR)',
+    tag_SIRET: 'SIRET (SIRET)',
+    tag_IP: 'Adresse IP, IPv4 ou IPv6 (IP)',
+    tag_MAC: 'Adresse MAC (MAC)',
+    tag_PLATE: 'Plaque d’immatriculation (PLATE)',
+    tag_GEO: 'Coordonnées géographiques (GEO)',
+    tag_TITLE: 'Civilité (TITLE)',
+    tag_GENDER: 'Sexe (GENDER)',
+    tag_NATIONALITY: 'Nationalité (NATIONALITY)',
+    err_columns_invalid: 'Colonne {n} : un nom est un texte d’une ligne, de 1 à {length} caractères, avec une lettre ' +
+      'ou un chiffre.',
+    err_columns_too_many: '{max} colonnes au plus peuvent être imposées.',
+    err_columns_type: 'Colonne {n} : son type n’est pas un de ceux que le service accepte.',
+    err_columns_duplicate: 'La colonne {n} figure deux fois (sans compter la casse ni les accents).'
   }
 };

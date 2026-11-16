@@ -172,6 +172,7 @@ namespace pseudalis
             j["substitutes_restored"] = static_cast<unsigned long long>(r.substitutes_restored);
             j["pictures_removed"] = static_cast<unsigned long long>(r.pictures_removed);
             j["dropped"] = json::array();
+            if (!r.encoding.empty()) j["encoding"] = r.encoding;
             return j;
         }
 
@@ -992,6 +993,10 @@ namespace pseudalis
         {
             bool tags = true;
             pseudonymizer::substitute_resolver text;
+            // Les colonnes imposées du moment, que tout l'appel lit.
+            std::vector<pii_imposed_column> columns;
+            // Restauration : un texte en ASCII pur dont l'original était écrit en Windows-1252, pour le fichier seul.
+            bool ascii_1252 = false;
         };
 
         // Le résolveur d'une liste de substituts : les étiquettes d'un substitut, dans l'ordre de la liste.
@@ -1033,9 +1038,17 @@ namespace pseudalis
         model_set m;
         // La clé des identifiants des images, dérivée de la clé du moteur.
         std::string picture_key;
-        // Les termes imposés, que set_terms() remplace pendant que des fichiers sont traités.
+        // Les termes et les colonnes imposés, que set_terms() et set_columns() remplacent pendant que
+        // des fichiers sont traités.
         mutable std::mutex terms_m;
         std::vector<pii_imposed_term> terms;
+        std::vector<pii_imposed_column> columns;
+
+        std::vector<pii_imposed_column> imposed_columns() const
+        {
+            std::lock_guard<std::mutex> lock(terms_m);
+            return columns;
+        }
 
         // Les options d'un détecteur : celles du moteur, avec les termes imposés du moment.
         pii_detector_options options() const
@@ -1324,6 +1337,10 @@ namespace pseudalis
             // Sans étiquettes, les valeurs du texte prennent aussi des substituts, que l'appelant garde.
             a.set_untagged_text(!restoring && !c.tags);
             a.set_text_substitute_resolver(c.text);
+            // Les valeurs des colonnes imposées d'un fichier CSV prennent leurs substituts, avec ou sans étiquettes.
+            a.set_imposed_columns(c.columns);
+            // Un texte en ASCII pur revient dans l'encodage de son original, que l'appelant connaît.
+            a.set_ascii_windows_1252(restoring && c.ascii_1252);
             // Une restauration ne peut pas remettre une image dans un document : son marqueur s'en va.
             if (restoring) a.set_picture_text_finder(picture_markers);
             /*
@@ -1499,6 +1516,9 @@ namespace pseudalis
             engine_result out;
             out.kind = archive_kind_name(ak);
             out.report = report_json(document_report());
+            // L'encodage d'un original ne concerne que le fichier, jamais les entrées d'une archive.
+            call_options inner = c;
+            inner.ascii_1252 = false;
             {
                 document_report r;
                 out.name = folder_of(name) + (restoring ? restore_alone(base_name(name), lookup, r)
@@ -1544,7 +1564,7 @@ namespace pseudalis
                 }
                 try
                 {
-                    engine_result r = any(e.data, e.name, handler, restoring, lookup, depth + 1, budget, c,
+                    engine_result r = any(e.data, e.name, handler, restoring, lookup, depth + 1, budget, inner,
                                           restoring ? nullptr : &kind);
                     const std::string read_as = e.name;
                     const std::string renamed =
@@ -1708,15 +1728,19 @@ namespace pseudalis
         call_options c;
         c.tags = tags;
         c.text = resolver_of_list(known);
+        c.columns = p_->imposed_columns();
         return p_->any(bytes, name, pictures, false, lookup, 0, budget, c);
     }
 
     engine_result engine::restore(const std::string& bytes, const std::string& name,
-                                  const substitute_lookup& lookup, const std::vector<substitution>& text) const
+                                  const substitute_lookup& lookup, const std::vector<substitution>& text,
+                                  bool ascii_windows_1252) const
     {
         uint64_t budget = decompression_budget(bytes.size());
         call_options c;
         c.text = resolver_of_list(text);
+        c.columns = p_->imposed_columns();
+        c.ascii_1252 = ascii_windows_1252;
         return p_->any(bytes, name, picture_handler(), true, lookup, 0, budget, c);
     }
 
@@ -1861,6 +1885,21 @@ namespace pseudalis
         }
         std::lock_guard<std::mutex> lock(p_->terms_m);
         p_->terms.swap(converted);
+    }
+
+    void engine::set_columns(const std::vector<imposed_column>& columns)
+    {
+        std::vector<pii_imposed_column> converted;
+        for (const imposed_column& c : columns)
+        {
+            pii_imposed_column one;
+            one.name = c.name;
+            // Une colonne IP prend les deux formes d'adresse, que l'anonymiseur lit toutes deux dans une colonne ipv4.
+            one.type = c.type == "IP" ? pii_type::ipv4 : pii_type_from_keyword(c.type);
+            if (one.type != pii_type::none && !one.name.empty()) converted.push_back(one);
+        }
+        std::lock_guard<std::mutex> lock(p_->terms_m);
+        p_->columns.swap(converted);
     }
 
     json engine::detect(const std::string& text) const

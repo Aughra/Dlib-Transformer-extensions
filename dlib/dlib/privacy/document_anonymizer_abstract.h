@@ -4,6 +4,7 @@
 #ifdef DLIB_DOCUMENT_ANONYMIZER_ABSTRACT_H_
 
 #include <string>
+#include <vector>
 #include "../documents/document_image_abstract.h"
 #include "pii_detector_abstract.h"
 #include "pseudonymizer_abstract.h"
@@ -79,6 +80,25 @@ namespace dlib
 
 // ----------------------------------------------------------------------------------------
 
+    struct pii_imposed_column
+    {
+        /*!
+            WHAT THIS OBJECT REPRESENTS
+                A column of the delimited files whose values are all personal data of one
+                type, the column of the names of the clients or of their e-mail addresses in
+                an export for instance (document_anonymizer::set_imposed_columns()).
+
+                name - the name of the column in the header of a file, compared without
+                       regard to case and accents, the spaces at its ends left out
+                       ("Prénom" names the columns headed "PRENOM" and " prénom ")
+                type - the type of every value of the column
+        !*/
+        std::string name;
+        pii_type type = pii_type::none;
+    };
+
+// ----------------------------------------------------------------------------------------
+
     class document_anonymizer
     {
         /*!
@@ -99,9 +119,12 @@ namespace dlib
                                 rows feed the learning pass, so that a name established in
                                 one row is replaced in every cell, and detection runs cell
                                 by cell, so that a value never spills over a column.
-                                Quoting is kept, and added where a tag needs it. A file
-                                that does not parse is processed as plain text, with a
-                                note.
+                                Quoting is kept, and added where a value needs it (a
+                                delimiter, a line break); a cell written without quotes
+                                keeps the quotes it holds as they are. A file that does
+                                not parse is processed as plain text, with a note. The
+                                columns that set_imposed_columns() names take
+                                substitutes, without detection.
                     markup    - character data, CDATA sections, comments and attribute
                                 values are rewritten, nothing else. HTML and SVG are read
                                 with the tolerance of HTML parsers (unquoted and valueless
@@ -121,7 +144,8 @@ namespace dlib
                 Restoration of text and delimited files gives back the original bytes when
                 every tag verifies, with one exception: a Windows-1252 file whose protected
                 form holds only ASCII is restored in UTF-8, since nothing tells its
-                encoding any more (the reports note it). In markup, everything outside the
+                encoding any more (the reports note it), unless the caller knows it and
+                says so (set_ascii_windows_1252()). In markup, everything outside the
                 replaced values keeps its exact bytes; a restored value is written with
                 plain characters, and a value that spanned several inline elements comes
                 back in the first of them. A tag never forms "]]>" with the text after it:
@@ -294,6 +318,88 @@ namespace dlib
                 - anonymize() and anonymize_text() leave as they are the substitutes that
                   resolve knows, an untagged document protected again.
                 - An empty function, the default, restores no substitute of the text.
+        !*/
+
+        void set_ascii_windows_1252(
+            bool yes
+        );
+        /*!
+            ensures
+                - #ascii_windows_1252() == yes
+        !*/
+
+        bool ascii_windows_1252(
+        ) const;
+        /*!
+            ensures
+                - Returns whether restore() writes in Windows-1252 a text file whose bytes
+                  are plain ASCII, false by default. Such a text says nothing of the
+                  encoding of its original: a Windows-1252 original whose protected form
+                  holds only ASCII, all its accented letters taken by values, comes back in
+                  UTF-8 unless the caller, which kept the encoding of the original
+                  (document_report::encoding), says so here. The text is written in
+                  Windows-1252 when that encoding writes every character restored, in UTF-8
+                  otherwise; a text that holds other bytes keeps its own encoding.
+        !*/
+
+        void set_imposed_columns(
+            const std::vector<pii_imposed_column>& columns
+        );
+        /*!
+            ensures
+                - #imposed_columns() == columns, without those of type none, those whose
+                  name holds nothing but spaces and the later ones of a name given twice.
+        !*/
+
+        const std::vector<pii_imposed_column>& imposed_columns(
+        ) const;
+        /*!
+            ensures
+                - Returns the columns of the delimited files whose values are replaced whole,
+                  without detection, empty by default:
+                    - The header of a file is the first of its first 16 rows that holds the
+                      name of an imposed column in a cell. Its cells stay as they are, and the
+                      labels among them type their columns as in any header.
+                    - anonymize() writes the substitute of each value below the name of an
+                      imposed column (pseudonymizer::substitute() for the type of the column),
+                      with or without untagged text, the spaces and line breaks at its ends
+                      kept and an empty cell left empty. The tag of a value stands for that
+                      value, and a substitute that the text resolver knows for the type of
+                      the column (set_text_substitute_resolver()), a file protected before,
+                      stays as it is. Each value is counted in report.entities and listed with
+                      its tag in report.substitutions, text set to true, once: a substitute
+                      carries no check, and only a resolver that knows it gives its value back.
+                      A civility, a sex or a nationality takes another substitute at each
+                      place, listed each time. A date stays in clear under date_policy::keep.
+                    - A column of type ipv4 or ipv6 takes the addresses of both forms: each
+                      address takes the substitute of its own form, counted under that type,
+                      and keeps what surrounds it in the cell, a prefix length
+                      ("10.0.0.0/8"), the brackets and the port ("[2001:db8::1]:443",
+                      "192.0.2.1:8080") or a zone ("fe80::1%eth0"). An address written
+                      otherwise than in its canonical form (capitals, leading zeros), whose
+                      substitute is an opaque code, gives one opaque code to the whole value,
+                      what surrounds it included, and a value of no IP form takes the
+                      substitute of the type of the column.
+                    - The values are not read by the detector: each is recorded once as a
+                      value of the type of its column (pii_detector::learn_value()), so that
+                      the other cells of the file, a comment that names a client for
+                      instance, give it up too. The whole rows that the learning pass reads
+                      leave them out.
+                    - restore() gives each value below the name of an imposed column, whole, to
+                      the text resolver: the first tag returned that decodes to a value of the
+                      type of the column, or of either IP form in an IP column, takes its place,
+                      counted in report.substitutes_restored; in an IP column, the address of a
+                      value is given alone when the whole value is not known, what surrounds it
+                      staying in place. The other values are restored as in any cell.
+                    - A file is found delimited by its header. In a file named .csv, .tsv or
+                      .tab, a title may stand above the header, and a first line "sep=;"
+                      written by Excel gives the delimiter; such a file may also hold one
+                      column alone, its name alone on its line. A text given as
+                      document_format::text, or under another name, is read as delimited
+                      when its header holds the delimiter and the two records that follow it
+                      hold it as many times.
+                    - The values of the sheets of a workbook and of the other formats are
+                      detected as before.
         !*/
 
         std::string anonymize_name(

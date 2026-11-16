@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "../common/imposed_columns.h"
 #include "../common/imposed_terms.h"
 #include "../common/json.h"
 
@@ -116,7 +117,9 @@ namespace pseudalis
                 Sans étiquettes (anonymize() et anonymize_text() avec tags à false), chaque
                 valeur du texte prend aussi son substitut : le fichier ne contient aucune
                 étiquette, et ses valeurs ne reviennent que grâce aux substituts que l'appelant
-                garde (engine_result::substitutions, text à true) et rend à restore().
+                garde (engine_result::substitutions, text à true) et rend à restore().  Les
+                valeurs des colonnes imposées d'un fichier CSV prennent ainsi leurs substituts,
+                avec ou sans étiquettes (set_columns()).
 
             SÛRETÉ DES THREADS
                 Les méthodes peuvent être appelées depuis plusieurs threads à la fois.
@@ -170,11 +173,16 @@ namespace pseudalis
             s'en va avec les étiquettes de sa description (d'un passage de texte Word, avec la zone
             de texte grise d'une diapositive, de par-dessus le cadre gris d'un PDF, qui reste), de
             même que le fichier texte d'une image d'une archive, report["pictures_removed"] les
-            comptant ; le service rend l'image d'un fichier texte seul depuis son coffre.
+            comptant ; le service rend l'image d'un fichier texte seul depuis son coffre.  Un texte
+            dont les octets sont de l'ASCII pur ne dit rien de l'encodage de son original :
+            ascii_windows_1252, que l'appelant règle quand cet original était écrit en Windows-1252
+            (report["encoding"] de sa protection), le fait restaurer dans cet encodage plutôt
+            qu'en UTF-8.
         */
         engine_result restore(const std::string& bytes, const std::string& name,
             const substitute_lookup& lookup = substitute_lookup(),
-            const std::vector<substitution>& text = std::vector<substitution>()) const;
+            const std::vector<substitution>& text = std::vector<substitution>(),
+            bool ascii_windows_1252 = false) const;
         /*
             Les octets de l'entrée située à path dans l'archive bytes nommée name, lue comme
             anonymize() la lit : path est entry_written::original, les archives contenues jointes
@@ -216,6 +224,14 @@ namespace pseudalis
             lesquels il a commencé pour les détecteurs qu'il a déjà créés.
         */
         void set_terms(const std::vector<imposed_term>& terms);
+        /*
+            Remplace les colonnes imposées (common/imposed_columns.h), que tout fichier CSV traité
+            ensuite lit : sous le nom d'une telle colonne dans son en-tête, chaque valeur prend son
+            substitut, listé dans engine_result::substitutions avec text à true, une fois par valeur,
+            et restore() la rend à partir des substituts du texte qu'on lui donne.  Un appel en cours
+            garde les colonnes avec lesquelles il a commencé.
+        */
+        void set_columns(const std::vector<imposed_column>& columns);
 
         std::string key_fingerprint() const;
         // {"tagger", "span_model", "size"}

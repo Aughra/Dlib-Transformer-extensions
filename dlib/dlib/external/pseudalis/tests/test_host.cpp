@@ -12,10 +12,12 @@
 #include <string>
 #include <vector>
 
+#include <dlib/privacy/pii_types.h>
 #include <sqlite3.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "../common/imposed_columns.h"
 #include "../common/imposed_terms.h"
 #include "../common/platform.h"
 #include "../host/keys.h"
@@ -230,6 +232,56 @@ int main()
                                                       "\"}]"), terms, message, code, index));
     }
 
+    // Les colonnes imposées : une liste que le service prend, ou la raison et la place de son refus.
+    {
+        std::vector<imposed_column> columns;
+        std::string message, code;
+        long long index = -1;
+        json list = json::parse_or_null("[{\"column\": \"  Nom \", \"type\": \"PERSON\"}, "
+                                        "{\"column\": \"E-mail\", \"type\": \"EMAIL\"}, "
+                                        "{\"column\": \"Naissance\", \"type\": \"DATE\"}, "
+                                        "{\"column\": \"N° client\"}]");
+        CHECK(parse_imposed_columns(list, columns, message, code, index) && columns.size() == 4 &&
+              columns[0].name == "Nom" && columns[2].type == "DATE" && columns[3].type == "PERSON" && index == -1);
+        const json canonical = imposed_columns_json(columns);
+        std::vector<imposed_column> back;
+        CHECK(parse_imposed_columns(canonical, back, message, code, index) && back.size() == 4 &&
+              back[3].name == "N° client" && canonical[0]["column"].str() == "Nom");
+        CHECK(parse_imposed_columns(json::parse_or_null("[]"), columns, message, code, index) && columns.empty());
+        auto refused = [&](const char* text, const char* expected, long long at) {
+            std::vector<imposed_column> c;
+            std::string m, k;
+            long long i = -2;
+            return !parse_imposed_columns(json::parse_or_null(text), c, m, k, i) && k == expected && i == at &&
+                   !m.empty();
+        };
+        CHECK(refused("{}", "columns_invalid", -1));
+        CHECK(refused("[{\"column\": \"   \"}]", "columns_invalid", 0));
+        CHECK(refused("[{\"column\": \"Nom\"}, {\"column\": \"---\"}]", "columns_invalid", 1));
+        CHECK(refused("[{\"column\": \"Nom\\tPrenom\"}]", "columns_invalid", 0));
+        CHECK(refused("[{\"term\": \"Nom\"}]", "columns_invalid", 0));
+        CHECK(refused("[{\"column\": \"Nom\", \"type\": \"NONE\"}]", "columns_type", 0));
+        CHECK(refused("[{\"column\": \"Prénom\"}, {\"column\": \"PRENOM\"}]", "columns_duplicate", 1));
+        std::string many = "[";
+        for (int k = 0; k <= static_cast<int>(max_imposed_columns); ++k)
+            many += std::string(k ? "," : "") + "{\"column\": \"column " + std::to_string(k) + "\"}";
+        CHECK(refused((many + "]").c_str(), "columns_too_many", -1));
+        CHECK(refused(("[{\"column\": \"" + std::string(max_imposed_column_length + 1, 'a') + "\"}]").c_str(),
+                      "columns_invalid", 0));
+        CHECK(parse_imposed_columns(json::parse_or_null("[{\"column\": \"" +
+                                                        std::string(max_imposed_column_length, 'a') + "\"}]"),
+                                    columns, message, code, index));
+        for (const std::string& t : imposed_column_types())
+            CHECK(t == "IP" || dlib::pii_type_from_keyword(t) != dlib::pii_type::none);
+        // Les deux formes d'adresse IP font un seul type, IP ; les mots-clés des formes ne sont pas des types de colonne.
+        CHECK(parse_imposed_columns(json::parse_or_null("[{\"column\": \"ip_address\", \"type\": \"IP\"}]"),
+                                    columns, message, code, index) &&
+              columns.size() == 1 && columns[0].type == "IP");
+        CHECK(refused("[{\"column\": \"ip_address\", \"type\": \"IPV4\"}]", "columns_type", 0));
+        CHECK(refused("[{\"column\": \"ip\", \"type\": \"IP\"}, {\"column\": \"ip6\", \"type\": \"IPV6\"}]",
+                      "columns_type", 1));
+    }
+
     // La base de données : les fiches, les images et l'arborescence du lecteur.
     {
         store db(join_path(dir, "pseudalis.db"));
@@ -390,6 +442,31 @@ int main()
             file_record back;
             CHECK(migrated.find_by_output(bare.output_sha256, back) && !back.tags &&
                   migrated.text_substitutes(id).size() == 1);
+        }
+        // Une base de la version 3, telle que Pseudalis 1.0.8 l'a laissée : l'encodage de ses enregistrements est
+        // inconnu, puis gardé pour les suivants.
+        const std::string v3_path = join_path(dir, "version3.db");
+        {
+            store fresh(v3_path);
+            CHECK(fresh.add_file(r) > 0);
+        }
+        CHECK(sqlite3_open(v3_path.c_str(), &raw) == SQLITE_OK);
+        CHECK(sqlite3_exec(raw, "ALTER TABLE files DROP COLUMN encoding; PRAGMA user_version = 3;",
+                           nullptr, nullptr, nullptr) == SQLITE_OK);
+        sqlite3_close(raw);
+        {
+            store migrated(v3_path);
+            file_record before;
+            CHECK(migrated.find_by_output(r.output_sha256, before) && before.encoding.empty());
+            file_record text = r;
+            text.output_sha256 = std::string(64, 'e');
+            text.encoding = "windows-1252";
+            CHECK(migrated.add_file(text) > 0);
+        }
+        {
+            store reopened(v3_path);
+            file_record back;
+            CHECK(reopened.find_by_output(std::string(64, 'e'), back) && back.encoding == "windows-1252");
         }
 
         // Les fichiers du dossier du lecteur tels que le service les a laissés, et ce qu'ils pèsent.

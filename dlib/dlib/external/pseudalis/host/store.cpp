@@ -110,7 +110,7 @@ namespace pseudalis
 
         const char* const file_columns = "id, created, source, original_name, output_name, original_sha256,"
                                          " output_sha256, original_blob, original_size, output_size, kind,"
-                                         " object_id, path, removed, tags";
+                                         " object_id, path, removed, tags, encoding";
 
         file_record read_file_row(statement& s)
         {
@@ -130,6 +130,7 @@ namespace pseudalis
             r.path = s.text(12);
             r.removed = s.integer(13);
             r.tags = s.integer(14) != 0;
+            r.encoding = s.text(15);
             return r;
         }
     }
@@ -206,6 +207,32 @@ namespace pseudalis
                     throw;
                 }
             }
+            /*
+                4 : l'encodage de l'original d'un enregistrement qui est un texte, selon lequel une
+                restauration écrit un texte en ASCII pur comme son original était écrit ; inconnu pour
+                les enregistrements des versions antérieures.
+            */
+            if (version < 4)
+            {
+                // L'instruction qui lit les colonnes se termine avant que la table change.
+                bool has = false;
+                {
+                    statement c(db_, "PRAGMA table_info(files)");
+                    while (c.step()) has = has || c.text(1) == "encoding";
+                }
+                exec("BEGIN IMMEDIATE");
+                try
+                {
+                    if (!has) exec("ALTER TABLE files ADD COLUMN encoding TEXT NOT NULL DEFAULT '';");
+                    exec("PRAGMA user_version = 4;"
+                         "COMMIT;");
+                }
+                catch (...)
+                {
+                    sqlite3_exec(db_, "ROLLBACK", nullptr, nullptr, nullptr);
+                    throw;
+                }
+            }
         }
         catch (...)
         {
@@ -237,12 +264,12 @@ namespace pseudalis
         std::lock_guard<std::mutex> lock(m_);
         statement s(db_,
             "INSERT INTO files(created, source, original_name, output_name, original_sha256, output_sha256,"
-                         " original_blob, original_size, output_size, kind, object_id, path, tags)"
-                         " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)");
+                         " original_blob, original_size, output_size, kind, object_id, path, tags, encoding)"
+                         " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)");
         s.bind(1, static_cast<long long>(r.created ? r.created : now_unix())).bind(2, r.source).bind(3, r.original_name)
             .bind(4, r.output_name).bind(5, r.original_sha256).bind(6, r.output_sha256).bind(7, r.original_blob)
             .bind(8, r.original_size).bind(9, r.output_size).bind(10, r.kind).bind(11, r.object_id).bind(12, r.path)
-            .bind(13, static_cast<long long>(r.tags ? 1 : 0));
+            .bind(13, static_cast<long long>(r.tags ? 1 : 0)).bind(14, r.encoding);
         s.step();
         return sqlite3_last_insert_rowid(db_);
     }

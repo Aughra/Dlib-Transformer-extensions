@@ -45,6 +45,7 @@ namespace pseudalis
             psd_buffer*, psd_buffer*, psd_buffer*) = nullptr;
         int (PSD_CALL* key_fingerprint)(psd_engine*, psd_buffer*) = nullptr;
         int (PSD_CALL* set_terms)(psd_engine*, const char*, size_t, psd_buffer*) = nullptr;
+        int (PSD_CALL* set_columns)(psd_engine*, const char*, size_t, psd_buffer*) = nullptr;
         char* (PSD_CALL* alloc)(size_t) = nullptr;
         void (PSD_CALL* free_buffer)(psd_buffer*) = nullptr;
 
@@ -88,6 +89,8 @@ namespace pseudalis
         std::string key_fingerprint() const;
         // Remplace les termes imposés du moteur ([{"term", "type", "case_sensitive"}]).
         bool set_terms(const json& terms, std::string& error) const;
+        // Remplace les colonnes imposées du moteur ([{"column", "type"}]).
+        bool set_columns(const json& columns, std::string& error) const;
         std::string variant() const;
         // La version et le build du moteur (psd_build()).
         std::string build() const;

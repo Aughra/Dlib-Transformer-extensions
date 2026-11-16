@@ -4,3 +4,4 @@ Le carnet du portage de Pseudalis, l'application qui protège les données perso
 
 1. [Le coffre sans clé de service](01-le-coffre-sans-cle-de-service.md)
 2. [Des pseudonymes sans retour](02-des-pseudonymes-sans-retour.md)
+3. [Les colonnes désignées](03-les-colonnes-designees.md)
