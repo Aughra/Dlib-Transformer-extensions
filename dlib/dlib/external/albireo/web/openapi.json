@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Albireo Community Edition",
-  "version": "5.4.0",
+  "version": "5.4.1",
   "description": "L'interface du service Albireo, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions albireo-general, albireo-code et albireo-security désignent les modèles activés pour chaque fonction, albireo-background le modèle livré avec Albireo, que l'application web utilise pour son travail en arrière-plan, et albireo-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -1358,7 +1358,7 @@
      "Service"
     ],
     "summary": "Liste les modèles d'un fournisseur du relais",
-    "description": "Les réglages donnés, par-dessus ceux qui sont enregistrés, interrogent la route des modèles du fournisseur, pour un moteur d'OpenAI à l'adresse saisie, puis avec /v1 ; le secret masqué tient lieu du secret enregistré selon la règle des réglages.",
+    "description": "Les réglages donnés, par-dessus ceux qui sont enregistrés, interrogent la route des modèles du fournisseur, pour un moteur d'OpenAI à l'adresse saisie, puis avec /v1 ; le secret masqué tient lieu du secret enregistré selon la règle des réglages. Depuis le Mac seul, comme les réglages du relais : l'adresse locale du service (https://localhost), sans origine ou avec celle de sa page.",
     "requestBody": {
      "required": true,
      "content": {
@@ -1432,6 +1432,16 @@
      },
      "400": {
       "description": "Réglages invalides, ou un secret masqué donné pour un autre fournisseur, une autre adresse ou un autre utilisateur (code relay_secret)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Une requête qui ne vient pas du Mac lui-même : accès réseau, Host étranger ou page d'un autre site (code relay_mac_only)",
       "content": {
        "application/json": {
         "schema": {
@@ -2505,6 +2515,16 @@
      },
      "400": {
       "description": "Une valeur hors limites, le mot de passe masqué du proxy avec un autre utilisateur, hôte ou port (code proxy_password), le port réseau égal au port du Mac (code lan_port_same)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Un changement du relais (clé relay) qui ne vient pas du Mac lui-même : accès réseau, Host étranger ou page d'un autre site (code relay_mac_only)",
       "content": {
        "application/json": {
         "schema": {

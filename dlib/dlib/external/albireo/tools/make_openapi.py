@@ -800,7 +800,9 @@ paths = {
         "tags": ["Service"], "summary": "Liste les modèles d'un fournisseur du relais",
         "description": "Les réglages donnés, par-dessus ceux qui sont enregistrés, interrogent la route des modèles du "
                        "fournisseur, pour un moteur d'OpenAI à l'adresse saisie, puis avec /v1 ; le secret masqué "
-                       "tient lieu du secret enregistré selon la règle des réglages.",
+                       "tient lieu du secret enregistré selon la règle des réglages. Depuis le Mac seul, comme les "
+                       "réglages du relais : l'adresse locale du service (https://localhost), sans origine ou avec "
+                       "celle de sa page.",
         "requestBody": json_body(ref("RelaySettings")),
         "responses": {"200": reply("Si le fournisseur a répondu", {"type": "object", "properties": {
             "ok": {"type": "boolean"}, "models": {"type": "array", "items": {"type": "string"}},
@@ -817,7 +819,9 @@ paths = {
             "args": {"type": "object", "description": "s : le statut HTTP du moteur."},
             "detail": {"type": "string", "description": "Le message du moteur avec son statut."}}}),
             "400": reply("Réglages invalides, ou un secret masqué donné pour un autre fournisseur, une autre adresse "
-                         "ou un autre utilisateur (code relay_secret)", ref("Error"))}}},
+                         "ou un autre utilisateur (code relay_secret)", ref("Error")),
+            "403": reply("Une requête qui ne vient pas du Mac lui-même : accès réseau, Host étranger ou page d'un "
+                         "autre site (code relay_mac_only)", ref("Error"))}}},
     "/albireo/v1/web/fetch": {"post": {
         "tags": ["Accès au web"], "summary": "Lit une page du web à une adresse publique",
         "description": "L'outil fetch_page du bouton Web. L'adresse est en http ou https, sans informations "
@@ -1009,6 +1013,9 @@ paths = {
                               "400": reply("Une valeur hors limites, le mot de passe masqué du proxy avec un autre "
                                            "utilisateur, hôte ou port (code proxy_password), le port réseau égal au "
                                            "port du Mac (code lan_port_same)", ref("Error")),
+                              "403": reply("Un changement du relais (clé relay) qui ne vient pas du Mac lui-même : "
+                                           "accès réseau, Host étranger ou page d'un autre site (code "
+                                           "relay_mac_only)", ref("Error")),
                               "409": reply("Le nouveau port est occupé ou ne peut pas être ouvert (code "
                                            "port_unavailable)", ref("Error"))}}},
     "/albireo/v1/hub/search": {"get": {"tags": ["Hugging Face"], "summary": "Cherche les modèles GGUF de Hugging Face",

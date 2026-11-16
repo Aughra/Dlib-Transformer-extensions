@@ -420,12 +420,30 @@ carnet_refusals() {
   echo "refused $n of 7, CLAUDE.md $code"
 }
 
+# Les réglages du relais se changent depuis le Mac seul (5.4.1) : refusés à une page d'un autre site, à un Host
+# étranger et à l'accès réseau, acceptés du Mac et de la page du service.
+relay_guard() {
+  local body='{"relay":{"enabled":false,"model":"essai"}}' put web rebind lan test mac page
+  for i in $(seq 1 50); do curl -s --max-time 1 -o /dev/null http://127.0.0.1:$LAN_PORT/ && break; sleep 0.1; done
+  put() { curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' -d "$body" "$@"; }
+  web=$(put -k -H 'Origin: https://evil.example' https://localhost:$PORT/albireo/v1/settings)
+  rebind=$(put -k -H "Host: evil.example:$PORT" https://localhost:$PORT/albireo/v1/settings)
+  lan=$(put http://127.0.0.1:$LAN_PORT/albireo/v1/settings)
+  test=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' \
+    http://127.0.0.1:$LAN_PORT/albireo/v1/relay/test)
+  mac=$(put -k https://localhost:$PORT/albireo/v1/settings)
+  page=$(put -k -H "Origin: https://localhost:$PORT" https://localhost:$PORT/albireo/v1/settings)
+  echo "web $web, rebind $rebind, lan $lan, test $test, mac $mac, page $page"
+}
+
 # Le service, hors ligne, dans un dossier de données à lui.
 SERVICE=$BUILD/bin/albireo-service
 if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
   HOME_DIR=$WORK/home
   mkdir -p "$HOME_DIR"
-  echo "{\"port\": $PORT, \"offline\": true, \"default_model\": false}" \
+  # L'accès réseau ouvert sur son propre port, pour vérifier que les réglages du relais n'y passent pas.
+  LAN_PORT=$((PORT + 1))
+  echo "{\"port\": $PORT, \"offline\": true, \"default_model\": false, \"lan\": true, \"lan_port\": $LAN_PORT}" \
     > "$HOME_DIR/settings.json"
   ALBIREO_HOME=$HOME_DIR "$SERVICE" --console > "$WORK/service.log" 2>&1 &
   PID=$!
@@ -443,6 +461,7 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
       "https://localhost:$PORT/albireo/v1/licenses/../settings.json"
     step "service carnet" '"found":true,"sections":\[\{' curl -sk --max-time 5 https://localhost:$PORT/albireo/v1/carnet
     step "service carnet refusals" 'refused 7 of 7, CLAUDE.md 200' carnet_refusals
+    step "relay settings on the Mac only" 'web 403, rebind 403, lan 403, test 403, mac 200, page 200' relay_guard
     # Un modèle de l'utilisateur n'est pas lu par son chemin : l'application web l'envoie.
     step "service import refusal" '"code":"import_use_upload"' curl -sk --max-time 30 -X POST \
       -H "Content-Type: application/json" -d "{\"path\": \"$MODEL\"}" \

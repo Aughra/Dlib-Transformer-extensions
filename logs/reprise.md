@@ -4,9 +4,9 @@
 
 ## État actuel
 
-- `main` = **Albireo 5.4.0** ; **Pseudalis 3.1.0** (numérotation du fork, documentation à part : `docs/pseudalis/`, `blog/pseudalis/`, `pseudalis/web/changelog.md`). Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
+- `main` = **Albireo 5.4.1** ; **Pseudalis 3.1.0** (numérotation du fork, documentation à part : `docs/pseudalis/`, `blog/pseudalis/`, `pseudalis/web/changelog.md`). Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
 - **Vrai service** : Albireo tourne en **5.4.0** et Pseudalis en **3.1.0** (relancés le 2026-11-16, Albireo vers 6 h 50, Pseudalis vers 6 h 25 ; relais coupé, essayé de bout en bout sur lui-même avec Pseudalis : pseudonymes au départ, vraies valeurs au retour). Pseudalis sur 18444 (accès réseau 8445), Albireo sur 18443 (réseau 8444 sans mot de passe), bibliothèque `build/albireo-home/library` remplie de clones de `build/models` ; journal `build/albireo-home/logs/console.log`.
-- **Tests** : `test_macos.sh` d'Albireo 59 sur 59 (5.3.0, 2026-11-16), de Pseudalis 35 sur 35 (3.1.0, 2026-11-16) ; banc de la page 128 vérifications (5.4.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
+- **Tests** : `test_macos.sh` d'Albireo 60 sur 60 (5.4.1, 2026-11-16), de Pseudalis 35 sur 35 (3.1.0, 2026-11-16) ; banc de la page 128 vérifications (5.4.1 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
 - **Blog** : épisode 48 ; **blog de Pseudalis** : épisode 2 ; **notes pour l'auteur** : changement 23, entrée n° 23, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
 - **Le mode économie d'énergie du M2 est coupé** (2026-11-15) : les mesures redeviennent possibles sur le M2 (vérifier `pmset -g | grep lowpowermode` avant) ; les réglages fins attendent le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
 - **Original** : détaché depuis le 2026-11-11, plus de fusion ; lu à `53ddfe4` (Albireo 1.0.20) pour la reprise à la main du 2026-11-14, puis à `3bea372` (Albireo 1.0.23, 37 commits depuis la dernière fusion) pour le relais.
@@ -24,7 +24,7 @@ Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les ex
 2. ~~Albireo 5.3.0 : le service, et la carte de l'onglet Service~~ fait.
 3. ~~Albireo 5.4.0 : les discussions par le relais dans la page (cadenas)~~ fait. Non repris : le choix du niveau d'effort (menu de l'original).
 
-Reprise terminée (blog : épisode 48). **En attente de l'humain** : réserver ou non les réglages du relais au Mac seul (risque ci-dessous, « Relais, même choix »). Essai avec une vraie clé Claude ou Ollama : quand l'humain en donnera une, dans l'onglet Service.
+Reprise terminée (blog : épisode 48). Réglages du relais réservés au Mac seul en 5.4.1 (réponse de l'humain : « Mac seul »). Essai avec une vraie clé Claude ou Ollama : quand l'humain en donnera une, dans l'onglet Service.
 
 **Question ouverte** (2026-11-15) : le lecteur de Pseudalis est sur le Mac un dossier ordinaire (`build/pseudalis-home/drive`) ; proposé à l'humain : l'ajouter aux favoris du Finder ou le monter comme un volume « Pseudalis ».
 
@@ -44,6 +44,7 @@ Reprise terminée (blog : épisode 48). **En attente de l'humain** : réserver o
 
 ### 2026-11-16
 
+- **Albireo 5.4.1** : réglages et essai du relais depuis le Mac seul (403 `relay_mac_only` ailleurs) ; 60 sur 60.
 - **Albireo 5.4.0** : cadenas du relais dans la zone de saisie (une discussion part vers le moteur extérieur), erreurs du relais en français ; banc de la page 128 ; épisode 48.
 - **Albireo 5.3.0** : relais vers un moteur extérieur repris de l'original (OpenAI, Ollama, Claude et sa recherche web, pseudonymisation par Pseudalis, hors ligne limité au réseau local), carte de l'onglet Service ; 59 sur 59, banc de la page 125.
 - **Pseudalis 3.1.0** : clé de séance pour le relais d'Albireo (`"session": true` sur `/v1/text/anonymize`, valeurs dans `values`) ; 35 sur 35.
@@ -175,7 +176,7 @@ Reprise terminée (blog : épisode 48). **En attente de l'humain** : réserver o
 ## Problèmes ouverts
 
 - **Sécurité, choix assumé** (2026-11-11) : sur le Mac, le service n'a ni jeton d'administration ni contrôle `Host` / `Origin` (un site piégé ouvert dans un navigateur du Mac pourrait le piloter) ; l'accès réseau (port 8444, http) est **sans mot de passe** à la demande de l'humain, et le trafic passe en clair ; **depuis la 5.0.0 (2026-11-15), le mot de passe n'existe plus du tout** (« enlève les mots de passe partout »). À remettre si l'usage change ; le risque est écrit dans les notes de version.
-- **Relais, même choix** (2026-11-16, 5.3.0) : tout appareil du Wi-Fi (accès réseau ouvert) ou tout site piégé ouvert dans un navigateur du Mac peut changer les réglages du relais et s'en servir, donc dépenser le crédit de la clé ; il ne peut ni lire la clé ni l'envoyer à une autre adresse (le masque ne vaut que pour le même fournisseur, la même adresse et le même utilisateur). Il pourrait en revanche diriger le relais vers un moteur à lui, sans clé : une discussion envoyée ensuite par le relais irait chez lui. Proposé à l'humain : réserver les réglages du relais au Mac seul.
+- **Relais** (2026-11-16) : depuis la 5.4.1, ses réglages et son essai ne sont acceptés que du Mac lui-même (port HTTPS local, Host local, Origin absente ou celle de la page ; 403 `relay_mac_only` sinon). Reste ouvert, par choix : tout appareil du Wi-Fi (accès réseau sans mot de passe) peut envoyer une discussion par un relais déjà réglé, donc dépenser le crédit de la clé, sans pouvoir la lire ni changer où elle va.
 - **Gemma 4** : sur le processeur dans son mode habituel, les activations arrondies sur 8 bits le font diverger tôt du calcul exact (le GPU en est plus proche) ; sur `tests/lfm2/long_prompt.txt`, le E2B prend l'enregistrement 3 pour celui d'Inès (erreur du modèle, des deux côtés). Défaut de son gabarit, reproduit tel quel : une réponse avec du texte **et** des appels voit son texte placé après les résultats.
 - Le vrai service a pour modèle installé Qwen3-VL 4B **Thinking** (le catalogue désigne désormais Instruct pour une installation neuve) : il raisonne longtemps avant de répondre.
 - Un service lancé en arrière-plan par Claude s'arrête avec la session de Claude : le lancer détaché (commande ci-dessous).

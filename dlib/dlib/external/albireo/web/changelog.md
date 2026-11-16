@@ -2,6 +2,15 @@
 
 Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
 
+## 5.4.1 — 16 novembre 2026
+
+### Sécurité
+
+- Les réglages du relais se changent depuis le Mac seul (décision de l'utilisateur) : `PUT /albireo/v1/settings` avec la clé `relay`, et `POST /albireo/v1/relay/test`, ne sont acceptés que d'une requête arrivée par l'adresse locale du service (`https://localhost`, qui n'écoute que sur 127.0.0.1), dont l'en-tête Host nomme ce serveur et dont l'origine, s'il y en a une, est la page du service. L'accès depuis le réseau de la maison et les pages des autres sites, même ouvertes sur le Mac, reçoivent 403 (code `relay_mac_only`) : ils ne peuvent plus diriger le relais vers un autre moteur ni le rallumer.
+- Depuis un autre appareil, la carte du relais montre son état et le dit, sans champs ni boutons. Le cadenas des discussions reste utilisable : tout appareil du Wi-Fi peut encore envoyer une discussion par un relais déjà réglé, donc utiliser le crédit du compte extérieur.
+
+---
+
 ## 5.4.0 — 16 novembre 2026
 
 ### Moteurs extérieurs
