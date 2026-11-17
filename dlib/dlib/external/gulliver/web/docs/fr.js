@@ -4,7 +4,7 @@
 /*
     Swagger UI en français (fork pour macOS, demande de l'humain du 2026-11-15 : tout en français) : ses libellés
     anglais, remplacés à mesure qu'il les affiche (un texte entier, ou un texte d'aide de champ), sans toucher aux
-    descriptions de l'interface ni au code.  Commun aux pages d'Albireo et de Pseudalis.
+    descriptions de l'interface ni au code.  Commun aux pages de Gulliver et de Pseudalis.
 */
 (function () {
   const words = {

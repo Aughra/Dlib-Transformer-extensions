@@ -120,7 +120,7 @@ export function newChat(projectId) {
   ui.input.focus();
 }
 
-// La marque d'Albireo : de nouveau la page d'accueil, une nouvelle discussion avec une zone de saisie vide, sans son
+// La marque de Gulliver : de nouveau la page d'accueil, une nouvelle discussion avec une zone de saisie vide, sans son
 // brouillon ni ses pièces jointes.
 export function goHome() {
   state.incognito = false;

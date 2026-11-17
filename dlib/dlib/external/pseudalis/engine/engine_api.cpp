@@ -238,7 +238,7 @@ PSD_API int PSD_CALL psd_process(psd_engine* engine, const char* request, const 
         const std::vector<pseudalis::substitution> known = substitutions_in(req["substitutions"]);
         // Une protection sous une clé jetable (fork pour macOS) : des pseudonymes qui ne reviennent plus.
         std::unique_ptr<pseudalis::engine::one_time_key> one_time;
-        // Un texte du relais d'Albireo (fork pour macOS) : sous la clé de séance, ses valeurs rendues avec lui.
+        // Un texte du relais de Gulliver (fork pour macOS) : sous la clé de séance, ses valeurs rendues avec lui.
         const bool session = req["session"].as_bool(false) && op == "anonymize_text";
         std::unique_ptr<pseudalis::engine::session_key> session_scope;
         if (session)

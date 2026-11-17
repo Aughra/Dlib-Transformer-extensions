@@ -252,15 +252,15 @@ A program built for a baseline processor can still run its hot code with the ext
 
 ### A local inference service for Windows: Albireo
 
-**The library as an installed program.** [`dlib/dlib/external/albireo`](dlib/dlib/external/albireo) builds Albireo, a Windows 11 program that runs language models on the machine where it is installed, with the conversations, the documents and the models staying on that machine: an inference engine for quantized GGUF models, a Windows service that serves it on a local HTTPS address with an interface compatible with the OpenAI one, a web application served by that service, an icon in the notification area to manage it, and an installer.
+**The library as an installed program.** [`dlib/dlib/external/gulliver`](dlib/dlib/external/gulliver) builds Albireo, a Windows 11 program that runs language models on the machine where it is installed, with the conversations, the documents and the models staying on that machine: an inference engine for quantized GGUF models, a Windows service that serves it on a local HTTPS address with an interface compatible with the OpenAI one, a web application served by that service, an icon in the notification area to manage it, and an installer.
 
 **One interface, an engine per kind of processor.** The engines are libraries with a C interface, built from the same sources for every x86-64 processor, for AVX2, for the NPU and the integrated GPU of Intel processors through OpenVINO, and for NVIDIA graphics processors through CUDA. The service describes them in child processes, measures them on the machine and runs the fastest. The engines of the devices keep quantized processor kernels for the products they lose to the processor and send the others to the device through the tensors of this library: the routing of the NPU module decides with OpenVINO, measurements of the engine decide with CUDA, where the weights stay on the card in their GGUF formats and the card computes the layers of a dense model whole, the processor keeping the attention.
 
 **What it serves.** The requests of every client are computed together in each forward pass, and the keys and values of a finished request stay cached for the next turn of its conversation. Three functions, general, code and security, each get a model from a signed catalog, downloaded in parallel parts and checked against its hashes, or imported from a disk for a machine without network. The web application keeps its discussions and projects in the browser, works without network, shows the reasoning of the models that reason, and lets a model call tools in agent mode. Updates come from a signed feed and install when the service restarts.
 
-![A discussion in the web application of Albireo](dlib/dlib/external/albireo/docs/images/chat.png)
+![A discussion in the web application of Albireo](dlib/dlib/external/gulliver/docs/images/chat.png)
 
-The [README of Albireo](dlib/dlib/external/albireo/README.md) describes its architecture, its build, its tests and its publication, with screenshots of the web application, of the windows of the icon and of the installer.
+The [README of Albireo](dlib/dlib/external/gulliver/README.md) describes its architecture, its build, its tests and its publication, with screenshots of the web application, of the windows of the icon and of the installer.
 
 ---
 

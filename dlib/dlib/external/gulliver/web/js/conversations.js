@@ -174,7 +174,7 @@ function markdownOf(title, messages) {
         lines.push('', '> ' + img.name + ' (' + img.width + ' × ' + img.height + ', ' + formatSize(img.size || 0) + ')');
       }
     } else {
-      lines.push('## Albireo', '');
+      lines.push('## Gulliver', '');
       for (const s of m.steps || []) {
         if (s.reasoning) lines.push('<details><summary>' + t('thinking') + '</summary>', '', s.reasoning, '', '</details>', '');
         // Un appel sans résultat donne son état à la place.

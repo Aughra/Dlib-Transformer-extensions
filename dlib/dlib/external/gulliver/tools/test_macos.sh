@@ -2,14 +2,14 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Teste un build macOS d'Albireo (Apple Silicon) et affiche un résumé, une ligne par étape.
+# Teste un build macOS d'Gulliver (Apple Silicon) et affiche un résumé, une ligne par étape.
 #
 #   bash dlib/dlib/external/gulliver/tools/test_macos.sh [build folder] [model.gguf] [embedding model.gguf]
 #
-# Par défaut : build/macos-albireo à la racine du dépôt, build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf
-# et build/albireo-home/models/qwen3-embedding-0.6b.gguf.  Les étapes dont le modèle manque sont
+# Par défaut : build/macos-gulliver à la racine du dépôt, build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf
+# et build/gulliver-home/models/qwen3-embedding-0.6b.gguf.  Les étapes dont le modèle manque sont
 # sautées.  Le service tourne hors ligne dans un dossier de données à lui, sur le port 18443
-# (ALBIREO_TEST_PORT, et le port suivant pour le serveur local de test_host), reçoit le modèle comme
+# (GULLIVER_TEST_PORT, et le port suivant pour le serveur local de test_host), reçoit le modèle comme
 # l'application web l'envoie, le refuse par son chemin, répond à une question par l'interface
 # OpenAI et s'arrête.  La première étape vérifie les outils de ces tests.  Le code de sortie est
 # le nombre d'étapes échouées.
@@ -17,10 +17,10 @@
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../../../.." && pwd)
-BUILD=${1:-$ROOT/build/macos-albireo}
+BUILD=${1:-$ROOT/build/macos-gulliver}
 MODEL=${2:-$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf}
-EMBEDDING=${3:-$ROOT/build/albireo-home/models/qwen3-embedding-0.6b.gguf}
-PORT=${ALBIREO_TEST_PORT:-18443}
+EMBEDDING=${3:-$ROOT/build/gulliver-home/models/qwen3-embedding-0.6b.gguf}
+PORT=${GULLIVER_TEST_PORT:-18443}
 QUESTION="What is the capital of France? Answer in one sentence."
 WORK=$(mktemp -d)
 RESULTS=()
@@ -158,7 +158,7 @@ QWEN36=${QWEN36_MODEL:-$ROOT/build/models/Qwen3.6-11B-A3B-Niwaki-Q4_K_M.gguf}
 if [ ! -f "$ENGINE" ] || [ ! -f "$QWEN36" ]; then skip "qwen 3.6 moe" "no $QWEN36"
 else
   step "qwen 3.6 moe" "Paris" "$CHAT" "$ENGINE" "$QWEN36" --reasoning off --temperature 0 --max 40 --no-metal "$QUESTION"
-  # Depuis Albireo 4.12.0, ses prompts aussi (produits groupés des experts), coupés aux points de reprise.
+  # Depuis Gulliver 4.12.0, ses prompts aussi (produits groupés des experts), coupés aux points de reprise.
   step "qwen 3.6 moe on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$QWEN36" --reasoning off \
     --temperature 0 --max 20 "$QUESTION"
   step "qwen 3.6 moe checkpoint" "resumed at a checkpoint" qwen35_checkpoint "$QWEN36" gpu
@@ -166,13 +166,13 @@ fi
 
 # Qwen 3.5 sur le GPU : ses étapes de génération, quand un modèle en Q4_K / Q5_K / Q6_K est là (le 4B qu'installe
 # le service, par défaut).
-QWEN35_GPU=${QWEN35_GPU_MODEL:-$ROOT/build/albireo-home/models/hf-unsloth-qwen3.5-4b-q4_k_m.gguf}
+QWEN35_GPU=${QWEN35_GPU_MODEL:-$ROOT/build/gulliver-home/models/hf-unsloth-qwen3.5-4b-q4_k_m.gguf}
 if [ ! -f "$ENGINE" ] || [ ! -f "$QWEN35_GPU" ]; then skip "qwen 3.5 on the GPU" "no $QWEN35_GPU"
 else
   step "qwen 3.5 on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$QWEN35_GPU" --reasoning off \
     --temperature 0 --max 20 "$QUESTION"
   step "qwen 3.5 checkpoint on the GPU" "resumed at a checkpoint, answer on its subject" qwen35_checkpoint "$QWEN35_GPU" gpu
-  # Ses images (Albireo 4.13.0), quand son projecteur est là : le perroquet des images de compte de macOS.
+  # Ses images (Gulliver 4.13.0), quand son projecteur est là : le perroquet des images de compte de macOS.
   QWEN35_PROJECTOR=${QWEN35_PROJECTOR:-$ROOT/build/models/Qwen3.5-4B-mmproj-F16.gguf}
   PARROT="/Library/User Pictures/Animals/Parrot.heic"
   if [ -f "$QWEN35_PROJECTOR" ] && [ -f "$PARROT" ] && sips -s format jpeg -Z 512 "$PARROT" --out "$WORK/parrot.jpg" > /dev/null 2>&1
@@ -181,12 +181,12 @@ else
       --reasoning off --temperature 0 --max 60 "Describe this image in two sentences."
   else skip "qwen 3.5 image" "no $QWEN35_PROJECTOR"
   fi
-  # Ses appels d'outils, sous forme XML (<function=…>, <parameter=…>), lus par le moteur (Albireo 4.12.1).
+  # Ses appels d'outils, sous forme XML (<function=…>, <parameter=…>), lus par le moteur (Gulliver 4.12.1).
   step "qwen 3.5 tool call" '"name":"get_weather","arguments":".*Paris' "$CHAT" "$ENGINE" "$QWEN35_GPU" \
     --tools --reasoning off --temperature 0 --max 120 "What is the weather in Paris right now?"
 fi
 
-# Gemma 4 (fenêtre glissante, clés et valeurs partagées, entrées par couche ; Albireo 4.14.0) : son tokenizer comparé
+# Gemma 4 (fenêtre glissante, clés et valeurs partagées, entrées par couche ; Gulliver 4.14.0) : son tokenizer comparé
 # aux identifiants de llama-tokenize (llama.cpp 0.9.0), une réponse, et un raisonnement.
 GEMMA4=${GEMMA4_MODEL:-$ROOT/build/models/gemma-4-E2B-it-Q4_K_M.gguf}
 if [ ! -f "$ENGINE" ] || [ ! -f "$GEMMA4" ]; then skip "gemma 4" "no $GEMMA4"
@@ -196,13 +196,13 @@ else
   step "gemma 4" "Paris" "$CHAT" "$ENGINE" "$GEMMA4" --reasoning off --temperature 0 --max 40 "$QUESTION"
   step "gemma 4 reasoning" "391" "$CHAT" "$ENGINE" "$GEMMA4" --reasoning on --temperature 0 --max 600 \
     "What is 17 times 23? Answer with the number."
-  # Outils dans la notation de Gemma 4 (Albireo 4.15.0) : l'appel lu, puis la réponse tirée de son résultat, le
+  # Outils dans la notation de Gemma 4 (Gulliver 4.15.0) : l'appel lu, puis la réponse tirée de son résultat, le
   # raisonnement que le prompt rouvre après les résultats compris.
   step "gemma 4 tool call" '"name":"get_weather","arguments":".*Paris' "$CHAT" "$ENGINE" "$GEMMA4" \
     --tools --reasoning off --temperature 0 --max 120 "What is the weather in Paris right now?"
   step "gemma 4 tool result" "21 degrees" "$CHAT" "$ENGINE" "$GEMMA4" --tools --tool-result "Sunny, 21 degrees C" \
     --reasoning on --temperature 0 --max 600 "What is the weather in Paris right now?"
-  # Ses images (Albireo 4.16.0), quand son projecteur est là : le perroquet carré, puis le zèbre recadré en largeur, qui
+  # Ses images (Gulliver 4.16.0), quand son projecteur est là : le perroquet carré, puis le zèbre recadré en largeur, qui
   # éprouve les deux tables de positions.
   GEMMA4_PROJECTOR=${GEMMA4_PROJECTOR:-$ROOT/build/models/gemma-4-E2B-it-mmproj-F16.gguf}
   PARROT="/Library/User Pictures/Animals/Parrot.heic" ZEBRA="/Library/User Pictures/Animals/Zebra.heic"
@@ -219,7 +219,7 @@ else
   fi
 fi
 
-# Gemma 3 (le chemin de Gemma 4 : fenêtre glissante sur cinq couches sur six, sans norme des valeurs ; Albireo 4.19.0) :
+# Gemma 3 (le chemin de Gemma 4 : fenêtre glissante sur cinq couches sur six, sans norme des valeurs ; Gulliver 4.19.0) :
 # son tokenizer comparé à llama.cpp sur les textes de Gemma 4, une réponse, et le mot de code retrouvé dans un prompt de
 # 2 816 tokens, au-delà de la fenêtre de 512 positions (le 1B se trompe ensuite de voyageur, comme dans llama.cpp ; la
 # majuscule distingue la réponse de la question recopiée).
@@ -232,7 +232,7 @@ else
   GEMMA3_LOG=$(cat "$HERE/../tests/lfm2/long_prompt.txt"; printf x)
   step "gemma 3 long prompt" "The secret code word is PELICAN" "$CHAT" "$ENGINE" "$GEMMA3" --temperature 0 --max 60 "${GEMMA3_LOG%x}"
 fi
-# Gemma 3 sur le GPU (Albireo 4.22.0 ; le 4B, le 1B ayant une largeur de 1 152, qui n'est pas un multiple de 256) : le
+# Gemma 3 sur le GPU (Gulliver 4.22.0 ; le 4B, le 1B ayant une largeur de 1 152, qui n'est pas un multiple de 256) : le
 # contrôle accepté, puis le journal de 2 816 tokens, où la fenêtre glissante de 1 024 positions agit (sans elle, le GPU
 # n'écrit plus que des chiffres) ; la réponse est celle du processeur et de llama.cpp.
 GEMMA3_GPU=${GEMMA3_GPU_MODEL:-$ROOT/build/models/gemma-3-4b-it-Q4_K_M.gguf}
@@ -243,7 +243,7 @@ else
   GEMMA3_LOG=$(cat "$HERE/../tests/lfm2/long_prompt.txt"; printf x)
   step "gemma 3 long prompt on the GPU" "Record 3 was travelled by Gaëlle" "$CHAT" "$ENGINE" "$GEMMA3_GPU" --temperature 0 \
     --max 60 "${GEMMA3_LOG%x}"
-  # Ses images (Albireo 4.28.0), quand son projecteur est là : le perroquet carré, puis le zèbre recadré en largeur, posé
+  # Ses images (Gulliver 4.28.0), quand son projecteur est là : le perroquet carré, puis le zèbre recadré en largeur, posé
   # entre deux bandes noires dans la vue de 896 pixels.  Les 256 tokens d'une image s'y voient les uns les autres (sans
   # cela, la description du perroquet s'écarte de celle de llama.cpp dès son quatorzième token).
   GEMMA3_PROJECTOR=${GEMMA3_PROJECTOR:-$ROOT/build/models/gemma-3-4b-it-mmproj-F16.gguf}
@@ -261,7 +261,7 @@ else
   fi
 fi
 
-# Gemma 4 sur le GPU : les étapes (Albireo 4.26.0) et les prompts (4.27.0, attention en tuiles en deux tranches de 256
+# Gemma 4 sur le GPU : les étapes (Gulliver 4.26.0) et les prompts (4.27.0, attention en tuiles en deux tranches de 256
 # pour les têtes de 512 ; les étapes « gemma 4 » plus haut passent aussi par le GPU) ; le contrôle au chargement, puis le
 # journal de 2 622 tokens, au-delà de la fenêtre de 512 positions.  Le E2B y lit PELICAN, et prend l'enregistrement 3 pour celui d'Inès, sur le processeur comme sur le GPU.
 if [ ! -f "$ENGINE" ] || [ ! -f "$GEMMA4" ]; then skip "gemma 4 on the GPU" "no $GEMMA4"
@@ -274,7 +274,7 @@ else
     "${GEMMA4_LOG%x}"
 fi
 
-# Gemma 4 26B-A4B (Albireo 4.29.0), sur le processeur, quand il est là (16,9 Go) : le bloc dense et les 128 experts côte à
+# Gemma 4 26B-A4B (Gulliver 4.29.0), sur le processeur, quand il est là (16,9 Go) : le bloc dense et les 128 experts côte à
 # côte, les têtes de clés par couche (8, et 2 dans les couches globales) ; une réponse, puis un calcul en raisonnant.
 GEMMA4MOE=${GEMMA4_MOE_MODEL:-$ROOT/build/models/gemma-4-26B-A4B-it-UD-Q4_K_M.gguf}
 if [ ! -f "$ENGINE" ] || [ ! -f "$GEMMA4MOE" ]; then skip "gemma 4 moe" "no $GEMMA4MOE"
@@ -284,11 +284,11 @@ else
     "What is 17 times 23? Answer with the number."
 fi
 
-# LFM2 et LFM2-MoE (convolutions courtes et attention ; Albireo 4.17.0) : une réponse, l'état des convolutions repris
+# LFM2 et LFM2-MoE (convolutions courtes et attention ; Gulliver 4.17.0) : une réponse, l'état des convolutions repris
 # sur trois tours et à un point de reprise (sur le processeur, puis sur le GPU pour LFM2 dense), puis le mélange d'experts, qui raisonne avant de répondre, et un détail à
 # retrouver dans un journal de 2 622 tokens (tests/lfm2/long_prompt.txt) : l'enregistrement 3 est celui de Gaëlle, que le
 # modèle prenait pour Inès avec des valeurs sur 8 bits non tournées (llama.cpp aussi, sans sa rotation de Hadamard) ;
-# depuis Albireo 4.17.1, les valeurs sont tournées comme les clés, et l'étape le vérifie avec les 8 bits par défaut.
+# depuis Gulliver 4.17.1, les valeurs sont tournées comme les clés, et l'étape le vérifie avec les 8 bits par défaut.
 LFM2=${LFM2_MODEL:-$ROOT/build/models/LFM2.5-1.2B-Instruct-Q8_0.gguf}
 LFM2MOE=${LFM2MOE_MODEL:-$ROOT/build/models/LFM2.5-8B-A1B-Q4_K_M.gguf}
 if [ ! -f "$ENGINE" ] || [ ! -f "$LFM2" ]; then skip "lfm2" "no $LFM2"
@@ -299,11 +299,11 @@ else
   # son premier mot (« We » 0,27, « Our » 0,255 dans llama.cpp, dont la réponse est celle de la reprise).  L'étape
   # vérifie la reprise et le sujet de la réponse.
   step "lfm2 checkpoint" "resumed at a checkpoint, answer on its subject" qwen35_checkpoint "$LFM2" subject
-  # Sur le GPU (Albireo 4.20.0) : le contrôle accepté pour les étapes et les prompts, puis un point de reprise.
+  # Sur le GPU (Gulliver 4.20.0) : le contrôle accepté pour les étapes et les prompts, puis un point de reprise.
   step "lfm2 on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$LFM2" --temperature 0 --max 40 \
     "$QUESTION"
   step "lfm2 checkpoint on the GPU" "resumed at a checkpoint, answer on its subject" qwen35_checkpoint "$LFM2" gpu
-  # Outils dans la notation de LFM2 (appels à la manière de Python ; Albireo 4.18.0) : l'appel lu, puis la réponse tirée
+  # Outils dans la notation de LFM2 (appels à la manière de Python ; Gulliver 4.18.0) : l'appel lu, puis la réponse tirée
   # de son résultat, celle de llama.cpp 0.9.0.
   step "lfm2 tool call" '"name":"get_weather","arguments":".*Paris' "$CHAT" "$ENGINE" "$LFM2" \
     --tools --temperature 0 --max 120 "What is the weather in Paris right now?"
@@ -319,7 +319,7 @@ else
   # et la réponse, juste, passait sur deux lignes.
   step "lfm2 moe long prompt" "PELICAN.*Gaëlle" "$CHAT" "$ENGINE" "$LFM2MOE" --no-metal --temperature 0 --max 800 \
     "${LFM2_LOG%x}"
-  # Sur le GPU (Albireo 4.21.0) : le contrôle accepté.  Sur ce long prompt, le modèle y raisonne autrement, comme
+  # Sur le GPU (Gulliver 4.21.0) : le contrôle accepté.  Sur ce long prompt, le modèle y raisonne autrement, comme
   # llama.cpp sur son GPU (« The secret code word is given in Record 77 »), d'où l'étape précédente sur le processeur.
   step "lfm2 moe on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$LFM2MOE" --temperature 0 \
     --max 200 "$QUESTION"
@@ -470,10 +470,10 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
       -H "Content-Type: application/octet-stream" -H "Expect:" -T "$MODEL" \
       "https://localhost:$PORT/gulliver/v1/models/upload?name=$(basename "$MODEL")"
     for i in $(seq 1 300); do
-      curl -sk --max-time 1 https://localhost:$PORT/v1/models | grep -q albireo-general && break
+      curl -sk --max-time 1 https://localhost:$PORT/v1/models | grep -q gulliver-general && break
       sleep 0.2
     done
-    BODY="{\"model\": \"albireo-general\", \"reasoning\": false, \"max_tokens\": 40,"
+    BODY="{\"model\": \"gulliver-general\", \"reasoning\": false, \"max_tokens\": 40,"
     BODY="$BODY \"messages\": [{\"role\": \"user\", \"content\": \"$QUESTION\"}]}"
     step "service chat" "Paris" curl -sk --max-time 300 https://localhost:$PORT/v1/chat/completions \
       -H "Content-Type: application/json" -d "$BODY"

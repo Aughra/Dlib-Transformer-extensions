@@ -336,7 +336,7 @@ namespace pseudalis
 
         /*
             L'administration (fork pour macOS) : ses routes sont ouvertes sur le Mac, sans jeton, comme celles
-            d'Albireo (décision de l'humain du 2026-11-15).  Restent les gardes de toutes les routes : l'en-tête Host
+            de Gulliver (décision de l'humain du 2026-11-15).  Restent les gardes de toutes les routes : l'en-tête Host
             doit nommer le serveur local, et une requête venue d'une page doit venir de ce serveur.
         */
         auto admin = [](const httplib::Request&, httplib::Response&) { return true; };
@@ -473,7 +473,7 @@ namespace pseudalis
                     return;
                 }
                 user_error e;
-                // Un texte du relais d'Albireo : pseudonymes de la clé de séance, rendus avec leurs valeurs.
+                // Un texte du relais de Gulliver : pseudonymes de la clé de séance, rendus avec leurs valeurs.
                 const bool session = body["session"].as_bool(false);
                 if (!s->text(operation, body["text"].str(), out, e, tags, body["substitutions"], session))
                 {
@@ -528,7 +528,7 @@ namespace pseudalis
         srv.Post("/v1/names/anonymize", name_route(true));
         srv.Post("/v1/names/restore", name_route(false));
 
-        // Le lecteur, ses événements, Albireo.
+        // Le lecteur, ses événements, Gulliver.
         srv.Get("/v1/drive", [s](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, s->drive_status());
         });
@@ -542,8 +542,8 @@ namespace pseudalis
         srv.Get("/v1/speed", [s](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, s->speed());
         });
-        srv.Get("/v1/albireo", [s](const httplib::Request&, httplib::Response& res) {
-            send_json(res, 200, s->albireo().status());
+        srv.Get("/v1/gulliver", [s](const httplib::Request&, httplib::Response& res) {
+            send_json(res, 200, s->gulliver().status());
         });
 
         // Administration.
@@ -632,7 +632,7 @@ namespace pseudalis
                 }
             }
             const char* const choices[][2] = { { "language", " auto en fr " }, { "date_order", " dmy mdy " },
-                                               { "albireo", " auto off " } };
+                                               { "gulliver", " auto off " } };
             for (const auto& c : choices)
             {
                 if (!body.contains(c[0])) continue;
@@ -700,7 +700,7 @@ namespace pseudalis
             const bool restart = after.port != before.port || after.drive_letter != before.drive_letter ||
                                  after.date_order != before.date_order || after.proxy != before.proxy ||
                                  after.lan != before.lan || after.lan_port != before.lan_port;
-            s->albireo().set_enabled(after.albireo != "off");
+            s->gulliver().set_enabled(after.gulliver != "off");
             // Moins de jours ou moins d'espace : les originaux au-delà partent maintenant, en arrière-plan.
             if (after.removed_days != before.removed_days || after.history_mb != before.history_mb)
                 s->request_cleanup();

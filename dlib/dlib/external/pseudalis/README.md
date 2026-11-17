@@ -247,7 +247,7 @@ que les pages ouvertes par l'icône reçoivent dans le fragment de leur adresse 
 
 | Route | Rôle |
 |---|---|
-| `GET /v1/health`, `GET /v1/info` | l'état du service, de son moteur, du lecteur et d'Albireo |
+| `GET /v1/health`, `GET /v1/info` | l'état du service, de son moteur, du lecteur et d'Gulliver |
 | `POST /v1/anonymize?name=&record=&tags=&format=` | anonymise le fichier du corps, sans balises avec `tags=false` ; la réponse est le fichier, ou du JSON avec `format=json` |
 | `POST /v1/restore?name=&object_id=&format=` | restaure le fichier du corps : son original, son image ou ses balises |
 | `GET /v1/lookup?sha256=&object_id=` | si un fichier est un fichier anonymisé de cet ordinateur |
@@ -255,7 +255,7 @@ que les pages ouvertes par l'icône reçoivent dans le fragment de leur adresse 
 | `POST /v1/text/anonymize`, `/restore`, `/detect` | la même protection sur un texte, `{"text": ...}`, `"tags": false` sans balises, dont `/restore` reprend les `substitutions` ; les emplacements des balises écrites (`tags`) ou des valeurs restaurées (`restored`) reviennent avec lui |
 | `POST /v1/names/anonymize`, `/restore` | un nom seul, celui d'un dossier, `{"name": ...}`, ses substituts enregistrés |
 | `GET /v1/drive`, `GET /v1/events?since=` | le lecteur, les fichiers qu'il a protégés ou refusés (jeton pour les événements) |
-| `GET /v1/albireo` | si Albireo décrit les images |
+| `GET /v1/gulliver` | si Gulliver décrit les images |
 | `GET /v1/records`, `GET /v1/records/{id}/original`, `DELETE /v1/records/{id}` | les originaux conservés (jeton) |
 | `GET /v1/settings`, `PUT /v1/settings`, `POST /v1/restart` | les réglages et le redémarrage (jeton) |
 | `GET /v1/terms`, `PUT /v1/terms` | les termes imposés (jeton) |
@@ -290,9 +290,9 @@ imposés », l'interface par `GET` et `PUT /v1/terms` ; le service la garde dans
 seuls SYSTEM et les administrateurs lisent, et le moteur applique aussitôt une nouvelle liste, aux fichiers
 traités ensuite.
 
-### Les images et Albireo
+### Les images et Gulliver
 
-Quand Albireo, le service d'inférence local, est installé sur le même ordinateur et que l'un de ses modèles
+Quand Gulliver, le service d'inférence local, est installé sur le même ordinateur et que l'un de ses modèles
 lit les images, Pseudalis le trouve par son interface (son dossier de données, son port, son autorité
 locale) et lui demande de décrire chaque image, dans la langue de l'installation, sans nommer personne ni
 recopier aucun nom, adresse, numéro ou identifiant que l'image montre. Une description peut tout de même
@@ -307,7 +307,7 @@ dans un PDF). L'identifiant est une empreinte de l'image calculée avec la clé 
 rien de l'image à qui ne détient pas la clé et ne relie aucune image d'une installation à une autre ; il est
 enregistré dans la base de données avec l'image et sa description dans le coffre, toutes deux chiffrées,
 pour que restaurer le fichier texte rende l'image et qu'une image rencontrée de nouveau garde sa
-description, protégée à nouveau chaque fois qu'elle est écrite. Le réglage `albireo` désactive les
+description, protégée à nouveau chaque fois qu'elle est écrite. Le réglage `gulliver` désactive les
 descriptions, y compris celles qui sont conservées.
 
 ### Langues
@@ -351,7 +351,7 @@ fichiers non traités, `refused\`.
 - La clé maîtresse, 32 octets aléatoires, est chiffrée avec DPAPI pour le compte du service (LocalSystem)
   dans `keys\master.key`, dont les permissions n'admettent que SYSTEM et les administrateurs. HKDF-SHA-256
   en dérive la clé de la pseudonymisation et les deux clés du coffre.
-- Chaque original, chaque image et chaque description d'une image par Albireo est gardé dans le coffre,
+- Chaque original, chaque image et chaque description d'une image par Gulliver est gardé dans le coffre,
   chiffré avec AES-256-CTR et authentifié avec HMAC-SHA-256 ; la base de données contient les noms, les
   tailles, les empreintes et les emplacements des fichiers, jamais leur contenu ni une description : celles
   qu'une base de données d'une version antérieure gardait en clair sont effacées quand le service l'ouvre.
@@ -401,7 +401,7 @@ fichiers non traités, `refused\`.
 - L'icône et les commandes ne joignent le service que sur 127.0.0.1, et ouvrent ses pages à
   `https://127.0.0.1:8444` : `localhost` peut se résoudre d'abord en `::1`, où un autre compte pourrait
   écouter.
-- Albireo ne décrit les images que si son dossier de données est celui que son installateur a enregistré
+- Gulliver ne décrit les images que si son dossier de données est celui que son installateur a enregistré
   dans `HKLM\Software\Albireo`, et si ce dossier, ses certificats, son autorité et ses réglages
   appartiennent à SYSTEM ou aux administrateurs : n'importe quel utilisateur peut créer un dossier dans
   `%ProgramData%`, qui recevrait sinon les images de tous les utilisateurs.
@@ -451,7 +451,7 @@ fichiers non traités, `refused\`.
   contenu.
 - Sur Windows 11, les commandes de l'Explorateur se trouvent sous « Afficher d'autres options » : le premier
   menu de Windows 11 ne prend que les commandes des applications empaquetées.
-- Le service écoute sur le port 8444, à côté d'Albireo sur le 8443, avec la même pile : dlib, cpp-httplib et
+- Le service écoute sur le port 8444, à côté d'Gulliver sur le 8443, avec la même pile : dlib, cpp-httplib et
   Mbed TLS.
 - Un PDF garde toujours ses pages : le texte est redessiné en place, et l'option d'un PDF reconstruit en
   texte seul a disparu.
@@ -608,8 +608,8 @@ l'icône. Leurs messages et leurs journaux ne nomment jamais les emplacements qu
   d'être partagé.
 - Une page numérisée sans couche de texte est gardée sous forme de zone grise : aucune reconnaissance de
   caractères (OCR) n'est effectuée.
-- Une description d'Albireo est lue comme l'est le texte de son document, avec les mêmes limites : une
-  valeur que le détecteur manque y reste en clair. Le réglage `albireo` désactive les descriptions.
+- Une description d'Gulliver est lue comme l'est le texte de son document, avec les mêmes limites : une
+  valeur que le détecteur manque y reste en clair. Le réglage `gulliver` désactive les descriptions.
 - Le lecteur accepte des fichiers de 150 Mo au plus par défaut (`max_file_mb`) : un fichier plus grand va
   dans le dossier des fichiers non traités. Un dossier envoyé par l'application web forme une seule archive,
   sous la même limite.

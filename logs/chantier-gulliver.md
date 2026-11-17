@@ -21,6 +21,8 @@
   d'usage du `CMakeLists.txt`. **Build `build/macos-gulliver` compile sans avertissement**,
   binaires produits. Report à 0d : répertoires de sortie `build/macos-albireo`/`albireo-home`,
   README de l'original (Windows/CUDA/OpenVINO). Cibles/variables `ALBIREO_*` → **0b**.
+- **2026-11-17 ~21:40** — **BLOC 0 FINI** (0a–0e). Renommage Albireo→Gulliver complet, version 6.0.0. Vérifié : builds Gulliver+Pseudalis **0 avertissement**, `engine_chat` charge le moteur, `test_host` all checks passed, **`test_macos.sh` 55/55**, page `docs` 12/12 + `actions` 31/31 OK. **2 scénarios `regress` fragiles (flaky)** : « sidebar lists the chat » et « private chat not listed » comptent des discussions dont le titre est généré en arrière-plan par le modèle (non déterministe) ; comptes variables d'un run à l'autre (2, 5, 8…), SANS rapport avec le renommage (test_macos et 43 autres scénarios passent ; la persistance des discussions est exercée et OK par `actions`). À revérifier sur le Mac mini (plus rapide). **Prochaine action : commiter le bloc 0, puis BLOC A (profils côté service), sous-étape A1.**
+- **2026-11-17 ~21:50** — 0d en cours : fait à la main — images `img/gulliver-*` + manifest (name/short_name) + `<title>`, répertoires de build `macos-gulliver`/`gulliver-home` dans scripts+CMake+mémo+mac-mini, guide Pseudalis, identifiants techniques du mémo. **Trois agents en parallèle** (zones disjointes) : (1) texte « Albireo »→« Gulliver » dans la page/commentaires de `gulliver/`, (2) intégration Pseudalis→Gulliver (`gulliver_client`, `GULLIVER_HOME`, route `/v1/gulliver`, réglage `gulliver`), (3) doc du fork (mémo, notes-pour-l-auteur, différences) avec discernement fork/original. Reste à faire moi-même : `web/changelog.md`, README, CLAUDE.md, blog (0d/0e). **Décision tranchée** : Pseudalis garde son nom mais tout son volet « client Albireo » vise Gulliver (fichiers `gulliver_client.*`, route `/v1/gulliver`, réglage `gulliver`). Prochaine : rebuild Gulliver + Pseudalis + page_test + test_macos quand les agents ont fini, puis 0e (version majeure).
 - **2026-11-17 ~21:30** — **0c fait et vérifié** (110 scénarios page_test, 0 échec). **Prochaine action : 0d** — textes affichés et doc : nom « Albireo » → « Gulliver » dans l'interface (`<span>`, i18n `program_albireo`, messages `albireo-service`, libellés de licence), images `img/albireo-*` → `gulliver-*` + manifest/favicon, répertoires de build du mémo (`build/macos-albireo`→`-gulliver`, `albireo-home`→`gulliver-home`), README/docs du fork, CLAUDE.md, `web/changelog.md`. Garder le `product`/`full_name` de version.h pour 0e (avec la version). Puis 0e (version majeure + blog + commit).
 - **2026-11-17 ~21:05** — 0c en cours : routes `/albireo/v1` → `/gulliver/v1` partout
   (host/ 57, web/js 147, outils, openapi régénéré : 58 routes, 0 `albireo`). Rôles/modèles
@@ -96,8 +98,8 @@
   openapi** (sinon la page serait cassée entre deux sous-étapes), puis le reste de la page JS
   (`DB_NAME`, clés `localStorage`, textes visibles). *Réajustement 2026-11-17 : la route est
   partagée page/service, donc traitée d'un bloc ; les identifiants C++ internes restent en 0b.*
-- ☐ **0d** Texte, doc, outils (interface, bump_version, README, docs du fork, blog, CLAUDE.md).
-- ☐ **0e** Version (majeure) + changelog + blog + journal + reprise + commit.
+- ☑ **0d** (2026-11-17) Texte, doc, outils (interface, bump_version, README, docs du fork, blog, CLAUDE.md).
+- ☑ **0e** (2026-11-17) Version **6.0.0** (majeure) : `version.h` PRODUCT_NAME/FULL_NAME → « Gulliver »/« Gulliver pour macOS » (auteur/copyright Cydral gardés), bump major, section changelog 6.0.0 (rupture de nom + API). Build propre, `test_host` all checks passed. Reste : blog, journal, reprise, commit ; valide test_macos + page_test.
 
 ## Bloc A — Profils côté service
 
@@ -151,3 +153,11 @@ Choix faits sans demander, selon le meilleur intérêt du projet. Révisables si
 - **À venir (bloc A)** — *Profils* : je choisirai les détails non tranchés (nom par défaut du
   premier profil, comportement si aucun profil, forme exacte du sélecteur) au mieux, en les
   notant ici.
+- **2026-11-17** — *Readme.md racine et README du projet (hérités de l'original)* : le
+  `Readme.md` de la racine décrit le dépôt du point de vue de l'original (« Albireo, a
+  Windows 11 program »). Choix : **ne pas le réécrire** (règle de fusion : toucher l'original
+  le moins possible) — seulement réparer les **liens cassés** par le renommage du dossier
+  (`external/albireo` → `external/gulliver`). Le nom « Gulliver » vit dans les documents **du
+  fork** (CLAUDE.md, mémo, guide, blog, changelog, interface). Le README applicatif
+  (`gulliver/README.md`, 176 occ., très lié à l'original Windows/CUDA) est traité à part, avec
+  discernement, ou laissé proche de l'original selon le temps.

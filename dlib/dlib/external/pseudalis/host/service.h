@@ -18,7 +18,7 @@
 #include "../common/imposed_columns.h"
 #include "../common/imposed_terms.h"
 #include "../common/json.h"
-#include "albireo_client.h"
+#include "gulliver_client.h"
 #include "settings.h"
 #include "store.h"
 #include "user_error.h"
@@ -94,14 +94,14 @@ namespace pseudalis
             WHAT THIS OBJECT REPRESENTS
                 Le service Pseudalis : le moteur et sa clé, le coffre et la base de données
                 des originaux, le serveur HTTPS local (l'application web, son interface et sa
-                documentation), le lecteur et les descriptions des images par Albireo.  run()
+                documentation), le lecteur et les descriptions des images par Gulliver.  run()
                 démarre tout et bloque jusqu'à stop() ou une demande de redémarrage ;
                 l'appelant démarre alors un nouveau service quand restart_requested() le dit,
                 ce qui applique un changement de port ou de lecteur.
 
             PROTECTION
                 protect() exécute le moteur sur un fichier : chaque image est gardée dans le
-                coffre, décrite par Albireo quand il répond (la description est gardée avec
+                coffre, décrite par Gulliver quand il répond (la description est gardée avec
                 elle, pour les fichiers suivants qui la montrent), et avec record, l'original
                 est gardé dans le coffre et enregistré avec le SHA-256 du fichier protégé,
                 pour que restore() rende l'original lui-même, à partir de n'importe quelle
@@ -141,7 +141,7 @@ namespace pseudalis
         settings_store& settings() { return *settings_; }
         store& db() { return *db_; }
         vault& blobs() { return *vault_; }
-        albireo_client& albireo() { return albireo_; }
+        gulliver_client& gulliver() { return gulliver_; }
         work_slots& work() { return work_; }
 
         json status();
@@ -198,7 +198,7 @@ namespace pseudalis
             operation : "anonymize_text", "restore_text" ou "detect".  Sans tags, le texte ne garde
             aucun tag et out["substitutions"] liste les substituts écrits, que restore_text rend
             quand substitutions les contient : rien d'autre ne les garde.  Avec session (le relais
-            d'Albireo, fork pour macOS), une protection prend la clé de séance du moteur et
+            de Gulliver, fork pour macOS), une protection prend la clé de séance du moteur et
             out["values"] donne la valeur de chaque substitut écrit : [{"substitute", "value"}].
         */
         bool text(const std::string& operation, const std::string& text, json& out, user_error& error,
@@ -281,7 +281,7 @@ namespace pseudalis
         std::shared_ptr<engine_library> library_;
         std::unique_ptr<engine_client> engine_;
         std::string key_fingerprint_;
-        albireo_client albireo_;
+        gulliver_client gulliver_;
         std::unique_ptr<drive_host> drive_;
         std::unique_ptr<httplib::SSLServer> server_;
         // Le serveur du réseau de la maison, quand le réglage lan l'ouvre, et son thread.

@@ -297,7 +297,7 @@ namespace gulliver
         if (!prepare_certificates(cert_dir, st.trust_authority, renewed, error)) return false;
 
         /*
-            Les modèles et les modèles livrés avec Albireo lisent et écrivent la base : une base
+            Les modèles et les modèles livrés avec Gulliver lisent et écrivent la base : une base
             trouvée abîmée seulement maintenant est mise de côté comme à son ouverture, et l'étape se
             refait une fois sur une nouvelle base.  Tout autre échec fait échouer le démarrage, retenté.
         */
@@ -817,7 +817,7 @@ namespace gulliver
         /*
             Les modèles du dossier et de son sous-dossier models en un seul import, pour que chaque
             projecteur aille avec son décodeur.  Un fichier installé, déjà installé (un modèle livré
-            avec Albireo par exemple) ou gardé comme projecteur en attente a quitté le dossier ; celui
+            avec Gulliver par exemple) ou gardé comme projecteur en attente a quitté le dossier ; celui
             qui n'a pas pu être installé est mis de côté avec sa description annexe.
         */
         bool models = false;
@@ -1220,9 +1220,9 @@ namespace gulliver
         const std::vector<installed_model> added =
             models_->register_builtin(join_path(program_dir_, builtin_models_folder), removed);
         /*
-            Un modèle qui n'est plus livré avec Albireo laisse ses fonctions au nouveau modèle de son
+            Un modèle qui n'est plus livré avec Gulliver laisse ses fonctions au nouveau modèle de son
             genre, un modèle de langage à un modèle de langage et un modèle d'embedding à un modèle
-            d'embedding : une mise à jour qui change le modèle livré avec Albireo garde les fonctions
+            d'embedding : une mise à jour qui change le modèle livré avec Gulliver garde les fonctions
             là où l'utilisateur les avait.
         */
         std::map<std::string, std::string> successor;
@@ -1264,7 +1264,7 @@ namespace gulliver
         // se chargent avec les autres.
         for (const auto& m : added)
             if (!successors.count(m.id)) on_installed(m);
-        // Le modèle de langage livré avec Albireo sert le travail en arrière-plan.
+        // Le modèle de langage livré avec Gulliver sert le travail en arrière-plan.
         background_model_.clear();
         for (const auto& m : db_->models())
             if (m.source == "builtin" && !is_embedding(m) && file_exists(m.file) && background_model_.empty())
@@ -1658,7 +1658,7 @@ namespace gulliver
 
     bool service::replace_model_files(const std::string& id, const std::function<bool()>& place)
     {
-        // Le modèle du travail en arrière-plan reste chargé, et est livré avec Albireo : aucun fichier ne
+        // Le modèle du travail en arrière-plan reste chargé, et est livré avec Gulliver : aucun fichier ne
         // remplace le sien.
         if (!background_model_.empty() && id == background_model_) return false;
         bool retired = false;
@@ -1764,7 +1764,7 @@ namespace gulliver
         const std::string name = m.name.empty() ? id : m.name;
         if (m.source == "builtin")
         {
-            error.set("the model " + id + " comes with Albireo: it can leave its functions to other models, it "
+            error.set("the model " + id + " comes with Gulliver: it can leave its functions to other models, it "
                 "cannot be deleted", "builtin_model").arg("m", name);
             return false;
         }
@@ -1832,7 +1832,7 @@ namespace gulliver
         std::string role = requested;
         if (role.compare(0, 9, "gulliver-") == 0) role = role.substr(9);
         if (requested.empty() || requested == "auto" || requested == "gulliver") role = "general";
-        // Le travail en arrière-plan va au modèle livré avec Albireo, sinon au modèle
+        // Le travail en arrière-plan va au modèle livré avec Gulliver, sinon au modèle
         // général.
         if (role == "background")
         {
@@ -1847,7 +1847,7 @@ namespace gulliver
             auto it = st.active.find(role);
             if (it != st.active.end() && is_loaded(it->second)) return it->second;
             // Un rôle sans modèle à lui est servi par le modèle général, sinon par le modèle
-            // livré avec Albireo, sinon par le premier modèle de langage chargé.
+            // livré avec Gulliver, sinon par le premier modèle de langage chargé.
             it = st.active.find("general");
             if (it != st.active.end() && is_loaded(it->second)) return it->second;
             if (!background_model_.empty() && is_loaded(background_model_)) return background_model_;

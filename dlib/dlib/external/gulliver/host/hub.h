@@ -1,4 +1,4 @@
-// Fork pour macOS de Dlib-Transformer-extensions (Albireo pour Apple Silicon).
+// Fork pour macOS de Dlib-Transformer-extensions (Gulliver pour Apple Silicon).
 // License: Boost Software License   See LICENSE.txt for the full license.
 #ifndef GULLIVER_HOST_HUB_H_
 #define GULLIVER_HOST_HUB_H_

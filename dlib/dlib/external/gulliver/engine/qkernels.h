@@ -212,7 +212,7 @@ namespace gulliver
               contiennent des valeurs dix fois plus grandes que les autres, que la rotation
               répartit sur la ligne, pour que les groupes du format 8 bits les arrondissent avec
               un pas plus fin.
-            - Les valeurs du cache 8 bits sont stockées tournées de même (fork pour macOS, Albireo
+            - Les valeurs du cache 8 bits sont stockées tournées de même (fork pour macOS, Gulliver
               4.17.1), et la sortie de l'attention, qui en est une moyenne pondérée, est remise
               en place par qk_unrotate_row(), comme llama.cpp tourne ses valeurs quantifiées.
     !*/

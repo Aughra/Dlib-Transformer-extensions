@@ -122,7 +122,7 @@ namespace gulliver
             sur le M2 (bench_runtime, clés et valeurs en 8 bits) : le GPU lit un prompt de 24 tokens environ
             deux fois plus vite que le processeur (il développe chaque poids une fois par passe, environ
             200 ms pour un modèle 2B), un prompt de 1 024 tokens 1,7 à 2,1 fois plus vite, de 2 048 tokens
-            1,2 à 1,7 fois.  Son attention de prompt (attention_mtile, instructions matricielles, Albireo 4.11.0)
+            1,2 à 1,7 fois.  Son attention de prompt (attention_mtile, instructions matricielles, Gulliver 4.11.0)
             gagne à toutes les longueurs mesurées (2B, mesures alternées : 4 096 tokens 423 à 424 tokens/s contre
             170 à 177 sur le processeur, 8 192 tokens 295 contre 115 à 117, 16 384 tokens 171 contre 67) : la limite
             par défaut est la longueur des modèles, 262 144 positions.
@@ -154,9 +154,9 @@ namespace gulliver
             return W.cols % (W.type == dlib::ggml_type::Q8_0 || W.type == dlib::ggml_type::Q5_0 ? 32 : 256) == 0;
         };
         /*
-            Gemma 3 passe au GPU depuis Albireo 4.22.0, les étapes de Gemma 4 depuis Albireo 4.26.0 (têtes de 256 et
+            Gemma 3 passe au GPU depuis Gulliver 4.22.0, les étapes de Gemma 4 depuis Gulliver 4.26.0 (têtes de 256 et
             de 512, clés et valeurs partagées, norme des valeurs, entrées par couche, échelle de sortie, plafond des
-            logits), ses prompts depuis Albireo 4.27.0 (attention_mtile en deux tranches de 256 pour les têtes de 512).
+            logits), ses prompts depuis Gulliver 4.27.0 (attention_mtile en deux tranches de 256 pour les têtes de 512).
             Les mélanges d'experts de Gemma 4 (26B-A4B) restent sur le processeur.
         */
         const bool gemma4 = cfg_.gemma4 && !cfg_.gemma3;

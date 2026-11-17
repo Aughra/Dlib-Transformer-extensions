@@ -3,7 +3,7 @@
  "info": {
   "title": "Interface de Pseudalis",
   "version": "3.3.0",
-  "description": "L'interface locale de Pseudalis, sur ce Mac (https://localhost:8444 par défaut) et, une fois l'accès réseau activé (réglage lan), en HTTP simple sur chaque adresse du Mac, au port lan_port (8445 par défaut), sans mot de passe. Les fichiers voyagent tels quels, dans le corps des requêtes. Aucun compte ni jeton n'est nécessaire : sur macOS, les opérations d'administration sont ouvertes sur le Mac, comme les routes d'Albireo ; chaque requête doit toutefois nommer le serveur local dans son en-tête Host, et une requête venue d'une page doit venir du serveur local. Depuis la 3.0.0 (fork pour macOS), chaque protection écrit des pseudonymes sans retour, faits sous une clé jetable par document : ni balise, ni restauration à partir des pseudonymes ; /v1/restore rend l'original conservé, et le paramètre ou réglage tags est sans effet.",
+  "description": "L'interface locale de Pseudalis, sur ce Mac (https://localhost:8444 par défaut) et, une fois l'accès réseau activé (réglage lan), en HTTP simple sur chaque adresse du Mac, au port lan_port (8445 par défaut), sans mot de passe. Les fichiers voyagent tels quels, dans le corps des requêtes. Aucun compte ni jeton n'est nécessaire : sur macOS, les opérations d'administration sont ouvertes sur le Mac, comme les routes de Gulliver ; chaque requête doit toutefois nommer le serveur local dans son en-tête Host, et une requête venue d'une page doit venir du serveur local. Depuis la 3.0.0 (fork pour macOS), chaque protection écrit des pseudonymes sans retour, faits sous une clé jetable par document : ni balise, ni restauration à partir des pseudonymes ; /v1/restore rend l'original conservé, et le paramètre ou réglage tags est sans effet.",
   "contact": {
    "name": "Cydral Technology",
    "email": "cydraltechnology@gmail.com",
@@ -69,7 +69,7 @@
      "Service"
     ],
     "summary": "L'état du service",
-    "description": "Produit, édition (\"Community\"), version, moteur (variante, modèles), empreinte de la clé, lecteur, Albireo, nombre d'originaux conservés (records) et place qu'ils occupent : {\"bytes\", \"limit\"} dans history, limit étant le history_mb des réglages. tags indique si les fichiers reçoivent leurs balises lorsqu'une requête ne dit pas le contraire.",
+    "description": "Produit, édition (\"Community\"), version, moteur (variante, modèles), empreinte de la clé, lecteur, Gulliver, nombre d'originaux conservés (records) et place qu'ils occupent : {\"bytes\", \"limit\"} dans history, limit étant le history_mb des réglages. tags indique si les fichiers reçoivent leurs balises lorsqu'une requête ne dit pas le contraire.",
     "responses": {
      "200": {
       "description": "L'état",
@@ -90,7 +90,7 @@
      "Fichiers"
     ],
     "summary": "Protéger un fichier",
-    "description": "Protège un document (Word, Excel, PowerPoint, PDF, texte, CSV, balisage), une image ou une archive (ZIP, TAR, TAR.GZ) envoyés comme corps de la requête, dont le nom donne la nature que doit avoir son contenu. Un fichier d'une autre extension, ou sans extension, est protégé comme un texte lorsque son contenu est du texte de bout en bout : aucune signature binaire, les mesures d'un texte, chaque caractère décodé sans autre caractère de contrôle que la tabulation, les fins de ligne et le saut de page, et aucune partie encodée : un bloc de chiffres base64, base64url ou hexadécimaux (1024 caractères d'affilée, ou 16 suites d'affilée de 60, les lignes d'un bloc, y compris dans une chaîne JSON ou d'un programme), des données ou du JSON en base64, des octets en hexadécimal, un vidage ou un tableau (64 d'affilée, ou 4 lignes de 8, avec des lettres ou des signes parmi eux), un message comportant des parties en base64, quoted-printable ou uuencode ou des mots encodés, un document RTF, une vCard ou un iCalendar, du LDIF en base64, un bloc armé PEM ou OpenPGP, son en-tête comme son corps, y compris dans une chaîne, du uuencode ou de l'ASCII85, et, d'après sa première ligne, un programme PostScript ou un export du registre ; sans extension, une image, un document Office, une archive ou un PDF est aussi reconnu à sa signature. Un fichier d'une autre nature, ou dont le contenu n'est pas de la nature que donne son nom, est refusé (422, code unsupported ou kind_mismatch), de même qu'un texte d'une autre extension qui contient une partie encodée (code encoded_content) : leur contenu ressortirait à moitié protégé. Un dossier voyage sous forme d'archive ZIP de son arborescence, qui revient anonymisée. Chaque valeur personnelle devient une balise [[TYPE:body#CCC]] chiffrée avec la clé de cette installation. Une image devient le fichier texte <name>.txt contenant \"[Image@<id> : <description>]\", la description étant écrite par Albireo lorsqu'il est installé, et ses valeurs remplacées par des balises comme celles du texte de son document ; les images des documents Word, des diapositives et des pages PDF sont remplacées sur place de la même façon. Les entrées d'une archive qui sont d'une autre nature sont écartées et listées dans le rapport (dropped). Le nom du fichier, les noms des entrées et des dossiers d'une archive et les propriétés des documents (titre, auteurs, sujet, mots-clés, société des documents Office, informations du document d'un PDF) reçoivent des substituts : chaque valeur est écrite sans sa balise, et le service enregistre cette balise pour qu'une restauration rende la valeur. Avec tags=false, chaque valeur du fichier reçoit de même son substitut, descriptions de ses images comprises, et le fichier ne contient aucune balise : son enregistrement garde les substituts de son texte avec leurs balises, et ses valeurs ne reviennent que tant que cet enregistrement dure (/v1/restore) ; sans enregistrement, rien ne les rend, ce qu'indique le rapport (\"tags\": false, \"restorable\": false). Sans ce paramètre, c'est le réglage tags qui décide. Un fichier protégé que l'on protège de nouveau, par un moteur plus récent par exemple, garde telles quelles les valeurs déjà protégées, y compris les substituts que garde son enregistrement ; avec tags=false, ses balises cèdent la place aux substituts de leurs valeurs, que garde son enregistrement. Le nom protégé figure dans X-Pseudalis-Name et dans Content-Disposition. Avec record (par défaut), l'original est conservé, en clair dans le coffre, pour que /v1/restore le rende à partir de n'importe quelle copie du fichier protégé ; les originaux conservés en premier sont oubliés lorsque les originaux occuperaient plus que le history_mb des réglages, ou laisseraient moins de 256 Mo libres sur le disque, si les oublier libère cette place ; un fichier plus grand que history_mb est protégé sans que son original soit conservé (record 0). Les termes imposés (/v1/terms) sont remplacés avant la lecture de toute autre valeur. Un corps illisible est refusé (400, code bad_request). Un corps plus grand que ce qu'accepte la route est refusé avant d'être lu (413) : les fichiers jusqu'au max_file_mb des réglages, les corps JSON jusqu'à 16 Mo. Lorsque tous les emplacements de travail restent occupés pendant une minute, la réponse est 503 avec Retry-After (code busy).",
+    "description": "Protège un document (Word, Excel, PowerPoint, PDF, texte, CSV, balisage), une image ou une archive (ZIP, TAR, TAR.GZ) envoyés comme corps de la requête, dont le nom donne la nature que doit avoir son contenu. Un fichier d'une autre extension, ou sans extension, est protégé comme un texte lorsque son contenu est du texte de bout en bout : aucune signature binaire, les mesures d'un texte, chaque caractère décodé sans autre caractère de contrôle que la tabulation, les fins de ligne et le saut de page, et aucune partie encodée : un bloc de chiffres base64, base64url ou hexadécimaux (1024 caractères d'affilée, ou 16 suites d'affilée de 60, les lignes d'un bloc, y compris dans une chaîne JSON ou d'un programme), des données ou du JSON en base64, des octets en hexadécimal, un vidage ou un tableau (64 d'affilée, ou 4 lignes de 8, avec des lettres ou des signes parmi eux), un message comportant des parties en base64, quoted-printable ou uuencode ou des mots encodés, un document RTF, une vCard ou un iCalendar, du LDIF en base64, un bloc armé PEM ou OpenPGP, son en-tête comme son corps, y compris dans une chaîne, du uuencode ou de l'ASCII85, et, d'après sa première ligne, un programme PostScript ou un export du registre ; sans extension, une image, un document Office, une archive ou un PDF est aussi reconnu à sa signature. Un fichier d'une autre nature, ou dont le contenu n'est pas de la nature que donne son nom, est refusé (422, code unsupported ou kind_mismatch), de même qu'un texte d'une autre extension qui contient une partie encodée (code encoded_content) : leur contenu ressortirait à moitié protégé. Un dossier voyage sous forme d'archive ZIP de son arborescence, qui revient anonymisée. Chaque valeur personnelle devient une balise [[TYPE:body#CCC]] chiffrée avec la clé de cette installation. Une image devient le fichier texte <name>.txt contenant \"[Image@<id> : <description>]\", la description étant écrite par Gulliver lorsqu'il est installé, et ses valeurs remplacées par des balises comme celles du texte de son document ; les images des documents Word, des diapositives et des pages PDF sont remplacées sur place de la même façon. Les entrées d'une archive qui sont d'une autre nature sont écartées et listées dans le rapport (dropped). Le nom du fichier, les noms des entrées et des dossiers d'une archive et les propriétés des documents (titre, auteurs, sujet, mots-clés, société des documents Office, informations du document d'un PDF) reçoivent des substituts : chaque valeur est écrite sans sa balise, et le service enregistre cette balise pour qu'une restauration rende la valeur. Avec tags=false, chaque valeur du fichier reçoit de même son substitut, descriptions de ses images comprises, et le fichier ne contient aucune balise : son enregistrement garde les substituts de son texte avec leurs balises, et ses valeurs ne reviennent que tant que cet enregistrement dure (/v1/restore) ; sans enregistrement, rien ne les rend, ce qu'indique le rapport (\"tags\": false, \"restorable\": false). Sans ce paramètre, c'est le réglage tags qui décide. Un fichier protégé que l'on protège de nouveau, par un moteur plus récent par exemple, garde telles quelles les valeurs déjà protégées, y compris les substituts que garde son enregistrement ; avec tags=false, ses balises cèdent la place aux substituts de leurs valeurs, que garde son enregistrement. Le nom protégé figure dans X-Pseudalis-Name et dans Content-Disposition. Avec record (par défaut), l'original est conservé, en clair dans le coffre, pour que /v1/restore le rende à partir de n'importe quelle copie du fichier protégé ; les originaux conservés en premier sont oubliés lorsque les originaux occuperaient plus que le history_mb des réglages, ou laisseraient moins de 256 Mo libres sur le disque, si les oublier libère cette place ; un fichier plus grand que history_mb est protégé sans que son original soit conservé (record 0). Les termes imposés (/v1/terms) sont remplacés avant la lecture de toute autre valeur. Un corps illisible est refusé (400, code bad_request). Un corps plus grand que ce qu'accepte la route est refusé avant d'être lu (413) : les fichiers jusqu'au max_file_mb des réglages, les corps JSON jusqu'à 16 Mo. Lorsque tous les emplacements de travail restent occupés pendant une minute, la réponse est 503 avec Retry-After (code busy).",
     "parameters": [
      {
       "name": "name",
@@ -429,7 +429,7 @@
          },
          "session": {
           "type": "boolean",
-          "description": "true pour le relais d'Albireo : les pseudonymes sont faits sous la clé de séance, tirée au démarrage du moteur et gardée en mémoire seulement ; une même valeur garde le même pseudonyme d'un texte à l'autre, et la réponse donne leurs valeurs (values). Sans ce champ, la clé jetable des documents : aucun pseudonyme ne revient."
+          "description": "true pour le relais de Gulliver : les pseudonymes sont faits sous la clé de séance, tirée au démarrage du moteur et gardée en mémoire seulement ; une même valeur garde le même pseudonyme d'un texte à l'autre, et la réponse donne leurs valeurs (values). Sans ce champ, la clé jetable des documents : aucun pseudonyme ne revient."
          }
         },
         "required": [
@@ -514,7 +514,7 @@
              }
             }
            },
-           "description": "Avec session seulement : la valeur de chaque pseudonyme écrit, une fois chacun, dans l'ordre du texte. Le relais d'Albireo les garde en mémoire pour les remettre dans la réponse du moteur extérieur."
+           "description": "Avec session seulement : la valeur de chaque pseudonyme écrit, une fois chacun, dans l'ordre du texte. Le relais de Gulliver les garde en mémoire pour les remettre dans la réponse du moteur extérieur."
           }
          }
         }
@@ -878,12 +878,12 @@
     }
    }
   },
-  "/v1/albireo": {
+  "/v1/gulliver": {
    "get": {
     "tags": [
      "Service"
     ],
-    "summary": "Indique si Albireo décrit les images",
+    "summary": "Indique si Gulliver décrit les images",
     "responses": {
      "200": {
       "description": "{\"enabled\", \"found\", \"port\", \"model\", \"reason\"}",
@@ -1382,7 +1382,7 @@
        "mdy"
       ]
      },
-     "albireo": {
+     "gulliver": {
       "type": "string",
       "enum": [
        "auto",

@@ -177,7 +177,7 @@ schemas = {
                                      "gulliver-security), gulliver-background, gulliver-relay ou auto. Une fonction "
                                      "sans modèle propre est servie par le modèle général ; gulliver-background, le "
                                      "travail fait en arrière-plan (titres, résumés, mémoire), par le modèle livré "
-                                     "avec Albireo, sinon par le général ; gulliver-relay, une fois le relais prêt, "
+                                     "avec Gulliver, sinon par le général ; gulliver-relay, une fois le relais prêt, "
                                      "par le moteur extérieur du relais (/gulliver/v1/relay), qui ne prend ni outil, "
                                      "ni son, ni d'autre choix que n = 1.",
                       "example": "gulliver-general"},
@@ -322,7 +322,7 @@ schemas = {
         "port": {"type": "integer", "minimum": 1024, "maximum": 65535},
         "language": {"type": "string", "enum": ["auto", "fr"]},
         "engine": {"type": "string", "enum": ["auto"],
-                   "description": "Valeur acceptée : auto. Albireo utilise le moteur CPU disponible ; "
+                   "description": "Valeur acceptée : auto. Gulliver utilise le moteur CPU disponible ; "
                    "l'accélération Metal se règle avec accelerator."},
         "accelerator": {"type": "string", "enum": ["auto", "none"],
                         "description": "none : chaque passe du moteur sur le processeur, le GPU du Mac inutilisé ; "
@@ -462,7 +462,7 @@ schemas = {
         "language": {"type": "string", "pattern": "^[a-z]{2,3}(-([A-Z]{2}|[0-9]{3}))?$", "example": "fr",
                      "description": "La langue des résultats : le site de Wikipedia de cette langue (en sans "
                                     "elle)."}},
-        "example": {"query": "Albireo étoile double", "count": 5, "language": "fr"}},
+        "example": {"query": "Gulliver étoile double", "count": 5, "language": "fr"}},
     "WebSearchResults": {"type": "object", "properties": {
         "provider": {"type": "string", "enum": ["wikipedia"]},
         "results": {"type": "array", "description": "Les résultats dont l'adresse est en http ou https, count au "
@@ -475,7 +475,7 @@ schemas = {
                                     "ses entités, sinon la description de la page."}}}}}},
     "WebFetchRequest": {"type": "object", "required": ["url"], "properties": {
         "url": {"type": "string", "description": "Une adresse http ou https d'un hôte public, sans informations "
-                "d'utilisateur.", "example": "https://en.wikipedia.org/wiki/Albireo"},
+                "d'utilisateur.", "example": "https://en.wikipedia.org/wiki/Gulliver"},
         "language": {"type": "string", "pattern": "^[a-z]{2,3}(-([A-Z]{2}|[0-9]{3}))?$",
                      "description": "Envoyée comme Accept-Language."}}},
     "WebPage": {"type": "object", "properties": {
@@ -556,11 +556,11 @@ paths = {
         "description": "Le serveur répond pendant que le service démarre : state vaut \"starting\" et starting nomme "
                        "l'étape en cours, \"engines\" puis \"models\", jusqu'à ce que le service soit \"ready\".",
         "responses": {"200": reply("L'état", {"type": "object", "properties": {
-            "product": {"type": "string", "example": "Albireo"},
+            "product": {"type": "string", "example": "Gulliver"},
             "edition": {"type": "string", "description": "L'édition, Community Edition."},
             "version": {"type": "string"},
             "author": {"type": "string"}, "email": {"type": "string"}, "copyright": {"type": "string"},
-            "project": {"type": "string", "description": "L'adresse du code source d'Albireo."},
+            "project": {"type": "string", "description": "L'adresse du code source d'Gulliver."},
             "settings": {"type": "object", "description": "Les réglages du service que suit l'application web, comme "
                          "la langue de l'interface.", "properties": {
                              "language": {"type": "string", "enum": ["auto", "fr"]},
@@ -612,11 +612,11 @@ paths = {
             "active": {"type": "object", "additionalProperties": {"type": "string"},
                        "description": "Le modèle de chaque fonction : general, code, security, embedding. Une "
                                       "fonction sans modèle choisi pour elle prend le modèle général, sinon le "
-                                      "modèle livré avec Albireo."},
+                                      "modèle livré avec Gulliver."},
             "selected": {"type": "object", "additionalProperties": {"type": "string"},
                          "description": "Les modèles choisis pour les fonctions, que la désactivation rétablit."},
             "background": {"type": "string",
-                           "description": "Le modèle livré avec Albireo, qui sert gulliver-background et reste "
+                           "description": "Le modèle livré avec Gulliver, qui sert gulliver-background et reste "
                                           "chargé ; vide s'il n'y en a pas."},
             "loaded_models": {"type": "array", "items": {"type": "object"},
                               "description": "Les modèles du moteur, avec leur contexte et leurs capacités : "
@@ -635,7 +635,7 @@ paths = {
                         "search": {"type": "string", "enum": ["wikipedia", "none"]}}}}})}}},
     "/gulliver/v1/models": {"get": {
         "tags": ["Service"], "summary": "Catalogue, modèles installés, téléchargements et modèles actifs",
-        "description": "Les modèles de langage : ceux livrés avec Albireo d'abord (builtin), puis le catalogue et les "
+        "description": "Les modèles de langage : ceux livrés avec Gulliver d'abord (builtin), puis le catalogue et les "
                        "imports. Les modèles d'embedding servent la recherche dans les documents et sont donnés à "
                        "part.",
         "parameters": [{"name": "lang", "in": "query",
@@ -652,7 +652,7 @@ paths = {
                 "inputs": {"type": "array", "items": {"type": "string", "enum": ["text", "image", "audio"]},
                            "description": "Ce que lit le modèle ; les pièces jointes de l'application web suivent."},
                 "installed": {"type": "boolean"},
-                "builtin": {"type": "boolean", "description": "Livré avec Albireo : il ne peut pas être supprimé."},
+                "builtin": {"type": "boolean", "description": "Livré avec Gulliver : il ne peut pas être supprimé."},
                 "size": {"type": "integer"}, "quantization": {"type": "string"},
                 "total_size": {"type": "integer", "description": "Les octets des fichiers du modèle, son projecteur "
                                "compris."},
@@ -663,7 +663,7 @@ paths = {
                                   "sha256": {"type": "string"}, "quantization": {"type": "string"}}},
                 "description": {"type": "string"}, "publisher": {"type": "string"},
                 "license": {"type": "string", "description": "La licence de l'entrée du modèle dans le catalogue, ou "
-                            "dans le manifeste des modèles livrés avec Albireo ; absente pour un fichier importé sans "
+                            "dans le manifeste des modèles livrés avec Gulliver ; absente pour un fichier importé sans "
                             "entrée."}}}},
             "background": {"type": "string", "description": "Le modèle d'gulliver-background, vide s'il n'y en a "
                                                              "pas."},
@@ -729,7 +729,7 @@ paths = {
     "/gulliver/v1/licenses": {"get": {
         "tags": ["Service"], "summary": "Textes des licences de l'installation",
         "description": "Les textes du dossier des licences des programmes, que remplit l'installateur : ceux des "
-                       "composants des programmes (Albireo, dlib, Mbed TLS, cpp-httplib, zlib, SQLite) et des "
+                       "composants des programmes (Gulliver, dlib, Mbed TLS, cpp-httplib, zlib, SQLite) et des "
                        "environnements d'exécution du moteur. La liste est vide sans ce dossier, comme dans un "
                        "dossier de build. Les composants de l'application web sont listés par "
                        "/vendor/components.json.",
@@ -891,7 +891,7 @@ paths = {
         "tags": ["Administration"], "summary": "Supprime un modèle installé",
         "description": "Un modèle du moteur est supprimé une fois ses requêtes servies et une fois qu'il a quitté le "
                        "moteur : pending vaut alors true, et le modèle est listé sous leaving jusque-là. Un modèle "
-                       "livré avec Albireo est refusé avec le code builtin_model.",
+                       "livré avec Gulliver est refusé avec le code builtin_model.",
         "parameters": [model_id],
         "responses": {"200": reply("Supprimé, ou à supprimer", {"type": "object", "properties": {
             "ok": {"type": "boolean"}, "pending": {"type": "boolean"}}}), "400": reply("Refusé", ok)}}},
@@ -940,7 +940,7 @@ paths = {
     "/gulliver/v1/carnet": {"get": {
         "tags": ["Service"], "summary": "Le sommaire des documents du portage",
         "description": "Les sections du sommaire (macos/site-docs/sommaire.json du dépôt où le service a été "
-                       "construit, ou de ALBIREO_FORK_ROOT) et les épisodes de chaque blog ; found est false sans "
+                       "construit, ou de GULLIVER_FORK_ROOT) et les épisodes de chaque blog ; found est false sans "
                        "dépôt. La page /carnet/ les affiche.",
         "responses": {"200": reply("{found, sections: [{title, entries: [{path, title, desc}]}], blogs: [{title, "
                                    "episodes: [{number, path, title}]}]}", {"type": "object"})}}},
@@ -977,7 +977,7 @@ paths = {
                       "400": reply("Le dossier ne peut pas être créé ou n'est pas sûr (library_unavailable, "
                                    "library_insecure)", {"type": "object"})}}},
     "/gulliver/v1/library/load": {"post": {
-        "tags": ["Administration"], "summary": "Charge dans Albireo un fichier de la bibliothèque du Mac",
+        "tags": ["Administration"], "summary": "Charge dans Gulliver un fichier de la bibliothèque du Mac",
         "description": "Importe le fichier, avec le projecteur que /gulliver/v1/library lui apparie, sans le réseau et "
                        "sans les déplacer : la copie est un clone APFS sur le même volume.",
         "requestBody": json_body({"type": "object", "required": ["file"], "properties": {"file": {"type": "string"}}}),
@@ -1126,15 +1126,15 @@ with open(os.path.join(here, "..", "common", "version.h"), encoding="utf-8") as 
 doc = {
     "openapi": "3.0.3",
     "info": {
-        "title": "Interface locale d'Albireo Community Edition",
+        "title": "Interface locale d'Gulliver Community Edition",
         "version": version,
-        "description": "L'interface du service Albireo, servie sur https://localhost (port 8443 sauf changement dans "
+        "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans "
                        "l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple "
                        "sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent "
                        "l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url "
                        "https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, "
                        "gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, "
-                       "gulliver-background le modèle livré avec Albireo, que l'application web utilise pour son "
+                       "gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son "
                        "travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les "
                        "documents.\n\n"
                        "Une version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur "

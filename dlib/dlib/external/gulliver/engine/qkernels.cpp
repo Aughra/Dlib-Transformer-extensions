@@ -20,7 +20,7 @@
     les produits des longues passes par Accelerate (qkernels_accelerate.inc).
 */
 #if !defined(__ARM_NEON) || !defined(__ARM_FEATURE_DOTPROD)
-#error "Albireo builds for Apple Silicon only: NEON with the dot product instructions is required"
+#error "Gulliver builds for Apple Silicon only: NEON with the dot product instructions is required"
 #endif
 #include <arm_neon.h>
 #define ACCELERATE_NEW_LAPACK

@@ -1,6 +1,6 @@
-# Captures d'écran d'Albireo (fork macOS)
+# Captures d'écran de Gulliver (fork macOS)
 
-Prises le 11 novembre 2026, Albireo 3.2.0, sur le MacBook Air M2, avec Chrome sans fenêtre : en format ordinateur (1 280 × 860, `https://localhost:18443/`) et en format téléphone (390 × 844, par l'accès réseau `http://<adresse du Mac>:8444/`). À refaire quand la page change beaucoup.
+Prises le 11 novembre 2026, Gulliver 3.2.0, sur le MacBook Air M2, avec Chrome sans fenêtre : en format ordinateur (1 280 × 860, `https://localhost:18443/`) et en format téléphone (390 × 844, par l'accès réseau `http://<adresse du Mac>:8444/`). À refaire quand la page change beaucoup.
 
 | Écran | Ordinateur | Téléphone |
 |---|---|---|

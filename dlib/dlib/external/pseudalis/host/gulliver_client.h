@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef PSEUDALIS_HOST_ALBIREO_CLIENT_H_
-#define PSEUDALIS_HOST_ALBIREO_CLIENT_H_
+#ifndef PSEUDALIS_HOST_GULLIVER_CLIENT_H_
+#define PSEUDALIS_HOST_GULLIVER_CLIENT_H_
 
 #include <cstdint>
 #include <mutex>
@@ -11,15 +11,15 @@
 
 namespace pseudalis
 {
-    class albireo_client
+    class gulliver_client
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                Les descriptions des images par Albireo, le service d'inférence local,
+                Les descriptions des images par Gulliver, le service d'inférence local,
                 quand il est installé sur le même ordinateur et que l'un de ses modèles lit
-                les images.  Albireo se trouve par son interface : ALBIREO_HOME ou, à défaut,
-                ~/.local/share/albireo, le port de son settings.json (8443 par défaut) et son
-                autorité locale (certificates/albireo-authority.crt), qui vérifie son
+                les images.  Gulliver se trouve par son interface : GULLIVER_HOME ou, à défaut,
+                ~/.local/share/gulliver, le port de son settings.json (8443 par défaut) et son
+                autorité locale (certificates/gulliver-authority.crt), qui vérifie son
                 certificat ; puis GET /v1/models, dont les "inputs" désignent les modèles qui
                 lisent les images.  Sur macOS, les contrôles d'appartenance employés ici
                 vérifient le propriétaire, les droits POSIX et les ACL de ces fichiers et de
@@ -34,7 +34,7 @@ namespace pseudalis
                 images PNG et JPEG de 15 Mo au plus sont envoyées.
         !*/
     public:
-        albireo_client();
+        gulliver_client();
 
         // {"enabled", "found", "port", "model", "reason"}
         json status();
@@ -44,12 +44,12 @@ namespace pseudalis
         std::string describe(const std::string& bytes, const std::string& media_type, const std::string& language,
             std::string& error);
 
-        // Le dossier de données d'Albireo sur cet ordinateur, vide quand il n'en a pas.
-        static std::string albireo_data_dir();
+        // Le dossier de données de Gulliver sur cet ordinateur, vide quand il n'en a pas.
+        static std::string gulliver_data_dir();
 
     private:
         bool refresh(std::string& reason);
-        // Trouve Albireo et le modèle qui lit les images, sans le verrou de l'état.
+        // Trouve Gulliver et le modèle qui lit les images, sans le verrou de l'état.
         static bool probe(int& port, std::string& ca, std::string& model, std::string& reason);
         std::mutex m_;              // l'état
         std::mutex request_m_;      // une description à la fois
@@ -64,4 +64,4 @@ namespace pseudalis
     };
 }
 
-#endif // PSEUDALIS_HOST_ALBIREO_CLIENT_H_
+#endif // PSEUDALIS_HOST_GULLIVER_CLIENT_H_

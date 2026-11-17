@@ -1089,7 +1089,7 @@ namespace pseudalis
                 if (ch == ']') ch = ')';
                 if (ch == ' ' && (line.empty() || line.back() == ' ')) continue;
                 line.push_back(ch);
-                // Les réponses d'Albireo restent bien en dessous ; au-delà de 1000 octets, rien n'est écrit.
+                // Les réponses de Gulliver restent bien en dessous ; au-delà de 1000 octets, rien n'est écrit.
                 if (line.size() >= 16384)
                 {
                     bounded = true;
@@ -1276,7 +1276,7 @@ namespace pseudalis
             Un document, protégé ou restauré.  Un document Office demande les descriptions de ses
             images pendant sa lecture, avant que son texte ait appris quoi que ce soit au détecteur,
             un PDF une fois que c'est fait : la description donnée pour chaque image est gardée,
-            Albireo n'étant interrogé qu'une fois, et relue avec ce que le texte entier a appris ;
+            Gulliver n'étant interrogé qu'une fois, et relue avec ce que le texte entier a appris ;
             quand cela révèle une valeur que la première lecture d'une description avait manquée, un
             nom du texte qu'elle répète tel quel, le document est protégé à nouveau, ses images
             prenant leurs descriptions lues avec le détecteur de la première protection.

@@ -1,15 +1,15 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Albireo : le service d'inférence local construit sur dlib, pour macOS sur Apple Silicon seulement.
+# Gulliver : le service d'inférence local construit sur dlib, pour macOS sur Apple Silicon seulement.
 #
-#   cmake -S dlib/dlib/external/gulliver -B build/macos-albireo -G Ninja -DCMAKE_BUILD_TYPE=Release
+#   cmake -S dlib/dlib/external/gulliver -B build/macos-gulliver -G Ninja -DCMAKE_BUILD_TYPE=Release
 #
 # Chaque programme arrive dans <build>/bin et le moteur dans <build>/bin/engines ; l'application web
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 5.9.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 6.0.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -37,7 +37,7 @@ option(GULLIVER_PROGRAMS "Build the service, the engine and the tools" ON)
 option(GULLIVER_TESTS "Build the test programs" ON)
 
 if (NOT APPLE OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|ARM64)$")
-   message(FATAL_ERROR "Albireo builds for macOS on Apple Silicon only (arm64).")
+   message(FATAL_ERROR "Gulliver builds for macOS on Apple Silicon only (arm64).")
 endif()
 
 set(CMAKE_CXX_STANDARD 14)
@@ -181,25 +181,25 @@ if (GULLIVER_PROGRAMS)
    target_link_libraries(gulliver-service PRIVATE gulliver_common gulliver_sqlite ZLIB::ZLIB dlib::httplib)
    target_compile_options(gulliver-service PRIVATE ${GULLIVER_WARNINGS})
 
-   # La préparation des modèles fournis avec Albireo : vérifiés et convertis avec le code
+   # La préparation des modèles fournis avec Gulliver : vérifiés et convertis avec le code
    # du moteur, puis remis aux programmes de l'arbre.
    add_executable(gulliver-builtin tools/gulliver_builtin.cpp engine/chat_format.cpp engine/model_config.cpp
       engine/model_file.cpp $<TARGET_OBJECTS:gulliver-kernels> host/crypto.cpp)
    target_link_libraries(gulliver-builtin PRIVATE gulliver_common dlib::httplib)
    target_compile_options(gulliver-builtin PRIVATE ${GULLIVER_WARNINGS})
 
-   # Les modèles fournis avec Albireo (resources/builtin_models.json) : téléchargés une fois dans
+   # Les modèles fournis avec Gulliver (resources/builtin_models.json) : téléchargés une fois dans
    # le cache (cmake/builtin_models.cmake), vérifiés et convertis par gulliver-builtin, puis
    # remis au dossier « models » des programmes de l'arbre.
-   option(GULLIVER_BUILTIN_MODELS "Prepare the models that come with Albireo" OFF)
+   option(GULLIVER_BUILTIN_MODELS "Prepare the models that come with Gulliver" OFF)
    set(cache_default "$ENV{HOME}/Library/Caches/gulliver")
    set(GULLIVER_MODEL_CACHE "${cache_default}" CACHE PATH
-      "Folder of the downloaded and converted models that come with Albireo")
+      "Folder of the downloaded and converted models that come with Gulliver")
    set(GULLIVER_BUILTIN_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/resources/builtin_models.json" CACHE FILEPATH
-      "Manifest of the models that come with Albireo")
+      "Manifest of the models that come with Gulliver")
    if (GULLIVER_BUILTIN_MODELS)
       if (CMAKE_VERSION VERSION_LESS 3.19)
-         message(FATAL_ERROR "the models that come with Albireo need CMake 3.19 or later "
+         message(FATAL_ERROR "the models that come with Gulliver need CMake 3.19 or later "
             "(-DGULLIVER_BUILTIN_MODELS=OFF builds without them)")
       endif()
       set(GULLIVER_BUILTIN_COMMAND $<TARGET_FILE:gulliver-builtin>)
@@ -212,7 +212,7 @@ if (GULLIVER_PROGRAMS)
             --models-out ${CMAKE_BINARY_DIR}/bin/models
          DEPENDS ${GULLIVER_BUILTIN_MANIFEST} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/builtin_models.cmake
             ${builtin_tool_target}
-         COMMENT "Preparing the models that come with Albireo"
+         COMMENT "Preparing the models that come with Gulliver"
          VERBATIM)
       add_custom_target(gulliver-builtin-models ALL DEPENDS ${GULLIVER_BUILTIN_STAMP})
    endif()

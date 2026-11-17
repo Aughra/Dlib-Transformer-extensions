@@ -36,7 +36,7 @@ namespace gulliver
         /*!
             WHAT THIS OBJECT REPRESENTS
                 Le relais de l'inférence (relay.h, repris de l'original, Albireo 1.0.23) : le
-                moteur extérieur auquel le modèle albireo-relay envoie les discussions qui le
+                moteur extérieur auquel le modèle gulliver-relay envoie les discussions qui le
                 demandent, les modèles du Mac restant en place pour les autres.
 
                 provider vaut "openai", un moteur de l'interface d'OpenAI à url (sa base,
@@ -88,7 +88,7 @@ namespace gulliver
         /*
             La bibliothèque du Mac (fork pour macOS) : un dossier de fichiers GGUF que le service lit sans
             jamais y écrire, que l'onglet Modèles liste (« Rafraîchir depuis le Mac ») et dont il charge un
-            modèle dans Albireo par une copie, un clone APFS sur le même volume.  Vide : <data>/library.
+            modèle dans Gulliver par une copie, un clone APFS sur le même volume.  Vide : <data>/library.
         */
         std::string library_dir;
         std::string language = "auto";          // auto, en, fr, de, it, es

@@ -34,7 +34,7 @@ const texts = {
     reasoningTurnedOn: 'Raisonnement approfondi activé : ce modèle raisonne avant d\'agir ou de chercher.',
     agentNeedsReasoning: 'Activez d\'abord le raisonnement approfondi : ce modèle raisonne avant d\'appeler ses ' +
       'outils',
-    attach: 'Joindre des fichiers', send: 'Envoyer', stop: 'Arrêter', placeholder: 'Posez votre question à Albireo…',
+    attach: 'Joindre des fichiers', send: 'Envoyer', stop: 'Arrêter', placeholder: 'Posez votre question à Gulliver…',
     placeholderProject: 'Une question sur {project}…',
     thinking: 'Réflexion', thoughtFor: 'Réflexion de {s}', thoughtBriefly: 'Réflexion brève',
     toolRunning: 'en cours', toolDone: 'terminé', toolError: 'erreur', toolInput: 'Entrée', toolOutput: 'Résultat',
@@ -65,15 +65,15 @@ const texts = {
     webNoTools: 'Le modèle de cette fonction ne peut pas appeler d\'outils, ce que demande l\'accès au Web',
     webNeedsReasoning: 'Activez d\'abord le raisonnement approfondi : ce modèle raisonne avant de chercher sur ' +
       'le Web',
-    webOffline: 'Albireo fonctionne hors ligne : l\'accès au Web est indisponible',
-    webOff: 'L\'accès au Web est désactivé dans les paramètres du service Albireo',
-    webUnavailable: 'Le service Albireo ne donne pas d\'accès au Web',
+    webOffline: 'Gulliver fonctionne hors ligne : l\'accès au Web est indisponible',
+    webOff: 'L\'accès au Web est désactivé dans les paramètres du service Gulliver',
+    webUnavailable: 'Le service Gulliver ne donne pas d\'accès au Web',
     webHelp: 'Avec le Web activé, le modèle peut chercher dans Wikipédia et lire des pages Web et des fichiers PDF ' +
-      'par le service Albireo. Il ne lit que les adresses que vous écrivez dans vos questions, celles des ' +
+      'par le service Gulliver. Il ne lit que les adresses que vous écrivez dans vos questions, celles des ' +
       'résultats de ses recherches et les liens des pages qu\'il a déjà lues. Le raisonnement approfondi, l\'agent ' +
       'et le Web sont désactivés au début de chaque nouvelle discussion, et chaque discussion garde son propre choix.',
     tool_web_search: 'Recherche Web', tool_fetch_page: 'Lecture d\'une page',
-    toolHint_web_search: 'Cherche dans les articles de Wikipédia par le service Albireo et liste les résultats ' +
+    toolHint_web_search: 'Cherche dans les articles de Wikipédia par le service Gulliver et liste les résultats ' +
       'avec leurs adresses.',
     toolHint_fetch_page: 'Lit, partie par partie, une page Web ou un fichier PDF dont la discussion contient ' +
       'l\'adresse.',
@@ -98,14 +98,14 @@ const texts = {
     deleteDiscussionText: 'La discussion « {title} » sera supprimée de ce navigateur.',
     exportAnswer: 'Exporter cette réponse', deleteQuestion: 'Supprimer la question et sa réponse',
     compacting: 'Compression de la discussion…',
-    aiNotice: 'Albireo est une IA et peut commettre des erreurs.',
-    errModelNotFound: 'Aucun modèle ne sert cette fonction : activez-en un dans la fenêtre Modèles d\'Albireo.',
+    aiNotice: 'Gulliver est une IA et peut commettre des erreurs.',
+    errModelNotFound: 'Aucun modèle ne sert cette fonction : activez-en un dans la fenêtre Modèles d\'Gulliver.',
     errContextLength: 'La question ne tient pas dans le contexte du modèle, même raccourcie.',
     errUnloaded: 'Le modèle a quitté le moteur pendant sa réponse : posez la question à nouveau.',
-    errService: 'Le service Albireo ne répond pas.',
-    errStarting: 'Albireo démarre : posez la question dans un instant.',
-    memoryTab: 'Mémoire', memoryEnabled: 'Mémoriser les discussions', memoryText: 'Ce dont Albireo se souvient',
-    memoryIntro: 'Albireo garde de courtes notes sur vous à partir de vos discussions, hors discussions privées, et les donne au modèle au début de chaque discussion. Elles restent courtes pour laisser le contexte aux questions.',
+    errService: 'Le service Gulliver ne répond pas.',
+    errStarting: 'Gulliver démarre : posez la question dans un instant.',
+    memoryTab: 'Mémoire', memoryEnabled: 'Mémoriser les discussions', memoryText: 'Ce dont Gulliver se souvient',
+    memoryIntro: 'Gulliver garde de courtes notes sur vous à partir de vos discussions, hors discussions privées, et les donne au modèle au début de chaque discussion. Elles restent courtes pour laisser le contexte aux questions.',
     memorySensitive: 'Retenir les informations sensibles',
     memorySensitiveHelp: 'Désactivé par défaut : le modèle écarte la santé, les finances, les opinions, les identifiants et ce qui concerne d\'autres personnes.',
     memoryEmpty: 'Rien pour l\'instant : les notes viennent des discussions.', memorySize_one: '{n} mot sur {max} au plus',
@@ -113,7 +113,7 @@ const texts = {
     memoryUpdated: 'mise à jour le {date}', memoryReset: 'Réinitialiser la mémoire',
     memoryLearned_one: 'Mémoire mise à jour : {n} nouvelle information vous concernant.',
     memoryLearned_other: 'Mémoire mise à jour : {n} nouvelles informations vous concernant.',
-    memoryResetText: 'Albireo oublie ses notes, et les discussions passées ne les alimentent plus. Les discussions elles-mêmes restent.',
+    memoryResetText: 'Gulliver oublie ses notes, et les discussions passées ne les alimentent plus. Les discussions elles-mêmes restent.',
     searchProjects: 'Rechercher dans les projets', searchDiscussions: 'Rechercher dans les discussions',
     searchMoreProjects: 'Rechercher parmi les {n} projets…', searchMoreDiscussions: 'Rechercher parmi les {n} discussions…',
     searchPlaceholder: 'Mots, même incomplets…', resultsCount_one: '{n} résultat', resultsCount_other: '{n} résultats',
@@ -128,8 +128,8 @@ const texts = {
     welcome: 'Bonjour{name}', welcomeSub: 'Votre assistant privé. Tout s\'exécute sur cet ordinateur, rien n\'en sort.',
     contextTrimmed: 'Les messages les plus anciens ont été écartés pour tenir dans le contexte du modèle.',
     noModel: 'Aucun modèle n\'est actif. Ouvrez Paramètres, onglet Modèles, pour en télécharger ou en activer un.',
-    serviceDown: 'Le service Albireo ne répond pas.', modelLoading: 'Chargement du modèle…',
-    serviceStarting: 'Démarrage d\'Albireo…',
+    serviceDown: 'Le service Gulliver ne répond pas.', modelLoading: 'Chargement du modèle…',
+    serviceStarting: 'Démarrage d\'Gulliver…',
     instructions: 'Instructions', instructionsHelp: 'Données au modèle au début de chaque discussion de ce projet.',
     knowledge: 'Connaissances', knowledgeHelp: 'Documents et images que le modèle lit dans les discussions de ce projet.',
     addFiles: 'Ajouter des fichiers', projectName: 'Nom', description: 'Description', color: 'Couleur',
@@ -160,9 +160,9 @@ const texts = {
     imported: '{discussions} et {projects} importés.',
     discussionsCount_one: '{n} discussion', discussionsCount_other: '{n} discussions', projectsCount_one: '{n} projet',
     projectsCount_other: '{n} projets', imagesCount_one: '{n} image', imagesCount_other: '{n} images',
-    importFailed: 'Ce fichier n\'est pas un export Albireo.',
+    importFailed: 'Ce fichier n\'est pas un export Gulliver.',
     exportFailed: 'L\'export n\'a pas pu être écrit : {reason}', exportUser: 'Utilisateur',
-    dbBlocked: 'Un onglet d\'une version précédente d\'Albireo garde ouvertes les données de ce navigateur : ' +
+    dbBlocked: 'Un onglet d\'une version précédente d\'Gulliver garde ouvertes les données de ce navigateur : ' +
       'fermez-le, puis rechargez cette page.',
     tokensCount_one: '{n} jeton', tokensCount_other: '{n} jetons',
     errTooManyImages: 'La requête contient plus d\'images que le service n\'en lit à la fois (16).',
@@ -210,7 +210,7 @@ const texts = {
     legacyFormat: '{name} : ce format Office est antérieur à 2007 ; enregistrez-le en .docx, .xlsx ou .pptx.',
     pdfImagesTitle: 'PDF sans texte',
     pdfImagesText: '{name} ne contient que des images, comme des pages numérisées. Son texte ne peut pas être lu ' +
-      'sans reconnaissance optique de caractères (OCR), qu\'Albireo n\'effectue pas. Le fichier n\'a pas été ajouté.',
+      'sans reconnaissance optique de caractères (OCR), qu\'Gulliver n\'effectue pas. Le fichier n\'a pas été ajouté.',
     pdfPagesWithoutText_one: '{name} a été ajouté, mais une de ses {total} pages n\'a pas de texte lisible, car elle ' +
       'ne contient que des images.',
     pdfPagesWithoutText_other: '{name} a été ajouté, mais {n} de ses {total} pages n\'ont pas de texte lisible, car ' +
@@ -218,7 +218,7 @@ const texts = {
     pdfPassword: '{name} est protégé par un mot de passe et ne peut pas être ouvert. Retirez le mot de passe, puis ' +
       'joignez de nouveau le fichier.',
     pdfInvalid: '{name} n\'est pas un fichier PDF valide, ou il est endommagé.',
-    pdfReader: '{name} ne peut pas être lu, car ce navigateur ne peut pas exécuter le lecteur PDF d\'Albireo. ' +
+    pdfReader: '{name} ne peut pas être lu, car ce navigateur ne peut pas exécuter le lecteur PDF d\'Gulliver. ' +
       'Utilisez une version récente de Microsoft Edge ou de Google Chrome, puis rechargez la page.',
     searchedDocument: 'consulté par recherche', removeAttachment: 'Retirer ce document',
     indexingDocument: 'Indexation de {name} pour la recherche…',
@@ -251,7 +251,7 @@ const texts = {
       'discussion sous la forme de leurs noms.',
     pastedImage: 'Image collée {date}',
     projectImages: 'Images', projectImagesCount: 'Images du projet : {n} sur {max} au plus',
-    knowledgeImagesHelp: 'Le modèle livré avec Albireo décrit chaque image dans la langue de l\'interface : le type ' +
+    knowledgeImagesHelp: 'Le modèle livré avec Gulliver décrit chaque image dans la langue de l\'interface : le type ' +
       'd\'image, son texte visible, ses éléments et ses données. La description rejoint la recherche du projet, et ' +
       'un modèle qui lit les images reçoit aussi l\'image quand une question trouve sa description.',
     imageDescribing: 'Description en cours…', imageDescribed: 'Description prête',
@@ -272,11 +272,11 @@ const texts = {
     agentLimit: 'L\'agent s\'est arrêté après {n} étapes.',
     agentRepeats: 'L\'agent répétait ses appels : ses outils ont été arrêtés pour qu\'il réponde avec les résultats obtenus.',
     agentSearchLimit: 'L\'agent a atteint ses {n} recherches : ses outils ont été arrêtés pour qu\'il réponde avec les résultats obtenus.',
-    aboutText: 'Albireo Community Edition exécute des modèles de langage localement, sur le processeur et le processeur graphique de ce Mac, en reposant sur la bibliothèque open source Dlib-Transformer-extensions.',
+    aboutText: 'Gulliver Community Edition exécute des modèles de langage localement, sur le processeur et le processeur graphique de ce Mac, en reposant sur la bibliothèque open source Dlib-Transformer-extensions.',
     createdBy: 'Créé par {author}', changelog: 'Notes de version', home: 'Accueil : nouvelle discussion, saisie effacée', forkedBy: 'Fork pour macOS (Apple Silicon), modifié par TortueTech', forkShort: 'fork macOS',
     thirdParty: 'Composants tiers', apiDocs: 'Documentation de l\'interface', close: 'Fermer', confirm: 'Confirmer',
     licensesTitle: 'Composants et licences',
-    licensesIntro: 'Albireo fonctionne sans réseau : les bibliothèques, les programmes et les modèles sur lesquels ' +
+    licensesIntro: 'Gulliver fonctionne sans réseau : les bibliothèques, les programmes et les modèles sur lesquels ' +
       'il repose sont installés avec lui. Les voici, avec leurs versions et leurs licences.',
     licensesWeb: 'Application web',
     licensesWebHelp: 'Les bibliothèques de cette interface, servies par le service local.',
@@ -284,7 +284,7 @@ const texts = {
     licensesProgramsHelp: 'Les composants du service et les environnements d\'exécution des moteurs, tels que ' +
       'l\'installation les fournit.',
     licensesProgramsNone: 'Les textes des licences des programmes et des moteurs sont fournis avec l\'installation. ' +
-      'Cette copie d\'Albireo n\'en contient pas, comme une version de développement.',
+      'Cette copie d\'Gulliver n\'en contient pas, comme une version de développement.',
     licensesModels: 'Modèles',
     licensesModelsHelp: 'Chaque modèle est distribué sous la licence de son éditeur, telle que l\'indique son entrée ' +
       'du catalogue.',
@@ -299,7 +299,7 @@ const texts = {
     component_pdfjs: 'Lit le texte des documents PDF',
     component_cmaps: 'Donne le texte des polices chinoises, japonaises et coréennes des documents PDF',
     component_swagger: 'Affiche la documentation interactive de l\'interface',
-    program_albireo: 'Le service et cette interface',
+    program_gulliver: 'Le service et cette interface',
     program_dlib: 'Moteur d\'inférence et bibliothèque des modèles',
     program_mbedtls: 'Chiffrement du serveur HTTPS local, et empreintes',
     program_httplib: 'Serveur web local et téléchargements',

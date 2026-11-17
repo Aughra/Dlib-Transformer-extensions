@@ -362,7 +362,7 @@ async function aboutTab(body, close) {
   const art = h('div', { class: 'about-art' }, h('img', { src: 'img/about.svg', alt: '' }));
   const kv = h('div', { class: 'kv' });
   const row = (k, v) => kv.append(h('div', null, k), h('div', null, v));
-  row(t('version'), [s.product || 'Albireo', s.edition, s.version].filter(Boolean).join(' ') + ' · ' + t('forkShort'));
+  row(t('version'), [s.product || 'Gulliver', s.edition, s.version].filter(Boolean).join(' ') + ' · ' + t('forkShort'));
   row(t('engine'), s.engine ? (s.engine.variant || '-') + (s.engine.device ? ' (' + s.engine.device + ')' : '') : '-');
   if (s.host) {
     row(t('processor'), s.host.cpu.name + ' · ' + s.host.cpu.cores + ' / ' + s.host.cpu.threads);

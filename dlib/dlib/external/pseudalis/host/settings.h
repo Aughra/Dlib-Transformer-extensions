@@ -23,7 +23,7 @@ namespace pseudalis
         std::string language = "auto";          // from_json garde auto, en et fr ; auto suit la langue du service
         std::string drive_letter = "A";         // la lettre du lecteur, vide sans lecteur
         std::string date_order = "dmy";         // dmy ou mdy : les dates numériques que lit le détecteur
-        std::string albireo = "auto";           // auto : les images sont décrites quand Albireo répond ; off
+        std::string gulliver = "auto";          // auto : les images sont décrites quand Gulliver répond ; off
         int max_file_mb = 150;                  // le plus gros fichier traité, en Mo
         /*
             Les jours pendant lesquels un original reste gardé une fois que son fichier a quitté le

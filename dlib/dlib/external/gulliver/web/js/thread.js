@@ -203,8 +203,8 @@ function renderWelcome() {
   const agent = c.agent && toolsAvailable(caps, c.reasoning && caps.reasoning)
     ? h('div', { class: 'agent-note' }, h('span', { html: icon('tool') }), h('span', null, t('agentHelp'))) : null;
   ui.content.replaceChildren(h('div', { class: 'welcome' },
-    h('img', { class: 'hero', src: 'img/albireo-mark.svg', alt: '' }),
-    h('h1', { html: escapeHtml(t('welcome', { name })).replace('Albireo', '<span>Albireo</span>') }),
+    h('img', { class: 'hero', src: 'img/gulliver-mark.svg', alt: '' }),
+    h('h1', { html: escapeHtml(t('welcome', { name })).replace('Gulliver', '<span>Gulliver</span>') }),
     h('p', null, p ? t('newProjectDiscussion', { name: p.name }) : t('welcomeSub')),
     notice, agent));
   ui.thread = null;
@@ -938,7 +938,7 @@ function toolState(tc) {
 
 /*
     Les mots d'un appel de fetch_page qui a lu sa page (tc.web), ce que la règle des adresses a permis : l'adresse sous
-    forme de lien qui s'ouvre dans un nouvel onglet sans la page d'Albireo comme opener ni referrer, puis le début de la
+    forme de lien qui s'ouvre dans un nouvel onglet sans la page de Gulliver comme opener ni referrer, puis le début de la
     partie lue.  null pour les autres appels, dont les mots sont du texte.
 */
 function pageBrief(tc) {

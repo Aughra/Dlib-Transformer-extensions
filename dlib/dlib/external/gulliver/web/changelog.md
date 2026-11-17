@@ -1,6 +1,14 @@
 # Notes de version
 
-Albireo pour macOS sur puce Apple, version dérivée d'Albireo Community Edition (Cydral Technology), maintenue par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne.
+Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
+
+## 6.0.0 — 17 novembre 2026
+
+### Plateforme
+
+- Le service de chat change de nom : **Albireo devient Gulliver**. C'est une rupture de nom et d'interface. Les adresses de l'interface passent de `/albireo/v1/…` à `/gulliver/v1/…` ; la variable d'environnement du dossier de données devient `GULLIVER_HOME` (sinon `~/.local/share/gulliver`) ; la base de données du service s'appelle `gulliver.db` ; les identifiants de modèles de l'interface deviennent `gulliver-general`, `gulliver-code`, `gulliver-security`, `gulliver-relay`, `gulliver-background` et `gulliver-embedding`. Les routes compatibles OpenAI (`/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/v1/completions`) sont inchangées. Pseudalis garde son nom et trouve désormais Gulliver par `GULLIVER_HOME`.
+
+---
 
 ## 5.9.0 — 16 novembre 2026
 

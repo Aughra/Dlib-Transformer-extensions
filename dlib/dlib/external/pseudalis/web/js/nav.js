@@ -4,7 +4,7 @@
 /*
     Le menu de la page (fork pour macOS) : une section à la fois, choisie par l'adresse (#protect, #restore…) ; les
     entrées de l'administration suivent les sections qu'app.js montre une fois chargées ; le bouton du
-    thème ; le passage à Albireo, quand Pseudalis le trouve sur ce Mac.
+    thème ; le passage à Gulliver, quand Pseudalis le trouve sur ce Mac.
 */
 (function () {
   const texts = window.PSEUDALIS_TEXTS || {};
@@ -51,16 +51,16 @@
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply);
   apply();
 
-  // Albireo sur ce Mac : par localhost depuis le Mac lui-même, par son accès réseau depuis un autre appareil.
+  // Gulliver sur ce Mac : par localhost depuis le Mac lui-même, par son accès réseau depuis un autre appareil.
   const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
   fetch('v1/info', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (info) {
-    const a = (info && info.albireo) || {};
+    const a = (info && info.gulliver) || {};
     if (!a.found || !a.port) return;
     let href = '';
     if (local) href = 'https://localhost:' + a.port + '/';
     else if (a.lan && a.lan_port) href = 'http://' + location.hostname + ':' + a.lan_port + '/';
     if (!href) return;
-    document.getElementById('to-albireo').href = href;
+    document.getElementById('to-gulliver').href = href;
     document.getElementById('app-switch').hidden = false;
   }).catch(function () { /* service muet */ });
 

@@ -1,9 +1,9 @@
 {
  "openapi": "3.0.3",
  "info": {
-  "title": "Interface locale d'Albireo Community Edition",
-  "version": "5.9.0",
-  "description": "L'interface du service Albireo, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Albireo, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
+  "title": "Interface locale d'Gulliver Community Edition",
+  "version": "6.0.0",
+  "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
    "url": "https://www.boost.org/LICENSE_1_0.txt"
@@ -328,7 +328,7 @@
          "properties": {
           "product": {
            "type": "string",
-           "example": "Albireo"
+           "example": "Gulliver"
           },
           "edition": {
            "type": "string",
@@ -348,7 +348,7 @@
           },
           "project": {
            "type": "string",
-           "description": "L'adresse du code source d'Albireo."
+           "description": "L'adresse du code source d'Gulliver."
           },
           "settings": {
            "type": "object",
@@ -555,7 +555,7 @@
            "additionalProperties": {
             "type": "string"
            },
-           "description": "Le modèle de chaque fonction : general, code, security, embedding. Une fonction sans modèle choisi pour elle prend le modèle général, sinon le modèle livré avec Albireo."
+           "description": "Le modèle de chaque fonction : general, code, security, embedding. Une fonction sans modèle choisi pour elle prend le modèle général, sinon le modèle livré avec Gulliver."
           },
           "selected": {
            "type": "object",
@@ -566,7 +566,7 @@
           },
           "background": {
            "type": "string",
-           "description": "Le modèle livré avec Albireo, qui sert gulliver-background et reste chargé ; vide s'il n'y en a pas."
+           "description": "Le modèle livré avec Gulliver, qui sert gulliver-background et reste chargé ; vide s'il n'y en a pas."
           },
           "loaded_models": {
            "type": "array",
@@ -615,7 +615,7 @@
      "Service"
     ],
     "summary": "Catalogue, modèles installés, téléchargements et modèles actifs",
-    "description": "Les modèles de langage : ceux livrés avec Albireo d'abord (builtin), puis le catalogue et les imports. Les modèles d'embedding servent la recherche dans les documents et sont donnés à part.",
+    "description": "Les modèles de langage : ceux livrés avec Gulliver d'abord (builtin), puis le catalogue et les imports. Les modèles d'embedding servent la recherche dans les documents et sont donnés à part.",
     "parameters": [
      {
       "name": "lang",
@@ -680,7 +680,7 @@
              },
              "builtin": {
               "type": "boolean",
-              "description": "Livré avec Albireo : il ne peut pas être supprimé."
+              "description": "Livré avec Gulliver : il ne peut pas être supprimé."
              },
              "size": {
               "type": "integer"
@@ -718,7 +718,7 @@
              },
              "license": {
               "type": "string",
-              "description": "La licence de l'entrée du modèle dans le catalogue, ou dans le manifeste des modèles livrés avec Albireo ; absente pour un fichier importé sans entrée."
+              "description": "La licence de l'entrée du modèle dans le catalogue, ou dans le manifeste des modèles livrés avec Gulliver ; absente pour un fichier importé sans entrée."
              }
             }
            }
@@ -1017,7 +1017,7 @@
      "Service"
     ],
     "summary": "Textes des licences de l'installation",
-    "description": "Les textes du dossier des licences des programmes, que remplit l'installateur : ceux des composants des programmes (Albireo, dlib, Mbed TLS, cpp-httplib, zlib, SQLite) et des environnements d'exécution du moteur. La liste est vide sans ce dossier, comme dans un dossier de build. Les composants de l'application web sont listés par /vendor/components.json.",
+    "description": "Les textes du dossier des licences des programmes, que remplit l'installateur : ceux des composants des programmes (Gulliver, dlib, Mbed TLS, cpp-httplib, zlib, SQLite) et des environnements d'exécution du moteur. La liste est vide sans ce dossier, comme dans un dossier de build. Les composants de l'application web sont listés par /vendor/components.json.",
     "responses": {
      "200": {
       "description": "Les textes, par les noms de leurs fichiers",
@@ -1867,7 +1867,7 @@
      "Administration"
     ],
     "summary": "Supprime un modèle installé",
-    "description": "Un modèle du moteur est supprimé une fois ses requêtes servies et une fois qu'il a quitté le moteur : pending vaut alors true, et le modèle est listé sous leaving jusque-là. Un modèle livré avec Albireo est refusé avec le code builtin_model.",
+    "description": "Un modèle du moteur est supprimé une fois ses requêtes servies et une fois qu'il a quitté le moteur : pending vaut alors true, et le modèle est listé sous leaving jusque-là. Un modèle livré avec Gulliver est refusé avec le code builtin_model.",
     "parameters": [
      {
       "name": "id",
@@ -2166,7 +2166,7 @@
      "Service"
     ],
     "summary": "Le sommaire des documents du portage",
-    "description": "Les sections du sommaire (macos/site-docs/sommaire.json du dépôt où le service a été construit, ou de ALBIREO_FORK_ROOT) et les épisodes de chaque blog ; found est false sans dépôt. La page /carnet/ les affiche.",
+    "description": "Les sections du sommaire (macos/site-docs/sommaire.json du dépôt où le service a été construit, ou de GULLIVER_FORK_ROOT) et les épisodes de chaque blog ; found est false sans dépôt. La page /carnet/ les affiche.",
     "responses": {
      "200": {
       "description": "{found, sections: [{title, entries: [{path, title, desc}]}], blogs: [{title, episodes: [{number, path, title}]}]}",
@@ -2322,7 +2322,7 @@
     "tags": [
      "Administration"
     ],
-    "summary": "Charge dans Albireo un fichier de la bibliothèque du Mac",
+    "summary": "Charge dans Gulliver un fichier de la bibliothèque du Mac",
     "description": "Importe le fichier, avec le projecteur que /gulliver/v1/library lui apparie, sans le réseau et sans les déplacer : la copie est un clone APFS sur le même volume.",
     "requestBody": {
      "required": true,
@@ -3393,7 +3393,7 @@
       "properties": {
        "model": {
         "type": "string",
-        "description": "Un identifiant de modèle, une fonction (gulliver-general, gulliver-code, gulliver-security), gulliver-background, gulliver-relay ou auto. Une fonction sans modèle propre est servie par le modèle général ; gulliver-background, le travail fait en arrière-plan (titres, résumés, mémoire), par le modèle livré avec Albireo, sinon par le général ; gulliver-relay, une fois le relais prêt, par le moteur extérieur du relais (/gulliver/v1/relay), qui ne prend ni outil, ni son, ni d'autre choix que n = 1.",
+        "description": "Un identifiant de modèle, une fonction (gulliver-general, gulliver-code, gulliver-security), gulliver-background, gulliver-relay ou auto. Une fonction sans modèle propre est servie par le modèle général ; gulliver-background, le travail fait en arrière-plan (titres, résumés, mémoire), par le modèle livré avec Gulliver, sinon par le général ; gulliver-relay, une fois le relais prêt, par le moteur extérieur du relais (/gulliver/v1/relay), qui ne prend ni outil, ni son, ni d'autre choix que n = 1.",
         "example": "gulliver-general"
        },
        "messages": {
@@ -3936,7 +3936,7 @@
       "enum": [
        "auto"
       ],
-      "description": "Valeur acceptée : auto. Albireo utilise le moteur CPU disponible ; l'accélération Metal se règle avec accelerator."
+      "description": "Valeur acceptée : auto. Gulliver utilise le moteur CPU disponible ; l'accélération Metal se règle avec accelerator."
      },
      "accelerator": {
       "type": "string",
@@ -4320,7 +4320,7 @@
      }
     },
     "example": {
-     "query": "Albireo étoile double",
+     "query": "Gulliver étoile double",
      "count": 5,
      "language": "fr"
     }
@@ -4365,7 +4365,7 @@
      "url": {
       "type": "string",
       "description": "Une adresse http ou https d'un hôte public, sans informations d'utilisateur.",
-      "example": "https://en.wikipedia.org/wiki/Albireo"
+      "example": "https://en.wikipedia.org/wiki/Gulliver"
      },
      "language": {
       "type": "string",

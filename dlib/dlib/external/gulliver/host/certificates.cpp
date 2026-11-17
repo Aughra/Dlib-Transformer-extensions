@@ -30,7 +30,7 @@ namespace gulliver
         // La validité des deux certificats, et le délai avant leur fin où ils sont renouvelés.
         const long validity_days = 397;
         const long long renewal_seconds = 86400LL * 30;
-        const char* const authority_name = "CN=Albireo Local Authority,O=Cydral Technology,C=FR";
+        const char* const authority_name = "CN=Gulliver Local Authority,O=Cydral Technology,C=FR";
 
         struct random_source
         {

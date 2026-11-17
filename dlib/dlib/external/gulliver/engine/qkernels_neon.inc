@@ -1,5 +1,5 @@
 // Noyaux NEON du portage macOS (Apple Silicon, avec les instructions de produit scalaire), inclus
-// par qkernels.cpp dans l'espace de noms albireo.
+// par qkernels.cpp dans l'espace de noms gulliver.
 //
 // Chaque noyau calcule, bloc par bloc, les mêmes sommes entières que sa référence (dot_*_ref),
 // exactes quel que soit l'ordre des additions, puis termine chaque bloc par la même expression

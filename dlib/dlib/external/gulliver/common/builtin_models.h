@@ -11,10 +11,10 @@ namespace gulliver
 {
 
     /*!
-        Les modèles fournis avec Albireo : un modèle de langage qui sert les trois fonctions
+        Les modèles fournis avec Gulliver : un modèle de langage qui sert les trois fonctions
         de l'application web et le modèle d'embeddings de la recherche dans les documents,
         préparés par le build (tools/gulliver_builtin.cpp, à partir de resources/builtin_models.json)
-        et nommés avec le suffixe "-albireo".
+        et nommés avec le suffixe "-gulliver".
 
         Dans une installation, ils se trouvent dans le dossier "models" des programmes, avec leur
         manifeste builtin.json, que le service lit à chaque démarrage : builtin_manifest_name

@@ -2,7 +2,7 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    L'interface C de common/engine_api.h au-dessus d'gulliver::engine.  Aucune exception ne la
+    L'interface C de common/engine_api.h au-dessus de gulliver::engine.  Aucune exception ne la
     traverse : chacune devient un code de retour et un message.
 */
 

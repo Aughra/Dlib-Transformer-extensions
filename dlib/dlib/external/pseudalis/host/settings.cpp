@@ -31,7 +31,7 @@ namespace pseudalis
         j["language"] = language;
         j["drive_letter"] = drive_letter;
         j["date_order"] = date_order;
-        j["albireo"] = albireo;
+        j["gulliver"] = gulliver;
         j["max_file_mb"] = max_file_mb;
         j["removed_days"] = removed_days;
         j["history_mb"] = history_mb;
@@ -57,7 +57,7 @@ namespace pseudalis
             letter = std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(letter[0]))));
         s.drive_letter = letter;
         s.date_order = j["date_order"].str(d.date_order) == "mdy" ? "mdy" : "dmy";
-        s.albireo = j["albireo"].str(d.albireo) == "off" ? "off" : "auto";
+        s.gulliver = j["gulliver"].str(d.gulliver) == "off" ? "off" : "auto";
         const long long mb = j["max_file_mb"].as_int(d.max_file_mb);
         s.max_file_mb = mb >= 1 && mb <= 2048 ? static_cast<int>(mb) : d.max_file_mb;
         /*

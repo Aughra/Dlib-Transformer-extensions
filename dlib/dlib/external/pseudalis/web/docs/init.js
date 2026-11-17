@@ -3,12 +3,12 @@
 
 /*
     La description de l'interface du service local, affichée par Swagger UI sans réseau, avec (fork pour macOS) le
-    thème, un démarrage rapide rempli avec l'adresse de ce service, et le passage à l'interface d'Albireo quand il
+    thème, un démarrage rapide rempli avec l'adresse de ce service, et le passage à l'interface de Gulliver quand il
     tourne.  Sur macOS, l'administration est ouverte sur le Mac, sans jeton.
 */
 window.addEventListener('load', function () {
   // Le français seulement (fork pour macOS, demande de l'humain du 2026-11-15).
-  const w = { what: 'Interface de programmation', back: '← Retour à l’application', switch: 'API d’Albireo',
+  const w = { what: 'Interface de programmation', back: '← Retour à l’application', switch: 'API de Gulliver',
       quick: 'Démarrage rapide', copy: 'Copier', copied: 'Copié', refused: 'Copie refusée',
       quick_hint: 'Chaque route ne répond que sur ce Mac. Les fichiers voyagent tels quels, dans le corps des ' +
         'requêtes ; ni compte ni jeton ne sont nécessaires.',
@@ -92,8 +92,8 @@ window.addEventListener('load', function () {
       authority = info.drive.folder.replace(/\/drive$/, '') + '/certificates/pseudalis-authority.crt';
       show();
     }
-    // Albireo sur ce Mac : sa propre interface, quand Pseudalis le trouve.
-    const a = info.albireo || {};
+    // Gulliver sur ce Mac : sa propre interface, quand Pseudalis le trouve.
+    const a = info.gulliver || {};
     if (a.found && a.port && (location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       const link = document.getElementById('switch');
       link.href = 'https://localhost:' + a.port + '/docs/';

@@ -29,7 +29,7 @@ endif()
 
 get_filename_component(PSEUDALIS_DLIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 get_filename_component(PSEUDALIS_INCLUDE_DIR "${PSEUDALIS_DLIB_DIR}/.." ABSOLUTE)
-get_filename_component(PSEUDALIS_ALBIREO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../albireo" ABSOLUTE)
+get_filename_component(PSEUDALIS_GULLIVER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../gulliver" ABSOLUTE)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -96,7 +96,7 @@ target_link_libraries(pseudalis_common PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
 
 # Le service, avec le moteur intégré.
 set(PSEUDALIS_SERVICE_SOURCES common/engine_loader.cpp host/main.cpp host/service.cpp host/server.cpp
-   host/settings.cpp host/store.cpp host/vault.cpp host/keys.cpp host/albireo_client.cpp
+   host/settings.cpp host/store.cpp host/vault.cpp host/keys.cpp host/gulliver_client.cpp
    host/http_fetch.cpp host/crypto.cpp host/certificates.cpp
    # Les lecteurs : deux dossiers du dossier de données, surveillés par le service.
    host/drive_folders.cpp ${PSEUDALIS_ENGINE_SOURCES})
@@ -107,8 +107,8 @@ target_compile_definitions(pseudalis-service PRIVATE PSEUDALIS_ENGINE_STATIC ${P
 target_compile_options(pseudalis-service PRIVATE ${PSEUDALIS_WARNINGS})
 
 # L'application web et la documentation de l'interface, à côté du service ; Swagger UI, la feuille de
-# style et le thème de la documentation (fork pour macOS) proviennent de la copie d'Albireo présente dans ce dépôt.
-set(swagger_dir ${PSEUDALIS_ALBIREO_DIR}/web/docs)
+# style et le thème de la documentation (fork pour macOS) proviennent de la copie de Gulliver présente dans ce dépôt.
+set(swagger_dir ${PSEUDALIS_GULLIVER_DIR}/web/docs)
 add_custom_target(pseudalis-web ALL
    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/web ${CMAKE_BINARY_DIR}/bin/web
    COMMAND ${CMAKE_COMMAND} -E copy ${swagger_dir}/swagger-ui-bundle.js ${swagger_dir}/swagger-ui.css

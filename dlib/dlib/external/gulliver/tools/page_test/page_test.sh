@@ -9,20 +9,20 @@
 # touché.  Avant les scénarios, ESLint vérifie les modules de la page (noms non définis, imports réaffectés,
 # déclarations en double) quand npm est là : il s'installe une fois dans build/page-test/lint.
 #
-# Il faut : Albireo construit (build/macos-albireo), Google Chrome, Node.js (Homebrew), et le modèle
+# Il faut : Albireo construit (build/macos-gulliver), Google Chrome, Node.js (Homebrew), et le modèle
 # build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf (PAGE_TEST_MODEL pour un autre).  Le scénario « images » demande en plus
-# le Qwen3-VL 4B et son projecteur, tels que le service les installe (build/albireo-home/models/qwen3-vl-4b-thinking*),
+# le Qwen3-VL 4B et son projecteur, tels que le service les installe (build/gulliver-home/models/qwen3-vl-4b-thinking*),
 # et il est sauté sans eux.  PAGE_TEST_KEEP=1 laisse le service d'essai tourner à la fin.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../../../../.." && pwd)
-BUILD=${PAGE_TEST_BUILD:-$ROOT/build/macos-albireo}
+BUILD=${PAGE_TEST_BUILD:-$ROOT/build/macos-gulliver}
 WORK=$ROOT/build/page-test
 BIN=$WORK/bin HOME_DIR=$WORK/home PORT=18491
 URL=https://localhost:$PORT
 MODEL=${PAGE_TEST_MODEL:-$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf}
-VL4=$ROOT/build/albireo-home/models/qwen3-vl-4b-thinking.gguf
-VL4P=$ROOT/build/albireo-home/models/qwen3-vl-4b-thinking.mmproj.gguf
+VL4=$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.gguf
+VL4P=$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.mmproj.gguf
 
 for need in "$BUILD/bin/gulliver-service" "$MODEL"; do
   [ -e "$need" ] || { echo "missing: $need"; exit 1; }

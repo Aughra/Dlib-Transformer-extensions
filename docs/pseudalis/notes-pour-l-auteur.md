@@ -1,6 +1,6 @@
 # Notes pour l'auteur — Pseudalis sur Mac Apple Silicon
 
-Ces notes viennent d'un fork de Dlib-Transformer-extensions, [Aughra/Dlib-Transformer-extensions](https://github.com/Aughra/Dlib-Transformer-extensions), qui fait tourner Albireo et Pseudalis sur les Mac à puce Apple. Elles recensent ce que le portage révèle sur **Pseudalis** : bugs, tests fragiles, remarques. Les points de dlib et d'Albireo, et ceux qui touchent les deux applications, sont dans les [notes générales](../notes-pour-l-auteur.md) ; cette page y renvoie.
+Ces notes viennent d'un fork de Dlib-Transformer-extensions, [Aughra/Dlib-Transformer-extensions](https://github.com/Aughra/Dlib-Transformer-extensions), qui fait tourner Gulliver et Pseudalis sur les Mac à puce Apple. Elles recensent ce que le portage révèle sur **Pseudalis** : bugs, tests fragiles, remarques. Les points de dlib et de Gulliver, et ceux qui touchent les deux applications, sont dans les [notes générales](../notes-pour-l-auteur.md) ; cette page y renvoie.
 
 Chaque entrée donne l'endroit exact dans l'original, ce qui se passe, comment le reproduire, la correction du fork (avec son commit) ou une suggestion marquée **non testée**, ce qui est vérifié, et une ligne **« Mac ou Windows »** : « aussi sous Windows » quand le défaut est dans du code commun (le fork n'a pas de machine Windows : c'est déduit du code), « propre au Mac » ou « à Linux » sinon.
 
@@ -14,8 +14,8 @@ Chaque entrée donne l'endroit exact dans l'original, ce qui se passe, comment l
 | P1 | Test fragile | `pseudalis/tools/test_linux.sh:202, 315, 328, 330` | Deux étapes attendent un temps fixe au lieu d'attendre le résultat, et échouent sur une machine lente (corrigé dans le fork). | Linux et Mac (script non lancé sous Windows) |
 | 4 | Robustesse | `pseudalis/host/main.cpp:307` | En `--console`, un service lancé en arrière-plan ne s'arrête pas par SIGINT sur macOS (corrigé dans le fork). Voir les [notes générales](../notes-pour-l-auteur.md), entrée 4. | Propre au Mac |
 | 5 | Avertissements | code de dlib employé par Pseudalis | Deux avertissements `-Wunused-but-set-variable` avec Apple clang (corrigés dans le fork). Voir les notes générales, entrée 5. | Code commun, avertissements propres à clang |
-| 21 | Remarque, sécurité | `pseudalis/common/platform.cpp:622, 636, 700` | Hors de Windows, les contrôles de dossiers répondent toujours « oui » ; Pseudalis s'en sert avant de faire confiance au dossier d'Albireo. Voir les notes générales, entrée 21. | Propre à Linux (et au Mac) |
-| P2 | Remarque | `pseudalis/host/albireo_client.h:24` | Le commentaire disait les contrôles d'appartenance « sans vérification » sur macOS, alors que le fork les a rendus réels (entrée 21) ; corrigé. | Propre au fork |
+| 21 | Remarque, sécurité | `pseudalis/common/platform.cpp:622, 636, 700` | Hors de Windows, les contrôles de dossiers répondent toujours « oui » ; Pseudalis s'en sert avant de faire confiance au dossier de Gulliver. Voir les notes générales, entrée 21. | Propre à Linux (et au Mac) |
+| P2 | Remarque | `pseudalis/host/gulliver_client.h:24` | Le commentaire disait les contrôles d'appartenance « sans vérification » sur macOS, alors que le fork les a rendus réels (entrée 21) ; corrigé. | Propre au fork |
 
 Ce que le fork change dans Pseudalis par choix (plus de jeton d'administration, français par défaut, application réorganisée) n'est pas un défaut de l'original : c'est dans les [notes de version](../../dlib/dlib/external/pseudalis/web/changelog.md) et le [tableau des différences](differences-mac-windows.md).
 
@@ -46,9 +46,9 @@ Ce que le fork change dans Pseudalis par choix (plus de jeton d'administration, 
 
 ## 2. Remarques
 
-### P2. Un commentaire de `albireo_client.h` décrivait des contrôles qui vérifient désormais
+### P2. Un commentaire de `gulliver_client.h` décrivait des contrôles qui vérifient désormais
 
-- **Où** : `dlib/dlib/external/pseudalis/host/albireo_client.h` (ligne 24 dans le fork), commentaire de la classe `albireo_client` : « Sur macOS, les contrôles d'appartenance employés ici sont actuellement des fonctions sans vérification ».
+- **Où** : `dlib/dlib/external/pseudalis/host/gulliver_client.h` (ligne 24 dans le fork), commentaire de la classe `gulliver_client` : « Sur macOS, les contrôles d'appartenance employés ici sont actuellement des fonctions sans vérification ».
 - **Ce qui se passe** : c'était vrai de l'original hors de Windows (entrée 21 des notes générales). Depuis les commits [4c0947b](https://github.com/Aughra/Dlib-Transformer-extensions/commit/4c0947b) et [0d4946d](https://github.com/Aughra/Dlib-Transformer-extensions/commit/0d4946d) du fork, `owned_by_system`, `secure_folder` et `folder_admin_only` vérifient le propriétaire, les droits POSIX et les ACL sur macOS ; le commentaire est resté.
 - **Corrigé dans le fork** (2026-11-15, Pseudalis 2.0.0) : le commentaire dit maintenant que ces contrôles vérifient le propriétaire, les droits POSIX et les ACL. Rien à changer dans l'original, dont les fonctions ne vérifient en effet rien hors de Windows. Vérifié : `common/platform.cpp` de Pseudalis appelle bien `acl_get_link_np`.
 - **Mac ou Windows** : propre au fork.

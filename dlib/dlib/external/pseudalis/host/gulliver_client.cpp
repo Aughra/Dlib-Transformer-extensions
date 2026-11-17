@@ -2,7 +2,7 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 #include <dlib/external/httplib/httplib.h>
 
-#include "albireo_client.h"
+#include "gulliver_client.h"
 
 #include <cstdlib>
 
@@ -47,47 +47,47 @@ namespace pseudalis
         }
     }
 
-    albireo_client::albireo_client() {}
+    gulliver_client::gulliver_client() {}
 
-    std::string albireo_client::albireo_data_dir()
+    std::string gulliver_client::gulliver_data_dir()
     {
-        const char* home = std::getenv("ALBIREO_HOME");
+        const char* home = std::getenv("GULLIVER_HOME");
         if (home && *home) return dir_exists(home) ? std::string(home) : std::string();
         const char* user = std::getenv("HOME");
-        const std::string dir = user ? join_path(user, ".local/share/albireo") : std::string();
+        const std::string dir = user ? join_path(user, ".local/share/gulliver") : std::string();
         return dir_exists(dir) ? dir : std::string();
     }
 
-    void albireo_client::set_enabled(bool on)
+    void gulliver_client::set_enabled(bool on)
     {
         std::lock_guard<std::mutex> lock(m_);
         enabled_ = on;
         checked_ = 0;
     }
 
-    bool albireo_client::probe(int& port, std::string& ca, std::string& model, std::string& reason)
+    bool gulliver_client::probe(int& port, std::string& ca, std::string& model, std::string& reason)
     {
         port = 8443;
         ca.clear();
         model.clear();
-        const std::string dir = albireo_data_dir();
+        const std::string dir = gulliver_data_dir();
         if (dir.empty())
         {
-            reason = "Albireo is not installed";
+            reason = "Gulliver is not installed";
             return false;
         }
         const std::string settings_path = join_path(dir, "settings.json");
-        ca = join_path(join_path(dir, "certificates"), "albireo-authority.crt");
+        ca = join_path(join_path(dir, "certificates"), "gulliver-authority.crt");
         if (!file_exists(ca))
         {
-            reason = "the local authority of Albireo is missing";
+            reason = "the local authority of Gulliver is missing";
             return false;
         }
         // Les contrôles vérifient les propriétaires, les permissions POSIX et les ACL étendues.
         if (!folder_admin_only(dir) || !folder_admin_only(join_path(dir, "certificates")) || !owned_by_system(ca)
             || (file_exists(settings_path) && !owned_by_system(settings_path)))
         {
-            reason = "the data folder of Albireo is not protected: its pictures are not described";
+            reason = "the data folder of Gulliver is not protected: its pictures are not described";
             return false;
         }
         std::string text;
@@ -102,7 +102,7 @@ namespace pseudalis
         json models;
         if (!r || r->status != 200 || !json::parse(r->body, models))
         {
-            reason = "Albireo does not answer on port " + std::to_string(port);
+            reason = "Gulliver does not answer on port " + std::to_string(port);
             return false;
         }
         std::string any;
@@ -111,24 +111,24 @@ namespace pseudalis
             bool image = false;
             for (const json& i : m["inputs"].elements()) image = image || i.str() == "image";
             if (!image) continue;
-            if (m["id"].str() == "albireo-general") model = m["id"].str();
+            if (m["id"].str() == "gulliver-general") model = m["id"].str();
             if (any.empty()) any = m["id"].str();
         }
         if (model.empty()) model = any;
         if (model.empty())
         {
-            reason = "no model of Albireo reads images";
+            reason = "no model of Gulliver reads images";
             return false;
         }
         reason.clear();
         return true;
     }
 
-    bool albireo_client::refresh(std::string& reason)
+    bool gulliver_client::refresh(std::string& reason)
     {
         /*
             L'état est vérifié de nouveau une fois par minute, par un seul appelant à la fois et
-            hors du verrou, pour qu'un Albireo lent ne retienne jamais les appelants de status() :
+            hors du verrou, pour qu'un Gulliver lent ne retienne jamais les appelants de status() :
             les autres reçoivent entre-temps l'état en place.
         */
         {
@@ -140,7 +140,7 @@ namespace pseudalis
             }
             if (checking_ || (checked_ && now_unix() - checked_ < 60))
             {
-                reason = checked_ ? reason_ : std::string("Albireo is being looked for");
+                reason = checked_ ? reason_ : std::string("Gulliver is being looked for");
                 return found_;
             }
             checking_ = true;
@@ -168,7 +168,7 @@ namespace pseudalis
         return found;
     }
 
-    json albireo_client::status()
+    json gulliver_client::status()
     {
         std::string reason;
         const bool ok = refresh(reason);
@@ -179,9 +179,9 @@ namespace pseudalis
         j["port"] = port_;
         j["model"] = ok ? model_ : std::string();
         j["reason"] = reason;
-        // L'accès d'Albireo depuis le réseau de la maison, lu dans ses réglages, pour le sélecteur de la page vue
+        // L'accès de Gulliver depuis le réseau de la maison, lu dans ses réglages, pour le sélecteur de la page vue
         // depuis un autre appareil (fork pour macOS).
-        const std::string dir = albireo_data_dir();
+        const std::string dir = gulliver_data_dir();
         std::string text;
         json settings;
         const bool read = !dir.empty() && read_file(join_path(dir, "settings.json"), text, 1u << 20)
@@ -192,12 +192,12 @@ namespace pseudalis
         return j;
     }
 
-    std::string albireo_client::describe(const std::string& bytes, const std::string& media_type,
+    std::string gulliver_client::describe(const std::string& bytes, const std::string& media_type,
                                          const std::string& language, std::string& error)
     {
         if (media_type != "image/png" && media_type != "image/jpeg")
         {
-            error = "Albireo reads PNG and JPEG pictures only";
+            error = "Gulliver reads PNG and JPEG pictures only";
             return std::string();
         }
         if (bytes.size() > (15u << 20))
@@ -256,20 +256,20 @@ namespace pseudalis
         json answer;
         if (!r)
         {
-            error = "Albireo does not answer";
+            error = "Gulliver does not answer";
             std::lock_guard<std::mutex> lock(m_);
             checked_ = 0;
             return std::string();
         }
         if (r->status != 200 || !json::parse(r->body, answer))
         {
-            error = "Albireo answered " + std::to_string(r->status);
+            error = "Gulliver answered " + std::to_string(r->status);
             return std::string();
         }
         const json& choices = answer["choices"];
         const std::string description =
             choices.size() > 0 ? without_reasoning(choices.elements()[0]["message"]["content"].str()) : std::string();
-        if (description.empty()) error = "Albireo gave no description";
+        if (description.empty()) error = "Gulliver gave no description";
         return description;
     }
 }

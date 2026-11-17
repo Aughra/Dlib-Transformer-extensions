@@ -589,7 +589,7 @@ async function updateMemory(force) {
         Math.ceil(words * 3.2) + 32, signal);
       if (await changed()) return;
       const delta = groundedFacts(r.text, read, sensitive);
-      console.info('Albireo: memory: ' + delta.proposed + ' facts proposed, ' + delta.discarded
+      console.info('Gulliver: memory: ' + delta.proposed + ' facts proposed, ' + delta.discarded
         + ' left out, unsupported by the words of the user');
       /*
           Un fait qui en remplace un de la mémoire prend sa place, un fait redit passe à la fin avec les nouveaux, pour

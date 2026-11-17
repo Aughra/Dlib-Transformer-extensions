@@ -13,10 +13,10 @@
 #include <string>
 #include <unistd.h>
 #include <vector>
-#include <dlib/external/albireo/engine/model_file.h>
-#include <dlib/external/albireo/engine/qkernels.h>
-#include <dlib/external/albireo/engine/thread_pool.h>
-using namespace albireo;
+#include <dlib/external/gulliver/engine/model_file.h>
+#include <dlib/external/gulliver/engine/qkernels.h>
+#include <dlib/external/gulliver/engine/thread_pool.h>
+using namespace gulliver;
 typedef std::chrono::steady_clock clk;
 static double ms(clk::time_point a) { return std::chrono::duration<double, std::milli>(clk::now() - a).count(); }
 

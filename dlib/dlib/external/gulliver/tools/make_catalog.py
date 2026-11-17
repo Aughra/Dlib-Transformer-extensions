@@ -1,7 +1,7 @@
 # Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 # License: Boost Software License   See LICENSE.txt for the full license.
 """
-Writes the model catalog of Albireo from the list below and from the Hugging Face hub.
+Writes the model catalog of Gulliver from the list below and from the Hugging Face hub.
 
     python3 make_catalog.py <output catalog.json>
 
@@ -51,19 +51,19 @@ MODELS = [
         "license": "Apache-2.0",
         "description": {
             "en": "Multimodal assistant that reads images and text and reasons step by step before answering: "
-                  "conversation, documents, screenshots, diagrams, code and security. Albireo installs it by "
+                  "conversation, documents, screenshots, diagrams, code and security. Gulliver installs it by "
                   "default, for computers with 8 GB of memory.",
             "fr": "Assistant multimodal qui lit les images et le texte et raisonne étape par étape avant de "
-                  "répondre : discussion, documents, captures d'écran, schémas, code et sécurité. Albireo "
+                  "répondre : discussion, documents, captures d'écran, schémas, code et sécurité. Gulliver "
                   "l'installe par défaut, pour les ordinateurs dotés de 8 Go de mémoire.",
             "de": "Multimodaler Assistent, der Bilder und Text liest und vor der Antwort Schritt für Schritt "
-                  "nachdenkt: Gespräche, Dokumente, Bildschirmfotos, Diagramme, Code und Sicherheit. Albireo "
+                  "nachdenkt: Gespräche, Dokumente, Bildschirmfotos, Diagramme, Code und Sicherheit. Gulliver "
                   "installiert ihn standardmäßig, für Computer mit 8 GB Arbeitsspeicher.",
             "it": "Assistente multimodale che legge immagini e testo e ragiona passo dopo passo prima di "
-                  "rispondere: conversazione, documenti, schermate, schemi, codice e sicurezza. Albireo lo installa "
+                  "rispondere: conversazione, documenti, schermate, schemi, codice e sicurezza. Gulliver lo installa "
                   "per impostazione predefinita, per computer con 8 GB di memoria.",
             "es": "Asistente multimodal que lee imágenes y texto y razona paso a paso antes de responder: "
-                  "conversación, documentos, capturas de pantalla, diagramas, código y seguridad. Albireo lo "
+                  "conversación, documentos, capturas de pantalla, diagramas, código y seguridad. Gulliver lo "
                   "instala por defecto, para ordenadores con 8 GB de memoria.",
         },
     },
@@ -119,20 +119,20 @@ MODELS = [
         "description": {
             "en": "Embedding model of the document search. It turns the passages of the attached documents and the "
                   "questions into vectors, in more than 100 languages, so that the passages answering a question are "
-                  "found by their meaning. Albireo installs it in every case, the search relies on it.",
+                  "found by their meaning. Gulliver installs it in every case, the search relies on it.",
             "fr": "Modèle d'embeddings de la recherche documentaire. Il convertit en vecteurs les passages des "
                   "documents joints et les questions, dans plus de 100 langues, pour retrouver par leur sens les "
-                  "passages qui répondent à une question. Albireo l'installe dans tous les cas, la recherche en "
+                  "passages qui répondent à une question. Gulliver l'installe dans tous les cas, la recherche en "
                   "dépend.",
             "de": "Embedding-Modell der Dokumentsuche. Es wandelt die Abschnitte der angehängten Dokumente und die "
                   "Fragen in mehr als 100 Sprachen in Vektoren um, damit die Abschnitte, die eine Frage beantworten, "
-                  "über ihre Bedeutung gefunden werden. Albireo installiert es in jedem Fall, die Suche beruht darauf.",
+                  "über ihre Bedeutung gefunden werden. Gulliver installiert es in jedem Fall, die Suche beruht darauf.",
             "it": "Modello di embedding della ricerca nei documenti. Converte in vettori i passaggi dei documenti "
                   "allegati e le domande, in più di 100 lingue, per ritrovare in base al significato i passaggi che "
-                  "rispondono a una domanda. Albireo lo installa in ogni caso, la ricerca si basa su di esso.",
+                  "rispondono a una domanda. Gulliver lo installa in ogni caso, la ricerca si basa su di esso.",
             "es": "Modelo de embeddings de la búsqueda en documentos. Convierte en vectores los pasajes de los "
                   "documentos adjuntos y las preguntas, en más de 100 idiomas, para encontrar por su significado los "
-                  "pasajes que responden a una pregunta. Albireo lo instala en todos los casos, la búsqueda depende "
+                  "pasajes que responden a una pregunta. Gulliver lo instala en todos los casos, la búsqueda depende "
                   "de él.",
         },
     },

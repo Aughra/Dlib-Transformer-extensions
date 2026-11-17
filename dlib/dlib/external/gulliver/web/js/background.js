@@ -375,7 +375,7 @@ export async function warmBeginning(c) {
     limit = api.limitedSignal(abort.signal, backgroundTimeout);
     await api.postJSON('/v1/chat/completions', body, limit.signal);
   } catch (e) {
-    if (!abort.signal.aborted) console.info('Albireo: the beginning of a discussion was not read ahead', e);
+    if (!abort.signal.aborted) console.info('Gulliver: the beginning of a discussion was not read ahead', e);
   } finally {
     if (limit) limit.done();
     if (warmups.get(c.id) === abort) warmups.delete(c.id);

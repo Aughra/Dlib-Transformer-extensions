@@ -248,7 +248,7 @@ int main()
         CHECK(res["report"]["total"].as_int() >= 4);
         /* Une description qui nomme telle quelle une personne du texte, que sa lecture seule laisse
            passer : Word la demande avant que son texte soit lu, et le document est protégé à
-           nouveau avec ce que son texte a appris au détecteur, Albireo n'étant interrogé qu'une fois. */
+           nouveau avec ce que son texte a appris au détecteur, Gulliver n'étant interrogé qu'une fois. */
         description_given = "Marchand in her garden, beside the bench";
         seen_pictures.clear();
         CHECK(process(e, "anonymize", "lettre.docx", docx, res, out));

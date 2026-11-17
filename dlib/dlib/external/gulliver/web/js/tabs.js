@@ -92,7 +92,7 @@ function settingChanged(key) {
 
 /*
     Applique la langue de l'interface après un changement du réglage ici ou dans un autre onglet,
-    ou de la langue d'Albireo.  Les textes sont redessinés, et la mémoire est écrite dans la
+    ou de la langue de Gulliver.  Les textes sont redessinés, et la mémoire est écrite dans la
     nouvelle langue à sa prochaine mise à jour.  force les redessine même quand la langue reste.
 */
 export async function languageChanged(force) {

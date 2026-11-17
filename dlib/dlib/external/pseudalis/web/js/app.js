@@ -134,8 +134,8 @@
       box.appendChild(pill(t('s_engine'), (info.engine && info.engine.variant) || '?'));
       const d = info.drive || {};
       box.appendChild(pill(t('s_drive'), d.mounted ? d.letter + ':' : t('s_drive_off'), !!d.mounted));
-      const a = info.albireo || {};
-      box.appendChild(pill(t('s_albireo'), a.found ? a.model : t('s_albireo_off'), !!a.found));
+      const a = info.gulliver || {};
+      box.appendChild(pill(t('s_gulliver'), a.found ? a.model : t('s_gulliver_off'), !!a.found));
       box.appendChild(pill(t('s_records'), String(info.records || 0)));
       const h = info.history || {};
       if (h.limit) box.appendChild(pill(t('s_history'), size(h.bytes || 0) + ' / ' + size(h.limit)));
@@ -773,7 +773,7 @@
     document.getElementById('set-max').value = s.max_file_mb;
     document.getElementById('set-removed').value = s.removed_days;
     document.getElementById('set-history').value = s.history_mb;
-    document.getElementById('set-albireo').checked = s.albireo !== 'off';
+    document.getElementById('set-gulliver').checked = s.gulliver !== 'off';
     document.getElementById('set-tags').checked = s.tags !== false;
     document.getElementById('set-lan').checked = s.lan === true;
     document.getElementById('set-lan-port').value = s.lan_port;
@@ -782,7 +782,7 @@
   // Les réglages que la carte affiche, par leur nom dans l'interface, avec la clé de leur libellé.
   const settingLabels = {
     drive_letter: 'set_drive', date_order: 'set_dates', max_file_mb: 'set_max',
-    removed_days: 'set_removed', history_mb: 'set_history', albireo: 'set_albireo',
+    removed_days: 'set_removed', history_mb: 'set_history', gulliver: 'set_gulliver',
     tags: 'set_tags', lan: 'set_lan', lan_port: 'set_lan_port'
   };
 
@@ -799,7 +799,7 @@
       max_file_mb: wholeNumber('set-max'),
       removed_days: wholeNumber('set-removed'),
       history_mb: wholeNumber('set-history'),
-      albireo: document.getElementById('set-albireo').checked ? 'auto' : 'off',
+      gulliver: document.getElementById('set-gulliver').checked ? 'auto' : 'off',
       tags: document.getElementById('set-tags').checked,
       lan: document.getElementById('set-lan').checked,
       lan_port: wholeNumber('set-lan-port')

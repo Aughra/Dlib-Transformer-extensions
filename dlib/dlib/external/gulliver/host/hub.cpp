@@ -1,4 +1,4 @@
-// Fork pour macOS de Dlib-Transformer-extensions (Albireo pour Apple Silicon).
+// Fork pour macOS de Dlib-Transformer-extensions (Gulliver pour Apple Silicon).
 // License: Boost Software License   See LICENSE.txt for the full license.
 #include "hub.h"
 
@@ -22,11 +22,11 @@ namespace gulliver
         const std::set<std::string> moe_architectures = { "mixtral", "granitemoe", "qwen3moe", "qwen3vlmoe", "qwen35moe",
             "lfm2moe" };
         // Les architectures dont le moteur lit les images avec un projecteur : qwen3vl_merger pour Qwen3-VL, et
-        // qwen35 depuis Albireo 4.13.0 du fork (qwen35moe, dont aucun projecteur n'a encore été essayé, attend) ;
-        // gemma4v pour Gemma 4 depuis Albireo 4.16.0 du fork, gemma3 pour Gemma 3 depuis Albireo 4.28.0.
+        // qwen35 depuis Gulliver 4.13.0 du fork (qwen35moe, dont aucun projecteur n'a encore été essayé, attend) ;
+        // gemma4v pour Gemma 4 depuis Gulliver 4.16.0 du fork, gemma3 pour Gemma 3 depuis Gulliver 4.28.0.
         const std::set<std::string> vision_architectures = { "qwen3vl", "qwen3vlmoe", "qwen35", "gemma4", "gemma3" };
-        // Les architectures dont les passes restent sur le processeur : aucune depuis Albireo 4.26.0 du fork, où les
-        // étapes de Gemma 4 vont au GPU (LFM2 depuis Albireo 4.20.0, LFM2-MoE depuis 4.21.0, Gemma 3 depuis 4.22.0 ;
+        // Les architectures dont les passes restent sur le processeur : aucune depuis Gulliver 4.26.0 du fork, où les
+        // étapes de Gemma 4 vont au GPU (LFM2 depuis Gulliver 4.20.0, LFM2-MoE depuis 4.21.0, Gemma 3 depuis 4.22.0 ;
         // un modèle dont la largeur n'est pas un multiple de 256, comme Gemma 3 1B, reste sur le processeur, ce que le
         // moteur décide au chargement).
         const std::set<std::string> processor_architectures = {};
@@ -102,7 +102,7 @@ namespace gulliver
             return q == "Q4_K_M" || q == "Q4_K_S" || q == "Q4_K" || q == "Q6_K";
         }
 
-        // Un dépôt de Gemma 4 à mélange d'experts (26B-A4B), que le moteur lit sur le processeur depuis Albireo 4.29.0 du
+        // Un dépôt de Gemma 4 à mélange d'experts (26B-A4B), que le moteur lit sur le processeur depuis Gulliver 4.29.0 du
         // fork : son nom le dit, l'API ne donnant pas le nombre d'experts.
         bool gemma4_experts(const std::string& arch, const std::string& repo)
         {
@@ -214,7 +214,7 @@ namespace gulliver
                 c["reason"] = "format de poids " + (q.empty() ? std::string("inconnu") : q) + " non lu par le moteur";
             }
             for (const auto& kv : c.items()) o[kv.first] = kv.second;
-            // Les mélanges d'experts écrivent aussi sur le GPU depuis Albireo 4.7.0 du fork.
+            // Les mélanges d'experts écrivent aussi sur le GPU depuis Gulliver 4.7.0 du fork.
             // Ceux de Gemma 4 restent sur le processeur.
             o["gpu"] = c["compatible"].as_bool(false) && quant_gpu(q) && !processor_architectures.count(arch)
                 && !gemma4_experts(arch, repo);

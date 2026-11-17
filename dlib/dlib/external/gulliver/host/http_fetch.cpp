@@ -66,7 +66,7 @@ namespace gulliver
             "network sends one";
 
         // Indique si un Content-Type désigne une page web, ce qu'un serveur de fichiers n'envoie jamais pour les
-        // fichiers d'Albireo.
+        // fichiers de Gulliver.
         bool web_page(const std::string& content_type)
         {
             std::string type = content_type.substr(0, content_type.find(';'));

@@ -137,7 +137,7 @@ function copyBySelection(text) {
 let storageWarned = 0;
 
 export function storageFailed(e) {
-  console.warn('Albireo: the database of the browser refused a change', e);
+  console.warn('Gulliver: the database of the browser refused a change', e);
   if (Date.now() - storageWarned < 15000) return;
   storageWarned = Date.now();
   toast(t(e && e.name === 'QuotaExceededError' ? 'errStorageFull' : 'errStorage'), true);

@@ -259,7 +259,7 @@ namespace pseudalis
         };
 
         /*
-            La clé de séance du relais d'Albireo (fork pour macOS, 2026-11-16) : tant que cet objet vit, les
+            La clé de séance du relais de Gulliver (fork pour macOS, 2026-11-16) : tant que cet objet vit, les
             protections que fait ce thread prennent le pseudonymiseur de séance du moteur, sous une clé tirée au
             hasard quand le moteur est créé, gardée en mémoire seulement et jamais écrite.  Une même valeur reçoit
             le même pseudonyme d'un texte à l'autre tant que le moteur vit (les messages d'une discussion envoyée

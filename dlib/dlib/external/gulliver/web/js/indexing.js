@@ -326,7 +326,7 @@ async function describeImage(projectId, imageId) {
             const r = await backgroundChat(describeMessages(url, img.name), 1024, job.signal);
             text = cleanDescription(r.text);
           } catch (e) {
-            console.warn('Albireo: the description of an image failed', e);
+            console.warn('Gulliver: the description of an image failed', e);
             text = '';
           }
         }

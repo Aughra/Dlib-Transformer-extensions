@@ -1,4 +1,4 @@
-// Fork Mac de Dlib-Transformer-extensions (Albireo pour macOS sur puce Apple).
+// Fork Mac de Dlib-Transformer-extensions (Gulliver pour macOS sur puce Apple).
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
@@ -176,7 +176,7 @@ const schemas = {
     box(460, 80, 120, 56, 'Internet', 's-soft') +
     text(300, 170, 'vide : les variables HTTPS_PROXY ; « none » : en direct', 's-f'), 190),
   relay: schema('Le relais : la question part pseudonymisée, la réponse revient en clair',
-    box(16, 62, 120, 56, 'Albireo', 's-blue', 'la discussion') + arrow(136, 90, 236, 90, 'texte') +
+    box(16, 62, 120, 56, 'Gulliver', 's-blue', 'la discussion') + arrow(136, 90, 236, 90, 'texte') +
     box(236, 62, 128, 56, 'Pseudalis', 's-gold', 'clé de séance') + arrow(364, 90, 464, 90, 'pseudonymes') +
     box(464, 62, 120, 56, 'Moteur', 's-soft', 'Claude, Ollama…') +
     `<line x1="524" y1="118" x2="524" y2="176" class="s-line"/>` +
@@ -217,7 +217,7 @@ const schemas = {
     text(300, 198, 'au-delà du plafond, les plus anciennes partent d’abord', 's-f'), 215),
   library_dir: schema('La bibliothèque : une étagère que le service consulte',
     box(20, 70, 170, 64, 'Bibliothèque', 's-gold', 'vos fichiers .gguf') + arrow(190, 102, 330, 102, 'clone') +
-    box(330, 70, 150, 64, 'Albireo', 's-blue', 'modèles installés') +
+    box(330, 70, 150, 64, 'Gulliver', 's-blue', 'modèles installés') +
     box(510, 70, 70, 64, 'HF', 's-soft') + arrow(510, 102, 480, 102) +
     text(300, 172, 'lue sans réseau, jamais modifiée ; « Rafraîchir depuis le Mac » en donne la liste', 's-f') +
     text(300, 192, 'une copie par clone APFS : aucune place prise sur le même disque', 's-f'), 210)
@@ -274,7 +274,7 @@ const groups = [
   },
   {
     title: 'Accès depuis le réseau',
-    note: 'Pour ouvrir Albireo depuis un téléphone ou une tablette de la maison.',
+    note: 'Pour ouvrir Gulliver depuis un téléphone ou une tablette de la maison.',
     items: ['lan', 'lan_port', 'port']
   },
   {
@@ -340,7 +340,7 @@ const items = {
       "lance un thread par cœur. Pour écrire un token, il n’emploie que l’équipe rapide, car attendre les cœurs lents " +
       "ferait perdre du temps ; pour lire un long prompt sur le processeur, il les prend tous. Avec le GPU allumé, " +
       "ce réglage compte moins : le GPU fait la plus grosse part.",
-    owl: "La thread pool d’Albireo crée N threads (0 = cœurs physiques, sysctl hw.physicalcpu) qui attendent en spin " +
+    owl: "La thread pool d’Gulliver crée N threads (0 = cœurs physiques, sysctl hw.physicalcpu) qui attendent en spin " +
       "2 ms au plus entre deux passes. Sur Apple Silicon, les passes de moins de 24 tokens tournent sur une « fast team » " +
       "limitée à hw.perflevel0.physicalcpu threads (cœurs P), pour éviter que la barrière de fin de passe n’attende un " +
       "cœur E. Les produits des prompts sur le processeur passent par Accelerate (cblas_sgemm sur le coprocesseur " +
@@ -452,7 +452,7 @@ const items = {
     restart: true,
     effect: 'Ouvre la page aux appareils de la maison (http, port réseau ci-dessous), sans mot de passe.',
     principle: 'Le service ouvre une seconde porte, sur l’adresse du Mac dans ton réseau, pour le téléphone ou la tablette.',
-    pros: ['Albireo depuis le canapé, sur le téléphone ou la tablette, sans rien installer.',
+    pros: ['Gulliver depuis le canapé, sur le téléphone ou la tablette, sans rien installer.',
       'Le Mac fait tout le calcul : le téléphone n’affiche que la page.'],
     cons: ['Pas de mot de passe : tout appareil de ton Wi-Fi peut s’en servir et tout régler.',
       'En http : le trafic n’est pas chiffré sur le Wi-Fi.',
@@ -467,7 +467,7 @@ const items = {
       "sauf si la box redirige ce port depuis Internet (elle ne le fait pas d’elle-même).",
     marmot: "C’est une deuxième porte d’entrée, côté jardin, sans digicode : n’importe qui dans le jardin peut " +
       "entrer. Chez toi, ce sont ta famille et tes invités.",
-    bee: "Un invité, une télé connectée ou un objet piraté de ton Wi-Fi peut utiliser Albireo, changer ses " +
+    bee: "Un invité, une télé connectée ou un objet piraté de ton Wi-Fi peut utiliser Gulliver, changer ses " +
       "réglages ou effacer des modèles et des documents. Sur un Wi-Fi partagé ou public, ne l’allume pas."
   },
   lan_port: {
@@ -479,10 +479,10 @@ const items = {
     pros: ['Séparé du port du Mac : on peut couper l’un sans toucher à l’autre.'],
     cons: ['Changer le port change l’adresse à taper sur chaque appareil.'],
     normal: "Le Mac a une adresse sur ton réseau (par exemple 192.168.1.12), et chaque service y a son numéro de porte. " +
-      "Albireo utilise 8444 par défaut pour les autres appareils. On tape donc « http://adresse-du-mac:8444/ » sur le téléphone.",
+      "Gulliver utilise 8444 par défaut pour les autres appareils. On tape donc « http://adresse-du-mac:8444/ » sur le téléphone.",
     owl: "Entier de 1024 à 65535, différent du port HTTPS du Mac. Le service vérifie qu’il peut lier 0.0.0.0 sur ce port " +
       "avant d’enregistrer (409 port_unavailable sinon). macOS peut demander, au premier lancement, d’autoriser les " +
-      "connexions entrantes pour albireo-service (pare-feu applicatif).",
+      "connexions entrantes pour gulliver-service (pare-feu applicatif).",
     marmot: "Ton immeuble a une adresse, et chaque appartement un numéro. Les copains doivent connaître les deux pour " +
       "sonner chez toi. Changer de numéro, c’est leur redonner la nouvelle adresse.",
     bee: "Un port déjà pris par un autre programme est refusé. Si tu le changes, les favoris enregistrés sur les " +
@@ -497,7 +497,7 @@ const items = {
     pros: ['Utile seulement si un autre programme veut ce numéro.'],
     cons: ['Les conversations sont rangées par adresse dans le navigateur : à la nouvelle adresse, la page est vide.',
       'Il faut mettre à jour les favoris et les outils qui appellent l’API.'],
-    normal: "C’est la porte d’Albireo sur le Mac lui-même. La page que tu regardes y est servie. Le navigateur range " +
+    normal: "C’est la porte d’Gulliver sur le Mac lui-même. La page que tu regardes y est servie. Le navigateur range " +
       "les conversations selon l’adresse exacte : en changeant de port, tu arrives sur une page neuve, et les anciennes " +
       "conversations restent à l’ancienne adresse (exporte-les d’abord depuis l’onglet Données).",
     owl: "Serveur httplib SSLServer lié à 127.0.0.1:port, certificat émis par l’autorité locale du dossier de données. " +
@@ -517,7 +517,7 @@ const items = {
     pros: ['Rien ne sort du Mac : confidentialité totale.', 'Aucun téléchargement surprise.'],
     cons: ['Pas de modèles qui ne sont pas déjà sur le Mac, pas de bouton Web.',
       'Un téléchargement en cours s’arrête (sa progression est gardée).'],
-    normal: "Albireo calcule déjà tout sur le Mac. Il ne va sur Internet que pour trois choses : le catalogue des " +
+    normal: "Gulliver calcule déjà tout sur le Mac. Il ne va sur Internet que pour trois choses : le catalogue des " +
       "modèles, leur téléchargement, et la recherche du bouton Web. Hors ligne, il n’y va plus du tout. On peut " +
       "toujours charger un modèle de la bibliothèque du Mac (« Rafraîchir depuis le Mac », section « Sur ce Mac »), " +
       "importer un modèle comme fichier, ou restaurer celui dont tous les fichiers sont vérifiés dans la réserve.",
@@ -527,7 +527,7 @@ const items = {
       "réseau, même si le réglage change pendant le travail. Le dossier d’import et la bibliothèque du Mac " +
       "(GET /gulliver/v1/library) restent lus. Remis à faux, http_restore() " +
       "rouvre les transferts.",
-    marmot: "C’est le mode avion de ton téléphone, mais pour Albireo. Tout ce qui est déjà sur le Mac marche toujours ; " +
+    marmot: "C’est le mode avion de ton téléphone, mais pour Gulliver. Tout ce qui est déjà sur le Mac marche toujours ; " +
       "seulement, plus rien ne part vers Internet, et rien n’en vient.",
     bee: "Oublié allumé, le catalogue ne se met plus à jour et le bouton Web répond « hors ligne ». Si la réserve " +
       "ne contient pas tous les fichiers vérifiés, il faut les importer ou revenir en ligne."
@@ -611,7 +611,7 @@ const items = {
       "de clés, charge chaque tranche de 32 positions une fois en mémoire de threadgroup (8 valeurs par thread, une " +
       "échelle par groupe) et calcule scores et sorties par simdgroup_matrix 8 x 8 ; la fenêtre glissante de Gemma 3 " +
       "et 4 y est appliquée. Mesures alternées (bench_runtime, " +
-      "clés q8, 2B, Albireo 4.11.0) : 4 096 tokens 423 à 424 tokens/s contre 170 à 177 sur le processeur ; 8 192 tokens " +
+      "clés q8, 2B, Gulliver 4.11.0) : 4 096 tokens 423 à 424 tokens/s contre 170 à 177 sur le processeur ; 8 192 tokens " +
       "295 contre 115 à 117 ; 16 384 tokens 171 contre 67.",
     marmot: "C’est comme un livreur qui a appris à charger tout un carton au lieu d’un colis à la fois : même pour les " +
       "longues tournées, il reste le plus rapide. Ce réglage dit jusqu’où on l’envoie ; par défaut, partout.",
@@ -688,7 +688,7 @@ const items = {
     control: { kind: 'text', placeholder: 'vide : le dossier « library » des données du service' },
     restart: false,
     effect: 'Le dossier de fichiers .gguf que « Rafraîchir depuis le Mac » liste dans l’onglet Modèles, pour les charger sans réseau.',
-    principle: 'Des modèles déjà présents sur le Mac, venus d’ailleurs qu’Albireo, deviennent utilisables même sans Hugging Face.',
+    principle: 'Des modèles déjà présents sur le Mac, venus d’ailleurs qu’Gulliver, deviennent utilisables même sans Hugging Face.',
     pros: ['Un modèle se charge sans Internet, en quelques secondes : le temps de vérifier son empreinte.',
       'La copie ne prend pas de place sur le même disque (clone APFS), et le fichier reste dans la bibliothèque.',
       'Chaque modèle vient avec son projecteur d’images, quand le dossier le contient.'],
@@ -696,7 +696,7 @@ const items = {
       'Le service refuse un dossier que d’autres comptes du Mac peuvent modifier.'],
     normal: "Dépose des fichiers .gguf dans ce dossier avec le Finder, puis clique « Rafraîchir depuis le Mac » dans " +
       "l’onglet Modèles : la section « Sur ce Mac » les liste, avec leur architecture, leur taille et le projecteur " +
-      "qui va avec chacun. « Charger dans Albireo » en fait une copie dans le dossier des modèles. Le service ne " +
+      "qui va avec chacun. « Charger dans Gulliver » en fait une copie dans le dossier des modèles. Le service ne " +
       "déplace, ne renomme et n’efface jamais rien dans la bibliothèque. Vide : <données>/library, créé à la première " +
       "lecture. Un autre dossier doit exister et être nommé par son chemin complet.",
     owl: "library_dir vide : <données>/library (effective_library_dir), créé par make_dirs. GET /gulliver/v1/library : " +
@@ -704,7 +704,7 @@ const items = {
       "sous-dossier, est ouvert par link_free_file (aucun lien, un seul nom) et décrit par describe_gguf ; les " +
       "projecteurs sont appariés par pair_projectors, comme un import. POST /gulliver/v1/library/load {file} : " +
       "model_manager::import_files(fichier et projecteur, move = false), SHA-256 par CommonCrypto, copie par " +
-      "fclonefileat. « Déjà dans Albireo » : un modèle installé de même taille et de même architecture ; l’import " +
+      "fclonefileat. « Déjà dans Gulliver » : un modèle installé de même taille et de même architecture ; l’import " +
       "tranche par l’empreinte.",
     marmot: "C’est l’étagère de ta chambre où tu ranges des jeux que tu as eus ailleurs. Le service regarde l’étagère " +
       "et te montre ce qu’il y a ; si tu choisis un jeu, il en fait une photocopie magique qui ne prend pas de place, " +
@@ -753,7 +753,7 @@ const items = {
       "dans proxy.secret. Appliqué à chaud (set_http_proxy).",
     marmot: "C’est comme passer par l’accueil d’un bâtiment pour sortir : certains endroits l’exigent. Chez toi, la " +
       "porte donne directement sur la rue, et tu n’en as pas besoin.",
-    bee: "Une adresse fausse coupe Albireo d’Internet sans prévenir : téléchargements et recherches échouent avec " +
+    bee: "Une adresse fausse coupe Gulliver d’Internet sans prévenir : téléchargements et recherches échouent avec " +
       "« the proxy refuses the connection ». Vide-le pour revenir au réglage normal."
   },
   relay: {
@@ -776,9 +776,9 @@ const items = {
         'ton crédit ; ses réglages, eux, ne se changent que sur le Mac.'],
     normal: "Un modèle du Mac répond sans que rien ne sorte. Pour une question difficile, on peut préférer un modèle " +
       "beaucoup plus grand, qui tourne chez Anthropic (Claude), chez Ollama, ou sur un autre ordinateur. Le relais " +
-      "envoie alors la discussion à ce moteur, avec ta clé, puis rend sa réponse dans Albireo. Avec la " +
+      "envoie alors la discussion à ce moteur, avec ta clé, puis rend sa réponse dans Gulliver. Avec la " +
       "pseudonymisation, Pseudalis remplace d’abord chaque donnée personnelle par un pseudonyme ; le moteur ne voit " +
-      "que les pseudonymes, et Albireo remet les vrais noms dans la réponse pendant qu’elle s’écrit. Les images ne " +
+      "que les pseudonymes, et Gulliver remet les vrais noms dans la réponse pendant qu’elle s’écrit. Les images ne " +
       "partent pas : un modèle du Mac qui lit les images les décrit, et la description part protégée elle aussi.",
     owl: "Le modèle albireo-relay de l’interface (POST /v1/chat/completions) passe par relay_service (host/relay.cpp, " +
       "repris de l’original 1.0.23) : huit réponses à la fois au plus, chacune sur son thread. OpenAI : " +
@@ -821,7 +821,7 @@ export function serviceTab(body, env) {
   let current = null;
 
   const intro = h('div', { class: 'svc-intro' },
-    h('p', null, 'Les réglages du service Albireo. Chaque ligne dit ce que le réglage change ; le ',
+    h('p', null, 'Les réglages du service Gulliver. Chaque ligne dit ce que le réglage change ; le ',
       h('b', null, '?'), ' ouvre sa fiche, avec trois explications : normale, ', h('b', null, 'le hibou'),
       ' (très technique) et ', h('b', null, 'la marmotte'), ' (pour un ado). ', h('b', null, "L'abeille"),
       ' dit ce qui arrive si on pousse trop ou qu’on s’en passe.'));

@@ -48,7 +48,7 @@ with open(version_h, "w", encoding="utf-8") as f:
 
 with open(cmake, encoding="utf-8") as f:
     lists = f.read()
-lists = re.sub(r"(project\(albireo VERSION )[0-9.]+", r"\g<1>%s" % text, lists, count=1)
+lists = re.sub(r"(project\(gulliver VERSION )[0-9.]+", r"\g<1>%s" % text, lists, count=1)
 with open(cmake, "w", encoding="utf-8") as f:
     f.write(lists)
 

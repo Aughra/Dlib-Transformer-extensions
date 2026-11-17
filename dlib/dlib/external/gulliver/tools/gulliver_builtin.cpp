@@ -2,13 +2,13 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    albireo-builtin : prépare les modèles fournis avec Albireo, pour le build.
+    gulliver-builtin : prépare les modèles fournis avec Gulliver, pour le build.
 
-        albireo-builtin --manifest <builtin_models.json> --cache <folder> [--models-out <folder>]
+        gulliver-builtin --manifest <builtin_models.json> --cache <folder> [--models-out <folder>]
             [--setup <albireo-setup-online.exe> --setup-out <albireo-setup.exe>] [--threads <n>]
 
     Le manifeste (resources/builtin_models.json) nomme chaque modèle, le fichier dont il vient,
-    avec son adresse, sa taille et son SHA-256, et la quantification qu'Albireo livre ; un modèle
+    avec son adresse, sa taille et son SHA-256, et la quantification que Gulliver livre ; un modèle
     qui lit des images nomme aussi son projecteur ("projector" : le fichier mmproj qui contient
     son encodeur de vision, livré tel qu'il est publié).  Le build télécharge les fichiers dans le
     cache, nommés d'après leur empreinte (cmake/builtin_models.cmake) ; ce programme les traite
@@ -25,7 +25,7 @@
         embedding_length * (1 + n_deepstack_layers) du décodeur ;
       - le modèle est converti : ses poids sont quantifiés à nouveau quand le manifeste demande
         une autre quantification que celle publiée, et ses métadonnées reçoivent son identité
-        dans Albireo (albireo.id, albireo.name, albireo.roles, albireo.inputs,
+        dans Gulliver (albireo.id, albireo.name, albireo.roles, albireo.inputs,
         albireo.builtin, albireo.source_sha256), par laquelle chaque copie du fichier se
         décrit elle-même ;
       - le fichier converti est relu et revérifié.
@@ -98,7 +98,7 @@ namespace
 {
 
     // La version de la conversion, qui fait partie du nom d'un fichier converti dans le cache.
-    const char* const conversion_version = "albireo-builtin 1";
+    const char* const conversion_version = "gulliver-builtin 1";
 
     std::FILE* open_file(const std::string& path, const char* mode)
     {
@@ -571,7 +571,7 @@ namespace
         std::vector<const gguf_tensor_info*> order;
         for (const auto& t : r.tensors()) order.push_back(&t);
         std::sort(order.begin(), order.end(), tensor_before);
-        // Un fichier publié dans la quantification qu'Albireo livre garde ses tenseurs tels quels.
+        // Un fichier publié dans la quantification que Gulliver livre garde ses tenseurs tels quels.
         const bool requantize = quantization == "Q4_K_M" && published != quantization;
         bool tied = true;
         int n_attn_v = 0;
@@ -994,7 +994,7 @@ namespace
         tok.load_from_gguf(file.reader());
         if (static_cast<long>(tok.size()) != cfg.vocab)
             throw std::runtime_error("the vocabulary and the output layer of the model disagree");
-        const std::string sample = "Albireo, 2026: Bonjour ! Quelle est la capitale de l'Italie ? \xC3\x89t\xC3\xA9, "
+        const std::string sample = "Gulliver, 2026: Bonjour ! Quelle est la capitale de l'Italie ? \xC3\x89t\xC3\xA9, "
             "\xE6\xBC\xA2\xE5\xAD\x97, int main() { return 0; }";
         const std::vector<int> ids = tok.encode(sample, false, false, false);
         if (ids.empty() || tok.decode(ids, false) != sample)
@@ -1219,7 +1219,7 @@ namespace
 
     int usage()
     {
-        std::cerr << "usage: albireo-builtin --manifest <builtin_models.json> --cache <folder>\n"
+        std::cerr << "usage: gulliver-builtin --manifest <builtin_models.json> --cache <folder>\n"
                      "           [--models-out <folder>] [--setup <setup.exe> --setup-out <setup.exe>]\n"
                      "           [--installer-limit <bytes>] [--threads <n>]\n";
         return 2;
@@ -1380,7 +1380,7 @@ int main(int argc, char** argv)
     }
     catch (const std::exception& e)
     {
-        std::cerr << "albireo-builtin: " << e.what() << "\n";
+        std::cerr << "gulliver-builtin: " << e.what() << "\n";
         return 1;
     }
 }

@@ -17,7 +17,7 @@ import { formatNumber, h } from './dom.js';
 import { state, ui } from './state.js';
 import { chatRole, modelName, roleCapabilities, roleModel, toolSet } from './status.js';
 
-const roles = { system: 'Système', user: 'Vous', assistant: 'Albireo', tool: 'Résultat d’outil' };
+const roles = { system: 'Système', user: 'Vous', assistant: 'Gulliver', tool: 'Résultat d’outil' };
 
 // Le texte d'un message : son contenu, ses images nommées, et les appels d'outils d'une réponse.
 function textOf(m) {
@@ -52,7 +52,7 @@ export async function contextPreview() {
     box.append(h('h2', null, 'Contexte de la prochaine question'),
       h('p', { class: 'help' }, 'Ce que le modèle lirait si vous envoyiez maintenant ' +
         (typed ? 'ce que vous avez tapé' : 'une question (rien n’est tapé : la question manque à la fin)') +
-        '. À l’envoi, Albireo peut encore ajouter des extraits de documents trouvés pour la question, et résumer ' +
+        '. À l’envoi, Gulliver peut encore ajouter des extraits de documents trouvés pour la question, et résumer ' +
         'les échanges les plus anciens si la place manque.'), head, list,
       h('div', { class: 'actions' }, h('button', { class: 'button primary', type: 'button', onclick: () => close(true) },
         'Fermer')));

@@ -2,7 +2,7 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    Le carnet du portage (fork pour macOS, demande de l'humain du 2026-11-15 : « Albireo affiche lui-même les
+    Le carnet du portage (fork pour macOS, demande de l'humain du 2026-11-15 : « Gulliver affiche lui-même les
     documents ») : le sommaire et les documents du dépôt du fork, que le service lit dans sa liste fermée
     (GET /gulliver/v1/carnet, GET /gulliver/v1/carnet/file).  L'adresse dit ce qui est lu : #/ pour le sommaire,
     #/chemin/du/document.md (et #ancre) pour un document.  Les Markdown sont mis en page par marked et nettoyés
@@ -47,7 +47,7 @@ function el(tag, props, ...children) {
 }());
 
 async function showIndex() {
-  document.title = 'Albireo · documents du portage';
+  document.title = 'Gulliver · documents du portage';
   const r = await fetch('/gulliver/v1/carnet', { cache: 'no-store' });
   const index = r.ok ? await r.json() : null;
   if (!index || !index.found) {
@@ -57,7 +57,7 @@ async function showIndex() {
     return;
   }
   const out = [el('h1', null, 'Documents du portage'),
-    el('p', { class: 'faint' }, 'Dlib Transformer Extensions sur macOS : Albireo, Pseudalis et leur portage, à lire depuis le canapé.')];
+    el('p', { class: 'faint' }, 'Dlib Transformer Extensions sur macOS : Gulliver, Pseudalis et leur portage, à lire depuis le canapé.')];
   for (const s of index.sections) {
     if (!s.entries.length) continue;
     out.push(el('div', { class: 'section-title' }, s.title));
@@ -107,7 +107,7 @@ async function showDocument(path, anchor) {
   }
   for (const h of box.querySelectorAll('h1, h2, h3, h4')) h.id = slug(h.textContent);
   const h1 = box.querySelector('h1');
-  document.title = (h1 ? h1.textContent : path) + ' · Albireo';
+  document.title = (h1 ? h1.textContent : path) + ' · Gulliver';
   main.replaceChildren(el('div', { class: 'path' }, path), box);
   const target = anchor && document.getElementById(decodeURIComponent(anchor));
   if (target) target.scrollIntoView(); else window.scrollTo(0, 0);

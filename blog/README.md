@@ -55,5 +55,6 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 49. [Les étages qui ne servent à personne](49-les-etages-qui-ne-servent-a-personne.md)
 50. [La liste d'attente](50-la-liste-d-attente.md)
 51. [Un GPU pour apprendre](51-un-gpu-pour-apprendre.md)
+52. [Un nouveau nom](52-un-nouveau-nom.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).

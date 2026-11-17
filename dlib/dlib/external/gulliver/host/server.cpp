@@ -877,7 +877,7 @@ namespace gulliver
         }
 
         /*
-            Une complétion de chat du modèle albireo-relay, que le relais envoie à son moteur
+            Une complétion de chat du modèle gulliver-relay, que le relais envoie à son moteur
             extérieur (relay.h) : ses images vérifiées comme celles du moteur, sa réponse écrite
             comme les réponses du moteur, ses tokens laissés hors de l'usage du moteur.
         */
@@ -1392,7 +1392,7 @@ namespace gulliver
         };
 
         const license_component license_components[] = {
-            {"gulliver.txt", "Albireo", GULLIVER_VERSION},
+            {"gulliver.txt", "Gulliver", GULLIVER_VERSION},
             {"dlib.txt", "dlib", ""},
             {"mbedtls.txt", "Mbed TLS", MBEDTLS_VERSION_STRING},
             {"cpp-httplib.txt", "cpp-httplib", CPPHTTPLIB_VERSION},

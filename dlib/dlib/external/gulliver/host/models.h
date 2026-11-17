@@ -78,7 +78,7 @@ namespace gulliver
                 seul. Un fichier
                 dont l'empreinte est dans le catalogue prend son entrée ; un autre est décrit
                 à partir de ses propres métadonnées, y compris l'identité d'un modèle
-                d'Albireo (albireo.id, albireo.name, albireo.roles, albireo.inputs).
+                de Gulliver (albireo.id, albireo.name, albireo.roles, albireo.inputs).
                 import_bundle() installe les modèles d'un paquet hors ligne, où qu'il se
                 trouve : seulement les fichiers que liste son catalogue (non signé), décodeurs
                 et projecteurs, trouvés par leurs noms et vérifiés par leurs tailles et leurs
@@ -98,7 +98,7 @@ namespace gulliver
                 Les fichiers sont lus sans passer par aucun lien (link_free_file), avec un nom
                 unique, pour qu'aucun import ne fasse lire au service le fichier d'un autre
                 compte.  Un fichier dont le contenu est celui d'un modèle ou d'un projecteur
-                installé, y compris un modèle livré avec Albireo, ou d'un projecteur en
+                installé, y compris un modèle livré avec Gulliver, ou d'un projecteur en
                 attente, n'est pas recopié : il est listé sous "already".  Un fichier ne
                 prend jamais l'identifiant d'un autre modèle installé, sauf s'il est une
                 version plus récente, venue du catalogue, d'un modèle du catalogue : il est
@@ -179,9 +179,9 @@ namespace gulliver
                   un), "embedding_models", "pending_projectors" ({"name", "size", "sha256",
                   "projector_type", "projection_width"} des projecteurs qui attendent leurs
                   décodeurs), "downloads" et "catalog".
-                - Une entrée du catalogue dont un modèle livré avec Albireo porte le fichier
+                - Une entrée du catalogue dont un modèle livré avec Gulliver porte le fichier
                   (le source_sha256 de son manifeste) n'est pas listée, sauf si elle est
-                  installée sous son propre identifiant : le modèle livré avec Albireo la
+                  installée sous son propre identifiant : le modèle livré avec Gulliver la
                   remplace.
         !*/
         json overview(const std::string& language) const;
@@ -193,7 +193,7 @@ namespace gulliver
                   réserve, sans jamais accéder au réseau. Une réserve inutilisable termine le
                   travail avec le code reserve_unavailable.
                 - Refuse, avec error rempli, une entrée qui n'est pas dans le catalogue, un
-                  modèle livré avec Albireo, et une entrée dont un tel modèle porte le fichier
+                  modèle livré avec Gulliver, et une entrée dont un tel modèle porte le fichier
                   (builtin_installed, qui nomme ce modèle).
                 - Refuse avec download_busy une demande locale alors qu'un téléchargement
                   réseau du même modèle est encore en cours.
@@ -287,7 +287,7 @@ namespace gulliver
 
         /*!
             ensures
-                - Enregistre les modèles livrés avec Albireo, listés par le manifeste
+                - Enregistre les modèles livrés avec Gulliver, listés par le manifeste
                   builtin.json de dir, le dossier "models" des programmes
                   (common/builtin_models.h) : source "builtin", leurs fichiers et leurs
                   projecteurs là où ils se trouvent, leurs empreintes telles que
@@ -423,7 +423,7 @@ namespace gulliver
         bool replacing(const std::string& id, const std::function<bool()>& work);
         // Défait ce qu'a fait put_file() : le fichier déplacé retourne à path, la copie est supprimée.
         void undo_put(const std::string& path, const std::string& target, const placement& how);
-        // Le modèle installé dont le fichier a le contenu d'empreinte sha, celui livré avec Albireo
+        // Le modèle installé dont le fichier a le contenu d'empreinte sha, celui livré avec Gulliver
         // d'abord, ou false.
         bool installed_with_hash(const std::string& sha, installed_model& m);
         /*!
@@ -478,7 +478,7 @@ namespace gulliver
               "publisher" quand l'en-tête nomme l'entreprise qui a fait le modèle
               (general.organization, sinon general.author).
             - Pour un décodeur : "context", "experts", "embedding", "roles", "reasoning",
-              "tools", "inputs", l'identité d'un fichier d'Albireo ("albireo_id") et
+              "tools", "inputs", l'identité d'un fichier de Gulliver ("albireo_id") et
               "reads_images", true pour une architecture qui lit les images (reads_images())
               et pour un vocabulaire qui contient le token <image> (LLaVA) ; pour ceux-ci,
               "projection_width", la largeur des tokens de vision qu'il prend :

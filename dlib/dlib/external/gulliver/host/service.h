@@ -52,7 +52,7 @@ namespace gulliver
     {
         /*!
             WHAT THIS OBJECT REPRESENTS
-                Le service Albireo : le moteur et ses modèles, le serveur HTTPS local avec
+                Le service Gulliver : le moteur et ses modèles, le serveur HTTPS local avec
                 l'application web, l'interface compatible OpenAI et l'interface
                 d'administration de l'application web, le catalogue et les
                 téléchargements des modèles.
@@ -119,7 +119,7 @@ namespace gulliver
         /*!
             ensures
                 - Renvoie le modèle du travail que les applications font en arrière-plan
-                  (titres, résumés, mémoire) : le modèle de langage livré avec Albireo, qui
+                  (titres, résumés, mémoire) : le modèle de langage livré avec Gulliver, qui
                   reste chargé quelles que soient les fonctions, ou vide s'il n'y en a pas,
                   les requêtes pour "background" allant alors au modèle général.
         !*/
@@ -127,7 +127,7 @@ namespace gulliver
         /*!
             ensures
                 - Renvoie le modèle de chaque fonction : celui choisi pour elle, sinon le modèle
-                  général, sinon le modèle de langage livré avec Albireo, pour que les trois
+                  général, sinon le modèle de langage livré avec Gulliver, pour que les trois
                   fonctions gardent un modèle une fois chaque choix défait ; le rôle d'embedding
                   garde le modèle choisi pour lui.
         !*/
@@ -184,7 +184,7 @@ namespace gulliver
                   comprise, et supprime son fichier.  Un modèle dans le moteur est supprimé
                   une fois ses requêtes servies et sorti du moteur : pending vaut alors true,
                   et le modèle reste listé, à l'état "removing", jusque-là.
-                - Un modèle livré avec Albireo est refusé (code "builtin_model") : il laisse
+                - Un modèle livré avec Gulliver est refusé (code "builtin_model") : il laisse
                   ses fonctions à d'autres modèles et reste installé.
         !*/
         bool remove_model(const std::string& id, user_error& error, bool& pending);
@@ -245,7 +245,7 @@ namespace gulliver
                   (library_insecure).
 
             load_from_library(file) ensures
-                - Charge dans Albireo le fichier file de la bibliothèque, et le projecteur que
+                - Charge dans Gulliver le fichier file de la bibliothèque, et le projecteur que
                   library() lui associe, en un seul import (model_manager::import_files()), sans
                   les déplacer ; renvoie le résultat de l'import.
                 - Refuse un nom que library() ne liste pas (library_not_found).
@@ -282,11 +282,11 @@ namespace gulliver
         void start_engines();
         /*!
             ensures
-                - Enregistre les modèles livrés avec Albireo, dans le dossier des programmes.
+                - Enregistre les modèles livrés avec Gulliver, dans le dossier des programmes.
                   Un nouveau qui prend la place d'un modèle de son genre (un modèle de langage,
-                  ou un modèle d'embedding) qui n'est plus livré avec Albireo reçoit les
+                  ou un modèle d'embedding) qui n'est plus livré avec Gulliver reçoit les
                   fonctions de ce modèle, comme le fait une mise à jour qui change le modèle
-                  livré avec Albireo ; un autre nouveau prend les fonctions qu'aucun modèle ne
+                  livré avec Gulliver ; un autre nouveau prend les fonctions qu'aucun modèle ne
                   tient.  Les fonctions d'un modèle parti sans successeur sont libérées.
                 - Le premier modèle de langage parmi eux sert le travail en arrière-plan.
         !*/

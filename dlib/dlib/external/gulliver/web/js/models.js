@@ -1,4 +1,4 @@
-// Fork Mac de Dlib-Transformer-extensions (Albireo pour macOS sur puce Apple).
+// Fork Mac de Dlib-Transformer-extensions (Gulliver pour macOS sur puce Apple).
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
@@ -61,7 +61,7 @@ function isMoe(m) {
 
 /*
     Les poids que prennent les noyaux Metal (cpu_runtime_metal.cpp) : Q4_K et Q6_K, et aussi Q5_K, Q8_0 et Q5_0 pour
-    Qwen 3.5, LFM2 et les mélanges d'experts (depuis Albireo 4.7.0 et 4.21.0 du fork) ; les experts de Gemma 4
+    Qwen 3.5, LFM2 et les mélanges d'experts (depuis Gulliver 4.7.0 et 4.21.0 du fork) ; les experts de Gemma 4
     (26B-A4B) restent sur le processeur.
 */
 function onGpu(m, moe) {
@@ -112,9 +112,9 @@ const modelErrors = {
   disk_space: 'L’espace libre est insuffisant pour préparer ce modèle.',
   catalog_entry: 'L’entrée du catalogue est invalide pour ce modèle.',
   not_in_catalog: 'Ce modèle ne figure plus dans le catalogue.',
-  builtin_installed: 'Ce modèle est déjà fourni avec Albireo.',
+  builtin_installed: 'Ce modèle est déjà fourni avec Gulliver.',
   not_installed: 'Ce modèle n’est plus installé.',
-  builtin_model: 'Ce modèle fourni avec Albireo ne peut pas être supprimé.',
+  builtin_model: 'Ce modèle fourni avec Gulliver ne peut pas être supprimé.',
   delete_failed: 'La suppression a échoué. Vérifiez la réserve et les fichiers du modèle.',
   offline: 'Cette opération demande une connexion au réseau.',
   stopping: 'Le service est en cours d’arrêt.',
@@ -444,7 +444,7 @@ export function modelsTab(body, env) {
 
   /*
       La bibliothèque du Mac (fork pour macOS) : les fichiers GGUF d'un dossier du Mac, que le service lit sans réseau et
-      sans y écrire ; « Charger dans Albireo » en fait une copie (un clone, sans place prise), avec son projecteur.
+      sans y écrire ; « Charger dans Gulliver » en fait une copie (un clone, sans place prise), avec son projecteur.
   */
   const billionsOf = (n) => n ? billions(n) + ' de paramètres' : 'taille inconnue';
   const library = h('section', { class: 'svc-group' }, h('h4', null, 'Sur ce Mac'),
@@ -460,7 +460,7 @@ export function modelsTab(body, env) {
       return;
     }
     const intro = h('p', { class: 'help' }, 'Les fichiers GGUF du dossier ', h('code', null, r.folder || ''), ', lus sans ' +
-      'réseau. « Charger dans Albireo » en fait une copie qui ne prend pas de place sur le disque, avec le projecteur ' +
+      'réseau. « Charger dans Gulliver » en fait une copie qui ne prend pas de place sur le disque, avec le projecteur ' +
       'd’images qui va avec le modèle. Le dossier se change dans l’onglet Service ; on y dépose les fichiers dans le ' +
       'Finder.');
     const models = r.models || [], lone = r.projectors || [];
@@ -470,7 +470,7 @@ export function modelsTab(body, env) {
         (f.quantization || '?') + ' · ' + billionsOf(f.parameters) + ' · ' + gb(f.size || 0)
         : 'projecteur d’images · ' + (f.arch || '?') + ' · ' + gb(f.size || 0)];
       if (model && f.projector) parts.push('avec son projecteur ' + f.projector.file + ' (' + gb(f.projector.size) + ')');
-      if (model && f.installed) parts.push('déjà dans Albireo (' + f.installed + ')');
+      if (model && f.installed) parts.push('déjà dans Gulliver (' + f.installed + ')');
       if (model && !f.supported) parts.push('le moteur ne lit pas cette architecture');
       const action = model && !f.supported ? null : h('button', { class: 'button', type: 'button', disabled: busy,
         onclick: async () => {
@@ -479,8 +479,8 @@ export function modelsTab(body, env) {
           try {
             const done = await api.postJSON('/gulliver/v1/library/load', { file: f.file });
             const ids = (done.imported || []).concat(done.already || []);
-            toast(done.imported && done.imported.length ? f.file + ' est chargé dans Albireo.'
-              : done.already && done.already.length ? f.file + ' était déjà dans Albireo (' + ids.join(', ') + ').'
+            toast(done.imported && done.imported.length ? f.file + ' est chargé dans Gulliver.'
+              : done.already && done.already.length ? f.file + ' était déjà dans Gulliver (' + ids.join(', ') + ').'
                 : done.pending && done.pending.length ? 'Le projecteur attend son modèle.'
                   : (done.errors && done.errors[0]) || 'Rien n’a été chargé.', !ids.length && !(done.pending || []).length);
           } catch (e) {
@@ -489,7 +489,7 @@ export function modelsTab(body, env) {
           loading.delete(f.file);
           load();
           loadLibrary();
-        } }, busy ? 'Chargement…' : f.installed ? 'Charger de nouveau' : 'Charger dans Albireo');
+        } }, busy ? 'Chargement…' : f.installed ? 'Charger de nouveau' : 'Charger dans Gulliver');
       return h('div', { class: 'svc-card hub-card' + (model && !f.supported ? ' incompatible' : '') },
         h('div', { class: 'svc-head' }, h('div', { class: 'svc-title' }, h('span', null, f.file)), action),
         h('p', { class: 'svc-where' }, parts.join(' · ')));

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Toutes les mesures de vitesse du moteur d'Albireo en une commande (fork pour macOS).
+# Toutes les mesures de vitesse du moteur d'Gulliver en une commande (fork pour macOS).
 #
 #   bash dlib/dlib/external/gulliver/tools/bench_macos.sh [essais] [build folder]
 #
@@ -10,17 +10,17 @@
 # les sorties brutes à côté.  Écrit pour comparer le MacBook Air M2 et le Mac mini M5 Pro : les mêmes modèles,
 # les mêmes tailles.
 #
-# Les modèles : ceux du portage quand ils sont là (build/models, build/albireo-home/models), et tout fichier
+# Les modèles : ceux du portage quand ils sont là (build/models, build/gulliver-home/models), et tout fichier
 # .gguf de build/bench-models (par exemple le Qwen3.6-35B-A3B sur le Mac mini).  BENCH_SIZES change les tailles
-# de prompt (« 64 512 1536 3584 » : le GPU lit tous les prompts depuis Albireo 4.11.0), BENCH_STEPS le nombre de tokens écrits (64).
+# de prompt (« 64 512 1536 3584 » : le GPU lit tous les prompts depuis Gulliver 4.11.0), BENCH_STEPS le nombre de tokens écrits (64).
 
 ROOT=$(cd "$(dirname "$0")/../../../../.." && pwd)
 ROUNDS=${1:-2}
-BUILD=${2:-$ROOT/build/macos-albireo}
+BUILD=${2:-$ROOT/build/macos-gulliver}
 BENCH=$BUILD/tests/bench_runtime
 SIZES=${BENCH_SIZES:-64 512 1536 3584}
 STEPS=${BENCH_STEPS:-64}
-if [ ! -x "$BENCH" ]; then echo "no $BENCH: build Albireo first"; exit 1; fi
+if [ ! -x "$BENCH" ]; then echo "no $BENCH: build Gulliver first"; exit 1; fi
 
 HOST=$(sysctl -n hw.model)
 STAMP=$(date +%Y%m%d-%H%M)
@@ -34,9 +34,9 @@ RAW=$OUTDIR/$HOST-$STAMP.raw
 NAMES=() FILES=()
 add_model() { [ -f "$2" ] && NAMES+=("$1") && FILES+=("$2"); }
 add_model "Qwen3-VL 2B Instruct Q4_K_M" "$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
-add_model "Qwen3-VL 4B Thinking Q4_K_M" "$ROOT/build/albireo-home/models/qwen3-vl-4b-thinking.gguf"
+add_model "Qwen3-VL 4B Thinking Q4_K_M" "$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.gguf"
 add_model "Qwen3.5-0.8B Q8_0" "$ROOT/build/models/Qwen3.5-0.8B-Q8_0.gguf"
-add_model "Qwen3.5-4B Q4_K_M" "$ROOT/build/albireo-home/models/hf-unsloth-qwen3.5-4b-q4_k_m.gguf"
+add_model "Qwen3.5-4B Q4_K_M" "$ROOT/build/gulliver-home/models/hf-unsloth-qwen3.5-4b-q4_k_m.gguf"
 add_model "Qwen 3.6 11B-A3B Q4_K_M (MoE)" "$ROOT/build/models/Qwen3.6-11B-A3B-Niwaki-Q4_K_M.gguf"
 for f in "$ROOT"/build/bench-models/*.gguf; do [ -f "$f" ] && add_model "$(basename "$f" .gguf)" "$f"; done
 if [ ${#FILES[@]} -eq 0 ]; then echo "no model to measure"; exit 1; fi
@@ -44,7 +44,7 @@ if [ ${#FILES[@]} -eq 0 ]; then echo "no model to measure"; exit 1; fi
 THREADS=$(sysctl -n hw.physicalcpu)
 LOAD_START=$(sysctl -n vm.loadavg)
 {
-  echo "# Mesures du moteur d'Albireo — $HOST, $(date '+%Y-%m-%d %H:%M')"
+  echo "# Mesures du moteur d'Gulliver — $HOST, $(date '+%Y-%m-%d %H:%M')"
   echo
   echo "| Machine | |"
   echo "|---|---|"
@@ -53,7 +53,7 @@ LOAD_START=$(sysctl -n vm.loadavg)
   echo "| Cœurs | $(sysctl -n hw.perflevel0.physicalcpu 2>/dev/null) performance, $(sysctl -n hw.perflevel1.physicalcpu 2>/dev/null) efficacité ; $THREADS threads pour les mesures |"
   echo "| Mémoire | $(( $(sysctl -n hw.memsize) / 1073741824 )) Go |"
   echo "| macOS | $(sw_vers -productVersion) ($(sw_vers -buildVersion)) |"
-  echo "| Albireo | $(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null)) |"
+  echo "| Gulliver | $(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null)) |"
   echo "| Mode économie d'énergie | $(pmset -g | awk '/lowpowermode/ {print $2}') (0 attendu) |"
   echo "| Charge au début | $LOAD_START |"
   echo

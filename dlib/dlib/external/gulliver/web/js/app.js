@@ -2,7 +2,7 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    L'application web d'Albireo : les discussions et les projets gardés dans ce navigateur, les discussions privées
+    L'application web de Gulliver : les discussions et les projets gardés dans ce navigateur, les discussions privées
     gardées en mémoire seulement, les trois fonctions du service (général, code, cybersécurité), le raisonnement
     approfondi affiché au fil de son écriture, et un mode agent dont les outils s'exécutent dans la page.
 
@@ -85,7 +85,7 @@ async function init() {
       e.preventDefault();
       return;
     }
-    console.warn('Albireo: an operation failed', r);
+    console.warn('Gulliver: an operation failed', r);
     if (r && (r.name === 'QuotaExceededError' || r.name === 'UnknownError' || r.name === 'InvalidStateError')) {
       storageFailed(r);
     }
@@ -106,11 +106,11 @@ async function init() {
     // Sans IndexedDB (une fenêtre de navigation privée de certains navigateurs), ou tant qu'un onglet
     // d'une version antérieure la garde ouverte, l'application garde ses données en mémoire, comme
     // dans une discussion privée.
-    console.warn('Albireo: the database of the browser is unavailable', e);
+    console.warn('Gulliver: the database of the browser is unavailable', e);
     blocked = !!e && e.name === 'BlockedError';
     state.incognito = true;
   }
-  // La langue d'Albireo, quand cette interface la suit, avant les premiers textes.
+  // La langue de Gulliver, quand cette interface la suit, avant les premiers textes.
   state.status = await api.status().catch(() => null);
   applyLanguage();
   applyTheme();

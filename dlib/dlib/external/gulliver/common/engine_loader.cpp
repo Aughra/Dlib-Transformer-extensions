@@ -53,7 +53,7 @@ namespace gulliver
             && resolve(handle_, "gulliver_engine_cancel", cancel);
         if (!ok)
         {
-            error = path + " is not an Albireo engine (missing functions)";
+            error = path + " is not an Gulliver engine (missing functions)";
             unload();
             return false;
         }

@@ -4,7 +4,7 @@
 #define GULLIVER_ENGINE_API_H_
 
 /*
-    Interface C entre l'hôte Albireo et ses moteurs d'inférence.
+    Interface C entre l'hôte Gulliver et ses moteurs d'inférence.
 
     Un moteur est une bibliothèque partagée construite à partir des sources de engine/ pour une
     classe de machines : x86-64 simple, x86-64 avec AVX2 et FMA, NPU et GPU Intel via OpenVINO,

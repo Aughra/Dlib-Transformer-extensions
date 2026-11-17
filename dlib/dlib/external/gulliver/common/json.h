@@ -744,7 +744,7 @@ namespace gulliver
         }
 
         // Les conversions supposent la locale numérique "C", qu'un programme garde tant qu'il
-        // n'appelle jamais setlocale() pour LC_NUMERIC ; les programmes d'Albireo ne le font jamais.
+        // n'appelle jamais setlocale() pour LC_NUMERIC ; les programmes de Gulliver ne le font jamais.
         void append_number(std::string& out) const
         {
             if (is_integer_)

@@ -19,7 +19,7 @@
 #include "settings.h"
 
 /*
-    Le relais de l'inférence : le modèle albireo-relay de l'interface envoie une discussion à un
+    Le relais de l'inférence : le modèle gulliver-relay de l'interface envoie une discussion à un
     moteur externe, que nomment les réglages (relay_settings), et rend sa réponse comme le moteur
     de l'ordinateur rend la sienne.  Le service sert ainsi d'intermédiaire (proxy) entre
     l'application web, ou tout client de son interface, et le moteur externe, dont les clients ne

@@ -292,7 +292,7 @@ namespace pseudalis
         if (!ensure_certificates(cert_dir, renewed, error)) return false;
 
         set_http_proxy(st.proxy);
-        albireo_.set_enabled(st.albireo != "off");
+        gulliver_.set_enabled(st.gulliver != "off");
 
         // Le lecteur.
         drive_.reset(new drive_host(*this));
@@ -472,7 +472,7 @@ namespace pseudalis
             history["limit"] = history_limit_;
             j["history"] = history;
         }
-        j["albireo"] = albireo_.status();
+        j["gulliver"] = gulliver_.status();
         return j;
     }
 
@@ -505,21 +505,21 @@ namespace pseudalis
             Chaque image : gardée, décrite une seule fois.  Les descriptions d'un fichier prennent
             trois minutes au plus, et aucune ne commence une fois que le service s'arrête : les
             images qui suivent gardent leur seul marqueur, comme toute image pendant que le
-            réglage albireo est sur off.  Une description peut nommer ce que montre l'image : elle
+            réglage gulliver est sur off.  Une description peut nommer ce que montre l'image : elle
             est gardée dans le coffre, comme l'image, et le moteur la protège chaque fois
             qu'il l'écrit.  Une image gardée sans description, ou dont la description ne peut plus
-            être lue, reçoit celle qu'Albireo donne maintenant.
+            être lue, reçoit celle que Gulliver donne maintenant.
         */
         const auto describe_until = std::chrono::steady_clock::now() + std::chrono::minutes(3);
         auto pictures = [&](const picture_request& p) -> std::string {
             picture_record rec;
             const bool known = db_->get_picture(p.id, rec) && rec.sha256 == p.sha256;
             std::string description, why;
-            if (known && st.albireo == "off") return description;
+            if (known && st.gulliver == "off") return description;
             if (known && !rec.description.empty() && vault_->get(rec.description, description)) return description;
-            if (st.albireo != "off" && !stopping_ && std::chrono::steady_clock::now() < describe_until)
+            if (st.gulliver != "off" && !stopping_ && std::chrono::steady_clock::now() < describe_until)
             {
-                description = albireo_.describe(p.bytes, p.media_type, lang, why);
+                description = gulliver_.describe(p.bytes, p.media_type, lang, why);
                 if (description.empty()) log_info("pictures: " + p.id + " without description: " + why);
             }
             if (!record) return description;

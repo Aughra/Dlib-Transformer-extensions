@@ -66,7 +66,7 @@ namespace pseudalis
         std::string sha256;
         std::string media_type;
         std::string blob;               // l'image dans le coffre
-        std::string description;        // la description d'Albireo gardée dans le coffre, ou vide
+        std::string description;        // la description de Gulliver gardée dans le coffre, ou vide
         int64_t created = 0;
     };
 

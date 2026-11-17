@@ -754,7 +754,7 @@ namespace gulliver
         web_reply refused(const std::string& host)
         {
             return failure(403, "address_refused", "the address of " + host
-                + " is local or private, which the web access of Albireo does not read", "url");
+                + " is local or private, which the web access of Gulliver does not read", "url");
         }
 
         web_reply timed_out(const std::string& host)
@@ -1143,13 +1143,13 @@ namespace gulliver
             const answer_check accept = [&a](const received& got, body_limit& limit, web_reply& refusal) {
                 const std::string host = host_part(a);
                 const web_reply too_large = failure(413, "too_large", "the PDF file of " + host + " is larger than "
-                    + std::to_string(max_pdf_bytes >> 20) + " MB, which the web access of Albireo does not read");
+                    + std::to_string(max_pdf_bytes >> 20) + " MB, which the web access of Gulliver does not read");
                 if (!readable_type(got.content_type))
                 {
                     refusal = failure(415, "unsupported_type", (got.content_type.empty()
-                        ? "the page of " + host + " gives no type, and the web access of Albireo reads"
+                        ? "the page of " + host + " gives no type, and the web access of Gulliver reads"
                         : "the page of " + host + " has the type " + got.content_type + ", while the web access of "
-                            "Albireo reads") + " text, HTML, XML, JSON and PDF only");
+                            "Gulliver reads") + " text, HTML, XML, JSON and PDF only");
                     return false;
                 }
                 const bool pdf = got.content_type == "application/pdf";
@@ -1177,7 +1177,7 @@ namespace gulliver
                 std::string why;
                 if (!parse_address(resolve_location(a, got.location), next, why))
                     return failure(502, "invalid_redirect", host_part(a) + " redirects to an address that the web "
-                        "access of Albireo does not read (" + why + ")");
+                        "access of Gulliver does not read (" + why + ")");
                 a = next;
             }
             json body = json::object();

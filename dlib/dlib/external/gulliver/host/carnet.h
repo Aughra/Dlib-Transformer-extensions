@@ -8,7 +8,7 @@
 #include "../common/json.h"
 
 /*
-    Le carnet du portage (fork pour macOS, demande de l'humain du 2026-11-15 : « Albireo affiche lui-même les
+    Le carnet du portage (fork pour macOS, demande de l'humain du 2026-11-15 : « Gulliver affiche lui-même les
     documents ») : les documents du dépôt du fork (docs/, blog/, logs/, quelques README et les notes de version),
     lus en lecture seule et mis en page par web/carnet/.  Il remplace le petit site à part du port 8650.
 

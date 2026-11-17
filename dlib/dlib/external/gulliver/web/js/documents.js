@@ -715,7 +715,7 @@ async function pdfLibrary() {
     try {
       lib = await import('../vendor/pdfjs/pdf.min.mjs');
     } catch (e) {
-      console.warn('Albireo: pdf.js cannot run in this browser', e);
+      console.warn('Gulliver: pdf.js cannot run in this browser', e);
       throw new Error('pdf-reader');
     }
     lib.GlobalWorkerOptions.workerSrc = pdfjsFolder + 'pdf.worker.min.mjs';

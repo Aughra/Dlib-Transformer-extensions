@@ -162,7 +162,7 @@ export function acceptFor(role, room) {
     contexte de travail (workingContext), 0 tant qu'il n'est pas chargé, et ses vitesses de lecture et d'écriture
     (readRate, writeRate).  Le format d'un modèle chargé dans le moteur donne son raisonnement et ses outils, et son
     entrée dans la liste du service les restreint (repris de l'original, Albireo 1.0.16) : les entrées du catalogue et
-    des modèles livrés avec Albireo disent ce que fait chaque modèle, vérifié modèle par modèle, de sorte qu'un modèle
+    des modèles livrés avec Gulliver disent ce que fait chaque modèle, vérifié modèle par modèle, de sorte qu'un modèle
     dont le format offre des outils qu'il n'appelle pas (Qwen2.5 Coder) a les boutons Agent et Web éteints, et un modèle
     qui ne raisonne pas, celui du raisonnement approfondi.  Un modèle importé, ou ajouté depuis Hugging Face (fork pour
     macOS), dont l'entrée devine ses capacités, garde celles de son format ; un modèle qui raisonne avant chaque
@@ -242,7 +242,7 @@ export function toolSet(c, caps) {
 }
 
 /*
-    Le travail fait en arrière-plan (titres, résumés, mémoire) va au modèle livré avec Albireo,
+    Le travail fait en arrière-plan (titres, résumés, mémoire) va au modèle livré avec Gulliver,
     que le service garde chargé, sans raisonnement ; le service le confie au modèle général quand
     il n'y en a pas.  Un modèle qui raisonne toujours voit son raisonnement terminé aussitôt par le
     moteur, hors de la réponse et de son max_tokens.
@@ -365,7 +365,7 @@ async function pollStatus() {
     if (changed || listed) renderComposerState();
     // Les tokens des images ont été mesurés pour les modèles des fonctions tels qu'ils étaient.
     if (changed) imageTokenCache.clear();
-    // Une langue choisie entre-temps dans Albireo, que cette interface suit.
+    // Une langue choisie entre-temps dans Gulliver, que cette interface suit.
     await languageChanged();
     renderHint();
     // Le modèle d'embedding de la recherche dans les documents ; les documents qui n'ont pas encore
@@ -522,7 +522,7 @@ function contextHelp() {
     'Ici, la discussion affichée occupe ' + formatNumber(tokens) + ' jetons sur les ' + formatNumber(total) +
       ' que ce modèle peut garder en tête' + (total ? ' (' + Math.round(100 * Math.min(1, tokens / total)) + ' %)' : '') +
       '. La barre devient orange aux trois quarts et rouge à 90 %.',
-    'Au-delà de la moitié, Albireo résume les échanges les plus anciens pour garder de la place à la réponse ; ' +
+    'Au-delà de la moitié, Gulliver résume les échanges les plus anciens pour garder de la place à la réponse ; ' +
       'le modèle en garde l’essentiel, pas chaque détail. Pour un nouveau sujet, une nouvelle discussion repart ' +
       'd’un contexte vide.',
     'Image : c’est la taille du bureau du modèle. Il ne travaille que sur ce qui tient dessus ; quand le bureau ' +

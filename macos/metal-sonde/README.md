@@ -13,7 +13,7 @@ Petit programme propre au fork, hors du moteur. Il enveloppe en place, sans copi
 Depuis la racine du dépôt :
 
 ```sh
-E=dlib/dlib/external/albireo
+E=dlib/dlib/external/gulliver
 clang++ -std=c++17 -O2 -fobjc-arc -Idlib -o build/metal-sonde macos/metal-sonde/probe.mm \
   $E/engine/qkernels.cpp $E/engine/model_file.cpp $E/common/system_info.cpp \
   -framework Metal -framework Foundation -framework Accelerate

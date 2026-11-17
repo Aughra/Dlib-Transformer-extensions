@@ -1,5 +1,5 @@
 {
- "_note": "Le sommaire du carnet du portage, que sert Albireo (host/carnet.h) : motifs = la liste fermée des fichiers lisibles (un dossier exact et un nom : « * », « *.extension » ou un nom exact) ; sections = le sommaire ; blogs = les dossiers des épisodes NN-titre.md, dont le titre perd le préfixe strip jusqu'à « : ». À mettre à jour quand un document du fork est ajouté.",
+ "_note": "Le sommaire du carnet du portage, que sert Gulliver (host/carnet.h) : motifs = la liste fermée des fichiers lisibles (un dossier exact et un nom : « * », « *.extension » ou un nom exact) ; sections = le sommaire ; blogs = les dossiers des épisodes NN-titre.md, dont le titre perd le préfixe strip jusqu'à « : ». À mettre à jour quand un document du fork est ajouté.",
  "motifs": [
   "docs/*.md",
   "docs/*.pdf",
@@ -14,9 +14,9 @@
   "CLAUDE.md",
   "macos/metal-sonde/README.md",
   "macos/site-docs/README.md",
-  "dlib/dlib/external/albireo/README.md",
-  "dlib/dlib/external/albireo/web/changelog.md",
-  "dlib/dlib/external/albireo/tools/page_test/README.md",
+  "dlib/dlib/external/gulliver/README.md",
+  "dlib/dlib/external/gulliver/web/changelog.md",
+  "dlib/dlib/external/gulliver/tools/page_test/README.md",
   "dlib/dlib/external/pseudalis/README.md",
   "dlib/dlib/external/pseudalis/web/changelog.md"
  ],
@@ -92,26 +92,26 @@
    ]
   },
   {
-   "title": "Albireo",
+   "title": "Gulliver",
    "entries": [
     {
-     "path": "dlib/dlib/external/albireo/web/changelog.md",
-     "title": "Notes de version d'Albireo",
+     "path": "dlib/dlib/external/gulliver/web/changelog.md",
+     "title": "Notes de version d'Gulliver",
      "desc": "Ce que chaque version apporte."
     },
     {
      "path": "docs/captures/README.md",
      "title": "Captures d'écran",
-     "desc": "Albireo sur le Mac et sur le téléphone."
+     "desc": "Gulliver sur le Mac et sur le téléphone."
     },
     {
-     "path": "dlib/dlib/external/albireo/tools/page_test/README.md",
+     "path": "dlib/dlib/external/gulliver/tools/page_test/README.md",
      "title": "Tests de la page",
      "desc": "Le banc d'essai de l'interface."
     },
     {
-     "path": "dlib/dlib/external/albireo/README.md",
-     "title": "README d'Albireo",
+     "path": "dlib/dlib/external/gulliver/README.md",
+     "title": "README d'Gulliver",
      "desc": "De l'original, traduit en français."
     }
    ]

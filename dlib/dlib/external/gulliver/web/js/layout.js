@@ -59,7 +59,7 @@ export function buildLayout() {
   ui.sidebar.append(
     h('div', { class: 'brand' },
       h('button', { class: 'brand-home', type: 'button', title: t('home'), 'aria-label': t('home'), onclick: goHome },
-        h('img', { src: 'img/albireo-mark.svg', alt: '' }), h('div', { class: 'name', html: '<span>Albireo</span>' })),
+        h('img', { src: 'img/gulliver-mark.svg', alt: '' }), h('div', { class: 'name', html: '<span>Gulliver</span>' })),
       h('div', { class: 'spacer' })),
     appSwitch(),
     h('div', { class: 'sidebar-actions' },
@@ -213,13 +213,13 @@ export function buildLayout() {
 }
 
 /*
-    Le passage à Pseudalis (fork pour macOS) : un sélecteur « Albireo | Pseudalis » sous le logo, montré seulement sur
+    Le passage à Pseudalis (fork pour macOS) : un sélecteur « Gulliver | Pseudalis » sous le logo, montré seulement sur
     le Mac lui-même (https://localhost), quand le service dit que Pseudalis y tourne (GET /gulliver/v1/pseudalis).
     Pseudalis s'ouvre dans un autre onglet, à son adresse ; son propre sélecteur ramène ici.
 */
 function appSwitch() {
   const box = h('div', { class: 'app-switch', hidden: true, role: 'group', 'aria-label': 'Application' },
-    h('span', { class: 'on', 'aria-current': 'page' }, 'Albireo'));
+    h('span', { class: 'on', 'aria-current': 'page' }, 'Gulliver'));
   // Sur le Mac, par localhost ; depuis un autre appareil, par l'accès réseau de Pseudalis quand il est ouvert.
   const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
   fetch('/gulliver/v1/pseudalis', { cache: 'no-store' }).then((r) => r.json()).then((p) => {

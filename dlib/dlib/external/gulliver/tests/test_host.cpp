@@ -11,7 +11,7 @@
     qui a un second nom, et un dossier de modèles remplacé par un lien sont refusés, et les fichiers
     vers lesquels ils mènent restent tels quels.  Les imports lisent sans aucun lien et par un seul
     nom, un paquet hors ligne ne donne que les fichiers que liste son catalogue, et un fichier dont
-    le contenu est celui d'un modèle installé, y compris un modèle fourni avec Albireo, n'est ni
+    le contenu est celui d'un modèle installé, y compris un modèle fourni avec Gulliver, n'est ni
     copié à nouveau ni enregistré par-dessus.  Les liens demandent un système qui laisse chaque
     compte en créer : ils sont sautés sous Windows.
 
@@ -41,7 +41,7 @@
     privée refusée.  La recherche de Wikipédia répond depuis le même serveur avec ses documents.  Les
     deux routes refusent de travailler hors ligne ou avec l'accès web désactivé, et une recherche
     sans fournisseur est refusée.
-    Le relais (repris de l'original, Albireo 1.0.23) garde son secret dans relay.secret (0600),
+    Le relais (repris de l'original, Gulliver 1.0.23) garde son secret dans relay.secret (0600),
     jamais dans settings.json, pour le fournisseur, l'adresse et l'utilisateur pour lesquels il a
     été donné ; il rend les pseudonymes d'une réponse coupée n'importe où, aux limites des mots, sa
     mémoire de la pseudonymisation sert un texte de nouveau sans Pseudalis et oublie les valeurs
@@ -332,7 +332,7 @@ int main(int argc, char** argv)
     gulliver::make_dirs(inbox);
 
     {
-        // À largeur égale, un projecteur ne va qu'avec un décodeur de sa famille (Albireo 4.30.0) : le projecteur de
+        // À largeur égale, un projecteur ne va qu'avec un décodeur de sa famille (Gulliver 4.30.0) : le projecteur de
         // Qwen3.5-4B et celui de Gemma 3 4B sortent tous deux 2 560 valeurs.
         auto file = [](const std::string& name, const std::string& arch, const std::string& type) {
             gulliver::pairing_file f;
@@ -532,7 +532,7 @@ int main(int argc, char** argv)
         l'interface de Wikipédia, et garde ce qu'elle a reçu, que les vérifications lisent sous
         seen_m.
     */
-    const std::string page = "<html><body><p>Albireo &amp; the web</p></body></html>";
+    const std::string page = "<html><body><p>Gulliver &amp; the web</p></body></html>";
     const std::string large_text = blob(3u << 20, 't');
     const size_t large_pdf = size_t(21) << 20;
     server.Get("/web/page.html", [&](const httplib::Request&, httplib::Response& res) {
@@ -622,7 +622,7 @@ int main(int argc, char** argv)
     official_serve("model-2.bin", newer_tiny);
 
     {
-        gulliver::store db(gulliver::join_path(work, "albireo.db"));
+        gulliver::store db(gulliver::join_path(work, "gulliver.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-10-30T00:00:00Z";
         json list = json::array();
@@ -894,7 +894,7 @@ int main(int argc, char** argv)
             refuse laisse le modèle tel quel ; le téléchargement suivant se complète à partir des
             fichiers reçus, sans nouveau transfert.
         */
-        gulliver::store db(gulliver::join_path(work, "albireo.db"));
+        gulliver::store db(gulliver::join_path(work, "gulliver.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-10-31T00:00:00Z";
         json list = json::array();
@@ -929,14 +929,14 @@ int main(int argc, char** argv)
     }
 
     {
-        // Les modèles fournis avec Albireo, et les imports du même contenu.
-        gulliver::store db(gulliver::join_path(work, "albireo-2.db"));
+        // Les modèles fournis avec Gulliver, et les imports du même contenu.
+        gulliver::store db(gulliver::join_path(work, "gulliver-2.db"));
         const std::string builtin = gulliver::join_path(work, "builtin");
         gulliver::make_dirs(builtin);
         const std::string own = blob(150000, 'q');
         write_text(gulliver::join_path(builtin, "base.gguf"), own);
         json entry = json::object();
-        entry["id"] = "base-albireo";
+        entry["id"] = "base-gulliver";
         entry["name"] = "Base";
         entry["file"] = "base.gguf";
         entry["sha256"] = gulliver::sha256_hex(own);
@@ -948,12 +948,12 @@ int main(int argc, char** argv)
         json manifest = json::object();
         manifest["models"] = listed;
         write_text(gulliver::join_path(builtin, gulliver::builtin_manifest_name), manifest.dump());
-        // Le catalogue en usage connaît un autre contenu sous l'identifiant du modèle fourni avec Albireo.
+        // Le catalogue en usage connaît un autre contenu sous l'identifiant du modèle fourni avec Gulliver.
         const std::string newer = blob(160000, 'z');
         json catalog = json::object();
         catalog["updated"] = "2026-10-30T00:00:00Z";
         json list = json::array();
-        list.push_back(catalog_entry("base-albireo", newer, base_url + "/none.bin"));
+        list.push_back(catalog_entry("base-gulliver", newer, base_url + "/none.bin"));
         list.push_back(catalog_entry("base", source, base_url + "/source.bin"));
         catalog["models"] = list;
         db.set_value("catalog", catalog.dump());
@@ -962,29 +962,29 @@ int main(int argc, char** argv)
         std::vector<gulliver::installed_model> removed;
         m.register_builtin(builtin, removed);
 
-        // L'entrée du fichier à partir duquel le modèle d'Albireo a été fait : le modèle d'Albireo en
+        // L'entrée du fichier à partir duquel le modèle d'Gulliver a été fait : le modèle d'Gulliver en
         // tient lieu.
         const json view = m.overview("en");
         bool listed_source = false, listed_builtin = false;
         for (const auto& x : view["models"].elements())
         {
             listed_source = listed_source || x["id"].as_string() == "base";
-            listed_builtin = listed_builtin || x["id"].as_string() == "base-albireo";
+            listed_builtin = listed_builtin || x["id"].as_string() == "base-gulliver";
         }
-        check(!listed_source && listed_builtin, "the catalog entry a model of Albireo stands for is not listed");
+        check(!listed_source && listed_builtin, "the catalog entry a model of Gulliver stands for is not listed");
         gulliver::user_error carried;
         check(!m.start_download("base", carried) && carried.code == "builtin_installed",
-            "the download of the file a model of Albireo carries is refused");
+            "the download of the file a model of Gulliver carries is refused");
 
         // Le même contenu dans le dossier d'import : pas copié, pas enregistré à nouveau, retiré du dossier.
-        const std::string copy = gulliver::join_path(inbox, "base-albireo.gguf");
+        const std::string copy = gulliver::join_path(inbox, "base-gulliver.gguf");
         write_text(copy, own);
         const json r = m.import_path(copy, inbox, true);
         gulliver::installed_model im;
-        check(r["imported"].size() == 0 && r["already"].size() == 1 && r["already"][0].as_string() == "base-albireo",
-            "a copy of a model that comes with Albireo is installed already");
+        check(r["imported"].size() == 0 && r["already"].size() == 1 && r["already"][0].as_string() == "base-gulliver",
+            "a copy of a model that comes with Gulliver is installed already");
         check(gulliver::list_dir(m.models_dir()).empty(), "no second copy enters the models folder");
-        check(installed(db, "base-albireo", im) && im.source == "builtin", "the model stays the one of Albireo");
+        check(installed(db, "base-gulliver", im) && im.source == "builtin", "the model stays the one of Gulliver");
         check(!gulliver::file_exists(copy), "the copy leaves the import folder");
 
         // Un autre contenu sous son identifiant : installé sous son propre nom, jamais par-dessus.
@@ -992,17 +992,17 @@ int main(int argc, char** argv)
         write_text(variant, newer);
         const json v = m.import_path(variant, inbox, false);
         gulliver::installed_model renamed;
-        check(v["imported"].size() == 1 && v["imported"][0].as_string() == "base-albireo-import",
-            "a file with the identifier of a model of Albireo takes the suffix -import");
-        check(installed(db, "base-albireo", im) && im.source == "builtin", "the model of Albireo keeps its entry");
-        check(installed(db, "base-albireo-import", renamed) && renamed.source == "catalog",
+        check(v["imported"].size() == 1 && v["imported"][0].as_string() == "base-gulliver-import",
+            "a file with the identifier of a model of Gulliver takes the suffix -import");
+        check(installed(db, "base-gulliver", im) && im.source == "builtin", "the model of Gulliver keeps its entry");
+        check(installed(db, "base-gulliver-import", renamed) && renamed.source == "catalog",
             "the other file has an entry of its own");
         check(gulliver::file_exists(variant), "a file imported without move stays in place");
 
         // Un téléchargement de son identifiant est refusé.
         gulliver::user_error error;
-        check(!m.start_download("base-albireo", error) && error.code == "builtin_installed",
-            "a download of a model that comes with Albireo is refused");
+        check(!m.start_download("base-gulliver", error) && error.code == "builtin_installed",
+            "a download of a model that comes with Gulliver is refused");
 
         // Le dossier d'import se lit sans aucun lien et par un seul nom.
         const std::string secret = gulliver::join_path(outside, "secret.gguf");
@@ -1096,7 +1096,7 @@ int main(int argc, char** argv)
             fichier corrompu qui est récupéré de nouveau, une empreinte qui échoue encore, une adresse qui
             n'a pas le fichier, puis une adresse qui le donne à une autre taille.
         */
-        gulliver::store db(gulliver::join_path(work, "albireo-3.db"));
+        gulliver::store db(gulliver::join_path(work, "gulliver-3.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-11-01T00:00:00Z";
         json list = json::array();
@@ -1218,7 +1218,7 @@ int main(int argc, char** argv)
 
         // Un modèle dont l'adresse répond une page web, puis donne le fichier ; un catalogue que son adresse
         // n'a pas.
-        gulliver::store db(gulliver::join_path(work, "albireo-4.db"));
+        gulliver::store db(gulliver::join_path(work, "gulliver-4.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-11-01T00:00:00Z";
         json list = json::array();
@@ -1263,7 +1263,7 @@ int main(int argc, char** argv)
             signature, de son adresse ou d'un dossier ; et un téléchargement annulé pendant qu'il vient de
             son adresse.
         */
-        gulliver::store db(gulliver::join_path(work, "albireo-5.db"));
+        gulliver::store db(gulliver::join_path(work, "gulliver-5.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-11-01T00:00:00Z";
         json list = json::array();
@@ -1318,7 +1318,7 @@ int main(int argc, char** argv)
         served_models.push_back(catalog_entry("slow", slow, official + "slow.bin"));
         served_catalog["models"] = served_models;
         official_serve("catalog.json", served_catalog.dump());
-        gulliver::store cdb(gulliver::join_path(work, "albireo-6.db"));
+        gulliver::store cdb(gulliver::join_path(work, "gulliver-6.db"));
         gulliver::model_manager cm(cdb, gulliver::join_path(work, "models-6"));
         std::string refresh_error;
         const bool refreshed = cm.refresh_catalog(refresh_error);
@@ -1543,7 +1543,7 @@ int main(int argc, char** argv)
         }
         const gulliver::web_reply local = fetch("http://[::ffff:127.0.0.1]/", web, "");
         check(local.code == "address_refused" && local.message == "the address of [::ffff:127.0.0.1] is local or "
-            "private, which the web access of Albireo does not read",
+            "private, which the web access of Gulliver does not read",
             "a refusal names the host (" + local.message + ")");
 
         // Le service hors ligne et l'accès web désactivé refusent les deux routes ; la capacité suit.
@@ -1613,9 +1613,9 @@ int main(int argc, char** argv)
         check(reply.status == 502 && reply.code == "too_many_redirects",
             "redirections are followed five times at most");
         reply = fetch(base_url + "/web/headers", web, "fr-FR");
-        check(reply.status == 200 && gulliver::base64_decode(reply.body["data"].as_string()) == std::string("Albireo/")
+        check(reply.status == 200 && gulliver::base64_decode(reply.body["data"].as_string()) == std::string("Gulliver/")
             + GULLIVER_VERSION + " (+https://github.com/Cydral/Dlib-Transformer-extensions)\nfr-FR\n",
-            "a page receives the User-Agent of Albireo, the language asked and no cookie");
+            "a page receives the User-Agent of Gulliver, the language asked and no cookie");
         gulliver::http_cancel_all("the service stops");
         reply = fetch(base_url + "/web/page.html", web, "");
         check(reply.status == 503 && reply.code == "cancelled", "a service that stops ends the reading of pages");
@@ -1637,7 +1637,7 @@ int main(int argc, char** argv)
         {
             std::lock_guard<std::mutex> lock(seen_m);
             check(seen_query == "Einstein relativit\xc3\xa9" && seen_count == "5"
-                && seen_agent == std::string("Albireo/") + GULLIVER_VERSION
+                && seen_agent == std::string("Gulliver/") + GULLIVER_VERSION
                 + " (https://github.com/Cydral/Dlib-Transformer-extensions; cydraltechnology@gmail.com)",
                 "Wikipedia receives the query, the count and the User-Agent with a contact (" + seen_agent + ")");
         }
@@ -1681,7 +1681,7 @@ int main(int argc, char** argv)
     }
 
     {
-        // Le relais (repris de l'original, Albireo 1.0.23) : son secret dans les réglages, la restauration des
+        // Le relais (repris de l'original, Gulliver 1.0.23) : son secret dans les réglages, la restauration des
         // pseudonymes, la mémoire de la pseudonymisation, et les requêtes de ses trois fournisseurs à un serveur
         // local qui répond comme chacun.
         const std::string folder = gulliver::join_path(work, "relay-settings");
@@ -2334,16 +2334,16 @@ int main(int argc, char** argv)
             Un nom du réseau local mène la requête à l'adresse vérifiée, un nom que le résolveur du
             système ne connaît pas ici ; un nom qui a une adresse publique parmi les siennes est refusé.
         */
-        gulliver::relay_name_for_tests("engine.albireo-test", { "127.0.0.1" });
-        gulliver::relay_name_for_tests("mixed.albireo-test", { "10.0.0.5", "93.184.215.14" });
+        gulliver::relay_name_for_tests("engine.gulliver-test", { "127.0.0.1" });
+        gulliver::relay_name_for_tests("mixed.gulliver-test", { "10.0.0.5", "93.184.215.14" });
         gulliver::relay_settings pinned = hs.relay;
-        pinned.url = "http://Engine.Albireo-Test:" + std::to_string(relay_port) + "/v1";
+        pinned.url = "http://Engine.Gulliver-Test:" + std::to_string(relay_port) + "/v1";
         const json pinned_test = relay.test(pinned);
         gulliver::relay_settings mixed = hs.relay;
-        mixed.url = "http://mixed.albireo-test:" + std::to_string(relay_port) + "/v1";
+        mixed.url = "http://mixed.gulliver-test:" + std::to_string(relay_port) + "/v1";
         const json mixed_test = relay.test(mixed);
-        gulliver::relay_name_for_tests("engine.albireo-test", {});
-        gulliver::relay_name_for_tests("mixed.albireo-test", {});
+        gulliver::relay_name_for_tests("engine.gulliver-test", {});
+        gulliver::relay_name_for_tests("mixed.gulliver-test", {});
         // Un nom sous .localhost joint 127.0.0.1 quel que soit le résolveur ; seul le réseau local reste à portée.
         gulliver::relay_settings dotted = hs.relay;
         dotted.url = "http://engine.localhost:" + std::to_string(relay_port) + "/v1";

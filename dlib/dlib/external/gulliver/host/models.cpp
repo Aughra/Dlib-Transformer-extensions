@@ -225,8 +225,8 @@ namespace gulliver
         }
 
         /*
-            Le modèle livré avec Albireo dont le fichier est celui de l'entrée du catalogue, fait à partir
-            d'elle par le build d'Albireo sous un autre identifiant : son manifeste donne l'empreinte du
+            Le modèle livré avec Gulliver dont le fichier est celui de l'entrée du catalogue, fait à partir
+            d'elle par le build de Gulliver sous un autre identifiant : son manifeste donne l'empreinte du
             fichier dont il a été fait (source_sha256).  Nul quand il n'y en a pas.
         */
         const installed_model* builtin_carrier(const std::vector<installed_model>& installed, const json& entry)
@@ -439,7 +439,7 @@ namespace gulliver
             d["tools"] = !embedding && (holds("[INST]") || holds("<|start_header_id|>")
                 || holds("<|start_of_role|>") || granite4 || (chatml && (holds("<tool_call>") || holds("tools"))));
             // Les entrées que le moteur lit dans le modèle, et l'identité que porte un fichier
-            // préparé par le build d'Albireo (tools/gulliver_builtin.cpp).
+            // préparé par le build de Gulliver (tools/gulliver_builtin.cpp).
             json inputs = json::array();
             if (g.has("albireo.inputs"))
                 for (const auto& s : g.at("albireo.inputs").arr_str) inputs.push_back(s);
@@ -810,7 +810,7 @@ namespace gulliver
             }
             m["total_size"] = static_cast<unsigned long long>(im.size + im.projector_size);
         };
-        // Les modèles livrés avec Albireo d'abord, dans l'ordre de leur manifeste.
+        // Les modèles livrés avec Gulliver d'abord, dans l'ordre de leur manifeste.
         for (const auto& im : installed)
         {
             if (im.source != "builtin" || embedding(im.descriptor)) continue;
@@ -826,7 +826,7 @@ namespace gulliver
         for (const auto& e : cat["models"].elements())
         {
             if (embedding(e)) continue;
-            // L'entrée que remplace un modèle livré avec Albireo, sauf si elle est installée sous son propre
+            // L'entrée que remplace un modèle livré avec Gulliver, sauf si elle est installée sous son propre
             // identifiant.
             const std::string eid = e["id"].as_string();
             bool own = false;
@@ -947,22 +947,22 @@ namespace gulliver
             error.set("invalid model identifier", "catalog_entry").arg("m", name);
             return false;
         }
-        // Un modèle livré avec Albireo garde son identifiant : un téléchargement de celui-ci remplacerait son entrée.
+        // Un modèle livré avec Gulliver garde son identifiant : un téléchargement de celui-ci remplacerait son entrée.
         installed_model holder;
         if (db_.find_model(id, holder) && holder.source == "builtin")
         {
             db_.remove_download_state(id);
-            error.set("the model '" + id + "' comes with Albireo and is installed already", "builtin_installed")
+            error.set("the model '" + id + "' comes with Gulliver and is installed already", "builtin_installed")
                 .arg("m", name);
             return false;
         }
-        // Le fichier de l'entrée est celui qu'un modèle livré avec Albireo porte sous un autre nom.
+        // Le fichier de l'entrée est celui qu'un modèle livré avec Gulliver porte sous un autre nom.
         const std::vector<installed_model> installed = db_.models();
         const installed_model* carrier = builtin_carrier(installed, entry);
         if (carrier)
         {
             db_.remove_download_state(id);
-            error.set("the model '" + id + "' comes with Albireo as " + carrier->name, "builtin_installed")
+            error.set("the model '" + id + "' comes with Gulliver as " + carrier->name, "builtin_installed")
                 .arg("m", carrier->name);
             return false;
         }
@@ -2072,11 +2072,11 @@ namespace gulliver
         }
         try
         {
-            // L'entrée d'un modèle livré avec Albireo n'est jamais remplacée par un autre fichier.
+            // L'entrée d'un modèle livré avec Gulliver n'est jamais remplacée par un autre fichier.
             installed_model existing;
             if (source != "builtin" && db_.find_model(id, existing) && existing.source == "builtin")
             {
-                error = "the model " + id + " comes with Albireo";
+                error = "the model " + id + " comes with Gulliver";
                 return false;
             }
             db_.put_model(m);
@@ -2400,7 +2400,7 @@ namespace gulliver
             if (!it.error.empty())
                 fail(it, it.error);
             else if (it.projector && !static_cast<const json&>(it.description)["vision"].as_bool(true))
-                fail(it, "the projector holds no vision encoder, and Albireo reads images only");
+                fail(it, "the projector holds no vision encoder, and Gulliver reads images only");
             else if (it.projector)
                 projectors.push_back(i);
             else
@@ -2441,7 +2441,7 @@ namespace gulliver
             import_item& d = items[i];
             import_item* p = projector_of[i] >= 0 ? &items[static_cast<size_t>(projector_of[i])] : nullptr;
             std::string error;
-            // Un fichier qui répète un modèle installé, y compris un modèle livré avec Albireo, n'est pas recopié.
+            // Un fichier qui répète un modèle installé, y compris un modèle livré avec Gulliver, n'est pas recopié.
             installed_model same;
             if (installed_with_hash(d.sha256, same))
             {
@@ -2706,7 +2706,7 @@ namespace gulliver
             if (name.size() > 5 && name.substr(name.size() - 5) == ".gguf") name = name.substr(0, name.size() - 5);
             for (char& c : name)
                 if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == '.')) c = '-';
-            // Un modèle d'Albireo garde son identifiant.
+            // Un modèle de Gulliver garde son identifiant.
             const std::string own = static_cast<const json&>(entry)["albireo_id"].as_string();
             id = own.empty() ? name : own;
             entry.erase("albireo_id");
@@ -2730,7 +2730,7 @@ namespace gulliver
         }
         /*
             Un fichier ne prend jamais l'identifiant d'un autre modèle installé, y compris un modèle livré avec
-            Albireo ; une version plus récente, venue du catalogue, d'un modèle du catalogue le remplace.
+            Gulliver ; une version plus récente, venue du catalogue, d'un modèle du catalogue le remplace.
         */
         id = free_identifier(id, known);
         entry["id"] = id;
@@ -2937,7 +2937,7 @@ namespace gulliver
             m.descriptor = d;
             db_.put_model(m);
             if (!known) added.push_back(m);
-            log_info("models: " + id + " comes with Albireo, in " + file + (projector.empty() ? std::string()
+            log_info("models: " + id + " comes with Gulliver, in " + file + (projector.empty() ? std::string()
                 : ", with its projector " + projector));
         }
         for (const auto& m : db_.models())
@@ -2945,7 +2945,7 @@ namespace gulliver
             if (m.source != "builtin" || listed.count(m.id)) continue;
             db_.remove_model(m.id);
             removed.push_back(m);
-            log_info("models: " + m.id + " no longer comes with Albireo");
+            log_info("models: " + m.id + " no longer comes with Gulliver");
         }
         return added;
     }

@@ -2,10 +2,10 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    albireo-service : le service Albireo.
+    gulliver-service : le service Gulliver.
 
-        albireo-service                  lancé au premier plan dans la console, arrêté par Ctrl+C
-        albireo-service --version
+        gulliver-service                  lancé au premier plan dans la console, arrêté par Ctrl+C
+        gulliver-service --version
 
     Outils du moteur, exécutés dans un processus qui se termine après leur réponse :
 
@@ -99,7 +99,7 @@ namespace
             if (!ok)
             {
                 gulliver::log_error("service: " + error);
-                if (console) std::cerr << "albireo-service: " << error << std::endl;
+                if (console) std::cerr << "gulliver-service: " << error << std::endl;
                 // Un démarrage qui échoue est retenté quelques fois, pour un port libéré tard
                 // par l'exécution précédente ou un disque monté après le service.
                 if (++failures >= 3) return 1;

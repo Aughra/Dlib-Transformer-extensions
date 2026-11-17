@@ -25,18 +25,18 @@ namespace gulliver
     /*
         Le dossier des données partagées par les programmes : les réglages, les certificats,
         la base de données, les journaux et, sauf si les réglages disent autre chose, les
-        modèles.  $GULLIVER_HOME quand elle est définie, sinon %ProgramData%\Albireo sous Windows
+        modèles.  $GULLIVER_HOME quand elle est définie, sinon %ProgramData%\Gulliver sous Windows
         et ~/.local/share/gulliver ailleurs.  Sous Windows, la variable est lue dans
         l'environnement de la machine, celui que reçoivent les services : la variable d'un
         utilisateur ne détourne ni l'installateur ni l'icône du service.  Le dossier que
-        l'installateur enregistre (DataDir de HKLM\Software\Albireo) passe en premier.
+        l'installateur enregistre (DataDir de HKLM\Software\Gulliver) passe en premier.
     */
     std::string data_dir();
 
     /*
         Fait que data_dir() renvoie p dans ce processus à partir de là.  Les programmes de test
         l'appellent, pour ne jamais écrire dans le dossier de données d'un service installé ;
-        les programmes d'Albireo ne le font jamais, et aucune variable de l'environnement d'un
+        les programmes de Gulliver ne le font jamais, et aucune variable de l'environnement d'un
         utilisateur ne peut le faire.
     */
     void set_data_dir(const std::string& p);
