@@ -1,6 +1,6 @@
 # Premier jour sur le Mac mini M5 Pro
 
-Ce qu'il faut faire, dans l'ordre, pour reprendre le portage sur le Mac mini (M5 Pro, 64 Go) et le comparer au MacBook Air M2. Écrit le 2026-11-13 (Albireo 4.13.0), mis à jour le 2026-11-16 (Albireo 5.4.1, Pseudalis 3.1.0). Les commandes se lancent depuis la racine du dépôt.
+Ce qu'il faut faire, dans l'ordre, pour reprendre le portage sur le Mac mini (M5 Pro, 64 Go) et le comparer au MacBook Air M2. Écrit le 2026-11-13 (Albireo 4.13.0), mis à jour le 2026-11-16 (Albireo 5.4.1, Pseudalis 3.1.0) et le 2026-11-17 (backend Metal de dlib ; arrivée prévue vers le 2026-11-21). Les commandes se lancent depuis la racine du dépôt.
 
 ## 1. Installer les outils
 
@@ -20,6 +20,9 @@ cmake -S dlib/dlib/external/albireo -B build/macos-albireo -G Ninja -DCMAKE_BUIL
 cmake --build build/macos-albireo -- -k 0
 cmake -S dlib/dlib/external/pseudalis -B build/macos-pseudalis -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
 cmake --build build/macos-pseudalis -- -k 0
+cmake -S dlib/dlib/test -B build/macos-arm64-tests-metal -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DDLIB_USE_FFMPEG=OFF -DDLIB_USE_CUDA=OFF -DDLIB_USE_NPU=OFF -DDLIB_USE_METAL=ON
+cmake --build build/macos-arm64-tests-metal --target dtest                  # backend Metal de dlib (épisode 51)
 ```
 
 ## 3. Copier les modèles et les données du M2
@@ -44,9 +47,10 @@ Pour le grand modèle à experts, le télécharger directement sur le Mac mini d
 
 ```sh
 ALBIREO_TEST_PORT=18453 bash dlib/dlib/external/albireo/tools/test_macos.sh      # 60 étapes sur le M2 (accès réseau d'essai sur 18454)
-PSEUDALIS_TEST_PORT=18456 bash dlib/dlib/external/pseudalis/tools/test_macos.sh   # 35 étapes
+PSEUDALIS_TEST_PORT=18456 bash dlib/dlib/external/pseudalis/tools/test_macos.sh   # 37 étapes
 build/macos-albireo/tests/test_metal                                             # noyaux Metal contre le processeur
-bash dlib/dlib/external/albireo/tools/page_test/page_test.sh                      # ESLint et 128 vérifications de la page
+bash dlib/dlib/external/albireo/tools/page_test/page_test.sh                      # ESLint et 131 vérifications de la page
+(cd build/macos-arm64-tests-metal && ./dtest --test_metal)                       # backend Metal de dlib : 4 041 vérifications sur le M2
 ```
 
 Un écart entre le GPU et le processeur au chargement d'un modèle (« its check disagrees ») renvoie seul le modèle au processeur : le journal du service le dit. Sur une nouvelle puce, c'est la première chose à regarder.
@@ -56,6 +60,12 @@ Un écart entre le GPU et le processeur au chargement d'un modèle (« its check
 ```sh
 pmset -g | grep lowpowermode          # doit donner 0
 bash dlib/dlib/external/albireo/tools/bench_macos.sh 2   # tableau dans build/bench/<modèle du Mac>-<date>.md
+```
+
+Le produit de matrices de dlib sur le GPU, contre le processeur (sur le M2 : 2048×2048 en 6,3 ms contre 14,5 ms, et le GPU plus lent sous 1024) :
+
+```sh
+(cd build/macos-arm64-tests-metal && DLIB_METAL_BENCH=1 ./dtest --test_metal | grep -o 'gemm [0-9]*x[0-9]*: .*')
 ```
 
 Le script mesure chaque modèle présent (y compris ceux de `build/bench-models/`) sur le processeur et le GPU, en alternance. Garder le tableau du M2 à côté pour comparer.

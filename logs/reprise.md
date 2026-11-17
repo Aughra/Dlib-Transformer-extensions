@@ -8,7 +8,7 @@
 - **Vrai service** : Albireo tourne en **5.9.0** et Pseudalis en **3.3.0** (relancés le 2026-11-16 au soir, après le redémarrage du Mac par une mise à jour de macOS ; relais coupé). Pseudalis sur 18444 (accès réseau 8445), Albireo sur 18443 (réseau 8444 sans mot de passe), bibliothèque `build/albireo-home/library` remplie de clones de `build/models` ; journal `build/albireo-home/logs/console.log`.
 - **Tests** : `test_macos.sh` d'Albireo 60 sur 60 (5.8.0, 2026-11-16), de Pseudalis 37 sur 37 (3.3.0, 2026-11-16) ; banc de la page 131 vérifications (5.9.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` de la liste du mémo avec `--test_npu`, `--test_metal` et `--test_dnn` : 5 252 124 vérifications (build CPU, 2026-11-17) ; `dtest --test_metal` : 4 041 vérifications dans le build Metal (5 256 150 avec la liste et `--test_dnn`) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
 - **Blog** : épisode 51 ; **blog de Pseudalis** : épisode 4 ; **notes pour l'auteur** : changement 25, entrée n° 24, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
-- **Le mode économie d'énergie du M2 est coupé** (2026-11-15) : les mesures redeviennent possibles sur le M2 (vérifier `pmset -g | grep lowpowermode` avant) ; les réglages fins attendent le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
+- **Le mode économie d'énergie du M2 est coupé** (2026-11-15) : les mesures redeviennent possibles sur le M2 (vérifier `pmset -g | grep lowpowermode` avant) ; les réglages fins attendent le **Mac mini M5 Pro (64 Go), attendu vers le **2026-11-21** (l'humain, le 2026-11-17 : « dans 4 jours ») : suivre `docs/mac-mini-premier-jour.md`.
 - **Original** : détaché depuis le 2026-11-11, plus de fusion ; lu à `53ddfe4` (Albireo 1.0.20) pour la reprise à la main du 2026-11-14, puis à `3bea372` (Albireo 1.0.23, 37 commits depuis la dernière fusion) pour le relais.
 - **Documents du portage** : dans Albireo, `/carnet/` (menu ☰) ; sommaire `macos/site-docs/sommaire.json` ; mot-clé « sitelog » (donner l'adresse du carnet). L'ancien site à part (`serve.py`, port 8650) est retiré.
 
@@ -17,6 +17,8 @@
 Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les exemples SLM, puis le moteur et le service d'Albireo et de Pseudalis, en « pur Apple » (NEON, Accelerate, Metal).
 
 ## En cours
+
+**Pause jusqu'au Mac mini** (décision de l'humain, 2026-11-17 : « on arrête les tests jusqu'à avoir le mini ») : plus de batteries de tests ni de mesures sur le M2 ; on reprend sur le Mac mini, par `docs/mac-mini-premier-jour.md`.
 
 **Backend Metal des tenseurs de dlib : les huit phases sont faites** (2026-11-17 ; consignes dans `logs/consignes-backend-metal-dlib.md`, bilan et « ce qui reste » à la fin de l'entrée de la phase 8 du journal ; blog : épisode 51). Build d'essai : `build/macos-arm64-tests-metal` (`-DDLIB_USE_METAL=ON`, commande dans le mémo) ; `dtest --test_metal` dans ce build et dans le build CPU. Suites possibles, à proposer à l'humain : enchaîner les commandes sans attente (vitesse), placer un réseau `dnn` entier sur Metal (les couches créent leurs tenseurs sur le processeur), l'attention par tuiles, d'autres formats GGUF, LoRA et la distillation ; mesurer sur le Mac mini.
 
@@ -180,6 +182,7 @@ Reprise terminée (blog : épisode 48). Réglages du relais réservés au Mac se
 
 ## Décisions, de la plus récente à la plus ancienne
 
+- 2026-11-17 : pause des tests et des mesures jusqu'à l'arrivée du Mac mini, vers le 2026-11-21 (décision de l'humain). Le backend Metal de dlib reste en l'état (huit phases faites) ; sa suite n'est à reprendre que pour un vrai projet d'entraînement (recommandation donnée à l'humain : il n'apporte rien à Albireo ni à Pseudalis aujourd'hui).
 - 2026-11-17 : backend Metal de dlib (choix du fork dans le plan validé) : un tenseur vide ne compte pour aucun dispositif (une sortie encore à dimensionner ne décide pas du chemin) ; `tensor_rand` refuse un tenseur Metal tant qu'il n'est pas porté ; noyaux compilés depuis leur texte au premier usage, comme ceux d'Albireo (pas d'outil `metal` de Xcode au build) ; chaque opération attend son tampon de commandes (`waitUntilCompleted`), si bien que `host()` lit toujours des valeurs finies.
 - 2026-11-15 : plus de jeton d'administration dans Pseudalis (décision de l'humain), comme pour Albireo : tout programme du Mac qui joint le service peut lire les originaux conservés ; restent les gardes Host et origine. Pseudalis a sa propre documentation et sa numérotation (2.0.0) ; les README d'Albireo et de Pseudalis sont en français.
 - 2026-11-15 : les modèles présents sur le Mac sans être passés par Albireo vont dans la **bibliothèque du Mac** (`library_dir`), que le service lit sans y écrire ; le dossier d'import reste une boîte aux lettres vidée au démarrage (l'original), la réserve garde les modèles passés par Albireo.
