@@ -65,6 +65,7 @@ Outils présents sur le Mac : AppleClang (Xcode), CMake et Ninja (Homebrew), `gh
 ## Méthode de travail
 
 - **Au début de chaque session : lire [logs/reprise.md](logs/reprise.md) en premier**, puis, pour information seulement, lancer `git fetch upstream` et dire combien de commits l'original a reçus depuis la dernière fusion.
+- **Chantier Gulliver en cours (depuis le 2026-11-17)** : le projet est renommé **Albireo → Gulliver**, avec un stockage par profil côté service puis le RAG en C++. Pour le reprendre ou le continuer, **lire d'abord l'avancement [logs/chantier-gulliver.md](logs/chantier-gulliver.md) (où on en est, quoi ensuite) et le plan [docs/chantier-gulliver-plan.md](docs/chantier-gulliver-plan.md)**. Mettre à jour l'avancement **à la fin de chaque sous-étape**, avant la suivante. Tant que le chantier n'est pas fini, le nom « Albireo » reste présent dans beaucoup de documents (dont ce fichier) : la mise à jour du nom suit les sous-étapes du bloc 0.
 - Énoncer ses hypothèses et traduire la demande en **critère vérifiable** avant de coder (par exemple « `cmake --build` finit sans erreur et `test_host` affiche *all tests passed* »).
 - Écrire le minimum qui résout le problème. Ne pas toucher aux fichiers hors du sujet de la demande.
 - Signaler toute dépendance ajoutée, et pourquoi.

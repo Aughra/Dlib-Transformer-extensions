@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Ouvrir le chantier Gulliver (plan, avancement, pointeur)
+
+- **Quoi** : démarrage d'un grand chantier en trois blocs, validé par l'humain : **0** renommer le projet **Albireo → Gulliver** (partout : routes d'API `/gulliver/v1`, base `gulliver.db`, dossiers de données, `GULLIVER_HOME`, `DB_NAME`, textes ; dossier `dlib/dlib/external/albireo/` → `.../gulliver/`, **dépôt GitHub gardé**) ; **A** stockage **par profil** côté service (un nom, sans mot de passe, tout ouvert sur le LAN, départ à vide, **garde « Mac seul » du relais retirée**) ; **B** moteur **RAG en C++** derrière une interface, **trois moteurs** (hybride/vecteurs/mots), **index nommés** et réglages RAG. Base de données : **SQLite**, accès isolé derrière `store.cpp`. Consigne : **aucune fonctionnalité perdue** (inventaire de non-régression dans le plan).
+- **Fichiers** : `docs/chantier-gulliver-plan.md` (plan complet, nouveau), `logs/chantier-gulliver.md` (avancement par sous-étape, nouveau), `CLAUDE.md` (pointeur de reprise ajouté à « Méthode de travail »).
+- **Pourquoi** : qu'une coupure ne fasse jamais reperdre plus d'une sous-étape, et qu'aucune fonction existante ne soit oubliée au refactor.
+- **Étapes** : plan validé (go), socle de reprise posé, aucune modification de code encore. Prochaine sous-étape : **0a** (renommer le dossier + chemins de build).
+
 ## 2026-11-17 — Porter SGD et Adam sur Metal et comparer un entraînement (phase 8 sur 8)
 
 - **Quoi** : versions Metal des formes à scalaires de `tt::affine_transform` (une, deux ou trois sources, avec ou sans constante, et `affine_transform_range`), dont se sert `sgd`, et de `tt::compute_adam_update`, dont se sert `adam` (pas `alpha` calculé par l'hôte exactement comme le CPU, puis un thread par valeur). Les solveurs `sgd` et `adam` de `dnn/solvers.h` créent leur état (`v` ; `m`, `v`, `s`) sur le dispositif des gradients, quand il est encore vide (aucune copie) : sans cela, un réseau sur Metal aurait reçu un état sur le processeur et l'aiguillage l'aurait refusé. Le pas s'applique comme dans `dnn/core.h`, par `tt::add(params, params, step)`, déjà porté.
