@@ -100,6 +100,9 @@ namespace dlib
         void silu (tensor& dest, const tensor& src);
         void gemm (float beta, tensor& dest, float alpha, const tensor& lhs, bool trans_lhs,
                    const tensor& rhs, bool trans_rhs, operation_mode mode);
+        void layer_normalize (double eps, resizable_tensor& dest, resizable_tensor& means,
+                              resizable_tensor& invstds, const tensor& src, const tensor& gamma,
+                              const tensor& beta);
     }
 }
 

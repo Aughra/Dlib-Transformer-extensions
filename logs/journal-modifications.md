@@ -2,6 +2,24 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Calculer la normalisation de couche (LayerNorm) sur Metal (phase 4 sur 8)
+
+- **Quoi** : `tt::layer_normalize` sur Metal, avec `eps`, `gamma` et `beta` par canal comme sur le CPU (moyenne et variance sur les k·nr·nc valeurs de chaque échantillon, variance par E[x²] − moyenne², sorties `means` et `invstds`). Deux noyaux : `layer_norm_stats`, un groupe de threads par échantillon (256 threads, ou la taille arrondie au multiple de 32 au-dessus) où chaque thread somme les valeurs et leurs carrés de 256 en 256, puis `simd_sum` et la somme des simdgroups ; `layer_norm_apply`, un thread par valeur. Une sortie vide sur le CPU passe sur Metal sans copie (`adopt`) ; `gamma` de plusieurs échantillons et `dest` qui serait `src` : erreur explicite. `run()` sait lancer des groupes de threads.
+- **Tolérance et justification** : les deux côtés somment D valeurs en float32, dans des ordres différents, et la soustraction E[x²] − moyenne² perd des chiffres quand la moyenne dépasse l'écart type ; 1e-5 seul ne tient donc pas sur des données décalées (écart mesuré 1,7e-4 sur des valeurs de moyenne 3). Le test calcule une référence exacte en double (deux passes) et exige |metal − cpu| ≤ 1e-5 + 1e-5·|cpu| + |cpu − exact| : au-delà de 1e-5, l'écart n'est permis que dans la mesure où le CPU lui-même s'éloigne de l'exact.
+- **Rapport** (graine 20261117 ; D valeurs par échantillon : 1, 7, 31, 32, 33, 100, 255, 256, 257, 1000, 1023, 1024, 4097, 12345 ; 1, 3 et 17 échantillons ; un canal de D valeurs, ou 3 canaux de D/3 quand D s'y prête ; valeurs centrées ou de moyenne 3) :
+
+  | Sortie | Valeurs | Écart CPU–Metal maximal | Écart maximal du CPU à l'exact | Écart maximal de Metal à l'exact |
+  |---|---|---|---|---|
+  | `dest`, centrées | 429 681 | 1,7e-5 | 1,7e-5 | 1,0e-6 |
+  | `dest`, moyenne 3 | 429 681 | 1,7e-4 | 1,7e-4 | 1,1e-5 |
+  | `means`, centrées / moyenne 3 | 294 / 294 | 1,2e-7 / 1,4e-5 | < 1e-6 / 1,4e-5 | < 1e-6 / 1e-6 |
+  | `invstds`, centrées / moyenne 3 | 294 / 294 | 3,1e-5 / 4,4e-5 (relatif ≤ 4,4e-5) | 2,76 / 14,8 | 2,76 / 14,8 |
+
+  Metal est le plus proche de l'exact partout : ses sommes par arbre perdent moins que la somme pas à pas du CPU. Les grands écarts de `invstds` à l'exact (pour D = 1 et les petits D décalés, où la variance vraie est nulle ou minuscule) viennent de la formule E[x²] − moyenne², commune aux deux côtés, qui s'y accordent à 4,4e-5 près en relatif.
+- **Non couvert** : plus de 2³² − 1 valeurs ; `gamma` de plusieurs échantillons ; la passe arrière (phase 7).
+- **Fichiers** : `dlib/dlib/cuda/{metal_kernels.mm,metal_dispatch.h,tensor_tools.cpp}`, `dlib/dlib/test/metal.cpp` ; registre de dlib, `docs/differences-mac-windows.md`, `logs/reprise.md`.
+- **Étapes** : `dtest --test_metal` : **3 002** vérifications (phases 1 à 4). Liste du mémo, `--test_npu`, `--test_metal`, `--test_dnn` : **5 255 111** (build Metal), **5 252 124** (build CPU) ; 0 avertissement.
+
 ## 2026-11-17 — Calculer le produit matriciel float32 sur Metal (phase 3 sur 8)
 
 - **Quoi** : `tt::gemm` sur Metal, dans ses deux modes. `CHANNEL_WISE` : un produit de `mat()` (une ligne par échantillon). `PLANE_WISE` : un produit par (échantillon, canal), avec les opérandes partagés par le lot ; tous les produits d'un appel vont dans un seul tampon de commandes, dans l'ordre du CPU (un `dest` partagé accumule donc comme sur le CPU). Le découpage `PLANE_WISE` de `tt::gemm` est extrait tel quel dans `cuda/gemm_planes.h` (`plan_gemm_planes`), lu par le chemin CPU et par Metal, pour qu'ils ne puissent pas diverger. Liaison à `MetalPerformanceShaders`.

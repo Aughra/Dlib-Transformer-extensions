@@ -291,6 +291,86 @@ kernel void silu (
     const float x = s[i];
     d[i] = x*(1.0f/(1.0f + exp(-x)));
 }
+
+// ----------------------------------------------------------------------------------------
+// Layer normalization: a threadgroup per sample sums its values and their squares, each
+// thread over a stride of the group width, then the simdgroups and the group combine their
+// partial sums.  Any number of values per sample works, multiple of the width or not.
+
+struct layer_norm_params
+{
+    uint samples;
+    uint per_sample;    // k*nr*nc
+    uint plane;         // nr*nc: the values of one channel, which share gamma and beta
+    float eps;
+};
+
+kernel void layer_norm_stats (
+    device const float* s              [[buffer(0)]],
+    device float* means                [[buffer(1)]],
+    device float* invstds              [[buffer(2)]],
+    constant layer_norm_params& p      [[buffer(3)]],
+    uint n                             [[threadgroup_position_in_grid]],
+    uint tid                           [[thread_index_in_threadgroup]],
+    uint width                         [[threads_per_threadgroup]],
+    uint lane                          [[thread_index_in_simdgroup]],
+    uint simd                          [[simdgroup_index_in_threadgroup]],
+    uint simds                         [[simdgroups_per_threadgroup]])
+{
+    threadgroup float part_sum[32];
+    threadgroup float part_sq[32];
+
+    device const float* x = s + (size_t)n*p.per_sample;
+    float a = 0;
+    float b = 0;
+    for (uint i = tid; i < p.per_sample; i += width)
+    {
+        const float v = x[i];
+        a += v;
+        b += v*v;
+    }
+    a = simd_sum(a);
+    b = simd_sum(b);
+    if (lane == 0)
+    {
+        part_sum[simd] = a;
+        part_sq[simd] = b;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tid == 0)
+    {
+        float sa = 0;
+        float sb = 0;
+        for (uint g = 0; g < simds; ++g)
+        {
+            sa += part_sum[g];
+            sb += part_sq[g];
+        }
+        // The formulas of the CPU: the mean of the values and of their squares.
+        const float m = sa/p.per_sample;
+        const float sq = sb/p.per_sample;
+        means[n] = m;
+        invstds[n] = 1.0f/sqrt(sq - m*m + p.eps);
+    }
+}
+
+kernel void layer_norm_apply (
+    device float* d                    [[buffer(0)]],
+    device const float* s              [[buffer(1)]],
+    device const float* means          [[buffer(2)]],
+    device const float* invstds        [[buffer(3)]],
+    device const float* gamma          [[buffer(4)]],
+    device const float* beta           [[buffer(5)]],
+    constant layer_norm_params& p      [[buffer(6)]],
+    uint i                             [[thread_position_in_grid]])
+{
+    if (i >= p.samples*p.per_sample)
+        return;
+    const uint n = i / p.per_sample;
+    const uint k = (i % p.per_sample) / p.plane;
+    const float y = (s[i] - means[n])*invstds[n];
+    d[i] = y*gamma[k] + beta[k];
+}
 )METAL";
 
             /*
@@ -376,14 +456,16 @@ kernel void silu (
                 Runs one kernel over threads threads, its float ranges bound to the buffers
                 0, 1, ... in order and its parameters to the next one, and waits for it.
                 An empty range is bound to the first nonempty one: the kernel reads none of
-                its values.
+                its values.  With group_width > 0, threads counts threadgroups of
+                group_width threads instead.
             */
             void run (
                 const char* name,
                 size_t threads,
                 std::initializer_list<arg> ranges,
                 const void* params,
-                size_t params_size
+                size_t params_size,
+                size_t group_width = 0
             )
             {
                 if (threads == 0)
@@ -425,9 +507,21 @@ kernel void silu (
                         [enc setBuffer:b.buffer offset:b.offset atIndex:index++];
                     }
                     [enc setBytes:params length:params_size atIndex:index];
-                    const NSUInteger width = std::min<NSUInteger>(p.maxTotalThreadsPerThreadgroup, 256);
-                    [enc dispatchThreads:MTLSizeMake(threads, 1, 1)
-                        threadsPerThreadgroup:MTLSizeMake(std::min<NSUInteger>(width, threads), 1, 1)];
+                    if (group_width > 0)
+                    {
+                        if (group_width > p.maxTotalThreadsPerThreadgroup)
+                            throw metal_error(std::string("Metal backend of dlib: the kernel ") + name +
+                                " takes at most " + std::to_string((size_t)p.maxTotalThreadsPerThreadgroup) +
+                                " threads per group.");
+                        [enc dispatchThreadgroups:MTLSizeMake(threads, 1, 1)
+                            threadsPerThreadgroup:MTLSizeMake(group_width, 1, 1)];
+                    }
+                    else
+                    {
+                        const NSUInteger width = std::min<NSUInteger>(p.maxTotalThreadsPerThreadgroup, 256);
+                        [enc dispatchThreads:MTLSizeMake(threads, 1, 1)
+                            threadsPerThreadgroup:MTLSizeMake(std::min<NSUInteger>(width, threads), 1, 1)];
+                    }
                     [enc endEncoding];
                     [cmd commit];
                     [cmd waitUntilCompleted];
@@ -719,6 +813,64 @@ kernel void silu (
                 if (cmd.status != MTLCommandBufferStatusCompleted)
                     throw metal_error("Metal backend of dlib: tt::gemm failed: " + command_problem(cmd));
             }
+        }
+
+    // ------------------------------------------------------------------------------------
+
+        namespace
+        {
+            // An output a Metal operation sizes itself: the route let it through because it
+            // was empty, so it moves to Metal without a copy.
+            void adopt (resizable_tensor& t)
+            {
+                if (t.get_tensor_device() == tensor_device::metal)
+                    return;
+                if (t.size() != 0)
+                    throw metal_error("Metal backend of dlib: an output on the CPU was given to a Metal operation.");
+                t.set_tensor_device(tensor_device::metal);
+            }
+        }
+
+        void layer_normalize (
+            const double eps,
+            resizable_tensor& dest,
+            resizable_tensor& means,
+            resizable_tensor& invstds,
+            const tensor& src,
+            const tensor& gamma,
+            const tensor& beta
+        )
+        {
+            DLIB_CASSERT(
+                have_same_dimensions(gamma, beta) &&
+                gamma.k() == src.k() &&
+                gamma.nr() == 1 &&
+                gamma.nc() == 1 &&
+                eps > 0);
+            if (gamma.num_samples() != 1)
+                throw metal_error("Metal backend of dlib: tt::layer_normalize takes a gamma of one sample.");
+            if (&dest == &src)
+                throw metal_error("Metal backend of dlib: tt::layer_normalize cannot write over its src.");
+            adopt(dest);
+            adopt(means);
+            adopt(invstds);
+            dest.copy_size(src);
+            means.set_size(src.num_samples());
+            invstds.set_size(src.num_samples());
+            if (src.size() == 0)
+                return;
+
+            struct
+            {
+                uint32_t samples, per_sample, plane;
+                float eps;
+            } p = {(uint32_t)src.num_samples(), as_index(src.size()/src.num_samples(), "layer_normalize"),
+                   (uint32_t)(src.nr()*src.nc()), (float)eps};
+            as_index(src.size(), "layer_normalize");
+            const size_t width = std::min<size_t>(256, (p.per_sample + 31)/32*32);
+            run("layer_norm_stats", p.samples, {in(src), out(means), out(invstds)}, &p, sizeof(p), width);
+            run("layer_norm_apply", src.size(), {out(dest), in(src), in(means), in(invstds), in(gamma), in(beta)},
+                &p, sizeof(p));
         }
     }
 }

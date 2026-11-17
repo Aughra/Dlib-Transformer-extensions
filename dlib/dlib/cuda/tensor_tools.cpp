@@ -932,7 +932,7 @@ namespace dlib { namespace tt
         const tensor& beta
     )
     {
-        DLIB_METAL_UNPORTED("layer_normalize", dest, means, vars, src, gamma, beta);
+        DLIB_METAL_TRY(layer_normalize(eps, dest, means, vars, src, gamma, beta), "layer_normalize", dest, means, vars, src, gamma, beta);
 #ifdef DLIB_USE_CUDA
         cuda::layer_normalize(eps, dest, means, vars, src, gamma, beta);
 #else

@@ -10,6 +10,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -335,10 +336,10 @@ namespace
         DLIB_TEST(has_pattern(dest, 2));
 
         // An output still to be sized counts for neither device.
-        resizable_tensor means, invstds, out;
-        resizable_tensor gamma = metal_tensor(1,3,4,5), beta = metal_tensor(1,3,4,5);
-        const std::string e2 = error_of([&]{ tt::layer_normalize(1e-5, out, means, invstds, src, gamma, beta); });
-        DLIB_TEST_MSG(contains(e2, "tt::layer_normalize has no Metal version yet"), e2);
+        resizable_tensor scale, out;
+        resizable_tensor gamma = metal_tensor(1,3,4,5);
+        const std::string e2 = error_of([&]{ tt::rms_normalize(1e-5, out, scale, src, gamma, false); });
+        DLIB_TEST_MSG(contains(e2, "tt::rms_normalize has no Metal version yet"), e2);
 
         // Methods of the classes in tensor_tools.h stop as well.
         tt::tensor_conv conv;
@@ -377,6 +378,8 @@ namespace
         size_t compared = 0;
         size_t failed = 0;
         double max_bound_ratio = 0;   // for gemm: the largest gap over its bound
+        double max_cpu_error = -1;    // with an exact reference: the largest gaps of each side
+        double max_gpu_error = -1;
     };
 
     // Tolerances of float32 (see the report in the journal of the fork): 1e-5 absolute and
@@ -768,6 +771,126 @@ namespace
         }
     }
 
+    /*
+        Parity of layer_normalize against an exact reference, computed in double with two
+        passes.  Both sides sum D values in float, in different orders, and compute the
+        variance as E[x^2] - mean^2, a subtraction that loses digits when the mean is large
+        before the spread.  The rule: the two sides agree within 1e-5 + 1e-5*|cpu|, plus the
+        gap of the CPU itself to the exact value; a gap beyond it would be Metal's own error.
+    */
+    void check_against_exact (
+        const std::string& op,
+        const tensor& cpu,
+        const tensor& gpu,
+        const std::vector<double>& exact
+    )
+    {
+        DLIB_TEST(have_same_dimensions(cpu, gpu) && cpu.size() == exact.size());
+        parity& p = parity_table()[op];
+        const float* c = cpu.host();
+        const float* g = gpu.host();
+        for (size_t i = 0; i < cpu.size(); ++i)
+        {
+            const double a = std::abs((double)g[i] - (double)c[i]);
+            const double ec = std::abs((double)c[i] - exact[i]);
+            const double eg = std::abs((double)g[i] - exact[i]);
+            ++p.compared;
+            p.max_abs = std::max(p.max_abs, a);
+            if (std::abs(c[i]) >= 1e-3)
+                p.max_rel = std::max(p.max_rel, a/std::abs((double)c[i]));
+            p.max_cpu_error = std::max(p.max_cpu_error, ec);
+            p.max_gpu_error = std::max(p.max_gpu_error, eg);
+            if (!(a <= 1e-5 + 1e-5*std::abs((double)c[i]) + ec))
+            {
+                if (p.failed < 5)
+                    dlog << LERROR << op << ": value " << i << " cpu " << c[i] << " metal " << g[i] << " exact " << exact[i];
+                ++p.failed;
+            }
+        }
+        DLIB_TEST_MSG(p.failed == 0, op << ": " << p.failed << " values beyond the tolerance");
+    }
+
+    void exact_layer_norm (
+        const tensor& src,
+        const tensor& gamma,
+        const tensor& beta,
+        double eps,
+        std::vector<double>& dest,
+        std::vector<double>& means,
+        std::vector<double>& invstds
+    )
+    {
+        const long n = src.num_samples();
+        const long d = src.size()/n;
+        const long plane = src.nr()*src.nc();
+        const float* x = src.host();
+        dest.assign(src.size(), 0);
+        means.assign(n, 0);
+        invstds.assign(n, 0);
+        for (long s = 0; s < n; ++s)
+        {
+            double m = 0;
+            for (long i = 0; i < d; ++i)
+                m += x[s*d + i];
+            m /= d;
+            double v = 0;
+            for (long i = 0; i < d; ++i)
+                v += (x[s*d + i] - m)*(x[s*d + i] - m);
+            v /= d;
+            const double r = 1/std::sqrt(v + eps);
+            means[s] = m;
+            invstds[s] = r;
+            for (long i = 0; i < d; ++i)
+                dest[s*d + i] = (x[s*d + i] - m)*r*gamma.host()[i/plane] + beta.host()[i/plane];
+        }
+    }
+
+    std::set<long>& layer_norm_sizes ()
+    {
+        static std::set<long> sizes;
+        return sizes;
+    }
+
+    void test_parity_layer_norm (dlib::rand& rnd)
+    {
+        // Values per sample around the width of a simdgroup (32) and of a threadgroup (256),
+        // and far from them; one channel or several of nr*nc values; centred values, and
+        // values with an offset, whose variance the formula E[x^2] - mean^2 computes by
+        // a subtraction.
+        const std::vector<long> sizes = {1, 7, 31, 32, 33, 100, 255, 256, 257, 1000, 1023, 1024, 4097, 12345};
+        for (long d : sizes)
+        {
+            for (long samples : {1L, 3L, 17L})
+            {
+                for (float offset : {0.0f, 3.0f})
+                {
+                    const shape s = (d % 3 == 0 && d > 3) ? shape{samples, 3, 1, d/3} : shape{samples, d, 1, 1};
+                    resizable_tensor src = random_cpu(rnd, s.n, s.k, s.nr, s.nc);
+                    for (auto& x : src)
+                        x += offset;
+                    resizable_tensor gamma = random_cpu(rnd, 1, s.k, 1, 1), beta = random_cpu(rnd, 1, s.k, 1, 1);
+                    resizable_tensor dest, means, invstds;
+                    resizable_tensor ms = on_metal(src), mg = on_metal(gamma), mb = on_metal(beta);
+                    resizable_tensor mdest, mmeans, minvstds;
+                    tt::layer_normalize(1e-5, dest, means, invstds, src, gamma, beta);
+                    tt::layer_normalize(1e-5, mdest, mmeans, minvstds, ms, mg, mb);
+                    DLIB_TEST(mdest.get_tensor_device() == tensor_device::metal);
+                    const std::string tag = offset == 0 ? "" : " offset 3";
+                    std::vector<double> edest, emeans, einvstds;
+                    exact_layer_norm(src, gamma, beta, 1e-5, edest, emeans, einvstds);
+                    check_against_exact("layer_normalize dest" + tag, dest, mdest, edest);
+                    check_against_exact("layer_normalize means" + tag, means, mmeans, emeans);
+                    check_against_exact("layer_normalize invstds" + tag, invstds, minvstds, einvstds);
+                    layer_norm_sizes().insert(d);
+                }
+            }
+        }
+        // Refused: a gamma of several samples.
+        resizable_tensor src = on_metal(random_cpu(rnd, 2, 4, 1, 1)), g = on_metal(random_cpu(rnd, 2, 4, 1, 1));
+        resizable_tensor d, m, v;
+        DLIB_TEST(contains(error_of([&]{ tt::layer_normalize(1e-5, d, m, v, src, g, g); }), "gamma of one sample"));
+    }
+
     void report_parity ()
     {
         for (auto& e : parity_table())
@@ -778,6 +901,8 @@ namespace
             sout << e.first << ": " << e.second.compared << " values, max |diff| " << e.second.max_abs
                  << (e.second.max_bound_ratio > 0 ? ", max gap/scale " : ", max rel (|cpu| >= 1e-3) ") << e.second.max_rel
                  << (e.second.max_bound_ratio > 0 ? ", max gap/bound " + std::to_string(e.second.max_bound_ratio) : std::string())
+                 << (e.second.max_cpu_error >= 0 ? ", max |cpu-exact| " + std::to_string(e.second.max_cpu_error) +
+                     ", max |metal-exact| " + std::to_string(e.second.max_gpu_error) : std::string())
                  << "\n";
         if (std::getenv("DLIB_METAL_REPORT"))
             std::cout << sout.str();
@@ -816,6 +941,7 @@ namespace
             test_parity_activations(rnd);
             test_parity_views(rnd);
             test_parity_gemm(rnd);
+            test_parity_layer_norm(rnd);
             report_parity();
             bench_gemm(rnd);
             DLIB_TEST(metal::live_buffers() == 0);
