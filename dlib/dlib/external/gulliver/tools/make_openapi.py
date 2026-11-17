@@ -519,7 +519,59 @@ schemas = {
                 "properties": {"ok": {"type": "boolean", "enum": [False]}, "error": {"type": "string"},
                                "code": {"type": "string"},
                                "args": {"type": "object", "additionalProperties": {"type": "string"}}}},
+    "Profile": {"type": "object", "description": "Un profil : un espace de données séparé (discussions, projets, "
+                "réglages de page, index RAG, images).", "properties": {
+                    "id": {"type": "string"}, "name": {"type": "string", "description": "De 1 à 80 caractères."},
+                    "created": {"type": "integer", "description": "Création, en secondes Unix."},
+                    "last_used": {"type": "integer", "description": "Dernier usage, en secondes Unix ; chaque requête "
+                                  "de données du profil le met à jour."}}},
+    "Chunk": {"type": "object", "description": "Un passage (chunk) de l'index RAG d'un document.", "properties": {
+        "id": {"type": "string"}, "owner": {"type": "string", "description": "Le propriétaire du document (une "
+               "conversation, un projet…)."},
+        "doc": {"type": "string", "description": "Le document découpé."},
+        "ordinal": {"type": "integer", "description": "Le rang du passage dans le document."},
+        "name": {"type": "string"}, "where": {"type": "string", "description": "L'emplacement du passage dans le "
+                 "document."},
+        "start": {"type": "integer"}, "end": {"type": "integer"},
+        "text": {"type": "string"}, "model": {"type": "string", "description": "Le modèle d'embedding du vecteur."},
+        "vector": {"type": "string", "description": "Le vecteur en base64 (octets bruts), vide quand le passage n'a "
+                   "pas encore de vecteur."}}},
+    "ImageMeta": {"type": "object", "description": "Les métadonnées d'une image d'un profil, sans ses octets (lus par "
+                  "/blob et /thumb).", "properties": {
+        "id": {"type": "string"}, "owner": {"type": "string"}, "name": {"type": "string"},
+        "type": {"type": "string", "description": "Le type de média de l'image, image/png ou image/jpeg."},
+        "size": {"type": "integer", "description": "La taille déclarée de l'image."},
+        "width": {"type": "integer"}, "height": {"type": "integer"},
+        "added": {"type": "integer", "description": "Ajout, en secondes Unix."},
+        "bytes": {"type": "integer", "description": "Les octets sur le disque, image pleine et vignette "
+                  "ensemble."}}},
 }
+
+# L'en-tête qui désigne le profil d'une requête de données ; toutes les routes /gulliver/v1/profile/ l'exigent.
+profile_header = {"name": "X-Gulliver-Profile", "in": "header", "required": True,
+                  "schema": {"type": "string"},
+                  "description": "L'identifiant du profil dont on lit ou écrit les données, tel que "
+                                 "/gulliver/v1/profiles le liste."}
+# Les erreurs communes aux routes de données d'un profil : en-tête X-Gulliver-Profile absent, ou profil inconnu.
+profile_replies = {
+    "400": reply("L'en-tête X-Gulliver-Profile manque (code profile_required)", ref("Error")),
+    "404": reply("Aucun profil n'a cet identifiant (code profile_unknown)", ref("Error")),
+}
+
+
+def profile_op(tags, summary, more_replies, extra_params=None, **rest):
+    # Une opération sur les données d'un profil : le tag Profils, l'en-tête X-Gulliver-Profile, et les erreurs
+    # communes (profile_required, profile_unknown) fondues avec celles propres à la route.
+    op = {"tags": tags, "summary": summary,
+          "parameters": [ref_param("ProfileHeader")] + (extra_params or []),
+          "responses": dict(profile_replies, **more_replies)}
+    op.update(rest)
+    return op
+
+
+def ref_param(name):
+    return {"$ref": "#/components/parameters/" + name}
+
 
 paths = {
     "/v1/models": {"get": {"tags": ["OpenAI"], "summary": "Modèles du moteur et alias des fonctions",
@@ -1109,6 +1161,190 @@ paths = {
                                                                              "enum": ["benchmark_running"]}}})}}},
     "/gulliver/v1/logs": {"get": {"tags": ["Administration"], "summary": "Dernières lignes du journal",
                                  "responses": {"200": reply("Les lignes", {"type": "object"})}}},
+
+    # Les profils : chacun est un espace de données séparé. Les routes /gulliver/v1/profiles gèrent la liste des
+    # profils ; les routes /gulliver/v1/profile/ lisent et écrivent les données du profil désigné par l'en-tête
+    # X-Gulliver-Profile.
+    "/gulliver/v1/profiles": {
+        "get": {"tags": ["Profils"], "summary": "Liste les profils",
+                "responses": {"200": reply("Les profils", {"type": "object", "properties": {
+                    "profiles": {"type": "array", "items": ref("Profile")}}})}},
+        "post": {"tags": ["Profils"], "summary": "Crée un profil",
+                 "requestBody": json_body({"type": "object", "required": ["name"], "properties": {
+                     "name": {"type": "string", "description": "De 1 à 80 caractères, une fois retirées les espaces à "
+                              "ses extrémités."}}}),
+                 "responses": {"200": reply("Le profil créé", ref("Profile")),
+                               "400": reply("Nom vide ou trop long (code name)", ref("Error")),
+                               "409": reply("Un profil porte déjà ce nom (code name_taken)", ref("Error"))}}},
+    "/gulliver/v1/profiles/{id}": {
+        "put": {"tags": ["Profils"], "summary": "Renomme un profil",
+                "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                "requestBody": json_body({"type": "object", "required": ["name"], "properties": {
+                    "name": {"type": "string", "description": "De 1 à 80 caractères."}}}),
+                "responses": {"200": reply("Le profil", ref("Profile")),
+                              "400": reply("Nom vide ou trop long (code name)", ref("Error")),
+                              "404": reply("Aucun profil n'a cet identifiant (code profile_unknown)", ref("Error")),
+                              "409": reply("Un autre profil porte déjà ce nom (code name_taken)", ref("Error"))}},
+        "delete": {"tags": ["Profils"], "summary": "Supprime un profil et toutes ses données",
+                   "description": "La suppression efface en cascade les discussions, projets, réglages de page, "
+                                  "passages de l'index RAG et images du profil.",
+                   "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                   "responses": {"200": reply("Supprimé", ok),
+                                 "404": reply("Aucun profil n'a cet identifiant (code profile_unknown)",
+                                              ref("Error"))}}},
+    "/gulliver/v1/profile/conversations": {
+        "get": profile_op(["Profils"], "Les discussions d'un profil",
+                          {"200": reply("Les discussions, objets entiers", {"type": "object", "properties": {
+                              "conversations": {"type": "array", "items": {"type": "object"}}}})})},
+    "/gulliver/v1/profile/conversations/{id}": {
+        "get": profile_op(["Profils"], "Une discussion",
+                         {"200": reply("La discussion", {"type": "object"}),
+                          "404": reply("Aucune discussion de cet identifiant dans le profil (code not_found)",
+                                       ref("Error"))},
+                         extra_params=[{"name": "id", "in": "path", "required": True,
+                                        "schema": {"type": "string"}}]),
+        "put": profile_op(["Profils"], "Écrit une discussion",
+                         {"200": reply("Écrit", ok),
+                          "400": reply("Objet doc manquant (code doc)", ref("Error")),
+                          "409": reply("La discussion a changé depuis sa lecture (code revision_conflict)",
+                                       ref("Error"))},
+                         extra_params=[{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                         requestBody=json_body({"type": "object", "required": ["doc"], "properties": {
+                             "doc": {"type": "object", "description": "La discussion entière."},
+                             "updated": {"type": "integer", "description": "La date de révision écrite en base, en "
+                                         "secondes Unix."},
+                             "project": {"type": "string", "description": "Le projet de la discussion, vide sans "
+                                         "projet."},
+                             "expected_updated": {"type": "integer", "description": "Révision optimiste : quand ce "
+                                                  "champ vaut 0 ou plus, l'écriture n'a lieu que si l'updated en base "
+                                                  "vaut cette valeur (0 exige l'absence), sinon 409 ; sans ce champ "
+                                                  "(ou -1), l'écriture est forcée."}}})),
+        "delete": profile_op(["Profils"], "Supprime une discussion",
+                            {"200": reply("Supprimé", ok)},
+                            extra_params=[{"name": "id", "in": "path", "required": True,
+                                           "schema": {"type": "string"}}])},
+    "/gulliver/v1/profile/projects": {
+        "get": profile_op(["Profils"], "Les projets d'un profil",
+                         {"200": reply("Les projets, objets entiers", {"type": "object", "properties": {
+                             "projects": {"type": "array", "items": {"type": "object"}}}})})},
+    "/gulliver/v1/profile/projects/{id}": {
+        "get": profile_op(["Profils"], "Un projet",
+                        {"200": reply("Le projet", {"type": "object"}),
+                         "404": reply("Aucun projet de cet identifiant dans le profil (code not_found)",
+                                      ref("Error"))},
+                        extra_params=[{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}]),
+        "put": profile_op(["Profils"], "Écrit un projet",
+                        {"200": reply("Écrit", ok)},
+                        extra_params=[{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                        requestBody=json_body({"type": "object", "required": ["doc"], "properties": {
+                            "doc": {"type": "object", "description": "Le projet entier ; sa clé name, quand elle "
+                                    "existe, est aussi gardée à part."}}})),
+        "delete": profile_op(["Profils"], "Supprime un projet",
+                           {"200": reply("Supprimé", ok)},
+                           extra_params=[{"name": "id", "in": "path", "required": True,
+                                          "schema": {"type": "string"}}])},
+    "/gulliver/v1/profile/page-settings": {
+        "get": profile_op(["Profils"], "Les réglages de page d'un profil",
+                        {"200": reply("Un objet {clé: valeur JSON} ; chaque valeur est un JSON quelconque",
+                                      {"type": "object", "additionalProperties": True})}),
+        "put": profile_op(["Profils"], "Écrit des réglages de page",
+                        {"200": reply("Écrit", ok)},
+                        requestBody=json_body({"type": "object", "additionalProperties": True,
+                                               "description": "Les clés à écrire (fusion partielle) ; une valeur null "
+                                                              "efface la clé."}))},
+    "/gulliver/v1/profile/chunks": {
+        "get": profile_op(["Profils"], "Les passages RAG d'un propriétaire ou d'un document",
+                        {"200": reply("Les passages, vecteurs en base64", {"type": "object", "properties": {
+                            "chunks": {"type": "array", "items": ref("Chunk")}}}),
+                         "400": reply("Il faut exactement un paramètre, owner ou doc (code owner_or_doc)",
+                                      ref("Error"))},
+                        extra_params=[
+                            {"name": "owner", "in": "query", "schema": {"type": "string"},
+                             "description": "Les passages d'un propriétaire ; exclusif avec doc."},
+                            {"name": "doc", "in": "query", "schema": {"type": "string"},
+                             "description": "Les passages d'un document ; exclusif avec owner."}]),
+        "delete": profile_op(["Profils"], "Efface les passages d'un propriétaire ou d'un document",
+                           {"200": reply("Supprimé", ok),
+                            "400": reply("Il faut exactement un paramètre, owner ou doc (code owner_or_doc)",
+                                         ref("Error"))},
+                           extra_params=[
+                               {"name": "owner", "in": "query", "schema": {"type": "string"},
+                                "description": "Par propriétaire ; exclusif avec doc."},
+                               {"name": "doc", "in": "query", "schema": {"type": "string"},
+                                "description": "Par document ; exclusif avec owner."}])},
+    "/gulliver/v1/profile/chunks/status": {
+        "get": profile_op(["Profils"], "Les comptes de passages par document, sans les vecteurs",
+                        {"200": reply("L'état par document", {"type": "object", "properties": {
+                            "status": {"type": "array", "items": {"type": "object", "properties": {
+                                "doc": {"type": "string"},
+                                "passages": {"type": "integer", "description": "Le nombre de passages."},
+                                "vectors": {"type": "integer", "description": "Le nombre de passages déjà vectorisés "
+                                            "pour le modèle."},
+                                "model": {"type": "string"}}}}}})},
+                        extra_params=[
+                            {"name": "owner", "in": "query", "schema": {"type": "string"},
+                             "description": "Limite aux documents de ce propriétaire."},
+                            {"name": "model", "in": "query", "schema": {"type": "string"},
+                             "description": "Le modèle d'embedding dont on compte les vecteurs."}])},
+    "/gulliver/v1/profile/chunks/documents": {
+        "get": profile_op(["Profils"], "Les couples (propriétaire, document) distincts de l'index",
+                        {"200": reply("Les documents indexés", {"type": "object", "properties": {
+                            "documents": {"type": "array", "items": {"type": "object", "properties": {
+                                "owner": {"type": "string"}, "doc": {"type": "string"}}}}}})})},
+    "/gulliver/v1/profile/chunks/{doc}": {
+        "put": profile_op(["Profils"], "Remplace en bloc les passages d'un document",
+                        {"200": reply("Écrit", ok),
+                         "400": reply("Tableau records manquant (code records)", ref("Error"))},
+                        extra_params=[{"name": "doc", "in": "path", "required": True, "schema": {"type": "string"}}],
+                        requestBody=json_body({"type": "object", "required": ["records"], "properties": {
+                            "records": {"type": "array", "items": ref("Chunk"),
+                                        "description": "Les passages du document ; ils remplacent en bloc ceux qui y "
+                                                       "étaient. Le vecteur de chaque passage arrive en base64."}}}))},
+    "/gulliver/v1/profile/images": {
+        "get": profile_op(["Profils"], "Les images d'un propriétaire",
+                        {"200": reply("Les métadonnées des images (sans leurs octets)", {"type": "object",
+                         "properties": {"images": {"type": "array", "items": ref("ImageMeta")}}})},
+                        extra_params=[{"name": "owner", "in": "query", "schema": {"type": "string"},
+                                       "description": "Le propriétaire des images."}]),
+        "delete": profile_op(["Profils"], "Efface les images d'un propriétaire",
+                           {"200": reply("Supprimé", ok),
+                            "400": reply("Paramètre owner manquant (code owner)", ref("Error"))},
+                           extra_params=[{"name": "owner", "in": "query", "required": True,
+                                          "schema": {"type": "string"},
+                                          "description": "Le propriétaire dont on efface les images."}])},
+    "/gulliver/v1/profile/images/usage": {
+        "get": profile_op(["Profils"], "Le nombre et les octets des images d'un profil",
+                        {"200": reply("L'usage", {"type": "object", "properties": {
+                            "count": {"type": "integer"}, "bytes": {"type": "integer"}}})})},
+    "/gulliver/v1/profile/images/{id}/blob": {
+        "get": profile_op(["Profils"], "Les octets d'une image",
+                        {"200": {"description": "Les octets de l'image, avec son type de média."},
+                         "404": reply("Aucune image de cet identifiant, ou son fichier manque (code not_found)",
+                                      ref("Error"))},
+                        extra_params=[{"name": "id", "in": "path", "required": True,
+                                       "schema": {"type": "string"}}])},
+    "/gulliver/v1/profile/images/{id}/thumb": {
+        "get": profile_op(["Profils"], "Les octets de la vignette d'une image",
+                        {"200": {"description": "Les octets de la vignette, avec le type de média de l'image."},
+                         "404": reply("Aucune image de cet identifiant, ou son fichier manque (code not_found)",
+                                      ref("Error"))},
+                        extra_params=[{"name": "id", "in": "path", "required": True,
+                                       "schema": {"type": "string"}}])},
+    "/gulliver/v1/profile/images/{id}": {
+        "put": profile_op(["Profils"], "Écrit une image (métadonnées et octets)",
+                        {"200": reply("Écrit", ok)},
+                        extra_params=[{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                        requestBody=json_body({"type": "object", "properties": {
+                            "owner": {"type": "string"}, "name": {"type": "string"},
+                            "type": {"type": "string", "description": "Le type de média, image/png ou image/jpeg."},
+                            "size": {"type": "integer"}, "width": {"type": "integer"},
+                            "height": {"type": "integer"},
+                            "blob": {"type": "string", "description": "L'image pleine en base64."},
+                            "thumb": {"type": "string", "description": "La vignette en base64."}}})),
+        "delete": profile_op(["Profils"], "Supprime une image",
+                           {"200": reply("Supprimé", ok)},
+                           extra_params=[{"name": "id", "in": "path", "required": True,
+                                          "schema": {"type": "string"}}])},
 }
 
 
@@ -1149,9 +1385,11 @@ doc = {
              {"name": "Accès au web", "description": "La recherche et les pages du web pour le bouton Web"},
              {"name": "Documents", "description": "Le dossier des documents du Mac, que l'application web joint"},
              {"name": "Hugging Face", "description": "Tous les modèles GGUF de Hugging Face, au-delà du catalogue"},
-             {"name": "Administration", "description": "Réglages, modèles, redémarrage et accès réseau"}],
+             {"name": "Administration", "description": "Réglages, modèles, redémarrage et accès réseau"},
+             {"name": "Profils", "description": "Les profils et leurs données séparées (discussions, projets, "
+                                                "réglages de page, index RAG, images)"}],
     "paths": paths,
-    "components": {"schemas": schemas},
+    "components": {"schemas": schemas, "parameters": {"ProfileHeader": profile_header}},
 }
 
 with open(os.path.join(here, "..", "web", "openapi.json"), "w", encoding="utf-8") as f:

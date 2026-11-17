@@ -15,9 +15,13 @@ import { fileURLToPath } from 'node:url';
 const here = process.env.PAGE_TEST_WORK || dirname(fileURLToPath(import.meta.url));
 const stepsFile = process.argv[2];
 const steps = stepsFile ? JSON.parse(readFileSync(stepsFile, 'utf8')) : [];
-// Un profil neuf à chaque scénario : sa base de discussions part vide.
+// Un profil neuf à chaque scénario : sa base de discussions part vide.  Le Chrome du scénario précédent
+// peut tenir le dossier un instant encore ; on réessaie quelques fois avant d'abandonner.
 const profile = join(here, 'chrome-profile');
-rmSync(profile, { recursive: true, force: true });
+for (let i = 0; i < 20; i++) {
+  try { rmSync(profile, { recursive: true, force: true }); break; }
+  catch (e) { if (i === 19) throw e; await new Promise((r) => setTimeout(r, 200)); }
+}
 mkdirSync(join(here, 'shots'), { recursive: true });
 const port = 9333;
 const url = process.env.PAGE_URL || 'https://localhost:18491/';

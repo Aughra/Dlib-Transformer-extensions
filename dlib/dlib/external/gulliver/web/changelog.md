@@ -2,6 +2,19 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.1.0 — 17 novembre 2026
+
+### Profils
+
+- Les données de l'application — discussions, projets, réglages de la page, index des documents (passages et vecteurs) et images — ne vivent plus dans le navigateur mais dans le service, rangées par **profil**. Un profil est un simple nom, sans mot de passe. Au premier démarrage, la page demande de choisir un profil ou d'en créer un ; le menu « Le Mac » permet d'en changer. Un même profil retrouve ses données depuis n'importe quel navigateur ou appareil, sans rien exporter.
+- Les discussions privées restent en mémoire, comme avant, et ne sont jamais envoyées au service. Quand le service est injoignable ou qu'aucun profil n'est choisi, la page fonctionne en mémoire : rien n'est gardé, jusqu'au prochain démarrage avec un profil.
+
+### Accès et documents
+
+- Les données d'un profil sont accessibles depuis le réseau de la maison, comme le chat : on retrouve ses discussions depuis le téléphone, sans mot de passe (réseau personnel maîtrisé).
+
+---
+
 ## 6.0.0 — 17 novembre 2026
 
 ### Plateforme

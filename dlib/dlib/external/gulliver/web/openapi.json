@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -43,6 +43,10 @@
   {
    "name": "Administration",
    "description": "Réglages, modèles, redémarrage et accès réseau"
+  },
+  {
+   "name": "Profils",
+   "description": "Les profils et leurs données séparées (discussions, projets, réglages de page, index RAG, images)"
   }
  ],
  "paths": {
@@ -3083,6 +3087,1624 @@
      }
     }
    }
+  },
+  "/gulliver/v1/profiles": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Liste les profils",
+    "responses": {
+     "200": {
+      "description": "Les profils",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "profiles": {
+           "type": "array",
+           "items": {
+            "$ref": "#/components/schemas/Profile"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Crée un profil",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "name"
+        ],
+        "properties": {
+         "name": {
+          "type": "string",
+          "description": "De 1 à 80 caractères, une fois retirées les espaces à ses extrémités."
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Le profil créé",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Profile"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Nom vide ou trop long (code name)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Un profil porte déjà ce nom (code name_taken)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profiles/{id}": {
+   "put": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Renomme un profil",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "name"
+        ],
+        "properties": {
+         "name": {
+          "type": "string",
+          "description": "De 1 à 80 caractères."
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Le profil",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Profile"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Nom vide ou trop long (code name)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Un autre profil porte déjà ce nom (code name_taken)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Supprime un profil et toutes ses données",
+    "description": "La suppression efface en cascade les discussions, projets, réglages de page, passages de l'index RAG et images du profil.",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Supprimé",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/conversations": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Les discussions d'un profil",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Les discussions, objets entiers",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "conversations": {
+           "type": "array",
+           "items": {
+            "type": "object"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/conversations/{id}": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Une discussion",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucune discussion de cet identifiant dans le profil (code not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "La discussion",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Écrit une discussion",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "Objet doc manquant (code doc)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Écrit",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "La discussion a changé depuis sa lecture (code revision_conflict)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "doc"
+        ],
+        "properties": {
+         "doc": {
+          "type": "object",
+          "description": "La discussion entière."
+         },
+         "updated": {
+          "type": "integer",
+          "description": "La date de révision écrite en base, en secondes Unix."
+         },
+         "project": {
+          "type": "string",
+          "description": "Le projet de la discussion, vide sans projet."
+         },
+         "expected_updated": {
+          "type": "integer",
+          "description": "Révision optimiste : quand ce champ vaut 0 ou plus, l'écriture n'a lieu que si l'updated en base vaut cette valeur (0 exige l'absence), sinon 409 ; sans ce champ (ou -1), l'écriture est forcée."
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Supprime une discussion",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Supprimé",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/projects": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Les projets d'un profil",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Les projets, objets entiers",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "projects": {
+           "type": "array",
+           "items": {
+            "type": "object"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/projects/{id}": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Un projet",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun projet de cet identifiant dans le profil (code not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Le projet",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Écrit un projet",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Écrit",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "doc"
+        ],
+        "properties": {
+         "doc": {
+          "type": "object",
+          "description": "Le projet entier ; sa clé name, quand elle existe, est aussi gardée à part."
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Supprime un projet",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Supprimé",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/page-settings": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Les réglages de page d'un profil",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Un objet {clé: valeur JSON} ; chaque valeur est un JSON quelconque",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Écrit des réglages de page",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Écrit",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Les clés à écrire (fusion partielle) ; une valeur null efface la clé."
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/chunks": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Les passages RAG d'un propriétaire ou d'un document",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "owner",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Les passages d'un propriétaire ; exclusif avec doc."
+     },
+     {
+      "name": "doc",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Les passages d'un document ; exclusif avec owner."
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "Il faut exactement un paramètre, owner ou doc (code owner_or_doc)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Les passages, vecteurs en base64",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "chunks": {
+           "type": "array",
+           "items": {
+            "$ref": "#/components/schemas/Chunk"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Efface les passages d'un propriétaire ou d'un document",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "owner",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Par propriétaire ; exclusif avec doc."
+     },
+     {
+      "name": "doc",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Par document ; exclusif avec owner."
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "Il faut exactement un paramètre, owner ou doc (code owner_or_doc)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Supprimé",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/chunks/status": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Les comptes de passages par document, sans les vecteurs",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "owner",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Limite aux documents de ce propriétaire."
+     },
+     {
+      "name": "model",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le modèle d'embedding dont on compte les vecteurs."
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "L'état par document",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "status": {
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "doc": {
+              "type": "string"
+             },
+             "passages": {
+              "type": "integer",
+              "description": "Le nombre de passages."
+             },
+             "vectors": {
+              "type": "integer",
+              "description": "Le nombre de passages déjà vectorisés pour le modèle."
+             },
+             "model": {
+              "type": "string"
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/chunks/documents": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Les couples (propriétaire, document) distincts de l'index",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Les documents indexés",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "documents": {
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "owner": {
+              "type": "string"
+             },
+             "doc": {
+              "type": "string"
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/chunks/{doc}": {
+   "put": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Remplace en bloc les passages d'un document",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "doc",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "Tableau records manquant (code records)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Écrit",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "records"
+        ],
+        "properties": {
+         "records": {
+          "type": "array",
+          "items": {
+           "$ref": "#/components/schemas/Chunk"
+          },
+          "description": "Les passages du document ; ils remplacent en bloc ceux qui y étaient. Le vecteur de chaque passage arrive en base64."
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/images": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Les images d'un propriétaire",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "owner",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le propriétaire des images."
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Les métadonnées des images (sans leurs octets)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "images": {
+           "type": "array",
+           "items": {
+            "$ref": "#/components/schemas/ImageMeta"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Efface les images d'un propriétaire",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "owner",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le propriétaire dont on efface les images."
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "Paramètre owner manquant (code owner)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Supprimé",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/images/usage": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Le nombre et les octets des images d'un profil",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "L'usage",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "count": {
+           "type": "integer"
+          },
+          "bytes": {
+           "type": "integer"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/images/{id}/blob": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Les octets d'une image",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucune image de cet identifiant, ou son fichier manque (code not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Les octets de l'image, avec son type de média."
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/images/{id}/thumb": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Les octets de la vignette d'une image",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucune image de cet identifiant, ou son fichier manque (code not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Les octets de la vignette, avec le type de média de l'image."
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/images/{id}": {
+   "put": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Écrit une image (métadonnées et octets)",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Écrit",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "owner": {
+          "type": "string"
+         },
+         "name": {
+          "type": "string"
+         },
+         "type": {
+          "type": "string",
+          "description": "Le type de média, image/png ou image/jpeg."
+         },
+         "size": {
+          "type": "integer"
+         },
+         "width": {
+          "type": "integer"
+         },
+         "height": {
+          "type": "integer"
+         },
+         "blob": {
+          "type": "string",
+          "description": "L'image pleine en base64."
+         },
+         "thumb": {
+          "type": "string",
+          "description": "La vignette en base64."
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Supprime une image",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Supprimé",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
   }
  },
  "components": {
@@ -4539,6 +6161,120 @@
       }
      }
     }
+   },
+   "Profile": {
+    "type": "object",
+    "description": "Un profil : un espace de données séparé (discussions, projets, réglages de page, index RAG, images).",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string",
+      "description": "De 1 à 80 caractères."
+     },
+     "created": {
+      "type": "integer",
+      "description": "Création, en secondes Unix."
+     },
+     "last_used": {
+      "type": "integer",
+      "description": "Dernier usage, en secondes Unix ; chaque requête de données du profil le met à jour."
+     }
+    }
+   },
+   "Chunk": {
+    "type": "object",
+    "description": "Un passage (chunk) de l'index RAG d'un document.",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "owner": {
+      "type": "string",
+      "description": "Le propriétaire du document (une conversation, un projet…)."
+     },
+     "doc": {
+      "type": "string",
+      "description": "Le document découpé."
+     },
+     "ordinal": {
+      "type": "integer",
+      "description": "Le rang du passage dans le document."
+     },
+     "name": {
+      "type": "string"
+     },
+     "where": {
+      "type": "string",
+      "description": "L'emplacement du passage dans le document."
+     },
+     "start": {
+      "type": "integer"
+     },
+     "end": {
+      "type": "integer"
+     },
+     "text": {
+      "type": "string"
+     },
+     "model": {
+      "type": "string",
+      "description": "Le modèle d'embedding du vecteur."
+     },
+     "vector": {
+      "type": "string",
+      "description": "Le vecteur en base64 (octets bruts), vide quand le passage n'a pas encore de vecteur."
+     }
+    }
+   },
+   "ImageMeta": {
+    "type": "object",
+    "description": "Les métadonnées d'une image d'un profil, sans ses octets (lus par /blob et /thumb).",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "owner": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string",
+      "description": "Le type de média de l'image, image/png ou image/jpeg."
+     },
+     "size": {
+      "type": "integer",
+      "description": "La taille déclarée de l'image."
+     },
+     "width": {
+      "type": "integer"
+     },
+     "height": {
+      "type": "integer"
+     },
+     "added": {
+      "type": "integer",
+      "description": "Ajout, en secondes Unix."
+     },
+     "bytes": {
+      "type": "integer",
+      "description": "Les octets sur le disque, image pleine et vignette ensemble."
+     }
+    }
+   }
+  },
+  "parameters": {
+   "ProfileHeader": {
+    "name": "X-Gulliver-Profile",
+    "in": "header",
+    "required": true,
+    "schema": {
+     "type": "string"
+    },
+    "description": "L'identifiant du profil dont on lit ou écrit les données, tel que /gulliver/v1/profiles le liste."
    }
   }
  }

@@ -1,7 +1,7 @@
-# Fork pour macOS de Dlib-Transformer-extensions (Albireo pour Apple Silicon).
+# Fork pour macOS de Dlib-Transformer-extensions (Gulliver pour Apple Silicon).
 # License: Boost Software License   See LICENSE.txt for the full license.
 #
-# Fixe la version d'Albireo aux endroits que compare le build (common/version.h, ses numéros et
+# Fixe la version de Gulliver aux endroits que compare le build (common/version.h, ses numéros et
 # son texte ; project() de CMakeLists.txt ; web/openapi.json, réécrit par make_openapi.py), et
 # vérifie que web/changelog.md a une section pour elle.
 #
@@ -54,7 +54,7 @@ with open(cmake, "w", encoding="utf-8") as f:
 
 subprocess.run([sys.executable, os.path.join(here, "make_openapi.py")], check=True)
 
-print("Albireo %d.%d.%d -> %s" % (tuple(current) + (text,)))
+print("Gulliver %d.%d.%d -> %s" % (tuple(current) + (text,)))
 with open(changelog, encoding="utf-8") as f:
     if not re.search(r"^## \[?%s\]?" % re.escape(text), f.read(), re.M):
         print("web/changelog.md has no section for %s yet: add it." % text)

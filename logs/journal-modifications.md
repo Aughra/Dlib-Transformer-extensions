@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Clore le stockage par profil : version 6.1.0, doc, blog (chantier Gulliver, A12)
+
+- **Quoi** : fin du bloc A (stockage par profil). Version **6.1.0** (fonction nouvelle, `bump_version.py minor` — son texte « Albireo » corrigé en « Gulliver »). Section `web/changelog.md` 6.1.0 (rubriques Profils, Accès et documents). Les 17 routes profil documentées dans `tools/make_openapi.py` et `web/openapi.json` (tag « Profils », en-tête `X-Gulliver-Profile` factorisé en paramètre réutilisable, schémas `Profile`/`Chunk`/`ImageMeta`). Épisode de blog 53 (« Un nom pour chaque espace »), ajouté au sommaire. `logs/reprise.md` et `docs/differences-mac-windows.md` à jour. A11 (renommer l'ancien « profil » de l'onglet Service) s'est avérée sans objet : l'UI affichait déjà « Sauvegardes », pas « profil ».
+- **Fichiers** : `common/version.h`, `CMakeLists.txt`, `web/changelog.md`, `tools/make_openapi.py`, `web/openapi.json`, `tools/bump_version.py`, `blog/53-un-nom-pour-chaque-espace.md` (nouveau), `blog/README.md`, `logs/reprise.md`.
+- **Pourquoi** : la doc suit le code (règle du projet) ; une fonction nouvelle incrémente la version.
+- **Étapes** : build complet 0 avertissement en 6.1.0 (version concordante : version.h, project(), openapi) ; banc de la page complet (voir ci-dessous). **Bloc A terminé.**
+
 ## 2026-11-17 — Ouvrir le relais au réseau et finir la bascule RAG (chantier Gulliver, A9 et A10)
 
 - **Quoi** : **A9** — rien à changer dans `rag.js` : `store.chunksOf` rend déjà les vecteurs en ArrayBuffer (A7), que `rag.js load()` convertit en Float32Array ; la chaîne indexation → vecteurs côté service → rapatriement → recherche marche, vérifiée par le scénario `docs` du banc (joindre un document, l'indexer, la réponse cite son contenu). **A10** — la garde « Mac seul » du relais est retirée : les deux appels `from_this_mac`/`refuse_relay_elsewhere` (route `/gulliver/v1/relay/test` et clé `relay` de `PUT /gulliver/v1/settings`) et les helpers + code d'erreur `relay_mac_only` sont supprimés de `host/server.cpp`. Les réglages du relais se changent désormais depuis n'importe quel appareil du Wi-Fi (le téléphone compris), selon le choix de l'humain. `openapi.json`/`make_openapi.py`, `web/js/service.js` et le test `test_macos.sh` (« relay settings from anywhere on the Wi-Fi ») suivent.
