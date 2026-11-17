@@ -7,6 +7,7 @@
 #include "gemm_planes.h"
 #include "../string.h"
 #include <atomic>
+#include <limits>
 #include <ostream>
 
 /*
@@ -2082,6 +2083,52 @@ namespace dlib { namespace tt
         DLIB_NPU_TRY(merge_heads(add_to, dst, src));
         cpu::merge_heads(add_to, dst, src);
 #endif
+    }
+
+// ----------------------------------------------------------------------------------------
+
+    void attention (
+        resizable_tensor& dest,
+        const tensor& q,
+        const tensor& k,
+        const tensor& v,
+        float scale,
+        bool causal
+    )
+    {
+        DLIB_CASSERT(q.num_samples() == k.num_samples() && k.num_samples() == v.num_samples());
+        DLIB_CASSERT(q.k() == k.k() && k.k() == v.k());
+        DLIB_CASSERT(q.nc() == k.nc() && k.nr() == v.nr());
+        DLIB_CASSERT(!causal || q.nr() <= k.nr());
+        const tensor_device device = q.get_tensor_device();
+        DLIB_CASSERT(k.get_tensor_device() == device && v.get_tensor_device() == device,
+            "tt::attention takes q, k and v on one device");
+
+        // The scores: scale*Q*trans(K) for each (sample, head).
+        resizable_tensor scores;
+        scores.set_tensor_device(device);
+        scores.set_size(q.num_samples(), q.k(), q.nr(), k.nr());
+        gemm(0, scores, scale, q, false, k, true, operation_mode::PLANE_WISE);
+
+        if (causal)
+        {
+            // -infinity where a query would see a later key, shared by every plane.
+            resizable_tensor mask(1, 1, q.nr(), k.nr());
+            const long shift = k.nr() - q.nr();
+            float* m = mask.host();
+            for (long i = 0; i < q.nr(); ++i)
+                for (long j = 0; j < k.nr(); ++j)
+                    m[i*k.nr() + j] = j <= i + shift ? 0.0f : -std::numeric_limits<float>::infinity();
+            mask.set_tensor_device(device);
+            add(1, scores, 1, mask);
+        }
+
+        softmax(scores, scores, operation_mode::PLANE_WISE);
+
+        if (dest.size() == 0)
+            dest.set_tensor_device(device);
+        dest.set_size(q.num_samples(), q.k(), q.nr(), v.nc());
+        gemm(0, dest, 1, scores, false, v, false, operation_mode::PLANE_WISE);
     }
 
 // ----------------------------------------------------------------------------------------

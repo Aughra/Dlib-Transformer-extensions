@@ -3152,6 +3152,37 @@ namespace dlib { namespace tt
 
 // ----------------------------------------------------------------------------------------
 
+    void attention (
+        resizable_tensor& dest,
+        const tensor& q,
+        const tensor& k,
+        const tensor& v,
+        float scale,
+        bool causal
+    );
+    /*!
+        requires
+            - q.num_samples() == k.num_samples() == v.num_samples()
+            - q.k() == k.k() == v.k()                 (the heads)
+            - q.nc() == k.nc()                        (the size of a head of q and k)
+            - k.nr() == v.nr()                        (the keys and their values)
+            - if (causal) then q.nr() <= k.nr()
+            - q, k and v are on the same device (see tensor::get_tensor_device())
+        ensures
+            - Scaled dot-product attention, written naively: the same composition of
+              tensor_tools functions as the attention of dlib's transformer layers.  For
+              each sample b and head h, with S = scale * Q*trans(K):
+                - if (causal) then the query i only sees the keys j <= i + k.nr() - q.nr()
+                  (the others get -infinity, as tril_ with neg_infinity_tag gives them);
+                - dest[b,h] == softmax_rows(S) * V
+            - #dest.num_samples() == q.num_samples(), #dest.k() == q.k(),
+              #dest.nr() == q.nr(), #dest.nc() == v.nc()
+            - The scores and the mask live on the device of q: on Metal, every step runs
+              there (tt::gemm, tt::add, tt::softmax).  dest, when empty, takes that device.
+    !*/
+
+// ----------------------------------------------------------------------------------------
+
     void gguf_matvec (
         tensor& dest,
         const tensor& src,

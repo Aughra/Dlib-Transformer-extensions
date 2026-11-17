@@ -891,6 +891,93 @@ namespace
         DLIB_TEST(contains(error_of([&]{ tt::layer_normalize(1e-5, d, m, v, src, g, g); }), "gamma of one sample"));
     }
 
+    void exact_attention (
+        const tensor& q,
+        const tensor& k,
+        const tensor& v,
+        double scale,
+        bool causal,
+        std::vector<double>& out
+    )
+    {
+        const long B = q.num_samples(), H = q.k(), tq = q.nr(), tk = k.nr(), d = q.nc(), dv = v.nc();
+        out.assign(B*H*tq*dv, 0);
+        std::vector<double> s(tk);
+        for (long p = 0; p < B*H; ++p)
+        {
+            const float* Q = q.host() + p*tq*d;
+            const float* K = k.host() + p*tk*d;
+            const float* V = v.host() + p*tk*dv;
+            for (long i = 0; i < tq; ++i)
+            {
+                double mx = -std::numeric_limits<double>::infinity();
+                for (long j = 0; j < tk; ++j)
+                {
+                    if (causal && j > i + tk - tq)
+                    {
+                        s[j] = -std::numeric_limits<double>::infinity();
+                        continue;
+                    }
+                    double dot = 0;
+                    for (long c = 0; c < d; ++c)
+                        dot += (double)Q[i*d + c]*K[j*d + c];
+                    s[j] = scale*dot;
+                    mx = std::max(mx, s[j]);
+                }
+                double sum = 0;
+                for (long j = 0; j < tk; ++j)
+                {
+                    s[j] = std::isinf(s[j]) ? 0 : std::exp(s[j] - mx);
+                    sum += s[j];
+                }
+                for (long c = 0; c < dv; ++c)
+                {
+                    double acc = 0;
+                    for (long j = 0; j < tk; ++j)
+                        acc += s[j]/sum*V[j*dv + c];
+                    out[(p*tq + i)*dv + c] = acc;
+                }
+            }
+        }
+    }
+
+    void test_parity_attention (dlib::rand& rnd)
+    {
+        struct form { long batch, heads, tq, tk, d, dv; };
+        const std::vector<form> forms = {
+            {1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 16, 16}, {1, 1, 7, 7, 16, 16}, {2, 4, 64, 64, 64, 64},
+            {1, 8, 129, 129, 64, 64}, {2, 3, 33, 33, 80, 80}, {1, 2, 300, 300, 32, 48},
+            {2, 4, 1, 40, 64, 64}, {1, 4, 5, 77, 32, 32}, {3, 1, 17, 9, 8, 8}};
+        for (auto& f : forms)
+        {
+            for (bool causal : {false, true})
+            {
+                if (causal && f.tq > f.tk)
+                    continue;
+                resizable_tensor q = random_cpu(rnd, f.batch, f.heads, f.tq, f.d);
+                resizable_tensor k = random_cpu(rnd, f.batch, f.heads, f.tk, f.d);
+                resizable_tensor v = random_cpu(rnd, f.batch, f.heads, f.tk, f.dv);
+                const float scale = 1/std::sqrt((float)f.d);
+                resizable_tensor out, mout;
+                tt::attention(out, q, k, v, scale, causal);
+                resizable_tensor mq = on_metal(q), mk = on_metal(k), mv = on_metal(v);
+                tt::attention(mout, mq, mk, mv, scale, causal);
+                DLIB_TEST(mout.get_tensor_device() == tensor_device::metal);
+                std::vector<double> exact;
+                exact_attention(q, k, v, scale, causal, exact);
+                check_against_exact(causal ? "attention causal" : "attention", out, mout, exact);
+                dlog << LINFO << "attention " << f.batch << "x" << f.heads << " heads, " << f.tq << " queries, "
+                     << f.tk << " keys, head " << f.d << "/" << f.dv << (causal ? ", causal" : "");
+            }
+        }
+
+        // Mixed devices are refused.
+        resizable_tensor q = on_metal(random_cpu(rnd, 1, 2, 4, 8)), k = random_cpu(rnd, 1, 2, 4, 8), out;
+        DLIB_TEST(contains(error_of([&]{ try { tt::attention(out, q, k, k, 1, false); }
+                                          catch (dlib::fatal_error& e) { throw metal_error(e.what()); } }),
+                           "one device"));
+    }
+
     void report_parity ()
     {
         for (auto& e : parity_table())
@@ -942,6 +1029,7 @@ namespace
             test_parity_views(rnd);
             test_parity_gemm(rnd);
             test_parity_layer_norm(rnd);
+            test_parity_attention(rnd);
             report_parity();
             bench_gemm(rnd);
             DLIB_TEST(metal::live_buffers() == 0);
