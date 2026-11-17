@@ -281,7 +281,7 @@ namespace albireo
             c->set_read_timeout(timeout_seconds, 0);
             c->set_write_timeout(timeout_seconds, 0);
             c->set_keep_alive(false);
-            c->set_default_headers({ { "User-Agent", std::string(ALBIREO_PRODUCT_NAME) + "/" + ALBIREO_VERSION } });
+            c->set_default_headers({ { "User-Agent", std::string(GULLIVER_PRODUCT_NAME) + "/" + GULLIVER_VERSION } });
             return c;
         }
 

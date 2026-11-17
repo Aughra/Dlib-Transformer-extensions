@@ -114,9 +114,9 @@ namespace albireo
     std::string carnet_root()
     {
         std::string root;
-        if (const char* r = std::getenv("ALBIREO_FORK_ROOT")) root = r;
-#ifdef ALBIREO_FORK_ROOT_DEFAULT
-        if (root.empty()) root = ALBIREO_FORK_ROOT_DEFAULT;
+        if (const char* r = std::getenv("GULLIVER_FORK_ROOT")) root = r;
+#ifdef GULLIVER_FORK_ROOT_DEFAULT
+        if (root.empty()) root = GULLIVER_FORK_ROOT_DEFAULT;
 #endif
         return !root.empty() && file_exists(join_path(root, sommaire_path)) ? root : std::string();
     }

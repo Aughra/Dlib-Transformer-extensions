@@ -53,7 +53,7 @@ LOAD_START=$(sysctl -n vm.loadavg)
   echo "| Cœurs | $(sysctl -n hw.perflevel0.physicalcpu 2>/dev/null) performance, $(sysctl -n hw.perflevel1.physicalcpu 2>/dev/null) efficacité ; $THREADS threads pour les mesures |"
   echo "| Mémoire | $(( $(sysctl -n hw.memsize) / 1073741824 )) Go |"
   echo "| macOS | $(sw_vers -productVersion) ($(sw_vers -buildVersion)) |"
-  echo "| Albireo | $(sed -n 's/.*ALBIREO_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null)) |"
+  echo "| Albireo | $(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null)) |"
   echo "| Mode économie d'énergie | $(pmset -g | awk '/lowpowermode/ {print $2}') (0 attendu) |"
   echo "| Charge au début | $LOAD_START |"
   echo

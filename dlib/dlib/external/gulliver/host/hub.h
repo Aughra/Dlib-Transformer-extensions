@@ -1,7 +1,7 @@
 // Fork pour macOS de Dlib-Transformer-extensions (Albireo pour Apple Silicon).
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef ALBIREO_HOST_HUB_H_
-#define ALBIREO_HOST_HUB_H_
+#ifndef GULLIVER_HOST_HUB_H_
+#define GULLIVER_HOST_HUB_H_
 
 #include <string>
 
@@ -33,4 +33,4 @@ namespace albireo
         std::string& error);
 }
 
-#endif // ALBIREO_HOST_HUB_H_
+#endif // GULLIVER_HOST_HUB_H_

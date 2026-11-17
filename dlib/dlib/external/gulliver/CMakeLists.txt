@@ -9,19 +9,19 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(albireo VERSION 5.9.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 5.9.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
 # l'interface.
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/common/version.h" version_lines REGEX "^#define ALBIREO_VERSION")
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/common/version.h" version_lines REGEX "^#define GULLIVER_VERSION")
 set(version_numbers)
 foreach (part MAJOR MINOR PATCH)
-   string(REGEX MATCH "#define ALBIREO_VERSION_${part} +([0-9]+)" found "${version_lines}")
+   string(REGEX MATCH "#define GULLIVER_VERSION_${part} +([0-9]+)" found "${version_lines}")
    list(APPEND version_numbers "${CMAKE_MATCH_1}")
 endforeach()
 string(REPLACE ";" "." version_numbers "${version_numbers}")
-string(REGEX MATCH "#define ALBIREO_VERSION +\"([0-9.]+)\"" found "${version_lines}")
+string(REGEX MATCH "#define GULLIVER_VERSION +\"([0-9.]+)\"" found "${version_lines}")
 set(version_text "${CMAKE_MATCH_1}")
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/web/openapi.json" openapi_text)
 string(REGEX MATCH "\"version\" *: *\"([0-9.]+)\"" found "${openapi_text}")
@@ -33,8 +33,8 @@ if (NOT version_numbers STREQUAL PROJECT_VERSION OR NOT version_text STREQUAL PR
       "(${openapi_version}): the four must agree")
 endif()
 
-option(ALBIREO_PROGRAMS "Build the service, the engine and the tools" ON)
-option(ALBIREO_TESTS "Build the test programs" ON)
+option(GULLIVER_PROGRAMS "Build the service, the engine and the tools" ON)
+option(GULLIVER_TESTS "Build the test programs" ON)
 
 if (NOT APPLE OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|ARM64)$")
    message(FATAL_ERROR "Albireo builds for macOS on Apple Silicon only (arm64).")
@@ -48,14 +48,14 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
-get_filename_component(ALBIREO_DLIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
-get_filename_component(ALBIREO_INCLUDE_DIR "${ALBIREO_DLIB_DIR}/.." ABSOLUTE)
+get_filename_component(GULLIVER_DLIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+get_filename_component(GULLIVER_INCLUDE_DIR "${GULLIVER_DLIB_DIR}/.." ABSOLUTE)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(ALBIREO_ENGINE_DIR ${CMAKE_BINARY_DIR}/bin/engines)
+set(GULLIVER_ENGINE_DIR ${CMAKE_BINARY_DIR}/bin/engines)
 
 # Place les exécutables d'une cible dans un dossier de l'arbre de build.
-function(albireo_output_dir target dir)
+function(gulliver_output_dir target dir)
    set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${dir})
 endfunction()
 
@@ -75,9 +75,9 @@ set(DLIB_JXL_SUPPORT OFF CACHE BOOL "" FORCE)
 set(DLIB_WEBP_SUPPORT OFF CACHE BOOL "" FORCE)
 set(DLIB_GIF_SUPPORT OFF CACHE BOOL "" FORCE)
 set(DLIB_USE_MKL_FFT OFF CACHE BOOL "" FORCE)
-add_subdirectory(${ALBIREO_DLIB_DIR} dlib_build EXCLUDE_FROM_ALL)
+add_subdirectory(${GULLIVER_DLIB_DIR} dlib_build EXCLUDE_FROM_ALL)
 
-set(ALBIREO_WARNINGS -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
+set(GULLIVER_WARNINGS -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
 find_package(Threads REQUIRED)
 # Les produits des longues passes passent par Accelerate (engine/qkernels_accelerate.inc) ; le
 # GPU par Metal (engine/metal_device.mm).
@@ -85,7 +85,7 @@ link_libraries("-framework Accelerate" "-framework Metal" "-framework MetalPerfo
 
 # La source des noyaux Metal, intégrée au moteur sous forme d'une chaîne que macOS compile quand
 # le moteur ouvre le GPU : le build n'a besoin d'aucun compilateur Metal.
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels.metal" ALBIREO_METAL_SOURCE)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels.metal" GULLIVER_METAL_SOURCE)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels.metal")
 configure_file(engine/metal_kernels.inc.in ${CMAKE_BINARY_DIR}/generated/metal_kernels.inc @ONLY)
 set_source_files_properties(engine/metal_device.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
@@ -96,9 +96,9 @@ find_package(ZLIB REQUIRED)
 
 # Les décodeurs PNG et JPEG du moteur, qui lisent les images des requêtes : les copies de libpng
 # et de libjpeg que dlib embarque, compilées dans le moteur, quoi que contienne le système.
-set(png_dir ${ALBIREO_DLIB_DIR}/external/libpng)
-set(jpeg_dir ${ALBIREO_DLIB_DIR}/external/libjpeg)
-add_library(albireo_image STATIC
+set(png_dir ${GULLIVER_DLIB_DIR}/external/libpng)
+set(jpeg_dir ${GULLIVER_DLIB_DIR}/external/libjpeg)
+add_library(gulliver_image STATIC
    ${png_dir}/png.c ${png_dir}/pngerror.c ${png_dir}/pngget.c ${png_dir}/pngmem.c ${png_dir}/pngpread.c
    ${png_dir}/pngread.c ${png_dir}/pngrio.c ${png_dir}/pngrtran.c ${png_dir}/pngrutil.c ${png_dir}/pngset.c
    ${png_dir}/pngtrans.c ${png_dir}/pngwio.c ${png_dir}/pngwrite.c ${png_dir}/pngwtran.c ${png_dir}/pngwutil.c
@@ -109,14 +109,14 @@ add_library(albireo_image STATIC
    ${jpeg_dir}/jdpostct.c ${jpeg_dir}/jdsample.c ${jpeg_dir}/jerror.c ${jpeg_dir}/jidctflt.c ${jpeg_dir}/jidctfst.c
    ${jpeg_dir}/jidctint.c ${jpeg_dir}/jmemmgr.c ${jpeg_dir}/jmemnobs.c ${jpeg_dir}/jquant1.c ${jpeg_dir}/jquant2.c
    ${jpeg_dir}/jutils.c)
-target_include_directories(albireo_image PRIVATE ${png_dir} ${jpeg_dir})
-target_link_libraries(albireo_image PUBLIC ZLIB::ZLIB)
+target_include_directories(gulliver_image PRIVATE ${png_dir} ${jpeg_dir})
+target_link_libraries(gulliver_image PUBLIC ZLIB::ZLIB)
 # Compilé dans le moteur partagé, dont seuls les symboles propres sont visibles.
-set_target_properties(albireo_image PROPERTIES POSITION_INDEPENDENT_CODE ON
+set_target_properties(gulliver_image PROPERTIES POSITION_INDEPENDENT_CODE ON
    C_VISIBILITY_PRESET hidden)
 
 # Le moteur d'inférence.
-set(ALBIREO_ENGINE_SOURCES
+set(GULLIVER_ENGINE_SOURCES
    engine/chat_format.cpp
    engine/cpu_runtime.cpp
    engine/cpu_runtime_metal.cpp
@@ -131,161 +131,161 @@ set(ALBIREO_ENGINE_SOURCES
    common/system_info.cpp)
 
 # Les noyaux quantifiés (NEON, Accelerate), partagés par le moteur, les outils et les tests.
-add_library(albireo-kernels OBJECT engine/qkernels.cpp)
-target_include_directories(albireo-kernels PRIVATE ${ALBIREO_INCLUDE_DIR})
-target_compile_options(albireo-kernels PRIVATE ${ALBIREO_WARNINGS})
-set_target_properties(albireo-kernels PROPERTIES POSITION_INDEPENDENT_CODE ON
+add_library(gulliver-kernels OBJECT engine/qkernels.cpp)
+target_include_directories(gulliver-kernels PRIVATE ${GULLIVER_INCLUDE_DIR})
+target_compile_options(gulliver-kernels PRIVATE ${GULLIVER_WARNINGS})
+set_target_properties(gulliver-kernels PROPERTIES POSITION_INDEPENDENT_CODE ON
    C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 
 # La bibliothèque du moteur, que le service charge depuis son dossier engines.
-function(albireo_engine variant)
-   set(target albireo-engine-${variant})
-   add_library(${target} SHARED ${ALBIREO_ENGINE_SOURCES} $<TARGET_OBJECTS:albireo-kernels> ${ARGN})
-   target_include_directories(${target} PRIVATE ${ALBIREO_INCLUDE_DIR})
-   target_compile_definitions(${target} PRIVATE ALBIREO_ENGINE_BUILD ALBIREO_ENGINE_VARIANT="${variant}")
-   target_compile_options(${target} PRIVATE ${ALBIREO_WARNINGS})
-   target_link_libraries(${target} PRIVATE albireo_image Threads::Threads ${CMAKE_DL_LIBS})
+function(gulliver_engine variant)
+   set(target gulliver-engine-${variant})
+   add_library(${target} SHARED ${GULLIVER_ENGINE_SOURCES} $<TARGET_OBJECTS:gulliver-kernels> ${ARGN})
+   target_include_directories(${target} PRIVATE ${GULLIVER_INCLUDE_DIR})
+   target_compile_definitions(${target} PRIVATE GULLIVER_ENGINE_BUILD GULLIVER_ENGINE_VARIANT="${variant}")
+   target_compile_options(${target} PRIVATE ${GULLIVER_WARNINGS})
+   target_link_libraries(${target} PRIVATE gulliver_image Threads::Threads ${CMAKE_DL_LIBS})
    set_target_properties(${target} PROPERTIES
       C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON
-      LIBRARY_OUTPUT_DIRECTORY ${ALBIREO_ENGINE_DIR})
+      LIBRARY_OUTPUT_DIRECTORY ${GULLIVER_ENGINE_DIR})
 endfunction()
 
-if (ALBIREO_PROGRAMS)
-   albireo_engine(cpu)
+if (GULLIVER_PROGRAMS)
+   gulliver_engine(cpu)
 endif()
 
-if (ALBIREO_PROGRAMS)
+if (GULLIVER_PROGRAMS)
    # Bibliothèque compilée dans les programmes : SQLite, venue de dlib/external ; zlib est celle de macOS.
-   add_library(albireo_sqlite STATIC ${ALBIREO_DLIB_DIR}/external/sqlite/sqlite3.c)
-   target_include_directories(albireo_sqlite PUBLIC ${ALBIREO_DLIB_DIR}/external/sqlite)
-   target_compile_definitions(albireo_sqlite PRIVATE SQLITE_THREADSAFE=1 SQLITE_DQS=0 SQLITE_DEFAULT_MEMSTATUS=0
+   add_library(gulliver_sqlite STATIC ${GULLIVER_DLIB_DIR}/external/sqlite/sqlite3.c)
+   target_include_directories(gulliver_sqlite PUBLIC ${GULLIVER_DLIB_DIR}/external/sqlite)
+   target_compile_definitions(gulliver_sqlite PRIVATE SQLITE_THREADSAFE=1 SQLITE_DQS=0 SQLITE_DEFAULT_MEMSTATUS=0
       SQLITE_DEFAULT_WAL_SYNCHRONOUS=1 SQLITE_LIKE_DOESNT_MATCH_BLOBS SQLITE_TEMP_STORE=2 SQLITE_SECURE_DELETE
       SQLITE_ENABLE_API_ARMOR SQLITE_ENABLE_FTS5 SQLITE_ENABLE_MATH_FUNCTIONS SQLITE_OMIT_LOAD_EXTENSION)
-   target_link_libraries(albireo_sqlite PUBLIC ${CMAKE_DL_LIBS} m)
+   target_link_libraries(gulliver_sqlite PUBLIC ${CMAKE_DL_LIBS} m)
 
    # Code partagé par le service et les outils.
-   add_library(albireo_common STATIC common/log.cpp common/platform.cpp common/system_info.cpp
+   add_library(gulliver_common STATIC common/log.cpp common/platform.cpp common/system_info.cpp
       common/engine_loader.cpp)
-   target_include_directories(albireo_common PUBLIC ${ALBIREO_INCLUDE_DIR})
-   target_compile_options(albireo_common PRIVATE ${ALBIREO_WARNINGS})
-   target_link_libraries(albireo_common PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+   target_include_directories(gulliver_common PUBLIC ${GULLIVER_INCLUDE_DIR})
+   target_compile_options(gulliver_common PRIVATE ${GULLIVER_WARNINGS})
+   target_link_libraries(gulliver_common PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
 
    # Le service.
-   add_executable(albireo-service host/main.cpp host/service.cpp host/server.cpp host/settings.cpp host/store.cpp
+   add_executable(gulliver-service host/main.cpp host/service.cpp host/server.cpp host/settings.cpp host/store.cpp
       host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/crypto.cpp
       host/certificates.cpp host/web_access.cpp host/hub.cpp host/carnet.cpp host/relay.cpp host/pseudonyms.cpp)
-   target_include_directories(albireo-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
+   target_include_directories(gulliver-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
    # Le carnet du portage lit les documents du dépôt où le service est construit (host/carnet.h).
-   get_filename_component(ALBIREO_FORK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
-   target_compile_definitions(albireo-service PRIVATE ALBIREO_FORK_ROOT_DEFAULT="${ALBIREO_FORK_ROOT}")
-   target_link_libraries(albireo-service PRIVATE albireo_common albireo_sqlite ZLIB::ZLIB dlib::httplib)
-   target_compile_options(albireo-service PRIVATE ${ALBIREO_WARNINGS})
+   get_filename_component(GULLIVER_FORK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
+   target_compile_definitions(gulliver-service PRIVATE GULLIVER_FORK_ROOT_DEFAULT="${GULLIVER_FORK_ROOT}")
+   target_link_libraries(gulliver-service PRIVATE gulliver_common gulliver_sqlite ZLIB::ZLIB dlib::httplib)
+   target_compile_options(gulliver-service PRIVATE ${GULLIVER_WARNINGS})
 
    # La préparation des modèles fournis avec Albireo : vérifiés et convertis avec le code
    # du moteur, puis remis aux programmes de l'arbre.
-   add_executable(albireo-builtin tools/albireo_builtin.cpp engine/chat_format.cpp engine/model_config.cpp
-      engine/model_file.cpp $<TARGET_OBJECTS:albireo-kernels> host/crypto.cpp)
-   target_link_libraries(albireo-builtin PRIVATE albireo_common dlib::httplib)
-   target_compile_options(albireo-builtin PRIVATE ${ALBIREO_WARNINGS})
+   add_executable(gulliver-builtin tools/gulliver_builtin.cpp engine/chat_format.cpp engine/model_config.cpp
+      engine/model_file.cpp $<TARGET_OBJECTS:gulliver-kernels> host/crypto.cpp)
+   target_link_libraries(gulliver-builtin PRIVATE gulliver_common dlib::httplib)
+   target_compile_options(gulliver-builtin PRIVATE ${GULLIVER_WARNINGS})
 
    # Les modèles fournis avec Albireo (resources/builtin_models.json) : téléchargés une fois dans
-   # le cache (cmake/builtin_models.cmake), vérifiés et convertis par albireo-builtin, puis
+   # le cache (cmake/builtin_models.cmake), vérifiés et convertis par gulliver-builtin, puis
    # remis au dossier « models » des programmes de l'arbre.
-   option(ALBIREO_BUILTIN_MODELS "Prepare the models that come with Albireo" OFF)
-   set(cache_default "$ENV{HOME}/Library/Caches/albireo")
-   set(ALBIREO_MODEL_CACHE "${cache_default}" CACHE PATH
+   option(GULLIVER_BUILTIN_MODELS "Prepare the models that come with Albireo" OFF)
+   set(cache_default "$ENV{HOME}/Library/Caches/gulliver")
+   set(GULLIVER_MODEL_CACHE "${cache_default}" CACHE PATH
       "Folder of the downloaded and converted models that come with Albireo")
-   set(ALBIREO_BUILTIN_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/resources/builtin_models.json" CACHE FILEPATH
+   set(GULLIVER_BUILTIN_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/resources/builtin_models.json" CACHE FILEPATH
       "Manifest of the models that come with Albireo")
-   if (ALBIREO_BUILTIN_MODELS)
+   if (GULLIVER_BUILTIN_MODELS)
       if (CMAKE_VERSION VERSION_LESS 3.19)
          message(FATAL_ERROR "the models that come with Albireo need CMake 3.19 or later "
-            "(-DALBIREO_BUILTIN_MODELS=OFF builds without them)")
+            "(-DGULLIVER_BUILTIN_MODELS=OFF builds without them)")
       endif()
-      set(ALBIREO_BUILTIN_COMMAND $<TARGET_FILE:albireo-builtin>)
-      set(builtin_tool_target albireo-builtin)
-      set(ALBIREO_BUILTIN_STAMP ${CMAKE_BINARY_DIR}/bin/models/builtin.json)
-      add_custom_command(OUTPUT ${ALBIREO_BUILTIN_STAMP}
-         COMMAND ${CMAKE_COMMAND} -DMANIFEST=${ALBIREO_BUILTIN_MANIFEST} -DCACHE=${ALBIREO_MODEL_CACHE}
+      set(GULLIVER_BUILTIN_COMMAND $<TARGET_FILE:gulliver-builtin>)
+      set(builtin_tool_target gulliver-builtin)
+      set(GULLIVER_BUILTIN_STAMP ${CMAKE_BINARY_DIR}/bin/models/builtin.json)
+      add_custom_command(OUTPUT ${GULLIVER_BUILTIN_STAMP}
+         COMMAND ${CMAKE_COMMAND} -DMANIFEST=${GULLIVER_BUILTIN_MANIFEST} -DCACHE=${GULLIVER_MODEL_CACHE}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/builtin_models.cmake
-         COMMAND ${ALBIREO_BUILTIN_COMMAND} --manifest ${ALBIREO_BUILTIN_MANIFEST} --cache ${ALBIREO_MODEL_CACHE}
+         COMMAND ${GULLIVER_BUILTIN_COMMAND} --manifest ${GULLIVER_BUILTIN_MANIFEST} --cache ${GULLIVER_MODEL_CACHE}
             --models-out ${CMAKE_BINARY_DIR}/bin/models
-         DEPENDS ${ALBIREO_BUILTIN_MANIFEST} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/builtin_models.cmake
+         DEPENDS ${GULLIVER_BUILTIN_MANIFEST} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/builtin_models.cmake
             ${builtin_tool_target}
          COMMENT "Preparing the models that come with Albireo"
          VERBATIM)
-      add_custom_target(albireo-builtin-models ALL DEPENDS ${ALBIREO_BUILTIN_STAMP})
+      add_custom_target(gulliver-builtin-models ALL DEPENDS ${GULLIVER_BUILTIN_STAMP})
    endif()
 
    # L'application web et la documentation de l'interface, à côté du service.
-   add_custom_target(albireo-web ALL
+   add_custom_target(gulliver-web ALL
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/web ${CMAKE_BINARY_DIR}/bin/web
       COMMENT "Copying the web application")
-   add_dependencies(albireo-service albireo-web)
+   add_dependencies(gulliver-service gulliver-web)
 
    # Les textes des licences des composants du service, que montre la page « Composants et licences »
    # (fork pour macOS : l'installateur Windows de l'original les assemblait, cmake/payload.cmake).
-   set(albireo_licenses
-      albireo.txt     ${CMAKE_CURRENT_SOURCE_DIR}/resources/license.txt
-      dlib.txt        ${ALBIREO_INCLUDE_DIR}/LICENSE.txt
-      mbedtls.txt     ${ALBIREO_DLIB_DIR}/external/mbedtls/LICENSE
-      cpp-httplib.txt ${ALBIREO_DLIB_DIR}/external/httplib/LICENSE
-      sqlite.txt      ${ALBIREO_DLIB_DIR}/external/sqlite/README.txt
-      libpng.txt      ${ALBIREO_DLIB_DIR}/external/libpng/LICENSE
-      libjpeg.txt     ${ALBIREO_DLIB_DIR}/external/libjpeg/README)
-   set(albireo_license_commands)
-   set(albireo_license_sources)
-   list(LENGTH albireo_licenses albireo_license_count)
-   math(EXPR albireo_license_last "${albireo_license_count} - 1")
-   foreach(i RANGE 0 ${albireo_license_last} 2)
+   set(gulliver_licenses
+      gulliver.txt     ${CMAKE_CURRENT_SOURCE_DIR}/resources/license.txt
+      dlib.txt        ${GULLIVER_INCLUDE_DIR}/LICENSE.txt
+      mbedtls.txt     ${GULLIVER_DLIB_DIR}/external/mbedtls/LICENSE
+      cpp-httplib.txt ${GULLIVER_DLIB_DIR}/external/httplib/LICENSE
+      sqlite.txt      ${GULLIVER_DLIB_DIR}/external/sqlite/README.txt
+      libpng.txt      ${GULLIVER_DLIB_DIR}/external/libpng/LICENSE
+      libjpeg.txt     ${GULLIVER_DLIB_DIR}/external/libjpeg/README)
+   set(gulliver_license_commands)
+   set(gulliver_license_sources)
+   list(LENGTH gulliver_licenses gulliver_license_count)
+   math(EXPR gulliver_license_last "${gulliver_license_count} - 1")
+   foreach(i RANGE 0 ${gulliver_license_last} 2)
       math(EXPR j "${i} + 1")
-      list(GET albireo_licenses ${i} name)
-      list(GET albireo_licenses ${j} source)
-      list(APPEND albireo_license_sources ${source})
-      list(APPEND albireo_license_commands
+      list(GET gulliver_licenses ${i} name)
+      list(GET gulliver_licenses ${j} source)
+      list(APPEND gulliver_license_sources ${source})
+      list(APPEND gulliver_license_commands
          COMMAND ${CMAKE_COMMAND} -E copy_if_different ${source} ${CMAKE_BINARY_DIR}/bin/licenses/${name})
    endforeach()
-   add_custom_target(albireo-licenses ALL
+   add_custom_target(gulliver-licenses ALL
       COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/bin/licenses
-      ${albireo_license_commands}
-      DEPENDS ${albireo_license_sources}
+      ${gulliver_license_commands}
+      DEPENDS ${gulliver_license_sources}
       COMMENT "Copying the license texts")
-   add_dependencies(albireo-service albireo-licenses)
+   add_dependencies(gulliver-service gulliver-licenses)
 
 endif()
 
-if (ALBIREO_TESTS AND ALBIREO_PROGRAMS)
+if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    # Les fichiers que le service écrit dans son dossier de modèles et lit dans ses imports, les
    # téléchargements, les réglages, l'accès web et le relais, avec des serveurs locaux.
    add_executable(test_host tests/test_host.cpp host/models.cpp host/store.cpp host/http_fetch.cpp
       host/crypto.cpp host/settings.cpp host/web_access.cpp host/certificates.cpp host/relay.cpp
       host/pseudonyms.cpp)
    target_include_directories(test_host PRIVATE ${CMAKE_BINARY_DIR}/generated)
-   target_link_libraries(test_host PRIVATE albireo_common albireo_sqlite ZLIB::ZLIB dlib::httplib)
-   target_compile_options(test_host PRIVATE ${ALBIREO_WARNINGS})
-   albireo_output_dir(test_host ${CMAKE_BINARY_DIR}/tests)
+   target_link_libraries(test_host PRIVATE gulliver_common gulliver_sqlite ZLIB::ZLIB dlib::httplib)
+   target_compile_options(test_host PRIVATE ${GULLIVER_WARNINGS})
+   gulliver_output_dir(test_host ${CMAKE_BINARY_DIR}/tests)
    # test_model_file : fichiers de modèle abîmés ; test_engine_api : l'interface C d'une bibliothèque de moteur.
    foreach (t test_qkernels test_runtime test_tokenizer engine_chat bench_runtime test_model_file test_engine_api)
       if (t STREQUAL "engine_chat" OR t STREQUAL "test_engine_api")
          add_executable(${t} tests/${t}.cpp)
-         target_link_libraries(${t} PRIVATE albireo_common)
+         target_link_libraries(${t} PRIVATE gulliver_common)
       else()
          add_executable(${t} tests/${t}.cpp engine/cpu_runtime.cpp engine/cpu_runtime_metal.cpp engine/metal_device.mm
-            engine/model_config.cpp engine/model_file.cpp $<TARGET_OBJECTS:albireo-kernels> common/system_info.cpp)
-         target_include_directories(${t} PRIVATE ${ALBIREO_INCLUDE_DIR})
+            engine/model_config.cpp engine/model_file.cpp $<TARGET_OBJECTS:gulliver-kernels> common/system_info.cpp)
+         target_include_directories(${t} PRIVATE ${GULLIVER_INCLUDE_DIR})
          target_link_libraries(${t} PRIVATE Threads::Threads)
       endif()
-      albireo_output_dir(${t} ${CMAKE_BINARY_DIR}/tests)
+      gulliver_output_dir(${t} ${CMAKE_BINARY_DIR}/tests)
    endforeach()
    # Les noyaux Metal comparés au processeur, sur des données aléatoires (portage macOS).
-   add_executable(test_metal tests/test_metal.cpp engine/metal_device.mm $<TARGET_OBJECTS:albireo-kernels>
+   add_executable(test_metal tests/test_metal.cpp engine/metal_device.mm $<TARGET_OBJECTS:gulliver-kernels>
       common/system_info.cpp)
-   target_include_directories(test_metal PRIVATE ${ALBIREO_INCLUDE_DIR})
-   target_compile_options(test_metal PRIVATE ${ALBIREO_WARNINGS})
+   target_include_directories(test_metal PRIVATE ${GULLIVER_INCLUDE_DIR})
+   target_compile_options(test_metal PRIVATE ${GULLIVER_WARNINGS})
    target_link_libraries(test_metal PRIVATE Threads::Threads)
-   albireo_output_dir(test_metal ${CMAKE_BINARY_DIR}/tests)
+   gulliver_output_dir(test_metal ${CMAKE_BINARY_DIR}/tests)
    # Le format de chat des agents : les prompts avec outils, et les appels d'outils relus.
    add_executable(test_chat_format tests/test_chat_format.cpp engine/chat_format.cpp)
-   target_include_directories(test_chat_format PRIVATE ${ALBIREO_INCLUDE_DIR})
-   albireo_output_dir(test_chat_format ${CMAKE_BINARY_DIR}/tests)
+   target_include_directories(test_chat_format PRIVATE ${GULLIVER_INCLUDE_DIR})
+   gulliver_output_dir(test_chat_format ${CMAKE_BINARY_DIR}/tests)
 endif()

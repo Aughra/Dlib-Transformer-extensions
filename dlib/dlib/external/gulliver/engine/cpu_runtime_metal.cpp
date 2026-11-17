@@ -207,7 +207,7 @@ namespace albireo
             }
         if (!why.empty())
         {
-            if (log) log(ALBIREO_LOG_INFO, "GPU: the passes stay on the processor, the kernels do not cover " + why);
+            if (log) log(GULLIVER_LOG_INFO, "GPU: the passes stay on the processor, the kernels do not cover " + why);
             note_gpu("the kernels do not cover " + why);
             return;
         }
@@ -232,7 +232,7 @@ namespace albireo
         g->weights = device.wrap(file_->data(), static_cast<size_t>(file_->size()), g->weights_offset);
         if (!g->weights.valid())
         {
-            if (g->log) g->log(ALBIREO_LOG_WARNING, "GPU: the weights cannot be taken without copy, the passes stay on the processor");
+            if (g->log) g->log(GULLIVER_LOG_WARNING, "GPU: the weights cannot be taken without copy, the passes stay on the processor");
             note_gpu("the weights cannot be taken without copy");
             return;
         }
@@ -281,7 +281,7 @@ namespace albireo
             g->states = device.wrap(states_.data, states_.bytes, at);
             if (!g->states.valid() || at != 0)
             {
-                if (g->log) g->log(ALBIREO_LOG_WARNING, "GPU: the states of the linear attention layers cannot be "
+                if (g->log) g->log(GULLIVER_LOG_WARNING, "GPU: the states of the linear attention layers cannot be "
                     "taken without copy, the passes stay on the processor");
                 note_gpu("the states cannot be taken without copy");
                 return;
@@ -398,7 +398,7 @@ namespace albireo
     {
         if (!gpu_ || gpu_->state == gpu_state::dropped) return;
         gpu_->state = gpu_state::dropped;
-        if (gpu_->log) gpu_->log(ALBIREO_LOG_WARNING, "GPU: the passes go back to the processor: " + why);
+        if (gpu_->log) gpu_->log(GULLIVER_LOG_WARNING, "GPU: the passes go back to the processor: " + why);
         note_gpu(why);
     }
 
@@ -563,7 +563,7 @@ namespace albireo
         gpu_->state = gpu_state::ready;
         note_gpu();
         if (gpu_->log)
-            gpu_->log(ALBIREO_LOG_INFO, "GPU " + gpu_->device->name() + ": the generation steps"
+            gpu_->log(GULLIVER_LOG_INFO, "GPU " + gpu_->device->name() + ": the generation steps"
                 + std::string(gpu_prompt ? " and the prompts of " + std::to_string(gpu_prompt_min_)
                     + " tokens or more, up to " + std::to_string(gpu_prompt_context_) + " positions," : "")
                 + " run on it (" + detail.str() + ")");

@@ -57,12 +57,12 @@ namespace
         std::string final_json;
     };
 
-    void ALBIREO_ENGINE_CALL on_event(void* user, int kind, const char* data, size_t size)
+    void GULLIVER_ENGINE_CALL on_event(void* user, int kind, const char* data, size_t size)
     {
         tracker& t = *static_cast<tracker*>(user);
         std::lock_guard<std::mutex> lock(t.m);
         if (t.finals > 0) ++t.after_final;
-        if (kind == ALBIREO_EVENT_DONE || kind == ALBIREO_EVENT_ERROR)
+        if (kind == GULLIVER_EVENT_DONE || kind == GULLIVER_EVENT_ERROR)
         {
             ++t.finals;
             t.kind = kind;
@@ -88,13 +88,13 @@ namespace
         int finals = 0;
     };
 
-    void ALBIREO_ENGINE_CALL collect_event(void* user, int kind, const char* data, size_t size)
+    void GULLIVER_ENGINE_CALL collect_event(void* user, int kind, const char* data, size_t size)
     {
         collector& c = *static_cast<collector*>(user);
         std::lock_guard<std::mutex> lock(c.m);
-        if (kind == ALBIREO_EVENT_CONTENT) c.content.append(data, size);
-        else if (kind == ALBIREO_EVENT_REASONING) c.reasoning.append(data, size);
-        else if (kind == ALBIREO_EVENT_DONE || kind == ALBIREO_EVENT_ERROR)
+        if (kind == GULLIVER_EVENT_CONTENT) c.content.append(data, size);
+        else if (kind == GULLIVER_EVENT_REASONING) c.reasoning.append(data, size);
+        else if (kind == GULLIVER_EVENT_DONE || kind == GULLIVER_EVENT_ERROR)
         {
             ++c.finals;
             c.final_json.assign(data, size);
@@ -162,34 +162,34 @@ int main(int argc, char** argv)
     albireo_engine* e = lib.create("{\"threads\": 2, \"spin_us\": 1000000000}", nullptr, nullptr, err, sizeof(err));
     expect(e != nullptr, std::string("engine created: ") + err);
     if (!e) return 1;
-    expect(lib.load_model(nullptr, "m", path.c_str(), nullptr, err, sizeof(err)) == ALBIREO_E_INVALID_ARGUMENT,
+    expect(lib.load_model(nullptr, "m", path.c_str(), nullptr, err, sizeof(err)) == GULLIVER_E_INVALID_ARGUMENT,
         "load without an engine");
-    expect(lib.load_model(e, nullptr, path.c_str(), nullptr, err, sizeof(err)) == ALBIREO_E_INVALID_ARGUMENT,
+    expect(lib.load_model(e, nullptr, path.c_str(), nullptr, err, sizeof(err)) == GULLIVER_E_INVALID_ARGUMENT,
         "load without an identifier");
     for (const char* options : { "{\"kv_mb\": -1}", "{\"max_sequences\": 100000}", "{\"context\": -5}",
         "{\"batch_tokens\": 1e999}", "{\"kv_mb\": \"lots\"}", "{\"context\": " })
-        expect(lib.load_model(e, "m", path.c_str(), options, err, sizeof(err)) == ALBIREO_E_INVALID_ARGUMENT,
+        expect(lib.load_model(e, "m", path.c_str(), options, err, sizeof(err)) == GULLIVER_E_INVALID_ARGUMENT,
             std::string("load options refused: ") + options);
-    expect(lib.load_model(e, "m", (folder + "missing.gguf").c_str(), nullptr, err, sizeof(err)) != ALBIREO_OK,
+    expect(lib.load_model(e, "m", (folder + "missing.gguf").c_str(), nullptr, err, sizeof(err)) != GULLIVER_OK,
         "a missing file is refused");
-    expect(lib.load_model(e, "m", damaged_path.c_str(), nullptr, err, sizeof(err)) != ALBIREO_OK,
+    expect(lib.load_model(e, "m", damaged_path.c_str(), nullptr, err, sizeof(err)) != GULLIVER_OK,
         "a special token outside the vocabulary is refused");
     const char* options = "{\"context\": 1024, \"max_sequences\": 16, \"kv_mb\": 1}";
-    expect(lib.load_model(e, "m", path.c_str(), options, err, sizeof(err)) == ALBIREO_OK,
+    expect(lib.load_model(e, "m", path.c_str(), options, err, sizeof(err)) == GULLIVER_OK,
         std::string("the model loads: ") + err);
 
     size_t needed = 0;
-    expect(lib.query(e, "{\"op\":\"stats\"}", nullptr, 0, &needed) == ALBIREO_E_BUFFER_TOO_SMALL && needed > 1,
+    expect(lib.query(e, "{\"op\":\"stats\"}", nullptr, 0, &needed) == GULLIVER_E_BUFFER_TOO_SMALL && needed > 1,
         "a query without a buffer gives its size");
     char answer[4096];
-    expect(lib.query(e, "[1, 2]", answer, sizeof(answer), &needed) == ALBIREO_E_INVALID_ARGUMENT,
+    expect(lib.query(e, "[1, 2]", answer, sizeof(answer), &needed) == GULLIVER_E_INVALID_ARGUMENT,
         "a query that is no object");
-    expect(lib.query(nullptr, "{\"op\":\"stats\"}", answer, sizeof(answer), &needed) == ALBIREO_E_INVALID_ARGUMENT,
+    expect(lib.query(nullptr, "{\"op\":\"stats\"}", answer, sizeof(answer), &needed) == GULLIVER_E_INVALID_ARGUMENT,
         "a query without an engine");
 
     tracker unused;
     uint64_t id = 0;
-    expect(lib.submit(e, chat("hello").c_str(), nullptr, nullptr, &id, err, sizeof(err)) == ALBIREO_E_INVALID_ARGUMENT,
+    expect(lib.submit(e, chat("hello").c_str(), nullptr, nullptr, &id, err, sizeof(err)) == GULLIVER_E_INVALID_ARGUMENT,
         "a request without a callback");
     const std::string long_stop(2000, 'x');
     const std::string refused[] = { "{\"model\":", "[]", "{\"model\":\"other\"}",
@@ -199,12 +199,12 @@ int main(int argc, char** argv)
         chat("hello", ",\"top_p\":2"), chat("hello", ",\"stop\":[\"" + long_stop + "\"]"),
         chat("hello", ",\"logit_bias\":{\"999999\":1}"), "{\"model\":\"m\",\"messages\":[{\"role\":\"robot\"}]}" };
     for (const auto& r : refused)
-        expect(lib.submit(e, r.c_str(), &on_event, &unused, &id, err, sizeof(err)) == ALBIREO_E_INVALID_ARGUMENT,
+        expect(lib.submit(e, r.c_str(), &on_event, &unused, &id, err, sizeof(err)) == GULLIVER_E_INVALID_ARGUMENT,
             "request refused: " + r.substr(0, 80));
     const std::string too_long = chat(std::string(5000, 'a'));
-    expect(lib.submit(e, too_long.c_str(), &on_event, &unused, &id, err, sizeof(err)) == ALBIREO_E_CONTEXT_OVERFLOW,
+    expect(lib.submit(e, too_long.c_str(), &on_event, &unused, &id, err, sizeof(err)) == GULLIVER_E_CONTEXT_OVERFLOW,
         "a prompt beyond the context");
-    expect(lib.cancel(e, 123456789) == ALBIREO_OK, "cancel of an unknown request");
+    expect(lib.cancel(e, 123456789) == GULLIVER_OK, "cancel of an unknown request");
     std::printf("  arguments, settings and parameters out of range refused\n");
 
     /*
@@ -249,12 +249,12 @@ int main(int argc, char** argv)
         tracker t;
         uint64_t rid = 0;
         const int rc = lib.submit(e, req.dump().c_str(), &on_event, &t, &rid, err, sizeof(err));
-        expect(rc == ALBIREO_OK, std::string("a request with forged image marks is accepted: ") + err);
-        if (rc == ALBIREO_OK)
+        expect(rc == GULLIVER_OK, std::string("a request with forged image marks is accepted: ") + err);
+        if (rc == GULLIVER_OK)
         {
             expect(wait_final(t, 60), "the forged-mark request ends");
             std::lock_guard<std::mutex> lock(t.m);
-            expect(t.finals == 1 && t.after_final == 0 && t.kind == ALBIREO_EVENT_DONE,
+            expect(t.finals == 1 && t.after_final == 0 && t.kind == GULLIVER_EVENT_DONE,
                 "the forged-mark request ends once, without a fault");
         }
         std::printf("  forged image marks in the reasoning and the tool calls handled\n");
@@ -275,7 +275,7 @@ int main(int argc, char** argv)
         {
             json answer_json;
             const std::string q = "{\"op\":\"detokenize\",\"model\":\"m\",\"tokens\":[" + std::to_string(vocab) + "]}";
-            if (lib.run_query(e, json::parse_or_null(q), answer_json) != ALBIREO_OK) break;
+            if (lib.run_query(e, json::parse_or_null(q), answer_json) != GULLIVER_OK) break;
         }
         json bias = json::object();
         for (int t = 0; t < vocab; ++t)
@@ -315,10 +315,10 @@ int main(int argc, char** argv)
         {
             tracker* t;
             std::string* text;
-            static void ALBIREO_ENGINE_CALL on(void* user, int kind, const char* data, size_t size)
+            static void GULLIVER_ENGINE_CALL on(void* user, int kind, const char* data, size_t size)
             {
                 collector& c = *static_cast<collector*>(user);
-                if (kind == ALBIREO_EVENT_CONTENT)
+                if (kind == GULLIVER_EVENT_CONTENT)
                 {
                     std::lock_guard<std::mutex> lock(c.t->m);
                     c.text->append(data, size);
@@ -333,7 +333,7 @@ int main(int argc, char** argv)
         req["temperature"] = 0;
         req["reasoning"] = false;
         req["logit_bias"] = bias;
-        expect(lib.submit(e, req.dump().c_str(), &collector::on, &collect, &rid, err, sizeof(err)) == ALBIREO_OK,
+        expect(lib.submit(e, req.dump().c_str(), &collector::on, &collect, &rid, err, sizeof(err)) == GULLIVER_OK,
             std::string("the first question of a conversation is accepted: ") + err);
         expect(wait_final(first, 60), "the first answer ends");
         expect(answer.size() == 40 && answer.find_first_not_of("abcd") == std::string::npos,
@@ -350,7 +350,7 @@ int main(int argc, char** argv)
         messages.push_back(content("assistant", answer));
         messages.push_back(content("user", "more"));
         tracker second;
-        expect(ask(messages, 1, second, rid) == ALBIREO_OK, std::string("the next question is accepted: ") + err);
+        expect(ask(messages, 1, second, rid) == GULLIVER_OK, std::string("the next question is accepted: ") + err);
         expect(wait_final(second, 60), "the next answer ends");
         {
             std::lock_guard<std::mutex> lock(second.m);
@@ -364,14 +364,14 @@ int main(int argc, char** argv)
         messages.push_back(content("assistant", "a"));
         messages.push_back(content("user", "again"));
         tracker third, fourth;
-        expect(ask(messages, 30, third, rid) == ALBIREO_OK, "a third question is accepted");
+        expect(ask(messages, 30, third, rid) == GULLIVER_OK, "a third question is accepted");
         expect(wait_final(third, 60), "the third answer ends");
         messages.push_back(content("user", "and again"));
-        expect(ask(messages, 2, fourth, rid) == ALBIREO_OK, "a question at once after an answer is accepted");
+        expect(ask(messages, 2, fourth, rid) == GULLIVER_OK, "a question at once after an answer is accepted");
         expect(wait_final(fourth, 60), "the question at once after an answer ends");
         {
             std::lock_guard<std::mutex> lock(fourth.m);
-            expect(fourth.finals == 1 && fourth.after_final == 0 && fourth.kind == ALBIREO_EVENT_DONE,
+            expect(fourth.finals == 1 && fourth.after_final == 0 && fourth.kind == GULLIVER_EVENT_DONE,
                 "the question at once after an answer ends once");
         }
         std::printf("  the history of an answer read ahead of the next question (%lld tokens)\n", warmed);
@@ -392,15 +392,15 @@ int main(int argc, char** argv)
         const albireo_test::tiny_gguf thinking =
             albireo_test::tiny_gguf_writer().build(albireo_test::tiny_gguf_writer::thinking_template());
         expect(thinking.save(thinking_path, thinking.bytes), "the model that always reasons is written");
-        expect(lib.load_model(e, "t", thinking_path.c_str(), options, err, sizeof(err)) == ALBIREO_OK,
+        expect(lib.load_model(e, "t", thinking_path.c_str(), options, err, sizeof(err)) == GULLIVER_OK,
             std::string("the model that always reasons loads: ") + err);
         auto ask = [&](const std::string& model, const std::string& extra, collector& c) {
             const std::string req = "{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\","
                 "\"content\":\"hello\"}],\"temperature\":0,\"logit_bias\":{\"97\":100}" + extra + "}";
             uint64_t rid = 0;
             const int rc = lib.submit(e, req.c_str(), &collect_event, &c, &rid, err, sizeof(err));
-            expect(rc == ALBIREO_OK, "request accepted: " + extra + " " + err);
-            if (rc == ALBIREO_OK) expect(wait_collected(c, 120), "request ended: " + extra);
+            expect(rc == GULLIVER_OK, "request accepted: " + extra + " " + err);
+            if (rc == GULLIVER_OK) expect(wait_collected(c, 120), "request ended: " + extra);
             std::lock_guard<std::mutex> lock(c.m);
             return json::parse_or_null(c.final_json);
         };
@@ -416,7 +416,7 @@ int main(int argc, char** argv)
             "the answer stopped keeps the tokens it wrote");
 
         json models;
-        expect(lib.run_query(e, json::parse_or_null("{\"op\":\"models\"}"), models) == ALBIREO_OK, "models query");
+        expect(lib.run_query(e, json::parse_or_null("{\"op\":\"models\"}"), models) == GULLIVER_OK, "models query");
         int always = 0, switched = 0;
         for (const auto& m : models["models"].elements())
         {
@@ -432,7 +432,7 @@ int main(int argc, char** argv)
         q["model"] = "t";
         q["text"] = "\n\n" + sentence + "\n</think>\n\n";
         q["special"] = true;
-        expect(lib.run_query(e, q, counted) == ALBIREO_OK, "tokenize query");
+        expect(lib.run_query(e, q, counted) == GULLIVER_OK, "tokenize query");
         const long long closing = static_cast<long long>(counted["tokens"].size());
 
         /*
@@ -536,7 +536,7 @@ int main(int argc, char** argv)
         expect(trimmed(stopped.content) == std::string(40, 'a') && l["finish_reason"].as_string() == "length",
             "the stop sequences apply to the answer: " + l.dump());
 
-        expect(lib.unload_model(e, "t") == ALBIREO_OK, "the model that always reasons unloads");
+        expect(lib.unload_model(e, "t") == GULLIVER_OK, "the model that always reasons unloads");
         std::printf("  the answers that loop stopped, the reasoning of a model that always reasons bounded\n");
     }
 
@@ -568,7 +568,7 @@ int main(int argc, char** argv)
                     uint64_t rid = 0;
                     char e2[512];
                     const int rc = lib.submit(e, request.c_str(), &on_event, t.get(), &rid, e2, sizeof(e2));
-                    if (rc == ALBIREO_OK)
+                    if (rc == GULLIVER_OK)
                     {
                         if (rng() % 3 == 0)
                         {
@@ -581,7 +581,7 @@ int main(int argc, char** argv)
                     else
                     {
                         // Refusée pendant que le modèle était déchargé.
-                        expect(rc == ALBIREO_E_INVALID_ARGUMENT, std::string("refusal of a request: ") + e2);
+                        expect(rc == GULLIVER_E_INVALID_ARGUMENT, std::string("refusal of a request: ") + e2);
                     }
                 }
             });
@@ -589,8 +589,8 @@ int main(int argc, char** argv)
         if (round == 1)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(300));
-            expect(lib.unload_model(e, "m") == ALBIREO_OK, "unload during the requests");
-            expect(lib.load_model(e, "m", path.c_str(), options, err, sizeof(err)) == ALBIREO_OK, "load again");
+            expect(lib.unload_model(e, "m") == GULLIVER_OK, "unload during the requests");
+            expect(lib.load_model(e, "m", path.c_str(), options, err, sizeof(err)) == GULLIVER_OK, "load again");
         }
         for (auto& t : clients) t.join();
         long missing = 0;
@@ -605,7 +605,7 @@ int main(int argc, char** argv)
             std::lock_guard<std::mutex> lock(t->m);
             expect(t->finals == 1 && t->after_final == 0, "one final event and nothing after it");
             const json f = json::parse_or_null(t->final_json);
-            ++endings[t->kind == ALBIREO_EVENT_DONE ? f["finish_reason"].as_string()
+            ++endings[t->kind == GULLIVER_EVENT_DONE ? f["finish_reason"].as_string()
                 : "error " + f["code"].as_string()];
         }
         expect(missing == 0, std::to_string(missing) + " requests never ended");
@@ -623,7 +623,7 @@ int main(int argc, char** argv)
     {
         std::unique_ptr<tracker> t(new tracker());
         const std::string request = chat(std::string(50, static_cast<char>('k' + i)), ",\"max_tokens\":400");
-        if (lib.submit(e, request.c_str(), &on_event, t.get(), &id, err, sizeof(err)) == ALBIREO_OK)
+        if (lib.submit(e, request.c_str(), &on_event, t.get(), &id, err, sizeof(err)) == GULLIVER_OK)
             running.push_back(std::move(t));
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(50));

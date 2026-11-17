@@ -530,7 +530,7 @@ namespace albireo
             c->set_read_timeout(timeout_seconds, 0);
             c->set_write_timeout(timeout_seconds, 0);
             c->set_keep_alive(false);
-            c->set_default_headers({ { "User-Agent", std::string(ALBIREO_PRODUCT_NAME) + "/" + ALBIREO_VERSION } });
+            c->set_default_headers({ { "User-Agent", std::string(GULLIVER_PRODUCT_NAME) + "/" + GULLIVER_VERSION } });
             return c;
         }
 
@@ -1258,12 +1258,12 @@ namespace albireo
             }
             catch (const std::exception& x)
             {
-                if (!j->done) j->sink(ALBIREO_EVENT_ERROR, error_event(std::string("the relay failed: ") + x.what(),
+                if (!j->done) j->sink(GULLIVER_EVENT_ERROR, error_event(std::string("the relay failed: ") + x.what(),
                     "relay_failed").dump());
             }
             catch (...)
             {
-                if (!j->done) j->sink(ALBIREO_EVENT_ERROR, error_event("the relay failed", "relay_failed").dump());
+                if (!j->done) j->sink(GULLIVER_EVENT_ERROR, error_event("the relay failed", "relay_failed").dump());
             }
             j->request = json();
             j->done = true;
@@ -1335,7 +1335,7 @@ namespace albireo
         // Le journal nomme le fournisseur et le code d'un échec, jamais son message, qui peut citer la requête.
         auto fail = [&](const std::string& message, const std::string& code) {
             if (code != "cancelled") log_warning("relay: an answer of " + r.provider + " failed (" + code + ")");
-            j->sink(ALBIREO_EVENT_ERROR, error_event(message, code).dump());
+            j->sink(GULLIVER_EVENT_ERROR, error_event(message, code).dump());
             j->done = true;
         };
         relay_model m;
@@ -1501,7 +1501,7 @@ namespace albireo
                 first = false;
                 first_token = std::chrono::steady_clock::now();
             }
-            const std::string out = kind == ALBIREO_EVENT_REASONING ? reasoning_restorer.feed(text)
+            const std::string out = kind == GULLIVER_EVENT_REASONING ? reasoning_restorer.feed(text)
                                                                      : content_restorer.feed(text);
             if (!out.empty()) j->sink(kind, out);
         };
@@ -1524,9 +1524,9 @@ namespace albireo
         auto web_block = [&](const json& b) {
             const std::string kind = b["type"].as_string();
             if (kind == "server_tool_use" && b["name"].as_string() == "web_search" && b["input"]["query"].is_string())
-                emit(ALBIREO_EVENT_REASONING, "\nweb_search: " + b["input"]["query"].as_string() + "\n");
+                emit(GULLIVER_EVENT_REASONING, "\nweb_search: " + b["input"]["query"].as_string() + "\n");
             if (kind == "web_search_tool_result" && b["content"]["error_code"].is_string())
-                emit(ALBIREO_EVENT_REASONING, "\nweb_search: " + b["content"]["error_code"].as_string() + "\n");
+                emit(GULLIVER_EVENT_REASONING, "\nweb_search: " + b["content"]["error_code"].as_string() + "\n");
         };
         auto on_event = [&](const std::string& name, const std::string& data) {
             if (!claude && data == "[DONE]")
@@ -1560,8 +1560,8 @@ namespace albireo
                 {
                     const json& d = e["delta"];
                     const std::string kind = d["type"].as_string();
-                    if (kind == "text_delta") emit(ALBIREO_EVENT_CONTENT, d["text"].as_string());
-                    else if (kind == "thinking_delta") emit(ALBIREO_EVENT_REASONING, d["thinking"].as_string());
+                    if (kind == "text_delta") emit(GULLIVER_EVENT_CONTENT, d["text"].as_string());
+                    else if (kind == "thinking_delta") emit(GULLIVER_EVENT_REASONING, d["thinking"].as_string());
                     else if (kind == "input_json_delta" || kind == "citations_delta")
                     {
                         claude_block& block = blocks[e["index"].as_int(0)];
@@ -1581,7 +1581,7 @@ namespace albireo
                         b["input"] = json::parse_or_null(it->second.input);
                         web_block(b);
                     }
-                    if (it->second.type == "text") emit(ALBIREO_EVENT_CONTENT, source_links(it->second.sources));
+                    if (it->second.type == "text") emit(GULLIVER_EVENT_CONTENT, source_links(it->second.sources));
                     blocks.erase(it);
                 }
                 else if (type == "message_delta")
@@ -1611,9 +1611,9 @@ namespace albireo
             }
             const json& choice = e["choices"][0];
             const json& d = choice["delta"];
-            if (d["reasoning_content"].is_string()) emit(ALBIREO_EVENT_REASONING, d["reasoning_content"].as_string());
-            else if (d["reasoning"].is_string()) emit(ALBIREO_EVENT_REASONING, d["reasoning"].as_string());
-            if (d["content"].is_string()) emit(ALBIREO_EVENT_CONTENT, d["content"].as_string());
+            if (d["reasoning_content"].is_string()) emit(GULLIVER_EVENT_REASONING, d["reasoning_content"].as_string());
+            else if (d["reasoning"].is_string()) emit(GULLIVER_EVENT_REASONING, d["reasoning"].as_string());
+            if (d["content"].is_string()) emit(GULLIVER_EVENT_CONTENT, d["content"].as_string());
             if (choice["finish_reason"].is_string())
             {
                 const std::string f = choice["finish_reason"].as_string();
@@ -1721,12 +1721,12 @@ namespace albireo
                 ++events;
                 for (const json& b : a["content"].elements())
                 {
-                    if (b["type"].as_string() == "thinking") emit(ALBIREO_EVENT_REASONING, b["thinking"].as_string());
+                    if (b["type"].as_string() == "thinking") emit(GULLIVER_EVENT_REASONING, b["thinking"].as_string());
                     if (b["type"].as_string() == "text")
                     {
                         claude_block block;
                         for (const json& c : b["citations"].elements()) add_source(block, c);
-                        emit(ALBIREO_EVENT_CONTENT, b["text"].as_string() + source_links(block.sources));
+                        emit(GULLIVER_EVENT_CONTENT, b["text"].as_string() + source_links(block.sources));
                     }
                     web_block(b);
                 }
@@ -1743,10 +1743,10 @@ namespace albireo
                 const json& choice = a["choices"][0];
                 const json& msg = choice["message"];
                 if (msg["reasoning_content"].is_string())
-                    emit(ALBIREO_EVENT_REASONING, msg["reasoning_content"].as_string());
+                    emit(GULLIVER_EVENT_REASONING, msg["reasoning_content"].as_string());
                 else if (msg["reasoning"].is_string())
-                    emit(ALBIREO_EVENT_REASONING, msg["reasoning"].as_string());
-                if (msg["content"].is_string()) emit(ALBIREO_EVENT_CONTENT, msg["content"].as_string());
+                    emit(GULLIVER_EVENT_REASONING, msg["reasoning"].as_string());
+                if (msg["content"].is_string()) emit(GULLIVER_EVENT_CONTENT, msg["content"].as_string());
                 const std::string f = choice["finish_reason"].as_string();
                 finish = f == "length" || f == "content_filter" ? f : "stop";
                 prompt_tokens = a["usage"]["prompt_tokens"].as_int(0);
@@ -1794,9 +1794,9 @@ namespace albireo
         }
         // Les substituts que complète la fin de la réponse, puis la fin elle-même.
         const std::string reasoning_rest = reasoning_restorer.finish();
-        if (!reasoning_rest.empty()) j->sink(ALBIREO_EVENT_REASONING, reasoning_rest);
+        if (!reasoning_rest.empty()) j->sink(GULLIVER_EVENT_REASONING, reasoning_rest);
         const std::string content_rest = content_restorer.finish();
-        if (!content_rest.empty()) j->sink(ALBIREO_EVENT_CONTENT, content_rest);
+        if (!content_rest.empty()) j->sink(GULLIVER_EVENT_CONTENT, content_rest);
         const auto now = std::chrono::steady_clock::now();
         const double prompt_ms = std::chrono::duration<double, std::milli>(first_token - started).count();
         const double generation_ms = std::chrono::duration<double, std::milli>(now - first_token).count();
@@ -1823,7 +1823,7 @@ namespace albireo
         log_info("relay: " + r.provider + " " + m.id + ", " + std::to_string(prompt_tokens) + " tokens read, "
             + std::to_string(completion_tokens) + " written"
             + (web_searches > 0 ? ", " + std::to_string(web_searches) + " searches of the web" : std::string()));
-        j->sink(ALBIREO_EVENT_DONE, done.dump());
+        j->sink(GULLIVER_EVENT_DONE, done.dump());
         j->done = true;
     }
 

@@ -165,7 +165,7 @@ int main(int argc, char** argv)
         albireo::end_process(albireo::service::benchmark_engine(args[2], args[3], args[4]));
     if (args.size() >= 2 && args[1] == "--version")
     {
-        std::cout << ALBIREO_FULL_NAME << " " << ALBIREO_VERSION << std::endl;
+        std::cout << GULLIVER_FULL_NAME << " " << GULLIVER_VERSION << std::endl;
         return 0;
     }
     const bool console = args.size() >= 2 && args[1] == "--console";

@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef ALBIREO_ENGINE_ENGINE_H_
-#define ALBIREO_ENGINE_ENGINE_H_
+#ifndef GULLIVER_ENGINE_ENGINE_H_
+#define GULLIVER_ENGINE_ENGINE_H_
 
 #include <atomic>
 #include <condition_variable>
@@ -33,7 +33,7 @@ namespace albireo
     // Reçoit les messages du moteur : une gravité d'engine_api.h et un texte.
     typedef std::function<void(int level, const std::string& message)> log_sink;
 
-    // Une requête refusée pour un temps, le moteur contenant tout ce qu'il peut contenir : ALBIREO_E_BUSY.
+    // Une requête refusée pour un temps, le moteur contenant tout ce qu'il peut contenir : GULLIVER_E_BUSY.
     struct engine_busy : std::runtime_error
     {
         explicit engine_busy(const std::string& what) : std::runtime_error(what) {}
@@ -174,4 +174,4 @@ namespace albireo
 
 }
 
-#endif // ALBIREO_ENGINE_ENGINE_H_
+#endif // GULLIVER_ENGINE_ENGINE_H_

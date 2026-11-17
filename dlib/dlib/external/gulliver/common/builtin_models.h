@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef ALBIREO_COMMON_BUILTIN_MODELS_H_
-#define ALBIREO_COMMON_BUILTIN_MODELS_H_
+#ifndef GULLIVER_COMMON_BUILTIN_MODELS_H_
+#define GULLIVER_COMMON_BUILTIN_MODELS_H_
 
 #include <cstdint>
 #include <cstring>
@@ -99,4 +99,4 @@ namespace albireo
 
 }
 
-#endif // ALBIREO_COMMON_BUILTIN_MODELS_H_
+#endif // GULLIVER_COMMON_BUILTIN_MODELS_H_

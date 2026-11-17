@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef ALBIREO_COMMON_PLATFORM_H_
-#define ALBIREO_COMMON_PLATFORM_H_
+#ifndef GULLIVER_COMMON_PLATFORM_H_
+#define GULLIVER_COMMON_PLATFORM_H_
 
 #include <atomic>
 #include <cstdint>
@@ -25,8 +25,8 @@ namespace albireo
     /*
         Le dossier des données partagées par les programmes : les réglages, les certificats,
         la base de données, les journaux et, sauf si les réglages disent autre chose, les
-        modèles.  $ALBIREO_HOME quand elle est définie, sinon %ProgramData%\Albireo sous Windows
-        et ~/.local/share/albireo ailleurs.  Sous Windows, la variable est lue dans
+        modèles.  $GULLIVER_HOME quand elle est définie, sinon %ProgramData%\Albireo sous Windows
+        et ~/.local/share/gulliver ailleurs.  Sous Windows, la variable est lue dans
         l'environnement de la machine, celui que reçoivent les services : la variable d'un
         utilisateur ne détourne ni l'installateur ni l'icône du service.  Le dossier que
         l'installateur enregistre (DataDir de HKLM\Software\Albireo) passe en premier.
@@ -288,4 +288,4 @@ namespace albireo
 
 }
 
-#endif // ALBIREO_COMMON_PLATFORM_H_
+#endif // GULLIVER_COMMON_PLATFORM_H_

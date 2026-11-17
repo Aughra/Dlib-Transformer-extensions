@@ -57,10 +57,10 @@ namespace albireo
             unload();
             return false;
         }
-        if (abi_version() != ALBIREO_ENGINE_ABI_VERSION)
+        if (abi_version() != GULLIVER_ENGINE_ABI_VERSION)
         {
             error = path + " implements the engine interface " + std::to_string(abi_version()) + ", this program needs "
-                + std::to_string(ALBIREO_ENGINE_ABI_VERSION);
+                + std::to_string(GULLIVER_ENGINE_ABI_VERSION);
             unload();
             return false;
         }
@@ -95,12 +95,12 @@ namespace albireo
         size_t needed = 0;
         std::vector<char> buf(4096);
         int rc = describe(buf.data(), buf.size(), &needed);
-        if (rc == ALBIREO_E_BUFFER_TOO_SMALL)
+        if (rc == GULLIVER_E_BUFFER_TOO_SMALL)
         {
             buf.resize(needed);
             rc = describe(buf.data(), buf.size(), &needed);
         }
-        if (rc != ALBIREO_OK) return json();
+        if (rc != GULLIVER_OK) return json();
         return json::parse_or_null(buf.data());
     }
 
@@ -110,7 +110,7 @@ namespace albireo
         std::vector<char> buf(16384);
         size_t needed = 0;
         int rc = query(e, text.c_str(), buf.data(), buf.size(), &needed);
-        if (rc == ALBIREO_E_BUFFER_TOO_SMALL)
+        if (rc == GULLIVER_E_BUFFER_TOO_SMALL)
         {
             buf.resize(needed);
             rc = query(e, text.c_str(), buf.data(), buf.size(), &needed);

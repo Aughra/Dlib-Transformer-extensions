@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef ALBIREO_ENGINE_VISION_ENCODER_H_
-#define ALBIREO_ENGINE_VISION_ENCODER_H_
+#ifndef GULLIVER_ENGINE_VISION_ENCODER_H_
+#define GULLIVER_ENGINE_VISION_ENCODER_H_
 
 #include <limits>
 #include <memory>
@@ -355,4 +355,4 @@ namespace albireo
 
 }
 
-#endif // ALBIREO_ENGINE_VISION_ENCODER_H_
+#endif // GULLIVER_ENGINE_VISION_ENCODER_H_

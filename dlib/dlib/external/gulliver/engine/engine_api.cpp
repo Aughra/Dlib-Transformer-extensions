@@ -6,8 +6,8 @@
     traverse : chacune devient un code de retour et un message.
 */
 
-#ifndef ALBIREO_ENGINE_BUILD
-#define ALBIREO_ENGINE_BUILD
+#ifndef GULLIVER_ENGINE_BUILD
+#define GULLIVER_ENGINE_BUILD
 #endif
 
 #include "../common/engine_api.h"
@@ -42,18 +42,18 @@ namespace
     int write_json(const std::string& text, char* json, size_t capacity, size_t* needed)
     {
         if (needed) *needed = text.size() + 1;
-        if (!json || capacity < text.size() + 1) return ALBIREO_E_BUFFER_TOO_SMALL;
+        if (!json || capacity < text.size() + 1) return GULLIVER_E_BUFFER_TOO_SMALL;
         std::memcpy(json, text.data(), text.size());
         json[text.size()] = '\0';
-        return ALBIREO_OK;
+        return GULLIVER_OK;
     }
 
     int code_of(const std::exception& e)
     {
-        if (dynamic_cast<const albireo::engine_busy*>(&e)) return ALBIREO_E_BUSY;
-        if (dynamic_cast<const std::invalid_argument*>(&e)) return ALBIREO_E_INVALID_ARGUMENT;
-        if (dynamic_cast<const std::bad_alloc*>(&e)) return ALBIREO_E_OUT_OF_MEMORY;
-        return ALBIREO_E_INTERNAL;
+        if (dynamic_cast<const albireo::engine_busy*>(&e)) return GULLIVER_E_BUSY;
+        if (dynamic_cast<const std::invalid_argument*>(&e)) return GULLIVER_E_INVALID_ARGUMENT;
+        if (dynamic_cast<const std::bad_alloc*>(&e)) return GULLIVER_E_OUT_OF_MEMORY;
+        return GULLIVER_E_INTERNAL;
     }
 
 
@@ -70,12 +70,12 @@ namespace
 extern "C"
 {
 
-ALBIREO_ENGINE_EXPORT uint32_t ALBIREO_ENGINE_CALL albireo_engine_abi_version(void)
+GULLIVER_ENGINE_EXPORT uint32_t GULLIVER_ENGINE_CALL albireo_engine_abi_version(void)
 {
-    return ALBIREO_ENGINE_ABI_VERSION;
+    return GULLIVER_ENGINE_ABI_VERSION;
 }
 
-ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_describe(char* json, size_t capacity, size_t* needed)
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_describe(char* json, size_t capacity, size_t* needed)
 {
     try
     {
@@ -83,11 +83,11 @@ ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_describe(char* json
     }
     catch (...)
     {
-        return ALBIREO_E_INTERNAL;
+        return GULLIVER_E_INTERNAL;
     }
 }
 
-ALBIREO_ENGINE_EXPORT albireo_engine* ALBIREO_ENGINE_CALL albireo_engine_create(const char* config_json,
+GULLIVER_ENGINE_EXPORT albireo_engine* GULLIVER_ENGINE_CALL albireo_engine_create(const char* config_json,
     albireo_log_callback log, void* log_user, char* error, size_t error_capacity)
 {
     try
@@ -110,7 +110,7 @@ ALBIREO_ENGINE_EXPORT albireo_engine* ALBIREO_ENGINE_CALL albireo_engine_create(
     return nullptr;
 }
 
-ALBIREO_ENGINE_EXPORT void ALBIREO_ENGINE_CALL albireo_engine_destroy(albireo_engine* engine)
+GULLIVER_ENGINE_EXPORT void GULLIVER_ENGINE_CALL albireo_engine_destroy(albireo_engine* engine)
 {
     try
     {
@@ -121,14 +121,14 @@ ALBIREO_ENGINE_EXPORT void ALBIREO_ENGINE_CALL albireo_engine_destroy(albireo_en
     }
 }
 
-ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_load_model(albireo_engine* engine,
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_load_model(albireo_engine* engine,
     const char* model_id, const char* path, const char* options_json, char* error, size_t error_capacity)
 {
-    if (!engine || !model_id || !path) return ALBIREO_E_INVALID_ARGUMENT;
+    if (!engine || !model_id || !path) return GULLIVER_E_INVALID_ARGUMENT;
     try
     {
         engine->impl->load_model(model_id, path, parse_or_throw(options_json));
-        return ALBIREO_OK;
+        return GULLIVER_OK;
     }
     catch (const std::exception& ex)
     {
@@ -138,32 +138,32 @@ ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_load_model(albireo_
     catch (...)
     {
         copy_message("unknown error", error, error_capacity);
-        return ALBIREO_E_INTERNAL;
+        return GULLIVER_E_INTERNAL;
     }
 }
 
-ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_unload_model(albireo_engine* engine, const char* model_id)
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_unload_model(albireo_engine* engine, const char* model_id)
 {
-    if (!engine || !model_id) return ALBIREO_E_INVALID_ARGUMENT;
+    if (!engine || !model_id) return GULLIVER_E_INVALID_ARGUMENT;
     try
     {
         engine->impl->unload_model(model_id);
-        return ALBIREO_OK;
+        return GULLIVER_OK;
     }
     catch (...)
     {
-        return ALBIREO_E_INTERNAL;
+        return GULLIVER_E_INTERNAL;
     }
 }
 
-ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_query(albireo_engine* engine,
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_query(albireo_engine* engine,
     const char* request_json, char* json, size_t capacity, size_t* needed)
 {
-    if (!engine) return ALBIREO_E_INVALID_ARGUMENT;
+    if (!engine) return GULLIVER_E_INVALID_ARGUMENT;
     try
     {
         std::string text;
-        int code = ALBIREO_OK;
+        int code = GULLIVER_OK;
         try
         {
             text = engine->impl->query(parse_or_throw(request_json)).dump();
@@ -176,52 +176,52 @@ ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_query(albireo_engin
             text = e.dump();
         }
         const int w = write_json(text, json, capacity, needed);
-        return w != ALBIREO_OK ? w : code;
+        return w != GULLIVER_OK ? w : code;
     }
     catch (...)
     {
         // Mémoire épuisée pendant l'écriture de la réponse ou de l'erreur.
-        return ALBIREO_E_INTERNAL;
+        return GULLIVER_E_INTERNAL;
     }
 }
 
-ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_submit(albireo_engine* engine,
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_submit(albireo_engine* engine,
     const char* request_json, albireo_event_callback callback, void* user, uint64_t* request_id,
     char* error, size_t error_capacity)
 {
-    if (!engine || !callback) return ALBIREO_E_INVALID_ARGUMENT;
+    if (!engine || !callback) return GULLIVER_E_INVALID_ARGUMENT;
     try
     {
         const uint64_t id = engine->impl->submit(parse_or_throw(request_json),
             [callback, user](int kind, const std::string& data) { callback(user, kind, data.data(), data.size()); });
         if (request_id) *request_id = id;
-        return ALBIREO_OK;
+        return GULLIVER_OK;
     }
     catch (const std::exception& ex)
     {
         copy_message(ex.what(), error, error_capacity);
         const std::string what = ex.what();
-        if (what.find("beyond the context") != std::string::npos) return ALBIREO_E_CONTEXT_OVERFLOW;
+        if (what.find("beyond the context") != std::string::npos) return GULLIVER_E_CONTEXT_OVERFLOW;
         return code_of(ex);
     }
     catch (...)
     {
         copy_message("unknown error", error, error_capacity);
-        return ALBIREO_E_INTERNAL;
+        return GULLIVER_E_INTERNAL;
     }
 }
 
-ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_cancel(albireo_engine* engine, uint64_t request_id)
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_cancel(albireo_engine* engine, uint64_t request_id)
 {
-    if (!engine) return ALBIREO_E_INVALID_ARGUMENT;
+    if (!engine) return GULLIVER_E_INVALID_ARGUMENT;
     try
     {
         engine->impl->cancel(request_id);
-        return ALBIREO_OK;
+        return GULLIVER_OK;
     }
     catch (...)
     {
-        return ALBIREO_E_INTERNAL;
+        return GULLIVER_E_INTERNAL;
     }
 }
 

@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef ALBIREO_HOST_CARNET_H_
-#define ALBIREO_HOST_CARNET_H_
+#ifndef GULLIVER_HOST_CARNET_H_
+#define GULLIVER_HOST_CARNET_H_
 
 #include <string>
 
@@ -18,7 +18,7 @@
     La liste des fichiers lisibles est fermée : les motifs de macos/site-docs/sommaire.json (un dossier exact et
     un nom, « * » ou « *.extension »).  Un chemin avec un composant vide, caché ou « .. », ou qui passe par un
     lien, est refusé ; rien d'autre du dépôt n'est atteint.  Le dépôt est celui où le service a été construit
-    (ALBIREO_FORK_ROOT_DEFAULT, donné par CMakeLists.txt), ou celui que nomme la variable ALBIREO_FORK_ROOT.
+    (GULLIVER_FORK_ROOT_DEFAULT, donné par CMakeLists.txt), ou celui que nomme la variable GULLIVER_FORK_ROOT.
 */
 
 namespace albireo
@@ -41,4 +41,4 @@ namespace albireo
     bool carnet_file(const std::string& rel, std::string& data, std::string& type);
 }
 
-#endif // ALBIREO_HOST_CARNET_H_
+#endif // GULLIVER_HOST_CARNET_H_

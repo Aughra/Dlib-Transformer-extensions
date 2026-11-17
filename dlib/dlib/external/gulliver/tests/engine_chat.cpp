@@ -93,14 +93,14 @@ namespace
 
     std::mutex print_mutex;
 
-    void ALBIREO_ENGINE_CALL on_event(void* user, int kind, const char* data, size_t size)
+    void GULLIVER_ENGINE_CALL on_event(void* user, int kind, const char* data, size_t size)
     {
         pending& p = *static_cast<pending*>(user);
         const std::string s(data, size);
         std::lock_guard<std::mutex> lock(p.m);
         switch (kind)
         {
-        case ALBIREO_EVENT_CONTENT:
+        case GULLIVER_EVENT_CONTENT:
             p.content += s;
             if (!p.parallel)
             {
@@ -109,7 +109,7 @@ namespace
                 std::fflush(stdout);
             }
             break;
-        case ALBIREO_EVENT_REASONING:
+        case GULLIVER_EVENT_REASONING:
             p.reasoning += s;
             if (!p.parallel)
             {
@@ -118,22 +118,22 @@ namespace
                 std::fflush(stdout);
             }
             break;
-        case ALBIREO_EVENT_TOOL_CALL:
+        case GULLIVER_EVENT_TOOL_CALL:
             p.tools += s + "\n";
             break;
-        case ALBIREO_EVENT_PROGRESS:
+        case GULLIVER_EVENT_PROGRESS:
             break;
-        case ALBIREO_EVENT_DONE:
-        case ALBIREO_EVENT_ERROR:
+        case GULLIVER_EVENT_DONE:
+        case GULLIVER_EVENT_ERROR:
             p.final_json = s;
-            p.failed = kind == ALBIREO_EVENT_ERROR;
+            p.failed = kind == GULLIVER_EVENT_ERROR;
             p.done = true;
             p.cv.notify_all();
             break;
         }
     }
 
-    void ALBIREO_ENGINE_CALL on_log(void*, int level, const char* message)
+    void GULLIVER_ENGINE_CALL on_log(void*, int level, const char* message)
     {
         std::lock_guard<std::mutex> l(print_mutex);
         std::fprintf(stderr, "[engine %d] %s\n", level, message);
@@ -201,7 +201,7 @@ namespace
             p->parallel = true;
             uint64_t id = 0;
             char err[1024] = { 0 };
-            if (lib.submit(e, req.dump().c_str(), on_event, p.get(), &id, err, sizeof(err)) != ALBIREO_OK)
+            if (lib.submit(e, req.dump().c_str(), on_event, p.get(), &id, err, sizeof(err)) != GULLIVER_OK)
             {
                 // Les requêtes déjà soumises rendent compte à leurs objets jusqu'à leur fin : attendues
                 // ci-dessous.
@@ -453,7 +453,7 @@ int main(int argc, char** argv)
     if (!projector.empty()) options["projector"] = projector;
     // Le stockage des clés et valeurs (auto, q8 ou f16), pour comparer à une référence en demi-précision.
     if (!kv_type.empty()) options["kv_type"] = kv_type;
-    if (lib.load_model(e, "m", argv[2], options.dump().c_str(), err, sizeof(err)) != ALBIREO_OK)
+    if (lib.load_model(e, "m", argv[2], options.dump().c_str(), err, sizeof(err)) != GULLIVER_OK)
     {
         std::printf("load: %s\n", err);
         lib.destroy(e);
@@ -487,9 +487,9 @@ int main(int argc, char** argv)
         req["model"] = "m";
         json answer;
         const int rc = lib.run_query(e, req, answer);
-        std::printf("%s", rc == ALBIREO_OK ? answer["prompt"].as_string().c_str() : answer.dump().c_str());
+        std::printf("%s", rc == GULLIVER_OK ? answer["prompt"].as_string().c_str() : answer.dump().c_str());
         lib.destroy(e);
-        return finish(rc == ALBIREO_OK ? 0 : 1);
+        return finish(rc == GULLIVER_OK ? 0 : 1);
     }
 
     json tool_list = json::parse_or_null(R"([{"type":"function","function":{"name":"get_weather",
@@ -551,7 +551,7 @@ int main(int argc, char** argv)
         p->parallel = parallel;
         uint64_t id = 0;
         const auto t0 = std::chrono::steady_clock::now();
-        if (lib.submit(e, req.dump().c_str(), on_event, p.get(), &id, err, sizeof(err)) != ALBIREO_OK)
+        if (lib.submit(e, req.dump().c_str(), on_event, p.get(), &id, err, sizeof(err)) != GULLIVER_OK)
         {
             std::printf("submit: %s\n", err);
             ++failures;
@@ -607,7 +607,7 @@ int main(int argc, char** argv)
                 std::unique_ptr<pending> second(new pending());
                 second->index = static_cast<int>(q);
                 const auto t1 = std::chrono::steady_clock::now();
-                if (lib.submit(e, next.dump().c_str(), on_event, second.get(), &id, err, sizeof(err)) != ALBIREO_OK)
+                if (lib.submit(e, next.dump().c_str(), on_event, second.get(), &id, err, sizeof(err)) != GULLIVER_OK)
                 {
                     std::printf("submit: %s\n", err);
                     ++failures;

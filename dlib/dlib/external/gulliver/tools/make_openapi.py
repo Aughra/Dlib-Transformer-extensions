@@ -1121,7 +1121,7 @@ paths = {
 
 here = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(here, "..", "common", "version.h"), encoding="utf-8") as f:
-    version = re.search(r'#define ALBIREO_VERSION "([0-9.]+)"', f.read()).group(1)
+    version = re.search(r'#define GULLIVER_VERSION "([0-9.]+)"', f.read()).group(1)
 
 doc = {
     "openapi": "3.0.3",

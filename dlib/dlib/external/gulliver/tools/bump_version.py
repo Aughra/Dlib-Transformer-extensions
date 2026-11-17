@@ -23,7 +23,7 @@ changelog = os.path.join(root, "web", "changelog.md")
 
 with open(version_h, encoding="utf-8") as f:
     header = f.read()
-current = [int(re.search(r"#define ALBIREO_VERSION_%s +(\d+)" % p, header).group(1)) for p in ("MAJOR", "MINOR", "PATCH")]
+current = [int(re.search(r"#define GULLIVER_VERSION_%s +(\d+)" % p, header).group(1)) for p in ("MAJOR", "MINOR", "PATCH")]
 
 if len(sys.argv) != 2:
     sys.exit("usage: bump_version.py major|minor|patch|X.Y.Z (now %d.%d.%d)" % tuple(current))
@@ -41,8 +41,8 @@ else:
 text = "%d.%d.%d" % tuple(new)
 
 for part, value in zip(("MAJOR", "MINOR", "PATCH"), new):
-    header = re.sub(r"(#define ALBIREO_VERSION_%s +)\d+" % part, r"\g<1>%d" % value, header)
-header = re.sub(r'(#define ALBIREO_VERSION +")[0-9.]+(")', r"\g<1>%s\g<2>" % text, header)
+    header = re.sub(r"(#define GULLIVER_VERSION_%s +)\d+" % part, r"\g<1>%d" % value, header)
+header = re.sub(r'(#define GULLIVER_VERSION +")[0-9.]+(")', r"\g<1>%s\g<2>" % text, header)
 with open(version_h, "w", encoding="utf-8") as f:
     f.write(header)
 

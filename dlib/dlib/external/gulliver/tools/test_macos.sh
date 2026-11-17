@@ -71,7 +71,7 @@ CHAT=$BUILD/tests/engine_chat
 # Les noyaux quantifiés (NEON, Accelerate).
 if [ -x "$BUILD/tests/test_qkernels" ]; then
   step "quantized kernels" "all checks passed" "$BUILD/tests/test_qkernels"
-else skip "quantized kernels" "no $BUILD/tests/test_qkernels (ALBIREO_TESTS=ON)"
+else skip "quantized kernels" "no $BUILD/tests/test_qkernels (GULLIVER_TESTS=ON)"
 fi
 
 # L'attention des étapes répartie entre les threads, comparée à une tâche par tête de clés et valeurs,
@@ -91,7 +91,7 @@ fi
 if [ -x "$BUILD/tests/test_chat_format" ]; then step "chat format" "all checks passed" "$BUILD/tests/test_chat_format"
 else skip "chat format" "no $BUILD/tests/test_chat_format"
 fi
-ENGINE=$ENGINES/libalbireo-engine-cpu.dylib
+ENGINE=$ENGINES/libgulliver-engine-cpu.dylib
 if [ -x "$BUILD/tests/test_engine_api" ] && [ -f "$ENGINE" ]; then
   step "engine interface" "all checks passed" "$BUILD/tests/test_engine_api" "$ENGINE" "$WORK"
 else skip "engine interface" "no $BUILD/tests/test_engine_api or no $ENGINE"
@@ -437,7 +437,7 @@ relay_guard() {
 }
 
 # Le service, hors ligne, dans un dossier de données à lui.
-SERVICE=$BUILD/bin/albireo-service
+SERVICE=$BUILD/bin/gulliver-service
 if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
   HOME_DIR=$WORK/home
   mkdir -p "$HOME_DIR"
@@ -445,7 +445,7 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
   LAN_PORT=$((PORT + 1))
   echo "{\"port\": $PORT, \"offline\": true, \"default_model\": false, \"lan\": true, \"lan_port\": $LAN_PORT}" \
     > "$HOME_DIR/settings.json"
-  ALBIREO_HOME=$HOME_DIR "$SERVICE" --console > "$WORK/service.log" 2>&1 &
+  GULLIVER_HOME=$HOME_DIR "$SERVICE" --console > "$WORK/service.log" 2>&1 &
   PID=$!
   START=$(now)
   for i in $(seq 1 300); do

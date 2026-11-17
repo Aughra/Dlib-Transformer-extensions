@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef ALBIREO_ENGINE_API_H_
-#define ALBIREO_ENGINE_API_H_
+#ifndef GULLIVER_ENGINE_API_H_
+#define GULLIVER_ENGINE_API_H_
 
 /*
     Interface C entre l'hôte Albireo et ses moteurs d'inférence.
@@ -18,7 +18,7 @@
         needed), soit sous forme d'un pointeur et d'une taille valables seulement pendant un
         callback.
       - Une fonction qui écrit du JSON dans un tampon de l'appelant renvoie
-        ALBIREO_E_BUFFER_TOO_SMALL quand le document ne tient pas, et place dans *needed la
+        GULLIVER_E_BUFFER_TOO_SMALL quand le document ne tient pas, et place dans *needed la
         taille requise, zéro terminal compris, pour que l'appelant puisse réessayer avec un
         tampon plus grand.
       - Les messages d'erreur sont écrits terminés par NUL dans le tampon d'erreur de
@@ -31,7 +31,7 @@
       albireo_engine_create() démarre le moteur avec la configuration de l'hôte ; les modèles
       sont ensuite chargés et déchargés par identifiant ; les requêtes sont soumises à un modèle
       chargé et signalent leur avancement par des événements jusqu'à un unique
-      ALBIREO_EVENT_DONE ou ALBIREO_EVENT_ERROR, après quoi le callback n'est plus jamais
+      GULLIVER_EVENT_DONE ou GULLIVER_EVENT_ERROR, après quoi le callback n'est plus jamais
       invoqué pour cette requête.  albireo_engine_destroy() annule les requêtes encore en
       cours, attend leur événement final et libère tout.
 */
@@ -39,10 +39,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#  define ALBIREO_ENGINE_EXPORT __attribute__((visibility("default")))
-#  define ALBIREO_ENGINE_CALL
+#  define GULLIVER_ENGINE_EXPORT __attribute__((visibility("default")))
+#  define GULLIVER_ENGINE_CALL
 
-#define ALBIREO_ENGINE_ABI_VERSION 1u
+#define GULLIVER_ENGINE_ABI_VERSION 1u
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,43 +53,43 @@ typedef struct albireo_engine albireo_engine;
 /* Codes de retour. */
 enum
 {
-    ALBIREO_OK = 0,
-    ALBIREO_E_INVALID_ARGUMENT = 1,
-    ALBIREO_E_NOT_FOUND = 2,
-    ALBIREO_E_BUSY = 3,
-    ALBIREO_E_OUT_OF_MEMORY = 4,
-    ALBIREO_E_UNSUPPORTED = 5,
-    ALBIREO_E_INTERNAL = 6,
-    ALBIREO_E_BUFFER_TOO_SMALL = 7,
-    ALBIREO_E_CONTEXT_OVERFLOW = 8
+    GULLIVER_OK = 0,
+    GULLIVER_E_INVALID_ARGUMENT = 1,
+    GULLIVER_E_NOT_FOUND = 2,
+    GULLIVER_E_BUSY = 3,
+    GULLIVER_E_OUT_OF_MEMORY = 4,
+    GULLIVER_E_UNSUPPORTED = 5,
+    GULLIVER_E_INTERNAL = 6,
+    GULLIVER_E_BUFFER_TOO_SMALL = 7,
+    GULLIVER_E_CONTEXT_OVERFLOW = 8
 };
 
 /* Types des événements remis au callback d'une requête. */
 enum
 {
-    ALBIREO_EVENT_CONTENT = 1,    /* texte UTF-8 ajouté à la réponse */
-    ALBIREO_EVENT_REASONING = 2,  /* texte UTF-8 ajouté à la trace de raisonnement */
-    ALBIREO_EVENT_TOOL_CALL = 3,  /* JSON {"index","id","name","arguments"} d'un appel complet */
-    ALBIREO_EVENT_PROGRESS = 4,   /* JSON {"prompt_done","prompt_total","cached"} pendant la lecture */
-    ALBIREO_EVENT_DONE = 5,       /* JSON {"finish_reason","usage","timings"}, événement final ; voir submit */
-    ALBIREO_EVENT_ERROR = 6       /* JSON {"code","message"}, événement final */
+    GULLIVER_EVENT_CONTENT = 1,    /* texte UTF-8 ajouté à la réponse */
+    GULLIVER_EVENT_REASONING = 2,  /* texte UTF-8 ajouté à la trace de raisonnement */
+    GULLIVER_EVENT_TOOL_CALL = 3,  /* JSON {"index","id","name","arguments"} d'un appel complet */
+    GULLIVER_EVENT_PROGRESS = 4,   /* JSON {"prompt_done","prompt_total","cached"} pendant la lecture */
+    GULLIVER_EVENT_DONE = 5,       /* JSON {"finish_reason","usage","timings"}, événement final ; voir submit */
+    GULLIVER_EVENT_ERROR = 6       /* JSON {"code","message"}, événement final */
 };
 
 /* Gravités passées au callback de journal. */
 enum
 {
-    ALBIREO_LOG_DEBUG = 0,
-    ALBIREO_LOG_INFO = 1,
-    ALBIREO_LOG_WARNING = 2,
-    ALBIREO_LOG_ERROR = 3
+    GULLIVER_LOG_DEBUG = 0,
+    GULLIVER_LOG_INFO = 1,
+    GULLIVER_LOG_WARNING = 2,
+    GULLIVER_LOG_ERROR = 3
 };
 
-typedef void (ALBIREO_ENGINE_CALL *albireo_event_callback)(void* user, int kind, const char* data, size_t size);
-typedef void (ALBIREO_ENGINE_CALL *albireo_log_callback)(void* user, int level, const char* message);
+typedef void (GULLIVER_ENGINE_CALL *albireo_event_callback)(void* user, int kind, const char* data, size_t size);
+typedef void (GULLIVER_ENGINE_CALL *albireo_log_callback)(void* user, int level, const char* message);
 
-/* Version d'ABI que la bibliothèque implémente, ALBIREO_ENGINE_ABI_VERSION quand elle
+/* Version d'ABI que la bibliothèque implémente, GULLIVER_ENGINE_ABI_VERSION quand elle
    correspond à l'hôte.  L'hôte la vérifie avant d'appeler quoi que ce soit d'autre. */
-ALBIREO_ENGINE_EXPORT uint32_t ALBIREO_ENGINE_CALL albireo_engine_abi_version(void);
+GULLIVER_ENGINE_EXPORT uint32_t GULLIVER_ENGINE_CALL albireo_engine_abi_version(void);
 
 /* Description JSON du moteur et des appareils qu'il a trouvés sur cette machine :
    {"variant","version","backend","build","kernels","devices":[...],"usable":true|false,
@@ -102,7 +102,7 @@ ALBIREO_ENGINE_EXPORT uint32_t ALBIREO_ENGINE_CALL albireo_engine_abi_version(vo
    pourquoi les autres appareils qu'il cherche ont été écartés, tel que leur runtime le signale.
    Peut être appelée avant albireo_engine_create() ; l'hôte la lance dans un processus enfant
    pour classer les moteurs sans risquer son propre processus. */
-ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_describe(char* json, size_t capacity, size_t* needed);
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_describe(char* json, size_t capacity, size_t* needed);
 
 /* Démarre un moteur.  config_json contient les réglages de l'hôte (threads, longueur de
    contexte, nombre de séquences, budgets mémoire, appareils) ; les membres absents prennent
@@ -112,10 +112,10 @@ ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_describe(char* json
    nouveau message ; la requête "stats" compte ces tokens par modèle dans "warmed_total", et
    les lectures en cours dans "warming".
    Renvoie NULL en cas d'échec, avec la raison dans error. */
-ALBIREO_ENGINE_EXPORT albireo_engine* ALBIREO_ENGINE_CALL albireo_engine_create(const char* config_json,
+GULLIVER_ENGINE_EXPORT albireo_engine* GULLIVER_ENGINE_CALL albireo_engine_create(const char* config_json,
     albireo_log_callback log, void* log_user, char* error, size_t error_capacity);
 
-ALBIREO_ENGINE_EXPORT void ALBIREO_ENGINE_CALL albireo_engine_destroy(albireo_engine* engine);
+GULLIVER_ENGINE_EXPORT void GULLIVER_ENGINE_CALL albireo_engine_destroy(albireo_engine* engine);
 
 /* Charge le modèle GGUF situé à path (UTF-8) sous l'identifiant model_id.  options_json peut
    remplacer la longueur de contexte et d'autres réglages pour ce modèle.  Le contexte ne
@@ -127,17 +127,17 @@ ALBIREO_ENGINE_EXPORT void ALBIREO_ENGINE_CALL albireo_engine_destroy(albireo_en
    "models" donne alors "inputs" ["text","image"], "image_tokens" {"min","low","auto","high"}
    (les tokens qu'une image prend au plus avec chaque niveau de détail), "images_per_request"
    et "projector_bytes". */
-ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_load_model(albireo_engine* engine,
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_load_model(albireo_engine* engine,
     const char* model_id, const char* path, const char* options_json, char* error, size_t error_capacity);
 
-ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_unload_model(albireo_engine* engine, const char* model_id);
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_unload_model(albireo_engine* engine, const char* model_id);
 
 /* Requêtes synchrones, request_json nommant l'opération dans "op" :
      {"op":"stats"}                                   activité, débit et mémoire
      {"op":"models"}                                  modèles chargés et leurs propriétés
      {"op":"tokenize","model":id,"text":s}            identifiants des tokens d'un texte
      {"op":"count","model":id,"messages":[...],...}   tokens d'une conversation rendue */
-ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_query(albireo_engine* engine,
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_query(albireo_engine* engine,
     const char* request_json, char* json, size_t capacity, size_t* needed);
 
 /* Soumet une requête et rend aussitôt la main avec son identifiant.  Les événements
@@ -180,19 +180,19 @@ ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_query(albireo_engin
    quand une entrée échoue.  Une requête annulée avec albireo_engine_cancel() se termine,
    comme toute autre, par DONE et la raison de fin "cancelled".
 
-   Renvoie ALBIREO_E_BUSY pour une requête que le moteur refuse pour un temps : ses images
+   Renvoie GULLIVER_E_BUSY pour une requête que le moteur refuse pour un temps : ses images
    porteraient les pixels décodés que détiennent les requêtes en attente du modèle au-delà de
    1 Gio.  La même requête réussit une fois ces requêtes encodées. */
-ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_submit(albireo_engine* engine,
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_submit(albireo_engine* engine,
     const char* request_json, albireo_event_callback callback, void* user, uint64_t* request_id,
     char* error, size_t error_capacity);
 
-/* Demande à une requête de s'arrêter.  Son événement final, ALBIREO_EVENT_DONE avec la raison
+/* Demande à une requête de s'arrêter.  Son événement final, GULLIVER_EVENT_DONE avec la raison
    de fin "cancelled", suit de peu.  Les identifiants inconnus ou terminés sont ignorés. */
-ALBIREO_ENGINE_EXPORT int ALBIREO_ENGINE_CALL albireo_engine_cancel(albireo_engine* engine, uint64_t request_id);
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_cancel(albireo_engine* engine, uint64_t request_id);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* ALBIREO_ENGINE_API_H_ */
+#endif /* GULLIVER_ENGINE_API_H_ */

@@ -1614,7 +1614,7 @@ int main(int argc, char** argv)
             "redirections are followed five times at most");
         reply = fetch(base_url + "/web/headers", web, "fr-FR");
         check(reply.status == 200 && albireo::base64_decode(reply.body["data"].as_string()) == std::string("Albireo/")
-            + ALBIREO_VERSION + " (+https://github.com/Cydral/Dlib-Transformer-extensions)\nfr-FR\n",
+            + GULLIVER_VERSION + " (+https://github.com/Cydral/Dlib-Transformer-extensions)\nfr-FR\n",
             "a page receives the User-Agent of Albireo, the language asked and no cookie");
         albireo::http_cancel_all("the service stops");
         reply = fetch(base_url + "/web/page.html", web, "");
@@ -1637,7 +1637,7 @@ int main(int argc, char** argv)
         {
             std::lock_guard<std::mutex> lock(seen_m);
             check(seen_query == "Einstein relativit\xc3\xa9" && seen_count == "5"
-                && seen_agent == std::string("Albireo/") + ALBIREO_VERSION
+                && seen_agent == std::string("Albireo/") + GULLIVER_VERSION
                 + " (https://github.com/Cydral/Dlib-Transformer-extensions; cydraltechnology@gmail.com)",
                 "Wikipedia receives the query, the count and the User-Agent with a contact (" + seen_agent + ")");
         }
@@ -2015,11 +2015,11 @@ int main(int argc, char** argv)
             std::string error;
             if (!relay.submit(request, [target](int kind, const std::string& data) {
                     std::lock_guard<std::mutex> lock(target->m);
-                    if (kind == ALBIREO_EVENT_CONTENT) target->content += data;
-                    if (kind == ALBIREO_EVENT_REASONING) target->reasoning += data;
-                    if (kind == ALBIREO_EVENT_DONE) target->done = data;
-                    if (kind == ALBIREO_EVENT_ERROR) target->error = data;
-                    if (kind == ALBIREO_EVENT_DONE || kind == ALBIREO_EVENT_ERROR)
+                    if (kind == GULLIVER_EVENT_CONTENT) target->content += data;
+                    if (kind == GULLIVER_EVENT_REASONING) target->reasoning += data;
+                    if (kind == GULLIVER_EVENT_DONE) target->done = data;
+                    if (kind == GULLIVER_EVENT_ERROR) target->error = data;
+                    if (kind == GULLIVER_EVENT_DONE || kind == GULLIVER_EVENT_ERROR)
                     {
                         target->finished = true;
                         target->cv.notify_all();

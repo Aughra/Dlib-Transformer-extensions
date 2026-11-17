@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef ALBIREO_TESTS_TINY_GGUF_H_
-#define ALBIREO_TESTS_TINY_GGUF_H_
+#ifndef GULLIVER_TESTS_TINY_GGUF_H_
+#define GULLIVER_TESTS_TINY_GGUF_H_
 
 /*
     Un fichier GGUF d'un tout petit modèle d'architecture qwen3, écrit en mémoire, pour les tests
@@ -302,4 +302,4 @@ namespace albireo_test
 
 }
 
-#endif // ALBIREO_TESTS_TINY_GGUF_H_
+#endif // GULLIVER_TESTS_TINY_GGUF_H_

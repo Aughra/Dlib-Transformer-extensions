@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef ALBIREO_COMMON_ENGINE_LOADER_H_
-#define ALBIREO_COMMON_ENGINE_LOADER_H_
+#ifndef GULLIVER_COMMON_ENGINE_LOADER_H_
+#define GULLIVER_COMMON_ENGINE_LOADER_H_
 
 #include <string>
 #include <vector>
@@ -49,18 +49,18 @@ namespace albireo
         const std::string& path() const { return path_; }
 
         // Les fonctions de la bibliothèque.
-        uint32_t (ALBIREO_ENGINE_CALL* abi_version)(void) = nullptr;
-        int (ALBIREO_ENGINE_CALL* describe)(char*, size_t, size_t*) = nullptr;
-        albireo_engine* (ALBIREO_ENGINE_CALL* create)(
+        uint32_t (GULLIVER_ENGINE_CALL* abi_version)(void) = nullptr;
+        int (GULLIVER_ENGINE_CALL* describe)(char*, size_t, size_t*) = nullptr;
+        albireo_engine* (GULLIVER_ENGINE_CALL* create)(
             const char*, albireo_log_callback, void*, char*, size_t) = nullptr;
-        void (ALBIREO_ENGINE_CALL* destroy)(albireo_engine*) = nullptr;
-        int (ALBIREO_ENGINE_CALL* load_model)(
+        void (GULLIVER_ENGINE_CALL* destroy)(albireo_engine*) = nullptr;
+        int (GULLIVER_ENGINE_CALL* load_model)(
             albireo_engine*, const char*, const char*, const char*, char*, size_t) = nullptr;
-        int (ALBIREO_ENGINE_CALL* unload_model)(albireo_engine*, const char*) = nullptr;
-        int (ALBIREO_ENGINE_CALL* query)(albireo_engine*, const char*, char*, size_t, size_t*) = nullptr;
-        int (ALBIREO_ENGINE_CALL* submit)(
+        int (GULLIVER_ENGINE_CALL* unload_model)(albireo_engine*, const char*) = nullptr;
+        int (GULLIVER_ENGINE_CALL* query)(albireo_engine*, const char*, char*, size_t, size_t*) = nullptr;
+        int (GULLIVER_ENGINE_CALL* submit)(
             albireo_engine*, const char*, albireo_event_callback, void*, uint64_t*, char*, size_t) = nullptr;
-        int (ALBIREO_ENGINE_CALL* cancel)(albireo_engine*, uint64_t) = nullptr;
+        int (GULLIVER_ENGINE_CALL* cancel)(albireo_engine*, uint64_t) = nullptr;
 
         // describe() sous forme de document, ou null.
         json description() const;
@@ -82,4 +82,4 @@ namespace albireo
 
 }
 
-#endif // ALBIREO_COMMON_ENGINE_LOADER_H_
+#endif // GULLIVER_COMMON_ENGINE_LOADER_H_

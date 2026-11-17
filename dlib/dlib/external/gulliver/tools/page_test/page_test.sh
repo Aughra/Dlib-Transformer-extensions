@@ -24,14 +24,14 @@ MODEL=${PAGE_TEST_MODEL:-$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf}
 VL4=$ROOT/build/albireo-home/models/qwen3-vl-4b-thinking.gguf
 VL4P=$ROOT/build/albireo-home/models/qwen3-vl-4b-thinking.mmproj.gguf
 
-for need in "$BUILD/bin/albireo-service" "$MODEL"; do
+for need in "$BUILD/bin/gulliver-service" "$MODEL"; do
   [ -e "$need" ] || { echo "missing: $need"; exit 1; }
 done
 command -v node > /dev/null || { echo "missing: node (brew install node)"; exit 1; }
 mkdir -p "$WORK" && chmod 700 "$WORK"
 
 # Le service d'essai, avec la page des sources.
-cp -c "$BUILD/bin/albireo-service" "$BIN/" 2>/dev/null || { mkdir -p "$BIN" && cp -c "$BUILD/bin/albireo-service" "$BIN/"; }
+cp -c "$BUILD/bin/gulliver-service" "$BIN/" 2>/dev/null || { mkdir -p "$BIN" && cp -c "$BUILD/bin/gulliver-service" "$BIN/"; }
 rsync -a --delete "$BUILD/bin/engines/" "$BIN/engines/"
 [ -d "$BUILD/bin/licenses" ] && rsync -a --delete "$BUILD/bin/licenses/" "$BIN/licenses/"
 rsync -a --delete "$ROOT/dlib/dlib/external/gulliver/web/" "$BIN/web/"
@@ -76,7 +76,7 @@ mkdir -p "$HOME_DIR/library" && chmod 700 "$HOME_DIR/library"
 if [ -f "$LIBRARY_MODEL" ] && [ ! -f "$HOME_DIR/library/Qwen3.5-0.8B-Q8_0.gguf" ]; then
   cp -c "$LIBRARY_MODEL" "$HOME_DIR/library/"
 fi
-ALBIREO_HOME=$HOME_DIR "$BIN/albireo-service" --console > "$WORK/service.log" 2>&1 &
+GULLIVER_HOME=$HOME_DIR "$BIN/gulliver-service" --console > "$WORK/service.log" 2>&1 &
 SERVICE=$!
 stop() { [ "${PAGE_TEST_KEEP:-0}" = 1 ] || kill -TERM "$SERVICE" 2>/dev/null; }
 trap stop EXIT

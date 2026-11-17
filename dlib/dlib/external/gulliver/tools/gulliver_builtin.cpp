@@ -1116,7 +1116,7 @@ namespace
         std::string text;
         const json manifest = find_builtin_overlay(read, lower, file_size(file), start, trailer, text)
             ? json::parse_or_null(text) : json();
-        bool valid = manifest["models"].size() == models.size() && manifest["version"].as_string() == ALBIREO_VERSION;
+        bool valid = manifest["models"].size() == models.size() && manifest["version"].as_string() == GULLIVER_VERSION;
         for (size_t i = 0; valid && i < models.size(); ++i)
         {
             const json& e = manifest["models"].elements()[i];
@@ -1249,7 +1249,7 @@ namespace
         std::vector<model_entry> models;
         json out = json::object();
         out["format"] = 1;
-        out["version"] = ALBIREO_VERSION;
+        out["version"] = GULLIVER_VERSION;
         out["models"] = json::array();
         for (const auto& d : manifest["models"].elements())
         {

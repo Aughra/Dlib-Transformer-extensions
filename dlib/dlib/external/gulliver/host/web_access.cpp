@@ -730,14 +730,14 @@ namespace albireo
         // Le User-Agent des requêtes : le programme, sa version et l'adresse de son projet.
         std::string user_agent()
         {
-            return std::string(ALBIREO_PRODUCT_NAME) + "/" + ALBIREO_VERSION + " (+" + ALBIREO_PROJECT_URL + ")";
+            return std::string(GULLIVER_PRODUCT_NAME) + "/" + GULLIVER_VERSION + " (+" + GULLIVER_PROJECT_URL + ")";
         }
 
         // Le User-Agent que demande la politique de Wikimedia, avec un contact.
         std::string wikimedia_user_agent()
         {
-            return std::string(ALBIREO_PRODUCT_NAME) + "/" + ALBIREO_VERSION + " (" + ALBIREO_PROJECT_URL + "; "
-                + ALBIREO_AUTHOR_EMAIL + ")";
+            return std::string(GULLIVER_PRODUCT_NAME) + "/" + GULLIVER_VERSION + " (" + GULLIVER_PROJECT_URL + "; "
+                + GULLIVER_AUTHOR_EMAIL + ")";
         }
 
         web_reply failure(int status, const std::string& code, const std::string& message,

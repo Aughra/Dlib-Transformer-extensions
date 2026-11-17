@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef ALBIREO_ENGINE_THREAD_POOL_H_
-#define ALBIREO_ENGINE_THREAD_POOL_H_
+#ifndef GULLIVER_ENGINE_THREAD_POOL_H_
+#define GULLIVER_ENGINE_THREAD_POOL_H_
 
 #include <atomic>
 #include <chrono>
@@ -13,7 +13,7 @@
 #include <type_traits>
 #include <vector>
 
-#define ALBIREO_CPU_RELAX() std::this_thread::yield()
+#define GULLIVER_CPU_RELAX() std::this_thread::yield()
 
 #include <memory>
 #include <sys/sysctl.h>
@@ -131,7 +131,7 @@ namespace albireo
             unsigned spins = 0;
             while (pending_.value.load(std::memory_order_acquire) != 0)
             {
-                if (++spins < 4096) ALBIREO_CPU_RELAX();
+                if (++spins < 4096) GULLIVER_CPU_RELAX();
                 else std::this_thread::yield();
             }
             if (failed_.load(std::memory_order_acquire))
@@ -202,7 +202,7 @@ namespace albireo
                     // Après une courte attente active, céder de temps en temps, pour qu'une machine
                     // chargée exécute quand même le thread qui démarrera la section suivante.
                     if (polls > 2048 && (polls & 63) == 0) std::this_thread::yield();
-                    else ALBIREO_CPU_RELAX();
+                    else GULLIVER_CPU_RELAX();
                     g = generation_.load(std::memory_order_acquire);
                     if (g != seen) break;
                     if ((++polls & 255) == 0 && std::chrono::steady_clock::now() > spin_until)
@@ -256,4 +256,4 @@ namespace albireo
 
 }
 
-#endif // ALBIREO_ENGINE_THREAD_POOL_H_
+#endif // GULLIVER_ENGINE_THREAD_POOL_H_

@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef ALBIREO_HOST_ENGINE_HOST_H_
-#define ALBIREO_HOST_ENGINE_HOST_H_
+#ifndef GULLIVER_HOST_ENGINE_HOST_H_
+#define GULLIVER_HOST_ENGINE_HOST_H_
 
 #include <atomic>
 #include <condition_variable>
@@ -116,9 +116,9 @@ namespace albireo
 
         /*
             Soumet une requête ; le sink reçoit ses événements jusqu'au dernier.  code, s'il est
-            fourni, reçoit le résultat de albireo_engine_submit() : ALBIREO_OK, ou le code de
-            son refus, ALBIREO_E_BUSY pour une requête à soumettre de nouveau sous peu ; il
-            reçoit ALBIREO_E_NOT_FOUND quand aucun moteur ne tourne ou quand le modèle quitte
+            fourni, reçoit le résultat de albireo_engine_submit() : GULLIVER_OK, ou le code de
+            son refus, GULLIVER_E_BUSY pour une requête à soumettre de nouveau sous peu ; il
+            reçoit GULLIVER_E_NOT_FOUND quand aucun moteur ne tourne ou quand le modèle quitte
             le moteur.
         */
         bool submit(const json& request, request_sink sink, uint64_t& id, std::string& error, int* code = nullptr);
@@ -133,9 +133,9 @@ namespace albireo
         unsigned long long activity(long& active) const;
 
     private:
-        static void ALBIREO_ENGINE_CALL on_event(void* user, int kind, const char* data, size_t size);
+        static void GULLIVER_ENGINE_CALL on_event(void* user, int kind, const char* data, size_t size);
         void request_ended(const std::string& model);
-        static void ALBIREO_ENGINE_CALL on_log(void* user, int level, const char* message);
+        static void GULLIVER_ENGINE_CALL on_log(void* user, int level, const char* message);
 
         // Le moteur lui-même : tenu en exclusivité pour le démarrer et l'arrêter, partagé par
         // les opérations qui l'utilisent.
@@ -162,4 +162,4 @@ namespace albireo
 
 }
 
-#endif // ALBIREO_HOST_ENGINE_HOST_H_
+#endif // GULLIVER_HOST_ENGINE_HOST_H_

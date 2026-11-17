@@ -80,10 +80,10 @@ namespace albireo
             std::lock_guard<std::mutex> lock(data_dir_mutex());
             if (!data_dir_override().empty()) return data_dir_override();
         }
-        const char* home = std::getenv("ALBIREO_HOME");
+        const char* home = std::getenv("GULLIVER_HOME");
         if (home && *home) return home;
         const char* h = std::getenv("HOME");
-        return join_path(join_path(join_path(h ? h : "/tmp", ".local"), "share"), "albireo");
+        return join_path(join_path(join_path(h ? h : "/tmp", ".local"), "share"), "gulliver");
     }
 
     std::string join_path(const std::string& a, const std::string& b)

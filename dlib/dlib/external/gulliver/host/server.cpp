@@ -429,7 +429,7 @@ namespace albireo
             {
                 std::lock_guard<std::mutex> lock(m);
                 q.emplace_back(kind, data);
-                if (kind == ALBIREO_EVENT_DONE || kind == ALBIREO_EVENT_ERROR) finished = true;
+                if (kind == GULLIVER_EVENT_DONE || kind == GULLIVER_EVENT_ERROR) finished = true;
                 cv.notify_all();
             }
 
@@ -676,14 +676,14 @@ namespace albireo
                     std::pair<int, std::string> e;
                     if (ch->pop(e, 1000))
                     {
-                        if (e.first == ALBIREO_EVENT_CONTENT) content += e.second;
-                        else if (e.first == ALBIREO_EVENT_REASONING) reasoning += e.second;
-                        else if (e.first == ALBIREO_EVENT_TOOL_CALL)
+                        if (e.first == GULLIVER_EVENT_CONTENT) content += e.second;
+                        else if (e.first == GULLIVER_EVENT_REASONING) reasoning += e.second;
+                        else if (e.first == GULLIVER_EVENT_TOOL_CALL)
                             calls.push_back(tool_call_of(json::parse_or_null(e.second), -1));
-                        else if (e.first == ALBIREO_EVENT_DONE || e.first == ALBIREO_EVENT_ERROR)
+                        else if (e.first == GULLIVER_EVENT_DONE || e.first == GULLIVER_EVENT_ERROR)
                         {
                             done = json::parse_or_null(e.second);
-                            failed = e.first == ALBIREO_EVENT_ERROR;
+                            failed = e.first == GULLIVER_EVENT_ERROR;
                             break;
                         }
                     }
@@ -737,7 +737,7 @@ namespace albireo
                 out["timings"] = done["timings"];
                 // Une réponse que le moteur a arrêtée parce qu'elle se répétait.
                 if (done["repetition"].as_bool(false)) out["repetition"] = true;
-                out["system_fingerprint"] = std::string("albireo-") + ALBIREO_VERSION;
+                out["system_fingerprint"] = std::string("albireo-") + GULLIVER_VERSION;
                 send_json(res, 200, out);
                 return;
             }
@@ -803,27 +803,27 @@ namespace albireo
                     json delta = json::object();
                     switch (e.first)
                     {
-                    case ALBIREO_EVENT_CONTENT:
+                    case GULLIVER_EVENT_CONTENT:
                         delta["content"] = e.second;
                         return chunk(delta, json(), false);
-                    case ALBIREO_EVENT_REASONING:
+                    case GULLIVER_EVENT_REASONING:
                         delta["reasoning_content"] = e.second;
                         return chunk(delta, json(), false);
-                    case ALBIREO_EVENT_TOOL_CALL:
+                    case GULLIVER_EVENT_TOOL_CALL:
                     {
                         json list = json::array();
                         list.push_back(tool_call_of(json::parse_or_null(e.second), (*tool_index)++));
                         delta["tool_calls"] = list;
                         return chunk(delta, json(), false);
                     }
-                    case ALBIREO_EVENT_PROGRESS:
+                    case GULLIVER_EVENT_PROGRESS:
                     {
                         // La progression d'un long prompt, sous forme d'une ligne de commentaire que
                         // les clients du standard ignorent et que l'application web affiche.
                         const std::string line = ": progress " + e.second + "\n\n";
                         return sink.write(line.data(), line.size());
                     }
-                    case ALBIREO_EVENT_DONE:
+                    case GULLIVER_EVENT_DONE:
                     {
                         const json done = json::parse_or_null(e.second);
                         if (count_usage)
@@ -1003,10 +1003,10 @@ namespace albireo
             auto ch = std::make_shared<event_channel>();
             uint64_t id = 0;
             auto sink = [ch](int kind, const std::string& data) { ch->push(kind, data); };
-            int code = ALBIREO_OK;
+            int code = GULLIVER_OK;
             if (!svc.engine().submit(request, sink, id, error, &code))
             {
-                if (code == ALBIREO_E_BUSY)
+                if (code == GULLIVER_E_BUSY)
                 {
                     // Refusée pour un temps, les images en file d'attente pour le modèle occupant la mémoire qui
                     // leur est réservée.
@@ -1309,11 +1309,11 @@ namespace albireo
             const std::function<void()> cancel = [&svc, id]() { svc.engine().cancel(id); };
             for (;;)
             {
-                if (ch->pop(e, 1000) && (e.first == ALBIREO_EVENT_DONE || e.first == ALBIREO_EVENT_ERROR)) break;
+                if (ch->pop(e, 1000) && (e.first == GULLIVER_EVENT_DONE || e.first == GULLIVER_EVENT_ERROR)) break;
                 if (end_abandoned(svc, req, res, cancel, next_look)) return;
             }
             const json done = json::parse_or_null(e.second);
-            if (e.first == ALBIREO_EVENT_ERROR)
+            if (e.first == GULLIVER_EVENT_ERROR)
             {
                 send_error(res, 500, "server_error", done["message"].as_string(), done["code"].as_string());
                 return;
@@ -1392,7 +1392,7 @@ namespace albireo
         };
 
         const license_component license_components[] = {
-            {"albireo.txt", "Albireo", ALBIREO_VERSION},
+            {"albireo.txt", "Albireo", GULLIVER_VERSION},
             {"dlib.txt", "dlib", ""},
             {"mbedtls.txt", "Mbed TLS", MBEDTLS_VERSION_STRING},
             {"cpp-httplib.txt", "cpp-httplib", CPPHTTPLIB_VERSION},

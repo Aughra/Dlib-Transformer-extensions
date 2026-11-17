@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#ifndef ALBIREO_ENGINE_SAMPLER_H_
-#define ALBIREO_ENGINE_SAMPLER_H_
+#ifndef GULLIVER_ENGINE_SAMPLER_H_
+#define GULLIVER_ENGINE_SAMPLER_H_
 
 #include <cstdint>
 #include <random>
@@ -71,4 +71,4 @@ namespace albireo
 
 }
 
-#endif // ALBIREO_ENGINE_SAMPLER_H_
+#endif // GULLIVER_ENGINE_SAMPLER_H_

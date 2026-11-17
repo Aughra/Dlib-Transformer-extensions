@@ -27,8 +27,8 @@
 #include "thread_pool.h"
 #include "vision_encoder.h"
 
-#ifndef ALBIREO_ENGINE_VARIANT
-#define ALBIREO_ENGINE_VARIANT "cpu"
+#ifndef GULLIVER_ENGINE_VARIANT
+#define GULLIVER_ENGINE_VARIANT "cpu"
 #endif
 
 namespace albireo
@@ -989,19 +989,19 @@ namespace albireo
         // entre les passes.
         pool_->set_spin_time(std::chrono::microseconds(bounded(settings_["spin_us"], 2000, 0, 100000)));
         warm_history_ = settings_["warm_history"].as_bool(true);
-        log(ALBIREO_LOG_INFO, std::string("engine ") + ALBIREO_ENGINE_VARIANT + " " + ALBIREO_VERSION + ", "
+        log(GULLIVER_LOG_INFO, std::string("engine ") + GULLIVER_ENGINE_VARIANT + " " + GULLIVER_VERSION + ", "
             + std::to_string(threads_) + " threads, kernels " + qk_isa());
         if (settings_["metal"].as_bool(true))
         {
             std::string why;
             gpu_ = metal_device::open(why);
             if (gpu_)
-                log(ALBIREO_LOG_INFO, "GPU " + gpu_->name() + " through Metal, " + std::to_string(gpu_->kernel_count())
+                log(GULLIVER_LOG_INFO, "GPU " + gpu_->name() + " through Metal, " + std::to_string(gpu_->kernel_count())
                     + " kernels compiled, " + std::to_string(gpu_->working_set_bytes() >> 20) + " MB advised, buffers of "
                     + std::to_string(gpu_->max_buffer_bytes() >> 20) + " MB at most");
             else
             {
-                log(ALBIREO_LOG_WARNING, "GPU: " + why);
+                log(GULLIVER_LOG_WARNING, "GPU: " + why);
                 gpu_off_ = why;
             }
         }
@@ -1046,10 +1046,10 @@ namespace albireo
         const cpu_info cpu = read_cpu_info();
         const memory_info mem = read_memory_info();
         json d = json::object();
-        d["variant"] = ALBIREO_ENGINE_VARIANT;
-        d["version"] = ALBIREO_VERSION;
+        d["variant"] = GULLIVER_ENGINE_VARIANT;
+        d["version"] = GULLIVER_VERSION;
         d["backend"] = "processor";
-        d["abi"] = static_cast<long long>(ALBIREO_ENGINE_ABI_VERSION);
+        d["abi"] = static_cast<long long>(GULLIVER_ENGINE_ABI_VERSION);
 #if   defined(__clang__)
         d["build"] = std::string("Clang ") + __clang_version__ + ", " + __DATE__;
 #elif defined(__GNUC__)
@@ -1243,7 +1243,7 @@ namespace albireo
         m->kv_type = whole_groups && (kv_type == "q8" || (kv_type == "auto" && !embedding)) ? kv_format::q8
             : kv_format::f16;
         if (kv_type == "q8" && !whole_groups)
-            log(ALBIREO_LOG_WARNING, "model '" + id + "': heads of " + std::to_string(m->cfg.head_dim) + " values "
+            log(GULLIVER_LOG_WARNING, "model '" + id + "': heads of " + std::to_string(m->cfg.head_dim) + " values "
                 "hold no whole groups of 8-bit keys and values, which stay in half precision");
 
         // Seules les couches d'attention gardent des clés et valeurs (les couches linéaires de qwen35 ont un état
@@ -1292,7 +1292,7 @@ namespace albireo
             if (chosen_context) kv = std::max<size_t>(kv, bytes_for(m->context));
             kv = std::max<size_t>(kv, bytes_for(std::min<long>(m->context, 4096)));
             if (chosen_context && known && bytes_for(m->context) > room_bytes)
-                log(ALBIREO_LOG_WARNING, "model '" + id + "': the keys and values of a context of "
+                log(GULLIVER_LOG_WARNING, "model '" + id + "': the keys and values of a context of "
                     + std::to_string(m->context) + " tokens take " + std::to_string(bytes_for(m->context) >> 20)
                     + " MB, beyond the " + std::to_string(room_bytes >> 20) + " MB the system can commit for them");
         }
@@ -1329,7 +1329,7 @@ namespace albireo
         const long room = static_cast<long>(m->runtime->kv_bytes_budget() / m->runtime->kv_bytes_per_token());
         if (room < m->context)
         {
-            log(ALBIREO_LOG_INFO, "model '" + id + "': context reduced from " + std::to_string(m->context) + " to "
+            log(GULLIVER_LOG_INFO, "model '" + id + "': context reduced from " + std::to_string(m->context) + " to "
                 + std::to_string(room) + " tokens, the positions its keys and values can hold in the memory given "
                 "to them");
             m->context = room;
@@ -1359,8 +1359,8 @@ namespace albireo
 
         const std::string use = embedding ? "vectors of " + std::to_string(m->cfg.d_model) + " dimensions"
             : std::string("chat format ") + m->format->name();
-        if (m->vision) log(ALBIREO_LOG_INFO, "model '" + id + "': images read by " + m->vision->description());
-        log(ALBIREO_LOG_INFO, "model '" + id + "': " + m->runtime->description() + ", " + use
+        if (m->vision) log(GULLIVER_LOG_INFO, "model '" + id + "': images read by " + m->vision->description());
+        log(GULLIVER_LOG_INFO, "model '" + id + "': " + m->runtime->description() + ", " + use
             + ", context " + std::to_string(m->context) + ", keys and values in "
             + (m->kv_type == kv_format::q8 ? "8 bits" : "half precision") + " up to "
             + std::to_string(m->runtime->kv_bytes_budget() >> 20) + " MB"
@@ -1777,7 +1777,7 @@ namespace albireo
         timings["prompt_ms"] = 1000.0 * compute;
         timings["prompt_per_second"] = compute > 0 ? job.tokens / compute : 0.0;
         done["timings"] = timings;
-        job.sink(ALBIREO_EVENT_DONE, done.dump());
+        job.sink(GULLIVER_EVENT_DONE, done.dump());
         std::lock_guard<std::mutex> lock(mutex_);
         jobs_.erase(job.id);
     }
@@ -1792,7 +1792,7 @@ namespace albireo
         json e = json::object();
         e["code"] = code;
         e["message"] = message;
-        if (job.sink) job.sink(ALBIREO_EVENT_ERROR, e.dump());
+        if (job.sink) job.sink(GULLIVER_EVENT_ERROR, e.dump());
         std::lock_guard<std::mutex> lock(mutex_);
         jobs_.erase(job.id);
     }
@@ -1809,7 +1809,7 @@ namespace albireo
         usage["prompt_tokens"] = job.tokens;
         usage["total_tokens"] = job.tokens;
         done["usage"] = usage;
-        if (job.sink) job.sink(ALBIREO_EVENT_DONE, done.dump());
+        if (job.sink) job.sink(GULLIVER_EVENT_DONE, done.dump());
         std::lock_guard<std::mutex> lock(mutex_);
         jobs_.erase(job.id);
     }
@@ -1933,7 +1933,7 @@ namespace albireo
                 {
                     try
                     {
-                        log(ALBIREO_LOG_ERROR, "model '" + m->id + "': " + e.what());
+                        log(GULLIVER_LOG_ERROR, "model '" + m->id + "': " + e.what());
                     }
                     catch (...)
                     {
@@ -2052,7 +2052,7 @@ namespace albireo
             r.kv_tokens.clear();
             r.cached = 0;
             r.ph = request_state::phase::waiting;
-            log(ALBIREO_LOG_DEBUG, "model '" + m.id + "': a prompt being read gave its memory to the answers being "
+            log(GULLIVER_LOG_DEBUG, "model '" + m.id + "': a prompt being read gave its memory to the answers being "
                 "written, and will be read again");
             return true;
         }
@@ -2124,7 +2124,7 @@ namespace albireo
                 p["prompt_done"] = r->cached;
                 p["prompt_total"] = static_cast<long>(r->prompt.size());
                 p["cached"] = r->cached;
-                r->sink(ALBIREO_EVENT_PROGRESS, p.dump());
+                r->sink(GULLIVER_EVENT_PROGRESS, p.dump());
             }
         }
     }
@@ -2246,7 +2246,7 @@ namespace albireo
             const std::shared_ptr<std::vector<float>> out = std::make_shared<std::vector<float>>();
             out->swap(m.vision_job->output());
             const std::shared_ptr<const std::vector<float>> features = out;
-            log(ALBIREO_LOG_DEBUG, "model '" + m.id + "': image of " + std::to_string(image.grid_w) + "x"
+            log(GULLIVER_LOG_DEBUG, "model '" + m.id + "': image of " + std::to_string(image.grid_w) + "x"
                 + std::to_string(image.grid_h) + " tokens encoded in "
                 + std::to_string(static_cast<long>(1000 * m.vision_job->seconds())) + " ms");
             keep_encoding(m, digest, features);
@@ -2270,7 +2270,7 @@ namespace albireo
             m.vision->release_work();
             try
             {
-                log(ALBIREO_LOG_WARNING, "model '" + m.id + "': " + message);
+                log(GULLIVER_LOG_WARNING, "model '" + m.id + "': " + message);
             }
             catch (...)
             {
@@ -2533,7 +2533,7 @@ namespace albireo
                     p["prompt_done"] = static_cast<long>(r.kv_tokens.size());
                     p["prompt_total"] = static_cast<long>(r.prompt.size());
                     p["cached"] = r.cached;
-                    r.sink(ALBIREO_EVENT_PROGRESS, p.dump());
+                    r.sink(GULLIVER_EVENT_PROGRESS, p.dump());
                 }
             }
             if (!w.logits) continue;
@@ -2653,13 +2653,13 @@ namespace albireo
                 r.forced.assign(r.closing.begin(), r.closing.end());
                 r.closing.clear();
                 reset_loops(r);
-                log(ALBIREO_LOG_INFO, "engine: model '" + r.model_id + "': a reasoning that repeated itself was "
+                log(GULLIVER_LOG_INFO, "engine: model '" + r.model_id + "': a reasoning that repeated itself was "
                     "ended after " + std::to_string(r.generated) + " tokens");
             }
             else
             {
                 r.repetition = true;
-                log(ALBIREO_LOG_WARNING, "engine: model '" + r.model_id + "': an answer that repeated itself was "
+                log(GULLIVER_LOG_WARNING, "engine: model '" + r.model_id + "': an answer that repeated itself was "
                     "stopped after " + std::to_string(r.generated) + " tokens");
                 finish(m, r, "length");
                 return;
@@ -2691,12 +2691,12 @@ namespace albireo
                 if (e.kind == output_kind::content)
                 {
                     if (kept) r.answer += e.text;
-                    r.sink(ALBIREO_EVENT_CONTENT, e.text);
+                    r.sink(GULLIVER_EVENT_CONTENT, e.text);
                 }
                 else if (e.kind == output_kind::reasoning)
                 {
                     if (kept) r.thought += e.text;
-                    r.sink(ALBIREO_EVENT_REASONING, e.text);
+                    r.sink(GULLIVER_EVENT_REASONING, e.text);
                 }
                 else
                 {
@@ -2705,7 +2705,7 @@ namespace albireo
                     c["id"] = e.call.id;
                     c["name"] = e.call.name;
                     c["arguments"] = e.call.arguments;
-                    r.sink(ALBIREO_EVENT_TOOL_CALL, c.dump());
+                    r.sink(GULLIVER_EVENT_TOOL_CALL, c.dump());
                 }
             }
             events.clear();
@@ -2829,7 +2829,7 @@ namespace albireo
             if (r.generated >= 8 && gt > 0) average(m.generation_rate, (r.generated - 1) / gt);
         }
         done["timings"] = timings;
-        r.sink(ALBIREO_EVENT_DONE, done.dump());
+        r.sink(GULLIVER_EVENT_DONE, done.dump());
 
         // Indique si la séquence de la requête a rejoint celles en cache, comme la dernière d'entre elles.
         bool cached = false;
@@ -2959,7 +2959,7 @@ namespace albireo
         w->background = true;
         w->submitted = clock_type::now();
         w->sink = [](int, const std::string&) {};
-        log(ALBIREO_LOG_DEBUG, "model '" + m.id + "': the history of an answer is read ahead of the next question ("
+        log(GULLIVER_LOG_DEBUG, "model '" + m.id + "': the history of an answer is read ahead of the next question ("
             + std::to_string(w->keys.size() - known) + " tokens)");
         std::lock_guard<std::mutex> lock(mutex_);
         if (stop_ || m.unloading) return;
@@ -3043,7 +3043,7 @@ namespace albireo
         e["code"] = code;
         e["message"] = message;
         if (r.job) end_job(*r.job, code, message);
-        else if (r.sink) r.sink(ALBIREO_EVENT_ERROR, e.dump());
+        else if (r.sink) r.sink(GULLIVER_EVENT_ERROR, e.dump());
         std::shared_ptr<loaded_model> m;
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -3066,8 +3066,8 @@ namespace albireo
     json engine::stats()
     {
         json s = json::object();
-        s["variant"] = ALBIREO_ENGINE_VARIANT;
-        s["version"] = ALBIREO_VERSION;
+        s["variant"] = GULLIVER_ENGINE_VARIANT;
+        s["version"] = GULLIVER_VERSION;
         s["threads"] = threads_;
         // Le GPU du Mac : son nom, ou la raison pour laquelle le moteur ne l'utilise pas.
         json gpu = json::object();

@@ -231,7 +231,7 @@ namespace albireo
         const std::string logs = join_path(data_dir_, "logs");
         make_dirs(logs);
         log_file::instance().open(join_path(logs, "service.log"));
-        log_info(std::string(ALBIREO_FULL_NAME) + " " + ALBIREO_VERSION + " starting");
+        log_info(std::string(GULLIVER_FULL_NAME) + " " + GULLIVER_VERSION + " starting");
         log_info("programs in " + program_dir_ + ", data in " + data_dir_);
 
         const std::string settings_path = join_path(data_dir_, "settings.json");
@@ -250,7 +250,7 @@ namespace albireo
         apply_network_settings(st);
         log_info("web search: " + web_search_provider(st));
 
-        const std::string db_path = join_path(data_dir_, "albireo.db");
+        const std::string db_path = join_path(data_dir_, "gulliver.db");
         try
         {
             db_.reset(new store(db_path));
@@ -914,11 +914,11 @@ namespace albireo
         uint64_t id = 0;
         if (!engine_.submit(request, [a](int kind, const std::string& data) {
                 std::lock_guard<std::mutex> lock(a->m);
-                if (kind == ALBIREO_EVENT_CONTENT) a->text += data;
-                if (kind == ALBIREO_EVENT_DONE || kind == ALBIREO_EVENT_ERROR)
+                if (kind == GULLIVER_EVENT_CONTENT) a->text += data;
+                if (kind == GULLIVER_EVENT_DONE || kind == GULLIVER_EVENT_ERROR)
                 {
                     a->finished = true;
-                    a->failed = kind == ALBIREO_EVENT_ERROR;
+                    a->failed = kind == GULLIVER_EVENT_ERROR;
                     if (a->failed) a->message = json::parse_or_null(data)["message"].as_string();
                     a->cv.notify_all();
                 }
@@ -1917,13 +1917,13 @@ namespace albireo
     {
         const host_settings st = settings_->get();
         json s = json::object();
-        s["product"] = ALBIREO_PRODUCT_NAME;
-        s["edition"] = ALBIREO_EDITION;
-        s["version"] = ALBIREO_VERSION;
-        s["author"] = ALBIREO_AUTHOR_NAME;
-        s["email"] = ALBIREO_AUTHOR_EMAIL;
-        s["copyright"] = ALBIREO_COPYRIGHT;
-        s["project"] = ALBIREO_PROJECT_URL;
+        s["product"] = GULLIVER_PRODUCT_NAME;
+        s["edition"] = GULLIVER_EDITION;
+        s["version"] = GULLIVER_VERSION;
+        s["author"] = GULLIVER_AUTHOR_NAME;
+        s["email"] = GULLIVER_AUTHOR_EMAIL;
+        s["copyright"] = GULLIVER_COPYRIGHT;
+        s["project"] = GULLIVER_PROJECT_URL;
         s["started_at"] = static_cast<long long>(started_at_);
         s["uptime"] = static_cast<long long>(now_unix() - started_at_);
         const std::string phase = starting_phase();
@@ -2222,7 +2222,7 @@ namespace albireo
         json options = json::object();
         options["context"] = 2048;
         options["max_sequences"] = 1;
-        if (lib.load_model(e, "bench", model.c_str(), options.dump().c_str(), err, sizeof(err)) != ALBIREO_OK)
+        if (lib.load_model(e, "bench", model.c_str(), options.dump().c_str(), err, sizeof(err)) != GULLIVER_OK)
         {
             lib.destroy(e);
             return fail(err);
@@ -2234,10 +2234,10 @@ namespace albireo
             std::condition_variable cv;
             bool done = false;
             std::string result;
-            static void ALBIREO_ENGINE_CALL on_event(void* user, int kind, const char* data, size_t size)
+            static void GULLIVER_ENGINE_CALL on_event(void* user, int kind, const char* data, size_t size)
             {
                 waiter* w = static_cast<waiter*>(user);
-                if (kind != ALBIREO_EVENT_DONE && kind != ALBIREO_EVENT_ERROR) return;
+                if (kind != GULLIVER_EVENT_DONE && kind != GULLIVER_EVENT_ERROR) return;
                 std::lock_guard<std::mutex> lock(w->m);
                 w->done = true;
                 w->result.assign(data, size);
@@ -2261,7 +2261,7 @@ namespace albireo
             req["stop"] = stop_none;
             waiter w;
             uint64_t id = 0;
-            if (lib.submit(e, req.dump().c_str(), &waiter::on_event, &w, &id, err, sizeof(err)) != ALBIREO_OK)
+            if (lib.submit(e, req.dump().c_str(), &waiter::on_event, &w, &id, err, sizeof(err)) != GULLIVER_OK)
                 return false;
             std::unique_lock<std::mutex> lock(w.m);
             w.cv.wait(lock, [&]() { return w.done; });

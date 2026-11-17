@@ -221,7 +221,7 @@ namespace albireo
         }
         char err[2048] = { 0 };
         const int rc = lib_->load_model(engine_, id.c_str(), path.c_str(), options.dump().c_str(), err, sizeof(err));
-        if (rc != ALBIREO_OK)
+        if (rc != GULLIVER_OK)
         {
             error = err;
             return false;
@@ -289,11 +289,11 @@ namespace albireo
         return models_;
     }
 
-    void ALBIREO_ENGINE_CALL engine_host::on_event(void* user, int kind, const char* data, size_t size)
+    void GULLIVER_ENGINE_CALL engine_host::on_event(void* user, int kind, const char* data, size_t size)
     {
         sink_holder* h = static_cast<sink_holder*>(user);
         h->sink(kind, std::string(data, size));
-        if (kind == ALBIREO_EVENT_DONE || kind == ALBIREO_EVENT_ERROR)
+        if (kind == GULLIVER_EVENT_DONE || kind == GULLIVER_EVENT_ERROR)
         {
             h->host->request_ended(h->model);
             delete h;
@@ -310,18 +310,18 @@ namespace albireo
         flight_cv_.notify_all();
     }
 
-    void ALBIREO_ENGINE_CALL engine_host::on_log(void*, int level, const char* message)
+    void GULLIVER_ENGINE_CALL engine_host::on_log(void*, int level, const char* message)
     {
         const std::string m = std::string("engine: ") + message;
-        if (level >= ALBIREO_LOG_ERROR) log_error(m);
-        else if (level == ALBIREO_LOG_WARNING) log_warning(m);
-        else if (level == ALBIREO_LOG_INFO) log_info(m);
+        if (level >= GULLIVER_LOG_ERROR) log_error(m);
+        else if (level == GULLIVER_LOG_WARNING) log_warning(m);
+        else if (level == GULLIVER_LOG_INFO) log_info(m);
         else log_debug(m);
     }
 
     bool engine_host::submit(const json& request, request_sink sink, uint64_t& id, std::string& error, int* code)
     {
-        if (code) *code = ALBIREO_E_NOT_FOUND;
+        if (code) *code = GULLIVER_E_NOT_FOUND;
         std::shared_lock<std::shared_timed_mutex> life(life_);
         if (!engine_)
         {
@@ -344,7 +344,7 @@ namespace albireo
         char err[2048] = { 0 };
         const int rc = lib_->submit(engine_, request.dump().c_str(), &engine_host::on_event, h, &id, err, sizeof(err));
         if (code) *code = rc;
-        if (rc != ALBIREO_OK)
+        if (rc != GULLIVER_OK)
         {
             delete h;
             request_ended(model);
