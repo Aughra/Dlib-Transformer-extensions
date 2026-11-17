@@ -332,6 +332,64 @@ int main(int argc, char** argv)
     gulliver::make_dirs(inbox);
 
     {
+        // Les profils : créer, lister, retrouver par id et par nom, renommer, noter l'usage, supprimer.
+        gulliver::store db(gulliver::join_path(work, "profiles.db"));
+        check(db.profiles().empty(), "a new database has no profile");
+
+        gulliver::profile a;
+        a.id = gulliver::random_hex(12);
+        a.name = "barbidou";
+        a.created = 1000;
+        a.last_used = 1000;
+        db.put_profile(a);
+
+        gulliver::profile b;
+        b.id = gulliver::random_hex(12);
+        b.name = "essai";
+        b.created = 2000;
+        b.last_used = 2000;
+        db.put_profile(b);
+
+        auto all = db.profiles();
+        check(all.size() == 2, "two profiles are listed");
+        // Le plus récemment utilisé d'abord : essai (2000) avant barbidou (1000).
+        check(all[0].name == "essai" && all[1].name == "barbidou", "profiles are listed most recently used first");
+
+        gulliver::profile got;
+        check(db.find_profile(a.id, got) && got.name == "barbidou" && got.created == 1000,
+            "a profile is found by its id");
+        check(db.find_profile_by_name("essai", got) && got.id == b.id, "a profile is found by its name");
+        check(!db.find_profile("absent", got) && !db.find_profile_by_name("absent", got),
+            "an absent profile is not found, by id or by name");
+
+        // Renommer : même id, nouveau nom.
+        a.name = "barbidou-pro";
+        db.put_profile(a);
+        check(db.find_profile(a.id, got) && got.name == "barbidou-pro", "a profile keeps its id when renamed");
+
+        // Noter l'usage change l'ordre de la liste.
+        db.touch_profile(a.id, 3000);
+        all = db.profiles();
+        check(all[0].id == a.id && all[0].last_used == 3000, "touching a profile moves it to the front");
+
+        // Un nom déjà pris, sous un autre id, est refusé par l'unicité de la base.
+        gulliver::profile clash;
+        clash.id = gulliver::random_hex(12);
+        clash.name = "essai";
+        bool refused = false;
+        try { db.put_profile(clash); } catch (const std::exception&) { refused = true; }
+        check(refused, "a duplicate profile name is refused");
+
+        db.remove_profile(a.id);
+        check(!db.find_profile(a.id, got) && db.profiles().size() == 1, "a removed profile is gone");
+
+        // La base reste saine après ces écritures.
+        gulliver::store reopened(gulliver::join_path(work, "profiles.db"));
+        check(reopened.profiles().size() == 1 && reopened.profiles()[0].name == "essai",
+            "profiles survive reopening the database");
+    }
+
+    {
         // À largeur égale, un projecteur ne va qu'avec un décodeur de sa famille (Gulliver 4.30.0) : le projecteur de
         // Qwen3.5-4B et celui de Gemma 3 4B sortent tous deux 2 560 valeurs.
         auto file = [](const std::string& name, const std::string& arch, const std::string& type) {

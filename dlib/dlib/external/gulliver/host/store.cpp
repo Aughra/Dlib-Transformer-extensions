@@ -89,6 +89,13 @@ namespace gulliver
             " day TEXT PRIMARY KEY, prompt_tokens INTEGER NOT NULL DEFAULT 0,"
             " generated_tokens INTEGER NOT NULL DEFAULT 0, requests INTEGER NOT NULL DEFAULT 0)");
         db_->exec("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+        // Les profils : l'espace de chaque utilisateur.  Le nom est unique ; les données d'un profil
+        // (tables profile_*) s'y rattachent par une clé étrangère ON DELETE CASCADE, active grâce au
+        // PRAGMA foreign_keys=ON de connect().
+        db_->exec(
+            "CREATE TABLE IF NOT EXISTS profiles ("
+            " id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE,"
+            " created INTEGER NOT NULL, last_used INTEGER NOT NULL DEFAULT 0)");
     }
 
     store::~store() {}
@@ -334,6 +341,96 @@ namespace gulliver
             dlib::statement st(*db_, "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
             st.bind(1, key);
             st.bind(2, v);
+            st.exec();
+        });
+    }
+
+    // ----------------------------------------------------------------------------------------
+    //  Profils
+
+    namespace
+    {
+        // Une ligne de la table profiles lue dans l'ordre des colonnes de profile_columns.
+        profile profile_of(dlib::statement& st)
+        {
+            profile p;
+            p.id = st.get_column_as_text(0);
+            p.name = st.get_column_as_text(1);
+            p.created = st.get_column_as_int64(2);
+            p.last_used = st.get_column_as_int64(3);
+            return p;
+        }
+        const char* const profile_columns = "id, name, created, last_used";
+    }
+
+    std::vector<profile> store::profiles()
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<profile> out;
+        dlib::statement st(*db_, std::string("SELECT ") + profile_columns +
+            " FROM profiles ORDER BY last_used DESC, name");
+        st.exec();
+        while (st.move_next()) out.push_back(profile_of(st));
+        return out;
+    }
+
+    bool store::find_profile(const std::string& id, profile& p)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        dlib::statement st(*db_, std::string("SELECT ") + profile_columns + " FROM profiles WHERE id = ?");
+        st.bind(1, id);
+        st.exec();
+        if (!st.move_next()) return false;
+        p = profile_of(st);
+        return true;
+    }
+
+    bool store::find_profile_by_name(const std::string& name, profile& p)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        dlib::statement st(*db_, std::string("SELECT ") + profile_columns + " FROM profiles WHERE name = ?");
+        st.bind(1, name);
+        st.exec();
+        if (!st.move_next()) return false;
+        p = profile_of(st);
+        return true;
+    }
+
+    void store::put_profile(const profile& p)
+    {
+        // Sur un id déjà présent (renommage ou mise à jour de l'usage), les champs sont mis à jour.
+        // Un conflit sur le nom unique, lui, laisse l'erreur remonter : on ne remplace jamais le profil
+        // d'un autre, ce qui emporterait ses données.  (INSERT OR REPLACE aurait supprimé la ligne en
+        // conflit de nom, donc effacé ce profil-là ; on ne l'utilise pas pour cette raison.)
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::statement st(*db_, "INSERT INTO profiles (id, name, created, last_used) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET name = excluded.name, last_used = excluded.last_used");
+            st.bind(1, p.id);
+            st.bind(2, p.name);
+            st.bind_int64(3, p.created);
+            st.bind_int64(4, p.last_used);
+            st.exec();
+        });
+    }
+
+    void store::remove_profile(const std::string& id)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::statement st(*db_, "DELETE FROM profiles WHERE id = ?");
+            st.bind(1, id);
+            st.exec();
+        });
+    }
+
+    void store::touch_profile(const std::string& id, int64_t when)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::statement st(*db_, "UPDATE profiles SET last_used = ? WHERE id = ?");
+            st.bind_int64(1, when);
+            st.bind(2, id);
             st.exec();
         });
     }

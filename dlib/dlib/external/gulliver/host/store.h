@@ -48,6 +48,18 @@ namespace gulliver
         int64_t received_at = 0;
     };
 
+    // Un profil : l'espace d'un utilisateur (ses discussions, projets, réglages de page,
+    // index de documents et images), gardé par le service pour qu'il se retrouve depuis
+    // n'importe quel navigateur.  Pas de mot de passe (usage personnel sur un seul Mac).
+    // L'identifiant est opaque et stable ; le nom, lui, peut être changé.
+    struct profile
+    {
+        std::string id;              // identifiant opaque (hex), clé de partition des données
+        std::string name;            // le nom choisi, unique, affiché et renommable
+        int64_t created = 0;
+        int64_t last_used = 0;
+    };
+
     class store
     {
         /*!
@@ -97,6 +109,19 @@ namespace gulliver
 
         std::string value(const std::string& key, const std::string& def = std::string());
         void set_value(const std::string& key, const std::string& v);
+
+        // Les profils, le plus récemment utilisé d'abord.  find_profile() et find_profile_by_name()
+        // renvoient false quand le profil n'existe pas.  put_profile() crée le profil ou met son nom
+        // à jour (le nom reste unique : une collision lève une erreur de SQLite, que l'appelant
+        // signale).  remove_profile() efface le profil ; les données qui s'y rattachent partent avec
+        // lui par les clés étrangères des tables de profil (ON DELETE CASCADE).  touch_profile() note
+        // qu'il vient de servir (last_used), sans rien lire.
+        std::vector<profile> profiles();
+        bool find_profile(const std::string& id, profile& p);
+        bool find_profile_by_name(const std::string& name, profile& p);
+        void put_profile(const profile& p);
+        void remove_profile(const std::string& id);
+        void touch_profile(const std::string& id, int64_t when);
 
     private:
         // Ouvre la connexion et règle ses options ; m_ est tenu, ou le store est en construction.
