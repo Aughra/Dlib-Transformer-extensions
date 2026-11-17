@@ -2,6 +2,28 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Calculer l'addition, la multiplication, softmax, GELU et SiLU sur Metal (phase 2 sur 8)
+
+- **Quoi** : `dlib/dlib/cuda/metal_kernels.mm` (nouveau) : noyaux en Metal Shading Language dans le fichier, compilés depuis leur texte au premier usage (`MTLMathModeSafe`, fonctions mathématiques précises), une pipeline par noyau gardée en cache ; chaque opération lie ses tampons au décalage de ses tenseurs (vues comprises), lance un thread par valeur ou par vecteur et attend la fin. Versions Metal de `tt::add(dest,src1,src2)` (mêmes formes, ou formes différentes avec 0 hors d'une source), `tt::add(beta,dest,alpha,src)` (les cinq diffusions du CPU ; `beta = alpha = 0` met 0 sans lire `dest`), `tt::multiply` (les trois cas du CPU, dont la somme sur les échantillons dans le même ordre), `tt::softmax` (`CHANNEL_WISE`, `PLANE_WISE` avec sa ligne de −∞), `tt::gelu` (formule 7.1.26 d'Abramowitz et Stegun, erreur ≤ 1,5e-7 sur erf : Metal n'a pas `erf`), `tt::silu` (même formule que le CPU). Macro `DLIB_METAL_TRY` dans `tensor_tools.cpp` (après les vérifications de formes de `multiply`) ; déclarations dans `metal_dispatch.h` ; `metal_kernels.mm` ajouté au CMake.
+- **Fichiers** : `dlib/dlib/cuda/{metal_kernels.mm (nouveau),metal_dispatch.h,tensor_tools.cpp}`, `dlib/dlib/CMakeLists.txt`, `dlib/dlib/test/metal.cpp` ; `docs/notes-pour-l-auteur.md` (registre ; commit de la phase 1), `docs/differences-mac-windows.md`, `logs/reprise.md`.
+- **Pourquoi** : phase 2 sur 8 des consignes du backend Metal.
+- **Tolérance** : |metal − cpu| ≤ 1e-5 + 1e-5·|cpu| (point de départ des consignes, gardé). Justification : en float32, une valeur proche de 1 a un pas de 1,2e-7 ; 1e-5 laisse environ 80 pas, largement de quoi couvrir l'écart des `exp` (quelques pas de chaque côté) et de l'approximation de erf, tout en restant mille fois sous l'erreur qui changerait une décision du réseau. Le CPU calcule GELU en double (`sqrt_2` est un `double`) : c'est une référence plus juste que le GPU.
+- **Rapport par opération** (graine 20261117) :
+
+  | Opération | Valeurs comparées | Écart maximal mesuré | Écart relatif maximal (\|cpu\| ≥ 1e-3) | Formes non supportées (erreur explicite) |
+  |---|---|---|---|---|
+  | `add(dest,src1,src2)` | 3 769 | 0 (identique) | 0 | plus de 2³² − 1 valeurs |
+  | `add(beta,dest,alpha,src)` | 9 000 | 0 (identique) | 0 | `src` qui recouvre `dest` ; plus de 2³² − 1 valeurs |
+  | `multiply` | 8 920 | 0 (identique) | 0 | somme sur les échantillons dans un `dest` qui recouvre une source ; plus de 2³² − 1 valeurs |
+  | `softmax CHANNEL_WISE` | 159 968 | 6,0e-8 | 1,9e-7 | autres modes ; plus de 2³² − 1 valeurs |
+  | `softmax PLANE_WISE` | 159 740 | 6,0e-8 | 2,2e-7 | idem |
+  | `gelu` | 300 612 | 4,8e-7 | 2,1e-4 (queue négative, valeurs vers 1e-3 : l'écart absolu y reste sous 3e-7) | formes différentes ; plus de 2³² − 1 valeurs |
+  | `silu` | 300 372 | 9,5e-7 | 2,4e-7 | idem |
+
+  Formes testées : de 1 valeur à 100 003, vecteurs de softmax de 1 à 32 000, sources plus petites et plus grandes que `dest`, diffusions, `add_to`, calcul sur place, vues décalées dans un même tampon ; valeurs gaussiennes d'écart 1, 4, 20 et 30.
+- **Étapes** : `dtest --test_metal` : **2 079** vérifications (build Metal). Liste du mémo, `--test_npu`, `--test_metal`, `--test_dnn` : **5 254 188** vérifications dans le build Metal, **5 252 124** dans le build CPU ; 0 avertissement.
+- **Ce qui n'est pas couvert** : un thread par vecteur pour softmax (juste, mais lent sur de très longs vecteurs : la réduction par groupe de threads viendra avec les performances) ; une commande attendue par opération (pas encore d'enchaînement sans attente) ; les passes arrière (phase 7).
+
 ## 2026-11-17 — Poser le dispositif et le squelette du backend Metal de dlib (phase 1 sur 8)
 
 - **Quoi** : option CMake `DLIB_USE_METAL` (désactivée par défaut, macOS seulement, exclusive de CUDA ; `cuda/metal_dlib.mm` compilé en Objective-C++ avec ARC, liaison à Metal et Foundation ; `#cmakedefine` dans `config.h.in`). Étiquette `tensor_device { cpu, metal }` dans `gpu_data` (`get_device`, `set_device`), lue par `tensor::get_tensor_device()` et changée par `resizable_tensor::set_tensor_device()` ; une copie garde le dispositif de l'original, `swap` et le déplacement l'emportent avec le tampon ; changer de dispositif copie une fois les valeurs. Un tenseur Metal vit dans un `MTLBuffer` en `MTLStorageModeShared` : `host()` pointe dans le tampon, aucune copie hôte-GPU. Squelette `metal_dlib.{h,mm}` : `MTLDevice` et `MTLCommandQueue` uniques, créés au premier usage ; `allocate`, `synchronize`, `blit_copy` (copie par le GPU, pour le test), `live_buffers` ; registre des tampons pour retrouver le `MTLBuffer` et le décalage d'un pointeur (`find_buffer`, interne). Aiguillage : `DLIB_METAL_UNPORTED("op", tenseurs…)` en tête des **102** fonctions de `tensor_tools.cpp` (inséré par un script à partir des signatures, puis relu) et `metal::refuse` dans les 8 méthodes de calcul de `tensor_conv` et `pooling` (`tensor_tools.h`) : un tenseur Metal lève `metal_error` (« has no Metal version yet »), un appel qui mêle les deux dispositifs aussi ; un tenseur vide ne compte pour aucun dispositif. Sans `DLIB_USE_METAL`, la macro est vide et `set_tensor_device(metal)` lève `metal_error`.

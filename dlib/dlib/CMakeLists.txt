@@ -744,11 +744,12 @@ if (NOT TARGET dlib)
          if (NOT APPLE)
             message(FATAL_ERROR "DLIB_USE_METAL needs macOS: Metal exists only on Apple systems.")
          endif()
-         # cuda/metal_dlib.mm is the only Objective-C++ file.  It is built with automatic
-         # reference counting, and dlib links the Metal and Foundation frameworks for it.
+         # The Objective-C++ files of the backend: the device and its buffers, and the
+         # kernels.  They are built with automatic reference counting, and dlib links the
+         # Metal and Foundation frameworks for them.
          enable_language(OBJCXX)
-         set(source_files ${source_files} cuda/metal_dlib.mm)
-         set_source_files_properties(cuda/metal_dlib.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+         set(source_files ${source_files} cuda/metal_dlib.mm cuda/metal_kernels.mm)
+         set_source_files_properties(cuda/metal_dlib.mm cuda/metal_kernels.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
          list (APPEND dlib_needed_private_libraries "-framework Metal" "-framework Foundation")
          message(STATUS "Enabling the Metal backend of dlib tensors.")
       endif()

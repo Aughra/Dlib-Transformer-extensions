@@ -25,11 +25,17 @@
     (see metal_dispatch.h).  CPU tensors go on to the host path, unchanged.  Without
     DLIB_USE_METAL no tensor can be on Metal, and it expands to nothing.
 */
+/*
+    DLIB_METAL_TRY(call, "op", tensors...) runs metal::call and returns when the tensors are
+    on Metal, refuses a mix of devices, and lets CPU tensors go on to the host path.
+*/
 #ifdef DLIB_USE_METAL
 #include "metal_dispatch.h"
 #define DLIB_METAL_UNPORTED(...) ::dlib::metal::refuse(__VA_ARGS__)
+#define DLIB_METAL_TRY(call, ...) if (::dlib::metal::route(__VA_ARGS__)) { ::dlib::metal::call; return; }
 #else
 #define DLIB_METAL_UNPORTED(...)
+#define DLIB_METAL_TRY(call, ...)
 #endif
 
 namespace dlib
@@ -510,7 +516,6 @@ namespace dlib { namespace tt
         const tensor& src2
     )
     {
-        DLIB_METAL_UNPORTED("multiply", dest, src1, src2);
         DLIB_CASSERT(dest.k() == src1.k() && src1.k() == src2.k() &&
             dest.nr() == src1.nr() && src1.nr() == src2.nr() &&
             dest.nc() == src1.nc() && src1.nc() == src2.nc() );
@@ -518,6 +523,7 @@ namespace dlib { namespace tt
         DLIB_CASSERT((dest.num_samples()==1 || dest.num_samples()==MD) &&
                     (src1.num_samples()==1 || src1.num_samples()==MD) &&
                     (src2.num_samples()==1 || src2.num_samples()==MD) );
+        DLIB_METAL_TRY(multiply(add_to, dest, src1, src2), "multiply", dest, src1, src2);
 #ifdef DLIB_USE_CUDA
         cuda::multiply(add_to, dest, src1, src2);
 #else
@@ -1078,7 +1084,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
-        DLIB_METAL_UNPORTED("add", dest, src);
+        DLIB_METAL_TRY(add(beta,dest,alpha,src), "add", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::add(beta,dest,alpha,src);
 #else
@@ -1095,7 +1101,7 @@ namespace dlib { namespace tt
         const tensor& src2
     )
     {
-        DLIB_METAL_UNPORTED("add", dest, src1, src2);
+        DLIB_METAL_TRY(add(dest, src1, src2), "add", dest, src1, src2);
 #ifdef DLIB_USE_CUDA
         cuda::add(dest, src1, src2);
 #else
@@ -1144,7 +1150,7 @@ namespace dlib { namespace tt
         operation_mode mode
     )
     {
-        DLIB_METAL_UNPORTED("softmax", dest, src);
+        DLIB_METAL_TRY(softmax(dest, src, mode), "softmax", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::softmax(dest, src, mode);
 #else
@@ -1464,7 +1470,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
-        DLIB_METAL_UNPORTED("gelu", dest, src);
+        DLIB_METAL_TRY(gelu(dest, src), "gelu", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::gelu(dest,src);
 #else
@@ -1530,7 +1536,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
-        DLIB_METAL_UNPORTED("silu", dest, src);
+        DLIB_METAL_TRY(silu(dest, src), "silu", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::silu(dest,src);
 #else

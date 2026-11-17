@@ -4,7 +4,11 @@
 #include <dlib/dnn.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <functional>
+#include <iostream>
+#include <limits>
+#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -313,11 +317,11 @@ namespace
         DLIB_TEST_MSG(contains(e1, "tt::relu has no Metal version yet"), e1);
         DLIB_TEST(has_pattern(dest, 2));
         const std::vector<std::pair<std::string, std::function<void()>>> ops = {
-            {"tt::add",              [&]{ tt::add(dest, src, other); }},
-            {"tt::multiply",         [&]{ tt::multiply(false, dest, src, other); }},
-            {"tt::softmax",          [&]{ tt::softmax(dest, src); }},
-            {"tt::gelu",             [&]{ tt::gelu(dest, src); }},
-            {"tt::silu",             [&]{ tt::silu(dest, src); }},
+            {"tt::sigmoid",          [&]{ tt::sigmoid(dest, src); }},
+            {"tt::tanh",             [&]{ tt::tanh(dest, src); }},
+            {"tt::exp",              [&]{ tt::exp(dest, src); }},
+            {"tt::softmax_all",      [&]{ tt::softmax_all(dest, src); }},
+            {"tt::gelu_gradient",    [&]{ tt::gelu_gradient(dest, src, other); }},
             {"tt::affine_transform", [&]{ tt::affine_transform(dest, src, 2, 1); }},
             {"tt::gemm",             [&]{ tt::gemm(0, dest, 1, src, false, other, true); }},
             {"tt::tensor_rand::fill_uniform", [&]{ tt::tensor_rand(1).fill_uniform(dest); }},
@@ -349,6 +353,9 @@ namespace
         const std::string e4 = error_of([&]{ tt::relu(cpu_dest, src); });
         DLIB_TEST_MSG(contains(e4, "tt::relu was given tensors on the CPU and tensors on Metal"), e4);
         DLIB_TEST(has_pattern(cpu_dest, 4));
+        const std::string e5 = error_of([&]{ tt::add(cpu_dest, src, other); });
+        DLIB_TEST_MSG(contains(e5, "tt::add was given tensors on the CPU and tensors on Metal"), e5);
+        DLIB_TEST(has_pattern(cpu_dest, 4));
 
         // CPU tensors take the host path, unchanged.
         resizable_tensor a(2,3,4,5), b(2,3,4,5);
@@ -357,6 +364,236 @@ namespace
         for (size_t i = 0; i < a.size(); ++i)
             DLIB_TEST(b.host()[i] == std::max(0.0f, a.host()[i]));
     }
+
+// ----------------------------------------------------------------------------------------
+// Parity of the operations of phase 2: the same random operands, a CPU result of
+// reference, a Metal result, compared with |metal - cpu| <= atol + rtol*|cpu|.
+
+    struct parity
+    {
+        double max_abs = 0;
+        double max_rel = 0;
+        size_t compared = 0;
+        size_t failed = 0;
+    };
+
+    // Tolerances of float32 (see the report in the journal of the fork): 1e-5 absolute and
+    // 1e-5 relative, about 84 units in the last place of a value near 1.
+    const double default_atol = 1e-5;
+    const double default_rtol = 1e-5;
+
+    std::map<std::string, parity>& parity_table ()
+    {
+        static std::map<std::string, parity> table;
+        return table;
+    }
+
+    void check_parity (
+        const std::string& op,
+        const tensor& cpu,
+        const tensor& gpu,
+        double atol = default_atol,
+        double rtol = default_rtol
+    )
+    {
+        DLIB_TEST(cpu.get_tensor_device() == tensor_device::cpu);
+        DLIB_TEST(gpu.get_tensor_device() == tensor_device::metal);
+        DLIB_TEST(have_same_dimensions(cpu, gpu));
+        parity& p = parity_table()[op];
+        const float* c = cpu.host();
+        const float* g = gpu.host();
+        for (size_t i = 0; i < cpu.size(); ++i)
+        {
+            const double a = std::abs((double)g[i] - (double)c[i]);
+            const bool same_special = (std::isnan(c[i]) && std::isnan(g[i])) || (c[i] == g[i]);
+            ++p.compared;
+            if (same_special)
+                continue;
+            p.max_abs = std::max(p.max_abs, a);
+            // The relative gap is read where it means something: away from 0.
+            if (std::abs((double)c[i]) >= 1e-3)
+                p.max_rel = std::max(p.max_rel, a/std::abs((double)c[i]));
+            if (!(a <= atol + rtol*std::abs((double)c[i])))
+            {
+                if (p.failed < 5)
+                    dlog << LERROR << op << ": value " << i << " cpu " << c[i] << " metal " << g[i];
+                ++p.failed;
+            }
+        }
+        DLIB_TEST_MSG(p.failed == 0, op << ": " << p.failed << " values beyond the tolerance");
+    }
+
+    resizable_tensor random_cpu (dlib::rand& rnd, long long n, long long k, long long nr, long long nc, float scale = 1)
+    {
+        resizable_tensor t(n, k, nr, nc);
+        for (auto& x : t)
+            x = scale*rnd.get_random_gaussian();
+        return t;
+    }
+
+    resizable_tensor on_metal (const tensor& t)
+    {
+        resizable_tensor m(t);
+        m.set_tensor_device(tensor_device::metal);
+        return m;
+    }
+
+    struct shape { long long n, k, nr, nc; };
+
+    void test_parity_add (dlib::rand& rnd)
+    {
+        // add(dest, src1, src2): same shapes, then sources smaller or larger than dest in
+        // each dimension (values outside a source count as 0).
+        const std::vector<std::vector<shape>> cases = {
+            {{2,3,4,5}, {2,3,4,5}, {2,3,4,5}},
+            {{1,1,1,1}, {1,1,1,1}, {1,1,1,1}},
+            {{3,1,1,1000}, {3,1,1,1000}, {3,1,1,1000}},
+            {{2,3,4,5}, {1,3,4,5}, {2,2,3,5}},
+            {{2,3,4,5}, {3,4,5,6}, {1,1,1,1}},
+            {{4,2,7,3}, {4,1,7,3}, {2,2,2,2}},
+        };
+        for (auto& c : cases)
+        {
+            resizable_tensor d(c[0].n, c[0].k, c[0].nr, c[0].nc);
+            d = 0;
+            resizable_tensor a = random_cpu(rnd, c[1].n, c[1].k, c[1].nr, c[1].nc);
+            resizable_tensor b = random_cpu(rnd, c[2].n, c[2].k, c[2].nr, c[2].nc);
+            resizable_tensor md = on_metal(d), ma = on_metal(a), mb = on_metal(b);
+            tt::add(d, a, b);
+            tt::add(md, ma, mb);
+            check_parity("add(dest,src1,src2)", d, md);
+        }
+
+        // add(beta, dest, alpha, src) for each broadcast the CPU accepts.
+        const shape dshape = {3,4,5,6};
+        const std::vector<shape> srcs = {{3,4,5,6}, {1,4,1,1}, {1,4,5,6}, {1,1,5,6}, {3,1,1,1}};
+        const std::vector<std::pair<float,float>> coefs = {{1,1}, {0,1}, {0.5f,-2}, {1,0}, {0,0}};
+        for (auto& s : srcs)
+        {
+            for (auto& ab : coefs)
+            {
+                resizable_tensor d = random_cpu(rnd, dshape.n, dshape.k, dshape.nr, dshape.nc);
+                resizable_tensor src = random_cpu(rnd, s.n, s.k, s.nr, s.nc);
+                resizable_tensor md = on_metal(d), ms = on_metal(src);
+                tt::add(ab.first, d, ab.second, src);
+                tt::add(ab.first, md, ab.second, ms);
+                check_parity("add(beta,dest,alpha,src)", d, md);
+            }
+        }
+    }
+
+    void test_parity_multiply (dlib::rand& rnd)
+    {
+        // The three cases of cpu::multiply: same sizes, a dest of one sample (sum over the
+        // samples), and sources of one sample repeated over the samples of dest.
+        const std::vector<std::vector<shape>> cases = {
+            {{2,3,4,5}, {2,3,4,5}, {2,3,4,5}},
+            {{1,3,4,5}, {6,3,4,5}, {6,3,4,5}},
+            {{1,3,4,5}, {1,3,4,5}, {6,3,4,5}},
+            {{6,3,4,5}, {1,3,4,5}, {6,3,4,5}},
+            {{6,3,4,5}, {6,3,4,5}, {1,3,4,5}},
+            {{5,1,1,700}, {1,1,1,700}, {1,1,1,700}},
+        };
+        for (auto& c : cases)
+        {
+            for (bool add_to : {false, true})
+            {
+                resizable_tensor d = random_cpu(rnd, c[0].n, c[0].k, c[0].nr, c[0].nc);
+                resizable_tensor a = random_cpu(rnd, c[1].n, c[1].k, c[1].nr, c[1].nc);
+                resizable_tensor b = random_cpu(rnd, c[2].n, c[2].k, c[2].nr, c[2].nc);
+                resizable_tensor md = on_metal(d), ma = on_metal(a), mb = on_metal(b);
+                tt::multiply(add_to, d, a, b);
+                tt::multiply(add_to, md, ma, mb);
+                check_parity("multiply", d, md);
+            }
+        }
+    }
+
+    void test_parity_softmax (dlib::rand& rnd)
+    {
+        const std::vector<shape> shapes = {
+            {1,1,1,1}, {2,3,4,5}, {3,1000,1,1}, {2,7,1,1}, {1,1,9,513}, {4,5,3,3}, {1,1,1,32000}};
+        for (auto& s : shapes)
+        {
+            for (auto mode : {operation_mode::CHANNEL_WISE, operation_mode::PLANE_WISE})
+            {
+                for (float scale : {1.0f, 20.0f})
+                {
+                    resizable_tensor src = random_cpu(rnd, s.n, s.k, s.nr, s.nc, scale);
+                    resizable_tensor d(s.n, s.k, s.nr, s.nc);
+                    resizable_tensor ms = on_metal(src), md = on_metal(d);
+                    tt::softmax(d, src, mode);
+                    tt::softmax(md, ms, mode);
+                    check_parity(mode == operation_mode::CHANNEL_WISE ? "softmax CHANNEL_WISE" : "softmax PLANE_WISE", d, md);
+                    // In place, as the layers of dlib do.
+                    tt::softmax(src, src, mode);
+                    tt::softmax(ms, ms, mode);
+                    check_parity(mode == operation_mode::CHANNEL_WISE ? "softmax CHANNEL_WISE" : "softmax PLANE_WISE", src, ms);
+                }
+            }
+        }
+        // A row of -infinity gives zeros along the rows.
+        resizable_tensor src(1,2,2,3);
+        src = -std::numeric_limits<float>::infinity();
+        src.host()[0] = 1;
+        resizable_tensor d(1,2,2,3), ms = on_metal(src), md = on_metal(d);
+        tt::softmax(d, src, operation_mode::PLANE_WISE);
+        tt::softmax(md, ms, operation_mode::PLANE_WISE);
+        check_parity("softmax PLANE_WISE", d, md);
+    }
+
+    void test_parity_activations (dlib::rand& rnd)
+    {
+        for (auto s : std::vector<shape>{{1,1,1,1}, {2,3,4,5}, {1,1,1,100003}})
+        {
+            for (float scale : {1.0f, 4.0f, 30.0f})
+            {
+                resizable_tensor src = random_cpu(rnd, s.n, s.k, s.nr, s.nc, scale);
+                src.host()[0] = 0;
+                resizable_tensor d(s.n, s.k, s.nr, s.nc);
+                resizable_tensor ms = on_metal(src), md = on_metal(d);
+                tt::gelu(d, src);
+                tt::gelu(md, ms);
+                check_parity("gelu", d, md);
+                tt::silu(d, src);
+                tt::silu(md, ms);
+                check_parity("silu", d, md);
+            }
+        }
+    }
+
+    void test_parity_views (dlib::rand& rnd)
+    {
+        // Views at an offset inside Metal tensors: the kernels bind the buffer at that offset.
+        resizable_tensor big = random_cpu(rnd, 4,3,4,5);
+        resizable_tensor mbig = on_metal(big);
+        alias_tensor part(1,3,4,5);
+        auto a = part(big, 60), b = part(big, 120), out = part(big, 180);
+        auto ma = part(mbig, 60), mb = part(mbig, 120), mout = part(mbig, 180);
+        tt::add(out, a, b);
+        tt::add(mout, ma, mb);
+        check_parity("add(dest,src1,src2)", big, mbig);
+        tt::gelu(out, a);
+        tt::gelu(mout, ma);
+        check_parity("gelu", big, mbig);
+        tt::softmax(out, b, operation_mode::CHANNEL_WISE);
+        tt::softmax(mout, mb, operation_mode::CHANNEL_WISE);
+        check_parity("softmax CHANNEL_WISE", big, mbig);
+    }
+
+    void report_parity ()
+    {
+        for (auto& e : parity_table())
+            dlog << LINFO << "parity " << e.first << ": " << e.second.compared << " values, max |diff| "
+                 << e.second.max_abs << ", max rel (|cpu| >= 1e-3) " << e.second.max_rel;
+        std::ostringstream sout;
+        for (auto& e : parity_table())
+            sout << e.first << ": " << e.second.compared << " values, max |diff| " << e.second.max_abs
+                 << ", max rel (|cpu| >= 1e-3) " << e.second.max_rel << "\n";
+        if (std::getenv("DLIB_METAL_REPORT"))
+            std::cout << sout.str();
+    }
+
 #endif
 
 // ----------------------------------------------------------------------------------------
@@ -383,6 +620,13 @@ namespace
             test_moving_between_devices();
             test_copies_moves_and_views();
             test_routing();
+            dlib::rand rnd(20261117);
+            test_parity_add(rnd);
+            test_parity_multiply(rnd);
+            test_parity_softmax(rnd);
+            test_parity_activations(rnd);
+            test_parity_views(rnd);
+            report_parity();
             DLIB_TEST(metal::live_buffers() == 0);
 #endif
         }

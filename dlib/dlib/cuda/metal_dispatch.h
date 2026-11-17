@@ -15,9 +15,13 @@
 
     refuse(op, args...) is route() for an operation without a Metal version: it raises
     metal_error as soon as one of its tensors is on Metal.
+
+    The operations below have a Metal version (metal_kernels.mm).  Each takes the arguments
+    of its tt:: counterpart, all its tensors on Metal, and returns once the GPU is done.
 */
 
 #include "metal_dlib.h"
+#include "operation_mode.h"
 #include "tensor.h"
 #include <string>
 #include <type_traits>
@@ -84,6 +88,16 @@ namespace dlib
             if (route(op, args...))
                 not_ported(op);
         }
+
+    // ------------------------------------------------------------------------------------
+
+        void fill (tensor& dest, float value);
+        void add (tensor& dest, const tensor& src1, const tensor& src2);
+        void add (float beta, tensor& dest, float alpha, const tensor& src);
+        void multiply (bool add_to, tensor& dest, const tensor& src1, const tensor& src2);
+        void softmax (tensor& dest, const tensor& src, operation_mode mode);
+        void gelu (tensor& dest, const tensor& src);
+        void silu (tensor& dest, const tensor& src);
     }
 }
 
