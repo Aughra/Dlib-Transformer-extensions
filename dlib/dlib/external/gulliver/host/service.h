@@ -92,6 +92,10 @@ namespace gulliver
         std::string data_dir() const { return data_dir_; }
         // Les documents du Mac que l'application web joint : <data>/documents.
         std::string documents_dir() const { return join_path(data_dir_, "documents"); }
+        // Les données des profils : <data>/profiles/<id>/ (les images d'un profil y vont, en fichiers).
+        std::string profiles_dir() const { return join_path(data_dir_, "profiles"); }
+        std::string profile_images_dir(const std::string& id) const
+        { return join_path(join_path(profiles_dir(), id), "images"); }
         int port() const { return port_; }
 
         // Ce dont les interfaces ont besoin.

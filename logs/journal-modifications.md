@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Images par profil, octets sur disque (chantier Gulliver, A6)
+
+- **Quoi** : `host/service.h` gagne `profiles_dir()` (= `<data>/profiles`) et `profile_images_dir(id)`. Table `profile_images` (métadonnées : owner, name, type, size, width, height, added, blob_bytes, thumb_bytes ; cascade) et struct `image_record` dans `host/store.cpp`. Les **octets** de l'image et de sa vignette sont des **fichiers** sous `<data>/profiles/<id>/images/<imageId>` et `…<imageId>.thumb` (pour ne pas gonfler la base ni ralentir quick_check). Méthodes `images_of/find_image/put_image/delete_image/delete_images_of_owner/image_usage`. Routes `GET /gulliver/v1/profile/images?owner=`, `GET …/images/usage`, `GET …/images/<id>/blob` et `/thumb`, `PUT …/images/<id>` (blob+thumb en base64, écrits par `write_file_atomic`), `DELETE …/images/<id>` et `…/images?owner=` (effacent lignes et fichiers).
+- **Fichiers** : `host/service.h`, `host/store.h`, `host/store.cpp`, `host/server.cpp`, `tests/test_host.cpp`.
+- **Pourquoi** : déménager côté service les images (aujourd'hui des blobs dans l'IndexedDB `images` du navigateur), par profil ; les fichiers sur disque sont cohérents avec `documents_dir()` et évitent de gonfler la base.
+- **Étapes** : compilé sans avertissement ; vérifié au curl (fichiers image+vignette créés puis lus octet pour octet puis effacés du disque, usage juste) et par test_host all checks passed (métadonnées par profil/propriétaire, usage, cascade). **Fin du stockage côté service (A1–A6).** Pas d'incrément de version.
+
 ## 2026-11-17 — Index RAG par profil, vecteurs en BLOB (chantier Gulliver, A5)
 
 - **Quoi** : table `profile_chunks` (profile, id, owner, doc, ordinal, name, where_, start_, end_, text, model, vector BLOB ; index owner et doc ; cascade) dans `host/store.cpp`, structs `chunk_record` et `chunk_status_row`. Méthodes : `replace_chunks` (supprime puis insère les passages d'un document dans une `dlib::transaction`, vecteur via `bind_blob`), `chunks_of`, `chunks_of_document`, `chunk_status` (comptes par document en SQL, sans transférer les vecteurs), `chunk_documents`, `delete_chunks_of_owner/document`. Routes `GET /gulliver/v1/profile/chunks?owner=|doc=`, `…/chunks/status?owner=&model=`, `…/chunks/documents`, `PUT …/chunks/<doc>`, `DELETE …/chunks?owner=|doc=` ; le vecteur voyage en base64 dans le JSON (helpers `chunk_json`/`chunk_of_json`). Premier usage de `bind_blob`/`get_column_as_blob` dans le service.

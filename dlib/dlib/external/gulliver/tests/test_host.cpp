@@ -465,12 +465,37 @@ int main(int argc, char** argv)
             check(db.chunks_of("pa", "proj1").empty(), "chunks are deleted by owner");
         }
 
+        // Métadonnées d'images : par propriétaire, usage, suppression.
+        {
+            gulliver::image_record im;
+            im.id = "i1"; im.owner = "conv1"; im.name = "a.png"; im.type = "image/png";
+            im.width = 100; im.height = 80; im.blob_bytes = 15; im.thumb_bytes = 8;
+            db.put_image("pa", im);
+            gulliver::image_record im2 = im; im2.id = "i2"; im2.blob_bytes = 20; im2.thumb_bytes = 5;
+            db.put_image("pa", im2);
+            check(db.images_of("pa", "conv1").size() == 2 && db.images_of("pb", "conv1").empty(),
+                "images are listed per profile and owner");
+            gulliver::image_record got;
+            check(db.find_image("pa", "i1", got) && got.width == 100, "an image is found by its id");
+            int64_t count = 0, bytes = 0;
+            db.image_usage("pa", count, bytes);
+            check(count == 2 && bytes == 15 + 8 + 20 + 5, "image_usage sums the bytes of the blobs and thumbs");
+            db.delete_image("pa", "i1");
+            db.image_usage("pa", count, bytes);
+            check(count == 1 && bytes == 25, "a deleted image is gone from the usage");
+            auto ids = db.delete_images_of_owner("pa", "conv1");
+            check(ids.size() == 1 && ids[0] == "i2" && db.images_of("pa", "conv1").empty(),
+                "deleting by owner returns the removed ids");
+        }
+
         // Supprimer le profil emporte toutes ses données (clé étrangère ON DELETE CASCADE).
         db.replace_chunks("pa", "d9", { [] { gulliver::chunk_record c; c.id = "d9:0"; c.owner = "o"; c.doc = "d9"; return c; }() });
+        { gulliver::image_record im; im.id = "ic"; im.owner = "o"; db.put_image("pa", im); }
         db.remove_profile("pa");
+        int64_t cnt = 0, by = 0; db.image_usage("pa", cnt, by);
         check(db.conversation_docs("pa").empty() && db.project_docs("pa").empty()
-            && db.page_settings("pa").items().empty() && db.chunk_documents("pa").empty(),
-            "removing a profile cascades to its conversations, projects, page settings and chunks");
+            && db.page_settings("pa").items().empty() && db.chunk_documents("pa").empty() && cnt == 0,
+            "removing a profile cascades to its conversations, projects, page settings, chunks and images");
     }
 
     {

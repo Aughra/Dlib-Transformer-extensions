@@ -131,6 +131,18 @@ namespace gulliver
             " FOREIGN KEY (profile) REFERENCES profiles(id) ON DELETE CASCADE)");
         db_->exec("CREATE INDEX IF NOT EXISTS ix_chunk_owner ON profile_chunks(profile, owner)");
         db_->exec("CREATE INDEX IF NOT EXISTS ix_chunk_doc ON profile_chunks(profile, doc)");
+        // Les images d'un profil : les octets (image pleine et vignette) vont dans des fichiers sous
+        // <data>/profiles/<id>/images/ ; cette table n'en garde que les métadonnées, pour la liste par
+        // propriétaire et le total d'octets.
+        db_->exec(
+            "CREATE TABLE IF NOT EXISTS profile_images ("
+            " profile TEXT NOT NULL, id TEXT NOT NULL, owner TEXT NOT NULL, name TEXT NOT NULL DEFAULT '',"
+            " type TEXT NOT NULL DEFAULT '', size INTEGER NOT NULL DEFAULT 0,"
+            " width INTEGER NOT NULL DEFAULT 0, height INTEGER NOT NULL DEFAULT 0, added INTEGER NOT NULL DEFAULT 0,"
+            " blob_bytes INTEGER NOT NULL DEFAULT 0, thumb_bytes INTEGER NOT NULL DEFAULT 0,"
+            " PRIMARY KEY (profile, id),"
+            " FOREIGN KEY (profile) REFERENCES profiles(id) ON DELETE CASCADE)");
+        db_->exec("CREATE INDEX IF NOT EXISTS ix_image_owner ON profile_images(profile, owner)");
     }
 
     store::~store() {}
@@ -760,6 +772,124 @@ namespace gulliver
             st.bind(2, doc);
             st.exec();
         });
+    }
+
+    // ----------------------------------------------------------------------------------------
+    //  Métadonnées des images (les octets sont des fichiers à part)
+
+    namespace
+    {
+        const char* const image_columns = "id, owner, name, type, size, width, height, added, blob_bytes, thumb_bytes";
+
+        image_record image_of(dlib::statement& st)
+        {
+            image_record r;
+            r.id = st.get_column_as_text(0);
+            r.owner = st.get_column_as_text(1);
+            r.name = st.get_column_as_text(2);
+            r.type = st.get_column_as_text(3);
+            r.size = st.get_column_as_int64(4);
+            r.width = st.get_column_as_int64(5);
+            r.height = st.get_column_as_int64(6);
+            r.added = st.get_column_as_int64(7);
+            r.blob_bytes = st.get_column_as_int64(8);
+            r.thumb_bytes = st.get_column_as_int64(9);
+            return r;
+        }
+    }
+
+    std::vector<image_record> store::images_of(const std::string& profile, const std::string& owner)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<image_record> out;
+        dlib::statement st(*db_, std::string("SELECT ") + image_columns +
+            " FROM profile_images WHERE profile = ? AND owner = ? ORDER BY added");
+        st.bind(1, profile);
+        st.bind(2, owner);
+        st.exec();
+        while (st.move_next()) out.push_back(image_of(st));
+        return out;
+    }
+
+    bool store::find_image(const std::string& profile, const std::string& id, image_record& out)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        dlib::statement st(*db_, std::string("SELECT ") + image_columns + " FROM profile_images WHERE profile = ? AND id = ?");
+        st.bind(1, profile);
+        st.bind(2, id);
+        st.exec();
+        if (!st.move_next()) return false;
+        out = image_of(st);
+        return true;
+    }
+
+    void store::put_image(const std::string& profile, const image_record& r)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::statement st(*db_, "INSERT OR REPLACE INTO profile_images "
+                "(profile, id, owner, name, type, size, width, height, added, blob_bytes, thumb_bytes) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            st.bind(1, profile);
+            st.bind(2, r.id);
+            st.bind(3, r.owner);
+            st.bind(4, r.name);
+            st.bind(5, r.type);
+            st.bind_int64(6, r.size);
+            st.bind_int64(7, r.width);
+            st.bind_int64(8, r.height);
+            st.bind_int64(9, r.added);
+            st.bind_int64(10, r.blob_bytes);
+            st.bind_int64(11, r.thumb_bytes);
+            st.exec();
+        });
+    }
+
+    void store::delete_image(const std::string& profile, const std::string& id)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::statement st(*db_, "DELETE FROM profile_images WHERE profile = ? AND id = ?");
+            st.bind(1, profile);
+            st.bind(2, id);
+            st.exec();
+        });
+    }
+
+    std::vector<std::string> store::delete_images_of_owner(const std::string& profile, const std::string& owner)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<std::string> ids;
+        {
+            dlib::statement st(*db_, "SELECT id FROM profile_images WHERE profile = ? AND owner = ?");
+            st.bind(1, profile);
+            st.bind(2, owner);
+            st.exec();
+            while (st.move_next()) ids.push_back(st.get_column_as_text(0));
+        }
+        writing([&]() {
+            dlib::statement st(*db_, "DELETE FROM profile_images WHERE profile = ? AND owner = ?");
+            st.bind(1, profile);
+            st.bind(2, owner);
+            st.exec();
+        });
+        return ids;
+    }
+
+    void store::image_usage(const std::string& profile, int64_t& count, int64_t& bytes)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        dlib::statement st(*db_, "SELECT COUNT(*), COALESCE(SUM(blob_bytes + thumb_bytes), 0) "
+            "FROM profile_images WHERE profile = ?");
+        st.bind(1, profile);
+        st.exec();
+        count = 0;
+        bytes = 0;
+        if (st.move_next())
+        {
+            count = st.get_column_as_int64(0);
+            bytes = st.get_column_as_int64(1);
+        }
     }
 
 }

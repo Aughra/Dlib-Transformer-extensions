@@ -136,6 +136,22 @@ namespace gulliver
             return o;
         }
 
+        // Les métadonnées d'une image rendues à la page (sans les octets, qui se lisent par /blob et /thumb).
+        json image_json(const image_record& r)
+        {
+            json o = json::object();
+            o["id"] = r.id;
+            o["owner"] = r.owner;
+            o["name"] = r.name;
+            o["type"] = r.type;
+            o["size"] = static_cast<long long>(r.size);
+            o["width"] = static_cast<long long>(r.width);
+            o["height"] = static_cast<long long>(r.height);
+            o["added"] = static_cast<long long>(r.added);
+            o["bytes"] = static_cast<long long>(r.blob_bytes + r.thumb_bytes);
+            return o;
+        }
+
         // Un passage (chunk) rendu à la page : ses champs, et son vecteur en base64 (vide si absent).
         json chunk_json(const chunk_record& c)
         {
@@ -2644,6 +2660,116 @@ namespace gulliver
             }
             if (owner.empty()) s->db().delete_chunks_of_document(p.id, doc);
             else s->db().delete_chunks_of_owner(p.id, owner);
+            send_json(res, 200, ok_result(true));
+        });
+
+        // Les images d'un profil.  Les métadonnées sont en base ; les octets (image pleine et vignette)
+        // sont des fichiers sous <data>/profiles/<id>/images/<imageId>{,.thumb}.
+        // GET images?owner=…  : les métadonnées d'un propriétaire.  GET images/usage : nombre et octets.
+        // GET images/<id>/blob  et  /thumb : les octets, avec leur type.
+        // PUT images/<id> {owner, name, type, size, width, height, blob(base64), thumb(base64)}.
+        // DELETE images/<id>  ou  images?owner=… : efface la (les) ligne(s) et le(s) fichier(s).
+        srv.Get("/gulliver/v1/profile/images", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            json list = json::array();
+            for (const image_record& r : s->db().images_of(p.id, req.get_param_value("owner")))
+                list.push_back(image_json(r));
+            json o = json::object();
+            o["images"] = list;
+            send_json(res, 200, o);
+        });
+        srv.Get("/gulliver/v1/profile/images/usage", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            int64_t count = 0, bytes = 0;
+            s->db().image_usage(p.id, count, bytes);
+            json o = json::object();
+            o["count"] = static_cast<long long>(count);
+            o["bytes"] = static_cast<long long>(bytes);
+            send_json(res, 200, o);
+        });
+        const auto serve_image_file = [s](const httplib::Request& req, httplib::Response& res, bool thumb) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            image_record r;
+            if (!s->db().find_image(p.id, req.matches[1], r))
+            {
+                send_error(res, 404, "invalid_request_error", "no image of this id in the profile", "not_found");
+                return;
+            }
+            const std::string path = join_path(s->profile_images_dir(p.id), r.id + (thumb ? ".thumb" : ""));
+            std::string data;
+            if (!read_file(path, data, max_document_bytes))
+            {
+                send_error(res, 404, "invalid_request_error", "the image file is missing", "not_found");
+                return;
+            }
+            res.set_content(data, r.type.empty() ? "application/octet-stream" : r.type.c_str());
+        };
+        srv.Get(R"(/gulliver/v1/profile/images/([^/]+)/blob)",
+            [serve_image_file](const httplib::Request& req, httplib::Response& res) { serve_image_file(req, res, false); });
+        srv.Get(R"(/gulliver/v1/profile/images/([^/]+)/thumb)",
+            [serve_image_file](const httplib::Request& req, httplib::Response& res) { serve_image_file(req, res, true); });
+        srv.Put(R"(/gulliver/v1/profile/images/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string id = req.matches[1];
+            const std::string dir = s->profile_images_dir(p.id);
+            if (!make_dirs(dir))
+            {
+                send_error(res, 500, "server_error", "the image folder cannot be created");
+                return;
+            }
+            const std::string blob = body.contains("blob") ? base64_decode(body["blob"].as_string()) : std::string();
+            const std::string thumb = body.contains("thumb") ? base64_decode(body["thumb"].as_string()) : std::string();
+            if (!write_file_atomic(join_path(dir, id), blob)
+                || !write_file_atomic(join_path(dir, id + ".thumb"), thumb))
+            {
+                send_error(res, 500, "server_error", "the image cannot be written");
+                return;
+            }
+            image_record r;
+            r.id = id;
+            r.owner = body.contains("owner") ? body["owner"].as_string() : std::string();
+            r.name = body.contains("name") ? body["name"].as_string() : std::string();
+            r.type = body.contains("type") ? body["type"].as_string() : std::string();
+            r.size = body.contains("size") ? body["size"].as_int(0) : 0;
+            r.width = body.contains("width") ? body["width"].as_int(0) : 0;
+            r.height = body.contains("height") ? body["height"].as_int(0) : 0;
+            r.added = body.contains("added") ? body["added"].as_int(now_unix()) : now_unix();
+            r.blob_bytes = static_cast<int64_t>(blob.size());
+            r.thumb_bytes = static_cast<int64_t>(thumb.size());
+            s->db().put_image(p.id, r);
+            send_json(res, 200, ok_result(true));
+        });
+        srv.Delete(R"(/gulliver/v1/profile/images/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            const std::string id = req.matches[1];
+            const std::string dir = s->profile_images_dir(p.id);
+            remove_file(join_path(dir, id));
+            remove_file(join_path(dir, id + ".thumb"));
+            s->db().delete_image(p.id, id);
+            send_json(res, 200, ok_result(true));
+        });
+        srv.Delete("/gulliver/v1/profile/images", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            const std::string owner = req.get_param_value("owner");
+            if (owner.empty())
+            {
+                send_error(res, 400, "invalid_request_error", "owner is required", "owner");
+                return;
+            }
+            const std::string dir = s->profile_images_dir(p.id);
+            for (const std::string& id : s->db().delete_images_of_owner(p.id, owner))
+            {
+                remove_file(join_path(dir, id));
+                remove_file(join_path(dir, id + ".thumb"));
+            }
             send_json(res, 200, ok_result(true));
         });
 

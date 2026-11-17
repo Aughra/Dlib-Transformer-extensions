@@ -76,6 +76,22 @@ namespace gulliver
         std::string model;
     };
 
+    // Les métadonnées d'une image d'un profil.  Les octets (image pleine et vignette) vivent
+    // dans des fichiers à part ; blob_bytes et thumb_bytes en donnent les tailles pour l'usage.
+    struct image_record
+    {
+        std::string id;
+        std::string owner;           // la discussion ou le projet
+        std::string name;
+        std::string type;            // le type MIME (image/jpeg, image/png…)
+        int64_t size = 0;            // la taille d'origine annoncée
+        int64_t width = 0;
+        int64_t height = 0;
+        int64_t added = 0;
+        int64_t blob_bytes = 0;      // octets du fichier de l'image
+        int64_t thumb_bytes = 0;     // octets du fichier de la vignette
+    };
+
     // Un profil : l'espace d'un utilisateur (ses discussions, projets, réglages de page,
     // index de documents et images), gardé par le service pour qu'il se retrouve depuis
     // n'importe quel navigateur.  Pas de mot de passe (usage personnel sur un seul Mac).
@@ -190,6 +206,18 @@ namespace gulliver
         std::vector<std::pair<std::string, std::string>> chunk_documents(const std::string& profile);
         void delete_chunks_of_owner(const std::string& profile, const std::string& owner);
         void delete_chunks_of_document(const std::string& profile, const std::string& doc);
+
+        // Les métadonnées des images d'un profil (les octets sont dans des fichiers à part).
+        // images_of() rend celles d'un propriétaire ; find_image() une seule (false si absente) ;
+        // put_image() écrit ou remplace ; delete_image() en efface une, delete_images_of_owner()
+        // toutes celles d'un propriétaire.  image_usage() rend le nombre et le total d'octets
+        // (image pleine + vignette) d'un profil.
+        std::vector<image_record> images_of(const std::string& profile, const std::string& owner);
+        bool find_image(const std::string& profile, const std::string& id, image_record& out);
+        void put_image(const std::string& profile, const image_record& r);
+        void delete_image(const std::string& profile, const std::string& id);
+        std::vector<std::string> delete_images_of_owner(const std::string& profile, const std::string& owner);
+        void image_usage(const std::string& profile, int64_t& count, int64_t& bytes);
 
     private:
         // Ouvre la connexion et règle ses options ; m_ est tenu, ou le store est en construction.
