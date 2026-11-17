@@ -4,7 +4,7 @@
 #
 # Teste un build macOS d'Albireo (Apple Silicon) et affiche un résumé, une ligne par étape.
 #
-#   bash dlib/dlib/external/albireo/tools/test_macos.sh [build folder] [model.gguf] [embedding model.gguf]
+#   bash dlib/dlib/external/gulliver/tools/test_macos.sh [build folder] [model.gguf] [embedding model.gguf]
 #
 # Par défaut : build/macos-albireo à la racine du dépôt, build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf
 # et build/albireo-home/models/qwen3-embedding-0.6b.gguf.  Les étapes dont le modèle manque sont
@@ -410,7 +410,7 @@ offline_reserve_test() {
 # Le carnet du portage : un fichier de sa liste se lit, et chaque chemin hors de la liste répond 404 (fork pour macOS).
 carnet_refusals() {
   local n=0 p code
-  for p in '../etc/passwd' 'dlib/dlib/external/albireo/host/server.cpp' 'docs/../CLAUDE.md' '.git/config' \
+  for p in '../etc/passwd' 'dlib/dlib/external/gulliver/host/server.cpp' 'docs/../CLAUDE.md' '.git/config' \
       'logs/.hidden.md' '/etc/hosts' 'docs//memo-portage-macos-arm64.md'; do
     code=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' -G --data-urlencode "path=$p" \
       "https://localhost:$PORT/albireo/v1/carnet/file") || return 1

@@ -3,9 +3,9 @@
 Le banc vérifie la page web d'Albireo de bout en bout, comme un utilisateur, sans toucher au service dont on se sert. Il a servi au découpage d'`app.js` (Albireo 4.11.1 à 4.11.11) et sert à tout changement de la page.
 
 ```sh
-bash dlib/dlib/external/albireo/tools/page_test/page_test.sh            # tous les scénarios
-bash dlib/dlib/external/albireo/tools/page_test/page_test.sh regress    # un seul
-PAGE_TEST_KEEP=1 bash dlib/dlib/external/albireo/tools/page_test/page_test.sh   # le service reste ouvert à la fin
+bash dlib/dlib/external/gulliver/tools/page_test/page_test.sh            # tous les scénarios
+bash dlib/dlib/external/gulliver/tools/page_test/page_test.sh regress    # un seul
+PAGE_TEST_KEEP=1 bash dlib/dlib/external/gulliver/tools/page_test/page_test.sh   # le service reste ouvert à la fin
 ```
 
 ## Ce qu'il fait

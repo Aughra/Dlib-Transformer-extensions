@@ -3,7 +3,7 @@
 #
 # Albireo : le service d'inférence local construit sur dlib, pour macOS sur Apple Silicon seulement.
 #
-#   cmake -S dlib/dlib/external/albireo -B build/macos-albireo -G Ninja -DCMAKE_BUILD_TYPE=Release
+#   cmake -S dlib/dlib/external/gulliver -B build/macos-albireo -G Ninja -DCMAKE_BUILD_TYPE=Release
 #
 # Chaque programme arrive dans <build>/bin et le moteur dans <build>/bin/engines ; l'application web
 # est copiée dans <build>/bin/web.

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Banc d'essai de la page web d'Albireo (fork pour macOS).
 #
-#   bash dlib/dlib/external/albireo/tools/page_test/page_test.sh [scénario…]
+#   bash dlib/dlib/external/gulliver/tools/page_test/page_test.sh [scénario…]
 #
 # Démarre un service d'essai isolé (port 18491, hors ligne, données dans build/page-test), qui sert la page des
 # sources (web/), y installe des modèles clonés depuis le Mac (copies APFS, sans place prise), puis joue les scénarios
@@ -34,7 +34,7 @@ mkdir -p "$WORK" && chmod 700 "$WORK"
 cp -c "$BUILD/bin/albireo-service" "$BIN/" 2>/dev/null || { mkdir -p "$BIN" && cp -c "$BUILD/bin/albireo-service" "$BIN/"; }
 rsync -a --delete "$BUILD/bin/engines/" "$BIN/engines/"
 [ -d "$BUILD/bin/licenses" ] && rsync -a --delete "$BUILD/bin/licenses/" "$BIN/licenses/"
-rsync -a --delete "$ROOT/dlib/dlib/external/albireo/web/" "$BIN/web/"
+rsync -a --delete "$ROOT/dlib/dlib/external/gulliver/web/" "$BIN/web/"
 
 # Vrai quand le service d'essai a installé le modèle id.
 installed() {
@@ -103,7 +103,7 @@ if command -v npm > /dev/null; then
     mkdir -p "$LINT" && (cd "$LINT" && npm init -y > /dev/null && npm i --silent eslint@9.17.0 globals@15.14.0 > /dev/null)
   fi
   cp "$HERE/eslint.config.mjs" "$LINT/"
-  if (cd "$ROOT/dlib/dlib/external/albireo/web/js" && "$LINT/node_modules/.bin/eslint" --no-config-lookup \
+  if (cd "$ROOT/dlib/dlib/external/gulliver/web/js" && "$LINT/node_modules/.bin/eslint" --no-config-lookup \
         -c "$LINT/eslint.config.mjs" ./*.js); then
     echo "lint: ok"
   else

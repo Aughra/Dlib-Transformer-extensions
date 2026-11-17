@@ -9,10 +9,17 @@
 
 ## Reprise (où on en est, quoi ensuite)
 
+- **2026-11-17 20:15** — **0a fait** : dossier renommé (`git mv .../albireo → .../gulliver`),
+  chemins `external/albireo` → `external/gulliver` corrigés dans les scripts du projet
+  (`tools/bench_macos.sh`, `test_macos.sh`, `page_test/page_test.sh` + README) et la commande
+  d'usage du `CMakeLists.txt`. **Build `build/macos-gulliver` compile sans avertissement**,
+  binaires produits. Report à 0d : répertoires de sortie `build/macos-albireo`/`albireo-home`,
+  README de l'original (Windows/CUDA/OpenVINO). Cibles/variables `ALBIREO_*` → **0b**.
+  **Prochaine action : 0b** — renommer les identifiants techniques C++ (routes `/gulliver/v1`,
+  `gulliver.db`, `GULLIVER_HOME`, `~/.local/share/gulliver`, macros `ALBIREO_*` → `GULLIVER_*`,
+  cibles CMake `albireo-*`). Attention : `DB_NAME` de la page = 0c ; ici c'est le C++.
 - **2026-11-17 20:07** — Plan validé (go de l'utilisateur). Plan copié dans le dépôt, ce
-  fichier d'avancement créé, pointeur ajouté à CLAUDE.md. **Rien n'est encore renommé ni
-  codé.** Prochaine action : **bloc 0, sous-étape 0a** (renommer le dossier
-  `dlib/dlib/external/albireo/` → `.../gulliver/` et ajuster les chemins de build).
+  fichier d'avancement créé, pointeur ajouté à CLAUDE.md.
 
 ## Décisions clés (rappel)
 
@@ -29,7 +36,10 @@
 
 ## Bloc 0 — Renommer Albireo → Gulliver
 
-- ☐ **0a** Dossier + chemins de build (`git mv`, CMakeLists, cibles, mémo).
+- ☑ **0a** Dossier + chemins de build (`git mv`, chemins `external/gulliver`). 2026-11-17,
+  commit à venir. `cmake` configure et `cmake --build build/macos-gulliver` compile sans
+  avertissement ; binaires produits (`albireo-service`, moteur, 10 tests). Cibles/variables
+  `ALBIREO_*` et répertoires de sortie `build/macos-albireo`/`albireo-home` : reportés (0b/0d).
 - ☐ **0b** Identifiants techniques C++ (routes `/gulliver/v1`, `gulliver.db`,
   `GULLIVER_HOME`, macros `ALBIREO_*`).
 - ☐ **0c** Page JS (`DB_NAME`, API, clés, openapi, textes).

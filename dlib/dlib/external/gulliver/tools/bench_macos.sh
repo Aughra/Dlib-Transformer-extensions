@@ -1,7 +1,7 @@
 #!/bin/bash
 # Toutes les mesures de vitesse du moteur d'Albireo en une commande (fork pour macOS).
 #
-#   bash dlib/dlib/external/albireo/tools/bench_macos.sh [essais] [build folder]
+#   bash dlib/dlib/external/gulliver/tools/bench_macos.sh [essais] [build folder]
 #
 # Pour chaque modèle présent, la lecture de prompts de 64, 512, 1 536 et 3 584 tokens et l'écriture de 64 tokens
 # (bench_runtime, clés et valeurs en 8 bits comme le service), sur le processeur puis sur le GPU, en
@@ -53,7 +53,7 @@ LOAD_START=$(sysctl -n vm.loadavg)
   echo "| Cœurs | $(sysctl -n hw.perflevel0.physicalcpu 2>/dev/null) performance, $(sysctl -n hw.perflevel1.physicalcpu 2>/dev/null) efficacité ; $THREADS threads pour les mesures |"
   echo "| Mémoire | $(( $(sysctl -n hw.memsize) / 1073741824 )) Go |"
   echo "| macOS | $(sw_vers -productVersion) ($(sw_vers -buildVersion)) |"
-  echo "| Albireo | $(sed -n 's/.*ALBIREO_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/albireo/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null)) |"
+  echo "| Albireo | $(sed -n 's/.*ALBIREO_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null)) |"
   echo "| Mode économie d'énergie | $(pmset -g | awk '/lowpowermode/ {print $2}') (0 attendu) |"
   echo "| Charge au début | $LOAD_START |"
   echo
