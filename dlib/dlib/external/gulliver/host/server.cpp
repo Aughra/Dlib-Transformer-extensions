@@ -125,6 +125,57 @@ namespace gulliver
             send_json(res, status, e);
         }
 
+        // Un profil rendu à la page : son id, son nom et ses dates.
+        json profile_json(const profile& p)
+        {
+            json o = json::object();
+            o["id"] = p.id;
+            o["name"] = p.name;
+            o["created"] = static_cast<long long>(p.created);
+            o["last_used"] = static_cast<long long>(p.last_used);
+            return o;
+        }
+
+        // Le nom d'un profil pris dans un corps de requête : coupé de ses espaces de bord, de 1 à 80
+        // caractères.  Renvoie une chaîne vide quand il manque ou qu'il est hors bornes.
+        std::string profile_name_of(const json& body)
+        {
+            if (!body.contains("name")) return std::string();
+            std::string name = body["name"].as_string();
+            const auto not_space = [](unsigned char c) { return !std::isspace(c); };
+            name.erase(name.begin(), std::find_if(name.begin(), name.end(), not_space));
+            name.erase(std::find_if(name.rbegin(), name.rend(), not_space).base(), name.end());
+            if (name.empty() || name.size() > 80) return std::string();
+            return name;
+        }
+
+        /*
+            Le profil d'une requête de données, lu dans l'en-tête X-Gulliver-Profile.  Renvoie true
+            et remplit `out` quand l'en-tête nomme un profil connu (dont il note l'usage), sinon
+            envoie l'erreur et renvoie false : 400 profile_required si l'en-tête manque, 404
+            profile_unknown s'il nomme un profil qui n'existe pas (ou plus).  Les routes de données
+            d'un profil commencent toutes par cet appel.
+        */
+        // [[maybe_unused]] le temps que les routes de données du profil (sous-étapes suivantes) l'appellent.
+        [[maybe_unused]] bool resolve_profile(service& svc, const httplib::Request& req, httplib::Response& res, profile& out)
+        {
+            const std::string id = req.get_header_value("X-Gulliver-Profile");
+            if (id.empty())
+            {
+                send_error(res, 400, "invalid_request_error",
+                    "this request needs a profile: send its id in the X-Gulliver-Profile header", "profile_required");
+                return false;
+            }
+            if (!svc.db().find_profile(id, out))
+            {
+                send_error(res, 404, "invalid_request_error",
+                    "no profile has this id; create one or choose another", "profile_unknown");
+                return false;
+            }
+            svc.db().touch_profile(id, now_unix());
+            return true;
+        }
+
         /*
             La réponse à une requête dont le modèle n'est pas encore dans le moteur, parce que
             le service démarre ou que le modèle se charge : 503 avec un code et le délai après
@@ -2244,6 +2295,93 @@ namespace gulliver
                 return;
             }
             write_file_atomic(join_path(s->data_dir(), "settings-profiles.json"), kept.dump_formatted(1));
+            send_json(res, 200, ok_result(true));
+        });
+
+        // Les profils d'utilisateur (l'espace de chacun : discussions, projets, documents, images).
+        // À ne pas confondre avec /settings/profiles ci-dessus, qui sont des instantanés de réglages.
+        // Lister ; créer avec un nom ; renommer par son id ; supprimer par son id (ses données
+        // partent avec lui par la cascade des tables de profil).
+        srv.Get("/gulliver/v1/profiles", [s](const httplib::Request&, httplib::Response& res) {
+            json list = json::array();
+            for (const auto& p : s->db().profiles())
+                list.push_back(profile_json(p));
+            json o = json::object();
+            o["profiles"] = list;
+            send_json(res, 200, o);
+        });
+        srv.Post("/gulliver/v1/profiles", [s](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string name = profile_name_of(body);
+            if (name.empty())
+            {
+                send_error(res, 400, "invalid_request_error",
+                    "a name of 1 to 80 characters is required", "name");
+                return;
+            }
+            profile exists;
+            if (s->db().find_profile_by_name(name, exists))
+            {
+                send_error(res, 409, "invalid_request_error", "a profile already has this name", "name_taken");
+                return;
+            }
+            profile p;
+            p.id = random_hex(12);
+            p.name = name;
+            p.created = now_unix();
+            p.last_used = p.created;
+            try { s->db().put_profile(p); }
+            catch (const std::exception&)
+            {
+                // Une collision de nom au même instant, par exemple : la base l'a refusée.
+                send_error(res, 409, "invalid_request_error", "a profile already has this name", "name_taken");
+                return;
+            }
+            log_info("profiles: created " + p.id);
+            send_json(res, 200, profile_json(p));
+        });
+        srv.Put(R"(/gulliver/v1/profiles/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string id = req.matches[1];
+            profile p;
+            if (!s->db().find_profile(id, p))
+            {
+                send_error(res, 404, "invalid_request_error", "no profile has this id", "profile_unknown");
+                return;
+            }
+            const std::string name = profile_name_of(body);
+            if (name.empty())
+            {
+                send_error(res, 400, "invalid_request_error", "a name of 1 to 80 characters is required", "name");
+                return;
+            }
+            profile other;
+            if (s->db().find_profile_by_name(name, other) && other.id != id)
+            {
+                send_error(res, 409, "invalid_request_error", "another profile already has this name", "name_taken");
+                return;
+            }
+            p.name = name;
+            try { s->db().put_profile(p); }
+            catch (const std::exception&)
+            {
+                send_error(res, 409, "invalid_request_error", "another profile already has this name", "name_taken");
+                return;
+            }
+            send_json(res, 200, profile_json(p));
+        });
+        srv.Delete(R"(/gulliver/v1/profiles/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            const std::string id = req.matches[1];
+            profile p;
+            if (!s->db().find_profile(id, p))
+            {
+                send_error(res, 404, "invalid_request_error", "no profile has this id", "profile_unknown");
+                return;
+            }
+            s->db().remove_profile(id);
+            log_info("profiles: removed " + id);
             send_json(res, 200, ok_result(true));
         });
 

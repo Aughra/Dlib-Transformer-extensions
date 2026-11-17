@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Exposer les routes de gestion des profils (chantier Gulliver, A2)
+
+- **Quoi** : les routes HTTP de gestion des profils dans `host/server.cpp` : `GET /gulliver/v1/profiles` (lister), `POST` (créer avec un nom), `PUT /gulliver/v1/profiles/<id>` (renommer), `DELETE /gulliver/v1/profiles/<id>` (supprimer). Helpers `profile_json` (sérialisation) et `profile_name_of` (nom coupé de ses espaces, 1 à 80 caractères). Helper `resolve_profile(svc, req, res, out)` : lit l'en-tête `X-Gulliver-Profile`, renvoie 400 `profile_required` si absent, 404 `profile_unknown` si inconnu, note `last_used` sinon ; il sera appelé par les routes de données des sous-étapes suivantes, d'où un `[[maybe_unused]]` provisoire. À distinguer de `/gulliver/v1/settings/profiles` (instantanés de réglages), inchangé.
+- **Fichiers** : `dlib/dlib/external/gulliver/host/server.cpp`.
+- **Pourquoi** : permettre à la page de créer et choisir un profil (sans mot de passe) avant d'y ranger ses données.
+- **Étapes** : compilé sans avertissement ; vérifié au `curl` sur un service d'essai : cycle complet créer/lister/renommer/supprimer, nom en double refusé (409 `name_taken`), id inconnu (404 `profile_unknown`). Pas d'incrément de version (bump à la fin du bloc A).
+
 ## 2026-11-17 — Ajouter la table des profils au service (chantier Gulliver, A1)
 
 - **Quoi** : première brique du stockage par profil. Struct `profile` (id opaque, nom unique, created, last_used) et table SQLite `profiles` dans `host/store.{h,cpp}`, avec les méthodes `profiles()` (triées par usage), `find_profile`, `find_profile_by_name`, `put_profile`, `remove_profile`, `touch_profile`. `put_profile` emploie `INSERT … ON CONFLICT(id) DO UPDATE` et non `INSERT OR REPLACE`, pour qu'un nom déjà pris par un autre profil soit refusé au lieu d'effacer ce profil (voir `logs/chantier-gulliver.md`).
