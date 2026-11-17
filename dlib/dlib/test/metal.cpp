@@ -5,6 +5,7 @@
 #include <dlib/data_io/gguf_reader.h>
 #include <mach/mach.h>
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -340,7 +341,7 @@ namespace
             {"tt::tanh",             [&]{ tt::tanh(dest, src); }},
             {"tt::exp",              [&]{ tt::exp(dest, src); }},
             {"tt::softmax_all",      [&]{ tt::softmax_all(dest, src); }},
-            {"tt::gelu_gradient",    [&]{ tt::gelu_gradient(dest, src, other); }},
+            {"tt::mish_gradient",    [&]{ tt::mish_gradient(dest, src, other); }},
             {"tt::affine_transform", [&]{ tt::affine_transform(dest, src, 2, 1); }},
             {"tt::log",              [&]{ tt::log(dest, src); }},
             {"tt::tensor_rand::fill_uniform", [&]{ tt::tensor_rand(1).fill_uniform(dest); }},
@@ -1230,6 +1231,362 @@ namespace
                   << "  ratio float32 / quantized (buffers): " << (double)live_f/live_q << std::endl;
     }
 
+// ----------------------------------------------------------------------------------------
+// Backward passes.  Each gradient is checked twice: against the CPU, and against a centred
+// finite difference of a loss L(x) = sum of w*f(x), computed in double from an exact
+// forward pass, at a few chosen values.  With h = 1e-4*max(1,|x|), the difference is
+// within about h^2*|f'''| (1e-8) of the derivative: the bound 1e-4 + 1e-3*|fd| then
+// measures the float32 rounding of the gradient, and would catch a wrong formula, a wrong
+// index or a gradient left at zero.
+
+    std::vector<double> as_doubles (const tensor& t)
+    {
+        return std::vector<double>(t.host(), t.host() + t.size());
+    }
+
+    std::vector<size_t> chosen (dlib::rand& rnd, size_t n, size_t count = 8)
+    {
+        std::vector<size_t> at;
+        for (size_t i = 0; i < count && n > 0; ++i)
+            at.push_back(rnd.get_random_64bit_number() % n);
+        at.push_back(0);
+        at.push_back(n - 1);
+        return at;
+    }
+
+    template <typename F>
+    void finite_differences (
+        const std::string& op,
+        F loss,
+        std::vector<double> x,
+        const tensor& grad,
+        const std::vector<size_t>& at
+    )
+    {
+        parity& p = parity_table()[op + " vs finite differences"];
+        const float* g = grad.host();
+        for (size_t i : at)
+        {
+            const double x0 = x[i];
+            const double h = 1e-4*std::max(1.0, std::abs(x0));
+            x[i] = x0 + h;
+            const double lp = loss(x);
+            x[i] = x0 - h;
+            const double lm = loss(x);
+            x[i] = x0;
+            const double fd = (lp - lm)/(2*h);
+            const double a = std::abs((double)g[i] - fd);
+            ++p.compared;
+            p.max_abs = std::max(p.max_abs, a);
+            if (std::abs(fd) >= 1e-3)
+                p.max_rel = std::max(p.max_rel, a/std::abs(fd));
+            if (!(a <= 1e-4 + 1e-3*std::abs(fd)))
+            {
+                if (p.failed < 5)
+                    dlog << LERROR << op << ": value " << i << " gradient " << g[i] << " finite difference " << fd;
+                ++p.failed;
+            }
+        }
+        DLIB_TEST_MSG(p.failed == 0, op << ": " << p.failed << " gradients away from the finite differences");
+    }
+
+    double dot (const std::vector<double>& a, const std::vector<double>& b)
+    {
+        double s = 0;
+        for (size_t i = 0; i < a.size(); ++i)
+            s += a[i]*b[i];
+        return s;
+    }
+
+    void test_gradients_activations (dlib::rand& rnd)
+    {
+        for (const std::string op : {"gelu_gradient", "silu_gradient"})
+        {
+            for (float scale : {1.0f, 4.0f})
+            {
+                resizable_tensor x = random_cpu(rnd, 3, 4, 5, 6, scale), w = random_cpu(rnd, 3, 4, 5, 6);
+                resizable_tensor g = random_cpu(rnd, 3, 4, 5, 6);
+                resizable_tensor mx = on_metal(x), mw = on_metal(w), mg = on_metal(g);
+                auto grad = [&](tensor& gg, const tensor& xx, const tensor& ww) {
+                    if (op == "gelu_gradient") tt::gelu_gradient(gg, xx, ww); else tt::silu_gradient(gg, xx, ww);
+                };
+                // Added to grad, then written over grad when grad is gradient_input.
+                grad(g, x, w);
+                grad(mg, mx, mw);
+                check_parity(op, g, mg);
+                resizable_tensor w2(w), mw2 = on_metal(w);
+                grad(w2, x, w2);
+                grad(mw2, mx, mw2);
+                check_parity(op, w2, mw2);
+
+                const std::vector<double> wd = as_doubles(w);
+                auto loss = [&](const std::vector<double>& xv) {
+                    std::vector<double> y(xv.size());
+                    for (size_t i = 0; i < xv.size(); ++i)
+                        y[i] = op == "gelu_gradient" ? 0.5*xv[i]*(1 + std::erf(xv[i]/std::sqrt(2.0)))
+                                                     : xv[i]/(1 + std::exp(-xv[i]));
+                    return dot(y, wd);
+                };
+                finite_differences(op, loss, as_doubles(x), mw2, chosen(rnd, x.size()));
+            }
+        }
+    }
+
+    // The exact softmax of a tensor, in double, along the vectors of a mode.
+    std::vector<double> exact_softmax (const std::vector<double>& x, const shape& s, operation_mode mode)
+    {
+        std::vector<double> y(x.size());
+        const long loc = s.nr*s.nc;
+        auto apply = [&](long base, long count, long step) {
+            double mx = -std::numeric_limits<double>::infinity(), sum = 0;
+            for (long j = 0; j < count; ++j) mx = std::max(mx, x[base + j*step]);
+            for (long j = 0; j < count; ++j) sum += std::exp(x[base + j*step] - mx);
+            for (long j = 0; j < count; ++j) y[base + j*step] = std::exp(x[base + j*step] - mx)/sum;
+        };
+        for (long n = 0; n < s.n; ++n)
+        {
+            if (mode == operation_mode::CHANNEL_WISE)
+                for (long i = 0; i < loc; ++i) apply(n*s.k*loc + i, s.k, loc);
+            else
+                for (long k = 0; k < s.k; ++k)
+                    for (long r = 0; r < s.nr; ++r) apply((n*s.k + k)*loc + r*s.nc, s.nc, 1);
+        }
+        return y;
+    }
+
+    void test_gradients_softmax (dlib::rand& rnd)
+    {
+        for (shape s : {shape{2,5,3,4}, shape{3,1000,1,1}, shape{1,2,7,300}})
+        {
+            for (auto mode : {operation_mode::CHANNEL_WISE, operation_mode::PLANE_WISE})
+            {
+                const std::string op = mode == operation_mode::CHANNEL_WISE ? "softmax_gradient CHANNEL_WISE" : "softmax_gradient PLANE_WISE";
+                resizable_tensor x = random_cpu(rnd, s.n, s.k, s.nr, s.nc, 3), w = random_cpu(rnd, s.n, s.k, s.nr, s.nc);
+                resizable_tensor d(s.n, s.k, s.nr, s.nc);
+                tt::softmax(d, x, mode);
+                resizable_tensor g = random_cpu(rnd, s.n, s.k, s.nr, s.nc);
+                resizable_tensor md = on_metal(d), mw = on_metal(w), mg = on_metal(g);
+                tt::softmax_gradient(g, d, w, mode);
+                tt::softmax_gradient(mg, md, mw, mode);
+                check_parity(op, g, mg);
+                resizable_tensor w2(w), mw2 = on_metal(w);
+                tt::softmax_gradient(w2, d, w2, mode);
+                tt::softmax_gradient(mw2, md, mw2, mode);
+                check_parity(op, w2, mw2);
+
+                const std::vector<double> wd = as_doubles(w);
+                auto loss = [&](const std::vector<double>& xv) { return dot(exact_softmax(xv, s, mode), wd); };
+                finite_differences(op, loss, as_doubles(x), mw2, chosen(rnd, x.size()));
+            }
+        }
+    }
+
+    void exact_layer_norm_d (
+        const std::vector<double>& x, const std::vector<double>& gamma, const std::vector<double>& beta,
+        long n, long d, long plane, double eps, std::vector<double>& y)
+    {
+        y.assign(x.size(), 0);
+        for (long s = 0; s < n; ++s)
+        {
+            double m = 0, v = 0;
+            for (long i = 0; i < d; ++i) m += x[s*d + i];
+            m /= d;
+            for (long i = 0; i < d; ++i) v += (x[s*d + i] - m)*(x[s*d + i] - m);
+            v /= d;
+            const double r = 1/std::sqrt(v + eps);
+            for (long i = 0; i < d; ++i)
+                y[s*d + i] = (x[s*d + i] - m)*r*gamma[i/plane] + beta[i/plane];
+        }
+    }
+
+    void test_gradients_layer_norm (dlib::rand& rnd)
+    {
+        for (shape s : {shape{3,32,1,1}, shape{2,3,1,85}, shape{4,257,1,1}, shape{1,4,16,64}})
+        {
+            const long d = s.k*s.nr*s.nc, plane = s.nr*s.nc;
+            resizable_tensor x = random_cpu(rnd, s.n, s.k, s.nr, s.nc), w = random_cpu(rnd, s.n, s.k, s.nr, s.nc);
+            resizable_tensor gamma = random_cpu(rnd, 1, s.k, 1, 1), beta = random_cpu(rnd, 1, s.k, 1, 1);
+            resizable_tensor y, means, invstds;
+            tt::layer_normalize(1e-5, y, means, invstds, x, gamma, beta);
+            resizable_tensor sg(x), gg(gamma), bg(beta), dm, dv;
+            sg = 0;
+            tt::layer_normalize_gradient(1e-5, w, means, invstds, x, gamma, sg, gg, bg, dm, dv);
+
+            resizable_tensor mx = on_metal(x), mw = on_metal(w), mgamma = on_metal(gamma), mbeta = on_metal(beta);
+            resizable_tensor my, mmeans, minvstds;
+            tt::layer_normalize(1e-5, my, mmeans, minvstds, mx, mgamma, mbeta);
+            resizable_tensor msg = on_metal(sg), mgg = on_metal(gg), mbg = on_metal(bg), mdm, mdv;
+            msg = 0;
+            tt::layer_normalize_gradient(1e-5, mw, mmeans, minvstds, mx, mgamma, msg, mgg, mbg, mdm, mdv);
+
+            // Against the CPU: both sum in float, in their orders; the gap is read against the
+            // size of what the sums gather, the gradients of a sample being sums of d terms.
+            check_parity("layer_normalize_gradient src", sg, msg, 1e-4, 1e-4);
+            check_parity("layer_normalize_gradient gamma", gg, mgg, 1e-4, 1e-4);
+            check_parity("layer_normalize_gradient beta", bg, mbg, 1e-4, 1e-4);
+
+            const std::vector<double> xd = as_doubles(x), gd = as_doubles(gamma), bd = as_doubles(beta), wd = as_doubles(w);
+            std::vector<double> yd;
+            auto loss_x = [&](const std::vector<double>& xv) { exact_layer_norm_d(xv, gd, bd, s.n, d, plane, 1e-5, yd); return dot(yd, wd); };
+            auto loss_g = [&](const std::vector<double>& gv) { exact_layer_norm_d(xd, gv, bd, s.n, d, plane, 1e-5, yd); return dot(yd, wd); };
+            auto loss_b = [&](const std::vector<double>& bv) { exact_layer_norm_d(xd, gd, bv, s.n, d, plane, 1e-5, yd); return dot(yd, wd); };
+            finite_differences("layer_normalize_gradient src", loss_x, xd, msg, chosen(rnd, x.size()));
+            finite_differences("layer_normalize_gradient gamma", loss_g, gd, mgg, chosen(rnd, gamma.size(), 4));
+            finite_differences("layer_normalize_gradient beta", loss_b, bd, mbg, chosen(rnd, beta.size(), 4));
+        }
+    }
+
+    void test_gradients_bias_and_products (dlib::rand& rnd)
+    {
+        // The gradients of add(1, dest, 1, bias): a bias of one sample, and one per channel.
+        for (shape s : {shape{5,3,4,6}, shape{40,7,1,1}, shape{2,64,9,9}})
+        {
+            resizable_tensor gi = random_cpu(rnd, s.n, s.k, s.nr, s.nc), mgi = on_metal(gi);
+            resizable_tensor b1(1, s.k, s.nr, s.nc), mb1 = on_metal(b1), b2(1, s.k, 1, 1), mb2 = on_metal(b2);
+            tt::assign_bias_gradient(b1, gi);
+            tt::assign_bias_gradient(mb1, mgi);
+            tt::assign_conv_bias_gradient(b2, gi);
+            tt::assign_conv_bias_gradient(mb2, mgi);
+            resizable_tensor s1(1, s.k, s.nr, s.nc), s2(1, s.k, 1, 1);
+            tt::assign_bias_gradient(s1, absolute(gi));
+            tt::assign_conv_bias_gradient(s2, absolute(gi));
+            check_gemm_parity("assign_bias_gradient", b1, mb1, s1, s.n);
+            check_gemm_parity("assign_conv_bias_gradient", b2, mb2, s2, s.n*s.nr*s.nc);
+
+            resizable_tensor x = random_cpu(rnd, s.n, s.k, s.nr, s.nc);
+            const std::vector<double> xd = as_doubles(x), wd = as_doubles(gi);
+            auto loss1 = [&](const std::vector<double>& bv) {
+                double l = 0;
+                for (size_t i = 0; i < xd.size(); ++i) l += wd[i]*(xd[i] + bv[i % bv.size()]);
+                return l;
+            };
+            auto loss2 = [&](const std::vector<double>& bv) {
+                double l = 0;
+                for (size_t i = 0; i < xd.size(); ++i) l += wd[i]*(xd[i] + bv[(i/(s.nr*s.nc)) % s.k]);
+                return l;
+            };
+            finite_differences("assign_bias_gradient", loss1, as_doubles(b1), mb1, chosen(rnd, b1.size(), 4));
+            finite_differences("assign_conv_bias_gradient", loss2, as_doubles(b2), mb2, chosen(rnd, b2.size(), 4));
+        }
+
+        // The gradients of a product C = A*B are products: dA = W*trans(B), dB = trans(A)*W.
+        for (auto dims : std::vector<std::array<long,3>>{{7,5,3}, {64,33,17}, {128,256,96}})
+        {
+            const long m = dims[0], kk = dims[1], n = dims[2];
+            resizable_tensor a = random_cpu(rnd, m, kk, 1, 1), b = random_cpu(rnd, kk, n, 1, 1), w = random_cpu(rnd, m, n, 1, 1);
+            resizable_tensor da(m, kk), db(kk, n), sa(m, kk), sb(kk, n);
+            tt::gemm(0, da, 1, w, false, b, true);
+            tt::gemm(0, db, 1, a, true, w, false);
+            tt::gemm(0, sa, 1, absolute(w), false, absolute(b), true);
+            tt::gemm(0, sb, 1, absolute(a), true, absolute(w), false);
+            resizable_tensor ma = on_metal(a), mb = on_metal(b), mw = on_metal(w), mda = on_metal(da), mdb = on_metal(db);
+            tt::gemm(0, mda, 1, mw, false, mb, true);
+            tt::gemm(0, mdb, 1, ma, true, mw, false);
+            check_gemm_parity("gemm gradient", da, mda, sa, n);
+            check_gemm_parity("gemm gradient", db, mdb, sb, m);
+            const std::vector<double> ad = as_doubles(a), bd = as_doubles(b), wd = as_doubles(w);
+            auto product_loss = [&](const std::vector<double>& av, const std::vector<double>& bv) {
+                double l = 0;
+                for (long i = 0; i < m; ++i)
+                    for (long j = 0; j < n; ++j)
+                    {
+                        double c = 0;
+                        for (long t = 0; t < kk; ++t) c += av[i*kk + t]*bv[t*n + j];
+                        l += wd[i*n + j]*c;
+                    }
+                return l;
+            };
+            finite_differences("gemm gradient", [&](const std::vector<double>& av) { return product_loss(av, bd); }, ad, mda, chosen(rnd, a.size(), 4));
+            finite_differences("gemm gradient", [&](const std::vector<double>& bv) { return product_loss(ad, bv); }, bd, mdb, chosen(rnd, b.size(), 4));
+        }
+
+        // The gradient of a product by a factor shared by the samples: a sum over them.
+        resizable_tensor a = random_cpu(rnd, 6, 3, 4, 5), b = random_cpu(rnd, 1, 3, 4, 5), w = random_cpu(rnd, 6, 3, 4, 5);
+        resizable_tensor db(1, 3, 4, 5), mdb = on_metal(db);
+        tt::multiply(false, db, w, a);
+        tt::multiply(false, mdb, on_metal(w), on_metal(a));
+        check_parity("multiply gradient", db, mdb);
+        const std::vector<double> ad = as_doubles(a), wd = as_doubles(w);
+        auto loss = [&](const std::vector<double>& bv) {
+            double l = 0;
+            for (size_t i = 0; i < ad.size(); ++i) l += wd[i]*ad[i]*bv[i % bv.size()];
+            return l;
+        };
+        finite_differences("multiply gradient", loss, as_doubles(b), mdb, chosen(rnd, b.size(), 4));
+    }
+
+    // The attention of exact_attention(), on doubles: planes of tq queries, tk keys.
+    void exact_attention_d (
+        const std::vector<double>& q, const std::vector<double>& k, const std::vector<double>& v,
+        long planes, long tq, long tk, long d, long dv, double scale, bool causal, std::vector<double>& out)
+    {
+        out.assign(planes*tq*dv, 0);
+        std::vector<double> s(tk);
+        for (long p = 0; p < planes; ++p)
+            for (long i = 0; i < tq; ++i)
+            {
+                double mx = -std::numeric_limits<double>::infinity();
+                for (long j = 0; j < tk; ++j)
+                {
+                    if (causal && j > i + tk - tq) { s[j] = -std::numeric_limits<double>::infinity(); continue; }
+                    double dt = 0;
+                    for (long c = 0; c < d; ++c) dt += q[(p*tq + i)*d + c]*k[(p*tk + j)*d + c];
+                    s[j] = scale*dt;
+                    mx = std::max(mx, s[j]);
+                }
+                double sum = 0;
+                for (long j = 0; j < tk; ++j) { s[j] = std::isinf(s[j]) ? 0 : std::exp(s[j] - mx); sum += s[j]; }
+                for (long c = 0; c < dv; ++c)
+                {
+                    double acc = 0;
+                    for (long j = 0; j < tk; ++j) acc += s[j]/sum*v[(p*tk + j)*dv + c];
+                    out[(p*tq + i)*dv + c] = acc;
+                }
+            }
+    }
+
+    void test_gradients_attention (dlib::rand& rnd)
+    {
+        struct form { long batch, heads, tq, tk, d, dv; };
+        for (form f : {form{1,1,4,4,8,8}, form{2,3,17,17,16,16}, form{1,2,5,33,32,24}, form{2,4,64,64,32,32}})
+        {
+            for (bool causal : {false, true})
+            {
+                resizable_tensor q = random_cpu(rnd, f.batch, f.heads, f.tq, f.d);
+                resizable_tensor k = random_cpu(rnd, f.batch, f.heads, f.tk, f.d);
+                resizable_tensor v = random_cpu(rnd, f.batch, f.heads, f.tk, f.dv);
+                resizable_tensor w = random_cpu(rnd, f.batch, f.heads, f.tq, f.dv);
+                const float scale = 1/std::sqrt((float)f.d);
+                // The gradients are added to: both sides start from the same values.
+                resizable_tensor qg = random_cpu(rnd, f.batch, f.heads, f.tq, f.d);
+                resizable_tensor kg = random_cpu(rnd, f.batch, f.heads, f.tk, f.d);
+                resizable_tensor vg = random_cpu(rnd, f.batch, f.heads, f.tk, f.dv);
+                resizable_tensor mqg = on_metal(qg), mkg = on_metal(kg), mvg = on_metal(vg);
+                resizable_tensor mq = on_metal(q), mk = on_metal(k), mv = on_metal(v), mw = on_metal(w);
+                tt::attention_gradient(w, q, k, v, scale, causal, qg, kg, vg);
+                tt::attention_gradient(mw, mq, mk, mv, scale, causal, mqg, mkg, mvg);
+                const std::string op = causal ? "attention_gradient causal" : "attention_gradient";
+                check_parity(op, qg, mqg, 1e-5, 1e-4);
+                check_parity(op, kg, mkg, 1e-5, 1e-4);
+                check_parity(op, vg, mvg, 1e-5, 1e-4);
+
+                // For the finite differences, the gradients alone, without their start values.
+                resizable_tensor gq = on_metal(q), gk = on_metal(k), gv = on_metal(v);
+                gq = 0; gk = 0; gv = 0;
+                tt::attention_gradient(mw, mq, mk, mv, scale, causal, gq, gk, gv);
+                const std::vector<double> qd = as_doubles(q), kd = as_doubles(k), vd = as_doubles(v), wd = as_doubles(w);
+                auto loss = [&](const std::vector<double>& qv, const std::vector<double>& kv, const std::vector<double>& vv) {
+                    std::vector<double> out;
+                    exact_attention_d(qv, kv, vv, f.batch*f.heads, f.tq, f.tk, f.d, f.dv, scale, causal, out);
+                    return dot(out, wd);
+                };
+                finite_differences(op, [&](const std::vector<double>& x) { return loss(x, kd, vd); }, qd, gq, chosen(rnd, q.size(), 6));
+                finite_differences(op, [&](const std::vector<double>& x) { return loss(qd, x, vd); }, kd, gk, chosen(rnd, k.size(), 6));
+                finite_differences(op, [&](const std::vector<double>& x) { return loss(qd, kd, x); }, vd, gv, chosen(rnd, v.size(), 6));
+            }
+        }
+    }
+
     void report_parity ()
     {
         for (auto& e : parity_table())
@@ -1285,6 +1642,11 @@ namespace
             test_parity_layer_norm(rnd);
             test_parity_attention(rnd);
             test_parity_gguf(rnd);
+            test_gradients_activations(rnd);
+            test_gradients_softmax(rnd);
+            test_gradients_layer_norm(rnd);
+            test_gradients_bias_and_products(rnd);
+            test_gradients_attention(rnd);
             report_parity();
             bench_gemm(rnd);
             measure_gguf_memory(rnd);

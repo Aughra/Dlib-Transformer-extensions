@@ -3181,6 +3181,35 @@ namespace dlib { namespace tt
               there (tt::gemm, tt::add, tt::softmax).  dest, when empty, takes that device.
     !*/
 
+    void attention_gradient (
+        const tensor& gradient_input,
+        const tensor& q,
+        const tensor& k,
+        const tensor& v,
+        float scale,
+        bool causal,
+        tensor& q_grad,
+        tensor& k_grad,
+        tensor& v_grad
+    );
+    /*!
+        requires
+            - q, k, v, scale and causal as given to attention(dest, q, k, v, scale, causal)
+            - have_same_dimensions(gradient_input, dest) of that call
+            - have_same_dimensions(q_grad, q), have_same_dimensions(k_grad, k),
+              have_same_dimensions(v_grad, v)
+            - every tensor is on the device of q
+        ensures
+            - The backward pass of attention(): with P the softmax of the masked scores and
+              dP = gradient_input * trans(V), it adds to the gradients
+                - v_grad += trans(P) * gradient_input
+                - q_grad += scale * dS * K
+                - k_grad += scale * trans(dS) * Q
+              where dS is the gradient of the softmax (softmax_gradient() of P and dP).  The
+              masked scores get no gradient: their probabilities are 0.
+            - The scores are computed again, on the device of q.
+    !*/
+
 // ----------------------------------------------------------------------------------------
 
     void gguf_matvec (

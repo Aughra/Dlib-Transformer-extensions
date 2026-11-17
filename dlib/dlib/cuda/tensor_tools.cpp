@@ -357,7 +357,8 @@ namespace dlib { namespace tt
         operation_mode mode
     )
     {
-        DLIB_METAL_TRY(gemm(beta, dest, alpha, lhs, trans_lhs, rhs, trans_rhs, mode), "gemm", dest, lhs, rhs);
+        DLIB_METAL_TRY(gemm(beta, dest, alpha, lhs, trans_lhs, rhs, trans_rhs, mode), "gemm",
+            dest, lhs, rhs);
 #ifdef DLIB_USE_CUDA
         cuda::gemm(beta, dest, alpha, lhs, trans_lhs, rhs, trans_rhs, mode);
 #else
@@ -935,7 +936,8 @@ namespace dlib { namespace tt
         const tensor& beta
     )
     {
-        DLIB_METAL_TRY(layer_normalize(eps, dest, means, vars, src, gamma, beta), "layer_normalize", dest, means, vars, src, gamma, beta);
+        DLIB_METAL_TRY(layer_normalize(eps, dest, means, vars, src, gamma, beta), "layer_normalize",
+            dest, means, vars, src, gamma, beta);
 #ifdef DLIB_USE_CUDA
         cuda::layer_normalize(eps, dest, means, vars, src, gamma, beta);
 #else
@@ -958,7 +960,9 @@ namespace dlib { namespace tt
             resizable_tensor& dvars
     )
     {
-        DLIB_METAL_UNPORTED("layer_normalize_gradient", gradient_input, means, invstds, src, gamma, src_grad, gamma_grad, beta_grad, dmeans, dvars);
+        DLIB_METAL_TRY(layer_normalize_gradient(eps, gradient_input, means, invstds, src, gamma, src_grad,
+            gamma_grad, beta_grad, dmeans, dvars), "layer_normalize_gradient", gradient_input, means, invstds,
+            src, gamma, src_grad, gamma_grad, beta_grad, dmeans, dvars);
 #ifdef DLIB_USE_CUDA
         cuda::layer_normalize_gradient(eps, gradient_input, means, invstds, src, gamma, src_grad, gamma_grad, beta_grad, dmeans, dvars);
 #else
@@ -1083,7 +1087,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
-        DLIB_METAL_UNPORTED("assign_conv_bias_gradient", grad, gradient_input);
+        DLIB_METAL_TRY(assign_conv_bias_gradient(grad,gradient_input), "assign_conv_bias_gradient", grad, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::assign_conv_bias_gradient(grad,gradient_input);
 #else
@@ -1099,7 +1103,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
-        DLIB_METAL_UNPORTED("assign_bias_gradient", grad, gradient_input);
+        DLIB_METAL_TRY(assign_bias_gradient(grad,gradient_input), "assign_bias_gradient", grad, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::assign_bias_gradient(grad,gradient_input);
 #else
@@ -1132,7 +1136,7 @@ namespace dlib { namespace tt
         operation_mode mode
     )
     {
-        DLIB_METAL_UNPORTED("softmax_gradient", grad, dest, gradient_input);
+        DLIB_METAL_TRY(softmax_gradient(grad, dest, gradient_input, mode), "softmax_gradient", grad, dest, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::softmax_gradient(grad, dest, gradient_input, mode);
 #else
@@ -1451,7 +1455,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
-        DLIB_METAL_UNPORTED("gelu_gradient", grad, src, gradient_input);
+        DLIB_METAL_TRY(gelu_gradient(grad, src, gradient_input), "gelu_gradient", grad, src, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::gelu_gradient(grad, src, gradient_input);
 #else
@@ -1517,7 +1521,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
-        DLIB_METAL_UNPORTED("silu_gradient", grad, src, gradient_input);
+        DLIB_METAL_TRY(silu_gradient(grad, src, gradient_input), "silu_gradient", grad, src, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::silu_gradient(grad, src, gradient_input);
 #else
@@ -2133,6 +2137,59 @@ namespace dlib { namespace tt
         gemm(0, dest, 1, scores, false, v, false, operation_mode::PLANE_WISE);
     }
 
+    void attention_gradient (
+        const tensor& gradient_input,
+        const tensor& q,
+        const tensor& k,
+        const tensor& v,
+        float scale,
+        bool causal,
+        tensor& q_grad,
+        tensor& k_grad,
+        tensor& v_grad
+    )
+    {
+        DLIB_CASSERT(q.num_samples() == k.num_samples() && k.num_samples() == v.num_samples());
+        DLIB_CASSERT(q.k() == k.k() && k.k() == v.k());
+        DLIB_CASSERT(q.nc() == k.nc() && k.nr() == v.nr());
+        DLIB_CASSERT(!causal || q.nr() <= k.nr());
+        DLIB_CASSERT(gradient_input.num_samples() == q.num_samples() && gradient_input.k() == q.k() &&
+                     gradient_input.nr() == q.nr() && gradient_input.nc() == v.nc());
+        DLIB_CASSERT(have_same_dimensions(q_grad, q) && have_same_dimensions(k_grad, k) &&
+                     have_same_dimensions(v_grad, v));
+        const tensor_device device = q.get_tensor_device();
+        DLIB_CASSERT(k.get_tensor_device() == device && v.get_tensor_device() == device,
+            "tt::attention_gradient takes q, k and v on one device");
+
+        // The probabilities of the forward pass, computed again.
+        resizable_tensor probs;
+        probs.set_tensor_device(device);
+        probs.set_size(q.num_samples(), q.k(), q.nr(), k.nr());
+        gemm(0, probs, scale, q, false, k, true, operation_mode::PLANE_WISE);
+        if (causal)
+        {
+            resizable_tensor mask(1, 1, q.nr(), k.nr());
+            const long shift = k.nr() - q.nr();
+            float* m = mask.host();
+            for (long i = 0; i < q.nr(); ++i)
+                for (long j = 0; j < k.nr(); ++j)
+                    m[i*k.nr() + j] = j <= i + shift ? 0.0f : -std::numeric_limits<float>::infinity();
+            mask.set_tensor_device(device);
+            add(1, probs, 1, mask);
+        }
+        softmax(probs, probs, operation_mode::PLANE_WISE);
+
+        // v_grad += trans(P)*dO, then dP = dO*trans(V), dS in place, and the two products.
+        gemm(1, v_grad, 1, probs, true, gradient_input, false, operation_mode::PLANE_WISE);
+        resizable_tensor dscores;
+        dscores.set_tensor_device(device);
+        dscores.copy_size(probs);
+        gemm(0, dscores, 1, gradient_input, false, v, true, operation_mode::PLANE_WISE);
+        softmax_gradient(dscores, probs, dscores, operation_mode::PLANE_WISE);
+        gemm(1, q_grad, scale, dscores, false, k, false, operation_mode::PLANE_WISE);
+        gemm(1, k_grad, scale, dscores, true, q, false, operation_mode::PLANE_WISE);
+    }
+
 // ----------------------------------------------------------------------------------------
 
     void gguf_matvec (
@@ -2145,7 +2202,8 @@ namespace dlib { namespace tt
         size_t row_bytes
     )
     {
-        DLIB_METAL_TRY(gguf_matvec(dest, src, weights, type, rows, cols, row_bytes), "gguf_matvec", dest, src, weights);
+        DLIB_METAL_TRY(gguf_matvec(dest, src, weights, type, rows, cols, row_bytes), "gguf_matvec",
+            dest, src, weights);
 #ifdef DLIB_USE_CUDA
         cuda::gguf_matvec(dest, src, weights, type, rows, cols, row_bytes);
 #else

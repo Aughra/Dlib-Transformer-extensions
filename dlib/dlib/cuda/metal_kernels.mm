@@ -470,6 +470,296 @@ kernel void gguf_matvec_q8_0 (
 {
     matvec_rows<34>(y, x, w, p, r, lane);
 }
+// ----------------------------------------------------------------------------------------
+// Backward passes.  As on the CPU, a gradient is written over when grad is the same tensor
+// as gradient_input, and added to grad otherwise (p.assign).
+
+struct softmax_grad_params
+{
+    uint samples, channels, locations, nr, nc;
+    uint assign;
+};
+
+kernel void softmax_gradient_channels (
+    device float* g                    [[buffer(0)]],
+    device const float* d              [[buffer(1)]],
+    device const float* in             [[buffer(2)]],
+    constant softmax_grad_params& p    [[buffer(3)]],
+    uint t                             [[thread_position_in_grid]])
+{
+    if (t >= p.samples*p.locations)
+        return;
+    const uint base = (t / p.locations)*p.locations*p.channels + t % p.locations;
+    const uint step = p.locations;
+    float sum = 0.0f;
+    for (uint k = 0; k < p.channels; ++k)
+        sum += -d[base + k*step]*in[base + k*step];
+    for (uint k = 0; k < p.channels; ++k)
+    {
+        const uint i = base + k*step;
+        const float v = d[i]*(sum + in[i]);
+        if (p.assign)
+            g[i] = v;
+        else
+            g[i] += v;
+    }
+}
+
+kernel void softmax_gradient_rows (
+    device float* g                    [[buffer(0)]],
+    device const float* d              [[buffer(1)]],
+    device const float* in             [[buffer(2)]],
+    constant softmax_grad_params& p    [[buffer(3)]],
+    uint t                             [[thread_position_in_grid]])
+{
+    if (t >= p.samples*p.channels*p.nr)
+        return;
+    const uint base = t*p.nc;
+    float sum = 0.0f;
+    for (uint c = 0; c < p.nc; ++c)
+        sum += -d[base + c]*in[base + c];
+    for (uint c = 0; c < p.nc; ++c)
+    {
+        const float v = d[base + c]*(sum + in[base + c]);
+        if (p.assign)
+            g[base + c] = v;
+        else
+            g[base + c] += v;
+    }
+}
+
+struct act_grad_params
+{
+    uint count;
+    uint assign;
+};
+
+// d/dx of x*Phi(x): Phi(x) + x*phi(x), the formula of the CPU.
+kernel void gelu_gradient (
+    device float* g                    [[buffer(0)]],
+    device const float* s              [[buffer(1)]],
+    device const float* in             [[buffer(2)]],
+    constant act_grad_params& p        [[buffer(3)]],
+    uint i                             [[thread_position_in_grid]])
+{
+    if (i >= p.count)
+        return;
+    const float x = s[i];
+    const float cdf = 0.5f*(1.0f + erf_as(x*M_SQRT1_2_F));
+    const float pdf = 0.3989422804014327f*exp(-0.5f*x*x);   // 1/sqrt(2*pi)
+    const float v = in[i]*(cdf + x*pdf);
+    if (p.assign)
+        g[i] = v;
+    else
+        g[i] += v;
+}
+
+kernel void silu_gradient (
+    device float* g                    [[buffer(0)]],
+    device const float* s              [[buffer(1)]],
+    device const float* in             [[buffer(2)]],
+    constant act_grad_params& p        [[buffer(3)]],
+    uint i                             [[thread_position_in_grid]])
+{
+    if (i >= p.count)
+        return;
+    const float x = s[i];
+    const float sig = 1.0f/(1.0f + exp(-x));
+    const float v = in[i]*(sig*(1.0f + x*(1.0f - sig)));
+    if (p.assign)
+        g[i] = v;
+    else
+        g[i] += v;
+}
+
+struct bias_grad_params
+{
+    uint size;       // the values of one sample
+    uint samples;
+};
+
+// grad[i] = the sum over the samples of gradient_input, in the order of the CPU.
+kernel void bias_gradient (
+    device float* g                    [[buffer(0)]],
+    device const float* in             [[buffer(1)]],
+    constant bias_grad_params& p       [[buffer(2)]],
+    uint i                             [[thread_position_in_grid]])
+{
+    if (i >= p.size)
+        return;
+    float acc = in[i];
+    for (uint n = 1; n < p.samples; ++n)
+        acc += in[(size_t)n*p.size + i];
+    g[i] = acc;
+}
+
+struct channel_sum_params
+{
+    uint samples, channels, plane;
+};
+
+// grad[k] = the sum of gradient_input over the samples and the plane of channel k: a
+// threadgroup per channel.
+kernel void conv_bias_gradient (
+    device float* g                    [[buffer(0)]],
+    device const float* in             [[buffer(1)]],
+    constant channel_sum_params& p     [[buffer(2)]],
+    uint k                             [[threadgroup_position_in_grid]],
+    uint tid                           [[thread_index_in_threadgroup]],
+    uint width                         [[threads_per_threadgroup]],
+    uint lane                          [[thread_index_in_simdgroup]],
+    uint simd                          [[simdgroup_index_in_threadgroup]],
+    uint simds                         [[simdgroups_per_threadgroup]])
+{
+    threadgroup float part[32];
+    float a = 0;
+    const uint per_channel = p.samples*p.plane;
+    for (uint j = tid; j < per_channel; j += width)
+    {
+        const uint n = j / p.plane, i = j % p.plane;
+        a += in[((size_t)n*p.channels + k)*p.plane + i];
+    }
+    a = simd_sum(a);
+    if (lane == 0)
+        part[simd] = a;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tid == 0)
+    {
+        float s = 0;
+        for (uint q = 0; q < simds; ++q)
+            s += part[q];
+        g[k] = s;
+    }
+}
+
+// Layer normalization, backward: per sample, dvars and dmeans; per channel, gamma_grad and
+// beta_grad; per value, src_grad += ..., with the formulas of the CPU.
+kernel void layer_norm_grad_stats (
+    device const float* gi             [[buffer(0)]],
+    device const float* s              [[buffer(1)]],
+    device const float* means          [[buffer(2)]],
+    device const float* invstds        [[buffer(3)]],
+    device const float* gamma          [[buffer(4)]],
+    device float* dmeans               [[buffer(5)]],
+    device float* dvars                [[buffer(6)]],
+    constant layer_norm_params& p      [[buffer(7)]],
+    uint n                             [[threadgroup_position_in_grid]],
+    uint tid                           [[thread_index_in_threadgroup]],
+    uint width                         [[threads_per_threadgroup]],
+    uint lane                          [[thread_index_in_simdgroup]],
+    uint simd                          [[simdgroup_index_in_threadgroup]],
+    uint simds                         [[simdgroups_per_threadgroup]])
+{
+    threadgroup float part_dx[32];
+    threadgroup float part_dxc[32];
+    threadgroup float part_c[32];
+    const float m = means[n];
+    const size_t base = (size_t)n*p.per_sample;
+    float a = 0, b = 0, c = 0;
+    for (uint i = tid; i < p.per_sample; i += width)
+    {
+        const float dx = gi[base + i]*gamma[i / p.plane];
+        const float xc = s[base + i] - m;
+        a += dx;
+        b += dx*xc;
+        c += xc;
+    }
+    a = simd_sum(a);
+    b = simd_sum(b);
+    c = simd_sum(c);
+    if (lane == 0)
+    {
+        part_dx[simd] = a;
+        part_dxc[simd] = b;
+        part_c[simd] = c;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tid == 0)
+    {
+        float sa = 0, sb = 0, sc = 0;
+        for (uint q = 0; q < simds; ++q)
+        {
+            sa += part_dx[q];
+            sb += part_dxc[q];
+            sc += part_c[q];
+        }
+        const float r = invstds[n];
+        const float invstd_pow = -0.5f*r*r*r;
+        const float invnum = 1.0f/p.per_sample;
+        const float dv = sb*invstd_pow;
+        dvars[n] = dv;
+        dmeans[n] = -r*sa + dv*-2.0f*sc*invnum;
+    }
+}
+
+kernel void layer_norm_grad_params (
+    device const float* gi             [[buffer(0)]],
+    device const float* s              [[buffer(1)]],
+    device const float* means          [[buffer(2)]],
+    device const float* invstds        [[buffer(3)]],
+    device float* gamma_grad           [[buffer(4)]],
+    device float* beta_grad            [[buffer(5)]],
+    constant layer_norm_params& p      [[buffer(6)]],
+    uint k                             [[threadgroup_position_in_grid]],
+    uint tid                           [[thread_index_in_threadgroup]],
+    uint width                         [[threads_per_threadgroup]],
+    uint lane                          [[thread_index_in_simdgroup]],
+    uint simd                          [[simdgroup_index_in_threadgroup]],
+    uint simds                         [[simdgroups_per_threadgroup]])
+{
+    threadgroup float part_g[32];
+    threadgroup float part_b[32];
+    const uint per_channel = p.samples*p.plane;
+    float a = 0, b = 0;
+    for (uint j = tid; j < per_channel; j += width)
+    {
+        const uint n = j / p.plane, i = j % p.plane;
+        const size_t idx = (size_t)n*p.per_sample + (size_t)k*p.plane + i;
+        const float x_hat = (s[idx] - means[n])*invstds[n];
+        a += gi[idx]*x_hat;
+        b += gi[idx];
+    }
+    a = simd_sum(a);
+    b = simd_sum(b);
+    if (lane == 0)
+    {
+        part_g[simd] = a;
+        part_b[simd] = b;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tid == 0)
+    {
+        float sg = 0, sb = 0;
+        for (uint q = 0; q < simds; ++q)
+        {
+            sg += part_g[q];
+            sb += part_b[q];
+        }
+        gamma_grad[k] = sg;
+        beta_grad[k] = sb;
+    }
+}
+
+kernel void layer_norm_grad_src (
+    device float* src_grad             [[buffer(0)]],
+    device const float* gi             [[buffer(1)]],
+    device const float* s              [[buffer(2)]],
+    device const float* means          [[buffer(3)]],
+    device const float* invstds        [[buffer(4)]],
+    device const float* gamma          [[buffer(5)]],
+    device const float* dmeans         [[buffer(6)]],
+    device const float* dvars          [[buffer(7)]],
+    constant layer_norm_params& p      [[buffer(8)]],
+    uint i                             [[thread_position_in_grid]])
+{
+    if (i >= p.samples*p.per_sample)
+        return;
+    const uint n = i / p.per_sample;
+    const uint k = (i % p.per_sample) / p.plane;
+    const float invnum = 1.0f/p.per_sample;
+    const float dx = gi[i]*gamma[k];
+    src_grad[i] += dx*invstds[n] + dvars[n]*2*(s[i] - means[n])*invnum + dmeans[n]*invnum;
+}
 )METAL";
 
             /*
@@ -1018,6 +1308,172 @@ kernel void gguf_matvec_q8_0 (
             as_index(src.size(), "gguf_matvec");
             run(type == gguf_blocks::q4_0 ? "gguf_matvec_q4_0" : "gguf_matvec_q8_0", rows,
                 {out(dest), in(src), in(weights)}, &p, sizeof(p), 32);
+        }
+
+    // ------------------------------------------------------------------------------------
+    // Backward passes
+
+        void softmax_gradient (
+            tensor& grad,
+            const tensor& dest,
+            const tensor& gradient_input,
+            operation_mode mode
+        )
+        {
+            DLIB_CASSERT(have_same_dimensions(grad, dest) && have_same_dimensions(grad, gradient_input));
+            if (mode != operation_mode::CHANNEL_WISE && mode != operation_mode::PLANE_WISE)
+                throw metal_error("Metal backend of dlib: tt::softmax_gradient takes CHANNEL_WISE or PLANE_WISE.");
+            as_index(grad.size(), "softmax_gradient");
+            if (grad.size() == 0)
+                return;
+            struct
+            {
+                uint32_t samples, channels, locations, nr, nc;
+                uint32_t assign;
+            } p = {(uint32_t)grad.num_samples(), (uint32_t)grad.k(), (uint32_t)(grad.nr()*grad.nc()),
+                   (uint32_t)grad.nr(), (uint32_t)grad.nc(), is_same_object(grad, gradient_input) ? 1u : 0u};
+            if (mode == operation_mode::CHANNEL_WISE)
+                run("softmax_gradient_channels", (size_t)p.samples*p.locations, {out(grad), in(dest), in(gradient_input)}, &p, sizeof(p));
+            else
+                run("softmax_gradient_rows", (size_t)p.samples*p.channels*p.nr, {out(grad), in(dest), in(gradient_input)}, &p, sizeof(p));
+        }
+
+        namespace
+        {
+            void activation_gradient (
+                const char* kernel,
+                const char* op,
+                tensor& grad,
+                const tensor& src,
+                const tensor& gradient_input
+            )
+            {
+                DLIB_CASSERT(have_same_dimensions(src, gradient_input) && have_same_dimensions(src, grad));
+                struct
+                {
+                    uint32_t count, assign;
+                } p = {as_index(src.size(), op), is_same_object(grad, gradient_input) ? 1u : 0u};
+                run(kernel, p.count, {out(grad), in(src), in(gradient_input)}, &p, sizeof(p));
+            }
+        }
+
+        void gelu_gradient (
+            tensor& grad,
+            const tensor& src,
+            const tensor& gradient_input
+        )
+        {
+            activation_gradient("gelu_gradient", "gelu_gradient", grad, src, gradient_input);
+        }
+
+        void silu_gradient (
+            tensor& grad,
+            const tensor& src,
+            const tensor& gradient_input
+        )
+        {
+            activation_gradient("silu_gradient", "silu_gradient", grad, src, gradient_input);
+        }
+
+        void assign_bias_gradient (
+            tensor& grad,
+            const tensor& gradient_input
+        )
+        {
+            DLIB_CASSERT(
+                  grad.num_samples() == 1 &&
+                  gradient_input.k() == grad.k() &&
+                  gradient_input.nr() == grad.nr() &&
+                  gradient_input.nc() == grad.nc() &&
+                  gradient_input.size() > 0);
+            if (overlap(grad, gradient_input))
+                throw metal_error("Metal backend of dlib: tt::assign_bias_gradient was given a grad that "
+                    "overlaps gradient_input.");
+            struct
+            {
+                uint32_t size, samples;
+            } p = {as_index(grad.size(), "assign_bias_gradient"), (uint32_t)gradient_input.num_samples()};
+            as_index(gradient_input.size(), "assign_bias_gradient");
+            run("bias_gradient", p.size, {out(grad), in(gradient_input)}, &p, sizeof(p));
+        }
+
+        void assign_conv_bias_gradient (
+            tensor& grad,
+            const tensor& gradient_input
+        )
+        {
+            DLIB_CASSERT(
+                  grad.num_samples() == 1 &&
+                  grad.k()  >= 1 &&
+                  grad.nr() == 1 &&
+                  grad.nc() == 1 &&
+                  gradient_input.k() == grad.k() &&
+                  gradient_input.size() > 0 &&
+                  is_same_object(grad,gradient_input) == false);
+            if (overlap(grad, gradient_input))
+                throw metal_error("Metal backend of dlib: tt::assign_conv_bias_gradient was given a grad "
+                    "that overlaps gradient_input.");
+            struct
+            {
+                uint32_t samples, channels, plane;
+            } p = {(uint32_t)gradient_input.num_samples(), (uint32_t)gradient_input.k(),
+                   (uint32_t)(gradient_input.nr()*gradient_input.nc())};
+            as_index(gradient_input.size(), "assign_conv_bias_gradient");
+            const size_t per_channel = (size_t)p.samples*p.plane;
+            const size_t width = std::min<size_t>(256, (per_channel + 31)/32*32);
+            run("conv_bias_gradient", p.channels, {out(grad), in(gradient_input)}, &p, sizeof(p), width);
+        }
+
+        void layer_normalize_gradient (
+            const double eps,
+            const tensor& gradient_input,
+            const tensor& means,
+            const tensor& invstds,
+            const tensor& src,
+            const tensor& gamma,
+            tensor& src_grad,
+            tensor& gamma_grad,
+            tensor& beta_grad,
+            resizable_tensor& dmeans,
+            resizable_tensor& dvars
+        )
+        {
+            DLIB_CASSERT(src.num_samples() == (long long)means.size());
+            DLIB_CASSERT(src.num_samples() == (long long)invstds.size());
+            DLIB_CASSERT(have_same_dimensions(gamma, gamma_grad));
+            DLIB_CASSERT(have_same_dimensions(gamma_grad, beta_grad));
+            DLIB_CASSERT(gamma.k() == src.k());
+            DLIB_CASSERT(gamma.nr() == 1);
+            DLIB_CASSERT(gamma.nc() == 1);
+            DLIB_CASSERT(have_same_dimensions(gradient_input, src));
+            DLIB_CASSERT(have_same_dimensions(gradient_input, src_grad));
+            DLIB_CASSERT(eps > 0);
+            if (gamma.num_samples() != 1)
+                throw metal_error("Metal backend of dlib: tt::layer_normalize_gradient takes a gamma of one sample.");
+            adopt(dmeans);
+            adopt(dvars);
+            dvars.copy_size(invstds);
+            dmeans.copy_size(means);
+            if (src.size() == 0)
+                return;
+            struct
+            {
+                uint32_t samples, per_sample, plane;
+                float eps;
+            } p = {(uint32_t)src.num_samples(), as_index(src.size()/src.num_samples(), "layer_normalize_gradient"),
+                   (uint32_t)(src.nr()*src.nc()), (float)eps};
+            as_index(src.size(), "layer_normalize_gradient");
+            const size_t width = std::min<size_t>(256, (p.per_sample + 31)/32*32);
+            run("layer_norm_grad_stats", p.samples,
+                {in(gradient_input), in(src), in(means), in(invstds), in(gamma), out(dmeans), out(dvars)},
+                &p, sizeof(p), width);
+            const size_t per_channel = (size_t)p.samples*p.plane;
+            run("layer_norm_grad_params", src.k(),
+                {in(gradient_input), in(src), in(means), in(invstds), out(gamma_grad), out(beta_grad)},
+                &p, sizeof(p), std::min<size_t>(256, (per_channel + 31)/32*32));
+            run("layer_norm_grad_src", src.size(),
+                {out(src_grad), in(gradient_input), in(src), in(means), in(invstds), in(gamma), in(dmeans), in(dvars)},
+                &p, sizeof(p));
         }
     }
 }

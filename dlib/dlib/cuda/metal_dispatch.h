@@ -105,6 +105,18 @@ namespace dlib
                               const tensor& beta);
         void gguf_matvec (tensor& dest, const tensor& src, const tensor& weights, int type, long rows,
                           long cols, size_t row_bytes);
+
+        // Backward passes.
+        void softmax_gradient (tensor& grad, const tensor& dest, const tensor& gradient_input,
+                               operation_mode mode);
+        void gelu_gradient (tensor& grad, const tensor& src, const tensor& gradient_input);
+        void silu_gradient (tensor& grad, const tensor& src, const tensor& gradient_input);
+        void assign_bias_gradient (tensor& grad, const tensor& gradient_input);
+        void assign_conv_bias_gradient (tensor& grad, const tensor& gradient_input);
+        void layer_normalize_gradient (double eps, const tensor& gradient_input, const tensor& means,
+                                       const tensor& invstds, const tensor& src, const tensor& gamma,
+                                       tensor& src_grad, tensor& gamma_grad, tensor& beta_grad,
+                                       resizable_tensor& dmeans, resizable_tensor& dvars);
     }
 }
 
