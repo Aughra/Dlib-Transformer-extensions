@@ -2,6 +2,30 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Calculer les passes arrière sur Metal (phase 7 sur 8)
+
+- **Quoi** : versions Metal de `tt::softmax_gradient` (`CHANNEL_WISE`, `PLANE_WISE`), `tt::gelu_gradient`, `tt::silu_gradient`, `tt::assign_bias_gradient`, `tt::assign_conv_bias_gradient` et `tt::layer_normalize_gradient`, chacune avec la règle du CPU : le gradient est écrasé quand `grad` est `gradient_input`, ajouté sinon ; `gamma_grad` et `beta_grad` écrasés, `src_grad` ajouté, `dmeans` et `dvars` dimensionnés (sur Metal quand ils sont vides). Nouvelle fonction `tt::attention_gradient(gradient_input, q, k, v, scale, causal, q_grad, k_grad, v_grad)`, composée comme `tt::attention` (scores recalculés, `v_grad += Pᵀ·dO`, `dP = dO·Vᵀ`, `softmax_gradient` sur place, `q_grad += scale·dS·K`, `k_grad += scale·dSᵀ·Q`), qui tourne sur le dispositif de q. Les passes arrière de `gemm` et de `multiply` sont `gemm` et `multiply` eux-mêmes (transpositions, somme sur les échantillons), déjà portés et vérifiés ici comme gradients. Commit du code : `c9e9f9d` (ses documents ont suivi dans le commit d'après, le script qui les écrivait ayant échoué).
+- **Opération par opération** :
+
+  | Passe avant portée | Passe arrière | Écart CPU–Metal maximal | Écart maximal aux différences finies |
+  |---|---|---|---|
+  | `add(dest,src1,src2)`, `add(beta,dest,alpha,src)` de même forme | le gradient lui-même (`tt::add`) | — | — |
+  | `add(1, dest, 1, biais)`, biais (1,k,nr,nc) | `assign_bias_gradient` | 0 (identique) | 1,3e-6 |
+  | idem, biais par canal (1,k,1,1) | `assign_conv_bias_gradient` | 1,1e-5 (1,1 % de la borne d'une somme) | 1,4e-6 |
+  | `multiply` | `multiply` (somme sur les échantillons) | 0 (identique) | 1,8e-7 |
+  | `softmax CHANNEL_WISE` / `PLANE_WISE` | `softmax_gradient` | 2,4e-7 / 1,2e-7 | 1,1e-7 / 3,6e-8 |
+  | `gelu` | `gelu_gradient` | 3,6e-7 | 1,9e-7 |
+  | `silu` | `silu_gradient` | 2,4e-7 | 5,1e-8 |
+  | `gemm` | `gemm` (dA = W·Bᵀ, dB = Aᵀ·W) | 10 % de la borne | 7,2e-6 |
+  | `layer_normalize` | `layer_normalize_gradient` (src, gamma, beta) | 3,3e-6 / 1,9e-5 / 9,5e-6 | 2,3e-7 / 3,9e-6 / 7,8e-6 |
+  | `attention` (avec et sans masque) | `attention_gradient` | 4,8e-7 | 3,5e-7 |
+
+- **Différences finies** : sur une perte L = Σ w·f(x) (w aléatoire), calculée en double à partir d'une passe avant exacte (erf, exp, softmax, LayerNorm à deux passes, attention), différence centrée de pas h = 1e-4·max(1, |x|), sur 6 à 10 valeurs choisies par tenseur (dont la première et la dernière). L'erreur de troncature est d'environ h² fois la dérivée troisième, soit 1e-8 : la borne 1e-4 + 1e-3·|différence| ne mesure plus que l'arrondi float32 du gradient, et ferait échouer une formule fausse, un mauvais indice ou un gradient laissé à zéro. Tolérances contre le CPU : 1e-5 + 1e-5·|cpu| (activations, softmax), borne d'une somme (biais, gemm), 1e-4 + 1e-4·|cpu| pour LayerNorm (gradients qui somment D termes dans des ordres différents) et 1e-5 + 1e-4·|cpu| pour l'attention (deux produits et un softmax en chaîne).
+- **Sans passe arrière sur Metal** (erreur explicite par l'aiguillage, jamais de zéros) : `tt::gguf_matvec` (poids quantifiés figés ; le gradient de l'entrée, Wᵀ·g, n'a pas de fonction dans dlib) ; la diffusion de `add(beta,dest,alpha,src)` par une source (1,1,nr,nc) ou (n,1,1,1), qui n'a pas de fonction de gradient dans dlib non plus. Le masque de l'attention n'a pas de paramètre.
+- **Écueil du test, corrigé avant le commit** : les gradients de l'attention s'ajoutent ; le test copiait d'abord ceux du CPU, déjà calculés, vers Metal, qui les ajoutait une seconde fois (Metal valait le double ; les différences finies l'ont désigné). Les deux côtés partent désormais des mêmes valeurs.
+- **Fichiers** : `dlib/dlib/cuda/{metal_kernels.mm,metal_dispatch.h,tensor_tools.h,tensor_tools.cpp}`, `dlib/dlib/test/metal.cpp` ; registre de dlib, `docs/differences-mac-windows.md`, `logs/reprise.md`.
+- **Étapes** : `dtest --test_metal` : **3 403** vérifications. Liste du mémo, `--test_npu`, `--test_metal`, `--test_dnn` : **5 255 512** (build Metal), **5 252 124** (build CPU) ; 0 avertissement.
+
 ## 2026-11-17 — Multiplier par des poids GGUF Q4_0 et Q8_0 décodés à la volée sur Metal (phase 6 sur 8)
 
 - **Quoi** : `tt::gguf_matvec` sur Metal pour Q4_0 et Q8_0, les poids lus dans leurs octets GGUF, sans matrice float32. Format lu dans `cuda/gguf_blocks.h` : blocs de 32 valeurs, chacun précédé de son échelle en demi-précision (2 octets) ; Q4_0 range 32 quartets dans 16 octets (valeur j dans le quartet bas de l'octet j, valeur j+16 dans son quartet haut, chacune moins 8), 18 octets par bloc ; Q8_0 32 octets signés, 34 octets par bloc. Noyaux `gguf_matvec_q4_0` et `gguf_matvec_q8_0` : un simdgroup (32 threads) par ligne de poids, ses voies prennent les blocs à tour de rôle, décodent leurs 32 valeurs et en font le produit dans l'ordre du CPU, les sommes des voies s'ajoutent par `simd_sum` ; les sources passent par paquets de 8 lignes, les poids sont lus une fois par paquet. `metal::live_bytes()` et `metal::allocated_bytes()` ajoutés pour la mesure.
