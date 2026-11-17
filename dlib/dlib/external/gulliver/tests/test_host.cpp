@@ -418,10 +418,21 @@ int main(int argc, char** argv)
         check(db.project_docs("pa").empty() && db.get_conversation("pa", "c3", doc),
             "removing a project keeps its conversations but detaches them");
 
+        // Les réglages de page, par profil : clé/valeur, isolation, écriture partielle.
+        db.set_page_setting("pa", "theme", "\"dark\"");
+        db.set_page_setting("pa", "name", "\"Alice\"");
+        check(db.page_settings("pa").items().size() == 2 && db.page_settings("pb").items().empty(),
+            "page settings are per profile");
+        db.set_page_setting("pa", "theme", "\"light\"");
+        check(db.page_settings("pa")["theme"].as_string() == "\"light\""
+            && db.page_settings("pa")["name"].as_string() == "\"Alice\"",
+            "writing one page setting keeps the others");
+
         // Supprimer le profil emporte toutes ses données (clé étrangère ON DELETE CASCADE).
         db.remove_profile("pa");
-        check(db.conversation_docs("pa").empty() && db.project_docs("pa").empty(),
-            "removing a profile cascades to its conversations and projects");
+        check(db.conversation_docs("pa").empty() && db.project_docs("pa").empty()
+            && db.page_settings("pa").items().empty(),
+            "removing a profile cascades to its conversations, projects and page settings");
     }
 
     {

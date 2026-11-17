@@ -142,6 +142,11 @@ namespace gulliver
                          const std::string& doc);
         void delete_project(const std::string& profile, const std::string& id);
 
+        // Les réglages de page d'un profil, en clé/valeur.  page_settings() rend l'objet entier
+        // {clé: valeur} ; set_page_setting() écrit une clé.
+        json page_settings(const std::string& profile);
+        void set_page_setting(const std::string& profile, const std::string& key, const std::string& value);
+
     private:
         // Ouvre la connexion et règle ses options ; m_ est tenu, ou le store est en construction.
         void connect();

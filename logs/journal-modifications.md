@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Réglages de page par profil (chantier Gulliver, A4)
+
+- **Quoi** : table `profile_page_settings` (profile, key, value ; cascade) dans `host/store.cpp`, méthodes `page_settings()` (objet entier) et `set_page_setting()`, routes `GET/PUT /gulliver/v1/profile/page-settings`. Chaque valeur est un JSON quelconque gardé sérialisé ; un PUT écrit les clés de l'objet reçu et préserve les autres.
+- **Fichiers** : `host/store.h`, `host/store.cpp`, `host/server.cpp`, `tests/test_host.cpp`.
+- **Pourquoi** : déménager côté service, par profil, les préférences de page (thème, nom, prompt système, mémoire) aujourd'hui dans l'IndexedDB `settings` du navigateur.
+- **Étapes** : compilé sans avertissement ; vérifié au curl (isolation entre profils, écriture partielle, objets JSON conservés) et par test_host all checks passed. Pas d'incrément de version.
+
 ## 2026-11-17 — Stocker discussions et projets par profil (chantier Gulliver, A3)
 
 - **Quoi** : tables `profile_conversations` (profile, id, project, updated, doc, index project/updated) et `profile_projects` (profile, id, name, doc) dans `host/store.cpp`, liées à `profiles` par une clé étrangère `ON DELETE CASCADE`. Méthodes de `store` : `conversation_docs/get_conversation/put_conversation/delete_conversation` et `project_docs/get_project/put_project/delete_project` ; `delete_project` détache les discussions du projet (colonne `project` vidée). `put_conversation` fait une **révision optimiste** : `expected_updated` ≥ 0 n'écrit que si l'`updated` en base vaut cette valeur (0 exige l'absence de la ligne), sinon renvoie false ; < 0 force. Routes `GET/PUT/DELETE /gulliver/v1/profile/conversations[/<id>]` et `…/projects[/<id>]` dans `host/server.cpp`, toutes passant par `resolve_profile` (le `[[maybe_unused]]` d'A2 est retiré). Un conflit de révision renvoie 409 `revision_conflict`.

@@ -2493,6 +2493,31 @@ namespace gulliver
             send_json(res, 200, ok_result(true));
         });
 
+        // Les réglages de la page, par profil (thème, nom, prompt système, mémoire…).  Chaque valeur
+        // est un JSON quelconque, gardé sérialisé.  GET rend l'objet entier {clé: valeur} ; PUT écrit
+        // les clés de l'objet du corps (une valeur null efface la clé, comme un oubli de réglage).
+        srv.Get("/gulliver/v1/profile/page-settings", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            const json stored = s->db().page_settings(p.id);
+            json out = json::object();
+            for (const auto& kv : stored.items())
+            {
+                json v;
+                if (json::parse(kv.second.as_string(), v)) out[kv.first] = v;
+            }
+            send_json(res, 200, out);
+        });
+        srv.Put("/gulliver/v1/profile/page-settings", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            json body;
+            if (!parse_body(req, res, body)) return;
+            for (const auto& kv : body.items())
+                s->db().set_page_setting(p.id, kv.first, kv.second.dump());
+            send_json(res, 200, ok_result(true));
+        });
+
         // Le mot de passe du proxy est donné sous la forme proxy_password_mask (host_settings::to_json()).
         srv.Get("/gulliver/v1/settings", [s](const httplib::Request& req, httplib::Response& res) {
             send_json(res, 200, public_settings(*s));

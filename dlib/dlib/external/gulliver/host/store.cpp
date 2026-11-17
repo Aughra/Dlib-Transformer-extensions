@@ -113,6 +113,12 @@ namespace gulliver
             " profile TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', doc TEXT NOT NULL,"
             " PRIMARY KEY (profile, id),"
             " FOREIGN KEY (profile) REFERENCES profiles(id) ON DELETE CASCADE)");
+        // Les réglages de la page, par profil, en clé/valeur (thème, nom, prompt système, mémoire…).
+        db_->exec(
+            "CREATE TABLE IF NOT EXISTS profile_page_settings ("
+            " profile TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,"
+            " PRIMARY KEY (profile, key),"
+            " FOREIGN KEY (profile) REFERENCES profiles(id) ON DELETE CASCADE)");
     }
 
     store::~store() {}
@@ -571,6 +577,30 @@ namespace gulliver
             dlib::statement st(*db_, "DELETE FROM profile_projects WHERE profile = ? AND id = ?");
             st.bind(1, profile);
             st.bind(2, id);
+            st.exec();
+        });
+    }
+
+    json store::page_settings(const std::string& profile)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        json out = json::object();
+        dlib::statement st(*db_, "SELECT key, value FROM profile_page_settings WHERE profile = ?");
+        st.bind(1, profile);
+        st.exec();
+        while (st.move_next()) out[st.get_column_as_text(0)] = st.get_column_as_text(1);
+        return out;
+    }
+
+    void store::set_page_setting(const std::string& profile, const std::string& key, const std::string& value)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::statement st(*db_, "INSERT OR REPLACE INTO profile_page_settings (profile, key, value) "
+                "VALUES (?, ?, ?)");
+            st.bind(1, profile);
+            st.bind(2, key);
+            st.bind(3, value);
             st.exec();
         });
     }
