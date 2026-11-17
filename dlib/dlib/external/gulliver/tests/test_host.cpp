@@ -390,6 +390,41 @@ int main(int argc, char** argv)
     }
 
     {
+        // Discussions et projets par profil : isolation, révision optimiste, cascade à la suppression.
+        gulliver::store db(gulliver::join_path(work, "profile-data.db"));
+        gulliver::profile pa; pa.id = "pa"; pa.name = "alice"; pa.created = 1; pa.last_used = 1; db.put_profile(pa);
+        gulliver::profile pb; pb.id = "pb"; pb.name = "bob"; pb.created = 2; pb.last_used = 2; db.put_profile(pb);
+
+        check(db.put_conversation("pa", "c1", "", 100, "{\"id\":\"c1\"}", -1), "a conversation is written");
+        std::string doc;
+        check(db.get_conversation("pa", "c1", doc) && doc == "{\"id\":\"c1\"}", "the conversation is read back");
+        check(db.conversation_docs("pa").size() == 1 && db.conversation_docs("pb").empty(),
+            "a profile sees only its own conversations");
+
+        // Révision optimiste : la bonne valeur passe, une valeur périmée est refusée sans rien changer.
+        check(db.put_conversation("pa", "c1", "", 200, "{\"id\":\"c1\",\"v\":2}", 100), "an update with the right revision passes");
+        check(!db.put_conversation("pa", "c1", "", 300, "{\"id\":\"c1\",\"v\":3}", 100), "a stale revision is refused");
+        db.get_conversation("pa", "c1", doc);
+        check(doc == "{\"id\":\"c1\",\"v\":2}", "the refused update changed nothing");
+        // Une ligne absente ne s'écrit qu'avec expected_updated 0.
+        check(!db.put_conversation("pa", "c2", "", 10, "{}", 5), "a new conversation needs expected_updated 0");
+        check(db.put_conversation("pa", "c2", "", 10, "{}", 0), "a new conversation with expected 0 is created");
+
+        // Un projet, une discussion rattachée, puis la suppression du projet détache la discussion.
+        db.put_project("pa", "p1", "Projet A", "{\"id\":\"p1\"}");
+        db.put_conversation("pa", "c3", "p1", 20, "{\"id\":\"c3\"}", -1);
+        check(db.project_docs("pa").size() == 1 && db.project_docs("pb").empty(), "a profile sees only its own projects");
+        db.delete_project("pa", "p1");
+        check(db.project_docs("pa").empty() && db.get_conversation("pa", "c3", doc),
+            "removing a project keeps its conversations but detaches them");
+
+        // Supprimer le profil emporte toutes ses données (clé étrangère ON DELETE CASCADE).
+        db.remove_profile("pa");
+        check(db.conversation_docs("pa").empty() && db.project_docs("pa").empty(),
+            "removing a profile cascades to its conversations and projects");
+    }
+
+    {
         // À largeur égale, un projecteur ne va qu'avec un décodeur de sa famille (Gulliver 4.30.0) : le projecteur de
         // Qwen3.5-4B et celui de Gemma 3 4B sortent tous deux 2 560 valeurs.
         auto file = [](const std::string& name, const std::string& arch, const std::string& type) {

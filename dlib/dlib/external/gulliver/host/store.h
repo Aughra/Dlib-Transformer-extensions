@@ -123,6 +123,25 @@ namespace gulliver
         void remove_profile(const std::string& id);
         void touch_profile(const std::string& id, int64_t when);
 
+        // Les discussions et les projets d'un profil.  `doc` est le JSON entier que la page gère.
+        // *_docs() rend tous les documents d'un profil (discussions triées du plus récent au plus
+        // ancien) ; get_* un seul, false s'il manque.  put_* écrit ou remplace, avec une révision
+        // optimiste : si expected_updated >= 0, l'écriture n'a lieu que si l'`updated` en base vaut
+        // exactement cette valeur (ou que la ligne n'existe pas et expected_updated == 0), sinon elle
+        // renvoie false sans rien changer — l'appelant relit et réessaie.  expected_updated < 0 force
+        // l'écriture.  delete_* efface, et un projet supprimé détache ses discussions (project = '').
+        std::vector<std::string> conversation_docs(const std::string& profile);
+        bool get_conversation(const std::string& profile, const std::string& id, std::string& doc);
+        bool put_conversation(const std::string& profile, const std::string& id, const std::string& project,
+                              int64_t updated, const std::string& doc, int64_t expected_updated);
+        void delete_conversation(const std::string& profile, const std::string& id);
+
+        std::vector<std::string> project_docs(const std::string& profile);
+        bool get_project(const std::string& profile, const std::string& id, std::string& doc);
+        void put_project(const std::string& profile, const std::string& id, const std::string& name,
+                         const std::string& doc);
+        void delete_project(const std::string& profile, const std::string& id);
+
     private:
         // Ouvre la connexion et règle ses options ; m_ est tenu, ou le store est en construction.
         void connect();

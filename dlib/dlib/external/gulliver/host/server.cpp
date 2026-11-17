@@ -156,8 +156,8 @@ namespace gulliver
             profile_unknown s'il nomme un profil qui n'existe pas (ou plus).  Les routes de données
             d'un profil commencent toutes par cet appel.
         */
-        // [[maybe_unused]] le temps que les routes de données du profil (sous-étapes suivantes) l'appellent.
-        [[maybe_unused]] bool resolve_profile(service& svc, const httplib::Request& req, httplib::Response& res, profile& out)
+
+        bool resolve_profile(service& svc, const httplib::Request& req, httplib::Response& res, profile& out)
         {
             const std::string id = req.get_header_value("X-Gulliver-Profile");
             if (id.empty())
@@ -2382,6 +2382,114 @@ namespace gulliver
             }
             s->db().remove_profile(id);
             log_info("profiles: removed " + id);
+            send_json(res, 200, ok_result(true));
+        });
+
+        // Les données d'un profil : discussions et projets.  Chaque route commence par resolve_profile
+        // (en-tête X-Gulliver-Profile).  Le corps et les réponses portent le JSON entier que la page
+        // gère (champ "doc"), déjà parsé une fois ici pour vérifier qu'il tient dans les bornes.
+        srv.Get("/gulliver/v1/profile/conversations", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            json list = json::array();
+            for (const std::string& doc : s->db().conversation_docs(p.id))
+            {
+                json d;
+                if (json::parse(doc, d)) list.push_back(d);
+            }
+            json o = json::object();
+            o["conversations"] = list;
+            send_json(res, 200, o);
+        });
+        srv.Get(R"(/gulliver/v1/profile/conversations/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            std::string doc;
+            if (!s->db().get_conversation(p.id, req.matches[1], doc))
+            {
+                send_error(res, 404, "invalid_request_error", "no conversation of this id in the profile", "not_found");
+                return;
+            }
+            json d;
+            json::parse(doc, d);
+            send_json(res, 200, d);
+        });
+        srv.Put(R"(/gulliver/v1/profile/conversations/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            json body;
+            if (!parse_body(req, res, body)) return;
+            if (!body.contains("doc") || !body["doc"].is_object())
+            {
+                send_error(res, 400, "invalid_request_error", "a doc object is required", "doc");
+                return;
+            }
+            const std::string id = req.matches[1];
+            const std::string project = body.contains("project") ? body["project"].as_string() : std::string();
+            const int64_t updated = body.contains("updated") ? body["updated"].as_int(0) : 0;
+            // La révision optimiste : si le corps dit quelle valeur d'updated il croyait avoir, l'écriture
+            // n'a lieu que si elle n'a pas changé entre-temps (409 sinon).  Sans ce champ, écriture forcée.
+            const int64_t expected = body.contains("expected_updated") ? body["expected_updated"].as_int(-1) : -1;
+            const bool ok = s->db().put_conversation(p.id, id, project, updated, body["doc"].dump(), expected);
+            if (!ok)
+            {
+                send_error(res, 409, "invalid_request_error",
+                    "the conversation changed since it was read; read it again and retry", "revision_conflict");
+                return;
+            }
+            send_json(res, 200, ok_result(true));
+        });
+        srv.Delete(R"(/gulliver/v1/profile/conversations/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            s->db().delete_conversation(p.id, req.matches[1]);
+            send_json(res, 200, ok_result(true));
+        });
+
+        srv.Get("/gulliver/v1/profile/projects", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            json list = json::array();
+            for (const std::string& doc : s->db().project_docs(p.id))
+            {
+                json d;
+                if (json::parse(doc, d)) list.push_back(d);
+            }
+            json o = json::object();
+            o["projects"] = list;
+            send_json(res, 200, o);
+        });
+        srv.Get(R"(/gulliver/v1/profile/projects/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            std::string doc;
+            if (!s->db().get_project(p.id, req.matches[1], doc))
+            {
+                send_error(res, 404, "invalid_request_error", "no project of this id in the profile", "not_found");
+                return;
+            }
+            json d;
+            json::parse(doc, d);
+            send_json(res, 200, d);
+        });
+        srv.Put(R"(/gulliver/v1/profile/projects/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            json body;
+            if (!parse_body(req, res, body)) return;
+            if (!body.contains("doc") || !body["doc"].is_object())
+            {
+                send_error(res, 400, "invalid_request_error", "a doc object is required", "doc");
+                return;
+            }
+            const std::string name = body["doc"].contains("name") ? body["doc"]["name"].as_string() : std::string();
+            s->db().put_project(p.id, req.matches[1], name, body["doc"].dump());
+            send_json(res, 200, ok_result(true));
+        });
+        srv.Delete(R"(/gulliver/v1/profile/projects/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            s->db().delete_project(p.id, req.matches[1]);
             send_json(res, 200, ok_result(true));
         });
 

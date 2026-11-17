@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Stocker discussions et projets par profil (chantier Gulliver, A3)
+
+- **Quoi** : tables `profile_conversations` (profile, id, project, updated, doc, index project/updated) et `profile_projects` (profile, id, name, doc) dans `host/store.cpp`, liées à `profiles` par une clé étrangère `ON DELETE CASCADE`. Méthodes de `store` : `conversation_docs/get_conversation/put_conversation/delete_conversation` et `project_docs/get_project/put_project/delete_project` ; `delete_project` détache les discussions du projet (colonne `project` vidée). `put_conversation` fait une **révision optimiste** : `expected_updated` ≥ 0 n'écrit que si l'`updated` en base vaut cette valeur (0 exige l'absence de la ligne), sinon renvoie false ; < 0 force. Routes `GET/PUT/DELETE /gulliver/v1/profile/conversations[/<id>]` et `…/projects[/<id>]` dans `host/server.cpp`, toutes passant par `resolve_profile` (le `[[maybe_unused]]` d'A2 est retiré). Un conflit de révision renvoie 409 `revision_conflict`.
+- **Fichiers** : `host/store.h`, `host/store.cpp`, `host/server.cpp`, `tests/test_host.cpp`.
+- **Pourquoi** : les discussions et projets, aujourd'hui dans l'IndexedDB du navigateur, deviennent des données du service rangées par profil ; la révision optimiste remplace la fusion in-place de `updateConversations` pour le cas multi-onglets.
+- **Étapes** : compilé sans avertissement ; vérifié au `curl` (isolation entre deux profils, 400 sans en-tête, 404 profil inconnu, 409 sur révision périmée sans modifier le contenu, cascade à la suppression du projet) et par `test_host` *all checks passed* (10 vérifications A3 : écriture/lecture, isolation, révision, création exigeant expected 0, détachement à la suppression d'un projet, cascade à la suppression du profil). Pas d'incrément de version (bump à la fin du bloc A).
+
 ## 2026-11-17 — Exposer les routes de gestion des profils (chantier Gulliver, A2)
 
 - **Quoi** : les routes HTTP de gestion des profils dans `host/server.cpp` : `GET /gulliver/v1/profiles` (lister), `POST` (créer avec un nom), `PUT /gulliver/v1/profiles/<id>` (renommer), `DELETE /gulliver/v1/profiles/<id>` (supprimer). Helpers `profile_json` (sérialisation) et `profile_name_of` (nom coupé de ses espaces, 1 à 80 caractères). Helper `resolve_profile(svc, req, res, out)` : lit l'en-tête `X-Gulliver-Profile`, renvoie 400 `profile_required` si absent, 404 `profile_unknown` si inconnu, note `last_used` sinon ; il sera appelé par les routes de données des sous-étapes suivantes, d'où un `[[maybe_unused]]` provisoire. À distinguer de `/gulliver/v1/settings/profiles` (instantanés de réglages), inchangé.

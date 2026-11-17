@@ -96,6 +96,23 @@ namespace gulliver
             "CREATE TABLE IF NOT EXISTS profiles ("
             " id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE,"
             " created INTEGER NOT NULL, last_used INTEGER NOT NULL DEFAULT 0)");
+        // Les données d'un profil.  Chaque table porte la colonne profile en tête de clé et une clé
+        // étrangère ON DELETE CASCADE : supprimer un profil emporte toutes ses données.  Le document
+        // (doc) est le JSON entier que la page gère déjà (une discussion avec ses messages, un projet
+        // avec ses fichiers) ; `updated` sert à la révision optimiste et au tri.
+        db_->exec(
+            "CREATE TABLE IF NOT EXISTS profile_conversations ("
+            " profile TEXT NOT NULL, id TEXT NOT NULL, project TEXT NOT NULL DEFAULT '',"
+            " updated INTEGER NOT NULL DEFAULT 0, doc TEXT NOT NULL,"
+            " PRIMARY KEY (profile, id),"
+            " FOREIGN KEY (profile) REFERENCES profiles(id) ON DELETE CASCADE)");
+        db_->exec("CREATE INDEX IF NOT EXISTS ix_conv_project ON profile_conversations(profile, project)");
+        db_->exec("CREATE INDEX IF NOT EXISTS ix_conv_updated ON profile_conversations(profile, updated)");
+        db_->exec(
+            "CREATE TABLE IF NOT EXISTS profile_projects ("
+            " profile TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', doc TEXT NOT NULL,"
+            " PRIMARY KEY (profile, id),"
+            " FOREIGN KEY (profile) REFERENCES profiles(id) ON DELETE CASCADE)");
     }
 
     store::~store() {}
@@ -430,6 +447,129 @@ namespace gulliver
         writing([&]() {
             dlib::statement st(*db_, "UPDATE profiles SET last_used = ? WHERE id = ?");
             st.bind_int64(1, when);
+            st.bind(2, id);
+            st.exec();
+        });
+    }
+
+    // ----------------------------------------------------------------------------------------
+    //  Discussions et projets d'un profil
+
+    std::vector<std::string> store::conversation_docs(const std::string& profile)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<std::string> out;
+        dlib::statement st(*db_, "SELECT doc FROM profile_conversations WHERE profile = ? ORDER BY updated DESC");
+        st.bind(1, profile);
+        st.exec();
+        while (st.move_next()) out.push_back(st.get_column_as_text(0));
+        return out;
+    }
+
+    bool store::get_conversation(const std::string& profile, const std::string& id, std::string& doc)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        dlib::statement st(*db_, "SELECT doc FROM profile_conversations WHERE profile = ? AND id = ?");
+        st.bind(1, profile);
+        st.bind(2, id);
+        st.exec();
+        if (!st.move_next()) return false;
+        doc = st.get_column_as_text(0);
+        return true;
+    }
+
+    bool store::put_conversation(const std::string& profile, const std::string& id, const std::string& project,
+                                 int64_t updated, const std::string& doc, int64_t expected_updated)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        bool ok = true;
+        writing([&]() {
+            if (expected_updated >= 0)
+            {
+                // La révision optimiste : la valeur en base doit être celle qu'on croyait avoir lue,
+                // ou la ligne doit être absente et expected_updated == 0.
+                dlib::statement cur(*db_, "SELECT updated FROM profile_conversations WHERE profile = ? AND id = ?");
+                cur.bind(1, profile);
+                cur.bind(2, id);
+                cur.exec();
+                if (cur.move_next())
+                {
+                    if (cur.get_column_as_int64(0) != expected_updated) { ok = false; return; }
+                }
+                else if (expected_updated != 0) { ok = false; return; }
+            }
+            dlib::statement st(*db_, "INSERT OR REPLACE INTO profile_conversations (profile, id, project, updated, doc) "
+                "VALUES (?, ?, ?, ?, ?)");
+            st.bind(1, profile);
+            st.bind(2, id);
+            st.bind(3, project);
+            st.bind_int64(4, updated);
+            st.bind(5, doc);
+            st.exec();
+        });
+        return ok;
+    }
+
+    void store::delete_conversation(const std::string& profile, const std::string& id)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::statement st(*db_, "DELETE FROM profile_conversations WHERE profile = ? AND id = ?");
+            st.bind(1, profile);
+            st.bind(2, id);
+            st.exec();
+        });
+    }
+
+    std::vector<std::string> store::project_docs(const std::string& profile)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<std::string> out;
+        dlib::statement st(*db_, "SELECT doc FROM profile_projects WHERE profile = ? ORDER BY name");
+        st.bind(1, profile);
+        st.exec();
+        while (st.move_next()) out.push_back(st.get_column_as_text(0));
+        return out;
+    }
+
+    bool store::get_project(const std::string& profile, const std::string& id, std::string& doc)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        dlib::statement st(*db_, "SELECT doc FROM profile_projects WHERE profile = ? AND id = ?");
+        st.bind(1, profile);
+        st.bind(2, id);
+        st.exec();
+        if (!st.move_next()) return false;
+        doc = st.get_column_as_text(0);
+        return true;
+    }
+
+    void store::put_project(const std::string& profile, const std::string& id, const std::string& name,
+                            const std::string& doc)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::statement st(*db_, "INSERT OR REPLACE INTO profile_projects (profile, id, name, doc) "
+                "VALUES (?, ?, ?, ?)");
+            st.bind(1, profile);
+            st.bind(2, id);
+            st.bind(3, name);
+            st.bind(4, doc);
+            st.exec();
+        });
+    }
+
+    void store::delete_project(const std::string& profile, const std::string& id)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            // Les discussions du projet sont détachées (project vide), puis le projet est supprimé.
+            dlib::statement detach(*db_, "UPDATE profile_conversations SET project = '' WHERE profile = ? AND project = ?");
+            detach.bind(1, profile);
+            detach.bind(2, id);
+            detach.exec();
+            dlib::statement st(*db_, "DELETE FROM profile_projects WHERE profile = ? AND id = ?");
+            st.bind(1, profile);
             st.bind(2, id);
             st.exec();
         });
