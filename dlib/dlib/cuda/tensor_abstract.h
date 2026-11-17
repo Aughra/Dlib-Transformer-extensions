@@ -217,6 +217,17 @@ namespace dlib
                 - If CUDA is not being used then this function always returns 0.
         !*/
 
+        tensor_device get_tensor_device(
+        ) const;
+        /*!
+            ensures
+                - returns where the values of this tensor live: tensor_device::cpu, the
+                  default, or tensor_device::metal (see dlib/cuda/metal_dlib.h).  The
+                  tensor_tools functions compute on that device, and raise metal_error
+                  when their tensors do not all have the same device or when an operation
+                  has no Metal version yet.
+        !*/
+
         tensor& operator= (
             float val
         );
@@ -521,6 +532,20 @@ namespace dlib
         /*!
             ensures
                 - resizes *this so that: have_same_dimensions(#*this, item)==true
+        !*/
+
+        void set_tensor_device (
+            tensor_device device
+        );
+        /*!
+            ensures
+                - #get_tensor_device() == device
+                - the values are kept: when the device changes, they are copied once into
+                  memory of the new device.
+                - A copy of a resizable_tensor has the device of the tensor it copies.
+            throws
+                - metal_error when device is tensor_device::metal and dlib was built
+                  without DLIB_USE_METAL, or when no Metal device is available.
         !*/
 
         void set_size(

@@ -10,6 +10,7 @@
 #include <cstring>
 #include "cuda_errors.h"
 #include "extended_memory.h"
+#include "metal_dlib.h"
 #include "../serialize.h"
 
 namespace dlib
@@ -49,11 +50,16 @@ namespace dlib
                       be a window onto the subsystem's mapped store rather than a pinned
                       buffer of its own.  When xrec == nullptr the object behaves exactly
                       as it does in stock dlib.
+
+                - the_device tells where the values live: tensor_device::cpu, in memory of
+                  the process, or tensor_device::metal, in a shared MTLBuffer whose contents
+                  data_host points at (see metal_dlib.h).  Only a build with DLIB_USE_METAL
+                  has Metal blocks.
         !*/
     public:
 
         gpu_data(
-        ) : data_size(0), host_current(true), device_current(true),have_active_transfer(false),device_in_use(false), the_device_id(0), xrec(nullptr)
+        ) : data_size(0), host_current(true), device_current(true),have_active_transfer(false),device_in_use(false), the_device_id(0), xrec(nullptr), the_device(tensor_device::cpu)
         {
         }
 
@@ -72,6 +78,38 @@ namespace dlib
         gpu_data& operator=(gpu_data&& item) { swap(item); return *this; }
 
         int device_id() const { return the_device_id; }
+
+        tensor_device get_device() const { return the_device; }
+
+        void set_device (
+            tensor_device new_device
+        )
+        /*!
+            ensures
+                - #get_device() == new_device
+                - the values are kept: when the device changes, they are copied once into a
+                  block of the new device, and the old block is released.
+            throws
+                - metal_error when new_device is tensor_device::metal and dlib was built
+                  without DLIB_USE_METAL, or when no Metal device is available.
+        !*/
+        {
+            if (new_device == the_device)
+                return;
+#ifdef DLIB_USE_METAL
+            std::shared_ptr<float> moved;
+            if (data_size != 0)
+            {
+                moved = allocate_block(new_device, data_size);
+                std::memcpy(moved.get(), data_host.get(), sizeof(float)*data_size);
+            }
+            forget_copies();
+            data_host = std::move(moved);
+            the_device = new_device;
+#else
+            throw metal_error("A Metal tensor was asked for, but dlib was built without DLIB_USE_METAL.");
+#endif
+        }
 
 #ifdef DLIB_USE_CUDA
         void async_copy_to_device() const; 
@@ -99,7 +137,7 @@ namespace dlib
                 host_current = true;
                 device_current = true;
                 device_in_use.store(false, std::memory_order_relaxed);
-                data_host.reset(new float[new_size], std::default_delete<float[]>());
+                data_host = allocate_block(the_device, new_size);
                 data_device.reset();
             }
         }
@@ -221,12 +259,28 @@ namespace dlib
             std::swap(cuda_stream, item.cuda_stream);
             std::swap(the_device_id, item.the_device_id);
             std::swap(xrec, item.xrec);
+            std::swap(the_device, item.the_device);
             // Both records have to learn where their block went before the guard lets go.
             if (xrec)       xrec->owner = this;
             if (item.xrec)  item.xrec->owner = &item;
         }
 
     private:
+
+#ifndef DLIB_USE_CUDA
+        static std::shared_ptr<float> allocate_block (
+            tensor_device device,
+            size_t n
+        )
+        {
+#ifdef DLIB_USE_METAL
+            if (device == tensor_device::metal)
+                return metal::allocate(n);
+#endif
+            (void)device;
+            return std::shared_ptr<float>(new float[n], std::default_delete<float[]>());
+        }
+#endif
 
         // Called by every access that may change the values: copies taken under the mark
         // stop being current.
@@ -291,6 +345,8 @@ namespace dlib
         /* Set by set_copy_mark() and cleared by forget_copies(). Atomic because a reader
            marks blocks it only reads, possibly from another thread than their writer. */
         mutable std::atomic<uint64_t> mark{0};
+
+        tensor_device the_device;
     };
 
     inline void serialize(const gpu_data& item, std::ostream& out)

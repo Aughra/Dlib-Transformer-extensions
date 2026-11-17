@@ -85,6 +85,20 @@ Dans un nouveau build, activer les options `DLIB_JPEG_SUPPORT`, `DLIB_PNG_SUPPOR
 
 Installer FFmpeg et `pkg-config` (par exemple avec Homebrew), puis configurer un répertoire neuf avec `DLIB_USE_FFMPEG=ON`. Le module [`find_ffmpeg.cmake`](../dlib/dlib/cmake_utils/find_ffmpeg.cmake) recherche les composants `libav*` via `pkg-config`. Confirmer leur détection dans la sortie CMake, compiler `dtest` et exécuter ses tests vidéo/audio.
 
+### Backend Metal des tenseurs de dlib (`DLIB_USE_METAL`)
+
+Option du fork, désactivée par défaut (consignes des phases 1 à 8 dans [logs/consignes-backend-metal-dlib.md](../logs/consignes-backend-metal-dlib.md)). Elle n'existe que sur macOS et exclut CUDA ; elle compile `dlib/cuda/metal_dlib.mm` en Objective-C++ (ARC) et lie Metal et Foundation. Un tenseur s'y place par `resizable_tensor::set_tensor_device(tensor_device::metal)` : ses valeurs vivent alors dans un `MTLBuffer` partagé, que `host()` lit sans copie. Une opération de `tensor_tools` qui n'a pas encore de version Metal, ou qui reçoit des tenseurs des deux dispositifs, lève `metal_error`.
+
+```sh
+cmake -S dlib/dlib/test -B build/macos-arm64-tests-metal -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DDLIB_USE_FFMPEG=OFF -DDLIB_USE_CUDA=OFF -DDLIB_USE_NPU=OFF -DDLIB_USE_METAL=ON
+cmake --build build/macos-arm64-tests-metal --target dtest
+(cd build/macos-arm64-tests-metal && ./dtest --test_metal)
+```
+
+La configuration doit afficher « Enabling the Metal backend of dlib tensors. ». Le même `--test_metal` passe aussi dans le build CPU, où il vérifie qu'un tenseur Metal y est refusé.
+
 ## Applications Albireo et Pseudalis
 
 Les deux applications de `dlib/dlib/external/` (Albireo : moteur GGUF et service de chat ; Pseudalis : anonymisation de documents) étaient chez l'original des programmes Windows 11. Depuis le nettoyage du 2026-11-11 (« du pur Apple », section suivante), elles ne se construisent plus que pour macOS sur Apple Silicon : leur CMake refuse toute autre plateforme. Elles ont chacune un CMake à elles, que le build des exemples ne compile pas. Le service se lance avec `--console` :

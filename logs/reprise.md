@@ -1,12 +1,12 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-16 vers 6 h 50, sur le Mac M2. Ce fichier va **du plus récent au plus ancien** : l'état actuel, ce qui est en cours et à faire, puis ce qui est fait et les décisions (antéchronologiques), les problèmes ouverts et les commandes. Le détail de chaque étape est dans `logs/journal-modifications.md`.
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-17 vers 6 h, sur le Mac M2. Ce fichier va **du plus récent au plus ancien** : l'état actuel, ce qui est en cours et à faire, puis ce qui est fait et les décisions (antéchronologiques), les problèmes ouverts et les commandes. Le détail de chaque étape est dans `logs/journal-modifications.md`.
 
 ## État actuel
 
 - `main` = **Albireo 5.9.0** ; **Pseudalis 3.3.0** (numérotation du fork, documentation à part : `docs/pseudalis/`, `blog/pseudalis/`, `pseudalis/web/changelog.md`). Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
 - **Vrai service** : Albireo tourne en **5.9.0** et Pseudalis en **3.3.0** (relancés le 2026-11-16 au soir, après le redémarrage du Mac par une mise à jour de macOS ; relais coupé). Pseudalis sur 18444 (accès réseau 8445), Albireo sur 18443 (réseau 8444 sans mot de passe), bibliothèque `build/albireo-home/library` remplie de clones de `build/models` ; journal `build/albireo-home/logs/console.log`.
-- **Tests** : `test_macos.sh` d'Albireo 60 sur 60 (5.8.0, 2026-11-16), de Pseudalis 37 sur 37 (3.3.0, 2026-11-16) ; banc de la page 131 vérifications (5.9.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` 4 457 648 vérifications (liste du mémo) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
+- **Tests** : `test_macos.sh` d'Albireo 60 sur 60 (5.8.0, 2026-11-16), de Pseudalis 37 sur 37 (3.3.0, 2026-11-16) ; banc de la page 131 vérifications (5.9.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` de la liste du mémo avec `--test_npu`, `--test_metal` et `--test_dnn` : 5 252 124 vérifications (build CPU, 2026-11-17) ; `dtest --test_metal` : 1 593 vérifications dans le build Metal ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
 - **Blog** : épisode 50 ; **blog de Pseudalis** : épisode 4 ; **notes pour l'auteur** : changement 25, entrée n° 24, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
 - **Le mode économie d'énergie du M2 est coupé** (2026-11-15) : les mesures redeviennent possibles sur le M2 (vérifier `pmset -g | grep lowpowermode` avant) ; les réglages fins attendent le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
 - **Original** : détaché depuis le 2026-11-11, plus de fusion ; lu à `53ddfe4` (Albireo 1.0.20) pour la reprise à la main du 2026-11-14, puis à `3bea372` (Albireo 1.0.23, 37 commits depuis la dernière fusion) pour le relais.
@@ -17,6 +17,12 @@
 Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les exemples SLM, puis le moteur et le service d'Albireo et de Pseudalis, en « pur Apple » (NEON, Accelerate, Metal).
 
 ## En cours
+
+**Backend Metal des tenseurs de dlib** (consignes de l'humain, phases 1 à 8, dans `logs/consignes-backend-metal-dlib.md` ; plan validé le 2026-11-17 : « Oui, ensuite toutes les phases », une phase après l'autre, chacune testée, commitée et rapportée). Build d'essai : `build/macos-arm64-tests-metal` (`-DDLIB_USE_METAL=ON`, commande dans le mémo) ; test `dtest --test_metal`, à lancer aussi dans le build CPU.
+
+1. ~~Phase 1 : dispositif `cpu`/`metal` des tenseurs, aiguillage dans `tensor_tools`, squelette Metal (`MTLDevice`, `MTLCommandQueue`, tampons partagés)~~ fait (journal du 2026-11-17).
+2. **Phase 2, en cours** : addition (`add` à trois tenseurs et `add(beta,dest,alpha,src)`), multiplication, softmax, GELU, SiLU en Metal, tests de parité (tolérance 1e-5 absolue et relative). Noyaux écrits dans `dlib/dlib/cuda/metal_kernels.mm` (pas encore dans le CMake ni commités), compilés depuis leur texte au premier usage, maths précises ; GELU par la formule 7.1.26 d'Abramowitz et Stegun (Metal n'a pas `erf`). Brouillon des tests de parité : à intégrer dans `test/metal.cpp`.
+3. Phases 3 à 8 : produit matriciel (MPS ou noyau maison), LayerNorm, attention naïve, produits Q4_0 et Q8_0 dequantifiés à la volée, passes arrière, SGD et Adam. Un épisode du blog à la fin.
 
 **Reprise du relais de l'original, terminée** (choix de l'humain, 2026-11-16 : piste B) : Albireo envoie une discussion à un moteur extérieur (OpenAI et compatibles, Ollama, Claude), pseudonymisée par Pseudalis, et remet les vraies valeurs dans la réponse ; mode hors ligne limité au Mac et au réseau de la maison ; recherche web de Claude. Source : `upstream/main` à `3bea372` (Albireo 1.0.22 `dd858d5` et 1.0.23 `37c6304`), fichiers `host/relay.{h,cpp}`, `host/pseudonyms.{h,cpp}`, parties de `server.cpp`, `service.cpp`, `settings.cpp`, `http_fetch`, `certificates`, `test_host.cpp`, `make_openapi.py`, page.
 
@@ -32,9 +38,6 @@ Reprise terminée (blog : épisode 48). Réglages du relais réservés au Mac se
 
 ## À faire, dans l'ordre proposé
 
-**Backend Metal de dlib, en cours** (plan de la phase 1 validé par l'humain le 2026-11-17 : « Oui, ensuite toutes les phases ») : option `DLIB_USE_METAL` (désactivée par défaut, Apple seulement, exclusive de CUDA ; essais dans `build/macos-arm64-tests-metal`) ; étiquette `cpu`/`metal` dans `gpu_data` (méthodes ajoutées au tenseur, interfaces existantes intactes) ; tenseur `metal` dans un `MTLBuffer` partagé (`host()` dans le même tampon, pas de copie ; commandes attendues en phase 1) ; macro de dispatch à côté de `DLIB_NPU_TRY` dans les 99 fonctions de `tensor_tools` (vers `metal::…` ou erreur explicite, mélange de dispositifs refusé) ; squelette `dlib/cuda/metal_context.{h,mm}` ; test `dlib/test/metal.cpp` ; `dtest` CPU (liste du mémo et `--test_dnn`) dans les deux builds. Limite dite : le code qui lit `host()` directement calcule sur le processeur.
-
-**Ensuite, demandé par l'humain (2026-11-16)** : le backend Metal des tenseurs de dlib, phases 1 à 8 sur 8, une par une, consignes recopiées dans `logs/consignes-backend-metal-dlib.md` ; la phase 1 commence par un plan court **à faire valider avant toute modification**.
 
 **Liste en cours, dans l'ordre (2026-11-16, « dans l'ordre fait tout »)** : ~~A. Gemma 4, lignes utiles des couches partagées (5.5.0)~~ ; ~~B. panne d'une étape de Qwen 3.5 sur le GPU (5.5.1, carnet et relecture)~~ ; ~~C. boutons selon les capacités vérifiées (5.6.0)~~ ; ~~D. Mistral Small 3.2 (5.7.0)~~ ; ~~E. noyau NEON Q5_K (5.8.0 ; Q8_0 sans gain, non gardé)~~ ; ~~F. effort du relais, suppression depuis un projet (5.9.0)~~ ; **en cours : Pseudalis 1.0.6 à 1.0.11** de l'original (~~1.0.6 : code mort retiré, 3.1.1~~ ; ~~1.0.8 à 1.0.10 : colonnes imposées, 3.2.0~~ ; ~~1.0.11 : détecteurs réentraînés, 3.3.0~~ — **liste finie** ; 1.0.11 : détecteurs réentraînés, dans `dlib/privacy` et `slm_document_anonymizer_ex.h`), en sous-étapes de Pseudalis.
 
@@ -46,6 +49,10 @@ Reprise terminée (blog : épisode 48). Réglages du relais réservés au Mac se
 7. Pour l'humain, images du Qwen3.5-4B déjà installé : onglet Modèles, chercher « unsloth/Qwen3.5-4B-GGUF », cocher « Avec la lecture des images » et ajouter de nouveau le fichier Q4_K_M (seul le projecteur, 672 Mo, est téléchargé ; essayé sur le service d'essai, pas sur le vrai).
 
 ## Fait, du plus récent au plus ancien
+
+### 2026-11-17
+
+- **Backend Metal de dlib, phase 1 sur 8** : option `DLIB_USE_METAL`, étiquette `tensor_device` des tenseurs (`get_tensor_device`, `set_tensor_device`), tampons `MTLBuffer` partagés où `host()` lit sans copie, aiguillage `DLIB_METAL_UNPORTED` dans les 102 fonctions de `tensor_tools.cpp` et les 8 méthodes de `tensor_conv` et `pooling` (erreur explicite, aucun repli sur le processeur), squelette `metal_dlib.{h,mm}`, test `test/metal.cpp` (1 593 vérifications avec Metal, 15 sans). Premier `--test_dnn` complet sur le Mac : il passe. Au passage : chemin des tests de Pseudalis corrigé dans son guide (`bin/`), ligne vide retirée du registre de dlib.
 
 ### 2026-11-16
 
@@ -170,6 +177,7 @@ Reprise terminée (blog : épisode 48). Réglages du relais réservés au Mac se
 
 ## Décisions, de la plus récente à la plus ancienne
 
+- 2026-11-17 : backend Metal de dlib (choix du fork dans le plan validé) : un tenseur vide ne compte pour aucun dispositif (une sortie encore à dimensionner ne décide pas du chemin) ; `tensor_rand` refuse un tenseur Metal tant qu'il n'est pas porté ; noyaux compilés depuis leur texte au premier usage, comme ceux d'Albireo (pas d'outil `metal` de Xcode au build) ; chaque opération attend son tampon de commandes (`waitUntilCompleted`), si bien que `host()` lit toujours des valeurs finies.
 - 2026-11-15 : plus de jeton d'administration dans Pseudalis (décision de l'humain), comme pour Albireo : tout programme du Mac qui joint le service peut lire les originaux conservés ; restent les gardes Host et origine. Pseudalis a sa propre documentation et sa numérotation (2.0.0) ; les README d'Albireo et de Pseudalis sont en français.
 - 2026-11-15 : les modèles présents sur le Mac sans être passés par Albireo vont dans la **bibliothèque du Mac** (`library_dir`), que le service lit sans y écrire ; le dossier d'import reste une boîte aux lettres vidée au démarrage (l'original), la réserve garde les modèles passés par Albireo.
 - 2026-11-15 : l'humain veut les images de Gemma 3 **et** le 26B-A4B (« fait les deux »), malgré la recommandation de ne faire que le second. Les tokens d'une image de Gemma 3 se voient les uns les autres, comme dans llama.cpp, et une passe qui contient une image reste sur le processeur (comme pour les autres familles). Le 26B-A4B commence sur le processeur ; le GPU viendra après les mesures sur le Mac mini.

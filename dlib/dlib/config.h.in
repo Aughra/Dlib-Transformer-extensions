@@ -29,6 +29,7 @@
 #cmakedefine DLIB_USE_LAPACK
 #cmakedefine DLIB_USE_CUDA
 #cmakedefine DLIB_USE_NPU
+#cmakedefine DLIB_USE_METAL
 #cmakedefine DLIB_USE_MKL_FFT
 #cmakedefine DLIB_USE_FFMPEG
 

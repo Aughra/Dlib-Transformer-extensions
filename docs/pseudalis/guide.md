@@ -97,8 +97,8 @@ Un `admin.token` laissé par une version antérieure n'est plus lu.
 ## Tester
 
 ```sh
-build/macos-pseudalis/tests/test_engine            # le moteur
-build/macos-pseudalis/tests/test_host <dossier>    # le service et ses fichiers
+build/macos-pseudalis/bin/test_engine            # le moteur
+build/macos-pseudalis/bin/test_host <dossier>    # le service et ses fichiers
 PSEUDALIS_TEST_PORT=18474 bash dlib/dlib/external/pseudalis/tools/test_macos.sh   # 37 étapes
 ```
 

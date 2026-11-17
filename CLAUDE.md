@@ -45,6 +45,7 @@ La référence des commandes et des résultats est [docs/memo-portage-macos-arm6
 
 - **dlib + exemples** : `cmake -S dlib/examples -B build/macos-arm64-cpu` (options CPU seules, voir le mémo), puis `cmake --build build/macos-arm64-cpu`.
 - **Tests dlib** : `cmake -S dlib/dlib/test -B build/macos-arm64-tests`, puis `build/macos-arm64-tests/dtest`.
+- **Backend Metal des tenseurs de dlib** (option `DLIB_USE_METAL`, désactivée par défaut, en cours de construction phase par phase) : build de tests à part, `build/macos-arm64-tests-metal`, avec `-DDLIB_USE_METAL=ON` (commande dans le mémo) ; `dtest --test_metal` dans ce build et dans le build CPU.
 - **Albireo / Pseudalis** : `cmake -S dlib/dlib/external/<app> -B build/macos-<app> -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64`.
 - **Service de Pseudalis** : `PSEUDALIS_HOME=$PWD/build/pseudalis-home ALBIREO_HOME=$PWD/build/albireo-home build/macos-pseudalis/bin/pseudalis-service --console` (port 18444, réglé dans ses données : le port par défaut, 8444, est celui de l'accès réseau d'Albireo) ; Albireo se lance avec `PSEUDALIS_HOME` aussi, pour son sélecteur. Ne jamais lancer `pseudalis-service` sans `PSEUDALIS_HOME` (il n'a pas d'option `--help` et crée un dossier de données par défaut). Test complet : `PSEUDALIS_TEST_PORT=18474 bash dlib/dlib/external/pseudalis/tools/test_macos.sh` quand le vrai service tourne. Détails : [docs/pseudalis/guide.md](docs/pseudalis/guide.md).
 - **Sonde Metal** (GPU du Mac, hors moteur) : `macos/metal-sonde/`, propre au fork ; commandes dans son README.

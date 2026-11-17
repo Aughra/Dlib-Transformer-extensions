@@ -130,6 +130,8 @@ if (NOT TARGET dlib)
       "Set this to a comma-separated list of CUDA compute capabilities" )
    set (DLIB_USE_NPU_STR
       "Disable this if you don't want dlib to route computations to the NPU and the Intel GPU of the processor through OpenVINO" )
+   set (DLIB_USE_METAL_STR
+      "Enable this to build the Metal backend of dlib tensors, for Apple Silicon (see dlib/cuda/metal_dlib.h)" )
    set (DLIB_BACKENDS_STR
       "AUTO, or the backends to build among CPU, CUDA and NPU, such as CPU/NPU or CPU/NPU/CUDA.  A list makes each accelerator it names mandatory and turns the others off." )
    set (DLIB_USE_MKL_SEQUENTIAL_STR
@@ -171,6 +173,7 @@ if (NOT TARGET dlib)
    option(DLIB_USE_MKL_WITH_TBB ${DLIB_USE_MKL_WITH_TBB_STR} OFF)
    option(DLIB_USE_SYSTEM_SQLITE3 ${DLIB_USE_SYSTEM_SQLITE3_STR} OFF)
    option(DLIB_HTTPLIB_TLS ${DLIB_HTTPLIB_TLS_STR} ON)
+   option(DLIB_USE_METAL ${DLIB_USE_METAL_STR} OFF)
 
    if(DLIB_ENABLE_ASSERTS)
       # Set these variables so they are set in the config.h.in file when dlib
@@ -265,6 +268,9 @@ if (NOT TARGET dlib)
    endif()
    if (DLIB_ISO_CPP_ONLY AND DLIB_USE_NPU)
       set(DLIB_USE_NPU OFF CACHE BOOL ${DLIB_USE_NPU_STR} FORCE)
+   endif()
+   if (DLIB_ISO_CPP_ONLY AND DLIB_USE_METAL)
+      set(DLIB_USE_METAL OFF CACHE BOOL ${DLIB_USE_METAL_STR} FORCE)
    endif()
 
    toggle_preprocessor_switch(DLIB_JPEG_SUPPORT)
@@ -729,6 +735,24 @@ if (NOT TARGET dlib)
          message(FATAL_ERROR "DLIB_BACKENDS=${DLIB_BACKENDS} requires NPU support, which could not be enabled (see the messages above).")
       endif()
       toggle_preprocessor_switch(DLIB_USE_NPU)
+
+      if (DLIB_USE_METAL)
+         # A tensor lives in one place: on Metal or on CUDA, never both.
+         if (DLIB_USE_CUDA)
+            message(FATAL_ERROR "DLIB_USE_METAL and DLIB_USE_CUDA exclude each other.  Turn one of them off.")
+         endif()
+         if (NOT APPLE)
+            message(FATAL_ERROR "DLIB_USE_METAL needs macOS: Metal exists only on Apple systems.")
+         endif()
+         # cuda/metal_dlib.mm is the only Objective-C++ file.  It is built with automatic
+         # reference counting, and dlib links the Metal and Foundation frameworks for it.
+         enable_language(OBJCXX)
+         set(source_files ${source_files} cuda/metal_dlib.mm)
+         set_source_files_properties(cuda/metal_dlib.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+         list (APPEND dlib_needed_private_libraries "-framework Metal" "-framework Foundation")
+         message(STATUS "Enabling the Metal backend of dlib tensors.")
+      endif()
+      toggle_preprocessor_switch(DLIB_USE_METAL)
 
 
       set(dlib_bundled_sqlite3 OFF)

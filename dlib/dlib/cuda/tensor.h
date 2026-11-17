@@ -81,6 +81,11 @@ namespace dlib
 
         int device_id() const { return data().device_id(); }
 
+        // Where the values live, and so where the tensor_tools functions compute
+        // (see metal_dlib.h).  A view such as an alias_tensor_instance shares the device of
+        // the tensor it looks into.
+        tensor_device get_tensor_device() const { return data().get_device(); }
+
         tensor& operator= (float val)
         {
 #ifdef DLIB_USE_CUDA
@@ -338,11 +343,13 @@ namespace dlib
 
         resizable_tensor(const resizable_tensor& item) : _annotation(item.annotation()) 
         {
+            data_instance.set_device(item.get_tensor_device());
             copy_size(item);
             memcpy(*this, item);
         }
         resizable_tensor(const tensor& item) : _annotation(item.annotation()) 
         {
+            data_instance.set_device(item.get_tensor_device());
             copy_size(item);
             memcpy(*this, item);
         }
@@ -374,6 +381,13 @@ namespace dlib
         )
         {
             set_size(item.num_samples(), item.k(), item.nr(), item.nc());
+        }
+
+        void set_tensor_device (
+            tensor_device device
+        )
+        {
+            data_instance.set_device(device);
         }
 
         resizable_tensor& operator= (float val)

@@ -63,6 +63,28 @@ namespace dlib
                 - If CUDA is not being used then this function always returns 0.
         !*/
 
+        tensor_device get_device(
+        ) const;
+        /*!
+            ensures
+                - returns where the values live: tensor_device::cpu, the default, or
+                  tensor_device::metal, a shared MTLBuffer that host() points into, with no
+                  copy between host and device (see dlib/cuda/metal_dlib.h).
+        !*/
+
+        void set_device (
+            tensor_device new_device
+        );
+        /*!
+            ensures
+                - #get_device() == new_device
+                - the values are kept: when the device changes, they are copied once into
+                  memory of the new device.
+            throws
+                - metal_error when new_device is tensor_device::metal and dlib was built
+                  without DLIB_USE_METAL, or when no Metal device is available.
+        !*/
+
         void async_copy_to_device(
         ); 
         /*!

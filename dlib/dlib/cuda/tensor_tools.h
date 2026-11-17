@@ -13,6 +13,9 @@
 #include "cpu_gguf.h"
 #include "cuda_gguf.h"
 #include "gguf_blocks.h"
+#ifdef DLIB_USE_METAL
+#include "metal_dispatch.h"
+#endif
 #include "npu_dlib.h"
 #include "../rand.h"
 #include <memory>
@@ -1207,6 +1210,9 @@ namespace dlib { namespace tt
             const tensor& filters
         )
         {
+#ifdef DLIB_USE_METAL
+            metal::refuse("tensor_conv", add_to_output,output,data,filters);
+#endif
 #if defined(DLIB_USE_NPU) && !defined(DLIB_USE_CUDA)
             if (npu::conv(add_to_output, output, data, filters, stride_y, stride_x, padding_y, padding_x))
                 return;
@@ -1241,6 +1247,9 @@ namespace dlib { namespace tt
             const tensor& filters
         )
         {
+#ifdef DLIB_USE_METAL
+            metal::refuse("tensor_conv", add_to_output,output,data,filters);
+#endif
 #if defined(DLIB_USE_NPU) && !defined(DLIB_USE_CUDA)
             if (stride_y > 0 && stride_x > 0)
             {
@@ -1283,6 +1292,9 @@ namespace dlib { namespace tt
             bool use_relu
         )
         {
+#ifdef DLIB_USE_METAL
+            metal::refuse("tensor_conv", add_to_output,output,data,filters,biases,use_relu);
+#endif
 #if defined(DLIB_USE_NPU) && !defined(DLIB_USE_CUDA)
             if (npu::conv(add_to_output, output, data, filters, stride_y, stride_x, padding_y, padding_x))
             {
@@ -1327,6 +1339,9 @@ namespace dlib { namespace tt
             bool use_relu
         )
         {
+#ifdef DLIB_USE_METAL
+            metal::refuse("tensor_conv", add_to_output,output,data,filters,biases,use_relu);
+#endif
 #if defined(DLIB_USE_NPU) && !defined(DLIB_USE_CUDA)
             if (stride_y > 0 && stride_x > 0)
             {
@@ -1373,6 +1388,9 @@ namespace dlib { namespace tt
             tensor& data_gradient
         )
         {
+#ifdef DLIB_USE_METAL
+            metal::refuse("tensor_conv::get_gradient_for_data", add_to_output,gradient_input,filters,data_gradient);
+#endif
 #if defined(DLIB_USE_NPU) && !defined(DLIB_USE_CUDA)
             if (npu::conv_gradient_for_data(add_to_output, gradient_input, filters, data_gradient,
                     stride_y, stride_x, padding_y, padding_x))
@@ -1417,6 +1435,9 @@ namespace dlib { namespace tt
             tensor& filters_gradient
         )
         {
+#ifdef DLIB_USE_METAL
+            metal::refuse("tensor_conv::get_gradient_for_filters", add_to_output,gradient_input,data,filters_gradient);
+#endif
 #if defined(DLIB_USE_NPU) && !defined(DLIB_USE_CUDA)
             if (npu::conv_gradient_for_filters(add_to_output, gradient_input, data, filters_gradient,
                     stride_y, stride_x, padding_y, padding_x))
@@ -1597,6 +1618,9 @@ namespace dlib { namespace tt
             const tensor& src
         )
         {
+#ifdef DLIB_USE_METAL
+            metal::refuse("pooling", dest, src);
+#endif
 #if defined(DLIB_USE_NPU) && !defined(DLIB_USE_CUDA)
             if (geometry[2] > 0 && src.size() != 0)
             {
@@ -1640,6 +1664,9 @@ namespace dlib { namespace tt
             tensor& grad 
         )
         {
+#ifdef DLIB_USE_METAL
+            metal::refuse("pooling::get_gradient", gradient_input, dest, src, grad);
+#endif
 #if defined(DLIB_USE_NPU) && !defined(DLIB_USE_CUDA)
             if (geometry[2] > 0 && npu::pooling_gradient(impl.does_max_pooling(), geometry[0], geometry[1],
                     geometry[2], geometry[3], geometry[4], geometry[5], gradient_input, dest, src, grad))

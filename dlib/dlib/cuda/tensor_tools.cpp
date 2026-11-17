@@ -19,6 +19,19 @@
 #define DLIB_NPU_TRY(call)
 #endif
 
+/*
+    DLIB_METAL_UNPORTED("op", tensors...) stops an operation that has no Metal version yet
+    when one of its tensors is on Metal, and refuses a call that mixes CPU and Metal tensors
+    (see metal_dispatch.h).  CPU tensors go on to the host path, unchanged.  Without
+    DLIB_USE_METAL no tensor can be on Metal, and it expands to nothing.
+*/
+#ifdef DLIB_USE_METAL
+#include "metal_dispatch.h"
+#define DLIB_METAL_UNPORTED(...) ::dlib::metal::refuse(__VA_ARGS__)
+#else
+#define DLIB_METAL_UNPORTED(...)
+#endif
+
 namespace dlib
 {
     namespace
@@ -48,6 +61,31 @@ namespace dlib
     {
         dnn_prefer_fastest_algo() = false;
     }
+
+#ifndef DLIB_USE_METAL
+    // The Metal backend of metal_dlib.h in a build without DLIB_USE_METAL: no device, so
+    // that programs can ask unconditionally.
+    namespace metal
+    {
+        bool is_compiled_in () { return false; }
+        bool is_available () { return false; }
+        std::string unavailable_reason () { return "dlib was built without DLIB_USE_METAL"; }
+        std::string device_name () { return std::string(); }
+        std::shared_ptr<float> allocate (size_t)
+        {
+            throw metal_error("A Metal buffer was asked for, but dlib was built without DLIB_USE_METAL.");
+        }
+        void synchronize ()
+        {
+            throw metal_error("Metal synchronize was called, but dlib was built without DLIB_USE_METAL.");
+        }
+        void blit_copy (float*, const float*, size_t)
+        {
+            throw metal_error("Metal blit_copy was called, but dlib was built without DLIB_USE_METAL.");
+        }
+        size_t live_buffers () { return 0; }
+    }
+#endif
 
 #ifndef DLIB_USE_NPU
     // The run-time control of npu_dlib.h in a build without DLIB_USE_NPU: no device, nothing
@@ -93,6 +131,7 @@ namespace dlib { namespace tt
         const double eps
     )
     {
+        DLIB_METAL_UNPORTED("inverse_norms", invnorms, data);
 #ifdef DLIB_USE_CUDA
         cuda::inverse_norms(invnorms, data, eps);
 #else
@@ -107,6 +146,7 @@ namespace dlib { namespace tt
         const double eps
     )
     {
+        DLIB_METAL_UNPORTED("inverse_sqrt", dest, src);
         DLIB_CASSERT(dest.size() == src.size());
 
 #ifdef DLIB_USE_CUDA
@@ -124,6 +164,7 @@ namespace dlib { namespace tt
         const double eps
     )
     {
+        DLIB_METAL_UNPORTED("divide_by_sqrt", dest, num, sqnorm);
         DLIB_CASSERT(dest.size() == num.size() && dest.size() == sqnorm.size());
 
 #ifdef DLIB_USE_CUDA
@@ -140,6 +181,7 @@ namespace dlib { namespace tt
         const tensor& rhs
     )
     {
+        DLIB_METAL_UNPORTED("dot_prods", out, lhs, rhs);
 #ifdef DLIB_USE_CUDA
         cuda::dot_prods(out, lhs, rhs);
 #else
@@ -155,6 +197,7 @@ namespace dlib { namespace tt
         const tensor& rhs
     )
     {
+        DLIB_METAL_UNPORTED("dot_prods", out, lhs, rhs);
 #ifdef DLIB_USE_CUDA
         cuda::dot_prods(add_to, out, lhs, rhs);
 #else
@@ -172,6 +215,7 @@ namespace dlib { namespace tt
         const tensor& v
     )
     {
+        DLIB_METAL_UNPORTED("scale_columns", out, m, v);
         DLIB_CASSERT(have_same_dimensions(out,m));
         DLIB_CASSERT(is_vector(v));
         if (m.size() == 0 && v.size() == 0)
@@ -193,6 +237,7 @@ namespace dlib { namespace tt
         const tensor& v
     )
     {
+        DLIB_METAL_UNPORTED("scale_rows", out, m, v);
         DLIB_CASSERT(have_same_dimensions(out,m));
         DLIB_CASSERT(is_vector(v));
         if (m.size() == 0 && v.size() == 0)
@@ -217,6 +262,7 @@ namespace dlib { namespace tt
         const tensor& v2
     )
     {
+        DLIB_METAL_UNPORTED("scale_rows2", out, m1, m2, v1, v2);
         DLIB_CASSERT(have_same_dimensions(out,m1));
         DLIB_CASSERT(have_same_dimensions(out,m2));
         DLIB_CASSERT(have_same_dimensions(v1,v2));
@@ -241,6 +287,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("exp", dest, src);
         DLIB_CASSERT(dest.size() == src.size());
 
 #ifdef DLIB_USE_CUDA
@@ -258,6 +305,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("log", dest, src);
         DLIB_CASSERT(dest.size() == src.size());
 
 #ifdef DLIB_USE_CUDA
@@ -275,6 +323,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("log10", dest, src);
         DLIB_CASSERT(dest.size() == src.size());
 
 #ifdef DLIB_USE_CUDA
@@ -298,6 +347,7 @@ namespace dlib { namespace tt
         operation_mode mode
     )
     {
+        DLIB_METAL_UNPORTED("gemm", dest, lhs, rhs);
 #ifdef DLIB_USE_CUDA
         cuda::gemm(beta, dest, alpha, lhs, trans_lhs, rhs, trans_rhs, mode);
 #else
@@ -426,6 +476,7 @@ namespace dlib { namespace tt
         float stddev
     )
     {
+        DLIB_METAL_UNPORTED("tensor_rand::fill_gaussian", data);
         DLIB_CASSERT(data.size()%2 == 0);
 #ifdef DLIB_USE_CUDA
         rnd.fill_gaussian(data, mean, stddev);
@@ -440,6 +491,7 @@ namespace dlib { namespace tt
         tensor& data
     )
     {
+        DLIB_METAL_UNPORTED("tensor_rand::fill_uniform", data);
 #ifdef DLIB_USE_CUDA
         rnd.fill_uniform(data);
 #else
@@ -458,6 +510,7 @@ namespace dlib { namespace tt
         const tensor& src2
     )
     {
+        DLIB_METAL_UNPORTED("multiply", dest, src1, src2);
         DLIB_CASSERT(dest.k() == src1.k() && src1.k() == src2.k() &&
             dest.nr() == src1.nr() && src1.nr() == src2.nr() &&
             dest.nc() == src1.nc() && src1.nc() == src2.nc() );
@@ -481,6 +534,7 @@ namespace dlib { namespace tt
         const tensor& scales
     )
     {
+        DLIB_METAL_UNPORTED("scale_channels", dest, src, scales);
 #ifdef DLIB_USE_CUDA
         cuda::scale_channels(add_to, dest, src, scales);
 #else
@@ -496,6 +550,7 @@ namespace dlib { namespace tt
         const tensor& src2
     )
     {
+        DLIB_METAL_UNPORTED("multiply_conv", dest, src1, src2);
 #ifdef DLIB_USE_CUDA
         cuda::multiply_conv(add_to, dest, src1, src2);
 #else
@@ -511,6 +566,7 @@ namespace dlib { namespace tt
         const tensor& src2
     )
     {
+        DLIB_METAL_UNPORTED("multiply_zero_padded", dest, src1, src2);
 #ifdef DLIB_USE_CUDA
         cuda::multiply_zero_padded(add_to, dest, src1, src2);
 #else
@@ -528,6 +584,7 @@ namespace dlib { namespace tt
         const float B
     )
     {
+        DLIB_METAL_UNPORTED("affine_transform", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform(dest,src,A,B);
 #else
@@ -542,6 +599,7 @@ namespace dlib { namespace tt
         const float A
     )
     {
+        DLIB_METAL_UNPORTED("affine_transform", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform(dest,src,A);
 #else
@@ -559,6 +617,7 @@ namespace dlib { namespace tt
         const float C
     )
     {
+        DLIB_METAL_UNPORTED("affine_transform", dest, src1, src2);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform(dest,src1,src2,A,B,C);
 #else
@@ -575,6 +634,7 @@ namespace dlib { namespace tt
         const float B
     )
     {
+        DLIB_METAL_UNPORTED("affine_transform", dest, src1, src2);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform(dest,src1,src2,A,B);
 #else
@@ -594,6 +654,7 @@ namespace dlib { namespace tt
         const float D
     )
     {
+        DLIB_METAL_UNPORTED("affine_transform", dest, src1, src2, src3);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform(dest,src1,src2,src3,A,B,C,D);
 #else
@@ -614,6 +675,7 @@ namespace dlib { namespace tt
         const float C
     )
     {
+        DLIB_METAL_UNPORTED("affine_transform_range", dest, src1, src2, src3);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform_range(begin, end, dest,src1,src2,src3,A,B,C);
 #else
@@ -633,6 +695,7 @@ namespace dlib { namespace tt
         float C
     )
     {
+        DLIB_METAL_UNPORTED("affine_transform", dest, src1, src2, src3);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform(rect, dest,src1,src2,src3,A,B,C);
 #else
@@ -651,6 +714,7 @@ namespace dlib { namespace tt
         const float C
     )
     {
+        DLIB_METAL_UNPORTED("affine_transform", dest, src1, src2, src3);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform_range(0,dest.size(),dest,src1,src2,src3,A,B,C);
 #else
@@ -668,6 +732,7 @@ namespace dlib { namespace tt
         const tensor& B
     )
     {
+        DLIB_METAL_UNPORTED("affine_transform", dest, src, A, B);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform(dest,src,A,B);
 #else
@@ -685,6 +750,7 @@ namespace dlib { namespace tt
         const tensor& B
     )
     {
+        DLIB_METAL_UNPORTED("affine_transform_conv", dest, src, A, B);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform_conv(dest,src,A,B);
 #else
@@ -710,6 +776,7 @@ namespace dlib { namespace tt
         const tensor& params_grad
     )
     {
+        DLIB_METAL_UNPORTED("compute_adam_update", s, m, v, params, params_grad);
 #ifdef DLIB_USE_CUDA
         cuda::compute_adam_update(begin, end, s, m, v, t, learning_rate, weight_decay, momentum1,
             momentum2, params, params_grad);
@@ -738,6 +805,7 @@ namespace dlib { namespace tt
         const tensor& params_grad
     )
     {
+        DLIB_METAL_UNPORTED("compute_adam_atan2_update", s, m, v, params, params_grad);
 #ifdef DLIB_USE_CUDA
         cuda::compute_adam_atan2_update(begin, end, s, m, v, t, learning_rate, weight_decay,
             momentum1, momentum2, params, params_grad);
@@ -761,6 +829,7 @@ namespace dlib { namespace tt
         const tensor& running_variances
     )
     {
+        DLIB_METAL_UNPORTED("batch_normalize_inference", dest, src, gamma, beta, running_means, running_variances);
 #ifdef DLIB_USE_CUDA
         cuda::batch_normalize_inference(eps,dest,src,gamma,beta,running_means,running_variances);
 #else
@@ -782,6 +851,7 @@ namespace dlib { namespace tt
         const tensor& beta 
     )
     {
+        DLIB_METAL_UNPORTED("batch_normalize", dest, means, vars, running_means, running_variances, src, gamma, beta);
 #ifdef DLIB_USE_CUDA
         cuda::batch_normalize(eps,dest,means,vars,averaging_factor,running_means,running_variances,src,gamma,beta);
 #else
@@ -803,6 +873,7 @@ namespace dlib { namespace tt
             tensor& beta_grad 
     )
     {
+        DLIB_METAL_UNPORTED("batch_normalize_gradient", gradient_input, means, invstds, src, gamma, src_grad, gamma_grad, beta_grad);
              
 #ifdef DLIB_USE_CUDA
         cuda::batch_normalize_gradient(eps,gradient_input, means, invstds, src, gamma, src_grad, gamma_grad, beta_grad);
@@ -825,6 +896,7 @@ namespace dlib { namespace tt
         const tensor& running_variances
     )
     {
+        DLIB_METAL_UNPORTED("batch_normalize_conv_inference", dest, src, gamma, beta, running_means, running_variances);
 #ifdef DLIB_USE_CUDA
         cuda::batch_normalize_conv_inference(eps,dest,src,gamma,beta,running_means,running_variances);
 #else
@@ -846,6 +918,7 @@ namespace dlib { namespace tt
         const tensor& beta 
     )
     {
+        DLIB_METAL_UNPORTED("batch_normalize_conv", dest, means, vars, running_means, running_variances, src, gamma, beta);
 #ifdef DLIB_USE_CUDA
         cuda::batch_normalize_conv(eps,dest,means,vars,averaging_factor,running_means,running_variances,src,gamma,beta);
 #else
@@ -867,6 +940,7 @@ namespace dlib { namespace tt
         tensor& beta_grad 
     )
     {
+        DLIB_METAL_UNPORTED("batch_normalize_conv_gradient", gradient_input, means, invstds, src, gamma, src_grad, gamma_grad, beta_grad);
              
 #ifdef DLIB_USE_CUDA
         cuda::batch_normalize_conv_gradient(eps,gradient_input, means, invstds, src, gamma, src_grad, gamma_grad, beta_grad);
@@ -889,6 +963,7 @@ namespace dlib { namespace tt
         const tensor& beta
     )
     {
+        DLIB_METAL_UNPORTED("layer_normalize", dest, means, vars, src, gamma, beta);
 #ifdef DLIB_USE_CUDA
         cuda::layer_normalize(eps, dest, means, vars, src, gamma, beta);
 #else
@@ -911,6 +986,7 @@ namespace dlib { namespace tt
             resizable_tensor& dvars
     )
     {
+        DLIB_METAL_UNPORTED("layer_normalize_gradient", gradient_input, means, invstds, src, gamma, src_grad, gamma_grad, beta_grad, dmeans, dvars);
 #ifdef DLIB_USE_CUDA
         cuda::layer_normalize_gradient(eps, gradient_input, means, invstds, src, gamma, src_grad, gamma_grad, beta_grad, dmeans, dvars);
 #else
@@ -931,6 +1007,7 @@ namespace dlib { namespace tt
         bool axis_is_nc
     )
     {            
+        DLIB_METAL_UNPORTED("rms_normalize", dest, scale, src, gamma);
 #ifdef DLIB_USE_CUDA
         cuda::rms_normalize(eps, dest, scale, src, gamma, axis_is_nc);
 #else
@@ -950,6 +1027,7 @@ namespace dlib { namespace tt
         bool axis_is_nc
     )
     {            
+        DLIB_METAL_UNPORTED("rms_normalize_gradient", gradient_input, scale, src, gamma, src_grad, gamma_grad, dscale);
 #ifdef DLIB_USE_CUDA
         cuda::rms_normalize_gradient(gradient_input, scale, src, gamma, src_grad, gamma_grad, dscale, axis_is_nc);
 #else
@@ -966,6 +1044,7 @@ namespace dlib { namespace tt
         float thresh
     )
     {
+        DLIB_METAL_UNPORTED("threshold", data);
 #ifdef DLIB_USE_CUDA
         cuda::threshold(data,thresh);
 #else
@@ -981,6 +1060,7 @@ namespace dlib { namespace tt
         size_t idx
     )
     {
+        DLIB_METAL_UNPORTED("dot", a, b, result);
 #ifdef DLIB_USE_CUDA
         cuda::dot(a,b,result,idx);
 #else
@@ -998,6 +1078,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("add", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::add(beta,dest,alpha,src);
 #else
@@ -1014,6 +1095,7 @@ namespace dlib { namespace tt
         const tensor& src2
     )
     {
+        DLIB_METAL_UNPORTED("add", dest, src1, src2);
 #ifdef DLIB_USE_CUDA
         cuda::add(dest, src1, src2);
 #else
@@ -1029,6 +1111,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
+        DLIB_METAL_UNPORTED("assign_conv_bias_gradient", grad, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::assign_conv_bias_gradient(grad,gradient_input);
 #else
@@ -1044,6 +1127,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
+        DLIB_METAL_UNPORTED("assign_bias_gradient", grad, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::assign_bias_gradient(grad,gradient_input);
 #else
@@ -1060,6 +1144,7 @@ namespace dlib { namespace tt
         operation_mode mode
     )
     {
+        DLIB_METAL_UNPORTED("softmax", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::softmax(dest, src, mode);
 #else
@@ -1075,6 +1160,7 @@ namespace dlib { namespace tt
         operation_mode mode
     )
     {
+        DLIB_METAL_UNPORTED("softmax_gradient", grad, dest, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::softmax_gradient(grad, dest, gradient_input, mode);
 #else
@@ -1090,6 +1176,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("softmax_all", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::softmax_all(dest,src);
 #else
@@ -1104,6 +1191,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
+        DLIB_METAL_UNPORTED("softmax_all_gradient", grad, dest, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::softmax_all_gradient(grad, dest, gradient_input);
 #else
@@ -1119,6 +1207,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("sigmoid", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::sigmoid(dest,src);
 #else
@@ -1133,6 +1222,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
+        DLIB_METAL_UNPORTED("sigmoid_gradient", grad, dest, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::sigmoid_gradient(grad, dest, gradient_input);
 #else
@@ -1148,6 +1238,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("mish", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::mish(dest,src);
 #else
@@ -1162,6 +1253,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
+        DLIB_METAL_UNPORTED("mish_gradient", grad, src, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::mish_gradient(grad, src, gradient_input);
 #else
@@ -1177,6 +1269,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("relu", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::relu(dest,src);
 #else
@@ -1191,6 +1284,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
+        DLIB_METAL_UNPORTED("relu_gradient", grad, dest, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::relu_gradient(grad, dest, gradient_input);
 #else
@@ -1207,6 +1301,7 @@ namespace dlib { namespace tt
         const tensor& param
     )
     {
+        DLIB_METAL_UNPORTED("prelu", dest, src, param);
 #ifdef DLIB_USE_CUDA
         cuda::prelu(dest, src, param);
 #else
@@ -1223,6 +1318,7 @@ namespace dlib { namespace tt
         tensor& params_grad 
     )
     {
+        DLIB_METAL_UNPORTED("prelu_gradient", grad, src, gradient_input, param, params_grad);
 #ifdef DLIB_USE_CUDA
         cuda::prelu_gradient(grad, src, gradient_input, param, params_grad);
 #else
@@ -1239,6 +1335,7 @@ namespace dlib { namespace tt
         const float alpha
     )
     {
+        DLIB_METAL_UNPORTED("leaky_relu", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::leaky_relu(dest, src, alpha);
 #else
@@ -1254,6 +1351,7 @@ namespace dlib { namespace tt
         const float alpha
     )
     {
+        DLIB_METAL_UNPORTED("leaky_relu_gradient", grad, dest, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::leaky_relu_gradient(grad, dest, gradient_input, alpha);
 #else
@@ -1269,6 +1367,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("tanh", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::tanh(dest,src);
 #else
@@ -1283,6 +1382,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
+        DLIB_METAL_UNPORTED("tanh_gradient", grad, dest, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::tanh_gradient(grad, dest, gradient_input);
 #else
@@ -1299,6 +1399,7 @@ namespace dlib { namespace tt
         const float ceiling
     )
     {
+        DLIB_METAL_UNPORTED("clipped_relu", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::clipped_relu(dest, src, ceiling);
 #else
@@ -1314,6 +1415,7 @@ namespace dlib { namespace tt
         const float ceiling
     )
     {
+        DLIB_METAL_UNPORTED("clipped_relu_gradient", grad, dest, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::clipped_relu_gradient(grad, dest, gradient_input, ceiling);
 #else
@@ -1330,6 +1432,7 @@ namespace dlib { namespace tt
         const float alpha
     )
     {
+        DLIB_METAL_UNPORTED("elu", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::elu(dest, src, alpha);
 #else
@@ -1345,6 +1448,7 @@ namespace dlib { namespace tt
         const float alpha
     )
     {
+        DLIB_METAL_UNPORTED("elu_gradient", grad, dest, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::elu_gradient(grad, dest, gradient_input, alpha);
 #else
@@ -1360,6 +1464,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("gelu", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::gelu(dest,src);
 #else
@@ -1374,6 +1479,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
+        DLIB_METAL_UNPORTED("gelu_gradient", grad, src, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::gelu_gradient(grad, src, gradient_input);
 #else
@@ -1390,6 +1496,7 @@ namespace dlib { namespace tt
         const float beta
     )
     {
+        DLIB_METAL_UNPORTED("smelu", dest, src);
         DLIB_CASSERT(beta > 0);
 #ifdef DLIB_USE_CUDA
         cuda::smelu(dest, src, beta);
@@ -1406,6 +1513,7 @@ namespace dlib { namespace tt
         const float beta
     )
     {
+        DLIB_METAL_UNPORTED("smelu_gradient", grad, dest, gradient_input);
         DLIB_CASSERT(beta > 0);
 #ifdef DLIB_USE_CUDA
         cuda::smelu_gradient(grad, dest, gradient_input, beta);
@@ -1422,6 +1530,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("silu", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::silu(dest,src);
 #else
@@ -1436,6 +1545,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
+        DLIB_METAL_UNPORTED("silu_gradient", grad, src, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::silu_gradient(grad, src, gradient_input);
 #else
@@ -1455,6 +1565,7 @@ namespace dlib { namespace tt
         long src_channel_stride
     )
     {
+        DLIB_METAL_UNPORTED("resize_bilinear", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::resize_bilinear(dest,dest_row_stride,dest_channel_stride, src,src_row_stride,src_channel_stride);
 #else
@@ -1472,6 +1583,7 @@ namespace dlib { namespace tt
         long gradient_input_channel_stride
     )
     {
+        DLIB_METAL_UNPORTED("resize_bilinear_gradient", grad, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::resize_bilinear_gradient(grad,grad_row_stride,grad_channel_stride,  gradient_input,gradient_input_row_stride,gradient_input_channel_stride);
 #else
@@ -1491,6 +1603,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("reorg", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::reorg(add_to, dest, row_stride, col_stride, src);
 #else
@@ -1507,6 +1620,7 @@ namespace dlib { namespace tt
         const tensor& gradient_input
     )
     {
+        DLIB_METAL_UNPORTED("reorg_gradient", grad, gradient_input);
 #ifdef DLIB_USE_CUDA
         cuda::reorg_gradient(add_to, grad, row_stride, col_stride, gradient_input);
 #else
@@ -1526,6 +1640,7 @@ namespace dlib { namespace tt
             size_t count_k
     )
     {
+        DLIB_METAL_UNPORTED("copy_tensor", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::copy_tensor(add_to, dest, dest_k_offset, src, src_k_offset, count_k);
 #else
@@ -1545,6 +1660,7 @@ namespace dlib { namespace tt
         size_t k, size_t nr, size_t nc
     )
     {
+        DLIB_METAL_UNPORTED("copy_tensor", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::copy_tensor(add_to, dest, dk, dnr, dnc , src, sk, snr, snc, k, nr, nc);
 #else
@@ -1561,6 +1677,7 @@ namespace dlib { namespace tt
         resizable_tensor& out
     )
     {
+        DLIB_METAL_UNPORTED("inv", m, out);
 #ifdef DLIB_USE_CUDA
         finv(m,out);
 #else
@@ -1577,6 +1694,7 @@ namespace dlib { namespace tt
         const tensor& src
     )
     {
+        DLIB_METAL_UNPORTED("transpose", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::transpose(add_to, dest, src);
 #else
@@ -1593,6 +1711,7 @@ namespace dlib { namespace tt
         const tensor& embs
     )
     {
+        DLIB_METAL_UNPORTED("embeddings", dest, src, embs);
 #ifdef DLIB_USE_CUDA
         cuda::embeddings(dest, src, embs);
 #else
@@ -1610,6 +1729,7 @@ namespace dlib { namespace tt
         bool scale
     )
     {
+        DLIB_METAL_UNPORTED("embeddings_gradient", prev, gradient_input, grads, freqs);
 #ifdef DLIB_USE_CUDA
         cuda::embeddings_gradient(prev, gradient_input, grads, freqs, learning_rate, scale);
 #else
@@ -1628,6 +1748,7 @@ namespace dlib { namespace tt
         float scale
     )
     {
+        DLIB_METAL_UNPORTED("puzzle_embeddings", dest, tokens, token_table, puzzle_table);
 #ifdef DLIB_USE_CUDA
         cuda::puzzle_embeddings(dest, tokens, token_table, puzzle_table, scale);
 #else
@@ -1646,6 +1767,7 @@ namespace dlib { namespace tt
         float puzzle_decay
     )
     {
+        DLIB_METAL_UNPORTED("puzzle_embeddings_gradient", tokens, gradient_input, token_grad, puzzle_table);
 #ifdef DLIB_USE_CUDA
         cuda::puzzle_embeddings_gradient(tokens, gradient_input, token_grad, puzzle_table,
                                          scale, puzzle_rate, puzzle_decay);
@@ -1665,6 +1787,7 @@ namespace dlib { namespace tt
         long repeat_factor
     )
     {
+        DLIB_METAL_UNPORTED("repeat_channels", dest, src);
         DLIB_CASSERT(repeat_factor >= 1);
         DLIB_CASSERT(dest.num_samples() == src.num_samples());
         DLIB_CASSERT(dest.k() == src.k() * repeat_factor);
@@ -1689,6 +1812,7 @@ namespace dlib { namespace tt
         long repeat_factor
     )
     {
+        DLIB_METAL_UNPORTED("accumulate_repeated_channels", dest, src);
         DLIB_CASSERT(repeat_factor >= 1);
         DLIB_CASSERT(dest.num_samples() == src.num_samples());
         DLIB_CASSERT(src.k() == dest.k() * repeat_factor);
@@ -1721,6 +1845,7 @@ namespace dlib { namespace tt
         long feature_dim
     )
     {
+        DLIB_METAL_UNPORTED("compute_halt_logits", logits, halt_probs, state, halt_params, active_mask);
 #ifdef DLIB_USE_CUDA
         cuda::compute_halt_logits(logits, halt_probs, state, halt_params, active_mask,
             batch_size, seq_len, num_channels, feature_dim);
@@ -1751,6 +1876,7 @@ namespace dlib { namespace tt
         bool gradient_check_mode
     )
     {
+        DLIB_METAL_UNPORTED("compute_halt_gradient", grad_params, grad_state, gradient_input, state, halt_probs, halt_params, active_mask, n_steps, final_state);
 #ifdef DLIB_USE_CUDA
         cuda::compute_halt_gradient(grad_params, grad_state, gradient_input, state,
             halt_probs, halt_params, active_mask, n_steps, final_state,
@@ -1779,6 +1905,7 @@ namespace dlib { namespace tt
         long feature_dim
     )
     {
+        DLIB_METAL_UNPORTED("accumulate_weighted_state", output, state, weights, active_mask);
 #ifdef DLIB_USE_CUDA
         cuda::accumulate_weighted_state(output, state, weights, active_mask,
             batch_size, seq_len, num_channels, feature_dim);
@@ -1802,6 +1929,7 @@ namespace dlib { namespace tt
         long max_steps
     )
     {
+        DLIB_METAL_UNPORTED("apply_act_depth_scaling", gradients, n_steps);
 #ifdef DLIB_USE_CUDA
         cuda::apply_act_depth_scaling(gradients, n_steps, batch_size, seq_len,
             num_channels, feature_dim, max_steps);
@@ -1822,6 +1950,7 @@ namespace dlib { namespace tt
         const tensor& row
     )
     {
+        DLIB_METAL_UNPORTED("broadcast_row", dest, row);
 #ifdef DLIB_USE_CUDA
         cuda::broadcast_row(dest, row);
 #else
@@ -1839,6 +1968,7 @@ namespace dlib { namespace tt
         float halt_threshold
     )
     {
+        DLIB_METAL_UNPORTED("act_mark_active", active_mask, active_count, cumulative_halting);
         DLIB_CASSERT(active_mask.size() == cumulative_halting.size());
         DLIB_CASSERT(active_count.size() == 1);
 #ifdef DLIB_USE_CUDA
@@ -1863,6 +1993,7 @@ namespace dlib { namespace tt
         float halt_threshold
     )
     {
+        DLIB_METAL_UNPORTED("act_update_halting", cumulative_halting, remainders, n_steps, step_weights, halt_probs, active_mask);
         DLIB_CASSERT(cumulative_halting.size() == remainders.size());
         DLIB_CASSERT(cumulative_halting.size() == n_steps.size());
         DLIB_CASSERT(cumulative_halting.size() == step_weights.size());
@@ -1893,6 +2024,7 @@ namespace dlib { namespace tt
         long feature_dim
     )
     {
+        DLIB_METAL_UNPORTED("act_gather_final_state", final_state, step_state, n_steps);
         DLIB_CASSERT(have_same_dimensions(final_state, step_state));
         DLIB_CASSERT(n_steps.size() == (size_t)(batch_size * seq_len));
 #ifdef DLIB_USE_CUDA
@@ -1921,6 +2053,7 @@ namespace dlib { namespace tt
         long feature_dim
     )
     {
+        DLIB_METAL_UNPORTED("act_accumulate_output_grad", grad_state, gradient_input, step_weights, active_mask, n_steps);
         DLIB_CASSERT(have_same_dimensions(grad_state, gradient_input));
         DLIB_CASSERT(step_weights.size() == (size_t)(batch_size * seq_len));
         DLIB_CASSERT(active_mask.size() == step_weights.size());
@@ -1943,6 +2076,7 @@ namespace dlib { namespace tt
         const resizable_tensor& sin_cache
     )
     {
+        DLIB_METAL_UNPORTED("apply_rotary_positional_embedding", data, cos_cache, sin_cache);
 #ifdef DLIB_USE_CUDA
         cuda::apply_rotary_positional_embedding(is_backward, data, cos_cache, sin_cache);
 #else
@@ -1958,6 +2092,7 @@ namespace dlib { namespace tt
         tensor& dst,
         const tensor& src)
     {
+        DLIB_METAL_UNPORTED("split_heads", dst, src);
 #ifdef DLIB_USE_CUDA
         cuda::split_heads(add_to, dst, src);
 #else
@@ -1971,6 +2106,7 @@ namespace dlib { namespace tt
         tensor& dst,
         const tensor& src)
     {
+        DLIB_METAL_UNPORTED("merge_heads", dst, src);
 #ifdef DLIB_USE_CUDA
         cuda::merge_heads(add_to, dst, src);
 #else
@@ -1991,6 +2127,7 @@ namespace dlib { namespace tt
         size_t row_bytes
     )
     {
+        DLIB_METAL_UNPORTED("gguf_matvec", dest, src, weights);
 #ifdef DLIB_USE_CUDA
         cuda::gguf_matvec(dest, src, weights, type, rows, cols, row_bytes);
 #else
@@ -2008,6 +2145,7 @@ namespace dlib { namespace tt
         size_t row_bytes
     )
     {
+        DLIB_METAL_UNPORTED("gguf_dequantize", dest, weights);
 #ifdef DLIB_USE_CUDA
         cuda::gguf_dequantize(dest, weights, type, first, count, cols, row_bytes);
 #else
@@ -2022,6 +2160,7 @@ namespace dlib { namespace tt
         float eps
     )
     {
+        DLIB_METAL_UNPORTED("rms_norm_rows", dest, src, gamma);
 #ifdef DLIB_USE_CUDA
         cuda::rms_norm_rows(dest, src, gamma, eps);
 #else
@@ -2034,6 +2173,7 @@ namespace dlib { namespace tt
         const tensor& up
     )
     {
+        DLIB_METAL_UNPORTED("silu_multiply", gate, up);
 #ifdef DLIB_USE_CUDA
         cuda::silu_multiply(gate, up);
 #else
