@@ -16,7 +16,7 @@
 #include "../common/engine_loader.h"
 #include "../common/json.h"
 
-namespace albireo
+namespace gulliver
 {
 
     struct engine_candidate
@@ -116,7 +116,7 @@ namespace albireo
 
         /*
             Soumet une requête ; le sink reçoit ses événements jusqu'au dernier.  code, s'il est
-            fourni, reçoit le résultat de albireo_engine_submit() : GULLIVER_OK, ou le code de
+            fourni, reçoit le résultat de gulliver_engine_submit() : GULLIVER_OK, ou le code de
             son refus, GULLIVER_E_BUSY pour une requête à soumettre de nouveau sous peu ; il
             reçoit GULLIVER_E_NOT_FOUND quand aucun moteur ne tourne ou quand le modèle quitte
             le moteur.
@@ -141,7 +141,7 @@ namespace albireo
         // les opérations qui l'utilisent.
         mutable std::shared_timed_mutex life_;
         std::unique_ptr<engine_library> lib_;
-        albireo_engine* engine_ = nullptr;
+        gulliver_engine* engine_ = nullptr;
         // Ce que le service demande souvent : l'état, la description et les modèles.
         mutable std::mutex m_;
         bool running_ = false;

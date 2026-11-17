@@ -11,7 +11,7 @@
 
 #include "model_config.h"
 
-namespace albireo
+namespace gulliver
 {
 
     struct forward_batch

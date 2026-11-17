@@ -11,7 +11,7 @@
 
 #include "../common/json.h"
 
-namespace albireo
+namespace gulliver
 {
 
     /*!

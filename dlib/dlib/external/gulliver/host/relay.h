@@ -41,7 +41,7 @@
     pseudonymisation quand le modèle externe ne lit pas les images.
 */
 
-namespace albireo
+namespace gulliver
 {
 
     // Le modèle de l'interface qui relaie une discussion au moteur externe.

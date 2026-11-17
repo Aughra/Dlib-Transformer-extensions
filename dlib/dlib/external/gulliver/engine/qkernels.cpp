@@ -26,7 +26,7 @@
 #define ACCELERATE_NEW_LAPACK
 #include <vecLib/cblas_new.h>
 
-namespace albireo
+namespace gulliver
 {
     using dlib::ggml_type;
 

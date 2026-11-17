@@ -18,7 +18,7 @@
 #include <memory>
 #include <sys/sysctl.h>
 
-namespace albireo
+namespace gulliver
 {
 
     class thread_pool

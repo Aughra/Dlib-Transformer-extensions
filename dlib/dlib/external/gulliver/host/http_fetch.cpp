@@ -22,7 +22,7 @@
 #include "../common/platform.h"
 #include "../common/version.h"
 
-namespace albireo
+namespace gulliver
 {
 
     bool parse_url(const std::string& url, url_parts& out)

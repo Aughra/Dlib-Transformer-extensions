@@ -10,7 +10,7 @@
 #include "../common/platform.h"
 #include "certificates.h"
 
-namespace albireo
+namespace gulliver
 {
 
     const char* const model_roles[3] = { "general", "code", "security" };

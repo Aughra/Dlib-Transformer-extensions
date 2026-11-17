@@ -14,7 +14,7 @@
     d'utilisateur ou un dossier avec des accents, ou dans une autre écriture, marche partout.
 */
 
-namespace albireo
+namespace gulliver
 {
 
 

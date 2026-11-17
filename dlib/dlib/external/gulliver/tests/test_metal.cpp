@@ -25,7 +25,7 @@
 #include "../engine/metal_device.h"
 #include "../engine/qkernels.h"
 
-using namespace albireo;
+using namespace gulliver;
 
 namespace
 {

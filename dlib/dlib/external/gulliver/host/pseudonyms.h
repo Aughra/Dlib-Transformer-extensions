@@ -28,7 +28,7 @@ namespace httplib { class Client; }
     flux.
 */
 
-namespace albireo
+namespace gulliver
 {
 
     class cancellable

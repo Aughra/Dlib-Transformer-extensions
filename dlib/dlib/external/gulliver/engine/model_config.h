@@ -8,7 +8,7 @@
 
 #include "model_file.h"
 
-namespace albireo
+namespace gulliver
 {
 
     enum class rope_style

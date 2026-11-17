@@ -16,7 +16,7 @@ HUB_API = "https://huggingface.co/api/models/"
 
 
 def load_make_catalog():
-    spec = importlib.util.spec_from_file_location("albireo_make_catalog", MAKE_CATALOG)
+    spec = importlib.util.spec_from_file_location("gulliver_make_catalog", MAKE_CATALOG)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

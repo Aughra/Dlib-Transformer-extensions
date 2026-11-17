@@ -23,7 +23,7 @@
 #include "../common/engine_api.h"
 #include "metal_device.h"
 
-namespace albireo
+namespace gulliver
 {
 
     struct cpu_runtime::gpu_state

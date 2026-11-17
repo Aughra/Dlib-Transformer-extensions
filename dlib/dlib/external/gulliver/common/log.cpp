@@ -10,7 +10,7 @@
 
 #include "platform.h"
 
-namespace albireo
+namespace gulliver
 {
 
     std::string without_queries(const std::string& message)

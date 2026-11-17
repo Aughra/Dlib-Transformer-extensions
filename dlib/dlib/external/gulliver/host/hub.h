@@ -7,7 +7,7 @@
 
 #include "../common/json.h"
 
-namespace albireo
+namespace gulliver
 {
     /*
         Les modèles GGUF de Hugging Face, au-delà du catalogue de l'original : la recherche, les fichiers d'un dépôt,

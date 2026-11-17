@@ -18,7 +18,7 @@
 
 #include "../common/json.h"
 
-namespace albireo
+namespace gulliver
 {
     class thread_pool;
     class metal_device;

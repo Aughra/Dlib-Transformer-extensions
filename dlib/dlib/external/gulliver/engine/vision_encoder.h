@@ -14,7 +14,7 @@
 #include "qkernels.h"
 #include "thread_pool.h"
 
-namespace albireo
+namespace gulliver
 {
 
     class vision_encoder

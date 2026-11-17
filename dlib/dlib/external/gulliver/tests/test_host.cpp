@@ -98,7 +98,7 @@
 
 namespace
 {
-    using albireo::json;
+    using gulliver::json;
 
     int failures = 0;
 
@@ -117,7 +117,7 @@ namespace
     std::string read_text(const std::string& path)
     {
         std::string data;
-        albireo::read_file(path, data);
+        gulliver::read_file(path, data);
         return data;
     }
 
@@ -134,14 +134,14 @@ namespace
         json f = json::object();
         f["url"] = url;
         f["size"] = static_cast<unsigned long long>(content.size());
-        f["sha256"] = albireo::sha256_hex(content);
+        f["sha256"] = gulliver::sha256_hex(content);
         json files = json::array();
         files.push_back(f);
         json e = json::object();
         e["id"] = id;
         e["name"] = id;
         e["size"] = static_cast<unsigned long long>(content.size());
-        e["sha256"] = albireo::sha256_hex(content);
+        e["sha256"] = gulliver::sha256_hex(content);
         e["files"] = files;
         json roles = json::array();
         roles.push_back("general");
@@ -176,7 +176,7 @@ namespace
             json f = json::object();
             f["url"] = urls[i];
             f["size"] = static_cast<unsigned long long>(contents[i].size());
-            f["sha256"] = albireo::sha256_hex(contents[i]);
+            f["sha256"] = gulliver::sha256_hex(contents[i]);
             if (!packed[i].empty())
             {
                 f["compression"] = "gzip";
@@ -194,13 +194,13 @@ namespace
     int logged(const std::string& text)
     {
         int n = 0;
-        for (const auto& line : albireo::log_file::instance().recent())
+        for (const auto& line : gulliver::log_file::instance().recent())
             if (line.find(text) != std::string::npos) ++n;
         return n;
     }
 
     // Attend que le téléchargement de id quitte ses états actifs ; renvoie son dernier état.
-    json wait_download(albireo::model_manager& m, const std::string& id)
+    json wait_download(gulliver::model_manager& m, const std::string& id)
     {
         for (int i = 0; i < 1200; ++i)
         {
@@ -227,7 +227,7 @@ namespace
         return ::link(target.c_str(), link.c_str()) == 0;
     }
 
-    bool installed(albireo::store& db, const std::string& id, albireo::installed_model& m)
+    bool installed(gulliver::store& db, const std::string& id, gulliver::installed_model& m)
     {
         return db.find_model(id, m);
     }
@@ -317,25 +317,25 @@ int main(int argc, char** argv)
         return 2;
     }
     const int port = argc >= 3 ? std::atoi(argv[2]) : 18487;
-    const std::string root = albireo::final_path(argv[1]).empty() ? argv[1] : albireo::final_path(argv[1]);
-    const std::string work = albireo::join_path(root, "test_host-" + albireo::random_hex(8));
-    const std::string models_dir = albireo::join_path(work, "models");
-    const std::string outside = albireo::join_path(work, "outside");
-    albireo::make_dirs(models_dir);
-    albireo::make_dirs(outside);
+    const std::string root = gulliver::final_path(argv[1]).empty() ? argv[1] : gulliver::final_path(argv[1]);
+    const std::string work = gulliver::join_path(root, "test_host-" + gulliver::random_hex(8));
+    const std::string models_dir = gulliver::join_path(work, "models");
+    const std::string outside = gulliver::join_path(work, "outside");
+    gulliver::make_dirs(models_dir);
+    gulliver::make_dirs(outside);
     // Un dossier de données à lui, sur tous les systèmes : le dossier d'import d'un service installé n'est
     // jamais touché.
-    const std::string data = albireo::join_path(work, "data");
-    albireo::set_data_dir(data);
-    check(albireo::data_dir() == data, "the test works in a data folder of its own");
-    const std::string inbox = albireo::join_path(albireo::data_dir(), "import");
-    albireo::make_dirs(inbox);
+    const std::string data = gulliver::join_path(work, "data");
+    gulliver::set_data_dir(data);
+    check(gulliver::data_dir() == data, "the test works in a data folder of its own");
+    const std::string inbox = gulliver::join_path(gulliver::data_dir(), "import");
+    gulliver::make_dirs(inbox);
 
     {
         // À largeur égale, un projecteur ne va qu'avec un décodeur de sa famille (Albireo 4.30.0) : le projecteur de
         // Qwen3.5-4B et celui de Gemma 3 4B sortent tous deux 2 560 valeurs.
         auto file = [](const std::string& name, const std::string& arch, const std::string& type) {
-            albireo::pairing_file f;
+            gulliver::pairing_file f;
             f.name = name;
             f.description = json::object();
             f.description["arch"] = arch;
@@ -348,57 +348,57 @@ int main(int argc, char** argv)
             }
             return f;
         };
-        const std::vector<albireo::pairing_file> decoders = { file("gemma-3-4b-it-Q4_K_M.gguf", "gemma3", "") };
-        const std::vector<albireo::pairing_file> projectors = { file("Qwen3.5-4B-mmproj-F16.gguf", "clip", "qwen3vl_merger"),
+        const std::vector<gulliver::pairing_file> decoders = { file("gemma-3-4b-it-Q4_K_M.gguf", "gemma3", "") };
+        const std::vector<gulliver::pairing_file> projectors = { file("Qwen3.5-4B-mmproj-F16.gguf", "clip", "qwen3vl_merger"),
             file("gemma-3-4b-it-mmproj-F16.gguf", "clip", "gemma3") };
-        const std::vector<int> pairs = albireo::pair_projectors(decoders, projectors);
+        const std::vector<int> pairs = gulliver::pair_projectors(decoders, projectors);
         check(pairs.size() == 2 && pairs[0] == -1 && pairs[1] == 0,
             "a projector goes only with a decoder of its family, whatever the width they share");
     }
 
-    const std::string secured = albireo::join_path(data, "secure-test");
+    const std::string secured = gulliver::join_path(data, "secure-test");
     std::string security_error;
-    check(albireo::secure_folder(secured, security_error), "secure_folder creates a private folder");
+    check(gulliver::secure_folder(secured, security_error), "secure_folder creates a private folder");
     struct stat secured_stat;
     check(lstat(secured.c_str(), &secured_stat) == 0 && (secured_stat.st_mode & 0777) == 0700,
           "secure_folder sets mode 0700");
-    check(albireo::owned_by_system(secured) && albireo::folder_admin_only(secured),
+    check(gulliver::owned_by_system(secured) && gulliver::folder_admin_only(secured),
           "owned folders pass the macOS ownership checks");
-    const std::string writable = albireo::join_path(secured, "writable");
+    const std::string writable = gulliver::join_path(secured, "writable");
     {
         std::ofstream out(writable);
         out << "test";
     }
     chmod(writable.c_str(), 0666);
-    check(!albireo::folder_admin_only(secured), "a group-writable or world-writable entry is rejected");
-    check(!albireo::secure_folder(secured, security_error, true) && !security_error.empty(),
+    check(!gulliver::folder_admin_only(secured), "a group-writable or world-writable entry is rejected");
+    check(!gulliver::secure_folder(secured, security_error, true) && !security_error.empty(),
           "secure_folder refuses unsafe content when asked to inspect it");
     chmod(writable.c_str(), 0600);
-    check(albireo::folder_admin_only(secured), "safe contents pass recursive permission checks");
+    check(gulliver::folder_admin_only(secured), "safe contents pass recursive permission checks");
     // Les ACL étendues de macOS : une entrée « allow » qui laisse un autre compte écrire est refusée,
     // une entrée « deny » est acceptée, et secure_folder vide l'ACL dangereuse de son dossier.
     const auto acl = [](const std::string& rule, const std::string& path)
     { return std::system(("/bin/chmod " + rule + " '" + path + "'").c_str()) == 0; };
     check(acl("+a 'everyone allow write'", writable), "the security test adds an ACL to a file");
-    check(!albireo::folder_admin_only(secured), "an ACL entry that lets everyone write a file is rejected");
-    check(!albireo::secure_folder(secured, security_error, true) && !security_error.empty(),
+    check(!gulliver::folder_admin_only(secured), "an ACL entry that lets everyone write a file is rejected");
+    check(!gulliver::secure_folder(secured, security_error, true) && !security_error.empty(),
           "secure_folder refuses content with a writable ACL when asked to inspect it");
-    check(acl("-N", writable) && albireo::folder_admin_only(secured), "the file passes again without its ACL");
-    check(acl("+a 'everyone deny delete'", secured) && albireo::folder_admin_only(secured)
-              && albireo::owned_by_system(secured),
+    check(acl("-N", writable) && gulliver::folder_admin_only(secured), "the file passes again without its ACL");
+    check(acl("+a 'everyone deny delete'", secured) && gulliver::folder_admin_only(secured)
+              && gulliver::owned_by_system(secured),
           "a deny ACL entry is accepted");
-    check(acl("+a 'everyone allow add_file'", secured) && !albireo::folder_admin_only(secured)
-              && !albireo::owned_by_system(secured),
+    check(acl("+a 'everyone allow add_file'", secured) && !gulliver::folder_admin_only(secured)
+              && !gulliver::owned_by_system(secured),
           "an ACL entry that lets everyone add files to the folder is rejected");
-    check(albireo::secure_folder(secured, security_error) && albireo::folder_admin_only(secured),
+    check(gulliver::secure_folder(secured, security_error) && gulliver::folder_admin_only(secured),
           "secure_folder removes a writable ACL from its folder");
-    const std::string linked = albireo::join_path(data, "linked-secure-test");
+    const std::string linked = gulliver::join_path(data, "linked-secure-test");
     check(make_symlink(secured, linked), "the security test creates a symlink");
-    check(!albireo::owned_by_system(linked) && !albireo::folder_admin_only(linked),
+    check(!gulliver::owned_by_system(linked) && !gulliver::folder_admin_only(linked),
           "security checks refuse a symlink");
-    check(!albireo::secure_folder(linked, security_error) && !albireo::secure_folder(linked + "/", security_error),
+    check(!gulliver::secure_folder(linked, security_error) && !gulliver::secure_folder(linked + "/", security_error),
           "secure_folder refuses a symlink, including one with a trailing slash");
-    check(!albireo::secure_folder("/", security_error), "secure_folder refuses the filesystem root");
+    check(!gulliver::secure_folder("/", security_error), "secure_folder refuses the filesystem root");
 
     // Les fichiers que donne le serveur local, avec des plages, et un fichier qu'il donne en entier quelle
     // que soit la plage demandée.
@@ -615,14 +615,14 @@ int main(int argc, char** argv)
         local, catalogue officiel compris.
     */
     const std::string official = base_url + "/official/";
-    albireo::official_catalog_for_tests(official + "catalog.json");
+    gulliver::official_catalog_for_tests(official + "catalog.json");
     official_serve("model.bin", served);
     official_serve("other.bin", other);
     official_serve("projector.bin", projector);
     official_serve("model-2.bin", newer_tiny);
 
     {
-        albireo::store db(albireo::join_path(work, "albireo.db"));
+        gulliver::store db(gulliver::join_path(work, "albireo.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-10-30T00:00:00Z";
         json list = json::array();
@@ -632,26 +632,26 @@ int main(int argc, char** argv)
         json projector_file = json::object();
         projector_file["url"] = base_url + "/official/projector.bin";
         projector_file["size"] = static_cast<unsigned long long>(projector.size());
-        projector_file["sha256"] = albireo::sha256_hex(projector);
+        projector_file["sha256"] = gulliver::sha256_hex(projector);
         json projector_files = json::array();
         projector_files.push_back(projector_file);
         json projector_entry = json::object();
         projector_entry["size"] = static_cast<unsigned long long>(projector.size());
-        projector_entry["sha256"] = albireo::sha256_hex(projector);
+        projector_entry["sha256"] = gulliver::sha256_hex(projector);
         projector_entry["files"] = projector_files;
         vision["projector"] = projector_entry;
         list.push_back(vision);
         catalog["models"] = list;
         db.set_value("catalog", catalog.dump());
-        const std::string reserve_dir = albireo::join_path(work, "reserve");
-        albireo::model_manager m(db, models_dir, reserve_dir);
+        const std::string reserve_dir = gulliver::join_path(work, "reserve");
+        gulliver::model_manager m(db, models_dir, reserve_dir);
         const std::string dir = m.models_dir();
-        const std::string partial = albireo::join_path(dir, "tiny.gguf.partial");
-        const std::string target = albireo::join_path(dir, "tiny.gguf");
-        albireo::user_error error;
+        const std::string partial = gulliver::join_path(dir, "tiny.gguf.partial");
+        const std::string target = gulliver::join_path(dir, "tiny.gguf");
+        gulliver::user_error error;
 
         // Le fichier partiel, un lien vers un fichier extérieur : refusé, le fichier extérieur inchangé.
-        const std::string victim = albireo::join_path(outside, "victim.txt");
+        const std::string victim = gulliver::join_path(outside, "victim.txt");
         write_text(victim, "kept");
         make_symlink(victim, partial);
         check(m.start_download("tiny", error), "a download starts");
@@ -659,7 +659,7 @@ int main(int argc, char** argv)
         check(d["state"].as_string() == "error" && d["code"].as_string() == "download_file",
             "a partial file that is a link is refused (" + d["state"].as_string() + ")");
         check(read_text(victim) == "kept", "the file the link leads to is unchanged");
-        albireo::remove_file(partial);
+        gulliver::remove_file(partial);
 
         // Le fichier partiel, second nom d'un fichier extérieur : refusé, le fichier inchangé.
         make_hard_link(victim, partial);
@@ -668,55 +668,55 @@ int main(int argc, char** argv)
         check(d["state"].as_string() == "error" && d["code"].as_string() == "download_file",
             "a partial file with a second name is refused");
         check(read_text(victim) == "kept", "the file of the second name is unchanged");
-        albireo::remove_file(partial);
+        gulliver::remove_file(partial);
 
         // Le nom final, un lien : le téléchargement remplace le lien, n'écrit jamais à travers lui.
         make_symlink(victim, target);
         check(m.start_download("tiny", error), "a download starts over a final name that is a link");
         d = wait_download(m, "tiny");
-        albireo::installed_model im;
-        check(d["state"].as_string() == "done" && !albireo::is_link(target) && read_text(target) == served,
+        gulliver::installed_model im;
+        check(d["state"].as_string() == "done" && !gulliver::is_link(target) && read_text(target) == served,
             "the model replaces the link at its final name (" + d["state"].as_string() + ")");
         check(read_text(victim) == "kept", "the file the final link led to is unchanged");
         check(installed(db, "tiny", im) && im.file == target, "the model is recorded at its name");
-        check(!albireo::file_exists(partial), "no partial file is left");
+        check(!gulliver::file_exists(partial), "no partial file is left");
 
         // Le dossier de modèles remplacé par un lien : le téléchargement n'écrit rien là où il mène.
         const std::string moved = dir + ".moved";
-        const std::string elsewhere = albireo::join_path(outside, "elsewhere");
-        albireo::make_dirs(elsewhere);
-        albireo::rename_file(dir, moved);
+        const std::string elsewhere = gulliver::join_path(outside, "elsewhere");
+        gulliver::make_dirs(elsewhere);
+        gulliver::rename_file(dir, moved);
         make_symlink(elsewhere, dir);
         check(m.start_download("small", error), "a download starts into a folder replaced by a link");
         d = wait_download(m, "small");
         check(d["state"].as_string() == "error", "the download into a folder replaced by a link fails");
-        check(albireo::list_dir(elsewhere).empty(), "nothing is written where the link leads");
-        albireo::remove_file(dir);
-        albireo::rename_file(moved, dir);
+        check(gulliver::list_dir(elsewhere).empty(), "nothing is written where the link leads");
+        gulliver::remove_file(dir);
+        gulliver::rename_file(moved, dir);
 
         // Un téléchargement annulé ne laisse aucun fichier partiel et revient ensuite en entier.
-        albireo::installed_model small;
+        gulliver::installed_model small;
         check(m.start_download("small", error), "a download of small starts");
         m.cancel_download("small");
         d = wait_download(m, "small");
         check(d["state"].as_string() == "cancelled" || d["state"].as_string() == "done",
             "the cancelled download ends (" + d["state"].as_string() + ")");
         if (d["state"].as_string() == "cancelled")
-            check(!albireo::file_exists(albireo::join_path(dir, "small.gguf.partial")), "its partial file is removed");
+            check(!gulliver::file_exists(gulliver::join_path(dir, "small.gguf.partial")), "its partial file is removed");
         check(m.start_download("small", error), "the download starts again");
         d = wait_download(m, "small");
         check(d["state"].as_string() == "done" && installed(db, "small", small), "the new download installs it");
 
         // Un fichier inconnu nommé d'après un modèle installé : installé sous un nom à lui, le modèle
         // inchangé.
-        const albireo_test::tiny_gguf tiny_model = albireo_test::tiny_gguf_writer().build();
-        const std::string unknown = albireo::join_path(inbox, "tiny.gguf");
+        const gulliver_test::tiny_gguf tiny_model = gulliver_test::tiny_gguf_writer().build();
+        const std::string unknown = gulliver::join_path(inbox, "tiny.gguf");
         tiny_model.save(unknown, tiny_model.bytes);
         const json u = m.import_path(unknown, inbox, false);
-        albireo::installed_model kept;
+        gulliver::installed_model kept;
         check(u["imported"].size() == 1 && u["imported"][0].as_string() == "tiny-import",
             "an unknown file named after an installed model takes the suffix -import (" + u.dump() + ")");
-        check(read_text(target) == served && installed(db, "tiny", kept) && kept.sha256 == albireo::sha256_hex(served)
+        check(read_text(target) == served && installed(db, "tiny", kept) && kept.sha256 == gulliver::sha256_hex(served)
             && kept.source == "catalog", "the installed model keeps its file and its record");
         // Un autre fichier inconnu de ce nom prend le nom libre suivant.
         std::vector<unsigned char> changed = tiny_model.bytes;
@@ -725,13 +725,13 @@ int main(int argc, char** argv)
         const json u2 = m.import_path(unknown, inbox, false);
         check(u2["imported"].size() == 1 && u2["imported"][0].as_string() == "tiny-import-2",
             "a second unknown file of that name takes the next free name (" + u2.dump() + ")");
-        albireo::remove_file(unknown);
+        gulliver::remove_file(unknown);
 
         const int network_before_restore = official_count("other.bin");
         std::string remove_error;
-        const std::string reserved = albireo::join_path(reserve_dir, albireo::sha256_hex(other) + ".gguf");
+        const std::string reserved = gulliver::join_path(reserve_dir, gulliver::sha256_hex(other) + ".gguf");
         struct stat reserve_stat = {};
-        check(m.remove("small", remove_error) && !albireo::file_exists(small.file)
+        check(m.remove("small", remove_error) && !gulliver::file_exists(small.file)
             && read_text(reserved) == other && ::stat(reserved.c_str(), &reserve_stat) == 0
             && (reserve_stat.st_mode & 0777) == 0600 && !installed(db, "small", small),
             "removing a model keeps its verified file in the local reserve");
@@ -741,7 +741,7 @@ int main(int argc, char** argv)
             && official_count("other.bin") == network_before_restore,
             "a reserved model is restored without a network request");
         check(m.remove("small", remove_error), "a restored model can be reserved again");
-        check(!albireo::http_cancelled() && m.start_download("small", error, true),
+        check(!gulliver::http_cancelled() && m.start_download("small", error, true),
             "a local-only restoration of a model without projector starts while the network is available");
         d = wait_download(m, "small");
         check(d["state"].as_string() == "done" && read_text(small.file) == other
@@ -752,7 +752,7 @@ int main(int argc, char** argv)
         corrupt_reserve[0] ^= 1;
         write_text(reserved, corrupt_reserve);
         const int network_before_corrupt_reserve = official_count("other.bin");
-        check(!albireo::http_cancelled() && m.start_download("small", error, true),
+        check(!gulliver::http_cancelled() && m.start_download("small", error, true),
             "a local-only restoration starts while network access is otherwise available");
         d = wait_download(m, "small");
         check(d["state"].as_string() == "error" && d["code"].as_string() == "reserve_unavailable"
@@ -766,22 +766,22 @@ int main(int argc, char** argv)
 
         check(m.start_download("vision", error), "a model with an image projector downloads");
         d = wait_download(m, "vision");
-        albireo::installed_model vision_model;
+        gulliver::installed_model vision_model;
         check(d["state"].as_string() == "done" && installed(db, "vision", vision_model)
             && read_text(vision_model.file) == other && read_text(vision_model.projector) == projector,
             "the model and projector are installed together");
         check(m.remove("vision", remove_error), "a model and projector can be moved to reserve");
-        const std::string vision_reserved = albireo::join_path(reserve_dir,
-            albireo::sha256_hex(other) + ".gguf");
-        const std::string projector_reserved = albireo::join_path(reserve_dir,
-            albireo::sha256_hex(projector) + ".gguf");
+        const std::string vision_reserved = gulliver::join_path(reserve_dir,
+            gulliver::sha256_hex(other) + ".gguf");
+        const std::string projector_reserved = gulliver::join_path(reserve_dir,
+            gulliver::sha256_hex(projector) + ".gguf");
         check(read_text(vision_reserved) == other && read_text(projector_reserved) == projector,
             "both model and projector are kept in the local reserve");
         const int network_before_vision_restore = official_count("other.bin") + official_count("projector.bin");
-        albireo::http_cancel_all("offline mode");
+        gulliver::http_cancel_all("offline mode");
         check(m.start_download("vision", error, true), "a model with its projector can be restored offline");
         d = wait_download(m, "vision");
-        albireo::http_restore();
+        gulliver::http_restore();
         check(d["state"].as_string() == "done" && read_text(vision_model.file) == other
             && read_text(vision_model.projector) == projector
             && official_count("other.bin") + official_count("projector.bin") == network_before_vision_restore,
@@ -794,17 +794,17 @@ int main(int argc, char** argv)
         write_text(vision_partial, decoder_prefix);
         write_text(projector_partial, projector_prefix);
         json progress = json::object(), done = json::array();
-        progress["sha256"] = albireo::sha256_hex(other);
-        progress["projector_sha256"] = albireo::sha256_hex(projector);
+        progress["sha256"] = gulliver::sha256_hex(other);
+        progress["projector_sha256"] = gulliver::sha256_hex(projector);
         done.push_back(static_cast<unsigned long long>(decoder_prefix.size()));
         done.push_back(static_cast<unsigned long long>(projector_prefix.size()));
         progress["done"] = done;
         db.set_download_state("vision", progress);
-        check(albireo::remove_file(projector_reserved), "the projector can be removed from the reserve for the test");
+        check(gulliver::remove_file(projector_reserved), "the projector can be removed from the reserve for the test");
         const int network_before_missing = official_count("other.bin") + official_count("projector.bin");
         check(m.start_download("vision", error, true), "a local-only restoration with a missing projector starts");
         d = wait_download(m, "vision");
-        const std::vector<std::string> after_missing = albireo::list_dir(dir);
+        const std::vector<std::string> after_missing = gulliver::list_dir(dir);
         check(d["state"].as_string() == "error" && d["code"].as_string() == "reserve_unavailable"
             && !installed(db, "vision", vision_model)
             && official_count("other.bin") + official_count("projector.bin") == network_before_missing
@@ -869,17 +869,17 @@ int main(int argc, char** argv)
         m.reserve_limit([]() { return static_cast<uint64_t>(0); });
         m.trim_reserve();
         reserve = m.reserve_status();
-        check(reserve["used"].as_int() == 0 && albireo::file_exists(vision_reserved) && reserve["shared"].as_int() > 0,
+        check(reserve["used"].as_int() == 0 && gulliver::file_exists(vision_reserved) && reserve["shared"].as_int() > 0,
             "a limit of 0 removes the copies of removed models and keeps those of installed ones");
-        const std::string old_copy = albireo::join_path(reserve_dir, albireo::sha256_hex("old reserve copy") + ".gguf");
-        const std::string new_copy = albireo::join_path(reserve_dir, albireo::sha256_hex("new reserve copy") + ".gguf");
+        const std::string old_copy = gulliver::join_path(reserve_dir, gulliver::sha256_hex("old reserve copy") + ".gguf");
+        const std::string new_copy = gulliver::join_path(reserve_dir, gulliver::sha256_hex("new reserve copy") + ".gguf");
         write_text(old_copy, "old reserve copy");
         write_text(new_copy, "new reserve copy");
         struct timeval long_ago[2] = { { 1000000, 0 }, { 1000000, 0 } };
         utimes(old_copy.c_str(), long_ago);
         m.reserve_limit([]() { return static_cast<uint64_t>(16); });
         m.trim_reserve();
-        check(!albireo::file_exists(old_copy) && albireo::file_exists(new_copy),
+        check(!gulliver::file_exists(old_copy) && gulliver::file_exists(new_copy),
             "beyond its limit, the reserve removes its oldest copy first");
         uint64_t freed = 0;
         const size_t emptied = m.clear_reserve(freed);
@@ -894,7 +894,7 @@ int main(int argc, char** argv)
             refuse laisse le modèle tel quel ; le téléchargement suivant se complète à partir des
             fichiers reçus, sans nouveau transfert.
         */
-        albireo::store db(albireo::join_path(work, "albireo.db"));
+        gulliver::store db(gulliver::join_path(work, "albireo.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-10-31T00:00:00Z";
         json list = json::array();
@@ -902,52 +902,52 @@ int main(int argc, char** argv)
         list.push_back(catalog_entry("small", other, base_url + "/official/other.bin"));
         catalog["models"] = list;
         db.set_value("catalog", catalog.dump());
-        albireo::model_manager m(db, models_dir);
-        const std::string target = albireo::join_path(m.models_dir(), "tiny.gguf");
+        gulliver::model_manager m(db, models_dir);
+        const std::string target = gulliver::join_path(m.models_dir(), "tiny.gguf");
         std::atomic<bool> allow{false};
         std::atomic<int> asked{0};
         m.on_replace([&](const std::string& id, const std::function<bool()>& place) {
             if (id == "tiny") ++asked;
             return allow && place();
         });
-        albireo::user_error error;
+        gulliver::user_error error;
         check(m.start_download("tiny", error), "the download of a newer version of an installed model starts");
         json d = wait_download(m, "tiny");
         check(d["state"].as_string() == "error" && d["code"].as_string() == "download_install" && asked == 1,
             "a replacement refused ends the download in error (" + d.dump() + ")");
-        albireo::installed_model im;
-        check(read_text(target) == served && installed(db, "tiny", im) && im.sha256 == albireo::sha256_hex(served),
+        gulliver::installed_model im;
+        check(read_text(target) == served && installed(db, "tiny", im) && im.sha256 == gulliver::sha256_hex(served),
             "the model keeps its file and its record when its replacement is refused");
         allow = true;
         check(m.start_download("tiny", error), "the download starts again");
         d = wait_download(m, "tiny");
         check(d["state"].as_string() == "done" && asked == 2, "the next replacement completes it (" + d.dump() + ")");
         check(read_text(target) == newer_tiny && installed(db, "tiny", im)
-            && im.sha256 == albireo::sha256_hex(newer_tiny), "the newer version takes the name and the record of tiny");
-        check(!albireo::file_exists(target + ".partial"), "no partial file is left");
+            && im.sha256 == gulliver::sha256_hex(newer_tiny), "the newer version takes the name and the record of tiny");
+        check(!gulliver::file_exists(target + ".partial"), "no partial file is left");
         m.stop();
     }
 
     {
         // Les modèles fournis avec Albireo, et les imports du même contenu.
-        albireo::store db(albireo::join_path(work, "albireo-2.db"));
-        const std::string builtin = albireo::join_path(work, "builtin");
-        albireo::make_dirs(builtin);
+        gulliver::store db(gulliver::join_path(work, "albireo-2.db"));
+        const std::string builtin = gulliver::join_path(work, "builtin");
+        gulliver::make_dirs(builtin);
         const std::string own = blob(150000, 'q');
-        write_text(albireo::join_path(builtin, "base.gguf"), own);
+        write_text(gulliver::join_path(builtin, "base.gguf"), own);
         json entry = json::object();
         entry["id"] = "base-albireo";
         entry["name"] = "Base";
         entry["file"] = "base.gguf";
-        entry["sha256"] = albireo::sha256_hex(own);
+        entry["sha256"] = gulliver::sha256_hex(own);
         // Le fichier du catalogue à partir duquel le build l'a fait.
         const std::string source = blob(140000, 'o');
-        entry["source_sha256"] = albireo::sha256_hex(source);
+        entry["source_sha256"] = gulliver::sha256_hex(source);
         json listed = json::array();
         listed.push_back(entry);
         json manifest = json::object();
         manifest["models"] = listed;
-        write_text(albireo::join_path(builtin, albireo::builtin_manifest_name), manifest.dump());
+        write_text(gulliver::join_path(builtin, gulliver::builtin_manifest_name), manifest.dump());
         // Le catalogue en usage connaît un autre contenu sous l'identifiant du modèle fourni avec Albireo.
         const std::string newer = blob(160000, 'z');
         json catalog = json::object();
@@ -957,9 +957,9 @@ int main(int argc, char** argv)
         list.push_back(catalog_entry("base", source, base_url + "/source.bin"));
         catalog["models"] = list;
         db.set_value("catalog", catalog.dump());
-        const std::string models2 = albireo::join_path(work, "models-2");
-        albireo::model_manager m(db, models2);
-        std::vector<albireo::installed_model> removed;
+        const std::string models2 = gulliver::join_path(work, "models-2");
+        gulliver::model_manager m(db, models2);
+        std::vector<gulliver::installed_model> removed;
         m.register_builtin(builtin, removed);
 
         // L'entrée du fichier à partir duquel le modèle d'Albireo a été fait : le modèle d'Albireo en
@@ -972,83 +972,83 @@ int main(int argc, char** argv)
             listed_builtin = listed_builtin || x["id"].as_string() == "base-albireo";
         }
         check(!listed_source && listed_builtin, "the catalog entry a model of Albireo stands for is not listed");
-        albireo::user_error carried;
+        gulliver::user_error carried;
         check(!m.start_download("base", carried) && carried.code == "builtin_installed",
             "the download of the file a model of Albireo carries is refused");
 
         // Le même contenu dans le dossier d'import : pas copié, pas enregistré à nouveau, retiré du dossier.
-        const std::string copy = albireo::join_path(inbox, "base-albireo.gguf");
+        const std::string copy = gulliver::join_path(inbox, "base-albireo.gguf");
         write_text(copy, own);
         const json r = m.import_path(copy, inbox, true);
-        albireo::installed_model im;
+        gulliver::installed_model im;
         check(r["imported"].size() == 0 && r["already"].size() == 1 && r["already"][0].as_string() == "base-albireo",
             "a copy of a model that comes with Albireo is installed already");
-        check(albireo::list_dir(m.models_dir()).empty(), "no second copy enters the models folder");
+        check(gulliver::list_dir(m.models_dir()).empty(), "no second copy enters the models folder");
         check(installed(db, "base-albireo", im) && im.source == "builtin", "the model stays the one of Albireo");
-        check(!albireo::file_exists(copy), "the copy leaves the import folder");
+        check(!gulliver::file_exists(copy), "the copy leaves the import folder");
 
         // Un autre contenu sous son identifiant : installé sous son propre nom, jamais par-dessus.
-        const std::string variant = albireo::join_path(inbox, "variant.gguf");
+        const std::string variant = gulliver::join_path(inbox, "variant.gguf");
         write_text(variant, newer);
         const json v = m.import_path(variant, inbox, false);
-        albireo::installed_model renamed;
+        gulliver::installed_model renamed;
         check(v["imported"].size() == 1 && v["imported"][0].as_string() == "base-albireo-import",
             "a file with the identifier of a model of Albireo takes the suffix -import");
         check(installed(db, "base-albireo", im) && im.source == "builtin", "the model of Albireo keeps its entry");
         check(installed(db, "base-albireo-import", renamed) && renamed.source == "catalog",
             "the other file has an entry of its own");
-        check(albireo::file_exists(variant), "a file imported without move stays in place");
+        check(gulliver::file_exists(variant), "a file imported without move stays in place");
 
         // Un téléchargement de son identifiant est refusé.
-        albireo::user_error error;
+        gulliver::user_error error;
         check(!m.start_download("base-albireo", error) && error.code == "builtin_installed",
             "a download of a model that comes with Albireo is refused");
 
         // Le dossier d'import se lit sans aucun lien et par un seul nom.
-        const std::string secret = albireo::join_path(outside, "secret.gguf");
+        const std::string secret = gulliver::join_path(outside, "secret.gguf");
         write_text(secret, blob(1000, 's'));
-        const std::string linked = albireo::join_path(inbox, "linked.gguf");
+        const std::string linked = gulliver::join_path(inbox, "linked.gguf");
         make_symlink(secret, linked);
         const json l = m.import_path(linked, inbox, true);
         check(l["imported"].size() == 0 && l["errors"].size() == 1, "a link in the import folder is refused");
-        const std::string hard = albireo::join_path(inbox, "hard.gguf");
+        const std::string hard = gulliver::join_path(inbox, "hard.gguf");
         make_hard_link(secret, hard);
         const json h = m.import_path(hard, inbox, true);
         check(h["imported"].size() == 0 && h["errors"].size() == 1, "a second name in the import folder is refused");
-        check(albireo::file_exists(secret), "the file they lead to stays");
-        albireo::remove_file(linked);
-        albireo::remove_file(hard);
+        check(gulliver::file_exists(secret), "the file they lead to stays");
+        gulliver::remove_file(linked);
+        gulliver::remove_file(hard);
         // Un dossier du dossier d'import remplacé par un lien : rien n'est lu à travers lui.
-        const std::string sub = albireo::join_path(inbox, "models");
+        const std::string sub = gulliver::join_path(inbox, "models");
         make_symlink(outside, sub);
         const json s = m.import_path(inbox, inbox, false);
         check(s["imported"].size() == 0, "the models subfolder that is a link is not read");
-        albireo::remove_file(sub);
+        gulliver::remove_file(sub);
         std::string why;
-        albireo::link_free_file f;
-        check(!f.open(albireo::join_path(albireo::join_path(work, "via"), "secret.gguf"), work, why)
+        gulliver::link_free_file f;
+        check(!f.open(gulliver::join_path(gulliver::join_path(work, "via"), "secret.gguf"), work, why)
             && (why == "missing" || why == "link"), "a missing entry is reported");
-        make_symlink(outside, albireo::join_path(work, "via"));
-        check(!f.open(albireo::join_path(albireo::join_path(work, "via"), "secret.gguf"), work, why) && why == "link",
+        make_symlink(outside, gulliver::join_path(work, "via"));
+        check(!f.open(gulliver::join_path(gulliver::join_path(work, "via"), "secret.gguf"), work, why) && why == "link",
             "a folder that is a link stops a link-free opening");
 
         // Un paquet hors ligne : seulement les fichiers de son catalogue, avec leurs tailles et empreintes.
-        const std::string bundle = albireo::join_path(work, "bundle");
-        albireo::make_dirs(albireo::join_path(bundle, "models"));
+        const std::string bundle = gulliver::join_path(work, "bundle");
+        gulliver::make_dirs(gulliver::join_path(bundle, "models"));
         const std::string listed_content = blob(120000, 'm');
         json bundle_catalog = json::object();
         json models = json::array();
         models.push_back(catalog_entry("bundled", listed_content, "https://example.org/files/bundled-q4.gguf"));
         models.push_back(catalog_entry("damaged", blob(50000, 'd'), "https://example.org/files/damaged.gguf"));
         bundle_catalog["models"] = models;
-        write_text(albireo::join_path(albireo::join_path(bundle, "models"), "bundled-q4.gguf"), listed_content);
-        write_text(albireo::join_path(albireo::join_path(bundle, "models"), "damaged.gguf"), blob(50000, 'x'));
-        write_text(albireo::join_path(albireo::join_path(bundle, "models"), "unlisted.gguf"), blob(1000, 'u'));
+        write_text(gulliver::join_path(gulliver::join_path(bundle, "models"), "bundled-q4.gguf"), listed_content);
+        write_text(gulliver::join_path(gulliver::join_path(bundle, "models"), "damaged.gguf"), blob(50000, 'x'));
+        write_text(gulliver::join_path(gulliver::join_path(bundle, "models"), "unlisted.gguf"), blob(1000, 'u'));
         const json b = m.import_bundle(bundle, bundle_catalog);
         check(b["imported"].size() == 1 && b["imported"][0].as_string() == "bundled", "the listed model is imported");
         check(b["errors"].size() == 1, "the file that does not match the catalog is refused");
         bool leftover = false;
-        for (const auto& n : albireo::list_dir(m.models_dir()))
+        for (const auto& n : gulliver::list_dir(m.models_dir()))
             leftover = leftover || n.find(".partial") != std::string::npos;
         check(!leftover, "no temporary file is left in the models folder");
         const json again = m.import_bundle(bundle, bundle_catalog);
@@ -1063,29 +1063,29 @@ int main(int argc, char** argv)
             got.append(data, n);
             return true;
         };
-        check(albireo::http_get_range(base_url + "/model.bin", 1000, 1999, keep, error)
+        check(gulliver::http_get_range(base_url + "/model.bin", 1000, 1999, keep, error)
             && got == served.substr(1000, 1000), "a part of a file arrives as asked (" + error + ")");
         got.clear();
-        check(albireo::http_get_range(base_url + "/whole.bin", 0, 999, keep, error) && got == served.substr(0, 1000),
+        check(gulliver::http_get_range(base_url + "/whole.bin", 0, 999, keep, error) && got == served.substr(0, 1000),
             "a server that ignores the range of a request from 0 gives the bytes asked for alone (" + error + ")");
         got.clear();
-        check(!albireo::http_get_range(base_url + "/whole.bin", 1000, 1999, keep, error) && got.empty(),
+        check(!gulliver::http_get_range(base_url + "/whole.bin", 1000, 1999, keep, error) && got.empty(),
             "a server that ignores the range of a request from elsewhere is refused");
     }
 
     {
         // Les adresses des messages ne portent pas leur requête (une clé de recherche peut s'y trouver).
-        check(albireo::without_queries("https://example.org/search?q=X&key=Y: status 500")
+        check(gulliver::without_queries("https://example.org/search?q=X&key=Y: status 500")
             == "https://example.org/search: status 500", "the queries of the addresses stay out of the messages");
-        check(albireo::without_queries("'https://example.org/a?x=1' \"https://example.org/b?y=2\"\r\n"
+        check(gulliver::without_queries("'https://example.org/a?x=1' \"https://example.org/b?y=2\"\r\n"
                 "https://example.org/c?z=3\tend")
             == "'https://example.org/a' \"https://example.org/b\"\r\nhttps://example.org/c\tend",
             "queries are removed from quoted addresses and lines without losing their delimiters");
         // Le journal écrit ses lignes telles qu'elles sont données.
-        const std::string log_path = albireo::join_path(work, "logs/service.log");
-        albireo::make_dirs(albireo::join_path(work, "logs"));
-        albireo::log_file::instance().open(log_path);
-        albireo::log_warning("models: a line of the log");
+        const std::string log_path = gulliver::join_path(work, "logs/service.log");
+        gulliver::make_dirs(gulliver::join_path(work, "logs"));
+        gulliver::log_file::instance().open(log_path);
+        gulliver::log_warning("models: a line of the log");
         check(read_text(log_path).find("[warning] models: a line of the log") != std::string::npos,
             "the log writes its lines as they are given");
     }
@@ -1096,7 +1096,7 @@ int main(int argc, char** argv)
             fichier corrompu qui est récupéré de nouveau, une empreinte qui échoue encore, une adresse qui
             n'a pas le fichier, puis une adresse qui le donne à une autre taille.
         */
-        albireo::store db(albireo::join_path(work, "albireo-3.db"));
+        gulliver::store db(gulliver::join_path(work, "albireo-3.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-11-01T00:00:00Z";
         json list = json::array();
@@ -1114,12 +1114,12 @@ int main(int argc, char** argv)
         official_serve("first.bin", first_part);
         official_serve("second.bin", second_part);
         official_serve("wrong.bin", stale_copy);
-        albireo::model_manager m(db, albireo::join_path(work, "models-3"));
-        albireo::user_error started;
-        albireo::installed_model im;
+        gulliver::model_manager m(db, gulliver::join_path(work, "models-3"));
+        gulliver::user_error started;
+        gulliver::installed_model im;
         auto complete = [&](const json& d, const std::string& id, const std::string& content) {
             return d["state"].as_string() == "done" && installed(db, id, im) && read_text(im.file) == content
-                && im.sha256 == albireo::sha256_hex(content) && d["received"].as_int(-1) == d["total"].as_int(-2);
+                && im.sha256 == gulliver::sha256_hex(content) && d["received"].as_int(-1) == d["total"].as_int(-2);
         };
         check(m.start_download("linked", started), "the download of a model starts");
         json d = wait_download(m, "linked");
@@ -1157,7 +1157,7 @@ int main(int argc, char** argv)
         d = wait_download(m, "absent");
         check(d["state"].as_string() == "error" && d["code"].as_string() == "download_failed"
             && d["error"].as_string() == "the file of " + official + "absent.bin does not have the size the catalog "
-            "gives" && !albireo::file_exists(albireo::join_path(m.models_dir(), "absent.gguf")),
+            "gives" && !gulliver::file_exists(gulliver::join_path(m.models_dir(), "absent.gguf")),
             "an address of another size fails (" + d.dump() + ")");
         official_serve("absent.bin", absent);
         check(m.start_download("absent", started), "a download starts again from the right address");
@@ -1177,10 +1177,10 @@ int main(int argc, char** argv)
         reset_server resetting;
         check(resetting.start(port + 1), "a server that resets its connections listens on the port "
             + std::to_string(port + 1));
-        albireo::http_bounds_for_tests(1, 2);
+        gulliver::http_bounds_for_tests(1, 2);
         auto answers = [&]() {
             std::string alive, e;
-            return albireo::http_get(base_url + "/alive", alive, e, 64) && alive == "alive";
+            return gulliver::http_get(base_url + "/alive", alive, e, 64) && alive == "alive";
         };
         const std::string page_text = "a web page comes in place of the answer, as a proxy or a filter of the network "
             "sends one";
@@ -1191,18 +1191,18 @@ int main(int argc, char** argv)
         };
         bool escaped = false;
         official_fault = html_200;
-        const bool from_page = albireo::http_get_range(official + "model.bin", 0, 999, keep, error);
+        const bool from_page = gulliver::http_get_range(official + "model.bin", 0, 999, keep, error);
         const std::string page_error = error;
         official_fault = stall;
-        const bool from_stall = albireo::http_get_range(official + "model.bin", 0, 999, keep, error);
+        const bool from_stall = gulliver::http_get_range(official + "model.bin", 0, 999, keep, error);
         const std::string stall_error = error;
         official_fault = no_fault;
-        const bool from_reset = albireo::http_get_range("http://127.0.0.1:" + std::to_string(port + 1)
+        const bool from_reset = gulliver::http_get_range("http://127.0.0.1:" + std::to_string(port + 1)
             + "/official/model.bin", 1000, 1999, keep, error);
         // Un récepteur qui lève une exception : l'exception devient l'erreur du téléchargement.
         try
         {
-            albireo::http_get_range(official + "model.bin", 0, 999, [](const char*, size_t) -> bool {
+            gulliver::http_get_range(official + "model.bin", 0, 999, [](const char*, size_t) -> bool {
                 throw std::runtime_error("the disk is full");
             }, error);
         }
@@ -1218,7 +1218,7 @@ int main(int argc, char** argv)
 
         // Un modèle dont l'adresse répond une page web, puis donne le fichier ; un catalogue que son adresse
         // n'a pas.
-        albireo::store db(albireo::join_path(work, "albireo-4.db"));
+        gulliver::store db(gulliver::join_path(work, "albireo-4.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-11-01T00:00:00Z";
         json list = json::array();
@@ -1226,13 +1226,13 @@ int main(int argc, char** argv)
         catalog["models"] = list;
         db.set_value("catalog", catalog.dump());
         {
-            albireo::model_manager m(db, albireo::join_path(work, "models-4"));
-            albireo::user_error started;
+            gulliver::model_manager m(db, gulliver::join_path(work, "models-4"));
+            gulliver::user_error started;
             official_fault = html_200;
             check(m.start_download("tiny", started), "the download of a model whose address is a web page starts");
             json d = wait_download(m, "tiny");
             official_fault = no_fault;
-            const std::string partial = albireo::join_path(m.models_dir(), "tiny.gguf.partial");
+            const std::string partial = gulliver::join_path(m.models_dir(), "tiny.gguf.partial");
             const std::string blocked = official + "model.bin cannot be downloaded: " + page_text;
             check(d["state"].as_string() == "error" && d["code"].as_string() == "download_failed"
                 && d["error"].as_string() == blocked && d["args"]["e"].as_string() == blocked
@@ -1241,9 +1241,9 @@ int main(int argc, char** argv)
                 + d.dump() + ")");
             check(m.start_download("tiny", started), "the download of the model starts again");
             d = wait_download(m, "tiny");
-            albireo::installed_model im;
+            gulliver::installed_model im;
             check(d["state"].as_string() == "done" && installed(db, "tiny", im) && read_text(im.file) == served
-                && im.sha256 == albireo::sha256_hex(served) && answers(),
+                && im.sha256 == gulliver::sha256_hex(served) && answers(),
                 "a model comes from its address once the page is gone (" + d.dump() + ")");
             std::string refreshed;
             const bool refreshed_ok = m.refresh_catalog(refreshed);
@@ -1252,7 +1252,7 @@ int main(int argc, char** argv)
                 "a catalog its address does not have fails with the address and the answer (" + refreshed + ")");
             m.stop();
         }
-        albireo::http_bounds_for_tests(0, 0);
+        gulliver::http_bounds_for_tests(0, 0);
         resetting.stop();
     }
 
@@ -1263,7 +1263,7 @@ int main(int argc, char** argv)
             signature, de son adresse ou d'un dossier ; et un téléchargement annulé pendant qu'il vient de
             son adresse.
         */
-        albireo::store db(albireo::join_path(work, "albireo-5.db"));
+        gulliver::store db(gulliver::join_path(work, "albireo-5.db"));
         json catalog = json::object();
         catalog["updated"] = "2026-11-01T00:00:00Z";
         json list = json::array();
@@ -1284,9 +1284,9 @@ int main(int argc, char** argv)
         catalog["models"] = list;
         db.set_value("catalog", catalog.dump());
         official_serve("slow.bin", slow);
-        albireo::model_manager m(db, albireo::join_path(work, "models-5"));
-        albireo::user_error started;
-        albireo::installed_model im;
+        gulliver::model_manager m(db, gulliver::join_path(work, "models-5"));
+        gulliver::user_error started;
+        gulliver::installed_model im;
 
         check(m.start_download("parts", started), "the download of a model of eight parts starts");
         json d = wait_download(m, "parts");
@@ -1306,7 +1306,7 @@ int main(int argc, char** argv)
             each_once = each_once && official_count("part-" + std::to_string(i) + ".bin") == (i < 7 ? 1 : 4);
         }
         check(d["state"].as_string() == "done" && installed(db, "parts", im) && read_text(im.file) == whole
-            && im.sha256 == albireo::sha256_hex(whole) && d["received"].as_int(-1) == d["total"].as_int(-2)
+            && im.sha256 == gulliver::sha256_hex(whole) && d["received"].as_int(-1) == d["total"].as_int(-2)
             && each_once, "a model of eight parts, one compressed, resumes with its last part (" + d.dump() + ")");
 
         // Le catalogue, sans signature : son adresse le sert, et un catalogue plus ancien ne remplace pas le
@@ -1318,8 +1318,8 @@ int main(int argc, char** argv)
         served_models.push_back(catalog_entry("slow", slow, official + "slow.bin"));
         served_catalog["models"] = served_models;
         official_serve("catalog.json", served_catalog.dump());
-        albireo::store cdb(albireo::join_path(work, "albireo-6.db"));
-        albireo::model_manager cm(cdb, albireo::join_path(work, "models-6"));
+        gulliver::store cdb(gulliver::join_path(work, "albireo-6.db"));
+        gulliver::model_manager cm(cdb, gulliver::join_path(work, "models-6"));
         std::string refresh_error;
         const bool refreshed = cm.refresh_catalog(refresh_error);
         json status = cm.catalog_status();
@@ -1335,20 +1335,20 @@ int main(int argc, char** argv)
         check(kept && status["models"].as_int() == 2 && status["updated"].as_string() == "2026-11-02T00:00:00Z",
             "an older catalog never replaces a newer one (" + refresh_error + ")");
         // Un dossier d'un disque : son catalog.json seul suffit.
-        const std::string drive = albireo::join_path(work, "drive");
-        albireo::make_dirs(drive);
+        const std::string drive = gulliver::join_path(work, "drive");
+        gulliver::make_dirs(drive);
         json drive_catalog = served_catalog;
         drive_catalog["updated"] = "2026-11-03T00:00:00Z";
         json drive_models = json::array();
         drive_models.push_back(catalog_entry("tiny", served, official + "model.bin"));
         drive_catalog["models"] = drive_models;
-        write_text(albireo::join_path(drive, "catalog.json"), drive_catalog.dump());
+        write_text(gulliver::join_path(drive, "catalog.json"), drive_catalog.dump());
         const json imported = cm.import_catalog(drive, std::string());
         status = cm.catalog_status();
         check(!imported.contains("error") && imported["models"].as_int() == 1
             && status["updated"].as_string() == "2026-11-03T00:00:00Z",
             "the catalog.json of a folder is installed without signature (" + imported.dump() + ")");
-        const json empty_drive = cm.import_catalog(albireo::join_path(work, "no-drive"), std::string());
+        const json empty_drive = cm.import_catalog(gulliver::join_path(work, "no-drive"), std::string());
         check(empty_drive.contains("error"), "a folder without catalog.json is refused");
         cm.stop();
 
@@ -1363,7 +1363,7 @@ int main(int argc, char** argv)
             for (const auto& x : downloads.elements())
                 if (x["id"].as_string() == "slow") received = x["received"].as_int(0);
         }
-        albireo::user_error local_busy;
+        gulliver::user_error local_busy;
         check(!m.start_download("slow", local_busy, true) && local_busy.code == "download_busy",
             "a local-only request does not claim that a running network download is a local restoration");
         const auto cancelled_at = std::chrono::steady_clock::now();
@@ -1373,7 +1373,7 @@ int main(int argc, char** argv)
             - cancelled_at).count();
         check(received > 0 && received < static_cast<long long>(slow.size()) && d["state"].as_string() == "cancelled"
             && cancel_seconds < 5 && official_count("slow.bin") == 1 && !installed(db, "slow", im)
-            && !albireo::file_exists(albireo::join_path(m.models_dir(), "slow.gguf.partial"))
+            && !gulliver::file_exists(gulliver::join_path(m.models_dir(), "slow.gguf.partial"))
             && !db.download_state("slow").is_object(), "a download cancelled while it comes from its address "
             "ends in " + std::to_string(static_cast<int>(cancel_seconds)) + " s, its partial file and progress "
             "removed (" + d.dump() + ")");
@@ -1383,24 +1383,24 @@ int main(int argc, char** argv)
     {
         // Les réglages d'une version antérieure : lus sans erreur, réécrits sans ce qui manque à cette
         // version.
-        const std::string folder = albireo::join_path(work, "settings");
-        albireo::make_dirs(folder);
-        const std::string settings_file = albireo::join_path(folder, "settings.json");
-        const std::string key_file = albireo::join_path(folder, "web_search.secret");
+        const std::string folder = gulliver::join_path(work, "settings");
+        gulliver::make_dirs(folder);
+        const std::string settings_file = gulliver::join_path(folder, "settings.json");
+        const std::string key_file = gulliver::join_path(folder, "web_search.secret");
         write_text(settings_file, "{\"port\": 9123, \"web_search\": \"brave\", \"web_search_url\": "
             "\"https://searx.example.org\", \"web_search_key_set\": true, \"web_search_key\": \"BSA-by-hand-42\", "
             "\"public_link\": \"https://files.example.invalid/publink/show?code=0123456789\"}");
         write_text(key_file, "BSA-secret-0123456789");
         {
-            albireo::settings_store store(settings_file);
+            gulliver::settings_store store(settings_file);
             const std::string text = read_text(settings_file), copy = read_text(settings_file + ".bak");
             check(store.get().port == 9123 && store.get().web_search == "wikipedia" && !holds_folded(text, "example.invalid")
                 && !holds_folded(copy, "example.invalid") && text.find("web_search_url") == std::string::npos
                 && text.find("web_search_key") == std::string::npos && text.find("public_link") == std::string::npos
-                && text.find("BSA-") == std::string::npos && !albireo::file_exists(key_file),
+                && text.find("BSA-") == std::string::npos && !gulliver::file_exists(key_file),
                 "the settings of an earlier version are read, and written again without what this version lacks");
         }
-        albireo::host_settings s;
+        gulliver::host_settings s;
         const char* const providers[] = { "auto", "brave", "searxng", "wikipedia" };
         bool wikipedia = s.web_search == "wikipedia";
         for (const char* p : providers)
@@ -1435,12 +1435,12 @@ int main(int argc, char** argv)
 
     {
         // Une base de données abîmée au-delà de son en-tête échoue à l'ouverture comme malformée.
-        const std::string path = albireo::join_path(work, "damaged.db");
+        const std::string path = gulliver::join_path(work, "damaged.db");
         {
-            albireo::store db(path);
+            gulliver::store db(path);
             for (int i = 0; i < 200; ++i) db.set_value("key-" + std::to_string(i), blob(2000, static_cast<char>(i)));
         }
-        for (const char* part : { "-wal", "-shm" }) albireo::remove_file(path + part);
+        for (const char* part : { "-wal", "-shm" }) gulliver::remove_file(path + part);
         std::string bytes = read_text(path);
         check(bytes.size() > 8 * 4096, "the database spans several pages");
         // Sa première page, l'en-tête et le schéma, reste ; les pages de ses tables sont effacées.
@@ -1449,7 +1449,7 @@ int main(int argc, char** argv)
         bool malformed = false;
         try
         {
-            albireo::store damaged(path);
+            gulliver::store damaged(path);
         }
         catch (const std::exception& e)
         {
@@ -1460,11 +1460,11 @@ int main(int argc, char** argv)
 
     {
         // Un fichier écrit de façon atomique remplace celui en place et ne laisse aucun fichier temporaire.
-        const std::string file = albireo::join_path(work, "atomic.txt");
-        check(albireo::write_file_atomic(file, "first") && albireo::write_file_atomic(file, "second")
+        const std::string file = gulliver::join_path(work, "atomic.txt");
+        check(gulliver::write_file_atomic(file, "first") && gulliver::write_file_atomic(file, "second")
             && read_text(file) == "second", "a file written atomically replaces its content");
         bool temporary = false;
-        for (const auto& n : albireo::list_dir(work)) temporary = temporary || n.find("atomic.txt.tmp-") == 0;
+        for (const auto& n : gulliver::list_dir(work)) temporary = temporary || n.find("atomic.txt.tmp-") == 0;
         check(!temporary, "no temporary file is left");
     }
 
@@ -1500,23 +1500,23 @@ int main(int argc, char** argv)
         };
         std::string wrong;
         for (const char* a : public_addresses)
-            if (!albireo::public_address(a)) wrong += std::string(" ") + a;
+            if (!gulliver::public_address(a)) wrong += std::string(" ") + a;
         check(wrong.empty(), "the addresses beside the ranges that are not public are public" + wrong);
         wrong.clear();
         for (const char* a : private_addresses)
-            if (albireo::public_address(a)) wrong += std::string(" ") + a;
+            if (gulliver::public_address(a)) wrong += std::string(" ") + a;
         check(wrong.empty(), "the addresses of the ranges that are not public are not" + wrong);
-        check(!albireo::public_address("example.org") && !albireo::public_address("127.1")
-            && !albireo::public_address(""), "a text that is no address is not public");
+        check(!gulliver::public_address("example.org") && !gulliver::public_address("127.1")
+            && !gulliver::public_address(""), "a text that is no address is not public");
 
         // Les adresses refusées avant toute connexion : 400 pour une adresse invalide, 403 pour une
         // adresse locale ou privée.
-        albireo::host_settings web;
-        auto fetch = [&](const std::string& url, const albireo::host_settings& s, const std::string& language) {
+        gulliver::host_settings web;
+        auto fetch = [&](const std::string& url, const gulliver::host_settings& s, const std::string& language) {
             json request = json::object();
             request["url"] = url;
             if (!language.empty()) request["language"] = language;
-            return albireo::web_fetch(request, s);
+            return gulliver::web_fetch(request, s);
         };
         struct refusal
         {
@@ -1537,61 +1537,61 @@ int main(int argc, char** argv)
         };
         for (const auto& r : refusals)
         {
-            const albireo::web_reply reply = fetch(r.url, web, "");
+            const gulliver::web_reply reply = fetch(r.url, web, "");
             check(reply.status == r.status, "the address " + r.url + " is refused with " + std::to_string(r.status)
                 + " (" + std::to_string(reply.status) + " " + reply.code + ": " + reply.message + ")");
         }
-        const albireo::web_reply local = fetch("http://[::ffff:127.0.0.1]/", web, "");
+        const gulliver::web_reply local = fetch("http://[::ffff:127.0.0.1]/", web, "");
         check(local.code == "address_refused" && local.message == "the address of [::ffff:127.0.0.1] is local or "
             "private, which the web access of Albireo does not read",
             "a refusal names the host (" + local.message + ")");
 
         // Le service hors ligne et l'accès web désactivé refusent les deux routes ; la capacité suit.
-        albireo::host_settings offline = web, off = web, none = web;
+        gulliver::host_settings offline = web, off = web, none = web;
         offline.offline = true;
         off.web_access = false;
         none.web_search = "none";
         json search_request = json::object();
         search_request["query"] = "Einstein relativit\xc3\xa9";
-        albireo::web_reply reply = fetch("https://example.org/", offline, "");
+        gulliver::web_reply reply = fetch("https://example.org/", offline, "");
         check(reply.status == 403 && reply.code == "offline", "a page is refused offline (" + reply.message + ")");
-        reply = albireo::web_search(search_request, offline);
+        reply = gulliver::web_search(search_request, offline);
         check(reply.status == 403 && reply.code == "offline", "a search is refused offline");
         reply = fetch("https://example.org/", off, "");
         check(reply.status == 403 && reply.code == "web_access_off",
             "a page is refused with the web access turned off");
-        reply = albireo::web_search(search_request, off);
+        reply = gulliver::web_search(search_request, off);
         check(reply.status == 403 && reply.code == "web_access_off", "a search is refused with the web access off");
-        reply = albireo::web_search(search_request, none);
+        reply = gulliver::web_search(search_request, none);
         check(reply.status == 403 && reply.code == "no_search_provider" && reply.message == "no search provider is set",
             "a search without provider is refused");
-        check(albireo::web_capability(web).dump() == "{\"available\":true,\"search\":\"wikipedia\"}"
-            && albireo::web_capability(offline).dump() == "{\"available\":false,\"search\":\"none\"}"
-            && albireo::web_capability(off).dump() == "{\"available\":false,\"search\":\"none\"}"
-            && albireo::web_capability(none).dump() == "{\"available\":true,\"search\":\"none\"}"
-            && albireo::web_search_provider(web) == "wikipedia" && albireo::web_search_provider(none) == "none",
+        check(gulliver::web_capability(web).dump() == "{\"available\":true,\"search\":\"wikipedia\"}"
+            && gulliver::web_capability(offline).dump() == "{\"available\":false,\"search\":\"none\"}"
+            && gulliver::web_capability(off).dump() == "{\"available\":false,\"search\":\"none\"}"
+            && gulliver::web_capability(none).dump() == "{\"available\":true,\"search\":\"none\"}"
+            && gulliver::web_search_provider(web) == "wikipedia" && gulliver::web_search_provider(none) == "none",
             "the capability gives the web access and its provider of search, wikipedia or none");
 
         // Les pages du serveur local, le loopback permis pour les tests.
-        albireo::web_allow_loopback_for_tests(true);
+        gulliver::web_allow_loopback_for_tests(true);
         reply = fetch(base_url + "/web/page.html", web, "");
         const json& b = reply.body;
         check(reply.status == 200 && b["status"].as_int() == 200 && b["content_type"].as_string() == "text/html"
             && b["charset"].as_string() == "utf-8" && !b["truncated"].as_bool()
             && b["size"].as_int() == static_cast<long long>(page.size())
-            && albireo::base64_decode(b["data"].as_string()) == page && b["url"].as_string() == base_url
+            && gulliver::base64_decode(b["data"].as_string()) == page && b["url"].as_string() == base_url
             + "/web/page.html" && b["final_url"].as_string() == base_url + "/web/page.html",
             "a page is read with its status, its type and its bytes (" + reply.message + ")");
         reply = fetch(base_url + "/web/large.txt", web, "");
         check(reply.status == 200 && reply.body["truncated"].as_bool() && reply.body["size"].as_int() == (2 << 20)
-            && albireo::base64_decode(reply.body["data"].as_string()) == large_text.substr(0, 2u << 20),
+            && gulliver::base64_decode(reply.body["data"].as_string()) == large_text.substr(0, 2u << 20),
             "a text is cut at 2 MB (" + reply.message + ")");
         reply = fetch(base_url + "/web/image.png", web, "");
         check(reply.status == 415 && reply.code == "unsupported_type" && reply.message.find("image/png")
             != std::string::npos, "a type the web access does not read is refused (" + reply.message + ")");
         reply = fetch(base_url + "/web/small.pdf", web, "");
         check(reply.status == 200 && reply.body["content_type"].as_string() == "application/pdf"
-            && albireo::base64_decode(reply.body["data"].as_string()) == "%PDF-1.4\n%%EOF\n", "a PDF file is read");
+            && gulliver::base64_decode(reply.body["data"].as_string()) == "%PDF-1.4\n%%EOF\n", "a PDF file is read");
         reply = fetch(base_url + "/web/large.pdf", web, "");
         check(reply.status == 413 && reply.code == "too_large", "a PDF file announced above 20 MB is refused ("
             + reply.message + ")");
@@ -1600,32 +1600,32 @@ int main(int argc, char** argv)
             "refused (" + reply.message + ")");
         reply = fetch(base_url + "/web/missing", web, "");
         check(reply.status == 200 && reply.body["status"].as_int() == 404
-            && albireo::base64_decode(reply.body["data"].as_string()) == "<p>no such page</p>",
+            && gulliver::base64_decode(reply.body["data"].as_string()) == "<p>no such page</p>",
             "a page that answers 404 is given with its status and its body");
         reply = fetch(base_url + "/web/to-private", web, "");
         check(reply.status == 403 && reply.code == "address_refused" && reply.message.find("192.168.1.10")
             != std::string::npos, "a redirection to a private address is refused (" + reply.message + ")");
         reply = fetch(base_url + "/web/relative", web, "");
         check(reply.status == 200 && reply.body["final_url"].as_string() == base_url + "/web/page.html?from=relative"
-            && albireo::base64_decode(reply.body["data"].as_string()) == page,
+            && gulliver::base64_decode(reply.body["data"].as_string()) == page,
             "a relative redirection is followed to its address (" + reply.message + ")");
         reply = fetch(base_url + "/web/loop", web, "");
         check(reply.status == 502 && reply.code == "too_many_redirects",
             "redirections are followed five times at most");
         reply = fetch(base_url + "/web/headers", web, "fr-FR");
-        check(reply.status == 200 && albireo::base64_decode(reply.body["data"].as_string()) == std::string("Albireo/")
+        check(reply.status == 200 && gulliver::base64_decode(reply.body["data"].as_string()) == std::string("Albireo/")
             + GULLIVER_VERSION + " (+https://github.com/Cydral/Dlib-Transformer-extensions)\nfr-FR\n",
             "a page receives the User-Agent of Albireo, the language asked and no cookie");
-        albireo::http_cancel_all("the service stops");
+        gulliver::http_cancel_all("the service stops");
         reply = fetch(base_url + "/web/page.html", web, "");
         check(reply.status == 503 && reply.code == "cancelled", "a service that stops ends the reading of pages");
-        albireo::http_restore();
+        gulliver::http_restore();
 
         // La recherche de Wikipédia, servie par le serveur local.
-        albireo::web_provider_origin_for_tests(base_url);
+        gulliver::web_provider_origin_for_tests(base_url);
         search_request["count"] = 5;
         search_request["language"] = "fr";
-        reply = albireo::web_search(search_request, web);
+        reply = gulliver::web_search(search_request, web);
         const json results = reply.body["results"];
         check(reply.status == 200 && reply.body["provider"].as_string() == "wikipedia" && results.size() == 2
             && results[0]["title"].as_string() == "Albert Einstein"
@@ -1642,34 +1642,34 @@ int main(int argc, char** argv)
                 "Wikipedia receives the query, the count and the User-Agent with a contact (" + seen_agent + ")");
         }
         search_request["query"] = "too many";
-        reply = albireo::web_search(search_request, web);
+        reply = gulliver::web_search(search_request, web);
         check(reply.status == 429 && reply.code == "rate_limited" && reply.retry_after == 30
             && reply.message.find("Wikipedia limits the rate") != std::string::npos,
             "a limit of the rate of Wikipedia is reported with its delay (" + reply.message + ")");
         json invalid = json::object();
         invalid["query"] = "   ";
-        const bool empty_refused = albireo::web_search(invalid, web).code == "invalid_query";
+        const bool empty_refused = gulliver::web_search(invalid, web).code == "invalid_query";
         invalid["query"] = std::string(401, 'q');
-        const bool long_refused = albireo::web_search(invalid, web).code == "invalid_query";
+        const bool long_refused = gulliver::web_search(invalid, web).code == "invalid_query";
         std::string four_hundred;
         for (int i = 0; i < 400; ++i) four_hundred += "\xc3\xa9";
         invalid["query"] = four_hundred;
-        const bool characters_counted = albireo::web_search(invalid, web).status == 200;
+        const bool characters_counted = gulliver::web_search(invalid, web).status == 200;
         invalid["query"] = "ok";
         invalid["count"] = 11;
-        const bool count_refused = albireo::web_search(invalid, web).code == "invalid_count";
+        const bool count_refused = gulliver::web_search(invalid, web).code == "invalid_count";
         invalid["count"] = 2;
         invalid["language"] = "french";
-        const bool language_refused = albireo::web_search(invalid, web).code == "invalid_language";
+        const bool language_refused = gulliver::web_search(invalid, web).code == "invalid_language";
         check(empty_refused && long_refused && characters_counted && count_refused && language_refused,
             "a query of 1 to 400 characters, a count of 1 to 10 and a code of language are required");
 
-        albireo::web_provider_origin_for_tests("");
-        albireo::web_allow_loopback_for_tests(false);
+        gulliver::web_provider_origin_for_tests("");
+        gulliver::web_allow_loopback_for_tests(false);
 
         // Le journal nomme les hôtes lus et le fournisseur, jamais un chemin ni une requête.
         bool leaked = false, read_line = false, search_line = false;
-        for (const auto& line : albireo::log_file::instance().recent())
+        for (const auto& line : gulliver::log_file::instance().recent())
         {
             leaked = leaked || line.find("relativit") != std::string::npos || line.find("/web/") != std::string::npos
                 || line.find("q=") != std::string::npos;
@@ -1684,14 +1684,14 @@ int main(int argc, char** argv)
         // Le relais (repris de l'original, Albireo 1.0.23) : son secret dans les réglages, la restauration des
         // pseudonymes, la mémoire de la pseudonymisation, et les requêtes de ses trois fournisseurs à un serveur
         // local qui répond comme chacun.
-        const std::string folder = albireo::join_path(work, "relay-settings");
-        albireo::make_dirs(folder);
-        const std::string file = albireo::join_path(folder, "settings.json");
-        const std::string secret_file = albireo::join_path(folder, "relay.secret");
+        const std::string folder = gulliver::join_path(work, "relay-settings");
+        gulliver::make_dirs(folder);
+        const std::string file = gulliver::join_path(folder, "settings.json");
+        const std::string secret_file = gulliver::join_path(folder, "relay.secret");
         const std::string key = "sk-ant-test-0123456789";
         {
-            albireo::settings_store store(file);
-            store.update([&](albireo::host_settings& s) {
+            gulliver::settings_store store(file);
+            store.update([&](gulliver::host_settings& s) {
                 s.relay.enabled = true;
                 s.relay.provider = "claude";
                 s.relay.model = "claude-opus-5-5";
@@ -1701,14 +1701,14 @@ int main(int argc, char** argv)
         const std::string text = read_text(file);
         bool reread = false;
         {
-            albireo::settings_store store(file);
+            gulliver::settings_store store(file);
             reread = store.get().relay.secret == key && store.get().relay.to_json()["secret"].as_string() == "********";
         }
         // Sur le Mac, relay.secret garde la clé telle quelle, lisible par le compte du service seul (0600).
         struct stat secret_stat;
         const bool sealed = ::stat(secret_file.c_str(), &secret_stat) == 0 && (secret_stat.st_mode & 0077) == 0;
         check(text.find(key) == std::string::npos && text.find("\"secret\": \"********\"") != std::string::npos
-            && read_text(file + ".bak").find(key) == std::string::npos && albireo::file_exists(secret_file) && reread
+            && read_text(file + ".bak").find(key) == std::string::npos && gulliver::file_exists(secret_file) && reread
             && sealed, "the key of the relay stays out of settings.json and its copy, kept in relay.secret and read "
             "again");
         json edited = json::parse_or_null(text);
@@ -1716,11 +1716,11 @@ int main(int argc, char** argv)
         write_text(file, edited.dump());
         bool elsewhere = false;
         {
-            albireo::settings_store store(file);
+            gulliver::settings_store store(file);
             elsewhere = store.get().relay.secret.empty();
-            store.update([](albireo::host_settings& s) { s.relay.enabled = false; });
+            store.update([](gulliver::host_settings& s) { s.relay.enabled = false; });
         }
-        check(elsewhere && !albireo::file_exists(secret_file),
+        check(elsewhere && !gulliver::file_exists(secret_file),
             "a settings.json that names another provider reads no key, and relay.secret goes with the key");
 
         // Les valeurs reviennent dans une réponse coupée n'importe où, aux limites des mots seulement.
@@ -1729,7 +1729,7 @@ int main(int argc, char** argv)
         values["Qbspm"] = "Paris";
         values["[[PERSON:Xoydoeh Nuggwdfsorn#EKR]]"] = "Jean Dupont";
         {
-            albireo::stream_restorer r(values);
+            gulliver::stream_restorer r(values);
             std::string out;
             for (const char* chunk : { "Bonjour Xoy", "doeh Nugg", "wdfsorn, de Qbs", "pm et Qbspmx. ",
                      "M. Nuggwdfsorn", " et [[PERSON:Xoydoeh", " Nuggwdfsorn#EKR]], d\xE2\x80\x99Xoydoeh" })
@@ -1741,7 +1741,7 @@ int main(int argc, char** argv)
             std::map<std::string, std::string> both;
             both["Mxrtin"] = "Durand";
             both["Jxan Mxrtin"] = "Paul Dupont";
-            albireo::stream_restorer w(both);
+            gulliver::stream_restorer w(both);
             const std::string kept = w.feed("Ask Mxrtin, then Jxan Mxrtin.") + w.finish();
             check(kept == "Ask Durand, then Paul Dupont.", "a whole substitute keeps its value when it is also a word "
                 "of another one (" + kept + ")");
@@ -1940,17 +1940,17 @@ int main(int argc, char** argv)
         std::thread relay_listener([&]() { if (relay_listening) relay_server.listen_after_bind(); });
         const std::string origin = "http://127.0.0.1:" + std::to_string(relay_port);
         check(relay_listening, "the server of the relay listens on the port " + std::to_string(relay_port));
-        albireo::pseudalis_client::endpoint_for_tests(origin);
-        albireo::relay_origin_for_tests("claude", origin);
-        albireo::relay_origin_for_tests("ollama", origin);
+        gulliver::pseudalis_client::endpoint_for_tests(origin);
+        gulliver::relay_origin_for_tests("claude", origin);
+        gulliver::relay_origin_for_tests("ollama", origin);
 
         // La mémoire de la pseudonymisation : un texte servi de nouveau sans Pseudalis, ses valeurs oubliées.
         {
-            albireo::pseudalis_client client;
-            albireo::pseudonym_memory::limits limits;
+            gulliver::pseudalis_client client;
+            gulliver::pseudonym_memory::limits limits;
             limits.values = 3;
             limits.max_idle = 100;
-            albireo::pseudonym_memory memory(limits);
+            gulliver::pseudonym_memory memory(limits);
             memory.set_time_for_tests(1000);
             std::map<std::string, std::string> found;
             std::string out, error;
@@ -1996,9 +1996,9 @@ int main(int argc, char** argv)
             bool finished = false;
         };
         std::mutex settings_m;
-        albireo::host_settings hs;
+        gulliver::host_settings hs;
         int described = 0;
-        albireo::relay_service relay(
+        gulliver::relay_service relay(
             [&]() {
                 std::lock_guard<std::mutex> lock(settings_m);
                 return hs;
@@ -2029,9 +2029,9 @@ int main(int argc, char** argv)
             std::unique_lock<std::mutex> lock(a->m);
             return a->cv.wait_for(lock, std::chrono::seconds(30), [&]() { return a->finished; });
         };
-        auto set_relay = [&](const std::function<void(albireo::relay_settings&)>& change) {
+        auto set_relay = [&](const std::function<void(gulliver::relay_settings&)>& change) {
             std::lock_guard<std::mutex> lock(settings_m);
-            hs.relay = albireo::relay_settings();
+            hs.relay = gulliver::relay_settings();
             hs.relay.enabled = true;
             change(hs.relay);
         };
@@ -2039,7 +2039,7 @@ int main(int argc, char** argv)
             "\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==\"}}");
 
         // Un moteur de l'interface d'OpenAI, les textes pseudonymisés, l'image décrite ici.
-        set_relay([&](albireo::relay_settings& r) {
+        set_relay([&](gulliver::relay_settings& r) {
             r.provider = "openai";
             r.url = origin + "/v1/";
             r.model = "local-test";
@@ -2047,7 +2047,7 @@ int main(int argc, char** argv)
             r.pseudonymize = true;
         });
         json request = json::object();
-        request["model"] = albireo::relay_model_id;
+        request["model"] = gulliver::relay_model_id;
         request["stream"] = true;
         request["messages"] = json::parse_or_null("[{\"role\": \"system\", \"content\": \"Tu aides Jean Dupont.\"}, "
             "{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": "
@@ -2113,7 +2113,7 @@ int main(int argc, char** argv)
             std::lock_guard<std::mutex> lock(mock.m);
             mock.mode = "ok";
         }
-        albireo::relay_settings tested = hs.relay;
+        gulliver::relay_settings tested = hs.relay;
         const json listed = relay.test(tested);
         tested.secret = "wrong";
         const json refused_test = relay.test(tested);
@@ -2132,7 +2132,7 @@ int main(int argc, char** argv)
             std::lock_guard<std::mutex> lock(mock.m);
             mock.mode = "ok";
         }
-        set_relay([&](albireo::relay_settings& r) {
+        set_relay([&](gulliver::relay_settings& r) {
             r.provider = "openai";
             r.url = origin + "/v1/";
             r.model = "local-test";
@@ -2142,24 +2142,24 @@ int main(int argc, char** argv)
         });
         const bool kept = ask(request, a, status, code) && a->content == "Xoydoeh Nuggwdfsorn habite Qbspm."
             && a->reasoning == "Xoydoeh vit \xC3\xA0 Qbspm."
-            && albireo::relay_description(hs.relay)["keep_substitutes"].as_bool(false);
+            && gulliver::relay_description(hs.relay)["keep_substitutes"].as_bool(false);
         check(credit && kept, "an account without credit ends the answer with its reason, and the check of what "
             "left keeps the substitutes in the answer (" + a->content + ")");
 
         // Une adresse sans /v1, que le relais complète, une autre avec le chemin d'une opération, et leurs échecs.
-        set_relay([&](albireo::relay_settings& r) {
+        set_relay([&](gulliver::relay_settings& r) {
             r.provider = "openai";
             r.url = origin;
             r.model = "local-test";
             r.secret = "sk-test-secret";
         });
         json plain = json::object();
-        plain["model"] = albireo::relay_model_id;
+        plain["model"] = gulliver::relay_model_id;
         plain["stream"] = true;
         plain["messages"] = json::parse_or_null("[{\"role\": \"user\", \"content\": \"Bonjour\"}]");
         const bool completed = ask(plain, a, status, code) && a->error.empty()
             && a->content == "Xoydoeh Nuggwdfsorn habite Qbspm.";
-        albireo::relay_settings bare = hs.relay;
+        gulliver::relay_settings bare = hs.relay;
         const json found = relay.test(bare);
         bare.url = origin + "/v1/chat/completions";
         const json pasted = relay.test(bare);
@@ -2185,20 +2185,20 @@ int main(int argc, char** argv)
         bare.url = "http://127.0.0.1:1/v1";
         const json closed = relay.test(bare);
         check(hidden["code"].as_string() == "relay_address" && with_user["code"].as_string() == "relay_address"
-            && albireo::valid_relay_url("http://gpu_box.lan:8000/v1") && albireo::valid_relay_url("http://[::1]:8080")
-            && !albireo::valid_relay_url("http://host:70000/v1") && !albireo::valid_relay_url("http://host#x/v1")
+            && gulliver::valid_relay_url("http://gpu_box.lan:8000/v1") && gulliver::valid_relay_url("http://[::1]:8080")
+            && !gulliver::valid_relay_url("http://host:70000/v1") && !gulliver::valid_relay_url("http://host#x/v1")
             && closed["code"].as_string() == "relay_unreachable",
             "an address whose host carries a user, a query or a fragment is refused, and an engine out of reach gives "
             "its code (" + closed.dump() + ")");
 
         // Claude : le système à part, le raisonnement résumé avec son effort, pas de température, l'image telle quelle.
-        set_relay([&](albireo::relay_settings& r) {
+        set_relay([&](gulliver::relay_settings& r) {
             r.provider = "claude";
             r.model = "claude-opus-5-5";
             r.secret = key;
         });
         json claude = json::object();
-        claude["model"] = albireo::relay_model_id;
+        claude["model"] = gulliver::relay_model_id;
         claude["temperature"] = 0.7;
         claude["reasoning_effort"] = "high";
         claude["messages"] = json::parse_or_null("[{\"role\": \"system\", \"content\": \"Be brief.\"}, "
@@ -2257,7 +2257,7 @@ int main(int argc, char** argv)
             + a->content + " | " + a->reasoning + ")");
 
         // Ollama : le raisonnement d'un modèle qui l'active ou le coupe, l'image telle quelle.
-        set_relay([&](albireo::relay_settings& r) {
+        set_relay([&](gulliver::relay_settings& r) {
             r.provider = "ollama";
             r.model = "gemma4:31b";
             r.secret = "sk-test-secret";
@@ -2287,7 +2287,7 @@ int main(int argc, char** argv)
             hs.offline = true;
         }
         const bool offline = !ask(request, a, status, code) && status == 503 && code == "offline";
-        set_relay([&](albireo::relay_settings& r) {
+        set_relay([&](gulliver::relay_settings& r) {
             r.provider = "claude";
             r.model = "claude-opus-5-5";
         });
@@ -2299,8 +2299,8 @@ int main(int argc, char** argv)
             téléchargements que tient le mode hors ligne, Pseudalis compris ; les fournisseurs
             d'Internet et une adresse publique sont refusés avant toute connexion.
         */
-        albireo::http_cancel_all("offline mode");
-        set_relay([&](albireo::relay_settings& r) {
+        gulliver::http_cancel_all("offline mode");
+        set_relay([&](gulliver::relay_settings& r) {
             r.provider = "openai";
             r.url = origin + "/v1";
             r.model = "local-test";
@@ -2311,75 +2311,75 @@ int main(int argc, char** argv)
             && a->content == "Jean Dupont habite Paris.";
         const std::string local_error = a ? a->error : std::string();
         std::string why;
-        albireo::relay_settings remote = hs.relay;
+        gulliver::relay_settings remote = hs.relay;
         remote.url = "http://93.184.215.14/v1";
-        const bool remote_refused = !albireo::relay_offline_ready(remote, why)
+        const bool remote_refused = !gulliver::relay_offline_ready(remote, why)
             && why.find("neither") != std::string::npos;
         const json remote_test = relay.test(remote);
         remote.url = "http://[2606:4700:4700::1111]/v1";
-        const bool remote6_refused = !albireo::relay_offline_ready(remote, why);
-        albireo::relay_settings loopback6 = hs.relay;
+        const bool remote6_refused = !gulliver::relay_offline_ready(remote, why);
+        gulliver::relay_settings loopback6 = hs.relay;
         loopback6.url = "http://[::1]:8080/v1";
-        albireo::relay_settings cloud = hs.relay;
+        gulliver::relay_settings cloud = hs.relay;
         cloud.provider = "claude";
         cloud.model = "claude-opus-5-5";
         cloud.secret = key;
-        const bool cloud_refused = !albireo::relay_offline_ready(cloud, why)
+        const bool cloud_refused = !gulliver::relay_offline_ready(cloud, why)
             && why.find("Internet") != std::string::npos;
         const json cloud_test = relay.test(cloud);
-        albireo::relay_settings named = hs.relay;
+        gulliver::relay_settings named = hs.relay;
         named.url = "http://localhost:" + std::to_string(relay_port) + "/v1";
         const json named_test = relay.test(named);
         /*
             Un nom du réseau local mène la requête à l'adresse vérifiée, un nom que le résolveur du
             système ne connaît pas ici ; un nom qui a une adresse publique parmi les siennes est refusé.
         */
-        albireo::relay_name_for_tests("engine.albireo-test", { "127.0.0.1" });
-        albireo::relay_name_for_tests("mixed.albireo-test", { "10.0.0.5", "93.184.215.14" });
-        albireo::relay_settings pinned = hs.relay;
+        gulliver::relay_name_for_tests("engine.albireo-test", { "127.0.0.1" });
+        gulliver::relay_name_for_tests("mixed.albireo-test", { "10.0.0.5", "93.184.215.14" });
+        gulliver::relay_settings pinned = hs.relay;
         pinned.url = "http://Engine.Albireo-Test:" + std::to_string(relay_port) + "/v1";
         const json pinned_test = relay.test(pinned);
-        albireo::relay_settings mixed = hs.relay;
+        gulliver::relay_settings mixed = hs.relay;
         mixed.url = "http://mixed.albireo-test:" + std::to_string(relay_port) + "/v1";
         const json mixed_test = relay.test(mixed);
-        albireo::relay_name_for_tests("engine.albireo-test", {});
-        albireo::relay_name_for_tests("mixed.albireo-test", {});
+        gulliver::relay_name_for_tests("engine.albireo-test", {});
+        gulliver::relay_name_for_tests("mixed.albireo-test", {});
         // Un nom sous .localhost joint 127.0.0.1 quel que soit le résolveur ; seul le réseau local reste à portée.
-        albireo::relay_settings dotted = hs.relay;
+        gulliver::relay_settings dotted = hs.relay;
         dotted.url = "http://engine.localhost:" + std::to_string(relay_port) + "/v1";
         const json dotted_test = relay.test(dotted);
-        albireo::relay_settings nearby = hs.relay;
+        gulliver::relay_settings nearby = hs.relay;
         nearby.url = "http://100.64.1.1:8080/v1";
-        const bool shared_refused = !albireo::relay_offline_ready(nearby, why);
+        const bool shared_refused = !gulliver::relay_offline_ready(nearby, why);
         nearby.url = "http://[64:ff9b:1::1]:8080/v1";
-        const bool translated_refused = !albireo::relay_offline_ready(nearby, why);
+        const bool translated_refused = !gulliver::relay_offline_ready(nearby, why);
         nearby.url = "http://192.168.1.20:8080/v1";
-        const bool lan_ready = albireo::relay_offline_ready(nearby, why);
+        const bool lan_ready = gulliver::relay_offline_ready(nearby, why);
         nearby.url = "http://[fd00::1]:8080/v1";
-        const bool unique_local_ready = albireo::relay_offline_ready(nearby, why);
+        const bool unique_local_ready = gulliver::relay_offline_ready(nearby, why);
         check(pinned_test["ok"].as_bool(false) && mixed_test["code"].as_string() == "relay_offline_remote"
             && dotted_test["ok"].as_bool(false) && shared_refused && translated_refused && lan_ready
             && unique_local_ready,
             "offline, a name of the local network leads the request to the address checked, a name under .localhost "
             "to 127.0.0.1, and the addresses outside the local network are refused (" + pinned_test.dump() + " | "
             + mixed_test.dump() + " | " + dotted_test.dump() + ")");
-        albireo::http_restore();
+        gulliver::http_restore();
         check(local && remote_refused && remote6_refused && remote_test["code"].as_string() == "relay_offline_remote"
-            && albireo::relay_offline_ready(loopback6, why) && cloud_refused
+            && gulliver::relay_offline_ready(loopback6, why) && cloud_refused
             && cloud_test["code"].as_string() == "relay_offline" && named_test["ok"].as_bool(false),
             "offline, the relay answers through an engine of this computer and Pseudalis whatever the cancellation of "
             "the downloads, and refuses the providers of the Internet and a public address before any connection ("
             + local_error + " | " + named_test.dump() + ")");
         bool leaked = false;
-        for (const auto& line : albireo::log_file::instance().recent())
+        for (const auto& line : gulliver::log_file::instance().recent())
             leaked = leaked || line.find("sk-test") != std::string::npos || line.find(key) != std::string::npos
                 || line.find("Jean Dupont") != std::string::npos;
         check(!leaked, "the log names no key and no value of the discussions");
         relay.stop();
-        albireo::pseudalis_client::endpoint_for_tests("");
+        gulliver::pseudalis_client::endpoint_for_tests("");
         // L'état de Pseudalis nomme par un code pourquoi il n'est pas joint, qu'il soit sur ce Mac ou non.
         {
-            albireo::pseudalis_client client;
+            gulliver::pseudalis_client client;
             const json s = client.status();
             const std::string code = s["code"].as_string();
             const bool coherent = s["found"].as_bool(false) ? code.empty() && s["reason"].as_string().empty()
@@ -2387,15 +2387,15 @@ int main(int argc, char** argv)
                     && !s["reason"].as_string().empty();
             check(coherent, "the state of Pseudalis names by a code why it is not reached (" + s.dump() + ")");
         }
-        albireo::relay_origin_for_tests("claude", "");
-        albireo::relay_origin_for_tests("ollama", "");
+        gulliver::relay_origin_for_tests("claude", "");
+        gulliver::relay_origin_for_tests("ollama", "");
         relay_server.stop();
         relay_listener.join();
     }
 
     server.stop();
     listener.join();
-    if (failures == 0) albireo::remove_tree(work);
+    if (failures == 0) gulliver::remove_tree(work);
     std::printf(failures ? "%d checks FAILED\n" : "all checks passed\n", failures);
     return failures ? 1 : 0;
 }

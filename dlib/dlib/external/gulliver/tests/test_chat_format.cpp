@@ -18,7 +18,7 @@
 
 #include "../engine/chat_format.h"
 
-using namespace albireo;
+using namespace gulliver;
 
 namespace
 {

@@ -21,7 +21,7 @@
     (GULLIVER_FORK_ROOT_DEFAULT, donné par CMakeLists.txt), ou celui que nomme la variable GULLIVER_FORK_ROOT.
 */
 
-namespace albireo
+namespace gulliver
 {
     // Le dossier du dépôt, ou une chaîne vide quand il n'a pas de sommaire.
     std::string carnet_root();

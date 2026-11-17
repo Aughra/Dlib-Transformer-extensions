@@ -30,7 +30,7 @@
 #include "../engine/qkernels.h"
 #include "../engine/thread_pool.h"
 
-using namespace albireo;
+using namespace gulliver;
 using dlib::ggml_type;
 
 namespace

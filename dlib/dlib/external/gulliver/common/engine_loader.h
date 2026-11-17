@@ -9,7 +9,7 @@
 #include "engine_api.h"
 #include "json.h"
 
-namespace albireo
+namespace gulliver
 {
 
     class engine_library
@@ -51,22 +51,22 @@ namespace albireo
         // Les fonctions de la bibliothèque.
         uint32_t (GULLIVER_ENGINE_CALL* abi_version)(void) = nullptr;
         int (GULLIVER_ENGINE_CALL* describe)(char*, size_t, size_t*) = nullptr;
-        albireo_engine* (GULLIVER_ENGINE_CALL* create)(
-            const char*, albireo_log_callback, void*, char*, size_t) = nullptr;
-        void (GULLIVER_ENGINE_CALL* destroy)(albireo_engine*) = nullptr;
+        gulliver_engine* (GULLIVER_ENGINE_CALL* create)(
+            const char*, gulliver_log_callback, void*, char*, size_t) = nullptr;
+        void (GULLIVER_ENGINE_CALL* destroy)(gulliver_engine*) = nullptr;
         int (GULLIVER_ENGINE_CALL* load_model)(
-            albireo_engine*, const char*, const char*, const char*, char*, size_t) = nullptr;
-        int (GULLIVER_ENGINE_CALL* unload_model)(albireo_engine*, const char*) = nullptr;
-        int (GULLIVER_ENGINE_CALL* query)(albireo_engine*, const char*, char*, size_t, size_t*) = nullptr;
+            gulliver_engine*, const char*, const char*, const char*, char*, size_t) = nullptr;
+        int (GULLIVER_ENGINE_CALL* unload_model)(gulliver_engine*, const char*) = nullptr;
+        int (GULLIVER_ENGINE_CALL* query)(gulliver_engine*, const char*, char*, size_t, size_t*) = nullptr;
         int (GULLIVER_ENGINE_CALL* submit)(
-            albireo_engine*, const char*, albireo_event_callback, void*, uint64_t*, char*, size_t) = nullptr;
-        int (GULLIVER_ENGINE_CALL* cancel)(albireo_engine*, uint64_t) = nullptr;
+            gulliver_engine*, const char*, gulliver_event_callback, void*, uint64_t*, char*, size_t) = nullptr;
+        int (GULLIVER_ENGINE_CALL* cancel)(gulliver_engine*, uint64_t) = nullptr;
 
         // describe() sous forme de document, ou null.
         json description() const;
 
         // query() avec un tampon agrandi selon les besoins.
-        int run_query(albireo_engine* e, const json& request, json& answer) const;
+        int run_query(gulliver_engine* e, const json& request, json& answer) const;
 
     private:
         void* handle_ = nullptr;
@@ -77,7 +77,7 @@ namespace albireo
     };
 
     // Nom de fichier d'une bibliothèque de moteur de la variante donnée sur cette plateforme :
-    // "albireo-engine-cpu-avx2.dll", "libalbireo-engine-cpu-avx2.so".
+    // "albireo-engine-cpu-avx2.dll", "libgulliver-engine-cpu-avx2.so".
     std::string engine_file_name(const std::string& variant);
 
 }

@@ -16,7 +16,7 @@
 #include <mach/mach.h>
 #include <sys/sysctl.h>
 
-namespace albireo
+namespace gulliver
 {
 
     namespace

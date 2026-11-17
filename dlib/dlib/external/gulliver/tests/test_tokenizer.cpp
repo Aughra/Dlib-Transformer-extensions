@@ -43,10 +43,10 @@ int main(int argc, char** argv)
         std::printf("usage: test_tokenizer texts.json expected.json name=model.gguf...\n");
         return 2;
     }
-    albireo::json texts, expected;
+    gulliver::json texts, expected;
     std::string error;
-    const bool parsed = albireo::json::parse(read_file(argv[1]), texts, &error)
-        && albireo::json::parse(read_file(argv[2]), expected, &error);
+    const bool parsed = gulliver::json::parse(read_file(argv[1]), texts, &error)
+        && gulliver::json::parse(read_file(argv[2]), expected, &error);
     if (!parsed)
     {
         std::printf("cannot parse the inputs: %s\n", error.c_str());
@@ -62,7 +62,7 @@ int main(int argc, char** argv)
         dlib::gguf_reader g(spec.substr(eq + 1));
         dlib::hf_tokenizer tok;
         tok.load_from_gguf(g);
-        const albireo::json& exp = expected[name];
+        const gulliver::json& exp = expected[name];
         int ok = 0;
         for (size_t i = 0; i < texts.size(); ++i)
         {

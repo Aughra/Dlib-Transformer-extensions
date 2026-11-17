@@ -43,7 +43,7 @@
 namespace
 {
     std::mutex current_m;
-    albireo::service* current = nullptr;
+    gulliver::service* current = nullptr;
     std::atomic<bool> stop_requested{false};
 
     // Renvoyé par serve() quand le redémarrage demande un nouveau processus.
@@ -53,7 +53,7 @@ namespace
     // une fois que l'un d'eux a tourné (engine_host::pinned_engine_started()).
     int finish(int code)
     {
-        if (albireo::engine_host::pinned_engine_started()) albireo::end_process(code);
+        if (gulliver::engine_host::pinned_engine_started()) gulliver::end_process(code);
         return code;
     }
 
@@ -70,7 +70,7 @@ namespace
         int failures = 0;
         while (!stop_requested)
         {
-            albireo::service svc;
+            gulliver::service svc;
             {
                 std::lock_guard<std::mutex> lock(current_m);
                 current = &svc;
@@ -98,7 +98,7 @@ namespace
             if (stop_requested) break;
             if (!ok)
             {
-                albireo::log_error("service: " + error);
+                gulliver::log_error("service: " + error);
                 if (console) std::cerr << "albireo-service: " << error << std::endl;
                 // Un démarrage qui échoue est retenté quelques fois, pour un port libéré tard
                 // par l'exécution précédente ou un disque monté après le service.
@@ -109,12 +109,12 @@ namespace
             }
             failures = 0;
             if (!svc.restart_requested()) break;
-            if (albireo::engine_host::pinned_engine_started())
+            if (gulliver::engine_host::pinned_engine_started())
             {
-                albireo::log_info("service: restart in a new process");
+                gulliver::log_info("service: restart in a new process");
                 return restart_process;
             }
-            albireo::log_info("service: restart");
+            gulliver::log_info("service: restart");
         }
         return 0;
     }
@@ -139,7 +139,7 @@ namespace
             int sig = 0;
             if (sigwait(&set, &sig) == 0) request_stop();
         }).detach();
-        albireo::log_file::instance().set_console(true);
+        gulliver::log_file::instance().set_console(true);
         const int code = serve(true);
         if (code != restart_process) return code;
         // La même ligne de commande dans un nouveau processus.
@@ -147,7 +147,7 @@ namespace
         for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
         argv.push_back(nullptr);
         // Le chemin du programme (_NSGetExecutablePath sur macOS, où /proc n'existe pas).
-        const std::string self = albireo::executable_path();
+        const std::string self = gulliver::executable_path();
         if (!self.empty()) execv(self.c_str(), argv.data());
         execvp(argv[0], argv.data());
         return 1;
@@ -160,9 +160,9 @@ int main(int argc, char** argv)
     for (int i = 0; i < argc; ++i) args.push_back(argv[i]);
 
     // Les sondes se terminent dès que leur résultat est écrit, le moteur qu'elles ont chargé encore en mémoire.
-    if (args.size() >= 3 && args[1] == "--probe-engine") albireo::end_process(albireo::service::probe_engine(args[2]));
+    if (args.size() >= 3 && args[1] == "--probe-engine") gulliver::end_process(gulliver::service::probe_engine(args[2]));
     if (args.size() >= 5 && args[1] == "--bench-engine")
-        albireo::end_process(albireo::service::benchmark_engine(args[2], args[3], args[4]));
+        gulliver::end_process(gulliver::service::benchmark_engine(args[2], args[3], args[4]));
     if (args.size() >= 2 && args[1] == "--version")
     {
         std::cout << GULLIVER_FULL_NAME << " " << GULLIVER_VERSION << std::endl;

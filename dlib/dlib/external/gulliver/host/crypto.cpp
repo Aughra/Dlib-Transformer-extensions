@@ -13,7 +13,7 @@
 
 #include "../common/platform.h"
 
-namespace albireo
+namespace gulliver
 {
 
     // L'empreinte SHA-256 passe par CommonCrypto, qui se sert des instructions SHA de la puce Apple :

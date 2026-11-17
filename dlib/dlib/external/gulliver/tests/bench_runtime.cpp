@@ -23,7 +23,7 @@
 #include "../engine/cpu_runtime.h"
 #include "../engine/metal_device.h"
 
-using namespace albireo;
+using namespace gulliver;
 using clock_type = std::chrono::steady_clock;
 
 static double since(clock_type::time_point t)

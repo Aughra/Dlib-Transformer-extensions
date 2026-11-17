@@ -11,7 +11,7 @@
 
 #include "qkernels.h"
 
-namespace albireo
+namespace gulliver
 {
 
     /*!

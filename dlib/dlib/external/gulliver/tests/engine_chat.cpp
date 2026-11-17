@@ -76,7 +76,7 @@
 #include "../common/platform.h"
 
 
-using namespace albireo;
+using namespace gulliver;
 
 namespace
 {
@@ -181,7 +181,7 @@ namespace
 
     // Plonge les textes en vecteurs et affiche ces vecteurs et leurs similarités ; 0 quand tout a
     // marché.
-    int embed(engine_library& lib, albireo_engine* e, const std::vector<std::string>& texts, bool parallel,
+    int embed(engine_library& lib, gulliver_engine* e, const std::vector<std::string>& texts, bool parallel,
         const std::string& reference)
     {
         std::vector<std::vector<float>> vectors(texts.size());
@@ -442,7 +442,7 @@ int main(int argc, char** argv)
     if (!metal) config["metal"] = false;
     if (gpu_prompt_tokens > 0) config["gpu_prompt_tokens"] = gpu_prompt_tokens;
     char err[1024] = { 0 };
-    albireo_engine* e = lib.create(config.dump().c_str(), render_mode ? nullptr : on_log, nullptr, err, sizeof(err));
+    gulliver_engine* e = lib.create(config.dump().c_str(), render_mode ? nullptr : on_log, nullptr, err, sizeof(err));
     if (!e)
     {
         std::printf("create: %s\n", err);

@@ -15,7 +15,7 @@
 
 #include <dlib/data_io/gguf_dequantize.h>
 
-namespace albireo
+namespace gulliver
 {
 
     mapped_file::mapped_file(const std::string& utf8_path)

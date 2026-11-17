@@ -22,9 +22,9 @@
 #include "store.h"
 
 namespace httplib { class SSLServer; class Server; }
-namespace albireo { class relay_service; }
+namespace gulliver { class relay_service; }
 
-namespace albireo
+namespace gulliver
 {
 
     // Le moteur CPU utilisable ; key sert à retrouver ses mesures.

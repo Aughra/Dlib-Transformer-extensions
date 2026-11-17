@@ -26,7 +26,7 @@
 
 namespace httplib { class Client; }
 
-namespace albireo
+namespace gulliver
 {
 
     struct url_parts

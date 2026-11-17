@@ -38,7 +38,7 @@
 #include "../engine/cpu_runtime.h"
 #include "tiny_gguf.h"
 
-using namespace albireo;
+using namespace gulliver;
 
 namespace
 {
@@ -155,7 +155,7 @@ namespace
     int synthetic(const std::string& folder)
     {
         const std::string path = folder + "test_runtime_synthetic.gguf";
-        const albireo_test::tiny_gguf model = albireo_test::tiny_gguf_writer().head_dim(32).build();
+        const gulliver_test::tiny_gguf model = gulliver_test::tiny_gguf_writer().head_dim(32).build();
         if (!model.save(path, model.bytes))
         {
             std::printf("cannot write %s\n", path.c_str());

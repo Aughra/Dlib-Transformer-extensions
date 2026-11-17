@@ -14,7 +14,7 @@
 
 namespace dlib { class database; }
 
-namespace albireo
+namespace gulliver
 {
 
     struct installed_model

@@ -12,7 +12,7 @@
 #include "../common/log.h"
 #include "../common/platform.h"
 
-namespace albireo
+namespace gulliver
 {
 
     namespace

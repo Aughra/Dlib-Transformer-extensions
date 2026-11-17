@@ -13,7 +13,7 @@
 #include "../common/system_info.h"
 #include "../common/version.h"
 
-namespace albireo
+namespace gulliver
 {
 
     namespace
@@ -155,7 +155,7 @@ namespace albireo
             lib->keep_loaded();
         }
         char err[2048] = { 0 };
-        albireo_engine* e = lib->create(config.dump().c_str(), &engine_host::on_log, nullptr, err, sizeof(err));
+        gulliver_engine* e = lib->create(config.dump().c_str(), &engine_host::on_log, nullptr, err, sizeof(err));
         if (!e)
         {
             error = err;

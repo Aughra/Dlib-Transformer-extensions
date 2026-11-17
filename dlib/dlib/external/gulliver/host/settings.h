@@ -10,7 +10,7 @@
 
 #include "../common/json.h"
 
-namespace albireo
+namespace gulliver
 {
 
     // Les rôles pour lesquels un modèle de langage peut être activé : un modèle au plus par rôle.

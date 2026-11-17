@@ -15,10 +15,11 @@
   d'usage du `CMakeLists.txt`. **Build `build/macos-gulliver` compile sans avertissement**,
   binaires produits. Report à 0d : répertoires de sortie `build/macos-albireo`/`albireo-home`,
   README de l'original (Windows/CUDA/OpenVINO). Cibles/variables `ALBIREO_*` → **0b**.
-- **2026-11-17 ~20:30** — **0b fait et vérifié** (voir ci-dessous). **Prochaine action :
-  0b-bis** — identifiants C++ **minuscules** (namespace `albireo` → `gulliver`, API C du
-  moteur `albireo_engine_*`), passe soignée, SANS toucher routes/rôles/clés JSON/certificats/
-  URL externes (voir la ligne 0b-bis). Puis 0c (routes, bloc C++ + JS + openapi).
+- **2026-11-17 ~20:45** — **0b-bis fait et vérifié** (namespace + API C du moteur ; moteur
+  charge et répond). **Prochaine action : 0c** — routes `/albireo/v1` → `/gulliver/v1` en un
+  seul bloc (C++ host/ + page web/js + openapi), car la route est partagée.
+- **2026-11-17 ~20:30** — 0b fait et vérifié (identifiants C++ majuscules, `gulliver.db`,
+  `GULLIVER_HOME`, cibles de build).
 - **2026-11-17 20:07** — Plan validé (go de l'utilisateur). Plan copié dans le dépôt, ce
   fichier d'avancement créé, pointeur ajouté à CLAUDE.md.
 
@@ -53,7 +54,7 @@
   avertissement (service + 10 tests) ; le service démarre avec `GULLIVER_HOME` et crée
   **`gulliver.db`**. Le `"product":"Albireo"` du status reste « Albireo » (texte → 0d) ;
   routes encore `/albireo/v1` (→ 0c).
-- ☐ **0b-bis** Identifiants C++ **minuscules** (passe soignée, catégorie par catégorie, car
+- ☑ **0b-bis** (2026-11-17) Identifiants C++ **minuscules** (passe soignée, catégorie par catégorie, car
   `albireo` minuscule est mêlé à des chaînes à ne pas toucher) : `namespace albireo` →
   `gulliver` et `albireo::` ; API C du moteur `albireo_engine_*`, `albireo_event_callback`,
   `albireo_log_callback`, `albireo_id`, wrappers `albireo_png_*`/`albireo_jpeg_*`. **À NE PAS
@@ -62,6 +63,14 @@
   `albireo-authority|server*` (passe dédiée, regénère les certificats), URL/noms externes
   (`dist/albireo/catalog.json`, `libalbireo-engine-*.so/.dll` : **ne pas toucher**, original/
   autres plateformes). `ALBIREO_TEST_PORT` → avec 0d (README).
+  **Fait** : namespace `albireo` → `gulliver` partout (find -exec) ; API C du moteur
+  `albireo_engine*`, `albireo_event_callback`, `albireo_log_callback`, `albireo_png_*`,
+  `albireo_jpeg_*`, `albireo_make_catalog` (+ chaînes dlsym couplées) ; namespace de test
+  `albireo_test` → `gulliver_test`. **Gardés exprès** : `albireo_id`/`"albireo.id"` (clé de
+  métadonnée GGUF des modèles existants). **Bug 0b corrigé ici** : le loader cherchait
+  `libalbireo-engine-<variant>.dylib` alors que la cible renommée produit
+  `libgulliver-engine-*.dylib` (`common/engine_loader.cpp:124`), sinon le moteur ne se
+  chargeait plus. **Vérifié** : build sans avertissement ; `engine_chat` charge `libgulliver-engine-cpu.dylib`, lit un modèle Qwen 0.5B et répond (symboles `gulliver_engine_*` résolus par dlsym OK).
 - ☐ **0c** **Préfixe de route `/albireo/v1` → `/gulliver/v1`, en un seul bloc C++ + JS +
   openapi** (sinon la page serait cassée entre deux sous-étapes), puis le reste de la page JS
   (`DB_NAME`, clés `localStorage`, textes visibles). *Réajustement 2026-11-17 : la route est

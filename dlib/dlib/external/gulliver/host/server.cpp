@@ -63,7 +63,7 @@
 #include "service.h"
 #include "web_access.h"
 
-namespace albireo
+namespace gulliver
 {
 
     namespace

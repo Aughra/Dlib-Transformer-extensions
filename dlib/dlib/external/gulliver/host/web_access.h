@@ -41,7 +41,7 @@
     lu et le fournisseur d'une recherche, jamais un chemin, une requête ni le texte recherché.
 */
 
-namespace albireo
+namespace gulliver
 {
 
     // La réponse d'une route de l'accès au web : son corps avec le statut 200, sinon l'erreur

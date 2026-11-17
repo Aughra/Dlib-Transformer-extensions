@@ -11,7 +11,7 @@
 
 #include "json.h"
 
-namespace albireo
+namespace gulliver
 {
 
     enum class log_level { debug = 0, info = 1, warning = 2, error = 3 };

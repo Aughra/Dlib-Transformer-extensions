@@ -7,13 +7,13 @@
 #include <cstring>
 #include <string>
 
-namespace albireo
+namespace gulliver
 {
 
     /*!
         Les modèles fournis avec Albireo : un modèle de langage qui sert les trois fonctions
         de l'application web et le modèle d'embeddings de la recherche dans les documents,
-        préparés par le build (tools/albireo_builtin.cpp, à partir de resources/builtin_models.json)
+        préparés par le build (tools/gulliver_builtin.cpp, à partir de resources/builtin_models.json)
         et nommés avec le suffixe "-albireo".
 
         Dans une installation, ils se trouvent dans le dossier "models" des programmes, avec leur

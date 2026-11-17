@@ -7,7 +7,7 @@
 
 #include <dlfcn.h>
 
-namespace albireo
+namespace gulliver
 {
 
     namespace
@@ -42,15 +42,15 @@ namespace albireo
             return false;
         }
         path_ = path;
-        const bool ok = resolve(handle_, "albireo_engine_abi_version", abi_version)
-            && resolve(handle_, "albireo_engine_describe", describe)
-            && resolve(handle_, "albireo_engine_create", create)
-            && resolve(handle_, "albireo_engine_destroy", destroy)
-            && resolve(handle_, "albireo_engine_load_model", load_model)
-            && resolve(handle_, "albireo_engine_unload_model", unload_model)
-            && resolve(handle_, "albireo_engine_query", query)
-            && resolve(handle_, "albireo_engine_submit", submit)
-            && resolve(handle_, "albireo_engine_cancel", cancel);
+        const bool ok = resolve(handle_, "gulliver_engine_abi_version", abi_version)
+            && resolve(handle_, "gulliver_engine_describe", describe)
+            && resolve(handle_, "gulliver_engine_create", create)
+            && resolve(handle_, "gulliver_engine_destroy", destroy)
+            && resolve(handle_, "gulliver_engine_load_model", load_model)
+            && resolve(handle_, "gulliver_engine_unload_model", unload_model)
+            && resolve(handle_, "gulliver_engine_query", query)
+            && resolve(handle_, "gulliver_engine_submit", submit)
+            && resolve(handle_, "gulliver_engine_cancel", cancel);
         if (!ok)
         {
             error = path + " is not an Albireo engine (missing functions)";
@@ -104,7 +104,7 @@ namespace albireo
         return json::parse_or_null(buf.data());
     }
 
-    int engine_library::run_query(albireo_engine* e, const json& request, json& answer) const
+    int engine_library::run_query(gulliver_engine* e, const json& request, json& answer) const
     {
         const std::string text = request.dump();
         std::vector<char> buf(16384);
@@ -121,7 +121,7 @@ namespace albireo
 
     std::string engine_file_name(const std::string& variant)
     {
-        return "libalbireo-engine-" + variant + ".dylib";
+        return "libgulliver-engine-" + variant + ".dylib";
     }
 
 }

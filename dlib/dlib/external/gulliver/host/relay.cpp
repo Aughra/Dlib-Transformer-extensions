@@ -26,7 +26,7 @@
 #include "crypto.h"
 #include "http_fetch.h"
 
-namespace albireo
+namespace gulliver
 {
 
     const char* const relay_model_id = "albireo-relay";

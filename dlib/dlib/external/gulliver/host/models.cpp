@@ -30,7 +30,7 @@
 #include "crypto.h"
 #include "http_fetch.h"
 
-namespace albireo
+namespace gulliver
 {
 
     namespace
@@ -439,7 +439,7 @@ namespace albireo
             d["tools"] = !embedding && (holds("[INST]") || holds("<|start_header_id|>")
                 || holds("<|start_of_role|>") || granite4 || (chatml && (holds("<tool_call>") || holds("tools"))));
             // Les entrées que le moteur lit dans le modèle, et l'identité que porte un fichier
-            // préparé par le build d'Albireo (tools/albireo_builtin.cpp).
+            // préparé par le build d'Albireo (tools/gulliver_builtin.cpp).
             json inputs = json::array();
             if (g.has("albireo.inputs"))
                 for (const auto& s : g.at("albireo.inputs").arr_str) inputs.push_back(s);

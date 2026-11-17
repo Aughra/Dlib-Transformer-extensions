@@ -12,7 +12,7 @@
 
 #include <dlib/data_io/gguf_model_spec.h>
 
-namespace albireo
+namespace gulliver
 {
 
     namespace

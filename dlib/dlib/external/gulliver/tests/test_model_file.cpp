@@ -69,8 +69,8 @@ void operator delete[](void* p) noexcept { std::free(p); }
 void operator delete(void* p, size_t) noexcept { std::free(p); }
 void operator delete[](void* p, size_t) noexcept { std::free(p); }
 
-using namespace albireo;
-using albireo_test::tiny_gguf;
+using namespace gulliver;
+using gulliver_test::tiny_gguf;
 
 namespace
 {
@@ -121,7 +121,7 @@ namespace
     // Fixe le champ de l'étiquette donnée en octets, comme le fait tiny_gguf::with() dans une copie.
     void set_field(const tiny_gguf& model, std::vector<unsigned char>& bytes, const std::string& label, uint64_t value)
     {
-        const albireo_test::gguf_field* f = model.find(label);
+        const gulliver_test::gguf_field* f = model.find(label);
         expect(f != nullptr, "no field " + label);
         if (f)
             for (size_t i = 0; i < f->size; ++i) bytes[f->offset + i] = static_cast<unsigned char>(value >> (8 * i));
@@ -134,7 +134,7 @@ namespace
     std::vector<unsigned char> renamed(const tiny_gguf& model, const std::string& label, size_t index, char c)
     {
         std::vector<unsigned char> b = model.bytes;
-        const albireo_test::gguf_field* f = model.find("length " + label);
+        const gulliver_test::gguf_field* f = model.find("length " + label);
         expect(f != nullptr, "no string " + label);
         if (f) b[f->offset + f->size + index] = static_cast<unsigned char>(c);
         return b;
@@ -213,7 +213,7 @@ namespace
     void large_file(const tiny_gguf& model, const std::string& folder)
     {
         const char* field = "offset output_norm.weight";
-        const albireo_test::gguf_field* f = model.find(field);
+        const gulliver_test::gguf_field* f = model.find(field);
         expect(f != nullptr && f->size == 8, std::string("no field ") + field);
         if (!f) return;
         uint64_t original = 0;
@@ -281,7 +281,7 @@ int main(int argc, char** argv)
 {
     const std::string folder = argc > 1 ? std::string(argv[1]) + "/" : std::string();
     const std::string path = folder + "test_model_file.gguf";
-    const tiny_gguf model = albireo_test::tiny_gguf_writer().build();
+    const tiny_gguf model = gulliver_test::tiny_gguf_writer().build();
 
     // Le fichier intact.
     expect(model.save(path, model.bytes), "write the model");

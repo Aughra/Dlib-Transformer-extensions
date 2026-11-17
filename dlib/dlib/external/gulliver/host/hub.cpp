@@ -9,7 +9,7 @@
 
 #include "http_fetch.h"
 
-namespace albireo
+namespace gulliver
 {
     namespace
     {

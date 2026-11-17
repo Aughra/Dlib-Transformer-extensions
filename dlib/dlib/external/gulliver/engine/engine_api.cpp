@@ -2,7 +2,7 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    L'interface C de common/engine_api.h au-dessus d'albireo::engine.  Aucune exception ne la
+    L'interface C de common/engine_api.h au-dessus d'gulliver::engine.  Aucune exception ne la
     traverse : chacune devient un code de retour et un message.
 */
 
@@ -22,9 +22,9 @@
 
 #include "engine.h"
 
-struct albireo_engine
+struct gulliver_engine
 {
-    std::unique_ptr<albireo::engine> impl;
+    std::unique_ptr<gulliver::engine> impl;
 };
 
 namespace
@@ -50,19 +50,19 @@ namespace
 
     int code_of(const std::exception& e)
     {
-        if (dynamic_cast<const albireo::engine_busy*>(&e)) return GULLIVER_E_BUSY;
+        if (dynamic_cast<const gulliver::engine_busy*>(&e)) return GULLIVER_E_BUSY;
         if (dynamic_cast<const std::invalid_argument*>(&e)) return GULLIVER_E_INVALID_ARGUMENT;
         if (dynamic_cast<const std::bad_alloc*>(&e)) return GULLIVER_E_OUT_OF_MEMORY;
         return GULLIVER_E_INTERNAL;
     }
 
 
-    albireo::json parse_or_throw(const char* text)
+    gulliver::json parse_or_throw(const char* text)
     {
-        if (!text || !*text) return albireo::json::object();
-        albireo::json j;
+        if (!text || !*text) return gulliver::json::object();
+        gulliver::json j;
         std::string error;
-        if (!albireo::json::parse(text, j, &error)) throw std::invalid_argument("invalid JSON: " + error);
+        if (!gulliver::json::parse(text, j, &error)) throw std::invalid_argument("invalid JSON: " + error);
         return j;
     }
 }
@@ -70,16 +70,16 @@ namespace
 extern "C"
 {
 
-GULLIVER_ENGINE_EXPORT uint32_t GULLIVER_ENGINE_CALL albireo_engine_abi_version(void)
+GULLIVER_ENGINE_EXPORT uint32_t GULLIVER_ENGINE_CALL gulliver_engine_abi_version(void)
 {
     return GULLIVER_ENGINE_ABI_VERSION;
 }
 
-GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_describe(char* json, size_t capacity, size_t* needed)
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL gulliver_engine_describe(char* json, size_t capacity, size_t* needed)
 {
     try
     {
-        return write_json(albireo::engine::describe().dump(), json, capacity, needed);
+        return write_json(gulliver::engine::describe().dump(), json, capacity, needed);
     }
     catch (...)
     {
@@ -87,16 +87,16 @@ GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_describe(char* js
     }
 }
 
-GULLIVER_ENGINE_EXPORT albireo_engine* GULLIVER_ENGINE_CALL albireo_engine_create(const char* config_json,
-    albireo_log_callback log, void* log_user, char* error, size_t error_capacity)
+GULLIVER_ENGINE_EXPORT gulliver_engine* GULLIVER_ENGINE_CALL gulliver_engine_create(const char* config_json,
+    gulliver_log_callback log, void* log_user, char* error, size_t error_capacity)
 {
     try
     {
-        std::unique_ptr<albireo_engine> e(new albireo_engine());
-        albireo::log_sink sink;
+        std::unique_ptr<gulliver_engine> e(new gulliver_engine());
+        gulliver::log_sink sink;
         if (log)
             sink = [log, log_user](int level, const std::string& message) { log(log_user, level, message.c_str()); };
-        e->impl.reset(new albireo::engine(parse_or_throw(config_json), sink));
+        e->impl.reset(new gulliver::engine(parse_or_throw(config_json), sink));
         return e.release();
     }
     catch (const std::exception& ex)
@@ -110,7 +110,7 @@ GULLIVER_ENGINE_EXPORT albireo_engine* GULLIVER_ENGINE_CALL albireo_engine_creat
     return nullptr;
 }
 
-GULLIVER_ENGINE_EXPORT void GULLIVER_ENGINE_CALL albireo_engine_destroy(albireo_engine* engine)
+GULLIVER_ENGINE_EXPORT void GULLIVER_ENGINE_CALL gulliver_engine_destroy(gulliver_engine* engine)
 {
     try
     {
@@ -121,7 +121,7 @@ GULLIVER_ENGINE_EXPORT void GULLIVER_ENGINE_CALL albireo_engine_destroy(albireo_
     }
 }
 
-GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_load_model(albireo_engine* engine,
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL gulliver_engine_load_model(gulliver_engine* engine,
     const char* model_id, const char* path, const char* options_json, char* error, size_t error_capacity)
 {
     if (!engine || !model_id || !path) return GULLIVER_E_INVALID_ARGUMENT;
@@ -142,7 +142,7 @@ GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_load_model(albire
     }
 }
 
-GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_unload_model(albireo_engine* engine, const char* model_id)
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL gulliver_engine_unload_model(gulliver_engine* engine, const char* model_id)
 {
     if (!engine || !model_id) return GULLIVER_E_INVALID_ARGUMENT;
     try
@@ -156,7 +156,7 @@ GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_unload_model(albi
     }
 }
 
-GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_query(albireo_engine* engine,
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL gulliver_engine_query(gulliver_engine* engine,
     const char* request_json, char* json, size_t capacity, size_t* needed)
 {
     if (!engine) return GULLIVER_E_INVALID_ARGUMENT;
@@ -171,7 +171,7 @@ GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_query(albireo_eng
         catch (const std::exception& ex)
         {
             code = code_of(ex);
-            albireo::json e = albireo::json::object();
+            gulliver::json e = gulliver::json::object();
             e["error"] = ex.what();
             text = e.dump();
         }
@@ -185,8 +185,8 @@ GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_query(albireo_eng
     }
 }
 
-GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_submit(albireo_engine* engine,
-    const char* request_json, albireo_event_callback callback, void* user, uint64_t* request_id,
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL gulliver_engine_submit(gulliver_engine* engine,
+    const char* request_json, gulliver_event_callback callback, void* user, uint64_t* request_id,
     char* error, size_t error_capacity)
 {
     if (!engine || !callback) return GULLIVER_E_INVALID_ARGUMENT;
@@ -211,7 +211,7 @@ GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_submit(albireo_en
     }
 }
 
-GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL albireo_engine_cancel(albireo_engine* engine, uint64_t request_id)
+GULLIVER_ENGINE_EXPORT int GULLIVER_ENGINE_CALL gulliver_engine_cancel(gulliver_engine* engine, uint64_t request_id)
 {
     if (!engine) return GULLIVER_E_INVALID_ARGUMENT;
     try

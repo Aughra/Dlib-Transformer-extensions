@@ -31,7 +31,7 @@
 #define GULLIVER_ENGINE_VARIANT "cpu"
 #endif
 
-namespace albireo
+namespace gulliver
 {
     typedef std::chrono::steady_clock clock_type;
 
@@ -1407,7 +1407,7 @@ namespace albireo
         j["experts"] = m.cfg.n_experts;
         j["embedding"] = m.cfg.is_embedding();
         if (m.cfg.is_embedding()) j["dimensions"] = m.cfg.d_model;
-        j["description"] = albireo::describe(m.cfg);
+        j["description"] = gulliver::describe(m.cfg);
         json inputs = json::array();
         inputs.push_back("text");
         if (m.vision)

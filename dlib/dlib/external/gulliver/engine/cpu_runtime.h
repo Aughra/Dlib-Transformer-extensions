@@ -15,7 +15,7 @@
 #include "model_file.h"
 #include "offload.h"
 
-namespace albireo
+namespace gulliver
 {
     class metal_device;
 }
@@ -23,7 +23,7 @@ namespace albireo
 #include "runtime.h"
 #include "thread_pool.h"
 
-namespace albireo
+namespace gulliver
 {
 
     class cpu_runtime : public model_runtime

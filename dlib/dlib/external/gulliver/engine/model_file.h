@@ -13,7 +13,7 @@
 
 #include "qkernels.h"
 
-namespace albireo
+namespace gulliver
 {
 
     class mapped_file

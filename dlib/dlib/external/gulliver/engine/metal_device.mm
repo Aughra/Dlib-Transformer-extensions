@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <vector>
 
-namespace albireo
+namespace gulliver
 {
 
     namespace

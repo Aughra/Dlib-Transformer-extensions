@@ -16,7 +16,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-namespace albireo
+namespace gulliver
 {
 
     /*!

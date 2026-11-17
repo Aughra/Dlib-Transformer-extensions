@@ -16,7 +16,7 @@
 #include <dlib/external/libjpeg/jpeglib.h>
 #include <dlib/external/libpng/png.h>
 
-namespace albireo
+namespace gulliver
 {
 
     namespace
@@ -197,18 +197,18 @@ namespace albireo
             char message[256];
         };
 
-        void albireo_png_error(png_structp png, png_const_charp message)
+        void gulliver_png_error(png_structp png, png_const_charp message)
         {
             png_reader_state* s = static_cast<png_reader_state*>(png_get_error_ptr(png));
             std::snprintf(s->message, sizeof(s->message), "%s", message);
             png_longjmp(png, 1);
         }
 
-        void albireo_png_warning(png_structp, png_const_charp)
+        void gulliver_png_warning(png_structp, png_const_charp)
         {
         }
 
-        void albireo_png_read(png_structp png, png_bytep out, png_size_t n)
+        void gulliver_png_read(png_structp png, png_bytep out, png_size_t n)
         {
             png_reader_state* s = static_cast<png_reader_state*>(png_get_io_ptr(png));
             if (n > s->size - s->at) png_error(png, "the file is truncated");
@@ -220,8 +220,8 @@ namespace albireo
         int decode_png_pixels(png_reader_state& state, const image_limits& limits, std::vector<uint8_t>& pixels,
             std::vector<png_bytep>& rows, long& width, long& height, int& channels)
         {
-            png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, &state, albireo_png_error,
-                albireo_png_warning);
+            png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, &state, gulliver_png_error,
+                gulliver_png_warning);
             if (!png) return 2;
             png_infop info = png_create_info_struct(png);
             if (!info)
@@ -234,7 +234,7 @@ namespace albireo
                 png_destroy_read_struct(&png, &info, nullptr);
                 return 1;
             }
-            png_set_read_fn(png, &state, albireo_png_read);
+            png_set_read_fn(png, &state, gulliver_png_read);
             png_set_user_limits(png, static_cast<png_uint_32>(limits.max_side),
                 static_cast<png_uint_32>(limits.max_side));
             png_set_chunk_malloc_max(png, 8u << 20);
@@ -318,7 +318,7 @@ namespace albireo
         */
         const int max_jpeg_scans = 1000;
 
-        void albireo_jpeg_error(j_common_ptr info)
+        void gulliver_jpeg_error(j_common_ptr info)
         {
             jpeg_failure* f = reinterpret_cast<jpeg_failure*>(info->err);
             (*info->err->format_message)(info, f->message);
@@ -327,7 +327,7 @@ namespace albireo
 
         // Appelée par libjpeg à mesure qu'elle lit les scans et les lignes : arrête un fichier
         // au-delà de max_jpeg_scans.
-        void albireo_jpeg_progress(j_common_ptr info)
+        void gulliver_jpeg_progress(j_common_ptr info)
         {
             if (!info->is_decompressor) return;
             if (reinterpret_cast<j_decompress_ptr>(info)->input_scan_number <= max_jpeg_scans) return;
@@ -336,7 +336,7 @@ namespace albireo
             std::longjmp(f->jump, 1);
         }
 
-        void albireo_jpeg_message(j_common_ptr, int)
+        void gulliver_jpeg_message(j_common_ptr, int)
         {
         }
 
@@ -345,8 +345,8 @@ namespace albireo
         {
             jpeg_decompress_struct info;
             info.err = jpeg_std_error(&failure.mgr);
-            failure.mgr.error_exit = albireo_jpeg_error;
-            failure.mgr.emit_message = albireo_jpeg_message;
+            failure.mgr.error_exit = gulliver_jpeg_error;
+            failure.mgr.emit_message = gulliver_jpeg_message;
             failure.message[0] = '\0';
             if (setjmp(failure.jump))
             {
@@ -356,7 +356,7 @@ namespace albireo
             jpeg_create_decompress(&info);
             // Positionné après jpeg_create_decompress(), qui efface la structure.
             std::memset(&failure.progress, 0, sizeof(failure.progress));
-            failure.progress.progress_monitor = albireo_jpeg_progress;
+            failure.progress.progress_monitor = gulliver_jpeg_progress;
             info.progress = &failure.progress;
             jpeg_mem_src(&info, reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size());
             jpeg_read_header(&info, TRUE);

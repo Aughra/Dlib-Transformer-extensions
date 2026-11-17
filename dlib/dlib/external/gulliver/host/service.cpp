@@ -29,7 +29,7 @@
 #include "relay.h"
 #include "web_access.h"
 
-namespace albireo
+namespace gulliver
 {
 
     namespace
@@ -183,7 +183,7 @@ namespace albireo
         return options.empty() ? engine_choice() : options.front();
     }
 
-    service::service() : program_dir_(executable_dir()), data_dir_(albireo::data_dir())
+    service::service() : program_dir_(executable_dir()), data_dir_(gulliver::data_dir())
     {
     }
 
@@ -2217,7 +2217,7 @@ namespace albireo
         if (!lib.load(path, error)) return fail(error);
         lib.keep_loaded();
         char err[2048] = { 0 };
-        albireo_engine* e = lib.create(config.c_str(), nullptr, nullptr, err, sizeof(err));
+        gulliver_engine* e = lib.create(config.c_str(), nullptr, nullptr, err, sizeof(err));
         if (!e) return fail(err);
         json options = json::object();
         options["context"] = 2048;

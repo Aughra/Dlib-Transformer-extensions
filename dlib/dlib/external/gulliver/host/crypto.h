@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-namespace albireo
+namespace gulliver
 {
 
     class sha256_stream

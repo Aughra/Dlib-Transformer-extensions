@@ -29,7 +29,7 @@
 #include "../common/engine_loader.h"
 #include "tiny_gguf.h"
 
-using namespace albireo;
+using namespace gulliver;
 
 namespace
 {
@@ -132,7 +132,7 @@ int main(int argc, char** argv)
     const std::string folder = argc > 2 ? std::string(argv[2]) + "/" : std::string();
     const std::string path = folder + "test_engine_api.gguf";
     const std::string damaged_path = folder + "test_engine_api_damaged.gguf";
-    const albireo_test::tiny_gguf model = albireo_test::tiny_gguf_writer().build();
+    const gulliver_test::tiny_gguf model = gulliver_test::tiny_gguf_writer().build();
     if (!model.save(path, model.bytes)
         || !model.save(damaged_path, model.with("kv tokenizer.ggml.eos_token_id", 1u << 20)))
     {
@@ -159,7 +159,7 @@ int main(int argc, char** argv)
     char err[1024] = { 0 };
     expect(lib.create("{\"threads\": ", nullptr, nullptr, err, sizeof(err)) == nullptr && err[0] != 0,
         "an invalid configuration is refused with a message");
-    albireo_engine* e = lib.create("{\"threads\": 2, \"spin_us\": 1000000000}", nullptr, nullptr, err, sizeof(err));
+    gulliver_engine* e = lib.create("{\"threads\": 2, \"spin_us\": 1000000000}", nullptr, nullptr, err, sizeof(err));
     expect(e != nullptr, std::string("engine created: ") + err);
     if (!e) return 1;
     expect(lib.load_model(nullptr, "m", path.c_str(), nullptr, err, sizeof(err)) == GULLIVER_E_INVALID_ARGUMENT,
@@ -389,8 +389,8 @@ int main(int argc, char** argv)
     */
     {
         const std::string thinking_path = folder + "test_engine_api_thinking.gguf";
-        const albireo_test::tiny_gguf thinking =
-            albireo_test::tiny_gguf_writer().build(albireo_test::tiny_gguf_writer::thinking_template());
+        const gulliver_test::tiny_gguf thinking =
+            gulliver_test::tiny_gguf_writer().build(gulliver_test::tiny_gguf_writer::thinking_template());
         expect(thinking.save(thinking_path, thinking.bytes), "the model that always reasons is written");
         expect(lib.load_model(e, "t", thinking_path.c_str(), options, err, sizeof(err)) == GULLIVER_OK,
             std::string("the model that always reasons loads: ") + err);

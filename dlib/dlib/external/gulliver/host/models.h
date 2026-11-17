@@ -18,7 +18,7 @@
 #include "store.h"
 #include "user_error.h"
 
-namespace albireo
+namespace gulliver
 {
     class link_free_file;
 

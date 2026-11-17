@@ -7,7 +7,7 @@
 
 #include "../common/json.h"
 
-namespace albireo
+namespace gulliver
 {
 
     struct user_error

@@ -92,7 +92,7 @@ using dlib::gguf_type;
 using dlib::gguf_tensor_info;
 using dlib::gguf_value;
 
-namespace albireo
+namespace gulliver
 {
 namespace
 {
@@ -1376,7 +1376,7 @@ int main(int argc, char** argv)
 {
     try
     {
-        return albireo::run(argc, argv);
+        return gulliver::run(argc, argv);
     }
     catch (const std::exception& e)
     {

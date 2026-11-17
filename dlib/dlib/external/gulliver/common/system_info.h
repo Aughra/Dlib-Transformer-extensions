@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace albireo
+namespace gulliver
 {
 
     struct cpu_info

@@ -10,7 +10,7 @@
 
 #include "../common/platform.h"
 
-namespace albireo
+namespace gulliver
 {
     namespace
     {
