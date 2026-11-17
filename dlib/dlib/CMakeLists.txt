@@ -746,11 +746,11 @@ if (NOT TARGET dlib)
          endif()
          # The Objective-C++ files of the backend: the device and its buffers, and the
          # kernels.  They are built with automatic reference counting, and dlib links the
-         # Metal and Foundation frameworks for them.
+         # Metal, Metal Performance Shaders (matrix products) and Foundation frameworks.
          enable_language(OBJCXX)
          set(source_files ${source_files} cuda/metal_dlib.mm cuda/metal_kernels.mm)
          set_source_files_properties(cuda/metal_dlib.mm cuda/metal_kernels.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
-         list (APPEND dlib_needed_private_libraries "-framework Metal" "-framework Foundation")
+         list (APPEND dlib_needed_private_libraries "-framework Metal" "-framework MetalPerformanceShaders" "-framework Foundation")
          message(STATUS "Enabling the Metal backend of dlib tensors.")
       endif()
       toggle_preprocessor_switch(DLIB_USE_METAL)

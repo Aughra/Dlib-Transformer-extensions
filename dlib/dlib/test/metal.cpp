@@ -3,6 +3,7 @@
 
 #include <dlib/dnn.h>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <functional>
@@ -323,7 +324,7 @@ namespace
             {"tt::softmax_all",      [&]{ tt::softmax_all(dest, src); }},
             {"tt::gelu_gradient",    [&]{ tt::gelu_gradient(dest, src, other); }},
             {"tt::affine_transform", [&]{ tt::affine_transform(dest, src, 2, 1); }},
-            {"tt::gemm",             [&]{ tt::gemm(0, dest, 1, src, false, other, true); }},
+            {"tt::log",              [&]{ tt::log(dest, src); }},
             {"tt::tensor_rand::fill_uniform", [&]{ tt::tensor_rand(1).fill_uniform(dest); }},
         };
         for (auto& op : ops)
@@ -375,6 +376,7 @@ namespace
         double max_rel = 0;
         size_t compared = 0;
         size_t failed = 0;
+        double max_bound_ratio = 0;   // for gemm: the largest gap over its bound
     };
 
     // Tolerances of float32 (see the report in the journal of the fork): 1e-5 absolute and
@@ -581,6 +583,191 @@ namespace
         check_parity("softmax CHANNEL_WISE", big, mbig);
     }
 
+// ----------------------------------------------------------------------------------------
+// Parity of tt::gemm.  Both sides sum products in their own order, so the bound is that of
+// the error analysis of a dot product of length K in float32 (u = 2^-24): each side is
+// within (K+2)*u*S of the exact value, S being what the same computation gives on absolute
+// values; the two sides are thus within 2*(K+2)*u*S of each other, times the number of
+// products a value accumulates.
+
+    void check_gemm_parity (
+        const std::string& op,
+        const tensor& cpu,
+        const tensor& gpu,
+        const tensor& scale,
+        double terms
+    )
+    {
+        DLIB_TEST(have_same_dimensions(cpu, gpu) && have_same_dimensions(cpu, scale));
+        const double u = std::ldexp(1.0, -24);
+        parity& p = parity_table()[op];
+        const float* c = cpu.host();
+        const float* g = gpu.host();
+        const float* s = scale.host();
+        for (size_t i = 0; i < cpu.size(); ++i)
+        {
+            const double a = std::abs((double)g[i] - (double)c[i]);
+            const double bound = 2*(terms + 2)*u*s[i] + 1e-30;
+            ++p.compared;
+            p.max_abs = std::max(p.max_abs, a);
+            if (s[i] > 0)
+                p.max_rel = std::max(p.max_rel, a/s[i]);
+            p.max_bound_ratio = std::max(p.max_bound_ratio, a/bound);
+            if (!(a <= bound))
+            {
+                if (p.failed < 5)
+                    dlog << LERROR << op << ": value " << i << " cpu " << c[i] << " metal " << g[i] << " bound " << bound;
+                ++p.failed;
+            }
+        }
+        DLIB_TEST_MSG(p.failed == 0, op << ": " << p.failed << " values beyond the bound");
+    }
+
+    resizable_tensor absolute (const tensor& t)
+    {
+        resizable_tensor a(t);
+        for (auto& x : a)
+            x = std::abs(x);
+        return a;
+    }
+
+    void run_gemm_case (
+        dlib::rand& rnd,
+        const std::string& op,
+        shape ds, shape ls, shape rs,
+        bool tl, bool tr,
+        float alpha, float beta,
+        operation_mode mode,
+        double terms
+    )
+    {
+        resizable_tensor dest = random_cpu(rnd, ds.n, ds.k, ds.nr, ds.nc);
+        resizable_tensor lhs = random_cpu(rnd, ls.n, ls.k, ls.nr, ls.nc);
+        resizable_tensor rhs = random_cpu(rnd, rs.n, rs.k, rs.nr, rs.nc);
+        resizable_tensor scale = absolute(dest);
+        resizable_tensor md = on_metal(dest), ml = on_metal(lhs), mr = on_metal(rhs);
+        tt::gemm(std::abs(beta), scale, std::abs(alpha), absolute(lhs), tl, absolute(rhs), tr, mode);
+        tt::gemm(beta, dest, alpha, lhs, tl, rhs, tr, mode);
+        tt::gemm(beta, md, alpha, ml, tl, mr, tr, mode);
+        check_gemm_parity(op, dest, md, scale, terms);
+    }
+
+    void test_parity_gemm (dlib::rand& rnd)
+    {
+        // CHANNEL_WISE: mat(t) has a row per sample.  Square, rectangular, small and large,
+        // with each transposition, and alpha and beta.
+        struct mnk { long m, n, k; };
+        const std::vector<mnk> sizes = {{1,1,1}, {2,3,4}, {64,64,64}, {3,5,700}, {1000,300,17},
+                                        {33,65,129}, {512,512,512}, {7,1,1024}, {1,4096,64}};
+        const std::vector<std::pair<float,float>> coefs = {{1,0}, {1,1}, {-2,0.5f}};
+        for (auto& s : sizes)
+        {
+            for (int t = 0; t < 4; ++t)
+            {
+                const bool tl = t & 1, tr = t & 2;
+                for (auto& ab : coefs)
+                {
+                    const shape ls = tl ? shape{s.k, s.m, 1, 1} : shape{s.m, s.k, 1, 1};
+                    const shape rs = tr ? shape{s.n, s.k, 1, 1} : shape{s.k, s.n, 1, 1};
+                    run_gemm_case(rnd, "gemm CHANNEL_WISE", {s.m, s.n, 1, 1}, ls, rs, tl, tr,
+                        ab.first, ab.second, operation_mode::CHANNEL_WISE, s.k);
+                }
+            }
+        }
+        // mat() of a 4-dimensional tensor: k*nr*nc columns.
+        run_gemm_case(rnd, "gemm CHANNEL_WISE", {6,2,3,4}, {6,5,2,2}, {20,2,3,4}, false, false, 1, 0,
+            operation_mode::CHANNEL_WISE, 20);
+
+        // PLANE_WISE: a product per (sample, channel), operands of one plane shared by the
+        // batch, and a dest shared by the batch, which accumulates with beta = 1.
+        for (int t = 0; t < 4; ++t)
+        {
+            const bool tl = t & 1, tr = t & 2;
+            const long m = 9, n = 13, k = 17;
+            const shape a = tl ? shape{2,3,k,m} : shape{2,3,m,k};
+            const shape b = tr ? shape{2,3,n,k} : shape{2,3,k,n};
+            run_gemm_case(rnd, "gemm PLANE_WISE", {2,3,m,n}, a, b, tl, tr, 1, 0, operation_mode::PLANE_WISE, k);
+            run_gemm_case(rnd, "gemm PLANE_WISE", {2,3,m,n}, a, b, tl, tr, 0.5f, 2, operation_mode::PLANE_WISE, k);
+            const shape bm = tr ? shape{1,1,n,k} : shape{1,1,k,n};
+            run_gemm_case(rnd, "gemm PLANE_WISE", {2,3,m,n}, a, bm, tl, tr, 1, 0, operation_mode::PLANE_WISE, k);
+            const shape am = tl ? shape{1,1,k,m} : shape{1,1,m,k};
+            run_gemm_case(rnd, "gemm PLANE_WISE", {2,3,m,n}, am, b, tl, tr, 1, 1, operation_mode::PLANE_WISE, k);
+            run_gemm_case(rnd, "gemm PLANE_WISE", {1,1,m,n}, a, b, tl, tr, 1, 1, operation_mode::PLANE_WISE, 6*k);
+        }
+        // Attention-like shapes: (batch, heads, sequence, head size).
+        run_gemm_case(rnd, "gemm PLANE_WISE", {2,4,64,64}, {2,4,64,32}, {2,4,64,32}, false, true, 0.125f, 0,
+            operation_mode::PLANE_WISE, 32);
+        run_gemm_case(rnd, "gemm PLANE_WISE", {2,4,64,32}, {2,4,64,64}, {2,4,64,32}, false, false, 1, 0,
+            operation_mode::PLANE_WISE, 64);
+        // A matrix of planes of one value: (K, N, 1, 1) is the K x N matrix of a linear layer.
+        run_gemm_case(rnd, "gemm PLANE_WISE", {2,3,5,7}, {2,3,5,11}, {11,7,1,1}, false, false, 1, 0,
+            operation_mode::PLANE_WISE, 11);
+        run_gemm_case(rnd, "gemm PLANE_WISE", {2,3,5,7}, {5,11,1,1}, {2,3,11,7}, false, false, 1, 0.5f,
+            operation_mode::PLANE_WISE, 11);
+
+        // Views at an offset, in a larger buffer.
+        resizable_tensor big = random_cpu(rnd, 4, 1, 1, 64*64);
+        resizable_tensor mbig = on_metal(big);
+        alias_tensor part(64, 64);
+        auto a = part(big, 1), b = part(big, 64*64 + 3), d = part(big, 2*64*64 + 101);
+        auto ma = part(mbig, 1), mb = part(mbig, 64*64 + 3), md = part(mbig, 2*64*64 + 101);
+        resizable_tensor scale(64, 64);
+        scale = 0;
+        tt::gemm(0, scale, 1, absolute(a), false, absolute(b), false);
+        tt::gemm(0, d, 1, a, false, b, false);
+        tt::gemm(0, md, 1, ma, false, mb, false);
+        resizable_tensor dc(d), dm(md);
+        check_gemm_parity("gemm CHANNEL_WISE", dc, dm, scale, 64);
+
+        // A NaN left in dest does not come through when beta == 0, as on the CPU.
+        resizable_tensor l = random_cpu(rnd, 8, 8, 1, 1), r = random_cpu(rnd, 8, 8, 1, 1);
+        resizable_tensor nan_dest(8, 8);
+        nan_dest = std::numeric_limits<float>::quiet_NaN();
+        resizable_tensor ml = on_metal(l), mr = on_metal(r), mn = on_metal(nan_dest);
+        tt::gemm(0, nan_dest, 1, l, false, r, false);
+        tt::gemm(0, mn, 1, ml, false, mr, false);
+        for (auto x : mn)
+            DLIB_TEST(!std::isnan(x));
+
+        // Refused: matrices that do not fit, and a dest that overlaps an operand.
+        resizable_tensor x = on_metal(random_cpu(rnd, 4, 5, 1, 1)), y = on_metal(random_cpu(rnd, 6, 3, 1, 1));
+        resizable_tensor z = on_metal(random_cpu(rnd, 4, 3, 1, 1));
+        DLIB_TEST(contains(error_of([&]{ tt::gemm(0, z, 1, x, false, y, false); }), "tt::gemm was given matrices"));
+        DLIB_TEST(contains(error_of([&]{ tt::gemm(0, x, 1, x, false, x, true); }), "overlaps"));
+    }
+
+    // Times of tt::gemm on the CPU (dlib with its BLAS) and on Metal, for square matrices.
+    // Only with DLIB_METAL_BENCH set: 3 runs to warm up, then the median of 15.
+    void bench_gemm (dlib::rand& rnd)
+    {
+        if (!std::getenv("DLIB_METAL_BENCH"))
+            return;
+        for (long n : {256L, 1024L, 2048L})
+        {
+            resizable_tensor a = random_cpu(rnd, n, n, 1, 1), b = random_cpu(rnd, n, n, 1, 1), d(n, n);
+            resizable_tensor ma = on_metal(a), mb = on_metal(b), md = on_metal(d);
+            auto time_of = [&](tensor& dd, const tensor& aa, const tensor& bb)
+            {
+                std::vector<double> t;
+                for (int i = 0; i < 3 + 15; ++i)
+                {
+                    const auto start = std::chrono::steady_clock::now();
+                    tt::gemm(0, dd, 1, aa, false, bb, false);
+                    const double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+                    if (i >= 3)
+                        t.push_back(s);
+                }
+                std::sort(t.begin(), t.end());
+                return t[t.size()/2];
+            };
+            const double tc = time_of(d, a, b);
+            const double tm = time_of(md, ma, mb);
+            const double flops = 2.0*n*n*n;
+            std::cout << "gemm " << n << "x" << n << ": cpu " << tc*1e3 << " ms (" << flops/tc*1e-9
+                      << " GFLOP/s), metal " << tm*1e3 << " ms (" << flops/tm*1e-9 << " GFLOP/s)" << std::endl;
+        }
+    }
+
     void report_parity ()
     {
         for (auto& e : parity_table())
@@ -589,7 +776,9 @@ namespace
         std::ostringstream sout;
         for (auto& e : parity_table())
             sout << e.first << ": " << e.second.compared << " values, max |diff| " << e.second.max_abs
-                 << ", max rel (|cpu| >= 1e-3) " << e.second.max_rel << "\n";
+                 << (e.second.max_bound_ratio > 0 ? ", max gap/scale " : ", max rel (|cpu| >= 1e-3) ") << e.second.max_rel
+                 << (e.second.max_bound_ratio > 0 ? ", max gap/bound " + std::to_string(e.second.max_bound_ratio) : std::string())
+                 << "\n";
         if (std::getenv("DLIB_METAL_REPORT"))
             std::cout << sout.str();
     }
@@ -626,7 +815,9 @@ namespace
             test_parity_softmax(rnd);
             test_parity_activations(rnd);
             test_parity_views(rnd);
+            test_parity_gemm(rnd);
             report_parity();
+            bench_gemm(rnd);
             DLIB_TEST(metal::live_buffers() == 0);
 #endif
         }

@@ -14,9 +14,11 @@
 #endif
 
 #import <Foundation/Foundation.h>
+#import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
 #include "metal_dlib_internal.h"
 #include "metal_dispatch.h"
+#include "gemm_planes.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -596,6 +598,127 @@ kernel void silu (
             DLIB_CASSERT(have_same_dimensions(dest, src));
             const uint32_t count = as_index(src.size(), "silu");
             run("silu", count, {out(dest), in(src)}, &count, sizeof(count));
+        }
+
+    // ------------------------------------------------------------------------------------
+    // Matrix products, by MPSMatrixMultiplication
+
+        namespace
+        {
+            struct product
+            {
+                size_t lhs_offset, rhs_offset, dest_offset;    // in values
+            };
+
+            MPSMatrix* matrix_view (
+                const tensor& t,
+                size_t offset,
+                long rows,
+                long cols
+            )
+            {
+                const buffer_view v = find_buffer(t.host() + offset, (size_t)rows*cols);
+                MPSMatrixDescriptor* d = [MPSMatrixDescriptor matrixDescriptorWithRows:rows
+                                                                               columns:cols
+                                                                              rowBytes:cols*sizeof(float)
+                                                                              dataType:MPSDataTypeFloat32];
+                return [[MPSMatrix alloc] initWithBuffer:v.buffer offset:v.offset descriptor:d];
+            }
+
+            void check_product_shapes (
+                long lhs_rows, long lhs_cols, bool trans_lhs,
+                long rhs_rows, long rhs_cols, bool trans_rhs,
+                long dest_rows, long dest_cols
+            )
+            {
+                const long m = trans_lhs ? lhs_cols : lhs_rows;
+                const long k = trans_lhs ? lhs_rows : lhs_cols;
+                const long k2 = trans_rhs ? rhs_cols : rhs_rows;
+                const long n = trans_rhs ? rhs_rows : rhs_cols;
+                if (k != k2 || dest_rows != m || dest_cols != n)
+                    throw metal_error("Metal backend of dlib: tt::gemm was given matrices of " +
+                        std::to_string(lhs_rows) + "x" + std::to_string(lhs_cols) + (trans_lhs ? " (transposed)" : "") +
+                        " and " + std::to_string(rhs_rows) + "x" + std::to_string(rhs_cols) + (trans_rhs ? " (transposed)" : "") +
+                        " for a result of " + std::to_string(dest_rows) + "x" + std::to_string(dest_cols) + ".");
+                if (k == 0 && m*n != 0)
+                    throw metal_error("Metal backend of dlib: tt::gemm with an inner dimension of 0 has no Metal version.");
+            }
+        }
+
+        void gemm (
+            float beta,
+            tensor& dest,
+            float alpha,
+            const tensor& lhs,
+            bool trans_lhs,
+            const tensor& rhs,
+            bool trans_rhs,
+            operation_mode mode
+        )
+        {
+            if (mode != operation_mode::CHANNEL_WISE && mode != operation_mode::PLANE_WISE)
+                throw metal_error("Metal backend of dlib: tt::gemm takes CHANNEL_WISE or PLANE_WISE.");
+            if (overlap(dest, lhs) || overlap(dest, rhs))
+                throw metal_error("Metal backend of dlib: tt::gemm was given a dest that overlaps lhs or rhs, "
+                    "which the Metal version does not support.");
+
+            long lhs_rows, lhs_cols, rhs_rows, rhs_cols, dest_rows, dest_cols;
+            std::vector<product> products;
+            if (mode == operation_mode::CHANNEL_WISE)
+            {
+                // mat(t): one row per sample, k*nr*nc columns.
+                auto cols_of = [](const tensor& t) { return t.num_samples() == 0 ? 0L : (long)(t.size()/t.num_samples()); };
+                lhs_rows = lhs.num_samples();  lhs_cols = cols_of(lhs);
+                rhs_rows = rhs.num_samples();  rhs_cols = cols_of(rhs);
+                dest_rows = dest.num_samples(); dest_cols = cols_of(dest);
+                products.push_back(product{0, 0, 0});
+            }
+            else
+            {
+                const tt::gemm_planes p = tt::plan_gemm_planes(dest, lhs, rhs);
+                lhs_rows = p.lhs_rows;   lhs_cols = p.lhs_cols;
+                rhs_rows = p.rhs_rows;   rhs_cols = p.rhs_cols;
+                dest_rows = p.dest_rows; dest_cols = p.dest_cols;
+                for (long b = 0; b < p.num_samples; ++b)
+                    for (long c = 0; c < p.num_channels; ++c)
+                        products.push_back(product{p.lhs_offset(b, c), p.rhs_offset(b, c), p.dest_offset(b, c)});
+            }
+            check_product_shapes(lhs_rows, lhs_cols, trans_lhs, rhs_rows, rhs_cols, trans_rhs, dest_rows, dest_cols);
+            for (const tensor* t : {&lhs, &rhs, (const tensor*)&dest})
+                as_index(t->size(), "gemm");
+            if (products.empty() || dest_rows*dest_cols == 0)
+                return;
+            const long inner = trans_lhs ? lhs_rows : lhs_cols;
+
+            id<MTLDevice> device = ready_device();
+            id<MTLCommandQueue> queue = ready_queue();
+            @autoreleasepool
+            {
+                id<MTLCommandBuffer> cmd = [queue commandBuffer];
+                if (cmd == nil)
+                    throw metal_error("Metal backend of dlib: the queue did not create a command buffer.");
+                MPSMatrixMultiplication* mm = [[MPSMatrixMultiplication alloc] initWithDevice:device
+                                                                                 transposeLeft:trans_lhs
+                                                                                transposeRight:trans_rhs
+                                                                                    resultRows:dest_rows
+                                                                                 resultColumns:dest_cols
+                                                                               interiorColumns:inner
+                                                                                         alpha:alpha
+                                                                                          beta:beta];
+                if (mm == nil)
+                    throw metal_error("Metal backend of dlib: MPSMatrixMultiplication could not be created.");
+                for (const product& pr : products)
+                {
+                    [mm encodeToCommandBuffer:cmd
+                                   leftMatrix:matrix_view(lhs, pr.lhs_offset, lhs_rows, lhs_cols)
+                                  rightMatrix:matrix_view(rhs, pr.rhs_offset, rhs_rows, rhs_cols)
+                                 resultMatrix:matrix_view(dest, pr.dest_offset, dest_rows, dest_cols)];
+                }
+                [cmd commit];
+                [cmd waitUntilCompleted];
+                if (cmd.status != MTLCommandBufferStatusCompleted)
+                    throw metal_error("Metal backend of dlib: tt::gemm failed: " + command_problem(cmd));
+            }
         }
     }
 }

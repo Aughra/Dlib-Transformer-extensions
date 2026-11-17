@@ -98,6 +98,8 @@ namespace dlib
         void softmax (tensor& dest, const tensor& src, operation_mode mode);
         void gelu (tensor& dest, const tensor& src);
         void silu (tensor& dest, const tensor& src);
+        void gemm (float beta, tensor& dest, float alpha, const tensor& lhs, bool trans_lhs,
+                   const tensor& rhs, bool trans_rhs, operation_mode mode);
     }
 }
 

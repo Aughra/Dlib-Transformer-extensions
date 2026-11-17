@@ -4,6 +4,7 @@
 #define DLIB_TeNSOR_TOOLS_CPP_
 
 #include "tensor_tools.h"
+#include "gemm_planes.h"
 #include "../string.h"
 #include <atomic>
 #include <ostream>
@@ -353,7 +354,7 @@ namespace dlib { namespace tt
         operation_mode mode
     )
     {
-        DLIB_METAL_UNPORTED("gemm", dest, lhs, rhs);
+        DLIB_METAL_TRY(gemm(beta, dest, alpha, lhs, trans_lhs, rhs, trans_rhs, mode), "gemm", dest, lhs, rhs);
 #ifdef DLIB_USE_CUDA
         cuda::gemm(beta, dest, alpha, lhs, trans_lhs, rhs, trans_rhs, mode);
 #else
@@ -385,54 +386,16 @@ namespace dlib { namespace tt
         }
         else if (mode == operation_mode::PLANE_WISE)
         {
-            /* Disambiguate the two matrix layouts against the batch geometry of the
-               operands: when one of them is unambiguously plane-batched and carries
-               the same (num_samples, k), the tensor belongs to that batch and its
-               1x1 planes are planes, not the cells of a matrix. */
-            auto plane_batched = [](const tensor& t) {
-                return t.num_samples() * t.k() > 1 && t.nr() * t.nc() > 1;
-            };
-            auto shares_batch = [&](const tensor& t) {
-                auto same = [&](const tensor& o) {
-                    return plane_batched(o)
-                        && o.num_samples() == t.num_samples() && o.k() == t.k();
-                    };
-                return same(lhs) || same(rhs) || same(dest);
-            };
-            auto is_matrix = [&](const tensor& t) {
-                if (t.num_samples() * t.k() == 1) return t.nr() * t.nc() > 1;
-                return t.nr() * t.nc() == 1 && !shares_batch(t);
-            };
+            // The cut of the operands into matrices is shared with the Metal path.
+            const gemm_planes p = plan_gemm_planes(dest, lhs, rhs);
 
-            long num_samples = std::min({ lhs.num_samples(), rhs.num_samples(), dest.num_samples() });
-            long num_channels = std::min({ lhs.k(), rhs.k(), dest.k() });
-            const bool lhs_is_matrix = is_matrix(lhs), rhs_is_matrix = is_matrix(rhs), dest_is_matrix = is_matrix(dest);
-
-            if (lhs_is_matrix && rhs_is_matrix && dest_is_matrix) {
-                num_samples = num_channels = 1;
-            }
-
-            long lhs_rows = (lhs_is_matrix && lhs.num_samples() > 1) ? lhs.num_samples() : lhs.nr();
-            long lhs_cols = (lhs_is_matrix && lhs.k() > 1) ? lhs.k() : lhs.nc();
-            long rhs_rows = (rhs_is_matrix && rhs.num_samples() > 1) ? rhs.num_samples() : rhs.nr();
-            long rhs_cols = (rhs_is_matrix && rhs.k() > 1) ? rhs.k() : rhs.nc();
-            long dest_rows = (dest_is_matrix && dest.num_samples() > 1) ? dest.num_samples() : dest.nr();
-            long dest_cols = (dest_is_matrix && dest.k() > 1) ? dest.k() : dest.nc();
-
-            const size_t lhs_plane_size = lhs_rows * lhs_cols;
-            const size_t rhs_plane_size = rhs_rows * rhs_cols;
-            const size_t dest_plane_size = dest_rows * dest_cols;
-
-            for (long b = 0; b < num_samples; ++b)
+            for (long b = 0; b < p.num_samples; ++b)
             {
-                for (long c = 0; c < num_channels; ++c)
+                for (long c = 0; c < p.num_channels; ++c)
                 {
-                    auto lhs_slice = lhs_is_matrix ? alias_tensor(lhs_rows, lhs_cols)(lhs, 0) :
-                        alias_tensor(lhs_rows, lhs_cols)(lhs, (b * num_channels + c) * lhs_plane_size);
-                    auto rhs_slice = rhs_is_matrix ? alias_tensor(rhs_rows, rhs_cols)(rhs, 0) :
-                        alias_tensor(rhs_rows, rhs_cols)(rhs, (b * num_channels + c) * rhs_plane_size);
-                    auto dest_slice = dest_is_matrix ? alias_tensor(dest_rows, dest_cols)(dest, 0) :
-                        alias_tensor(dest_rows, dest_cols)(dest, (b * num_channels + c) * dest_plane_size);
+                    auto lhs_slice = alias_tensor(p.lhs_rows, p.lhs_cols)(lhs, p.lhs_offset(b, c));
+                    auto rhs_slice = alias_tensor(p.rhs_rows, p.rhs_cols)(rhs, p.rhs_offset(b, c));
+                    auto dest_slice = alias_tensor(p.dest_rows, p.dest_cols)(dest, p.dest_offset(b, c));
 
                     if (beta != 0)
                     {
