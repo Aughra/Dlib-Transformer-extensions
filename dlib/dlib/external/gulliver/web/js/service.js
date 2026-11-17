@@ -786,9 +786,8 @@ const items = {
       "https://ollama.com/v1 ; Claude : /v1/messages, système à part, raisonnement adaptatif, effort, 64 000 tokens " +
       "de réponse sans borne de la requête, web_search à cinq recherches au plus. La clé ne va que dans les en-têtes " +
       "(x-api-key ou Authorization), et vit dans relay.secret (0600) ; settings.json n’a que ********, valable pour le " +
-      "même fournisseur, la même adresse et le même utilisateur. Réglages et essai depuis le Mac seul (5.4.1) : " +
-      "requête arrivée sur le port HTTPS, qui n’écoute que sur 127.0.0.1, Host local, et Origin absente ou celle de " +
-      "la page du service ; sinon 403, code relay_mac_only. Pseudonymisation : POST /v1/text/anonymize de " +
+      "même fournisseur, la même adresse et le même utilisateur. Réglages et essai depuis n’importe quel appareil du " +
+      "Wi-Fi, le téléphone compris (6.0.0 ; Wi-Fi personnel maîtrisé). Pseudonymisation : POST /v1/text/anonymize de " +
       "Pseudalis avec session: true (sa clé de séance, 3.1.0), réponse values ; une mémoire de 2 h (4 096 textes, " +
       "16 384 valeurs) évite de reprotéger les messages renvoyés à chaque tour ; stream_restorer remet les valeurs au " +
       "fil des fragments, mots seuls de quatre octets ou plus compris. Les séquences d’arrêt ne partent pas avec la " +
@@ -1126,8 +1125,7 @@ export function serviceTab(body, env) {
     relay_http_address: 'le moteur ne connaît pas cette adresse', relay_http_size: 'requête trop grande',
     relay_http_limit: 'le moteur limite les requêtes ou le crédit', relay_http_failing: 'le moteur est surchargé ou en panne',
     relay_http_refused: 'le moteur refuse la requête', relay_not_interface: 'cette adresse ne répond pas comme une interface OpenAI',
-    relay_secret: 'la clé enregistrée ne vaut que pour l’ancien fournisseur, adresse et utilisateur : retape-la',
-    relay_mac_only: 'les réglages du relais se changent sur le Mac lui-même, pas depuis un autre appareil'
+    relay_secret: 'la clé enregistrée ne vaut que pour l’ancien fournisseur, adresse et utilisateur : retape-la'
   };
   const relayWhy = (why) => relayReasons[why] || why;
   // Une fenêtre de contexte : « 1 M tokens », « 256 K tokens ».

@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 5.9.0, 16 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.0.0, 17 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -65,6 +65,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Contrôle des dossiers (propriétaire, droits) | Vérifié sous Windows ; **toujours « oui »** sous Linux et macOS | Propriétaire, droits POSIX et ACL de macOS vérifiés | Sans ça, un dossier ouvert à tous aurait été accepté | v. 4.0.2, 4.1.1, notes remarque 21 |
 | Jeton d'administration, contrôle `Host` et `Origin` | Présents | Retirés | Usage personnel sur un seul Mac, choix de l'humain ; risque écrit dans les notes de version (une page piégée pourrait piloter le service) | v. 2.0.0 |
 | Accès depuis le réseau de la maison | — | Port 8444 en http, sans mot de passe (facultatif jusqu'à la 4.32.1, retiré en 5.0.0) ; tout appareil du Wi-Fi peut s'en servir | Ouvrir Gulliver depuis le téléphone ou l'iPad ; demande de l'humain : « enlève les mots de passe partout » | v. 2.0.0, v. 5.0.0 |
+| Réglages du relais depuis le réseau | Réservés au Mac lui-même (garde « Mac seul », 403 `relay_mac_only` ailleurs ; reprise de l'original en 5.4.1) | Ouverts à tout appareil du Wi-Fi, le téléphone compris : la garde `from_this_mac` est retirée | L'humain pilote tout depuis le téléphone, jamais depuis le Mac (« tout est changeable par tél ») ; Wi-Fi personnel maîtrisé | v. 6.0.0 |
 | Installateur, icône de la barre des tâches, service Windows, mises à jour signées | Présents | Retirés | Propres à Windows | v. 2.0.0, 4.0.0 |
 | Bibliothèques embarquées | zlib, CBLAS, pybind11 et l'interface Python de dlib embarqués | zlib de macOS ; CBLAS, pybind11 et l'interface Python retirés (rien ne s'en servait) | Moins de code recopié à entretenir ; Apple met zlib à jour avec le système | v. 4.26.2 |
 | dlib | Bibliothèque générique (Windows, Linux, Mac) | Ne vise que macOS : `platform.h` arrête la compilation ailleurs ; conditions Apple retirées ; toutes les conditions Windows retirées (versions Windows des services de base, contournements de Visual Studio, branches des fichiers CMake, exemples et tests : 85 fichiers, 7 233 lignes) ; branches Linux de la plate-forme retirées | Le fork ne vise que le Mac | registre des notes, partie 5 |

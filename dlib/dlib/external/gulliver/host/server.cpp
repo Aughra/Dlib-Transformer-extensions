@@ -1195,35 +1195,6 @@ namespace gulliver
         }
 
         /*
-            Si une requête vient du Mac lui-même par l'adresse locale du service (fork pour macOS, décision
-            de l'humain du 2026-11-16) : arrivée sur le port du serveur HTTPS, qui n'écoute que sur
-            127.0.0.1, avec un Host qui nomme ce serveur (localhost ou 127.0.0.1 à ce port, contre le
-            rebinding DNS), et sans Origin ou avec celle de la page du service.  L'accès depuis le réseau
-            (lan_port) et les pages des autres sites, même ouvertes sur le Mac, n'y répondent pas : les
-            réglages du relais, qui décident où partent les discussions et quelle clé paie, se changent
-            depuis le Mac seul.
-        */
-        bool from_this_mac(const service& svc, const httplib::Request& req)
-        {
-            if (req.local_port != svc.port()) return false;
-            const std::string port = std::to_string(svc.port());
-            std::string host = req.get_header_value("Host");
-            for (char& c : host) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            if (host != "localhost:" + port && host != "127.0.0.1:" + port) return false;
-            if (!req.has_header("Origin")) return true;
-            std::string origin = req.get_header_value("Origin");
-            for (char& c : origin) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            return origin == "https://localhost:" + port || origin == "https://127.0.0.1:" + port;
-        }
-
-        // Le refus d'un réglage du relais qui ne vient pas du Mac (from_this_mac()).
-        void refuse_relay_elsewhere(httplib::Response& res)
-        {
-            send_error(res, 403, "invalid_request_error", "the settings of the relay are changed on the Mac itself, at "
-                "https://localhost, not through the network access nor from another site", "relay_mac_only");
-        }
-
-        /*
             Le relais de current avec les membres que donne changes.  Le masque du secret tient lieu
             du secret enregistré seulement avec le fournisseur, l'adresse et l'utilisateur pour
             lesquels il a été donné, pour qu'il n'aille jamais à un autre serveur : false quand ils
@@ -1939,12 +1910,8 @@ namespace gulliver
             send_json(res, 200, o);
         });
         srv.Post("/gulliver/v1/relay/test", [s](const httplib::Request& req, httplib::Response& res) {
-            // L'essai joint le fournisseur avec la clé enregistrée : depuis le Mac seul, comme les réglages.
-            if (!from_this_mac(*s, req))
-            {
-                refuse_relay_elsewhere(res);
-                return;
-            }
+            // L'essai joint le fournisseur avec la clé enregistrée.  (Le relais se règle et s'essaie
+            // depuis n'importe quel appareil du Wi-Fi, téléphone compris : choix de l'humain, 2026-11-17.)
             json body;
             if (!parse_body(req, res, body)) return;
             std::string error;
@@ -2797,13 +2764,8 @@ namespace gulliver
                     + " is in use or cannot be opened", "port_unavailable");
                 return;
             }
-            // L'accès depuis le réseau : son propre port, et un mot de passe avant qu'il s'ouvre.
-            // Les réglages du relais se changent depuis le Mac seul.
-            if (changes.contains("relay") && !from_this_mac(*s, req))
-            {
-                refuse_relay_elsewhere(res);
-                return;
-            }
+            // Les réglages (relais compris) se changent depuis n'importe quel appareil du Wi-Fi, le
+            // téléphone compris (choix de l'humain, 2026-11-17 : « tout est changeable par tél »).
             const host_settings now = s->settings().get();
             const long long lan_port = changes["lan_port"].as_int(now.lan_port);
             if (lan_port == port)

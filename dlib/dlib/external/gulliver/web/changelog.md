@@ -8,6 +8,10 @@ Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo
 
 - Le service de chat change de nom : **Albireo devient Gulliver**. C'est une rupture de nom et d'interface. Les adresses de l'interface passent de `/albireo/v1/…` à `/gulliver/v1/…` ; la variable d'environnement du dossier de données devient `GULLIVER_HOME` (sinon `~/.local/share/gulliver`) ; la base de données du service s'appelle `gulliver.db` ; les identifiants de modèles de l'interface deviennent `gulliver-general`, `gulliver-code`, `gulliver-security`, `gulliver-relay`, `gulliver-background` et `gulliver-embedding`. Les routes compatibles OpenAI (`/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/v1/completions`) sont inchangées. Pseudalis garde son nom et trouve désormais Gulliver par `GULLIVER_HOME`.
 
+### Sécurité
+
+- Les réglages du relais (vers un moteur extérieur) se changent désormais depuis **n'importe quel appareil du réseau de la maison**, le téléphone compris. La garde qui les réservait au Mac lui-même (code `relay_mac_only`) est retirée. Cela permet de tout piloter depuis le téléphone ; en contrepartie, un appareil du Wi-Fi peut rediriger le relais : à n'utiliser que sur un réseau personnel maîtrisé.
+
 ---
 
 ## 5.9.0 — 16 novembre 2026
