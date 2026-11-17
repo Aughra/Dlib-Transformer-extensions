@@ -113,6 +113,13 @@ else
   echo "lint: skipped (no npm)"
 fi
 
+# Un profil par défaut pour les scénarios : les données vivent côté service, rangées par profil, et la page
+# demande d'en choisir un au démarrage.  On en crée un et on le pose dans localStorage (PAGE_TEST_PROFILE, que
+# cdp.mjs injecte avant le chargement de la page), pour que les scénarios partent d'un profil choisi.
+PAGE_TEST_PROFILE=$(curl -sk -H "Content-Type: application/json" -d '{"name":"banc"}' "$URL/gulliver/v1/profiles" \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))' 2>/dev/null)
+export PAGE_TEST_PROFILE
+
 # Les scénarios.
 cd "$WORK" || exit 1
 names=("$@")

@@ -62,10 +62,12 @@ import * as rag from './rag.js';
 import * as store from './store.js';
 import { generations } from './composer.js';
 import { memoryWords } from './context.js';
-import { storageFailed, toast } from './dom.js';
+import { dialog } from './dialogs.js';
+import { h, storageFailed, toast } from './dom.js';
 import { pruneDrafts, saveDraft } from './drafts.js';
 import { guardFileDrops } from './files.js';
 import { t } from './i18n.js';
+import { ensureProfile } from './profile.js';
 import { indexProjects, pruneImages, pruneIndex } from './indexing.js';
 import { buildLayout } from './layout.js';
 import { reloadLists } from './lists.js';
@@ -91,6 +93,11 @@ async function init() {
     }
   });
   let blocked = false;
+  // Choisir un profil avant de charger les données : elles vivent dans le service, rangées par profil.
+  // Si le service ne répond pas (ou qu'aucun profil n'est choisi), la page bascule en mode mémoire :
+  // rien n'est alors gardé, comme une discussion privée, jusqu'au prochain démarrage avec un profil.
+  const profile = await ensureProfile(dialog, h, t).catch(() => null);
+  if (!profile) state.incognito = true;
   try {
     await store.open();
     state.settings = Object.assign({}, defaults, await store.getSettings());

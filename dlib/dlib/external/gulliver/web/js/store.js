@@ -2,111 +2,86 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    Les données de l'application, gardées dans la base IndexedDB de ce navigateur pour
-    l'origine du serveur local : les discussions avec leurs messages, les projets avec leurs
-    instructions et leurs documents, les passages des documents avec leurs vecteurs pour la
-    recherche documentaire, les images des discussions et des projets, et les préférences.
-    Rien n'est envoyé nulle part ; une discussion incognito n'atteint jamais ce module.
+    Les données de l'application (fork pour macOS).  Elles ne vivent plus dans la base IndexedDB de ce
+    navigateur mais dans le service local, rangées par PROFIL : les discussions avec leurs messages, les
+    projets avec leurs instructions et leurs documents, les passages des documents avec leurs vecteurs pour
+    la recherche documentaire, les images des discussions et des projets, et les préférences.  Chaque appel
+    passe au service l'identifiant du profil courant (profile.js) dans l'en-tête X-Gulliver-Profile ; toutes
+    les adresses sont relatives, servies par la même origine que la page.
+
+    Ce module garde l'API publique de l'ancienne version sur IndexedDB (mêmes noms, mêmes signatures, mêmes
+    types de retour, tout en Promise), si bien que les autres modules n'ont rien à changer.  Deux gardes
+    protègent les ÉCRITURES : en incognito (state.incognito, une discussion privée) ou quand aucun profil
+    n'est choisi, on n'écrit rien côté service.  Les LECTURES sans profil, ou que le service en panne fait
+    échouer, renvoient une valeur vide, comme le faisait une base indisponible.
 */
 
-const DB_NAME = 'gulliver';
-const DB_VERSION = 3;
-let db = null;
+import { state } from './state.js';
+import { currentProfile, hasProfile } from './profile.js';
 
-function request(r) {
-  return new Promise((resolve, reject) => {
-    r.onsuccess = () => resolve(r.result);
-    r.onerror = () => reject(r.error);
-  });
-}
-
-// L'ouverture en cours, que partagent les appels faits entre-temps.
-let opening = null;
+const BASE = '/gulliver/v1/profile';
 
 /*
-    L'erreur d'une ouverture qu'un onglet d'une version antérieure a bloquée.  Le navigateur met en file toutes les
-    ouvertures suivantes derrière celle qui est bloquée, si bien que les appels de cette visite échouent aussitôt avec
-    cette erreur au lieu d'attendre.
+    Un appel au service sur une route de données du profil.  method est le verbe HTTP, path le reste de
+    l'adresse après BASE (par exemple '/conversations/<id>'), body l'objet JSON du corps, le cas échéant.
+    Ajoute l'en-tête X-Gulliver-Profile, vérifie que la réponse est bonne (sinon lève une erreur qui porte
+    son code HTTP, pour distinguer 404 et 409), et renvoie le JSON de la réponse.
 */
-let blocked = null;
-
-export function open() {
-  if (db) return Promise.resolve(db);
-  if (blocked) return Promise.reject(blocked);
-  if (!opening) {
-    opening = connect().then((d) => {
-      /*
-          Quand une version plus récente de l'application met à niveau la base dans un autre onglet,
-          cet onglet la lâche et la rouvre à son prochain accès.
-      */
-      d.onversionchange = () => {
-        d.close();
-        if (db === d) db = null;
-      };
-      db = d;
-      return d;
-    }).finally(() => { opening = null; });
+async function req(method, path, body) {
+  const res = await fetch(BASE + path, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-Gulliver-Profile': currentProfile() || '' },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) {
+    const e = new Error('service ' + res.status);
+    e.status = res.status;
+    throw e;
   }
-  return opening;
+  return res.json();
 }
 
-async function connect() {
-  const r = indexedDB.open(DB_NAME, DB_VERSION);
-  r.onupgradeneeded = () => {
-    const d = r.result;
-    if (!d.objectStoreNames.contains('conversations')) {
-      const s = d.createObjectStore('conversations', { keyPath: 'id' });
-      s.createIndex('updated', 'updated');
-      s.createIndex('project', 'projectId');
-    }
-    if (!d.objectStoreNames.contains('projects')) d.createObjectStore('projects', { keyPath: 'id' });
-    if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', { keyPath: 'key' });
-    // Les passages des documents : {id, owner (projet ou discussion), doc, ordinal, text,
-    // where, model, vector}.
-    if (!d.objectStoreNames.contains('chunks')) {
-      const c = d.createObjectStore('chunks', { keyPath: 'id' });
-      c.createIndex('owner', 'owner');
-      c.createIndex('doc', 'doc');
-    }
-    // Les images des discussions et des projets (images.js) : {id, owner, name, type, size, width,
-    // height, added, blob, thumb}, l'image et sa vignette sous forme de Blobs.
-    if (!d.objectStoreNames.contains('images')) {
-      const i = d.createObjectStore('images', { keyPath: 'id' });
-      i.createIndex('owner', 'owner');
-    }
-  };
-  /*
-      Un onglet d'une version antérieure qui garde la base ouverte bloque sa mise à niveau : l'ouverture échoue alors
-      avec une BlockedError, de même que les appels suivants de cette visite (open).  La connexion que le navigateur
-      ouvre une fois cet onglet fermé, avec la base mise à niveau, est fermée aussitôt : la visite suivante lit la
-      base.
-  */
-  return new Promise((resolve, reject) => {
-    r.onsuccess = () => {
-      if (blocked) r.result.close();
-      else resolve(r.result);
-    };
-    r.onerror = () => reject(r.error);
-    r.onblocked = () => {
-      const e = new Error('another tab keeps the database open in an earlier version');
-      e.name = 'BlockedError';
-      blocked = e;
-      reject(e);
-    };
-  });
+// Un appel qui tolère le 404 : renvoie undefined comme IndexedDB.get le faisait pour une clé absente.
+async function getOrUndefined(path) {
+  try {
+    return await req('GET', path);
+  } catch (e) {
+    if (e && e.status === 404) return undefined;
+    throw e;
+  }
 }
 
-function store(name, mode) {
-  return db.transaction(name, mode).objectStore(name);
+/*
+    Vrai quand une ÉCRITURE de persistance ne doit toucher à rien : en incognito (les données d'une
+    discussion privée ne quittent jamais la page) ou sans profil choisi (les gardes sont ailleurs, ici on
+    reste sûr).  Commenté partout où c'est utilisé : « en incognito ou sans profil, on n'écrit rien côté
+    service ».
+*/
+function noWrite() {
+  return state.incognito || !hasProfile();
 }
 
-// La fin d'une transaction.
-function completed(tx) {
-  return new Promise((resolve, reject) => {
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  });
+// --- Conversions base64 <-> ArrayBuffer / Blob, pour les vecteurs et les images. ---
+
+// La forme base64 des octets d'un ArrayBuffer ou d'un tableau typé.
+function b64ofBuffer(buffer) {
+  const bytes = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : new Uint8Array(buffer.buffer || buffer);
+  let bin = '';
+  for (let i = 0; i < bytes.length; ++i) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+// L'ArrayBuffer des octets d'une chaîne base64 (chaîne vide -> buffer vide).
+function bufferOfB64(text) {
+  const bin = atob(text || '');
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; ++i) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
+// La forme base64 des octets d'un Blob.
+async function b64ofBlob(blob) {
+  return b64ofBuffer(await blob.arrayBuffer());
 }
 
 export function uid() {
@@ -115,250 +90,296 @@ export function uid() {
   return Array.from(a, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/*
+    L'ouverture, gardée parce que beaucoup de modules l'appellent avant de lire ou d'écrire.  Il n'y a plus
+    de base à ouvrir : elle résout toujours, même sans profil (les gardes du choix de profil sont ailleurs).
+*/
+export function open() {
+  return Promise.resolve();
+}
+
 export async function allConversations() {
-  await open();
-  const list = await request(store('conversations', 'readonly').getAll());
-  list.sort((a, b) => b.updated - a.updated);
-  return list;
+  if (!hasProfile()) return [];
+  try {
+    const r = await req('GET', '/conversations');
+    const list = Array.isArray(r.conversations) ? r.conversations : [];
+    // Le service les trie déjà par date décroissante ; on re-trie par sécurité.
+    list.sort((a, b) => b.updated - a.updated);
+    return list;
+  } catch (e) {
+    return [];
+  }
 }
 
 export async function getConversation(id) {
-  await open();
-  return request(store('conversations', 'readonly').get(id));
+  if (!hasProfile()) return undefined;
+  try {
+    return await getOrUndefined('/conversations/' + encodeURIComponent(id));
+  } catch (e) {
+    return undefined;
+  }
 }
 
 export async function putConversation(c) {
-  await open();
-  return request(store('conversations', 'readwrite').put(c));
+  // En incognito ou sans profil, on n'écrit rien côté service.
+  if (noWrite()) return undefined;
+  // Écriture forcée : pas de révision optimiste (expected_updated absent).
+  return req('PUT', '/conversations/' + encodeURIComponent(c.id), {
+    updated: c.updated || 0, project: c.projectId || '', doc: c
+  });
 }
 
 /*
-    Modifie sur place des discussions stockées, en une transaction, pour que les messages qu'un
-    autre onglet a enregistrés entre-temps restent : fn(record) modifie l'enregistrement lu dans
-    la base et renvoie true pour l'enregistrer.  Seulement la discussion de id, quand id est donné.
+    Modifie sur place des discussions stockées pour que les messages qu'un autre onglet a enregistrés
+    entre-temps restent : fn(record) modifie l'enregistrement relu du service et renvoie true pour
+    l'enregistrer.  La révision optimiste du service (expected_updated = l'ancien updated) écarte une
+    écriture concurrente : sur un 409, on relit et on réessaie.  Seulement la discussion de id quand id est
+    donné, sinon toutes.
 */
 export async function updateConversations(fn, id) {
-  await open();
-  const tx = db.transaction('conversations', 'readwrite');
-  const r = tx.objectStore('conversations').openCursor(id == null ? null : IDBKeyRange.only(id));
-  r.onsuccess = () => {
-    const c = r.result;
-    if (!c) return;
-    if (fn(c.value)) c.update(c.value);
-    c.continue();
-  };
-  await completed(tx);
+  // En incognito ou sans profil, on n'écrit rien côté service.
+  if (noWrite()) return undefined;
+  const ids = id == null ? (await allConversations()).map((c) => c.id) : [id];
+  for (const one of ids) await updateOne(fn, one);
+  return undefined;
+}
+
+// Applique fn à une discussion, avec quelques essais en cas de conflit de révision (409).
+async function updateOne(fn, id) {
+  for (let attempt = 0; attempt < 5; ++attempt) {
+    const current = await getConversation(id);
+    if (!current) return;
+    if (!fn(current)) return;
+    try {
+      await req('PUT', '/conversations/' + encodeURIComponent(id), {
+        updated: current.updated || 0, project: current.projectId || '', doc: current,
+        expected_updated: current.updated || 0
+      });
+      return;
+    } catch (e) {
+      // Sur un conflit de révision, la discussion a changé entre-temps : on la relit et on recommence.
+      if (e && e.status === 409) continue;
+      throw e;
+    }
+  }
 }
 
 /*
-    Supprime une discussion : son enregistrement d'abord, dans une transaction à part, puis ses passages et ses
-    images.  Les passages et les images que laisse un onglet fermé entre-temps sont élagués au démarrage suivant
-    (app.js, pruneIndex et pruneImages).
+    Supprime une discussion.  Le service ne supprime pas en cascade ses passages ni ses images : on les
+    efface donc ensuite, comme le faisait l'ancienne version, pour nettoyer l'index documentaire et les
+    images de cette discussion.
 */
 export async function deleteConversation(id) {
-  await open();
-  const tx = db.transaction('conversations', 'readwrite');
-  tx.objectStore('conversations').delete(id);
-  await completed(tx);
+  // En incognito ou sans profil, on n'écrit rien côté service.
+  if (noWrite()) return undefined;
+  await req('DELETE', '/conversations/' + encodeURIComponent(id));
   await deleteChunks('owner', id);
   await deleteImages(id);
+  return undefined;
 }
 
 export async function allProjects() {
-  await open();
-  const list = await request(store('projects', 'readonly').getAll());
-  list.sort((a, b) => a.name.localeCompare(b.name));
-  return list;
+  if (!hasProfile()) return [];
+  try {
+    const r = await req('GET', '/projects');
+    // Le service les trie déjà par nom.
+    return Array.isArray(r.projects) ? r.projects : [];
+  } catch (e) {
+    return [];
+  }
 }
 
 export async function getProject(id) {
-  await open();
-  return request(store('projects', 'readonly').get(id));
+  if (!hasProfile()) return undefined;
+  try {
+    return await getOrUndefined('/projects/' + encodeURIComponent(id));
+  } catch (e) {
+    return undefined;
+  }
 }
 
 export async function putProject(p) {
-  await open();
-  return request(store('projects', 'readwrite').put(p));
-}
-
-export async function deleteProject(id) {
-  await open();
-  /*
-      Les discussions du projet restent, hors de tout projet.  Elles sont modifiées sur place, dans
-      une même transaction que la suppression du projet, par l'index de leurs projets.
-  */
-  const tx = db.transaction(['conversations', 'projects'], 'readwrite');
-  const r = tx.objectStore('conversations').index('project').openCursor(IDBKeyRange.only(id));
-  r.onsuccess = () => {
-    const c = r.result;
-    if (!c) return;
-    c.value.projectId = null;
-    c.update(c.value);
-    c.continue();
-  };
-  tx.objectStore('projects').delete(id);
-  await completed(tx);
-  await deleteChunks('owner', id);
-  await deleteImages(id);
+  // En incognito ou sans profil, on n'écrit rien côté service.
+  if (noWrite()) return undefined;
+  return req('PUT', '/projects/' + encodeURIComponent(p.id), { doc: p });
 }
 
 /*
-    Remplace les passages du document docId par records, en une transaction : un onglet fermé entre-temps laisse
-    soit les anciens passages, soit les nouveaux.
+    Supprime un projet.  Le service détache côté base les discussions du projet (par leur colonne), mais le
+    JSON des discussions garde son projectId ; comme pour une discussion, les passages et les images du
+    projet sont effacés ensuite, comme le faisait l'ancienne version.
+*/
+export async function deleteProject(id) {
+  // En incognito ou sans profil, on n'écrit rien côté service.
+  if (noWrite()) return undefined;
+  await req('DELETE', '/projects/' + encodeURIComponent(id));
+  await deleteChunks('owner', id);
+  await deleteImages(id);
+  return undefined;
+}
+
+// Un passage envoyé au service : ses champs, le vecteur en base64 (ArrayBuffer ou tableau typé), '' si absent.
+function toWire(r) {
+  return {
+    id: r.id, owner: r.owner, doc: r.doc, ordinal: r.ordinal, name: r.name, where: r.where,
+    start: r.start, end: r.end, text: r.text, model: r.model,
+    vector: r.vector ? b64ofBuffer(r.vector) : ''
+  };
+}
+
+// Un passage reçu du service : le vecteur base64 est décodé en ArrayBuffer (rag.js le lit en Float32Array).
+function fromWire(c) {
+  return Object.assign({}, c, { vector: c.vector ? bufferOfB64(c.vector) : null });
+}
+
+/*
+    Remplace en bloc les passages du document docId par records.  Le vecteur de chaque passage, un
+    ArrayBuffer (ou un tableau typé) côté page, part en base64.
 */
 export async function replaceChunks(docId, records) {
-  await open();
-  const tx = db.transaction('chunks', 'readwrite');
-  const s = tx.objectStore('chunks');
-  const cursor = s.index('doc').openKeyCursor(IDBKeyRange.only(docId));
-  cursor.onsuccess = () => {
-    const c = cursor.result;
-    if (c) {
-      s.delete(c.primaryKey);
-      c.continue();
-      return;
-    }
-    // Les anciens passages supprimés, les nouveaux sont écrits par la même transaction.
-    for (const r of records) s.put(r);
-  };
-  await completed(tx);
+  // En incognito ou sans profil, on n'écrit rien côté service.
+  if (noWrite()) return undefined;
+  return req('PUT', '/chunks/' + encodeURIComponent(docId), { records: records.map(toWire) });
 }
 
 export async function chunksOf(owner) {
-  await open();
-  return request(store('chunks', 'readonly').index('owner').getAll(owner));
+  if (!hasProfile()) return [];
+  try {
+    const r = await req('GET', '/chunks?owner=' + encodeURIComponent(owner));
+    return (Array.isArray(r.chunks) ? r.chunks : []).map(fromWire);
+  } catch (e) {
+    return [];
+  }
 }
 
 // Les passages d'un document.
 export async function chunksOfDocument(docId) {
-  await open();
-  return request(store('chunks', 'readonly').index('doc').getAll(docId));
+  if (!hasProfile()) return [];
+  try {
+    const r = await req('GET', '/chunks?doc=' + encodeURIComponent(docId));
+    return (Array.isArray(r.chunks) ? r.chunks : []).map(fromWire);
+  } catch (e) {
+    return [];
+  }
 }
 
 /*
-    L'état des documents d'un propriétaire, lu passage par passage sans garder les passages : Map doc ->
-    {passages, vectors, model}, vectors comptant les passages qui contiennent un vecteur de model.
+    L'état des documents d'un propriétaire : Map doc -> {passages, vectors, model}, vectors comptant les
+    passages porteurs d'un vecteur de model.  Le service rend déjà ces comptes, sans transférer les vecteurs.
 */
 export async function chunkStatus(owner, model) {
-  await open();
-  const tx = db.transaction('chunks', 'readonly');
   const out = new Map();
-  const r = tx.objectStore('chunks').index('owner').openCursor(IDBKeyRange.only(owner));
-  r.onsuccess = () => {
-    const c = r.result;
-    if (!c) return;
-    const v = c.value;
-    const s = out.get(v.doc) || { passages: 0, vectors: 0, model: v.model };
-    s.passages += 1;
-    if (v.vector && model && v.model === model) s.vectors += 1;
-    out.set(v.doc, s);
-    c.continue();
-  };
-  await completed(tx);
+  if (!hasProfile()) return out;
+  try {
+    const r = await req('GET', '/chunks/status?owner=' + encodeURIComponent(owner)
+      + '&model=' + encodeURIComponent(model || ''));
+    for (const row of Array.isArray(r.status) ? r.status : []) {
+      out.set(row.doc, { passages: row.passages, vectors: row.vectors, model: row.model });
+    }
+  } catch (e) {
+    // Service indisponible : état vide, comme une base en panne.
+  }
   return out;
 }
 
-// Les documents qui ont des passages : un {owner, doc} par document, lu dans un passage de chacun.
+// Les documents qui ont des passages : un {owner, doc} par document.
 export async function chunkDocuments() {
-  await open();
-  const tx = db.transaction('chunks', 'readonly');
-  const out = [];
-  const r = tx.objectStore('chunks').index('doc').openCursor(null, 'nextunique');
-  r.onsuccess = () => {
-    const c = r.result;
-    if (!c) return;
-    out.push({ owner: c.value.owner, doc: c.value.doc });
-    c.continue();
-  };
-  await completed(tx);
-  return out;
+  if (!hasProfile()) return [];
+  try {
+    const r = await req('GET', '/chunks/documents');
+    return Array.isArray(r.documents) ? r.documents : [];
+  } catch (e) {
+    return [];
+  }
 }
 
 // Supprime les passages d'un propriétaire ('owner') ou d'un document ('doc').
 export async function deleteChunks(index, key) {
-  await open();
-  const tx = db.transaction('chunks', 'readwrite');
-  const s = tx.objectStore('chunks');
-  const cursor = s.index(index).openKeyCursor(IDBKeyRange.only(key));
-  cursor.onsuccess = () => {
-    const c = cursor.result;
-    if (!c) return;
-    s.delete(c.primaryKey);
-    c.continue();
-  };
-  await completed(tx);
+  // En incognito ou sans profil, on n'écrit rien côté service.
+  if (noWrite()) return undefined;
+  const param = index === 'owner' ? 'owner=' : 'doc=';
+  return req('DELETE', '/chunks?' + param + encodeURIComponent(key));
 }
 
 // Les images.
 export async function putImages(records) {
-  await open();
-  if (!records.length) return;
-  const tx = db.transaction('images', 'readwrite');
-  const s = tx.objectStore('images');
-  for (const r of records) s.put(r);
-  await completed(tx);
+  // En incognito ou sans profil, on n'écrit rien côté service.
+  if (noWrite()) return undefined;
+  if (!records.length) return undefined;
+  // Les octets de l'image et de sa vignette, des Blobs, partent en base64 ; une image par requête.
+  await Promise.all(records.map(async (r) => req('PUT', '/images/' + encodeURIComponent(r.id), {
+    owner: r.owner, name: r.name, type: r.type, size: r.size, width: r.width, height: r.height,
+    added: r.added, blob: r.blob instanceof Blob ? await b64ofBlob(r.blob) : '',
+    thumb: r.thumb instanceof Blob ? await b64ofBlob(r.thumb) : ''
+  })));
+  return undefined;
 }
 
+/*
+    Une image comme l'ancienne base la rendait : {id, owner, name, type, size, width, height, added, blob,
+    thumb}, blob et thumb étant des Blobs.  Le service n'a pas de route « une image » unique ; on lit les
+    octets par deux adresses binaires (/blob et /thumb), et on en déduit le type depuis le Blob.  Les autres
+    métadonnées (name, width...) ne sont pas lues ici : les appelants (images.js) n'ont besoin que de .blob,
+    .thumb et parfois .type.  undefined quand l'image manque (404).
+*/
 export async function getImage(id) {
-  await open();
-  return request(store('images', 'readonly').get(id));
+  if (!hasProfile()) return undefined;
+  const key = encodeURIComponent(id);
+  try {
+    const [blobRes, thumbRes] = await Promise.all([
+      fetch(BASE + '/images/' + key + '/blob', { headers: { 'X-Gulliver-Profile': currentProfile() || '' } }),
+      fetch(BASE + '/images/' + key + '/thumb', { headers: { 'X-Gulliver-Profile': currentProfile() || '' } })
+    ]);
+    if (blobRes.status === 404 || thumbRes.status === 404) return undefined;
+    if (!blobRes.ok || !thumbRes.ok) return undefined;
+    const blob = await blobRes.blob();
+    const thumb = await thumbRes.blob();
+    return { id, blob, thumb, type: blob.type || '' };
+  } catch (e) {
+    return undefined;
+  }
 }
 
-// Les images d'un propriétaire, ou de tous : [{owner, id}], lues dans l'index sans les images.
+/*
+    Les images d'un propriétaire : [{owner, id}].  Sans propriétaire (owner null ou absent), l'ancienne
+    version listait TOUTES les images, pour l'élagage au démarrage ; le service n'a pas d'équivalent (une
+    adresse « toutes les images » du profil), et il nettoie déjà ses images par cascade.  CHOIX PRAGMATIQUE :
+    sans propriétaire, on renvoie [] ; l'élagage des images au démarrage devient alors un no-op côté page.
+*/
 export async function imageKeys(owner) {
-  await open();
-  const tx = db.transaction('images', 'readonly');
-  const out = [];
-  const r = tx.objectStore('images').index('owner').openKeyCursor(owner == null ? null : IDBKeyRange.only(owner));
-  r.onsuccess = () => {
-    const c = r.result;
-    if (!c) return;
-    out.push({ owner: c.key, id: c.primaryKey });
-    c.continue();
-  };
-  await completed(tx);
-  return out;
+  if (!hasProfile() || owner == null) return [];
+  try {
+    const r = await req('GET', '/images?owner=' + encodeURIComponent(owner));
+    return (Array.isArray(r.images) ? r.images : []).map((x) => ({ owner: x.owner, id: x.id }));
+  } catch (e) {
+    return [];
+  }
 }
 
 // Supprime les images d'un propriétaire.
 export async function deleteImages(owner) {
-  await open();
-  const tx = db.transaction('images', 'readwrite');
-  const s = tx.objectStore('images');
-  const r = s.index('owner').openKeyCursor(IDBKeyRange.only(owner));
-  r.onsuccess = () => {
-    const c = r.result;
-    if (!c) return;
-    s.delete(c.primaryKey);
-    c.continue();
-  };
-  await completed(tx);
+  // En incognito ou sans profil, on n'écrit rien côté service.
+  if (noWrite()) return undefined;
+  return req('DELETE', '/images?owner=' + encodeURIComponent(owner));
 }
 
 export async function deleteImageIds(ids) {
-  await open();
-  if (!ids.length) return;
-  const tx = db.transaction('images', 'readwrite');
-  const s = tx.objectStore('images');
-  for (const id of ids) s.delete(id);
-  await completed(tx);
+  // En incognito ou sans profil, on n'écrit rien côté service.
+  if (noWrite()) return undefined;
+  if (!ids.length) return undefined;
+  await Promise.all(ids.map((id) => req('DELETE', '/images/' + encodeURIComponent(id))));
+  return undefined;
 }
 
 // Les images stockées : {count, bytes}, les octets des images et de leurs vignettes.
 export async function imageUsage() {
-  await open();
-  const tx = db.transaction('images', 'readonly');
-  let count = 0, bytes = 0;
-  const r = tx.objectStore('images').openCursor();
-  r.onsuccess = () => {
-    const c = r.result;
-    if (!c) return;
-    count += 1;
-    for (const b of [c.value.blob, c.value.thumb]) if (b instanceof Blob) bytes += b.size;
-    c.continue();
-  };
-  await completed(tx);
-  return { count, bytes };
+  if (!hasProfile()) return { count: 0, bytes: 0 };
+  try {
+    const r = await req('GET', '/images/usage');
+    return { count: r.count || 0, bytes: r.bytes || 0 };
+  } catch (e) {
+    return { count: 0, bytes: 0 };
+  }
 }
 
 // Un Blob sous forme d'URL data ("data:image/jpeg;base64,...").
@@ -383,73 +404,94 @@ function blobOfDataUrl(text) {
 }
 
 export async function getSettings() {
-  await open();
-  const rows = await request(store('settings', 'readonly').getAll());
-  const s = {};
-  for (const r of rows) s[r.key] = r.value;
-  return s;
+  if (!hasProfile()) return {};
+  try {
+    return await req('GET', '/page-settings');
+  } catch (e) {
+    return {};
+  }
 }
 
 export async function setSetting(key, value) {
-  await open();
-  return request(store('settings', 'readwrite').put({ key, value }));
+  // En incognito ou sans profil, on n'écrit rien côté service.
+  if (noWrite()) return undefined;
+  return req('PUT', '/page-settings', { [key]: value });
 }
 
 /*
-    Prend le bail de key pour owner jusqu'à l'instant until, en une transaction, pour que deux
-    onglets ne le prennent jamais tous les deux.  Renvoie true quand le bail était libre, expiré
-    ou déjà détenu par owner.
+    Le bail d'une ressource entre les onglets de ce navigateur (la mémoire, par exemple).  Les baux ne
+    passent plus par le service (un détail propre à ce navigateur, pas aux données du profil) : ils vivent
+    dans localStorage, sous 'gulliver.lease.<key>' = {owner, until}.  claim renvoie true quand le bail est
+    libre, expiré ou déjà détenu par owner, et le pose ; release l'enlève quand owner le détient.  Chaque
+    accès à localStorage est protégé (il peut lever en navigation privée).
 */
-export async function claimLease(key, owner, until) {
-  await open();
-  const tx = db.transaction('settings', 'readwrite');
-  const s = tx.objectStore('settings');
-  let taken = false;
-  const r = s.get(key);
-  r.onsuccess = () => {
-    const lease = r.result && r.result.value;
-    if (lease && lease.owner !== owner && lease.until > Date.now()) return;
-    s.put({ key, value: { owner, until } });
-    taken = true;
-  };
-  await completed(tx);
-  return taken;
+function leaseKey(key) {
+  return 'gulliver.lease.' + key;
 }
 
-// Rend le bail de key, quand owner le détient.
+function readLease(key) {
+  try {
+    const raw = localStorage.getItem(leaseKey(key));
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function claimLease(key, owner, until) {
+  const lease = readLease(key);
+  if (lease && lease.owner !== owner && lease.until > Date.now()) return false;
+  try {
+    localStorage.setItem(leaseKey(key), JSON.stringify({ owner, until }));
+  } catch (e) {
+    // Sans localStorage, le bail n'est pas partagé entre onglets ; on accorde tout de même l'accès à cet onglet.
+  }
+  return true;
+}
+
 export async function releaseLease(key, owner) {
-  await open();
-  const tx = db.transaction('settings', 'readwrite');
-  const s = tx.objectStore('settings');
-  const r = s.get(key);
-  r.onsuccess = () => {
-    const lease = r.result && r.result.value;
-    if (lease && lease.owner === owner) s.put({ key, value: null });
-  };
-  await completed(tx);
+  const lease = readLease(key);
+  if (lease && lease.owner === owner) {
+    try {
+      localStorage.removeItem(leaseKey(key));
+    } catch (e) {
+      // Sans localStorage, rien à retirer.
+    }
+  }
+  return undefined;
 }
 
 /*
     Tout ce qui est stocké, sous forme de fichier JSON dans un Blob construit enregistrement par enregistrement, les
-    images en URL data, pour qu'aucune chaîne ne contienne à elle seule tout l'export.
+    images en URL data, pour qu'aucune chaîne ne contienne à elle seule tout l'export.  Les enregistrements sont
+    lus par les nouvelles fonctions, le format reste identique à l'ancienne version.
 */
 export async function exportAll() {
-  await open();
   const parts = ['{"format":"gulliver-export","version":1,"exported":' + Date.now() + ',"conversations":['];
   (await allConversations()).forEach((c, i) => parts.push((i ? ',' : '') + JSON.stringify(c)));
   parts.push('],"projects":[');
   (await allProjects()).forEach((p, i) => parts.push((i ? ',' : '') + JSON.stringify(p)));
   parts.push('],"settings":' + JSON.stringify(await getSettings()) + ',"images":[');
-  const records = await request(store('images', 'readonly').getAll());
+  // Les images, par propriétaire : on énumère les propriétaires (discussions et projets), puis leurs images.
   let first = true;
-  for (const r of records) {
-    if (!(r.blob instanceof Blob)) continue;
-    const { blob, thumb, ...rest } = r;
-    const picture = Object.assign(rest, {
-      data: await dataUrlOf(blob), thumbnail: thumb instanceof Blob ? await dataUrlOf(thumb) : null
-    });
-    parts.push((first ? '' : ',') + JSON.stringify(picture));
-    first = false;
+  const owners = new Set();
+  for (const c of await allConversations()) owners.add(c.id);
+  for (const p of await allProjects()) owners.add(p.id);
+  const seen = new Set();
+  for (const owner of owners) {
+    for (const k of await imageKeys(owner)) {
+      if (seen.has(k.id)) continue;
+      seen.add(k.id);
+      const record = await getImage(k.id);
+      if (!record || !(record.blob instanceof Blob)) continue;
+      const picture = {
+        id: k.id, owner, type: record.type,
+        data: await dataUrlOf(record.blob),
+        thumbnail: record.thumb instanceof Blob ? await dataUrlOf(record.thumb) : null
+      };
+      parts.push((first ? '' : ',') + JSON.stringify(picture));
+      first = false;
+    }
   }
   parts.push(']}');
   return new Blob(parts, { type: 'application/json' });
@@ -555,13 +597,17 @@ export async function importAll(data) {
   return { conversations: n, projects: p, images: pictures.length, ids };
 }
 
-// Supprime toutes les discussions, projets, passages et images, en une transaction ; les réglages restent.
+/*
+    Supprime toutes les discussions, tous les projets, et leurs passages et images (deleteConversation et
+    deleteProject les effacent en cascade côté page), puis réapplique les réglages de reset.  Le service n'a
+    pas d'adresse « tout effacer » : on liste et on supprime.  Les autres réglages restent.
+*/
 export async function clearAll(reset) {
-  await open();
-  const names = ['conversations', 'projects', 'chunks', 'images'];
-  const tx = db.transaction(names.concat(['settings']), 'readwrite');
-  for (const name of names) tx.objectStore(name).clear();
-  // Les réglages de reset, dans la même transaction : la mémoire, le nom et les instructions partent avec les discussions.
-  for (const key of Object.keys(reset || {})) tx.objectStore('settings').put({ key, value: reset[key] });
-  await completed(tx);
+  // En incognito ou sans profil, on n'écrit rien côté service.
+  if (noWrite()) return undefined;
+  for (const c of await allConversations()) await deleteConversation(c.id);
+  for (const p of await allProjects()) await deleteProject(p.id);
+  // Les réglages de reset (la mémoire, le nom et les instructions partent avec les discussions).
+  for (const key of Object.keys(reset || {})) await setSetting(key, reset[key]);
+  return undefined;
 }
