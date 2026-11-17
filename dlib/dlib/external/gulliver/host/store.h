@@ -48,6 +48,34 @@ namespace gulliver
         int64_t received_at = 0;
     };
 
+    // Un passage d'un document indexé (RAG) : son texte, sa place, et son vecteur d'embedding
+    // quand il est calculé.  Le vecteur est gardé tel quel (octets d'un tableau de float), vide
+    // quand le passage n'a pas encore été vectorisé ; `model` dit avec quel modèle il l'a été.
+    struct chunk_record
+    {
+        std::string id;              // "docId:i"
+        std::string owner;           // le propriétaire (une discussion ou un projet)
+        std::string doc;             // le document d'où vient le passage
+        int64_t ordinal = 0;         // sa place dans le document
+        std::string name;            // le nom du document
+        std::string where;           // la section/page/diapositive
+        int64_t start = 0;
+        int64_t end = 0;
+        std::string text;
+        std::string model;           // le modèle d'embedding, vide si pas de vecteur
+        std::vector<char> vector;    // les octets du vecteur, vide si pas encore calculé
+    };
+
+    // L'état d'indexation d'un document : combien de passages, combien avec un vecteur du modèle
+    // courant, et quel modèle.
+    struct chunk_status_row
+    {
+        std::string doc;
+        int64_t passages = 0;
+        int64_t vectors = 0;         // passages dont le vecteur est du modèle demandé
+        std::string model;
+    };
+
     // Un profil : l'espace d'un utilisateur (ses discussions, projets, réglages de page,
     // index de documents et images), gardé par le service pour qu'il se retrouve depuis
     // n'importe quel navigateur.  Pas de mot de passe (usage personnel sur un seul Mac).
@@ -146,6 +174,22 @@ namespace gulliver
         // {clé: valeur} ; set_page_setting() écrit une clé.
         json page_settings(const std::string& profile);
         void set_page_setting(const std::string& profile, const std::string& key, const std::string& value);
+
+        // Les passages indexés (RAG) d'un profil.  replace_chunks() remplace en une transaction tous
+        // les passages d'un document par ceux donnés (supprime puis insère).  chunks_of() rend les
+        // passages d'un propriétaire (texte et vecteur), chunks_of_document() ceux d'un document.
+        // chunk_status() compte, par document d'un propriétaire, les passages et ceux dont le vecteur
+        // est du modèle donné.  chunk_documents() liste les couples (owner, doc) distincts, pour
+        // l'élagage.  delete_chunks() efface par propriétaire ou par document.
+        void replace_chunks(const std::string& profile, const std::string& doc,
+                            const std::vector<chunk_record>& records);
+        std::vector<chunk_record> chunks_of(const std::string& profile, const std::string& owner);
+        std::vector<chunk_record> chunks_of_document(const std::string& profile, const std::string& doc);
+        std::vector<chunk_status_row> chunk_status(const std::string& profile, const std::string& owner,
+                                                   const std::string& model);
+        std::vector<std::pair<std::string, std::string>> chunk_documents(const std::string& profile);
+        void delete_chunks_of_owner(const std::string& profile, const std::string& owner);
+        void delete_chunks_of_document(const std::string& profile, const std::string& doc);
 
     private:
         // Ouvre la connexion et règle ses options ; m_ est tenu, ou le store est en construction.

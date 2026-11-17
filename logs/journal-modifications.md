@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Index RAG par profil, vecteurs en BLOB (chantier Gulliver, A5)
+
+- **Quoi** : table `profile_chunks` (profile, id, owner, doc, ordinal, name, where_, start_, end_, text, model, vector BLOB ; index owner et doc ; cascade) dans `host/store.cpp`, structs `chunk_record` et `chunk_status_row`. Méthodes : `replace_chunks` (supprime puis insère les passages d'un document dans une `dlib::transaction`, vecteur via `bind_blob`), `chunks_of`, `chunks_of_document`, `chunk_status` (comptes par document en SQL, sans transférer les vecteurs), `chunk_documents`, `delete_chunks_of_owner/document`. Routes `GET /gulliver/v1/profile/chunks?owner=|doc=`, `…/chunks/status?owner=&model=`, `…/chunks/documents`, `PUT …/chunks/<doc>`, `DELETE …/chunks?owner=|doc=` ; le vecteur voyage en base64 dans le JSON (helpers `chunk_json`/`chunk_of_json`). Premier usage de `bind_blob`/`get_column_as_blob` dans le service.
+- **Fichiers** : `host/store.h`, `host/store.cpp`, `host/server.cpp`, `tests/test_host.cpp` (+ `#include <cstring>`).
+- **Pourquoi** : déménager côté service l'index RAG (passages + vecteurs) aujourd'hui dans l'IndexedDB `chunks` du navigateur ; garder les vecteurs évite de réindexer à chaque recherche (15 s sur le chemin critique).
+- **Étapes** : compilé sans avertissement ; vérifié au curl (un vecteur float32 revient identique après base64→BLOB→base64, status par modèle, remplacement transactionnel d'un document, suppression par propriétaire) et par test_host all checks passed (round-trip BLOB vérifié par memcmp, isolation, cascade). openapi des routes profil groupé en A12. Pas d'incrément de version.
+
 ## 2026-11-17 — Réglages de page par profil (chantier Gulliver, A4)
 
 - **Quoi** : table `profile_page_settings` (profile, key, value ; cascade) dans `host/store.cpp`, méthodes `page_settings()` (objet entier) et `set_page_setting()`, routes `GET/PUT /gulliver/v1/profile/page-settings`. Chaque valeur est un JSON quelconque gardé sérialisé ; un PUT écrit les clés de l'objet reçu et préserve les autres.

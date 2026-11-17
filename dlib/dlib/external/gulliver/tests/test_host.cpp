@@ -60,6 +60,7 @@
 #include <cstdio>
 #include <ctime>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -428,11 +429,48 @@ int main(int argc, char** argv)
             && db.page_settings("pa")["name"].as_string() == "\"Alice\"",
             "writing one page setting keeps the others");
 
+        // Passages RAG : round-trip du vecteur BLOB, remplacement transactionnel, statut.
+        {
+            gulliver::chunk_record c0;
+            c0.id = "d1:0"; c0.owner = "proj1"; c0.doc = "d1"; c0.ordinal = 0; c0.text = "bonjour";
+            c0.model = "qwen";
+            const float vals[3] = { 1.0f, 2.5f, -3.0f };
+            c0.vector.assign(reinterpret_cast<const char*>(vals), reinterpret_cast<const char*>(vals) + sizeof(vals));
+            gulliver::chunk_record c1;
+            c1.id = "d1:1"; c1.owner = "proj1"; c1.doc = "d1"; c1.ordinal = 1; c1.text = "monde";  // sans vecteur
+            db.replace_chunks("pa", "d1", { c0, c1 });
+
+            auto got = db.chunks_of("pa", "proj1");
+            check(got.size() == 2 && got[0].text == "bonjour" && got[1].vector.empty(),
+                "chunks are read back, one with a vector and one without");
+            check(got[0].vector.size() == sizeof(vals)
+                && std::memcmp(got[0].vector.data(), vals, sizeof(vals)) == 0,
+                "the vector survives the round trip through a BLOB");
+            check(db.chunks_of("pb", "proj1").empty(), "chunks are per profile");
+
+            auto status = db.chunk_status("pa", "proj1", "qwen");
+            check(status.size() == 1 && status[0].passages == 2 && status[0].vectors == 1,
+                "chunk_status counts the passages and those with the current model's vector");
+            check(db.chunk_documents("pa").size() == 1, "chunk_documents lists the (owner, doc) pairs");
+
+            // Remplacer le document : les anciens passages partent, les nouveaux restent.
+            gulliver::chunk_record only;
+            only.id = "d1:0"; only.owner = "proj1"; only.doc = "d1"; only.text = "remplace";
+            db.replace_chunks("pa", "d1", { only });
+            check(db.chunks_of_document("pa", "d1").size() == 1
+                && db.chunks_of_document("pa", "d1")[0].text == "remplace",
+                "replacing a document's chunks removes the old ones");
+
+            db.delete_chunks_of_owner("pa", "proj1");
+            check(db.chunks_of("pa", "proj1").empty(), "chunks are deleted by owner");
+        }
+
         // Supprimer le profil emporte toutes ses données (clé étrangère ON DELETE CASCADE).
+        db.replace_chunks("pa", "d9", { [] { gulliver::chunk_record c; c.id = "d9:0"; c.owner = "o"; c.doc = "d9"; return c; }() });
         db.remove_profile("pa");
         check(db.conversation_docs("pa").empty() && db.project_docs("pa").empty()
-            && db.page_settings("pa").items().empty(),
-            "removing a profile cascades to its conversations, projects and page settings");
+            && db.page_settings("pa").items().empty() && db.chunk_documents("pa").empty(),
+            "removing a profile cascades to its conversations, projects, page settings and chunks");
     }
 
     {

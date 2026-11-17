@@ -136,6 +136,47 @@ namespace gulliver
             return o;
         }
 
+        // Un passage (chunk) rendu à la page : ses champs, et son vecteur en base64 (vide si absent).
+        json chunk_json(const chunk_record& c)
+        {
+            json o = json::object();
+            o["id"] = c.id;
+            o["owner"] = c.owner;
+            o["doc"] = c.doc;
+            o["ordinal"] = static_cast<long long>(c.ordinal);
+            o["name"] = c.name;
+            o["where"] = c.where;
+            o["start"] = static_cast<long long>(c.start);
+            o["end"] = static_cast<long long>(c.end);
+            o["text"] = c.text;
+            o["model"] = c.model;
+            o["vector"] = c.vector.empty() ? std::string()
+                : base64_encode(std::string(c.vector.begin(), c.vector.end()));
+            return o;
+        }
+
+        // Un passage lu d'un objet JSON du corps : le vecteur arrive en base64.
+        chunk_record chunk_of_json(const json& j)
+        {
+            chunk_record c;
+            c.id = j.contains("id") ? j["id"].as_string() : std::string();
+            c.owner = j.contains("owner") ? j["owner"].as_string() : std::string();
+            c.doc = j.contains("doc") ? j["doc"].as_string() : std::string();
+            c.ordinal = j.contains("ordinal") ? j["ordinal"].as_int(0) : 0;
+            c.name = j.contains("name") ? j["name"].as_string() : std::string();
+            c.where = j.contains("where") ? j["where"].as_string() : std::string();
+            c.start = j.contains("start") ? j["start"].as_int(0) : 0;
+            c.end = j.contains("end") ? j["end"].as_int(0) : 0;
+            c.text = j.contains("text") ? j["text"].as_string() : std::string();
+            c.model = j.contains("model") ? j["model"].as_string() : std::string();
+            if (j.contains("vector") && !j["vector"].as_string().empty())
+            {
+                const std::string bytes = base64_decode(j["vector"].as_string());
+                c.vector.assign(bytes.begin(), bytes.end());
+            }
+            return c;
+        }
+
         // Le nom d'un profil pris dans un corps de requête : coupé de ses espaces de bord, de 1 à 80
         // caractères.  Renvoie une chaîne vide quand il manque ou qu'il est hors bornes.
         std::string profile_name_of(const json& body)
@@ -2515,6 +2556,94 @@ namespace gulliver
             if (!parse_body(req, res, body)) return;
             for (const auto& kv : body.items())
                 s->db().set_page_setting(p.id, kv.first, kv.second.dump());
+            send_json(res, 200, ok_result(true));
+        });
+
+        // L'index RAG d'un profil : les passages des documents, avec leurs vecteurs en base64.
+        // GET chunks?owner=…  : les passages d'un propriétaire ; GET chunks?doc=… : ceux d'un document.
+        // GET chunks/status?owner=…&model=… : les comptes par document, sans transférer les vecteurs.
+        // GET chunks/documents : les couples (owner, doc) distincts (pour l'élagage au démarrage).
+        // PUT chunks/<doc> {records:[…]} : remplace en bloc les passages d'un document.
+        // DELETE chunks?owner=…  ou  ?doc=… : efface par propriétaire ou par document.
+        srv.Get("/gulliver/v1/profile/chunks", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            const std::string owner = req.get_param_value("owner");
+            const std::string doc = req.get_param_value("doc");
+            if (owner.empty() == doc.empty())
+            {
+                send_error(res, 400, "invalid_request_error", "exactly one of owner or doc is required", "owner_or_doc");
+                return;
+            }
+            const std::vector<chunk_record> records = owner.empty()
+                ? s->db().chunks_of_document(p.id, doc) : s->db().chunks_of(p.id, owner);
+            json list = json::array();
+            for (const chunk_record& c : records) list.push_back(chunk_json(c));
+            json o = json::object();
+            o["chunks"] = list;
+            send_json(res, 200, o);
+        });
+        srv.Get("/gulliver/v1/profile/chunks/status", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            const std::string owner = req.get_param_value("owner");
+            const std::string model = req.get_param_value("model");
+            json list = json::array();
+            for (const chunk_status_row& r : s->db().chunk_status(p.id, owner, model))
+            {
+                json o = json::object();
+                o["doc"] = r.doc;
+                o["passages"] = static_cast<long long>(r.passages);
+                o["vectors"] = static_cast<long long>(r.vectors);
+                o["model"] = r.model;
+                list.push_back(o);
+            }
+            json o = json::object();
+            o["status"] = list;
+            send_json(res, 200, o);
+        });
+        srv.Get("/gulliver/v1/profile/chunks/documents", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            json list = json::array();
+            for (const auto& od : s->db().chunk_documents(p.id))
+            {
+                json o = json::object();
+                o["owner"] = od.first;
+                o["doc"] = od.second;
+                list.push_back(o);
+            }
+            json o = json::object();
+            o["documents"] = list;
+            send_json(res, 200, o);
+        });
+        srv.Put(R"(/gulliver/v1/profile/chunks/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            json body;
+            if (!parse_body(req, res, body)) return;
+            if (!body.contains("records") || !body["records"].is_array())
+            {
+                send_error(res, 400, "invalid_request_error", "a records array is required", "records");
+                return;
+            }
+            std::vector<chunk_record> records;
+            for (const auto& r : body["records"].elements()) records.push_back(chunk_of_json(r));
+            s->db().replace_chunks(p.id, req.matches[1], records);
+            send_json(res, 200, ok_result(true));
+        });
+        srv.Delete("/gulliver/v1/profile/chunks", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            const std::string owner = req.get_param_value("owner");
+            const std::string doc = req.get_param_value("doc");
+            if (owner.empty() == doc.empty())
+            {
+                send_error(res, 400, "invalid_request_error", "exactly one of owner or doc is required", "owner_or_doc");
+                return;
+            }
+            if (owner.empty()) s->db().delete_chunks_of_document(p.id, doc);
+            else s->db().delete_chunks_of_owner(p.id, owner);
             send_json(res, 200, ok_result(true));
         });
 

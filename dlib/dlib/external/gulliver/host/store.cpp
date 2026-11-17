@@ -119,6 +119,18 @@ namespace gulliver
             " profile TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,"
             " PRIMARY KEY (profile, key),"
             " FOREIGN KEY (profile) REFERENCES profiles(id) ON DELETE CASCADE)");
+        // Les passages indexés (RAG) : le texte et, quand il est calculé, le vecteur d'embedding en
+        // BLOB.  where_, start_, end_ : les mots réservés de SQL prennent un souligné.
+        db_->exec(
+            "CREATE TABLE IF NOT EXISTS profile_chunks ("
+            " profile TEXT NOT NULL, id TEXT NOT NULL, owner TEXT NOT NULL, doc TEXT NOT NULL,"
+            " ordinal INTEGER NOT NULL DEFAULT 0, name TEXT NOT NULL DEFAULT '',"
+            " where_ TEXT NOT NULL DEFAULT '', start_ INTEGER NOT NULL DEFAULT 0, end_ INTEGER NOT NULL DEFAULT 0,"
+            " text TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '', vector BLOB,"
+            " PRIMARY KEY (profile, id),"
+            " FOREIGN KEY (profile) REFERENCES profiles(id) ON DELETE CASCADE)");
+        db_->exec("CREATE INDEX IF NOT EXISTS ix_chunk_owner ON profile_chunks(profile, owner)");
+        db_->exec("CREATE INDEX IF NOT EXISTS ix_chunk_doc ON profile_chunks(profile, doc)");
     }
 
     store::~store() {}
@@ -601,6 +613,151 @@ namespace gulliver
             st.bind(1, profile);
             st.bind(2, key);
             st.bind(3, value);
+            st.exec();
+        });
+    }
+
+    // ----------------------------------------------------------------------------------------
+    //  Passages indexés (RAG)
+
+    namespace
+    {
+        const char* const chunk_columns = "id, owner, doc, ordinal, name, where_, start_, end_, text, model, vector";
+
+        chunk_record chunk_of(dlib::statement& st)
+        {
+            chunk_record c;
+            c.id = st.get_column_as_text(0);
+            c.owner = st.get_column_as_text(1);
+            c.doc = st.get_column_as_text(2);
+            c.ordinal = st.get_column_as_int64(3);
+            c.name = st.get_column_as_text(4);
+            c.where = st.get_column_as_text(5);
+            c.start = st.get_column_as_int64(6);
+            c.end = st.get_column_as_int64(7);
+            c.text = st.get_column_as_text(8);
+            c.model = st.get_column_as_text(9);
+            c.vector = st.get_column_as_blob(10);
+            return c;
+        }
+    }
+
+    void store::replace_chunks(const std::string& profile, const std::string& doc,
+                               const std::vector<chunk_record>& records)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::transaction t(*db_);
+            {
+                dlib::statement del(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND doc = ?");
+                del.bind(1, profile);
+                del.bind(2, doc);
+                del.exec();
+            }
+            for (const chunk_record& c : records)
+            {
+                dlib::statement st(*db_, "INSERT INTO profile_chunks "
+                    "(profile, id, owner, doc, ordinal, name, where_, start_, end_, text, model, vector) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                st.bind(1, profile);
+                st.bind(2, c.id);
+                st.bind(3, c.owner);
+                st.bind(4, c.doc);
+                st.bind_int64(5, c.ordinal);
+                st.bind(6, c.name);
+                st.bind(7, c.where);
+                st.bind_int64(8, c.start);
+                st.bind_int64(9, c.end);
+                st.bind(10, c.text);
+                st.bind(11, c.model);
+                st.bind_blob(12, c.vector);
+                st.exec();
+            }
+            t.commit();
+        });
+    }
+
+    std::vector<chunk_record> store::chunks_of(const std::string& profile, const std::string& owner)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<chunk_record> out;
+        dlib::statement st(*db_, std::string("SELECT ") + chunk_columns +
+            " FROM profile_chunks WHERE profile = ? AND owner = ? ORDER BY doc, ordinal");
+        st.bind(1, profile);
+        st.bind(2, owner);
+        st.exec();
+        while (st.move_next()) out.push_back(chunk_of(st));
+        return out;
+    }
+
+    std::vector<chunk_record> store::chunks_of_document(const std::string& profile, const std::string& doc)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<chunk_record> out;
+        dlib::statement st(*db_, std::string("SELECT ") + chunk_columns +
+            " FROM profile_chunks WHERE profile = ? AND doc = ? ORDER BY ordinal");
+        st.bind(1, profile);
+        st.bind(2, doc);
+        st.exec();
+        while (st.move_next()) out.push_back(chunk_of(st));
+        return out;
+    }
+
+    std::vector<chunk_status_row> store::chunk_status(const std::string& profile, const std::string& owner,
+                                                      const std::string& model)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<chunk_status_row> out;
+        // Par document : le nombre de passages, ceux dont le vecteur est du modèle demandé, et un
+        // modèle représentatif.  Le comptage se fait en SQL, sans transférer les vecteurs.
+        dlib::statement st(*db_,
+            "SELECT doc, COUNT(*), SUM(CASE WHEN vector IS NOT NULL AND model = ? THEN 1 ELSE 0 END), MAX(model) "
+            "FROM profile_chunks WHERE profile = ? AND owner = ? GROUP BY doc");
+        st.bind(1, model);
+        st.bind(2, profile);
+        st.bind(3, owner);
+        st.exec();
+        while (st.move_next())
+        {
+            chunk_status_row r;
+            r.doc = st.get_column_as_text(0);
+            r.passages = st.get_column_as_int64(1);
+            r.vectors = st.get_column_as_int64(2);
+            r.model = st.get_column_as_text(3);
+            out.push_back(r);
+        }
+        return out;
+    }
+
+    std::vector<std::pair<std::string, std::string>> store::chunk_documents(const std::string& profile)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<std::pair<std::string, std::string>> out;
+        dlib::statement st(*db_, "SELECT DISTINCT owner, doc FROM profile_chunks WHERE profile = ?");
+        st.bind(1, profile);
+        st.exec();
+        while (st.move_next()) out.emplace_back(st.get_column_as_text(0), st.get_column_as_text(1));
+        return out;
+    }
+
+    void store::delete_chunks_of_owner(const std::string& profile, const std::string& owner)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::statement st(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND owner = ?");
+            st.bind(1, profile);
+            st.bind(2, owner);
+            st.exec();
+        });
+    }
+
+    void store::delete_chunks_of_document(const std::string& profile, const std::string& doc)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::statement st(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND doc = ?");
+            st.bind(1, profile);
+            st.bind(2, doc);
             st.exec();
         });
     }
