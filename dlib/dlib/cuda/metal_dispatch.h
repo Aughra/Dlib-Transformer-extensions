@@ -103,6 +103,8 @@ namespace dlib
         void layer_normalize (double eps, resizable_tensor& dest, resizable_tensor& means,
                               resizable_tensor& invstds, const tensor& src, const tensor& gamma,
                               const tensor& beta);
+        void gguf_matvec (tensor& dest, const tensor& src, const tensor& weights, int type, long rows,
+                          long cols, size_t row_bytes);
     }
 }
 

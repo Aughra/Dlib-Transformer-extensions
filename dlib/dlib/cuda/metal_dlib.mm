@@ -89,7 +89,10 @@ namespace dlib
                 context& c = get_context();
                 std::lock_guard<std::mutex> guard(c.lock);
                 // Erasing the entry drops the last strong reference to the MTLBuffer.
-                c.buffers.erase(reinterpret_cast<const char*>(p));
+                @autoreleasepool
+                {
+                    c.buffers.erase(reinterpret_cast<const char*>(p));
+                }
             }
 
         }
@@ -149,16 +152,21 @@ namespace dlib
                     " bytes exceeds the largest buffer of the device (" +
                     std::to_string((size_t)c.device.maxBufferLength) + " bytes).");
 
+            /* Both calls stay inside the pool: contents leaves an autoreleased reference to
+               the buffer, which, without a pool to drain it, would keep the buffer and its
+               memory alive after the tensor has released it. */
             id<MTLBuffer> buffer = nil;
+            float* p = nullptr;
             @autoreleasepool
             {
                 buffer = [c.device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
+                if (buffer != nil)
+                    p = static_cast<float*>([buffer contents]);
             }
-            if (buffer == nil)
+            if (buffer == nil || p == nullptr)
                 throw metal_error("Metal backend of dlib: the device refused a shared buffer of " +
                     std::to_string(bytes) + " bytes.");
 
-            float* const p = static_cast<float*>([buffer contents]);
             {
                 std::lock_guard<std::mutex> guard(c.lock);
                 c.buffers[reinterpret_cast<const char*>(p)] = buffer_entry{buffer, bytes};
@@ -252,6 +260,24 @@ namespace dlib
             context& c = get_context();
             std::lock_guard<std::mutex> guard(c.lock);
             return c.buffers.size();
+        }
+
+        size_t live_bytes (
+        )
+        {
+            context& c = get_context();
+            std::lock_guard<std::mutex> guard(c.lock);
+            size_t total = 0;
+            for (const auto& b : c.buffers)
+                total += b.second.bytes;
+            return total;
+        }
+
+        size_t allocated_bytes (
+        )
+        {
+            context& c = get_context();
+            return c.device == nil ? 0 : (size_t)c.device.currentAllocatedSize;
         }
     }
 }

@@ -2,10 +2,13 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 #include <dlib/dnn.h>
+#include <dlib/data_io/gguf_reader.h>
+#include <mach/mach.h>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -175,6 +178,20 @@ namespace
             DLIB_TEST(metal::live_buffers() == before);
         }
         DLIB_TEST(metal::live_buffers() == before);
+    }
+
+    // A released tensor gives its memory back to the system: the device counts it no more.
+    void test_memory_is_given_back ()
+    {
+        resizable_tensor warm = metal_tensor(1, 1, 1, 1000);
+        const size_t before = metal::allocated_bytes();
+        for (int i = 0; i < 10; ++i)
+        {
+            resizable_tensor t = metal_tensor(1, 1, 1, 12500000);   // 50 MB
+            t = 1;
+        }
+        const size_t after = metal::allocated_bytes();
+        DLIB_TEST_MSG(after <= before + 1000000, "the device holds " << (after - before) << " more bytes");
     }
 
     void test_gpu_sees_the_same_memory ()
@@ -380,6 +397,8 @@ namespace
         double max_bound_ratio = 0;   // for gemm: the largest gap over its bound
         double max_cpu_error = -1;    // with an exact reference: the largest gaps of each side
         double max_gpu_error = -1;
+        double sum_gap2 = 0;          // against float32 weights: the relative gap of all values
+        double sum_norm2 = 0;
     };
 
     // Tolerances of float32 (see the report in the journal of the fork): 1e-5 absolute and
@@ -978,6 +997,239 @@ namespace
                            "one device"));
     }
 
+// ----------------------------------------------------------------------------------------
+// GGUF weights in Q4_0 and Q8_0: a quantizer written from the definition of the formats
+// (one half precision scale per block of 32 values, then 4 or 8 bit values), the product of
+// the CPU (tt::gguf_matvec on the host) as reference, and the product of Metal.
+
+    uint16_t half_bits (float x)
+    {
+        const __fp16 h = (__fp16)x;
+        uint16_t b;
+        std::memcpy(&b, &h, sizeof(b));
+        return b;
+    }
+
+    float from_half_bits (uint16_t b)
+    {
+        __fp16 h;
+        std::memcpy(&h, &b, sizeof(b));
+        return (float)h;
+    }
+
+    // Quantizes a rows x cols matrix (cols a multiple of 32) into the bytes of a GGUF
+    // matrix, stored in the floats of a tensor.
+    resizable_tensor quantize (const matrix<float>& m, int type)
+    {
+        const long rows = m.nr(), cols = m.nc();
+        const size_t row_bytes = gguf_blocks::row_bytes(type, cols);
+        std::vector<uint8_t> bytes((size_t)rows*row_bytes, 0);
+        for (long r = 0; r < rows; ++r)
+        {
+            for (long g = 0; g < cols/32; ++g)
+            {
+                uint8_t* b = bytes.data() + (size_t)r*row_bytes + g*(type == gguf_blocks::q4_0 ? 18 : 34);
+                if (type == gguf_blocks::q8_0)
+                {
+                    float amax = 0;
+                    for (int j = 0; j < 32; ++j)
+                        amax = std::max(amax, std::abs(m(r, g*32 + j)));
+                    const uint16_t hd = half_bits(amax/127);
+                    const float d = from_half_bits(hd);
+                    std::memcpy(b, &hd, 2);
+                    for (int j = 0; j < 32; ++j)
+                    {
+                        const int q = d == 0 ? 0 : (int)std::lround(m(r, g*32 + j)/d);
+                        b[2 + j] = (uint8_t)(int8_t)std::max(-127, std::min(127, q));
+                    }
+                }
+                else
+                {
+                    // The value of largest magnitude maps to -8, so that the 16 levels
+                    // -8..7 cover the block.
+                    float extreme = 0;
+                    for (int j = 0; j < 32; ++j)
+                        if (std::abs(m(r, g*32 + j)) > std::abs(extreme))
+                            extreme = m(r, g*32 + j);
+                    const uint16_t hd = half_bits(extreme/-8);
+                    const float d = from_half_bits(hd);
+                    std::memcpy(b, &hd, 2);
+                    for (int j = 0; j < 16; ++j)
+                    {
+                        auto level = [&](float x) { return d == 0 ? 8 : std::max(0, std::min(15, (int)std::lround(x/d) + 8)); };
+                        b[2 + j] = (uint8_t)(level(m(r, g*32 + j)) | (level(m(r, g*32 + j + 16)) << 4));
+                    }
+                }
+            }
+        }
+        resizable_tensor w(1, 1, 1, (long)((bytes.size() + 3)/4));
+        w = 0;
+        std::memcpy(w.host(), bytes.data(), bytes.size());
+        return w;
+    }
+
+    void test_parity_gguf (dlib::rand& rnd)
+    {
+        struct form { long rows, cols, n; };
+        const std::vector<form> forms = {{1, 32, 1}, {7, 64, 3}, {64, 4096, 1}, {64, 4096, 8}, {513, 4128, 9},
+                                         {33, 256, 17}, {1000, 1024, 2}};
+        for (int type : {(int)gguf_blocks::q4_0, (int)gguf_blocks::q8_0})
+        {
+            const std::string name = type == gguf_blocks::q4_0 ? "gguf_matvec Q4_0" : "gguf_matvec Q8_0";
+            for (auto& f : forms)
+            {
+                const matrix<float> wf = matrix_cast<float>(gaussian_randm(f.rows, f.cols, rnd.get_random_32bit_number()));
+                resizable_tensor w = quantize(wf, type);
+                const size_t row_bytes = gguf_blocks::row_bytes(type, f.cols);
+                resizable_tensor x = random_cpu(rnd, f.n, 1, 1, f.cols), y(f.n, 1, 1, f.rows);
+                tt::gguf_matvec(y, x, w, type, f.rows, f.cols, row_bytes);
+
+                resizable_tensor mw = on_metal(w), mx = on_metal(x), my = on_metal(y);
+                my = 0;
+                tt::gguf_matvec(my, mx, mw, type, f.rows, f.cols, row_bytes);
+
+                // The bound of a dot product of cols terms, as for gemm, on the decoded weights.
+                resizable_tensor wd(f.rows, f.cols);
+                tt::gguf_dequantize(wd, w, type, 0, f.rows, f.cols, row_bytes);
+                resizable_tensor scale(f.n, 1, 1, f.rows);
+                tt::gemm(0, scale, 1, absolute(x), false, absolute(wd), true);
+                check_gemm_parity(name, y, my, scale, f.cols);
+
+                // What quantization costs, against the product by the weights in float32:
+                // the largest gap, and the relative gap of all the values together.
+                const matrix<float> exact = mat(x)*trans(wf);
+                parity& q = parity_table()[name + " vs float32 weights"];
+                for (long t = 0; t < f.n; ++t)
+                {
+                    for (long r = 0; r < f.rows; ++r)
+                    {
+                        const double e = (double)my.host()[t*f.rows + r] - exact(t, r);
+                        q.max_abs = std::max(q.max_abs, std::abs(e));
+                        q.sum_gap2 += e*e;
+                        q.sum_norm2 += (double)exact(t, r)*exact(t, r);
+                        ++q.compared;
+                    }
+                }
+                q.max_rel = std::sqrt(q.sum_gap2/q.sum_norm2);
+            }
+        }
+
+        // Unhandled cases stop with a clear error.
+        resizable_tensor w = on_metal(quantize(matrix_cast<float>(gaussian_randm(4, 64, 1)), gguf_blocks::q4_0));
+        resizable_tensor x = on_metal(random_cpu(rnd, 1, 1, 1, 64)), y = on_metal(random_cpu(rnd, 1, 1, 1, 4));
+        DLIB_TEST(contains(error_of([&]{ tt::gguf_matvec(y, x, w, gguf_blocks::q4_K, 4, 256, gguf_blocks::row_bytes(gguf_blocks::q4_K, 256)); }),
+            "no Metal version for the GGUF format 12"));
+        DLIB_TEST(contains(error_of([&]{ tt::gguf_matvec(y, x, w, gguf_blocks::q4_0, 4, 64, 37); }), "rows of 37 bytes"));
+        resizable_tensor y8 = on_metal(random_cpu(rnd, 1, 1, 1, 8));
+        DLIB_TEST(contains(error_of([&]{ tt::gguf_matvec(y8, x, w, gguf_blocks::q4_0, 8, 64, 36); }), "bytes of weights"));
+    }
+
+    /*
+        Memory of the weights of a GGUF model on Metal, kept in their Q4_0 or Q8_0 bytes,
+        against the same weights decoded to float32.  Only with DLIB_METAL_GGUF set to the
+        path of a model.  Method: every Q4_0 and Q8_0 tensor of the file is copied into a
+        Metal tensor as its bytes; the buffers the backend holds (metal::live_bytes(), the
+        sum of the lengths of its MTLBuffers) and the memory the device reports allocated
+        (metal::allocated_bytes(), MTLDevice.currentAllocatedSize) are read before and after.
+        Then the same tensors are decoded by the CPU (tt::gguf_dequantize) and moved to Metal
+        in float32, and both counts are read again.  The other tensors of the file (norms,
+        embeddings in other formats) are counted apart, not loaded.  A product of the first
+        matrix by a random vector checks the Metal product on real weights.
+    */
+    // The physical memory of the process (phys_footprint of macOS), which counts the pages
+    // of the shared Metal buffers once written.
+    size_t footprint ()
+    {
+        task_vm_info_data_t info;
+        mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+        if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &count) != KERN_SUCCESS)
+            return 0;
+        return (size_t)info.phys_footprint;
+    }
+
+    void measure_gguf_memory (dlib::rand& rnd)
+    {
+        const char* path = std::getenv("DLIB_METAL_GGUF");
+        if (!path)
+            return;
+        gguf_reader reader(path);
+        struct loaded { const gguf_tensor_info* info; resizable_tensor bytes; };
+        std::vector<loaded> packed;
+        uint64_t values = 0, other_bytes = 0, file_bytes = 0;
+        std::map<int, size_t> counts;
+        const size_t live0 = metal::live_bytes(), dev0 = metal::allocated_bytes(), foot0 = footprint();
+        std::vector<uint8_t> raw;
+        for (auto& t : reader.tensors())
+        {
+            const int type = (int)t.type;
+            if (type != gguf_blocks::q4_0 && type != gguf_blocks::q8_0)
+            {
+                other_bytes += t.nbytes;
+                continue;
+            }
+            reader.read_tensor_raw(t, raw);
+            loaded l;
+            l.info = &t;
+            l.bytes.set_tensor_device(tensor_device::metal);
+            l.bytes.set_size(1, 1, 1, (long)((raw.size() + 3)/4));
+            std::memcpy(l.bytes.host(), raw.data(), raw.size());
+            packed.push_back(std::move(l));
+            values += t.n_elements();
+            file_bytes += t.nbytes;
+            ++counts[type];
+        }
+        raw.clear();
+        raw.shrink_to_fit();
+        const size_t live_q = metal::live_bytes() - live0, dev_q = metal::allocated_bytes() - dev0;
+        const size_t foot_q = footprint() - foot0;
+
+        // A product by the first matrix, on real weights.
+        if (!packed.empty())
+        {
+            const gguf_tensor_info& t = *packed[0].info;
+            const long cols = (long)t.dims[0], rows = (long)(t.n_elements()/t.dims[0]);
+            const int type = (int)t.type;
+            const size_t row_bytes = gguf_blocks::row_bytes(type, cols);
+            resizable_tensor w(packed[0].bytes);
+            w.set_tensor_device(tensor_device::cpu);
+            resizable_tensor x = random_cpu(rnd, 1, 1, 1, cols), y(1, 1, 1, rows);
+            tt::gguf_matvec(y, x, w, type, rows, cols, row_bytes);
+            resizable_tensor mx = on_metal(x), my = on_metal(y);
+            tt::gguf_matvec(my, mx, packed[0].bytes, type, rows, cols, row_bytes);
+            resizable_tensor wd(rows, cols), scale(1, 1, 1, rows);
+            tt::gguf_dequantize(wd, w, type, 0, rows, cols, row_bytes);
+            tt::gemm(0, scale, 1, absolute(x), false, absolute(wd), true);
+            check_gemm_parity("gguf_matvec on the weights of the model", y, my, scale, cols);
+            std::cout << "real matrix " << t.name << " (" << rows << "x" << cols << "): max gap/bound "
+                      << parity_table()["gguf_matvec on the weights of the model"].max_bound_ratio << std::endl;
+        }
+
+        std::vector<resizable_tensor> decoded;
+        for (auto& l : packed)
+        {
+            const gguf_tensor_info& t = *l.info;
+            const long cols = (long)t.dims[0], rows = (long)(t.n_elements()/t.dims[0]);
+            resizable_tensor w(l.bytes);
+            w.set_tensor_device(tensor_device::cpu);
+            resizable_tensor f(rows, cols);
+            tt::gguf_dequantize(f, w, (int)t.type, 0, rows, cols, gguf_blocks::row_bytes((int)t.type, cols));
+            f.set_tensor_device(tensor_device::metal);
+            decoded.push_back(std::move(f));
+        }
+        const size_t live_f = metal::live_bytes() - live0 - live_q, dev_f = metal::allocated_bytes() - dev0 - dev_q;
+        const size_t foot_f = footprint() - foot0 - foot_q;
+
+        std::cout << "model " << path << "\n"
+                  << "  tensors in Q4_0: " << counts[gguf_blocks::q4_0] << ", in Q8_0: " << counts[gguf_blocks::q8_0]
+                  << ", values: " << values << ", their bytes in the file: " << file_bytes
+                  << ", other tensors (not loaded): " << other_bytes << " bytes\n"
+                  << "  Metal, kept quantized: buffers " << live_q << " bytes, device " << dev_q
+                  << " bytes, process footprint +" << foot_q << " bytes\n"
+                  << "  Metal, decoded to float32: buffers " << live_f << " bytes, device " << dev_f
+                  << " bytes, process footprint +" << foot_f << " bytes\n"
+                  << "  ratio float32 / quantized (buffers): " << (double)live_f/live_q << std::endl;
+    }
+
     void report_parity ()
     {
         for (auto& e : parity_table())
@@ -986,7 +1238,8 @@ namespace
         std::ostringstream sout;
         for (auto& e : parity_table())
             sout << e.first << ": " << e.second.compared << " values, max |diff| " << e.second.max_abs
-                 << (e.second.max_bound_ratio > 0 ? ", max gap/scale " : ", max rel (|cpu| >= 1e-3) ") << e.second.max_rel
+                 << (e.second.max_bound_ratio > 0 ? ", max gap/scale " :
+                     e.second.sum_norm2 > 0 ? ", relative gap of all values " : ", max rel (|cpu| >= 1e-3) ") << e.second.max_rel
                  << (e.second.max_bound_ratio > 0 ? ", max gap/bound " + std::to_string(e.second.max_bound_ratio) : std::string())
                  << (e.second.max_cpu_error >= 0 ? ", max |cpu-exact| " + std::to_string(e.second.max_cpu_error) +
                      ", max |metal-exact| " + std::to_string(e.second.max_gpu_error) : std::string())
@@ -1017,6 +1270,7 @@ namespace
 #else
             test_device();
             test_values_read_back();
+            test_memory_is_given_back();
             test_gpu_sees_the_same_memory();
             test_moving_between_devices();
             test_copies_moves_and_views();
@@ -1030,8 +1284,10 @@ namespace
             test_parity_gemm(rnd);
             test_parity_layer_norm(rnd);
             test_parity_attention(rnd);
+            test_parity_gguf(rnd);
             report_parity();
             bench_gemm(rnd);
+            measure_gguf_memory(rnd);
             DLIB_TEST(metal::live_buffers() == 0);
 #endif
         }

@@ -19,6 +19,7 @@
 #include "metal_dlib_internal.h"
 #include "metal_dispatch.h"
 #include "gemm_planes.h"
+#include "gguf_blocks.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -370,6 +371,104 @@ kernel void layer_norm_apply (
     const uint k = (i % p.per_sample) / p.plane;
     const float y = (s[i] - means[n])*invstds[n];
     d[i] = y*gamma[k] + beta[k];
+}
+// ----------------------------------------------------------------------------------------
+// Products by GGUF weight matrices read in place (Q4_0 and Q8_0), decoded on the fly.  A
+// block holds 32 consecutive values of a row and starts with its scale, a half precision
+// float: Q4_0 then packs 32 nibbles in 16 bytes (value j in the low nibble of byte j, value
+// j+16 in its high nibble, each minus 8), Q8_0 32 signed bytes.  A simdgroup handles a row:
+// its lanes take the blocks in turn, each block's 32 products are summed in the order of the
+// CPU, and the lanes' sums are added by simd_sum.  The sources go by 8 rows, so that the
+// weights are read once for every 8 of them, as on the CPU.
+
+struct matvec_params
+{
+    uint rows, cols, n, row_bytes;
+};
+
+inline float half_at (device const uchar* p)
+{
+    const ushort h = ushort(p[0]) | ushort(ushort(p[1]) << 8);
+    return float(as_type<half>(h));
+}
+
+inline void decode_q4_0 (device const uchar* b, thread float* v)
+{
+    const float d = half_at(b);
+    for (int j = 0; j < 16; ++j)
+    {
+        v[j] = float(int(b[2 + j] & 0x0F) - 8)*d;
+        v[j + 16] = float(int(b[2 + j] >> 4) - 8)*d;
+    }
+}
+
+inline void decode_q8_0 (device const uchar* b, thread float* v)
+{
+    const float d = half_at(b);
+    for (int j = 0; j < 32; ++j)
+        v[j] = float(as_type<char>(b[2 + j]))*d;
+}
+
+template <int block_bytes>
+inline void matvec_rows (
+    device float* y,
+    device const float* x,
+    device const uchar* w,
+    constant matvec_params& p,
+    uint r,
+    uint lane)
+{
+    device const uchar* row = w + (size_t)r*p.row_bytes;
+    const uint groups = p.cols/32;
+    for (uint t0 = 0; t0 < p.n; t0 += 8)
+    {
+        const uint tn = min(8u, p.n - t0);
+        float acc[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+        for (uint g = lane; g < groups; g += 32)
+        {
+            float v[32];
+            if (block_bytes == 18)
+                decode_q4_0(row + g*18, v);
+            else
+                decode_q8_0(row + g*34, v);
+            for (uint t = 0; t < tn; ++t)
+            {
+                device const float* xt = x + (size_t)(t0 + t)*p.cols + g*32;
+                float s = 0;
+                for (int i = 0; i < 32; ++i)
+                    s += v[i]*xt[i];
+                acc[t] += s;
+            }
+        }
+        for (uint t = 0; t < tn; ++t)
+        {
+            const float s = simd_sum(acc[t]);
+            if (lane == 0)
+                y[(size_t)(t0 + t)*p.rows + r] = s;
+        }
+    }
+}
+
+kernel void gguf_matvec_q4_0 (
+    device float* y                    [[buffer(0)]],
+    device const float* x              [[buffer(1)]],
+    device const uchar* w              [[buffer(2)]],
+    constant matvec_params& p          [[buffer(3)]],
+    uint r                             [[threadgroup_position_in_grid]],
+    uint lane                          [[thread_index_in_threadgroup]])
+{
+    matvec_rows<18>(y, x, w, p, r, lane);
+}
+
+kernel void gguf_matvec_q8_0 (
+    device float* y                    [[buffer(0)]],
+    device const float* x              [[buffer(1)]],
+    device const uchar* w              [[buffer(2)]],
+    constant matvec_params& p          [[buffer(3)]],
+    uint r                             [[threadgroup_position_in_grid]],
+    uint lane                          [[thread_index_in_threadgroup]])
+{
+    matvec_rows<34>(y, x, w, p, r, lane);
 }
 )METAL";
 
@@ -871,6 +970,54 @@ kernel void layer_norm_apply (
             run("layer_norm_stats", p.samples, {in(src), out(means), out(invstds)}, &p, sizeof(p), width);
             run("layer_norm_apply", src.size(), {out(dest), in(src), in(means), in(invstds), in(gamma), in(beta)},
                 &p, sizeof(p));
+        }
+
+        void gguf_matvec (
+            tensor& dest,
+            const tensor& src,
+            const tensor& weights,
+            int type,
+            long rows,
+            long cols,
+            size_t row_bytes
+        )
+        {
+            if (type != gguf_blocks::q4_0 && type != gguf_blocks::q8_0)
+                throw metal_error("Metal backend of dlib: tt::gguf_matvec has no Metal version for the GGUF "
+                    "format " + std::to_string(type) + "; Q4_0 (2) and Q8_0 (8) have one.");
+            if (rows <= 0 || cols <= 0 || cols % 32 != 0)
+                throw metal_error("Metal backend of dlib: tt::gguf_matvec takes rows > 0 and a number of "
+                    "columns that fills whole blocks of 32, and was given " + std::to_string(rows) + "x" +
+                    std::to_string(cols) + ".");
+            if (row_bytes != gguf_blocks::row_bytes(type, cols))
+                throw metal_error("Metal backend of dlib: tt::gguf_matvec was given rows of " +
+                    std::to_string(row_bytes) + " bytes, where the format needs " +
+                    std::to_string(gguf_blocks::row_bytes(type, cols)) + ".");
+            if (&dest == &src || &dest == &weights || overlap(dest, src) || overlap(dest, weights))
+                throw metal_error("Metal backend of dlib: tt::gguf_matvec was given a dest that overlaps "
+                    "src or weights.");
+            if (src.size() % (size_t)cols != 0)
+                throw metal_error("Metal backend of dlib: tt::gguf_matvec takes a src of whole rows of " +
+                    std::to_string(cols) + " values.");
+            const size_t n = src.size()/(size_t)cols;
+            if (dest.size() != n*(size_t)rows)
+                throw metal_error("Metal backend of dlib: tt::gguf_matvec takes a dest of " +
+                    std::to_string(n*(size_t)rows) + " values, and was given " + std::to_string(dest.size()) + ".");
+            if (weights.size()*sizeof(float) < (size_t)rows*row_bytes)
+                throw metal_error("Metal backend of dlib: tt::gguf_matvec was given " +
+                    std::to_string(weights.size()*sizeof(float)) + " bytes of weights for a matrix of " +
+                    std::to_string((size_t)rows*row_bytes) + ".");
+            if (n == 0)
+                return;
+            struct
+            {
+                uint32_t rows, cols, n, row_bytes;
+            } p = {as_index(rows, "gguf_matvec"), as_index(cols, "gguf_matvec"), as_index(n, "gguf_matvec"),
+                   as_index(row_bytes, "gguf_matvec")};
+            as_index(dest.size(), "gguf_matvec");
+            as_index(src.size(), "gguf_matvec");
+            run(type == gguf_blocks::q4_0 ? "gguf_matvec_q4_0" : "gguf_matvec_q8_0", rows,
+                {out(dest), in(src), in(weights)}, &p, sizeof(p), 32);
         }
     }
 }

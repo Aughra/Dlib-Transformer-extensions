@@ -140,6 +140,22 @@ namespace dlib
             ensures
                 - returns the number of buffers allocate() made that are still held.
         !*/
+
+        size_t live_bytes (
+        );
+        /*!
+            ensures
+                - returns the sum of the lengths of the buffers allocate() made that are
+                  still held.
+        !*/
+
+        size_t allocated_bytes (
+        );
+        /*!
+            ensures
+                - returns the memory the Metal device reports allocated by this process
+                  (MTLDevice.currentAllocatedSize), or 0 without a device.
+        !*/
     }
 
 // ----------------------------------------------------------------------------------------

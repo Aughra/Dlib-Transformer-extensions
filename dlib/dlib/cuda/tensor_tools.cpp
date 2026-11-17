@@ -92,6 +92,8 @@ namespace dlib
             throw metal_error("Metal blit_copy was called, but dlib was built without DLIB_USE_METAL.");
         }
         size_t live_buffers () { return 0; }
+        size_t live_bytes () { return 0; }
+        size_t allocated_bytes () { return 0; }
     }
 #endif
 
@@ -2143,7 +2145,7 @@ namespace dlib { namespace tt
         size_t row_bytes
     )
     {
-        DLIB_METAL_UNPORTED("gguf_matvec", dest, src, weights);
+        DLIB_METAL_TRY(gguf_matvec(dest, src, weights, type, rows, cols, row_bytes), "gguf_matvec", dest, src, weights);
 #ifdef DLIB_USE_CUDA
         cuda::gguf_matvec(dest, src, weights, type, rows, cols, row_bytes);
 #else
