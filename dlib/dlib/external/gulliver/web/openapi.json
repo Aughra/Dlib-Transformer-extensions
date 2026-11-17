@@ -3,7 +3,7 @@
  "info": {
   "title": "Interface locale d'Albireo Community Edition",
   "version": "5.9.0",
-  "description": "L'interface du service Albireo, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions albireo-general, albireo-code et albireo-security désignent les modèles activés pour chaque fonction, albireo-background le modèle livré avec Albireo, que l'application web utilise pour son travail en arrière-plan, et albireo-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
+  "description": "L'interface du service Albireo, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Albireo, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
    "url": "https://www.boost.org/LICENSE_1_0.txt"
@@ -107,7 +107,7 @@
       }
      },
      "400": {
-      "description": "Requête invalide ; pour albireo-relay, des outils, des sons, plusieurs choix, des images que ni le modèle extérieur ni un modèle du Mac ne peuvent prendre (code image_input_not_supported), ou une recherche sur le web demandée à un autre fournisseur que Claude (web_search_not_supported)",
+      "description": "Requête invalide ; pour gulliver-relay, des outils, des sons, plusieurs choix, des images que ni le modèle extérieur ni un modèle du Mac ne peuvent prendre (code image_input_not_supported), ou une recherche sur le web demandée à un autre fournisseur que Claude (web_search_not_supported)",
       "content": {
        "application/json": {
         "schema": {
@@ -117,7 +117,7 @@
       }
      },
      "404": {
-      "description": "Modèle inconnu ou inactif ; pour albireo-relay, un relais coupé, incomplet ou hors de portée du mode hors ligne (code relay_unavailable)",
+      "description": "Modèle inconnu ou inactif ; pour gulliver-relay, un relais coupé, incomplet ou hors de portée du mode hors ligne (code relay_unavailable)",
       "content": {
        "application/json": {
         "schema": {
@@ -127,7 +127,7 @@
       }
      },
      "503": {
-      "description": "Le service démarre (code starting), le modèle se charge (code model_loading), les valeurs des corps JSON lus en même temps atteignent leur budget (code busy, Retry-After: 2), ou le moteur refuse la requête pour un temps parce que les images déjà en attente pour le modèle occupent la mémoire qui leur est réservée (code engine_busy, Retry-After: 5) ; l'en-tête Retry-After donne les secondes à attendre ; pour albireo-relay, un moteur trouvé hors de portée du mode hors ligne par la requête elle-même, son nom résolu (code offline), huit réponses en cours (engine_busy), ou Pseudalis absent alors que le relais pseudonymise (pseudonymization_failed)",
+      "description": "Le service démarre (code starting), le modèle se charge (code model_loading), les valeurs des corps JSON lus en même temps atteignent leur budget (code busy, Retry-After: 2), ou le moteur refuse la requête pour un temps parce que les images déjà en attente pour le modèle occupent la mémoire qui leur est réservée (code engine_busy, Retry-After: 5) ; l'en-tête Retry-After donne les secondes à attendre ; pour gulliver-relay, un moteur trouvé hors de portée du mode hors ligne par la requête elle-même, son nom résolu (code offline), huit réponses en cours (engine_busy), ou Pseudalis absent alors que le relais pseudonymise (pseudonymization_failed)",
       "content": {
        "application/json": {
         "schema": {
@@ -147,7 +147,7 @@
       }
      },
      "403": {
-      "description": "albireo-relay : une recherche sur le web demandée alors que l'accès au web des réglages est coupé (code web_access_off)",
+      "description": "gulliver-relay : une recherche sur le web demandée alors que l'accès au web des réglages est coupé (code web_access_off)",
       "content": {
        "application/json": {
         "schema": {
@@ -157,7 +157,7 @@
       }
      },
      "502": {
-      "description": "albireo-relay, hors flux : le moteur extérieur a refusé la requête (code relay_refused, sa raison sans la clé ni l'adresse), a échoué (relay_failed) ou n'a pas pu être joint (relay_unreachable)",
+      "description": "gulliver-relay, hors flux : le moteur extérieur a refusé la requête (code relay_refused, sa raison sans la clé ni l'adresse), a échoué (relay_failed) ou n'a pas pu être joint (relay_unreachable)",
       "content": {
        "application/json": {
         "schema": {
@@ -311,7 +311,7 @@
     }
    }
   },
-  "/albireo/v1/status": {
+  "/gulliver/v1/status": {
    "get": {
     "tags": [
      "Service"
@@ -566,7 +566,7 @@
           },
           "background": {
            "type": "string",
-           "description": "Le modèle livré avec Albireo, qui sert albireo-background et reste chargé ; vide s'il n'y en a pas."
+           "description": "Le modèle livré avec Albireo, qui sert gulliver-background et reste chargé ; vide s'il n'y en a pas."
           },
           "loaded_models": {
            "type": "array",
@@ -587,7 +587,7 @@
           },
           "web": {
            "type": "object",
-           "description": "L'accès au web du bouton Web, que l'application web lit à son démarrage : disponible tant que l'administrateur le laisse activé (web_access) et que le service n'est pas hors ligne, et le fournisseur de /albireo/v1/web/search, wikipedia, ou none quand la recherche est indisponible alors que /albireo/v1/web/fetch reste disponible.",
+           "description": "L'accès au web du bouton Web, que l'application web lit à son démarrage : disponible tant que l'administrateur le laisse activé (web_access) et que le service n'est pas hors ligne, et le fournisseur de /gulliver/v1/web/search, wikipedia, ou none quand la recherche est indisponible alors que /gulliver/v1/web/fetch reste disponible.",
            "properties": {
             "available": {
              "type": "boolean"
@@ -609,7 +609,7 @@
     }
    }
   },
-  "/albireo/v1/models": {
+  "/gulliver/v1/models": {
    "get": {
     "tags": [
      "Service"
@@ -725,7 +725,7 @@
           },
           "background": {
            "type": "string",
-           "description": "Le modèle d'albireo-background, vide s'il n'y en a pas."
+           "description": "Le modèle d'gulliver-background, vide s'il n'y en a pas."
           },
           "embedding_models": {
            "type": "array",
@@ -851,13 +851,13 @@
     }
    }
   },
-  "/albireo/v1/reserve": {
+  "/gulliver/v1/reserve": {
    "get": {
     "tags": [
      "Service"
     ],
     "summary": "La réserve des modèles sur le Mac",
-    "description": "Chaque fichier vérifié d'un modèle est gardé sous son hachage à la fin de son téléchargement et quand le modèle est retiré ; sur APFS, la copie est un clone, qui ne prend pas de place tant que le modèle reste installé. Un modèle dont tous les fichiers sont dans la réserve est restauré sans le réseau (in_reserve dans /albireo/v1/models).",
+    "description": "Chaque fichier vérifié d'un modèle est gardé sous son hachage à la fin de son téléchargement et quand le modèle est retiré ; sur APFS, la copie est un clone, qui ne prend pas de place tant que le modèle reste installé. Un modèle dont tous les fichiers sont dans la réserve est restauré sans le réseau (in_reserve dans /gulliver/v1/models).",
     "responses": {
      "200": {
       "description": "La réserve",
@@ -946,7 +946,7 @@
     }
    }
   },
-  "/albireo/v1/usage": {
+  "/gulliver/v1/usage": {
    "get": {
     "tags": [
      "Service"
@@ -991,7 +991,7 @@
     }
    }
   },
-  "/albireo/v1/engines": {
+  "/gulliver/v1/engines": {
    "get": {
     "tags": [
      "Service"
@@ -1011,7 +1011,7 @@
     }
    }
   },
-  "/albireo/v1/licenses": {
+  "/gulliver/v1/licenses": {
    "get": {
     "tags": [
      "Service"
@@ -1052,7 +1052,7 @@
     }
    }
   },
-  "/albireo/v1/licenses/{file}": {
+  "/gulliver/v1/licenses/{file}": {
    "get": {
     "tags": [
      "Service"
@@ -1067,7 +1067,7 @@
       "schema": {
        "type": "string"
       },
-      "description": "Un fichier listé par /albireo/v1/licenses."
+      "description": "Un fichier listé par /gulliver/v1/licenses."
      }
     ],
     "responses": {
@@ -1104,13 +1104,13 @@
     }
    }
   },
-  "/albireo/v1/count": {
+  "/gulliver/v1/count": {
    "post": {
     "tags": [
      "Service"
     ],
     "summary": "Tokens de messages, ou d'un texte, pour un modèle",
-    "description": "Pour albireo-relay, une estimation (estimated: true) des tokens du modèle extérieur : comptés par le modèle général du Mac, ou environ quatre octets par token sans lui, dans le contexte du modèle extérieur.",
+    "description": "Pour gulliver-relay, une estimation (estimated: true) des tokens du modèle extérieur : comptés par le modèle général du Mac, ou environ quatre octets par token sans lui, dans le contexte du modèle extérieur.",
     "requestBody": {
      "required": true,
      "content": {
@@ -1178,7 +1178,7 @@
     }
    }
   },
-  "/albireo/v1/web/search": {
+  "/gulliver/v1/web/search": {
    "post": {
     "tags": [
      "Accès au web"
@@ -1269,7 +1269,7 @@
     }
    }
   },
-  "/albireo/v1/relay": {
+  "/gulliver/v1/relay": {
    "get": {
     "tags": [
      "Service"
@@ -1352,7 +1352,7 @@
     }
    }
   },
-  "/albireo/v1/relay/test": {
+  "/gulliver/v1/relay/test": {
    "post": {
     "tags": [
      "Service"
@@ -1453,7 +1453,7 @@
     }
    }
   },
-  "/albireo/v1/web/fetch": {
+  "/gulliver/v1/web/fetch": {
    "post": {
     "tags": [
      "Accès au web"
@@ -1554,7 +1554,7 @@
     }
    }
   },
-  "/albireo/v1/models/refresh": {
+  "/gulliver/v1/models/refresh": {
    "post": {
     "tags": [
      "Administration"
@@ -1592,13 +1592,13 @@
     }
    }
   },
-  "/albireo/v1/models/{id}/download": {
+  "/gulliver/v1/models/{id}/download": {
    "post": {
     "tags": [
      "Administration"
     ],
     "summary": "Lance ou reprend le téléchargement d'un modèle",
-    "description": "En mode hors ligne, lance une restauration purement locale de tous les fichiers vérifiés depuis la réserve, sans repli sur le réseau même si le réglage change. Si la réserve ne peut pas les fournir, la tâche asynchrone signale l'état error et le code reserve_unavailable dans GET /albireo/v1/models. Une tâche réseau déjà en cours pour ce modèle est refusée avec le code download_busy.",
+    "description": "En mode hors ligne, lance une restauration purement locale de tous les fichiers vérifiés depuis la réserve, sans repli sur le réseau même si le réglage change. Si la réserve ne peut pas les fournir, la tâche asynchrone signale l'état error et le code reserve_unavailable dans GET /gulliver/v1/models. Une tâche réseau déjà en cours pour ce modèle est refusée avec le code download_busy.",
     "parameters": [
      {
       "name": "id",
@@ -1608,7 +1608,7 @@
        "type": "string",
        "pattern": "^[A-Za-z0-9._-]+$"
       },
-      "description": "Identifiant du modèle, tel que /albireo/v1/models le liste."
+      "description": "Identifiant du modèle, tel que /gulliver/v1/models le liste."
      }
     ],
     "responses": {
@@ -1664,7 +1664,7 @@
        "type": "string",
        "pattern": "^[A-Za-z0-9._-]+$"
       },
-      "description": "Identifiant du modèle, tel que /albireo/v1/models le liste."
+      "description": "Identifiant du modèle, tel que /gulliver/v1/models le liste."
      }
     ],
     "responses": {
@@ -1689,7 +1689,7 @@
     }
    }
   },
-  "/albireo/v1/models/{id}/activate": {
+  "/gulliver/v1/models/{id}/activate": {
    "post": {
     "tags": [
      "Administration"
@@ -1704,7 +1704,7 @@
        "type": "string",
        "pattern": "^[A-Za-z0-9._-]+$"
       },
-      "description": "Identifiant du modèle, tel que /albireo/v1/models le liste."
+      "description": "Identifiant du modèle, tel que /gulliver/v1/models le liste."
      }
     ],
     "requestBody": {
@@ -1770,7 +1770,7 @@
     }
    }
   },
-  "/albireo/v1/models/{id}/deactivate": {
+  "/gulliver/v1/models/{id}/deactivate": {
    "post": {
     "tags": [
      "Administration"
@@ -1786,7 +1786,7 @@
        "type": "string",
        "pattern": "^[A-Za-z0-9._-]+$"
       },
-      "description": "Identifiant du modèle, tel que /albireo/v1/models le liste."
+      "description": "Identifiant du modèle, tel que /gulliver/v1/models le liste."
      }
     ],
     "responses": {
@@ -1829,7 +1829,7 @@
     }
    }
   },
-  "/albireo/v1/models/{id}/verify": {
+  "/gulliver/v1/models/{id}/verify": {
    "post": {
     "tags": [
      "Administration"
@@ -1844,7 +1844,7 @@
        "type": "string",
        "pattern": "^[A-Za-z0-9._-]+$"
       },
-      "description": "Identifiant du modèle, tel que /albireo/v1/models le liste."
+      "description": "Identifiant du modèle, tel que /gulliver/v1/models le liste."
      }
     ],
     "responses": {
@@ -1861,7 +1861,7 @@
     }
    }
   },
-  "/albireo/v1/models/{id}": {
+  "/gulliver/v1/models/{id}": {
    "delete": {
     "tags": [
      "Administration"
@@ -1877,7 +1877,7 @@
        "type": "string",
        "pattern": "^[A-Za-z0-9._-]+$"
       },
-      "description": "Identifiant du modèle, tel que /albireo/v1/models le liste."
+      "description": "Identifiant du modèle, tel que /gulliver/v1/models le liste."
      }
     ],
     "responses": {
@@ -1920,13 +1920,13 @@
     }
    }
   },
-  "/albireo/v1/import": {
+  "/gulliver/v1/import": {
    "post": {
     "tags": [
      "Administration"
     ],
     "summary": "Importe un lot hors ligne, ou le contenu du dossier d'import",
-    "description": "Pour un ordinateur sans réseau : une carte mémoire ou un disque apporté à la machine. Le service lit avec ses propres droits, si bien qu'il accepte deux sortes de chemins : un lot hors ligne sur un disque local (un dossier qui contient un catalog.json), dont il ne lit que le catalogue et les modèles qu'il liste, par leurs noms, tailles et hachages ; et un dossier ou un fichier du dossier d'import du dossier des données. Chaque fichier est lu sans passer par aucun lien. Un fichier de modèle de l'utilisateur s'envoie par /albireo/v1/models/upload. Un catalogue plus ancien ne remplace jamais un plus récent, et un modèle déjà installé est listé sous already.",
+    "description": "Pour un ordinateur sans réseau : une carte mémoire ou un disque apporté à la machine. Le service lit avec ses propres droits, si bien qu'il accepte deux sortes de chemins : un lot hors ligne sur un disque local (un dossier qui contient un catalog.json), dont il ne lit que le catalogue et les modèles qu'il liste, par leurs noms, tailles et hachages ; et un dossier ou un fichier du dossier d'import du dossier des données. Chaque fichier est lu sans passer par aucun lien. Un fichier de modèle de l'utilisateur s'envoie par /gulliver/v1/models/upload. Un catalogue plus ancien ne remplace jamais un plus récent, et un modèle déjà installé est listé sous already.",
     "requestBody": {
      "required": true,
      "content": {
@@ -2016,12 +2016,12 @@
     }
    }
   },
-  "/albireo/v1/models/import": {
+  "/gulliver/v1/models/import": {
    "post": {
     "tags": [
      "Administration"
     ],
-    "summary": "Identique à /albireo/v1/import",
+    "summary": "Identique à /gulliver/v1/import",
     "requestBody": {
      "required": true,
      "content": {
@@ -2087,13 +2087,13 @@
     }
    }
   },
-  "/albireo/v1/speed": {
+  "/gulliver/v1/speed": {
    "get": {
     "tags": [
      "Service"
     ],
     "summary": "Le débit du moteur en direct",
-    "description": "Les tokens que le moteur a lus (prompts) et écrits (réponses) sur les cinq dernières secondes, par seconde, et les requêtes en cours et en attente ; zéro une fois le moteur au repos. Bien plus léger que /albireo/v1/status, pour un affichage rafraîchi chaque seconde.",
+    "description": "Les tokens que le moteur a lus (prompts) et écrits (réponses) sur les cinq dernières secondes, par seconde, et les requêtes en cours et en attente ; zéro une fois le moteur au repos. Bien plus léger que /gulliver/v1/status, pour un affichage rafraîchi chaque seconde.",
     "responses": {
      "200": {
       "description": "Le débit",
@@ -2122,7 +2122,7 @@
     }
    }
   },
-  "/albireo/v1/pseudalis": {
+  "/gulliver/v1/pseudalis": {
    "get": {
     "tags": [
      "Service"
@@ -2160,7 +2160,7 @@
     }
    }
   },
-  "/albireo/v1/carnet": {
+  "/gulliver/v1/carnet": {
    "get": {
     "tags": [
      "Service"
@@ -2181,7 +2181,7 @@
     }
    }
   },
-  "/albireo/v1/carnet/file": {
+  "/gulliver/v1/carnet/file": {
    "get": {
     "tags": [
      "Service"
@@ -2223,7 +2223,7 @@
     }
    }
   },
-  "/albireo/v1/library": {
+  "/gulliver/v1/library": {
    "get": {
     "tags": [
      "Service"
@@ -2317,13 +2317,13 @@
     }
    }
   },
-  "/albireo/v1/library/load": {
+  "/gulliver/v1/library/load": {
    "post": {
     "tags": [
      "Administration"
     ],
     "summary": "Charge dans Albireo un fichier de la bibliothèque du Mac",
-    "description": "Importe le fichier, avec le projecteur que /albireo/v1/library lui apparie, sans le réseau et sans les déplacer : la copie est un clone APFS sur le même volume.",
+    "description": "Importe le fichier, avec le projecteur que /gulliver/v1/library lui apparie, sans le réseau et sans les déplacer : la copie est un clone APFS sur le même volume.",
     "requestBody": {
      "required": true,
      "content": {
@@ -2395,7 +2395,7 @@
     }
    }
   },
-  "/albireo/v1/models/upload": {
+  "/gulliver/v1/models/upload": {
    "post": {
     "tags": [
      "Administration"
@@ -2467,7 +2467,7 @@
     }
    }
   },
-  "/albireo/v1/settings": {
+  "/gulliver/v1/settings": {
    "get": {
     "tags": [
      "Administration"
@@ -2546,7 +2546,7 @@
     }
    }
   },
-  "/albireo/v1/hub/search": {
+  "/gulliver/v1/hub/search": {
    "get": {
     "tags": [
      "Hugging Face"
@@ -2608,7 +2608,7 @@
     }
    }
   },
-  "/albireo/v1/hub/files": {
+  "/gulliver/v1/hub/files": {
    "get": {
     "tags": [
      "Hugging Face"
@@ -2671,7 +2671,7 @@
     }
    }
   },
-  "/albireo/v1/hub/recent": {
+  "/gulliver/v1/hub/recent": {
    "get": {
     "tags": [
      "Hugging Face"
@@ -2691,7 +2691,7 @@
     }
    }
   },
-  "/albireo/v1/hub/add": {
+  "/gulliver/v1/hub/add": {
    "post": {
     "tags": [
      "Hugging Face"
@@ -2748,7 +2748,7 @@
     }
    }
   },
-  "/albireo/v1/settings/profiles": {
+  "/gulliver/v1/settings/profiles": {
    "get": {
     "tags": [
      "Administration"
@@ -2772,7 +2772,7 @@
      "Administration"
     ],
     "summary": "Enregistre les réglages actuels sous une étiquette",
-    "description": "Les réglages que change l'application web ; une étiquette enregistrée à nouveau est remplacée. Les restaurer, c'est faire un PUT de leurs settings vers /albireo/v1/settings.",
+    "description": "Les réglages que change l'application web ; une étiquette enregistrée à nouveau est remplacée. Les restaurer, c'est faire un PUT de leurs settings vers /gulliver/v1/settings.",
     "requestBody": {
      "required": true,
      "content": {
@@ -2863,7 +2863,7 @@
     }
    }
   },
-  "/albireo/v1/documents": {
+  "/gulliver/v1/documents": {
    "get": {
     "tags": [
      "Documents"
@@ -2935,7 +2935,7 @@
     }
    }
   },
-  "/albireo/v1/documents/{name}": {
+  "/gulliver/v1/documents/{name}": {
    "get": {
     "tags": [
      "Documents"
@@ -3014,7 +3014,7 @@
     }
    }
   },
-  "/albireo/v1/restart": {
+  "/gulliver/v1/restart": {
    "post": {
     "tags": [
      "Administration"
@@ -3042,7 +3042,7 @@
     }
    }
   },
-  "/albireo/v1/engines/benchmark": {
+  "/gulliver/v1/engines/benchmark": {
    "post": {
     "tags": [
      "Administration"
@@ -3084,7 +3084,7 @@
     }
    }
   },
-  "/albireo/v1/logs": {
+  "/gulliver/v1/logs": {
    "get": {
     "tags": [
      "Administration"
@@ -3393,8 +3393,8 @@
       "properties": {
        "model": {
         "type": "string",
-        "description": "Un identifiant de modèle, une fonction (albireo-general, albireo-code, albireo-security), albireo-background, albireo-relay ou auto. Une fonction sans modèle propre est servie par le modèle général ; albireo-background, le travail fait en arrière-plan (titres, résumés, mémoire), par le modèle livré avec Albireo, sinon par le général ; albireo-relay, une fois le relais prêt, par le moteur extérieur du relais (/albireo/v1/relay), qui ne prend ni outil, ni son, ni d'autre choix que n = 1.",
-        "example": "albireo-general"
+        "description": "Un identifiant de modèle, une fonction (gulliver-general, gulliver-code, gulliver-security), gulliver-background, gulliver-relay ou auto. Une fonction sans modèle propre est servie par le modèle général ; gulliver-background, le travail fait en arrière-plan (titres, résumés, mémoire), par le modèle livré avec Albireo, sinon par le général ; gulliver-relay, une fois le relais prêt, par le moteur extérieur du relais (/gulliver/v1/relay), qui ne prend ni outil, ni son, ni d'autre choix que n = 1.",
+        "example": "gulliver-general"
        },
        "messages": {
         "type": "array",
@@ -3449,17 +3449,17 @@
          "xhigh",
          "max"
         ],
-        "description": "none désactive le raisonnement ; low lui donne le budget d'un raisonnement court, high lève sa borne par défaut (reasoning_budget). Pour albireo-relay, le niveau d'effort du modèle extérieur parmi ceux qu'il prend (efforts dans /albireo/v1/relay), le sien sans niveau donné."
+        "description": "none désactive le raisonnement ; low lui donne le budget d'un raisonnement court, high lève sa borne par défaut (reasoning_budget). Pour gulliver-relay, le niveau d'effort du modèle extérieur parmi ceux qu'il prend (efforts dans /gulliver/v1/relay), le sien sans niveau donné."
        },
        "web_search": {
         "type": "boolean",
-        "description": "albireo-relay avec Claude : le modèle extérieur cherche sur le web, cinq recherches au plus, qu'Anthropic facture ; ses requêtes viennent avec le raisonnement, ses sources en liens après les textes qui les citent, et usage donne web_search_requests. L'accès au web des réglages doit le permettre."
+        "description": "gulliver-relay avec Claude : le modèle extérieur cherche sur le web, cinq recherches au plus, qu'Anthropic facture ; ses requêtes viennent avec le raisonnement, ses sources en liens après les textes qui les citent, et usage donne web_search_requests. L'accès au web des réglages doit le permettre."
        },
        "reasoning_budget": {
         "type": "integer",
         "minimum": -1,
         "nullable": true,
-        "description": "Les tokens que le raisonnement peut prendre : au-delà, le moteur le termine par une phrase qui demande au modèle de répondre à partir de ce qu'il a pensé, puis par la marque qui ferme le raisonnement ; cette fin compte parmi les tokens de la réponse et reste hors de reasoning_content. -1 ou null ne fixe aucune limite, 0 termine le raisonnement aussitôt. Sans lui, le raisonnement prend au plus la moitié de max_tokens (la moitié de la place que le contexte laisse à la réponse quand la requête ne donne pas de max_tokens), 32768 tokens au plus, pour que la réponse garde de la place après lui, et l'effort high ne fixe aucune limite ; un modèle qui raisonne toujours, à qui l'on ne demande pas de raisonnement, voit son raisonnement terminé aussitôt, et l'effort low lui donne 512 tokens, 256 pour le travail en arrière-plan (albireo-background). La réponse d'un modèle à qui l'on ne demande pas de raisonnement reçoit max_tokens une fois son raisonnement terminé, et les séquences d'arrêt ne s'appliquent qu'à cette réponse. Un raisonnement dont les 384 derniers tokens répètent, pour neuf dixièmes d'entre eux, des passages de 16 tokens déjà écrits deux fois se termine de la même façon."
+        "description": "Les tokens que le raisonnement peut prendre : au-delà, le moteur le termine par une phrase qui demande au modèle de répondre à partir de ce qu'il a pensé, puis par la marque qui ferme le raisonnement ; cette fin compte parmi les tokens de la réponse et reste hors de reasoning_content. -1 ou null ne fixe aucune limite, 0 termine le raisonnement aussitôt. Sans lui, le raisonnement prend au plus la moitié de max_tokens (la moitié de la place que le contexte laisse à la réponse quand la requête ne donne pas de max_tokens), 32768 tokens au plus, pour que la réponse garde de la place après lui, et l'effort high ne fixe aucune limite ; un modèle qui raisonne toujours, à qui l'on ne demande pas de raisonnement, voit son raisonnement terminé aussitôt, et l'effort low lui donne 512 tokens, 256 pour le travail en arrière-plan (gulliver-background). La réponse d'un modèle à qui l'on ne demande pas de raisonnement reçoit max_tokens une fois son raisonnement terminé, et les séquences d'arrêt ne s'appliquent qu'à cette réponse. Un raisonnement dont les 384 derniers tokens répètent, pour neuf dixièmes d'entre eux, des passages de 16 tokens déjà écrits deux fois se termine de la même façon."
        },
        "chat_template_kwargs": {
         "type": "object",
@@ -3479,7 +3479,7 @@
      }
     ],
     "example": {
-     "model": "albireo-general",
+     "model": "gulliver-general",
      "messages": [
       {
        "role": "user",
@@ -3695,7 +3695,7 @@
       "properties": {
        "model": {
         "type": "string",
-        "example": "albireo-general"
+        "example": "gulliver-general"
        },
        "prompt": {
         "type": "string"
@@ -3749,8 +3749,8 @@
     "properties": {
      "model": {
       "type": "string",
-      "description": "albireo-embedding, auto, ou l'identifiant d'un modèle d'embedding actif.",
-      "example": "albireo-embedding"
+      "description": "gulliver-embedding, auto, ou l'identifiant d'un modèle d'embedding actif.",
+      "example": "gulliver-embedding"
      },
      "input": {
       "description": "Un texte, une liste de textes, ou des listes de tokens.",
@@ -3802,7 +3802,7 @@
      }
     },
     "example": {
-     "model": "albireo-embedding",
+     "model": "gulliver-embedding",
      "input": [
       "Le service tourne sur cet ordinateur.",
       "Où le service tourne-t-il ?"
@@ -3987,7 +3987,7 @@
      "web_access": {
       "type": "boolean",
       "default": true,
-      "description": "L'accès au web du bouton Web, de /albireo/v1/web/search et de /albireo/v1/web/fetch ; false le coupe."
+      "description": "L'accès au web du bouton Web, de /gulliver/v1/web/search et de /gulliver/v1/web/fetch ; false le coupe."
      },
      "lan": {
       "type": "boolean",
@@ -4031,7 +4031,7 @@
      },
      "library_dir": {
       "type": "string",
-      "description": "La bibliothèque du Mac : un dossier de fichiers GGUF que /albireo/v1/library liste et dans lequel le service n'écrit jamais, un dossier existant désigné par son chemin complet, ou vide pour le dossier de la bibliothèque dans les données."
+      "description": "La bibliothèque du Mac : un dossier de fichiers GGUF que /gulliver/v1/library liste et dans lequel le service n'écrit jamais, un dossier existant désigné par son chemin complet, ou vide pour le dossier de la bibliothèque dans les données."
      },
      "reserve_gb": {
       "type": "integer",
@@ -4047,7 +4047,7 @@
        "none"
       ],
       "default": "wikipedia",
-      "description": "Le fournisseur de /albireo/v1/web/search : wikipedia, l'interface REST de Wikipedia ; ou none, qui coupe la recherche tandis que /albireo/v1/web/fetch reste disponible. Un settings.json d'une version antérieure qui nomme un autre fournisseur est lu comme wikipedia."
+      "description": "Le fournisseur de /gulliver/v1/web/search : wikipedia, l'interface REST de Wikipedia ; ou none, qui coupe la recherche tandis que /gulliver/v1/web/fetch reste disponible. Un settings.json d'une version antérieure qui nomme un autre fournisseur est lu comme wikipedia."
      },
      "relay": {
       "$ref": "#/components/schemas/RelaySettings"
@@ -4056,7 +4056,7 @@
    },
    "RelaySettings": {
     "type": "object",
-    "description": "Le relais vers un moteur extérieur, le modèle albireo-relay. Un changement donne les membres qu'il change ; les autres restent.",
+    "description": "Le relais vers un moteur extérieur, le modèle gulliver-relay. Un changement donne les membres qu'il change ; les autres restent.",
     "properties": {
      "enabled": {
       "type": "boolean",

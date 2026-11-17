@@ -181,7 +181,7 @@ async function fitContext(c, build, toolDefs, reserve, signal, onCompact, model,
   // est demandée.
   const answer = c.messages[c.messages.length - 1];
   let spare = answer && answer.role === 'assistant' && (answer.steps || []).length > 1 ? 0.25 : 0;
-  const counted = model || 'albireo-' + chatRole(c);
+  const counted = model || 'gulliver-' + chatRole(c);
   for (let attempt = 0; attempt < 12; ++attempt) {
     const list = build(cuts);
     // Les images que le service n'a pas encore mesurées pour ce modèle, une fois.
@@ -452,7 +452,7 @@ export async function runTurn(c, abort, turn) {
       const fitted = await fitContext(c, build, stepTools, answerReserve(caps, reasoning), signal, () => {
         turn.compacting = true;
         scheduleRender(c);
-      }, 'albireo-' + role, cuts);
+      }, 'gulliver-' + role, cuts);
       turn.compacting = false;
       /*
           Une question qui ne tient pas à côté des documents du projet lus en entier les fait chercher, dans cette
@@ -477,7 +477,7 @@ export async function runTurn(c, abort, turn) {
         turn.contextTokens = fitted.context;
         turn.promptTokens = fitted.tokens;
       }
-      const body = { model: 'albireo-' + role, messages: fitted.messages, reasoning };
+      const body = { model: 'gulliver-' + role, messages: fitted.messages, reasoning };
       if (stepTools) body.tools = stepTools;
       // Le Web d'une discussion relayée : le modèle extérieur cherche lui-même (Claude), sans les outils de la page.
       if (set.webSearch) body.web_search = true;

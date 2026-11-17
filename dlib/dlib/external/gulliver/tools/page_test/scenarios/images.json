@@ -1,7 +1,7 @@
 [
  {
   "name": "use the 4B",
-  "eval": "const r=await fetch('/albireo/v1/models/qwen3-vl-4b-test/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:'general'})}); return r.status"
+  "eval": "const r=await fetch('/gulliver/v1/models/qwen3-vl-4b-test/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:'general'})}); return r.status"
  },
  {
   "wait": 15000
@@ -68,7 +68,7 @@
  },
  {
   "name": "back to the 2B",
-  "eval": "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); const r=await fetch('/albireo/v1/models/qwen3-vl-2b-test/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:'general'})}); return r.status"
+  "eval": "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); const r=await fetch('/gulliver/v1/models/qwen3-vl-2b-test/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:'general'})}); return r.status"
  },
  {
   "wait": 8000

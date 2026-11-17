@@ -32,7 +32,7 @@ function copyToMac(f) {
   const key = [f.name, f.size, f.lastModified].join('|');
   if (sentToMac.has(key)) return;
   sentToMac.add(key);
-  fetch('/albireo/v1/documents?name=' + encodeURIComponent(f.name), {
+  fetch('/gulliver/v1/documents?name=' + encodeURIComponent(f.name), {
     method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f
   }).then(async (r) => {
     if (!r.ok) {
@@ -69,7 +69,7 @@ function macDocumentsDialog(onFiles) {
     const refresh = async () => {
       let r;
       try {
-        r = await api.getJSON('/albireo/v1/documents');
+        r = await api.getJSON('/gulliver/v1/documents');
       } catch (e) {
         list.replaceChildren(h('p', { class: 'help' }, e.message));
         return;
@@ -92,7 +92,7 @@ function macDocumentsDialog(onFiles) {
           iconButton('trash', t('macDocsDelete'), async (e) => {
             e.preventDefault();
             if (!await confirmDialog(t('macDocsDelete'), d.name)) return;
-            await fetch('/albireo/v1/documents/' + encodeURIComponent(d.name), { method: 'DELETE' });
+            await fetch('/gulliver/v1/documents/' + encodeURIComponent(d.name), { method: 'DELETE' });
             picked.delete(d.name);
             add.disabled = !picked.size;
             refresh();
@@ -104,7 +104,7 @@ function macDocumentsDialog(onFiles) {
       sendInput.value = '';
       for (const f of files) {
         try {
-          const r = await fetch('/albireo/v1/documents?name=' + encodeURIComponent(f.name), {
+          const r = await fetch('/gulliver/v1/documents?name=' + encodeURIComponent(f.name), {
             method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f
           });
           if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
@@ -120,7 +120,7 @@ function macDocumentsDialog(onFiles) {
       const files = [];
       for (const name of picked) {
         try {
-          const r = await fetch('/albireo/v1/documents/' + encodeURIComponent(name), { cache: 'no-store' });
+          const r = await fetch('/gulliver/v1/documents/' + encodeURIComponent(name), { cache: 'no-store' });
           if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
           const blob = await r.blob();
           const f = new File([blob], name, { type: blob.type });

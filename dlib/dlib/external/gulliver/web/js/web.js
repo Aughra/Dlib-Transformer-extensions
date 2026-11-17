@@ -3,8 +3,8 @@
 
 /*
     Les outils web du mode agent, que le bouton Web de la zone de saisie donne au modèle : web_search, qui cherche
-    dans Wikipédia par le service (POST /albireo/v1/web/search), et fetch_page, qui lit une page par le service
-    (POST /albireo/v1/web/fetch) et transforme ses octets en texte : le HTML par un document inerte de DOMParser, qui
+    dans Wikipédia par le service (POST /gulliver/v1/web/search), et fetch_page, qui lit une page par le service
+    (POST /gulliver/v1/web/fetch) et transforme ses octets en texte : le HTML par un document inerte de DOMParser, qui
     n'exécute aucun script, ne charge aucune image et n'entre jamais dans la page ; le PDF par le lecteur des
     documents ; le JSON, le XML et le texte brut tels quels.  Le modèle reçoit une page par parties de sliceChars
     caractères, et le texte de chaque page reste en mémoire pour sa discussion, pour que les parties suivantes ne
@@ -422,7 +422,7 @@ function pdfProblem(e) {
   return 'The text of this PDF file cannot be read: ' + (code || String(e));
 }
 
-// La page d'une réponse de /albireo/v1/web/fetch : {final, status, type, title, text, links, truncated}.
+// La page d'une réponse de /gulliver/v1/web/fetch : {final, status, type, title, text, links, truncated}.
 async function pageOf(r) {
   const bytes = bytesOf(r.data);
   const type = String(r.content_type || '');
@@ -549,11 +549,11 @@ async function readPage(id, key, language, signal) {
   if (kept) return kept;
   let r;
   try {
-    r = await api.postJSON('/albireo/v1/web/fetch', { url: key, language }, signal);
+    r = await api.postJSON('/gulliver/v1/web/fetch', { url: key, language }, signal);
   } catch (e) {
     if (e && e.code === 'busy' && !(signal && signal.aborted)) {
       await pause(1000 * Math.min(Math.max(Number(e.retryAfter) || 1, 1), 5), signal);
-      r = await api.postJSON('/albireo/v1/web/fetch', { url: key, language }, signal);
+      r = await api.postJSON('/gulliver/v1/web/fetch', { url: key, language }, signal);
     } else {
       throw e;
     }
@@ -608,7 +608,7 @@ async function webSearch(args, context) {
   const n = Math.min(Math.max(parseInt(args.count, 10) || 5, 1), 10);
   let r;
   try {
-    r = await api.postJSON('/albireo/v1/web/search', { query, count: n, language: context.language }, context.signal);
+    r = await api.postJSON('/gulliver/v1/web/search', { query, count: n, language: context.language }, context.signal);
   } catch (e) {
     return failure(e, 'The search');
   }
@@ -617,7 +617,7 @@ async function webSearch(args, context) {
   const language = String(context.language || 'en');
   if (results.length < Math.min(3, n) && !/^en(-|$)/i.test(language)) {
     try {
-      const more = await api.postJSON('/albireo/v1/web/search', { query, count: n, language: 'en' }, context.signal);
+      const more = await api.postJSON('/gulliver/v1/web/search', { query, count: n, language: 'en' }, context.signal);
       const seen = new Set(results.map((x) => addressKey(x.url)));
       for (const x of Array.isArray(more.results) ? more.results : []) {
         const k = x && addressKey(x.url);
@@ -662,7 +662,7 @@ async function fetchPage(args, context) {
   if (!page) {
     let r;
     try {
-      r = await api.postJSON('/albireo/v1/web/fetch', { url: key, language: context.language }, context.signal);
+      r = await api.postJSON('/gulliver/v1/web/fetch', { url: key, language: context.language }, context.signal);
     } catch (e) {
       return failure(e, 'The reading of ' + key);
     }

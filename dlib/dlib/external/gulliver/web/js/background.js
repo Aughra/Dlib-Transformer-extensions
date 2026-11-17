@@ -195,7 +195,7 @@ export async function nameConversation(c) {
   if (naming.has(c.id)) return;
   naming.add(c.id);
   try {
-    await exclusive('albireo-title-' + c.id, async () => {
+    await exclusive('gulliver-title-' + c.id, async () => {
       // Les secondes que le dernier refus du service a demandé d'attendre (Retry-After), que la pause suivante dure au
       // moins.
       let asked = 0;
@@ -265,7 +265,7 @@ export function compactLater(c) {
   if (!c || !c.messages.length || compactions.has(c.id) || !roleModel(c.role)) return;
   const abort = new AbortController();
   const job = { done: null, abort, always: false };
-  const work = () => exclusive('albireo-compact-' + c.id, () => compactInBackground(c, abort.signal));
+  const work = () => exclusive('gulliver-compact-' + c.id, () => compactInBackground(c, abort.signal));
   job.done = Promise.resolve().then(work).catch(() => {}).finally(() => {
     if (compactions.get(c.id) === job) compactions.delete(c.id);
   });
@@ -282,7 +282,7 @@ export function compactLater(c) {
 async function compactInBackground(c, signal) {
   const view = Object.assign({}, c, { messages: c.messages.slice() });
   const role = view.role;
-  const model = 'albireo-' + role;
+  const model = 'gulliver-' + role;
   const caps = roleCapabilities(role);
   const set = toolSet(view, caps);
   const toolDefs = set.definitions;

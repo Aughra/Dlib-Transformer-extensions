@@ -27,22 +27,22 @@ window.addEventListener('load', function () {
 
   const base = location.origin + '/v1';
   const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  let authority = '<dossier des données>/certificates/albireo-authority.crt';
+  let authority = '<dossier des données>/certificates/gulliver-authority.crt';
   const samples = {
     curl: function () {
       return 'curl ' + (location.protocol === 'https:' ? '--cacert "' + authority + '" \\\n  ' : '') + base +
         '/chat/completions \\\n  -H "Content-Type: application/json" \\\n' +
-        '  -d \'{"model": "albireo-general", "messages": [{"role": "user", "content": "Bonjour !"}]}\'';
+        '  -d \'{"model": "gulliver-general", "messages": [{"role": "user", "content": "Bonjour !"}]}\'';
     },
     Python: function () {
       return '# pip install openai\nimport httpx\nfrom openai import OpenAI\n\nclient = OpenAI(base_url="' + base +
-        '", api_key="albireo"' + (location.protocol === 'https:' ? ',\n                http_client=httpx.Client(verify="' +
-        authority + '")' : '') + ')\nanswer = client.chat.completions.create(\n    model="albireo-general",\n' +
+        '", api_key="gulliver"' + (location.protocol === 'https:' ? ',\n                http_client=httpx.Client(verify="' +
+        authority + '")' : '') + ')\nanswer = client.chat.completions.create(\n    model="gulliver-general",\n' +
         '    messages=[{"role": "user", "content": "Bonjour !"}])\nprint(answer.choices[0].message.content)';
     },
     JavaScript: function () {
       return 'const r = await fetch("' + base + '/chat/completions", {\n  method: "POST",\n' +
-        '  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({ model: "albireo-general",\n' +
+        '  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({ model: "gulliver-general",\n' +
         '    messages: [{ role: "user", content: "Bonjour !" }] })\n});\nconsole.log((await r.json()).choices[0].message.content);';
     }
   };
@@ -76,9 +76,9 @@ window.addEventListener('load', function () {
     s.appendChild(b);
     document.getElementById('facts').appendChild(s);
   }
-  fetch('../albireo/v1/status', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) {
+  fetch('../gulliver/v1/status', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) {
     document.getElementById('version').textContent = s.version ? 'version ' + s.version : '';
-    if (s.data_dir) authority = s.data_dir + '/certificates/albireo-authority.crt';
+    if (s.data_dir) authority = s.data_dir + '/certificates/gulliver-authority.crt';
     show();
     fact('Adresse', base);
     if (s.loaded_models && s.loaded_models.length) fact('Modèles chargés', s.loaded_models.length);
@@ -87,7 +87,7 @@ window.addEventListener('load', function () {
 
   // Pseudalis sur ce Mac : sa propre interface, quand il tourne.
   if (local) {
-    fetch('../albireo/v1/pseudalis', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (p) {
+    fetch('../gulliver/v1/pseudalis', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (p) {
       if (!p.running || !p.port) return;
       const link = document.getElementById('switch');
       link.href = 'https://localhost:' + p.port + '/docs/';

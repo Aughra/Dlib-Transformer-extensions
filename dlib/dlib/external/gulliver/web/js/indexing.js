@@ -304,7 +304,7 @@ async function updateProjectImage(projectId, imageId, change) {
     et son verrou soient libérés.
 */
 async function describeImage(projectId, imageId) {
-  await exclusive('albireo-describe-' + imageId, async () => {
+  await exclusive('gulliver-describe-' + imageId, async () => {
     const p = projectById(projectId);
     const img = p && (p.images || []).find((x) => x.id === imageId);
     if (!img) return;

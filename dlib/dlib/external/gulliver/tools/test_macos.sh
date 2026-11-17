@@ -348,17 +348,17 @@ offline_reserve_test() {
   chmod 600 "$folder/catalog.json" || return 1
   payload=$(perl -MJSON::PP -e 'print encode_json({path => shift})' "$folder") || return 1
   reply=$(curl -sk --max-time 10 -H "Content-Type: application/json" -d "$payload" \
-    "https://localhost:$PORT/albireo/v1/import") || return 1
+    "https://localhost:$PORT/gulliver/v1/import") || return 1
   if ! printf '%s' "$reply" | perl -MJSON::PP -e '
     my $j = decode_json(do { local $/; <STDIN> });
     exit !(ref($j->{catalog}) eq "HASH" && ($j->{catalog}{models} || 0) == 1);
   '; then echo "catalog import failed: $reply"; return 1; fi
 
   code=$(curl -sk --max-time 10 -X POST -o "$WORK/reserve-start.json" -w '%{http_code}' \
-    "https://localhost:$PORT/albireo/v1/models/offline-reserve-test/download") || return 1
+    "https://localhost:$PORT/gulliver/v1/models/offline-reserve-test/download") || return 1
   if [ "$code" != 202 ]; then echo "restoration refused ($code): $(cat "$WORK/reserve-start.json")"; return 1; fi
   for i in $(seq 1 200); do
-    reply=$(curl -sk --max-time 5 "https://localhost:$PORT/albireo/v1/models") || return 1
+    reply=$(curl -sk --max-time 5 "https://localhost:$PORT/gulliver/v1/models") || return 1
     if printf '%s' "$reply" | perl -MJSON::PP -e '
       my $j = decode_json(do { local $/; <STDIN> });
       my ($m) = grep { ($_->{id} || "") eq "offline-reserve-test" } @{$j->{models} || []};
@@ -376,10 +376,10 @@ offline_reserve_test() {
   cmp -s "$sample" "$path" || { echo "restored bytes differ"; return 1; }
 
   code=$(curl -sk --max-time 10 -X DELETE -o "$WORK/reserve-delete.json" -w '%{http_code}' \
-    "https://localhost:$PORT/albireo/v1/models/offline-reserve-test") || return 1
+    "https://localhost:$PORT/gulliver/v1/models/offline-reserve-test") || return 1
   if [ "$code" != 200 ]; then echo "model removal failed ($code): $(cat "$WORK/reserve-delete.json")"; return 1; fi
   for i in $(seq 1 200); do
-    reply=$(curl -sk --max-time 5 "https://localhost:$PORT/albireo/v1/models") || return 1
+    reply=$(curl -sk --max-time 5 "https://localhost:$PORT/gulliver/v1/models") || return 1
     if printf '%s' "$reply" | perl -MJSON::PP -e '
       my $j = decode_json(do { local $/; <STDIN> });
       my ($m) = grep { ($_->{id} || "") eq "offline-reserve-test" } @{$j->{models} || []};
@@ -390,10 +390,10 @@ offline_reserve_test() {
   if [ "$removed" != 1 ]; then echo "model removal did not finish: $reply"; return 1; fi
   rm -f "$HOME_DIR/reserve/$sha.gguf" || return 1
   code=$(curl -sk --max-time 10 -X POST -o "$WORK/reserve-missing.json" -w '%{http_code}' \
-    "https://localhost:$PORT/albireo/v1/models/offline-reserve-test/download") || return 1
+    "https://localhost:$PORT/gulliver/v1/models/offline-reserve-test/download") || return 1
   if [ "$code" != 202 ]; then echo "missing reserve refused synchronously ($code)"; return 1; fi
   for i in $(seq 1 200); do
-    reply=$(curl -sk --max-time 5 "https://localhost:$PORT/albireo/v1/models") || return 1
+    reply=$(curl -sk --max-time 5 "https://localhost:$PORT/gulliver/v1/models") || return 1
     if printf '%s' "$reply" | perl -MJSON::PP -e '
       my $j = decode_json(do { local $/; <STDIN> });
       my ($m) = grep { ($_->{id} || "") eq "offline-reserve-test" } @{$j->{models} || []};
@@ -413,10 +413,10 @@ carnet_refusals() {
   for p in '../etc/passwd' 'dlib/dlib/external/gulliver/host/server.cpp' 'docs/../CLAUDE.md' '.git/config' \
       'logs/.hidden.md' '/etc/hosts' 'docs//memo-portage-macos-arm64.md'; do
     code=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' -G --data-urlencode "path=$p" \
-      "https://localhost:$PORT/albireo/v1/carnet/file") || return 1
+      "https://localhost:$PORT/gulliver/v1/carnet/file") || return 1
     [ "$code" = 404 ] && n=$((n + 1))
   done
-  code=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' "https://localhost:$PORT/albireo/v1/carnet/file?path=CLAUDE.md")
+  code=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' "https://localhost:$PORT/gulliver/v1/carnet/file?path=CLAUDE.md")
   echo "refused $n of 7, CLAUDE.md $code"
 }
 
@@ -426,13 +426,13 @@ relay_guard() {
   local body='{"relay":{"enabled":false,"model":"essai"}}' put web rebind lan test mac page
   for i in $(seq 1 50); do curl -s --max-time 1 -o /dev/null http://127.0.0.1:$LAN_PORT/ && break; sleep 0.1; done
   put() { curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X PUT -H 'Content-Type: application/json' -d "$body" "$@"; }
-  web=$(put -k -H 'Origin: https://evil.example' https://localhost:$PORT/albireo/v1/settings)
-  rebind=$(put -k -H "Host: evil.example:$PORT" https://localhost:$PORT/albireo/v1/settings)
-  lan=$(put http://127.0.0.1:$LAN_PORT/albireo/v1/settings)
+  web=$(put -k -H 'Origin: https://evil.example' https://localhost:$PORT/gulliver/v1/settings)
+  rebind=$(put -k -H "Host: evil.example:$PORT" https://localhost:$PORT/gulliver/v1/settings)
+  lan=$(put http://127.0.0.1:$LAN_PORT/gulliver/v1/settings)
   test=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' \
-    http://127.0.0.1:$LAN_PORT/albireo/v1/relay/test)
-  mac=$(put -k https://localhost:$PORT/albireo/v1/settings)
-  page=$(put -k -H "Origin: https://localhost:$PORT" https://localhost:$PORT/albireo/v1/settings)
+    http://127.0.0.1:$LAN_PORT/gulliver/v1/relay/test)
+  mac=$(put -k https://localhost:$PORT/gulliver/v1/settings)
+  page=$(put -k -H "Origin: https://localhost:$PORT" https://localhost:$PORT/gulliver/v1/settings)
   echo "web $web, rebind $rebind, lan $lan, test $test, mac $mac, page $page"
 }
 
@@ -449,26 +449,26 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
   PID=$!
   START=$(now)
   for i in $(seq 1 300); do
-    curl -sk --max-time 1 https://localhost:$PORT/albireo/v1/status -o /dev/null && break
+    curl -sk --max-time 1 https://localhost:$PORT/gulliver/v1/status -o /dev/null && break
     sleep 0.1
   done
-  if curl -sk --max-time 2 https://localhost:$PORT/albireo/v1/status | grep -q '"offline":true'; then
+  if curl -sk --max-time 2 https://localhost:$PORT/gulliver/v1/status | grep -q '"offline":true'; then
     record "service start" PASS "offline, https://localhost:$PORT" "$(elapsed "$START")"
     # Les textes de licence de l'installation, aucun dans un dossier de build, et un nom hors de leur
     # dossier refusé.
-    step "service licenses" '^\[(\]|\{"file")' curl -sk --max-time 5 https://localhost:$PORT/albireo/v1/licenses
+    step "service licenses" '^\[(\]|\{"file")' curl -sk --max-time 5 https://localhost:$PORT/gulliver/v1/licenses
     step "service license refusal" '"code":"invalid_license"' curl -sk --max-time 5 --path-as-is \
-      "https://localhost:$PORT/albireo/v1/licenses/../settings.json"
-    step "service carnet" '"found":true,"sections":\[\{' curl -sk --max-time 5 https://localhost:$PORT/albireo/v1/carnet
+      "https://localhost:$PORT/gulliver/v1/licenses/../settings.json"
+    step "service carnet" '"found":true,"sections":\[\{' curl -sk --max-time 5 https://localhost:$PORT/gulliver/v1/carnet
     step "service carnet refusals" 'refused 7 of 7, CLAUDE.md 200' carnet_refusals
     step "relay settings on the Mac only" 'web 403, rebind 403, lan 403, test 403, mac 200, page 200' relay_guard
     # Un modèle de l'utilisateur n'est pas lu par son chemin : l'application web l'envoie.
     step "service import refusal" '"code":"import_use_upload"' curl -sk --max-time 30 -X POST \
       -H "Content-Type: application/json" -d "{\"path\": \"$MODEL\"}" \
-      https://localhost:$PORT/albireo/v1/import
+      https://localhost:$PORT/gulliver/v1/import
     step "service import" '"imported":\["' curl -sk --max-time 600 -X POST \
       -H "Content-Type: application/octet-stream" -H "Expect:" -T "$MODEL" \
-      "https://localhost:$PORT/albireo/v1/models/upload?name=$(basename "$MODEL")"
+      "https://localhost:$PORT/gulliver/v1/models/upload?name=$(basename "$MODEL")"
     for i in $(seq 1 300); do
       curl -sk --max-time 1 https://localhost:$PORT/v1/models | grep -q albireo-general && break
       sleep 0.2
@@ -480,7 +480,7 @@ if [ -x "$SERVICE" ] && [ -f "$MODEL" ]; then
     step "offline reserve" "local restoration and missing reserve reported" offline_reserve_test
     # Hors ligne, une recherche Hugging Face jamais gardée sur le Mac ne sort pas : 404 hub_not_cached.
     step "hub search kept on the Mac" '"code":"hub_not_cached"' curl -sk --max-time 5 \
-      "https://localhost:$PORT/albireo/v1/hub/search?q=never-searched-$$"
+      "https://localhost:$PORT/gulliver/v1/hub/search?q=never-searched-$$"
     # Le fork n'a plus de lecture à voix haute : la route speech de l'interface OpenAI n'existe plus.
     step "service without speech" "404" curl -sk --max-time 5 -o /dev/null -w "%{http_code}" \
       -H "Content-Type: application/json" -d '{"input": "Bonjour"}' https://localhost:$PORT/v1/audio/speech

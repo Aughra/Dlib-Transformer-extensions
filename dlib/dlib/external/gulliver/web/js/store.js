@@ -9,7 +9,7 @@
     Rien n'est envoyé nulle part ; une discussion incognito n'atteint jamais ce module.
 */
 
-const DB_NAME = 'albireo';
+const DB_NAME = 'gulliver';
 const DB_VERSION = 3;
 let db = null;
 
@@ -435,7 +435,7 @@ export async function releaseLease(key, owner) {
 */
 export async function exportAll() {
   await open();
-  const parts = ['{"format":"albireo-export","version":1,"exported":' + Date.now() + ',"conversations":['];
+  const parts = ['{"format":"gulliver-export","version":1,"exported":' + Date.now() + ',"conversations":['];
   (await allConversations()).forEach((c, i) => parts.push((i ? ',' : '') + JSON.stringify(c)));
   parts.push('],"projects":[');
   (await allProjects()).forEach((p, i) => parts.push((i ? ',' : '') + JSON.stringify(p)));
@@ -523,7 +523,7 @@ function cleanProject(p) {
     de côté.
 */
 export async function importAll(data) {
-  if (!data || data.format !== 'albireo-export' || !Array.isArray(data.conversations)) throw new Error('format');
+  if (!data || data.format !== 'gulliver-export' || !Array.isArray(data.conversations)) throw new Error('format');
   let n = 0, p = 0;
   const ids = [];
   for (const raw of data.conversations) {

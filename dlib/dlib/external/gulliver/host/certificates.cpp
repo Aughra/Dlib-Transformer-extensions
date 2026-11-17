@@ -42,7 +42,7 @@ namespace gulliver
             {
                 mbedtls_entropy_init(&entropy);
                 mbedtls_ctr_drbg_init(&drbg);
-                static const char personal[] = "albireo-certificates";
+                static const char personal[] = "gulliver-certificates";
                 ok = mbedtls_ctr_drbg_seed(&drbg, mbedtls_entropy_func, &entropy,
                     reinterpret_cast<const unsigned char*>(personal), sizeof(personal) - 1) == 0;
             }
@@ -314,10 +314,10 @@ namespace gulliver
     certificate_files certificate_paths(const std::string& dir)
     {
         certificate_files f;
-        f.ca_cert = join_path(dir, "albireo-authority.crt");
-        f.ca_key = join_path(dir, "albireo-authority.key");
-        f.server_cert = join_path(dir, "albireo-server.crt");
-        f.plain_key = join_path(dir, "albireo-server.key");
+        f.ca_cert = join_path(dir, "gulliver-authority.crt");
+        f.ca_key = join_path(dir, "gulliver-authority.key");
+        f.server_cert = join_path(dir, "gulliver-server.crt");
+        f.plain_key = join_path(dir, "gulliver-server.key");
         f.server_key = f.plain_key;
         return f;
     }

@@ -247,7 +247,7 @@ function dataTab(body, close) {
         class: 'button', type: 'button', html: icon('download') + '<span>' + escapeHtml(t('exportAll')) + '</span>',
         onclick: async () => {
           try {
-            download('albireo-' + new Date().toISOString().slice(0, 10) + '.json', await store.exportAll(),
+            download('gulliver-' + new Date().toISOString().slice(0, 10) + '.json', await store.exportAll(),
               'application/json');
           } catch (e) {
             // L'exportation ne lit que la base du navigateur : l'erreur est celle du navigateur, telle quelle.
@@ -454,7 +454,7 @@ let licensesSequence = 0;
 
 // Le rôle et la licence de chaque texte du dossier des licences, par son fichier.
 const programTexts = {
-  'albireo.txt': ['albireo', 'Boost Software License 1.0'], 'dlib.txt': ['dlib', 'Boost Software License 1.0'],
+  'gulliver.txt': ['gulliver', 'Boost Software License 1.0'], 'dlib.txt': ['dlib', 'Boost Software License 1.0'],
   'mbedtls.txt': ['mbedtls', 'Apache License 2.0 or GPL 2.0 or later'], 'cpp-httplib.txt': ['httplib', 'MIT License'],
   'sqlite.txt': ['sqlite', null],
   'libpng.txt': ['libpng', 'PNG Reference Library License 2'], 'libjpeg.txt': ['libjpeg', 'IJG License']
@@ -513,7 +513,7 @@ export async function renderLicenses() {
     h('div', { class: 'empty-note' }, t('licenseLoading'))));
   const [web, programs, models] = await Promise.all([
     api.getJSON('/vendor/components.json').catch(() => null),
-    api.getJSON('/albireo/v1/licenses').catch(() => null),
+    api.getJSON('/gulliver/v1/licenses').catch(() => null),
     api.models(language()).catch(() => null)
   ]);
   if (sequence !== licensesSequence || state.view !== 'licenses') return;
@@ -538,7 +538,7 @@ export async function renderLicenses() {
     const [id, license] = programTexts[p.file] || ['runtime', '-'];
     programRows.push(licenseRow([['lic-name', p.name || p.file], ['lic-version', p.version || '-'],
       ['lic-role', t('program_' + id)], ['lic-license', license === null ? t('licensePublicDomain') : license]],
-    () => licenseText('/albireo/v1/licenses/' + encodeURIComponent(p.file)).then((text) => [[p.file, text]])));
+    () => licenseText('/gulliver/v1/licenses/' + encodeURIComponent(p.file)).then((text) => [[p.file, text]])));
   }
   if (programRows.length) programRows.unshift(licenseHead(columns));
 

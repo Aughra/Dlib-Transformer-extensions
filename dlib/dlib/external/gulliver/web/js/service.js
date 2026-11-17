@@ -525,7 +525,7 @@ const items = {
       "les routes qui ont besoin du réseau (refuse_offline : 409, code offline) et ferme " +
       "l’accès web (403, code offline). Les restaurations de la réserve vérifient taille et SHA-256, sans aucun repli " +
       "réseau, même si le réglage change pendant le travail. Le dossier d’import et la bibliothèque du Mac " +
-      "(GET /albireo/v1/library) restent lus. Remis à faux, http_restore() " +
+      "(GET /gulliver/v1/library) restent lus. Remis à faux, http_restore() " +
       "rouvre les transferts.",
     marmot: "C’est le mode avion de ton téléphone, mais pour Albireo. Tout ce qui est déjà sur le Mac marche toujours ; " +
       "seulement, plus rien ne part vers Internet, et rien n’en vient.",
@@ -542,7 +542,7 @@ const items = {
     cons: ['Les mots de ta recherche partent vers le site cherché.', 'Plus lent : il faut télécharger puis lire les pages.'],
     normal: "Un modèle ne connaît que ce qu’il a appris jusqu’à une certaine date. Avec le bouton Web, il peut chercher " +
       "et lire des pages, puis répondre en citant ce qu’il a lu. Coupé, il répond seulement avec ce qu’il sait déjà.",
-    owl: "Routes POST /albireo/v1/web/search (1 à 10 résultats, http et https seulement) et /albireo/v1/web/fetch " +
+    owl: "Routes POST /gulliver/v1/web/search (1 à 10 résultats, http et https seulement) et /gulliver/v1/web/fetch " +
       "(octets de la page en base64, adresses publiques seulement : les adresses locales et privées sont refusées pour " +
       "éviter de servir de relais vers le réseau de la maison). web_access = false les ferme (403).",
     marmot: "C’est comme autoriser ton assistant à aller à la bibliothèque. Il revient avec des livres récents et te dit " +
@@ -699,10 +699,10 @@ const items = {
       "qui va avec chacun. « Charger dans Albireo » en fait une copie dans le dossier des modèles. Le service ne " +
       "déplace, ne renomme et n’efface jamais rien dans la bibliothèque. Vide : <données>/library, créé à la première " +
       "lecture. Un autre dossier doit exister et être nommé par son chemin complet.",
-    owl: "library_dir vide : <données>/library (effective_library_dir), créé par make_dirs. GET /albireo/v1/library : " +
+    owl: "library_dir vide : <données>/library (effective_library_dir), créé par make_dirs. GET /gulliver/v1/library : " +
       "le dossier doit passer folder_admin_only (propriétaire, permissions POSIX, ACL) ; chaque .gguf du dossier, sans " +
       "sous-dossier, est ouvert par link_free_file (aucun lien, un seul nom) et décrit par describe_gguf ; les " +
-      "projecteurs sont appariés par pair_projectors, comme un import. POST /albireo/v1/library/load {file} : " +
+      "projecteurs sont appariés par pair_projectors, comme un import. POST /gulliver/v1/library/load {file} : " +
       "model_manager::import_files(fichier et projecteur, move = false), SHA-256 par CommonCrypto, copie par " +
       "fclonefileat. « Déjà dans Albireo » : un modèle installé de même taille et de même architecture ; l’import " +
       "tranche par l’empreinte.",
@@ -846,7 +846,7 @@ export function serviceTab(body, env) {
   async function apply() {
     const changes = Object.assign({}, pending);
     try {
-      const r = await api.putJSON('/albireo/v1/settings', changes);
+      const r = await api.putJSON('/gulliver/v1/settings', changes);
       for (const k of Object.keys(changes)) delete pending[k];
       if (r.restart) await waitRestart(changes);
       await load();
@@ -886,7 +886,7 @@ export function serviceTab(body, env) {
 
   async function setLive(key, value) {
     try {
-      await api.putJSON('/albireo/v1/settings', { [key]: value });
+      await api.putJSON('/gulliver/v1/settings', { [key]: value });
       current[key] = value;
       toast('Appliqué.');
     } catch (e) {
@@ -1014,7 +1014,7 @@ export function serviceTab(body, env) {
   async function sendAll(changes, what) {
     if (!Object.keys(changes).length) return toast('Rien à changer : ' + what + ' sont déjà en place.');
     try {
-      const r = await api.putJSON('/albireo/v1/settings', changes);
+      const r = await api.putJSON('/gulliver/v1/settings', changes);
       for (const k of Object.keys(changes)) delete pending[k];
       if (r.restart) await waitRestart(changes);
       else toast('Appliqué.');
@@ -1045,7 +1045,7 @@ export function serviceTab(body, env) {
       const name = label.value.trim();
       if (!name) return toast('Donne un libellé à la sauvegarde.', true);
       try {
-        await api.postJSON('/albireo/v1/settings/profiles', { label: name });
+        await api.postJSON('/gulliver/v1/settings/profiles', { label: name });
         toast('Réglages sauvés sous « ' + name + ' ».');
         label.value = '';
         loadProfiles();
@@ -1069,7 +1069,7 @@ export function serviceTab(body, env) {
   async function loadProfiles() {
     let list = [];
     try {
-      list = (await api.getJSON('/albireo/v1/settings/profiles')).profiles || [];
+      list = (await api.getJSON('/gulliver/v1/settings/profiles')).profiles || [];
     } catch (e) {
       profilesBox.replaceChildren(h('p', { class: 'help' }, e.message));
       return;
@@ -1089,7 +1089,7 @@ export function serviceTab(body, env) {
       } }, 'Restaurer'),
       h('button', { class: 'button', type: 'button', onclick: async () => {
         if (!window.confirm('Supprimer la sauvegarde « ' + p.label + ' » ?')) return;
-        await fetch('/albireo/v1/settings/profiles?label=' + encodeURIComponent(p.label), { method: 'DELETE' });
+        await fetch('/gulliver/v1/settings/profiles?label=' + encodeURIComponent(p.label), { method: 'DELETE' });
         loadProfiles();
       } }, 'Supprimer'))) : [h('p', { class: 'help' }, 'Aucune sauvegarde pour l’instant.')]));
   }
@@ -1139,7 +1139,7 @@ export function serviceTab(body, env) {
     (async () => {
       let info;
       try {
-        info = await api.getJSON('/albireo/v1/relay');
+        info = await api.getJSON('/gulliver/v1/relay');
       } catch (e) {
         box.replaceChildren(h('p', { class: 'help' }, e.message));
         return;
@@ -1227,7 +1227,7 @@ export function serviceTab(body, env) {
         const test = h('button', { class: 'button', type: 'button', onclick: async () => {
           result.textContent = 'Essai…';
           try {
-            const r = await api.postJSON('/albireo/v1/relay/test', body());
+            const r = await api.postJSON('/gulliver/v1/relay/test', body());
             if (r.ok) {
               found = r.models || [];
               if (r.url && openai) draft.url = r.url;
@@ -1244,8 +1244,8 @@ export function serviceTab(body, env) {
         } }, 'Tester');
         const save = h('button', { class: 'button primary', type: 'button', onclick: async () => {
           try {
-            await api.putJSON('/albireo/v1/settings', { relay: body() });
-            current = await api.getJSON('/albireo/v1/settings');
+            await api.putJSON('/gulliver/v1/settings', { relay: body() });
+            current = await api.getJSON('/gulliver/v1/settings');
             toast('Relais enregistré.');
             if (env.refreshStatus) env.refreshStatus();
             render();
@@ -1301,7 +1301,7 @@ export function serviceTab(body, env) {
     (async () => {
       let r;
       try {
-        r = await api.getJSON('/albireo/v1/reserve');
+        r = await api.getJSON('/gulliver/v1/reserve');
       } catch (e) {
         box.replaceChildren(e.message);
         return;
@@ -1312,7 +1312,7 @@ export function serviceTab(body, env) {
         if (!window.confirm('Vider la réserve ?\n\nLes ' + files.length + ' copies sont retirées ; un modèle supprimé ' +
           'devra se retélécharger.')) return;
         try {
-          const res = await fetch('/albireo/v1/reserve', { method: 'DELETE' });
+          const res = await fetch('/gulliver/v1/reserve', { method: 'DELETE' });
           const o = await res.json();
           if (!res.ok) throw new Error(o.error || res.statusText);
           toast(o.removed + (o.removed === 1 ? ' copie retirée, ' : ' copies retirées, ') + gb(o.freed) + ' libérés.');
@@ -1353,7 +1353,7 @@ export function serviceTab(body, env) {
 
   async function load() {
     try {
-      current = await api.getJSON('/albireo/v1/settings');
+      current = await api.getJSON('/gulliver/v1/settings');
       render();
       loadProfiles();
     } catch (e) {

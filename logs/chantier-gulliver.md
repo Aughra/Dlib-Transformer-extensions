@@ -7,6 +7,12 @@
 
 **Légende** : ☐ à faire · ⏳ en cours · ☑ fait (date, commit).
 
+> **Consigne (2026-11-17)** : mener **tout le chantier (blocs 0, A, B) jusqu'au bout sans
+> s'arrêter** entre les sous-étapes. **Trancher soi-même** les choix de conception selon le
+> meilleur intérêt du projet, les noter ici avec leur raison, et continuer. Garder les
+> garde-fous (compile/teste, commit+push, avancement + non-régression à jour). Voir
+> « Décisions tranchées en autonomie » plus bas pour les choix faits sans demander.
+
 ## Reprise (où on en est, quoi ensuite)
 
 - **2026-11-17 20:15** — **0a fait** : dossier renommé (`git mv .../albireo → .../gulliver`),
@@ -15,6 +21,21 @@
   d'usage du `CMakeLists.txt`. **Build `build/macos-gulliver` compile sans avertissement**,
   binaires produits. Report à 0d : répertoires de sortie `build/macos-albireo`/`albireo-home`,
   README de l'original (Windows/CUDA/OpenVINO). Cibles/variables `ALBIREO_*` → **0b**.
+- **2026-11-17 ~21:30** — **0c fait et vérifié** (110 scénarios page_test, 0 échec). **Prochaine action : 0d** — textes affichés et doc : nom « Albireo » → « Gulliver » dans l'interface (`<span>`, i18n `program_albireo`, messages `albireo-service`, libellés de licence), images `img/albireo-*` → `gulliver-*` + manifest/favicon, répertoires de build du mémo (`build/macos-albireo`→`-gulliver`, `albireo-home`→`gulliver-home`), README/docs du fork, CLAUDE.md, `web/changelog.md`. Garder le `product`/`full_name` de version.h pour 0e (avec la version). Puis 0e (version majeure + blog + commit).
+- **2026-11-17 ~21:05** — 0c en cours : routes `/albireo/v1` → `/gulliver/v1` partout
+  (host/ 57, web/js 147, outils, openapi régénéré : 58 routes, 0 `albireo`). Rôles/modèles
+  d'API `albireo-general|code|security|relay|background|embedding` → `gulliver-*` **des deux
+  côtés** (service + page + make_openapi), avec correction des `compare(0, 8, "albireo-")` →
+  `compare(0, 9, "gulliver-")` et `substr(8)` → `substr(9)` (service.cpp:643,1833). Verrous
+  Web Locks, `BroadcastChannel('gulliver')`, clés `gulliver-message/-draft-`, `DB_NAME =
+  'gulliver'`, format `gulliver-export`, nom du fichier d'export, certificats
+  `gulliver-authority/-server/-certificates` (génération + doc Swagger). **Bugs corrigés
+  ici** (latents depuis 0b) : la licence servie `{"albireo.txt",...}` → `gulliver.txt`
+  (server.cpp:1395) pour suivre la cible CMake. **Gardés exprès** : clés de métadonnée GGUF
+  `albireo.id/.inputs/.name/.roles` (format des modèles existants). Reste en **0d** (texte) :
+  `<span>Albireo</span>`, `program_albireo` (i18n), `albireo-service` dans un message
+  (main.cpp:102, service.js:485), images `img/albireo-*`, libellés de licence « Albireo ».
+  **Vérifié** : rebuild sans avertissement ; `page_test.sh` (sur `build/macos-gulliver`) **110 scénarios, 0 échec** (regress 55, docs 12, images 12, actions 31), ESLint ok. Scénarios de test mis à jour (`albireo-relay` → `gulliver-relay`). NB : un faux run à 50 échecs venait de DEUX page_test lancés en parallèle sur le même port (18491), pas du renommage — ne jamais lancer deux page_test à la fois.
 - **2026-11-17 ~20:45** — **0b-bis fait et vérifié** (namespace + API C du moteur ; moteur
   charge et répond). **Prochaine action : 0c** — routes `/albireo/v1` → `/gulliver/v1` en un
   seul bloc (C++ host/ + page web/js + openapi), car la route est partagée.
@@ -71,7 +92,7 @@
   `libalbireo-engine-<variant>.dylib` alors que la cible renommée produit
   `libgulliver-engine-*.dylib` (`common/engine_loader.cpp:124`), sinon le moteur ne se
   chargeait plus. **Vérifié** : build sans avertissement ; `engine_chat` charge `libgulliver-engine-cpu.dylib`, lit un modèle Qwen 0.5B et répond (symboles `gulliver_engine_*` résolus par dlsym OK).
-- ☐ **0c** **Préfixe de route `/albireo/v1` → `/gulliver/v1`, en un seul bloc C++ + JS +
+- ☑ **0c** (2026-11-17) **Préfixe de route `/albireo/v1` → `/gulliver/v1`, en un seul bloc C++ + JS +
   openapi** (sinon la page serait cassée entre deux sous-étapes), puis le reste de la page JS
   (`DB_NAME`, clés `localStorage`, textes visibles). *Réajustement 2026-11-17 : la route est
   partagée page/service, donc traitée d'un bloc ; les identifiants C++ internes restent en 0b.*
@@ -111,3 +132,22 @@
 - Plan validé et copié dans le dépôt (`docs/chantier-gulliver-plan.md`).
 - Fichier d'avancement créé. Pointeur ajouté à CLAUDE.md.
 - Aucune modification de code encore. Prochaine étape : 0a.
+
+---
+
+## Décisions tranchées en autonomie (consigne « continue sans t'arrêter »)
+
+Choix faits sans demander, selon le meilleur intérêt du projet. Révisables si l'humain le dit.
+
+- **2026-11-17** — *Identifiants « albireo » minuscules mêlés à des chaînes* : renommés
+  catégorie par catégorie (namespace, API C, routes, rôles), en **gardant** les clés de
+  métadonnée GGUF `albireo.id/.inputs/.name/.roles` (sinon on casse la lecture des modèles
+  déjà préparés). Raison : cohérence du nom sans casser le format de données existant.
+- **2026-11-17** — *Rôles/modèles d'API* `albireo-*` → `gulliver-*` renommés des deux côtés
+  (service + page + openapi) en un bloc. Raison : c'est le protocole page↔service, il ne doit
+  jamais être désaccordé. On part à vide, donc aucun client externe à ménager.
+- **2026-11-17** — *Certificats* `albireo-authority/server/certificates` → `gulliver-*`.
+  Raison : `GULLIVER_HOME` est neuf, les certificats se régénèrent, autant les nommer juste.
+- **À venir (bloc A)** — *Profils* : je choisirai les détails non tranchés (nom par défaut du
+  premier profil, comportement si aucun profil, forme exacte du sélecteur) au mieux, en les
+  notant ici.

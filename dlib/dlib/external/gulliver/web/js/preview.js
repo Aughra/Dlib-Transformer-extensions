@@ -4,7 +4,7 @@
 /*
     Le contexte de la prochaine question (fork pour macOS, demande de l'humain du 2026-11-15) : ce que la page
     enverrait au modèle si l'on envoyait maintenant ce qui est tapé, assemblé comme le fait une vraie question
-    (systemPrompt, apiMessages, les outils de toolSet), compté par le service (POST /albireo/v1/count), message par
+    (systemPrompt, apiMessages, les outils de toolSet), compté par le service (POST /gulliver/v1/count), message par
     message, dans une fenêtre.  Les images y sont nommées au lieu d'être envoyées.  À l'envoi, la page peut encore
     ajouter des extraits de documents trouvés pour la question, et résumer les échanges les plus anciens si la place
     manque (generation.js) : la fenêtre le dit.
@@ -57,7 +57,7 @@ export async function contextPreview() {
       h('div', { class: 'actions' }, h('button', { class: 'button primary', type: 'button', onclick: () => close(true) },
         'Fermer')));
     const show = (total, context) => {
-      const estimate = total ? tokenEstimate(messages, total, 'albireo-' + role) : null;
+      const estimate = total ? tokenEstimate(messages, total, 'gulliver-' + role) : null;
       const parts = [model ? modelName(model) : 'aucun modèle'];
       if (total) parts.push(formatNumber(total) + ' jetons' + (context ? ' sur ' + formatNumber(context) + ' (' +
         Math.round(100 * total / context) + ' %)' : ''));
@@ -75,7 +75,7 @@ export async function contextPreview() {
       }));
     };
     show(0, 0);
-    api.count('albireo-' + role, messages, set.definitions).then((r) => {
+    api.count('gulliver-' + role, messages, set.definitions).then((r) => {
       if (r && typeof r.tokens === 'number') show(r.tokens, r.context || 0);
     }).catch(() => { head.textContent = 'Le service ne compte pas ce contexte maintenant (modèle absent ou occupé).'; });
   });

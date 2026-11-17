@@ -4,7 +4,7 @@
 /*
     Le carnet du portage (fork pour macOS, demande de l'humain du 2026-11-15 : « Albireo affiche lui-même les
     documents ») : le sommaire et les documents du dépôt du fork, que le service lit dans sa liste fermée
-    (GET /albireo/v1/carnet, GET /albireo/v1/carnet/file).  L'adresse dit ce qui est lu : #/ pour le sommaire,
+    (GET /gulliver/v1/carnet, GET /gulliver/v1/carnet/file).  L'adresse dit ce qui est lu : #/ pour le sommaire,
     #/chemin/du/document.md (et #ancre) pour un document.  Les Markdown sont mis en page par marked et nettoyés
     par DOMPurify ; leurs liens relatifs mènent aux autres documents du carnet.
 */
@@ -13,7 +13,7 @@ import { Marked } from '../vendor/marked/marked.esm.js';
 import DOMPurify from '../vendor/dompurify/purify.es.mjs';
 
 const main = document.getElementById('carnet');
-const fileUrl = (path) => '/albireo/v1/carnet/file?path=' + encodeURIComponent(path);
+const fileUrl = (path) => '/gulliver/v1/carnet/file?path=' + encodeURIComponent(path);
 
 function el(tag, props, ...children) {
   const e = document.createElement(tag);
@@ -48,7 +48,7 @@ function el(tag, props, ...children) {
 
 async function showIndex() {
   document.title = 'Albireo · documents du portage';
-  const r = await fetch('/albireo/v1/carnet', { cache: 'no-store' });
+  const r = await fetch('/gulliver/v1/carnet', { cache: 'no-store' });
   const index = r.ok ? await r.json() : null;
   if (!index || !index.found) {
     main.replaceChildren(el('h1', null, 'Documents du portage'),

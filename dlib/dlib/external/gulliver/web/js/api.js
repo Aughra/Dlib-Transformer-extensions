@@ -131,22 +131,22 @@ export async function* streamChat(body, signal) {
 
 // L'état du service, qu'un service qui ne répond plus laisse inconnu au bout d'un moment.
 export function status() {
-  return getJSON('/albireo/v1/status', timeout(8000));
+  return getJSON('/gulliver/v1/status', timeout(8000));
 }
 
 // Les modèles du service et de son catalogue, lus dans le délai de l'état (repris de l'original, Albireo 1.0.16) : la
 // page s'ouvre et l'état se relit même quand le service ne répond pas.
 export function models(lang) {
-  return getJSON('/albireo/v1/models?lang=' + encodeURIComponent(lang || 'en'), timeout(8000));
+  return getJSON('/gulliver/v1/models?lang=' + encodeURIComponent(lang || 'en'), timeout(8000));
 }
 
 export function usage() {
-  return getJSON('/albireo/v1/usage');
+  return getJSON('/gulliver/v1/usage');
 }
 
 // Nombre de tokens d'une liste de messages pour le modèle d'un rôle, et son contexte.
 export function count(model, messages, tools) {
   const body = { model, messages };
   if (tools) body.tools = tools;
-  return postJSON('/albireo/v1/count', body);
+  return postJSON('/gulliver/v1/count', body);
 }

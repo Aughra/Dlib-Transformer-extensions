@@ -38,7 +38,7 @@ rsync -a --delete "$ROOT/dlib/dlib/external/gulliver/web/" "$BIN/web/"
 
 # Vrai quand le service d'essai a installé le modèle id.
 installed() {
-  curl -sk "$URL/albireo/v1/models" | python3 -c 'import json, sys
+  curl -sk "$URL/gulliver/v1/models" | python3 -c 'import json, sys
 d = json.load(sys.stdin)
 sys.exit(0 if any(m.get("id") == sys.argv[1] and m.get("installed") for m in d.get("models", [])) else 1)' "$1"
 }
@@ -80,16 +80,16 @@ GULLIVER_HOME=$HOME_DIR "$BIN/gulliver-service" --console > "$WORK/service.log" 
 SERVICE=$!
 stop() { [ "${PAGE_TEST_KEEP:-0}" = 1 ] || kill -TERM "$SERVICE" 2>/dev/null; }
 trap stop EXIT
-for _ in $(seq 1 60); do curl -sk --max-time 2 "$URL/albireo/v1/status" | grep -q '"offline":true' && break; sleep 1; done
+for _ in $(seq 1 60); do curl -sk --max-time 2 "$URL/gulliver/v1/status" | grep -q '"offline":true' && break; sleep 1; done
 if [ "$fresh" = 1 ]; then
-  curl -sk -H "Content-Type: application/json" -d "{\"path\":\"$HOME_DIR/import/catalog\"}" "$URL/albireo/v1/import" > /dev/null
+  curl -sk -H "Content-Type: application/json" -d "{\"path\":\"$HOME_DIR/import/catalog\"}" "$URL/gulliver/v1/import" > /dev/null
   for id in qwen3-vl-2b-test qwen3-vl-4b-test; do
-    curl -sk -X POST "$URL/albireo/v1/models/$id/download" > /dev/null
+    curl -sk -X POST "$URL/gulliver/v1/models/$id/download" > /dev/null
   done
   for _ in $(seq 1 60); do
     installed qwen3-vl-2b-test && break; sleep 1
   done
-  curl -sk -H "Content-Type: application/json" -d '{"role":"general"}' "$URL/albireo/v1/models/qwen3-vl-2b-test/activate" > /dev/null
+  curl -sk -H "Content-Type: application/json" -d '{"role":"general"}' "$URL/gulliver/v1/models/qwen3-vl-2b-test/activate" > /dev/null
   sleep 5
 fi
 # Le modèle chargé avant les scénarios : en mode économie d'énergie, son chargement prend une vingtaine de secondes, et

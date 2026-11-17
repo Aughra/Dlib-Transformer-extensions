@@ -133,7 +133,7 @@ namespace gulliver
         !*/
         std::map<std::string, std::string> effective_models(const host_settings& st) const;
         // Le modèle d'embedding d'une requête : un modèle d'embedding chargé nommé par son
-        // identifiant, sinon celui qui est actif ("auto", "embedding", "albireo-embedding").
+        // identifiant, sinon celui qui est actif ("auto", "embedding", "gulliver-embedding").
         std::string resolve_embedding_model(const std::string& requested);
         /*!
             ensures

@@ -26,7 +26,7 @@
  },
  {
   "name": "no cuDNN in licenses",
-  "eval": "const r=await fetch('/albireo/v1/licenses'); const j=await r.json(); return JSON.stringify(j).includes('cuDNN')",
+  "eval": "const r=await fetch('/gulliver/v1/licenses'); const j=await r.json(); return JSON.stringify(j).includes('cuDNN')",
   "expect": false
  },
  {
@@ -116,7 +116,7 @@
  },
  {
   "name": "relay save local",
-  "eval": "const card=()=>document.querySelector('.dialog .svc-card[data-key=relay]'); const c=card(); const url=[...c.querySelectorAll('.svc-relay input')].find(x=>x.placeholder.startsWith('http')); url.value='http://127.0.0.1:9/v1'; url.dispatchEvent(new Event('change')); const auth=c.querySelectorAll('.svc-relay select')[1]; auth.value='none'; auth.dispatchEvent(new Event('change')); await new Promise(r=>setTimeout(r,100)); const model=[...card().querySelectorAll('.svc-relay input')].find(x=>x.getAttribute('list')==='svc-relay-models'); model.value='essai'; model.dispatchEvent(new Event('change')); const on=card().querySelector('.svc-relay input[type=checkbox]'); on.checked=true; on.dispatchEvent(new Event('change')); await new Promise(r=>setTimeout(r,100)); [...card().querySelectorAll('button')].find(b=>b.innerText==='Enregistrer').click(); for(let i=0;i<30&&!(card()&&card().innerText.includes('Prêt'));i++) await new Promise(r=>setTimeout(r,200)); const ready=card().innerText.includes('Prêt : essai (OpenAI), sans pseudonymisation'); const listed=(await (await fetch('/v1/models')).json()).data.some(m=>m.id==='albireo-relay'); const s=await (await fetch('/albireo/v1/settings')).json(); await fetch('/albireo/v1/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({relay:{enabled:false}})}); const after=(await (await fetch('/v1/models')).json()).data.some(m=>m.id==='albireo-relay'); return [ready, listed, s.relay.secret, after]",
+  "eval": "const card=()=>document.querySelector('.dialog .svc-card[data-key=relay]'); const c=card(); const url=[...c.querySelectorAll('.svc-relay input')].find(x=>x.placeholder.startsWith('http')); url.value='http://127.0.0.1:9/v1'; url.dispatchEvent(new Event('change')); const auth=c.querySelectorAll('.svc-relay select')[1]; auth.value='none'; auth.dispatchEvent(new Event('change')); await new Promise(r=>setTimeout(r,100)); const model=[...card().querySelectorAll('.svc-relay input')].find(x=>x.getAttribute('list')==='svc-relay-models'); model.value='essai'; model.dispatchEvent(new Event('change')); const on=card().querySelector('.svc-relay input[type=checkbox]'); on.checked=true; on.dispatchEvent(new Event('change')); await new Promise(r=>setTimeout(r,100)); [...card().querySelectorAll('button')].find(b=>b.innerText==='Enregistrer').click(); for(let i=0;i<30&&!(card()&&card().innerText.includes('Prêt'));i++) await new Promise(r=>setTimeout(r,200)); const ready=card().innerText.includes('Prêt : essai (OpenAI), sans pseudonymisation'); const listed=(await (await fetch('/v1/models')).json()).data.some(m=>m.id==='gulliver-relay'); const s=await (await fetch('/gulliver/v1/settings')).json(); await fetch('/gulliver/v1/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({relay:{enabled:false}})}); const after=(await (await fetch('/v1/models')).json()).data.some(m=>m.id==='gulliver-relay'); return [ready, listed, s.relay.secret, after]",
   "expect": [
    true,
    true,
@@ -150,7 +150,7 @@
  },
  {
   "name": "library model loaded into Albireo",
-  "eval": "const card=[...document.querySelectorAll('.dialog .svc-card')].find(c=>c.innerText.includes('Qwen3.5-0.8B-Q8_0.gguf')&&c.querySelector('button')); card.querySelector('button').click(); for(let i=0;i<120;i++){await new Promise(r=>setTimeout(r,500)); const j=await (await fetch('/albireo/v1/library')).json(); const m=j.models.find(x=>x.file==='Qwen3.5-0.8B-Q8_0.gguf'); if(m&&m.installed) return true;} return false",
+  "eval": "const card=[...document.querySelectorAll('.dialog .svc-card')].find(c=>c.innerText.includes('Qwen3.5-0.8B-Q8_0.gguf')&&c.querySelector('button')); card.querySelector('button').click(); for(let i=0;i<120;i++){await new Promise(r=>setTimeout(r,500)); const j=await (await fetch('/gulliver/v1/library')).json(); const m=j.models.find(x=>x.file==='Qwen3.5-0.8B-Q8_0.gguf'); if(m&&m.installed) return true;} return false",
   "expect": true
  },
  {
@@ -312,7 +312,7 @@
  },
  {
   "name": "relay padlock",
-  "eval": "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})); for(const b of document.querySelectorAll('.dialog .close, .dialog [aria-label=Fermer]')) b.click(); await new Promise(r=>setTimeout(r,300)); const put=(o)=>fetch('/albireo/v1/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({relay:o})}); await put({enabled:true,provider:'openai',url:'http://127.0.0.1:18491/v1',auth:'none',model:'essai'}); T.btn('Nouvelle discussion').click(); let lock=null; for(let i=0;i<60;i++){ lock=document.querySelector('.composer .toggle.relay:not(.hidden)'); if(lock) break; await new Promise(r=>setTimeout(r,500)); } if(!lock) return 'no padlock'; const off=lock.getAttribute('aria-pressed'); lock.click(); await new Promise(r=>setTimeout(r,200)); const btn=document.querySelector('.composer .toggle.relay'); return [off, btn.getAttribute('aria-pressed'), btn.innerText.trim(), btn.title.startsWith('Relayée vers essai · OpenAI'), document.querySelector('.composer .toggle.web').classList.contains('unavailable')]",
+  "eval": "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})); for(const b of document.querySelectorAll('.dialog .close, .dialog [aria-label=Fermer]')) b.click(); await new Promise(r=>setTimeout(r,300)); const put=(o)=>fetch('/gulliver/v1/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({relay:o})}); await put({enabled:true,provider:'openai',url:'http://127.0.0.1:18491/v1',auth:'none',model:'essai'}); T.btn('Nouvelle discussion').click(); let lock=null; for(let i=0;i<60;i++){ lock=document.querySelector('.composer .toggle.relay:not(.hidden)'); if(lock) break; await new Promise(r=>setTimeout(r,500)); } if(!lock) return 'no padlock'; const off=lock.getAttribute('aria-pressed'); lock.click(); await new Promise(r=>setTimeout(r,200)); const btn=document.querySelector('.composer .toggle.relay'); return [off, btn.getAttribute('aria-pressed'), btn.innerText.trim(), btn.title.startsWith('Relayée vers essai · OpenAI'), document.querySelector('.composer .toggle.web').classList.contains('unavailable')]",
   "expect": [
    "false",
    "true",
@@ -323,9 +323,9 @@
  },
  {
   "name": "relay question sent",
-  "eval": "const orig=window.fetch; let sent=null; window.fetch=(u,o)=>{ if(String(u).includes('/v1/chat/completions')&&o&&o.body){ try{ const b=JSON.parse(o.body); if(b.model==='albireo-relay') sent=b; }catch(e){} } return orig(u,o); }; T.ask('Bonjour, réponds en un mot.'); for(let i=0;i<60&&!(sent&&!document.querySelector('.message.assistant.live'));i++) await new Promise(r=>setTimeout(r,500)); window.fetch=orig; const last=[...document.querySelectorAll('.message.assistant')].pop(); return [sent?sent.model:'', !!(sent&&sent.tools), !!(sent&&sent.web_search), !!last && /Le moteur extérieur/.test(last.innerText), document.querySelector('.status-line').innerText.includes('essai · OpenAI · hors du Mac'), document.querySelector('.hint-model').innerText]",
+  "eval": "const orig=window.fetch; let sent=null; window.fetch=(u,o)=>{ if(String(u).includes('/v1/chat/completions')&&o&&o.body){ try{ const b=JSON.parse(o.body); if(b.model==='gulliver-relay') sent=b; }catch(e){} } return orig(u,o); }; T.ask('Bonjour, réponds en un mot.'); for(let i=0;i<60&&!(sent&&!document.querySelector('.message.assistant.live'));i++) await new Promise(r=>setTimeout(r,500)); window.fetch=orig; const last=[...document.querySelectorAll('.message.assistant')].pop(); return [sent?sent.model:'', !!(sent&&sent.tools), !!(sent&&sent.web_search), !!last && /Le moteur extérieur/.test(last.innerText), document.querySelector('.status-line').innerText.includes('essai · OpenAI · hors du Mac'), document.querySelector('.hint-model').innerText]",
   "expect": [
-   "albireo-relay",
+   "gulliver-relay",
    false,
    false,
    true,
@@ -338,12 +338,12 @@
  },
  {
   "name": "relay off again",
-  "eval": "const put=(o)=>fetch('/albireo/v1/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({relay:o})}); await put({enabled:false,url:'',model:'',auth:'key'}); for(let i=0;i<60&&document.querySelector('.composer .toggle.relay:not(.hidden)');i++) await new Promise(r=>setTimeout(r,500)); return !document.querySelector('.composer .toggle.relay:not(.hidden)')",
+  "eval": "const put=(o)=>fetch('/gulliver/v1/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({relay:o})}); await put({enabled:false,url:'',model:'',auth:'key'}); for(let i=0;i<60&&document.querySelector('.composer .toggle.relay:not(.hidden)');i++) await new Promise(r=>setTimeout(r,500)); return !document.querySelector('.composer .toggle.relay:not(.hidden)')",
   "expect": true
  },
  {
   "name": "relay effort menu",
-  "eval": "const put=(o)=>fetch('/albireo/v1/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({relay:o})}); await put({enabled:true,provider:'openai',url:'http://127.0.0.1:9/v1',auth:'none',model:'essai',reasoning:true}); T.btn('Nouvelle discussion').click(); let lock=null; for(let i=0;i<60;i++){ lock=document.querySelector('.composer .toggle.relay:not(.hidden)'); if(lock) break; await new Promise(r=>setTimeout(r,500)); } if(!lock) return 'no padlock'; lock.click(); await new Promise(r=>setTimeout(r,300)); const reason=document.querySelector('.composer .toggle.reason'); const before=reason.innerText.trim(); reason.click(); await new Promise(r=>setTimeout(r,300)); const items=[...document.querySelectorAll('.menu [role=menuitem]')].map(e=>e.innerText.trim()); const high=[...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Élevé'); if(high) high.click(); await new Promise(r=>setTimeout(r,300)); const after=document.querySelector('.composer .toggle.reason').innerText.trim(); const orig=window.fetch; let sent=null; window.fetch=(u,o)=>{ if(String(u).includes('/v1/chat/completions')&&o&&o.body){ try{ const b=JSON.parse(o.body); if(b.model==='albireo-relay') sent=b; }catch(e){} } return orig(u,o); }; T.ask('Bonjour.'); for(let i=0;i<60&&!(sent&&!document.querySelector('.message.assistant.live'));i++) await new Promise(r=>setTimeout(r,500)); window.fetch=orig; await put({enabled:false,url:'',model:'',auth:'key',reasoning:false}); return [before, items.join('|'), after, sent?sent.reasoning_effort:'']",
+  "eval": "const put=(o)=>fetch('/gulliver/v1/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({relay:o})}); await put({enabled:true,provider:'openai',url:'http://127.0.0.1:9/v1',auth:'none',model:'essai',reasoning:true}); T.btn('Nouvelle discussion').click(); let lock=null; for(let i=0;i<60;i++){ lock=document.querySelector('.composer .toggle.relay:not(.hidden)'); if(lock) break; await new Promise(r=>setTimeout(r,500)); } if(!lock) return 'no padlock'; lock.click(); await new Promise(r=>setTimeout(r,300)); const reason=document.querySelector('.composer .toggle.reason'); const before=reason.innerText.trim(); reason.click(); await new Promise(r=>setTimeout(r,300)); const items=[...document.querySelectorAll('.menu [role=menuitem]')].map(e=>e.innerText.trim()); const high=[...document.querySelectorAll('.menu [role=menuitem]')].find(e=>e.innerText.trim()==='Élevé'); if(high) high.click(); await new Promise(r=>setTimeout(r,300)); const after=document.querySelector('.composer .toggle.reason').innerText.trim(); const orig=window.fetch; let sent=null; window.fetch=(u,o)=>{ if(String(u).includes('/v1/chat/completions')&&o&&o.body){ try{ const b=JSON.parse(o.body); if(b.model==='gulliver-relay') sent=b; }catch(e){} } return orig(u,o); }; T.ask('Bonjour.'); for(let i=0;i<60&&!(sent&&!document.querySelector('.message.assistant.live'));i++) await new Promise(r=>setTimeout(r,500)); window.fetch=orig; await put({enabled:false,url:'',model:'',auth:'key',reasoning:false}); return [before, items.join('|'), after, sent?sent.reasoning_effort:'']",
   "expect": [
    "Effort · Par défaut",
    "Par défaut|Faible|Moyen|Élevé",

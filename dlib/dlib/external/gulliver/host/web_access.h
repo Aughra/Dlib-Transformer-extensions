@@ -13,8 +13,8 @@
     deux outils, web_search et fetch_page, qui atteignent le web par deux routes du
     service :
 
-        POST /albireo/v1/web/search   {"query", "count", "language"}
-        POST /albireo/v1/web/fetch    {"url", "language"}
+        POST /gulliver/v1/web/search   {"query", "count", "language"}
+        POST /gulliver/v1/web/fetch    {"url", "language"}
 
     La recherche passe par la recherche de Wikipédia, son interface REST, dans la langue de la
     requête (le réglage web_search "wikipedia", par défaut) ; web_search "none" la désactive.
@@ -77,7 +77,7 @@ namespace gulliver
 
     /*!
         ensures
-            - Renvoie ce que /albireo/v1/status donne à l'application web sous "web" :
+            - Renvoie ce que /gulliver/v1/status donne à l'application web sous "web" :
               {"available": true quand web_access est activé et que le service n'est pas hors
                ligne, "search": web_search_provider(s) tant que c'est disponible, "none"
                sinon}.  La lecture de pages est disponible avec l'accès au web, quel que soit
@@ -87,7 +87,7 @@ namespace gulliver
 
     /*!
         ensures
-            - Répond à POST /albireo/v1/web/fetch : lit la page à request["url"], une adresse
+            - Répond à POST /gulliver/v1/web/fetch : lit la page à request["url"], une adresse
               http ou https, avec l'Accept-Language request["language"] quand il est fourni.
             - Le corps de la réponse est {"url", "final_url", "status", "content_type",
               "charset", "size", "truncated", "data"} : l'adresse demandée et celle qui a
@@ -106,7 +106,7 @@ namespace gulliver
 
     /*!
         ensures
-            - Répond à POST /albireo/v1/web/search : recherche request["query"], de 1 à 400
+            - Répond à POST /gulliver/v1/web/search : recherche request["query"], de 1 à 400
               caractères, par web_search_provider(s), au plus request["count"] résultats (de 1
               à 10, 5 par défaut), dans la langue request["language"] quand elle est fournie
               ([a-z]{2,3} avec une région facultative).

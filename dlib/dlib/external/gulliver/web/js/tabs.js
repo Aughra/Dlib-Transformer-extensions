@@ -36,12 +36,12 @@ import { lockThread, renderAll, renderMain, renderTopbar } from './thread.js';
 */
 let channel = null;
 try {
-  channel = new BroadcastChannel('albireo');
+  channel = new BroadcastChannel('gulliver');
   channel.onmessage = (e) => receive(e.data);
 } catch (e) {
   channel = null;
   window.addEventListener('storage', (ev) => {
-    if (ev.key !== 'albireo-message' || !ev.newValue) return;
+    if (ev.key !== 'gulliver-message' || !ev.newValue) return;
     try {
       receive(JSON.parse(ev.newValue).message);
     } catch (e2) {
@@ -53,7 +53,7 @@ try {
 export function broadcast(message) {
   try {
     if (channel) channel.postMessage(message);
-    else localStorage.setItem('albireo-message', JSON.stringify({ message, n: Math.random() }));
+    else localStorage.setItem('gulliver-message', JSON.stringify({ message, n: Math.random() }));
   } catch (e) {
     // Les autres onglets relisent les réglages à leur prochain démarrage.
   }

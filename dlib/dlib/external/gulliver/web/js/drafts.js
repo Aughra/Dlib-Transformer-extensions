@@ -19,7 +19,7 @@ import { state, ui } from './state.js';
 */
 export const drafts = new Map();
 const newDraft = 'new';
-const draftPrefix = 'albireo-draft-';
+const draftPrefix = 'gulliver-draft-';
 // Le texte tapé est gardé ce nombre de millisecondes après la dernière touche.
 const draftDelay = 400;
 let draftTimer = 0;

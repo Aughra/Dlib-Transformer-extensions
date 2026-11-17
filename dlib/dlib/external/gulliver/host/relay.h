@@ -45,7 +45,7 @@ namespace gulliver
 {
 
     // Le modèle de l'interface qui relaie une discussion au moteur externe.
-    extern const char* const relay_model_id;   // "albireo-relay"
+    extern const char* const relay_model_id;   // "gulliver-relay"
 
     struct relay_model
     {

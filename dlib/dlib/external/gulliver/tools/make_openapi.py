@@ -46,21 +46,21 @@ generation_replies = dict(engine_replies, **{
                  "mémoire qui leur est réservée (code engine_busy, Retry-After: 5) ; l'en-tête Retry-After donne les "
                  "secondes à attendre", ref("Error")),
 })
-# Les complétions de chat, auxquelles le relais peut aussi répondre (albireo-relay), et ses échecs une fois commencé.
+# Les complétions de chat, auxquelles le relais peut aussi répondre (gulliver-relay), et ses échecs une fois commencé.
 relay_replies = dict(generation_replies, **{
-    "400": reply("Requête invalide ; pour albireo-relay, des outils, des sons, plusieurs choix, des images que ni le "
+    "400": reply("Requête invalide ; pour gulliver-relay, des outils, des sons, plusieurs choix, des images que ni le "
                  "modèle extérieur ni un modèle du Mac ne peuvent prendre (code image_input_not_supported), ou une "
                  "recherche sur le web demandée à un autre fournisseur que Claude (web_search_not_supported)",
                  ref("Error")),
-    "403": reply("albireo-relay : une recherche sur le web demandée alors que l'accès au web des réglages est coupé "
+    "403": reply("gulliver-relay : une recherche sur le web demandée alors que l'accès au web des réglages est coupé "
                  "(code web_access_off)", ref("Error")),
-    "404": reply("Modèle inconnu ou inactif ; pour albireo-relay, un relais coupé, incomplet ou hors de portée du "
+    "404": reply("Modèle inconnu ou inactif ; pour gulliver-relay, un relais coupé, incomplet ou hors de portée du "
                  "mode hors ligne (code relay_unavailable)", ref("Error")),
-    "502": reply("albireo-relay, hors flux : le moteur extérieur a refusé la requête (code relay_refused, sa raison "
+    "502": reply("gulliver-relay, hors flux : le moteur extérieur a refusé la requête (code relay_refused, sa raison "
                  "sans la clé ni l'adresse), a échoué (relay_failed) ou n'a pas pu être joint (relay_unreachable)",
                  ref("Error")),
 })
-relay_replies["503"] = reply(generation_replies["503"]["description"] + " ; pour albireo-relay, un moteur trouvé "
+relay_replies["503"] = reply(generation_replies["503"]["description"] + " ; pour gulliver-relay, un moteur trouvé "
                              "hors de portée du mode hors ligne par la requête elle-même, son nom résolu (code "
                              "offline), huit réponses en cours (engine_busy), ou Pseudalis absent alors que le relais "
                              "pseudonymise (pseudonymization_failed)", ref("Error"))
@@ -72,7 +72,7 @@ pseudalis_code = {"type": "string", "enum": ["", "not_installed", "no_authority"
 offline_reply = {"409": reply("Refusé en mode hors ligne", {"type": "object", "properties": {
     "ok": {"type": "boolean"}, "error": {"type": "string"}}})}
 model_id = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "pattern": "^[A-Za-z0-9._-]+$"},
-            "description": "Identifiant du modèle, tel que /albireo/v1/models le liste."}
+            "description": "Identifiant du modèle, tel que /gulliver/v1/models le liste."}
 ok = {"type": "object", "properties": {"ok": {"type": "boolean"}, "error": {"type": "string"}}}
 # Les codes des refus des imports par chemin (service::import_folder() dans host/service.h).
 import_codes = ["import_path_relative", "import_path_network", "import_path_device", "import_path_invalid",
@@ -173,14 +173,14 @@ schemas = {
         "type": "object", "required": ["messages"],
         "properties": {
             "model": {"type": "string",
-                      "description": "Un identifiant de modèle, une fonction (albireo-general, albireo-code, "
-                                     "albireo-security), albireo-background, albireo-relay ou auto. Une fonction "
-                                     "sans modèle propre est servie par le modèle général ; albireo-background, le "
+                      "description": "Un identifiant de modèle, une fonction (gulliver-general, gulliver-code, "
+                                     "gulliver-security), gulliver-background, gulliver-relay ou auto. Une fonction "
+                                     "sans modèle propre est servie par le modèle général ; gulliver-background, le "
                                      "travail fait en arrière-plan (titres, résumés, mémoire), par le modèle livré "
-                                     "avec Albireo, sinon par le général ; albireo-relay, une fois le relais prêt, "
-                                     "par le moteur extérieur du relais (/albireo/v1/relay), qui ne prend ni outil, "
+                                     "avec Albireo, sinon par le général ; gulliver-relay, une fois le relais prêt, "
+                                     "par le moteur extérieur du relais (/gulliver/v1/relay), qui ne prend ni outil, "
                                      "ni son, ni d'autre choix que n = 1.",
-                      "example": "albireo-general"},
+                      "example": "gulliver-general"},
             "messages": {"type": "array", "items": ref("Message")},
             "stream": {"type": "boolean", "default": False},
             "stream_options": {"type": "object", "properties": {"include_usage": {"type": "boolean"}}},
@@ -199,10 +199,10 @@ schemas = {
             "reasoning_effort": {"type": "string", "enum": ["none", "low", "medium", "high", "xhigh", "max"],
                                  "description": "none désactive le raisonnement ; low lui donne le budget d'un "
                                                 "raisonnement court, high lève sa borne par défaut "
-                                                "(reasoning_budget). Pour albireo-relay, le niveau d'effort du "
+                                                "(reasoning_budget). Pour gulliver-relay, le niveau d'effort du "
                                                 "modèle extérieur parmi ceux qu'il prend (efforts dans "
-                                                "/albireo/v1/relay), le sien sans niveau donné."},
-            "web_search": {"type": "boolean", "description": "albireo-relay avec Claude : le modèle extérieur cherche "
+                                                "/gulliver/v1/relay), le sien sans niveau donné."},
+            "web_search": {"type": "boolean", "description": "gulliver-relay avec Claude : le modèle extérieur cherche "
                            "sur le web, cinq recherches au plus, qu'Anthropic facture ; ses requêtes viennent avec le "
                            "raisonnement, ses sources en liens après les textes qui les citent, et usage donne "
                            "web_search_requests. L'accès au web des réglages doit le permettre."},
@@ -219,7 +219,7 @@ schemas = {
                                                 "l'effort high ne fixe aucune limite ; un modèle qui raisonne "
                                                 "toujours, à qui l'on ne demande pas de raisonnement, voit son "
                                                 "raisonnement terminé aussitôt, et l'effort low lui donne 512 tokens, "
-                                                "256 pour le travail en arrière-plan (albireo-background). "
+                                                "256 pour le travail en arrière-plan (gulliver-background). "
                                                 "La réponse d'un modèle à qui l'on ne demande pas de raisonnement "
                                                 "reçoit max_tokens une fois son raisonnement terminé, et les séquences "
                                                 "d'arrêt ne s'appliquent qu'à cette réponse. Un raisonnement dont les "
@@ -228,7 +228,7 @@ schemas = {
                                                 "façon."},
             "chat_template_kwargs": {"type": "object", "properties": {"enable_thinking": {"type": "boolean"}}},
             "n": {"type": "integer", "enum": [1]}}}],
-        "example": {"model": "albireo-general", "messages": [{"role": "user", "content": "Bonjour !"}],
+        "example": {"model": "gulliver-general", "messages": [{"role": "user", "content": "Bonjour !"}],
                     "max_tokens": 200}},
     "Usage": {"type": "object", "properties": {
         "prompt_tokens": {"type": "integer"}, "completion_tokens": {"type": "integer"},
@@ -273,7 +273,7 @@ schemas = {
                         "code": {"type": "string", "nullable": True,
                                  "description": "Le code du moteur, comme out_of_memory."}}}}},
     "CompletionRequest": {"allOf": [ref("Sampling"), {"type": "object", "required": ["prompt"], "properties": {
-        "model": {"type": "string", "example": "albireo-general"}, "prompt": {"type": "string"},
+        "model": {"type": "string", "example": "gulliver-general"}, "prompt": {"type": "string"},
         "stream": {"type": "boolean"}}}]},
     "Completion": {"type": "object", "properties": {
         "id": {"type": "string"}, "object": {"type": "string", "enum": ["text_completion"]},
@@ -281,8 +281,8 @@ schemas = {
             "index": {"type": "integer"}, "text": {"type": "string"}, "finish_reason": {"type": "string"}}}},
         "usage": ref("Usage")}},
     "EmbeddingRequest": {"type": "object", "required": ["input"], "properties": {
-        "model": {"type": "string", "description": "albireo-embedding, auto, ou l'identifiant d'un modèle d'embedding "
-                                                   "actif.", "example": "albireo-embedding"},
+        "model": {"type": "string", "description": "gulliver-embedding, auto, ou l'identifiant d'un modèle d'embedding "
+                                                   "actif.", "example": "gulliver-embedding"},
         "input": {"description": "Un texte, une liste de textes, ou des listes de tokens.", "oneOf": [
             {"type": "string"}, {"type": "array", "items": {"type": "string"}, "maxItems": 2048},
             {"type": "array", "items": {"type": "integer"}},
@@ -294,7 +294,7 @@ schemas = {
                        "vecteur, normalisé à nouveau, pour les modèles entraînés à garder leur sens une fois "
                        "raccourcis (Qwen3 Embedding : 32 à 1024)."},
         "user": {"type": "string", "description": "Accepté et ignoré."}},
-        "example": {"model": "albireo-embedding", "input": ["Le service tourne sur cet ordinateur.",
+        "example": {"model": "gulliver-embedding", "input": ["Le service tourne sur cet ordinateur.",
                                                             "Où le service tourne-t-il ?"]}},
     "EmbeddingList": {"type": "object", "properties": {
         "object": {"type": "string", "enum": ["list"]}, "model": {"type": "string"},
@@ -352,8 +352,8 @@ schemas = {
                                  "quand l'utilisateur, l'hôte et le port restent les mêmes, et elle est refusée sinon "
                                  "(code proxy_password)."},
         "web_access": {"type": "boolean", "default": True,
-                       "description": "L'accès au web du bouton Web, de /albireo/v1/web/search et de "
-                                      "/albireo/v1/web/fetch ; false le coupe."},
+                       "description": "L'accès au web du bouton Web, de /gulliver/v1/web/search et de "
+                                      "/gulliver/v1/web/fetch ; false le coupe."},
         "lan": {"type": "boolean", "default": False, "description": "L'accès depuis le réseau local : un serveur en "
                 "HTTP simple sur chaque adresse du Mac, au port lan_port, ouvert à tous les appareils du réseau, "
                 "sans mot de passe."},
@@ -373,7 +373,7 @@ schemas = {
         "models_dir": {"type": "string", "description": "Le dossier des modèles, un dossier existant, ou vide pour le "
                        "dossier des modèles dans les données."},
         "library_dir": {"type": "string", "description": "La bibliothèque du Mac : un dossier de fichiers GGUF que "
-                        "/albireo/v1/library liste et dans lequel le service n'écrit jamais, un dossier existant "
+                        "/gulliver/v1/library liste et dans lequel le service n'écrit jamais, un dossier existant "
                         "désigné par son chemin complet, ou vide pour le dossier de la bibliothèque dans les "
                         "données."},
         "reserve_gb": {"type": "integer", "minimum": 0, "maximum": 100000, "default": 200,
@@ -382,12 +382,12 @@ schemas = {
                                       "partent les premières. 0 ne garde rien au-delà des clones des modèles "
                                       "installés."},
         "web_search": {"type": "string", "enum": ["wikipedia", "none"], "default": "wikipedia",
-                       "description": "Le fournisseur de /albireo/v1/web/search : wikipedia, l'interface REST de "
-                                      "Wikipedia ; ou none, qui coupe la recherche tandis que /albireo/v1/web/fetch "
+                       "description": "Le fournisseur de /gulliver/v1/web/search : wikipedia, l'interface REST de "
+                                      "Wikipedia ; ou none, qui coupe la recherche tandis que /gulliver/v1/web/fetch "
                                       "reste disponible. Un settings.json d'une version antérieure qui nomme un autre "
                                       "fournisseur est lu comme wikipedia."},
         "relay": ref("RelaySettings")}},
-    "RelaySettings": {"type": "object", "description": "Le relais vers un moteur extérieur, le modèle albireo-relay. "
+    "RelaySettings": {"type": "object", "description": "Le relais vers un moteur extérieur, le modèle gulliver-relay. "
                       "Un changement donne les membres qu'il change ; les autres restent.", "properties": {
         "enabled": {"type": "boolean", "default": False},
         "provider": {"type": "string", "enum": ["openai", "ollama", "claude"], "default": "openai",
@@ -551,7 +551,7 @@ paths = {
         "requestBody": json_body(ref("EmbeddingRequest")),
         "responses": dict({"200": reply("Un vecteur par entrée, dans l'ordre des entrées", ref("EmbeddingList"))},
                           **engine_replies)}},
-    "/albireo/v1/status": {"get": {
+    "/gulliver/v1/status": {"get": {
         "tags": ["Service"], "summary": "État du service, du moteur et des modèles",
         "description": "Le serveur répond pendant que le service démarre : state vaut \"starting\" et starting nomme "
                        "l'étape en cours, \"engines\" puis \"models\", jusqu'à ce que le service soit \"ready\".",
@@ -616,7 +616,7 @@ paths = {
             "selected": {"type": "object", "additionalProperties": {"type": "string"},
                          "description": "Les modèles choisis pour les fonctions, que la désactivation rétablit."},
             "background": {"type": "string",
-                           "description": "Le modèle livré avec Albireo, qui sert albireo-background et reste "
+                           "description": "Le modèle livré avec Albireo, qui sert gulliver-background et reste "
                                           "chargé ; vide s'il n'y en a pas."},
             "loaded_models": {"type": "array", "items": {"type": "object"},
                               "description": "Les modèles du moteur, avec leur contexte et leurs capacités : "
@@ -628,12 +628,12 @@ paths = {
                              "description": "loading, ready, unloading, removing, ou l'erreur d'un chargement."},
             "web": {"type": "object", "description": "L'accès au web du bouton Web, que l'application web lit à son "
                     "démarrage : disponible tant que l'administrateur le laisse activé (web_access) et que le service "
-                    "n'est pas hors ligne, et le fournisseur de /albireo/v1/web/search, wikipedia, ou none quand la "
-                    "recherche est indisponible alors que /albireo/v1/web/fetch reste disponible.",
+                    "n'est pas hors ligne, et le fournisseur de /gulliver/v1/web/search, wikipedia, ou none quand la "
+                    "recherche est indisponible alors que /gulliver/v1/web/fetch reste disponible.",
                     "properties": {
                         "available": {"type": "boolean"},
                         "search": {"type": "string", "enum": ["wikipedia", "none"]}}}}})}}},
-    "/albireo/v1/models": {"get": {
+    "/gulliver/v1/models": {"get": {
         "tags": ["Service"], "summary": "Catalogue, modèles installés, téléchargements et modèles actifs",
         "description": "Les modèles de langage : ceux livrés avec Albireo d'abord (builtin), puis le catalogue et les "
                        "imports. Les modèles d'embedding servent la recherche dans les documents et sont donnés à "
@@ -665,7 +665,7 @@ paths = {
                 "license": {"type": "string", "description": "La licence de l'entrée du modèle dans le catalogue, ou "
                             "dans le manifeste des modèles livrés avec Albireo ; absente pour un fichier importé sans "
                             "entrée."}}}},
-            "background": {"type": "string", "description": "Le modèle d'albireo-background, vide s'il n'y en a "
+            "background": {"type": "string", "description": "Le modèle d'gulliver-background, vide s'il n'y en a "
                                                              "pas."},
             "embedding_models": {"type": "array", "items": {"type": "object", "properties": {
                 "id": {"type": "string"}, "name": {"type": "string"},
@@ -692,13 +692,13 @@ paths = {
                                                                                             "removing"]},
                         "description": "Modèles qui attendent la fin de leurs requêtes avant de quitter le "
                                        "moteur."}}})}}},
-    "/albireo/v1/reserve": {
+    "/gulliver/v1/reserve": {
         "get": {"tags": ["Service"], "summary": "La réserve des modèles sur le Mac",
                 "description": "Chaque fichier vérifié d'un modèle est gardé sous son hachage à la fin de son "
                                "téléchargement et quand le modèle est retiré ; sur APFS, la copie est un clone, qui "
                                "ne prend pas de place tant que le modèle reste installé. Un modèle dont tous les "
                                "fichiers sont dans la réserve est restauré sans le réseau (in_reserve dans "
-                               "/albireo/v1/models).",
+                               "/gulliver/v1/models).",
                 "responses": {"200": reply("La réserve", {"type": "object", "properties": {
                     "limit": {"type": "integer", "description": "La limite en octets (reserve_gb)."},
                     "used": {"type": "integer", "description": "Octets des copies de modèles qui ne sont plus "
@@ -714,7 +714,7 @@ paths = {
                    "responses": {"200": reply("Résultat", {"type": "object", "properties": {
                        "ok": {"type": "boolean"}, "removed": {"type": "integer"},
                        "freed": {"type": "integer", "description": "Octets que comptaient les copies retirées."}}})}}},
-    "/albireo/v1/usage": {"get": {"tags": ["Service"], "summary": "Usage par jour sur 30 jours",
+    "/gulliver/v1/usage": {"get": {"tags": ["Service"], "summary": "Usage par jour sur 30 jours",
                                   "responses": {"200": reply("Les chiffres", {"type": "object", "properties": {
                                       "days": {"type": "array", "description": "Les jours avec un usage, 30 au plus, "
                                                "le plus récent d'abord.", "items": {"type": "object", "properties": {
@@ -723,10 +723,10 @@ paths = {
                                                    "prompt_tokens": {"type": "integer"},
                                                    "generated_tokens": {"type": "integer"},
                                                    "requests": {"type": "integer"}}}}}})}}},
-    "/albireo/v1/engines": {"get": {"tags": ["Service"], "summary": "Moteurs trouvés, leurs périphériques et leurs "
+    "/gulliver/v1/engines": {"get": {"tags": ["Service"], "summary": "Moteurs trouvés, leurs périphériques et leurs "
                                                                     "mesures",
                                     "responses": {"200": reply("Les moteurs", ref("Engines"))}}},
-    "/albireo/v1/licenses": {"get": {
+    "/gulliver/v1/licenses": {"get": {
         "tags": ["Service"], "summary": "Textes des licences de l'installation",
         "description": "Les textes du dossier des licences des programmes, que remplit l'installateur : ceux des "
                        "composants des programmes (Albireo, dlib, Mbed TLS, cpp-httplib, zlib, SQLite) et des "
@@ -739,19 +739,19 @@ paths = {
                 "name": {"type": "string", "example": "Mbed TLS"}, "size": {"type": "integer"},
                 "version": {"type": "string", "description": "La version avec laquelle le service a été construit, "
                             "quand il la connaît."}}}})}}},
-    "/albireo/v1/licenses/{file}": {"get": {
+    "/gulliver/v1/licenses/{file}": {"get": {
         "tags": ["Service"], "summary": "Un texte de licence de l'installation",
         "description": "Seulement les fichiers que le dossier liste, lus sans passer par aucun lien : un lien, un "
                        "fichier à plusieurs noms (liens physiques) ou un texte de plus de 1 Mo n'est pas servi.",
         "parameters": [{"name": "file", "in": "path", "required": True, "schema": {"type": "string"},
-                        "description": "Un fichier listé par /albireo/v1/licenses."}],
+                        "description": "Un fichier listé par /gulliver/v1/licenses."}],
         "responses": {"200": {"description": "Le texte", "content": {"text/plain": {"schema": {"type": "string"}}}},
                       "400": reply("Un nom avec un séparateur, deux-points, un caractère de contrôle ou un point "
                                    "initial (code invalid_license)", ref("Error")),
                       "404": reply("Aucun texte de ce nom (code license_not_found)", ref("Error"))}}},
-    "/albireo/v1/count": {"post": {
+    "/gulliver/v1/count": {"post": {
         "tags": ["Service"], "summary": "Tokens de messages, ou d'un texte, pour un modèle",
-        "description": "Pour albireo-relay, une estimation (estimated: true) des tokens du modèle extérieur : comptés "
+        "description": "Pour gulliver-relay, une estimation (estimated: true) des tokens du modèle extérieur : comptés "
                        "par le modèle général du Mac, ou environ quatre octets par token sans lui, dans le contexte "
                        "du modèle extérieur.",
         "requestBody": json_body({"type": "object", "properties": {
@@ -762,7 +762,7 @@ paths = {
                       "400": reply("Le moteur a refusé le compte, par exemple pour un modèle qui n'est pas chargé : "
                                    "error donne la raison, sous forme de texte", {"type": "object", "properties": {
                                        "error": {"type": "string"}}})}}},
-    "/albireo/v1/web/search": {"post": {
+    "/gulliver/v1/web/search": {"post": {
         "tags": ["Accès au web"], "summary": "Cherche dans Wikipedia",
         "description": "L'outil web_search du bouton Web, par l'interface REST de Wikipedia (GET "
                        "https://<langue>.wikipedia.org/w/rest.php/v1/search/page, avec un User-Agent qui donne un "
@@ -783,7 +783,7 @@ paths = {
             "503": reply("Trois requêtes de l'accès au web tournent déjà (code busy, Retry-After: 2), ou le service "
                          "s'arrête (cancelled)", ref("Error")),
             "504": reply("Le fournisseur n'a pas répondu à temps (code timeout)", ref("Error"))}}},
-    "/albireo/v1/relay": {"get": {
+    "/gulliver/v1/relay": {"get": {
         "tags": ["Service"], "summary": "Les fournisseurs du relais, leurs modèles et l'état du relais",
         "responses": {"200": reply("Les fournisseurs et le relais", {"type": "object", "properties": {
             "providers": {"type": "array", "items": {"type": "object", "properties": {
@@ -796,7 +796,7 @@ paths = {
                               "found": {"type": "boolean"}, "port": {"type": "integer"},
                               "reason": {"type": "string"}, "code": pseudalis_code,
                               "memory": {"type": "object"}}}}})}}},
-    "/albireo/v1/relay/test": {"post": {
+    "/gulliver/v1/relay/test": {"post": {
         "tags": ["Service"], "summary": "Liste les modèles d'un fournisseur du relais",
         "description": "Les réglages donnés, par-dessus ceux qui sont enregistrés, interrogent la route des modèles du "
                        "fournisseur, pour un moteur d'OpenAI à l'adresse saisie, puis avec /v1 ; le secret masqué "
@@ -822,7 +822,7 @@ paths = {
                          "ou un autre utilisateur (code relay_secret)", ref("Error")),
             "403": reply("Une requête qui ne vient pas du Mac lui-même : accès réseau, Host étranger ou page d'un "
                          "autre site (code relay_mac_only)", ref("Error"))}}},
-    "/albireo/v1/web/fetch": {"post": {
+    "/gulliver/v1/web/fetch": {"post": {
         "tags": ["Accès au web"], "summary": "Lit une page du web à une adresse publique",
         "description": "L'outil fetch_page du bouton Web. L'adresse est en http ou https, sans informations "
                        "d'utilisateur ; son hôte est refusé quand il désigne cet ordinateur ou un réseau local "
@@ -855,22 +855,22 @@ paths = {
             "503": reply("Trois requêtes de l'accès au web tournent déjà (code busy, Retry-After: 2), ou le service "
                          "s'arrête (cancelled)", ref("Error")),
             "504": reply("Le site n'a pas répondu à temps (code timeout)", ref("Error"))}}},
-    "/albireo/v1/models/refresh": {"post": {"tags": ["Administration"],
+    "/gulliver/v1/models/refresh": {"post": {"tags": ["Administration"],
                                             "summary": "Récupère à nouveau le catalogue, en arrière-plan",
                                             "responses": dict({"202": reply("Lancé", {"type": "object"})},
                                                               **offline_reply)}},
-    "/albireo/v1/models/{id}/download": {
+    "/gulliver/v1/models/{id}/download": {
         "post": {"tags": ["Administration"], "summary": "Lance ou reprend le téléchargement d'un modèle",
                  "description": "En mode hors ligne, lance une restauration purement locale de tous les fichiers "
                                 "vérifiés depuis la réserve, sans repli sur le réseau même si le réglage change. Si "
                                 "la réserve ne peut pas les fournir, la tâche asynchrone signale l'état error et le "
-                                "code reserve_unavailable dans GET /albireo/v1/models. Une tâche réseau déjà en cours "
+                                "code reserve_unavailable dans GET /gulliver/v1/models. Une tâche réseau déjà en cours "
                                 "pour ce modèle est refusée avec le code download_busy.",
                  "parameters": [model_id],
                  "responses": {"202": reply("Lancé", ok), "400": reply("Refusé", ok)}},
         "delete": {"tags": ["Administration"], "summary": "Annule un téléchargement",
                    "parameters": [model_id], "responses": {"200": reply("Annulé", ok)}}},
-    "/albireo/v1/models/{id}/activate": {"post": {
+    "/gulliver/v1/models/{id}/activate": {"post": {
         "tags": ["Administration"], "summary": "Active un modèle pour une fonction",
         "parameters": [model_id],
         "requestBody": json_body({"type": "object", "properties": {
@@ -878,16 +878,16 @@ paths = {
                      "description": "embedding ne prend qu'un modèle d'embedding, les autres fonctions un modèle de "
                                     "langage."}}}),
         "responses": {"200": reply("Activé", ok), "400": reply("Refusé", ok)}}},
-    "/albireo/v1/models/{id}/deactivate": {"post": {
+    "/gulliver/v1/models/{id}/deactivate": {"post": {
         "tags": ["Administration"], "summary": "Désactive un modèle pour toutes les fonctions",
         "description": "Le modèle quitte le moteur une fois servies ses requêtes en cours et en attente ; une "
                        "activation entre-temps le garde chargé. Le modèle de la recherche dans les documents est "
                        "remplacé par l'activation d'un autre modèle d'embedding.",
         "parameters": [model_id], "responses": {"200": reply("Désactivé", ok), "400": reply("Refusé", ok)}}},
-    "/albireo/v1/models/{id}/verify": {"post": {
+    "/gulliver/v1/models/{id}/verify": {"post": {
         "tags": ["Administration"], "summary": "Recalcule le hachage d'un modèle installé",
         "parameters": [model_id], "responses": {"200": reply("Résultat", {"type": "object"})}}},
-    "/albireo/v1/models/{id}": {"delete": {
+    "/gulliver/v1/models/{id}": {"delete": {
         "tags": ["Administration"], "summary": "Supprime un modèle installé",
         "description": "Un modèle du moteur est supprimé une fois ses requêtes servies et une fois qu'il a quitté le "
                        "moteur : pending vaut alors true, et le modèle est listé sous leaving jusque-là. Un modèle "
@@ -895,7 +895,7 @@ paths = {
         "parameters": [model_id],
         "responses": {"200": reply("Supprimé, ou à supprimer", {"type": "object", "properties": {
             "ok": {"type": "boolean"}, "pending": {"type": "boolean"}}}), "400": reply("Refusé", ok)}}},
-    "/albireo/v1/import": {"post": {
+    "/gulliver/v1/import": {"post": {
         "tags": ["Administration"], "summary": "Importe un lot hors ligne, ou le contenu du dossier d'import",
         "description": "Pour un ordinateur sans réseau : une carte mémoire ou un disque apporté à la machine. Le "
                        "service lit avec ses propres droits, si bien qu'il accepte deux sortes de chemins : un lot "
@@ -903,7 +903,7 @@ paths = {
                        "le catalogue et les modèles qu'il liste, par leurs noms, tailles et hachages ; et un dossier "
                        "ou un fichier du dossier d'import du dossier des données. Chaque fichier est lu sans passer "
                        "par aucun lien. Un fichier de modèle de l'utilisateur s'envoie par "
-                       "/albireo/v1/models/upload. Un catalogue plus ancien ne remplace jamais un plus récent, et un "
+                       "/gulliver/v1/models/upload. Un catalogue plus ancien ne remplace jamais un plus récent, et un "
                        "modèle déjà installé est listé sous already.",
         "requestBody": json_body({"type": "object", "required": ["path"], "properties": {"path": {"type": "string"}}}),
         "responses": {"200": reply("Modèles importés, catalogue et erreurs", {"type": "object", "properties": {
@@ -915,20 +915,20 @@ paths = {
                       "400": reply("Le chemin est refusé avant que rien n'en soit lu ; le code est le même, qu'un "
                                    "dossier hors du dossier d'import soit absent, illisible ou atteint par un lien "
                                    "(import_not_bundle)", import_refusal)}}},
-    "/albireo/v1/models/import": {"post": {
-        "tags": ["Administration"], "summary": "Identique à /albireo/v1/import",
+    "/gulliver/v1/models/import": {"post": {
+        "tags": ["Administration"], "summary": "Identique à /gulliver/v1/import",
         "requestBody": json_body({"type": "object", "required": ["path"], "properties": {"path": {"type": "string"}}}),
         "responses": {"200": reply("Fichiers importés et erreurs", {"type": "object"}),
                       "400": reply("Refusé", import_refusal)}}},
-    "/albireo/v1/speed": {"get": {
+    "/gulliver/v1/speed": {"get": {
         "tags": ["Service"], "summary": "Le débit du moteur en direct",
         "description": "Les tokens que le moteur a lus (prompts) et écrits (réponses) sur les cinq dernières "
                        "secondes, par seconde, et les requêtes en cours et en attente ; zéro une fois le moteur au "
-                       "repos. Bien plus léger que /albireo/v1/status, pour un affichage rafraîchi chaque seconde.",
+                       "repos. Bien plus léger que /gulliver/v1/status, pour un affichage rafraîchi chaque seconde.",
         "responses": {"200": reply("Le débit", {"type": "object", "properties": {
             "prompt_tokens_per_second": {"type": "number"}, "generation_tokens_per_second": {"type": "number"},
             "active": {"type": "integer"}, "waiting": {"type": "integer"}}})}}},
-    "/albireo/v1/pseudalis": {"get": {
+    "/gulliver/v1/pseudalis": {"get": {
         "tags": ["Service"], "summary": "Pseudalis sur ce Mac",
         "description": "Si Pseudalis est installé sur ce Mac (son dossier de données : PSEUDALIS_HOME, ou "
                        "~/.local/share/pseudalis), le port de ses réglages, son accès réseau (lan, lan_port) et s'il "
@@ -937,14 +937,14 @@ paths = {
         "responses": {"200": reply("Pseudalis", {"type": "object", "properties": {
             "found": {"type": "boolean"}, "port": {"type": "integer"}, "lan": {"type": "boolean"},
             "lan_port": {"type": "integer"}, "running": {"type": "boolean"}}})}}},
-    "/albireo/v1/carnet": {"get": {
+    "/gulliver/v1/carnet": {"get": {
         "tags": ["Service"], "summary": "Le sommaire des documents du portage",
         "description": "Les sections du sommaire (macos/site-docs/sommaire.json du dépôt où le service a été "
                        "construit, ou de ALBIREO_FORK_ROOT) et les épisodes de chaque blog ; found est false sans "
                        "dépôt. La page /carnet/ les affiche.",
         "responses": {"200": reply("{found, sections: [{title, entries: [{path, title, desc}]}], blogs: [{title, "
                                    "episodes: [{number, path, title}]}]}", {"type": "object"})}}},
-    "/albireo/v1/carnet/file": {"get": {
+    "/gulliver/v1/carnet/file": {"get": {
         "tags": ["Service"], "summary": "Un document du portage",
         "description": "Le fichier de chemin path dans le dépôt, s'il répond à un motif de la liste fermée du "
                        "sommaire : un Markdown en texte, une image, un PDF. Un chemin avec un composant vide, caché "
@@ -952,7 +952,7 @@ paths = {
         "parameters": [{"name": "path", "in": "query", "required": True, "schema": {"type": "string"}}],
         "responses": {"200": reply("Le fichier", {"type": "string", "format": "binary"}),
                       "404": reply("Absent de la liste (code not_found)", ref("Error"))}}},
-    "/albireo/v1/library": {"get": {
+    "/gulliver/v1/library": {"get": {
         "tags": ["Service"], "summary": "Les fichiers GGUF de la bibliothèque du Mac",
         "description": "Le dossier du réglage library_dir (créé à la première lecture quand c'est celui par défaut), "
                        "lu sans le réseau et jamais écrit : chaque fichier GGUF du dossier lui-même, ouvert sans "
@@ -976,9 +976,9 @@ paths = {
                         "{file, reason}.", "items": {"type": "object"}}}}),
                       "400": reply("Le dossier ne peut pas être créé ou n'est pas sûr (library_unavailable, "
                                    "library_insecure)", {"type": "object"})}}},
-    "/albireo/v1/library/load": {"post": {
+    "/gulliver/v1/library/load": {"post": {
         "tags": ["Administration"], "summary": "Charge dans Albireo un fichier de la bibliothèque du Mac",
-        "description": "Importe le fichier, avec le projecteur que /albireo/v1/library lui apparie, sans le réseau et "
+        "description": "Importe le fichier, avec le projecteur que /gulliver/v1/library lui apparie, sans le réseau et "
                        "sans les déplacer : la copie est un clone APFS sur le même volume.",
         "requestBody": json_body({"type": "object", "required": ["file"], "properties": {"file": {"type": "string"}}}),
         "responses": {"200": reply("Le résultat de l'import", {"type": "object", "properties": {
@@ -988,7 +988,7 @@ paths = {
             "errors": {"type": "array", "items": {"type": "string"}}}}),
                       "400": reply("Un fichier que la bibliothèque ne liste pas (library_not_found), ou un dossier "
                                    "refusé", {"type": "object"})}}},
-    "/albireo/v1/models/upload": {"post": {
+    "/gulliver/v1/models/upload": {"post": {
         "tags": ["Administration"], "summary": "Installe un fichier GGUF envoyé dans le corps",
         "description": "Le corps est le fichier, de la longueur que donne son en-tête Content-Length : un corps sans "
                        "longueur, ou envoyé par morceaux (Transfer-Encoding), est refusé (400). La limite de taille "
@@ -1002,7 +1002,7 @@ paths = {
                       "500": reply("Le fichier ne peut pas être créé dans le dossier des modèles", ref("Error")),
                       "507": reply("Il manque au disque du dossier des modèles la taille du fichier plus 256 Mo",
                                    ref("Error"))}}},
-    "/albireo/v1/settings": {
+    "/gulliver/v1/settings": {
         "get": {"tags": ["Administration"], "summary": "Réglages du service",
                 "responses": {"200": reply("Les réglages, le mot de passe du proxy donné sous la forme ********, et "
                                            "les adresses IPv4 du Mac (lan_addresses)", {"type": "object"})}},
@@ -1018,7 +1018,7 @@ paths = {
                                            "relay_mac_only)", ref("Error")),
                               "409": reply("Le nouveau port est occupé ou ne peut pas être ouvert (code "
                                            "port_unavailable)", ref("Error"))}}},
-    "/albireo/v1/hub/search": {"get": {"tags": ["Hugging Face"], "summary": "Cherche les modèles GGUF de Hugging Face",
+    "/gulliver/v1/hub/search": {"get": {"tags": ["Hugging Face"], "summary": "Cherche les modèles GGUF de Hugging Face",
         "description": "Chaque réponse est gardée sur le Mac (les 30 dernières recherches). En mode hors ligne, avec "
                        "local=1, ou quand Hugging Face ne répond pas, la réponse gardée pour les mêmes mots est "
                        "donnée, avec sa date dans cached_at.",
@@ -1034,7 +1034,7 @@ paths = {
                                    "hub_not_cached)", ref("Error")),
                       "502": reply("Hugging Face ne peut pas être joint et rien n'est gardé (code hub_unreachable)",
                                    ref("Error"))}}},
-    "/albireo/v1/hub/files": {"get": {"tags": ["Hugging Face"], "summary": "Les fichiers GGUF d'un dépôt",
+    "/gulliver/v1/hub/files": {"get": {"tags": ["Hugging Face"], "summary": "Les fichiers GGUF d'un dépôt",
         "description": "Gardés sur le Mac comme les recherches (les 30 derniers dépôts).",
         "parameters": [{"name": "repo", "in": "query", "required": True, "schema": {"type": "string"},
                         "description": "propriétaire/nom"},
@@ -1047,9 +1047,9 @@ paths = {
                                    ref("Error")),
                       "502": reply("Hugging Face ne peut pas être joint, ou le dépôt est invalide, et rien n'est "
                                    "gardé (code hub_unreachable)", ref("Error"))}}},
-    "/albireo/v1/hub/recent": {"get": {"tags": ["Hugging Face"], "summary": "Les recherches gardées sur le Mac",
+    "/gulliver/v1/hub/recent": {"get": {"tags": ["Hugging Face"], "summary": "Les recherches gardées sur le Mac",
         "responses": {"200": reply("{searches: [{query, at}]}, la plus récente d'abord", {"type": "object"})}}},
-    "/albireo/v1/hub/add": {"post": {"tags": ["Hugging Face"],
+    "/gulliver/v1/hub/add": {"post": {"tags": ["Hugging Face"],
         "summary": "Ajoute un fichier à la liste personnelle et lance son téléchargement",
         "description": "L'entrée est faite à partir du dépôt (taille et SHA-256 de Git LFS, architecture, contexte, "
                        "licence) et gardée à côté du catalogue ; le modèle s'installe et s'active ensuite comme les "
@@ -1061,12 +1061,12 @@ paths = {
         "responses": {"200": reply("{ok, id, name}", {"type": "object"}),
                       "400": reply("Dépôt ou fichier invalide, architecture non prise en charge (code hub_entry)",
                                    ref("Error"))}}},
-    "/albireo/v1/settings/profiles": {
+    "/gulliver/v1/settings/profiles": {
         "get": {"tags": ["Administration"], "summary": "Les réglages enregistrés",
                 "responses": {"200": reply("{profiles: [{label, saved, settings}]}", {"type": "object"})}},
         "post": {"tags": ["Administration"], "summary": "Enregistre les réglages actuels sous une étiquette",
                  "description": "Les réglages que change l'application web ; une étiquette enregistrée à nouveau est remplacée. Les restaurer, c'est faire un PUT "
-                                "de leurs settings vers /albireo/v1/settings.",
+                                "de leurs settings vers /gulliver/v1/settings.",
                  "requestBody": json_body({"type": "object", "required": ["label"], "properties": {
                      "label": {"type": "string", "minLength": 1, "maxLength": 120}}}),
                  "responses": {"200": reply("Les réglages enregistrés", {"type": "object"}),
@@ -1077,7 +1077,7 @@ paths = {
                    "responses": {"200": reply("Supprimé", ok),
                                  "404": reply("Aucun réglage enregistré sous cette étiquette (code label)",
                                               ref("Error"))}}},
-    "/albireo/v1/documents": {
+    "/gulliver/v1/documents": {
         "get": {"tags": ["Documents"], "summary": "Les documents du Mac",
                 "description": "Les fichiers du dossier des documents des données, hors de ses dossiers et de ses "
                                "fichiers cachés.",
@@ -1093,7 +1093,7 @@ paths = {
                  "responses": {"200": reply("{ok, name, already}", {"type": "object"}),
                                "400": reply("Un autre nom, pas de longueur ou un fichier plus long (code "
                                             "document_name), ou un transfert incomplet", ref("Error"))}}},
-    "/albireo/v1/documents/{name}": {
+    "/gulliver/v1/documents/{name}": {
         "get": {"tags": ["Documents"], "summary": "Lit un document du Mac",
                 "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
                 "responses": {"200": {"description": "Ses octets, avec le type de son extension"},
@@ -1102,9 +1102,9 @@ paths = {
                    "parameters": [{"name": "name", "in": "path", "required": True, "schema": {"type": "string"}}],
                    "responses": {"200": reply("Supprimé", ok),
                                  "404": reply("Aucun document de ce nom (code document_not_found)", ref("Error"))}}},
-    "/albireo/v1/restart": {"post": {"tags": ["Administration"], "summary": "Redémarre le service",
+    "/gulliver/v1/restart": {"post": {"tags": ["Administration"], "summary": "Redémarre le service",
                                      "responses": {"202": reply("Redémarrage en cours", ok)}}},
-    "/albireo/v1/engines/benchmark": {"post": {"tags": ["Administration"],
+    "/gulliver/v1/engines/benchmark": {"post": {"tags": ["Administration"],
                                                "summary": "Mesure chaque moteur utilisable sur cette machine",
                                                "description": "Une seule mesure tourne à la fois.",
                                                "responses": {
@@ -1114,7 +1114,7 @@ paths = {
                                                                     "error": {"type": "string"},
                                                                     "code": {"type": "string",
                                                                              "enum": ["benchmark_running"]}}})}}},
-    "/albireo/v1/logs": {"get": {"tags": ["Administration"], "summary": "Dernières lignes du journal",
+    "/gulliver/v1/logs": {"get": {"tags": ["Administration"], "summary": "Dernières lignes du journal",
                                  "responses": {"200": reply("Les lignes", {"type": "object"})}}},
 }
 
@@ -1132,10 +1132,10 @@ doc = {
                        "l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple "
                        "sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent "
                        "l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url "
-                       "https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions albireo-general, "
-                       "albireo-code et albireo-security désignent les modèles activés pour chaque fonction, "
-                       "albireo-background le modèle livré avec Albireo, que l'application web utilise pour son "
-                       "travail en arrière-plan, et albireo-embedding le modèle d'embedding de la recherche dans les "
+                       "https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, "
+                       "gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, "
+                       "gulliver-background le modèle livré avec Albireo, que l'application web utilise pour son "
+                       "travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les "
                        "documents.\n\n"
                        "Une version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur "
                        "le Mac comme sur le port réseau.\n\n"

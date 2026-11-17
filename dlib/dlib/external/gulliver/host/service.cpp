@@ -640,8 +640,8 @@ namespace gulliver
         const host_settings st = settings_->get();
         std::string id = requested;
         std::string role = requested;
-        if (role.compare(0, 8, "albireo-") == 0) role = role.substr(8);
-        if (requested.empty() || requested == "auto" || requested == "albireo") role = "general";
+        if (role.compare(0, 9, "gulliver-") == 0) role = role.substr(9);
+        if (requested.empty() || requested == "auto" || requested == "gulliver") role = "general";
         if (role == "background")
         {
             if (!background_model_.empty()) id = background_model_;
@@ -1178,7 +1178,7 @@ namespace gulliver
         if (path.size() > 5 && same_name(path.substr(path.size() - 5), ".gguf"))
             return refuse("import_use_upload", "a model file outside the import folder is sent to the service by its "
                 "user: Import..., then Model files (*.gguf), in the Models window, or the route "
-                "/albireo/v1/models/upload");
+                "/gulliver/v1/models/upload");
         /*
             Le catalogue décide, lu sans passer par aucun lien depuis la racine du disque ; la réponse
             est la même, que le dossier manque, soit illisible ou atteint par un lien, pour qu'elle ne
@@ -1830,8 +1830,8 @@ namespace gulliver
             return std::find(loaded.begin(), loaded.end(), id) != loaded.end();
         };
         std::string role = requested;
-        if (role.compare(0, 8, "albireo-") == 0) role = role.substr(8);
-        if (requested.empty() || requested == "auto" || requested == "albireo") role = "general";
+        if (role.compare(0, 9, "gulliver-") == 0) role = role.substr(9);
+        if (requested.empty() || requested == "auto" || requested == "gulliver") role = "general";
         // Le travail en arrière-plan va au modèle livré avec Albireo, sinon au modèle
         // général.
         if (role == "background")
@@ -1866,7 +1866,7 @@ namespace gulliver
             return std::find(loaded.begin(), loaded.end(), id) != loaded.end();
         };
         if (!requested.empty() && requested != "auto" && requested != embedding_role
-            && requested != std::string("albireo-") + embedding_role)
+            && requested != std::string("gulliver-") + embedding_role)
         {
             installed_model m;
             return is_loaded(requested) && db_->find_model(requested, m) && is_embedding(m) ? requested : std::string();

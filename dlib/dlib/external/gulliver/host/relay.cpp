@@ -29,7 +29,7 @@
 namespace gulliver
 {
 
-    const char* const relay_model_id = "albireo-relay";
+    const char* const relay_model_id = "gulliver-relay";
 
     namespace
     {

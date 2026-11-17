@@ -12,8 +12,8 @@
     documents ») : les documents du dépôt du fork (docs/, blog/, logs/, quelques README et les notes de version),
     lus en lecture seule et mis en page par web/carnet/.  Il remplace le petit site à part du port 8650.
 
-        GET /albireo/v1/carnet              le sommaire : ses sections, et les épisodes de chaque blog
-        GET /albireo/v1/carnet/file?path=   un fichier, par son chemin dans le dépôt
+        GET /gulliver/v1/carnet              le sommaire : ses sections, et les épisodes de chaque blog
+        GET /gulliver/v1/carnet/file?path=   un fichier, par son chemin dans le dépôt
 
     La liste des fichiers lisibles est fermée : les motifs de macos/site-docs/sommaire.json (un dossier exact et
     un nom, « * » ou « *.extension »).  Un chemin avec un composant vide, caché ou « .. », ou qui passe par un

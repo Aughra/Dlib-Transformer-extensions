@@ -11,7 +11,7 @@
         /v1/chat/completions
         /v1/completions
         /v1/embeddings
-        /albireo/v1/...           l'interface de l'application web
+        /gulliver/v1/...           l'interface de l'application web
 
     Une version personnelle : le service n'écoute que sur 127.0.0.1, et toute requête qu'il
     reçoit peut tout faire, l'application web changeant les réglages, les modèles et
@@ -100,9 +100,9 @@ namespace gulliver
         // n'écrit.
         const size_t max_backlog = 16384;
 
-        const char* const upload_route = "/albireo/v1/models/upload";
+        const char* const upload_route = "/gulliver/v1/models/upload";
         // Les documents du Mac (documents_dir()), envoyés dans leurs propres octets à cette route.
-        const char* const documents_route = "/albireo/v1/documents";
+        const char* const documents_route = "/gulliver/v1/documents";
         const uint64_t max_document_bytes = 512ull << 20;
 
         void send_json(httplib::Response& res, int status, const json& j)
@@ -338,7 +338,7 @@ namespace gulliver
             return s;
         }
 
-        // Les réglages que contient un instantané de /albireo/v1/settings/profiles : ceux que change l'application
+        // Les réglages que contient un instantané de /gulliver/v1/settings/profiles : ceux que change l'application
         // web.
         const char* const profile_keys[] = { "accelerator", "threads", "max_sequences", "context", "kv_mb", "kv_type",
             "warm_history", "spin_us", "gpu_prompt_tokens", "gpu_prompt_context", "lan", "lan_port", "port",
@@ -543,7 +543,7 @@ namespace gulliver
                     }
             if (body["think"].is_bool()) out["reasoning"] = body["think"];
             // Le travail de fond de l'application web, dont les réponses laissent aux prompts leur passe entière.
-            if (requested == "albireo-background") out["priority"] = "background";
+            if (requested == "gulliver-background") out["priority"] = "background";
             return true;
         }
 
@@ -737,7 +737,7 @@ namespace gulliver
                 out["timings"] = done["timings"];
                 // Une réponse que le moteur a arrêtée parce qu'elle se répétait.
                 if (done["repetition"].as_bool(false)) out["repetition"] = true;
-                out["system_fingerprint"] = std::string("albireo-") + GULLIVER_VERSION;
+                out["system_fingerprint"] = std::string("gulliver-") + GULLIVER_VERSION;
                 send_json(res, 200, out);
                 return;
             }
@@ -1273,7 +1273,7 @@ namespace gulliver
             if (model.empty())
             {
                 const bool alias = requested.empty() || requested == "auto" || requested == "embedding"
-                    || requested == "albireo-embedding";
+                    || requested == "gulliver-embedding";
                 if (send_not_ready(svc, res, alias ? std::string("embedding") : requested)) return;
                 send_error(res, 404, "invalid_request_error", requested.empty() || requested == "auto"
                     ? std::string("no embedding model is active")
@@ -1392,7 +1392,7 @@ namespace gulliver
         };
 
         const license_component license_components[] = {
-            {"albireo.txt", "Albireo", GULLIVER_VERSION},
+            {"gulliver.txt", "Albireo", GULLIVER_VERSION},
             {"dlib.txt", "dlib", ""},
             {"mbedtls.txt", "Mbed TLS", MBEDTLS_VERSION_STRING},
             {"cpp-httplib.txt", "cpp-httplib", CPPHTTPLIB_VERSION},
@@ -1548,7 +1548,7 @@ namespace gulliver
                     "media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' "
                     "data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; "
                     "form-action 'none'");
-            if (req.path.compare(0, 4, "/v1/") == 0 || req.path.compare(0, 11, "/albireo/v1") == 0)
+            if (req.path.compare(0, 4, "/v1/") == 0 || req.path.compare(0, 11, "/gulliver/v1") == 0)
                 res.set_header("Cache-Control", "no-store");
         });
         srv.set_exception_handler([](const httplib::Request& req, httplib::Response& res, std::exception_ptr ep) {
@@ -1588,7 +1588,7 @@ namespace gulliver
                 m["id"] = id;
                 m["object"] = "model";
                 m["created"] = now;
-                m["owned_by"] = "albireo";
+                m["owned_by"] = "gulliver";
                 json roles = json::array();
                 for (const auto& kv : st.active)
                     if (kv.second == id) roles.push_back(kv.first);
@@ -1601,10 +1601,10 @@ namespace gulliver
                 const std::string target = s->resolve_model(role);
                 if (target.empty()) continue;
                 json m = json::object();
-                m["id"] = std::string("albireo-") + role;
+                m["id"] = std::string("gulliver-") + role;
                 m["object"] = "model";
                 m["created"] = now;
-                m["owned_by"] = "albireo";
+                m["owned_by"] = "gulliver";
                 m["alias_of"] = target;
                 add_traits(m, target);
                 list.push_back(m);
@@ -1613,10 +1613,10 @@ namespace gulliver
             if (!background.empty())
             {
                 json m = json::object();
-                m["id"] = "albireo-background";
+                m["id"] = "gulliver-background";
                 m["object"] = "model";
                 m["created"] = now;
-                m["owned_by"] = "albireo";
+                m["owned_by"] = "gulliver";
                 m["alias_of"] = background;
                 add_traits(m, background);
                 list.push_back(m);
@@ -1625,10 +1625,10 @@ namespace gulliver
             if (!embedder.empty())
             {
                 json m = json::object();
-                m["id"] = std::string("albireo-") + embedding_role;
+                m["id"] = std::string("gulliver-") + embedding_role;
                 m["object"] = "model";
                 m["created"] = now;
-                m["owned_by"] = "albireo";
+                m["owned_by"] = "gulliver";
                 m["alias_of"] = embedder;
                 add_traits(m, embedder);
                 list.push_back(m);
@@ -1668,12 +1668,12 @@ namespace gulliver
 
         // Interface de l'application web.  Le statut dit à l'application web
         // si l'accès au web est disponible et quel est son fournisseur de recherche (web_capability()).
-        srv.Get("/albireo/v1/status", [s](const httplib::Request&, httplib::Response& res) {
+        srv.Get("/gulliver/v1/status", [s](const httplib::Request&, httplib::Response& res) {
             json status = s->status();
             status["web"] = web_capability(s->settings().get());
             send_json(res, 200, status);
         });
-        srv.Get("/albireo/v1/models", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Get("/gulliver/v1/models", [s](const httplib::Request& req, httplib::Response& res) {
             std::string lang = req.get_param_value("lang");
             if (lang.empty() || lang == "auto") lang = "fr";
             json o = s->models().overview(lang);
@@ -1693,18 +1693,18 @@ namespace gulliver
             send_json(res, 200, o);
         });
         // Le débit du moteur, lu en direct par l'application (fork pour macOS).
-        srv.Get("/albireo/v1/speed", [s](const httplib::Request&, httplib::Response& res) {
+        srv.Get("/gulliver/v1/speed", [s](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, s->speed());
         });
         // Pseudalis sur ce Mac (fork pour macOS), pour passer d'une application à l'autre.
-        srv.Get("/albireo/v1/pseudalis", [](const httplib::Request&, httplib::Response& res) {
+        srv.Get("/gulliver/v1/pseudalis", [](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, pseudalis_peer());
         });
         // Le carnet du portage (fork pour macOS, host/carnet.h) : son sommaire, puis un fichier de sa liste.
-        srv.Get("/albireo/v1/carnet", [](const httplib::Request&, httplib::Response& res) {
+        srv.Get("/gulliver/v1/carnet", [](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, carnet_index());
         });
-        srv.Get("/albireo/v1/carnet/file", [](const httplib::Request& req, httplib::Response& res) {
+        srv.Get("/gulliver/v1/carnet/file", [](const httplib::Request& req, httplib::Response& res) {
             std::string data, type;
             if (!carnet_file(req.get_param_value("path"), data, type))
             {
@@ -1714,10 +1714,10 @@ namespace gulliver
             res.set_content(data, type);
         });
         // La réserve des modèles (fork pour macOS) : ce qu'elle garde, et son vidage.
-        srv.Get("/albireo/v1/reserve", [s](const httplib::Request&, httplib::Response& res) {
+        srv.Get("/gulliver/v1/reserve", [s](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, s->models().reserve_status());
         });
-        srv.Delete("/albireo/v1/reserve", [s](const httplib::Request&, httplib::Response& res) {
+        srv.Delete("/gulliver/v1/reserve", [s](const httplib::Request&, httplib::Response& res) {
             uint64_t freed = 0;
             const size_t removed = s->models().clear_reserve(freed);
             json o = ok_result(true);
@@ -1725,20 +1725,20 @@ namespace gulliver
             o["freed"] = static_cast<unsigned long long>(freed);
             send_json(res, 200, o);
         });
-        srv.Get("/albireo/v1/usage", [s](const httplib::Request&, httplib::Response& res) {
+        srv.Get("/gulliver/v1/usage", [s](const httplib::Request&, httplib::Response& res) {
             json o = json::object();
             o["days"] = s->db().usage(30);
             send_json(res, 200, o);
         });
-        srv.Get("/albireo/v1/engines", [s](const httplib::Request&, httplib::Response& res) {
+        srv.Get("/gulliver/v1/engines", [s](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, s->engines());
         });
         // Les textes de licence de l'installation, en lecture seule : leur liste, et chaque texte par son fichier.
         const std::string licenses = join_path(svc.program_dir(), "licenses");
-        srv.Get("/albireo/v1/licenses", [licenses](const httplib::Request&, httplib::Response& res) {
+        srv.Get("/gulliver/v1/licenses", [licenses](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, license_list(licenses));
         });
-        srv.Get(R"(/albireo/v1/licenses/(.+))", [licenses](const httplib::Request& req, httplib::Response& res) {
+        srv.Get(R"(/gulliver/v1/licenses/(.+))", [licenses](const httplib::Request& req, httplib::Response& res) {
             const std::string name = req.matches[1];
             if (!license_file_name(name))
             {
@@ -1758,7 +1758,7 @@ namespace gulliver
             res.status = 200;
             res.set_content(text, "text/plain; charset=utf-8");
         });
-        srv.Post("/albireo/v1/count", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Post("/gulliver/v1/count", [s](const httplib::Request& req, httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;
             json q = json::object();
@@ -1808,12 +1808,12 @@ namespace gulliver
             l'origine du reste de l'interface, refusées tant que le service travaille hors ligne
             ou une fois que l'administrateur a désactivé l'accès au web.
         */
-        srv.Post("/albireo/v1/web/search", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Post("/gulliver/v1/web/search", [s](const httplib::Request& req, httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;
             send_web_reply(res, web_search(body, s->settings().get()));
         });
-        srv.Post("/albireo/v1/web/fetch", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Post("/gulliver/v1/web/fetch", [s](const httplib::Request& req, httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;
             send_web_reply(res, web_fetch(body, s->settings().get()));
@@ -1823,14 +1823,14 @@ namespace gulliver
             adresse ni son secret, pour l'application web ; l'essai d'un fournisseur avec les réglages
             que l'application web s'apprête à enregistrer.
         */
-        srv.Get("/albireo/v1/relay", [s](const httplib::Request&, httplib::Response& res) {
+        srv.Get("/gulliver/v1/relay", [s](const httplib::Request&, httplib::Response& res) {
             json o = relay_catalog();
             o["relay"] = s->relay_status();
             // Si Pseudalis répond sur ce Mac, pour l'application web, qui propose la pseudonymisation.
             o["pseudalis"] = s->relay().pseudonymization_status();
             send_json(res, 200, o);
         });
-        srv.Post("/albireo/v1/relay/test", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Post("/gulliver/v1/relay/test", [s](const httplib::Request& req, httplib::Response& res) {
             // L'essai joint le fournisseur avec la clé enregistrée : depuis le Mac seul, comme les réglages.
             if (!from_this_mac(*s, req))
             {
@@ -1855,8 +1855,8 @@ namespace gulliver
             send_json(res, 200, s->relay().test(r));
         });
 
-        // Le catalogue est téléchargé en arrière-plan ; son état est dans /albireo/v1/models.
-        srv.Post("/albireo/v1/models/refresh", [s](const httplib::Request& req, httplib::Response& res) {
+        // Le catalogue est téléchargé en arrière-plan ; son état est dans /gulliver/v1/models.
+        srv.Post("/gulliver/v1/models/refresh", [s](const httplib::Request& req, httplib::Response& res) {
             if (refuse_offline(*s, res)) return;
             s->models().refresh_catalog_async();
             json o = ok_result(true);
@@ -1894,20 +1894,20 @@ namespace gulliver
             else
                 send_error(res, 502, "server_error", "Hugging Face: " + error, "hub_unreachable");
         };
-        srv.Get("/albireo/v1/hub/search", [hub_route](const httplib::Request& req, httplib::Response& res) {
+        srv.Get("/gulliver/v1/hub/search", [hub_route](const httplib::Request& req, httplib::Response& res) {
             const std::string q = req.get_param_value("q");
             hub_route("search", q, req, res, [&](json& out, std::string& error) { return hub_search(q, out, error); });
         });
-        srv.Get("/albireo/v1/hub/files", [hub_route](const httplib::Request& req, httplib::Response& res) {
+        srv.Get("/gulliver/v1/hub/files", [hub_route](const httplib::Request& req, httplib::Response& res) {
             const std::string repo = req.get_param_value("repo");
             hub_route("files", repo, req, res, [&](json& out, std::string& error) { return hub_files(repo, out, error); });
         });
-        srv.Get("/albireo/v1/hub/recent", [s](const httplib::Request&, httplib::Response& res) {
+        srv.Get("/gulliver/v1/hub/recent", [s](const httplib::Request&, httplib::Response& res) {
             json o = json::object();
             o["searches"] = hub_cache_recent(s->db());
             send_json(res, 200, o);
         });
-        srv.Post("/albireo/v1/hub/add", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Post("/gulliver/v1/hub/add", [s](const httplib::Request& req, httplib::Response& res) {
             if (refuse_offline(*s, res)) return;
             json body;
             if (!parse_body(req, res, body)) return;
@@ -1933,18 +1933,18 @@ namespace gulliver
             o["name"] = entry["name"];
             send_json(res, 200, o);
         });
-        srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,
+        srv.Post(R"(/gulliver/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,
                                                                                httplib::Response& res) {
             user_error error;
             const bool ok = s->models().start_download(req.matches[1], error, s->settings().get().offline);
             send_json(res, ok ? 202 : 400, ok_result(ok, error));
         });
-        srv.Delete(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,
+        srv.Delete(R"(/gulliver/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,
                                                                                  httplib::Response& res) {
             s->models().cancel_download(req.matches[1]);
             send_json(res, 200, ok_result(true));
         });
-        srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/activate)", [s](const httplib::Request& req,
+        srv.Post(R"(/gulliver/v1/models/([A-Za-z0-9._-]+)/activate)", [s](const httplib::Request& req,
                                                                                httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;
@@ -1952,17 +1952,17 @@ namespace gulliver
             const bool ok = s->activate(req.matches[1], body["role"].str("general"), error);
             send_json(res, ok ? 200 : 400, ok_result(ok, error));
         });
-        srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/deactivate)", [s](const httplib::Request& req,
+        srv.Post(R"(/gulliver/v1/models/([A-Za-z0-9._-]+)/deactivate)", [s](const httplib::Request& req,
                                                                                  httplib::Response& res) {
             user_error error;
             const bool ok = s->deactivate(req.matches[1], error);
             send_json(res, ok ? 200 : 400, ok_result(ok, error));
         });
-        srv.Post(R"(/albireo/v1/models/([A-Za-z0-9._-]+)/verify)", [s](const httplib::Request& req,
+        srv.Post(R"(/gulliver/v1/models/([A-Za-z0-9._-]+)/verify)", [s](const httplib::Request& req,
                                                                              httplib::Response& res) {
             send_json(res, 200, s->models().verify(req.matches[1]));
         });
-        srv.Delete(R"(/albireo/v1/models/([A-Za-z0-9._-]+))", [s](const httplib::Request& req,
+        srv.Delete(R"(/gulliver/v1/models/([A-Za-z0-9._-]+))", [s](const httplib::Request& req,
                                                                         httplib::Response& res) {
             const std::string id = req.matches[1];
             user_error error;
@@ -1990,16 +1990,16 @@ namespace gulliver
             }
             send_json(res, 200, r);
         };
-        srv.Post("/albireo/v1/import", import);
-        srv.Post("/albireo/v1/models/import", import);
+        srv.Post("/gulliver/v1/import", import);
+        srv.Post("/gulliver/v1/models/import", import);
         // La bibliothèque du Mac (fork pour macOS) : ses fichiers, et le chargement de l'un d'eux, sans réseau.
-        srv.Get("/albireo/v1/library", [s](const httplib::Request&, httplib::Response& res) {
+        srv.Get("/gulliver/v1/library", [s](const httplib::Request&, httplib::Response& res) {
             user_error refusal;
             const json r = s->library(refusal);
             if (!refusal.code.empty()) send_json(res, 400, ok_result(false, refusal));
             else send_json(res, 200, r);
         });
-        srv.Post("/albireo/v1/library/load", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Post("/gulliver/v1/library/load", [s](const httplib::Request& req, httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;
             user_error refusal;
@@ -2090,7 +2090,7 @@ namespace gulliver
             o["documents"] = list;
             send_json(res, 200, o);
         });
-        srv.Get(R"(/albireo/v1/documents/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Get(R"(/gulliver/v1/documents/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
             const std::string name = req.matches[1];
             std::string data;
             if (!document_name(name) || !read_file(join_path(s->documents_dir(), name), data, max_document_bytes))
@@ -2101,7 +2101,7 @@ namespace gulliver
             res.set_header("Cache-Control", "no-store");
             res.set_content(data, document_type(name));
         });
-        srv.Delete(R"(/albireo/v1/documents/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Delete(R"(/gulliver/v1/documents/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
             const std::string name = req.matches[1];
             const std::string path = join_path(s->documents_dir(), name);
             if (!document_name(name) || !file_exists(path) || !remove_file(path))
@@ -2188,14 +2188,14 @@ namespace gulliver
             Les réglages enregistrés : des instantanés des réglages que change l'application web, sous une
             étiquette que donne l'utilisateur, dans settings-profiles.json du dossier de données.  Un
             instantané ne contient pas le mot de passe du proxy (seulement son masque).  En restaurer un est un changement des réglages, que l'application web envoie à
-            /albireo/v1/settings.
+            /gulliver/v1/settings.
         */
-        srv.Get("/albireo/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Get("/gulliver/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
             json o = json::object();
             o["profiles"] = read_profiles(*s);
             send_json(res, 200, o);
         });
-        srv.Post("/albireo/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Post("/gulliver/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;
             const std::string label = body["label"].as_string();
@@ -2227,7 +2227,7 @@ namespace gulliver
             log_info("settings: saved as " + label);
             send_json(res, 200, p);
         });
-        srv.Delete("/albireo/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Delete("/gulliver/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
             const std::string label = req.get_param_value("label");
             std::lock_guard<std::mutex> lock(profiles_m);
             const json profiles = read_profiles(*s);
@@ -2248,10 +2248,10 @@ namespace gulliver
         });
 
         // Le mot de passe du proxy est donné sous la forme proxy_password_mask (host_settings::to_json()).
-        srv.Get("/albireo/v1/settings", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Get("/gulliver/v1/settings", [s](const httplib::Request& req, httplib::Response& res) {
             send_json(res, 200, public_settings(*s));
         });
-        srv.Put("/albireo/v1/settings", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Put("/gulliver/v1/settings", [s](const httplib::Request& req, httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;
             std::string error;
@@ -2349,16 +2349,16 @@ namespace gulliver
             if (after.reserve_gb < before.reserve_gb) s->models().trim_reserve();
             if (restart) s->request_restart();
         });
-        srv.Post("/albireo/v1/restart", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Post("/gulliver/v1/restart", [s](const httplib::Request& req, httplib::Response& res) {
             send_json(res, 202, ok_result(true));
             s->request_restart();
         });
-        srv.Post("/albireo/v1/engines/benchmark", [s](const httplib::Request& req, httplib::Response& res) {
+        srv.Post("/gulliver/v1/engines/benchmark", [s](const httplib::Request& req, httplib::Response& res) {
             // Une mesure déjà en cours refuse la seconde avec 409.
             const json r = s->benchmark_engines();
             send_json(res, r["code"].as_string() == "benchmark_running" ? 409 : 200, r);
         });
-        srv.Get("/albireo/v1/logs", [](const httplib::Request& req, httplib::Response& res) {
+        srv.Get("/gulliver/v1/logs", [](const httplib::Request& req, httplib::Response& res) {
             json lines = json::array();
             for (const auto& l : log_file::instance().recent()) lines.push_back(l);
             json o = json::object();

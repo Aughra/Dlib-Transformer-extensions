@@ -2,7 +2,7 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 // L'état du service et des modèles vu par la page (fork pour macOS : sorti d'app.js) : la lecture régulière de
-// /albireo/v1/status, le modèle de chaque rôle et ce qu'il lit, le modèle d'arrière-plan et ses vitesses, les outils
+// /gulliver/v1/status, le modèle de chaque rôle et ce qu'il lit, le modèle d'arrière-plan et ses vitesses, les outils
 // et l'accès au Web disponibles, et la ligne d'état du panneau latéral.
 
 import * as api from './api.js';
@@ -39,7 +39,7 @@ export function roleModel(role) {
     modèle, albireo-relay, tient lieu du modèle extérieur ; l'agent reste aux modèles du Mac, et le Web d'une discussion
     relayée est la recherche du modèle extérieur lui-même (Claude), sans les outils de la page.
 */
-export const relayModel = 'albireo-relay';
+export const relayModel = 'gulliver-relay';
 
 export function relayStatus() {
   const s = state.status;
@@ -247,7 +247,7 @@ export function toolSet(c, caps) {
     il n'y en a pas.  Un modèle qui raisonne toujours voit son raisonnement terminé aussitôt par le
     moteur, hors de la réponse et de son max_tokens.
 */
-export const backgroundModel = 'albireo-background';
+export const backgroundModel = 'gulliver-background';
 
 // Le contexte de travail du modèle d'arrière-plan, et ses vitesses de lecture et d'écriture.
 export function backgroundContext() {
@@ -460,7 +460,7 @@ async function measureContext(c, key) {
     const caps = roleCapabilities(role);
     const set = toolSet(c, caps);
     const system = systemPrompt(c, caps, set);
-    const model = 'albireo-' + role;
+    const model = 'gulliver-' + role;
     const text = apiMessages(c, system, null, { read: false, url: () => null });
     const r = await api.count(model, text, set.definitions);
     if (r && typeof r.tokens === 'number' && r.context) {
@@ -538,7 +538,7 @@ function speedHelp() {
       'au plus un jeton par réponse en cours. À la fin de chaque passe, il note l’heure et le nombre de jetons lus et ' +
       'écrits. Le débit est la somme des jetons des passes des cinq dernières secondes, divisée par le temps écoulé ' +
       'depuis la plus ancienne de ces passes (une seconde au moins). La page le relit chaque seconde ' +
-      '(GET /albireo/v1/speed).',
+      '(GET /gulliver/v1/speed).',
     'Lecture : les jetons de prompt que le moteur calcule, c’est-à-dire la question, la discussion et les documents, ' +
       'y compris la relecture de l’historique en arrière-plan (réglage « Préparer la question suivante »). Les jetons ' +
       'déjà en mémoire, repris d’une lecture précédente, ne sont pas relus, donc pas comptés. C’est rapide, surtout ' +
@@ -579,7 +579,7 @@ function renderHint() {
 
 /*
     Le débit du moteur en direct (fork pour macOS), sous la ligne d'état : les tokens lus (prompts, documents) et
-    écrits (réponses) par seconde, sur les cinq dernières secondes (GET /albireo/v1/speed), relus chaque seconde
+    écrits (réponses) par seconde, sur les cinq dernières secondes (GET /gulliver/v1/speed), relus chaque seconde
     pendant que la page est visible.  Au repos, les dernières valeurs mesurées restent, en plus pâle.
 */
 const lastSpeed = { read: 0, write: 0 };
@@ -587,7 +587,7 @@ async function pollSpeed() {
   if (!ui.speedLine || document.hidden) return;
   let s;
   try {
-    s = await api.getJSON('/albireo/v1/speed');
+    s = await api.getJSON('/gulliver/v1/speed');
   } catch (e) {
     ui.speedLine.replaceChildren();
     return;

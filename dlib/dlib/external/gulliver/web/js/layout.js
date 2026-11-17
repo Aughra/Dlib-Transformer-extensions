@@ -214,7 +214,7 @@ export function buildLayout() {
 
 /*
     Le passage à Pseudalis (fork pour macOS) : un sélecteur « Albireo | Pseudalis » sous le logo, montré seulement sur
-    le Mac lui-même (https://localhost), quand le service dit que Pseudalis y tourne (GET /albireo/v1/pseudalis).
+    le Mac lui-même (https://localhost), quand le service dit que Pseudalis y tourne (GET /gulliver/v1/pseudalis).
     Pseudalis s'ouvre dans un autre onglet, à son adresse ; son propre sélecteur ramène ici.
 */
 function appSwitch() {
@@ -222,7 +222,7 @@ function appSwitch() {
     h('span', { class: 'on', 'aria-current': 'page' }, 'Albireo'));
   // Sur le Mac, par localhost ; depuis un autre appareil, par l'accès réseau de Pseudalis quand il est ouvert.
   const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-  fetch('/albireo/v1/pseudalis', { cache: 'no-store' }).then((r) => r.json()).then((p) => {
+  fetch('/gulliver/v1/pseudalis', { cache: 'no-store' }).then((r) => r.json()).then((p) => {
     if (!p || !p.running || !p.port) return;
     const href = local ? 'https://localhost:' + p.port + '/'
       : p.lan && p.lan_port ? 'http://' + location.hostname + ':' + p.lan_port + '/' : '';

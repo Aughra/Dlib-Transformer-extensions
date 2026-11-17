@@ -89,7 +89,7 @@
  },
  {
   "name": "carnet",
-  "eval": "const r=await (await fetch('/albireo/v1/carnet')).json(); const ok=await fetch('/albireo/v1/carnet/file?path=CLAUDE.md'); return r.found+' '+(r.sections.length>=5)+' '+(r.blogs.length===2&&r.blogs[0].episodes.length>40)+' '+ok.status",
+  "eval": "const r=await (await fetch('/gulliver/v1/carnet')).json(); const ok=await fetch('/gulliver/v1/carnet/file?path=CLAUDE.md'); return r.found+' '+(r.sections.length>=5)+' '+(r.blogs.length===2&&r.blogs[0].episodes.length>40)+' '+ok.status",
   "expect": "true true true 200"
  },
  {

@@ -322,7 +322,7 @@ export function modelsTab(body, env) {
   async function choose(m) {
     try {
       for (const role of ['general', 'code', 'security']) {
-        await api.postJSON('/albireo/v1/models/' + encodeURIComponent(m.id) + '/activate', { role });
+        await api.postJSON('/gulliver/v1/models/' + encodeURIComponent(m.id) + '/activate', { role });
       }
       toast(m.name + ' répond désormais ; il se charge.');
       if (env.refreshStatus) env.refreshStatus();
@@ -363,14 +363,14 @@ export function modelsTab(body, env) {
       const pct = dl.total ? Math.round(100 * dl.received / dl.total) : 0;
       actions = h('div', { class: 'mdl-progress' }, h('div', { class: 'bar' }, h('div', { style: { width: pct + '%' } })),
         h('span', null, dl.state === 'verifying' ? 'vérification' : dl.state === 'queued' ? 'en attente' : pct + ' %'), h('button', { class: 'button', type: 'button',
-          onclick: () => act('DELETE', '/albireo/v1/models/' + encodeURIComponent(m.id) + '/download', 'Téléchargement annulé.') },
+          onclick: () => act('DELETE', '/gulliver/v1/models/' + encodeURIComponent(m.id) + '/download', 'Téléchargement annulé.') },
         'Annuler'));
     } else if (m.installed) {
       actions = h('div', { class: 'svc-input' },
         h('button', { class: 'button primary', type: 'button', onclick: () => choose(m) }, 'Choisir'),
         h('button', { class: 'button', type: 'button', onclick: () => {
           if (window.confirm('Supprimer ' + m.name + ' du Mac ?')) {
-            act('DELETE', '/albireo/v1/models/' + encodeURIComponent(m.id), m.name + ' supprimé.');
+            act('DELETE', '/gulliver/v1/models/' + encodeURIComponent(m.id), m.name + ' supprimé.');
           }
         } }, 'Supprimer'));
     } else {
@@ -380,7 +380,7 @@ export function modelsTab(body, env) {
       actions = h('button', { class: 'button', type: 'button', disabled: !!data.offline && !local,
         title: local ? 'Copie locale depuis la réserve du Mac, vérifiée, sans réseau'
           : data.offline ? 'Ce modèle n’est pas dans la réserve du Mac' : null,
-        onclick: () => act('POST', '/albireo/v1/models/' + encodeURIComponent(m.id) + '/download',
+        onclick: () => act('POST', '/gulliver/v1/models/' + encodeURIComponent(m.id) + '/download',
           (local ? 'Restauration de ' + m.name + ' lancée.' : 'Téléchargement de ' + m.name + ' lancé.')) },
       local ? 'Restaurer depuis le Mac' : data.offline ? 'Pas dans la réserve'
         : 'Télécharger (' + gb(m.total_size || m.size || 0) + ')');
@@ -418,7 +418,7 @@ export function modelsTab(body, env) {
       h('button', { class: 'button', type: 'button', disabled: offlineNow,
         title: offlineNow ? 'Le service est hors ligne' : 'Le catalogue depuis GitHub, la dernière recherche depuis Hugging Face',
         onclick: async () => {
-          await act('POST', '/albireo/v1/models/refresh', 'Catalogue demandé à GitHub.');
+          await act('POST', '/gulliver/v1/models/refresh', 'Catalogue demandé à GitHub.');
           if (lastQuery !== null) search();
         } }, 'Rafraîchir depuis Hugging Face'));
     const updated = data.catalog && data.catalog.updated ? new Date(data.catalog.updated).toLocaleString('fr-FR',
@@ -453,7 +453,7 @@ export function modelsTab(body, env) {
   async function loadLibrary() {
     let r;
     try {
-      r = await api.getJSON('/albireo/v1/library');
+      r = await api.getJSON('/gulliver/v1/library');
     } catch (e) {
       library.replaceChildren(h('h4', null, 'Sur ce Mac'), h('p', { class: 'error-box', role: 'alert' },
         modelErrors[e.code] || 'La bibliothèque du Mac ne se lit pas : ' + e.message));
@@ -477,7 +477,7 @@ export function modelsTab(body, env) {
           loading.add(f.file);
           loadLibrary();
           try {
-            const done = await api.postJSON('/albireo/v1/library/load', { file: f.file });
+            const done = await api.postJSON('/gulliver/v1/library/load', { file: f.file });
             const ids = (done.imported || []).concat(done.already || []);
             toast(done.imported && done.imported.length ? f.file + ' est chargé dans Albireo.'
               : done.already && done.already.length ? f.file + ' était déjà dans Albireo (' + ids.join(', ') + ').'
@@ -514,7 +514,7 @@ export function modelsTab(body, env) {
   async function loadRecent() {
     let r;
     try {
-      r = await api.getJSON('/albireo/v1/hub/recent');
+      r = await api.getJSON('/gulliver/v1/hub/recent');
     } catch (e) {
       return;
     }
@@ -546,7 +546,7 @@ export function modelsTab(body, env) {
       : 'Recherche sur Hugging Face…'));
     let r;
     try {
-      r = await api.getJSON('/albireo/v1/hub/search?q=' + encodeURIComponent(lastQuery) + (local ? '&local=1' : ''));
+      r = await api.getJSON('/gulliver/v1/hub/search?q=' + encodeURIComponent(lastQuery) + (local ? '&local=1' : ''));
     } catch (e) {
       hubResults.replaceChildren(h('p', { class: 'help' }, e.code === 'hub_not_cached' || /never kept/.test(e.message)
         ? 'Cette recherche n’a jamais été faite sur ce Mac : il faut Internet pour la lancer.' : e.message));
@@ -576,7 +576,7 @@ export function modelsTab(body, env) {
     box.replaceChildren(h('p', { class: 'help' }, 'Lecture des fichiers…'));
     let r;
     try {
-      r = await api.getJSON('/albireo/v1/hub/files?repo=' + encodeURIComponent(repo));
+      r = await api.getJSON('/gulliver/v1/hub/files?repo=' + encodeURIComponent(repo));
     } catch (e) {
       box.replaceChildren(h('p', { class: 'help' }, e.message));
       return;
@@ -600,7 +600,7 @@ export function modelsTab(body, env) {
             (heavy ? ' · trop gros pour ce Mac' : '') + (f.reason ? ' · ' + f.reason : '')),
           f.compatible ? h('button', { class: 'button', type: 'button', onclick: async () => {
             try {
-              const done = await api.postJSON('/albireo/v1/hub/add', { repo, file: f.file,
+              const done = await api.postJSON('/gulliver/v1/hub/add', { repo, file: f.file,
                 projector: vision && vision.checked ? pick.file : '' });
               toast(done.name + ' ajouté ; son téléchargement commence.');
               load();
