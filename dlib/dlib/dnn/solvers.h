@@ -46,6 +46,8 @@ namespace dlib
             DLIB_CASSERT(params.size() != 0);
             if (v.size() == 0)
             {
+                // The state lives where the gradients do (see tensor::get_tensor_device()).
+                v.set_tensor_device(params_grad.get_tensor_device());
                 v.copy_size(params_grad);
                 v = 0;
             }
@@ -159,6 +161,8 @@ namespace dlib
             DLIB_CASSERT(params.size() != 0);
             if (v.size() == 0)
             {
+                // The state lives where the gradients do (see tensor::get_tensor_device()).
+                v.set_tensor_device(params_grad.get_tensor_device());
                 v.copy_size(params_grad);
                 v = 0;
             }
@@ -232,6 +236,10 @@ namespace dlib
             DLIB_CASSERT(params.size() != 0);
             if (v.size() == 0)
             {
+                // The state lives where the gradients do (see tensor::get_tensor_device()).
+                m.set_tensor_device(params_grad.get_tensor_device());
+                v.set_tensor_device(params_grad.get_tensor_device());
+                s.set_tensor_device(params_grad.get_tensor_device());
                 m.copy_size(params_grad);
                 m = 0;
                 v.copy_size(params_grad);
@@ -358,6 +366,10 @@ namespace dlib
             DLIB_CASSERT(params.size() != 0);
             if (v.size() == 0)
             {
+                // The state lives where the gradients do (see tensor::get_tensor_device()).
+                m.set_tensor_device(params_grad.get_tensor_device());
+                v.set_tensor_device(params_grad.get_tensor_device());
+                s.set_tensor_device(params_grad.get_tensor_device());
                 m.copy_size(params_grad);
                 m = 0;
                 v.copy_size(params_grad);

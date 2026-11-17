@@ -6,8 +6,8 @@
 
 - `main` = **Albireo 5.9.0** ; **Pseudalis 3.3.0** (numérotation du fork, documentation à part : `docs/pseudalis/`, `blog/pseudalis/`, `pseudalis/web/changelog.md`). Plus aucune condition de plateforme dans Albireo et Pseudalis (seul un `#error` dans `qkernels.cpp` si l'on compile sans les instructions de la puce Apple). **dlib ne vise plus que macOS** (2026-11-15) : `platform.h` s'arrête ailleurs ; interface Python, CBLAS et zlib embarquée retirées (zlib de macOS) ; plus aucune condition Apple ni Windows dans son code ; ses bibliothèques embarquées (sqlite, httplib, mbedtls, libpng, libjpeg) gardent les leurs.
 - **Vrai service** : Albireo tourne en **5.9.0** et Pseudalis en **3.3.0** (relancés le 2026-11-16 au soir, après le redémarrage du Mac par une mise à jour de macOS ; relais coupé). Pseudalis sur 18444 (accès réseau 8445), Albireo sur 18443 (réseau 8444 sans mot de passe), bibliothèque `build/albireo-home/library` remplie de clones de `build/models` ; journal `build/albireo-home/logs/console.log`.
-- **Tests** : `test_macos.sh` d'Albireo 60 sur 60 (5.8.0, 2026-11-16), de Pseudalis 37 sur 37 (3.3.0, 2026-11-16) ; banc de la page 131 vérifications (5.9.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` de la liste du mémo avec `--test_npu`, `--test_metal` et `--test_dnn` : 5 252 124 vérifications (build CPU, 2026-11-17) ; `dtest --test_metal` : 3 403 vérifications dans le build Metal (5 255 512 avec la liste et `--test_dnn`) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
-- **Blog** : épisode 50 ; **blog de Pseudalis** : épisode 4 ; **notes pour l'auteur** : changement 25, entrée n° 24, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
+- **Tests** : `test_macos.sh` d'Albireo 60 sur 60 (5.8.0, 2026-11-16), de Pseudalis 37 sur 37 (3.3.0, 2026-11-16) ; banc de la page 131 vérifications (5.9.0 ; le compte de 113 écrit le 2026-11-14 était une erreur d’addition : 112) ; `test_metal` passe ; `dtest` de la liste du mémo avec `--test_npu`, `--test_metal` et `--test_dnn` : 5 252 124 vérifications (build CPU, 2026-11-17) ; `dtest --test_metal` : 4 041 vérifications dans le build Metal (5 256 150 avec la liste et `--test_dnn`) ; **0 avertissement** dans les quatre builds (exemples de dlib, Albireo, Pseudalis, tests de dlib).
+- **Blog** : épisode 51 ; **blog de Pseudalis** : épisode 4 ; **notes pour l'auteur** : changement 25, entrée n° 24, registre de dlib (partie 5). Journal de la nuit du 15 : `logs/nuit-2026-11-15.md`.
 - **Le mode économie d'énergie du M2 est coupé** (2026-11-15) : les mesures redeviennent possibles sur le M2 (vérifier `pmset -g | grep lowpowermode` avant) ; les réglages fins attendent le **Mac mini M5 Pro (64 Go), attendu vers le 2026-11-27** : suivre `docs/mac-mini-premier-jour.md`.
 - **Original** : détaché depuis le 2026-11-11, plus de fusion ; lu à `53ddfe4` (Albireo 1.0.20) pour la reprise à la main du 2026-11-14, puis à `3bea372` (Albireo 1.0.23, 37 commits depuis la dernière fusion) pour le relais.
 - **Documents du portage** : dans Albireo, `/carnet/` (menu ☰) ; sommaire `macos/site-docs/sommaire.json` ; mot-clé « sitelog » (donner l'adresse du carnet). L'ancien site à part (`serve.py`, port 8650) est retiré.
@@ -18,16 +18,7 @@ Faire tourner le projet sur Mac Apple Silicon, et seulement là : dlib et les ex
 
 ## En cours
 
-**Backend Metal des tenseurs de dlib** (consignes de l'humain, phases 1 à 8, dans `logs/consignes-backend-metal-dlib.md` ; plan validé le 2026-11-17 : « Oui, ensuite toutes les phases », une phase après l'autre, chacune testée, commitée et rapportée). Build d'essai : `build/macos-arm64-tests-metal` (`-DDLIB_USE_METAL=ON`, commande dans le mémo) ; test `dtest --test_metal`, à lancer aussi dans le build CPU.
-
-1. ~~Phase 1 : dispositif `cpu`/`metal` des tenseurs, aiguillage dans `tensor_tools`, squelette Metal (`MTLDevice`, `MTLCommandQueue`, tampons partagés)~~ fait (journal du 2026-11-17).
-2. ~~Phase 2 : addition, multiplication, softmax, GELU, SiLU en Metal (`metal_kernels.mm`), tests de parité~~ fait (journal du 2026-11-17 : tolérances et écarts).
-3. ~~Phase 3 : produit matriciel par `MPSMatrixMultiplication`, découpage `PLANE_WISE` partagé (`cuda/gemm_planes.h`)~~ fait (journal : parité, temps).
-4. ~~Phase 4 : LayerNorm, un groupe de threads par échantillon~~ fait (journal : parité contre une référence exacte).
-5. ~~Phase 5 : `tt::attention`, naïve, la même composition sur les deux dispositifs~~ fait (journal : formes, masque, suite par tuiles).
-6. ~~Phase 6 : `tt::gguf_matvec` sur Metal pour Q4_0 et Q8_0, mesure mémoire sur deux vrais modèles~~ fait (journal ; fuite des tampons de la phase 1 corrigée au passage).
-7. ~~Phase 7 : passes arrière, différences finies en double~~ fait (journal : tableau par opération).
-8. **Phase 8, en cours** : SGD et Adam (`tt::affine_transform` à scalaires, `tt::compute_adam_update`), état des solveurs créé sur le dispositif des gradients, trajectoire d'un petit réseau. Brouillons dans le dossier temporaire de la session. Ensuite, l'épisode du blog sur le backend. produit matriciel (MPS ou noyau maison), LayerNorm, attention naïve, produits Q4_0 et Q8_0 dequantifiés à la volée, passes arrière, SGD et Adam. Un épisode du blog à la fin.
+**Backend Metal des tenseurs de dlib : les huit phases sont faites** (2026-11-17 ; consignes dans `logs/consignes-backend-metal-dlib.md`, bilan et « ce qui reste » à la fin de l'entrée de la phase 8 du journal ; blog : épisode 51). Build d'essai : `build/macos-arm64-tests-metal` (`-DDLIB_USE_METAL=ON`, commande dans le mémo) ; `dtest --test_metal` dans ce build et dans le build CPU. Suites possibles, à proposer à l'humain : enchaîner les commandes sans attente (vitesse), placer un réseau `dnn` entier sur Metal (les couches créent leurs tenseurs sur le processeur), l'attention par tuiles, d'autres formats GGUF, LoRA et la distillation ; mesurer sur le Mac mini.
 
 **Reprise du relais de l'original, terminée** (choix de l'humain, 2026-11-16 : piste B) : Albireo envoie une discussion à un moteur extérieur (OpenAI et compatibles, Ollama, Claude), pseudonymisée par Pseudalis, et remet les vraies valeurs dans la réponse ; mode hors ligne limité au Mac et au réseau de la maison ; recherche web de Claude. Source : `upstream/main` à `3bea372` (Albireo 1.0.22 `dd858d5` et 1.0.23 `37c6304`), fichiers `host/relay.{h,cpp}`, `host/pseudonyms.{h,cpp}`, parties de `server.cpp`, `service.cpp`, `settings.cpp`, `http_fetch`, `certificates`, `test_host.cpp`, `make_openapi.py`, page.
 
@@ -57,6 +48,7 @@ Reprise terminée (blog : épisode 48). Réglages du relais réservés au Mac se
 
 ### 2026-11-17
 
+- **Backend Metal de dlib, phase 8 sur 8** : SGD et Adam sur Metal (au bit près), trajectoire d'un petit réseau identique au CPU à 1,5e-7 près ; épisode 51 du blog. **Les huit phases sont faites.**
 - **Backend Metal de dlib, phase 7 sur 8** : passes arrière sur Metal, `tt::attention_gradient` ; différences finies vertes.
 - **Backend Metal de dlib, phase 6 sur 8** : `tt::gguf_matvec` Q4_0 et Q8_0 sur Metal ; fuite des tampons Metal libérés corrigée.
 - **Backend Metal de dlib, phase 5 sur 8** : `tt::attention` naïve, masque causal compris, sur les deux dispositifs (écart CPU–Metal ≤ 4,8e-7).
@@ -229,6 +221,7 @@ ALBIREO_TEST_PORT=18473 bash dlib/dlib/external/albireo/tools/test_macos.sh
 PSEUDALIS_TEST_PORT=18476 bash dlib/dlib/external/pseudalis/tools/test_macos.sh
 bash dlib/dlib/external/albireo/tools/page_test/page_test.sh     # banc de la page
 build/macos-albireo/tests/test_metal                               # noyaux du GPU
+cmake --build build/macos-arm64-tests-metal --target dtest && (cd build/macos-arm64-tests-metal && ./dtest --test_metal)   # backend Metal de dlib
 (cd build/macos-arm64-tests && ./dtest --test_threads --test_sockets --test_httplib --test_tokenizer --test_image)   # tests de dlib, depuis leur dossier
 
 # Service d'Albireo (page : https://localhost:18443/ ; arrêt : Ctrl-C, kill -INT ou kill -TERM)

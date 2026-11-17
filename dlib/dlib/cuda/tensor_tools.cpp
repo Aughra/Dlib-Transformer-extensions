@@ -557,7 +557,7 @@ namespace dlib { namespace tt
         const float B
     )
     {
-        DLIB_METAL_UNPORTED("affine_transform", dest, src);
+        DLIB_METAL_TRY(affine_transform(dest, src, A, B), "affine_transform", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform(dest,src,A,B);
 #else
@@ -572,7 +572,7 @@ namespace dlib { namespace tt
         const float A
     )
     {
-        DLIB_METAL_UNPORTED("affine_transform", dest, src);
+        DLIB_METAL_TRY(affine_transform(dest, src, A, 0), "affine_transform", dest, src);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform(dest,src,A);
 #else
@@ -590,7 +590,7 @@ namespace dlib { namespace tt
         const float C
     )
     {
-        DLIB_METAL_UNPORTED("affine_transform", dest, src1, src2);
+        DLIB_METAL_TRY(affine_transform(dest, src1, src2, A, B, C), "affine_transform", dest, src1, src2);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform(dest,src1,src2,A,B,C);
 #else
@@ -607,7 +607,7 @@ namespace dlib { namespace tt
         const float B
     )
     {
-        DLIB_METAL_UNPORTED("affine_transform", dest, src1, src2);
+        DLIB_METAL_TRY(affine_transform(dest, src1, src2, A, B, 0), "affine_transform", dest, src1, src2);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform(dest,src1,src2,A,B);
 #else
@@ -627,7 +627,7 @@ namespace dlib { namespace tt
         const float D
     )
     {
-        DLIB_METAL_UNPORTED("affine_transform", dest, src1, src2, src3);
+        DLIB_METAL_TRY(affine_transform(dest, src1, src2, src3, A, B, C, D), "affine_transform", dest, src1, src2, src3);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform(dest,src1,src2,src3,A,B,C,D);
 #else
@@ -648,7 +648,8 @@ namespace dlib { namespace tt
         const float C
     )
     {
-        DLIB_METAL_UNPORTED("affine_transform_range", dest, src1, src2, src3);
+        DLIB_METAL_TRY(affine_transform_range(begin, end, dest, src1, src2, src3, A, B, C), "affine_transform_range",
+            dest, src1, src2, src3);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform_range(begin, end, dest,src1,src2,src3,A,B,C);
 #else
@@ -687,7 +688,8 @@ namespace dlib { namespace tt
         const float C
     )
     {
-        DLIB_METAL_UNPORTED("affine_transform", dest, src1, src2, src3);
+        DLIB_METAL_TRY(affine_transform_range(0, dest.size(), dest, src1, src2, src3, A, B, C), "affine_transform",
+            dest, src1, src2, src3);
 #ifdef DLIB_USE_CUDA
         cuda::affine_transform_range(0,dest.size(),dest,src1,src2,src3,A,B,C);
 #else
@@ -749,7 +751,8 @@ namespace dlib { namespace tt
         const tensor& params_grad
     )
     {
-        DLIB_METAL_UNPORTED("compute_adam_update", s, m, v, params, params_grad);
+        DLIB_METAL_TRY(compute_adam_update(begin, end, s, m, v, t, learning_rate, weight_decay, momentum1,
+            momentum2, params, params_grad), "compute_adam_update", s, m, v, params, params_grad);
 #ifdef DLIB_USE_CUDA
         cuda::compute_adam_update(begin, end, s, m, v, t, learning_rate, weight_decay, momentum1,
             momentum2, params, params_grad);

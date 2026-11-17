@@ -342,7 +342,7 @@ namespace
             {"tt::exp",              [&]{ tt::exp(dest, src); }},
             {"tt::softmax_all",      [&]{ tt::softmax_all(dest, src); }},
             {"tt::mish_gradient",    [&]{ tt::mish_gradient(dest, src, other); }},
-            {"tt::affine_transform", [&]{ tt::affine_transform(dest, src, 2, 1); }},
+            {"tt::affine_transform", [&]{ tt::affine_transform(dest, src, other, other); }},
             {"tt::log",              [&]{ tt::log(dest, src); }},
             {"tt::tensor_rand::fill_uniform", [&]{ tt::tensor_rand(1).fill_uniform(dest); }},
         };
@@ -1587,6 +1587,187 @@ namespace
         }
     }
 
+    // Tolerance of the loss of the small model, step by step (see the journal of the fork).
+    const double trajectory_rtol = 1e-4;
+// ----------------------------------------------------------------------------------------
+// Optimizers: the solvers of dlib (sgd, adam) driven through a stand-in for a layer, the
+// step applied as dnn/core.h applies it (tt::add(params, params, step)).
+
+    struct stand_in_layer
+    {
+        resizable_tensor params;
+        const tensor& get_layer_params () const { return params; }
+        tensor& get_layer_params () { return params; }
+    };
+
+    void test_parity_affine (dlib::rand& rnd)
+    {
+        resizable_tensor a = random_cpu(rnd, 3, 4, 5, 6), b = random_cpu(rnd, 3, 4, 5, 6), c = random_cpu(rnd, 3, 4, 5, 6);
+        resizable_tensor ma = on_metal(a), mb = on_metal(b), mc = on_metal(c);
+        resizable_tensor d(a), md = on_metal(a);
+        tt::affine_transform(d, a, 2.5f, -1); tt::affine_transform(md, ma, 2.5f, -1); check_parity("affine_transform", d, md);
+        tt::affine_transform(d, a, -0.75f); tt::affine_transform(md, ma, -0.75f); check_parity("affine_transform", d, md);
+        tt::affine_transform(d, a, b, 0.5f, 2, 3); tt::affine_transform(md, ma, mb, 0.5f, 2, 3); check_parity("affine_transform", d, md);
+        tt::affine_transform(d, a, b, 0.5f, 2); tt::affine_transform(md, ma, mb, 0.5f, 2); check_parity("affine_transform", d, md);
+        tt::affine_transform(d, a, b, c, 1, -2, 3, 4); tt::affine_transform(md, ma, mb, mc, 1, -2, 3, 4); check_parity("affine_transform", d, md);
+        tt::affine_transform(d, a, b, c, 1, -2, 3); tt::affine_transform(md, ma, mb, mc, 1, -2, 3); check_parity("affine_transform", d, md);
+        tt::affine_transform_range(17, 300, d, a, b, c, 0.25f, 1, -1);
+        tt::affine_transform_range(17, 300, md, ma, mb, mc, 0.25f, 1, -1);
+        check_parity("affine_transform", d, md);
+        // In place, as sgd does: v = momentum*v - wd*lr*params - lr*grad.
+        tt::affine_transform(d, d, a, b, 0.9f, -1e-3f, -0.1f); tt::affine_transform(md, md, ma, mb, 0.9f, -1e-3f, -0.1f);
+        check_parity("affine_transform", d, md);
+    }
+
+    template <typename solver_type>
+    void run_solver_steps (dlib::rand& rnd, const std::string& op, solver_type cpu_solver, solver_type metal_solver, int steps)
+    {
+        stand_in_layer cl, ml;
+        cl.params = random_cpu(rnd, 7, 13, 1, 1);
+        ml.params = on_metal(cl.params);
+        for (int i = 0; i < steps; ++i)
+        {
+            resizable_tensor g = random_cpu(rnd, 7, 13, 1, 1), mg = on_metal(g);
+            const tensor& step = cpu_solver(0.01f, cl, g);
+            tt::add(cl.params, cl.params, step);
+            const tensor& mstep = metal_solver(0.01f, ml, mg);
+            DLIB_TEST(mstep.get_tensor_device() == tensor_device::metal);
+            tt::add(ml.params, ml.params, mstep);
+            check_parity(op, cl.params, ml.params);
+        }
+    }
+
+    void test_parity_solvers (dlib::rand& rnd)
+    {
+        resizable_tensor s = random_cpu(rnd, 5, 50, 1, 1), m(s), v(s), p = random_cpu(rnd, 5, 50, 1, 1);
+        m = 0; v = 0;
+        resizable_tensor ms = on_metal(s), mm = on_metal(m), mv = on_metal(v), mp = on_metal(p);
+        for (int t = 1; t <= 25; ++t)
+        {
+            resizable_tensor g = random_cpu(rnd, 5, 50, 1, 1), mg = on_metal(g);
+            tt::compute_adam_update(0, p.size(), s, m, v, t, 0.001f, 0.01f, 0.9f, 0.999f, p, g);
+            tt::compute_adam_update(0, mp.size(), ms, mm, mv, t, 0.001f, 0.01f, 0.9f, 0.999f, mp, mg);
+            check_parity("compute_adam_update s", s, ms);
+            check_parity("compute_adam_update m", m, mm);
+            check_parity("compute_adam_update v", v, mv);
+        }
+        run_solver_steps(rnd, "sgd, 30 steps", sgd(0.0005f, 0.9f), sgd(0.0005f, 0.9f), 30);
+        run_solver_steps(rnd, "adam, 30 steps", adam(0.0005f, 0.9f, 0.999f), adam(0.0005f, 0.9f, 0.999f), 30);
+    }
+
+    /*
+        A small model trained the same way on both devices: x -> linear (16 -> 32) ->
+        layer_normalize -> gelu -> linear (32 -> 4), a mean squared error against the
+        outputs of a fixed random teacher, every parameter updated by its own solver.  Every
+        step of the forward and backward passes is a tensor_tools call, so that on Metal it
+        all runs there; only the value of the loss is read by the host, to be compared.
+    */
+    template <typename solver_type>
+    std::vector<double> train_small_model (tensor_device device, unsigned long seed, solver_type solver, int steps)
+    {
+        dlib::rand rnd(seed);
+        const long n = 64, din = 16, h = 32, dout = 4;
+        auto make = [&](long a, long b, float scale) { resizable_tensor r = random_cpu(rnd, a, b, 1, 1, scale); r.set_tensor_device(device); return r; };
+        resizable_tensor x = make(n, din, 1), teacher = make(din, dout, 1);
+        resizable_tensor y(n, dout);
+        y.set_tensor_device(device);
+        tt::gemm(0, y, 1, x, false, teacher, false);
+        tt::gelu(y, y);
+
+        stand_in_layer w1, b1, gamma, beta, w2, b2;
+        w1.params = make(din, h, 0.25f);
+        b1.params = make(1, h, 0.1f);
+        gamma.params = make(1, h, 0.1f);
+        tt::affine_transform(gamma.params, gamma.params, 1, 1);     // around 1
+        beta.params = make(1, h, 0.1f);
+        w2.params = make(h, dout, 0.2f);
+        b2.params = make(1, dout, 0.1f);
+        std::vector<solver_type> solvers(6, solver);
+        stand_in_layer* layers[] = {&w1, &b1, &gamma, &beta, &w2, &b2};
+
+        std::vector<double> losses;
+        auto on = [&](long a, long b, long c = 1, long d = 1) { resizable_tensor r; r.set_tensor_device(device); r.set_size(a, b, c, d); return r; };
+        for (int step = 0; step < steps; ++step)
+        {
+            // Forward.
+            resizable_tensor z1 = on(n, h);
+            tt::gemm(0, z1, 1, x, false, w1.params, false);
+            tt::add(1, z1, 1, b1.params);
+            resizable_tensor ln, means, invstds;
+            ln.set_tensor_device(device); means.set_tensor_device(device); invstds.set_tensor_device(device);
+            tt::layer_normalize(1e-5, ln, means, invstds, z1, gamma.params, beta.params);
+            resizable_tensor a1 = on(n, h);
+            tt::gelu(a1, ln);
+            resizable_tensor z2 = on(n, dout);
+            tt::gemm(0, z2, 1, a1, false, w2.params, false);
+            tt::add(1, z2, 1, b2.params);
+
+            // The loss, read by the host; its gradient, computed on the device.
+            double loss = 0;
+            for (size_t i = 0; i < z2.size(); ++i)
+                loss += ((double)z2.host()[i] - y.host()[i])*((double)z2.host()[i] - y.host()[i]);
+            losses.push_back(loss/z2.size());
+            const float c = 2.0f/z2.size();
+            resizable_tensor dz2 = on(n, dout);
+            tt::affine_transform(dz2, z2, y, c, -c);
+
+            // Backward.
+            resizable_tensor dw2 = on(h, dout), db2 = on(1, dout), da1 = on(n, h);
+            tt::gemm(0, dw2, 1, a1, true, dz2, false);
+            tt::assign_conv_bias_gradient(db2, dz2);
+            tt::gemm(0, da1, 1, dz2, false, w2.params, true);
+            tt::gelu_gradient(da1, ln, da1);
+            resizable_tensor dz1 = on(n, h), dgamma = on(1, h), dbeta = on(1, h), dmeans, dvars;
+            dmeans.set_tensor_device(device); dvars.set_tensor_device(device);
+            tt::affine_transform(dz1, z1, 0.0f);
+            tt::layer_normalize_gradient(1e-5, da1, means, invstds, z1, gamma.params, dz1, dgamma, dbeta, dmeans, dvars);
+            resizable_tensor dw1 = on(din, h), db1 = on(1, h);
+            tt::gemm(0, dw1, 1, x, true, dz1, false);
+            tt::assign_conv_bias_gradient(db1, dz1);
+
+            // Updates.
+            const tensor* grads[] = {&dw1, &db1, &dgamma, &dbeta, &dw2, &db2};
+            for (int i = 0; i < 6; ++i)
+            {
+                const tensor& s = solvers[i](0.01f, *layers[i], *grads[i]);
+                tt::add(layers[i]->params, layers[i]->params, s);
+            }
+        }
+        return losses;
+    }
+
+    void compare_trajectories (const std::string& op, const std::vector<double>& cpu, const std::vector<double>& gpu, double rtol)
+    {
+        DLIB_TEST(cpu.size() == gpu.size());
+        parity& p = parity_table()[op];
+        for (size_t i = 0; i < cpu.size(); ++i)
+        {
+            const double a = std::abs(cpu[i] - gpu[i]);
+            ++p.compared;
+            p.max_abs = std::max(p.max_abs, a);
+            p.max_rel = std::max(p.max_rel, a/cpu[i]);
+            if (!(a <= rtol*cpu[i]))
+                ++p.failed;
+        }
+        DLIB_TEST_MSG(p.failed == 0, op << ": " << p.failed << " steps beyond the tolerance");
+        DLIB_TEST_MSG(cpu.back() < 0.5*cpu.front(), op << ": the loss did not go down (" << cpu.front() << " -> " << cpu.back() << ")");
+        std::ostringstream sout;
+        for (size_t i = 0; i < cpu.size(); i += 5)
+            sout << " " << i << ":" << cpu[i] << "/" << gpu[i];
+        dlog << LINFO << op << " losses (cpu/metal):" << sout.str();
+        if (std::getenv("DLIB_METAL_REPORT"))
+            std::cout << op << " losses (cpu/metal):" << sout.str() << " last " << cpu.back() << "/" << gpu.back() << std::endl;
+    }
+
+    void test_training_trajectory ()
+    {
+        const int steps = 40;
+        compare_trajectories("trajectory adam", train_small_model(tensor_device::cpu, 7, adam(0, 0.9f, 0.999f), steps),
+            train_small_model(tensor_device::metal, 7, adam(0, 0.9f, 0.999f), steps), trajectory_rtol);
+        compare_trajectories("trajectory sgd", train_small_model(tensor_device::cpu, 7, sgd(0, 0.9f), steps),
+            train_small_model(tensor_device::metal, 7, sgd(0, 0.9f), steps), trajectory_rtol);
+    }
+
     void report_parity ()
     {
         for (auto& e : parity_table())
@@ -1647,6 +1828,9 @@ namespace
             test_gradients_layer_norm(rnd);
             test_gradients_bias_and_products(rnd);
             test_gradients_attention(rnd);
+            test_parity_affine(rnd);
+            test_parity_solvers(rnd);
+            test_training_trajectory();
             report_parity();
             bench_gemm(rnd);
             measure_gguf_memory(rnd);

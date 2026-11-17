@@ -22,6 +22,7 @@
 #include "gguf_blocks.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <initializer_list>
 #include <map>
@@ -760,6 +761,64 @@ kernel void layer_norm_grad_src (
     const float dx = gi[i]*gamma[k];
     src_grad[i] += dx*invstds[n] + dvars[n]*2*(s[i] - means[n])*invnum + dmeans[n]*invnum;
 }
+// ----------------------------------------------------------------------------------------
+// Optimizers.  affine_values covers the forms of tt::affine_transform with scalars:
+// d = c0*s1 [+ c1*s2 [+ c2*s3]] [+ k], over [begin, end), each in the order of the CPU.
+
+struct affine_params
+{
+    uint begin, end;
+    uint sources;       // 1, 2 or 3
+    uint with_constant;
+    float c0, c1, c2, k;
+};
+
+kernel void affine_values (
+    device float* d                    [[buffer(0)]],
+    device const float* s1             [[buffer(1)]],
+    device const float* s2             [[buffer(2)]],
+    device const float* s3             [[buffer(3)]],
+    constant affine_params& p          [[buffer(4)]],
+    uint t                             [[thread_position_in_grid]])
+{
+    const uint i = p.begin + t;
+    if (i >= p.end)
+        return;
+    float v;
+    if (p.sources == 1)
+        v = p.with_constant ? p.c0*s1[i] + p.k : p.c0*s1[i];
+    else if (p.sources == 2)
+        v = p.with_constant ? p.c0*s1[i] + p.c1*s2[i] + p.k : p.c0*s1[i] + p.c1*s2[i];
+    else
+        v = p.with_constant ? p.c0*s1[i] + p.c1*s2[i] + p.c2*s3[i] + p.k : p.c0*s1[i] + p.c1*s2[i] + p.c2*s3[i];
+    d[i] = v;
+}
+
+struct adam_params
+{
+    uint begin, end;
+    float alpha, weight_decay, momentum1, momentum2;
+};
+
+// The update of compute_adam_update on the CPU, value by value.
+kernel void adam_update (
+    device float* s                    [[buffer(0)]],
+    device float* m                    [[buffer(1)]],
+    device float* v                    [[buffer(2)]],
+    device const float* params         [[buffer(3)]],
+    device const float* params_grad    [[buffer(4)]],
+    constant adam_params& p            [[buffer(5)]],
+    uint t                             [[thread_position_in_grid]])
+{
+    const uint i = p.begin + t;
+    if (i >= p.end)
+        return;
+    const float eps = 1e-8f;
+    const float g = p.weight_decay*params[i] + params_grad[i];
+    m[i] = p.momentum1*m[i] + (1 - p.momentum1)*g;
+    v[i] = p.momentum2*v[i] + (1 - p.momentum2)*g*g;
+    s[i] = -p.alpha*m[i]/(sqrt(v[i]) + eps);
+}
 )METAL";
 
             /*
@@ -1474,6 +1533,104 @@ kernel void layer_norm_grad_src (
             run("layer_norm_grad_src", src.size(),
                 {out(src_grad), in(gradient_input), in(src), in(means), in(invstds), in(gamma), in(dmeans), in(dvars)},
                 &p, sizeof(p));
+        }
+
+    // ------------------------------------------------------------------------------------
+    // Optimizers
+
+        void affine_values (
+            size_t begin,
+            size_t end,
+            tensor& dest,
+            std::initializer_list<const tensor*> sources,
+            const float* coefficients,
+            bool with_constant,
+            float constant
+        )
+        {
+            for (const tensor* s : sources)
+                if (s->size() != dest.size())
+                    throw metal_error("Metal backend of dlib: tt::affine_transform takes tensors of one size.");
+            if (begin > end || end > dest.size())
+                throw metal_error("Metal backend of dlib: tt::affine_transform_range was given a range outside dest.");
+            as_index(dest.size(), "affine_transform");
+            if (begin == end)
+                return;
+            struct
+            {
+                uint32_t begin, end, sources, with_constant;
+                float c0, c1, c2, k;
+            } p = {(uint32_t)begin, (uint32_t)end, (uint32_t)sources.size(), with_constant ? 1u : 0u,
+                   coefficients[0], sources.size() > 1 ? coefficients[1] : 0.0f,
+                   sources.size() > 2 ? coefficients[2] : 0.0f, constant};
+            const tensor* s[3];
+            size_t n = 0;
+            for (const tensor* t : sources)
+                s[n++] = t;
+            for (; n < 3; ++n)
+                s[n] = s[0];
+            run("affine_values", end - begin, {out(dest), in(*s[0]), in(*s[1]), in(*s[2])}, &p, sizeof(p));
+        }
+
+        void compute_adam_update (
+            size_t begin,
+            size_t end,
+            tensor& s,
+            tensor& m,
+            tensor& v,
+            const float t,
+            const float learning_rate,
+            const float weight_decay,
+            const float momentum1,
+            const float momentum2,
+            const tensor& params,
+            const tensor& params_grad
+        )
+        {
+            DLIB_CASSERT(s.size() == m.size() &&
+                         s.size() == v.size() &&
+                         s.size() == params.size() &&
+                         s.size() == params_grad.size());
+            DLIB_CASSERT(begin <= end && end <= params.size());
+            as_index(params.size(), "compute_adam_update");
+            if (begin == end)
+                return;
+            // The step size of the CPU, computed the same way.
+            const float alpha = learning_rate*std::sqrt(1-std::pow(momentum2,t))/(1-std::pow(momentum1, t));
+            struct
+            {
+                uint32_t begin, end;
+                float alpha, weight_decay, momentum1, momentum2;
+            } p = {(uint32_t)begin, (uint32_t)end, alpha, weight_decay, momentum1, momentum2};
+            run("adam_update", end - begin, {out(s), out(m), out(v), in(params), in(params_grad)}, &p, sizeof(p));
+        }
+
+        void affine_transform (tensor& dest, const tensor& src, const float A, const float B)
+        {
+            const float c[] = {A};
+            affine_values(0, dest.size(), dest, {&src}, c, true, B);
+        }
+
+        void affine_transform (tensor& dest, const tensor& src1, const tensor& src2, const float A,
+                               const float B, const float C)
+        {
+            const float c[] = {A, B};
+            affine_values(0, dest.size(), dest, {&src1, &src2}, c, true, C);
+        }
+
+        void affine_transform (tensor& dest, const tensor& src1, const tensor& src2, const tensor& src3,
+                               const float A, const float B, const float C, const float D)
+        {
+            const float c[] = {A, B, C};
+            affine_values(0, dest.size(), dest, {&src1, &src2, &src3}, c, true, D);
+        }
+
+        void affine_transform_range (size_t begin, size_t end, tensor& dest, const tensor& src1,
+                                     const tensor& src2, const tensor& src3, const float A,
+                                     const float B, const float C)
+        {
+            const float c[] = {A, B, C};
+            affine_values(begin, end, dest, {&src1, &src2, &src3}, c, false, 0);
         }
     }
 }

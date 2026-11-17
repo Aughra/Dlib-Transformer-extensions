@@ -117,6 +117,20 @@ namespace dlib
                                        const tensor& invstds, const tensor& src, const tensor& gamma,
                                        tensor& src_grad, tensor& gamma_grad, tensor& beta_grad,
                                        resizable_tensor& dmeans, resizable_tensor& dvars);
+
+        // Optimizers.
+        void affine_transform (tensor& dest, const tensor& src, const float A, const float B);
+        void affine_transform (tensor& dest, const tensor& src1, const tensor& src2, const float A,
+                               const float B, const float C);
+        void affine_transform (tensor& dest, const tensor& src1, const tensor& src2, const tensor& src3,
+                               const float A, const float B, const float C, const float D);
+        void affine_transform_range (size_t begin, size_t end, tensor& dest, const tensor& src1,
+                                     const tensor& src2, const tensor& src3, const float A,
+                                     const float B, const float C);
+        void compute_adam_update (size_t begin, size_t end, tensor& s, tensor& m, tensor& v, const float t,
+                                  const float learning_rate, const float weight_decay,
+                                  const float momentum1, const float momentum2, const tensor& params,
+                                  const tensor& params_grad);
     }
 }
 
