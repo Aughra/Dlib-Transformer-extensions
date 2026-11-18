@@ -118,7 +118,7 @@
 
 ## Bloc B — RAG en C++ + moteurs + index
 
-- ☐ **B13** Interface `rag_engine` + moteur `lexical` (mots seuls).
+- ☑ **B13** (2026-11-17) Interface `rag_engine` + moteur `lexical` (mots seuls).
 - ☐ **B14** Moteur `dense` (vecteurs seuls).
 - ☐ **B15** Moteur `hybrid` + parité avec le JS.
 - ☐ **B16** Index nommés + bascule (service).
@@ -172,3 +172,33 @@ Choix faits sans demander, selon le meilleur intérêt du projet. Révisables si
   **ouvre** le relais au réseau n'est pas un défaut de l'auteur ; c'est un choix de sécurité
   propre au fork. → documenté dans **différences-mac-windows** (« ce que le fork fait
   autrement ») et le **changelog 6.0.0**.
+
+## Bloc B — note de méthode (2026-11-17)
+
+Le RAG de `rag.js` est touffu : découpage `chunk()` (sections, titres, chevauchement), `terms()`,
+BM25, cosinus, **fusion par rang réciproque (RRF)**, **MMR**, prolongement par passage suivant,
+fusion des passages consécutifs, tri des documents. Viser une parité **au bit près** C++↔JS sur
+RRF+MMR+tie-breaking est irréaliste et fragile.
+
+**Décision de méthode** : comme pour le backend Metal, viser une **parité fonctionnelle vérifiée**
+— le moteur C++ doit retrouver **les mêmes passages** (ou un classement très proche, tolérance
+documentée) que `rag.js` sur des cas de test, pas une égalité octet par octet. Le découpage
+(`chunk`) et BM25, plus déterministes, sont portés fidèlement et testés de près ; la fusion et le
+MMR sont portés avec une tolérance sur l'ordre, justifiée. On ne retire le code JS (B18) qu'une
+fois la parité fonctionnelle démontrée sur les scénarios du banc (mêmes extraits).
+
+- **2026-11-17 — B13 fait** : module `host/rag_engine.{h,cpp}` (ajouté aux cibles service et
+  test_host du CMakeLists). `rag_terms` (tokenisation latine : accents retirés par table
+  Latin-1/Latin étendu A, stop-words, chiffres), `rag_chunk` (découpage porté fidèlement de
+  `chunk()`), interface `rag_engine` + moteur **`lexical`** (BM25 + fusion par rang réciproque +
+  MMR + prolongement + fusion des passages consécutifs, communs via `assemble`). Route
+  `POST /gulliver/v1/profile/search` {question, owners, engine, limit, budget} → {excerpts, engine}.
+  `engine_for` rend lexical pour tous les noms en attendant B14/B15 (dense/hybrid) ; `min_meaning`/
+  `meaning_spread` `[[maybe_unused]]` en attendant. **Vérifié** : test_host all checks passed —
+  **parité exacte** de `rag_terms` (3 cas de référence calculés avec node) et `rag_chunk`
+  (3 passages, wheres `[Page 1, Page 1, Page 2]`, start 10, end 1628) ; le moteur classe le bon
+  passage, une question vide ne rend rien. Curl : « bloquer le port du pare-feu » → le passage
+  pare-feu ; question sans rapport → 0 extrait.
+- **Décision B13** : tokenisation **latine seulement** (choix de l'humain, 2026-11-18) — accents
+  du français et des langues voisines ramenés à la lettre de base ; écritures non latines non
+  normalisées (documents visés en fr/en). Parité stricte sur du texte latin.

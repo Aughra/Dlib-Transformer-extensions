@@ -91,6 +91,7 @@
 #include "../host/http_fetch.h"
 #include "../host/models.h"
 #include "../host/pseudonyms.h"
+#include "../host/rag_engine.h"
 #include "../host/relay.h"
 #include "../host/settings.h"
 #include "../host/store.h"
@@ -331,6 +332,55 @@ int main(int argc, char** argv)
     check(gulliver::data_dir() == data, "the test works in a data folder of its own");
     const std::string inbox = gulliver::join_path(gulliver::data_dir(), "import");
     gulliver::make_dirs(inbox);
+
+    {
+        // Parité de la tokenisation (rag_terms) avec terms() de la page, sur des cas de référence
+        // calculés avec node (voir le journal).  Accents latins retirés, mots vides et mots d'une
+        // lettre écartés, chiffres gardés, découpe sur ce qui n'est ni lettre ni chiffre.
+        auto terms_are = [](const std::string& in, const std::vector<std::string>& expected) {
+            const std::vector<std::string> got = gulliver::rag_terms(in);
+            return got == expected;
+        };
+        check(terms_are("Le caf\xC3\xA9 est pr\xC3\xAAt. Caf\xC3\xA9! CAF\xC3\x89.", { "cafe", "pret", "cafe", "cafe" }),
+            "rag_terms lowercases, strips latin accents and drops stop words like terms()");
+        check(terms_are("config_file=/etc/nginx/nginx.conf ; port 8080, IP 192.168.1.12.",
+            { "config_file", "etc", "nginx", "nginx", "conf", "port", "8080", "ip", "192", "168", "12" }),
+            "rag_terms keeps underscores and digits, splits on other punctuation");
+        check(terms_are("## Page 1\nBonjour le monde.\n## Page 2\nAu revoir.",
+            { "page", "bonjour", "monde", "page", "revoir" }),
+            "rag_terms over a small document matches terms()");
+
+        // Parité du découpage (rag_chunk) : mêmes nombre de passages, mêmes emplacements et mêmes
+        // bornes que chunk() de la page sur un document à deux pages.
+        std::string doc = "## Page 1\n";
+        for (int k = 0; k < 200; ++k) doc += "phrase. ";
+        doc += "\n## Page 2\nla fin.";
+        const std::vector<gulliver::rag_piece> pieces = gulliver::rag_chunk(doc);
+        check(pieces.size() == 3, "rag_chunk makes the same number of passages as chunk()");
+        check(pieces[0].where == "Page 1" && pieces[1].where == "Page 1" && pieces[2].where == "Page 2",
+            "rag_chunk gives the same locations as chunk()");
+        check(pieces.front().start == 10 && pieces.back().end == 1628,
+            "rag_chunk gives the same start and end offsets as chunk()");
+
+        // Le moteur lexical : une question trouve le passage qui contient ses mots, pas les autres.
+        std::vector<gulliver::rag_passage> ps;
+        auto passage = [&](const std::string& id, long long ord, const std::string& text) {
+            gulliver::rag_passage p;
+            p.id = "d:" + std::to_string(ord); p.doc = "d"; p.name = "doc"; p.ordinal = ord; p.text = text;
+            (void)id;
+            ps.push_back(p);
+        };
+        passage("a", 0, "Le renard brun saute par-dessus le chien paresseux.");
+        passage("b", 1, "La configuration du pare-feu bloque le port 8080 sortant.");
+        passage("c", 2, "Une recette de tarte aux pommes avec de la cannelle.");
+        auto engine = gulliver::engine_for("lexical");
+        gulliver::rag_search_options opt;
+        auto hits = engine->search(ps, "comment bloquer le port du pare-feu ?", opt);
+        check(!hits.empty() && hits[0].passages.size() >= 1 && hits[0].text.find("pare-feu") != std::string::npos,
+            "the lexical engine ranks the firewall passage first for a firewall question");
+        auto none = engine->search(ps, "", opt);
+        check(none.empty(), "an empty question returns no excerpt");
+    }
 
     {
         // Les profils : créer, lister, retrouver par id et par nom, renommer, noter l'usage, supprimer.

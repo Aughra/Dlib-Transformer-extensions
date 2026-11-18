@@ -59,6 +59,7 @@
 #include "crypto.h"
 #include "http_fetch.h"
 #include "hub.h"
+#include "rag_engine.h"
 #include "relay.h"
 #include "service.h"
 #include "web_access.h"
@@ -2628,6 +2629,58 @@ namespace gulliver
             if (owner.empty()) s->db().delete_chunks_of_document(p.id, doc);
             else s->db().delete_chunks_of_owner(p.id, owner);
             send_json(res, 200, ok_result(true));
+        });
+
+        // La recherche documentaire côté service : corps {question, owners:[...], engine?}.  Charge les
+        // passages des propriétaires, cherche avec le moteur choisi (lexical pour l'instant ; dense et
+        // hybrid viennent ensuite) et renvoie les extraits.  Le moteur lexical n'a pas besoin de vecteur.
+        srv.Post("/gulliver/v1/profile/search", [s](const httplib::Request& req, httplib::Response& res) {
+            profile prof;
+            if (!resolve_profile(*s, req, res, prof)) return;
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string question = body.contains("question") ? body["question"].as_string() : std::string();
+            std::vector<rag_passage> passages;
+            if (body.contains("owners") && body["owners"].is_array())
+            {
+                for (const auto& o : body["owners"].elements())
+                {
+                    for (const chunk_record& c : s->db().chunks_of(prof.id, o.as_string()))
+                    {
+                        rag_passage rp;
+                        rp.id = c.id; rp.doc = c.doc; rp.name = c.name; rp.where = c.where;
+                        rp.ordinal = c.ordinal; rp.text = c.text; rp.model = c.model;
+                        // Le vecteur (octets float) repassé en floats pour les moteurs dense et hybrid.
+                        if (!c.vector.empty())
+                        {
+                            rp.vector.resize(c.vector.size() / sizeof(float));
+                            std::memcpy(rp.vector.data(), c.vector.data(), rp.vector.size() * sizeof(float));
+                        }
+                        passages.push_back(std::move(rp));
+                    }
+                }
+            }
+            rag_search_options opt;
+            if (body.contains("limit")) opt.limit = static_cast<int>(body["limit"].as_int(opt.limit));
+            if (body.contains("budget")) opt.budget = body["budget"].as_int(opt.budget);
+            const std::string engine_name = body.contains("engine") ? body["engine"].as_string() : std::string("lexical");
+            std::unique_ptr<rag_engine> engine = engine_for(engine_name);
+            const std::vector<rag_excerpt> hits = engine->search(passages, question, opt);
+            json list = json::array();
+            for (const rag_excerpt& e : hits)
+            {
+                json o = json::object();
+                o["doc"] = e.doc; o["name"] = e.name; o["where"] = e.where; o["text"] = e.text;
+                o["score"] = e.score;
+                json ids = json::array();
+                for (const std::string& id : e.passages) ids.push_back(id);
+                o["passages"] = ids;
+                list.push_back(o);
+            }
+            json out = json::object();
+            out["excerpts"] = list;
+            out["engine"] = engine->name();
+            send_json(res, 200, out);
         });
 
         // Les images d'un profil.  Les métadonnées sont en base ; les octets (image pleine et vignette)

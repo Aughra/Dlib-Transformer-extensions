@@ -173,7 +173,7 @@ if (GULLIVER_PROGRAMS)
    # Le service.
    add_executable(gulliver-service host/main.cpp host/service.cpp host/server.cpp host/settings.cpp host/store.cpp
       host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/crypto.cpp
-      host/certificates.cpp host/web_access.cpp host/hub.cpp host/carnet.cpp host/relay.cpp host/pseudonyms.cpp)
+      host/certificates.cpp host/web_access.cpp host/hub.cpp host/carnet.cpp host/relay.cpp host/pseudonyms.cpp host/rag_engine.cpp)
    target_include_directories(gulliver-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
    # Le carnet du portage lit les documents du dépôt où le service est construit (host/carnet.h).
    get_filename_component(GULLIVER_FORK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
@@ -258,7 +258,7 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    # Les fichiers que le service écrit dans son dossier de modèles et lit dans ses imports, les
    # téléchargements, les réglages, l'accès web et le relais, avec des serveurs locaux.
    add_executable(test_host tests/test_host.cpp host/models.cpp host/store.cpp host/http_fetch.cpp
-      host/crypto.cpp host/settings.cpp host/web_access.cpp host/certificates.cpp host/relay.cpp
+      host/crypto.cpp host/settings.cpp host/web_access.cpp host/certificates.cpp host/relay.cpp host/rag_engine.cpp
       host/pseudonyms.cpp)
    target_include_directories(test_host PRIVATE ${CMAKE_BINARY_DIR}/generated)
    target_link_libraries(test_host PRIVATE gulliver_common gulliver_sqlite ZLIB::ZLIB dlib::httplib)
