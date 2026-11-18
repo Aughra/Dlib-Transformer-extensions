@@ -57,5 +57,6 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 51. [Un GPU pour apprendre](51-un-gpu-pour-apprendre.md)
 52. [Un nouveau nom](52-un-nouveau-nom.md)
 53. [Un nom pour chaque espace](53-un-nom-pour-chaque-espace.md)
+54. [La recherche passe côté moteur](54-la-recherche-passe-cote-moteur.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).

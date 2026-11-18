@@ -124,7 +124,7 @@
 - ☑ **B16** (2026-11-17) Index nommés + bascule (service). Table `profile_indexes` (id, name, embed_model, passage_chars, overlap_chars, created, active ; cascade) + struct `index_record` ; colonne `index_id` ajoutée à `profile_chunks` (migration `PRAGMA table_info` + `ALTER TABLE` pour les bases existantes). Méthodes `indexes/find_index/active_index/put_index/set_active_index/remove_index` ; les méthodes chunks prennent un `index_id` (défaut `''`), et les routes chunks/search ciblent l'`active_index` du profil. Routes `GET/POST /gulliver/v1/profile/indexes`, `PUT …/indexes/<id>/active`, `DELETE …/indexes/<id>`. Le premier index créé est actif d'office ; `remove_index` efface ses passages. **Vérifié** : test_host all checks passed + curl (2 index, le passage va dans l'actif ; basculer sur l'autre → 0 passage, instantané ; rebasculer → le passage est intact ; supprimer en cascade).
 - ☑ **B17** (2026-11-17) Réglages RAG (service + UI). `host/settings.{h,cpp}` : champs `rag_engine` (hybrid/dense/lexical, défaut hybrid, valeur invalide ramenée au défaut) et `rag_top_k` (1–50, défaut 12), dans to_json/from_json et `validate_settings`. La route search les prend par défaut depuis les réglages. UI : groupe « Documents » dans l'onglet Service, deux fiches 🦉🦫🐝 (`items`), valeurs `recommended`, schéma dans `make_openapi.py`/openapi. **Vérifié** : curl (défaut hybrid/12, modifiable, valeur invalide ramenée au défaut) ; banc regress 55/0 + docs 12/12 (l'onglet Service affiche le groupe et les fiches). **Le « garder/remplacer » au changement de modèle/découpage sera géré avec l'indexation en B18.**
 - ☑ **B18** (2026-11-18) Basculer la page sur le RAG du service. `web/js/rag.js` : `search()` aiguille — owners **persistants** → `searchInService` (POST `/gulliver/v1/profile/search`, vecteur de question en base64 via `b64OfFloat32`, en-tête `X-Gulliver-Profile`, moteur laissé au réglage de service) ; owners **incognito** → `searchInMemory` (ancien scoring JS gardé : leurs passages ne quittent jamais le navigateur) ; mélange → les deux puis retri par score. skip/exclude filtrés côté client (exclude approximé, commenté). L'indexation (découpe JS + embeddings + `store.replaceChunks`) reste inchangée. **Vérifié** : banc complet **regress 55/0, docs 12/12, actions 31/31, tabs 11/11, phone 10/10**. Le scénario `docs` (joindre un document, l'indexer, la réponse cite un mot et une couleur de son contenu) passe avec le RAG **C++** → **parité fonctionnelle d'hybrid (B15) prouvée de bout en bout**. Le scoring JS reste pour l'incognito (nécessaire).
-- ☐ **B19** Mesure + doc + version.
+- ☑ **B19** (2026-11-18) Mesure + doc + version. Version **6.2.0** (`bump_version.py minor`). Changelog 6.2.0 (Documents). Épisode de blog 54 (« La recherche passe côté moteur ») + sommaire. openapi régénéré (6.2.0). `differences-mac-windows.md` : deux lignes (profils 6.1.0, RAG C++ 6.2.0) + date 6.2.0. `reprise.md` : chantier terminé. **Mesure non faite** : la recherche est rapide des deux côtés, le gain visé est la confidentialité et le choix du moteur, pas la vitesse ; mesures plus justes sur le Mac mini (noté « — »). **Vérifié** : build 6.2.0 0 avertissement (versions concordantes) ; `test_host` all checks passed (le « 1 FAILED » d'un run était un flottement d'un test réseau, 3 passages propres ensuite) ; banc complet 119 scénarios 0 échec. **CHANTIER GULLIVER TERMINÉ (0, A, B).**
 
 ---
 
@@ -202,3 +202,21 @@ fois la parité fonctionnelle démontrée sur les scénarios du banc (mêmes ext
 - **Décision B13** : tokenisation **latine seulement** (choix de l'humain, 2026-11-18) — accents
   du français et des langues voisines ramenés à la lettre de base ; écritures non latines non
   normalisées (documents visés en fr/en). Parité stricte sur du texte latin.
+
+---
+
+## CHANTIER TERMINÉ (2026-11-18)
+
+Les trois blocs sont faits et vérifiés. **Gulliver 6.2.0.**
+- **Bloc 0** : renommage Albireo → Gulliver (6.0.0).
+- **Bloc A** : stockage par profil côté service (6.1.0) — discussions, projets, réglages, index
+  RAG + vecteurs, images, par profil ; sélecteur de profil ; relais ouvert au réseau.
+- **Bloc B** : RAG en C++ (6.2.0) — trois moteurs (hybride/vecteurs/mots), index nommés avec
+  bascule, réglages ; la recherche des documents passe au service (l'incognito garde son JS).
+
+Non-régression : inventaire du plan vérifié à chaque bloc, banc complet au vert (119 scénarios).
+Aucune fonctionnalité perdue.
+
+Suites possibles (si l'humain veut) : porter AUSSI le découpage à l'indexation côté service ;
+reranker ; mesures JS vs C++ et réglages fins sur le Mac mini ; modèle abliterated pour l'usage
+cyber ; entraînement si un modèle ne convient pas.

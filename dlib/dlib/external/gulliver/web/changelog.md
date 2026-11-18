@@ -2,6 +2,16 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.2.0 — 18 novembre 2026
+
+### Documents
+
+- La recherche dans les documents (le choix des extraits qui répondent à une question) se fait désormais dans le service, en C++, et non plus dans le navigateur. On choisit sa façon de chercher dans l'onglet Service : **mots et sens** (par défaut), **sens seul** (par les vecteurs d'embedding) ou **mots seuls** (sans modèle d'embedding, pour les termes techniques exacts). Le nombre d'extraits remontés se règle aussi.
+- Un profil peut garder **plusieurs index** de documents côte à côte — par exemple un par modèle d'embedding ou par taille de découpage — et basculer de l'un à l'autre instantanément, sans tout réindexer.
+- Les discussions privées gardent leur recherche dans le navigateur : leurs passages n'en sortent jamais.
+
+---
+
 ## 6.1.0 — 17 novembre 2026
 
 ### Profils

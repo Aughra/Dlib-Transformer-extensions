@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.0.0, 17 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.2.0, 18 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -79,6 +79,8 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Ce qui change | Original (Windows) | Fork (Mac) | Pourquoi | Où |
 |---|---|---|---|---|
 | Langues | Anglais, français, allemand, italien, espagnol | Français seulement, pages de l'interface de programmation comprises (descriptions des routes et libellés de Swagger UI) ; Pseudalis aussi | Décision de l'humain : « tout en français » | v. 2.0.0, v. 4.32.0 |
+| Où vivent les données (discussions, projets, index, images) | Dans la base IndexedDB du navigateur : perdues en changeant de navigateur ou de machine, sauf export/import manuel (qui n'emporte pas l'index) | Dans le service, rangées par **profil** (un simple nom, sans mot de passe) : retrouvées depuis n'importe quel navigateur ou appareil de la maison. Discussions privées gardées en mémoire du navigateur comme avant | Les retrouver depuis le téléphone ou le futur Mac mini sans rien exporter (demande de l'humain) | v. 6.1.0 |
+| Recherche dans les documents | Calculée dans le navigateur (JavaScript) ; une seule façon de chercher | Portée en C++ dans le service, avec le **choix du moteur** (mots et sens, sens seul, mots seuls) et des **index nommés** (plusieurs indexations, bascule instantanée sans réindexer) ; la recherche des discussions privées reste au navigateur | Confidentialité (le calcul quitte le navigateur) et choix du moteur ; garder côte à côte des index de modèles ou de découpages différents | v. 6.2.0 |
 | Documents du portage | — | Page `/carnet/` de Gulliver (menu « Documents du portage ») : sommaire, blogs, journaux, guides, liste fermée de fichiers du dépôt ; remplace le petit site à part du port 8650 | Lire la doc sur l'iPad sans lancer autre chose (demande de l'humain) | — | v. 5.2.0 |
 | Contexte de la prochaine question | — | Entrée du menu de la barre du haut : la consigne système, l'historique, le brouillon et les outils que lirait le modèle, comptés par le service | Voir ce que le modèle va lire (demande de l'humain) | v. 4.32.0 |
 | Accès aux paramètres et à l'API | Boutons « Paramètres » et « API » en bas à gauche | Un bouton « Menu » à trois traits en haut, qui ouvre un grand menu en colonnes (sur le modèle de celui de TortueTech) : onglets des paramètres, contexte de la prochaine question, aide, API ; plus rien en bas | Un seul accès, complet, à portée de main (demandes de l'humain) | v. 4.32.0, v. 4.32.1, v. 5.1.0 |

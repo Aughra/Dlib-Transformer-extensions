@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-18 — Clore le RAG en C++ : version 6.2.0, doc, blog (chantier Gulliver, B19) — FIN DU CHANTIER
+
+- **Quoi** : fin du bloc B et du chantier. Version **6.2.0** (`bump_version.py minor`). Section `web/changelog.md` 6.2.0 (Documents : recherche en C++, choix du moteur, index nommés). Épisode de blog 54 (« La recherche passe côté moteur »), ajouté au sommaire. openapi régénéré. `docs/differences-mac-windows.md` : deux lignes nouvelles (données par profil 6.1.0, recherche en C++ 6.2.0) et date mise à 6.2.0. `logs/reprise.md` : chantier terminé.
+- **Fichiers** : `common/version.h`, `CMakeLists.txt`, `web/changelog.md`, `blog/54-la-recherche-passe-cote-moteur.md` (nouveau), `blog/README.md`, `tools/make_openapi.py` déjà fait en B17/B16, `web/openapi.json`, `docs/differences-mac-windows.md`, `logs/reprise.md`.
+- **Mesure** : non faite. La recherche est rapide des deux côtés ; le gain visé est la confidentialité (le calcul quitte le navigateur) et le choix du moteur, pas la vitesse. Des mesures plus justes attendent le Mac mini.
+- **Étapes** : build 6.2.0 sans avertissement (versions concordantes : version.h, project(), openapi) ; `test_host` all checks passed (un run avait montré « 1 FAILED » sur un test réseau sensible au timing, non reproduit sur trois passages suivants) ; banc de la page complet **119 scénarios, 0 échec** (regress 55, docs 12, actions 31, tabs 11, phone 10). **Chantier Gulliver terminé : blocs 0 (renommage, 6.0.0), A (profils, 6.1.0), B (RAG C++, 6.2.0).** Aucune fonctionnalité perdue (inventaire de non-régression vérifié).
+
 ## 2026-11-18 — Basculer la recherche documentaire vers le service C++ (chantier Gulliver, B18)
 
 - **Quoi** : `web/js/rag.js` — la fonction `search()` ne calcule plus les scores en JavaScript pour les documents persistants : elle appelle le service (`POST /gulliver/v1/profile/search`, avec le vecteur de la question en base64 quand un modèle d'embedding est chargé, l'en-tête `X-Gulliver-Profile`, le moteur laissé au réglage de service). Le scoring JavaScript (BM25 + cosinus + fusion + MMR) est **conservé sous `searchInMemory` pour les discussions incognito**, dont les passages ne quittent jamais le navigateur ; un mélange incognito/persistant combine les deux puis retrie. `skip`/`exclude` sont filtrés côté client. L'indexation (découpe par `chunk`, embeddings par `embed`, stockage par `store.replaceChunks`) n'est pas touchée : seule la recherche bascule. Helper `b64OfFloat32`, import de `currentProfile`.
