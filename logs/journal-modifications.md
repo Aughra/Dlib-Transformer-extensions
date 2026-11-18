@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Moteurs RAG dense et hybrid en C++ (chantier Gulliver, B14 et B15)
+
+- **Quoi** : les deux autres moteurs. `rank_meaning` (cosinus du vecteur de la question contre ceux des passages, seuils `min_meaning`/`meaning_spread`, fusion par rang réciproque) ; `dense_engine` (sens seul), `hybrid_engine` (mots + sens + MMR, comme la page). `engine_for(name)` rend lexical, dense ou hybrid (hybrid par défaut pour un nom inconnu). La route `/gulliver/v1/profile/search` lit le vecteur de la question en base64 (`question_vector`) et le modèle, fournis par la page qui les a calculés via `/v1/embeddings`.
+- **Fichiers** : `host/rag_engine.cpp`, `host/server.cpp`, `tests/test_host.cpp`.
+- **Pourquoi** : offrir les trois façons de chercher (mots, sens, les deux) ; le moteur sera choisi par un réglage (B17).
+- **Étapes** : compilé sans avertissement ; `test_host` all checks passed (dense classe le passage le plus proche par le sens ; hybrid trouve par mots et par sens ; `engine_for` rend le bon moteur et hybrid par défaut). Curl : dense avec un vecteur de question proche de « beta » renvoie beta. La **parité fonctionnelle** du moteur hybrid avec `rag.js` sera prouvée par le scénario `docs` du banc quand la page passera au RAG C++ (B18). Pas d'incrément de version.
+
 ## 2026-11-17 — RAG en C++ : interface, tokenisation, découpage, moteur lexical (chantier Gulliver, B13)
 
 - **Quoi** : début du bloc B (RAG côté service). Nouveau module `host/rag_engine.{h,cpp}` : `rag_terms` (tokenisation latine fidèle à `terms()` — minuscules, accents latins retirés par une table Latin-1/Latin étendu A, mots vides et mots d'une lettre écartés, chiffres gardés), `rag_chunk` (découpage en passages, porté fidèlement de `chunk()` de rag.js : emplacements `## Page/Slide/Sheet`, titres, chevauchement, coupe aux phrases/espaces), interface `rag_engine` et moteur **`lexical`** (BM25, fusion par rang réciproque, MMR, prolongement par le passage suivant, fusion des passages consécutifs, tri des documents — post-traitement commun aux trois moteurs via `assemble`). Route `POST /gulliver/v1/profile/search`. `engine_for` rend lexical pour tous les noms en attendant dense (B14) et hybrid (B15). Tokenisation **latine seulement** (choix de l'humain) : parité parfaite sur le français et l'anglais, écritures non latines non normalisées.

@@ -119,7 +119,7 @@
 ## Bloc B — RAG en C++ + moteurs + index
 
 - ☑ **B13** (2026-11-17) Interface `rag_engine` + moteur `lexical` (mots seuls).
-- ☐ **B14** Moteur `dense` (vecteurs seuls).
+- ☑ **B14** (2026-11-17) Moteur `dense` (vecteurs seuls). `rank_meaning` (cosinus du vecteur de question, seuils `min_meaning`/`meaning_spread`), classe `dense_engine`. La route search lit le vecteur de question en base64 (`question_vector`, fourni par la page). **Vérifié** : test_host (dense classe le passage le plus proche par le sens) + curl (vecteur proche de « beta » → beta).
 - ☐ **B15** Moteur `hybrid` + parité avec le JS.
 - ☐ **B16** Index nommés + bascule (service).
 - ☐ **B17** Réglages RAG (service + UI).

@@ -18,9 +18,8 @@ namespace gulliver
         // Les paramètres du découpage et de la recherche, mêmes valeurs que web/js/rag.js.
         const long long passage_chars = 1200;
         const long long overlap_chars = 240;
-        // min_meaning et meaning_spread servent aux moteurs dense et hybrid (B14, B15).
-        [[maybe_unused]] const double min_meaning = 0.35;
-        [[maybe_unused]] const double meaning_spread = 0.2;
+        const double min_meaning = 0.35;
+        const double meaning_spread = 0.2;
         const double words_share = 0.3;
         const int followed = 3;
 
@@ -551,6 +550,39 @@ namespace gulliver
 
     namespace
     {
+        // Les scores par les mots (BM25), rangés par rang réciproque sur les passages proches du meilleur.
+        void rank_words(const std::vector<rag_passage>& all, const std::string& question, std::vector<double>& fused)
+        {
+            const std::vector<sparse_row> sparse = sparse_of(all);
+            const std::vector<double> words = bm25_scores(sparse, question);
+            double best = 0;
+            for (double w : words) best = std::max(best, w);
+            if (best > 0) reciprocal_rank(words, std::max(0.0, words_share * best), fused);
+        }
+
+        // Les scores par le sens (cosinus du vecteur de la question), rangés sur les passages d'un
+        // cosinus d'au moins min_meaning et à moins de meaning_spread du meilleur.  Sans vecteur de
+        // question, ne fait rien.
+        void rank_meaning(const std::vector<rag_passage>& all, const rag_search_options& options,
+                          std::vector<double>& fused)
+        {
+            if (options.question_vector.empty()) return;
+            const size_t d = options.question_vector.size();
+            std::vector<double> meaning(all.size(), -2.0);
+            bool any = false;
+            for (size_t i = 0; i < all.size(); ++i)
+            {
+                if (all[i].vector.size() != d || all[i].model != options.model) continue;
+                meaning[i] = cosine(all[i].vector, options.question_vector);
+                any = true;
+            }
+            if (!any) return;
+            double best = -1;
+            for (double m : meaning) best = std::max(best, m);
+            if (best < min_meaning) return;
+            reciprocal_rank(meaning, std::max(min_meaning, best - meaning_spread) - 1e-9, fused);
+        }
+
         class lexical_engine : public rag_engine
         {
         public:
@@ -559,12 +591,37 @@ namespace gulliver
                                             const rag_search_options& options) const override
             {
                 if (all.empty() || trim(question).empty()) return {};
-                const std::vector<sparse_row> sparse = sparse_of(all);
-                const std::vector<double> words = bm25_scores(sparse, question);
-                double best = 0;
-                for (double w : words) best = std::max(best, w);
                 std::vector<double> fused(all.size(), 0.0);
-                if (best > 0) reciprocal_rank(words, std::max(0.0, words_share * best), fused);
+                rank_words(all, question, fused);
+                return assemble(all, fused, options, options.model);
+            }
+        };
+
+        class dense_engine : public rag_engine
+        {
+        public:
+            std::string name() const override { return "dense"; }
+            std::vector<rag_excerpt> search(const std::vector<rag_passage>& all, const std::string& question,
+                                            const rag_search_options& options) const override
+            {
+                if (all.empty() || trim(question).empty()) return {};
+                std::vector<double> fused(all.size(), 0.0);
+                rank_meaning(all, options, fused);
+                return assemble(all, fused, options, options.model);
+            }
+        };
+
+        class hybrid_engine : public rag_engine
+        {
+        public:
+            std::string name() const override { return "hybrid"; }
+            std::vector<rag_excerpt> search(const std::vector<rag_passage>& all, const std::string& question,
+                                            const rag_search_options& options) const override
+            {
+                if (all.empty() || trim(question).empty()) return {};
+                std::vector<double> fused(all.size(), 0.0);
+                rank_words(all, question, fused);
+                rank_meaning(all, options, fused);
                 return assemble(all, fused, options, options.model);
             }
         };
@@ -572,8 +629,8 @@ namespace gulliver
 
     std::unique_ptr<rag_engine> engine_for(const std::string& name)
     {
-        // dense et hybrid viendront aux sous-étapes B14 et B15 ; en attendant, lexical pour tous.
-        (void)name;
-        return std::unique_ptr<rag_engine>(new lexical_engine());
+        if (name == "lexical") return std::unique_ptr<rag_engine>(new lexical_engine());
+        if (name == "dense") return std::unique_ptr<rag_engine>(new dense_engine());
+        return std::unique_ptr<rag_engine>(new hybrid_engine());  // hybrid par défaut (nom inconnu compris)
     }
 }

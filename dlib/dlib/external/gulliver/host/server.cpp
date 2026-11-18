@@ -2663,7 +2663,16 @@ namespace gulliver
             rag_search_options opt;
             if (body.contains("limit")) opt.limit = static_cast<int>(body["limit"].as_int(opt.limit));
             if (body.contains("budget")) opt.budget = body["budget"].as_int(opt.budget);
-            const std::string engine_name = body.contains("engine") ? body["engine"].as_string() : std::string("lexical");
+            if (body.contains("model")) opt.model = body["model"].as_string();
+            // Le vecteur de la question (pour les moteurs dense et hybrid), fourni en base64 par la page
+            // qui l'a calculé via /v1/embeddings.
+            if (body.contains("question_vector") && !body["question_vector"].as_string().empty())
+            {
+                const std::string bytes = base64_decode(body["question_vector"].as_string());
+                opt.question_vector.resize(bytes.size() / sizeof(float));
+                std::memcpy(opt.question_vector.data(), bytes.data(), opt.question_vector.size() * sizeof(float));
+            }
+            const std::string engine_name = body.contains("engine") ? body["engine"].as_string() : std::string("hybrid");
             std::unique_ptr<rag_engine> engine = engine_for(engine_name);
             const std::vector<rag_excerpt> hits = engine->search(passages, question, opt);
             json list = json::array();

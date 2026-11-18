@@ -380,6 +380,34 @@ int main(int argc, char** argv)
             "the lexical engine ranks the firewall passage first for a firewall question");
         auto none = engine->search(ps, "", opt);
         check(none.empty(), "an empty question returns no excerpt");
+
+        // Le moteur dense (vecteurs seuls) : des vecteurs unité en 3 dimensions, la question proche
+        // du deuxième passage par le sens, même si ses mots ne s'y retrouvent pas.
+        std::vector<gulliver::rag_passage> vps;
+        auto vpassage = [&](long long ord, const std::string& text, float x, float y, float z) {
+            gulliver::rag_passage p;
+            p.id = "v:" + std::to_string(ord); p.doc = "v"; p.name = "doc"; p.ordinal = ord;
+            p.text = text; p.model = "m"; p.vector = { x, y, z };
+            vps.push_back(p);
+        };
+        vpassage(0, "alpha", 1.0f, 0.0f, 0.0f);
+        vpassage(1, "beta", 0.0f, 1.0f, 0.0f);
+        vpassage(2, "gamma", 0.0f, 0.0f, 1.0f);
+        gulliver::rag_search_options dopt;
+        dopt.model = "m";
+        dopt.question_vector = { 0.1f, 0.99f, 0.0f };   // proche de beta (y)
+        auto dense = gulliver::engine_for("dense");
+        auto dhits = dense->search(vps, "une question quelconque", dopt);
+        check(!dhits.empty() && dhits[0].passages.front() == "v:1",
+            "the dense engine ranks the passage closest by meaning first");
+
+        // Le moteur hybrid mêle mots et sens : il nomme bien son nom, et trouve aussi par le sens.
+        auto hybrid = gulliver::engine_for("hybrid");
+        check(hybrid->name() == "hybrid" && gulliver::engine_for("inconnu")->name() == "hybrid",
+            "hybrid is the engine for its name and the default for an unknown name");
+        auto hhits = hybrid->search(vps, "beta", dopt);
+        check(!hhits.empty() && hhits[0].passages.front() == "v:1",
+            "the hybrid engine finds the beta passage by word and by meaning");
     }
 
     {
