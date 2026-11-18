@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-18 — Basculer la recherche documentaire vers le service C++ (chantier Gulliver, B18)
+
+- **Quoi** : `web/js/rag.js` — la fonction `search()` ne calcule plus les scores en JavaScript pour les documents persistants : elle appelle le service (`POST /gulliver/v1/profile/search`, avec le vecteur de la question en base64 quand un modèle d'embedding est chargé, l'en-tête `X-Gulliver-Profile`, le moteur laissé au réglage de service). Le scoring JavaScript (BM25 + cosinus + fusion + MMR) est **conservé sous `searchInMemory` pour les discussions incognito**, dont les passages ne quittent jamais le navigateur ; un mélange incognito/persistant combine les deux puis retrie. `skip`/`exclude` sont filtrés côté client. L'indexation (découpe par `chunk`, embeddings par `embed`, stockage par `store.replaceChunks`) n'est pas touchée : seule la recherche bascule. Helper `b64OfFloat32`, import de `currentProfile`.
+- **Fichiers** : `web/js/rag.js`.
+- **Pourquoi** : la recherche (le cœur du RAG) quitte le navigateur pour le C++ — plus confidentiel, et le choix du moteur devient un réglage de service. L'incognito garde son scoring local par nécessité.
+- **Étapes** : `node --check` ok ; banc de la page complet — **regress 55/0, docs 12/12, actions 31/31, tabs 11/11, phone 10/10**. Le scénario `docs` (document joint, indexé, réponse qui cite un mot et une couleur de son contenu) passe en utilisant le moteur hybrid **C++** : la **parité fonctionnelle** du portage (B15) est prouvée de bout en bout — mêmes extraits utiles, mêmes réponses. Pas d'incrément de version (bump à la fin du bloc, B19).
+
 ## 2026-11-17 — Réglages de la recherche documentaire (chantier Gulliver, B17)
 
 - **Quoi** : deux réglages de service pour le RAG. `host/settings.{h,cpp}` gagne `rag_engine` (hybrid/dense/lexical, défaut hybrid ; une valeur inconnue est ramenée au défaut) et `rag_top_k` (1 à 50, défaut 12), dans `to_json`/`from_json` et dans la liste blanche de `validate_settings`. La route `/gulliver/v1/profile/search` prend le moteur et la limite dans les réglages quand le corps ne les précise pas. UI : nouveau groupe « Documents » dans l'onglet Service de `web/js/service.js`, avec une fiche complète (effet, principe, pour/contre, hibou/marmotte/abeille) pour chaque réglage, leurs valeurs dans `recommended`, et leur schéma dans `make_openapi.py`/`web/openapi.json`.

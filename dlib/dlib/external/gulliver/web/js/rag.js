@@ -27,6 +27,7 @@
 
 import * as store from './store.js';
 import { terms } from './documents.js';
+import { currentProfile } from './profile.js';
 
 export const passageChars = 1200;
 export const overlapChars = 240;
@@ -79,6 +80,15 @@ function decodeVector(base64) {
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; ++i) bytes[i] = bin.charCodeAt(i);
   return new Float32Array(bytes.buffer);
+}
+
+// L'inverse de decodeVector : un Float32Array en base64 (ses octets bruts), pour envoyer le vecteur
+// de la question au service.
+function b64OfFloat32(arr) {
+  const bytes = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
+  let bin = '';
+  for (let i = 0; i < bytes.length; ++i) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
 }
 
 // Les vecteurs de textes, issus du modèle d'embedding du service.
@@ -419,6 +429,101 @@ function overlap(a, b) {
 }
 
 /*
+    La recherche d'un ou de plusieurs propriétaires persistants, confiée au service : il garde
+    leurs passages par profil et connaît les trois moteurs (hybrid, dense, lexical), le moteur et
+    le nombre de passages par défaut (rag_engine, rag_top_k) étant des réglages du service, que la
+    page ne précise pas.  hybrid et dense ont besoin du vecteur de la question ; la page le calcule
+    quand un modèle d'embedding est chargé et l'envoie en base64, et lexical l'ignore.  En cas
+    d'échec du calcul (service sans modèle, ou arrêté), le vecteur est simplement omis ; un abort
+    est relancé, comme dans l'ancienne recherche.
+
+    skip (Set de documents) et exclude (Set d'identifiants de passages) sont filtrés ici, côté
+    client, car le service ne les connaît pas : on retire les extraits dont le document est dans
+    skip, et ceux dont TOUS les passages sont dans exclude (approximation de l'ancien comportement,
+    qui écartait les passages un à un avant la fusion ; un extrait dont une partie seulement des
+    passages est exclue est gardé tel quel).  Si le service est indisponible, on renvoie [] comme
+    l'ancienne recherche sur une base en panne.
+*/
+async function searchInService(owners, question, options = {}) {
+  const { limit = 12, budget = 12000, signal = null, skip = null, exclude = null } = options;
+  if (!owners.length || !String(question).trim()) return [];
+
+  // Le vecteur de la question, quand un modèle d'embedding est chargé (pour hybrid et dense).
+  let qv = null;
+  if (model) {
+    try {
+      qv = (await embed([questionText(model.id, question)], signal))[0];
+    } catch (e) {
+      if (e.name === 'AbortError') throw e;
+      // Le service a perdu son modèle, ou s'est arrêté : la question part sans vecteur (lexical).
+      qv = null;
+    }
+  }
+
+  let json;
+  try {
+    const r = await fetch('/gulliver/v1/profile/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Gulliver-Profile': currentProfile() || '' },
+      signal,
+      body: JSON.stringify({
+        question,
+        owners,
+        model: model ? model.id : '',
+        question_vector: qv ? b64OfFloat32(qv) : '',
+        limit,
+        budget
+      })
+    });
+    if (!r.ok) return [];
+    json = await r.json();
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    // Service indisponible : aucun extrait, comme l'ancienne recherche sur une base en panne.
+    return [];
+  }
+
+  let excerpts = (json && json.excerpts) || [];
+  // skip et exclude filtrés côté client (le service ne les connaît pas).
+  if (skip) excerpts = excerpts.filter((x) => !skip.has(x.doc));
+  if (exclude) excerpts = excerpts.filter((x) => !(x.passages || []).every((id) => exclude.has(id)));
+  return excerpts;
+}
+
+/*
+    La recherche documentaire : elle sépare les propriétaires en deux groupes.  Les propriétaires
+    incognito (memory.has(o)) gardent leurs passages dans ce navigateur et sont cherchés en
+    JavaScript (searchInMemory) ; les autres, persistants, sont cherchés par le service
+    (searchInService), qui garde leurs passages par profil.
+
+    - Tous incognito : recherche JS seule, comportement identique à avant.
+    - Aucun incognito (cas le plus courant) : recherche par le service seul.
+    - Mélange (rare) : les deux, puis les listes concaténées, retriées par score décroissant et
+      tronquées à limit.  C'est une approximation : les scores JS et ceux du service ne partagent
+      pas la même échelle, mais ce cas est rare (une discussion incognito et des projets
+      persistants dans la même recherche).
+*/
+export async function search(owners, question, options = {}) {
+  const { limit = 12 } = options;
+  const incognito = owners.filter((o) => memory.has(o));
+  const persistent = owners.filter((o) => !memory.has(o));
+
+  if (!incognito.length) return searchInService(persistent, question, options);
+  if (!persistent.length) return searchInMemory(incognito, question, options);
+
+  const [fromMemory, fromService] = await Promise.all([
+    searchInMemory(incognito, question, options),
+    searchInService(persistent, question, options)
+  ]);
+  return fromMemory.concat(fromService).sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
+/*
+    La recherche en JavaScript, dans ce navigateur, pour les discussions incognito : leurs passages
+    vivent dans la Map mémoire et ne quittent jamais le navigateur, donc le service ne peut pas les
+    chercher.  C'est l'ancienne recherche, inchangée (BM25, cosinus, fusion par rang réciproque,
+    pertinence marginale maximale).
+
     Les extraits des documents de owners les plus proches d'une question :
     [{doc, name, where, text, score, passages}], les documents dans l'ordre de leur meilleur
     extrait, les extraits d'un document dans son ordre, dans budget caractères, limit passages
@@ -427,7 +532,7 @@ function overlap(a, b) {
     entier ; exclude, un Set d'identifiants de passages, exclut les passages que le contexte
     contient déjà.
 */
-export async function search(owners, question, options = {}) {
+async function searchInMemory(owners, question, options = {}) {
   const { limit = 12, budget = 12000, signal = null, skip = null, exclude = null } = options;
   const all = [];
   const sparse = [];
