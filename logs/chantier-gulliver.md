@@ -220,3 +220,87 @@ Aucune fonctionnalité perdue.
 Suites possibles (si l'humain veut) : porter AUSSI le découpage à l'indexation côté service ;
 reranker ; mesures JS vs C++ et réglages fins sur le Mac mini ; modèle abliterated pour l'usage
 cyber ; entraînement si un modèle ne convient pas.
+
+---
+
+## Bloc C — Suites (demandées le 2026-11-18 : « plus aucun calcul dans le browser »)
+
+> Consigne (2026-11-18) : l'humain veut **zéro calcul dans le navigateur, seulement des boutons
+> qui appellent des API**. Il **ne se sert pas de l'incognito** pour Gulliver → le scoring JS de
+> secours est **retiré entièrement**. Les trois suites qui **ne dépendent pas du Mac mini** sont
+> faites maintenant : découpage à l'indexation côté service, extraction de texte côté service
+> (PDF compris), reranker, et fiches de modèles abliterated au catalogue. Mesures de vitesse :
+> toujours en attente du Mac mini.
+
+**Décisions tranchées en autonomie (2026-11-18)** :
+- *Indexation côté service* : « tout en un appel, progression par flux » (choix de l'humain) —
+  route SSE `POST /gulliver/v1/profile/documents/<doc>/index` qui découpe (rag_chunk) ET calcule
+  les vecteurs en interne, en émettant la progression par événements, pour garder la barre et
+  l'annulation. Le navigateur ne fait plus **aucun** calcul RAG.
+- *Incognito* : l'humain ne s'en sert pas → `searchInMemory` et tout le scoring JS retirés de
+  `rag.js`. En incognito, la recherche documentaire est **désactivée** (pas de RAG sur des docs
+  incognito) ; le chat incognito marche toujours. Assumé et documenté.
+- *Extraction de texte* : l'humain veut tout côté service, **PDF compris via PDFium** (il l'a
+  demandé explicitement). Office/ODF/RTF/HTML par le lecteur ZIP natif de dlib (`dlib/zip.h`) +
+  lecture XML, **sans dépendance nouvelle**. PDF par **PDFium** (binaire MIT, bblanchon,
+  `third_party/pdfium`), chargé par `dlopen`, dylib **non versionnée** (récupérée par
+  `tools/fetch_pdfium.sh`, ~7,6 Mo). Conversion UTF-16LE→UTF-8 par **CoreFoundation** (pas
+  `<codecvt>`, déprécié). PDFium **sans V8** (3 Mo : on n'exécute pas le JS des PDF).
+
+- ☑ **C1** (2026-11-18) Découpage + vecteurs à l'indexation, côté service (route SSE).
+  `embed_texts` interne (host/server.cpp, calcul bloquant des vecteurs sans HTTP) + route
+  `POST /gulliver/v1/profile/documents/<doc>/index` : découpe (`rag_chunk`) ET vecteurs côté
+  service, flux SSE de progression (`: progress {done,total}`) puis `{passages,vectors}`. `rag.js`
+  réécrit en client (agent) : 693→307 lignes, `searchInMemory` et tout le scoring JS **retirés**
+  (l'humain ne se sert pas de l'incognito). **Vérifié** : build 0 avertissement ; curl (découpe
+  service, passages rangés, recherche OK) ; banc `docs 12/12` (indexation→réponse de bout en bout
+  avec le découpage côté service).
+- ☑ **C2** (2026-11-18) Extraction de texte côté service. **PDF via PDFium** (third_party/pdfium,
+  MIT, sans V8, dylib non versionnée, `tools/fetch_pdfium.sh`), `host/doc_extract_pdf.cpp` (dlopen,
+  UTF-16LE→UTF-8 par CoreFoundation). Office/ODF/RTF/HTML par le ZIP natif de dlib + lecture XML,
+  `host/doc_extract.cpp` (1925 lignes, agent). Route `POST /gulliver/v1/extract {name,bytes b64}` →
+  `{text,format}` ou 422 avec code. Page basculée : `files.js` (`extractViaService`), `web.js` (PDF
+  du web), `api.js` (pages d'erreur). `documents.js` nettoyé 1015→231 lignes (agent) ; gardé :
+  `pdfPages` (rendu PDF scanné en images, reste au navigateur), `terms`/`passages`/`searchPassages`
+  (RAG des docs lus en entier, **seul calcul JS gardé**, décision de l'humain), utilitaires.
+  **Vérifié en isolation** : PDF texte `## Page N`, PDF scanné `pdf-images`, non-PDF `pdf-invalid`,
+  docx extrait ; `test_host` all checks passed ; ESLint 0 sur tous les modules. **Reste** : banc.
+- ☑ **C3** (2026-11-18) Reranker. `rerank_excerpts` (host/rag_engine.cpp) : reclasse les extraits
+  assemblés par 2·couverture + 1·densité + 0,5·min(proximité, couverture) des mots de la question,
+  tri stable. Réglage `rag_rerank` (settings + validate + route search + options.rerank ; défaut
+  **off**). Fiche UI (service.js, groupe Documents) + recommended + openapi. **Bug corrigé** : la
+  proximité comptait les répétitions d'un même mot (« alpha alpha alpha » battait un extrait couvrant
+  alpha+beta) → ne compte que des mots DISTINCTS proches, bornée par la couverture. **Vérifié** :
+  test isolé (couverture bat répétition ; n'inverse pas un bon classement).
+- ☑ **C4** (2026-11-18) Suggestions de modèles abliterated. Décision : pas de fiches de catalogue
+  (URLs/SHA256 que je ne peux pas vérifier = fragile), mais des **suggestions de recherche** dans
+  l'onglet Hugging Face (models.js : liens « abliterated GGUF », « Qwen3 abliterated », « Llama 3
+  abliterated », « dolphin » qui lancent la recherche HF d'un clic). Le flux HF existant vérifie
+  l'architecture et les tailles à l'ajout. Mention de l'usage autorisé seulement. **Vérifié** :
+  ESLint 0.
+- ☑ **C5** (2026-11-18) Doc + version + non-régression + commits. Version **6.3.0**
+  (`bump_version.py minor`). Changelog 6.3.0 (Documents + Modèles). Blog 55 (« Le navigateur se
+  vide ») + sommaire. `differences-mac-windows.md` (5 lignes : indexation, lecture, reranker,
+  abliterated ; ligne recherche corrigée ; date 6.3.0). Mémo (note PDFium + `fetch_pdfium.sh`).
+  openapi régénéré (6.3.0, routes `/extract`, `/documents/<doc>/index`, `/profile/search`,
+  `rag_rerank`). reprise + journal à jour. Dépendance PDFium documentée (pas aux notes-pour-l-auteur :
+  c'est un ajout du fork, pas un défaut de l'original — comme la garde relais en A10). **Vérifié** :
+  build 6.3.0 0 avertissement ; `test_host` all checks passed ; **banc propre 124 scénarios, 0
+  échec** (regress 55, docs 17, actions 31, tabs 11, phone 10).
+
+**BLOC C TERMINÉ (2026-11-18) — Gulliver 6.3.0.** Plus aucun calcul RAG dans le navigateur : le
+découpage, le calcul des vecteurs, la lecture du texte (PDF par PDFium, Office/ODF/RTF/HTML par le
+ZIP de dlib) et la recherche sont au service. Seule exception assumée : le tri des documents lus
+« en entier » (petit texte déjà au navigateur). Reranker optionnel. Suggestions de modèles
+abliterated pour l'usage cyber. Aucune fonctionnalité perdue.
+
+**Décision C4 (tranchée)** : suggestions HF plutôt que fiches de catalogue — honnête (pas de fausse
+URL), sûr (le hub vérifie à l'ajout), durable (pas de SHA à maintenir). L'humain voulait « ajouter
+au catalogue sans télécharger » : les suggestions remplissent le besoin (trouver les modèles sans
+connaître leur repo) sans le risque d'un catalogue local à fausses empreintes.
+**Décision C2 (tranchée)** : `searchPassages`/`terms` gardés en JS pour les documents lus « en
+entier » (petit texte déjà dans le navigateur, tri trivial ; l'envoyer au service = aller-retour
+pour rien). Seule exception assumée au « zéro calcul navigateur », validée par l'humain.
+**Dépendance ajoutée (C2)** : PDFium (bblanchon/pdfium-binaries, MIT, ~7,6 Mo, arm64, sans V8).
+Binaire non versionné (récupéré par `tools/fetch_pdfium.sh`), en-têtes + licence + script versionnés.
+À signaler aux notes-pour-l-auteur et aux différences.

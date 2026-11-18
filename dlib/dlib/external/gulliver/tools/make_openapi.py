@@ -391,6 +391,9 @@ schemas = {
                                       "vecteurs d'embedding), lexical (mots seuls, BM25, sans modèle d'embedding)."},
         "rag_top_k": {"type": "integer", "minimum": 1, "maximum": 50, "default": 12,
                       "description": "Le nombre d'extraits de documents qu'une recherche remonte au plus."},
+        "rag_rerank": {"type": "boolean", "default": False,
+                       "description": "Reclasser les extraits trouvés par un tri fin (couverture et densité des mots de "
+                                      "la question), sans modèle supplémentaire."},
         "relay": ref("RelaySettings")}},
     "RelaySettings": {"type": "object", "description": "Le relais vers un moteur extérieur, le modèle gulliver-relay. "
                       "Un changement donne les membres qu'il change ; les autres restent.", "properties": {
@@ -819,6 +822,20 @@ paths = {
                       "400": reply("Le moteur a refusé le compte, par exemple pour un modèle qui n'est pas chargé : "
                                    "error donne la raison, sous forme de texte", {"type": "object", "properties": {
                                        "error": {"type": "string"}}})}}},
+    "/gulliver/v1/extract": {"post": {
+        "tags": ["Service"], "summary": "Le texte d'un document (PDF, Word, Excel, PowerPoint, OpenDocument, RTF, HTML)",
+        "description": "Lit le texte d'un fichier côté service : le navigateur envoie ses octets, le service rend le "
+                       "texte. Les PDF sont lus par PDFium, les formats de bureautique par le lecteur ZIP et le XML. "
+                       "Un PDF numérisé (fait d'images) renvoie 422 avec le code pdf-images et le nombre de pages, pour "
+                       "que la page les rende en images ; sans la bibliothèque PDFium, les PDF renvoient pdf-reader.",
+        "requestBody": json_body({"type": "object", "required": ["bytes"], "properties": {
+            "name": {"type": "string", "description": "Le nom du fichier (son extension sert à deviner le format)."},
+            "bytes": {"type": "string", "description": "Les octets du fichier, en base64."}}}),
+        "responses": {"200": reply("Le texte et le format", {"type": "object", "properties": {
+            "text": {"type": "string"}, "format": {"type": "string"}}}),
+                      "422": reply("Le fichier n'a pas pu être lu : code parmi pdf-images, pdf-password, pdf-invalid, "
+                                   "pdf-reader, legacy, unsupported, too-large. pages donne le nombre de pages d'un PDF "
+                                   "numérisé (pdf-images).", ref("Error"))}}},
     "/gulliver/v1/web/search": {"post": {
         "tags": ["Accès au web"], "summary": "Cherche dans Wikipedia",
         "description": "L'outil web_search du bouton Web, par l'interface REST de Wikipedia (GET "
@@ -1305,6 +1322,35 @@ paths = {
                             "records": {"type": "array", "items": ref("Chunk"),
                                         "description": "Les passages du document ; ils remplacent en bloc ceux qui y "
                                                        "étaient. Le vecteur de chaque passage arrive en base64."}}}))},
+    "/gulliver/v1/profile/documents/{doc}/index": {
+        "post": profile_op(["Profils"], "Indexe un document entièrement côté service (découpage et vecteurs)",
+                        {"200": reply("Un flux d'événements (text/event-stream) : des lignes de progression "
+                                      "«: progress {done,total}», puis «data: {passages,vectors[,error]}» et "
+                                      "«data: [DONE]». error est présent si le modèle d'embedding s'est arrêté "
+                                      "(les passages restants sont rangés sans vecteur).", None),
+                         "400": reply("Propriétaire manquant (code owner)", ref("Error"))},
+                        extra_params=[{"name": "doc", "in": "path", "required": True, "schema": {"type": "string"}}],
+                        requestBody=json_body({"type": "object", "required": ["owner"], "properties": {
+                            "owner": {"type": "string", "description": "La discussion ou le projet propriétaire."},
+                            "name": {"type": "string", "description": "Le nom du document."},
+                            "text": {"type": "string", "description": "Le texte brut du document ; le service le découpe."}}}))},
+    "/gulliver/v1/profile/search": {
+        "post": profile_op(["Profils"], "Cherche les extraits de documents proches d'une question",
+                        {"200": reply("Les extraits classés", {"type": "object", "properties": {
+                            "excerpts": {"type": "array", "items": {"type": "object", "properties": {
+                                "doc": {"type": "string"}, "name": {"type": "string"}, "where": {"type": "string"},
+                                "text": {"type": "string"}, "score": {"type": "number"},
+                                "passages": {"type": "array", "items": {"type": "string"}}}}},
+                            "engine": {"type": "string", "description": "Le moteur utilisé (hybrid, dense, lexical)."}}})},
+                        requestBody=json_body({"type": "object", "properties": {
+                            "question": {"type": "string"},
+                            "owners": {"type": "array", "items": {"type": "string"}},
+                            "engine": {"type": "string", "enum": ["hybrid", "dense", "lexical"],
+                                       "description": "Par défaut, le réglage rag_engine du service."},
+                            "question_vector": {"type": "string", "description": "Le vecteur de la question en base64 "
+                                                "(pour dense et hybrid), calculé par la page via /v1/embeddings."},
+                            "limit": {"type": "integer"}, "budget": {"type": "integer"},
+                            "rerank": {"type": "boolean", "description": "Par défaut, le réglage rag_rerank du service."}}}))},
     "/gulliver/v1/profile/images": {
         "get": profile_op(["Profils"], "Les images d'un propriétaire",
                         {"200": reply("Les métadonnées des images (sans leurs octets)", {"type": "object",

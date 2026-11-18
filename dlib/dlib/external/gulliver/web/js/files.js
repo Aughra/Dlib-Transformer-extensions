@@ -11,7 +11,7 @@ import * as store from './store.js';
 import { errorText } from './background.js';
 import { maxContextImages, maxProjectImages, maxProjectItems } from './context.js';
 import { closeMenu, confirmDialog, dialog, showMenu } from './dialogs.js';
-import { extractText, fileKind, maxFileBytes, pdfPages } from './documents.js';
+import { fileKind, maxFileBytes, pdfPages } from './documents.js';
 import { formatLimit, formatNumber, formatSize, h, iconButton, toast } from './dom.js';
 import { language, t, tn } from './i18n.js';
 import { icon } from './icons.js';
@@ -26,6 +26,36 @@ import { inputsLabel, modelName, roleInputs, roleModel } from './status.js';
     leur taille et leur date.  Un échec est signalé, et le fichier reste joint malgré tout.
 */
 const sentToMac = new Set();
+
+/*
+    Lit le texte d'un fichier côté service (route /gulliver/v1/extract) : le navigateur n'extrait
+    plus le texte lui-même (PDF, docx, xlsx…), il envoie les octets et reçoit {text, format}.  En
+    cas d'échec, l'erreur porte son code (pdf-images, pdf-password, unsupported, legacy, too-large…),
+    comme avant ; pour un PDF scanné (pdf-images), e.pages donne le nombre de pages à rendre en
+    images (ce rendu, lui, reste au navigateur : pdfPages dessine les pages pour le modèle de vision).
+*/
+async function extractViaService(f, signal) {
+  if (f.size > maxFileBytes) { const e = new Error('too-large'); e.code = 'too-large'; throw e; }
+  const bytes = await f.arrayBuffer();
+  // Les octets en base64, par tranches pour ne pas dépasser la pile d'arguments de String.fromCharCode.
+  const view = new Uint8Array(bytes);
+  let bin = '';
+  for (let i = 0; i < view.length; i += 0x8000) bin += String.fromCharCode.apply(null, view.subarray(i, i + 0x8000));
+  const body = { name: f.name, bytes: btoa(bin) };
+  const r = await fetch('/gulliver/v1/extract', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal
+  });
+  if (!r.ok) {
+    let code = String(r.status), message = r.statusText, pages = 0;
+    try { const j = await r.json(); if (j.error) { code = j.error.code || code; message = j.error.message || message; pages = j.error.pages || 0; } }
+    catch (e) { /* pas du JSON */ }
+    const err = new Error(message);
+    err.code = code;
+    if (pages) err.pages = pages;
+    throw err;
+  }
+  return r.json();
+}
 
 function copyToMac(f) {
   if (!f || f.fromMac || typeof f.size !== 'number') return;
@@ -198,22 +228,24 @@ export async function readFiles(files, role, room, most) {
       continue;
     }
     try {
-      const r = await extractText(f);
+      const r = await extractViaService(f);
       out.push({ id: store.uid(), name: f.name, size: f.size, format: r.format, text: r.text, added: Date.now() });
       if (r.unreadablePages) {
         toast(tn('pdfPagesWithoutText', r.unreadablePages, { total: r.pages, name: f.name }), false, 9000);
       }
     } catch (e) {
-      if (e.message === 'pdf-images') scans.push({ file: f, pages: e.pages || 0 });
-      else if (e.message === 'unsupported') toast(t('unsupported', { name: f.name }), true);
-      else if (e.message === 'legacy') toast(t('legacyFormat', { name: f.name }), true);
-      else if (e.message === 'too-large') {
+      // Le code vient du service (route /extract) ; les mêmes codes qu'avant.
+      const code = e.code || e.message;
+      if (code === 'pdf-images') scans.push({ file: f, pages: e.pages || 0 });
+      else if (code === 'unsupported') toast(t('unsupported', { name: f.name }), true);
+      else if (code === 'legacy') toast(t('legacyFormat', { name: f.name }), true);
+      else if (code === 'too-large') {
         toast(t('tooLarge', { name: f.name, size: formatSize(f.size), limit: formatLimit(maxFileBytes) }), true, 9000);
       }
-      else if (e.message === 'too-large-content') toast(t('tooLargeContent', { name: f.name }), true);
-      else if (e.message === 'pdf-password') toast(t('pdfPassword', { name: f.name }), true, 9000);
-      else if (e.message === 'pdf-invalid') toast(t('pdfInvalid', { name: f.name }), true);
-      else if (e.message === 'pdf-reader') toast(t('pdfReader', { name: f.name }), true, 12000);
+      else if (code === 'too-large-content') toast(t('tooLargeContent', { name: f.name }), true);
+      else if (code === 'pdf-password') toast(t('pdfPassword', { name: f.name }), true, 9000);
+      else if (code === 'pdf-invalid') toast(t('pdfInvalid', { name: f.name }), true);
+      else if (code === 'pdf-reader') toast(t('pdfReader', { name: f.name }), true, 12000);
       else toast(t('readFailed', { name: f.name, error: errorText(e) }), true);
     }
   }

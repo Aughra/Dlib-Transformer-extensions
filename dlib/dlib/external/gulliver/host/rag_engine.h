@@ -69,6 +69,7 @@ namespace gulliver
         long long budget = 12000;
         std::vector<float> question_vector;   // le vecteur de la question (vide : pas de recherche par le sens)
         std::string model;                    // le modèle du vecteur de la question
+        bool rerank = false;                  // reclasse les extraits par un tri fin (couverture et densité des mots)
     };
 
     // Les mots d'un texte pour la recherche par les mots : minuscules, accents latins retirés, coupés

@@ -22,6 +22,8 @@ async function errorOf(r) {
     if (j && j.error) {
       e = typeof j.error === 'string' ? serviceError(j.error, j.code) : serviceError(j.error.message || r.statusText,
         j.error.code);
+      // Un PDF scanné (pdf-images) porte le nombre de pages à rendre en images.
+      if (typeof j.error === 'object' && j.error.pages) e.pages = j.error.pages;
     }
   } catch (x) {
     // Le corps n'était pas du JSON.

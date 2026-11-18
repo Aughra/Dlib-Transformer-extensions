@@ -2,6 +2,20 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.3.0 — 18 novembre 2026
+
+### Documents
+
+- La **lecture du texte des documents** se fait désormais dans le service, et non plus dans le navigateur : Word, PowerPoint, Excel, OpenDocument, RTF et HTML par le service lui-même, et les **PDF par PDFium** (une bibliothèque de lecture de PDF). Le navigateur n'extrait plus aucun texte ; il envoie le fichier, le service rend le texte. Un PDF numérisé (fait d'images) est toujours lu page par page par le modèle de vision, comme avant.
+- L'**indexation d'un document** — le découpage en passages et le calcul de leurs vecteurs — se fait entièrement dans le service, en un seul appel, avec une barre de progression. Plus aucun calcul de recherche ne reste dans le navigateur.
+- Nouveau réglage **« Affiner le tri des extraits »** (onglet Service, éteint par défaut) : après la recherche, un second tri met devant l'extrait qui couvre le mieux l'ensemble des mots de la question, sans modèle supplémentaire.
+
+### Modèles
+
+- L'onglet Hugging Face propose des **suggestions de modèles « abliterated »** (sans réflexe de refus), utiles pour la cybersécurité : un clic lance la recherche. À n'utiliser que pour un usage autorisé.
+
+---
+
 ## 6.2.0 — 18 novembre 2026
 
 ### Documents

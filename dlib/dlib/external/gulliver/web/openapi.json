@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "6.2.0",
+  "version": "6.3.0",
   "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -1175,6 +1175,68 @@
            "type": "string"
           }
          }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/extract": {
+   "post": {
+    "tags": [
+     "Service"
+    ],
+    "summary": "Le texte d'un document (PDF, Word, Excel, PowerPoint, OpenDocument, RTF, HTML)",
+    "description": "Lit le texte d'un fichier côté service : le navigateur envoie ses octets, le service rend le texte. Les PDF sont lus par PDFium, les formats de bureautique par le lecteur ZIP et le XML. Un PDF numérisé (fait d'images) renvoie 422 avec le code pdf-images et le nombre de pages, pour que la page les rende en images ; sans la bibliothèque PDFium, les PDF renvoient pdf-reader.",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "bytes"
+        ],
+        "properties": {
+         "name": {
+          "type": "string",
+          "description": "Le nom du fichier (son extension sert à deviner le format)."
+         },
+         "bytes": {
+          "type": "string",
+          "description": "Les octets du fichier, en base64."
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Le texte et le format",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "text": {
+           "type": "string"
+          },
+          "format": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Le fichier n'a pas pu être lu : code parmi pdf-images, pdf-password, pdf-invalid, pdf-reader, legacy, unsupported, too-large. pages donne le nombre de pages d'un PDF numérisé (pdf-images).",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -4281,6 +4343,203 @@
     }
    }
   },
+  "/gulliver/v1/profile/documents/{doc}/index": {
+   "post": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Indexe un document entièrement côté service (découpage et vecteurs)",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     },
+     {
+      "name": "doc",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "Propriétaire manquant (code owner)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Un flux d'événements (text/event-stream) : des lignes de progression «: progress {done,total}», puis «data: {passages,vectors[,error]}» et «data: [DONE]». error est présent si le modèle d'embedding s'est arrêté (les passages restants sont rangés sans vecteur)."
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "owner"
+        ],
+        "properties": {
+         "owner": {
+          "type": "string",
+          "description": "La discussion ou le projet propriétaire."
+         },
+         "name": {
+          "type": "string",
+          "description": "Le nom du document."
+         },
+         "text": {
+          "type": "string",
+          "description": "Le texte brut du document ; le service le découpe."
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/profile/search": {
+   "post": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Cherche les extraits de documents proches d'une question",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/ProfileHeader"
+     }
+    ],
+    "responses": {
+     "400": {
+      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "200": {
+      "description": "Les extraits classés",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "excerpts": {
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "doc": {
+              "type": "string"
+             },
+             "name": {
+              "type": "string"
+             },
+             "where": {
+              "type": "string"
+             },
+             "text": {
+              "type": "string"
+             },
+             "score": {
+              "type": "number"
+             },
+             "passages": {
+              "type": "array",
+              "items": {
+               "type": "string"
+              }
+             }
+            }
+           }
+          },
+          "engine": {
+           "type": "string",
+           "description": "Le moteur utilisé (hybrid, dense, lexical)."
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "question": {
+          "type": "string"
+         },
+         "owners": {
+          "type": "array",
+          "items": {
+           "type": "string"
+          }
+         },
+         "engine": {
+          "type": "string",
+          "enum": [
+           "hybrid",
+           "dense",
+           "lexical"
+          ],
+          "description": "Par défaut, le réglage rag_engine du service."
+         },
+         "question_vector": {
+          "type": "string",
+          "description": "Le vecteur de la question en base64 (pour dense et hybrid), calculé par la page via /v1/embeddings."
+         },
+         "limit": {
+          "type": "integer"
+         },
+         "budget": {
+          "type": "integer"
+         },
+         "rerank": {
+          "type": "boolean",
+          "description": "Par défaut, le réglage rag_rerank du service."
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/gulliver/v1/profile/images": {
    "get": {
     "tags": [
@@ -5667,6 +5926,11 @@
       "maximum": 50,
       "default": 12,
       "description": "Le nombre d'extraits de documents qu'une recherche remonte au plus."
+     },
+     "rag_rerank": {
+      "type": "boolean",
+      "default": false,
+      "description": "Reclasser les extraits trouvés par un tri fin (couverture et densité des mots de la question), sans modèle supplémentaire."
      },
      "relay": {
       "$ref": "#/components/schemas/RelaySettings"

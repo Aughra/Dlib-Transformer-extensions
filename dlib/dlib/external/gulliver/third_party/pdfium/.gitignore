@@ -1,0 +1,4 @@
+# La bibliothèque PDFium binaire (~7,6 Mo) n'est pas versionnée : on la récupère avec
+# tools/fetch_pdfium.sh.  Les en-têtes, la licence, VERSION et PDFiumConfig.cmake, eux, sont
+# versionnés (ce .gitignore ne les exclut pas).
+lib/libpdfium.dylib

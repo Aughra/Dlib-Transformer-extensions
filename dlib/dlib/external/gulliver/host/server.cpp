@@ -60,6 +60,7 @@
 #include "http_fetch.h"
 #include "hub.h"
 #include "rag_engine.h"
+#include "doc_extract.h"
 #include "relay.h"
 #include "service.h"
 #include "web_access.h"
@@ -1239,7 +1240,7 @@ namespace gulliver
                 "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "offline",
                 "proxy", "web_access", "web_search", "lan", "lan_port", "warm_history", "spin_us",
                 "gpu_prompt_tokens", "gpu_prompt_context", "models_dir", "reserve_gb", "library_dir", "relay",
-                "rag_engine", "rag_top_k" };
+                "rag_engine", "rag_top_k", "rag_rerank" };
             for (const auto& kv : body.items())
             {
                 if (std::find_if(std::begin(keys), std::end(keys), [&](const char* k) { return kv.first == k; })
@@ -1351,6 +1352,60 @@ namespace gulliver
             std::vector<float> v(bytes.size() / sizeof(float));
             if (!v.empty()) std::memcpy(v.data(), bytes.data(), v.size() * sizeof(float));
             return v;
+        }
+
+        /*
+            Calcule les vecteurs d'une liste de textes avec un modèle d'embedding déjà résolu, en
+            bloquant jusqu'au résultat.  Même mécanique que handle_embeddings (soumission au moteur,
+            attente des événements, abandon du client), mais sans HTTP : la route d'indexation
+            (index_document) s'en sert pour embarquer le découpage ET les vecteurs côté service.
+            Renvoie true et remplit vectors (un vecteur d'octets float par texte, dans l'ordre) ;
+            renvoie false et remplit error en cas d'échec, true avec vectors vide si le client est
+            parti (should_stop).  should_stop() est consulté entre les attentes pour arrêter tôt.
+        */
+        bool embed_texts(service& svc, const std::string& model, const std::vector<std::string>& texts,
+            std::vector<std::vector<char>>& vectors, std::string& error,
+            const std::function<bool()>& should_stop)
+        {
+            vectors.assign(texts.size(), {});
+            if (texts.empty()) return true;
+            json request = json::object();
+            request["model"] = model;
+            request["encoding_format"] = "base64";
+            json input = json::array();
+            for (const std::string& t : texts) input.push_back(t);
+            request["input"] = std::move(input);
+            auto ch = std::make_shared<event_channel>();
+            uint64_t id = 0;
+            if (!svc.engine().submit(request, [ch](int kind, const std::string& data) { ch->push(kind, data); }, id,
+                    error))
+                return false;
+            std::pair<int, std::string> e;
+            for (;;)
+            {
+                if (should_stop && should_stop())
+                {
+                    svc.engine().cancel(id);
+                    vectors.clear();
+                    return true;
+                }
+                if (ch->pop(e, 1000) && (e.first == GULLIVER_EVENT_DONE || e.first == GULLIVER_EVENT_ERROR)) break;
+            }
+            const json done = json::parse_or_null(e.second);
+            if (e.first == GULLIVER_EVENT_ERROR)
+            {
+                error = done["message"].as_string();
+                return false;
+            }
+            for (const auto& d : done["data"].elements())
+            {
+                const long long idx = d["index"].as_int(0);
+                if (idx < 0 || static_cast<size_t>(idx) >= vectors.size()) continue;
+                const std::string bytes = base64_decode(d["embedding"].as_string());
+                vectors[idx].assign(bytes.begin(), bytes.end());
+            }
+            svc.record_usage(static_cast<long>(done["usage"]["prompt_tokens"].as_int(0)), 0);
+            return true;
         }
 
         /*
@@ -1853,6 +1908,60 @@ namespace gulliver
             res.status = 200;
             res.set_content(text, "text/plain; charset=utf-8");
         });
+        /*
+            L'extraction du texte d'un document, côté service (host/doc_extract.{h,cpp}) : le
+            navigateur n'a plus à lire les formats lui-même.  Corps {name, bytes} (les octets du
+            fichier en base64) → {text, format}.  En cas d'échec, 422 avec le code de doc_error
+            (pdf-images, pdf-password, pdf-invalid, pdf-reader, legacy, unsupported, too-large, …),
+            que la page connaît déjà (web/js/files.js).  Un PDF scanné lève "pdf-images" : la page
+            rend alors ses pages en images pour le modèle de vision, comme avant (ce rendu reste au
+            navigateur, il dessine les pages).
+        */
+        srv.Post("/gulliver/v1/extract", [s](const httplib::Request& req, httplib::Response& res) {
+            (void)s;
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string name = body.contains("name") ? body["name"].as_string() : std::string();
+            const std::string b64 = body.contains("bytes") ? body["bytes"].as_string() : std::string();
+            const std::string bytes = base64_decode(b64);
+            try
+            {
+                const std::string text = extract_text(name, bytes);
+                json out = json::object();
+                out["text"] = text;
+                // Le format affiché : l'extension en majuscules, PDF pour un PDF (nom ou octets).
+                std::string fmt;
+                const size_t dot = name.find_last_of('.');
+                if (dot != std::string::npos) { fmt = name.substr(dot + 1); for (char& c : fmt) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c))); }
+                if (bytes.size() >= 5 && bytes.compare(0, 5, "%PDF-") == 0) fmt = "PDF";
+                if (fmt.empty()) fmt = "TXT";
+                out["format"] = fmt;
+                send_json(res, 200, out);
+            }
+            catch (const doc_error& e)
+            {
+                // Pour un PDF scanné (pdf-images), la page a besoin du nombre de pages pour les
+                // rendre en images : on le remonte dans un champ "pages" de l'erreur (lu du message
+                // « the PDF has N pages of images »).
+                if (e.code == "pdf-images")
+                {
+                    long long pages = 0;
+                    for (char c : std::string(e.what())) { if (c >= '0' && c <= '9') pages = pages * 10 + (c - '0'); else if (pages) break; }
+                    json err = json::object();
+                    json inner = json::object();
+                    inner["message"] = std::string(e.what());
+                    inner["type"] = "invalid_request_error";
+                    inner["code"] = e.code;
+                    inner["pages"] = pages;
+                    err["error"] = inner;
+                    res.status = 422;
+                    res.set_content(err.dump(), "application/json");
+                    return;
+                }
+                send_error(res, 422, "invalid_request_error", e.what(), e.code);
+            }
+        });
+
         srv.Post("/gulliver/v1/count", [s](const httplib::Request& req, httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;
@@ -2731,9 +2840,11 @@ namespace gulliver
             const host_settings cfg = s->settings().get();
             rag_search_options opt;
             opt.limit = cfg.rag_top_k;
+            opt.rerank = cfg.rag_rerank;
             if (body.contains("limit")) opt.limit = static_cast<int>(body["limit"].as_int(opt.limit));
             if (body.contains("budget")) opt.budget = body["budget"].as_int(opt.budget);
             if (body.contains("model")) opt.model = body["model"].as_string();
+            if (body.contains("rerank")) opt.rerank = body["rerank"].as_bool(opt.rerank);
             // Le vecteur de la question (pour les moteurs dense et hybrid), fourni en base64 par la page
             // qui l'a calculé via /v1/embeddings.
             if (body.contains("question_vector") && !body["question_vector"].as_string().empty())
@@ -2760,6 +2871,132 @@ namespace gulliver
             out["excerpts"] = list;
             out["engine"] = engine->name();
             send_json(res, 200, out);
+        });
+
+        /*
+            Indexe un document entièrement côté service : le navigateur envoie le texte brut, le
+            service le découpe (rag_chunk) ET calcule les vecteurs (embed_texts), puis les range —
+            plus aucun découpage ni orchestration d'embedding dans le navigateur.  La réponse est un
+            flux d'événements (text/event-stream) qui porte la progression (": progress done total"),
+            comme le chat, pour garder la barre de progression et l'annulation : un client parti
+            arrête l'indexation en cours.  Corps {owner, doc, name, text, persistent?}.  Sans modèle
+            d'embedding, les passages sont rangés sans vecteur (recherche par les mots).
+        */
+        srv.Post(R"(/gulliver/v1/profile/documents/([^/]+)/index)",
+            [s](const httplib::Request& req, httplib::Response& res) {
+            profile prof;
+            if (!resolve_profile(*s, req, res, prof)) return;
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string doc = req.matches[1];
+            const std::string owner = body.contains("owner") ? body["owner"].as_string() : std::string();
+            const std::string name = body.contains("name") ? body["name"].as_string() : std::string();
+            const std::string text = body.contains("text") ? body["text"].as_string() : std::string();
+            if (owner.empty())
+            {
+                send_error(res, 400, "invalid_request_error", "an owner is required", "owner");
+                return;
+            }
+            // Le texte de chaque passage pour l'embedding, identique à passageText() de rag.js :
+            // nom (où)\ntexte, pour que les vecteurs concordent avec ceux de la page.
+            auto passage_text = [](const std::string& nm, const std::string& where, const std::string& t) {
+                return nm + (where.empty() ? std::string() : " (" + where + ")") + "\n" + t;
+            };
+            const std::vector<rag_piece> pieces = rag_chunk(text);
+            const std::string index_id = s->db().active_index(prof.id);
+            const std::string model = s->resolve_embedding_model(std::string());
+
+            res.set_header("X-Accel-Buffering", "no");
+            service* svc = s;
+            // Capturées par valeur dans le fournisseur de flux (appelé plusieurs fois) via un état partagé.
+            auto st = std::make_shared<json>(json::object());
+            (*st)["profile"] = prof.id; (*st)["doc"] = doc; (*st)["owner"] = owner;
+            (*st)["name"] = name; (*st)["index"] = index_id; (*st)["model"] = model;
+            auto done_flag = std::make_shared<bool>(false);
+            auto next_i = std::make_shared<size_t>(0);
+            auto pieces_ptr = std::make_shared<std::vector<rag_piece>>(pieces);
+            res.set_chunked_content_provider("text/event-stream",
+                [svc, &req, st, done_flag, next_i, pieces_ptr, passage_text](size_t, httplib::DataSink& sink) {
+                    const size_t total = pieces_ptr->size();
+                    const std::string prof_id = (*st)["profile"].as_string();
+                    const std::string doc_id = (*st)["doc"].as_string();
+                    const std::string owner = (*st)["owner"].as_string();
+                    const std::string name = (*st)["name"].as_string();
+                    const std::string index_id = (*st)["index"].as_string();
+                    const std::string model = (*st)["model"].as_string();
+                    auto emit_progress = [&sink](size_t done, size_t total) {
+                        json p = json::object();
+                        p["done"] = static_cast<long long>(done);
+                        p["total"] = static_cast<long long>(total);
+                        const std::string line = ": progress " + p.dump() + "\n\n";
+                        return sink.write(line.data(), line.size());
+                    };
+                    auto emit_done = [&sink](size_t passages, size_t vectors, const std::string& error) {
+                        json d = json::object();
+                        d["passages"] = static_cast<long long>(passages);
+                        d["vectors"] = static_cast<long long>(vectors);
+                        if (!error.empty()) d["error"] = error;
+                        const std::string line = "data: " + d.dump() + "\n\ndata: [DONE]\n\n";
+                        sink.write(line.data(), line.size());
+                        sink.done();
+                    };
+                    if (*done_flag) { sink.done(); return false; }
+
+                    // Un client parti arrête l'indexation sans rien ranger (le document reste à réindexer).
+                    if (svc->stopping() || req.is_connection_closed())
+                    {
+                        *done_flag = true;
+                        sink.done();
+                        return false;
+                    }
+
+                    // Les passages (texte seul), construits une fois.
+                    std::vector<chunk_record> records;
+                    records.reserve(total);
+                    for (size_t i = 0; i < total; ++i)
+                    {
+                        const rag_piece& pc = (*pieces_ptr)[i];
+                        chunk_record c;
+                        c.id = doc_id + ":" + std::to_string(i);
+                        c.owner = owner; c.doc = doc_id; c.ordinal = static_cast<int64_t>(i);
+                        c.name = name; c.where = pc.where; c.start = pc.start; c.end = pc.end; c.text = pc.text;
+                        records.push_back(std::move(c));
+                    }
+                    size_t vectors = 0;
+                    std::string error;
+                    if (!model.empty())
+                    {
+                        const size_t batch = 16;
+                        for (size_t i = 0; i < total; i += batch)
+                        {
+                            if (svc->stopping() || req.is_connection_closed()) { *done_flag = true; sink.done(); return false; }
+                            const size_t end = std::min(i + batch, total);
+                            std::vector<std::string> texts;
+                            for (size_t k = i; k < end; ++k)
+                                texts.push_back(passage_text(records[k].name, records[k].where, records[k].text));
+                            std::vector<std::vector<char>> vecs;
+                            const bool client_here = !req.is_connection_closed();
+                            if (!embed_texts(*svc, model, texts, vecs, error,
+                                    [svc, &req]() { return svc->stopping() || req.is_connection_closed(); }))
+                                break;   // le modèle s'est arrêté : les passages restants seront cherchés par les mots
+                            if (vecs.empty() && client_here) { *done_flag = true; sink.done(); return false; }
+                            for (size_t k = 0; k < vecs.size(); ++k)
+                            {
+                                if (vecs[k].empty()) continue;
+                                records[i + k].vector = std::move(vecs[k]);
+                                records[i + k].model = model;
+                                ++vectors;
+                            }
+                            if (!emit_progress(std::min(end, total), total)) { *done_flag = true; return false; }
+                        }
+                    }
+                    // Les passages (avec leurs vecteurs calculés) rangés en une transaction.
+                    svc->db().replace_chunks(prof_id, doc_id, records, index_id);
+                    *done_flag = true;
+                    emit_done(records.size(), vectors, error);
+                    return true;
+                },
+                [](bool) {});
         });
 
         // Les images d'un profil.  Les métadonnées sont en base ; les octets (image pleine et vignette)

@@ -32,6 +32,8 @@ mkdir -p "$WORK" && chmod 700 "$WORK"
 
 # Le service d'essai, avec la page des sources.
 cp -c "$BUILD/bin/gulliver-service" "$BIN/" 2>/dev/null || { mkdir -p "$BIN" && cp -c "$BUILD/bin/gulliver-service" "$BIN/"; }
+# La bibliothèque PDFium (lecture du texte des PDF), à côté du service pour que dlopen la trouve.
+[ -f "$BUILD/bin/libpdfium.dylib" ] && cp -c "$BUILD/bin/libpdfium.dylib" "$BIN/" 2>/dev/null
 rsync -a --delete "$BUILD/bin/engines/" "$BIN/engines/"
 [ -d "$BUILD/bin/licenses" ] && rsync -a --delete "$BUILD/bin/licenses/" "$BIN/licenses/"
 rsync -a --delete "$ROOT/dlib/dlib/external/gulliver/web/" "$BIN/web/"

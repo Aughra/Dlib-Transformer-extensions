@@ -193,6 +193,7 @@ namespace gulliver
         j["reserve_gb"] = reserve_gb;
         j["rag_engine"] = rag_engine;
         j["rag_top_k"] = rag_top_k;
+        j["rag_rerank"] = rag_rerank;
         j["offline"] = offline;
         j["proxy"] = masked_proxy(proxy);
         j["web_access"] = web_access;
@@ -248,6 +249,7 @@ namespace gulliver
         }
         rag_top_k = static_cast<int>(std::max<long long>(1, std::min<long long>(50,
             j["rag_top_k"].as_int(d.rag_top_k))));
+        rag_rerank = j["rag_rerank"].as_bool(d.rag_rerank);
         offline = j["offline"].as_bool(d.offline);
         proxy = j["proxy"].str(d.proxy);
         web_access = j["web_access"].as_bool(d.web_access);

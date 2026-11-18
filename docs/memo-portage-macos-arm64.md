@@ -117,6 +117,8 @@ cmake --build build/macos-pseudalis --parallel 3 -- -k 0
 
 `-- -k 0` fait continuer Ninja après une erreur, pour relever toutes les erreurs d'un seul passage.
 
+**Lecture du texte des PDF (PDFium).** Depuis la 6.3.0, Gulliver lit le texte des documents côté service ; les PDF passent par **PDFium** (bibliothèque C++, licence MIT, `bblanchon/pdfium-binaries`, version arm64 sans V8, ~7,6 Mo). Le binaire n'est pas versionné : le récupérer une fois avant le build avec `bash dlib/dlib/external/gulliver/tools/fetch_pdfium.sh` (il le place dans `third_party/pdfium/lib/libpdfium.dylib` ; les en-têtes, la licence et le script, eux, sont dans le dépôt). Le CMake copie la dylib à côté du service, où `dlopen` la trouve (`@loader_path`). Sans elle, le build réussit et le service tourne : seuls les PDF renvoient « pdf-reader ». Les autres formats (Word, Excel, PowerPoint, OpenDocument, RTF, HTML) sont lus par le lecteur ZIP de dlib (`dlib/zip.h`) et la lecture du XML, sans dépendance ajoutée.
+
 ### Nettoyage « du pur Apple » (2026-11-11)
 
 Décision de l'humain : dans Gulliver et Pseudalis, tout le code propre à Windows, à Linux, aux processeurs x86, à CUDA et à OpenVINO est retiré ; dlib, modifiable depuis le 2026-11-14, ne vise plus que macOS depuis le 2026-11-15 : conditions Apple, Windows et Linux de son code retirées, bibliothèques embarquées laissées telles quelles (registre des notes pour l'auteur, partie 5). Le fork ne fusionne plus l'original (dernière fusion : Albireo 1.0.12, Pseudalis 1.0.5).

@@ -259,7 +259,8 @@ const recommended = {
   web_search: 'wikipedia',
   proxy: '',
   rag_engine: 'hybrid',   // mots + sens : le plus complet par défaut (à mesurer sur le Mac mini)
-  rag_top_k: 12
+  rag_top_k: 12,
+  rag_rerank: false       // tri fin optionnel : laissé éteint par défaut (gain à mesurer sur le Mac mini)
 };
 
 const groups = [
@@ -271,7 +272,7 @@ const groups = [
   },
   {
     title: 'Documents',
-    items: ['rag_engine', 'rag_top_k']
+    items: ['rag_engine', 'rag_top_k', 'rag_rerank']
   },
   {
     title: 'Modèles',
@@ -849,6 +850,26 @@ const items = {
       "rater un détail. Beaucoup : il lit plus, mais il a moins de place pour le reste.",
     bee: "Trop haut, les extraits mangent toute la fenêtre du modèle et il reste peu de place à ta question et à la " +
       "discussion ; certains extraits sont alors coupés par le budget."
+  },
+  rag_rerank: {
+    title: 'Affiner le tri des extraits',
+    control: { kind: 'switch' },
+    restart: false,
+    effect: 'Reclasse les extraits trouvés par un second tri, plus fin, avant de les joindre à la question.',
+    principle: 'La recherche remonte les extraits par passages. Le reranker les reclasse sur l’extrait entier : il récompense celui qui couvre le plus de mots de la question, le plus densément et le plus serré.',
+    pros: ['Le meilleur extrait remonte souvent en tête.', 'Sans modèle en plus : aucun coût de chargement, aucune attente.'],
+    cons: ['Gain modeste : c’est un tri par les mots, pas un modèle qui « comprend » la question.', 'Un tout petit temps de calcul en plus par recherche.'],
+    normal: "Après avoir trouvé les extraits, le service peut les reclasser une seconde fois pour mettre devant celui qui " +
+      "répond le mieux à l’ensemble des mots de ta question. C’est léger et sans modèle supplémentaire ; laisse-le activé si " +
+      "les meilleurs extraits ne sont pas toujours en tête, désactivé sinon.",
+    owl: "rerank_excerpts (host/rag_engine.cpp) reclasse les extraits assemblés : score = 2·couverture + 1·densité + " +
+      "0,5·proximité, sur rag_terms(question). Tri stable (garde l’ordre de fusion à égalité). Réglage rag_rerank " +
+      "(options.rerank de rag_search_options), appliqué par les trois moteurs après assemble(). Ce n’est pas un cross-encoder " +
+      "neuronal (remis au Mac mini).",
+    marmot: "Quand l’assistant a trouvé des bouts de tes documents, ce réglage les range une deuxième fois pour mettre en " +
+      "premier celui qui colle le mieux à TOUTE ta question, pas juste à un mot.",
+    bee: "Sans lui, le meilleur extrait peut arriver deuxième ou troisième. Avec lui, il remonte ; mais ne lui demande pas de " +
+      "deviner le sens — il compte les mots, finement, rien de plus."
   }
 };
 

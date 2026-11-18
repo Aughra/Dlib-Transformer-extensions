@@ -25,7 +25,6 @@
 */
 
 import * as api from './api.js';
-import { extractText } from './documents.js';
 
 // Les caractères d'une page que le modèle reçoit à chaque appel, et les liens d'une page listés à sa fin.
 export const sliceChars = 8000;
@@ -413,8 +412,28 @@ export function htmlPage(html, final) {
 }
 
 // Pourquoi le texte d'un fichier PDF ne peut pas être lu, tel que le lecteur des documents le nomme.
+// Le texte d'un PDF récupéré sur le web, lu par le service (route /extract) : le navigateur
+// n'extrait plus le texte des PDF lui-même.  bytes sont les octets du PDF.
+async function pdfTextViaService(bytes) {
+  let bin = '';
+  const view = new Uint8Array(bytes);
+  for (let i = 0; i < view.length; i += 0x8000) bin += String.fromCharCode.apply(null, view.subarray(i, i + 0x8000));
+  const r = await fetch('/gulliver/v1/extract', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'page.pdf', bytes: btoa(bin) })
+  });
+  if (!r.ok) {
+    let code = String(r.status);
+    try { const j = await r.json(); if (j.error && j.error.code) code = j.error.code; } catch (e) { /* pas du JSON */ }
+    const err = new Error(code);
+    err.code = code;
+    throw err;
+  }
+  return (await r.json()).text;
+}
+
 function pdfProblem(e) {
-  const code = e && e.message;
+  const code = (e && e.code) || (e && e.message);
   if (code === 'pdf-images') return 'This PDF file holds images of its pages, as a scan does, without text to read.';
   if (code === 'pdf-password') return 'This PDF file opens with a password only.';
   if (code === 'pdf-invalid') return 'This PDF file is damaged.';
@@ -432,7 +451,7 @@ async function pageOf(r) {
   };
   if (type === 'application/pdf') {
     try {
-      page.text = (await extractText(new File([bytes], 'page.pdf', { type }))).text;
+      page.text = await pdfTextViaService(bytes);
     } catch (e) {
       page.text = pdfProblem(e);
     }

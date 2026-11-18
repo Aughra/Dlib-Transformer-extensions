@@ -1,7 +1,7 @@
 [
  {
   "name": "helpers",
-  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('.composer .md-field');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''},file:(input,name,text)=>{const dt=new DataTransfer(); dt.items.add(new File([text],name,{type:'text/plain'})); input.files=dt.files; input.dispatchEvent(new Event('change',{bubbles:true}));}}; return true"
+  "eval": "window.T={btn:(txt)=>[...document.querySelectorAll('button,.item')].find(b=>(b.innerText||'').trim()===txt||b.title===txt),ask:(q)=>{const a=document.querySelector('.composer .md-field');a.value=q;a.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('button.send').click();},done:(n)=>{const m=[...document.querySelectorAll('.message.assistant')];return m.length>=n&&!document.querySelector('.message.assistant.live')&&m[m.length-1].innerText.trim().length>0?m[m.length-1].innerText.trim():''},file:(input,name,text)=>{const dt=new DataTransfer(); dt.items.add(new File([text],name,{type:'text/plain'})); input.files=dt.files; input.dispatchEvent(new Event('change',{bubbles:true}));},fileB64:(input,name,b64,type)=>{const bin=atob(b64); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;++i)u[i]=bin.charCodeAt(i); const dt=new DataTransfer(); dt.items.add(new File([u],name,{type:type||'application/octet-stream'})); input.files=dt.files; input.dispatchEvent(new Event('change',{bubbles:true}));}}; return true"
  },
  {
   "name": "inputs",
@@ -31,6 +31,32 @@
  },
  {
   "shot": "file-answer.png"
+ },
+ {
+  "name": "new chat for the pdf",
+  "eval": "const b=[...document.querySelectorAll('button,.item')].find(b=>/Nouvelle discussion/.test(b.innerText||'')); if(b)b.click(); await new Promise(r=>setTimeout(r,700)); return true"
+ },
+ {
+  "name": "attach a real pdf",
+  "eval": "T.fileB64(document.querySelector('.composer input[type=file], input[type=file]'),'secret.pdf','JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCAxMDkgPj4Kc3RyZWFtCkJUIC9GMSAxNiBUZiA3MiA3MDAgVGQgKERvY3VtZW50IGRlIHRlc3QgUERGLiBMZSBtb3Qgc2VjcmV0IGRlIGNlIFBERiBlc3QgUkhJTk9DRVJPUy4gRmluIGR1IGRvY3VtZW50LikgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8IC9UeXBlIC9Gb250IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PgplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAowMDAwMDAwMjQxIDAwMDAwIG4gCjAwMDAwMDA0MDEgMDAwMDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSA2IC9Sb290IDEgMCBSID4+CnN0YXJ0eHJlZgo0NzEKJSVFT0Y=','application/pdf'); await new Promise(r=>setTimeout(r,2500)); return document.querySelector('.composer, main').innerText.includes('secret.pdf')",
+  "expect": true
+ },
+ {
+  "name": "ask about the pdf",
+  "eval": "T.ask('Quel est le mot secret de ce PDF ? Réponds par ce mot seulement.'); return true"
+ },
+ {
+  "name": "pdf answer",
+  "until": "return T.done(1)",
+  "timeout": 120000
+ },
+ {
+  "name": "pdf answer has the word",
+  "eval": "return /rhinoceros/i.test(T.done(1))",
+  "expect": true
+ },
+ {
+  "shot": "pdf-answer.png"
  },
  {
   "name": "new project",

@@ -543,6 +543,64 @@ namespace gulliver
             if (order.size() > 60) order.resize(60);
             for (size_t r = 0; r < order.size(); ++r) fused[order[r]] += 1.0 / (60.0 + r);
         }
+
+        /*
+            Un reclassement fin des extraits déjà choisis, sans modèle supplémentaire (donc sans coût
+            ni attente d'un chargement) : il note chaque extrait sur la façon dont il répond aux MOTS de
+            la question, là où la fusion note surtout les passages un à un.  Trois signaux, pour un mot
+            de la question :
+              - couverture : combien de mots DISTINCTS de la question l'extrait contient (le plus fort) ;
+              - densité : la part des mots de l'extrait qui sont des mots de la question ;
+              - proximité : un bonus quand deux mots de la question se suivent de près dans l'extrait.
+            Le score garde l'ordre de fusion en cas d'égalité (tri stable), et ne remonte un extrait que
+            s'il répond nettement mieux.  Activé par le réglage « reranker » (options.rerank) ; sinon on
+            ne touche à rien.  C'est un reranker « léger » : il affine le tri, il ne remplace pas un
+            cross-encoder neuronal (qui demanderait un modèle dédié, remis au Mac mini).
+        */
+        void rerank_excerpts(std::vector<rag_excerpt>& excerpts, const std::string& question)
+        {
+            if (excerpts.size() < 2) return;
+            const std::vector<std::string> qlist = rag_terms(question);
+            std::unordered_set<std::string> qset(qlist.begin(), qlist.end());
+            if (qset.empty()) return;
+
+            std::vector<double> rscore(excerpts.size(), 0.0);
+            for (size_t e = 0; e < excerpts.size(); ++e)
+            {
+                const std::vector<std::string> words = rag_terms(excerpts[e].text);
+                if (words.empty()) continue;
+                std::unordered_set<std::string> seen;
+                int hits = 0;                 // les occurrences d'un mot de la question (répétitions comprises)
+                int last_distinct = -1000;    // la position du dernier mot de la question d'un mot NOUVEAU
+                std::string last_word;
+                double proximity = 0;
+                for (int i = 0; i < static_cast<int>(words.size()); ++i)
+                {
+                    if (!qset.count(words[i])) continue;
+                    ++hits;
+                    // La proximité ne récompense QUE deux mots DIFFÉRENTS de la question qui se suivent de
+                    // près : répéter le même mot ne rapproche rien (sinon « alpha alpha alpha » l'emporterait
+                    // sur un extrait qui couvre vraiment « alpha » et « beta »).
+                    if (words[i] != last_word && i - last_distinct <= 6)
+                        proximity += 1.0 / (1.0 + (i - last_distinct));
+                    if (words[i] != last_word) { last_distinct = i; last_word = words[i]; }
+                    seen.insert(words[i]);
+                }
+                const double coverage = static_cast<double>(seen.size()) / static_cast<double>(qset.size());
+                const double density = static_cast<double>(hits) / static_cast<double>(words.size());
+                // La couverture pèse le plus (répondre à tous les mots de la question), puis la densité, puis
+                // la proximité (bornée par la couverture : pas de proximité sans plusieurs mots distincts).
+                rscore[e] = 2.0 * coverage + 1.0 * density + 0.5 * std::min(proximity, coverage);
+            }
+
+            std::vector<size_t> idx(excerpts.size());
+            for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
+            std::stable_sort(idx.begin(), idx.end(), [&](size_t a, size_t b) { return rscore[a] > rscore[b]; });
+            std::vector<rag_excerpt> sorted;
+            sorted.reserve(excerpts.size());
+            for (size_t i : idx) sorted.push_back(excerpts[i]);
+            excerpts.swap(sorted);
+        }
     }
 
     // ----------------------------------------------------------------------------------------
@@ -593,7 +651,9 @@ namespace gulliver
                 if (all.empty() || trim(question).empty()) return {};
                 std::vector<double> fused(all.size(), 0.0);
                 rank_words(all, question, fused);
-                return assemble(all, fused, options, options.model);
+                std::vector<rag_excerpt> out = assemble(all, fused, options, options.model);
+                if (options.rerank) rerank_excerpts(out, question);
+                return out;
             }
         };
 
@@ -607,7 +667,9 @@ namespace gulliver
                 if (all.empty() || trim(question).empty()) return {};
                 std::vector<double> fused(all.size(), 0.0);
                 rank_meaning(all, options, fused);
-                return assemble(all, fused, options, options.model);
+                std::vector<rag_excerpt> out = assemble(all, fused, options, options.model);
+                if (options.rerank) rerank_excerpts(out, question);
+                return out;
             }
         };
 
@@ -622,7 +684,9 @@ namespace gulliver
                 std::vector<double> fused(all.size(), 0.0);
                 rank_words(all, question, fused);
                 rank_meaning(all, options, fused);
-                return assemble(all, fused, options, options.model);
+                std::vector<rag_excerpt> out = assemble(all, fused, options, options.model);
+                if (options.rerank) rerank_excerpts(out, question);
+                return out;
             }
         };
     }

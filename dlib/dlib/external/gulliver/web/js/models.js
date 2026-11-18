@@ -529,11 +529,25 @@ export function modelsTab(body, env) {
   const keptOn = (sec) => new Date(sec * 1000).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
   const hubInput = h('input', { type: 'search', placeholder: 'Rechercher un modèle (qwen3, mistral, granite…)',
     'aria-label': 'Rechercher sur Hugging Face' });
+  /*
+      Des suggestions de recherche pour les modèles « abliterated » : des modèles ouverts dont on a
+      retiré le réflexe de refus, utiles pour la cybersécurité (analyse de code offensif, rédaction
+      d'exploits de test, lecture de journaux d'attaque) où un modèle bridé refuse à tort.  Ce ne
+      sont pas des fiches de catalogue (aucune URL figée ici) : un clic lance la recherche Hugging
+      Face, qui trouve les versions GGUF à jour, vérifie l'architecture et affiche les tailles.  À
+      réserver à un usage légitime et autorisé (test d'intrusion, recherche, CTF).
+  */
+  const abliteratedQueries = ['abliterated GGUF', 'Qwen3 abliterated', 'Llama 3 abliterated', 'dolphin'];
+  const hubAbliterated = h('p', { class: 'help' }, 'Pour la cybersécurité, les modèles « abliterated » (sans réflexe de ' +
+    'refus) : ', ...abliteratedQueries.map((q, i) => [i ? ' · ' : '',
+      h('a', { href: '#', onclick: (e) => { e.preventDefault(); hubInput.value = q; search(); } }, q)]).flat(),
+    '. Un clic lance la recherche ; Hugging Face donne les versions GGUF à jour. À n’utiliser que pour un usage autorisé.');
   const hub = h('section', { class: 'svc-group' }, h('h4', null, 'Tous les modèles de Hugging Face'),
     h('p', { class: 'help' }, 'Les modèles GGUF publiés sur Hugging Face, les plus téléchargés d’abord. Ceux que le moteur ' +
       'ne sait pas lire sont en gris, à la fin.'),
     h('div', { class: 'svc-input hub-search' }, hubInput,
-      h('button', { class: 'button primary', type: 'button', onclick: () => search() }, 'Rechercher')), hubRecent, hubResults);
+      h('button', { class: 'button primary', type: 'button', onclick: () => search() }, 'Rechercher')),
+    hubAbliterated, hubRecent, hubResults);
   loadRecent();
   hubInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
 
