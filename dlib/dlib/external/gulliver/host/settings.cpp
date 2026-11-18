@@ -191,6 +191,8 @@ namespace gulliver
         j["active"] = a;
         j["default_model"] = default_model;
         j["reserve_gb"] = reserve_gb;
+        j["rag_engine"] = rag_engine;
+        j["rag_top_k"] = rag_top_k;
         j["offline"] = offline;
         j["proxy"] = masked_proxy(proxy);
         j["web_access"] = web_access;
@@ -240,6 +242,12 @@ namespace gulliver
         default_model = j["default_model"].as_bool(d.default_model);
         reserve_gb = static_cast<int>(std::max<long long>(0, std::min<long long>(100000,
             j["reserve_gb"].as_int(d.reserve_gb))));
+        {
+            const std::string e = j["rag_engine"].as_string();
+            rag_engine = (e == "dense" || e == "lexical" || e == "hybrid") ? e : d.rag_engine;
+        }
+        rag_top_k = static_cast<int>(std::max<long long>(1, std::min<long long>(50,
+            j["rag_top_k"].as_int(d.rag_top_k))));
         offline = j["offline"].as_bool(d.offline);
         proxy = j["proxy"].str(d.proxy);
         web_access = j["web_access"].as_bool(d.web_access);

@@ -1238,7 +1238,8 @@ namespace gulliver
             static const char* const keys[] = { "port", "language", "engine", "accelerator",
                 "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "offline",
                 "proxy", "web_access", "web_search", "lan", "lan_port", "warm_history", "spin_us",
-                "gpu_prompt_tokens", "gpu_prompt_context", "models_dir", "reserve_gb", "library_dir", "relay" };
+                "gpu_prompt_tokens", "gpu_prompt_context", "models_dir", "reserve_gb", "library_dir", "relay",
+                "rag_engine", "rag_top_k" };
             for (const auto& kv : body.items())
             {
                 if (std::find_if(std::begin(keys), std::end(keys), [&](const char* k) { return kv.first == k; })
@@ -2727,7 +2728,9 @@ namespace gulliver
                     }
                 }
             }
+            const host_settings cfg = s->settings().get();
             rag_search_options opt;
+            opt.limit = cfg.rag_top_k;
             if (body.contains("limit")) opt.limit = static_cast<int>(body["limit"].as_int(opt.limit));
             if (body.contains("budget")) opt.budget = body["budget"].as_int(opt.budget);
             if (body.contains("model")) opt.model = body["model"].as_string();
@@ -2739,7 +2742,7 @@ namespace gulliver
                 opt.question_vector.resize(bytes.size() / sizeof(float));
                 std::memcpy(opt.question_vector.data(), bytes.data(), opt.question_vector.size() * sizeof(float));
             }
-            const std::string engine_name = body.contains("engine") ? body["engine"].as_string() : std::string("hybrid");
+            const std::string engine_name = body.contains("engine") ? body["engine"].as_string() : cfg.rag_engine;
             std::unique_ptr<rag_engine> engine = engine_for(engine_name);
             const std::vector<rag_excerpt> hits = engine->search(passages, question, opt);
             json list = json::array();

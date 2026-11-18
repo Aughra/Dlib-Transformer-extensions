@@ -257,7 +257,9 @@ const recommended = {
   offline: false,
   web_access: true,
   web_search: 'wikipedia',
-  proxy: ''
+  proxy: '',
+  rag_engine: 'hybrid',   // mots + sens : le plus complet par défaut (à mesurer sur le Mac mini)
+  rag_top_k: 12
 };
 
 const groups = [
@@ -266,6 +268,10 @@ const groups = [
     note: 'Ces réglages demandent un redémarrage du service : quelques secondes, le temps de recharger les modèles.',
     items: ['accelerator', 'gpu_prompt_tokens', 'gpu_prompt_context', 'threads', 'spin_us', 'max_sequences', 'context',
       'kv_mb', 'kv_type', 'warm_history']
+  },
+  {
+    title: 'Documents',
+    items: ['rag_engine', 'rag_top_k']
   },
   {
     title: 'Modèles',
@@ -801,6 +807,48 @@ const items = {
       "fournisseur. Pseudalis arrêté ou trop ancien alors que la pseudonymisation est demandée : la question ne part " +
       "pas du tout, plutôt que de partir en clair. Une clé fausse ou un compte sans crédit donnent une erreur, sans " +
       "jamais montrer la clé."
+  },
+  rag_engine: {
+    title: 'Comment chercher dans les documents',
+    control: { kind: 'choice', options: [['hybrid', 'Mots et sens'], ['dense', 'Sens seul'], ['lexical', 'Mots seuls']] },
+    restart: false,
+    effect: 'La façon dont le service choisit les extraits d’un document pour répondre : par les mots, par le sens, ou les deux.',
+    principle: 'Chaque document est coupé en passages. « Mots » compare les mots de la question à ceux des passages (BM25) ; « sens » compare des vecteurs qui résument l’idée (il faut un modèle d’embedding) ; « mots et sens » fond les deux.',
+    pros: ['« Mots et sens » trouve large : les bons mots comme les bonnes idées.',
+      '« Mots seuls » n’a besoin d’aucun modèle d’embedding et vise juste sur du technique exact (noms de fichiers, codes d’erreur, IP).',
+      '« Sens seul » retrouve une idée même quand les mots diffèrent.'],
+    cons: ['« Sens » et « mots et sens » exigent un modèle d’embedding chargé et des passages vectorisés.',
+      '« Mots seuls » manque une reformulation qui ne partage aucun mot avec le document.'],
+    normal: "Quand tu poses une question sur tes documents, le service en remonte les passages les plus utiles. Il peut " +
+      "les choisir par les mots communs, par le sens (plus malin, mais il faut un modèle qui transforme le texte en " +
+      "vecteurs), ou mélanger les deux. Le mélange est le plus sûr ; « mots seuls » marche partout, même sans modèle " +
+      "d’embedding, et excelle sur les termes techniques exacts.",
+    owl: "La recherche est portée en C++ dans host/rag_engine.{h,cpp} : rag_chunk découpe (fidèle à chunk() de la page), " +
+      "rag_terms tokenise (latin : accents retirés, mots vides écartés), BM25 pour les mots, cosinus des vecteurs pour " +
+      "le sens, fusion par rang réciproque, pertinence marginale maximale, prolongement par le passage suivant. " +
+      "engine_for(rag_engine) rend lexical, dense ou hybrid. Route POST /gulliver/v1/profile/search.",
+    marmot: "C’est comme chercher dans un gros classeur. « Mots » cherche les pages qui répètent tes mots. « Sens » " +
+      "cherche les pages qui parlent de la même chose, même avec d’autres mots. « Les deux » fait les deux à la fois.",
+    bee: "Sur « sens » ou « mots et sens » sans modèle d’embedding chargé, la recherche retombe sur les mots. Sur " +
+      "« mots seuls », une question qui reformule sans reprendre aucun mot du document peut ne rien trouver."
+  },
+  rag_top_k: {
+    title: 'Combien d’extraits de documents',
+    control: { kind: 'number', min: 1, max: 50 },
+    restart: false,
+    effect: 'Le nombre d’extraits de documents qu’une recherche remonte au plus pour une question.',
+    principle: 'Plus d’extraits donnent plus de contexte au modèle, mais remplissent sa fenêtre et laissent moins de place à la conversation.',
+    pros: ['Plus d’extraits : moins de chance de manquer le passage utile.'],
+    cons: ['Trop d’extraits noient la question, coûtent des tokens et peuvent dépasser le budget.'],
+    normal: "Pour répondre à partir de tes documents, le service joint quelques extraits à ta question. Ce réglage dit " +
+      "combien au maximum. Douze est un bon équilibre ; monte-le pour des documents longs où la réponse est éparpillée, " +
+      "baisse-le pour laisser plus de place à la conversation.",
+    owl: "rag_top_k borne le nombre d’extraits après la pertinence marginale maximale (options.limit de rag_search_options) ; " +
+      "un budget de caractères les coupe aussi. Les extraits consécutifs d’un document fondent en un seul.",
+    marmot: "C’est le nombre de bouts de tes documents que l’assistant lit avant de répondre. Peu : il va vite mais peut " +
+      "rater un détail. Beaucoup : il lit plus, mais il a moins de place pour le reste.",
+    bee: "Trop haut, les extraits mangent toute la fenêtre du modèle et il reste peu de place à ta question et à la " +
+      "discussion ; certains extraits sont alors coupés par le budget."
   }
 };
 

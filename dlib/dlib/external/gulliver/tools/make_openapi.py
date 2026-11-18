@@ -386,6 +386,11 @@ schemas = {
                                       "Wikipedia ; ou none, qui coupe la recherche tandis que /gulliver/v1/web/fetch "
                                       "reste disponible. Un settings.json d'une version antérieure qui nomme un autre "
                                       "fournisseur est lu comme wikipedia."},
+        "rag_engine": {"type": "string", "enum": ["hybrid", "dense", "lexical"], "default": "hybrid",
+                       "description": "La recherche documentaire : hybrid (mots + sens), dense (sens seul, par les "
+                                      "vecteurs d'embedding), lexical (mots seuls, BM25, sans modèle d'embedding)."},
+        "rag_top_k": {"type": "integer", "minimum": 1, "maximum": 50, "default": 12,
+                      "description": "Le nombre d'extraits de documents qu'une recherche remonte au plus."},
         "relay": ref("RelaySettings")}},
     "RelaySettings": {"type": "object", "description": "Le relais vers un moteur extérieur, le modèle gulliver-relay. "
                       "Un changement donne les membres qu'il change ; les autres restent.", "properties": {

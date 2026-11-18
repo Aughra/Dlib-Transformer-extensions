@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Réglages de la recherche documentaire (chantier Gulliver, B17)
+
+- **Quoi** : deux réglages de service pour le RAG. `host/settings.{h,cpp}` gagne `rag_engine` (hybrid/dense/lexical, défaut hybrid ; une valeur inconnue est ramenée au défaut) et `rag_top_k` (1 à 50, défaut 12), dans `to_json`/`from_json` et dans la liste blanche de `validate_settings`. La route `/gulliver/v1/profile/search` prend le moteur et la limite dans les réglages quand le corps ne les précise pas. UI : nouveau groupe « Documents » dans l'onglet Service de `web/js/service.js`, avec une fiche complète (effet, principe, pour/contre, hibou/marmotte/abeille) pour chaque réglage, leurs valeurs dans `recommended`, et leur schéma dans `make_openapi.py`/`web/openapi.json`.
+- **Fichiers** : `host/settings.h`, `host/settings.cpp`, `host/server.cpp`, `web/js/service.js`, `tools/make_openapi.py`, `web/openapi.json`.
+- **Pourquoi** : laisser choisir la façon de chercher (mots, sens, les deux) et le nombre d'extraits ; critère CLAUDE.md : chaque clé de `validate_settings` a sa carte.
+- **Étapes** : build 0 avertissement ; curl (défaut hybrid/12, modifiable en lexical/5, une valeur invalide ramenée à hybrid) ; banc regress 55/0 et docs 12/12 (l'onglet Service affiche le groupe « Documents » et ses fiches). Le « garder ou remplacer » au changement de modèle/découpage sera traité avec l'indexation côté page (B18). Pas d'incrément de version.
+
 ## 2026-11-17 — Index RAG nommés et bascule (chantier Gulliver, B16)
 
 - **Quoi** : plusieurs indexations par profil. Table `profile_indexes` (id, name, embed_model, passage_chars, overlap_chars, created, active ; cascade) et struct `index_record` ; colonne `index_id` ajoutée à `profile_chunks` (migration PRAGMA table_info + ALTER TABLE pour les bases créées avant). Méthodes store `indexes/find_index/active_index/put_index/set_active_index/remove_index` ; les méthodes chunks gagnent un paramètre `index_id` (défaut vide), et les routes chunks/search ciblent l'index actif du profil. Routes `GET/POST /gulliver/v1/profile/indexes`, `PUT …/indexes/<id>/active`, `DELETE …/indexes/<id>`. Le premier index créé est actif d'office ; supprimer un index emporte ses passages.

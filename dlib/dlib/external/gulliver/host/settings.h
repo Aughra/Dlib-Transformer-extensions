@@ -107,6 +107,8 @@ namespace gulliver
         std::map<std::string, std::string> active;   // rôle -> identifiant du modèle
         bool default_model = true;              // télécharger le modèle par défaut du catalogue au premier démarrage
         int reserve_gb = 200;                   // la réserve des modèles non installés, en Go (0 : rien de plus)
+        std::string rag_engine = "hybrid";      // la recherche documentaire : hybrid (mots + sens), dense (sens), lexical (mots)
+        int rag_top_k = 12;                     // le nombre d'extraits qu'une recherche remonte au plus
         // Une machine sans accès à Internet : aucune requête ne quitte la machine, le catalogue
         // et les modèles viennent de fichiers (dossier d'import, supports amovibles).
         bool offline = false;
