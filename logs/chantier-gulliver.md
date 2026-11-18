@@ -121,7 +121,7 @@
 - ☑ **B13** (2026-11-17) Interface `rag_engine` + moteur `lexical` (mots seuls).
 - ☑ **B14** (2026-11-17) Moteur `dense` (vecteurs seuls). `rank_meaning` (cosinus du vecteur de question, seuils `min_meaning`/`meaning_spread`), classe `dense_engine`. La route search lit le vecteur de question en base64 (`question_vector`, fourni par la page). **Vérifié** : test_host (dense classe le passage le plus proche par le sens) + curl (vecteur proche de « beta » → beta).
 - ☐ **B15** Moteur `hybrid` + parité avec le JS.
-- ☐ **B16** Index nommés + bascule (service).
+- ☑ **B16** (2026-11-17) Index nommés + bascule (service). Table `profile_indexes` (id, name, embed_model, passage_chars, overlap_chars, created, active ; cascade) + struct `index_record` ; colonne `index_id` ajoutée à `profile_chunks` (migration `PRAGMA table_info` + `ALTER TABLE` pour les bases existantes). Méthodes `indexes/find_index/active_index/put_index/set_active_index/remove_index` ; les méthodes chunks prennent un `index_id` (défaut `''`), et les routes chunks/search ciblent l'`active_index` du profil. Routes `GET/POST /gulliver/v1/profile/indexes`, `PUT …/indexes/<id>/active`, `DELETE …/indexes/<id>`. Le premier index créé est actif d'office ; `remove_index` efface ses passages. **Vérifié** : test_host all checks passed + curl (2 index, le passage va dans l'actif ; basculer sur l'autre → 0 passage, instantané ; rebasculer → le passage est intact ; supprimer en cascade).
 - ☐ **B17** Réglages RAG (service + UI).
 - ☐ **B18** Basculer la page sur le RAG du service, retirer le RAG JS.
 - ☐ **B19** Mesure + doc + version.

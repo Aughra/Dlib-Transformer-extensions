@@ -541,6 +541,24 @@ int main(int argc, char** argv)
 
             db.delete_chunks_of_owner("pa", "proj1");
             check(db.chunks_of("pa", "proj1").empty(), "chunks are deleted by owner");
+
+            // Index nommés : deux index, chacun ses passages, bascule instantanée, suppression en cascade.
+            gulliver::index_record i1; i1.id = "ix1"; i1.name = "qwen"; i1.embed_model = "qwen"; i1.created = 1; i1.active = true;
+            db.put_index("pa", i1);
+            gulliver::index_record i2; i2.id = "ix2"; i2.name = "autre"; i2.passage_chars = 800; i2.created = 2;
+            db.put_index("pa", i2);
+            check(db.indexes("pa").size() == 2 && db.active_index("pa") == "ix1", "indexes are listed, the first one active");
+            gulliver::chunk_record ci; ci.id = "dd:0"; ci.owner = "ow"; ci.doc = "dd"; ci.text = "texte";
+            db.replace_chunks("pa", "dd", { ci }, "ix1");
+            check(db.chunks_of("pa", "ow", "ix1").size() == 1 && db.chunks_of("pa", "ow", "ix2").empty(),
+                "a chunk belongs to the index it was written in");
+            db.set_active_index("pa", "ix2");
+            check(db.active_index("pa") == "ix2", "switching the active index is instant");
+            db.set_active_index("pa", "ix1");
+            check(db.chunks_of("pa", "ow", "ix1").size() == 1, "switching back finds the chunk untouched");
+            db.remove_index("pa", "ix1");
+            check(db.indexes("pa").size() == 1 && db.chunks_of("pa", "ow", "ix1").empty(),
+                "removing an index removes its chunks");
         }
 
         // Métadonnées d'images : par propriétaire, usage, suppression.

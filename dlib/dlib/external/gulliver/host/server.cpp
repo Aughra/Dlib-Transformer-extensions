@@ -137,6 +137,20 @@ namespace gulliver
             return o;
         }
 
+        // Un index nommé rendu à la page.
+        json index_json(const index_record& r)
+        {
+            json o = json::object();
+            o["id"] = r.id;
+            o["name"] = r.name;
+            o["embed_model"] = r.embed_model;
+            o["passage_chars"] = static_cast<long long>(r.passage_chars);
+            o["overlap_chars"] = static_cast<long long>(r.overlap_chars);
+            o["created"] = static_cast<long long>(r.created);
+            o["active"] = r.active;
+            return o;
+        }
+
         // Les métadonnées d'une image rendues à la page (sans les octets, qui se lisent par /blob et /thumb).
         json image_json(const image_record& r)
         {
@@ -2543,6 +2557,59 @@ namespace gulliver
             send_json(res, 200, ok_result(true));
         });
 
+        // Les index nommés d'un profil (chaque combinaison modèle + découpage).  Lister, créer/mettre à
+        // jour, rendre actif, supprimer.  L'index actif est celui où les passages sont rangés et cherchés.
+        srv.Get("/gulliver/v1/profile/indexes", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            json list = json::array();
+            for (const index_record& r : s->db().indexes(p.id)) list.push_back(index_json(r));
+            json o = json::object();
+            o["indexes"] = list;
+            o["active"] = s->db().active_index(p.id);
+            send_json(res, 200, o);
+        });
+        srv.Post("/gulliver/v1/profile/indexes", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string name = profile_name_of(body);  // mêmes bornes qu'un nom de profil
+            if (name.empty())
+            {
+                send_error(res, 400, "invalid_request_error", "a name of 1 to 80 characters is required", "name");
+                return;
+            }
+            index_record r;
+            r.id = random_hex(12);
+            r.name = name;
+            r.embed_model = body.contains("embed_model") ? body["embed_model"].as_string() : std::string();
+            r.passage_chars = body.contains("passage_chars") ? body["passage_chars"].as_int(1200) : 1200;
+            r.overlap_chars = body.contains("overlap_chars") ? body["overlap_chars"].as_int(240) : 240;
+            r.created = now_unix();
+            r.active = s->db().indexes(p.id).empty();  // le premier index est actif d'office
+            s->db().put_index(p.id, r);
+            send_json(res, 200, index_json(r));
+        });
+        srv.Put(R"(/gulliver/v1/profile/indexes/([^/]+)/active)", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            index_record r;
+            if (!s->db().find_index(p.id, req.matches[1], r))
+            {
+                send_error(res, 404, "invalid_request_error", "no index of this id in the profile", "not_found");
+                return;
+            }
+            s->db().set_active_index(p.id, req.matches[1]);
+            send_json(res, 200, ok_result(true));
+        });
+        srv.Delete(R"(/gulliver/v1/profile/indexes/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!resolve_profile(*s, req, res, p)) return;
+            s->db().remove_index(p.id, req.matches[1]);
+            send_json(res, 200, ok_result(true));
+        });
+
         // L'index RAG d'un profil : les passages des documents, avec leurs vecteurs en base64.
         // GET chunks?owner=…  : les passages d'un propriétaire ; GET chunks?doc=… : ceux d'un document.
         // GET chunks/status?owner=…&model=… : les comptes par document, sans transférer les vecteurs.
@@ -2560,7 +2627,7 @@ namespace gulliver
                 return;
             }
             const std::vector<chunk_record> records = owner.empty()
-                ? s->db().chunks_of_document(p.id, doc) : s->db().chunks_of(p.id, owner);
+                ? s->db().chunks_of_document(p.id, doc, s->db().active_index(p.id)) : s->db().chunks_of(p.id, owner, s->db().active_index(p.id));
             json list = json::array();
             for (const chunk_record& c : records) list.push_back(chunk_json(c));
             json o = json::object();
@@ -2573,7 +2640,7 @@ namespace gulliver
             const std::string owner = req.get_param_value("owner");
             const std::string model = req.get_param_value("model");
             json list = json::array();
-            for (const chunk_status_row& r : s->db().chunk_status(p.id, owner, model))
+            for (const chunk_status_row& r : s->db().chunk_status(p.id, owner, model, s->db().active_index(p.id)))
             {
                 json o = json::object();
                 o["doc"] = r.doc;
@@ -2590,7 +2657,7 @@ namespace gulliver
             profile p;
             if (!resolve_profile(*s, req, res, p)) return;
             json list = json::array();
-            for (const auto& od : s->db().chunk_documents(p.id))
+            for (const auto& od : s->db().chunk_documents(p.id, s->db().active_index(p.id)))
             {
                 json o = json::object();
                 o["owner"] = od.first;
@@ -2613,7 +2680,7 @@ namespace gulliver
             }
             std::vector<chunk_record> records;
             for (const auto& r : body["records"].elements()) records.push_back(chunk_of_json(r));
-            s->db().replace_chunks(p.id, req.matches[1], records);
+            s->db().replace_chunks(p.id, req.matches[1], records, s->db().active_index(p.id));
             send_json(res, 200, ok_result(true));
         });
         srv.Delete("/gulliver/v1/profile/chunks", [s](const httplib::Request& req, httplib::Response& res) {
@@ -2626,8 +2693,8 @@ namespace gulliver
                 send_error(res, 400, "invalid_request_error", "exactly one of owner or doc is required", "owner_or_doc");
                 return;
             }
-            if (owner.empty()) s->db().delete_chunks_of_document(p.id, doc);
-            else s->db().delete_chunks_of_owner(p.id, owner);
+            if (owner.empty()) s->db().delete_chunks_of_document(p.id, doc, s->db().active_index(p.id));
+            else s->db().delete_chunks_of_owner(p.id, owner, s->db().active_index(p.id));
             send_json(res, 200, ok_result(true));
         });
 
@@ -2645,7 +2712,7 @@ namespace gulliver
             {
                 for (const auto& o : body["owners"].elements())
                 {
-                    for (const chunk_record& c : s->db().chunks_of(prof.id, o.as_string()))
+                    for (const chunk_record& c : s->db().chunks_of(prof.id, o.as_string(), s->db().active_index(prof.id)))
                     {
                         rag_passage rp;
                         rp.id = c.id; rp.doc = c.doc; rp.name = c.name; rp.where = c.where;

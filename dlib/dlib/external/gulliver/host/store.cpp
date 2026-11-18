@@ -131,6 +131,27 @@ namespace gulliver
             " FOREIGN KEY (profile) REFERENCES profiles(id) ON DELETE CASCADE)");
         db_->exec("CREATE INDEX IF NOT EXISTS ix_chunk_owner ON profile_chunks(profile, owner)");
         db_->exec("CREATE INDEX IF NOT EXISTS ix_chunk_doc ON profile_chunks(profile, doc)");
+        // Les index nommés d'un profil : chaque combinaison {modèle d'embedding, découpage} est un index
+        // à part, nommé, pour garder plusieurs indexations et basculer de l'une à l'autre sans réindexer.
+        db_->exec(
+            "CREATE TABLE IF NOT EXISTS profile_indexes ("
+            " profile TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,"
+            " embed_model TEXT NOT NULL DEFAULT '', passage_chars INTEGER NOT NULL DEFAULT 1200,"
+            " overlap_chars INTEGER NOT NULL DEFAULT 240, created INTEGER NOT NULL DEFAULT 0,"
+            " active INTEGER NOT NULL DEFAULT 0,"
+            " PRIMARY KEY (profile, id),"
+            " FOREIGN KEY (profile) REFERENCES profiles(id) ON DELETE CASCADE)");
+        // La colonne index_id des passages, qui manque aux bases créées avant les index nommés : chaque
+        // passage appartient à un index (vide = l'index par défaut, pour les passages d'avant).
+        {
+            std::vector<std::string> cols;
+            dlib::statement st(*db_, "PRAGMA table_info(profile_chunks)");
+            st.exec();
+            while (st.move_next()) cols.push_back(st.get_column_as_text(1));
+            if (std::find(cols.begin(), cols.end(), "index_id") == cols.end())
+                db_->exec("ALTER TABLE profile_chunks ADD COLUMN index_id TEXT NOT NULL DEFAULT ''");
+        }
+        db_->exec("CREATE INDEX IF NOT EXISTS ix_chunk_index ON profile_chunks(profile, index_id)");
         // Les images d'un profil : les octets (image pleine et vignette) vont dans des fichiers sous
         // <data>/profiles/<id>/images/ ; cette table n'en garde que les métadonnées, pour la liste par
         // propriétaire et le total d'octets.
@@ -655,22 +676,23 @@ namespace gulliver
     }
 
     void store::replace_chunks(const std::string& profile, const std::string& doc,
-                               const std::vector<chunk_record>& records)
+                               const std::vector<chunk_record>& records, const std::string& index_id)
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
             dlib::transaction t(*db_);
             {
-                dlib::statement del(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND doc = ?");
+                dlib::statement del(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND doc = ? AND index_id = ?");
                 del.bind(1, profile);
                 del.bind(2, doc);
+                del.bind(3, index_id);
                 del.exec();
             }
             for (const chunk_record& c : records)
             {
                 dlib::statement st(*db_, "INSERT INTO profile_chunks "
-                    "(profile, id, owner, doc, ordinal, name, where_, start_, end_, text, model, vector) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    "(profile, id, owner, doc, ordinal, name, where_, start_, end_, text, model, vector, index_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 st.bind(1, profile);
                 st.bind(2, c.id);
                 st.bind(3, c.owner);
@@ -683,40 +705,45 @@ namespace gulliver
                 st.bind(10, c.text);
                 st.bind(11, c.model);
                 st.bind_blob(12, c.vector);
+                st.bind(13, index_id);
                 st.exec();
             }
             t.commit();
         });
     }
 
-    std::vector<chunk_record> store::chunks_of(const std::string& profile, const std::string& owner)
+    std::vector<chunk_record> store::chunks_of(const std::string& profile, const std::string& owner,
+                                               const std::string& index_id)
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<chunk_record> out;
         dlib::statement st(*db_, std::string("SELECT ") + chunk_columns +
-            " FROM profile_chunks WHERE profile = ? AND owner = ? ORDER BY doc, ordinal");
+            " FROM profile_chunks WHERE profile = ? AND owner = ? AND index_id = ? ORDER BY doc, ordinal");
         st.bind(1, profile);
         st.bind(2, owner);
+        st.bind(3, index_id);
         st.exec();
         while (st.move_next()) out.push_back(chunk_of(st));
         return out;
     }
 
-    std::vector<chunk_record> store::chunks_of_document(const std::string& profile, const std::string& doc)
+    std::vector<chunk_record> store::chunks_of_document(const std::string& profile, const std::string& doc,
+                                                        const std::string& index_id)
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<chunk_record> out;
         dlib::statement st(*db_, std::string("SELECT ") + chunk_columns +
-            " FROM profile_chunks WHERE profile = ? AND doc = ? ORDER BY ordinal");
+            " FROM profile_chunks WHERE profile = ? AND doc = ? AND index_id = ? ORDER BY ordinal");
         st.bind(1, profile);
         st.bind(2, doc);
+        st.bind(3, index_id);
         st.exec();
         while (st.move_next()) out.push_back(chunk_of(st));
         return out;
     }
 
     std::vector<chunk_status_row> store::chunk_status(const std::string& profile, const std::string& owner,
-                                                      const std::string& model)
+                                                      const std::string& model, const std::string& index_id)
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<chunk_status_row> out;
@@ -724,10 +751,11 @@ namespace gulliver
         // modèle représentatif.  Le comptage se fait en SQL, sans transférer les vecteurs.
         dlib::statement st(*db_,
             "SELECT doc, COUNT(*), SUM(CASE WHEN vector IS NOT NULL AND model = ? THEN 1 ELSE 0 END), MAX(model) "
-            "FROM profile_chunks WHERE profile = ? AND owner = ? GROUP BY doc");
+            "FROM profile_chunks WHERE profile = ? AND owner = ? AND index_id = ? GROUP BY doc");
         st.bind(1, model);
         st.bind(2, profile);
         st.bind(3, owner);
+        st.bind(4, index_id);
         st.exec();
         while (st.move_next())
         {
@@ -741,36 +769,156 @@ namespace gulliver
         return out;
     }
 
-    std::vector<std::pair<std::string, std::string>> store::chunk_documents(const std::string& profile)
+    std::vector<std::pair<std::string, std::string>> store::chunk_documents(const std::string& profile,
+                                                                            const std::string& index_id)
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<std::pair<std::string, std::string>> out;
-        dlib::statement st(*db_, "SELECT DISTINCT owner, doc FROM profile_chunks WHERE profile = ?");
+        dlib::statement st(*db_, "SELECT DISTINCT owner, doc FROM profile_chunks WHERE profile = ? AND index_id = ?");
         st.bind(1, profile);
+        st.bind(2, index_id);
         st.exec();
         while (st.move_next()) out.emplace_back(st.get_column_as_text(0), st.get_column_as_text(1));
         return out;
     }
 
-    void store::delete_chunks_of_owner(const std::string& profile, const std::string& owner)
+    void store::delete_chunks_of_owner(const std::string& profile, const std::string& owner,
+                                       const std::string& index_id)
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND owner = ?");
+            dlib::statement st(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND owner = ? AND index_id = ?");
             st.bind(1, profile);
             st.bind(2, owner);
+            st.bind(3, index_id);
             st.exec();
         });
     }
 
-    void store::delete_chunks_of_document(const std::string& profile, const std::string& doc)
+    void store::delete_chunks_of_document(const std::string& profile, const std::string& doc,
+                                          const std::string& index_id)
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND doc = ?");
+            dlib::statement st(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND doc = ? AND index_id = ?");
             st.bind(1, profile);
             st.bind(2, doc);
+            st.bind(3, index_id);
             st.exec();
+        });
+    }
+
+    // ----------------------------------------------------------------------------------------
+    //  Index nommés d'un profil
+
+    namespace
+    {
+        index_record index_of(dlib::statement& st)
+        {
+            index_record r;
+            r.id = st.get_column_as_text(0);
+            r.name = st.get_column_as_text(1);
+            r.embed_model = st.get_column_as_text(2);
+            r.passage_chars = st.get_column_as_int64(3);
+            r.overlap_chars = st.get_column_as_int64(4);
+            r.created = st.get_column_as_int64(5);
+            r.active = st.get_column_as_int64(6) != 0;
+            return r;
+        }
+        const char* const index_columns = "id, name, embed_model, passage_chars, overlap_chars, created, active";
+    }
+
+    std::vector<index_record> store::indexes(const std::string& profile)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::vector<index_record> out;
+        dlib::statement st(*db_, std::string("SELECT ") + index_columns +
+            " FROM profile_indexes WHERE profile = ? ORDER BY created");
+        st.bind(1, profile);
+        st.exec();
+        while (st.move_next()) out.push_back(index_of(st));
+        return out;
+    }
+
+    bool store::find_index(const std::string& profile, const std::string& id, index_record& out)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        dlib::statement st(*db_, std::string("SELECT ") + index_columns +
+            " FROM profile_indexes WHERE profile = ? AND id = ?");
+        st.bind(1, profile);
+        st.bind(2, id);
+        st.exec();
+        if (!st.move_next()) return false;
+        out = index_of(st);
+        return true;
+    }
+
+    std::string store::active_index(const std::string& profile)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        dlib::statement st(*db_, "SELECT id FROM profile_indexes WHERE profile = ? AND active = 1 LIMIT 1");
+        st.bind(1, profile);
+        st.exec();
+        return st.move_next() ? st.get_column_as_text(0) : std::string();
+    }
+
+    void store::put_index(const std::string& profile, const index_record& r)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::statement st(*db_, "INSERT OR REPLACE INTO profile_indexes "
+                "(profile, id, name, embed_model, passage_chars, overlap_chars, created, active) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            st.bind(1, profile);
+            st.bind(2, r.id);
+            st.bind(3, r.name);
+            st.bind(4, r.embed_model);
+            st.bind_int64(5, r.passage_chars);
+            st.bind_int64(6, r.overlap_chars);
+            st.bind_int64(7, r.created);
+            st.bind(8, r.active ? 1 : 0);
+            st.exec();
+        });
+    }
+
+    void store::set_active_index(const std::string& profile, const std::string& id)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::transaction t(*db_);
+            {
+                dlib::statement off(*db_, "UPDATE profile_indexes SET active = 0 WHERE profile = ?");
+                off.bind(1, profile);
+                off.exec();
+            }
+            {
+                dlib::statement on(*db_, "UPDATE profile_indexes SET active = 1 WHERE profile = ? AND id = ?");
+                on.bind(1, profile);
+                on.bind(2, id);
+                on.exec();
+            }
+            t.commit();
+        });
+    }
+
+    void store::remove_index(const std::string& profile, const std::string& id)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            dlib::transaction t(*db_);
+            {
+                dlib::statement chunks(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND index_id = ?");
+                chunks.bind(1, profile);
+                chunks.bind(2, id);
+                chunks.exec();
+            }
+            {
+                dlib::statement idx(*db_, "DELETE FROM profile_indexes WHERE profile = ? AND id = ?");
+                idx.bind(1, profile);
+                idx.bind(2, id);
+                idx.exec();
+            }
+            t.commit();
         });
     }
 

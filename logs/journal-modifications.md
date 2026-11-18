@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-17 — Index RAG nommés et bascule (chantier Gulliver, B16)
+
+- **Quoi** : plusieurs indexations par profil. Table `profile_indexes` (id, name, embed_model, passage_chars, overlap_chars, created, active ; cascade) et struct `index_record` ; colonne `index_id` ajoutée à `profile_chunks` (migration PRAGMA table_info + ALTER TABLE pour les bases créées avant). Méthodes store `indexes/find_index/active_index/put_index/set_active_index/remove_index` ; les méthodes chunks gagnent un paramètre `index_id` (défaut vide), et les routes chunks/search ciblent l'index actif du profil. Routes `GET/POST /gulliver/v1/profile/indexes`, `PUT …/indexes/<id>/active`, `DELETE …/indexes/<id>`. Le premier index créé est actif d'office ; supprimer un index emporte ses passages.
+- **Fichiers** : `host/store.h`, `host/store.cpp`, `host/server.cpp`, `tests/test_host.cpp`.
+- **Pourquoi** : demande de l'humain (« plusieurs indexations, sauvegarde nominative pour switch ») — garder côte à côte des index de modèles ou de découpages différents et basculer sans réindexer. Évite de mélanger des vecteurs incomparables (deux modèles d'embedding).
+- **Étapes** : compilé sans avertissement ; test_host all checks passed ; curl : deux index, le passage va dans l'actif, basculer sur l'autre montre 0 passage (switch instantané), rebasculer retrouve le passage intact, supprimer un index efface ses passages. Pas d'incrément de version.
+
 ## 2026-11-17 — Moteurs RAG dense et hybrid en C++ (chantier Gulliver, B14 et B15)
 
 - **Quoi** : les deux autres moteurs. `rank_meaning` (cosinus du vecteur de la question contre ceux des passages, seuils `min_meaning`/`meaning_spread`, fusion par rang réciproque) ; `dense_engine` (sens seul), `hybrid_engine` (mots + sens + MMR, comme la page). `engine_for(name)` rend lexical, dense ou hybrid (hybrid par défaut pour un nom inconnu). La route `/gulliver/v1/profile/search` lit le vecteur de la question en base64 (`question_vector`) et le modèle, fournis par la page qui les a calculés via `/v1/embeddings`.

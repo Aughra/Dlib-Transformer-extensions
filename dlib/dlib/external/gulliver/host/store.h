@@ -48,6 +48,20 @@ namespace gulliver
         int64_t received_at = 0;
     };
 
+    // Un index nommé d'un profil : une combinaison {modèle d'embedding, découpage} sous laquelle les
+    // passages sont rangés.  Un profil peut en avoir plusieurs et basculer de l'un à l'autre sans
+    // réindexer ; un seul est actif à la fois.
+    struct index_record
+    {
+        std::string id;
+        std::string name;
+        std::string embed_model;
+        int64_t passage_chars = 1200;
+        int64_t overlap_chars = 240;
+        int64_t created = 0;
+        bool active = false;
+    };
+
     // Un passage d'un document indexé (RAG) : son texte, sa place, et son vecteur d'embedding
     // quand il est calculé.  Le vecteur est gardé tel quel (octets d'un tableau de float), vide
     // quand le passage n'a pas encore été vectorisé ; `model` dit avec quel modèle il l'a été.
@@ -197,15 +211,33 @@ namespace gulliver
         // chunk_status() compte, par document d'un propriétaire, les passages et ceux dont le vecteur
         // est du modèle donné.  chunk_documents() liste les couples (owner, doc) distincts, pour
         // l'élagage.  delete_chunks() efface par propriétaire ou par document.
+        // Les passages sont rangés par index (index_id ; vide = l'index par défaut).  Les méthodes
+        // travaillent dans l'index donné.
         void replace_chunks(const std::string& profile, const std::string& doc,
-                            const std::vector<chunk_record>& records);
-        std::vector<chunk_record> chunks_of(const std::string& profile, const std::string& owner);
-        std::vector<chunk_record> chunks_of_document(const std::string& profile, const std::string& doc);
+                            const std::vector<chunk_record>& records, const std::string& index_id = std::string());
+        std::vector<chunk_record> chunks_of(const std::string& profile, const std::string& owner,
+                                            const std::string& index_id = std::string());
+        std::vector<chunk_record> chunks_of_document(const std::string& profile, const std::string& doc,
+                                                     const std::string& index_id = std::string());
         std::vector<chunk_status_row> chunk_status(const std::string& profile, const std::string& owner,
-                                                   const std::string& model);
-        std::vector<std::pair<std::string, std::string>> chunk_documents(const std::string& profile);
-        void delete_chunks_of_owner(const std::string& profile, const std::string& owner);
-        void delete_chunks_of_document(const std::string& profile, const std::string& doc);
+                                                   const std::string& model, const std::string& index_id = std::string());
+        std::vector<std::pair<std::string, std::string>> chunk_documents(const std::string& profile,
+                                                                         const std::string& index_id = std::string());
+        void delete_chunks_of_owner(const std::string& profile, const std::string& owner,
+                                    const std::string& index_id = std::string());
+        void delete_chunks_of_document(const std::string& profile, const std::string& doc,
+                                       const std::string& index_id = std::string());
+
+        // Les index nommés d'un profil.  indexes() les liste ; find_index() en trouve un ; active_index()
+        // rend l'id de l'index actif (vide s'il n'y en a pas) ; put_index() crée ou met à jour ;
+        // set_active_index() rend un index actif (et les autres inactifs) ; remove_index() l'efface avec
+        // ses passages.
+        std::vector<index_record> indexes(const std::string& profile);
+        bool find_index(const std::string& profile, const std::string& id, index_record& out);
+        std::string active_index(const std::string& profile);
+        void put_index(const std::string& profile, const index_record& r);
+        void set_active_index(const std::string& profile, const std::string& id);
+        void remove_index(const std::string& profile, const std::string& id);
 
         // Les métadonnées des images d'un profil (les octets sont dans des fichiers à part).
         // images_of() rend celles d'un propriétaire ; find_image() une seule (false si absente) ;
