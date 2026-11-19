@@ -7,6 +7,57 @@ Ce qui vient ensuite, dans l'ordre. Écrite le 2026-11-19, le jour où le Mac mi
 | 1 | Passer sur le Mac mini, mesurer, régler | à faire (machine en préparation) |
 | 2 | Le reste en attente du Mac mini | à faire après la partie 1 |
 | 3 | L'atelier : affiner, alléger et créer des modèles | à faire après la partie 2 |
+| Fil rouge | Rendre Gulliver indépendant de dlib, un morceau à la fin de chaque chantier | à faire, à partir de la fin de la partie 1 |
+
+---
+
+## Fil rouge — Rendre Gulliver indépendant de dlib
+
+Décision de l'humain (2026-11-19) : dépendre de dlib freine les changements. Gulliver en reprend le code **petit à petit, un morceau à la fin de chaque chantier**, pour le faire sien et l'optimiser. On ne reporte rien dans dlib : la copie de Gulliver est la seule qui vit. Pseudalis reste sur dlib pour l'instant ; on s'en occupera plus tard.
+
+### Ce que Gulliver prend à dlib aujourd'hui
+
+Relevé le 2026-11-19 : 10 fichiers d'en-tête, et le moteur n'utilise pas la partie réseaux de neurones de dlib (il a ses propres noyaux).
+
+| Morceau | Fichiers de dlib | Taille |
+|---|---|---|
+| Bibliothèques d'autres projets | `external/httplib`, sqlite, `external/libpng`, `external/libjpeg`, mbedtls | déplacées telles quelles |
+| SHA-256 | `crypto/sha256.h` (dans `host/crypto.cpp`, `engine/image_input.cpp`) | 326 lignes |
+| Lecture des ZIP, enveloppe de sqlite | `zip/`, `sqlite/` | petites |
+| Lecture des GGUF | `data_io/gguf_reader.h`, `gguf_dequantize.h`, `gguf_model_spec.h` | 1 411 lignes |
+| Tokenizer | `tokenizer/hf_tokenizer.h` | 1 166 lignes |
+
+### L'ordre, un morceau par fin de chantier
+
+| Ordre | Morceau | Où il va | Remarque |
+|---|---|---|---|
+| 1 | SHA-256 → CommonCrypto d'Apple | `host/`, `engine/` | Gulliver s'en sert déjà pour les gros fichiers (4.2.0) |
+| 2 | Bibliothèques d'autres projets | `gulliver/third_party/` | aucune ligne changée ; le build de Gulliver ne construit plus dlib |
+| 3 | Lecture des ZIP, enveloppe de sqlite | `host/` | |
+| 4 | Lecture des GGUF | `engine/` | premières optimisations |
+| 5 | Tokenizer | là où le moteur et le service le partagent | optimisable ensuite, notamment pour le français |
+
+Après le morceau 5, Gulliver (service et moteur) ne dépend plus de dlib.
+
+### L'atelier, de la même façon
+
+L'atelier (partie 3) se construit **dans Gulliver**, avec le code d'entraînement de dlib déplacé au fur et à mesure des besoins de chaque phase, puis optimisé. Inclure `dlib/dnn.h` tire 600 fichiers (environ 260 000 lignes, relevé du 2026-11-19), car dlib est très entremêlé : machines à vecteurs de support, traitement d'images, statistiques… dont l'atelier n'a pas besoin. On ne déplace donc pas en bloc : chaque phase reprend ce qu'elle utilise et coupe les inclusions inutiles.
+
+| Phase de l'atelier | Ce qu'elle reprend de dlib (à préciser au début de la phase) |
+|---|---|
+| A (conversion) | tenseurs et leurs calculs (processeur et Metal, `cuda/tensor_tools`, `metal_dlib`), couches du transformer, import GGUF (`slm_gguf_import_ex`), archives `.dat` |
+| B (affinage) | LoRA (`lora_adapter.h`), fonctions d'erreur (`loss.h`), Adam (`solvers.h`), boucle d'entraînement (`trainer.h`), données d'affinage (`finetuning_data.h`) |
+| D, E | distillation, apprentissage du tokenizer (`bpe_tokenizer.h`), exemples de préentraînement |
+
+### Dernier pas
+
+Gulliver vit encore physiquement dans l'arbre de dlib (`dlib/dlib/external/gulliver/`). Quand il n'en dépendra plus, son dossier pourra sortir à la racine du dépôt.
+
+### Règles
+
+- Un morceau déplacé passe `test_host`, `test_macos.sh` et le banc de la page, comme toute sous-étape.
+- Le code repris a ses commentaires en français et perd ce qui ne sert pas au Mac ; une optimisation n'est gardée que si elle gagne en mesures alternées.
+- Le code repris n'est plus du code de dlib : il n'a pas de ligne au registre « Ce que le fork change dans dlib ». Seul un changement fait dans `dlib/` lui-même en a une.
 
 ---
 
@@ -126,6 +177,6 @@ La page se construit **au fil des phases**, pas à la fin : chaque fonction de l
 ### Règles pour toute la partie 3
 
 - Une sous-étape à la fois : elle compile, elle est testée, elle est commitée et poussée, avec l'avancement à jour.
-- Chaque changement de dlib a sa ligne au registre des notes pour l'auteur et sa mention au blog.
+- Le code d'entraînement est repris de dlib dans Gulliver au fil des phases (voir le fil rouge) ; un changement fait dans `dlib/` lui-même garde sa ligne au registre des notes pour l'auteur et sa mention au blog.
 - Chaque gain de vitesse ou de mémoire vient d'une mesure alternée sur le Mac mini.
 - Les commentaires du code sont en français ; l'interface aussi.

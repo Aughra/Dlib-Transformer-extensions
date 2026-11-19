@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-19 — Décider l'indépendance de Gulliver vis-à-vis de dlib (fil rouge)
+
+- **Quoi** : nouvelle partie « Fil rouge » de `docs/feuille-de-route.md` : Gulliver reprend le code de dlib petit à petit, un morceau à la fin de chaque chantier (1. SHA-256 → CommonCrypto ; 2. bibliothèques d'autres projets → `gulliver/third_party/` ; 3. ZIP et sqlite ; 4. lecture des GGUF ; 5. tokenizer), puis l'atelier reprend au fil de ses phases le code d'entraînement dont il a besoin, en coupant les inclusions inutiles ; dernier pas : sortir le dossier de Gulliver de l'arbre de dlib. Rien n'est reporté dans dlib ; Pseudalis reste sur dlib pour l'instant. Règle ajoutée à CLAUDE.md (« Le projet »).
+- **Fichiers** : `docs/feuille-de-route.md`, `CLAUDE.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : décision de l'humain : dépendre de dlib freine les changements ; devenir indépendant et optimiser le code repris.
+- **Étapes** : relevé des dépendances : 10 en-têtes de dlib inclus par Gulliver (httplib ×7, `hf_tokenizer` ×5, `gguf_reader` ×5, `gguf_dequantize` ×4, `zip`, `sqlite`, libpng, libjpeg, `gguf_model_spec`, `sha256`) ; `#include <dlib/dnn.h>` tire 600 fichiers, environ 260 000 lignes (`clang++ -MM`), dont `svm` (108), `matrix` (38), `image_transforms` (36), `dnn` (45), `cuda` (20).
+
 ## 2026-11-19 — Noter les décisions de la phase C (modèle affiné dans Gulliver)
 
 - **Quoi** : trois décisions de l'humain ajoutées à la phase C de `docs/feuille-de-route.md` : 1) d'abord le GGUF réécrit en Q8_0 (R6), ensuite l'adaptateur au chargement (R7), processeur puis GPU, mesuré à chaque étape ; 2) original affiné gardé en pleine précision, seule la copie servie est compressée ; 3) pas de format d'adaptateur maison : PEFT de Hugging Face ou GGUF d'adaptateur de llama.cpp. Rappel ajouté : un GGUF n'est pas universel (correction d'un « lisible partout » trop large dans une réponse précédente).
