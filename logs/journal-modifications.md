@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-19 — Noter les décisions de la phase C (modèle affiné dans Gulliver)
+
+- **Quoi** : trois décisions de l'humain ajoutées à la phase C de `docs/feuille-de-route.md` : 1) d'abord le GGUF réécrit en Q8_0 (R6), ensuite l'adaptateur au chargement (R7), processeur puis GPU, mesuré à chaque étape ; 2) original affiné gardé en pleine précision, seule la copie servie est compressée ; 3) pas de format d'adaptateur maison : PEFT de Hugging Face ou GGUF d'adaptateur de llama.cpp. Rappel ajouté : un GGUF n'est pas universel (correction d'un « lisible partout » trop large dans une réponse précédente).
+- **Fichiers** : `docs/feuille-de-route.md`, ce journal.
+- **Pourquoi** : décision de l'humain, après comparaison des deux chemins.
+- **Étapes** : points d'accroche relevés dans le moteur (`cpu_runtime::product()`, 28 appels ; 8 points d'appel dans `cpu_runtime_metal.cpp`).
+
 ## 2026-11-19 — Écrire la feuille de route : Mac mini, puis atelier d'entraînement
 
 - **Quoi** : nouvelle feuille de route `docs/feuille-de-route.md`, en trois parties : 1) passer sur le Mac mini (arrivé ce jour, en préparation par l'humain), par `docs/mac-mini-premier-jour.md` ; 2) le reste en attente du Mac mini ; 3) l'atelier d'entraînement demandé par l'humain, ses dix-sept points (R1 à R17) rangés en phases A à F (faire entrer les modèles dans dlib, affiner, retour dans Gulliver, alléger, nos propres modèles, page « Atelier »), avec leurs dépendances, un critère par phase et un relevé de ce que dlib offre déjà (import GGUF, LoRA et fusion, masquage dans l'erreur, distillation, couche `moe_`, `bpe_tokenizer::train`, exemples de préentraînement ; rien trouvé pour QLoRA ni DPO ; retrait de blocs en Python seulement), marqué « pas encore vérifié en le lançant ».

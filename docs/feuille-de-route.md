@@ -83,7 +83,15 @@ Critère : sur un petit jeu d'essai, l'erreur baisse, et la mémoire prise par u
 | R6 | Recharger le modèle affiné dans Gulliver et discuter avec lui tout de suite. | R5 |
 | R7 | Garder plusieurs adaptateurs sur une même base (code, écriture, ton style) et passer de l'un à l'autre. | R5, R6 |
 
-Question à trancher au début de la phase : le moteur de Gulliver lit des GGUF. Deux chemins : écrire un GGUF depuis le réseau affiné, ou appliquer l'adaptateur dans le moteur au chargement. Le second sert mieux R7 (une seule base en mémoire, adaptateurs changés sans recharger).
+**Décisions de l'humain (2026-11-19)** :
+
+1. **Les deux chemins, dans cet ordre.**
+   - **D'abord le GGUF réécrit (R6), en Q8_0** : on en aura besoin pour les phases D et E (un modèle distillé, aminci ou maison a changé de forme : ce n'est pas un adaptateur) ; il ne demande aucun changement du moteur ; il permet de discuter vite avec un premier modèle affiné, ce qui vérifie toute la chaîne d'un bout à l'autre. Q8_0 plutôt que Q4 : l'arrondi refait après la fusion d'un adaptateur appris en QLoRA déplace un peu ce qu'il a appris ; en Q8_0 la perte est faible (un 4B pèserait environ 4,3 Go, estimation).
+   - **Ensuite l'adaptateur au chargement (R7)** : sur le processeur d'abord (un seul endroit à toucher : `cpu_runtime::product()`, `engine/cpu_runtime.cpp`), puis sur le GPU (8 points d'appel dans `cpu_runtime_metal.cpp`, plus les noyaux, et le contrôle du chargement GPU contre processeur), avec une mesure de vitesse à chaque étape. Pièges notés : le contexte déjà calculé d'une discussion (cache des clés et valeurs, points de reprise de Qwen 3.5) dépend de l'adaptateur et doit lui être rattaché ; pour les modèles à experts, un adaptateur par expert est plus compliqué que la fusion. Atout : plusieurs discussions en même temps, chacune avec son adaptateur, sur une seule base.
+2. **Pleine précision pour l'original, compression pour la copie servie.** L'original affiné est gardé en pleine précision (archive `.dat` de dlib) ; seule la copie servie par Gulliver est compressée, et toujours depuis cet original, jamais depuis une copie déjà compressée. Conversion (changer de format) et quantification (arrondir les poids) sont deux opérations distinctes.
+3. **Pas de format d'adaptateur maison.** On reprend l'un des deux formats répandus : celui de Hugging Face (PEFT : `adapter_model.safetensors` et `adapter_config.json`) ou le GGUF d'adaptateur de llama.cpp. Le choix entre les deux se fait au début de R7.
+
+Rappel : un GGUF n'est pas universel. Il se lit dans llama.cpp et les outils bâtis dessus (LM Studio, Ollama…) et dans Gulliver ; PyTorch et Transformers travaillent plutôt en `.safetensors`. Un export `.safetensors` n'est pas dans la liste ; il s'ajoutera si l'on veut partager un modèle avec le monde Python.
 
 ### Phase D — Alléger
 
