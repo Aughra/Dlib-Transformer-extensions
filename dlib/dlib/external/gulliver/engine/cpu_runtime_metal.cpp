@@ -202,8 +202,11 @@ namespace gulliver
                 }
                 else
                     for (const weight_matrix* W : { &L.w_gate, &L.w_up, &L.w_down }) all.push_back(W);
+                // ssm_alpha et ssm_beta (2 048 x 32) restent en floats dans certains fichiers (Qwen3.6-35B-A3B
+                // UD-Q4_K_M d'unsloth) : le GPU les lit tels quels, comme le routeur (Gulliver 6.5.0).
                 for (const weight_matrix* W : all)
-                    if (!formats(*W)) why = formats_why;
+                    if (!formats(*W) && !(W->type == dlib::ggml_type::F32 && (W == &L.w_alpha || W == &L.w_beta)))
+                        why = formats_why;
             }
         if (!why.empty())
         {
@@ -829,6 +832,19 @@ namespace gulliver
         // Un produit de la passe : par blocs en place pour une étape, développé puis via MPS pour un prompt.
         auto product = [&](const weight_matrix& M, const metal_buffer& x, long x_stride, const metal_buffer& y, long y_stride,
                            float alpha, float beta) {
+            // Une matrice en floats dans le fichier (ssm_alpha, ssm_beta) : sans développement, par mv_f32 pour
+            // une étape, par MPS pour un prompt.
+            if (M.type == dlib::ggml_type::F32)
+            {
+                if (step && alpha == 1.0f && beta == 0.0f)
+                    c->matvec_f32(at(g.weights, g.weight(M)), static_cast<unsigned>(M.rows), static_cast<unsigned>(M.cols),
+                        x, uT, static_cast<unsigned>(x_stride), y, static_cast<unsigned>(y_stride));
+                else
+                    c->gemm(x, static_cast<unsigned>((T + 31) / 32 * 32), static_cast<unsigned>(M.cols),
+                        static_cast<unsigned>(x_stride), at(g.weights, g.weight(M)), static_cast<unsigned>(M.rows),
+                        static_cast<unsigned>(M.cols), y, static_cast<unsigned>(y_stride), alpha, beta);
+                return;
+            }
             if (step)
             {
                 c->matvec(M.type, at(g.weights, g.weight(M)), M.rows, M.cols, x, uT, x_stride, y, y_stride, alpha, beta);

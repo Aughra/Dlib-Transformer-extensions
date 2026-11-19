@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.5.0 — 19 novembre 2026
+
+### Modèles
+
+- **Qwen3.6-35B-A3B** (fichier UD-Q4_K_M d'unsloth, 22,1 Go) tourne désormais **sur le GPU**. Ce fichier garde deux petites matrices par couche en pleine précision, que le GPU refusait ; il les lit maintenant telles quelles. Sur le Mac mini, la lecture d'un prompt passe de 103 à 176 tokens/s à 419 à 465, et l'écriture de 29 à 36 à 49 à 52. Le texte produit est identique à celui de llama.cpp.
+- Ses **images** sont lues avec son projecteur (`mmproj-F16`) : la description d'une image est identique, mot pour mot, à celle de llama.cpp. L'onglet Modèles propose désormais la lecture des images pour cette famille de modèles.
+
+---
+
 ## 6.4.1 — 19 novembre 2026
 
 ### Plateforme

@@ -166,6 +166,22 @@ else
     --temperature 0 --max 20 "$QUESTION"
   step "qwen 3.6 moe checkpoint" "resumed at a checkpoint" qwen35_checkpoint "$QWEN36" gpu
 fi
+# Le grand Qwen3.6-35B-A3B (UD-Q4_K_M d'unsloth, 22,1 Go), quand il est là : sur le GPU depuis Gulliver 6.5.0
+# (ssm_alpha et ssm_beta en floats), et ses images avec son projecteur.
+QWEN36_BIG=${QWEN36_BIG_MODEL:-$ROOT/build/bench-models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf}
+QWEN36_BIG_PROJECTOR=${QWEN36_BIG_PROJECTOR:-$ROOT/build/models/Qwen3.6-35B-A3B-mmproj-F16.gguf}
+if [ ! -f "$ENGINE" ] || [ ! -f "$QWEN36_BIG" ]; then skip "qwen 3.6 35b on the GPU" "no $QWEN36_BIG"
+else
+  step "qwen 3.6 35b on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$QWEN36_BIG" \
+    --reasoning off --temperature 0 --max 20 "$QUESTION"
+  if [ -f "$QWEN36_BIG_PROJECTOR" ] && sips -s format png -Z 512 "/Library/User Pictures/Animals/Parrot.heic" \
+       --out "$WORK/parrot35.png" > /dev/null 2>&1
+  then
+    step "qwen 3.6 35b image" "macaw" "$CHAT" "$ENGINE" "$QWEN36_BIG" --projector "$QWEN36_BIG_PROJECTOR" \
+      --image "$WORK/parrot35.png" --reasoning off --temperature 0 --max 40 "Describe this image in two sentences."
+  else skip "qwen 3.6 35b image" "no $QWEN36_BIG_PROJECTOR"
+  fi
+fi
 
 # Qwen 3.5 sur le GPU : ses étapes de génération, quand un modèle en Q4_K / Q5_K / Q6_K est là (le 4B qu'installe
 # le service, par défaut).

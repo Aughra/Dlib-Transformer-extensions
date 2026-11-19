@@ -308,7 +308,7 @@ const items = {
       'Contrôlé à chaque chargement : au moindre écart, le moteur repasse seul au processeur.'],
     cons: ['Pas identique au dernier chiffre près au processeur (écart de 0,04 % à quelques % sur les scores, même mot choisi).',
       'Environ 200 Mo de mémoire en plus pour ses tampons.',
-      'Seuls les poids en Q4_K et Q6_K y passent (aussi Q5_K, Q8_0 et Q5_0 pour Qwen 3.5, LFM2 et les mélanges d’experts).',
+      'Seuls les poids en Q4_K et Q6_K y passent (aussi Q5_K, Q8_0 et Q5_0 pour Qwen 3.5, LFM2 et les mélanges d’experts, et les petites matrices restées en floats de Qwen 3.6 35B-A3B).',
       'Restent sur le processeur : Gemma 3 1B (largeur de 1 152), Gemma 4 26B-A4B (ses experts), le modèle de recherche, ' +
         'les passes qui lisent une image, et les prompts des mélanges d’experts autres que Qwen 3.6.'],
     normal: "Le Mac a deux moteurs de calcul sur la même puce : le processeur, polyvalent, et le GPU, fait pour répéter " +

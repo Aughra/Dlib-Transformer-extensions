@@ -857,6 +857,24 @@ Après (fork, `engine/cpu_runtime.cpp`, avec `static const long part_workers = 1
 
 Corrigé dans le fork (Gulliver 6.4.0) ; non testé sous Windows.
 
+### Changement 28 : Qwen3.6-35B-A3B sur le GPU, matrices restées en floats (Gulliver 6.5.0)
+
+- **Avant** : le fichier UD-Q4_K_M d'unsloth (`unsloth/Qwen3.6-35B-A3B-GGUF`, 22 134 528 992 octets, SHA-256 `ac0e2c11…53e31a61` conforme) garde `ssm_alpha` et `ssm_beta` (2 048 × 32) en F32 dans ses 30 couches linéaires, là où le 11B-A3B les a en Q4_K. Le GPU refusait le modèle entier : « GPU: the passes stay on the processor, the kernels do not cover weights in other formats than Q4_K, Q5_K, Q6_K, Q5_0 and Q8_0 ».
+- **Changement** : `cpu_runtime::set_gpu` accepte ces deux matrices en F32, et le produit de la passe GPU (`product` dans `cpu_runtime_metal.cpp`) lit une matrice en floats sans développement, par `mv_f32` pour une étape et par MPS pour un prompt, comme le routeur des experts. Les poids restent ceux du fichier, partagés sans copie.
+- **Exactitude** : contrôle au chargement à 0,066 % à 0,105 % des logits du processeur, même token le plus probable ; 80 tokens en choix glouton identiques à llama.cpp (`llama-server -ngl 99 --jinja`, `/completion`, raisonnement coupé), sur le GPU comme sur le processeur.
+- **Vitesse** (Mac mini M5 Pro, `bench_runtime … 18 N 64 1 q8 [metal]`, processeur et GPU en alternance, deux tours) :
+
+| Prompt | Lecture, processeur | Lecture, GPU | Écriture, processeur | Écriture, GPU |
+|---|---|---|---|---|
+| 64 tokens | 56,4 à 60,2 tokens/s | 248,1 à 249,7 | 29,1 à 34,4 | 51,8 à 52,0 |
+| 512 tokens | 103,3 à 123,6 | 464,4 à 465,3 | 29,3 à 33,0 | 49,6 à 49,7 |
+| 3 584 tokens | 158,3 à 176,1 | 419,2 à 427,2 | 28,6 à 36,1 | 49,1 à 50,4 |
+
+- **Images** : avec `mmproj-F16.gguf` du même dépôt (899 283 680 octets, SHA-256 `8971ee4f…1829e887f` conforme), la description d'une image PNG (le perroquet des images de compte de macOS, 512 pixels) est identique mot pour mot à celle de llama.cpp (`--mmproj`, `enable_thinking: false`), avec clés et valeurs en 8 bits comme en demi-précision ; `qwen35moe` rejoint les architectures à images de `host/hub.cpp`. En JPEG, les deux descriptions diffèrent par la forme (décodeurs JPEG différents, déjà vu avec Gemma 3).
+- **Vérifié** : étapes « qwen 3.6 35b on the GPU » et « qwen 3.6 35b image » de `test_macos.sh` (quand le modèle est présent).
+
+**Mac ou Windows** : propre au Mac (le GPU par Metal) ; l'architecture `qwen35moe` est d'ailleurs propre au fork.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -866,6 +884,7 @@ Corrigé dans le fork (Gulliver 6.4.0) ; non testé sous Windows.
 | Prompt de 512 tokens | pas mesuré | 418 à 422 tokens/s sur le GPU ; 217 à 224 sur le processeur (64 à 72 avec les changements 1 à 3) |
 | Prompt de 4 096 tokens | pas mesuré | 156 à 166 tokens/s, en demi-précision ou, avec le changement 7, en 8 bits (36 à 38 en 8 bits sans lui ; 50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |
 | Génération après 4 096 tokens | pas mesuré | 26,5 à 28,5 tokens/s sur le GPU ; 20 à 23 sur le processeur (9 en 8 bits sans le changement 7 ; 7,5 à 9 avec les changements 1 et 2 seuls) |
+| Mac mini M5 Pro, Qwen3.6-35B-A3B (fork seulement) | non lu par le moteur | lecture de 512 tokens 464 à 465 tokens/s sur le GPU avec le changement 28 (103 à 124 sur le processeur) ; écriture 49 à 52 (29 à 36) |
 | Mac mini M5 Pro, 4B Thinking, écriture sur le processeur après 512 tokens | pas mesuré | 64 tokens/s avec le changement 26 (38 à 41 avant) ; 71 sur le GPU |
 | Qwen3.5-0.8B Q5_K_M (fork seulement), écriture sur le processeur | non lu par le moteur | 71,6 à 72,0 tokens/s avec le changement 25 (38,7 à 40,1 avant) |
 | Modèle de recherche (Q8_0), 512 tokens | pas mesuré | 573 à 601 tokens/s (184 à 213 avec les changements 1 à 3) |

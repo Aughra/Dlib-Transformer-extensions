@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-19 — Gulliver 6.5.0 : Qwen3.6-35B-A3B sur le GPU, et ses images
+
+- **Quoi** : téléchargement du Qwen3.6-35B-A3B UD-Q4_K_M et de son `mmproj-F16` (unsloth, empreintes conformes) ; le GPU accepte `ssm_alpha` et `ssm_beta` en F32 et le produit de la passe GPU lit une matrice en floats (`mv_f32` en étape, MPS en prompt) ; `qwen35moe` ajouté aux architectures à images (`host/hub.cpp`) ; deux étapes facultatives de `test_macos.sh` ; fiche « GPU » de l'onglet Service ; mesures de Gemma 4 E2B, Gemma 3 4B, Mistral Small 3.2 et Gemma 4 26B-A4B sur le Mac mini.
+- **Fichiers** : `gulliver/engine/cpu_runtime_metal.cpp`, `gulliver/host/hub.cpp`, `gulliver/tools/test_macos.sh`, `gulliver/web/{js/service.js,changelog.md,openapi.json}`, `gulliver/common/version.h`, `gulliver/CMakeLists.txt` ; `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,memo-portage-macos-arm64.md,feuille-de-route.md}`, `logs/{reprise.md,nuit-2026-11-19.md}`, ce journal.
+- **Pourquoi** : partie 1 de la feuille de route (étape 6 : le 35B-A3B et son projecteur, experts sur le GPU ou le processeur), nuit en autonomie.
+- **Étapes** : 80 tokens identiques à llama.cpp (processeur et GPU) ; description d'image PNG identique mot pour mot à llama.cpp ; contrôle du GPU à 0,1 % ; mesures alternées (lecture de 512 tokens 103-124 → 464-465 tokens/s, écriture 29-36 → 49-52) ; build sans avertissement ; `test_macos.sh` 63 étapes sans échec ; banc de la page 136.
+
 ## 2026-11-19 — Gulliver 6.4.1 : le SHA-256 du moteur par CommonCrypto (fil rouge, morceau 1)
 
 - **Quoi** : `engine/image_input.cpp` n'inclut plus `dlib/crypto/sha256.h` : `sha256()` et `image_digest()` passent par CommonCrypto (`CC_SHA256_*`, blocs de 1 Gio au plus). Nouveau test `tests/test_image_input.cpp` (valeurs FIPS 180-2 : vide, « abc », deux blocs, un million de « a » ; empreinte d'une image = taille et pixels), cible CMake et étape « image digest » de `test_macos.sh`.
