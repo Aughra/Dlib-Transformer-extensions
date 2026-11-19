@@ -66,6 +66,11 @@
      "desc": "Les vitesses des deux machines, côte à côte."
     },
     {
+     "path": "docs/mesures/2026-11-20-gulliver-contre-llama-cpp.md",
+     "title": "Gulliver contre llama.cpp",
+     "desc": "Les deux moteurs sur les mêmes modèles, longues questions comprises."
+    },
+    {
      "path": "macos/metal-sonde/README.md",
      "title": "La sonde Metal",
      "desc": "Le petit programme qui teste le GPU."
