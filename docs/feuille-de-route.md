@@ -49,6 +49,39 @@ L'atelier (partie 3) se construit **dans Gulliver**, avec le code d'entraînemen
 | B (affinage) | LoRA (`lora_adapter.h`), fonctions d'erreur (`loss.h`), Adam (`solvers.h`), boucle d'entraînement (`trainer.h`), données d'affinage (`finetuning_data.h`) |
 | D, E | distillation, apprentissage du tokenizer (`bpe_tokenizer.h`), exemples de préentraînement |
 
+### Le tri : ce qu'on garde, ce qu'on coupe
+
+Premier tri du 2026-11-19, fait en cherchant les noms dans le code de dlib et dans les exemples `slm_*` (import GGUF, LoRA, distillation, Cygnus). Il est **approximatif** : le vrai tri se fait à chaque phase par la compilation (on retire un morceau, ça compile toujours et les tests passent : il était inutile). Par exemple, l'addition des branches résiduelles (`add_prev`) n'a pas été trouvée par la recherche, alors qu'un transformer en a forcément besoin : elle porte sans doute un autre nom (`add_prev1`…).
+
+**On garde :**
+
+| Famille | Ce qu'on garde | À quoi ça sert |
+|---|---|---|
+| Tenseurs (`cuda/`) | `tensor.h`, `gpu_data`, `tensor_tools`, `cpu_dlib`, `cpu_gguf`, `gguf_blocks`, `operation_mode.h`, backend Metal (`metal_dlib.mm`, `metal_kernels.mm`, `metal_dispatch.h`) | les tableaux de nombres et leurs calculs, processeur et GPU |
+| Mécanique des réseaux | `dnn/core.h`, `dnn/network_context.h` | empiler les couches, calculer à l'endroit puis à l'envers |
+| Couches (`dnn/layers.h`) | environ 28 sur 65 : `embeddings`, `positional_encodings`, `rms_norm`, `unit_rms_norm`, `rope`, `repeat_heads`, `fc`, `fc_no_bias`, `linear`, `linear_no_bias`, `softmax`, `softmaxm`, `tril`, `tril_mask`, `split_heads_to`, `merge_heads_to`, `multm_prev`, `gelu`, `dropout`, `extract`, `slice`… | les briques d'un modèle de langage |
+| Blocs du transformer (`dnn/transformer.h`) | `gqa_attention`, `multihead_attention`, `moe_`, `fused_ffn`, `transformer_block`, `transformer_stack` | Qwen, Gemma, LFM2, Mistral, MoE |
+| LoRA | `dnn/lora_adapter.h`, partie fusion de `dnn/visitors.h` (`merge_network_adapters`) | R2 à R5 |
+| Fonctions d'erreur (`dnn/loss.h`) | 2 sur 25 : `loss_cross_entropy_per_token`, `loss_distillation_per_token` | apprendre le mot suivant ; distiller (R8) |
+| Apprentissage | AdamW (`dnn/solvers.h`), `dnn/trainer.h`, `dnn/lr_scheduler.h`, `dnn/finetuning_data.h` | faire tourner l'entraînement |
+| Configurations | `dnn/transformer_config.h`, `dnn/decoder_transformer_config.h`, `dnn/decoder_models.h` | décrire chaque architecture |
+| Entrée | `input_tensor` (et `input_embeddings`) de `dnn/input.h` | les tokens en entrée |
+| Lecture et écriture | `data_io/gguf_*`, `tokenizer/hf_tokenizer.h`, `tokenizer/bpe_tokenizer.h`, `serialize.h` | modèles, tokenizer et son apprentissage (R14), archives |
+
+**On coupe :**
+
+| Ce qu'on coupe | Pourquoi |
+|---|---|
+| `svm/` (108 fichiers tirés), traitement d'images, géométrie, détection d'objets | n'arrivent que par trois portes : les fonctions d'erreur de détection (`loss_mmod`, `loss_yolo`… de `loss.h`, qui inclut `svm/ranking_tools.h` et `image_processing/`), `dnn/validation.h` et les entrées d'images de `dnn/input.h` |
+| 23 fonctions d'erreur sur 25 | images, classement, détection, métrique |
+| Les couches d'images (convolutions `con`/`cont`, pooling, `upsample`, `bn_con`, `reorg`…) | inutiles pour le texte |
+| Les entrées d'images (`input_rgb_image`, pyramides…) | seule `input_tensor` sert |
+| Vision (`vision_transformer`, `runtime_vision_encoder`, `modality_fusion`) | Gulliver lit les images avec son moteur ; la liste n'entraîne pas de modèle de vision |
+| Raisonnement en boucle (`adaptive_halting`, HRM) | exemples de sudoku et d'ARC |
+| Inférence de dlib (`runtime_transformer`, `text_generation`) | Gulliver a son propre moteur, plus rapide |
+| CUDA, cuDNN, cuBLAS, cuRAND, cuSOLVER (`cuda/*.cu`, `*_dlibapi`), NPU (`npu_dlib`) | pas de carte NVIDIA sur un Mac |
+| Petits outils de base (`threads`, `pipe`, `md5`, `dir_nav`, `statistics`) | remplacés par la bibliothèque standard du C++ ou le thread pool de Gulliver |
+
 ### Dernier pas
 
 Gulliver vit encore physiquement dans l'arbre de dlib (`dlib/dlib/external/gulliver/`). Quand il n'en dépendra plus, son dossier pourra sortir à la racine du dépôt.

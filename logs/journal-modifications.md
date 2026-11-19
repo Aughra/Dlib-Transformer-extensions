@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-19 — Trier ce que l'atelier garde de dlib, et faire le point avant la pause
+
+- **Quoi** : section « Le tri : ce qu'on garde, ce qu'on coupe » ajoutée au fil rouge de `docs/feuille-de-route.md` : on garde les tenseurs (processeur et Metal), la mécanique des réseaux, environ 28 couches sur 65, les blocs du transformer (GQA, MoE), LoRA et sa fusion, 2 fonctions d'erreur sur 25 (entropie croisée par token, distillation), AdamW, la boucle d'entraînement, les configurations, la lecture des GGUF, le tokenizer et son apprentissage ; on coupe `svm/`, les images, la vision, HRM, l'inférence de dlib, CUDA et le NPU, et les petits outils remplacés par la bibliothèque standard. Tri marqué approximatif (recherche par noms), à confirmer à la compilation à chaque phase. Reprise mise au point pour la pause.
+- **Fichiers** : `docs/feuille-de-route.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain (« on va garder quoi ? », puis « mets tout ça »).
+- **Étapes** : inclusions de `dnn/*.h` relevées ; couches, fonctions d'erreur, entrées et solveurs cherchés dans `dnn/transformer*.h`, `decoder_*`, `lora_adapter.h`, `runtime_transformer.h` et les exemples `slm_gguf_import_ex`, `slm_lora_finetune_ex`, `slm_distill_ex`, `slm_cygnus_*`.
+
 ## 2026-11-19 — Décider l'indépendance de Gulliver vis-à-vis de dlib (fil rouge)
 
 - **Quoi** : nouvelle partie « Fil rouge » de `docs/feuille-de-route.md` : Gulliver reprend le code de dlib petit à petit, un morceau à la fin de chaque chantier (1. SHA-256 → CommonCrypto ; 2. bibliothèques d'autres projets → `gulliver/third_party/` ; 3. ZIP et sqlite ; 4. lecture des GGUF ; 5. tokenizer), puis l'atelier reprend au fil de ses phases le code d'entraînement dont il a besoin, en coupant les inclusions inutiles ; dernier pas : sortir le dossier de Gulliver de l'arbre de dlib. Rien n'est reporté dans dlib ; Pseudalis reste sur dlib pour l'instant. Règle ajoutée à CLAUDE.md (« Le projet »).
