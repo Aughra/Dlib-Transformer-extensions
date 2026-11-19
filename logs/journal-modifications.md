@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-19 — Passer les tests de l'étape 4 sur le Mac mini, et ajouter PDFium au guide du premier jour
+
+- **Quoi** : tests du guide du premier jour sur le Mac mini M5 Pro (Gulliver 6.3.0, `982fc30`) : `test_metal` all checks passed ; `dtest --test_metal` 4 041 vérifications réussies ; `test_macos.sh` de Gulliver 0 étape en échec (174 s) ; `test_macos.sh` de Pseudalis 0 en échec (253 s) ; banc de la page : regress 55, images 12, actions 31, tabs 11, phone 10 sans échec, docs 15 sur 17 au premier passage (PDF refusé, 422 sur `/gulliver/v1/extract`) puis 17 sur 17 une fois PDFium récupéré. Cause : `libpdfium.dylib` n'est pas versionnée et le guide oubliait `tools/fetch_pdfium.sh` ; ligne ajoutée au guide. Le fichier `fpdfview.h.orig` que l'archive de PDFium contient et que le script copie a été supprimé (sans usage).
+- **Fichiers** : `docs/mac-mini-premier-jour.md`, ce journal.
+- **Pourquoi** : partie 1 de la feuille de route (passer sur le Mac mini) ; un guide qui oublie une étape est un défaut de documentation.
+- **Étapes** : `fetch_pdfium.sh`, reconfiguration et build de Gulliver (dylib copiée à côté du service), `page_test.sh docs` relancé. Journaux dans `build/tests-mini-2157/`.
+
 ## 2026-11-19 — Ajouter à la feuille de route la comparaison avec d'autres moteurs locaux
 
 - **Quoi** : nouvelle ligne de la partie 2 de la feuille de route : comparer Gulliver à llama.cpp, Ollama et éventuellement un moteur MLX sur les longues questions (temps avant le premier mot), même modèle, prompts de 512 à 16 384 tokens, en alternance.
