@@ -896,8 +896,12 @@ namespace gulliver
         */
         const long units = static_cast<long>(tiles_.size()) * KVH;
         long parts = 1;
-        if (units < pool_.active())
-            parts = std::max<long>(1, std::min<long>((2 * pool_.active() + units - 1) / units, span / part_positions));
+        // Le nombre de plages se calcule sur part_workers, et non sur les threads du moteur : il ne dépend
+        // ainsi ni du réglage threads ni de la machine, et l'ordre des sommes partielles non plus.  Avec le
+        // nombre de threads, une même question pouvait recevoir deux réponses (LFM2.5-8B-A1B, détail d'un
+        // journal de 2 622 tokens : juste avec 6 ou 8 threads, faux avec 10, 12 ou 18 ; Gulliver 6.4.0).
+        if (units < part_workers)
+            parts = std::max<long>(1, std::min<long>((2 * part_workers + units - 1) / units, span / part_positions));
         const long rows_cap = per_tile * rep;
         if (parts > 1) partial_.resize(static_cast<size_t>(units * parts * rows_cap * (hd + 2)));
 

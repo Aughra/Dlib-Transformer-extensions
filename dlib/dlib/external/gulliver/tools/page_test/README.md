@@ -13,7 +13,7 @@ PAGE_TEST_KEEP=1 bash dlib/dlib/external/gulliver/tools/page_test/page_test.sh  
 1. Il démarre un **service d'essai** isolé : une copie du programme construit (`build/macos-gulliver`), qui sert la page des sources (`web/`), avec ses données dans `build/page-test/home`, hors ligne, sur le port 18491.
 2. Au premier lancement, il y installe des modèles **clonés** depuis le Mac (copies APFS, sans place prise), par un catalogue local et la réserve : le Qwen3-VL 2B (`build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf`, ou `PAGE_TEST_MODEL`), et, s'il est là, le Qwen3-VL 4B avec son projecteur, pris dans `build/gulliver-home/models`. À chaque lancement, sa bibliothèque du Mac (`<données>/library`, Albireo 4.30.0) reçoit, s'il est là, un clone de `build/models/Qwen3.5-0.8B-Q8_0.gguf`, que le scénario `regress` liste puis charge dans Albireo.
 3. Il passe **ESLint** sur les modules de la page (noms non définis, imports réaffectés, déclarations en double). ESLint s'installe une fois depuis npm dans `build/page-test/lint` ; sans npm, l'étape est sautée.
-4. Il joue les **scénarios** dans Chrome sans fenêtre, piloté par `cdp.mjs` (protocole DevTools, sans autre dépendance que Node.js). Chaque scénario part d'un profil de navigateur neuf. Toute erreur JavaScript de la page fait échouer le scénario.
+4. Il joue les **scénarios** dans Chrome sans fenêtre, piloté par `cdp.mjs` (protocole DevTools, sans autre dépendance que Node.js). Chaque scénario part d'un profil de navigateur neuf, et chaque passage d'un profil « banc » neuf côté service (celui du passage précédent est supprimé). Toute erreur JavaScript de la page fait échouer le scénario.
 
 ## Les scénarios
 

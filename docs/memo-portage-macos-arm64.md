@@ -169,15 +169,21 @@ BENCH_SIZES="512" bash dlib/dlib/external/gulliver/tools/bench_macos.sh 1   # un
 
 Le tableau (machine, version de Gulliver, mode économie, charge, puis lecture et écriture de chaque modèle) va dans `build/bench/<modèle du Mac>-<date>.md`. Les modèles mesurés : ceux du portage présents dans `build/models` et `build/gulliver-home/models`, et tout `.gguf` de `build/bench-models/`.
 
+Les tableaux de référence sont gardés dans le dépôt, sous `docs/mesures/` : le M2 et le Mac mini M5 Pro au 2026-11-19 (Gulliver 6.3.0), et leur comparaison ([2026-11-19-m2-contre-mac-mini.md](mesures/2026-11-19-m2-contre-mac-mini.md)). Pour mesurer le M2 depuis le Mac mini : `ssh barbidou@192.168.1.12`, dépôt `~/dev/Dlib-Transformer-extensions`, même commit, puis rapatrier `build/bench/*.md` par `scp`.
+
 ### Vérifier la page web
 
 ```sh
 bash dlib/dlib/external/gulliver/tools/page_test/page_test.sh        # ESLint, puis 5 scénarios dans Chrome sans fenêtre
 ```
 
-Un service d'essai isolé (port 18491, hors ligne, données dans `build/page-test`) sert la page des sources, avec le Qwen3-VL 2B et, s'il est là, le 4B et son projecteur, clonés depuis le Mac. ESLint vérifie les modules de la page, puis 131 vérifications jouent la page comme un utilisateur (conversation, barre de contexte, champs markdown, paramètres, projets, documents, images, actions du fil, suppression totale, deux onglets, largeur d'un téléphone), une fois le modèle chargé. Il faut Google Chrome et Node.js ; ESLint s'installe une fois depuis npm dans `build/page-test/lint`. Détails et écriture des scénarios : `tools/page_test/README.md`. Dernier passage : 2026-11-15, Gulliver 4.30.0 (pages), tout passe (regress 45, docs 12, images 12, actions 26, tabs 11, phone 8).
+Un service d'essai isolé (port 18491, hors ligne, données dans `build/page-test`) sert la page des sources, avec le Qwen3-VL 2B et, s'il est là, le 4B et son projecteur, clonés depuis le Mac. ESLint vérifie les modules de la page, puis 131 vérifications jouent la page comme un utilisateur (conversation, barre de contexte, champs markdown, paramètres, projets, documents, images, actions du fil, suppression totale, deux onglets, largeur d'un téléphone), une fois le modèle chargé. Il faut Google Chrome et Node.js ; ESLint s'installe une fois depuis npm dans `build/page-test/lint`. Détails et écriture des scénarios : `tools/page_test/README.md`. Dernier passage : 2026-11-19, sur le Mac mini M5 Pro, Gulliver 6.4.0, tout passe (regress 55, docs 17, images 12, actions 31, tabs 11, phone 10 : 136 vérifications). Les deux vérifications de PDF du scénario `docs` demandent PDFium (`tools/fetch_pdfium.sh`) : sans lui, le service répond 422 sur `/gulliver/v1/extract`.
 
 ## État constaté
+
+**Mac mini M5 Pro (2026-11-19, machine actuelle)** : `Mac17,16`, 6 cœurs « Super » et 12 cœurs « Performance » (pas de cœurs d'efficacité), 64 Go, macOS 27.2.1, AppleClang 21. Gulliver, Pseudalis et les tests Metal de dlib se construisent sans erreur ni avertissement (Gulliver en 15 s, `dtest` en 67 s). Passent : `test_metal`, `dtest --test_metal` (4 041 vérifications), `test_macos.sh` de Gulliver (0 étape en échec, 174 s) et de Pseudalis (0 en échec, 253 s), banc de la page (136 vérifications, une fois PDFium récupéré). Vitesse : 2,6 à 4,6 fois celle du M2 sur le GPU en lecture, 2,5 à 3,6 en écriture (`docs/mesures/`). Gulliver 6.4.0 n'y forme plus d'équipe rapide (changement 26 des notes pour l'auteur) ; réglages conseillés inchangés (18 threads, `gpu_prompt_tokens` 24, `gpu_prompt_context` 262 144), vérifiés par mesure.
+
+L'état ci-dessous est celui du MacBook Air M2, machine du portage jusqu'au 2026-11-19.
 
 Sur Mac M2, macOS arm64, avec AppleClang 21, CMake 4.1.2 et Ninja (état au 2026-11-09, après la fusion de `upstream/main` à `184ea00`, Albireo 1.0.12) :
 

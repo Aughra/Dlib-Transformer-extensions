@@ -206,6 +206,11 @@ namespace gulliver
         // Le nombre minimal de positions d'une plage du découpage de l'attention (attention()).
         static const long part_positions = 256;
 
+        // Le nombre de tâches visé par le découpage de l'attention, fixe pour que les réponses ne dépendent
+        // pas du nombre de threads.  16 : aussi rapide que l'ancien découpage par threads sur le Mac mini
+        // (18 threads) et sur le M2 (8), en mesures alternées ; 8 perdait 15 % sur le Mac mini.
+        static const long part_workers = 16;
+
         // Les tokens des passes qui comparent les couches du périphérique au processeur.
         static const long probe_tokens = 8;
 

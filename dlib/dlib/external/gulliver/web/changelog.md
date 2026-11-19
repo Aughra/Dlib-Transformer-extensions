@@ -2,6 +2,26 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.4.0 — 19 novembre 2026
+
+### Plateforme
+
+- Premier passage sur le **Mac mini M5 Pro** (18 cœurs, 64 Go) : tous les tests passent (service, Pseudalis, noyaux Metal, page). Par rapport au MacBook Air M2, le GPU lit les prompts 2,6 à 4,6 fois plus vite et écrit 2,5 à 3,6 fois plus vite (même version, mêmes modèles).
+
+### Performances
+
+- **Écriture sur le processeur plus rapide sur les puces sans cœurs d'efficacité.** Le moteur réservait l'écriture des tokens aux seuls cœurs de la première famille, ce qui convient au M2 (cœurs « Performance » et « Efficiency », lents). Le M5 Pro a 6 cœurs « Super » et 12 cœurs « Performance », tous rapides : le moteur les emploie désormais tous. Sur le Mac mini, l'écriture sur le processeur gagne de 15 à 60 % (Qwen3-VL 4B Thinking : 38 à 41 → 64 tokens/s après 512 tokens) ; la lecture ne change pas, et rien ne change sur le M2.
+
+### Corrections
+
+- **Les réponses ne dépendent plus du nombre de threads.** Pendant l'écriture, le moteur découpe la relecture du contexte en plages traitées en parallèle ; leur nombre suivait le nombre de threads, et l'ordre des additions avec lui. Une réponse sur le fil pouvait alors changer d'une machine à l'autre (LFM2.5-8B-A1B retrouvait un détail d'un long journal avec 6 ou 8 threads, pas avec 18). Le découpage est désormais fixe, sans perte de vitesse mesurable.
+
+### Réglages
+
+- La fiche du réglage **« Threads du moteur »** décrit maintenant aussi le Mac mini ; la valeur conseillée reste « Auto » (tous les cœurs), le meilleur choix mesuré sur les deux machines.
+
+---
+
 ## 6.3.0 — 18 novembre 2026
 
 ### Documents

@@ -15,6 +15,9 @@
 // l'équipe rapide, toujours une section à la fois sur les deux équipes, et les workers de l'autre
 // équipe, inactifs, s'endorment vite : le système garde alors les threads qui calculent sur les
 // cœurs de performance.
+//
+// Seulement quand la seconde famille de cœurs est lente (« Efficiency ») : un M5 Pro a 6 cœurs
+// « Super » et 12 cœurs « Performance », tous rapides, et y écrit plus vite sur les 18 (Gulliver 6.4.0).
 
         // Le nombre de threads qu'utilisent les sections du thread appelant.
         int active() const { return fast_team_ && fast_team_requested() ? fast_team_->size() : size(); }
@@ -53,10 +56,22 @@
             return n;
         }
 
+        // Vrai quand la seconde famille de cœurs est faite de cœurs d'efficacité, lents (« Efficiency »
+        // sur un M2).  Un M5 Pro a 6 cœurs « Super » et 12 cœurs « Performance », rapides eux aussi :
+        // l'équipe rapide y freinait la génération (47 tokens/s contre 65 sur tous les cœurs, 4B Thinking,
+        // 64 tokens de contexte).  Faute de réponse du système, on garde l'équipe rapide, comme avant.
+        static bool second_level_is_efficiency()
+        {
+            char name[64] = {};
+            size_t length = sizeof(name) - 1;
+            if (sysctlbyname("hw.perflevel1.name", name, &length, nullptr, 0) != 0) return true;
+            return std::strcmp(name, "Efficiency") == 0;
+        }
+
         void make_fast_team(int threads)
         {
             const int fast = performance_cores();
-            if (fast > 1 && fast < threads) fast_team_.reset(new thread_pool(fast));
+            if (fast > 1 && fast < threads && second_level_is_efficiency()) fast_team_.reset(new thread_pool(fast));
         }
 
         // Exécute la section sur l'équipe rapide, si le thread appelant l'a demandé.

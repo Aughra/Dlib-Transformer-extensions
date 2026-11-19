@@ -15,6 +15,7 @@
 
 #define GULLIVER_CPU_RELAX() std::this_thread::yield()
 
+#include <cstring>
 #include <memory>
 #include <sys/sysctl.h>
 

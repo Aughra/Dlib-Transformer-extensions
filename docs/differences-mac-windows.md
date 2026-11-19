@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.3.0, 18 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.4.0, 19 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -23,7 +23,8 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Sommes dans les noyaux Q4_K et Q6_K | — | Gardées en registres vectoriels | Moins d'allers-retours en mémoire | 4B, écriture : 16,5 à 17,0 → 18,0 à 18,1 tokens/s | ch. 6 |
 | Attention avec clés et valeurs en 8 bits (Albireo 1.0.12) | Code portable | NEON, exacte au bit près | Sans elle, la fusion de la 1.0.12 rendait les longs prompts 4 fois plus lents sur Mac | 2B, 4 096 tokens : 37 → 158 à 162 tokens/s ; écriture ensuite : 9 → 22,5 | ch. 7 |
 | Valeurs en 8 bits tournées avant l'arrondi | Seules les clés sont tournées (signes, puis Walsh-Hadamard) | Les valeurs aussi, sortie de l'attention remise en place (processeur et GPU), comme llama.cpp | Sans elle, LFM2.5-8B-A1B perdait un détail d'un prompt de 2 622 tokens | coût non mesurable (Qwen3-VL 2B, écriture et lecture dans le bruit des mesures alternées) | remarque 22, v. 4.17.1 |
-| Threads de l'écriture | Tous les cœurs | Cœurs de performance seuls pour l'écriture, tous les cœurs pour les prompts | Les cœurs lents faisaient attendre les rapides | 4B : 17,6 à 18,1 → 18,2 à 18,6 tokens/s ; 2B : 37,4 à 37,9 → 39,7 à 40,8 | ch. 8 |
+| Threads de l'écriture | Tous les cœurs | Cœurs de performance seuls pour l'écriture, tous les cœurs pour les prompts, **seulement si la seconde famille de cœurs est « Efficiency »** (6.4.0) : sur le M5 Pro (6 « Super » + 12 « Performance »), tous les cœurs | Sur le M2, les cœurs lents faisaient attendre les rapides ; sur le M5 Pro, aucun cœur n'est lent | M2 — 4B : 17,6 à 18,1 → 18,2 à 18,6 tokens/s ; 2B : 37,4 à 37,9 → 39,7 à 40,8. Mac mini — 4B après 512 tokens : 38 à 41 → 64 ; 2B : 79 à 90 → 125 à 131 | ch. 8, 26, v. 6.4.0 |
+| Découpage de l'attention de l'écriture | Nombre de plages selon le nombre de threads : la réponse peut changer avec la machine | Nombre de plages fixe (`part_workers` = 16) : même réponse avec n'importe quel nombre de threads | LFM2.5-8B-A1B retrouvait un détail d'un long journal avec 6 ou 8 threads, pas avec 10 à 18 | vitesse inchangée (mesures alternées sur le Mac mini et le M2) | ch. 27, v. 6.4.0 |
 | Écriture des réponses | CUDA (cartes NVIDIA) ou processeur | GPU de la puce par Metal, sans copie des poids (mémoire unifiée) | Le Mac n'a ni CUDA ni NVIDIA ; son GPU partage la mémoire | 4B : 18,3 à 19,0 → 21,3 à 21,7 tokens/s ; 2B : 35,7 à 40,8 → 49,4 à 49,6 | ch. 9, v. 2.0.0 |
 | Lecture des prompts | CUDA ou processeur | GPU par Metal, de 24 à 2 048 positions | Même raison | 4B, 512 tokens : 92 → 154 tokens/s ; 2B : 222 → 420 | ch. 10, v. 2.0.0 |
 | Produits des poids Q5_K et Q8_0 sur le GPU | — (pas de GPU Apple) | Noyaux Metal `mv_q5_K`, `mv_q8_0` | Les fichiers Qwen 3.5 en Q4_K_M en contiennent | permettent l'écriture de Qwen 3.5 sur le GPU | ch. 12, v. 4.5.0 |

@@ -99,7 +99,7 @@ const schemas = {
     box(70, 152, 460, 40, 'Mémoire unifiée : le modèle, les clés et valeurs, sans copie', 's-soft') +
     arrow(155, 134, 155, 152) + arrow(445, 134, 445, 152) +
     arrow(240, 98, 360, 98, 'prompts ≥ 24 tokens') + arrow(240, 120, 360, 120, 'chaque token écrit'), 215),
-  threads: schema('Les huit cœurs du M2 et les deux équipes',
+  threads: schema('Sur un M2 : deux familles de cœurs, deux équipes',
     [0, 1, 2, 3].map((i) => box(40 + i * 70, 60, 60, 46, 'P' + (i + 1), 's-gold')).join('') +
     [0, 1, 2, 3].map((i) => box(330 + i * 60, 66, 50, 34, 'E' + (i + 1), 's-soft')).join('') +
     text(155, 128, 'cœurs de performance', 's-f') + text(435, 128, "cœurs d'efficacité", 's-f') +
@@ -247,7 +247,7 @@ const recommended = {
   accelerator: 'auto',        // GPU : écriture 21-22 contre 18-19 tokens/s (4B), lecture x1,7 (épisodes 19, 20)
   gpu_prompt_tokens: 24,      // le GPU perd à 16 tokens, gagne dès 24 (épisode 20)
   gpu_prompt_context: 262144, // attention matricielle (4.11.0), 2B, mesures alternées : GPU 423-424 / 295 / 171 contre 170-177 / 115-117 / 67 à 4 096 / 8 192 / 16 384
-  threads: 0,                 // tous les cœurs physiques ; les pas d'écriture prennent les cœurs P (épisode 16)
+  threads: 0,                 // tous les cœurs physiques (épisode 16) ; 18 sur le M5 Pro, meilleur que 14, 12, 10, 6 (mesure du 2026-11-19)
   spin_us: 2000,
   max_sequences: 4,
   context: 0,
@@ -343,17 +343,20 @@ const items = {
       'Moins de threads laisse des cœurs libres pour le reste (visio, montage, compilation).'],
     cons: ['Moins de threads : lecture des prompts sur le processeur plus lente, presque en proportion.',
       'Au-delà du nombre de cœurs, aucun gain : les threads se gênent.'],
-    normal: "Le processeur du M2 a huit cœurs : quatre rapides (performance) et quatre économes (efficacité). Le moteur " +
-      "lance un thread par cœur. Pour écrire un token, il n’emploie que l’équipe rapide, car attendre les cœurs lents " +
-      "ferait perdre du temps ; pour lire un long prompt sur le processeur, il les prend tous. Avec le GPU allumé, " +
-      "ce réglage compte moins : le GPU fait la plus grosse part.",
+    normal: "Le moteur lance un thread par cœur. Le processeur du M2 a huit cœurs : quatre rapides (performance) et " +
+      "quatre économes (efficacité). Pour écrire un token, il n’y emploie que l’équipe rapide, car attendre les cœurs lents " +
+      "ferait perdre du temps ; pour lire un long prompt sur le processeur, il les prend tous. Le Mac mini M5 Pro a dix-huit " +
+      "cœurs tous rapides (six « Super », douze « Performance ») : il n’y a pas d’équipe rapide, et Auto (18) est le meilleur " +
+      "choix mesuré, en lecture comme en écriture (devant 14, 12, 10 et 6). Avec le GPU allumé, ce réglage compte moins : " +
+      "le GPU fait la plus grosse part.",
     owl: "La thread pool d’Gulliver crée N threads (0 = cœurs physiques, sysctl hw.physicalcpu) qui attendent en spin " +
       "2 ms au plus entre deux passes. Sur Apple Silicon, les passes de moins de 24 tokens tournent sur une « fast team » " +
       "limitée à hw.perflevel0.physicalcpu threads (cœurs P), pour éviter que la barrière de fin de passe n’attende un " +
-      "cœur E. Les produits des prompts sur le processeur passent par Accelerate (cblas_sgemm sur le coprocesseur " +
+      "cœur E — seulement si hw.perflevel1.name vaut « Efficiency » (Gulliver 6.4.0 : sur un M5 Pro, Super + Performance, " +
+      "l’équipe de 6 écrivait à 47 tokens/s contre 65 sur les 18 cœurs, 4B Thinking). Les produits des prompts sur le processeur passent par Accelerate (cblas_sgemm sur le coprocesseur " +
       "matriciel), alimenté par les threads qui décompressent les poids par tranches de 256 lignes.",
     marmot: "C’est comme le nombre de caisses ouvertes au supermarché. Plus il y en a, plus la file avance, mais il " +
-      "n’y a que huit caissiers dans le magasin : en ouvrir douze ne sert à rien. Et si tu en fermes quelques-unes, les " +
+      "n’y a que huit caissiers dans le magasin du M2 (dix-huit dans celui du Mac mini) : en ouvrir plus ne sert à rien. Et si tu en fermes quelques-unes, les " +
       "caissiers libres peuvent ranger les rayons pendant ce temps.",
     bee: "Trop bas, le moteur se traîne, surtout pour lire de longs documents sans GPU. Trop haut, les threads se " +
       "disputent les cœurs et le Mac devient moins réactif sans aller plus vite."

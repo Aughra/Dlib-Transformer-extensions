@@ -37,6 +37,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 21 | Remarque, sécurité | `gulliver/common/platform.cpp:622, 663, 735`, `pseudalis/common/platform.cpp:622, 636, 700` | Hors de Windows, les trois contrôles de dossiers répondent toujours « oui ». | **Propre à Linux** (et au Mac) ; Windows non concerné |
 | 23 | Test qui ne teste pas | `dlib/test/is_same_object.cpp:48` | `#if _MSC_VER > 1600` désactive une vérification avec tout compilateur autre que Visual Studio (corrigé dans le fork). | Aussi sous Windows (clang, gcc) et Linux, déduit du code |
 | 24 | Avertissement | `dlib/privacy/pii_lexicons.h:2110` | Une entrée de liste écrite en deux littéraux, prise par clang pour une virgule oubliée : l'exemple de l'anonymiseur ne compile plus avec `-Werror` (corrigé dans le fork). | Aussi sous Windows avec clang ; gcc et Visual Studio ne disent rien |
+| 25 | Remarque, exactitude | `albireo/engine/cpu_runtime.cpp:532` | Le découpage de l'attention de l'écriture dépend du nombre de threads : la même question peut recevoir une autre réponse sur une autre machine ou avec un autre réglage (corrigé dans le fork, détail au changement 27, partie 4). | Aussi sous Windows, déduit du code |
 | Registre | dlib | `dlib/dlib`, `dlib/examples` | Tout ce que le fork change dans dlib, fichier par fichier (partie 5). | Voir chaque ligne |
 | 22 | Remarque, exactitude | `gulliver/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant (corrigé dans le fork). | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
 
@@ -809,6 +810,53 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 
 **Mac ou Windows** : propre au Mac (NEON). Sous Windows x86, l'original a déjà son noyau AVX2 pour Q5_K (`dot_q5_K_avx2`, `engine/qkernels.cpp:949` au commit `184ea00`) ; ce noyau-ci servirait aux PC Windows à processeur ARM (non testé).
 
+### Changement 26 : l'équipe rapide seulement s'il y a des cœurs lents (Gulliver 6.4.0)
+
+- **Avant** : le changement 8 réservait les passes de moins de 24 tokens (une étape de la génération) à une « équipe rapide » d'un thread par cœur de la première famille (`hw.perflevel0.physicalcpu`), dès que le moteur avait plus de threads. C'est juste sur un M2 (4 cœurs « Performance », 4 « Efficiency », lents). Le Mac mini M5 Pro a 6 cœurs « Super » et 12 cœurs « Performance », tous rapides : l'équipe de 6 y laissait 12 cœurs rapides inactifs pendant l'écriture.
+- **Changement** : `make_fast_team` (`engine/thread_pool_apple.inc`) ne forme l'équipe que si `hw.perflevel1.name` vaut `Efficiency`, ce que dit macOS du M2 et pas du M5 Pro ; sans réponse du système, comportement d'avant. La règle s'appuie sur ce que le système dit des cœurs, pas sur un nom de puce.
+- **Exactitude** : les produits ne changent pas (chaque ligne est calculée par un seul thread), mais l'attention de l'écriture découpait le contexte en un nombre de plages qui dépendait du nombre de threads : passer de 6 à 18 threads changeait l'ordre de ses sommes partielles, et une réponse sur le fil (étape « lfm2 moe long prompt » de `test_macos.sh`) basculait. Le changement 27 rend ce découpage fixe ; avec lui, `test_macos.sh` passe.
+- **Vitesse** (Mac mini M5 Pro, 18 threads, `bench_runtime … q8`, processeur, 6.3.0 et 6.4.0 en alternance, trois tours, charge 4 à 14) :
+
+| Modèle | Contexte | Écriture 6.3.0 | Écriture 6.4.0 |
+|---|---|---|---|
+| Qwen3-VL 2B Q4_K_M | 64 | 87,7 à 102,5 tokens/s | 130,6 à 137,5 |
+| Qwen3-VL 2B Q4_K_M | 512 | 78,8 à 90,2 | 125,0 à 130,6 |
+| Qwen3-VL 4B Thinking Q4_K_M | 64 | 41,4 à 46,9 | 63,5 à 66,8 |
+| Qwen3-VL 4B Thinking Q4_K_M | 512 | 38,4 à 41,4 | 64,0 |
+| Qwen3.5-0.8B Q8_0 | 512 | 137,5 à 141,2 | 181,5 à 184,4 |
+| Qwen 3.6 11B-A3B Q4_K_M | 512 | 42,5 à 45,9 | 52,6 à 53,5 |
+
+La lecture des prompts ne change pas (elle prenait déjà tous les threads). Nombre de threads : 18 reste le meilleur choix (lecture 194 à 235, écriture 57 à 60 tokens/s après 1 536 tokens, devant 14, 12, 10 et 6).
+
+**Mac ou Windows** : propre au Mac (le changement 8 n'existe que dans le fork).
+
+### Changement 27 : un découpage de l'attention qui ne dépend pas du nombre de threads (Gulliver 6.4.0)
+
+- **Avant** : pendant l'écriture, `cpu_runtime::attention` découpe les positions du contexte en plages lues en parallèle, puis fusionne leurs sommes partielles (le découpage de FlashDecoding). Leur nombre valait à peu près 2 × threads actifs ÷ têtes de clés, plafonné à une plage par 256 positions : il changeait avec le réglage `threads` et avec la machine, et l'ordre des additions en flottants aussi.
+- **Ce qui se passait** : LFM2.5-8B-A1B Q4_K_M, sur le processeur, à température 0, sur le journal de 2 622 tokens de `tests/lfm2/long_prompt.txt` (« who travelled in record 3? ») : « Gaëlle » (juste) avec 6 ou 8 threads, « Inès travelled from Lille to Lyon » (inventé) avec 10, 12 ou 18. Reproduire : `engine_chat … LFM2.5-8B-A1B-Q4_K_M.gguf --no-metal --temperature 0 --max 800 --threads N "$(cat tests/lfm2/long_prompt.txt)"` avec N = 8 puis 12.
+- **Changement** : le nombre de plages se calcule sur une constante, `part_workers` = 16 (`engine/cpu_runtime.h`), et non plus sur `pool_.active()`. Une même question reçoit la même réponse quel que soit le nombre de threads.
+- **Vérifié** : la réponse est « Gaëlle » avec 6 et 18 threads (cibles 8 et 16 essayées) ; `test_macos.sh` passe. Vitesse d'écriture après 3 584 tokens, processeur, en alternance, trois tours : Mac mini (18 threads) 4B 44,1 à 50,6 → 42,7 à 51,5 tokens/s, 2B 77,5 à 94,3 → 80,9 à 95,0 (une cible de 8 perdait 15 %) ; M2 (8 threads) 4B 12,9 à 13,7 → 13,0 à 13,3, 2B 24,7 à 25,4 → 23,6 à 24,9. Sur le M2, sans ventilateur, la version essayée tournait toujours juste après l'autre : le témoin à 64 tokens, où les deux versions exécutent le même code (moins de 256 positions, une seule plage), montre le même écart de 5 à 8 % ; on l'attribue à la chaleur, pas au changement.
+
+**Mac ou Windows** : aussi sous Windows, déduit du code (non vérifié sous Windows) : l'original calcule `parts` de la même façon, donc ses réponses peuvent dépendre du nombre de threads.
+
+Fichier : `dlib/dlib/external/albireo/engine/cpu_runtime.cpp`, lignes 530 à 532 au commit `184ea00` (toujours là, lignes 718 à 720, dans `upstream/main` à `966c178`). Avant :
+
+```cpp
+        long parts = 1;
+        if (units < pool_.size())
+            parts = std::max<long>(1, std::min<long>((2 * pool_.size() + units - 1) / units, span / part_positions));
+```
+
+Après (fork, `engine/cpu_runtime.cpp`, avec `static const long part_workers = 16;` dans `cpu_runtime.h`) :
+
+```cpp
+        long parts = 1;
+        if (units < part_workers)
+            parts = std::max<long>(1, std::min<long>((2 * part_workers + units - 1) / units, span / part_positions));
+```
+
+Corrigé dans le fork (Gulliver 6.4.0) ; non testé sous Windows.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -818,6 +866,7 @@ Le gain est de 2 à 6 % en génération ; les longs prompts gardent la vitesse d
 | Prompt de 512 tokens | pas mesuré | 418 à 422 tokens/s sur le GPU ; 217 à 224 sur le processeur (64 à 72 avec les changements 1 à 3) |
 | Prompt de 4 096 tokens | pas mesuré | 156 à 166 tokens/s, en demi-précision ou, avec le changement 7, en 8 bits (36 à 38 en 8 bits sans lui ; 50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |
 | Génération après 4 096 tokens | pas mesuré | 26,5 à 28,5 tokens/s sur le GPU ; 20 à 23 sur le processeur (9 en 8 bits sans le changement 7 ; 7,5 à 9 avec les changements 1 et 2 seuls) |
+| Mac mini M5 Pro, 4B Thinking, écriture sur le processeur après 512 tokens | pas mesuré | 64 tokens/s avec le changement 26 (38 à 41 avant) ; 71 sur le GPU |
 | Qwen3.5-0.8B Q5_K_M (fork seulement), écriture sur le processeur | non lu par le moteur | 71,6 à 72,0 tokens/s avec le changement 25 (38,7 à 40,1 avant) |
 | Modèle de recherche (Q8_0), 512 tokens | pas mesuré | 573 à 601 tokens/s (184 à 213 avec les changements 1 à 3) |
 | Encodage d'une image 512 × 512, projecteur du 4B | pas mesuré | 1,8 à 2,2 s (8,9 à 10,3 avec les changements 1 à 3) |

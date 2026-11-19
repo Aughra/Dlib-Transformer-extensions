@@ -6,6 +6,7 @@
   "docs/captures/*.md",
   "docs/captures/*.jpg",
   "docs/captures/*.png",
+  "docs/mesures/*.md",
   "docs/pseudalis/*.md",
   "blog/*.md",
   "blog/images/*",
@@ -60,6 +61,11 @@
      "desc": "La liste à suivre à l'arrivée du M5 Pro."
     },
     {
+     "path": "docs/mesures/2026-11-19-m2-contre-mac-mini.md",
+     "title": "M2 contre Mac mini",
+     "desc": "Les vitesses des deux machines, côte à côte."
+    },
+    {
      "path": "macos/metal-sonde/README.md",
      "title": "La sonde Metal",
      "desc": "Le petit programme qui teste le GPU."
@@ -93,6 +99,11 @@
      "path": "logs/nuit-2026-11-15.md",
      "title": "Pendant la nuit (15 nov.)",
      "desc": "Les choix faits seul."
+    },
+    {
+     "path": "logs/nuit-2026-11-19.md",
+     "title": "Pendant la nuit (19 nov.)",
+     "desc": "Premier soir sur le Mac mini : les choix faits seul."
     }
    ]
   },

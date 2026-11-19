@@ -96,6 +96,8 @@ Gulliver vit encore physiquement dans l'arbre de dlib (`dlib/dlib/external/gulli
 
 ## Partie 1 — Le Mac mini
 
+**Avancement (2026-11-19)** : étapes 1 à 5 et 7 faites ; étape 6 faite pour les threads (l'équipe rapide corrigée, Gulliver 6.4.0), `gpu_prompt_tokens`, `gpu_prompt_context` et les experts sur le GPU ; reste de l'étape 6 : les modèles jamais essayés et ceux à porter au GPU. Mesures : `docs/mesures/` ; décisions : `logs/nuit-2026-11-19.md`.
+
 Le plan détaillé est [docs/mac-mini-premier-jour.md](mac-mini-premier-jour.md), dans l'ordre :
 
 1. Installer les outils (Xcode, CMake, Ninja, `gh`, Node.js, Chrome, llama.cpp).

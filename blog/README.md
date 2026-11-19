@@ -59,5 +59,6 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 53. [Un nom pour chaque espace](53-un-nom-pour-chaque-espace.md)
 54. [La recherche passe côté moteur](54-la-recherche-passe-cote-moteur.md)
 55. [Le navigateur se vide](55-le-navigateur-se-vide.md)
+56. [Le premier soir sur le Mac mini](56-le-premier-soir-sur-le-mac-mini.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).
