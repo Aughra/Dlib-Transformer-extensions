@@ -38,6 +38,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 23 | Test qui ne teste pas | `dlib/test/is_same_object.cpp:48` | `#if _MSC_VER > 1600` désactive une vérification avec tout compilateur autre que Visual Studio (corrigé dans le fork). | Aussi sous Windows (clang, gcc) et Linux, déduit du code |
 | 24 | Avertissement | `dlib/privacy/pii_lexicons.h:2110` | Une entrée de liste écrite en deux littéraux, prise par clang pour une virgule oubliée : l'exemple de l'anonymiseur ne compile plus avec `-Werror` (corrigé dans le fork). | Aussi sous Windows avec clang ; gcc et Visual Studio ne disent rien |
 | 25 | Remarque, exactitude | `albireo/engine/cpu_runtime.cpp:532` | Le découpage de l'attention de l'écriture dépend du nombre de threads : la même question peut recevoir une autre réponse sur une autre machine ou avec un autre réglage (corrigé dans le fork, détail au changement 27, partie 4). | Aussi sous Windows, déduit du code |
+| 26 | Bug | `albireo/engine/chat_format.cpp:1886` | Mixtral 8x7B et Mistral 7B v0.1/v0.2 reçoivent le format sans template (« User: … Assistant: ») : `[INST]` n'est pas un token de leur vocabulaire (corrigé dans le fork). | Aussi sous Windows, déduit du code |
 | Registre | dlib | `dlib/dlib`, `dlib/examples` | Tout ce que le fork change dans dlib, fichier par fichier (partie 5). | Voir chaque ligne |
 | 22 | Remarque, exactitude | `gulliver/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant (corrigé dans le fork). | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
 
@@ -233,6 +234,34 @@ Cette entrée, propre à Pseudalis, est désormais dans [les notes pour l'auteur
   ```
 
 ---
+
+### 25. Le découpage de l'attention de l'écriture dépend du nombre de threads
+
+Détail, reproduction, code avant et après : changement 27, partie 4.
+
+### 26. Mixtral et les premiers Mistral 7B reçoivent le format sans template
+
+- **Où** : `dlib/dlib/external/albireo/engine/chat_format.cpp`, ligne 1886 au commit `184ea00` (ligne 3392 dans `upstream/main` à `966c178`), `chat_format::detect`.
+- **Ce qui se passe** : le format Mistral n'est choisi que si `[INST]` est un token du vocabulaire. C'est vrai à partir du tokenizer v3 de Mistral (Mistral Small, Ministral…), pas pour Mixtral 8x7B Instruct v0.1 ni Mistral 7B Instruct v0.1/v0.2, dont le template écrit `[INST]` en texte (« ▁[ », « INST », « ] »). Ces modèles tombent alors sur `plain_format`, qui écrit « User: question\n\nAssistant: », un format qu'ils n'ont jamais vu à l'entraînement.
+- **Reproduire** : `engine_chat … Mixtral-8x7B-Instruct-v0.1.Q4_K_M.gguf --render conv.json` affiche `User: … Assistant: ` ; `llama-server --jinja`, `/apply-template`, rend ` [INST] … [/INST]`.
+- **Correction du fork** (Gulliver 6.6.0) : un format `mistral_v1_format`, choisi quand le template contient `[INST]` sans que ce soit un token, et sans `[SYSTEM_PROMPT]` : `<s>`, puis « ` [INST] ` question ` [/INST]` », la réponse précédée d'une espace et suivie de `</s>`, le prompt système devant la première question suivi d'une ligne vide, comme le template de Mixtral. Avant (lignes 1886 et 1887) :
+
+```cpp
+        if (has("[INST]") && (tok.token_id("[INST]") >= 0))
+            return std::unique_ptr<chat_format>(new mistral_format(tok, tmpl));
+```
+
+Après (le fork ajoute la classe `mistral_v1_format`, voir `engine/chat_format.cpp` du fork) :
+
+```cpp
+        if (has("[INST]") && (tok.token_id("[INST]") >= 0))
+            return std::unique_ptr<chat_format>(new mistral_format(tok, tmpl));
+        if (has("[INST]") && tok.token_id("[INST]") < 0 && !has("[SYSTEM_PROMPT]"))
+            return std::unique_ptr<chat_format>(new mistral_v1_format(tok));
+```
+
+- **Vérifié** : prompt de 23 tokens dans les deux moteurs ; avec ce format, Mixtral (conversion de mradermacher, SHA-256 `9f8d778c…0ed01d44`) répond comme llama.cpp jusqu'à une égalité de probabilités, où llama.cpp change lui-même de mot entre son GPU et son processeur ; étape « mixtral chat format » de `test_macos.sh`. Non vérifié : Mistral 7B v0.1/v0.2 (même template, pas essayé).
+- **Mac ou Windows** : aussi sous Windows (code commun), déduit du code, non vérifié sous Windows.
 
 ## 2. Portabilité vers macOS sur puce Apple
 
@@ -875,6 +904,23 @@ Corrigé dans le fork (Gulliver 6.4.0) ; non testé sous Windows.
 
 **Mac ou Windows** : propre au Mac (le GPU par Metal) ; l'architecture `qwen35moe` est d'ailleurs propre au fork.
 
+### Changement 29 : les prompts de tous les mélanges d'experts sur le GPU (Gulliver 6.6.0)
+
+- **Avant** : seuls les prompts des mélanges d'experts récurrents (qwen35moe, LFM2-MoE) passaient au GPU (`gpu_state::moe_prompts`), « ceux des autres mélanges d'experts, jamais essayés, restent sur le processeur ».
+- **Changement** : `moe_prompts` vaut pour tout mélange d'experts que le GPU accepte, aux mêmes conditions de forme (experts de 64 de large, `e_down` de 32 lignes) ; les produits groupés (`moe_group`, `matmul_id`, formats Q4_K, Q5_K, Q6_K, Q8_0, Q5_0) ne dépendent pas de la récurrence.
+- **Exactitude** : contrôle au chargement (prompt et deux pas) : Qwen3-30B-A3B 0,6 à 2,7 % (tolérance de 5 % en clés 8 bits), Granite 3.1 1B-A400M 0,13 %, Mixtral 8x7B 0,01 % ; textes identiques à llama.cpp avec le même prompt (Qwen3-30B 130 et 287 caractères, Granite 168 et 238) ; pour Mixtral, le GPU de llama.cpp et son processeur divergent eux-mêmes au mot où le moteur diverge du GPU de llama.cpp (« rich » ou « romantic », égalité).
+- **Vitesse** (Mac mini M5 Pro, `bench_runtime … 18 N 32 1 q8 [metal]`, en alternance, deux tours ; le processeur donne la vitesse d'avant) :
+
+| Modèle | Prompt | Lecture, processeur (avant) | Lecture, GPU |
+|---|---|---|---|
+| Qwen3-30B-A3B-Instruct-2507 Q4_K_M | 512 | 96,1 à 114,9 tokens/s | 591,7 à 592,5 |
+| Qwen3-30B-A3B-Instruct-2507 Q4_K_M | 3 584 | 117,1 à 131,6 | 520,8 à 571,8 |
+| Mixtral-8x7B-Instruct-v0.1 Q4_K_M | 512 | 28,9 à 34,9 | 133,0 à 143,0 |
+| Mixtral-8x7B-Instruct-v0.1 Q4_K_M | 3 584 | 49,7 à 59,9 | 138,0 à 145,4 |
+| granite-3.1-1b-a400m-instruct Q4_K_M | 512 | 745,8 à 953,7 | 2 366,7 à 4 118,3 |
+
+**Mac ou Windows** : propre au Mac (Metal).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -884,6 +930,7 @@ Corrigé dans le fork (Gulliver 6.4.0) ; non testé sous Windows.
 | Prompt de 512 tokens | pas mesuré | 418 à 422 tokens/s sur le GPU ; 217 à 224 sur le processeur (64 à 72 avec les changements 1 à 3) |
 | Prompt de 4 096 tokens | pas mesuré | 156 à 166 tokens/s, en demi-précision ou, avec le changement 7, en 8 bits (36 à 38 en 8 bits sans lui ; 50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |
 | Génération après 4 096 tokens | pas mesuré | 26,5 à 28,5 tokens/s sur le GPU ; 20 à 23 sur le processeur (9 en 8 bits sans le changement 7 ; 7,5 à 9 avec les changements 1 et 2 seuls) |
+| Mac mini M5 Pro, Qwen3-30B-A3B (mélange d'experts) | lecture de 512 tokens sur le processeur, environ 96 à 115 tokens/s (rien d'autre) | 592 tokens/s sur le GPU avec le changement 29 |
 | Mac mini M5 Pro, Qwen3.6-35B-A3B (fork seulement) | non lu par le moteur | lecture de 512 tokens 464 à 465 tokens/s sur le GPU avec le changement 28 (103 à 124 sur le processeur) ; écriture 49 à 52 (29 à 36) |
 | Mac mini M5 Pro, 4B Thinking, écriture sur le processeur après 512 tokens | pas mesuré | 64 tokens/s avec le changement 26 (38 à 41 avant) ; 71 sur le GPU |
 | Qwen3.5-0.8B Q5_K_M (fork seulement), écriture sur le processeur | non lu par le moteur | 71,6 à 72,0 tokens/s avec le changement 25 (38,7 à 40,1 avant) |

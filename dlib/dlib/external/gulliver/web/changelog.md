@@ -2,6 +2,20 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.6.0 — 20 novembre 2026
+
+### Performances
+
+- Les **prompts des mélanges d'experts** passent désormais tous sur le GPU, et plus seulement ceux de Qwen 3.5/3.6 et de LFM2 : Qwen3-30B-A3B lit ses prompts 4 à 6 fois plus vite (96 à 132 → 521 à 593 tokens/s sur le Mac mini), Mixtral 8x7B environ 4 fois (29 à 35 → 133 à 143), Granite 3.1 MoE 3 à 5 fois.
+
+### Modèles
+
+- **Qwen3-30B-A3B, Granite 3.1 MoE et Mixtral 8x7B** ont été essayés pour la première fois, sur le processeur et sur le GPU : leurs réponses sont celles de llama.cpp.
+- **Mixtral et les premiers Mistral 7B** (v0.1, v0.2) reçoivent enfin leur vrai format de conversation, « [INST] … [/INST] ». Leur vocabulaire n'ayant pas de token [INST], le service leur appliquait jusqu'ici un format générique (« User: … Assistant: »), qui dégradait leurs réponses.
+- Une conversion de Mixtral qui range ses experts un par un (fichiers de 2023) est refusée avec un message clair, comme le fait llama.cpp ; il faut une conversion récente.
+
+---
+
 ## 6.5.0 — 19 novembre 2026
 
 ### Modèles

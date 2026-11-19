@@ -3645,6 +3645,69 @@ namespace gulliver
             bool writes_calls_ = false;
         };
 
+        /*
+            Les premiers modèles de Mistral (Mistral 7B Instruct v0.1 et v0.2, Mixtral 8x7B Instruct), dont le
+            vocabulaire n'a pas de token [INST] : leur template écrit le balisage en texte, avec ses espaces,
+            « <s> [INST] question [/INST] réponse</s> », et le prompt système devant la première question, suivi
+            d'une ligne vide.  Ni outils ni raisonnement (fork pour macOS, Gulliver 6.6.0 : ces modèles recevaient
+            jusque-là le format sans template, « User: … Assistant: »).
+        */
+        class mistral_v1_format : public chat_format
+        {
+        public:
+            explicit mistral_v1_format(const dlib::hf_tokenizer& tok)
+            {
+                bos_ = tok.bos_id() >= 0 ? tok.id_to_token(tok.bos_id()) : std::string();
+                eos_ = tok.eos_id() >= 0 ? tok.id_to_token(tok.eos_id()) : std::string("</s>");
+            }
+
+            const char* name() const override { return "mistral-v1"; }
+            bool supports_tools() const override { return false; }
+            bool supports_reasoning() const override { return false; }
+
+            void render(const std::vector<chat_message>& messages, const render_options& opt,
+                std::vector<prompt_piece>& out) const override
+            {
+                (void)opt;
+                piece_writer w{ out };
+                w.markup(bos_);
+                size_t first = 0;
+                std::string system;
+                if (!messages.empty() && messages[0].role == "system")
+                {
+                    system = messages[0].content;
+                    first = 1;
+                }
+                bool first_question = true;
+                for (size_t i = first; i < messages.size(); ++i)
+                {
+                    const chat_message& m = messages[i];
+                    if (m.role == "user")
+                    {
+                        w.markup(" [INST] ");
+                        if (first_question && !system.empty()) w.text(system + "\n\n");
+                        w.text(m.content);
+                        w.markup(" [/INST]");
+                        first_question = false;
+                    }
+                    else if (m.role == "assistant")
+                    {
+                        w.markup(" ");
+                        w.text(m.content);
+                        w.markup(eos_);
+                    }
+                }
+            }
+
+            std::unique_ptr<output_parser> make_parser(const render_options&) const override
+            {
+                return std::unique_ptr<output_parser>(new tag_parser(parser_config()));
+            }
+
+        private:
+            std::string bos_, eos_;
+        };
+
         // Sans template
 
         class plain_format : public chat_format
@@ -3694,6 +3757,8 @@ namespace gulliver
         auto has = [&](const char* s) { return tmpl.find(s) != std::string::npos; };
         if (has("[INST]") && (tok.token_id("[INST]") >= 0))
             return std::unique_ptr<chat_format>(new mistral_format(tok, tmpl));
+        if (has("[INST]") && tok.token_id("[INST]") < 0 && !has("[SYSTEM_PROMPT]"))
+            return std::unique_ptr<chat_format>(new mistral_v1_format(tok));
         if (has("<|start_header_id|>") && tok.token_id("<|start_header_id|>") >= 0)
             return std::unique_ptr<chat_format>(new llama3_format(tok, tmpl));
         if (has("<|start_of_role|>") && tok.token_id("<|start_of_role|>") >= 0)

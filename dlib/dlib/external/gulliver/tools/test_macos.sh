@@ -166,6 +166,23 @@ else
     --temperature 0 --max 20 "$QUESTION"
   step "qwen 3.6 moe checkpoint" "resumed at a checkpoint" qwen35_checkpoint "$QWEN36" gpu
 fi
+# Les autres mélanges d'experts, quand ils sont là (Gulliver 6.6.0 : leurs prompts aussi sur le GPU, essayés
+# contre llama.cpp) : granitemoe (granite-3.1-1b-a400m, bartowski), qwen3moe (Qwen3-30B-A3B-Instruct-2507,
+# unsloth), mixtral (Mixtral-8x7B-Instruct, mradermacher ; les conversions à un tenseur par expert sont refusées).
+GRANITEMOE=${GRANITEMOE_MODEL:-$ROOT/build/models/granite-3.1-1b-a400m-instruct-Q4_K_M.gguf}
+QWEN3MOE=${QWEN3MOE_MODEL:-$ROOT/build/models/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf}
+MIXTRAL=${MIXTRAL_MODEL:-$ROOT/build/models/Mixtral-8x7B-Instruct-v0.1.Q4_K_M.gguf}
+for pair in "granitemoe:$GRANITEMOE" "qwen3moe:$QWEN3MOE" "mixtral:$MIXTRAL"; do
+  arch=${pair%%:*} model=${pair#*:}
+  if [ ! -f "$ENGINE" ] || [ ! -f "$model" ]; then skip "$arch" "no $model"; continue; fi
+  step "$arch" "Paris" "$CHAT" "$ENGINE" "$model" --reasoning off --temperature 0 --max 30 --no-metal "$QUESTION"
+  step "$arch on the GPU" "the generation steps and the prompts" "$CHAT" "$ENGINE" "$model" --reasoning off \
+    --temperature 0 --max 20 "$QUESTION"
+done
+# Le format des premiers modèles de Mistral (Gulliver 6.6.0) : « <s> [INST] … [/INST] » en texte, pas « User: ».
+if [ -f "$ENGINE" ] && [ -f "$MIXTRAL" ]; then
+  step "mixtral chat format" '"format": "mistral-v1"' "$CHAT" "$ENGINE" "$MIXTRAL" --max 1 --no-metal "$QUESTION"
+fi
 # Le grand Qwen3.6-35B-A3B (UD-Q4_K_M d'unsloth, 22,1 Go), quand il est là : sur le GPU depuis Gulliver 6.5.0
 # (ssm_alpha et ssm_beta en floats), et ses images avec son projecteur.
 QWEN36_BIG=${QWEN36_BIG_MODEL:-$ROOT/build/bench-models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf}

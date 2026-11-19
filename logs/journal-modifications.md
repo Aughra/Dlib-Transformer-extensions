@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-20 — Gulliver 6.6.0 : les mélanges d'experts essayés, leurs prompts sur le GPU, le format de Mixtral
+
+- **Quoi** : premiers essais de granitemoe, qwen3moe et mixtral contre llama.cpp (même prompt, choix glouton) ; prompts de tous les mélanges d'experts sur le GPU (`gpu_state::moe_prompts`) ; format `mistral_v1_format` pour les modèles dont le template écrit `[INST]` en texte (Mixtral, Mistral 7B v0.1/v0.2), qui recevaient le format sans template ; étapes de `test_macos.sh` pour les trois modèles et le format ; fiche « GPU » de l'onglet Service.
+- **Fichiers** : `gulliver/engine/{cpu_runtime_metal.cpp,chat_format.cpp}`, `gulliver/tools/test_macos.sh`, `gulliver/web/{js/service.js,changelog.md,openapi.json}`, `gulliver/common/version.h`, `gulliver/CMakeLists.txt` ; `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,memo-portage-macos-arm64.md,feuille-de-route.md}`, `logs/{reprise.md,nuit-2026-11-19.md}`, ce journal.
+- **Pourquoi** : partie 2 de la feuille de route (« qwen3moe, mixtral, granitemoe sur le GPU, admis, jamais lancés »), nuit en autonomie.
+- **Étapes** : modèles téléchargés et vérifiés par leur SHA-256 (la conversion de Mixtral de TheBloke, à un tenseur par expert, supprimée : llama.cpp la refuse aussi) ; textes identiques à llama.cpp (Granite et Qwen3-30B), Mixtral jusqu'à une égalité où llama.cpp change lui-même de mot ; mesures alternées (Qwen3-30B, lecture de 512 tokens 96-115 → 592 tokens/s ; Mixtral 29-35 → 133-143) ; build sans avertissement ; `test_macos.sh` 70 étapes sans échec ; banc de la page 136 (la vérification « tab 2 » échouée une fois sous charge, passée deux fois relancée). Notes pour l'auteur : changement 29, n° 26 (aussi sous Windows, code avant et après).
+
 ## 2026-11-19 — Gulliver 6.5.0 : Qwen3.6-35B-A3B sur le GPU, et ses images
 
 - **Quoi** : téléchargement du Qwen3.6-35B-A3B UD-Q4_K_M et de son `mmproj-F16` (unsloth, empreintes conformes) ; le GPU accepte `ssm_alpha` et `ssm_beta` en F32 et le produit de la passe GPU lit une matrice en floats (`mv_f32` en étape, MPS en prompt) ; `qwen35moe` ajouté aux architectures à images (`host/hub.cpp`) ; deux étapes facultatives de `test_macos.sh` ; fiche « GPU » de l'onglet Service ; mesures de Gemma 4 E2B, Gemma 3 4B, Mistral Small 3.2 et Gemma 4 26B-A4B sur le Mac mini.

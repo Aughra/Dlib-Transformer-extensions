@@ -142,8 +142,8 @@ namespace gulliver
         /*
             Les modèles à couches linéaires (qwen35) et les mélanges d'experts lisent aussi Q5_K, Q8_0 et Q5_0
             (step_format) : leurs étapes vont au GPU, et les prompts de qwen35 aussi, coupés aux points de reprise
-            (run_gpu_checkpointed).  Les prompts de qwen35moe y vont avec leurs experts en produits groupés (matmul_id) ;
-            ceux des autres mélanges d'experts, jamais essayés, restent sur le processeur.
+            (run_gpu_checkpointed).  Les prompts des mélanges d'experts y vont avec leurs experts en produits groupés
+            (matmul_id) : qwen35moe et LFM2-MoE d'abord, qwen3moe, granitemoe et mixtral depuis Gulliver 6.6.0.
         */
         const bool steps_only = cfg_.recurrent() || cfg_.is_moe();
         auto formats = [&](const weight_matrix& W) { return steps_only ? step_format(W) : gpu_format(W); };
@@ -216,7 +216,9 @@ namespace gulliver
         }
         std::unique_ptr<gpu_state> g(new gpu_state);
         g->device = &device;
-        if (cfg_.is_moe() && cfg_.recurrent())
+        // Les prompts des mélanges d'experts, par produits groupés : qwen35moe et LFM2-MoE d'abord, tous ceux que le
+        // GPU accepte depuis Gulliver 6.6.0 (qwen3moe, granitemoe, mixtral, essayés contre llama.cpp).
+        if (cfg_.is_moe())
         {
             // Les tuiles de matmul_id : 32 lignes, 64 colonnes.
             g->moe_prompts = cfg_.d_ffn_expert % 64 == 0 && cfg_.d_model % 64 == 0;
@@ -390,7 +392,7 @@ namespace gulliver
                 if (i >= sequences_.size() || !sequences_[i] || sequences_[i]->length + s.count > gpu_prompt_context_)
                     long_pass = false;
             }
-        // Les prompts des mélanges d'experts restent sur le processeur, sauf ceux de qwen35moe (produits groupés).
+        // Les prompts des mélanges d'experts dont les experts n'ont pas la forme des produits groupés restent sur le processeur.
         if (cfg_.is_moe() && !(gpu_ && gpu_->moe_prompts)) long_pass = false;
         return gpu_ && gpu_->state != gpu_state::dropped && (step || long_pass)
             && batch.embedding_rows.empty() && !batch.hidden_only

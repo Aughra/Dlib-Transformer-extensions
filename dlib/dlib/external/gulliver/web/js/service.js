@@ -310,7 +310,7 @@ const items = {
       'Environ 200 Mo de mémoire en plus pour ses tampons.',
       'Seuls les poids en Q4_K et Q6_K y passent (aussi Q5_K, Q8_0 et Q5_0 pour Qwen 3.5, LFM2 et les mélanges d’experts, et les petites matrices restées en floats de Qwen 3.6 35B-A3B).',
       'Restent sur le processeur : Gemma 3 1B (largeur de 1 152), Gemma 4 26B-A4B (ses experts), le modèle de recherche, ' +
-        'les passes qui lisent une image, et les prompts des mélanges d’experts autres que Qwen 3.6.'],
+        'et les passes qui lisent une image. Depuis la 6.6.0, les prompts de tous les mélanges d’experts que le GPU accepte (Qwen 3, Qwen 3.6, Granite, Mixtral, LFM2) y passent aussi.'],
     normal: "Le Mac a deux moteurs de calcul sur la même puce : le processeur, polyvalent, et le GPU, fait pour répéter " +
       "la même opération sur des milliers de nombres à la fois. Écrire une réponse, c’est relire tout le modèle pour " +
       "chaque mot : le GPU lit cette mémoire plus vite. Lire un long document, c’est surtout multiplier : le GPU calcule " +
@@ -320,7 +320,7 @@ const items = {
       "que la zone des clés et valeurs. Un pas d’écriture (1 à 8 tokens) est encodé en une seule commande : matvec Q4_K/Q6_K " +
       "en simdgroups, RMSNorm, RoPE, écriture des clés et valeurs q8 tournées (Walsh-Hadamard), attention en ligne par morceaux de 256 " +
       "positions puis fusion. Un prompt de 24 tokens ou plus décompresse chaque matrice en float32 puis passe par " +
-      "MPSMatrixMultiplication (les experts de Qwen 3.6 par produits groupés, matmul_id) ; son attention multiplie des " +
+      "MPSMatrixMultiplication (les experts des mélanges d’experts par produits groupés, matmul_id) ; son attention multiplie des " +
       "matrices 8 × 8 (simdgroup_matrix), les têtes de 512 de Gemma 4 en deux tranches de 256 pour tenir dans les 32 Ko " +
       "de mémoire de threadgroup. Au chargement, une sonde de 29 tokens et deux pas sont comparés au processeur en " +
       "produits flottants : logits à 1 % près (5 % en clés 8 bits, 25 % pour un mélange d’experts en 8 bits), même " +
