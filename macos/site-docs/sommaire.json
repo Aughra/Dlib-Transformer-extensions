@@ -33,6 +33,11 @@
      "path": "logs/reprise.md",
      "title": "Où en est le chantier",
      "desc": "Fait, en cours, à faire."
+    },
+    {
+     "path": "docs/feuille-de-route.md",
+     "title": "Feuille de route",
+     "desc": "Ce qui vient ensuite : le Mac mini, puis l'atelier d'entraînement."
     }
    ]
   },

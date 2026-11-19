@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-19 — Écrire la feuille de route : Mac mini, puis atelier d'entraînement
+
+- **Quoi** : nouvelle feuille de route `docs/feuille-de-route.md`, en trois parties : 1) passer sur le Mac mini (arrivé ce jour, en préparation par l'humain), par `docs/mac-mini-premier-jour.md` ; 2) le reste en attente du Mac mini ; 3) l'atelier d'entraînement demandé par l'humain, ses dix-sept points (R1 à R17) rangés en phases A à F (faire entrer les modèles dans dlib, affiner, retour dans Gulliver, alléger, nos propres modèles, page « Atelier »), avec leurs dépendances, un critère par phase et un relevé de ce que dlib offre déjà (import GGUF, LoRA et fusion, masquage dans l'erreur, distillation, couche `moe_`, `bpe_tokenizer::train`, exemples de préentraînement ; rien trouvé pour QLoRA ni DPO ; retrait de blocs en Python seulement), marqué « pas encore vérifié en le lançant ».
+- **Fichiers** : `docs/feuille-de-route.md` (nouveau), `macos/site-docs/sommaire.json` (entrée « Feuille de route »), `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain (« mets-le dans ton fichier de roadmap »).
+- **Étapes** : relevé par recherche dans `dlib/dnn`, `dlib/tokenizer` et `examples` ; sommaire vérifié (JSON valide).
+
 ## 2026-11-18 — Passer les données du vrai service à `build/gulliver-home` et relancer Gulliver 6.3.0
 
 - **Quoi** : depuis le renommage, le vrai service ne tournait plus (dernier journal le 2026-11-17 à 21 h 05) : ses données étaient restées dans `build/albireo-home` (base `albireo.db`), alors que le service renommé lit `build/gulliver-home` et `gulliver.db`. Dossier déplacé (`mv`, sans copie des 52 Go), base renommée en `gulliver.db`, chemins absolus des 4 modèles de la table `models` réécrits (`/build/albireo-home/` → `/build/gulliver-home/`), certificats `albireo-*` renommés `gulliver-*` (noms que lit `host/certificates.cpp`). Les réglages (`settings.json`) n'avaient que des dossiers relatifs. Service relancé : 6.3.0, modèles chargés, carnet servi sur le réseau (8444). Reprise remise à jour (elle annonçait encore Albireo 5.9.0 et « C5 en cours »). Commande d'adresse de « sitelog » rendue indépendante de l'interface (le Mac est sur `en10`, `en0` n'a pas d'adresse).

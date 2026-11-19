@@ -1,6 +1,6 @@
 # Reprise — portage Mac de Dlib-Transformer-extensions
 
-> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-18 vers 13 h, sur le Mac M2. Ce fichier va **du plus récent au plus ancien** : l'état actuel, ce qui est en cours et à faire, puis ce qui est fait et les décisions (antéchronologiques), les problèmes ouverts et les commandes. Le détail de chaque étape est dans `logs/journal-modifications.md`.
+> À lire en premier à chaque session (règle de CLAUDE.md). Dernière mise à jour : 2026-11-19, sur le Mac M2. Ce fichier va **du plus récent au plus ancien** : l'état actuel, ce qui est en cours et à faire, puis ce qui est fait et les décisions (antéchronologiques), les problèmes ouverts et les commandes. Le détail de chaque étape est dans `logs/journal-modifications.md`.
 
 ## État actuel
 
@@ -43,6 +43,8 @@ Reprise terminée (blog : épisode 48). Réglages du relais réservés au Mac se
 **Gemma 4 sur le GPU est complet** (dense) : étapes en 4.26.0, prompts en 4.27.0 (`attention_mtile` en deux tranches de 256 pour les têtes de 512, `SPLIT` ; deux listes de tuiles par largeur de tête). Sa vitesse reste à mesurer sur le Mac mini, en particulier celle des prompts, dont les couches de 512 calculent leurs scores deux fois. Pour comparer au processeur : le forcer en produits flottants (comme le contrôle), sinon ses activations arrondies sur 8 bits le font diverger tôt sur ce modèle.
 
 ## À faire, dans l'ordre proposé
+
+**Feuille de route : [docs/feuille-de-route.md](../docs/feuille-de-route.md)** (2026-11-19) — partie 1 : passer sur le Mac mini (**arrivé le 2026-11-19, l'humain le prépare**), par `docs/mac-mini-premier-jour.md` ; partie 2 : le reste en attente du Mac mini (liste ci-dessous) ; partie 3 : l'atelier d'entraînement demandé par l'humain (R1 à R17 : conversion GGUF → dlib, QLoRA, masquage, DPO, adaptateurs, retour dans Gulliver, distillation, retrait de blocs, MoE, tokenizer français, préentraînement, page « Atelier » et ses fiches).
 
 
 **Liste en cours, dans l'ordre (2026-11-16, « dans l'ordre fait tout »)** : ~~A. Gemma 4, lignes utiles des couches partagées (5.5.0)~~ ; ~~B. panne d'une étape de Qwen 3.5 sur le GPU (5.5.1, carnet et relecture)~~ ; ~~C. boutons selon les capacités vérifiées (5.6.0)~~ ; ~~D. Mistral Small 3.2 (5.7.0)~~ ; ~~E. noyau NEON Q5_K (5.8.0 ; Q8_0 sans gain, non gardé)~~ ; ~~F. effort du relais, suppression depuis un projet (5.9.0)~~ ; **en cours : Pseudalis 1.0.6 à 1.0.11** de l'original (~~1.0.6 : code mort retiré, 3.1.1~~ ; ~~1.0.8 à 1.0.10 : colonnes imposées, 3.2.0~~ ; ~~1.0.11 : détecteurs réentraînés, 3.3.0~~ — **liste finie** ; 1.0.11 : détecteurs réentraînés, dans `dlib/privacy` et `slm_document_anonymizer_ex.h`), en sous-étapes de Pseudalis.
