@@ -12,7 +12,7 @@
 #include <new>
 #include <stdexcept>
 
-#include <dlib/crypto/sha256.h>
+#include <CommonCrypto/CommonDigest.h>
 #include <dlib/external/libjpeg/jpeglib.h>
 #include <dlib/external/libpng/png.h>
 
@@ -734,9 +734,36 @@ namespace gulliver
         return out;
     }
 
+    namespace
+    {
+        // CC_SHA256_Update prend une longueur sur 32 bits : les grands blocs passent par morceaux.
+        void sha256_update(CC_SHA256_CTX& ctx, const uint8_t* data, size_t n)
+        {
+            while (n > 0)
+            {
+                const CC_LONG part = static_cast<CC_LONG>(std::min<size_t>(n, size_t(1) << 30));
+                CC_SHA256_Update(&ctx, data, part);
+                data += part;
+                n -= part;
+            }
+        }
+
+        std::array<uint8_t, 32> sha256_final(CC_SHA256_CTX& ctx)
+        {
+            std::array<uint8_t, 32> h{};
+            CC_SHA256_Final(h.data(), &ctx);
+            return h;
+        }
+    }
+
+    // L'empreinte passe par CommonCrypto, qui se sert des instructions SHA de la puce Apple (fil rouge,
+    // morceau 1 : Gulliver ne prend plus le SHA-256 de dlib).
     std::array<uint8_t, 32> sha256(const uint8_t* data, size_t n)
     {
-        return dlib::sha256_digest(data, n);
+        CC_SHA256_CTX ctx;
+        CC_SHA256_Init(&ctx);
+        sha256_update(ctx, data, n);
+        return sha256_final(ctx);
     }
 
     std::array<uint8_t, 32> image_digest(const rgb_image& image)
@@ -748,10 +775,11 @@ namespace gulliver
             size[b] = static_cast<uint8_t>(static_cast<uint64_t>(image.width) >> (8 * b));
             size[8 + b] = static_cast<uint8_t>(static_cast<uint64_t>(image.height) >> (8 * b));
         }
-        dlib::sha256 h;
-        h.update(size, sizeof(size));
-        if (!image.pixels.empty()) h.update(image.pixels.data(), image.pixels.size());
-        return h.finalize();
+        CC_SHA256_CTX ctx;
+        CC_SHA256_Init(&ctx);
+        sha256_update(ctx, size, sizeof(size));
+        if (!image.pixels.empty()) sha256_update(ctx, image.pixels.data(), image.pixels.size());
+        return sha256_final(ctx);
     }
 
 }

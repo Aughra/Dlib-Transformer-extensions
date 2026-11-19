@@ -88,6 +88,9 @@ if [ -x "$BUILD/tests/test_model_file" ]; then
   step "damaged model files" "all checks passed" "$BUILD/tests/test_model_file" "$WORK"
 else skip "damaged model files" "no $BUILD/tests/test_model_file"
 fi
+if [ -x "$BUILD/tests/test_image_input" ]; then step "image digest" "all checks passed" "$BUILD/tests/test_image_input"
+else skip "image digest" "no $BUILD/tests/test_image_input"
+fi
 if [ -x "$BUILD/tests/test_chat_format" ]; then step "chat format" "all checks passed" "$BUILD/tests/test_chat_format"
 else skip "chat format" "no $BUILD/tests/test_chat_format"
 fi

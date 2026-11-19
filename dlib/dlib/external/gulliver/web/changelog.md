@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.4.1 — 19 novembre 2026
+
+### Plateforme
+
+- L'empreinte des images que lit le moteur (la clé qui évite de réencoder une image déjà vue) passe par **CommonCrypto**, la bibliothèque d'Apple, comme celle des modèles depuis la 4.2.0. Gulliver n'utilise plus le SHA-256 de dlib : c'est le premier pas pour rendre Gulliver indépendant de dlib. Un nouveau test vérifie l'empreinte sur les valeurs de référence de la norme.
+
+---
+
 ## 6.4.0 — 19 novembre 2026
 
 ### Plateforme

@@ -22,7 +22,7 @@ Relevé le 2026-11-19 : 10 fichiers d'en-tête, et le moteur n'utilise pas la pa
 | Morceau | Fichiers de dlib | Taille |
 |---|---|---|
 | Bibliothèques d'autres projets | `external/httplib`, sqlite, `external/libpng`, `external/libjpeg`, mbedtls | déplacées telles quelles |
-| SHA-256 | `crypto/sha256.h` (dans `host/crypto.cpp`, `engine/image_input.cpp`) | 326 lignes |
+| ~~SHA-256~~ | ~~`crypto/sha256.h`~~ — **fait le 2026-11-19 (Gulliver 6.4.1)** : `engine/image_input.cpp` passe par CommonCrypto, comme `host/crypto.cpp` ; test `test_image_input` | 326 lignes |
 | Lecture des ZIP, enveloppe de sqlite | `zip/`, `sqlite/` | petites |
 | Lecture des GGUF | `data_io/gguf_reader.h`, `gguf_dequantize.h`, `gguf_model_spec.h` | 1 411 lignes |
 | Tokenizer | `tokenizer/hf_tokenizer.h` | 1 166 lignes |
@@ -31,7 +31,7 @@ Relevé le 2026-11-19 : 10 fichiers d'en-tête, et le moteur n'utilise pas la pa
 
 | Ordre | Morceau | Où il va | Remarque |
 |---|---|---|---|
-| 1 | SHA-256 → CommonCrypto d'Apple | `host/`, `engine/` | Gulliver s'en sert déjà pour les gros fichiers (4.2.0) |
+| 1 | ~~SHA-256 → CommonCrypto d'Apple~~ **fait (6.4.1)** | `host/`, `engine/` | Le service s'en servait déjà (4.2.0) ; restait l'empreinte des images du moteur |
 | 2 | Bibliothèques d'autres projets | `gulliver/third_party/` | aucune ligne changée ; le build de Gulliver ne construit plus dlib |
 | 3 | Lecture des ZIP, enveloppe de sqlite | `host/` | |
 | 4 | Lecture des GGUF | `engine/` | premières optimisations |

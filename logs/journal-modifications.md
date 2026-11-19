@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-19 — Gulliver 6.4.1 : le SHA-256 du moteur par CommonCrypto (fil rouge, morceau 1)
+
+- **Quoi** : `engine/image_input.cpp` n'inclut plus `dlib/crypto/sha256.h` : `sha256()` et `image_digest()` passent par CommonCrypto (`CC_SHA256_*`, blocs de 1 Gio au plus). Nouveau test `tests/test_image_input.cpp` (valeurs FIPS 180-2 : vide, « abc », deux blocs, un million de « a » ; empreinte d'une image = taille et pixels), cible CMake et étape « image digest » de `test_macos.sh`.
+- **Fichiers** : `gulliver/engine/image_input.cpp`, `gulliver/tests/test_image_input.cpp`, `gulliver/CMakeLists.txt`, `gulliver/tools/test_macos.sh`, `gulliver/common/version.h`, `gulliver/web/{changelog.md,openapi.json}` ; `docs/{feuille-de-route.md,differences-mac-windows.md,memo-portage-macos-arm64.md}`, `logs/{reprise.md,nuit-2026-11-19.md}`, ce journal.
+- **Pourquoi** : fil rouge de la feuille de route, morceau 1, à la fin de la partie 1 (Mac mini).
+- **Étapes** : build sans avertissement ; `test_image_input` passe ; `test_macos.sh` 61 étapes sans échec (dont les six étapes d'images). Plus aucune inclusion de `dlib/crypto` dans Gulliver.
+
 ## 2026-11-19 — Gulliver 6.4.0 : le Mac mini mesuré, l'équipe rapide et le découpage de l'attention corrigés
 
 - **Quoi** : (1) `bench_macos.sh` sur le Mac mini et sur le M2 (par SSH, même commit `982fc30`), tableaux gardés dans `docs/mesures/` avec leur comparaison (GPU ×2,6 à ×4,6 en lecture, ×2,5 à ×3,6 en écriture) ; (2) l'équipe rapide ne se forme plus que si `hw.perflevel1.name` vaut `Efficiency` (le M5 Pro a des cœurs « Super » et « Performance », tous rapides) : écriture sur le processeur du Mac mini +15 à +60 % ; (3) le découpage de l'attention de l'écriture se calcule sur `part_workers` = 16 et non plus sur les threads actifs : la réponse ne dépend plus du nombre de threads (LFM2.5-8B-A1B répondait faux avec 10 à 18 threads) ; (4) `page_test.sh` supprime le profil « banc » d'un passage précédent ; (5) fiche « Threads du moteur » complétée ; mesures de `threads`, `gpu_prompt_tokens`, `gpu_prompt_context` et des experts : défauts gardés.

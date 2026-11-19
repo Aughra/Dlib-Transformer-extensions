@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 6.4.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 6.4.1 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -303,6 +303,12 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    target_compile_options(test_metal PRIVATE ${GULLIVER_WARNINGS})
    target_link_libraries(test_metal PRIVATE Threads::Threads)
    gulliver_output_dir(test_metal ${CMAKE_BINARY_DIR}/tests)
+   # L'empreinte SHA-256 du moteur (CommonCrypto) et celle des images (fork pour macOS).
+   add_executable(test_image_input tests/test_image_input.cpp engine/image_input.cpp)
+   target_include_directories(test_image_input PRIVATE ${GULLIVER_INCLUDE_DIR})
+   target_compile_options(test_image_input PRIVATE ${GULLIVER_WARNINGS})
+   target_link_libraries(test_image_input PRIVATE gulliver_image)
+   gulliver_output_dir(test_image_input ${CMAKE_BINARY_DIR}/tests)
    # Le format de chat des agents : les prompts avec outils, et les appels d'outils relus.
    add_executable(test_chat_format tests/test_chat_format.cpp engine/chat_format.cpp)
    target_include_directories(test_chat_format PRIVATE ${GULLIVER_INCLUDE_DIR})
