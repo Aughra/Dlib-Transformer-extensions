@@ -114,6 +114,7 @@ Repris de la liste « À faire » de la reprise et des suites du bloc C :
 - Qwen3.6-35B-A3B et ses projecteurs ; qwen3moe, mixtral, granitemoe sur le GPU (admis, jamais lancés) ; noyau Q4_K du GPU (54 Go/s contre 70 au plafond).
 - Mesures de la recherche documentaire en C++ contre l'ancienne en JS ; reranker neuronal si le reranker par mots ne suffit pas.
 - Plusieurs tokens par pas (brouillons), repris de l'original, s'il reste du temps.
+- Comparer Gulliver à d'autres moteurs locaux sur les longues questions (demande de l'humain, 2026-11-19) : llama.cpp (déjà installé), Ollama, et éventuellement un moteur MLX, sur le même modèle et le même fichier GGUF, prompts de 512 à 16 384 tokens, lecture et écriture, en alternance. Critère : un tableau « temps avant le premier mot » par moteur, dans les notes pour l'auteur et le tableau des différences. Raison : un retour d'usage lu par l'humain (Ollama abandonné parce que les longues requêtes « prenaient une éternité »).
 
 ---
 

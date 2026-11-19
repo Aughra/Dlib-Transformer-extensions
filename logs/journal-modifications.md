@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-19 — Ajouter à la feuille de route la comparaison avec d'autres moteurs locaux
+
+- **Quoi** : nouvelle ligne de la partie 2 de la feuille de route : comparer Gulliver à llama.cpp, Ollama et éventuellement un moteur MLX sur les longues questions (temps avant le premier mot), même modèle, prompts de 512 à 16 384 tokens, en alternance.
+- **Fichiers** : `docs/feuille-de-route.md`, ce journal.
+- **Pourquoi** : demande de l'humain (« plus tard, mets-le dans la roadmap »), après un retour d'usage où Ollama était abandonné pour la lenteur des longues requêtes.
+- **Étapes** : ligne ajoutée ; aucune mesure faite. Le même soir sur le Mac mini : `bench_macos.sh` fini (`build/bench/Mac17,16-20261119-2145.md`), même mesure lancée sur le M2 par SSH, tests de l'étape 4 en cours.
+
 ## 2026-11-19 — Trier ce que l'atelier garde de dlib, et faire le point avant la pause
 
 - **Quoi** : section « Le tri : ce qu'on garde, ce qu'on coupe » ajoutée au fil rouge de `docs/feuille-de-route.md` : on garde les tenseurs (processeur et Metal), la mécanique des réseaux, environ 28 couches sur 65, les blocs du transformer (GQA, MoE), LoRA et sa fusion, 2 fonctions d'erreur sur 25 (entropie croisée par token, distillation), AdamW, la boucle d'entraînement, les configurations, la lecture des GGUF, le tokenizer et son apprentissage ; on coupe `svm/`, les images, la vision, HRM, l'inférence de dlib, CUDA et le NPU, et les petits outils remplacés par la bibliothèque standard. Tri marqué approximatif (recherche par noms), à confirmer à la compilation à chaque phase. Reprise mise au point pour la pause.
