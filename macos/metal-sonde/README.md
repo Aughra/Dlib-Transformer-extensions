@@ -22,6 +22,23 @@ Q4=mv3_q4_K ROWS=4 SGS=4 build/metal-sonde macos/metal-sonde/kernels.metal <mod�
 
 Variables : `Q4` et `Q6` choisissent les noyaux (`mv_q4_K`, `mv2_q4_K`, `mv3_q4_K` ; `mv_q6_K`, `mv2_q6_K`), `ROWS` le nombre de lignes par simdgroup, `SGS` le nombre de simdgroups par groupe, `QUICK=1` s'arrête après l'exactitude, le plafond et les mesures par format. Le dernier argument est le nombre de threads du processeur.
 
+## Résultats sur le Mac mini M5 Pro (2026-11-19)
+
+GPU du M5 Pro, charge 1,4 à 5. Mêmes noyaux (`mv3_q4_K`, `mv_q6_K`, `ROWS=4`, `SGS=4`), modèle 4B (2 375 Mo), 18 threads pour le processeur.
+
+| Un token, tous les poids Q4_K et Q6_K | 4B (2 375 Mo) |
+|---|---|
+| Processeur, 18 threads | 15,4 ms (161,9 Go/s) |
+| GPU, une commande | 11,0 à 11,3 ms (220 Go/s) |
+| GPU, soutenu (10 passes en une commande) | 11,4 à 11,8 ms (211 à 220 Go/s) |
+| GPU, plafond (lecture pure) | 9,6 à 9,8 ms (254 à 260 Go/s) |
+| GPU, une commande attendue par couche | 16,3 ms |
+| GPU, une commande attendue par produit | 41,3 ms |
+
+- Aller-retour avec le GPU : 108 µs (médiane), contre 187 sur le M2.
+- Q4_K seul : 218 à 219 Go/s avec `mv3_q4_K` (84 à 86 % du plafond, contre 76 % sur le M2), 195 avec `mv_q4_K`. Q6_K seul : 234 Go/s. Le noyau Q4_K du moteur suit la conception de `mv3_q4_K` (8 threads par bloc, 16 octets alignés) : la marge restante est d'environ 15 %.
+- Exactitude inchangée (2,8e-8 pour le GPU).
+
 ## Résultats sur le MacBook Air M2 (2026-11-11)
 
 GPU de 10 cœurs, `lowpowermode 0`, charge 3 à 4. Meilleurs noyaux : `mv3_q4_K` et `mv_q6_K`, `ROWS=4`, `SGS=4`.
