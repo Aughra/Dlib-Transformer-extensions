@@ -39,6 +39,11 @@
      "path": "docs/feuille-de-route.md",
      "title": "Feuille de route",
      "desc": "Ce qui vient ensuite : le Mac mini, puis l'atelier d'entraînement."
+    },
+    {
+     "path": "docs/plan-discussion-en-ligne.md",
+     "title": "La discussion en ligne",
+     "desc": "Plan : la page chez Cloudflare Pages, le calcul sur le Mac."
     }
    ]
   },

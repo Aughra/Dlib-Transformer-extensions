@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-20 — Écrire le plan de la discussion en ligne (page sur Pages, calcul sur le Mac)
+
+- **Quoi** : `docs/plan-discussion-en-ligne.md` : les 60 routes du service rangées en calcul, données et administration ; schéma Pages, passerelle (fonction Pages, liste des routes permises, jeton de service Access), Cloudflare Tunnel vers `localhost:18443` ; quatre étapes ; le choix des données (Mac ou D1/R2) avec ses pour et contre ; limites (100 Mo, 100 s, Cloudflare voit le contenu).
+- **Fichiers** : `docs/plan-discussion-en-ligne.md`, `macos/site-docs/sommaire.json`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain (« je veux la discussion, et pas de Tailscale, donne-moi un plan pour ne faire que le calcul sur le Mac ») ; l'export du carnet proposé avant n'est pas ce qu'il veut.
+- **Étapes** : routes lues dans `web/openapi.json`, écoute sur `127.0.0.1` (`host/service.cpp:404`), signal d'attente des flux (`host/server.cpp:916`). Rien installé, rien publié.
+
 ## 2026-11-20 — Gulliver 6.8.4 : appliquer la fenêtre glissante de Gemma 3 dans dlib (atelier, R1)
 
 - **Quoi** : `gqa_attention_::set_sliding_window` (scores à −∞ au-delà de W positions, passe complète et incrémentale ; aucune passe arrière à changer, les probabilités masquées étant nulles), champ sérialisé à la fin de la couche ; le chargeur règle la fenêtre sur les couches locales ; test de dlib `test_gqa_attention_sliding_window` ; `test_runtime` applique en mode `logprobs` le plancher de 10⁻³⁰ de dlib.
