@@ -5,6 +5,8 @@
 
 #include <string>
 
+#include <Security/Security.h>
+
 namespace gulliver
 {
 
@@ -62,6 +64,14 @@ namespace gulliver
 
     // Octets DER du premier certificat d'un fichier PEM, vide en cas d'échec.
     std::string certificate_der(const std::string& pem_path);
+
+    /*!
+        ensures
+            - Renvoie l'identité de Security du serveur local de dir (son certificat et sa clé,
+              en mémoire seulement, jamais dans le trousseau), pour le serveur TLS, ou nullptr
+              quand les fichiers ne se lisent pas.  L'appelant la libère par CFRelease.
+    !*/
+    SecIdentityRef server_identity(const std::string& dir);
 
 
 }

@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.12.1 — 20 novembre 2026
+
+### Plateforme
+
+- Les certificats du serveur local (l'autorité locale et le certificat de localhost) sont fabriqués par **Security et CommonCrypto**, de macOS, au lieu de Mbed TLS : clés EC P-256 gardées en mémoire, jamais dans le trousseau ; mêmes fichiers, même format et mêmes extensions qu'avant (contraintes de nom de l'autorité, usages, noms localhost, 127.0.0.1 et ::1). Les certificats déjà en place restent valables et ne sont pas refaits. L'encodage base64 ne passe plus par Mbed TLS. Première étape du passage au TLS d'Apple.
+
+---
+
 ## 6.12.0 — 20 novembre 2026
 
 ### Plateforme

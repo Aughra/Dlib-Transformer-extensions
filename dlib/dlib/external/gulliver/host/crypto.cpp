@@ -8,7 +8,6 @@
 #include <fstream>
 #include <vector>
 
-#include <mbedtls/base64.h>
 #include <CommonCrypto/CommonDigest.h>
 
 #include "../common/platform.h"
@@ -150,29 +149,71 @@ namespace gulliver
         return sha;
     }
 
+    /*
+        Base64 (RFC 4648), sans Mbed TLS (fork, 2026-11-20).  Le décodage est strict, comme celui
+        qu'il remplace : les blancs sont ignorés, mais un caractère hors de l'alphabet, un bourrage
+        mal placé ou une longueur qui n'est pas un multiple de 4 rendent une chaîne vide.
+    */
     std::string base64_encode(const std::string& data)
     {
-        size_t n = 0;
-        mbedtls_base64_encode(nullptr, 0, &n, reinterpret_cast<const unsigned char*>(data.data()), data.size());
-        std::vector<unsigned char> buf(n + 1);
-        if (mbedtls_base64_encode(buf.data(), buf.size(), &n, reinterpret_cast<const unsigned char*>(data.data()),
-                data.size()) != 0)
-            return std::string();
-        return std::string(reinterpret_cast<const char*>(buf.data()), n);
+        static const char* alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        std::string out;
+        out.reserve((data.size() + 2) / 3 * 4);
+        const unsigned char* p = reinterpret_cast<const unsigned char*>(data.data());
+        size_t i = 0;
+        for (; i + 2 < data.size(); i += 3)
+        {
+            const uint32_t v = static_cast<uint32_t>(p[i]) << 16 | static_cast<uint32_t>(p[i + 1]) << 8 | p[i + 2];
+            out += alphabet[v >> 18 & 63];
+            out += alphabet[v >> 12 & 63];
+            out += alphabet[v >> 6 & 63];
+            out += alphabet[v & 63];
+        }
+        if (i < data.size())
+        {
+            const uint32_t v = static_cast<uint32_t>(p[i]) << 16 | (i + 1 < data.size() ? static_cast<uint32_t>(p[i + 1]) << 8 : 0u);
+            out += alphabet[v >> 18 & 63];
+            out += alphabet[v >> 12 & 63];
+            out += i + 1 < data.size() ? alphabet[v >> 6 & 63] : '=';
+            out += '=';
+        }
+        return out;
     }
 
     std::string base64_decode(const std::string& text)
     {
         std::string clean;
+        clean.reserve(text.size());
         for (char c : text)
             if (c != '\n' && c != '\r' && c != ' ' && c != '\t') clean += c;
-        size_t n = 0;
-        mbedtls_base64_decode(nullptr, 0, &n, reinterpret_cast<const unsigned char*>(clean.data()), clean.size());
-        std::vector<unsigned char> buf(n + 1);
-        if (mbedtls_base64_decode(buf.data(), buf.size(), &n, reinterpret_cast<const unsigned char*>(clean.data()),
-                clean.size()) != 0)
-            return std::string();
-        return std::string(reinterpret_cast<const char*>(buf.data()), n);
+        if (clean.size() % 4 != 0) return std::string();
+        auto value = [](char c) -> int {
+            if (c >= 'A' && c <= 'Z') return c - 'A';
+            if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+            if (c >= '0' && c <= '9') return c - '0' + 52;
+            if (c == '+') return 62;
+            if (c == '/') return 63;
+            return -1;
+        };
+        std::string out;
+        out.reserve(clean.size() / 4 * 3);
+        for (size_t i = 0; i < clean.size(); i += 4)
+        {
+            const bool last = i + 4 == clean.size();
+            const int pad = (clean[i + 3] == '=' ? 1 : 0) + (clean[i + 2] == '=' ? 1 : 0);
+            if (pad > 0 && !last) return std::string();
+            if (clean[i + 2] == '=' && clean[i + 3] != '=') return std::string();
+            int v[4];
+            for (int k = 0; k < 4 - pad; ++k)
+                if ((v[k] = value(clean[i + k])) < 0) return std::string();
+            for (int k = 4 - pad; k < 4; ++k) v[k] = 0;
+            const uint32_t n = static_cast<uint32_t>(v[0]) << 18 | static_cast<uint32_t>(v[1]) << 12
+                | static_cast<uint32_t>(v[2]) << 6 | static_cast<uint32_t>(v[3]);
+            out += static_cast<char>(n >> 16 & 0xFF);
+            if (pad < 2) out += static_cast<char>(n >> 8 & 0xFF);
+            if (pad < 1) out += static_cast<char>(n & 0xFF);
+        }
+        return out;
     }
 
 }
