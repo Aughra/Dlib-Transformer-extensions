@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.11.0 — 20 novembre 2026
+
+### Plateforme
+
+- Les images envoyées au modèle sont décodées par **ImageIO**, de macOS, au lieu des copies de libpng et de libjpeg, retirées du service. Les pixels sont lus tels que le fichier les stocke, sans gestion des couleurs, comme le fait le prétraitement de référence ; la transparence posée sur du blanc, l'orientation EXIF et les limites de taille restent celles de Gulliver. Comparés à l'ancien décodage sur 338 images : les 58 PNG (dont 16 bits, niveaux de gris, palettes transparentes) sont identiques au pixel près ; sur les 280 JPEG, 94 % des valeurs sont identiques ou à un niveau près, l'écart moyen par image étant de 0,41 niveau sur 255 en médiane (1,67 au plus), chaque décodeur JPEG ayant ses arrondis.
+- La page « Composants et licences » ne liste plus libpng ni libjpeg.
+
+---
+
 ## 6.10.2 — 20 novembre 2026
 
 ### Sécurité

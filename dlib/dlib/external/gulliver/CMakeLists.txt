@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 6.10.2 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 6.11.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -87,7 +87,8 @@ target_link_libraries(gulliver_httplib INTERFACE gulliver_mbedtls Threads::Threa
 set(GULLIVER_WARNINGS -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
 # Les produits des longues passes passent par Accelerate (engine/qkernels_accelerate.inc) ; le
 # GPU par Metal (engine/metal_device.mm).
-link_libraries("-framework Accelerate" "-framework Metal" "-framework MetalPerformanceShaders" "-framework Foundation")
+link_libraries("-framework Accelerate" "-framework Metal" "-framework MetalPerformanceShaders" "-framework Foundation"
+   "-framework ImageIO" "-framework CoreGraphics" "-framework CoreFoundation")
 
 # La source des noyaux Metal, intégrée au moteur sous forme d'une chaîne que macOS compile quand
 # le moteur ouvre le GPU : le build n'a besoin d'aucun compilateur Metal.
@@ -100,26 +101,8 @@ set_source_files_properties(engine/metal_device.mm PROPERTIES COMPILE_OPTIONS "-
 # zlib, celle de macOS (SDK), pour les programmes et les décodeurs d'images du moteur.
 find_package(ZLIB REQUIRED)
 
-# Les décodeurs PNG et JPEG du moteur, qui lisent les images des requêtes : les copies de libpng
-# et de libjpeg de third_party, compilées dans le moteur, quoi que contienne le système.
-set(png_dir ${GULLIVER_THIRD_PARTY}/libpng)
-set(jpeg_dir ${GULLIVER_THIRD_PARTY}/libjpeg)
-add_library(gulliver_image STATIC
-   ${png_dir}/png.c ${png_dir}/pngerror.c ${png_dir}/pngget.c ${png_dir}/pngmem.c ${png_dir}/pngpread.c
-   ${png_dir}/pngread.c ${png_dir}/pngrio.c ${png_dir}/pngrtran.c ${png_dir}/pngrutil.c ${png_dir}/pngset.c
-   ${png_dir}/pngtrans.c ${png_dir}/pngwio.c ${png_dir}/pngwrite.c ${png_dir}/pngwtran.c ${png_dir}/pngwutil.c
-   ${png_dir}/arm/arm_init.c ${png_dir}/arm/filter_neon_intrinsics.c ${png_dir}/arm/palette_neon_intrinsics.c
-   ${jpeg_dir}/jaricom.c ${jpeg_dir}/jcomapi.c ${jpeg_dir}/jdapimin.c ${jpeg_dir}/jdapistd.c ${jpeg_dir}/jdarith.c
-   ${jpeg_dir}/jdatasrc.c ${jpeg_dir}/jdcoefct.c ${jpeg_dir}/jdcolor.c ${jpeg_dir}/jddctmgr.c ${jpeg_dir}/jdhuff.c
-   ${jpeg_dir}/jdinput.c ${jpeg_dir}/jdmainct.c ${jpeg_dir}/jdmarker.c ${jpeg_dir}/jdmaster.c ${jpeg_dir}/jdmerge.c
-   ${jpeg_dir}/jdpostct.c ${jpeg_dir}/jdsample.c ${jpeg_dir}/jerror.c ${jpeg_dir}/jidctflt.c ${jpeg_dir}/jidctfst.c
-   ${jpeg_dir}/jidctint.c ${jpeg_dir}/jmemmgr.c ${jpeg_dir}/jmemnobs.c ${jpeg_dir}/jquant1.c ${jpeg_dir}/jquant2.c
-   ${jpeg_dir}/jutils.c)
-target_include_directories(gulliver_image PUBLIC ${png_dir} ${jpeg_dir})
-target_link_libraries(gulliver_image PUBLIC ZLIB::ZLIB)
-# Compilé dans le moteur partagé, dont seuls les symboles propres sont visibles.
-set_target_properties(gulliver_image PROPERTIES POSITION_INDEPENDENT_CODE ON
-   C_VISIBILITY_PRESET hidden)
+# Les images des requêtes sont décodées par ImageIO (engine/image_input.cpp) : plus de copies de
+# libpng ni de libjpeg (fork pour macOS, 2026-11-20).
 
 # Le moteur d'inférence.
 set(GULLIVER_ENGINE_SOURCES
@@ -150,7 +133,7 @@ function(gulliver_engine variant)
    target_include_directories(${target} PRIVATE ${GULLIVER_INCLUDE_DIR})
    target_compile_definitions(${target} PRIVATE GULLIVER_ENGINE_BUILD GULLIVER_ENGINE_VARIANT="${variant}")
    target_compile_options(${target} PRIVATE ${GULLIVER_WARNINGS})
-   target_link_libraries(${target} PRIVATE gulliver_image Threads::Threads ${CMAKE_DL_LIBS})
+   target_link_libraries(${target} PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
    set_target_properties(${target} PROPERTIES
       C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON
       LIBRARY_OUTPUT_DIRECTORY ${GULLIVER_ENGINE_DIR})
@@ -255,9 +238,7 @@ if (GULLIVER_PROGRAMS)
       dlib.txt        ${GULLIVER_INCLUDE_DIR}/LICENSE.txt
       mbedtls.txt     ${GULLIVER_THIRD_PARTY}/mbedtls/LICENSE
       cpp-httplib.txt ${GULLIVER_THIRD_PARTY}/httplib/LICENSE
-      sqlite.txt      ${GULLIVER_THIRD_PARTY}/sqlite/README.txt
-      libpng.txt      ${GULLIVER_THIRD_PARTY}/libpng/LICENSE
-      libjpeg.txt     ${GULLIVER_THIRD_PARTY}/libjpeg/README)
+      sqlite.txt      ${GULLIVER_THIRD_PARTY}/sqlite/README.txt)
    set(gulliver_license_commands)
    set(gulliver_license_sources)
    list(LENGTH gulliver_licenses gulliver_license_count)
@@ -313,7 +294,6 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    add_executable(test_image_input tests/test_image_input.cpp engine/image_input.cpp)
    target_include_directories(test_image_input PRIVATE ${GULLIVER_INCLUDE_DIR})
    target_compile_options(test_image_input PRIVATE ${GULLIVER_WARNINGS})
-   target_link_libraries(test_image_input PRIVATE gulliver_image)
    gulliver_output_dir(test_image_input ${CMAKE_BINARY_DIR}/tests)
    # Le format de chat des agents : les prompts avec outils, et les appels d'outils relus.
    add_executable(test_chat_format tests/test_chat_format.cpp engine/chat_format.cpp)

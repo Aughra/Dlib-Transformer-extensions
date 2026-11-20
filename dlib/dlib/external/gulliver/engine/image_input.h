@@ -19,7 +19,8 @@ namespace gulliver
         Une requête porte une image sous forme de data URL ("data:image/png;base64,...") : le
         service ne lit rien sur le réseau ni sur le disque pour le compte d'une requête, donc
         toute autre adresse est refusée.  Les octets sont un fichier PNG ou JPEG, reconnu à
-        sa signature, et décodé par les copies de libpng et libjpeg fournies avec dlib.  La
+        sa signature, et décodé par ImageIO, de macOS (fork : plus de copies de libpng ni de
+        libjpeg).  La
         taille d'une image est lue dans son en-tête avant tout décodage, de sorte que les
         limites d'image_limits refusent une image avant que ses pixels n'occupent de mémoire.
 

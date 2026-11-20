@@ -6,15 +6,17 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
-#include <csetjmp>
-#include <cstdio>
 #include <cstring>
 #include <new>
 #include <stdexcept>
 
+#include <memory>
+#include <type_traits>
+
 #include <CommonCrypto/CommonDigest.h>
-#include <jpeglib.h>
-#include <png.h>
+#include <CoreFoundation/CoreFoundation.h>
+#include <CoreGraphics/CoreGraphics.h>
+#include <ImageIO/ImageIO.h>
 
 namespace gulliver
 {
@@ -187,247 +189,152 @@ namespace gulliver
             }
         }
 
-        // PNG par libpng.  Les fonctions de décodage créent chaque objet C++ qu'elles détiennent
-        // avant leur setjmp, auquel revient un échec de la bibliothèque.
-        struct png_reader_state
-        {
-            const uint8_t* data;
-            size_t size;
-            size_t at;
-            char message[256];
-        };
-
-        void gulliver_png_error(png_structp png, png_const_charp message)
-        {
-            png_reader_state* s = static_cast<png_reader_state*>(png_get_error_ptr(png));
-            std::snprintf(s->message, sizeof(s->message), "%s", message);
-            png_longjmp(png, 1);
-        }
-
-        void gulliver_png_warning(png_structp, png_const_charp)
-        {
-        }
-
-        void gulliver_png_read(png_structp png, png_bytep out, png_size_t n)
-        {
-            png_reader_state* s = static_cast<png_reader_state*>(png_get_io_ptr(png));
-            if (n > s->size - s->at) png_error(png, "the file is truncated");
-            std::memcpy(out, s->data + s->at, n);
-            s->at += n;
-        }
-
-        // Renvoie 0, ou 1 avec le message de libpng dans state.message, ou 2 quand la mémoire manque.
-        int decode_png_pixels(png_reader_state& state, const image_limits& limits, std::vector<uint8_t>& pixels,
-            std::vector<png_bytep>& rows, long& width, long& height, int& channels)
-        {
-            png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, &state, gulliver_png_error,
-                gulliver_png_warning);
-            if (!png) return 2;
-            png_infop info = png_create_info_struct(png);
-            if (!info)
-            {
-                png_destroy_read_struct(&png, nullptr, nullptr);
-                return 2;
-            }
-            if (setjmp(png_jmpbuf(png)))
-            {
-                png_destroy_read_struct(&png, &info, nullptr);
-                return 1;
-            }
-            png_set_read_fn(png, &state, gulliver_png_read);
-            png_set_user_limits(png, static_cast<png_uint_32>(limits.max_side),
-                static_cast<png_uint_32>(limits.max_side));
-            png_set_chunk_malloc_max(png, 8u << 20);
-            png_read_info(png, info);
-            const png_uint_32 w = png_get_image_width(png, info);
-            const png_uint_32 h = png_get_image_height(png, info);
-            if (static_cast<double>(w) * h > static_cast<double>(limits.max_pixels)) png_error(png, "too many pixels");
-            const int depth = png_get_bit_depth(png, info);
-            const int type = png_get_color_type(png, info);
-            if (depth == 16) png_set_strip_16(png);
-            if (type == PNG_COLOR_TYPE_PALETTE) png_set_palette_to_rgb(png);
-            if (type == PNG_COLOR_TYPE_GRAY && depth < 8) png_set_expand_gray_1_2_4_to_8(png);
-            if (png_get_valid(png, info, PNG_INFO_tRNS)) png_set_tRNS_to_alpha(png);
-            if (type == PNG_COLOR_TYPE_GRAY || type == PNG_COLOR_TYPE_GRAY_ALPHA) png_set_gray_to_rgb(png);
-            png_set_interlace_handling(png);
-            png_read_update_info(png, info);
-            const int c = png_get_channels(png, info);
-            if ((c != 3 && c != 4) || png_get_rowbytes(png, info) != static_cast<size_t>(w) * c)
-                png_error(png, "unexpected pixel layout");
-            try
-            {
-                pixels.resize(static_cast<size_t>(w) * h * c);
-                rows.resize(h);
-            }
-            catch (...)
-            {
-                png_destroy_read_struct(&png, &info, nullptr);
-                return 2;
-            }
-            for (png_uint_32 y = 0; y < h; ++y) rows[y] = pixels.data() + static_cast<size_t>(y) * w * c;
-            png_read_image(png, rows.data());
-            png_destroy_read_struct(&png, &info, nullptr);
-            width = static_cast<long>(w);
-            height = static_cast<long>(h);
-            channels = c;
-            return 0;
-        }
-
-        rgb_image decode_png(const std::string& bytes, const image_limits& limits)
-        {
-            png_reader_state state;
-            state.data = reinterpret_cast<const uint8_t*>(bytes.data());
-            state.size = bytes.size();
-            state.at = 0;
-            state.message[0] = '\0';
-            std::vector<uint8_t> pixels;
-            std::vector<png_bytep> rows;
-            long w = 0, h = 0;
-            int c = 0;
-            const int rc = decode_png_pixels(state, limits, pixels, rows, w, h, c);
-            if (rc == 2) throw std::bad_alloc();
-            if (rc != 0) refuse(std::string("the PNG image cannot be read (") + state.message + ")");
-            rgb_image out;
-            out.width = w;
-            out.height = h;
-            if (c == 3)
-            {
-                out.pixels.swap(pixels);
-            }
-            else
-            {
-                out.pixels.resize(static_cast<size_t>(w) * h * 3);
-                composite_on_white(pixels.data(), out.pixels.data(), static_cast<size_t>(w) * h);
-            }
-            return out;
-        }
-
-        // JPEG par libjpeg, avec la même discipline.
-        struct jpeg_failure
-        {
-            jpeg_error_mgr mgr;
-            jpeg_progress_mgr progress;
-            std::jmp_buf jump;
-            char message[JMSG_LENGTH_MAX];
-        };
-
         /*
-            Les scans que peut contenir un fichier progressif.  Chaque scan relit chaque bloc de
-            l'image, de sorte qu'un fichier de nombreux petits scans occuperait un processeur
-            pendant des heures ; les encodeurs en écrivent une dizaine.
+            Le décodage, par ImageIO (fork pour macOS : au lieu des copies de libpng et de libjpeg).
+            Les pixels sont lus tels que le fichier les stocke, sans gestion des couleurs, comme
+            le fait Pillow, que suit le prétraitement de référence : RGB et niveaux de gris sur 8
+            ou 16 bits (16 bits : l'octet de poids fort, comme png_set_strip_16), palette,
+            transparence posée sur du blanc par composite_on_white.  ImageIO n'applique pas
+            l'orientation EXIF, que decode_image applique ensuite.  Un fichier tronqué ou
+            incomplet est refusé.  Une disposition que cette lecture ne connaît pas (CMJN,
+            transparence prémultipliée, flottants) passe par un rendu dans un contexte sRGB.
         */
-        const int max_jpeg_scans = 1000;
-
-        void gulliver_jpeg_error(j_common_ptr info)
+        struct cf_release
         {
-            jpeg_failure* f = reinterpret_cast<jpeg_failure*>(info->err);
-            (*info->err->format_message)(info, f->message);
-            std::longjmp(f->jump, 1);
-        }
+            void operator()(const void* p) const { if (p) CFRelease(p); }
+        };
+        template <typename T>
+        using cf_ptr = std::unique_ptr<std::remove_pointer_t<T>, cf_release>;
 
-        // Appelée par libjpeg à mesure qu'elle lit les scans et les lignes : arrête un fichier
-        // au-delà de max_jpeg_scans.
-        void gulliver_jpeg_progress(j_common_ptr info)
+        // Rendu dans un contexte sRGB sur 8 bits (transparence prémultipliée, que l'on retire).
+        rgb_image render_srgb(CGImageRef img, long w, long h)
         {
-            if (!info->is_decompressor) return;
-            if (reinterpret_cast<j_decompress_ptr>(info)->input_scan_number <= max_jpeg_scans) return;
-            jpeg_failure* f = reinterpret_cast<jpeg_failure*>(info->err);
-            std::snprintf(f->message, sizeof(f->message), "more than %d scans", max_jpeg_scans);
-            std::longjmp(f->jump, 1);
-        }
-
-        void gulliver_jpeg_message(j_common_ptr, int)
-        {
-        }
-
-        int decode_jpeg_pixels(const std::string& bytes, const image_limits& limits, jpeg_failure& failure,
-            std::vector<uint8_t>& pixels, long& width, long& height, bool& cmyk, bool& adobe)
-        {
-            jpeg_decompress_struct info;
-            info.err = jpeg_std_error(&failure.mgr);
-            failure.mgr.error_exit = gulliver_jpeg_error;
-            failure.mgr.emit_message = gulliver_jpeg_message;
-            failure.message[0] = '\0';
-            if (setjmp(failure.jump))
-            {
-                jpeg_destroy_decompress(&info);
-                return 1;
-            }
-            jpeg_create_decompress(&info);
-            // Positionné après jpeg_create_decompress(), qui efface la structure.
-            std::memset(&failure.progress, 0, sizeof(failure.progress));
-            failure.progress.progress_monitor = gulliver_jpeg_progress;
-            info.progress = &failure.progress;
-            jpeg_mem_src(&info, reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size());
-            jpeg_read_header(&info, TRUE);
-            if (static_cast<long>(info.image_width) > limits.max_side
-                || static_cast<long>(info.image_height) > limits.max_side
-                || static_cast<double>(info.image_width) * info.image_height > static_cast<double>(limits.max_pixels))
-            {
-                std::snprintf(failure.message, sizeof(failure.message), "too many pixels");
-                jpeg_destroy_decompress(&info);
-                return 1;
-            }
-            const bool four = info.jpeg_color_space == JCS_CMYK || info.jpeg_color_space == JCS_YCCK;
-            info.out_color_space = four ? JCS_CMYK : JCS_RGB;
-            jpeg_start_decompress(&info);
-            const size_t stride = static_cast<size_t>(info.output_width) * info.output_components;
-            try
-            {
-                pixels.resize(stride * info.output_height);
-            }
-            catch (...)
-            {
-                jpeg_destroy_decompress(&info);
-                return 2;
-            }
-            while (info.output_scanline < info.output_height)
-            {
-                JSAMPROW row = pixels.data() + stride * info.output_scanline;
-                jpeg_read_scanlines(&info, &row, 1);
-            }
-            width = static_cast<long>(info.output_width);
-            height = static_cast<long>(info.output_height);
-            cmyk = four;
-            adobe = info.saw_Adobe_marker != 0;
-            jpeg_finish_decompress(&info);
-            jpeg_destroy_decompress(&info);
-            return 0;
-        }
-
-        rgb_image decode_jpeg(const std::string& bytes, const image_limits& limits)
-        {
-            jpeg_failure failure;
-            std::vector<uint8_t> pixels;
-            long w = 0, h = 0;
-            bool cmyk = false, adobe = false;
-            const int rc = decode_jpeg_pixels(bytes, limits, failure, pixels, w, h, cmyk, adobe);
-            if (rc == 2) throw std::bad_alloc();
-            if (rc != 0) refuse(std::string("the JPEG image cannot be read (") + failure.message + ")");
-            rgb_image out;
-            out.width = w;
-            out.height = h;
-            if (!cmyk)
-            {
-                out.pixels.swap(pixels);
-                return out;
-            }
-            // CMYK tel que Pillow le convertit, les fichiers d'Adobe stockant les valeurs inversées.
+            cf_ptr<CGColorSpaceRef> cs(CGColorSpaceCreateWithName(kCGColorSpaceSRGB));
+            std::vector<uint8_t> rgba(static_cast<size_t>(w) * h * 4);
+            cf_ptr<CGContextRef> ctx(CGBitmapContextCreate(rgba.data(), static_cast<size_t>(w), static_cast<size_t>(h), 8,
+                static_cast<size_t>(w) * 4, cs.get(), kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big));
+            if (!ctx) throw std::bad_alloc();
+            CGContextSetBlendMode(ctx.get(), kCGBlendModeCopy);
+            CGContextDrawImage(ctx.get(), CGRectMake(0, 0, static_cast<CGFloat>(w), static_cast<CGFloat>(h)), img);
             const size_t n = static_cast<size_t>(w) * h;
-            out.pixels.resize(n * 3);
             for (size_t i = 0; i < n; ++i)
             {
-                uint32_t v[4];
-                for (int c = 0; c < 4; ++c) v[c] = adobe ? 255u - pixels[4 * i + c] : pixels[4 * i + c];
-                const uint32_t nk = 255u - v[3];
-                for (int c = 0; c < 3; ++c)
+                uint8_t* px = rgba.data() + 4 * i;
+                const unsigned a = px[3];
+                if (a == 0 || a == 255) continue;
+                for (int c = 0; c < 3; ++c) px[c] = static_cast<uint8_t>(std::min(255u, (px[c] * 255u + a / 2) / a));
+            }
+            rgb_image out;
+            out.width = w;
+            out.height = h;
+            out.pixels.resize(n * 3);
+            composite_on_white(rgba.data(), out.pixels.data(), n);
+            return out;
+        }
+
+        rgb_image decode_imageio(const std::string& bytes, const image_limits& limits, const char* format, long w, long h)
+        {
+            const std::string what = std::string("the ") + format + " image cannot be read";
+            cf_ptr<CFDataRef> data(CFDataCreateWithBytesNoCopy(nullptr, reinterpret_cast<const UInt8*>(bytes.data()),
+                static_cast<CFIndex>(bytes.size()), kCFAllocatorNull));
+            if (!data) throw std::bad_alloc();
+            const void* keys[] = { kCGImageSourceShouldCache, kCGImageSourceShouldAllowFloat };
+            const void* values[] = { kCFBooleanFalse, kCFBooleanFalse };
+            cf_ptr<CFDictionaryRef> options(CFDictionaryCreate(nullptr, keys, values, 2, &kCFTypeDictionaryKeyCallBacks,
+                &kCFTypeDictionaryValueCallBacks));
+            cf_ptr<CGImageSourceRef> source(CGImageSourceCreateWithData(data.get(), options.get()));
+            if (!source || CGImageSourceGetStatus(source.get()) != kCGImageStatusComplete
+                || CGImageSourceGetCount(source.get()) < 1
+                || CGImageSourceGetStatusAtIndex(source.get(), 0) != kCGImageStatusComplete)
+                refuse(what + " (damaged or truncated file)");
+            cf_ptr<CGImageRef> img(CGImageSourceCreateImageAtIndex(source.get(), 0, options.get()));
+            if (!img) refuse(what);
+            // La taille décodée doit être celle que l'en-tête a annoncée et que check_size a bornée.
+            if (static_cast<long>(CGImageGetWidth(img.get())) != w || static_cast<long>(CGImageGetHeight(img.get())) != h)
+                refuse(what + " (its size differs from its header)");
+
+            const size_t bpc = CGImageGetBitsPerComponent(img.get());
+            const size_t bpp = CGImageGetBitsPerPixel(img.get());
+            const size_t stride = CGImageGetBytesPerRow(img.get());
+            const CGBitmapInfo info = CGImageGetBitmapInfo(img.get());
+            const CGImageAlphaInfo alpha = CGImageGetAlphaInfo(img.get());
+            CGColorSpaceRef cs = CGImageGetColorSpace(img.get());
+            const CGColorSpaceModel model = cs ? CGColorSpaceGetModel(cs) : kCGColorSpaceModelUnknown;
+            const uint32_t order = info & kCGBitmapByteOrderMask;
+            const bool floats = (info & kCGBitmapFloatComponents) != 0;
+            const bool premultiplied = alpha == kCGImageAlphaPremultipliedFirst || alpha == kCGImageAlphaPremultipliedLast;
+            const bool has_alpha = alpha == kCGImageAlphaFirst || alpha == kCGImageAlphaLast || premultiplied;
+            const bool skips = alpha == kCGImageAlphaNoneSkipFirst || alpha == kCGImageAlphaNoneSkipLast;
+            const bool alpha_first = alpha == kCGImageAlphaFirst || alpha == kCGImageAlphaPremultipliedFirst
+                || alpha == kCGImageAlphaNoneSkipFirst;
+            const size_t colors = model == kCGColorSpaceModelRGB ? 3 : model == kCGColorSpaceModelMonochrome ? 1
+                : model == kCGColorSpaceModelIndexed ? 1 : 0;
+            const size_t comps = colors + (has_alpha || skips ? 1 : 0);
+            const bool readable = colors != 0 && !floats && !premultiplied && (bpc == 8 || bpc == 16)
+                && bpp == comps * bpc && !(model == kCGColorSpaceModelIndexed && (bpc != 8 || has_alpha || skips))
+                && (order == kCGBitmapByteOrderDefault || order == kCGBitmapByteOrder32Big
+                    || order == kCGBitmapByteOrder16Big || (bpc == 16 && order == kCGBitmapByteOrder16Little)
+                    || (bpc == 8 && comps == 4 && order == kCGBitmapByteOrder32Little));
+            if (!readable) return render_srgb(img.get(), w, h);
+
+            cf_ptr<CFDataRef> raw(CGDataProviderCopyData(CGImageGetDataProvider(img.get())));
+            if (!raw || static_cast<size_t>(CFDataGetLength(raw.get())) < stride * static_cast<size_t>(h - 1)
+                    + static_cast<size_t>(w) * bpp / 8)
+                refuse(what);
+            const uint8_t* base = CFDataGetBytePtr(raw.get());
+
+            // La table des couleurs d'une palette, en RGB.
+            std::vector<uint8_t> table;
+            if (model == kCGColorSpaceModelIndexed)
+            {
+                CGColorSpaceRef under = CGColorSpaceGetBaseColorSpace(cs);
+                if (!under || CGColorSpaceGetModel(under) != kCGColorSpaceModelRGB) return render_srgb(img.get(), w, h);
+                table.resize(CGColorSpaceGetColorTableCount(cs) * 3);
+                CGColorSpaceGetColorTable(cs, table.data());
+            }
+
+            const size_t n = static_cast<size_t>(w) * h;
+            std::vector<uint8_t> rgba(n * 4);
+            const bool swap32 = bpc == 8 && order == kCGBitmapByteOrder32Little;
+            for (long y = 0; y < h; ++y)
+            {
+                const uint8_t* row = base + static_cast<size_t>(y) * stride;
+                for (long x = 0; x < w; ++x)
                 {
-                    const uint32_t t = v[c] * nk + 128u;
-                    const uint32_t m = ((t >> 8) + t) >> 8;
-                    out.pixels[3 * i + c] = static_cast<uint8_t>(nk > m ? nk - m : 0u);
+                    uint8_t v[4];
+                    for (size_t c = 0; c < comps; ++c)
+                    {
+                        const size_t k = swap32 ? comps - 1 - c : c;
+                        const uint8_t* q = row + (static_cast<size_t>(x) * comps + k) * (bpc / 8);
+                        // 16 bits : l'octet de poids fort.
+                        v[c] = bpc == 16 ? (order == kCGBitmapByteOrder16Little ? q[1] : q[0]) : q[0];
+                    }
+                    const uint8_t* colour = v + (alpha_first && comps > colors ? 1 : 0);
+                    const uint8_t a = has_alpha ? (alpha_first ? v[0] : v[colors]) : 255;
+                    uint8_t* out = rgba.data() + 4 * (static_cast<size_t>(y) * w + x);
+                    if (model == kCGColorSpaceModelIndexed)
+                    {
+                        const size_t i = static_cast<size_t>(colour[0]) * 3;
+                        if (i + 2 >= table.size()) refuse(what + " (palette index out of range)");
+                        out[0] = table[i]; out[1] = table[i + 1]; out[2] = table[i + 2];
+                    }
+                    else if (colors == 1)
+                    {
+                        out[0] = out[1] = out[2] = colour[0];
+                    }
+                    else
+                    {
+                        out[0] = colour[0]; out[1] = colour[1]; out[2] = colour[2];
+                    }
+                    out[3] = a;
                 }
             }
-            return out;
+            rgb_image result;
+            result.width = w;
+            result.height = h;
+            result.pixels.resize(n * 3);
+            composite_on_white(rgba.data(), result.pixels.data(), n);
+            return result;
         }
 
         // L'image telle qu'affichée pour une orientation EXIF, comme la produit exif_transpose de Pillow.
@@ -612,7 +519,10 @@ namespace gulliver
     rgb_image decode_image(const std::string& bytes, const image_limits& limits, long fit_width, long fit_height)
     {
         const image_header h = read_image_header(bytes, limits);
-        rgb_image img = h.format == image_format::png ? decode_png(bytes, limits) : decode_jpeg(bytes, limits);
+        // L'en-tête donne la taille stockée (avant l'orientation), que le décodage doit retrouver.
+        const bool swapped = swaps_axes(h.orientation);
+        rgb_image img = decode_imageio(bytes, limits, h.format == image_format::png ? "PNG" : "JPEG",
+            swapped ? h.height : h.width, swapped ? h.width : h.height);
         // L'image stockée est redimensionnée selon les axes stockés de la cible, puis orientée.
         if (fit_width > 0 && fit_height > 0)
         {

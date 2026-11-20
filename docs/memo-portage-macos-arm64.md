@@ -307,7 +307,7 @@ Ce qui a été changé pour compiler sur ARM64, chaque fois sous une condition q
 
 1. Moteurs `avx2` : non construits sur ARM64 (`gulliver/CMakeLists.txt`, `pseudalis/CMakeLists.txt`) ; les tests de Gulliver qui prennent les noyaux AVX2 les compilent sans options x86, donc en code portable.
 2. `svox_pico/lib/picopltf.h` : sur macOS, `<machine/endian.h>`, avec `__BYTE_ORDER` et `__BIG_ENDIAN` ramenés aux noms de macOS (`BYTE_ORDER`, `BIG_ENDIAN`).
-3. libpng de Gulliver : sur ARM64, compilation de ses sources NEON (`arm/arm_init.c`, `arm/filter_neon_intrinsics.c`, `arm/palette_neon_intrinsics.c`), comme le fait le CMake de dlib.
+3. libpng de Gulliver : sur ARM64, compilation de ses sources NEON (`arm/arm_init.c`, `arm/filter_neon_intrinsics.c`, `arm/palette_neon_intrinsics.c`), comme le fait le CMake de dlib. **Sans objet depuis Gulliver 6.11.0 (2026-11-20)** : libpng et libjpeg sont retirées, les images sont décodées par ImageIO.
 4. `dlib/dlib/CMakeLists.txt`, cible `dlib_httplib` : sur macOS, liaison de `CoreFoundation` et `Security` (certificats du Trousseau).
 5. `pseudalis/host/drive_folders.cpp` : sur macOS, `st_mtim` devient `st_mtimespec`.
 

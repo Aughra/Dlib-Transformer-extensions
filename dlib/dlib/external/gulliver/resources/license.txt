@@ -38,8 +38,6 @@ Mbed TLS 3.6                            Apache License 2.0
 cpp-httplib                             MIT License
 SQLite                                  Public domain
 zlib                                    zlib License
-libpng (image decoding)                 PNG Reference Library License version 2
-libjpeg (image decoding)                Independent JPEG Group License
 marked (web application)                MIT License
 DOMPurify (web application)             Apache License 2.0 or Mozilla Public License 2.0
 highlight.js (web application)          BSD 3-Clause License

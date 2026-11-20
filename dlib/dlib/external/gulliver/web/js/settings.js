@@ -462,8 +462,7 @@ let licensesSequence = 0;
 const programTexts = {
   'gulliver.txt': ['gulliver', 'Boost Software License 1.0'], 'dlib.txt': ['dlib', 'Boost Software License 1.0'],
   'mbedtls.txt': ['mbedtls', 'Apache License 2.0 or GPL 2.0 or later'], 'cpp-httplib.txt': ['httplib', 'MIT License'],
-  'sqlite.txt': ['sqlite', null],
-  'libpng.txt': ['libpng', 'PNG Reference Library License 2'], 'libjpeg.txt': ['libjpeg', 'IJG License']
+  'sqlite.txt': ['sqlite', null]
 };
 
 async function licenseText(url) {

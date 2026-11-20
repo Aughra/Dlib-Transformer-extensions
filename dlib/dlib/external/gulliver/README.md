@@ -413,8 +413,8 @@ que le moteur charge avec lui (option `projector` du modèle). Le moteur lit tro
   à leur chargement, ce qui conserve leurs valeurs.
 
 Le service ne lit rien sur le réseau ni sur le disque pour une requête : une image arrive sous forme de data URL
-d'un fichier PNG ou JPEG (20 Mo, 8 192 pixels de côté et 40 mégapixels au plus), décodée par les
-copies de libpng et de libjpeg de dlib, son orientation EXIF appliquée et sa transparence composée
+d'un fichier PNG ou JPEG (20 Mo, 8 192 pixels de côté et 40 mégapixels au plus), décodée par ImageIO, de macOS
+(les pixels tels que le fichier les stocke, sans gestion des couleurs), son orientation EXIF appliquée et sa transparence composée
 sur du blanc, puis redimensionnée comme le fait le prétraitement de référence (le filtre bicubique de Pillow pour
 Qwen3-VL et Pixtral, son filtre bilinéaire pour LLaVA-NeXT, en virgule fixe). Une requête porte 16
 images au plus. L'encodage d'une image s'exécute entre les passes des autres requêtes, un bloc

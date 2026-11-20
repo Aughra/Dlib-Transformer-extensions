@@ -1547,9 +1547,7 @@ namespace gulliver
             {"mbedtls.txt", "Mbed TLS", MBEDTLS_VERSION_STRING},
             {"cpp-httplib.txt", "cpp-httplib", CPPHTTPLIB_VERSION},
             {"zlib.txt", "zlib", ZLIB_VERSION},
-            {"sqlite.txt", "SQLite", SQLITE_VERSION},
-            {"libpng.txt", "libpng", ""},
-            {"libjpeg.txt", "libjpeg (Independent JPEG Group)", ""}
+            {"sqlite.txt", "SQLite", SQLITE_VERSION}
         };
 
         // Indique si name peut être une entrée du dossier licenses : aucun séparateur, deux-points,

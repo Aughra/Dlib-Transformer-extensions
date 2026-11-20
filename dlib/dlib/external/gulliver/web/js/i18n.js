@@ -312,8 +312,6 @@ const texts = {
     program_mbedtls: 'Chiffrement du serveur HTTPS local, et empreintes',
     program_httplib: 'Serveur web local et téléchargements',
     program_sqlite: 'Base de données du service',
-    program_libpng: 'Lecture des images PNG par les moteurs',
-    program_libjpeg: 'Lecture des images JPEG par les moteurs',
     program_runtime: 'Environnement d\'exécution d\'un moteur',
     errorPrefix: 'Erreur : {message}', retry: 'Réessayer', cancelled: 'Interrompu.', emptyAnswer: '(aucune réponse)',
     newProjectDiscussion: 'Nouvelle discussion dans {name}',
