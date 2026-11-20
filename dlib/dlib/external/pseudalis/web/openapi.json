@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface de Pseudalis",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "description": "L'interface locale de Pseudalis, sur ce Mac (https://localhost:8444 par défaut) et, une fois l'accès réseau activé (réglage lan), en HTTP simple sur chaque adresse du Mac, au port lan_port (8445 par défaut), sans mot de passe. Les fichiers voyagent tels quels, dans le corps des requêtes. Aucun compte ni jeton n'est nécessaire : sur macOS, les opérations d'administration sont ouvertes sur le Mac, comme les routes de Gulliver ; chaque requête doit toutefois nommer le serveur local dans son en-tête Host, et une requête venue d'une page doit venir du serveur local. Depuis la 3.0.0 (fork pour macOS), chaque protection écrit des pseudonymes sans retour, faits sous une clé jetable par document : ni balise, ni restauration à partir des pseudonymes ; /v1/restore rend l'original conservé, et le paramètre ou réglage tags est sans effet.",
   "contact": {
    "name": "Cydral Technology",

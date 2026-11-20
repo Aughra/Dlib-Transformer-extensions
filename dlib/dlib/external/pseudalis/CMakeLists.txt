@@ -11,7 +11,7 @@
 # l'application web.
 
 cmake_minimum_required(VERSION 3.16)
-project(pseudalis VERSION 3.3.0 LANGUAGES C CXX)
+project(pseudalis VERSION 3.3.1 LANGUAGES C CXX)
 
 option(PSEUDALIS_TESTS "Build the test programs" ON)
 
@@ -29,7 +29,6 @@ endif()
 
 get_filename_component(PSEUDALIS_DLIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 get_filename_component(PSEUDALIS_INCLUDE_DIR "${PSEUDALIS_DLIB_DIR}/.." ABSOLUTE)
-get_filename_component(PSEUDALIS_GULLIVER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../gulliver" ABSOLUTE)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
@@ -106,14 +105,11 @@ target_link_libraries(pseudalis-service PRIVATE pseudalis_common pseudalis_sqlit
 target_compile_definitions(pseudalis-service PRIVATE PSEUDALIS_ENGINE_STATIC ${PSEUDALIS_ENGINE_DEFINITIONS})
 target_compile_options(pseudalis-service PRIVATE ${PSEUDALIS_WARNINGS})
 
-# L'application web et la documentation de l'interface, à côté du service ; Swagger UI, la feuille de
-# style et le thème de la documentation (fork pour macOS) proviennent de la copie de Gulliver présente dans ce dépôt.
-set(swagger_dir ${PSEUDALIS_GULLIVER_DIR}/web/docs)
+# L'application web et la documentation de l'interface, à côté du service.  Swagger UI, la feuille de
+# style, le thème et la traduction de la documentation sont dans web/docs, copie propre à Pseudalis
+# (reprise de Gulliver le 2026-11-20) : le build ne lit plus rien dans le dossier de Gulliver.
 add_custom_target(pseudalis-web ALL
    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/web ${CMAKE_BINARY_DIR}/bin/web
-   COMMAND ${CMAKE_COMMAND} -E copy ${swagger_dir}/swagger-ui-bundle.js ${swagger_dir}/swagger-ui.css
-      ${swagger_dir}/LICENSE ${swagger_dir}/NOTICE ${swagger_dir}/docs.css ${swagger_dir}/theme.js ${swagger_dir}/fr.js
-      ${CMAKE_BINARY_DIR}/bin/web/docs
    COMMENT "Copying the web application")
 add_dependencies(pseudalis-service pseudalis-web)
 

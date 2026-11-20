@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-20 — Pseudalis 3.3.1 : séparer la construction de Pseudalis de celle de Gulliver
+
+- **Quoi** : demande de l'humain (« sépare les liens de Gulliver et Pseudalis, on s'occupe de Pseudalis après »). Relevé des liens : les bibliothèques (cpp-httplib, Mbed TLS, SQLite) de Pseudalis viennent de dlib (`dlib/external`), pas des copies de Gulliver : déjà séparées ; `host/gulliver_client.cpp` parle au service Gulliver par le réseau : un échange entre programmes, gardé ; le seul lien de code était la copie, au build, de 7 fichiers de la page de l'interface pris dans `gulliver/web/docs` (Swagger UI, sa licence et sa notice, `docs.css`, `theme.js`, `fr.js`). Ces fichiers sont copiés dans `pseudalis/web/docs`, le `CMakeLists.txt` de Pseudalis ne nomme plus le dossier de Gulliver.
+- **Fichiers** : `pseudalis/{CMakeLists.txt,web/docs/*,common/version.h,web/openapi.json,web/changelog.md}`, `gulliver/web/docs/fr.js` (commentaire), `docs/pseudalis/guide.md`, ce journal.
+- **Pourquoi** : que les changements de bibliothèques de Gulliver (points 2 à 4) ne touchent pas Pseudalis, traité plus tard.
+- **Étapes** : build de Pseudalis sans avertissement ; `bin/web/docs` complet (9 fichiers). Non lancé : les tests de Pseudalis (aucun code changé).
+
 ## 2026-11-20 — Gulliver 6.10.2 : mettre à jour cpp-httplib et Mbed TLS
 
 - **Quoi** : demande de l'humain (« mettre à jour les lib en les téléchargeant sur internet »). Versions publiées relevées aux sources (API GitHub, sqlite.org, ijg.org, SourceForge de libpng) : cpp-httplib 0.63.0 → **0.67.0**, Mbed TLS 3.6.7 → **3.6.8** (branche 3.6 ; la 4.x change l'interface) ; SQLite 3.54.1, libpng 1.6.59 et libjpeg 10 déjà à jour (libpng 1.7 en bêta). Mbed TLS : archives 3.6.8 et 3.6.7 contrôlées par leurs sommes publiées (la copie était la 3.6.7 intacte, sans ses fichiers de build) ; `include/` et `library/` remplacés ; `dlib_config/` devient `config/gulliver_mbedtls_config.h` (fils POSIX seulement, fichiers Windows retirés). cpp-httplib : des trois retouches de la copie de dlib, celle du LF seul est reportée (« gulliver: »), celle des chemins Windows laissée, celle des codages de transfert faite par la 0.67.0 elle-même ; `set_hostname_addr_map`, obsolète, remplacé par `set_direct_hostname_addr_map` (même comportement, chemin direct sans mandataire) dans `web_access.cpp`, `pseudonyms.cpp`, `relay.cpp`. README de `httplib/` et `mbedtls/` réécrits en français.

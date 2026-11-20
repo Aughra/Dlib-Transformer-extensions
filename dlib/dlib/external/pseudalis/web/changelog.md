@@ -2,6 +2,14 @@
 
 Pseudalis pour macOS sur puce Apple, version dérivée de Pseudalis Community (Cydral Technology), maintenue par TortueTech. Le fork numérote Pseudalis à part de l'original à partir de 2.0.0. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne ; avant 2.0.0, la section porte le numéro de la version de l'original sur laquelle reposait le fork.
 
+## 3.3.1 — 20 novembre 2026
+
+### Plateforme
+
+- Swagger UI, la feuille de style, le thème et la traduction française de la page de l'interface sont désormais dans le dossier de Pseudalis (`web/docs`) : sa construction ne lit plus rien dans le dossier de Gulliver, dont les bibliothèques changent de son côté. Aucun changement de la page.
+
+---
+
 ## 3.3.0 — 16 novembre 2026
 
 ### Protection

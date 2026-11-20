@@ -12,7 +12,7 @@ cmake -S dlib/dlib/external/pseudalis -B build/macos-pseudalis -G Ninja \
 cmake --build build/macos-pseudalis
 ```
 
-La construction donne `build/macos-pseudalis/bin/pseudalis-service`, l'application web à côté de lui (`bin/web`, avec la page de l'interface `bin/web/docs`, dont Swagger UI, la feuille de style et le thème viennent de la copie de Gulliver du dépôt), et les tests `test_engine` et `test_host`. Elle ne doit produire aucun avertissement.
+La construction donne `build/macos-pseudalis/bin/pseudalis-service`, l'application web à côté de lui (`bin/web`, avec la page de l'interface `bin/web/docs`, dont Swagger UI, la feuille de style, le thème et la traduction sont dans `web/docs`, copie propre à Pseudalis depuis 3.3.1 ; la construction ne lit rien dans le dossier de Gulliver), et les tests `test_engine` et `test_host`. Elle ne doit produire aucun avertissement.
 
 La version se change par `python3 dlib/dlib/external/pseudalis/tools/bump_version.py patch|minor|major` (`common/version.h`, `project()` du `CMakeLists.txt`, `web/openapi.json`) ; chaque version a sa section dans les notes de version.
 

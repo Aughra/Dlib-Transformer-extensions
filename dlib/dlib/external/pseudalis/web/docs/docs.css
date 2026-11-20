@@ -1,0 +1,159 @@
+/* Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
+   License: Boost Software License   See LICENSE.txt for the full license. */
+
+/*
+    La page de l'interface (fork pour macOS) : un en-tête, une carte de démarrage rapide, puis Swagger UI habillé
+    aux couleurs de l'application, en clair et en sombre (préférence du système, ou le bouton de l'en-tête).
+    La même feuille sert à Albireo et à Pseudalis : seules les couleurs de marque changent.
+*/
+:root {
+  --brand: #3d6bff;
+  --brand-2: #e8962e;
+  --head: linear-gradient(135deg, #1a2352 0%, #0b1022 100%);
+  --bg: #f6f7fb;
+  --card: #ffffff;
+  --soft: #f0f2f8;
+  --text: #171a2b;
+  --faint: #5d6380;
+  --line: rgba(23, 26, 43, 0.10);
+  --code: #0f1530;
+  --code-text: #e8ebf7;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+:root.dark {
+  --bg: #0b1022;
+  --card: #121935;
+  --soft: #172044;
+  --text: #e8ebf7;
+  --faint: #aab2d4;
+  --line: rgba(200, 210, 255, 0.12);
+  --code: #070b18;
+  color-scheme: dark;
+}
+:root.pseudalis {
+  --brand: #19b3a2;
+  --brand-2: #e8a923;
+  --head: linear-gradient(90deg, #16446e 0%, #0f2a44 100%);
+}
+:root.pseudalis.dark {
+  --bg: #08131f;
+  --card: #0f1f30;
+  --soft: #15283c;
+  --text: #e3ebf3;
+  --faint: #9db1c4;
+  --line: rgba(190, 215, 240, 0.14);
+  --code: #050d16;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 var(--font); }
+a { color: var(--brand); }
+
+/* L'en-tête. */
+.docs-head {
+  position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 28px; background: var(--head); color: #fff; box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+}
+.docs-head img { width: 30px; height: 30px; }
+.docs-head .brand { font-size: 19px; font-weight: 650; letter-spacing: -0.01em; }
+.docs-head .what { color: rgba(255, 255, 255, 0.72); font-size: 14px; }
+.docs-head .version { border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 999px; padding: 1px 9px;
+  font-size: 12px; color: rgba(255, 255, 255, 0.85); }
+.docs-head nav { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.docs-head nav a, .docs-head nav button {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 9px; padding: 6px 12px; background: rgba(255, 255, 255, 0.08); color: #fff;
+  font: 500 13px var(--font); text-decoration: none; cursor: pointer;
+}
+.docs-head nav a:hover, .docs-head nav button:hover { background: rgba(255, 255, 255, 0.18); }
+.docs-head nav a.switch { border-color: var(--brand-2); }
+.docs-head nav a[hidden] { display: none; }
+
+/* La carte de démarrage rapide. */
+.docs-main { max-width: 1180px; margin: 0 auto; padding: 24px 28px 8px; }
+.quick { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 24px;
+  box-shadow: 0 8px 30px rgba(20, 26, 60, 0.06); }
+.quick h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em; }
+.quick p { margin: 0 0 12px; color: var(--faint); }
+.quick .tabs { display: flex; gap: 6px; margin: 8px 0 10px; flex-wrap: wrap; }
+.quick .tabs button { border: 1px solid var(--line); background: var(--soft); color: var(--text); border-radius: 8px;
+  padding: 5px 12px; font: 500 13px var(--font); cursor: pointer; }
+.quick .tabs button.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.quick .sample { position: relative; }
+.quick pre { margin: 0; padding: 14px 16px; border-radius: 12px; background: var(--code); color: var(--code-text);
+  font: 13px/1.5 var(--mono); overflow-x: auto; white-space: pre; }
+.quick .tabs .copy { margin-left: auto; background: transparent; }
+.quick .facts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.quick .facts span { background: var(--soft); border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px;
+  font-size: 13px; color: var(--faint); }
+.quick .facts b { color: var(--text); font-weight: 600; }
+
+/* Swagger UI, aux couleurs de l'application. */
+#swagger-ui { max-width: 1180px; margin: 0 auto; padding: 0 12px 40px; }
+.swagger-ui, .swagger-ui .info .title, .swagger-ui .opblock-tag, .swagger-ui .opblock .opblock-summary-description,
+.swagger-ui .opblock .opblock-section-header h4, .swagger-ui table thead tr th, .swagger-ui .parameter__name,
+.swagger-ui .response-col_status, .swagger-ui .model-title, .swagger-ui .tab li, .swagger-ui label,
+.swagger-ui .btn, .swagger-ui select, .swagger-ui .info p, .swagger-ui .info li, .swagger-ui .markdown p,
+.swagger-ui .renderedMarkdown p, .swagger-ui section.models h4, .swagger-ui .servers-title {
+  font-family: var(--font) !important; color: var(--text);
+}
+.swagger-ui .topbar { display: none; }
+.swagger-ui .info { margin: 26px 0 10px; }
+.swagger-ui .info .title { font-size: 26px; letter-spacing: -0.01em; }
+.swagger-ui .info .title small { background: var(--soft); border-radius: 999px; }
+.swagger-ui .info .title small pre { color: var(--faint); }
+.swagger-ui .info .title small.version-stamp { background: var(--brand); }
+.swagger-ui .info .title small.version-stamp pre { color: #fff; }
+.swagger-ui .info .description, .swagger-ui .info p, .swagger-ui .info li { color: var(--faint); font-size: 14px; }
+.swagger-ui .info a, .swagger-ui .info .link { color: var(--brand); }
+.swagger-ui .scheme-container { background: transparent; box-shadow: none; padding: 6px 0 14px; }
+.swagger-ui .opblock-tag { border-bottom: 1px solid var(--line); font-size: 20px; padding: 12px 6px; }
+.swagger-ui .opblock-tag small { color: var(--faint); font-family: var(--font); }
+.swagger-ui .opblock { border-radius: 12px; box-shadow: none; margin: 0 0 10px; overflow: hidden; }
+.swagger-ui .opblock .opblock-summary { padding: 7px 10px; }
+.swagger-ui .opblock .opblock-summary-method { border-radius: 8px; min-width: 76px; font-family: var(--font);
+  font-weight: 650; }
+.swagger-ui .opblock .opblock-summary-path, .swagger-ui .opblock .opblock-summary-path__deprecated {
+  font-family: var(--mono); color: var(--text); font-size: 14px; }
+.swagger-ui .opblock .opblock-section-header { background: var(--soft); box-shadow: none; }
+.swagger-ui .btn { border-radius: 9px; }
+.swagger-ui .btn.execute { background: var(--brand); border-color: var(--brand); }
+.swagger-ui .btn.authorize { color: var(--brand); border-color: var(--brand); }
+.swagger-ui .btn.authorize svg { fill: var(--brand); }
+.swagger-ui section.models { border: 1px solid var(--line); border-radius: 12px; }
+.swagger-ui .highlight-code > .microlight, .swagger-ui .microlight { border-radius: 10px;
+  font-family: var(--mono) !important; }
+
+/* Le sombre : les surfaces et les textes de Swagger UI, qui n'a pas de thème sombre à lui. */
+:root.dark .swagger-ui .opblock .opblock-section-header,
+:root.dark .swagger-ui .opblock-description-wrapper, :root.dark .swagger-ui .opblock-body,
+:root.dark .swagger-ui .responses-inner, :root.dark .swagger-ui .model-box,
+:root.dark .swagger-ui section.models .model-container, :root.dark .swagger-ui .dialog-ux .modal-ux {
+  background: var(--card); }
+:root.dark .swagger-ui .opblock { background: rgba(255, 255, 255, 0.02); }
+:root.dark .swagger-ui .opblock .opblock-section-header { background: var(--soft); }
+:root.dark .swagger-ui, :root.dark .swagger-ui p, :root.dark .swagger-ui td, :root.dark .swagger-ui th,
+:root.dark .swagger-ui h1, :root.dark .swagger-ui h2, :root.dark .swagger-ui h3, :root.dark .swagger-ui h4,
+:root.dark .swagger-ui h5, :root.dark .swagger-ui label, :root.dark .swagger-ui .model,
+:root.dark .swagger-ui .model-title, :root.dark .swagger-ui .prop-type, :root.dark .swagger-ui .parameter__type,
+:root.dark .swagger-ui .parameter__in, :root.dark .swagger-ui .response-col_links,
+:root.dark .swagger-ui .opblock-summary-description, :root.dark .swagger-ui .tab li,
+:root.dark .swagger-ui .opblock-tag, :root.dark .swagger-ui .renderedMarkdown, :root.dark .swagger-ui .markdown {
+  color: var(--text) !important; }
+:root.dark .swagger-ui .prop-format, :root.dark .swagger-ui .parameter__deprecated,
+:root.dark .swagger-ui .model .property.primitive { color: var(--faint) !important; }
+:root.dark .swagger-ui input[type=text], :root.dark .swagger-ui input[type=password],
+:root.dark .swagger-ui textarea, :root.dark .swagger-ui select {
+  background: var(--soft); color: var(--text); border-color: var(--line); }
+:root.dark .swagger-ui svg:not(.locked):not(.unlocked) { fill: var(--faint); }
+:root.dark .swagger-ui .opblock-tag:hover { background: rgba(255, 255, 255, 0.03); }
+:root.dark .swagger-ui table thead tr td, :root.dark .swagger-ui table thead tr th { border-color: var(--line); }
+
+@media (max-width: 720px) {
+  .docs-head { padding: 10px 16px; }
+  .docs-head .what { display: none; }
+  .docs-main { padding: 16px 16px 4px; }
+  .quick { padding: 16px; }
+}
