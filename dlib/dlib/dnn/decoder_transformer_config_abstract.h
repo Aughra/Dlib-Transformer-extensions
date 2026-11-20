@@ -145,6 +145,30 @@ namespace dlib
 
     // ----------------------------------------------------------------------------------------
 
+    template <
+        long vocab_size, long num_layers, long num_heads, long num_kv_heads,
+        long embedding_dim, long ffn_num, long ffn_den, long head_dim, bool use_qk_norm,
+        unsigned long long attention_mask, long ssm_k_heads, long ssm_v_heads,
+        long ssm_head_dim, long conv_kernel
+    >
+    struct delta_net_transformer_config
+    {
+        /*!
+            WHAT THIS OBJECT REPRESENTS
+                The decoder of the Qwen 3.5 models: layer i is a pre-norm attention block
+                when bit i of attention_mask is set, and a Gated DeltaNet block otherwise
+                (gqa_transformer_unified::delta_net_block: RMSNorm, one projection to
+                gated_delta_net_::INPUT values, gated_delta_net_, ssm_out, residual add,
+                then the SwiGLU sublayer). The attention layers of these models carry an
+                output gate and a partial rotation, which are runtime settings of
+                gqa_attention_ that the GGUF import sets before the first forward pass.
+                It exports the constants of short_conv_transformer_config, plus
+                SSM_K_HEADS, SSM_V_HEADS and SSM_HEAD_DIM.
+        !*/
+    };
+
+    // ----------------------------------------------------------------------------------------
+
 
 // ----------------------------------------------------------------------------------------
 

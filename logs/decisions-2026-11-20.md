@@ -2,6 +2,14 @@
 
 Consigne de l'humain, le matin : « ARRÊT les tests de perfs, et continue la roadmap ». Ce fichier dit ce que j'ai décidé seul, et pourquoi. Le plus récent est en haut.
 
+## 8. Qwen 3.5 dans dlib : cinq choix
+
+- **La règle delta en une couche à elle** (`gated_delta_net_`), entre deux couches linéaires, comme la convolution de LFM2 : les quatre projections d'entrée (attn_qkv, attn_gate, ssm_alpha, ssm_beta) sont fusionnées en une seule à l'import, ce qui garde un seul `linear_no_bias` que LoRA et l'export savent traiter.
+- **La passe arrière recalcule les états par morceaux de 64 tokens** au lieu de les garder tous : chaque état fait head_dim² valeurs par tête (16 384 pour le 0.8B), soit 512 Mo par couche pour 512 tokens ; les points de départ de chaque morceau suffisent, pour un calcul refait une fois.
+- **Le test de la dérivée contre une référence en double**, pas `test_layer` : ses différences finies en float donnaient 5 % d'écart sur cette couche, qui fondaient quand le pas diminuait (12 %, 1 %, 0,5 %) ; une référence écrite à part, en double, donne 1e-4 et vérifie en plus la passe avant.
+- **La rotation partielle par des fréquences nulles** plutôt qu'une rotation tronquée : les paires au-delà des 64 dimensions gardent un angle nul, ce que les passes avant, incrémentale et arrière de la couche font déjà sans changement ; seules les tables de cosinus et la disposition des lignes à l'import changent.
+- **La porte de sortie dans `gqa_attention_`**, rangée après les biais et réglée avant la mise en place comme eux : elle multiplie les têtes avant W_O, à l'intérieur de la couche fusionnée, qu'une couche à part ne pouvait pas atteindre. Gulliver ne change pas : sa version reste 6.10.1.
+
 ## 7. LFM2 avant Qwen 3.5, et la forme de la pile mixte
 
 - **LFM2 passe avant Qwen 3.5** (l'ordre de la feuille de route était Gemma 3, Qwen 3.5, LFM2, Mistral 3) : les deux mêlent des blocs d'attention à des couches linéaires, et la pile qui les mêle est la même. LFM2 la pose avec une couche neuve simple (une convolution de 3 poids par canal, dérivée en quelques lignes) ; Qwen 3.5 demande en plus la règle delta entraînable (dérivée à travers toute la séquence) et une attention à porte avec rotation partielle. On sépare ainsi la mise au point de la pile de celle de la couche difficile.

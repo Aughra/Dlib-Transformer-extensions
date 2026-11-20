@@ -260,6 +260,28 @@ void build_expected_tensors(const model_spec& s, std::vector<expected_tensor>& o
     {
         const string p = "blk." + std::to_string(i) + ".";
         out.push_back({ p + "attn_norm.weight",   d });
+        // Qwen 3.5 names post_attention_norm the norm before the feed-forward.
+        const string ffn_norm = s.delta_blocks ? "post_attention_norm.weight" : "ffn_norm.weight";
+        if (s.delta_blocks && !((s.attention_mask >> i) & 1ull))
+        {
+            // A Gated DeltaNet block of Qwen 3.5 in place of the attention.
+            const long long hv = s.ssm_v_heads, vd = hv * s.ssm_head_dim;
+            const long long c = (2LL * s.ssm_k_heads + hv) * s.ssm_head_dim;
+            out.push_back({ p + "attn_qkv.weight",   d * c });
+            out.push_back({ p + "attn_gate.weight",  d * vd });
+            out.push_back({ p + "ssm_alpha.weight",  d * hv });
+            out.push_back({ p + "ssm_beta.weight",   d * hv });
+            out.push_back({ p + "ssm_conv1d.weight", c * s.conv_kernel });
+            out.push_back({ p + "ssm_dt.bias",       hv });
+            out.push_back({ p + "ssm_a",             hv });
+            out.push_back({ p + "ssm_norm.weight",   s.ssm_head_dim });
+            out.push_back({ p + "ssm_out.weight",    vd * d });
+            out.push_back({ p + ffn_norm,            d });
+            out.push_back({ p + "ffn_gate.weight",    d * ff });
+            out.push_back({ p + "ffn_up.weight",      d * ff });
+            out.push_back({ p + "ffn_down.weight",    ff * d });
+            continue;
+        }
         if (s.conv_blocks && !((s.attention_mask >> i) & 1ull))
         {
             // A short-convolution block of LFM2 in place of the attention.
@@ -272,7 +294,8 @@ void build_expected_tensors(const model_spec& s, std::vector<expected_tensor>& o
             out.push_back({ p + "ffn_down.weight",    ff * d });
             continue;
         }
-        out.push_back({ p + "attn_q.weight",      d * q });
+        // The query of Qwen 3.5 holds its output gate.
+        out.push_back({ p + "attn_q.weight",      d * q * (s.delta_blocks ? 2 : 1) });
         out.push_back({ p + "attn_k.weight",      d * kv });
         out.push_back({ p + "attn_v.weight",      d * kv });
         out.push_back({ p + "attn_output.weight", q * d });
@@ -281,7 +304,7 @@ void build_expected_tensors(const model_spec& s, std::vector<expected_tensor>& o
             out.push_back({ p + "attn_q_norm.weight", s.head_dim });
             out.push_back({ p + "attn_k_norm.weight", s.head_dim });
         }
-        out.push_back({ p + "ffn_norm.weight",    d });
+        out.push_back({ p + ffn_norm,             d });
         out.push_back({ p + "ffn_gate.weight",    d * ff });
         out.push_back({ p + "ffn_up.weight",      d * ff });
         out.push_back({ p + "ffn_down.weight",    ff * d });
@@ -477,7 +500,11 @@ bool model_matches_header(const model_spec& s)
         && s.ffn_den == imported_model::FFN_DEN
         && s.gemma_blocks == imported_model::GEMMA_BLOCKS
         && s.attention_mask == imported_model::ATTENTION_MASK
-        && s.conv_kernel == imported_model::CONV_KERNEL;
+        && s.conv_kernel == imported_model::CONV_KERNEL
+        && s.ssm_k_heads == imported_model::SSM_K_HEADS
+        && s.ssm_v_heads == imported_model::SSM_V_HEADS
+        && s.ssm_head_dim == imported_model::SSM_HEAD_DIM
+        && s.rope_dims == imported_model::ROPE_DIMS;
 }
 
 using infer_net = imported_model::network_type<false>;

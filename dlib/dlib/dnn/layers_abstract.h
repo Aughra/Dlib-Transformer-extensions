@@ -3639,6 +3639,49 @@ namespace dlib
 
 // ----------------------------------------------------------------------------------------
 
+    template <long k_heads, long v_heads, long head_dim, long conv_kernel>
+    class gated_delta_net_
+    {
+        /*!
+            REQUIREMENTS ON TEMPLATE PARAMETERS
+                - k_heads > 0, v_heads % k_heads == 0, head_dim > 0, conv_kernel >= 1
+
+            WHAT THIS OBJECT REPRESENTS
+                This is an implementation of the EXAMPLE_COMPUTATIONAL_LAYER_ interface
+                defined above: the Gated DeltaNet of the Qwen 3.5 models. Each input row
+                (one token, k() == 1, nc() == INPUT) holds side by side the mix of
+                MIX = (2*k_heads + v_heads)*head_dim channels (queries, keys, values),
+                the gate z of VALUE = v_heads*head_dim values, then alpha and beta,
+                v_heads values each. Each output row holds VALUE values:
+                    mix  = SiLU(causal convolution of conv_kernel taps, per channel)
+                    q, k = L2-normalized per head
+                    g = softplus(alpha + dt_bias)*A,  b = sigmoid(beta)
+                    per value head h (key head h % k_heads), state S of head_dim^2:
+                        S = exp(g) S;  S += k (b (v - S^T k))^T;  o = S^T q / sqrt(head_dim)
+                    y = RMSNorm(o, per head) * norm * SiLU(z)
+                The parameters are the convolution weights (MIX rows of conv_kernel
+                taps), dt_bias, A and the norm weights: PARAMS values. Left padding
+                declared to network_context leaves the state untouched.
+
+                In the prefill and incremental inference modes the layer keeps, per
+                sample, the convolution window and the states, so an incremental pass
+                carries on from them; a KV cache clear request drops them. The backward
+                pass assumes a full pass; it recomputes the states by chunks of 64
+                tokens from the ones kept at their starts.
+        !*/
+    public:
+        static constexpr long MIX, VALUE, INPUT, CONV_PARAMS, PARAMS;
+        void set_eps(double e);  // epsilon of the L2 and RMS norms
+        double get_eps() const;
+        void reset_state();
+        // Plus the members of EXAMPLE_COMPUTATIONAL_LAYER_.
+    };
+
+    template <long k_heads, long v_heads, long head_dim, long conv_kernel, typename SUBNET>
+    using gated_delta_net = add_layer<gated_delta_net_<k_heads, v_heads, head_dim, conv_kernel>, SUBNET>;
+
+// ----------------------------------------------------------------------------------------
+
     class smelu_
     {
         /*!

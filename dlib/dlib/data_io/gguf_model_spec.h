@@ -22,7 +22,7 @@
 
 namespace dlib
 {
-    enum class arch_family { llama, mistral, gemma, gemma2, gemma3, qwen2, qwen3, mixtral, granite_moe, lfm2, unknown };
+    enum class arch_family { llama, mistral, gemma, gemma2, gemma3, qwen2, qwen3, mixtral, granite_moe, lfm2, qwen35, unknown };
 
     inline arch_family arch_family_from_name(const std::string& a)
     {
@@ -36,6 +36,7 @@ namespace dlib
         if (a == "mixtral") return arch_family::mixtral;
         if (a == "granitemoe") return arch_family::granite_moe;
         if (a == "lfm2")    return arch_family::lfm2;
+        if (a == "qwen35")  return arch_family::qwen35;
         return arch_family::unknown;
     }
 
@@ -94,6 +95,18 @@ namespace dlib
         bool conv_blocks = false;
         unsigned long long attention_mask = 0;
         long conv_kernel = 0;
+
+        /* Qwen 3.5: one attention layer every full_attention_interval, the others Gated
+           DeltaNet blocks (delta_blocks) of ssm_k_heads key heads and ssm_v_heads value heads
+           of ssm_head_dim values, their convolution of conv_kernel taps; the attention layers
+           carry an output gate and rotate rope_dims of their head_dim dimensions. The layers
+           of multi-token prediction (nextn_predict_layers) are left out of n_layers. */
+        bool delta_blocks = false;
+        long ssm_k_heads = 0;
+        long ssm_v_heads = 0;
+        long ssm_head_dim = 0;
+        long rope_dims = 0;
+        long nextn_layers = 0;
     };
 
     inline long gcd_long(long a, long b)
@@ -252,7 +265,32 @@ namespace dlib
                 s.attention_mask |= 1ull << i;
             }
             s.conv_kernel = static_cast<long>(gguf_bounded_int(g, p + ".shortconv.l_cache", 0, 0, 64));
-            /* Layer 0 is a convolution: the QK-Norm is read on the first attention layer. */
+        }
+        if (s.family == arch_family::qwen35)
+        {
+            s.nextn_layers = static_cast<long>(gguf_bounded_int(g, p + ".nextn_predict_layers", 0, 0,
+                std::max<long>(0, s.n_layers - 1)));
+            s.n_layers -= s.nextn_layers;
+            const long interval = static_cast<long>(gguf_bounded_int(g, p + ".full_attention_interval", 4, 1,
+                std::max<long>(1, s.n_layers)));
+            if (s.n_layers > 64)
+                throw std::runtime_error("gguf: this Qwen 3.5 model has more than 64 layers");
+            s.delta_blocks = true;
+            for (long i = 0; i < s.n_layers; ++i)
+                if ((i + 1) % interval == 0) s.attention_mask |= 1ull << i;
+            s.conv_kernel  = static_cast<long>(gguf_bounded_int(g, p + ".ssm.conv_kernel", 0, 0, 64));
+            s.ssm_k_heads  = static_cast<long>(gguf_bounded_int(g, p + ".ssm.group_count", 0, 0, 1024));
+            s.ssm_v_heads  = static_cast<long>(gguf_bounded_int(g, p + ".ssm.time_step_rank", 0, 0, 1024));
+            s.ssm_head_dim = static_cast<long>(gguf_bounded_int(g, p + ".ssm.state_size", 0, 0, 4096));
+            const long inner = static_cast<long>(gguf_bounded_int(g, p + ".ssm.inner_size", 0, 0, int64_t(1) << 20));
+            if (inner != s.ssm_v_heads * s.ssm_head_dim)
+                throw std::runtime_error("gguf: the Gated DeltaNet inner size of this Qwen 3.5 model does not "
+                    "match its value heads");
+            s.rope_dims = static_cast<long>(gguf_bounded_int(g, p + ".rope.dimension_count", s.head_dim, 0, 4096));
+        }
+        if (s.conv_blocks || s.delta_blocks)
+        {
+            /* Layer 0 does not attend: the QK-Norm is read on the first attention layer. */
             for (long i = 0; i < s.n_layers; ++i)
                 if ((s.attention_mask >> i) & 1ull)
                 {
@@ -320,12 +358,18 @@ namespace dlib
               << ", residual " << s.residual_scale
               << ", attention " << s.attention_scale
               << ", logit " << s.logit_scale << "\n";
-        if (s.conv_blocks)
+        if (s.conv_blocks || s.delta_blocks)
         {
             o << "Attention layers   :";
             for (long i = 0; i < s.n_layers; ++i) if ((s.attention_mask >> i) & 1ull) o << " " << i;
-            o << " (the others: short convolution of " << s.conv_kernel << " taps)\n";
+            if (s.conv_blocks) o << " (the others: short convolution of " << s.conv_kernel << " taps)\n";
+            else o << " (the others: Gated DeltaNet, " << s.ssm_k_heads << "/" << s.ssm_v_heads << " heads of "
+                   << s.ssm_head_dim << ", convolution " << s.conv_kernel << ")\n";
         }
+        if (s.delta_blocks)
+            o << "Attention          : output gate, rotation of " << s.rope_dims << " of " << s.head_dim
+              << " dimensions" << (s.nextn_layers ? ", " + std::to_string(s.nextn_layers)
+                  + " multi-token prediction layer(s) left out" : std::string()) << "\n";
         o << "QK-Norm            : " << (s.qk_norm ? "yes" : "no") << "\n"
           << "Tied embeddings    : " << (s.tied_embeddings ? "yes" : "no") << "\n"
           << (s.embedding_model
@@ -357,13 +401,21 @@ namespace dlib
            unread, and a network computing something else than the model, without a word. */
         if (s.family == arch_family::unknown)
             r.blockers.push_back("architecture '" + s.arch_name + "' is not one of the supported families "
-                "(llama, mistral, qwen2, qwen3, gemma3, lfm2, mixtral, granitemoe)");
+                "(llama, mistral, qwen2, qwen3, qwen35, gemma3, lfm2, mixtral, granitemoe)");
         if (s.family == arch_family::gemma || s.family == arch_family::gemma2)
             r.blockers.push_back("Gemma family needs (1+w) RMSNorm, embedding scaling and GeGLU, not available yet");
         /* Gemma 3 as converted by llama.cpp: the conversion already adds 1 to every norm
            weight, so the plain RMSNorm reads them as they are. */
         if (s.conv_blocks && (s.conv_kernel < 1 || s.n_kv_heads == 0))
             r.blockers.push_back("LFM2 metadata without a convolution width or without attention layers");
+        if (s.delta_blocks && (s.conv_kernel < 1 || s.ssm_k_heads < 1 || s.ssm_head_dim < 1
+                || s.ssm_v_heads % s.ssm_k_heads != 0 || s.attention_mask == 0
+                || s.rope_dims < 2 || s.rope_dims > s.head_dim || s.rope_dims % 2 != 0))
+            r.blockers.push_back("Qwen 3.5 metadata with an unsupported Gated DeltaNet or rotation geometry");
+        /* The multimodal rotation sections of Qwen 3.5 give every section the same position
+           for text, which is the plain rotation. */
+        if (s.delta_blocks)
+            r.notes.push_back("text only: the multimodal rotation sections reduce to the plain rotation");
         if (s.family == arch_family::gemma3 && s.sliding_window > 0)
             r.notes.push_back("sliding window of " + std::to_string(s.sliding_window)
                 + " positions on five layers out of six");
@@ -435,7 +487,7 @@ namespace dlib
                 "expects " + std::to_string(s.d_model)
                 + "; the two files do not belong to the same model");
 
-        if (vs && (s.gemma_blocks || s.conv_blocks))
+        if (vs && (s.gemma_blocks || s.conv_blocks || s.delta_blocks))
             throw std::runtime_error("emit_header: the multimodal configuration has no Gemma "
                 "or short-convolution blocks yet; import the text model without its projector");
 
@@ -468,7 +520,12 @@ namespace dlib
             << "    static constexpr bool GEMMA_BLOCKS  = " << (s.gemma_blocks ? "true" : "false") << ";\n"
             << "    // Bit i set: layer i attends; clear: a short-convolution block (LFM2).\n"
             << "    static constexpr unsigned long long ATTENTION_MASK = " << s.attention_mask << "ull;\n"
-            << "    static constexpr long CONV_KERNEL   = " << s.conv_kernel << ";\n\n"
+            << "    static constexpr long CONV_KERNEL   = " << s.conv_kernel << ";\n"
+            << "    // Gated DeltaNet geometry and rotated dimensions (Qwen 3.5).\n"
+            << "    static constexpr long SSM_K_HEADS   = " << s.ssm_k_heads << ";\n"
+            << "    static constexpr long SSM_V_HEADS   = " << s.ssm_v_heads << ";\n"
+            << "    static constexpr long SSM_HEAD_DIM  = " << s.ssm_head_dim << ";\n"
+            << "    static constexpr long ROPE_DIMS     = " << s.rope_dims << ";\n\n"
             << "    static constexpr bool HAS_VISION    = " << (vs ? "true" : "false") << ";\n\n";
 
         if (vs)
@@ -488,6 +545,13 @@ namespace dlib
                 << "    // Positions a prompt must reserve for one image.\n"
                 << "    static constexpr long VISUAL_TOKENS = config::VISUAL_TOKENS;\n"
                 << "    using vision_tower = config::vision_tower;\n\n";
+        }
+        else if (s.delta_blocks)
+        {
+            out << "    using config = dlib::delta_net_transformer_config<\n"
+                << "        VOCAB_SIZE, NUM_LAYERS, NUM_HEADS, NUM_KV_HEADS, EMBEDDING_DIM, FFN_NUM, FFN_DEN,\n"
+                << "        HEAD_DIM, USE_QK_NORM, ATTENTION_MASK, SSM_K_HEADS, SSM_V_HEADS, SSM_HEAD_DIM,\n"
+                << "        CONV_KERNEL>;\n\n";
         }
         else if (s.conv_blocks)
         {
@@ -522,6 +586,10 @@ namespace dlib
             << (s.conv_blocks ? "    // Convolution layers: blk.{i}.shortconv.in_proj.weight, blk.{i}.shortconv.conv.weight,\n"
                                 "    //   blk.{i}.shortconv.out_proj.weight in place of the attention tensors;\n"
                                 "    //   the final norm is token_embd_norm.weight.\n" : "")
+            << (s.delta_blocks ? "    // Gated DeltaNet layers: blk.{i}.attn_qkv, attn_gate, ssm_alpha, ssm_beta (fused into\n"
+                                 "    //   one projection), ssm_conv1d, ssm_dt.bias, ssm_a, ssm_norm, ssm_out; attention\n"
+                                 "    //   layers: attn_q holds the query and the output gate of each head; the norm\n"
+                                 "    //   before the feed-forward is post_attention_norm.\n" : "")
             << "}\n\n"
             << "/* The first imported-model header included in a translation unit claims the\n"
             << "   generic `imported_model` alias, so single-model programs compile unchanged\n"

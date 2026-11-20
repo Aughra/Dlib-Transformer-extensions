@@ -16,6 +16,8 @@
 #include <vector>
 #include <string>
 #include <stdexcept>
+#include <utility>
+#include <algorithm>
 #include <cstring>
 #include <iostream>
 
@@ -148,6 +150,10 @@ namespace dlib
                sliding-window layers keep unscaled positions, as in llama.cpp. */
             float global_position_scale = 1.f;
             long swa_window = 0;     // window of the sliding-window layers
+            /* Qwen 3.5: an output gate on every attention layer, and a rotation of the first
+               rope_dims dimensions of each head (0: the whole head). */
+            bool output_gate = false;
+            long rope_dims = 0;
             template <typename T>
             auto set(T& layer, int) -> decltype((void)layer.set_rope_theta_base(0.f))
             {
@@ -170,6 +176,8 @@ namespace dlib
                 layer.set_qk_norm_eps(qk_eps);
                 layer.set_yarn_params(0.0f, 0.0f, 0, false); // classical RoPE only
                 layer.set_qkv_bias_enabled(qkv_bias);
+                layer.set_output_gate_enabled(output_gate);
+                layer.set_rope_rotary_dims(rope_dims);
             }
             template <typename T> void set(T&, long) {}
             template <typename T> void operator()(T& layer) { set(layer, 0); }
@@ -243,7 +251,8 @@ namespace dlib
                 static_cast<float>(spec.rope_freq_base_swa), spec.n_layers, &visited,
                 spec.gemma_blocks && spec.rope_scaling_type == "linear" && spec.rope_scaling_factor > 0
                     ? static_cast<float>(1.0 / spec.rope_scaling_factor) : 1.f,
-                spec.gemma_blocks ? spec.sliding_window : 0 };
+                spec.gemma_blocks ? spec.sliding_window : 0,
+                spec.delta_blocks, spec.delta_blocks && spec.rope_dims < spec.head_dim ? spec.rope_dims : 0 };
             visit_computational_layers(net, cfg);
             if (spec.gemma_blocks && visited != spec.n_layers)
                 throw std::runtime_error("import_gguf_weights: met " + std::to_string(visited)
@@ -340,7 +349,64 @@ namespace dlib
                 transpose_into(src, ff, d, dst.data(), 0, 0, false);
                 copy_into(next("ffn_gate"), dst, p + gate_inner);
             }
-            copy_into(next("ffn_norm"), fetch(g, p + "ffn_norm.weight"), p + "ffn_norm");
+            /* Qwen 3.5 names post_attention_norm the norm before the feed-forward. */
+            copy_into(next("ffn_norm"), fetch(g, p + (spec.delta_blocks ? "post_attention_norm.weight"
+                : "ffn_norm.weight")), p + "ffn_norm");
+
+            /* A Gated DeltaNet block of Qwen 3.5: ssm_out [VD, d]; the layer parameters (the
+               convolution as the file lays it out, dt_bias, A, the norm weights); the fused input
+               projection [d, C + VD + 2 Hv]: attn_qkv, attn_gate, ssm_alpha, ssm_beta side by side. */
+            if (spec.delta_blocks && !((spec.attention_mask >> b) & 1ull))
+            {
+                const long Hv = spec.ssm_v_heads, VD = Hv * spec.ssm_head_dim;
+                const long C = (2 * spec.ssm_k_heads + Hv) * spec.ssm_head_dim;
+                const long W = C + VD + 2 * Hv;
+                auto sized = [&](const std::string& name, size_t n) {
+                    std::vector<float> v = fetch(g, name);
+                    if (v.size() != n)
+                        throw std::runtime_error("import_gguf_weights: " + name + " holds " + std::to_string(v.size())
+                            + " values, expected " + std::to_string(n));
+                    return v;
+                };
+                {
+                    std::vector<float> src = sized(p + "ssm_out.weight", static_cast<size_t>(VD) * d),
+                        dst(static_cast<size_t>(VD) * d);
+                    transpose_into(src, d, VD, dst.data(), 0, 0, false);
+                    copy_into(next("ssm_out"), dst, p + "ssm_out");
+                }
+                {
+                    tensor& t = next("gated_delta_net");
+                    std::vector<float> all = sized(p + "ssm_conv1d.weight", static_cast<size_t>(C * spec.conv_kernel));
+                    for (const char* part : { "ssm_dt.bias", "ssm_a" })
+                    {
+                        const std::vector<float> v = sized(p + part, static_cast<size_t>(Hv));
+                        all.insert(all.end(), v.begin(), v.end());
+                    }
+                    const std::vector<float> nw = sized(p + "ssm_norm.weight", static_cast<size_t>(spec.ssm_head_dim));
+                    all.insert(all.end(), nw.begin(), nw.end());
+                    if (all.size() != t.size())
+                        throw std::runtime_error("import_gguf_weights: the Gated DeltaNet of " + p
+                            + " holds " + std::to_string(t.size()) + " parameters, the file " + std::to_string(all.size()));
+                    copy_into(t, all, p + "gated_delta_net");
+                }
+                {
+                    std::vector<float> dst(static_cast<size_t>(d) * W);
+                    long off = 0;
+                    for (const auto& part : { std::make_pair("attn_qkv.weight", C), std::make_pair("attn_gate.weight", VD),
+                                              std::make_pair("ssm_alpha.weight", Hv), std::make_pair("ssm_beta.weight", Hv) })
+                    {
+                        const long n = part.second;
+                        const std::vector<float> src = sized(p + part.first, static_cast<size_t>(n) * d);
+                        for (long o = 0; o < n; ++o)
+                            for (long i = 0; i < d; ++i)
+                                dst[static_cast<size_t>(i) * W + off + o] = src[static_cast<size_t>(o) * d + i];
+                        off += n;
+                    }
+                    copy_into(next("delta_in_proj"), dst, p + "delta_in_proj");
+                }
+                copy_into(next("attn_norm"), fetch(g, p + "attn_norm.weight"), p + "attn_norm");
+                continue;
+            }
 
             /* A short-convolution block of LFM2: out_proj [d, d], the D x kernel weights as the
                file lays them out (one row of taps per channel), in_proj [d, 3d]. */
@@ -385,16 +451,49 @@ namespace dlib
                    carry QKV biases; a bias-free layer holds none. */
                 const size_t nb = has_qkv_bias
                     ? static_cast<size_t>(qd) + 2 * static_cast<size_t>(kv) : 0;
-                std::vector<float> fused(2 * nq + 2 * nkv + 2 * ng + nb, 0.0f);
+                /* The output gate of Qwen 3.5 closes the blob, after the bias slots. */
+                const size_t ngate = spec.delta_blocks ? nq : 0;
+                std::vector<float> fused(2 * nq + 2 * nkv + 2 * ng + nb + ngate, 0.0f);
                 std::vector<float> sq = fetch(g, p + "attn_q.weight");
                 std::vector<float> sk = fetch(g, p + "attn_k.weight");
+                /* Qwen 3.5: attn_q holds, head by head, the query then its gate; the rotation is
+                   NeoX over the first rope_dims dimensions of each head. The query and key rows
+                   are put in the interleaved order of the layer here, over those dimensions only
+                   (the gate multiplies the merged heads, which are not rotated, and keeps its order);
+                   partial(r) maps a row of a head to its place. */
+                const long rd = spec.delta_blocks ? spec.rope_dims : hd;
+                auto partial = [&](long r) { return r >= rd ? r : (r < rd / 2 ? 2 * r : 2 * (r - rd / 2) + 1); };
+                std::vector<float> sgate;
+                if (spec.delta_blocks)
+                {
+                    if (sq.size() != 2 * nq || sk.size() != nkv)
+                        throw std::runtime_error("import_gguf_weights: unexpected query or key size in " + p);
+                    std::vector<float> q(nq), k(nkv);
+                    sgate.resize(nq);
+                    for (long h = 0; h < nh; ++h)
+                        for (long r = 0; r < hd; ++r)
+                        {
+                            const float* qrow = sq.data() + (static_cast<size_t>(h) * 2 * hd + r) * d;
+                            const float* grow = sq.data() + (static_cast<size_t>(h) * 2 * hd + hd + r) * d;
+                            std::copy(qrow, qrow + d, q.data() + (static_cast<size_t>(h) * hd + partial(r)) * d);
+                            std::copy(grow, grow + d, sgate.data() + (static_cast<size_t>(h) * hd + r) * d);
+                        }
+                    for (long h = 0; h < spec.n_kv_heads; ++h)
+                        for (long r = 0; r < hd; ++r)
+                        {
+                            const float* krow = sk.data() + (static_cast<size_t>(h) * hd + r) * d;
+                            std::copy(krow, krow + d, k.data() + (static_cast<size_t>(h) * hd + partial(r)) * d);
+                        }
+                    sq.swap(q);
+                    sk.swap(k);
+                }
                 std::vector<float> sv = fetch(g, p + "attn_v.weight");
                 std::vector<float> so = fetch(g, p + "attn_output.weight");
                 /* qwen families keep the split-half (NeoX) Q/K layout; llama-family
                    files come pre-permuted for the interleaved kernel. */
-                const bool neox_layout = opt.rope_permute
+                const bool neox_layout = !spec.delta_blocks && (opt.rope_permute
                     || spec.arch_name == "qwen2" || spec.arch_name == "qwen3" || spec.arch_name == "gemma3"
-                    || spec.arch_name == "lfm2";
+                    || spec.arch_name == "lfm2");
                 transpose_into(sq, qd, d, fused.data(), nh, hd, neox_layout);          // wq (RoPE)
                 transpose_into(sk, kv, d, fused.data() + nq, spec.n_kv_heads, hd, neox_layout); // wk (RoPE)
                 transpose_into(sv, kv, d, fused.data() + nq + nkv, 0, 0, false);            // wv
@@ -424,7 +523,8 @@ namespace dlib
                     float* dst_gk = dst_gq + ng;
                     for (long r = 0; r < hd; ++r)
                     {
-                        const long ri = neox_layout ? ((r < half) ? (2 * r) : (2 * (r - half) + 1)) : r;
+                        const long ri = spec.delta_blocks ? partial(r)
+                            : neox_layout ? ((r < half) ? (2 * r) : (2 * (r - half) + 1)) : r;
                         dst_gq[ri] = gq[static_cast<size_t>(r)];
                         dst_gk[ri] = gk[static_cast<size_t>(r)];
                     }
@@ -456,6 +556,8 @@ namespace dlib
                     /* V is rotation-free: copied verbatim, never permuted. */
                     std::memcpy(fused.data() + bb + qd + kv, bv.data(), bv.size() * sizeof(float));
                 }
+                if (spec.delta_blocks)
+                    transpose_into(sgate, qd, d, fused.data() + 2 * nq + 2 * nkv + 2 * ng + nb, 0, 0, false);  // wg
                 copy_into(next("attention"), fused, p + "attention");
             }
             copy_into(next("attn_norm"), fetch(g, p + "attn_norm.weight"), p + "attn_norm");

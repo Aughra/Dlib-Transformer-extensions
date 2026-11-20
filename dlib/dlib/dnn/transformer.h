@@ -185,6 +185,26 @@ namespace dlib
             rope_q_helper_.get().set_position_scale(scale);
             rope_k_helper_.get().set_position_scale(scale);
         }
+        // Partial rotation: only the first n dimensions of each head turn (Qwen 3.5: 64 of
+        // 256). 0 rotates the whole head. Set before the first forward pass.
+        void set_rope_rotary_dims(long n)
+        {
+            rope_q_helper_.get().set_rotary_dims(n);
+            rope_k_helper_.get().set_rotary_dims(n);
+        }
+        long get_rope_rotary_dims() const { return rope_q_helper_.get().get_rotary_dims(); }
+
+        /* Output gate (Qwen 3.5): the merged heads are multiplied, element by element, by
+           sigmoid(x . W_G) before the output projection, W_G being EMBEDDING_DIM x
+           Q_PROJ_DIM. Its weights close the fixed part of the blob, after the QKV bias slots.
+           Set before the layer is set up. */
+        void set_output_gate_enabled(bool enabled)
+        {
+            DLIB_CASSERT(params.size() == 0 || enabled == has_output_gate_,
+                "set_output_gate_enabled must be called before the layer is set up");
+            has_output_gate_ = enabled;
+        }
+        bool output_gate_enabled() const { return has_output_gate_; }
 
         /* Sliding-window attention: with a window of W > 0 positions, the query at position
            i sees the keys of positions i - W + 1 to i only (the layers of Gemma 3 that are
@@ -315,6 +335,8 @@ namespace dlib
             saved_scores.clear();
             saved_attn.clear();
             saved_ctx_flat.clear();
+            saved_gate.clear();
+            saved_ctx_ungated.clear();
             qk_scale_q.clear();
             qk_scale_k.clear();
             bias_ones_.clear();
@@ -407,6 +429,8 @@ namespace dlib
                 alias_tensor ball(1, bias_param_count());
                 ball(params, bq_offset) = 0;   // until the loader fills them
             }
+            if (has_output_gate_)
+                randomize_block(rnd, EMBEDDING_DIM, Q_PROJ_DIM, params, gate_offset());
 
             if (USE_QK_NORM)
             {
@@ -499,6 +523,32 @@ namespace dlib
                 alias_tensor cf_2d(B * N, Q_PROJ_DIM);
                 auto cf_view = cf_2d(saved_ctx_flat, 0);
                 tt::gemm(0.0f, dwo, 1.0f, cf_view, true, go_view, false);
+            }
+
+            // Step 9b backward: through the output gate, to the heads, W_G and x.
+            if (has_output_gate_)
+            {
+                resizable_tensor dgate(B * N, Q_PROJ_DIM);
+                float* dg = dgate.host();
+                float* dc = dctx_flat.host();
+                const float* g = saved_gate.host();
+                const float* c = saved_ctx_ungated.host();
+                const size_t n = static_cast<size_t>(B * N) * Q_PROJ_DIM;
+                for (size_t i = 0; i < n; ++i)
+                {
+                    dg[i] = dc[i] * c[i] * g[i] * (1.0f - g[i]);
+                    dc[i] *= g[i];
+                }
+                alias_tensor wg_a(EMBEDDING_DIM, Q_PROJ_DIM);
+                auto wg = wg_a(params, gate_offset());
+                auto dwg = wg_a(params_grad, gate_offset());
+                alias_tensor x_2d(B * N, EMBEDDING_DIM);
+                auto x_view = x_2d(const_cast<tensor&>(x), 0);
+                alias_tensor dx_2d(B * N, EMBEDDING_DIM);
+                auto dx_view = dx_2d(dx, 0);
+                tt::gemm(1.0f, dx_view, 1.0f, dgate, false, wg, true);
+                if (adapters_active()) dwg = 0;
+                else tt::gemm(0.0f, dwg, 1.0f, x_view, true, dgate, false);
             }
 
             // Step 9 backward
@@ -683,6 +733,8 @@ namespace dlib
             }
             DLIB_CASSERT(!offload_.active(),
                 "set_qkv_bias_enabled cannot lay out parameters held in host residency");
+            DLIB_CASSERT(!has_output_gate_,
+                "set_qkv_bias_enabled cannot lay out a set-up layer that carries an output gate");
 
             const size_t kept = weight_param_count();
             const size_t adapters = q_adapter_.parameter_count() + v_adapter_.parameter_count();
@@ -752,6 +804,7 @@ namespace dlib
             serialize(item.tril_helper_, out);
             serialize(item.qk_norm_eps_, out);
             serialize(item.sliding_window_, out);
+            serialize(item.has_output_gate_, out);
         }
 
         friend void deserialize(gqa_attention_& item, std::istream& in)
@@ -802,6 +855,7 @@ namespace dlib
             deserialize(item.tril_helper_, in);
             deserialize(item.qk_norm_eps_, in);
             deserialize(item.sliding_window_, in);
+            deserialize(item.has_output_gate_, in);
 
             // A layer never set up holds no parameters, and reads back as such.
             const size_t expected_params = item.base_param_count()
@@ -863,6 +917,8 @@ namespace dlib
         low_rank_adapter q_adapter_, v_adapter_;
         size_t q_adapter_offset = 0, v_adapter_offset = 0;
         bool has_qkv_bias_ = false;
+        bool has_output_gate_ = false;
+        resizable_tensor saved_gate, saved_ctx_ungated;
         resizable_tensor bias_ones_;
         double qk_norm_eps_ = DEFAULT_RMS_NORM_EPS;
         long sliding_window_ = 0;   // 0: no sliding window (see set_sliding_window)
@@ -1007,7 +1063,39 @@ namespace dlib
         /* Size of the fixed part of the blob: everything but the adapter blocks. */
         size_t base_param_count() const
         {
+            return gate_offset() + (has_output_gate_ ? gate_param_count() : 0);
+        }
+
+        static size_t gate_param_count()
+        {
+            return static_cast<size_t>(EMBEDDING_DIM) * Q_PROJ_DIM;
+        }
+
+        // The output gate weights follow the bias slots.
+        size_t gate_offset() const
+        {
             return weight_param_count() + (has_qkv_bias_ ? bias_param_count() : 0);
+        }
+
+        /* Forward of the output gate: saved_gate receives sigmoid(x . W_G), ungated (when
+           given) a copy of ctx before the product, and ctx is multiplied in place. */
+        void apply_output_gate(const tensor& P, const tensor& x, long rows, tensor& ctx, resizable_tensor* ungated)
+        {
+            alias_tensor wg_a(EMBEDDING_DIM, Q_PROJ_DIM);
+            auto wg = wg_a(const_cast<tensor&>(P), gate_offset());
+            alias_tensor x_2d(rows, EMBEDDING_DIM);
+            auto x_view = x_2d(const_cast<tensor&>(x), 0);
+            saved_gate.set_size(rows, Q_PROJ_DIM);
+            tt::gemm(0.0f, saved_gate, 1.0f, x_view, false, wg, false);
+            if (ungated) { ungated->copy_size(ctx); memcpy(*ungated, ctx); }
+            float* g = saved_gate.host();
+            float* c = ctx.host();
+            const size_t n = static_cast<size_t>(rows) * Q_PROJ_DIM;
+            for (size_t i = 0; i < n; ++i)
+            {
+                g[i] = 1.0f / (1.0f + std::exp(-g[i]));
+                c[i] *= g[i];
+            }
         }
 
         /* The bias slots follow the QK-Norm gammas when present, so the offsets before
@@ -1322,6 +1410,10 @@ namespace dlib
             saved_ctx_flat.set_size(B, 1, N, Q_PROJ_DIM);
             tt::merge_heads(false, saved_ctx_flat, ctx_4d);
 
+            // Step 9b: output gate; saved_ctx_flat holds the gated heads, which W_O reads.
+            if (has_output_gate_)
+                apply_output_gate(P, x, B * N, saved_ctx_flat, &saved_ctx_ungated);
+
             // Step 10: W_O projection
             output.set_size(B, 1, N, EMBEDDING_DIM);
             {
@@ -1534,6 +1626,8 @@ namespace dlib
             // Step 10: merge heads + W_O projection
             resizable_tensor ctx_flat(1, 1, 1, Q_PROJ_DIM);
             tt::merge_heads(false, ctx_flat, inc_ctx);
+            if (has_output_gate_)
+                apply_output_gate(P, x, 1, ctx_flat, nullptr);
 
             output.set_size(1, 1, 1, EMBEDDING_DIM);
             {
@@ -1792,6 +1886,20 @@ namespace dlib
         using short_conv_block =
             add_prev5<swiglu<d_model, hidden_num, hidden_den, rms_norm<tag5<
             add_prev1<LINEAR<d_model, short_conv<conv_kernel, LINEAR<3 * d_model,
+            rms_norm<tag1<SUBNET>>>>>>>>, LINEAR>>;
+
+        /* The Gated DeltaNet block of the Qwen 3.5 models: the pre-norm block whose attention
+           is replaced by one projection holding the mix, the gate z, alpha and beta side by
+           side (gated_delta_net_::INPUT values), the Gated DeltaNet and its output projection.
+           In visit order (output to input): ffn_down, ffn_up, ffn_gate, the feed-forward norm,
+           ssm_out, the DeltaNet parameters, the fused input projection, the block norm. */
+        template<long d_model, long k_heads, long v_heads, long ssm_head_dim, long conv_kernel,
+            long hidden_num, long hidden_den, typename SUBNET,
+            template <unsigned long, typename> class LINEAR = linear>
+        using delta_net_block =
+            add_prev5<swiglu<d_model, hidden_num, hidden_den, rms_norm<tag5<
+            add_prev1<LINEAR<d_model, gated_delta_net<k_heads, v_heads, ssm_head_dim, conv_kernel,
+            LINEAR<gated_delta_net_<k_heads, v_heads, ssm_head_dim, conv_kernel>::INPUT,
             rms_norm<tag1<SUBNET>>>>>>>>, LINEAR>>;
 
         /* A stack mixing attention blocks with another kind of block (LFM2, Qwen 3.5): bit i

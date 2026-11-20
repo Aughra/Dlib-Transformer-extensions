@@ -366,6 +366,34 @@ namespace dlib
                   kept, and the slots are added at zero or removed. Call it before
                   training starts, since a solver holds state shaped like the
                   tensor.
+                - A layer already set up with an output gate cannot be laid out
+                  again (DLIB_CASSERT).
+        !*/
+
+        void set_output_gate_enabled(bool enabled);
+        bool output_gate_enabled() const;
+        /*!
+            requires
+                - the layer is not set up yet, or enabled == output_gate_enabled()
+            ensures
+                - Enables the output gate of the Qwen 3.5 attention: the merged heads
+                  are multiplied, element by element, by sigmoid(x*W_G) before the
+                  output projection, W_G being EMBEDDING_DIM x Q_PROJ_DIM. Its weights
+                  close the fixed part of the parameter tensor, after the QKV bias
+                  slots and before the adapter blocks; it is frozen with the other
+                  weights while adapters are active. The flag is serialized.
+        !*/
+
+        void set_rope_rotary_dims(long n);
+        long get_rope_rotary_dims() const;
+        /*!
+            requires
+                - n >= 0 and n is even
+            ensures
+                - Only the first n dimensions of each head are rotated (0, the
+                  default, rotates the whole head); see
+                  rotary_positional_embedding_::set_rotary_dims(). Set before the
+                  first forward pass.
         !*/
 
         void reset_kv_cache();

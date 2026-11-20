@@ -149,6 +149,16 @@ namespace dlib
         bool conv_blocks;
         unsigned long long attention_mask;
         long conv_kernel;
+        // Qwen 3.5: Gated DeltaNet blocks on the layers whose bit is clear in attention_mask
+        // (one attention layer every full_attention_interval), ssm_k_heads / ssm_v_heads
+        // heads of ssm_head_dim, convolution conv_kernel; attention with an output gate and
+        // rope_dims rotated dimensions; nextn_layers multi-token prediction layers left out.
+        bool delta_blocks;
+        long ssm_k_heads;
+        long ssm_v_heads;
+        long ssm_head_dim;
+        long rope_dims;
+        long nextn_layers;
     };
 
     // ---------------------------------------------------------------------------------

@@ -6802,6 +6802,248 @@ void test_multm_prev()
         DLIB_TEST(!loads(c1, wide));
     }
 
+    void test_gated_delta_net()
+    {
+        /* The Gated DeltaNet of Qwen 3.5, two key heads shared by four value heads of 4 values
+           and a convolution of 3 taps: its gradients (finite differences, on random lengths and
+           on 70 tokens, which crosses the 64-token chunks of the backward pass), decoding one
+           token at a time after a prefill gives the rows of the full pass, and the parameters
+           read back. */
+        print_spinner();
+        using layer_type = gated_delta_net_<2, 4, 4, 3>;
+        const long IN = layer_type::INPUT;
+        DLIB_TEST(IN == 56);
+        {
+            /* Against an independent reference in double precision: the forward pass, and the
+               gradients against central differences of the reference (test_layer's differences
+               in float are too noisy for the L2 norms of short heads). 70 tokens cross the
+               64-token chunks of the backward pass. */
+            const long HK = 2, HV = 4, SD = 4, K = 3, MIX = layer_type::MIX, VAL = layer_type::VALUE,
+                CP = layer_type::CONV_PARAMS, T = 70;
+            auto sg = [](double v) { return 1 / (1 + std::exp(-v)); };
+            auto ref = [&](const std::vector<double>& x, const std::vector<double>& p) {
+                std::vector<double> y(T * VAL, 0), S(HV * SD * SD, 0), m(MIX), kv(SD);
+                for (long t = 0; t < T; ++t)
+                {
+                    for (long c = 0; c < MIX; ++c)
+                    {
+                        double s = 0;
+                        for (long i = 0; i < K; ++i) { const long u = t - (K - 1) + i; if (u >= 0) s += p[c * K + i] * x[u * IN + c]; }
+                        m[c] = s * sg(s);
+                    }
+                    for (long h = 0; h < 2 * HK; ++h)
+                    {
+                        double ss = 0;
+                        for (long i = 0; i < SD; ++i) ss += m[h * SD + i] * m[h * SD + i];
+                        for (long i = 0; i < SD; ++i) m[h * SD + i] /= std::sqrt(ss + 1e-6);
+                    }
+                    for (long h = 0; h < HV; ++h)
+                    {
+                        const long kh = h % HK;
+                        const double *q = &m[kh * SD], *k = &m[(HK + kh) * SD], *v = &m[2 * HK * SD + h * SD];
+                        const double a = x[t * IN + MIX + VAL + h] + p[CP + h];
+                        const double g = (a > 20 ? a : std::log1p(std::exp(a))) * p[CP + HV + h];
+                        const double b = sg(x[t * IN + MIX + VAL + HV + h]);
+                        double* Sh = &S[h * SD * SD];
+                        for (long i = 0; i < SD * SD; ++i) Sh[i] *= std::exp(g);
+                        std::fill(kv.begin(), kv.end(), 0.0);
+                        for (long i = 0; i < SD; ++i) for (long c = 0; c < SD; ++c) kv[c] += k[i] * Sh[i * SD + c];
+                        for (long i = 0; i < SD; ++i) for (long c = 0; c < SD; ++c) Sh[i * SD + c] += k[i] * b * (v[c] - kv[c]);
+                        double* o = &y[t * VAL + h * SD];
+                        double ss = 0;
+                        for (long c = 0; c < SD; ++c)
+                        {
+                            double s = 0;
+                            for (long i = 0; i < SD; ++i) s += q[i] * Sh[i * SD + c];
+                            o[c] = s / std::sqrt((double)SD);
+                            ss += o[c] * o[c];
+                        }
+                        const double rs = 1 / std::sqrt(ss / SD + 1e-6);
+                        for (long c = 0; c < SD; ++c)
+                        {
+                            const double z = x[t * IN + MIX + h * SD + c];
+                            o[c] = o[c] * rs * p[CP + 2 * HV + c] * z * sg(z);
+                        }
+                    }
+                }
+                return y;
+            };
+            using net1 = gated_delta_net<2, 4, 4, 3, input_tensor>;
+            resizable_tensor x(1, 1, T, IN);
+            tt::tensor_rand rnd(4); rnd.fill_gaussian(x);
+            net1 l;
+            {
+                std::vector<resizable_tensor> one(1, x); resizable_tensor staged;
+                l.to_tensor(one.begin(), one.end(), staged);
+                network_context::reset();
+                l.forward(x);
+            }
+            tensor& w = layer<0>(l).layer_details().get_layer_params();
+            rnd.fill_gaussian(w, 0, 0.5);
+            for (long h = 0; h < HV; ++h) w.host()[CP + HV + h] = -0.5f;
+            network_context::reset();
+            l.forward(x);
+            resizable_tensor G; G.copy_size(l.get_output()); rnd.fill_gaussian(G);
+            std::vector<double> xd(x.host(), x.host() + x.size()), pd(w.host(), w.host() + w.size());
+            const std::vector<double> yr = ref(xd, pd);
+            double fw = 0;
+            for (long i = 0; i < T * VAL; ++i) fw = std::max(fw, std::abs(yr[i] - l.get_output().host()[i]));
+            DLIB_TEST_MSG(fw < 1e-5, "Gated DeltaNet forward differs from the reference by " << fw);
+            l.back_propagate_error(x, G);
+            const tensor& pg = layer<0>(l).get_parameter_gradient();
+            const tensor& xg = l.get_final_data_gradient();
+            auto f = [&]() { const auto o = ref(xd, pd); double s = 0; for (long i = 0; i < T * VAL; ++i) s += o[i] * G.host()[i]; return s; };
+            auto num = [&](double& v) { const double e = 1e-6, o = v; v = o + e; const double a = f(); v = o - e; const double b = f(); v = o; return (a - b) / (2 * e); };
+            double wp = 0, wx = 0;
+            for (long i = 0; i < layer_type::PARAMS; ++i)
+                wp = std::max(wp, std::abs(num(pd[i]) - pg.host()[i]) / (std::abs(pg.host()[i]) + 1e-3));
+            for (long i = 0; i < T * IN; i += 7)
+                wx = std::max(wx, std::abs(num(xd[i]) - xg.host()[i]) / (std::abs(xg.host()[i]) + 1e-3));
+            DLIB_TEST_MSG(wp < 2e-3 && wx < 2e-3, "Gated DeltaNet gradients off the reference: parameters "
+                << wp << ", inputs " << wx);
+            network_context::reset();
+        }
+        const long N = 9;
+        using net_type = gated_delta_net<2, 4, 4, 3, input_tensor>;
+        resizable_tensor x(1, 1, N, IN);
+        tt::tensor_rand rnd(21); rnd.fill_gaussian(x);
+        net_type net;
+        {
+            std::vector<resizable_tensor> one(1, x); resizable_tensor staged;
+            net.to_tensor(one.begin(), one.end(), staged);
+            network_context::reset();
+            net.forward(x);
+        }
+        // Weights away from the identity start, A kept negative.
+        tensor& w = layer<0>(net).layer_details().get_layer_params();
+        rnd.fill_gaussian(w, 0, 0.5);
+        for (long h = 0; h < 4; ++h)
+            w.host()[layer_type::CONV_PARAMS + 4 + h] = -0.3f - 0.2f * h;
+        network_context::reset();
+        network_context::set_inference_mode(network_context::inference_mode::full);
+        net.forward(x);
+        resizable_tensor full; full = net.get_output();
+        const long V = layer_type::VALUE;
+        DLIB_TEST(full.nc() == V && full.nr() == N);
+
+        network_context::reset();
+        network_context::request_kv_cache_clear();
+        const long first = 5;
+        double worst = 0;
+        for (long t0 = 0; t0 < N; t0 = (t0 == 0 ? first : t0 + 1))
+        {
+            const long n = t0 == 0 ? first : 1;
+            network_context::set_inference_mode(t0 == 0 ? network_context::inference_mode::prefill
+                                                        : network_context::inference_mode::incremental);
+            resizable_tensor xi(1, 1, n, IN);
+            std::copy(x.host() + t0 * IN, x.host() + (t0 + n) * IN, xi.host());
+            net.forward(xi);
+            if (t0 == 0) network_context::clear_kv_cache_request();
+            const tensor& y = net.get_output();
+            for (long j = 0; j < n * V; ++j)
+                worst = std::max<double>(worst, std::abs(y.host()[j] - full.host()[t0 * V + j]));
+        }
+        network_context::reset();
+        DLIB_TEST_MSG(worst < 1e-5, "incremental Gated DeltaNet differs from the full pass by " << worst);
+
+        std::ostringstream o; serialize(layer<0>(net).layer_details(), o);
+        layer_type back;
+        std::istringstream in(o.str()); deserialize(back, in);
+        DLIB_TEST(max(abs(mat(back.get_layer_params()) - mat(w))) == 0);
+        gated_delta_net_<2, 4, 8, 3> other;
+        std::istringstream in2(o.str());
+        DLIB_TEST_MSG((
+            [&]() { try { deserialize(other, in2); } catch (const serialization_error&) { return true; } return false; }()),
+            "another geometry must be refused");
+    }
+
+    void test_gqa_attention_gate_partial_rope()
+    {
+        /* Qwen 3.5 attention: an output gate sigmoid(x . W_G) on the merged heads, and a
+           rotation of the first dimensions of each head only. The gradients hold (finite
+           differences), the dimensions beyond the rotated ones keep their values, decoding
+           one token at a time gives the rows of the full pass, and both switches read back. */
+        print_spinner();
+        {
+            gqa_attention_<16, 2, 1, 8, true> l;
+            l.set_output_gate_enabled(true);
+            l.set_rope_rotary_dims(4);
+            dlib::timpl::test_layer_params p({ 0, 1, 0, 16 });
+            auto res = test_layer(l, p);
+            DLIB_TEST_MSG(res, res);
+        }
+        {
+            // The rotation alone: with 4 of 8 dimensions turned, 4..7 pass through.
+            rope<input_tensor> r;
+            r.layer_details().set_rotary_dims(4);
+            resizable_tensor x(1, 2, 6, 8);
+            tt::tensor_rand rnd(3); rnd.fill_gaussian(x);
+            std::vector<resizable_tensor> one(1, x); resizable_tensor staged;
+            r.to_tensor(one.begin(), one.end(), staged);
+            r.forward(x);
+            const tensor& y = r.get_output();
+            double kept = 0, moved = 0;
+            for (long h = 0; h < 2; ++h)
+                for (long t = 0; t < 6; ++t)
+                    for (long c = 0; c < 8; ++c)
+                    {
+                        const size_t i = ((size_t)h * 6 + t) * 8 + c;
+                        const double d = std::abs(y.host()[i] - x.host()[i]);
+                        if (c >= 4) kept += d; else if (t > 0) moved += d;
+                    }
+            DLIB_TEST_MSG(kept == 0, "dimensions beyond the rotated ones moved by " << kept);
+            DLIB_TEST_MSG(moved > 1e-3, "the rotated dimensions did not turn");
+        }
+        using att = gqa_attention<32, 4, 2, 8, input_tensor, true, true>;
+        const long N = 7, D = 32;
+        resizable_tensor x(1, 1, N, D);
+        tt::tensor_rand rnd(13); rnd.fill_gaussian(x);
+        att full_net;
+        full_net.layer_details().set_output_gate_enabled(true);
+        full_net.layer_details().set_rope_rotary_dims(4);
+        {
+            std::vector<resizable_tensor> one(1, x); resizable_tensor staged;
+            full_net.to_tensor(one.begin(), one.end(), staged);
+        }
+        DLIB_TEST(full_net.layer_details().get_layer_params().size() == 0);
+        network_context::reset();
+        network_context::set_inference_mode(network_context::inference_mode::full);
+        full_net.forward(x);
+        resizable_tensor full; full = full_net.get_output();
+        network_context::reset();
+        // The blob holds wq, wk, wv, wo, the two QK-Norm gammas, then W_G.
+        DLIB_TEST(full_net.layer_details().get_layer_params().size()
+            == (size_t)(32 * 32 + 2 * 32 * 16 + 32 * 32 + 2 * 8 + 32 * 32));
+
+        att net = full_net;
+        network_context::reset();
+        network_context::set_kv_cache_capacity(N);
+        network_context::request_kv_cache_clear();
+        double worst = 0;
+        for (long i = 0; i < N; ++i)
+        {
+            network_context::set_inference_mode(i == 0 ? network_context::inference_mode::prefill
+                                                       : network_context::inference_mode::incremental);
+            resizable_tensor xi(1, 1, 1, D);
+            std::copy(x.host() + i*D, x.host() + (i+1)*D, xi.host());
+            net.forward(xi);
+            if (i == 0) network_context::clear_kv_cache_request();
+            const tensor& y = net.get_output();
+            for (long c = 0; c < D; ++c)
+                worst = std::max<double>(worst, std::abs(y.host()[c] - full.host()[i*D + c]));
+        }
+        network_context::reset();
+        DLIB_TEST_MSG(worst < 1e-4, "incremental decoding with the gate differs from the full pass by " << worst);
+
+        std::ostringstream o; serialize(full_net, o);
+        std::istringstream in(o.str());
+        att back; deserialize(back, in);
+        DLIB_TEST(back.layer_details().output_gate_enabled());
+        DLIB_TEST(back.layer_details().get_rope_rotary_dims() == 4);
+        DLIB_TEST(max(abs(mat(back.layer_details().get_layer_params())
+            - mat(full_net.layer_details().get_layer_params()))) == 0);
+    }
+
     void test_gqa_attention_bias_slots()
     {
         /* The QKV bias slots exist only in a layer that carries biases. Enabling them on a
@@ -6922,6 +7164,8 @@ void test_multm_prev()
             test_gqa_attention_causality();
             test_gqa_attention_sliding_window();
             test_short_conv();
+            test_gqa_attention_gate_partial_rope();
+            test_gated_delta_net();
             test_tagging();
 #ifdef DLIB_USE_CUDA
             test_affine_rect();

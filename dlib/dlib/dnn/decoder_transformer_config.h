@@ -157,6 +157,83 @@ namespace dlib
 
 // ----------------------------------------------------------------------------------------
 
+    /* A decoder whose layers mix pre-norm attention blocks and Gated DeltaNet blocks, the
+       Qwen 3.5 models. Bit i of attention_mask set makes layer i (from the input) an
+       attention block; the others are delta_net_block of ssm_k_heads key heads and
+       ssm_v_heads value heads of ssm_head_dim values, with a convolution of conv_kernel taps.
+       The attention layers carry an output gate and rotate part of their heads: the import
+       sets both on the layers before their first forward pass. */
+    template <
+        long vocab_size,
+        long num_layers,
+        long num_heads,
+        long num_kv_heads,
+        long embedding_dim,
+        long ffn_num,
+        long ffn_den,
+        long head_dim,
+        bool use_qk_norm,
+        unsigned long long attention_mask,
+        long ssm_k_heads,
+        long ssm_v_heads,
+        long ssm_head_dim,
+        long conv_kernel
+    >
+    struct delta_net_transformer_config
+    {
+        static constexpr long VOCAB_SIZE    = vocab_size;
+        static constexpr long NUM_LAYERS    = num_layers;
+        static constexpr long NUM_HEADS     = num_heads;
+        static constexpr long NUM_KV_HEADS  = num_kv_heads;
+        static constexpr long EMBEDDING_DIM = embedding_dim;
+        static constexpr long HEAD_DIM      = head_dim;
+        static constexpr bool USE_QK_NORM   = use_qk_norm;
+        static constexpr long FFN_NUM       = ffn_num;
+        static constexpr long FFN_DEN       = ffn_den;
+        static constexpr long FFN_HIDDEN    = embedding_dim * ffn_num / ffn_den;
+        static constexpr unsigned long long ATTENTION_MASK = attention_mask;
+        static constexpr long SSM_K_HEADS   = ssm_k_heads;
+        static constexpr long SSM_V_HEADS   = ssm_v_heads;
+        static constexpr long SSM_HEAD_DIM  = ssm_head_dim;
+        static constexpr long CONV_KERNEL   = conv_kernel;
+
+        template <typename SUBNET>
+        using delta_block = gqa_transformer_unified::delta_net_block<EMBEDDING_DIM, SSM_K_HEADS,
+            SSM_V_HEADS, SSM_HEAD_DIM, CONV_KERNEL, FFN_NUM, FFN_DEN, SUBNET, linear_no_bias>;
+
+        using subnet = gqa_transformer_unified::hybrid_stack<
+            NUM_LAYERS, ATTENTION_MASK, delta_block, EMBEDDING_DIM, NUM_HEADS, NUM_KV_HEADS,
+            FFN_NUM, FFN_DEN, embeddings<VOCAB_SIZE, EMBEDDING_DIM, input<matrix<int, 0, 1>>>,
+            linear_no_bias, HEAD_DIM, USE_QK_NORM>;
+
+        template <bool is_training>
+        using network_type = loss_cross_entropy_per_token<linear_no_bias<VOCAB_SIZE, rms_norm<subnet>>>;
+
+        struct model_info
+        {
+            static std::string describe()
+            {
+                long attention = 0;
+                for (long i = 0; i < NUM_LAYERS; ++i) attention += (ATTENTION_MASK >> i) & 1ull;
+                std::ostringstream o;
+                o << "delta_net_transformer_config\n"
+                  << "  vocab        : " << VOCAB_SIZE << "\n"
+                  << "  layers       : " << NUM_LAYERS << " (" << attention << " attention, "
+                  << NUM_LAYERS - attention << " Gated DeltaNet of " << SSM_K_HEADS << "/" << SSM_V_HEADS
+                  << " heads of " << SSM_HEAD_DIM << ", convolution " << CONV_KERNEL << ")\n"
+                  << "  heads        : " << NUM_HEADS << " (kv " << NUM_KV_HEADS
+                  << ", head_dim " << HEAD_DIM << ")\n"
+                  << "  d_model      : " << EMBEDDING_DIM << "\n"
+                  << "  qk_norm      : " << (USE_QK_NORM ? "on" : "off") << "\n"
+                  << "  ffn_hidden   : " << FFN_HIDDEN
+                  << " (= d_model * " << FFN_NUM << " / " << FFN_DEN << ")";
+                return o.str();
+            }
+        };
+    };
+
+// ----------------------------------------------------------------------------------------
+
     /* A decoder and a vision tower as one parameterizable model.
 
        This exists so that the composition is named once, here, rather than assembled by

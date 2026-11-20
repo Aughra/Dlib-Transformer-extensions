@@ -5147,6 +5147,515 @@ namespace dlib
 
 // ----------------------------------------------------------------------------------------
 
+    /* The Gated DeltaNet of the Qwen 3.5 models (llama.cpp, src/models/qwen35.cpp and
+       delta-net-base.cpp). Each input row (one token) holds the four projections of the
+       layer side by side: the mix of C = (2 * k_heads + v_heads) * head_dim channels (the
+       queries, the keys, the values), the gate z of V = v_heads * head_dim values, then
+       alpha and beta, v_heads values each. Each output row holds V values. Per token:
+
+           mix  <- SiLU(causal convolution of conv_kernel taps, per channel)
+           q, k <- L2-normalized per head;   g = softplus(alpha + dt_bias) * A;   b = sigmoid(beta)
+           per value head h, with key head h % k_heads and state S (head_dim x head_dim):
+               S <- exp(g) S;   delta = b (v - S^T k);   S <- S + k delta^T;   o = S^T q / sqrt(head_dim)
+           y    <- RMSNorm(o, per head) * norm * SiLU(z)
+
+       The parameters are the convolution weights (C rows of conv_kernel taps, the last for
+       the current token, as the GGUF ssm_conv1d.weight), dt_bias, A (ssm_a, negative) and
+       the norm weights (head_dim values). Left padding declared to network_context leaves
+       the state untouched. In prefill and incremental modes the layer keeps, per sample,
+       the convolution window and the states, so an incremental pass carries on from them;
+       a KV cache clear request drops them. The backward pass, after a full pass, walks the
+       sequence backwards and recomputes the states by chunks of 64 tokens from the ones
+       kept at their starts. */
+    template <long k_heads, long v_heads, long head_dim, long conv_kernel>
+    class gated_delta_net_
+    {
+        static_assert(k_heads > 0 && v_heads % k_heads == 0, "v_heads must be a multiple of k_heads");
+        static_assert(head_dim > 0 && conv_kernel >= 1, "invalid Gated DeltaNet geometry");
+
+    public:
+        static constexpr long MIX = (2 * k_heads + v_heads) * head_dim;
+        static constexpr long VALUE = v_heads * head_dim;
+        static constexpr long INPUT = MIX + VALUE + 2 * v_heads;
+        static constexpr long CONV_PARAMS = MIX * conv_kernel;
+        static constexpr long PARAMS = CONV_PARAMS + 2 * v_heads + head_dim;
+
+        gated_delta_net_() = default;
+
+        double get_learning_rate_multiplier() const { return learning_rate_multiplier; }
+        double get_weight_decay_multiplier() const { return weight_decay_multiplier; }
+        void set_learning_rate_multiplier(double v) { learning_rate_multiplier = v; }
+        void set_weight_decay_multiplier(double v) { weight_decay_multiplier = v; }
+        // The epsilon of the L2 and RMS norms (the model's RMSNorm epsilon).
+        void set_eps(double e) { eps = e; }
+        double get_eps() const { return eps; }
+        void reset_state() { state.clear(); state_planes = 0; }
+
+        template <typename SUBNET>
+        void setup(const SUBNET& sub)
+        {
+            DLIB_CASSERT(sub.get_output().nc() == INPUT && sub.get_output().k() == 1,
+                "gated_delta_net_ expects rows of " << INPUT << " values");
+            params.set_size(1, PARAMS);
+            float* p = params.host();
+            for (long c = 0; c < MIX; ++c)
+                for (long i = 0; i < conv_kernel; ++i)
+                    p[c * conv_kernel + i] = (i == conv_kernel - 1) ? 1.0f : 0.0f;
+            for (long h = 0; h < v_heads; ++h) { p[CONV_PARAMS + h] = 0.0f; p[CONV_PARAMS + v_heads + h] = -1.0f; }
+            for (long i = 0; i < head_dim; ++i) p[CONV_PARAMS + 2 * v_heads + i] = 1.0f;
+            reset_state();
+        }
+
+        template <typename SUBNET>
+        void forward(const SUBNET& sub, resizable_tensor& output)
+        {
+            const tensor& in = sub.get_output();
+            const auto mode = network_context::get_inference_mode();
+            if (network_context::consume_kv_cache_clear_request())
+                reset_state();
+            const long N = in.num_samples(), T = in.nr();
+            const bool keeps = mode == network_context::inference_mode::prefill
+                || mode == network_context::inference_mode::incremental;
+            const bool carries = mode == network_context::inference_mode::incremental && state_planes == N;
+            if (keeps && !carries)
+            {
+                state.assign(static_cast<size_t>(N * state_floats()), 0.0f);
+                state_planes = N;
+            }
+            const bool training = !keeps;
+            output.set_size(N, 1, T, VALUE);
+            if (training) prepare_saved(N, T);
+            std::vector<float> scratch(static_cast<size_t>(state_floats()));
+            for (long n = 0; n < N; ++n)
+            {
+                const long pad = (!carries && network_context::is_padding_set())
+                    ? std::min(T, network_context::get_padding_length(n)) : 0;
+                float* st = keeps ? state.data() + n * state_floats() : scratch.data();
+                if (!carries) std::fill(st, st + state_floats(), 0.0f);
+                run_sample(in.host() + n * T * INPUT, output.host() + n * T * VALUE, T, pad, st,
+                    training ? n : -1);
+            }
+        }
+
+        template <typename SUBNET>
+        void backward(const tensor& gradient_input, SUBNET& sub, tensor& params_grad)
+        {
+            const tensor& in = sub.get_output();
+            const long N = in.num_samples(), T = in.nr();
+            params_grad = 0;
+            for (long n = 0; n < N; ++n)
+            {
+                const long pad = network_context::is_padding_set()
+                    ? std::min(T, network_context::get_padding_length(n)) : 0;
+                backward_sample(in.host() + n * T * INPUT, gradient_input.host() + n * T * VALUE,
+                    sub.get_gradient_input().host() + n * T * INPUT, params_grad.host(), T, pad, n);
+            }
+        }
+
+        inline dpoint map_input_to_output(const dpoint& p) const { return p; }
+        inline dpoint map_output_to_input(const dpoint& p) const { return p; }
+
+        const tensor& get_layer_params() const { return params; }
+        tensor& get_layer_params() { return params; }
+
+        void clean()
+        {
+            reset_state();
+            s_mix.clear(); s_pre.clear(); s_norm.clear(); s_g.clear(); s_b.clear(); s_o.clear();
+            s_ckpt.clear();
+        }
+
+        friend void serialize(const gated_delta_net_& item, std::ostream& out)
+        {
+            serialize("gated_delta_net_", out);
+            const long dims[4] = { k_heads, v_heads, head_dim, conv_kernel };
+            for (long d : dims) serialize(d, out);
+            serialize(item.eps, out);
+            serialize(item.learning_rate_multiplier, out);
+            serialize(item.weight_decay_multiplier, out);
+            serialize(item.params, out);
+        }
+
+        friend void deserialize(gated_delta_net_& item, std::istream& in)
+        {
+            std::string version;
+            deserialize(version, in);
+            if (version != "gated_delta_net_")
+                throw serialization_error("Unexpected version '"+version+"' found while deserializing dlib::gated_delta_net_.");
+            const long dims[4] = { k_heads, v_heads, head_dim, conv_kernel };
+            for (long d : dims)
+            {
+                long found = 0;
+                deserialize(found, in);
+                if (found != d)
+                    throw serialization_error("gated_delta_net_: the archive was written for another geometry");
+            }
+            deserialize(item.eps, in);
+            deserialize(item.learning_rate_multiplier, in);
+            deserialize(item.weight_decay_multiplier, in);
+            deserialize(item.params, in);
+            item.reset_state();
+        }
+
+        friend std::ostream& operator<<(std::ostream& out, const gated_delta_net_& /*item*/)
+        {
+            out << "gated_delta_net (k_heads=" << k_heads << ", v_heads=" << v_heads
+                << ", head_dim=" << head_dim << ", conv=" << conv_kernel << ")";
+            return out;
+        }
+
+        friend void to_xml(const gated_delta_net_& /*item*/, std::ostream& out)
+        {
+            out << "<gated_delta_net k_heads='" << k_heads << "' v_heads='" << v_heads
+                << "' head_dim='" << head_dim << "' conv='" << conv_kernel << "'/>\n";
+        }
+
+    private:
+        static constexpr long W = conv_kernel - 1;
+        static constexpr long CHUNK = 64;
+        static constexpr long SS = head_dim * head_dim;
+        static long state_floats() { return MIX * W + v_heads * SS; }
+
+        static float silu(float x) { return x / (1.0f + std::exp(-x)); }
+        static float sigm(float x) { return 1.0f / (1.0f + std::exp(-x)); }
+        static float softplus(float x) { return x > 20.0f ? x : std::log1p(std::exp(x)); }
+
+        /* Saved for the backward pass, per sample: the convolution before SiLU (s_pre), the
+           mix after SiLU with q and k normalized (s_mix), the norms of q and k (s_norm), g and
+           b per value head, o before its RMSNorm, and the states at the start of each chunk. */
+        void prepare_saved(long N, long T)
+        {
+            const long chunks = (T + CHUNK - 1) / CHUNK;
+            s_pre.assign(static_cast<size_t>(N * T * MIX), 0.0f);
+            s_mix.assign(static_cast<size_t>(N * T * MIX), 0.0f);
+            s_norm.assign(static_cast<size_t>(N * T * 2 * k_heads), 1.0f);
+            s_g.assign(static_cast<size_t>(N * T * v_heads), 0.0f);
+            s_b.assign(static_cast<size_t>(N * T * v_heads), 0.0f);
+            s_o.assign(static_cast<size_t>(N * T * VALUE), 0.0f);
+            s_ckpt.assign(static_cast<size_t>(N * chunks * v_heads * SS), 0.0f);
+            saved_T = T;
+        }
+
+        /* One sample: rows x (T x INPUT), out (T x VALUE), state st (convolution window then
+           the states), saved for the backward pass when sample >= 0. */
+        void run_sample(const float* x, float* out, long T, long pad, float* st, long sample)
+        {
+            const float* p = params.host();
+            const float* conv = p;
+            const float* dt_bias = p + CONV_PARAMS;
+            const float* A = dt_bias + v_heads;
+            const float* nw = A + v_heads;
+            float* win = st;
+            float* S = st + MIX * W;
+            const long chunks = (T + CHUNK - 1) / CHUNK;
+            std::vector<float> mix(static_cast<size_t>(MIX)), kv(static_cast<size_t>(head_dim));
+            const float qscale = 1.0f / std::sqrt(static_cast<float>(head_dim));
+            for (long t = 0; t < T; ++t)
+            {
+                const float* r = x + t * INPUT;
+                float* y = out + t * VALUE;
+                if (sample >= 0 && t % CHUNK == 0)
+                    std::copy(S, S + v_heads * SS, s_ckpt.data()
+                        + ((static_cast<size_t>(sample) * chunks + t / CHUNK) * v_heads) * SS);
+                if (t < pad)
+                {
+                    std::fill(y, y + VALUE, 0.0f);
+                    continue;
+                }
+                // Convolution, then SiLU.
+                for (long c = 0; c < MIX; ++c)
+                {
+                    const float* w = conv + c * conv_kernel;
+                    float* wc = win + c * W;
+                    float s = r[c] * w[W];
+                    for (long i = 0; i < W; ++i) s += wc[i] * w[i];
+                    for (long i = 0; i + 1 < W; ++i) wc[i] = wc[i + 1];
+                    if (W > 0) wc[W - 1] = r[c];
+                    if (sample >= 0) s_pre[static_cast<size_t>((sample * saved_T + t) * MIX + c)] = s;
+                    mix[static_cast<size_t>(c)] = silu(s);
+                }
+                // L2 norms of the query and key heads.
+                for (long h = 0; h < 2 * k_heads; ++h)
+                {
+                    float* v = mix.data() + h * head_dim;
+                    float ss = 0;
+                    for (long i = 0; i < head_dim; ++i) ss += v[i] * v[i];
+                    const float nrm = std::sqrt(ss + static_cast<float>(eps));
+                    for (long i = 0; i < head_dim; ++i) v[i] /= nrm;
+                    if (sample >= 0) s_norm[static_cast<size_t>((sample * saved_T + t) * 2 * k_heads + h)] = nrm;
+                }
+                if (sample >= 0)
+                    std::copy(mix.begin(), mix.end(), s_mix.begin() + (sample * saved_T + t) * MIX);
+                // The delta rule, per value head.
+                for (long h = 0; h < v_heads; ++h)
+                {
+                    const long kh = h % k_heads;
+                    const float* q = mix.data() + kh * head_dim;
+                    const float* k = mix.data() + (k_heads + kh) * head_dim;
+                    const float* v = mix.data() + 2 * k_heads * head_dim + h * head_dim;
+                    const float g = softplus(r[MIX + VALUE + h] + dt_bias[h]) * A[h];
+                    const float b = sigm(r[MIX + VALUE + v_heads + h]);
+                    if (sample >= 0)
+                    {
+                        s_g[static_cast<size_t>((sample * saved_T + t) * v_heads + h)] = g;
+                        s_b[static_cast<size_t>((sample * saved_T + t) * v_heads + h)] = b;
+                    }
+                    float* Sh = S + h * SS;
+                    const float decay = std::exp(g);
+                    std::fill(kv.begin(), kv.end(), 0.0f);
+                    for (long i = 0; i < head_dim; ++i)
+                    {
+                        float* line = Sh + i * head_dim;
+                        for (long c = 0; c < head_dim; ++c)
+                        {
+                            line[c] *= decay;
+                            kv[static_cast<size_t>(c)] += k[i] * line[c];
+                        }
+                    }
+                    float* o = y + h * head_dim;
+                    std::fill(o, o + head_dim, 0.0f);
+                    for (long i = 0; i < head_dim; ++i)
+                    {
+                        float* line = Sh + i * head_dim;
+                        for (long c = 0; c < head_dim; ++c)
+                        {
+                            line[c] += k[i] * b * (v[c] - kv[static_cast<size_t>(c)]);
+                            o[c] += q[i] * line[c];
+                        }
+                    }
+                    for (long c = 0; c < head_dim; ++c) o[c] *= qscale;
+                }
+                if (sample >= 0)
+                    std::copy(y, y + VALUE, s_o.begin() + (sample * saved_T + t) * VALUE);
+                // RMSNorm of each head, times the norm weights and SiLU(z).
+                for (long h = 0; h < v_heads; ++h)
+                {
+                    float* o = y + h * head_dim;
+                    const float* z = r + MIX + h * head_dim;
+                    float ss = 0;
+                    for (long i = 0; i < head_dim; ++i) ss += o[i] * o[i];
+                    const float rs = 1.0f / std::sqrt(ss / head_dim + static_cast<float>(eps));
+                    for (long i = 0; i < head_dim; ++i) o[i] = o[i] * rs * nw[i] * silu(z[i]);
+                }
+            }
+        }
+
+        void backward_sample(const float* x, const float* gy, float* gx, float* gp, long T, long pad, long sample)
+        {
+            DLIB_CASSERT(saved_T == T, "gated_delta_net_: backward without its full forward pass");
+            const float* p = params.host();
+            const float* conv = p;
+            const float* dt_bias = p + CONV_PARAMS;
+            const float* A = dt_bias + v_heads;
+            const float* nw = A + v_heads;
+            float* gconv = gp;
+            float* gdt = gp + CONV_PARAMS;
+            float* gA = gdt + v_heads;
+            float* gnw = gA + v_heads;
+            const long chunks = (T + CHUNK - 1) / CHUNK;
+            const float qscale = 1.0f / std::sqrt(static_cast<float>(head_dim));
+            auto at = [&](const std::vector<float>& v, long t, long width) { return v.data() + (sample * saved_T + t) * width; };
+
+            // 1. Through the output norm and gate: do (T x VALUE), and the gradients of z and norm.
+            std::vector<float> dO(static_cast<size_t>(T * VALUE), 0.0f);
+            for (long t = pad; t < T; ++t)
+                for (long h = 0; h < v_heads; ++h)
+                {
+                    const float* o = at(s_o, t, VALUE) + h * head_dim;
+                    const float* z = x + t * INPUT + MIX + h * head_dim;
+                    const float* g = gy + t * VALUE + h * head_dim;
+                    float* dz = gx + t * INPUT + MIX + h * head_dim;
+                    float ss = 0;
+                    for (long i = 0; i < head_dim; ++i) ss += o[i] * o[i];
+                    const float rs = 1.0f / std::sqrt(ss / head_dim + static_cast<float>(eps));
+                    float dot = 0;
+                    std::vector<float> dhat(static_cast<size_t>(head_dim));
+                    for (long i = 0; i < head_dim; ++i)
+                    {
+                        const float hat = o[i] * rs, sz = sigm(z[i]), sl = z[i] * sz;
+                        dz[i] += g[i] * hat * nw[i] * (sz * (1.0f + z[i] * (1.0f - sz)));
+                        gnw[i] += g[i] * hat * sl;
+                        dhat[static_cast<size_t>(i)] = g[i] * nw[i] * sl;
+                        dot += hat * dhat[static_cast<size_t>(i)];
+                    }
+                    float* d = dO.data() + t * VALUE + h * head_dim;
+                    for (long i = 0; i < head_dim; ++i)
+                        d[i] = rs * (dhat[static_cast<size_t>(i)] - o[i] * rs * dot / head_dim);
+                }
+
+            // 2. The delta rule backwards, per value head, by chunks recomputed from their starts.
+            std::vector<float> dmix(static_cast<size_t>(T * MIX), 0.0f);
+            std::vector<float> prev(static_cast<size_t>(CHUNK * SS)), dS(static_cast<size_t>(SS)),
+                Sp(static_cast<size_t>(SS)), Sn(static_cast<size_t>(SS)), kv(static_cast<size_t>(head_dim)),
+                dd(static_cast<size_t>(head_dim));
+            for (long h = 0; h < v_heads; ++h)
+            {
+                const long kh = h % k_heads;
+                std::fill(dS.begin(), dS.end(), 0.0f);
+                for (long ch = chunks - 1; ch >= 0; --ch)
+                {
+                    const long t0 = ch * CHUNK, t1 = std::min(T, t0 + CHUNK);
+                    // The state before each step of the chunk, from the one kept at its start.
+                    std::vector<float> S(s_ckpt.begin() + ((sample * chunks + ch) * v_heads + h) * SS,
+                        s_ckpt.begin() + ((sample * chunks + ch) * v_heads + h + 1) * SS);
+                    for (long t = t0; t < t1; ++t)
+                    {
+                        std::copy(S.begin(), S.end(), prev.begin() + (t - t0) * SS);
+                        if (t < pad) continue;
+                        const float* m = at(s_mix, t, MIX);
+                        const float* k = m + (k_heads + kh) * head_dim;
+                        const float* v = m + 2 * k_heads * head_dim + h * head_dim;
+                        const float g = at(s_g, t, v_heads)[h], b = at(s_b, t, v_heads)[h], e = std::exp(g);
+                        std::fill(kv.begin(), kv.end(), 0.0f);
+                        for (long i = 0; i < head_dim; ++i)
+                            for (long c = 0; c < head_dim; ++c)
+                            {
+                                S[static_cast<size_t>(i * head_dim + c)] *= e;
+                                kv[static_cast<size_t>(c)] += k[i] * S[static_cast<size_t>(i * head_dim + c)];
+                            }
+                        for (long i = 0; i < head_dim; ++i)
+                            for (long c = 0; c < head_dim; ++c)
+                                S[static_cast<size_t>(i * head_dim + c)] += k[i] * b * (v[c] - kv[static_cast<size_t>(c)]);
+                    }
+                    for (long t = t1 - 1; t >= t0; --t)
+                    {
+                        if (t < pad) continue;
+                        const float* m = at(s_mix, t, MIX);
+                        const float* q = m + kh * head_dim;
+                        const float* k = m + (k_heads + kh) * head_dim;
+                        const float* v = m + 2 * k_heads * head_dim + h * head_dim;
+                        float* dq = dmix.data() + t * MIX + kh * head_dim;
+                        float* dk = dmix.data() + t * MIX + (k_heads + kh) * head_dim;
+                        float* dv = dmix.data() + t * MIX + 2 * k_heads * head_dim + h * head_dim;
+                        const float g = at(s_g, t, v_heads)[h], b = at(s_b, t, v_heads)[h], e = std::exp(g);
+                        const float* Sprev = prev.data() + (t - t0) * SS;
+                        std::fill(kv.begin(), kv.end(), 0.0f);
+                        for (long i = 0; i < head_dim; ++i)
+                            for (long c = 0; c < head_dim; ++c)
+                            {
+                                const float sp = Sprev[i * head_dim + c] * e;
+                                Sp[static_cast<size_t>(i * head_dim + c)] = sp;
+                                kv[static_cast<size_t>(c)] += k[i] * sp;
+                            }
+                        for (long i = 0; i < head_dim; ++i)
+                            for (long c = 0; c < head_dim; ++c)
+                                Sn[static_cast<size_t>(i * head_dim + c)] = Sp[static_cast<size_t>(i * head_dim + c)]
+                                    + k[i] * b * (v[c] - kv[static_cast<size_t>(c)]);
+                        const float* d_o = dO.data() + t * VALUE + h * head_dim;
+                        // o = qscale S_new^T q.
+                        for (long i = 0; i < head_dim; ++i)
+                        {
+                            float acc = 0;
+                            for (long c = 0; c < head_dim; ++c)
+                            {
+                                dS[static_cast<size_t>(i * head_dim + c)] += qscale * q[i] * d_o[c];
+                                acc += Sn[static_cast<size_t>(i * head_dim + c)] * d_o[c];
+                            }
+                            dq[i] += qscale * acc;
+                        }
+                        // S_new = S' + k delta^T, delta = b (v - S'^T k).
+                        std::fill(dd.begin(), dd.end(), 0.0f);
+                        for (long i = 0; i < head_dim; ++i)
+                            for (long c = 0; c < head_dim; ++c)
+                                dd[static_cast<size_t>(c)] += k[i] * dS[static_cast<size_t>(i * head_dim + c)];
+                        float db = 0;
+                        for (long c = 0; c < head_dim; ++c)
+                        {
+                            const float diff = v[c] - kv[static_cast<size_t>(c)];
+                            db += dd[static_cast<size_t>(c)] * diff;
+                            dv[c] += b * dd[static_cast<size_t>(c)];
+                        }
+                        for (long i = 0; i < head_dim; ++i)
+                        {
+                            float acc = 0;
+                            for (long c = 0; c < head_dim; ++c)
+                            {
+                                const float delta = b * (v[c] - kv[static_cast<size_t>(c)]);
+                                acc += dS[static_cast<size_t>(i * head_dim + c)] * delta
+                                    - b * dd[static_cast<size_t>(c)] * Sp[static_cast<size_t>(i * head_dim + c)];
+                            }
+                            dk[i] += acc;
+                        }
+                        float dg = 0;
+                        for (long i = 0; i < head_dim; ++i)
+                            for (long c = 0; c < head_dim; ++c)
+                            {
+                                float& d = dS[static_cast<size_t>(i * head_dim + c)];
+                                d -= k[i] * b * dd[static_cast<size_t>(c)];   // dS' = dS + k dkv^T
+                                dg += d * Sp[static_cast<size_t>(i * head_dim + c)];
+                                d *= e;                                      // dS_prev = e dS'
+                            }
+                        // g = softplus(alpha + dt_bias) A, b = sigmoid(beta).
+                        const float* r = x + t * INPUT;
+                        const float a = r[MIX + VALUE + h] + dt_bias[h];
+                        const float da = dg * A[h] * sigm(a);
+                        gx[t * INPUT + MIX + VALUE + h] += da;
+                        gdt[h] += da;
+                        gA[h] += dg * softplus(a);
+                        gx[t * INPUT + MIX + VALUE + v_heads + h] += db * b * (1.0f - b);
+                    }
+                }
+            }
+
+            // 3. Through the L2 norms of q and k, SiLU and the convolution.
+            std::vector<float> du(static_cast<size_t>(T * MIX), 0.0f);
+            for (long t = pad; t < T; ++t)
+            {
+                const float* m = at(s_mix, t, MIX);
+                float* d = dmix.data() + t * MIX;
+                for (long hh = 0; hh < 2 * k_heads; ++hh)
+                {
+                    const float* y = m + hh * head_dim;
+                    float* dy = d + hh * head_dim;
+                    const float nrm = at(s_norm, t, 2 * k_heads)[hh];
+                    float dot = 0;
+                    for (long i = 0; i < head_dim; ++i) dot += y[i] * dy[i];
+                    for (long i = 0; i < head_dim; ++i) dy[i] = (dy[i] - y[i] * dot) / nrm;
+                }
+                const float* u = at(s_pre, t, MIX);
+                for (long c = 0; c < MIX; ++c)
+                {
+                    const float sz = sigm(u[c]);
+                    du[static_cast<size_t>(t * MIX + c)] = d[c] * sz * (1.0f + u[c] * (1.0f - sz));
+                }
+            }
+            for (long c = 0; c < MIX; ++c)
+            {
+                const float* w = conv + c * conv_kernel;
+                float* gw = gconv + c * conv_kernel;
+                for (long s = pad; s < T; ++s)
+                {
+                    // Input s feeds the outputs s .. s + W through taps W .. 0.
+                    float din = 0;
+                    const float xs = x[s * INPUT + c];
+                    for (long i = 0; i <= W; ++i)
+                    {
+                        const long t = s + W - i;
+                        if (t >= T) continue;
+                        const float g = du[static_cast<size_t>(t * MIX + c)];
+                        din += g * w[i];
+                        gw[i] += g * xs;
+                    }
+                    gx[s * INPUT + c] += din;
+                }
+            }
+        }
+
+        double eps = 1e-6;
+        double learning_rate_multiplier = 1;
+        double weight_decay_multiplier = 1;
+        resizable_tensor params;
+        std::vector<float> state;
+        long state_planes = 0;
+        long saved_T = 0;
+        std::vector<float> s_pre, s_mix, s_norm, s_g, s_b, s_o, s_ckpt;
+    };
+
+    template <long k_heads, long v_heads, long head_dim, long conv_kernel, typename SUBNET>
+    using gated_delta_net = add_layer<gated_delta_net_<k_heads, v_heads, head_dim, conv_kernel>, SUBNET>;
+
+// ----------------------------------------------------------------------------------------
+
     class smelu_
     {
     public:
@@ -7462,6 +7971,7 @@ namespace dlib
             d_head(other.d_head),
             theta_base(other.theta_base),
             position_scale(other.position_scale),
+            rotary_dims(other.rotary_dims),
             cos_cache(other.cos_cache),
             sin_cache(other.sin_cache),
             yarn(other.yarn)
@@ -7475,6 +7985,7 @@ namespace dlib
                 d_head = other.d_head;
                 theta_base = other.theta_base;
                 position_scale = other.position_scale;
+                rotary_dims = other.rotary_dims;
                 cos_cache = other.cos_cache;
                 sin_cache = other.sin_cache;
                 yarn = other.yarn;
@@ -7500,6 +8011,17 @@ namespace dlib
             position_scale = scale;
         }
         float get_position_scale() const { return position_scale; }
+
+        /* Partial rotation (Qwen 3.5 rotates 64 of its 256 dimensions): only the first n
+           dimensions of a head turn, pair i at theta_base^(-2i/n); the pairs beyond keep a
+           zero angle, so the forward and backward passes leave them unchanged. 0, the
+           default, rotates the whole head. Set before the first forward pass. */
+        void set_rotary_dims(long n)
+        {
+            DLIB_CASSERT(n >= 0 && n % 2 == 0, "the rotated dimensions must be an even count");
+            rotary_dims = n;
+        }
+        long get_rotary_dims() const { return rotary_dims; }
         long get_seq_len() const { return seq_len; }
         long get_d_head() const { return d_head; }
 
@@ -7663,10 +8185,14 @@ namespace dlib
             /* The position scale is written only when it is not 1, under a second version
                tag, so that the archives of every other model keep their exact format. The
                std::string matters: a bare const char* would be serialized as a bool. */
-            const bool scaled = item.position_scale != 1.0f;
-            serialize(std::string(scaled ? "rotary_positional_embedding_2" : "rotary_positional_embedding_"), out);
+            /* A partial rotation writes a third tag, with the scale and the rotated count. */
+            const bool partial = item.rotary_dims != 0;
+            const bool scaled = item.position_scale != 1.0f || partial;
+            serialize(std::string(partial ? "rotary_positional_embedding_3"
+                : scaled ? "rotary_positional_embedding_2" : "rotary_positional_embedding_"), out);
             serialize(item.theta_base, out);
             if (scaled) serialize(item.position_scale, out);
+            if (partial) serialize(item.rotary_dims, out);
             serialize(item.cos_cache, out);
             serialize(item.sin_cache, out);
 
@@ -7681,13 +8207,16 @@ namespace dlib
         {
             std::string version;
             deserialize(version, in);
-            if (version != "rotary_positional_embedding_" && version != "rotary_positional_embedding_2")
+            if (version != "rotary_positional_embedding_" && version != "rotary_positional_embedding_2"
+                && version != "rotary_positional_embedding_3")
                 throw serialization_error("Unexpected version '" + version +
                     "' while deserializing rotary_positional_embedding_");
 
             deserialize(item.theta_base, in);
             item.position_scale = 1.0f;
-            if (version == "rotary_positional_embedding_2") deserialize(item.position_scale, in);
+            item.rotary_dims = 0;
+            if (version != "rotary_positional_embedding_") deserialize(item.position_scale, in);
+            if (version == "rotary_positional_embedding_3") deserialize(item.rotary_dims, in);
             deserialize(item.cos_cache, in);
             deserialize(item.sin_cache, in);
 
@@ -7758,10 +8287,12 @@ namespace dlib
             float* cos_ptr = cos_cache.host();
             float* sin_ptr = sin_cache.host();
 
-            // inv_freq_i = theta_base^(-2i/d_head)
+            // inv_freq_i = theta_base^(-2i/d_head), or over the rotated dimensions only, the
+            // pairs beyond them at a zero frequency.
+            const long rotated = (rotary_dims > 0 && rotary_dims < d_head) ? rotary_dims : d_head;
             std::vector<float> inv_freq(half_dim);
             for (long i = 0; i < half_dim; ++i)
-                inv_freq[i] = std::pow(theta_base, -2.0f * i / static_cast<float>(d_head));
+                inv_freq[i] = 2 * i < rotated ? std::pow(theta_base, -2.0f * i / static_cast<float>(rotated)) : 0.0f;
 
             // YaRN reference length must be fixed and explicit. If the user did not
             // set it, default it to the current seq_len at first call (legacy behaviour),
@@ -7807,6 +8338,7 @@ namespace dlib
         long d_head;
         float theta_base;
         float position_scale = 1.0f;
+        long rotary_dims = 0;
 
         // Precomputed trigonometric values
         // Shape: (1, 1, seq_len, d_head/2)
