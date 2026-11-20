@@ -524,7 +524,7 @@ namespace gulliver
             std::string address;
             if (!local_host(origin_host(origin), error, code, address)) return nullptr;
             auto c = std::make_shared<httplib::Client>(origin);
-            if (!address.empty()) c->set_hostname_addr_map({ { written_host(origin), address } });
+            if (!address.empty()) c->set_direct_hostname_addr_map({ { written_host(origin), address } });
             c->set_follow_location(false);
             c->set_connection_timeout(connect_seconds, 0);
             c->set_read_timeout(timeout_seconds, 0);

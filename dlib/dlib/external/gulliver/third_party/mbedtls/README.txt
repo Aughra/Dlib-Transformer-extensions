@@ -1,61 +1,34 @@
-Mbed TLS bundled with dlib
-==========================
+Mbed TLS, la copie de Gulliver
+==============================
 
-Version   : 3.6.7 (long-term support branch 3.6)
-Origin    : https://github.com/Mbed-TLS/mbedtls, tag v3.6.7
-            (commit 068ff080b369adfac81509f9b57b2afabaf82dc5)
-License   : Apache-2.0 OR GPL-2.0-or-later, see LICENSE in this folder; dlib uses it under
-            the Apache License 2.0
+Version   : 3.6.8 (branche 3.6, maintenue à long terme)
+Origine   : https://github.com/Mbed-TLS/mbedtls, publication mbedtls-3.6.8 ; archive
+            mbedtls-3.6.8.tar.bz2 contrôlée contre mbedtls-3.6.8-sha256sum.txt de la publication
+Licence   : Apache-2.0 OU GPL-2.0-or-later, voir LICENSE ; Gulliver l'utilise sous la licence
+            Apache 2.0
 
-What this folder holds
-----------------------
+Contenu
+-------
 
-   include/       the public headers of the release (include/mbedtls, include/psa), as released
-   library/       the sources of the library (*.c, *.h), as released
-   dlib_config/   the files dlib adds:
-                     dlib_mbedtls_config.h            adjustments to the default configuration
-                     threading_alt.h                  mutex type of the Win32 threading layer
-                     dlib_mbedtls_threading_win32.c   Win32 threading layer for MSVC
+   include/   les en-têtes publics de la publication (include/mbedtls, include/psa), tels quels
+   library/   les sources de la bibliothèque (*.c, *.h), telles quelles
+   config/    gulliver_mbedtls_config.h, les réglages de Gulliver (fils POSIX, sans MBEDTLS_NET_C)
 
-The build files, the tests, the programs, the scripts and the third party drivers of the
-release are left out: dlib compiles the library with its own CMake target, and the default
-configuration enables none of the third party drivers.
+Les fichiers de build, les tests, les programmes, les scripts et les pilotes tiers de la publication
+sont laissés de côté : Gulliver compile la bibliothèque par sa propre cible CMake (gulliver_mbedtls),
+que lie gulliver_httplib pour le HTTPS.  La configuration est publique : la cible définit
+MBEDTLS_USER_CONFIG_FILE="gulliver_mbedtls_config.h" pour toute unité qui inclut Mbed TLS.
 
-How it is used
---------------
+Pourquoi la branche 3.6
+-----------------------
 
-The sources are compiled into the static library dlib_mbedtls, which the dlib::httplib target
-links for its HTTPS support (see dlib/external/httplib/README.txt).  In a project build, the
-library is compiled only when a program links dlib::httplib.  The option DLIB_HTTPLIB_TLS, ON by
-default, decides whether dlib::httplib uses it.
+La branche 4 change l'interface de la bibliothèque, dont cpp-httplib se sert ; la 3.6 reçoit les
+corrections de sécurité jusqu'à la fin de sa maintenance.  La 3.6.8 (16 novembre 2026) en corrige
+plusieurs, dont des empreintes SHA fausses au-delà de 4 Gio de données en un appel.
 
-Configuration
--------------
+Mise à jour
+-----------
 
-The target defines MBEDTLS_USER_CONFIG_FILE as "dlib_mbedtls_config.h", publicly, so that the
-library and every translation unit that includes an Mbed TLS header see the same configuration.
-That file changes the default configuration of the release in two places:
-
-   - MBEDTLS_THREADING_C, with POSIX threads where the compiler provides them and the Win32
-     layer of dlib_mbedtls_threading_win32.c with MSVC.  TLS 1.3 goes through the PSA layer,
-     whose key store is global, and a server serves its connections from several threads.
-   - MBEDTLS_NET_C is removed: cpp-httplib reads and writes the sockets itself and hands Mbed TLS
-     its own send and receive callbacks.
-
-The Win32 threading layer registers itself before the static constructors of a program run,
-since Mbed TLS fails every lock until mbedtls_threading_set_alt() is called.  threading_alt.h
-names its initializer to the MSVC linker, so that the object file is taken out of the static
-library by every program that includes an Mbed TLS header.
-
-Tests
------
-
-test_httplib in the dtest suite exercises the library through cpp-httplib: TLS 1.2 and 1.3
-handshakes, certificate and host name verification, and concurrent sessions.
-
-Updating
---------
-
-Copy the include and library folders of a newer release of the 3.6 branch over these ones
-(without their build files), update the version and origin above, check that the options of
-dlib_mbedtls_config.h still exist under the same names, and run the dtest suite.
+Télécharger l'archive d'une version plus récente de la branche, contrôler sa somme SHA-256 publiée,
+remplacer include/ et library/ (sans CMakeLists.txt, Makefile, .gitignore), garder config/, mettre à
+jour la version ci-dessus, puis lancer les tests de Gulliver.

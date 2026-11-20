@@ -907,7 +907,7 @@ namespace gulliver
             }
             if (pin)
             {
-                c->set_hostname_addr_map({ { c->host(), pin->text } });
+                c->set_direct_hostname_addr_map({ { c->host(), pin->text } });
             }
             else
             {

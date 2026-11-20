@@ -315,7 +315,7 @@ namespace gulliver
             if (!e.ca.empty())
             {
                 // Le certificat nomme localhost, joint en 127.0.0.1 seulement, où aucun autre compte n'écoute.
-                c->set_hostname_addr_map({ { "localhost", "127.0.0.1" } });
+                c->set_direct_hostname_addr_map({ { "localhost", "127.0.0.1" } });
                 c->enable_system_ca(false);
                 c->set_ca_cert_path(e.ca);
                 c->enable_server_certificate_verification(true);
