@@ -21,7 +21,7 @@ Relevé le 2026-11-19 : 10 fichiers d'en-tête, et le moteur n'utilise pas la pa
 
 | Morceau | Fichiers de dlib | Taille |
 |---|---|---|
-| Bibliothèques d'autres projets | `external/httplib`, sqlite, `external/libpng`, `external/libjpeg`, mbedtls | déplacées telles quelles |
+| ~~Bibliothèques d'autres projets~~ | ~~`external/httplib`, sqlite, `external/libpng`, `external/libjpeg`, mbedtls~~ — **copiées telles quelles dans `gulliver/third_party/` le 2026-11-20 (Gulliver 6.8.1)** | 21 Mo |
 | ~~SHA-256~~ | ~~`crypto/sha256.h`~~ — **fait le 2026-11-19 (Gulliver 6.4.1)** : `engine/image_input.cpp` passe par CommonCrypto, comme `host/crypto.cpp` ; test `test_image_input` | 326 lignes |
 | Lecture des ZIP, enveloppe de sqlite | `zip/`, `sqlite/` | petites |
 | Lecture des GGUF | `data_io/gguf_reader.h`, `gguf_dequantize.h`, `gguf_model_spec.h` | 1 411 lignes |
@@ -32,7 +32,7 @@ Relevé le 2026-11-19 : 10 fichiers d'en-tête, et le moteur n'utilise pas la pa
 | Ordre | Morceau | Où il va | Remarque |
 |---|---|---|---|
 | 1 | ~~SHA-256 → CommonCrypto d'Apple~~ **fait (6.4.1)** | `host/`, `engine/` | Le service s'en servait déjà (4.2.0) ; restait l'empreinte des images du moteur |
-| 2 | Bibliothèques d'autres projets | `gulliver/third_party/` | aucune ligne changée ; le build de Gulliver ne construit plus dlib |
+| 2 | ~~Bibliothèques d'autres projets~~ **fait (6.8.1)** | `gulliver/third_party/` | aucune ligne changée ; le build de Gulliver ne construit plus dlib (copiées et non déplacées : dlib et Pseudalis s'en servent encore) |
 | 3 | Lecture des ZIP, enveloppe de sqlite | `host/` | |
 | 4 | Lecture des GGUF | `engine/` | premières optimisations |
 | 5 | Tokenizer | là où le moteur et le service le partagent | optimisable ensuite, notamment pour le français |
@@ -111,6 +111,9 @@ Le plan détaillé est [docs/mac-mini-premier-jour.md](mac-mini-premier-jour.md)
 ## Partie 2 — Le reste en attente du Mac mini
 
 Repris de la liste « À faire » de la reprise et des suites du bloc C :
+
+**Mesures de vitesse arrêtées (décision de l'humain, 2026-11-20 : « arrêt les tests de perfs, et continue la roadmap »)** : la comparaison avec Ollama et MLX, le découpage de l'attention des longues questions, plusieurs tokens par pas et les mesures de la recherche documentaire sont mis de côté. On passe au morceau 2 du fil rouge, puis à la partie 3. Gemma 4 26B-A4B sur le GPU reste ici, à reprendre plus tard.
+
 
 - Gemma 4 26B-A4B sur le GPU (mesure de la partie 1 : 126-129 tokens/s en lecture, 27 en écriture, sur le processeur seul) ; Gemma 4 E4B, 12B, 31B jamais essayés.
 - ~~Qwen3.6-35B-A3B et ses projecteurs~~ **fait (6.5.0, 2026-11-19)** : sur le GPU, images identiques à llama.cpp ; ~~qwen3moe, mixtral, granitemoe sur le GPU (admis, jamais lancés)~~ **essayés et validés contre llama.cpp, prompts sur le GPU, format de Mixtral corrigé (6.6.0)** ; ~~noyau Q4_K du GPU (54 Go/s contre 70 au plafond)~~ **mesuré sur le Mac mini (2026-11-19) : 218 Go/s pour un plafond de 260, 84 à 86 % ; laissé tel quel** (marge d'environ 15 %, voir `macos/metal-sonde/README.md`).

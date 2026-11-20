@@ -1,6 +1,6 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
-#include <dlib/external/httplib/httplib.h>
+#include <httplib.h>
 
 #include "pseudonyms.h"
 

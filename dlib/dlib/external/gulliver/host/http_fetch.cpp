@@ -16,7 +16,7 @@
 #include <thread>
 #include <vector>
 
-#include <dlib/external/httplib/httplib.h>
+#include <httplib.h>
 
 
 #include "../common/platform.h"

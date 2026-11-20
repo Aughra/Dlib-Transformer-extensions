@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 6.8.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 6.8.1 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -59,26 +59,33 @@ function(gulliver_output_dir target dir)
    set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${dir})
 endfunction()
 
-# dlib : les programmes n'utilisent que ses en-têtes et sa cible HTTPS.  Le moteur a ses propres
-# noyaux, donc dlib n'a besoin d'aucun BLAS.
-set(DLIB_NO_GUI_SUPPORT ON CACHE BOOL "" FORCE)
-set(DLIB_USE_CUDA OFF CACHE BOOL "" FORCE)
-set(DLIB_USE_NPU OFF CACHE BOOL "" FORCE)
-set(DLIB_BACKENDS "CPU" CACHE STRING "" FORCE)
-set(DLIB_USE_BLAS OFF CACHE BOOL "" FORCE)
-set(DLIB_USE_LAPACK OFF CACHE BOOL "" FORCE)
-set(DLIB_JPEG_SUPPORT OFF CACHE BOOL "" FORCE)
-set(DLIB_PNG_SUPPORT OFF CACHE BOOL "" FORCE)
-set(DLIB_LINK_WITH_SQLITE3 OFF CACHE BOOL "" FORCE)
-set(DLIB_USE_FFMPEG OFF CACHE BOOL "" FORCE)
-set(DLIB_JXL_SUPPORT OFF CACHE BOOL "" FORCE)
-set(DLIB_WEBP_SUPPORT OFF CACHE BOOL "" FORCE)
-set(DLIB_GIF_SUPPORT OFF CACHE BOOL "" FORCE)
-set(DLIB_USE_MKL_FFT OFF CACHE BOOL "" FORCE)
-add_subdirectory(${GULLIVER_DLIB_DIR} dlib_build EXCLUDE_FROM_ALL)
+# Les bibliothèques d'autres projets vivent dans third_party/, copiées telles quelles de
+# dlib/external (fil rouge, morceau 2) : le build de Gulliver ne construit plus dlib, dont il ne
+# prend encore que des en-têtes (lecture des GGUF, tokenizer, ZIP, enveloppe de sqlite).
+set(GULLIVER_THIRD_PARTY "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
+find_package(Threads REQUIRED)
+
+# Mbed TLS, pour le HTTPS de cpp-httplib (réglages dans third_party/mbedtls/dlib_config).
+set(mbedtls_dir ${GULLIVER_THIRD_PARTY}/mbedtls)
+file(GLOB gulliver_mbedtls_sources ${mbedtls_dir}/library/*.c)
+add_library(gulliver_mbedtls STATIC EXCLUDE_FROM_ALL ${gulliver_mbedtls_sources}
+   ${mbedtls_dir}/dlib_config/dlib_mbedtls_threading_win32.c)
+set_target_properties(gulliver_mbedtls PROPERTIES POSITION_INDEPENDENT_CODE ON C_STANDARD 99)
+target_include_directories(gulliver_mbedtls PUBLIC ${mbedtls_dir}/include ${mbedtls_dir}/dlib_config
+   PRIVATE ${mbedtls_dir}/library)
+# Toute unité qui inclut un en-tête de Mbed TLS doit voir la configuration de sa compilation.
+target_compile_definitions(gulliver_mbedtls PUBLIC "MBEDTLS_USER_CONFIG_FILE=\"dlib_mbedtls_config.h\"")
+target_link_libraries(gulliver_mbedtls PUBLIC Threads::Threads)
+
+# cpp-httplib (un seul en-tête) : HTTP et HTTPS, les certificats du trousseau de macOS lus par
+# CoreFoundation et Security.
+add_library(gulliver_httplib INTERFACE)
+target_include_directories(gulliver_httplib INTERFACE ${GULLIVER_THIRD_PARTY}/httplib)
+target_compile_definitions(gulliver_httplib INTERFACE CPPHTTPLIB_MBEDTLS_SUPPORT)
+target_link_libraries(gulliver_httplib INTERFACE gulliver_mbedtls Threads::Threads
+   "-framework CoreFoundation" "-framework Security")
 
 set(GULLIVER_WARNINGS -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
-find_package(Threads REQUIRED)
 # Les produits des longues passes passent par Accelerate (engine/qkernels_accelerate.inc) ; le
 # GPU par Metal (engine/metal_device.mm).
 link_libraries("-framework Accelerate" "-framework Metal" "-framework MetalPerformanceShaders" "-framework Foundation")
@@ -95,9 +102,9 @@ set_source_files_properties(engine/metal_device.mm PROPERTIES COMPILE_OPTIONS "-
 find_package(ZLIB REQUIRED)
 
 # Les décodeurs PNG et JPEG du moteur, qui lisent les images des requêtes : les copies de libpng
-# et de libjpeg que dlib embarque, compilées dans le moteur, quoi que contienne le système.
-set(png_dir ${GULLIVER_DLIB_DIR}/external/libpng)
-set(jpeg_dir ${GULLIVER_DLIB_DIR}/external/libjpeg)
+# et de libjpeg de third_party, compilées dans le moteur, quoi que contienne le système.
+set(png_dir ${GULLIVER_THIRD_PARTY}/libpng)
+set(jpeg_dir ${GULLIVER_THIRD_PARTY}/libjpeg)
 add_library(gulliver_image STATIC
    ${png_dir}/png.c ${png_dir}/pngerror.c ${png_dir}/pngget.c ${png_dir}/pngmem.c ${png_dir}/pngpread.c
    ${png_dir}/pngread.c ${png_dir}/pngrio.c ${png_dir}/pngrtran.c ${png_dir}/pngrutil.c ${png_dir}/pngset.c
@@ -109,7 +116,7 @@ add_library(gulliver_image STATIC
    ${jpeg_dir}/jdpostct.c ${jpeg_dir}/jdsample.c ${jpeg_dir}/jerror.c ${jpeg_dir}/jidctflt.c ${jpeg_dir}/jidctfst.c
    ${jpeg_dir}/jidctint.c ${jpeg_dir}/jmemmgr.c ${jpeg_dir}/jmemnobs.c ${jpeg_dir}/jquant1.c ${jpeg_dir}/jquant2.c
    ${jpeg_dir}/jutils.c)
-target_include_directories(gulliver_image PRIVATE ${png_dir} ${jpeg_dir})
+target_include_directories(gulliver_image PUBLIC ${png_dir} ${jpeg_dir})
 target_link_libraries(gulliver_image PUBLIC ZLIB::ZLIB)
 # Compilé dans le moteur partagé, dont seuls les symboles propres sont visibles.
 set_target_properties(gulliver_image PROPERTIES POSITION_INDEPENDENT_CODE ON
@@ -155,9 +162,9 @@ if (GULLIVER_PROGRAMS)
 endif()
 
 if (GULLIVER_PROGRAMS)
-   # Bibliothèque compilée dans les programmes : SQLite, venue de dlib/external ; zlib est celle de macOS.
-   add_library(gulliver_sqlite STATIC ${GULLIVER_DLIB_DIR}/external/sqlite/sqlite3.c)
-   target_include_directories(gulliver_sqlite PUBLIC ${GULLIVER_DLIB_DIR}/external/sqlite)
+   # Bibliothèque compilée dans les programmes : SQLite, de third_party ; zlib est celle de macOS.
+   add_library(gulliver_sqlite STATIC ${GULLIVER_THIRD_PARTY}/sqlite/sqlite3.c)
+   target_include_directories(gulliver_sqlite PUBLIC ${GULLIVER_THIRD_PARTY}/sqlite)
    target_compile_definitions(gulliver_sqlite PRIVATE SQLITE_THREADSAFE=1 SQLITE_DQS=0 SQLITE_DEFAULT_MEMSTATUS=0
       SQLITE_DEFAULT_WAL_SYNCHRONOUS=1 SQLITE_LIKE_DOESNT_MATCH_BLOBS SQLITE_TEMP_STORE=2 SQLITE_SECURE_DELETE
       SQLITE_ENABLE_API_ARMOR SQLITE_ENABLE_FTS5 SQLITE_ENABLE_MATH_FUNCTIONS SQLITE_OMIT_LOAD_EXTENSION)
@@ -179,7 +186,7 @@ if (GULLIVER_PROGRAMS)
    # Le carnet du portage lit les documents du dépôt où le service est construit (host/carnet.h).
    get_filename_component(GULLIVER_FORK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
    target_compile_definitions(gulliver-service PRIVATE GULLIVER_FORK_ROOT_DEFAULT="${GULLIVER_FORK_ROOT}")
-   target_link_libraries(gulliver-service PRIVATE gulliver_common gulliver_sqlite ZLIB::ZLIB dlib::httplib
+   target_link_libraries(gulliver-service PRIVATE gulliver_common gulliver_sqlite ZLIB::ZLIB gulliver_httplib
       "-framework CoreFoundation")
    target_compile_options(gulliver-service PRIVATE ${GULLIVER_WARNINGS})
 
@@ -204,7 +211,7 @@ if (GULLIVER_PROGRAMS)
    # du moteur, puis remis aux programmes de l'arbre.
    add_executable(gulliver-builtin tools/gulliver_builtin.cpp engine/chat_format.cpp engine/model_config.cpp
       engine/model_file.cpp $<TARGET_OBJECTS:gulliver-kernels> host/crypto.cpp)
-   target_link_libraries(gulliver-builtin PRIVATE gulliver_common dlib::httplib)
+   target_link_libraries(gulliver-builtin PRIVATE gulliver_common gulliver_httplib)
    target_compile_options(gulliver-builtin PRIVATE ${GULLIVER_WARNINGS})
 
    # Les modèles fournis avec Gulliver (resources/builtin_models.json) : téléchargés une fois dans
@@ -247,11 +254,11 @@ if (GULLIVER_PROGRAMS)
    set(gulliver_licenses
       gulliver.txt     ${CMAKE_CURRENT_SOURCE_DIR}/resources/license.txt
       dlib.txt        ${GULLIVER_INCLUDE_DIR}/LICENSE.txt
-      mbedtls.txt     ${GULLIVER_DLIB_DIR}/external/mbedtls/LICENSE
-      cpp-httplib.txt ${GULLIVER_DLIB_DIR}/external/httplib/LICENSE
-      sqlite.txt      ${GULLIVER_DLIB_DIR}/external/sqlite/README.txt
-      libpng.txt      ${GULLIVER_DLIB_DIR}/external/libpng/LICENSE
-      libjpeg.txt     ${GULLIVER_DLIB_DIR}/external/libjpeg/README)
+      mbedtls.txt     ${GULLIVER_THIRD_PARTY}/mbedtls/LICENSE
+      cpp-httplib.txt ${GULLIVER_THIRD_PARTY}/httplib/LICENSE
+      sqlite.txt      ${GULLIVER_THIRD_PARTY}/sqlite/README.txt
+      libpng.txt      ${GULLIVER_THIRD_PARTY}/libpng/LICENSE
+      libjpeg.txt     ${GULLIVER_THIRD_PARTY}/libjpeg/README)
    set(gulliver_license_commands)
    set(gulliver_license_sources)
    list(LENGTH gulliver_licenses gulliver_license_count)
@@ -280,7 +287,7 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
       host/crypto.cpp host/settings.cpp host/web_access.cpp host/certificates.cpp host/relay.cpp host/rag_engine.cpp
       host/pseudonyms.cpp)
    target_include_directories(test_host PRIVATE ${CMAKE_BINARY_DIR}/generated)
-   target_link_libraries(test_host PRIVATE gulliver_common gulliver_sqlite ZLIB::ZLIB dlib::httplib)
+   target_link_libraries(test_host PRIVATE gulliver_common gulliver_sqlite ZLIB::ZLIB gulliver_httplib)
    target_compile_options(test_host PRIVATE ${GULLIVER_WARNINGS})
    gulliver_output_dir(test_host ${CMAKE_BINARY_DIR}/tests)
    # test_model_file : fichiers de modèle abîmés ; test_engine_api : l'interface C d'une bibliothèque de moteur.

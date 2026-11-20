@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.8.1 — 20 novembre 2026
+
+### Plateforme
+
+- Les bibliothèques d'autres projets qu'utilise Gulliver (cpp-httplib, Mbed TLS, SQLite, libpng, libjpeg) sont désormais livrées avec lui, dans `third_party/`, copiées sans modification de celles de dlib. La construction de Gulliver ne construit plus dlib, dont il n'utilise plus que quelques en-têtes (lecture des GGUF, tokenizer, ZIP, accès à SQLite). Aucun changement de comportement.
+
+---
+
 ## 6.8.0 — 20 novembre 2026
 
 ### Performances

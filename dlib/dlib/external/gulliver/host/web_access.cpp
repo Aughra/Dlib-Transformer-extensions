@@ -18,7 +18,7 @@
 #include <mutex>
 #include <vector>
 
-#include <dlib/external/httplib/httplib.h>
+#include <httplib.h>
 
 #include "../common/log.h"
 #include "../common/version.h"

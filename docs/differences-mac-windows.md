@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.8.0, 20 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.8.1, 20 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -49,6 +49,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 |---|---|---|---|---|---|
 | Empreinte SHA-256 des modèles | mbedtls, en logiciel | CommonCrypto d'Apple, avec les instructions SHA de la puce | Chaque téléchargement, import et restauration relit tout le fichier | 285 → 2 100 Mo/s (8,7 → 1,2 s pour 2,5 Go) | ch. 11, v. 4.2.0 |
 | Empreinte SHA-256 des images (moteur) | `dlib::sha256`, en logiciel | CommonCrypto, comme le service ; vérifiée par `test_image_input` (valeurs de la norme FIPS 180-2) | Premier morceau de l'indépendance de Gulliver vis-à-vis de dlib | — (images de quelques Mo, non mesuré) | v. 6.4.1 |
+| Bibliothèques d'autres projets de Gulliver (cpp-httplib, Mbed TLS, SQLite, libpng, libjpeg) | Prises dans `dlib/external` ; le build de l'application construit dlib (`add_subdirectory`) pour obtenir sa cible HTTPS | Copiées sans changement dans `gulliver/third_party/`, avec leurs propres cibles (`gulliver_httplib`, `gulliver_mbedtls`) ; le build de Gulliver ne construit plus dlib et n'en lit plus que des en-têtes (GGUF, tokenizer, ZIP, enveloppe de sqlite) | Deuxième morceau de l'indépendance de Gulliver vis-à-vis de dlib (feuille de route, fil rouge) | — (aucun changement de comportement) | v. 6.8.1 |
 | Format de conversation de Mixtral et des premiers Mistral 7B | Format sans template (« User: … Assistant: »), `[INST]` n'étant pas un token de leur vocabulaire | « <s> [INST] … [/INST] » en texte, comme leur template | Le format générique dégradait leurs réponses | — (réponses comme llama.cpp) | n° 26, v. 6.6.0 |
 | Copie d'un modèle (réserve, restauration, import) | Copie octet par octet | Clone APFS (`fclonefileat`), puis relu et haché | Un clone est instantané et ne prend pas de place | Restaurer le 4B : 23 → 6,1 à 6,8 s ; place prise : 2,8 Go → 0 | ch. 11, v. 4.2.0 |
 | Signature du catalogue | Catalogue signé, vérifié par une clé publique | Plus aucune clé ni signature | Demande de l'humain (« tout faire sans clé ») ; le fork ne publie rien | — | v. 4.0.0 |

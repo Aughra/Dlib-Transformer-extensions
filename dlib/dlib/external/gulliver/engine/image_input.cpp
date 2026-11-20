@@ -13,8 +13,8 @@
 #include <stdexcept>
 
 #include <CommonCrypto/CommonDigest.h>
-#include <dlib/external/libjpeg/jpeglib.h>
-#include <dlib/external/libpng/png.h>
+#include <jpeglib.h>
+#include <png.h>
 
 namespace gulliver
 {

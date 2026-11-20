@@ -22,7 +22,7 @@
 */
 
 
-#include <dlib/external/httplib/httplib.h>
+#include <httplib.h>
 #include <mbedtls/build_info.h>
 #include <sqlite3.h>
 #include <zlib.h>

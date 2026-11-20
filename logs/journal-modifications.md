@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-20 — Gulliver 6.8.1 : copier les bibliothèques d'autres projets dans Gulliver (fil rouge, morceau 2)
+
+- **Quoi** : cpp-httplib, Mbed TLS, SQLite, libpng et libjpeg copiés sans changement de `dlib/external/` vers `gulliver/third_party/` (fichiers suivis par git, comparés par `diff -rq` : identiques) ; cibles `gulliver_mbedtls` et `gulliver_httplib` dans le CMake de Gulliver, qui ne fait plus `add_subdirectory` de dlib ; inclusions `<httplib.h>`, `<png.h>`, `<jpeglib.h>` ; licences lues dans `third_party/` ; `third_party/README.md`. Mesures de vitesse arrêtées à la demande de l'humain (feuille de route, partie 2) ; décisions dans `logs/decisions-2026-11-20.md`.
+- **Fichiers** : `gulliver/CMakeLists.txt`, `gulliver/third_party/{httplib,mbedtls,sqlite,libpng,libjpeg,README.md}`, `gulliver/host/{http_fetch,service,pseudonyms,web_access,relay,server}.cpp`, `gulliver/tests/test_host.cpp`, `gulliver/engine/image_input.cpp`, `gulliver/web/{changelog.md,openapi.json}`, `gulliver/common/version.h` ; `docs/{feuille-de-route.md,differences-mac-windows.md,memo-portage-macos-arm64.md}`, `macos/site-docs/sommaire.json`, `logs/{reprise.md,decisions-2026-11-20.md}`, ce journal.
+- **Pourquoi** : rendre Gulliver indépendant de dlib (décision de l'humain du 2026-11-19), morceau 2. Copier plutôt que déplacer : dlib et Pseudalis s'en servent encore.
+- **Étapes** : la règle SSH `barbidou` demandée par l'humain a été refusée par le contrôle de Claude Code (à ajouter par `/permissions`). Build neuf `build/macos-gulliver-tp` sans erreur ni avertissement, aucune cible `dlib_build` ; `test_host`, `test_image_input`, `test_chat_format`, `test_qkernels`, `test_model_file`, `test_engine_api`, `test_metal` all checks passed ; `test_macos.sh` (port 18463) : voir la reprise. dlib n'a pas changé (aucune ligne au registre).
+
 ## 2026-11-20 — Gulliver 6.8.0 : les poids des experts en demi-précision, et test_metal remis d'aplomb
 
 - **Quoi** : `mm_id` prépare sa tuile de poids en `half` (`simdgroup_half8x8`), activations et sommes en floats ; `test_metal` : tolérance de `mm_id` à 1e-3 (borne de la demi-précision), nouveau test `half gemm after dequant_h_*` (cinq formats), `random_matrix` qui place l'échelle de Q5_K, Q8_0 et Q5_0, erreur NaN qui fait échouer ; commentaire du noyau à jour.

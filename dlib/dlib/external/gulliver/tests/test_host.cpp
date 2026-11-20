@@ -80,7 +80,7 @@
 
 #include <zlib.h>
 
-#include <dlib/external/httplib/httplib.h>
+#include <httplib.h>
 
 #include "../common/builtin_models.h"
 #include "../common/engine_api.h"
