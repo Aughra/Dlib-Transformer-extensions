@@ -7972,6 +7972,7 @@ namespace dlib
             theta_base(other.theta_base),
             position_scale(other.position_scale),
             rotary_dims(other.rotary_dims),
+            ggml_yarn(other.ggml_yarn),
             cos_cache(other.cos_cache),
             sin_cache(other.sin_cache),
             yarn(other.yarn)
@@ -7986,6 +7987,7 @@ namespace dlib
                 theta_base = other.theta_base;
                 position_scale = other.position_scale;
                 rotary_dims = other.rotary_dims;
+                ggml_yarn = other.ggml_yarn;
                 cos_cache = other.cos_cache;
                 sin_cache = other.sin_cache;
                 yarn = other.yarn;
@@ -8022,6 +8024,25 @@ namespace dlib
             rotary_dims = n;
         }
         long get_rotary_dims() const { return rotary_dims; }
+
+        /* YaRN as llama.cpp computes it (ggml rope_yarn), the scaling the GGUF files declare
+           with rope.scaling.type = yarn: pair i mixes the extrapolated angle pos * f_i and the
+           interpolated one freq_scale * pos * f_i, by a ramp between the correction dimensions
+           of beta_fast and beta_slow over the original context; cosines and sines are
+           multiplied by mscale. Distinct from set_yarn_params, the library's own length-based
+           variant. Set before the first forward pass. */
+        struct ggml_yarn_config
+        {
+            bool enabled = false;
+            float freq_scale = 1, orig_ctx = 0, beta_fast = 32, beta_slow = 1, ext_factor = 1, mscale = 1;
+        };
+        void set_ggml_yarn(float freq_scale, float orig_ctx, float beta_fast, float beta_slow,
+            float ext_factor, float mscale)
+        {
+            DLIB_CASSERT(freq_scale > 0 && orig_ctx > 0 && mscale > 0, "invalid YaRN parameters");
+            ggml_yarn = { true, freq_scale, orig_ctx, beta_fast, beta_slow, ext_factor, mscale };
+        }
+        const ggml_yarn_config& get_ggml_yarn() const { return ggml_yarn; }
         long get_seq_len() const { return seq_len; }
         long get_d_head() const { return d_head; }
 
@@ -8186,13 +8207,21 @@ namespace dlib
                tag, so that the archives of every other model keep their exact format. The
                std::string matters: a bare const char* would be serialized as a bool. */
             /* A partial rotation writes a third tag, with the scale and the rotated count. */
-            const bool partial = item.rotary_dims != 0;
+            /* ggml's YaRN writes a fourth: the scale, the rotated count and its six values. */
+            const bool yarned = item.ggml_yarn.enabled;
+            const bool partial = item.rotary_dims != 0 || yarned;
             const bool scaled = item.position_scale != 1.0f || partial;
-            serialize(std::string(partial ? "rotary_positional_embedding_3"
+            serialize(std::string(yarned ? "rotary_positional_embedding_4" : partial ? "rotary_positional_embedding_3"
                 : scaled ? "rotary_positional_embedding_2" : "rotary_positional_embedding_"), out);
             serialize(item.theta_base, out);
             if (scaled) serialize(item.position_scale, out);
             if (partial) serialize(item.rotary_dims, out);
+            if (yarned)
+            {
+                const auto& y = item.ggml_yarn;
+                const float v[6] = { y.freq_scale, y.orig_ctx, y.beta_fast, y.beta_slow, y.ext_factor, y.mscale };
+                for (float f : v) serialize(f, out);
+            }
             serialize(item.cos_cache, out);
             serialize(item.sin_cache, out);
 
@@ -8208,7 +8237,7 @@ namespace dlib
             std::string version;
             deserialize(version, in);
             if (version != "rotary_positional_embedding_" && version != "rotary_positional_embedding_2"
-                && version != "rotary_positional_embedding_3")
+                && version != "rotary_positional_embedding_3" && version != "rotary_positional_embedding_4")
                 throw serialization_error("Unexpected version '" + version +
                     "' while deserializing rotary_positional_embedding_");
 
@@ -8216,7 +8245,16 @@ namespace dlib
             item.position_scale = 1.0f;
             item.rotary_dims = 0;
             if (version != "rotary_positional_embedding_") deserialize(item.position_scale, in);
-            if (version == "rotary_positional_embedding_3") deserialize(item.rotary_dims, in);
+            if (version == "rotary_positional_embedding_3" || version == "rotary_positional_embedding_4")
+                deserialize(item.rotary_dims, in);
+            item.ggml_yarn = ggml_yarn_config();
+            if (version == "rotary_positional_embedding_4")
+            {
+                auto& y = item.ggml_yarn;
+                y.enabled = true;
+                float* v[6] = { &y.freq_scale, &y.orig_ctx, &y.beta_fast, &y.beta_slow, &y.ext_factor, &y.mscale };
+                for (float* f : v) deserialize(*f, in);
+            }
             deserialize(item.cos_cache, in);
             deserialize(item.sin_cache, in);
 
@@ -8302,10 +8340,35 @@ namespace dlib
 
             const float train_len = static_cast<float>(yarn.original_len);
 
+            // The ramp of ggml's YaRN, over the rotated dimensions.
+            float ramp_low = 0, ramp_high = 0;
+            if (ggml_yarn.enabled)
+            {
+                const double pi = 3.14159265358979323846;
+                auto corr = [&](float n_rot) {
+                    return static_cast<float>(rotated * std::log(ggml_yarn.orig_ctx / (n_rot * 2.0 * pi))
+                        / (2.0 * std::log(static_cast<double>(theta_base))));
+                };
+                ramp_low = std::max(0.0f, std::floor(corr(ggml_yarn.beta_fast)));
+                ramp_high = std::min(static_cast<float>(rotated - 1), std::ceil(corr(ggml_yarn.beta_slow)));
+            }
+
             for (long pos = 0; pos < seq_len; ++pos)
             {
                 for (long i = 0; i < half_dim; ++i)
                 {
+                    if (ggml_yarn.enabled)
+                    {
+                        const float extrap = static_cast<float>(pos) * position_scale * inv_freq[i];
+                        const float interp = ggml_yarn.freq_scale * extrap;
+                        const float y = (static_cast<float>(i) - ramp_low) / std::max(0.001f, ramp_high - ramp_low);
+                        const float mix = (1.0f - std::min(1.0f, std::max(0.0f, y))) * ggml_yarn.ext_factor;
+                        const float theta = interp * (1.0f - mix) + extrap * mix;
+                        const long idx = tensor_index(cos_cache, 0, 0, pos, i);
+                        cos_ptr[idx] = std::cos(theta) * ggml_yarn.mscale;
+                        sin_ptr[idx] = std::sin(theta) * ggml_yarn.mscale;
+                        continue;
+                    }
                     float pos_scaled = static_cast<float>(pos) * position_scale;
 
                     if (yarn.enabled)
@@ -8339,6 +8402,7 @@ namespace dlib
         float theta_base;
         float position_scale = 1.0f;
         long rotary_dims = 0;
+        ggml_yarn_config ggml_yarn;
 
         // Precomputed trigonometric values
         // Shape: (1, 1, seq_len, d_head/2)

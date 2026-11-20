@@ -2,6 +2,15 @@
 
 Consigne de l'humain, le matin : « ARRÊT les tests de perfs, et continue la roadmap ». Ce fichier dit ce que j'ai décidé seul, et pourquoi. Le plus récent est en haut.
 
+## 9. Mistral 3 : un modèle téléchargé, YaRN de llama.cpp, la fin de R1
+
+- **Ministral 3 3B téléchargé** (Q8_0, 3,7 Go, dépôt officiel `mistralai/Ministral-3-3B-Instruct-2512-GGUF`) : le seul Mistral du Mac, Mistral Small 3.2 24B, est déclaré `llama` (famille déjà connue) et ferait 96 Go en float32, plus que les 64 Go du Mac mini ; Ministral 3 porte l'architecture `mistral3` et ses deux nouveautés.
+- **YaRN comme llama.cpp, dans les tables de la rotation**, à côté de la variante propre à dlib (`set_yarn_params`, réglée sur la longueur, que l'import coupe) plutôt qu'à sa place : on ne change pas un comportement que d'autres programmes peuvent utiliser. La passe arrière reste juste sans changement (la rotation est linéaire).
+- **La note YaRN de l'original corrigée et mesurée** (notes n° 30) : on a coupé YaRN le temps d'une mesure, puis remis le code (vérifié : plus de trace de la coupure).
+- **La température d'attention complète** bien qu'elle n'agisse qu'au-delà de 16 384 positions : sans elle, le réseau serait faux pour les longs textes, et son test le montre sur des tranches de 3 positions.
+- **La mesure longue en mode normal seulement** : le mode exact de `test_runtime` passait 69 minutes de calcul sur 1 561 tokens avec un vocabulaire de 131 072, sur des essais du moteur seul qui ne jugent pas l'import ; la comparaison au réseau dlib se fait aussi en mode normal.
+- **Les notes de version de 6.10.1 complétées** plutôt qu'une version nouvelle : Qwen 3.5 et Mistral 3 ne changent que dlib, et la règle n'incrémente Gulliver que quand Gulliver change.
+
 ## 8. Qwen 3.5 dans dlib : cinq choix
 
 - **La règle delta en une couche à elle** (`gated_delta_net_`), entre deux couches linéaires, comme la convolution de LFM2 : les quatre projections d'entrée (attn_qkv, attn_gate, ssm_alpha, ssm_beta) sont fusionnées en une seule à l'import, ce qui garde un seul `linear_no_bias` que LoRA et l'export savent traiter.

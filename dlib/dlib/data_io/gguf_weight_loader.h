@@ -154,6 +154,10 @@ namespace dlib
                rope_dims dimensions of each head (0: the whole head). */
             bool output_gate = false;
             long rope_dims = 0;
+            /* YaRN as llama.cpp computes it (factor 0: none), and the attention temperature. */
+            float yarn_freq_scale = 0, yarn_orig_ctx = 0, yarn_beta_fast = 32, yarn_beta_slow = 1, yarn_mscale = 1;
+            float temperature_scale = 0;
+            long temperature_length = 0;
             template <typename T>
             auto set(T& layer, int) -> decltype((void)layer.set_rope_theta_base(0.f))
             {
@@ -178,6 +182,9 @@ namespace dlib
                 layer.set_qkv_bias_enabled(qkv_bias);
                 layer.set_output_gate_enabled(output_gate);
                 layer.set_rope_rotary_dims(rope_dims);
+                if (yarn_freq_scale > 0)
+                    layer.set_rope_ggml_yarn(yarn_freq_scale, yarn_orig_ctx, yarn_beta_fast, yarn_beta_slow, 1.0f, yarn_mscale);
+                layer.set_attention_temperature(temperature_scale, temperature_length);
             }
             template <typename T> void set(T&, long) {}
             template <typename T> void operator()(T& layer) { set(layer, 0); }
@@ -252,7 +259,12 @@ namespace dlib
                 spec.gemma_blocks && spec.rope_scaling_type == "linear" && spec.rope_scaling_factor > 0
                     ? static_cast<float>(1.0 / spec.rope_scaling_factor) : 1.f,
                 spec.gemma_blocks ? spec.sliding_window : 0,
-                spec.delta_blocks, spec.delta_blocks && spec.rope_dims < spec.head_dim ? spec.rope_dims : 0 };
+                spec.delta_blocks, spec.delta_blocks && spec.rope_dims < spec.head_dim ? spec.rope_dims : 0,
+                spec.rope_scaling_type == "yarn" && spec.rope_scaling_factor > 0
+                    ? static_cast<float>(1.0 / spec.rope_scaling_factor) : 0.f,
+                static_cast<float>(spec.rope_orig_ctx), static_cast<float>(spec.yarn_beta_fast),
+                static_cast<float>(spec.yarn_beta_slow), static_cast<float>(spec.yarn_mscale),
+                static_cast<float>(spec.attn_temperature_scale), spec.attn_temperature_length };
             visit_computational_layers(net, cfg);
             if (spec.gemma_blocks && visited != spec.n_layers)
                 throw std::runtime_error("import_gguf_weights: met " + std::to_string(visited)

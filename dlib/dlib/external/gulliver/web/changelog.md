@@ -8,6 +8,8 @@ Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo
 
 - **LFM2** s'importe en réseau dlib : LFM2.5-1.2B donne les mêmes probabilités que le moteur de Gulliver (divergence moyenne 3,2e-7 sur 26 positions, même token le plus probable partout). dlib reçoit une couche de convolution courte entraînable et une pile qui mêle, couche par couche, blocs d'attention et blocs à convolution.
 
+- **Qwen 3.5** et **Mistral 3** s'importent aussi en réseau dlib, sans changement de Gulliver : Qwen3.5-0.8B (divergence moyenne 4e-8 sur 26 positions, 1,8e-9 sur 1 560) et Ministral 3 3B (3,8e-8 sur 26, 2,5e-8 sur 1 561) donnent les mêmes probabilités que le moteur. dlib reçoit pour eux une couche Gated DeltaNet entraînable, une porte de sortie et une rotation partielle dans l'attention, YaRN calculé comme llama.cpp et la température d'attention. Les quatre familles prévues pour l'import (Gemma 3, LFM2, Qwen 3.5, Mistral 3) sont en place.
+
 ### Corrections
 
 - `test_runtime` ne s'arrête plus sur un modèle à état récurrent (LFM2, Qwen 3.5) : la troncature y repart de la position 0, et l'essai du préfixe partagé, qui coupe une séquence au milieu d'un bloc, est sauté avec un message.

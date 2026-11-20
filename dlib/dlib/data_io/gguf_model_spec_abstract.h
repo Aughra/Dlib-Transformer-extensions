@@ -159,6 +159,13 @@ namespace dlib
         long ssm_head_dim;
         long rope_dims;
         long nextn_layers;
+        // YaRN as llama.cpp computes it (ramp bounds, amplitude of cosines and sines) and the
+        // attention temperature of Mistral 3 (scale, positions per step).
+        double yarn_beta_fast;
+        double yarn_beta_slow;
+        double yarn_mscale;
+        double attn_temperature_scale;
+        long attn_temperature_length;
     };
 
     // ---------------------------------------------------------------------------------

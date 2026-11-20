@@ -14,6 +14,7 @@
 
 #include "gguf_reader.h"
 #include "gguf_vision_spec.h"
+#include <cmath>
 #include <string>
 #include <vector>
 #include <sstream>
@@ -22,7 +23,7 @@
 
 namespace dlib
 {
-    enum class arch_family { llama, mistral, gemma, gemma2, gemma3, qwen2, qwen3, mixtral, granite_moe, lfm2, qwen35, unknown };
+    enum class arch_family { llama, mistral, gemma, gemma2, gemma3, qwen2, qwen3, mixtral, granite_moe, lfm2, qwen35, mistral3, unknown };
 
     inline arch_family arch_family_from_name(const std::string& a)
     {
@@ -37,6 +38,7 @@ namespace dlib
         if (a == "granitemoe") return arch_family::granite_moe;
         if (a == "lfm2")    return arch_family::lfm2;
         if (a == "qwen35")  return arch_family::qwen35;
+        if (a == "mistral3") return arch_family::mistral3;  // Ministral 3: a Llama with YaRN and a temperature
         return arch_family::unknown;
     }
 
@@ -107,6 +109,17 @@ namespace dlib
         long ssm_head_dim = 0;
         long rope_dims = 0;
         long nextn_layers = 0;
+
+        /* YaRN as llama.cpp computes it (rope.scaling.type = yarn): its ramp, the extension
+           factor (1) and the amplitude of the cosines and sines, from rope.scaling.attn_factor
+           and yarn_log_multiplier as llama.cpp combines them. The attention temperature of
+           Mistral 3 multiplies the query of position p by 1 + attn_temperature_scale *
+           log(1 + floor(p / attn_temperature_length)). */
+        double yarn_beta_fast = 32.0;
+        double yarn_beta_slow = 1.0;
+        double yarn_mscale = 1.0;
+        double attn_temperature_scale = 0.0;
+        long attn_temperature_length = 0;
     };
 
     inline long gcd_long(long a, long b)
@@ -211,6 +224,23 @@ namespace dlib
             s.rope_scaling_type = "linear";
             s.rope_scaling_factor = gguf_bounded_double(g, p + ".rope.scale_linear", 0.0, 0.0, 1e6);
         }
+        if (s.rope_scaling_type == "yarn" && s.rope_scaling_factor > 0.0)
+        {
+            s.yarn_beta_fast = gguf_bounded_double(g, p + ".rope.scaling.yarn_beta_fast", 32.0, 0.0, 1e6);
+            s.yarn_beta_slow = gguf_bounded_double(g, p + ".rope.scaling.yarn_beta_slow", 1.0, 0.0, 1e6);
+            const double base = 1.0 + 0.1 * std::log(s.rope_scaling_factor);
+            double mscale = base;
+            if (g.has(p + ".rope.scaling.yarn_log_multiplier"))
+            {
+                const double mul = gguf_bounded_double(g, p + ".rope.scaling.yarn_log_multiplier", 1.0, -1e6, 1e6);
+                mscale = base / (1.0 + 0.1 * mul * std::log(s.rope_scaling_factor));
+            }
+            s.yarn_mscale = mscale * gguf_bounded_double(g, p + ".rope.scaling.attn_factor", 1.0, 1e-6, 1e6);
+        }
+        s.attn_temperature_scale = gguf_bounded_double(g, p + ".attention.temperature_scale", 0.0, -1e6, 1e6);
+        if (s.attn_temperature_scale != 0.0)
+            s.attn_temperature_length = static_cast<long>(gguf_bounded_int(g, p + ".attention.temperature_length",
+                s.rope_scaling_type == "yarn" && s.rope_orig_ctx > 0 ? s.rope_orig_ctx : 8192, 1, int64_t(1) << 26));
         s.n_experts  = static_cast<long>(gguf_bounded_int(g, p + ".expert_count", 0, 0, 4096));
         s.n_experts_used = static_cast<long>(gguf_bounded_int(g, p + ".expert_used_count", 0, 0, s.n_experts));
         s.embedding_scale = gguf_bounded_double(g, p + ".embedding_scale", 1.0, -1e6, 1e6);
@@ -401,7 +431,7 @@ namespace dlib
            unread, and a network computing something else than the model, without a word. */
         if (s.family == arch_family::unknown)
             r.blockers.push_back("architecture '" + s.arch_name + "' is not one of the supported families "
-                "(llama, mistral, qwen2, qwen3, qwen35, gemma3, lfm2, mixtral, granitemoe)");
+                "(llama, mistral, mistral3, qwen2, qwen3, qwen35, gemma3, lfm2, mixtral, granitemoe)");
         if (s.family == arch_family::gemma || s.family == arch_family::gemma2)
             r.blockers.push_back("Gemma family needs (1+w) RMSNorm, embedding scaling and GeGLU, not available yet");
         /* Gemma 3 as converted by llama.cpp: the conversion already adds 1 to every norm
@@ -452,8 +482,19 @@ namespace dlib
             r.blockers.push_back("declared linear RoPE scaling (factor "
                 + std::to_string(s.rope_scaling_factor)
                 + ") is applied to every position by the reference and is not supported yet");
-        if (s.rope_scaling_type == "yarn")
-            r.notes.push_back("declared YaRN RoPE scaling is not applied on import; sequences beyond the original context length will degrade");
+        /* YaRN changes the angles of the low frequencies at every position, not only beyond
+           the original context: the import applies it as llama.cpp does. */
+        if (s.rope_scaling_type == "yarn" && s.rope_scaling_factor > 0.0)
+        {
+            if (s.rope_orig_ctx <= 0)
+                r.blockers.push_back("YaRN RoPE scaling without its original context length");
+            else
+                r.notes.push_back("YaRN RoPE scaling (factor " + std::to_string(s.rope_scaling_factor)
+                    + ", original context " + std::to_string(s.rope_orig_ctx) + ") applied as llama.cpp does");
+        }
+        if (s.attn_temperature_scale != 0.0)
+            r.notes.push_back("attention temperature " + std::to_string(s.attn_temperature_scale) + " every "
+                + std::to_string(s.attn_temperature_length) + " positions applied");
         if (s.head_dim <= 0 || (s.head_dim % 2) != 0)
             r.blockers.push_back("head_dim must be even for RoPE");
         if (s.n_kv_heads <= 0 || (s.n_heads % s.n_kv_heads) != 0)

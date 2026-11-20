@@ -6802,6 +6802,70 @@ void test_multm_prev()
         DLIB_TEST(!loads(c1, wide));
     }
 
+    void test_gqa_attention_temperature_yarn()
+    {
+        /* Mistral 3 attention: YaRN as llama.cpp computes it and the attention temperature.
+           The temperature leaves the first `length` positions alone and changes the later
+           ones; decoding one token at a time gives the rows of the full pass with both; both
+           read back. */
+        print_spinner();
+        using att = gqa_attention<32, 4, 2, 8, input_tensor>;
+        const long N = 8, D = 32, length = 3;
+        resizable_tensor x(1, 1, N, D);
+        tt::tensor_rand rnd(17); rnd.fill_gaussian(x);
+        auto run_full = [&](att& net) {
+            network_context::reset();
+            network_context::set_inference_mode(network_context::inference_mode::full);
+            net.forward(x);
+            resizable_tensor out; out = net.get_output();
+            network_context::reset();
+            return out;
+        };
+        att plain;
+        plain.layer_details().set_rope_ggml_yarn(1.0f / 16, 64, 32, 1, 1, 1.2f);
+        {
+            std::vector<resizable_tensor> one(1, x); resizable_tensor staged;
+            plain.to_tensor(one.begin(), one.end(), staged);
+        }
+        const resizable_tensor p = run_full(plain);
+        att warm = plain;
+        warm.layer_details().set_attention_temperature(0.5f, length);
+        const resizable_tensor w = run_full(warm);
+        double before = 0, after = 0;
+        for (long i = 0; i < N; ++i)
+            for (long c = 0; c < D; ++c)
+                (i < length ? before : after) += std::abs(p.host()[i * D + c] - w.host()[i * D + c]);
+        DLIB_TEST_MSG(before < 1e-6, "the temperature moved the first positions by " << before);
+        DLIB_TEST_MSG(after > 1e-3, "the temperature did not move the later positions");
+
+        att net = warm;
+        network_context::reset();
+        network_context::set_kv_cache_capacity(N);
+        network_context::request_kv_cache_clear();
+        double worst = 0;
+        for (long i = 0; i < N; ++i)
+        {
+            network_context::set_inference_mode(i == 0 ? network_context::inference_mode::prefill
+                                                       : network_context::inference_mode::incremental);
+            resizable_tensor xi(1, 1, 1, D);
+            std::copy(x.host() + i * D, x.host() + (i + 1) * D, xi.host());
+            net.forward(xi);
+            if (i == 0) network_context::clear_kv_cache_request();
+            for (long c = 0; c < D; ++c)
+                worst = std::max<double>(worst, std::abs(net.get_output().host()[c] - w.host()[i * D + c]));
+        }
+        network_context::reset();
+        DLIB_TEST_MSG(worst < 1e-4, "incremental decoding with YaRN and the temperature differs by " << worst);
+
+        std::ostringstream o; serialize(warm, o);
+        std::istringstream in(o.str());
+        att back; deserialize(back, in);
+        DLIB_TEST(back.layer_details().get_attention_temperature_scale() == 0.5f);
+        DLIB_TEST(back.layer_details().get_attention_temperature_length() == length);
+        const resizable_tensor again = run_full(back);
+        DLIB_TEST(max(abs(mat(again) - mat(w))) < 1e-6);
+    }
+
     void test_gated_delta_net()
     {
         /* The Gated DeltaNet of Qwen 3.5, two key heads shared by four value heads of 4 values
@@ -7166,6 +7230,7 @@ void test_multm_prev()
             test_short_conv();
             test_gqa_attention_gate_partial_rope();
             test_gated_delta_net();
+            test_gqa_attention_temperature_yarn();
             test_tagging();
 #ifdef DLIB_USE_CUDA
             test_affine_rect();

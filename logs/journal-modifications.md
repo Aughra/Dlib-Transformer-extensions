@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-20 — Importer Mistral 3 en réseau dlib, et clore R1
+
+- **Quoi** : dans dlib, `rotary_positional_embedding_::set_ggml_yarn` (YaRN comme llama.cpp : rampe de `beta_fast` à `beta_slow`, angles mêlés, amplitude), `gqa_attention_::set_rope_ggml_yarn` et la température d'attention (`set_attention_temperature`, dans les passes complète, incrémentale et arrière) ; famille `mistral3`, réglages YaRN et température lus par la description du modèle et posés par le chargeur ; la note YaRN de l'original corrigée (notes n° 30). Ministral 3 3B (Q8_0, 3,7 Go) téléchargé du dépôt officiel dans `build/models/`. Épisode 59 du blog, notes de version de 6.10.1 complétées (Gulliver ne change pas). R1 terminé.
+- **Fichiers** : `dlib/dlib/dnn/{layers.h,transformer.h}`, `dlib/dlib/data_io/{gguf_model_spec.h,gguf_model_spec_abstract.h,gguf_weight_loader.h}`, `dlib/dlib/test/dnn.cpp`, `gulliver/web/changelog.md` ; `blog/{59-quatre-familles-dans-dlib.md,README.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,feuille-de-route.md}`, `logs/{decisions-2026-11-20.md,reprise.md}`, ce journal.
+- **Pourquoi** : R1, dernière famille (décision 9).
+- **Étapes** : `dtest --test_dnn` 794 553 vérifications, 0 avertissement ; Ministral 3 3B contre le moteur de Gulliver : KL 3,81e-8 (produits exacts) et 3,63e-8 sur 26 positions, 2,52e-8 sur 1 561 (mode normal), même argmax partout ; YaRN coupé le temps d'une mesure : 2,1e-6 sur 26, 2,15e-3 et plus grand écart 6,21 sur 1 561 (argmax 99,9 %), puis code remis (vérifié) ; Qwen3-0.6B, Gemma 3 1B, LFM2.5-1.2B, Qwen3.5-0.8B inchangés. Une première mesure longue en mode exact a été arrêtée (69 minutes de calcul sur des essais du moteur seul). Non vérifié : un autre modèle YaRN, une génération complète dans dlib.
+
 ## 2026-11-20 — Importer Qwen 3.5 en réseau dlib (atelier, R1)
 
 - **Quoi** : dans dlib, couche `gated_delta_net_<Hk, Hv, S, K>` (convolution et SiLU, normes L2, règle delta, norme RMS fois SiLU(z) ; dérivée par morceaux de 64 tokens ; états gardés pour l'écriture token par token) ; `gqa_attention_` : porte de sortie (`set_output_gate_enabled`) et rotation partielle (`set_rope_rotary_dims`, par `rotary_positional_embedding_::set_rotary_dims`) ; `delta_net_block` et `delta_net_transformer_config` ; famille `qwen35` dans la description du modèle (couche de prédiction retirée, motif, `ssm.*`, `rope.dimension_count`), le chargeur (projection d'entrée fusionnée, paramètres du DeltaNet, `post_attention_norm`, requête et porte séparées, disposition NeoX sur 64 dimensions) et l'exemple d'import. Gulliver ne change pas (6.10.1).

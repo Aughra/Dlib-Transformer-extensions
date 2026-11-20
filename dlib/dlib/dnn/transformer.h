@@ -194,6 +194,46 @@ namespace dlib
         }
         long get_rope_rotary_dims() const { return rope_q_helper_.get().get_rotary_dims(); }
 
+        // YaRN as llama.cpp computes it (rotary_positional_embedding_::set_ggml_yarn), on Q and K.
+        void set_rope_ggml_yarn(float freq_scale, float orig_ctx, float beta_fast, float beta_slow,
+            float ext_factor, float mscale)
+        {
+            rope_q_helper_.get().set_ggml_yarn(freq_scale, orig_ctx, beta_fast, beta_slow, ext_factor, mscale);
+            rope_k_helper_.get().set_ggml_yarn(freq_scale, orig_ctx, beta_fast, beta_slow, ext_factor, mscale);
+        }
+
+        /* Attention temperature (Mistral 3, Llama 4): the rotated query of position p is
+           multiplied by 1 + scale * log(1 + floor(p / length)), which leaves the first length
+           positions unchanged. A scale of 0, the default, turns it off. */
+        void set_attention_temperature(float scale, long length)
+        {
+            DLIB_CASSERT(scale == 0 || length > 0, "the temperature needs a positive length");
+            attn_temp_scale_ = scale;
+            attn_temp_length_ = length;
+        }
+        float get_attention_temperature_scale() const { return attn_temp_scale_; }
+        long get_attention_temperature_length() const { return attn_temp_length_; }
+        float attention_temperature(long pos) const
+        {
+            if (attn_temp_scale_ == 0) return 1.0f;
+            return 1.0f + attn_temp_scale_ * std::log(1.0f + std::floor(static_cast<float>(pos) / attn_temp_length_));
+        }
+        // Multiplies the rows of each head of q (B x NUM_HEADS x N x HEAD_DIM), row r being position first + r.
+        void scale_by_temperature(tensor& q, long first) const
+        {
+            if (attn_temp_scale_ == 0) return;
+            float* d = q.host();
+            const long N = q.nr();
+            for (long plane = 0; plane < q.num_samples() * q.k(); ++plane)
+                for (long r = 0; r < N; ++r)
+                {
+                    const float f = attention_temperature(first + r);
+                    if (f == 1.0f) continue;
+                    float* row = d + (static_cast<size_t>(plane) * N + r) * HEAD_DIM;
+                    for (long c = 0; c < HEAD_DIM; ++c) row[c] *= f;
+                }
+        }
+
         /* Output gate (Qwen 3.5): the merged heads are multiplied, element by element, by
            sigmoid(x . W_G) before the output projection, W_G being EMBEDDING_DIM x
            Q_PROJ_DIM. Its weights close the fixed part of the blob, after the QKV bias slots.
@@ -601,6 +641,9 @@ namespace dlib
                 }
             }
 
+            // Step 3b backward: the temperature is a per-position factor on the rotated queries.
+            scale_by_temperature(dQ, 0);
+
             // Step 3 backward: RoPE, then (optional) QK-Norm. When QK-Norm is active, the tensor
             // RoPE saw in forward was the *normed* Q/K, so RoPE backward yields the gradient w.r.t.
             // the normed tensor, which then flows back through the per-head RMSNorm to the pre-norm
@@ -805,6 +848,8 @@ namespace dlib
             serialize(item.qk_norm_eps_, out);
             serialize(item.sliding_window_, out);
             serialize(item.has_output_gate_, out);
+            serialize(item.attn_temp_scale_, out);
+            serialize(item.attn_temp_length_, out);
         }
 
         friend void deserialize(gqa_attention_& item, std::istream& in)
@@ -856,6 +901,8 @@ namespace dlib
             deserialize(item.qk_norm_eps_, in);
             deserialize(item.sliding_window_, in);
             deserialize(item.has_output_gate_, in);
+            deserialize(item.attn_temp_scale_, in);
+            deserialize(item.attn_temp_length_, in);
 
             // A layer never set up holds no parameters, and reads back as such.
             const size_t expected_params = item.base_param_count()
@@ -918,6 +965,8 @@ namespace dlib
         size_t q_adapter_offset = 0, v_adapter_offset = 0;
         bool has_qkv_bias_ = false;
         bool has_output_gate_ = false;
+        float attn_temp_scale_ = 0;
+        long attn_temp_length_ = 0;
         resizable_tensor saved_gate, saved_ctx_ungated;
         resizable_tensor bias_ones_;
         double qk_norm_eps_ = DEFAULT_RMS_NORM_EPS;
@@ -1302,6 +1351,9 @@ namespace dlib
                 rope_k_helper_.forward(saved_k_pre_rope, saved_k_post_rope);
             }
 
+            // Step 3b: the attention temperature on the rotated queries (absolute positions 0..N-1).
+            scale_by_temperature(saved_q_post_rope, 0);
+
             // Step 3.5: prefill-mode cache write (K pre-RoPE and V).
             // Only effective non-padded positions are kept; padding is
             // stripped by adjusting the source row offset.
@@ -1584,6 +1636,7 @@ namespace dlib
                 tt::copy_tensor(false, inc_q_rope, 0, inc_q, 0, NUM_HEADS);
             }
             tt::apply_rotary_positional_embedding(false, inc_q_rope, q_cos_slice, q_sin_slice);
+            scale_by_temperature(inc_q_rope, L - 1);
 
             // Step 6: GQA repeat from NUM_KV_HEADS to NUM_HEADS
             inc_k_window_rep.set_size(1, NUM_HEADS, L, HEAD_DIM);

@@ -42,6 +42,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 27 | Bug | `dlib/data_io/gguf_weight_loader.h:230` | L'import d'un GGUF en réseau dlib (`slm_gguf_import_ex --probe-logits`, `--convert`, `--chat`) s'arrête pour tout modèle : « assigned 170 of 171 parameter tensors; the layer order assumption is wrong » ; la couche `embeddings_` expose sa table par `get_layer_params()` depuis le 2026-10-24 (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
 | 28 | Bug | `dlib/data_io/gguf_model_spec.h:291` | Une architecture inconnue de l'import (`gemma3`, `lfm2`, `qwen35`…) passe la vérification de compatibilité sans aucun blocage : elle est lue comme un Llama générique, ses tenseurs propres ignorés (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
 | 29 | Bug | `dlib/data_io/gguf_weight_loader.h:39` | `transpose_into` lit `out_dim × in_dim` valeurs sans regarder la taille du tenseur lu : un tenseur plus petit que prévu est lu au-delà de sa fin (lecture hors de la mémoire du vecteur) ; seul l'inventaire de `slm_gguf_import_ex` l'évite (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
+| 30 | Bug | `dlib/data_io/gguf_model_spec.h:425` | Un modèle YaRN (`rope.scaling.type = yarn`) passe l'import avec la note « sequences beyond the original context length will degrade » : YaRN change pourtant les angles des basses fréquences à toutes les positions, et le réseau importé calcule autre chose dès un texte court (corrigé dans le fork : YaRN appliqué comme llama.cpp). | **Aussi sous Windows**, déduit du code |
 | Registre | dlib | `dlib/dlib`, `dlib/examples` | Tout ce que le fork change dans dlib, fichier par fichier (partie 5). | Voir chaque ligne |
 | 22 | Remarque, exactitude | `gulliver/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant (corrigé dans le fork). | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
 
@@ -376,6 +377,41 @@ Après :
   `copy_into` est laissée telle quelle (le remplissage par des zéros peut être voulu) ; les tenseurs de la convolution de LFM2, ajoutés par le fork, sont vérifiés à la taille exacte.
 - **Vérifié** : Qwen3-0.6B, Gemma 3 1B et LFM2.5-1.2B toujours importés, identiques au moteur de Gulliver (aucun appel ne passait une taille différente). Non vérifié : le message sur un fichier réellement tronqué.
 - **Mac ou Windows** : aussi sous Windows (code commun, en-tête seulement), déduit du code, non vérifié sous Windows.
+
+### 30. Un modèle YaRN est importé sans YaRN, avec une note qui le dit sans danger
+
+- **Où** : `dlib/dlib/data_io/gguf_model_spec.h`, `check_compatibility`, lignes 424 et 425 dans `upstream/main` à `966c178` (lignes 322 et 323 au commit `184ea00`) ; la rotation de dlib (`rotary_positional_embedding_`) n'a qu'une variante à elle de YaRN (`set_yarn_params`, réglée sur la longueur), que l'import coupe.
+- **Ce qui se passe** : pour un fichier qui déclare `rope.scaling.type = yarn` (Ministral 3, et de nombreux modèles à long contexte), la vérification ne bloque pas et note : « declared YaRN RoPE scaling is not applied on import; sequences beyond the original context length will degrade ». Or YaRN, tel que llama.cpp le calcule (`ggml_rope_yarn_corr_dims`, `rope_yarn`), divise par le facteur la fréquence des paires lentes à **toutes** les positions, et multiplie cosinus et sinus par une amplitude : le réseau importé n'est pas le modèle, même sur un texte court, et l'écart grandit avec la longueur.
+- **Reproduire** : importer `Ministral-3-3B-Instruct-2512-Q8_0.gguf` (dépôt `mistralai/Ministral-3-3B-Instruct-2512-GGUF`, architecture `mistral3`, YaRN de facteur 16 sur 16 384 positions) et comparer ses log-probabilités à un moteur qui applique YaRN (llama.cpp, ou le moteur de Gulliver).
+
+| Texte | Import sans YaRN (comme l'original) | Import avec YaRN (fork) |
+|---|---|---|
+| 26 tokens | KL moyenne 2,1e-6, plus grand écart 0,042 | KL 3,8e-8, plus grand écart 0,0035 |
+| 1 561 tokens | KL moyenne 2,2e-3, plus grand écart 6,2 sur les logits, argmax différent à une position | KL 2,5e-8, plus grand écart 0,078, même argmax partout |
+
+- **Correction du fork** (ce commit) : `rotary_positional_embedding_::set_ggml_yarn` (rampe entre les dimensions de correction de `beta_fast` et `beta_slow`, mélange de l'angle d'origine et de l'angle étiré, amplitude), réglée par l'import sur chaque couche d'attention ; la description du modèle lit `yarn_beta_fast`, `yarn_beta_slow`, `yarn_log_multiplier` et `attn_factor`, et la note devient « applied as llama.cpp does ». Avant (lignes 424 et 425) :
+
+```cpp
+        if (s.rope_scaling_type == "yarn")
+            r.notes.push_back("declared YaRN RoPE scaling is not applied on import; sequences beyond the original context length will degrade");
+```
+
+Après :
+
+```cpp
+        if (s.rope_scaling_type == "yarn" && s.rope_scaling_factor > 0.0)
+        {
+            if (s.rope_orig_ctx <= 0)
+                r.blockers.push_back("YaRN RoPE scaling without its original context length");
+            else
+                r.notes.push_back("YaRN RoPE scaling (factor " + std::to_string(s.rope_scaling_factor)
+                    + ", original context " + std::to_string(s.rope_orig_ctx) + ") applied as llama.cpp does");
+        }
+```
+
+  avec le calcul dans `rotary_positional_embedding_::compute_and_cache_trig_values` (voir le registre, partie 5).
+- **Vérifié** : Ministral 3 3B, chiffres ci-dessus, contre le moteur de Gulliver (qui suit llama.cpp) ; test de dlib (décodage token par token = passe complète avec YaRN, aller-retour). Non vérifié : un autre modèle YaRN (Qwen à long contexte, par exemple).
+- **Mac ou Windows** : aussi sous Windows (code commun, en-têtes seulement), déduit du code, non vérifié sous Windows.
 
 ## 2. Portabilité vers macOS sur puce Apple
 
@@ -1174,6 +1210,10 @@ Le fork modifie aussi dlib depuis le 2026-11-14, quand le portage le demande. Ch
 | `dlib/dlib/data_io/gguf_weight_loader.h` | Blocs DeltaNet (projection d'entrée fusionnée attn_qkv, attn_gate, ssm_alpha, ssm_beta ; paramètres de la couche ; ssm_out, tailles exactes vérifiées), norme `post_attention_norm` avant le bloc de calcul, requête et porte séparées dans `attn_q`, disposition NeoX sur les 64 premières dimensions seulement | Qwen 3.5 dans l'import | [93ac246](https://github.com/Aughra/Dlib-Transformer-extensions/commit/93ac246) | Qwen3.5-0.8B : KL 4e-8 contre le moteur de Gulliver, même argmax aux 26 positions | Aussi sous Windows (code commun ; non testé) |
 | `dlib/examples/slm_gguf_import_ex.cpp` | Inventaire des blocs DeltaNet et de la requête doublée ; vérification de `SSM_*` et `ROPE_DIMS` contre l'en-tête | Qwen 3.5 dans l'import | [93ac246](https://github.com/Aughra/Dlib-Transformer-extensions/commit/93ac246) | Inventaire de Qwen3.5-0.8B complet | Aussi sous Windows (code commun ; non testé) |
 | `dlib/dlib/test/dnn.cpp` | `test_gqa_attention_gate_partial_rope`, `test_gated_delta_net` | Couvrir les ajouts | [93ac246](https://github.com/Aughra/Dlib-Transformer-extensions/commit/93ac246) | `dtest --test_dnn` : 794 541 vérifications | Aussi sous Windows (non testé) |
+| `dlib/dlib/dnn/layers.h` | `rotary_positional_embedding_::set_ggml_yarn` : YaRN comme llama.cpp (rampe de `beta_fast` à `beta_slow` sur le contexte d'origine, angle d'origine et angle étiré mêlés, amplitude des cosinus et sinus) ; étiquette `rotary_positional_embedding_4` écrite seulement quand il sert | Entrée n° 30 ; Mistral 3 dans l'import (atelier, R1) | ce commit | Ministral 3 3B identique au moteur de Gulliver (KL 3,8e-8) | Aussi sous Windows (code commun ; non testé) |
+| `dlib/dlib/dnn/transformer.h`, `transformer_abstract.h` | `gqa_attention_` : `set_rope_ggml_yarn` ; température d'attention (`set_attention_temperature` : requête de la position p multipliée par 1 + s·ln(1 + ⌊p/L⌋), dans les passes complète, incrémentale et arrière ; deux champs écrits à la fin de l'archive, règle du format de la couche) | Mistral 3 (et Llama 4) | ce commit | Test neuf : premières positions inchangées, suivantes changées, décodage token par token = passe complète à 1e-4, aller-retour | Ajouts, aussi sous Windows (code commun ; non testé) |
+| `dlib/dlib/data_io/gguf_model_spec.h`, `gguf_model_spec_abstract.h`, `gguf_weight_loader.h` | Famille `mistral3` (un Llama) ; réglages YaRN (`yarn_beta_fast`, `yarn_beta_slow`, amplitude tirée de `yarn_log_multiplier` et `attn_factor` comme llama.cpp) et température (`attention.temperature_scale`, `temperature_length`) lus et posés sur chaque couche d'attention ; note YaRN corrigée (entrée n° 30) | Mistral 3 dans l'import | ce commit | Détection de Ministral 3 3B (26 couches, sortie liée à la table d'entrée) | Aussi sous Windows (code commun ; non testé) |
+| `dlib/dlib/test/dnn.cpp` | `test_gqa_attention_temperature_yarn` | Couvrir les ajouts | ce commit | `dtest --test_dnn` : 794 553 vérifications | Aussi sous Windows (non testé) |
 ---
 
 *Écrit pour l'auteur de l'original et tenu à jour par le fork : les entrées les plus récentes peuvent se trouver en fin de section. Ce document ne contient aucun chemin de machine privée, aucune clé et aucun jeton.*
