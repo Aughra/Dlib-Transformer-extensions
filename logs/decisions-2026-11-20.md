@@ -2,6 +2,11 @@
 
 Consigne de l'humain, le matin : « ARRÊT les tests de perfs, et continue la roadmap ». Ce fichier dit ce que j'ai décidé seul, et pourquoi. Le plus récent est en haut.
 
+## 10. Bibliothèques : PDFium gardé, TLS d'Apple choisi par l'humain
+
+- **PDFium gardé, PDFKit écarté** (point 4a ; règle convenue avec l'humain : ne changer que si le texte est aussi bon). Sur 11 PDF (article à deux colonnes, document du fork, remerciements de Xcode, licence de macOS en français, espagnol, grec, hébreu, arabe, japonais, chinois, coréen), PDFKit donne 96,5 à 100 % des mots de PDFium, mais **perd des lettres doublées** sur la licence japonaise (« Hollyhill » → « Holyhil », « Specially » → « Specialy », « iii » → « i »), rend l'arabe en formes de présentation (à normaliser en NFKC) et y coupe des mots. PDFium mélange l'ordre des chiffres et des parenthèses en arabe, défaut moindre.
+- **Mbed TLS remplacé par le TLS d'Apple, serveur compris** : question posée à l'humain (garder Mbed TLS, recommandé ; clients Apple et serveur en HTTP local ; tout par Apple) ; il a choisi « tout par Apple ». Architecture retenue : cpp-httplib ne parle plus que HTTP en clair, Network.framework fait tout le TLS autour de lui (un portier qui termine le TLS du serveur et passe le HTTP par une prise Unix interne ; un pont qui ouvre le TLS des clients vers l'adresse épinglée avec le nom du serveur). Pourquoi : le code des routes et des clients (flux, découpage, en-têtes) ne change pas, et l'épinglage d'adresse contre le détournement DNS se garde.
+
 ## 9. Mistral 3 : un modèle téléchargé, YaRN de llama.cpp, la fin de R1
 
 - **Ministral 3 3B téléchargé** (Q8_0, 3,7 Go, dépôt officiel `mistralai/Ministral-3-3B-Instruct-2512-GGUF`) : le seul Mistral du Mac, Mistral Small 3.2 24B, est déclaré `llama` (famille déjà connue) et ferait 96 Go en float32, plus que les 64 Go du Mac mini ; Ministral 3 porte l'architecture `mistral3` et ses deux nouveautés.
