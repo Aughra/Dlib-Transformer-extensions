@@ -2,6 +2,12 @@
 
 Consigne de l'humain, le matin : « ARRÊT les tests de perfs, et continue la roadmap ». Ce fichier dit ce que j'ai décidé seul, et pourquoi. Le plus récent est en haut.
 
+## 6. La fenêtre glissante : un champ toujours écrit
+
+- **Quoi** : la fenêtre de `gqa_attention_` est écrite à la fin de chaque archive de la couche, qu'elle vaille 0 ou non.
+- **Pourquoi** : le commentaire de la couche pose la règle (une seule disposition, pas d'étiquette de version ni de champ écrit pour certaines variantes seulement, on réentraîne quand elle change), parce qu'un champ conditionnel a déjà cassé toutes ses archives. Les archives de cette couche écrites avant ne se relisent plus ; le fork n'en a aucune. Pour l'échelle des positions de RoPE (6.8.3), dans une autre classe sans cette règle, j'avais gardé l'ancien format lisible.
+- **Comment vérifier** : un test de dlib compare la passe complète et le décodage token par token avec une fenêtre de 3, puis Gemma 3 1B au-delà de sa fenêtre de 512 contre le moteur de Gulliver.
+
 ## 5. Gemma 3 dans dlib : six choix
 
 - **GELU tanh, couche nouvelle** plutôt que la GELU exacte de dlib : Gemma a été entraîné avec la version tanh, et Gulliver l'utilise ; la GELU exacte aurait été une erreur systématique dans chaque couche.

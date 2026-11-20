@@ -321,8 +321,7 @@ namespace dlib
            weight, so the plain RMSNorm reads them as they are. */
         if (s.family == arch_family::gemma3 && s.sliding_window > 0)
             r.notes.push_back("sliding window of " + std::to_string(s.sliding_window)
-                + " positions not applied yet: the network matches the model on sequences of up to "
-                + std::to_string(s.sliding_window) + " tokens only");
+                + " positions on five layers out of six");
         /* qwen2 QKV biases are held by the bias slots the fused attention packing
            allocates for the families that carry them; the first support tranche applies
            them in the inference forwards and freezes them during training (their

@@ -282,7 +282,10 @@ int main(int argc, char** argv)
             double sum = 0;
             for (long i = 0; i < V; ++i) sum += std::exp(r[i] - m);
             const double lse = m + std::log(sum);
-            for (long i = 0; i < V; ++i) r[i] = static_cast<float>(r[i] - lse);
+            // Le même plancher que slm_gguf_import_ex --dump-logits (log de 1e-30) : sous ce
+            // seuil, le softmax en float32 de dlib rend 0, et l'écart ne mesurerait rien.
+            const double floor_value = std::log(1e-30);
+            for (long i = 0; i < V; ++i) r[i] = static_cast<float>(std::max(r[i] - lse, floor_value));
         }
     const stats s = compare(ref.data(), compared.data(), T, V);
     report(exact ? "reference (exact products)" : "reference (quantized activations)", s);

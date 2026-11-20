@@ -142,11 +142,13 @@ namespace dlib
             /* Linear position scaling of the global layers (Gemma 3 4B and up: 1 / 8); the
                sliding-window layers keep unscaled positions, as in llama.cpp. */
             float global_position_scale = 1.f;
+            long swa_window = 0;     // window of the sliding-window layers
             template <typename T>
             auto set(T& layer, int) -> decltype((void)layer.set_rope_theta_base(0.f))
             {
                 float base = rope_base;
                 float position_scale = global_position_scale;
+                long window = 0;
                 if (swa_pattern > 0 && visited)
                 {
                     const long b = n_layers - 1 - (*visited)++;
@@ -154,10 +156,12 @@ namespace dlib
                     {
                         base = swa_base;
                         position_scale = 1.f;
+                        window = swa_window;
                     }
                 }
                 layer.set_rope_theta_base(base);
                 layer.set_rope_position_scale(position_scale);
+                layer.set_sliding_window(window);
                 layer.set_qk_norm_eps(qk_eps);
                 layer.set_yarn_params(0.0f, 0.0f, 0, false); // classical RoPE only
                 layer.set_qkv_bias_enabled(qkv_bias);
@@ -233,7 +237,8 @@ namespace dlib
                 has_qkv_bias, spec.gemma_blocks ? spec.sliding_window_pattern : 0,
                 static_cast<float>(spec.rope_freq_base_swa), spec.n_layers, &visited,
                 spec.gemma_blocks && spec.rope_scaling_type == "linear" && spec.rope_scaling_factor > 0
-                    ? static_cast<float>(1.0 / spec.rope_scaling_factor) : 1.f };
+                    ? static_cast<float>(1.0 / spec.rope_scaling_factor) : 1.f,
+                spec.gemma_blocks ? spec.sliding_window : 0 };
             visit_computational_layers(net, cfg);
             if (spec.gemma_blocks && visited != spec.n_layers)
                 throw std::runtime_error("import_gguf_weights: met " + std::to_string(visited)

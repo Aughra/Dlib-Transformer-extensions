@@ -185,6 +185,18 @@ namespace dlib
             rope_q_helper_.get().set_position_scale(scale);
             rope_k_helper_.get().set_position_scale(scale);
         }
+
+        /* Sliding-window attention: with a window of W > 0 positions, the query at position
+           i sees the keys of positions i - W + 1 to i only (the layers of Gemma 3 that are
+           not global). 0, the default, leaves the attention over the whole causal prefix.
+           The masked scores are -infinity, so their probabilities and their gradients are
+           zero: the backward pass needs no change. */
+        void set_sliding_window(long window)
+        {
+            DLIB_CASSERT(window >= 0, "the sliding window must be >= 0");
+            sliding_window_ = window;
+        }
+        long get_sliding_window() const { return sliding_window_; }
         // Read one cosine value of the rotary cache at the given position, ensuring
         // the cache covers it. A negative dim selects the last frequency dimension.
         // Diagnostic accessor: cos(pos=1, dim=0) must equal cos(1) ~= 0.5403 for any
@@ -739,6 +751,7 @@ namespace dlib
             serialize(item.rope_k_helper_, out);
             serialize(item.tril_helper_, out);
             serialize(item.qk_norm_eps_, out);
+            serialize(item.sliding_window_, out);
         }
 
         friend void deserialize(gqa_attention_& item, std::istream& in)
@@ -788,6 +801,7 @@ namespace dlib
             deserialize(item.rope_k_helper_, in);
             deserialize(item.tril_helper_, in);
             deserialize(item.qk_norm_eps_, in);
+            deserialize(item.sliding_window_, in);
 
             // A layer never set up holds no parameters, and reads back as such.
             const size_t expected_params = item.base_param_count()
@@ -851,6 +865,7 @@ namespace dlib
         bool has_qkv_bias_ = false;
         resizable_tensor bias_ones_;
         double qk_norm_eps_ = DEFAULT_RMS_NORM_EPS;
+        long sliding_window_ = 0;   // 0: no sliding window (see set_sliding_window)
         weight_init init_ = weight_init::glorot_uniform;
 
         // Forward state saved for backward (training only)
@@ -1278,6 +1293,20 @@ namespace dlib
                 scores_masked = saved_scores;
             }
 
+            // Step 6b: sliding window. The full pass starts at position 0 (RoPE above rotates
+            // positions 0..N-1), so the row and column indices are absolute positions.
+            if (sliding_window_ > 0 && N > sliding_window_)
+            {
+                float* sc = scores_masked.host();
+                const float neg_inf = -std::numeric_limits<float>::infinity();
+                for (long plane = 0; plane < B * NUM_HEADS; ++plane)
+                    for (long i = sliding_window_; i < N; ++i)
+                    {
+                        float* row = sc + (static_cast<size_t>(plane) * N + i) * N;
+                        for (long j = 0; j <= i - sliding_window_; ++j) row[j] = neg_inf;
+                    }
+            }
+
             // Step 7: softmax
             saved_attn.copy_size(scores_masked);
             tt::softmax(saved_attn, scores_masked, operation_mode::PLANE_WISE);
@@ -1483,6 +1512,15 @@ namespace dlib
             inc_scores.set_size(1, NUM_HEADS, 1, L);
             tt::gemm(0.0f, inc_scores, qk_scale, inc_q_rope, false, inc_k_window_rep, true,
                 operation_mode::PLANE_WISE);
+            // The query sits at position L - 1: a sliding window hides the keys of positions
+            // 0 to L - 1 - W.
+            if (sliding_window_ > 0 && L > sliding_window_)
+            {
+                float* sc = inc_scores.host();
+                const float neg_inf = -std::numeric_limits<float>::infinity();
+                for (long h = 0; h < NUM_HEADS; ++h)
+                    for (long j = 0; j < L - sliding_window_; ++j) sc[static_cast<size_t>(h) * L + j] = neg_inf;
+            }
 
             // Step 8: softmax
             inc_attn.set_size(1, NUM_HEADS, 1, L);

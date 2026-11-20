@@ -6589,6 +6589,76 @@ void test_multm_prev()
 
 // ----------------------------------------------------------------------------------------
 
+    void test_gqa_attention_sliding_window()
+    {
+        /* A sliding window of W positions (Gemma 3) must hide exactly the keys older than W
+           positions, in the full pass and in the incremental one alike: the rows before W
+           do not move, the later ones do, and decoding one token at a time after a
+           one-token prefill gives the rows of the full pass. */
+        print_spinner();
+        using att = gqa_attention<32, 4, 2, 8, input_tensor, false, true>;
+        const long N = 10, W = 3;
+        resizable_tensor x(1, 1, N, 32);
+        tt::tensor_rand rnd(11); rnd.fill_gaussian(x);
+
+        // One set of weights: the windowed layer is a copy of the plain one once set up.
+        auto run_full = [&](att& net) {
+            network_context::reset();
+            network_context::set_inference_mode(network_context::inference_mode::full);
+            net.forward(x);
+            resizable_tensor out; out = net.get_output();
+            network_context::reset();
+            return out;
+        };
+        att plain_net;
+        {
+            std::vector<resizable_tensor> one(1, x); resizable_tensor staged;
+            plain_net.to_tensor(one.begin(), one.end(), staged);
+        }
+        const resizable_tensor plain = run_full(plain_net);
+        att windowed_net = plain_net;
+        layer<0>(windowed_net).layer_details().set_sliding_window(W);
+        const resizable_tensor windowed = run_full(windowed_net);
+        const long D = 32;
+        double before = 0, after = 0;
+        for (long i = 0; i < N; ++i)
+            for (long c = 0; c < D; ++c)
+            {
+                const double d = std::abs(plain.host()[i*D + c] - windowed.host()[i*D + c]);
+                if (i < W) before += d; else after += d;
+            }
+        DLIB_TEST_MSG(before < 1e-5, "rows inside the window moved by " << before);
+        DLIB_TEST_MSG(after > 1e-3, "rows past the window did not move (" << after << ")");
+
+        // The same layer, the same weights, one token at a time.
+        att net = windowed_net;
+        network_context::reset();
+        network_context::set_kv_cache_capacity(N);
+        network_context::request_kv_cache_clear();
+        double worst = 0;
+        for (long i = 0; i < N; ++i)
+        {
+            network_context::set_inference_mode(i == 0 ? network_context::inference_mode::prefill
+                                                       : network_context::inference_mode::incremental);
+            resizable_tensor xi(1, 1, 1, D);
+            std::copy(x.host() + i*D, x.host() + (i+1)*D, xi.host());
+            net.forward(xi);
+            // The prefill consumed the clear request; left set, each step would empty the cache.
+            if (i == 0) network_context::clear_kv_cache_request();
+            const tensor& y = net.get_output();
+            for (long c = 0; c < D; ++c)
+                worst = std::max<double>(worst, std::abs(y.host()[c] - windowed.host()[i*D + c]));
+        }
+        network_context::reset();
+        DLIB_TEST_MSG(worst < 1e-4, "incremental decoding differs from the full pass by " << worst);
+
+        // The window travels with the layer.
+        std::ostringstream o; serialize(layer<0>(net).layer_details(), o);
+        gqa_attention_<32, 4, 2, 8, false, true> back;
+        std::istringstream in(o.str()); deserialize(back, in);
+        DLIB_TEST(back.get_sliding_window() == W);
+    }
+
     void test_gqa_attention_causality()
     {
         /* Two things the attention layer must guarantee and that nothing else here checks.
@@ -6770,6 +6840,7 @@ void test_multm_prev()
             srand(1234);
 
             test_gqa_attention_causality();
+            test_gqa_attention_sliding_window();
             test_tagging();
 #ifdef DLIB_USE_CUDA
             test_affine_rect();
