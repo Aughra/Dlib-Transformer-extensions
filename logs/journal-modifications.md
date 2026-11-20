@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-20 — Gulliver 6.8.0 : les poids des experts en demi-précision, et test_metal remis d'aplomb
+
+- **Quoi** : `mm_id` prépare sa tuile de poids en `half` (`simdgroup_half8x8`), activations et sommes en floats ; `test_metal` : tolérance de `mm_id` à 1e-3 (borne de la demi-précision), nouveau test `half gemm after dequant_h_*` (cinq formats), `random_matrix` qui place l'échelle de Q5_K, Q8_0 et Q5_0, erreur NaN qui fait échouer ; commentaire du noyau à jour.
+- **Fichiers** : `gulliver/engine/metal_kernels.metal`, `gulliver/tests/test_metal.cpp`, `gulliver/web/{changelog.md,openapi.json}`, `gulliver/common/version.h`, `gulliver/CMakeLists.txt` ; `docs/{notes-pour-l-auteur.md,differences-mac-windows.md}`, `logs/{reprise.md,nuit-2026-11-19.md}`, ce journal.
+- **Pourquoi** : écart de lecture des modèles à experts avec llama.cpp (×2,9) ; un test qui manquait et un générateur d'essai qui rendait un test vide.
+- **Étapes** : mesures alternées 6.7.0 / 6.8.0 (6.7.0 construite dans une copie de travail, supprimée), quatre modèles à experts, 512 et 4 096 tokens : +3 à +49 %, 16 paires sur 16 ; `test_metal` all checks passed ; `test_macos.sh` 70 étapes sans échec. Notes pour l'auteur : changement 31.
+
 ## 2026-11-20 — Gulliver 6.7.0 : les produits des prompts en demi-précision sur le GPU
 
 - **Quoi** : comparaison de Gulliver à llama.cpp (lecture environ 3 fois plus lente) ; essai d'un produit compressé `mm_dense` (non gardé, plus lent) ; produits des prompts en demi-précision : noyaux `dequant_h_*` et `to_half`, `metal_device::commands::{gemm_half,to_half,dequantize_half}`, tampon `xh`, `product()` en demi-précision ; contrôle du chargement en deux essais (demi-précision, puis floats) avec `gpu_state::half_prompts` ; fiche « GPU » de l'onglet Service.

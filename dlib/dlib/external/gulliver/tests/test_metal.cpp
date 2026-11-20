@@ -55,22 +55,32 @@ namespace
         const size_t rb = qk_row_bytes(type, cols);
         std::vector<uint8_t> w(rb * rows);
         for (auto& b : w) b = static_cast<uint8_t>(rng());
-        const long nb = cols / 256;
+        // L'échelle de chaque bloc remise dans une plage raisonnable, à sa place dans le bloc de chaque format (Q5_K,
+        // Q8_0 et Q5_0 depuis Gulliver 6.8.0 : sans cela, des octets au hasard donnaient des échelles infinies).
+        const bool small = type == dlib::ggml_type::Q8_0 || type == dlib::ggml_type::Q5_0;
+        const long nb = cols / (small ? 32 : 256);
+        const size_t block = type == dlib::ggml_type::Q4_K ? 144 : type == dlib::ggml_type::Q5_K ? 176
+            : type == dlib::ggml_type::Q6_K ? 210 : type == dlib::ggml_type::Q8_0 ? 34 : 22;
         for (long r = 0; r < rows; ++r)
             for (long b = 0; b < nb; ++b)
             {
-                uint8_t* blk = w.data() + r * rb + b * (type == dlib::ggml_type::Q4_K ? 144 : 210);
-                if (type == dlib::ggml_type::Q4_K)
+                uint8_t* blk = w.data() + r * rb + b * block;
+                if (type == dlib::ggml_type::Q4_K || type == dlib::ggml_type::Q5_K)
                 {
                     const uint16_t d = qk_float_to_half(uniform(0.001f, 0.02f));
                     const uint16_t m = qk_float_to_half(uniform(0.0f, 0.02f));
                     std::memcpy(blk, &d, 2);
                     std::memcpy(blk + 2, &m, 2);
                 }
-                else
+                else if (type == dlib::ggml_type::Q6_K)
                 {
                     const uint16_t d = qk_float_to_half(uniform(0.0005f, 0.01f));
                     std::memcpy(blk + 208, &d, 2);
+                }
+                else
+                {
+                    const uint16_t d = qk_float_to_half(uniform(0.001f, 0.02f));
+                    std::memcpy(blk, &d, 2);
                 }
             }
         return w;
@@ -191,7 +201,9 @@ namespace
             for (unsigned r = rows; r < y_stride; ++r) untouched = untouched && y[s * y_stride + r] == 7.0f;
         }
         const int* n = static_cast<const int*>(counts.contents());
-        check(encoded && worst < 1e-5 && untouched && n[5] == 0, std::string("mm_id_") + name + ", " + std::to_string(slots)
+        // Les poids de mm_id en demi-précision (Gulliver 6.8.0) : chacun arrondi à 2^-11 près au plus, d'où une erreur
+        // d'au plus environ 4,9e-4 rapportée à la somme des |w x| (mesuré : 5e-5 à 8e-5) ; un défaut donne de l'ordre de 1.
+        check(encoded && worst < 1e-3 && untouched && n[5] == 0, std::string("mm_id_") + name + ", " + std::to_string(slots)
             + " cases over 5 of 6 experts: largest error " + sci(worst) + ", the rows beyond the matrix untouched");
     }
 
@@ -237,6 +249,52 @@ namespace
         check(encoded && apart == 0, std::string("dequant_") + name + ": " + std::to_string(apart) + " of "
             + std::to_string(rows * cols) + " values apart from qk_dequantize_row");
         check(worst < 1e-5, std::string("gemm after dequant_") + name + ", " + std::to_string(tokens)
+            + " tokens: largest error " + sci(worst));
+    }
+
+    // Le produit d'un prompt en demi-précision (Gulliver 6.7.0) : poids développés en half, entrées copiées en half,
+    // MPS en half avec un résultat en floats.  Poids et entrées arrondis chacun à 2^-11 près : une erreur d'au plus
+    // environ 1e-3 rapportée à la somme des |w x|.
+    void test_half_gemm(metal_device& gpu, dlib::ggml_type type, const char* name)
+    {
+        const long rows = 320, cols = 1024;
+        const unsigned tokens = 37, rows32 = 64, x_stride = cols + 32, y_stride = rows + 4;
+        const std::vector<uint8_t> w = random_matrix(type, rows, cols);
+        const size_t rb = qk_row_bytes(type, cols);
+        metal_buffer W = gpu.allocate(w.size()), H = gpu.allocate(2 * rows * cols);
+        std::memcpy(W.contents(), w.data(), w.size());
+        metal_buffer X = gpu.allocate(sizeof(float) * rows32 * x_stride), XH = gpu.allocate(2 * rows32 * cols);
+        metal_buffer Y = gpu.allocate(sizeof(float) * rows32 * y_stride);
+        float* x = static_cast<float*>(X.contents());
+        float* y = static_cast<float*>(Y.contents());
+        for (size_t i = 0; i < rows32 * x_stride; ++i) x[i] = uniform(-1.0f, 1.0f);
+        for (size_t i = 0; i < rows32 * y_stride; ++i) y[i] = uniform(-1.0f, 1.0f);
+        const std::vector<float> before(y, y + rows32 * y_stride);
+        auto c = gpu.begin();
+        const bool encoded = c->dequantize_half(type, W, rows, cols, H, static_cast<unsigned>(cols));
+        c->to_half(X, rows32, static_cast<unsigned>(cols), x_stride, XH, static_cast<unsigned>(cols));
+        c->gemm_half(XH, rows32, cols, cols, H, rows, cols, Y, y_stride, 0.5f, 1.0f);
+        c->finish();
+        double worst = 0;
+        std::vector<float> row(cols);
+        for (long r = 0; r < rows; ++r)
+        {
+            qk_dequantize_row(type, w.data() + r * rb, row.data(), cols);
+            for (unsigned t = 0; t < tokens; ++t)
+            {
+                double ref = 0, mag = 0;
+                for (long i = 0; i < cols; ++i)
+                {
+                    ref += static_cast<double>(row[i]) * x[t * x_stride + i];
+                    mag += std::fabs(static_cast<double>(row[i]) * x[t * x_stride + i]);
+                }
+                const double e = 0.5 * ref + before[t * y_stride + r];
+                // Écrit de sorte qu'une erreur qui n'est pas un nombre reste dans worst et fasse échouer le test.
+                const double err = std::fabs(y[t * y_stride + r] - e) / (0.5 * mag + 1e-30);
+                if (!(err <= worst)) worst = err;
+            }
+        }
+        check(encoded && worst < 1e-3, std::string("half gemm after dequant_h_") + name + ", " + std::to_string(tokens)
             + " tokens: largest error " + sci(worst));
     }
 
@@ -587,6 +645,11 @@ int main()
     test_matvec(*gpu, dlib::ggml_type::Q6_K, "mv_q6_K");
     test_dequantize_gemm(*gpu, dlib::ggml_type::Q4_K, "q4_K");
     test_dequantize_gemm(*gpu, dlib::ggml_type::Q6_K, "q6_K");
+    test_half_gemm(*gpu, dlib::ggml_type::Q4_K, "q4_K");
+    test_half_gemm(*gpu, dlib::ggml_type::Q5_K, "q5_K");
+    test_half_gemm(*gpu, dlib::ggml_type::Q6_K, "q6_K");
+    test_half_gemm(*gpu, dlib::ggml_type::Q8_0, "q8_0");
+    test_half_gemm(*gpu, dlib::ggml_type::Q5_0, "q5_0");
     test_matmul_id(*gpu, dlib::ggml_type::Q4_K, "q4_K");
     test_matmul_id(*gpu, dlib::ggml_type::Q5_K, "q5_K");
     test_matmul_id(*gpu, dlib::ggml_type::Q6_K, "q6_K");

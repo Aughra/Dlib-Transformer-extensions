@@ -944,6 +944,22 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 
 **Mac ou Windows** : propre au Mac (Metal Performance Shaders).
 
+### Changement 31 : les poids des experts en demi-précision dans `mm_id` (Gulliver 6.8.0)
+
+- **Avant** : le noyau des produits groupés des experts (`mm_id`, prompts des mélanges d'experts) développait ses tuiles de poids en floats dans la mémoire du threadgroup (`threadgroup float ws[]`, `simdgroup_float8x8`).
+- **Changement** : la tuile de poids en `half`, chargée en `simdgroup_half8x8` ; les activations et les accumulateurs restent en floats (produit mixte half × float → float). Moitié moins de mémoire de threadgroup pour les poids, et des lectures plus rapides.
+- **Exactitude** : contrôle au chargement de Qwen3-30B-A3B à 1,66 % (tolérance de 25 % pour un mélange d'experts en 8 bits) ; `test_metal` et `test_macos.sh` passent.
+- **Vitesse** (Mac mini M5 Pro, `bench_runtime … 18 N 8 1 q8 metal`, 6.7.0 et 6.8.0 en alternance, deux tours ; la nouvelle version gagne dans les 16 paires) :
+
+| Modèle | 512 tokens | 4 096 tokens |
+|---|---|---|
+| Qwen3-30B-A3B-Instruct-2507 Q4_K_M | 577-674 → 760-787 | 555-597 → 585-663 |
+| Qwen3.6-35B-A3B UD-Q4_K_M | 557-566 → 617-620 | 469-483 → 495-522 |
+| Qwen 3.6 11B-A3B Q4_K_M | 934-946 → 984-990 | 753-768 → 772-793 |
+| granite-3.1-1b-a400m-instruct Q4_K_M | 3 377-3 906 → 4 768-5 028 | 3 432-3 500 → 3 613-3 950 |
+
+**Mac ou Windows** : propre au Mac (Metal).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

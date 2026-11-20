@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.7.0, 20 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.8.0, 20 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -28,6 +28,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Écriture des réponses | CUDA (cartes NVIDIA) ou processeur | GPU de la puce par Metal, sans copie des poids (mémoire unifiée) | Le Mac n'a ni CUDA ni NVIDIA ; son GPU partage la mémoire | 4B : 18,3 à 19,0 → 21,3 à 21,7 tokens/s ; 2B : 35,7 à 40,8 → 49,4 à 49,6 | ch. 9, v. 2.0.0 |
 | Lecture des prompts | CUDA ou processeur | GPU par Metal, de 24 à 2 048 positions | Même raison | 4B, 512 tokens : 92 → 154 tokens/s ; 2B : 222 → 420 | ch. 10, v. 2.0.0 |
 | Produits des poids Q5_K et Q8_0 sur le GPU | — (pas de GPU Apple) | Noyaux Metal `mv_q5_K`, `mv_q8_0` | Les fichiers Qwen 3.5 en Q4_K_M en contiennent | permettent l'écriture de Qwen 3.5 sur le GPU | ch. 12, v. 4.5.0 |
+| Poids des experts en demi-précision (prompts) | — (pas de GPU Apple) | Tuiles de poids de `mm_id` en `half`, activations et sommes en floats | Les experts restaient en float32 après la 6.7.0 | Mac mini, 512 tokens : Qwen3-30B-A3B 577-674 → 760-787 tokens/s ; +3 à +49 % sur quatre modèles à experts | ch. 31, v. 6.8.0 |
 | Produits des prompts en demi-précision | CUDA ou processeur | Poids et entrées développés en float16, MPS sur les unités matricielles du GPU, sommes en float32 | En float32, le GPU plafonnait à environ 6 000 milliards d'opérations par seconde, trois fois moins que llama.cpp | Mac mini, 4B Thinking, 512 tokens : 750-761 → 2 041-2 100 tokens/s ; 16 384 tokens : 367-377 → 530-532 ; tous les modèles ×1,2 à ×2,7 | ch. 30, v. 6.7.0 |
 | Mélange d'experts | Sur le processeur (et CUDA) ; pas d'expert partagé | Sur le GPU aussi (routeur, choix des experts, produits par indirection) ; expert partagé de Qwen 3.6 ; format Q5_0 sur le GPU ; prompts de Qwen 3.5/3.6 MoE par produits groupés, chaque expert multipliant d'un coup les tokens qui l'ont choisi | Les modèles à experts (Qwen3.6-35B-A3B) visent le Mac mini de 64 Go | Qwen 3.6 11B-A3B : écriture 24,4-25,0 → 26,1-26,3 tokens/s ; lecture de 512 tokens 107-112 → 196-198 (M2) | ch. 12, 15, v. 4.6.0, 4.7.0, 4.12.0 |
 | Gemma 3 sur le GPU | — (architecture non lue) | Fenêtre glissante dans les noyaux d'attention, seconde table de rotation, porte GELU et normes après les blocs sur le GPU ; le 1B (largeur 1 152) reste sur le processeur | Le 4B, le 12B et le 27B tiennent dans le GPU du Mac mini | Mac mini, 4B, 512 tokens : lecture 162-201 → 835-841 tokens/s, écriture 54-56 → 71 (2026-11-19) | ch. 21, v. 4.22.0 |

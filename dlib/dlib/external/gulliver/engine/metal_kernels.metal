@@ -1680,8 +1680,9 @@ kernel void moe_tiles(device const int* counts [[buffer(0)]], device int2* work 
 }
 
 // y[s][r] = sum_i W_e[r][i] x[s / x_div][i] pour les cases s de la tuile, e leur expert : grille
-// (lignes / MM_NR, tuiles), 4 simdgroups de 8 lignes chacun.  Les poids sont développés en floats dans la
-// mémoire du threadgroup, MM_KC colonnes à la fois.
+// (lignes / MM_NR, tuiles), 4 simdgroups de 8 lignes chacun.  Les poids sont développés en demi-précision dans
+// la mémoire du threadgroup, MM_KC colonnes à la fois, les activations et les sommes restant en floats (Gulliver
+// 6.8.0 : Qwen3-30B-A3B lit ses prompts 3 à 49 % plus vite qu'avec des poids en floats).
 struct mm_args
 {
     ulong expert_bytes;
@@ -1700,7 +1701,7 @@ kernel void mm_id(device const uchar* W [[buffer(0)]], device const float* x [[b
     uint sg [[simdgroup_index_in_threadgroup]])
 {
     threadgroup float xs[MM_TT * MM_KC];
-    threadgroup float ws[MM_NR * MM_KC];
+    threadgroup half ws[MM_NR * MM_KC];
     threadgroup float out[MM_TT * MM_NR];
     threadgroup int src[MM_TT];
     const int2 job = work[tg.y];
@@ -1732,13 +1733,14 @@ kernel void mm_id(device const uchar* W [[buffer(0)]], device const float* x [[b
             const uint g = tid + 128 * h, r = g / 8, c = k0 + (g % 8) * 8;
             float v[8];
             F::dq8(We + ulong(row0 + r) * a.row_bytes + (c / F::values) * F::bytes, c % F::values, v);
-            threadgroup float* dw = ws + r * MM_KC + (g % 8) * 8;
-            for (uint i = 0; i < 8; ++i) dw[i] = v[i];
+            threadgroup half* dw = ws + r * MM_KC + (g % 8) * 8;
+            for (uint i = 0; i < 8; ++i) dw[i] = half(v[i]);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
         for (uint kk = 0; kk < MM_KC; kk += 8)
         {
-            simdgroup_float8x8 a0, a1, b;
+            simdgroup_float8x8 a0, a1;
+            simdgroup_half8x8 b;
             simdgroup_load(a0, xs + kk, MM_KC);
             simdgroup_load(a1, xs + 8 * MM_KC + kk, MM_KC);
             simdgroup_load(b, ws + (sg * 8) * MM_KC + kk, MM_KC, ulong2(0, 0), true);
