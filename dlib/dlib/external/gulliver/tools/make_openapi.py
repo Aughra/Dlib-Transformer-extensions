@@ -827,15 +827,21 @@ paths = {
         "description": "Lit le texte d'un fichier côté service : le navigateur envoie ses octets, le service rend le "
                        "texte. Les PDF sont lus par PDFium, les formats de bureautique par le lecteur ZIP et le XML. "
                        "Un PDF numérisé (fait d'images) renvoie 422 avec le code pdf-images et le nombre de pages, pour "
-                       "que la page les rende en images ; sans la bibliothèque PDFium, les PDF renvoient pdf-reader.",
-        "requestBody": json_body({"type": "object", "required": ["bytes"], "properties": {
+                       "que la page les rende en images ; sans la bibliothèque PDFium, les PDF renvoient pdf-reader. "
+                       "Avec document à la place de bytes, le service lit lui-même ce fichier du dossier des documents "
+                       "du Mac, sans qu'il passe par le navigateur.",
+        "requestBody": json_body({"type": "object", "properties": {
             "name": {"type": "string", "description": "Le nom du fichier (son extension sert à deviner le format)."},
-            "bytes": {"type": "string", "description": "Les octets du fichier, en base64."}}}),
+            "bytes": {"type": "string", "description": "Les octets du fichier, en base64."},
+            "document": {"type": "string", "description": "Le nom d'un fichier du dossier des documents du Mac, "
+                                                          "lu par le service à la place de bytes."}}}),
         "responses": {"200": reply("Le texte et le format", {"type": "object", "properties": {
             "text": {"type": "string"}, "format": {"type": "string"}}}),
                       "422": reply("Le fichier n'a pas pu être lu : code parmi pdf-images, pdf-password, pdf-invalid, "
                                    "pdf-reader, legacy, unsupported, too-large. pages donne le nombre de pages d'un PDF "
-                                   "numérisé (pdf-images).", ref("Error"))}}},
+                                   "numérisé (pdf-images).", ref("Error")),
+                      "404": reply("Le document nommé n'est pas dans le dossier des documents du Mac (code "
+                                   "document_not_found)", ref("Error"))}}},
     "/gulliver/v1/web/search": {"post": {
         "tags": ["Accès au web"], "summary": "Cherche dans Wikipedia",
         "description": "L'outil web_search du bouton Web, par l'interface REST de Wikipedia (GET "

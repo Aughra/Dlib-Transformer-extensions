@@ -36,12 +36,18 @@ const sentToMac = new Set();
 */
 async function extractViaService(f, signal) {
   if (f.size > maxFileBytes) { const e = new Error('too-large'); e.code = 'too-large'; throw e; }
-  const bytes = await f.arrayBuffer();
-  // Les octets en base64, par tranches pour ne pas dépasser la pile d'arguments de String.fromCharCode.
-  const view = new Uint8Array(bytes);
-  let bin = '';
-  for (let i = 0; i < view.length; i += 0x8000) bin += String.fromCharCode.apply(null, view.subarray(i, i + 0x8000));
-  const body = { name: f.name, bytes: btoa(bin) };
+  let body;
+  if (f.macDocument) {
+    // Un document du Mac : le service le lit lui-même dans son dossier, rien ne passe par l'appareil.
+    body = { document: f.macDocument };
+  } else {
+    const bytes = await f.arrayBuffer();
+    // Les octets en base64, par tranches pour ne pas dépasser la pile d'arguments de String.fromCharCode.
+    const view = new Uint8Array(bytes);
+    let bin = '';
+    for (let i = 0; i < view.length; i += 0x8000) bin += String.fromCharCode.apply(null, view.subarray(i, i + 0x8000));
+    body = { name: f.name, bytes: btoa(bin) };
+  }
   const r = await fetch('/gulliver/v1/extract', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal
   });
@@ -55,6 +61,22 @@ async function extractViaService(f, signal) {
     throw err;
   }
   return r.json();
+}
+
+/*
+    Un document du dossier du Mac, joint sans être téléchargé : une fiche qui a le nom, la taille et la date d'un File,
+    et que readFiles lit par son nom (extractViaService).  Ses octets ne viennent que si on les demande (arrayBuffer),
+    pour dessiner les pages d'un PDF scanné.
+*/
+function macDocument(d) {
+  return {
+    name: d.name, size: d.size, type: '', lastModified: d.modified * 1000, fromMac: true, macDocument: d.name,
+    async arrayBuffer() {
+      const r = await fetch('/gulliver/v1/documents/' + encodeURIComponent(d.name), { cache: 'no-store' });
+      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+      return r.arrayBuffer();
+    }
+  };
 }
 
 function copyToMac(f) {
@@ -85,13 +107,16 @@ export function attachMenu(anchor, input, onFiles) {
 }
 
 /*
-    Les documents du Mac : une liste à cocher, les fichiers cochés donnés à onFiles comme objets File marqués fromMac,
+    Les documents du Mac : une liste à cocher, les fichiers cochés donnés à onFiles marqués fromMac (les images et les
+    sons comme objets File téléchargés, les documents comme fiches que le Mac lit lui-même, macDocument),
     un bouton qui envoie au Mac des fichiers de cet appareil, et la suppression d'un document.
 */
 function macDocumentsDialog(onFiles) {
   return dialog((box, close) => {
     const list = h('div', { class: 'mac-docs' }, h('p', { class: 'help' }, '…'));
     const picked = new Set();
+    // Les documents de la dernière liste, par nom : leur taille et leur date.
+    const known = new Map();
     const add = h('button', { class: 'button primary', type: 'button', disabled: true }, t('macDocsAdd'));
     const sendInput = h('input', { type: 'file', multiple: true, class: 'hidden' });
     const date = (sec) => new Intl.DateTimeFormat(language(), { dateStyle: 'medium', timeStyle: 'short' })
@@ -105,6 +130,8 @@ function macDocumentsDialog(onFiles) {
         return;
       }
       const docs = (r.documents || []).sort((a, b) => b.modified - a.modified);
+      known.clear();
+      for (const d of docs) known.set(d.name, d);
       if (!docs.length) {
         list.replaceChildren(h('p', { class: 'help' }, t('macDocsEmpty', { folder: r.folder })));
         return;
@@ -149,6 +176,12 @@ function macDocumentsDialog(onFiles) {
     add.addEventListener('click', async () => {
       const files = [];
       for (const name of picked) {
+        const d = known.get(name);
+        // Un document est lu par le Mac lui-même ; une image, un son viennent à la page, qui les prépare.
+        if (d && fileKind({ name, type: '' }) === 'document') {
+          files.push(macDocument(d));
+          continue;
+        }
         try {
           const r = await fetch('/gulliver/v1/documents/' + encodeURIComponent(name), { cache: 'no-store' });
           if (!r.ok) throw new Error(r.status + ' ' + r.statusText);

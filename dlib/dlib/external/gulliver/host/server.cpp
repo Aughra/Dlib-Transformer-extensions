@@ -1916,14 +1916,43 @@ namespace gulliver
             que la page connaît déjà (web/js/files.js).  Un PDF scanné lève "pdf-images" : la page
             rend alors ses pages en images pour le modèle de vision, comme avant (ce rendu reste au
             navigateur, il dessine les pages).
+
+            Corps {document} à la place de {name, bytes} (fork) : le service lit lui-même ce fichier
+            du dossier des documents du Mac, sans qu'il fasse l'aller-retour par le navigateur (un
+            téléphone en 4G le téléchargeait puis le renvoyait).  Un nom invalide ou absent : 404 ;
+            un fichier de plus de 100 Mo : 422 too-large, comme pour des octets envoyés.
         */
         srv.Post("/gulliver/v1/extract", [s](const httplib::Request& req, httplib::Response& res) {
-            (void)s;
             json body;
             if (!parse_body(req, res, body)) return;
-            const std::string name = body.contains("name") ? body["name"].as_string() : std::string();
-            const std::string b64 = body.contains("bytes") ? body["bytes"].as_string() : std::string();
-            const std::string bytes = base64_decode(b64);
+            std::string name = body.contains("name") ? body["name"].as_string() : std::string();
+            std::string bytes;
+            if (body.contains("document"))
+            {
+                name = body["document"].as_string();
+                const std::string path = join_path(s->documents_dir(), name);
+                struct stat st;
+                if (!document_name(name) || stat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+                {
+                    send_error(res, 404, "invalid_request_error", "no such document", "document_not_found");
+                    return;
+                }
+                // La limite de doc_extract (max_file_bytes, 100 Mo), vérifiée avant de lire le fichier.
+                if (static_cast<uint64_t>(st.st_size) > (100ull << 20))
+                {
+                    send_error(res, 422, "invalid_request_error", "Fichier trop volumineux", "too-large");
+                    return;
+                }
+                if (!read_file(path, bytes, 100ull << 20))
+                {
+                    send_error(res, 404, "invalid_request_error", "no such document", "document_not_found");
+                    return;
+                }
+            }
+            else
+            {
+                bytes = base64_decode(body.contains("bytes") ? body["bytes"].as_string() : std::string());
+            }
             try
             {
                 const std::string text = extract_text(name, bytes);

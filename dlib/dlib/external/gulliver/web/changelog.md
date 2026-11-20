@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.10.0 — 20 novembre 2026
+
+### Accès et documents
+
+- Un document joint depuis « Documents du Mac » est lu par le Mac lui-même : la page n'envoie plus que son nom (champ `document` de la route `/gulliver/v1/extract`), au lieu de télécharger le fichier pour le renvoyer au service. Depuis un téléphone, et à travers la passerelle Cloudflare, un document de ce dossier ne traverse plus le réseau ; la limite de lecture passe d'environ 48 Mo (corps de requête de 64 Mo en base64) à 100 Mo, celle de la lecture des documents. Les images et les sons de ce dossier sont toujours téléchargés par la page, qui les prépare ; un PDF scanné aussi, quand ses pages doivent être dessinées en images.
+
+---
+
 ## 6.9.0 — 20 novembre 2026
 
 ### Accès et documents

@@ -59,6 +59,34 @@
   "shot": "pdf-answer.png"
  },
  {
+  "name": "new chat for a Mac document",
+  "eval": "const b=[...document.querySelectorAll('button,.item')].find(b=>/Nouvelle discussion/.test(b.innerText||'')); if(b)b.click(); await new Promise(r=>setTimeout(r,700)); window.__calls=[]; if(!window.__fetch0){window.__fetch0=window.fetch; window.fetch=(u,o)=>{window.__calls.push((o&&o.method||'GET')+' '+u+' '+(o&&typeof o.body==='string'?o.body.slice(0,80):'')); return window.__fetch0(u,o);};} return true"
+ },
+ {
+  "name": "open the Mac documents",
+  "eval": "document.querySelector('.composer').querySelector('button.icon-button[aria-label^=\"Joindre\"]').click(); await new Promise(r=>setTimeout(r,300)); const it=[...document.querySelectorAll('.menu .entry')].find(b=>(b.innerText||'').trim()==='Documents du Mac'); it.click(); await new Promise(r=>setTimeout(r,1200)); const l=[...document.querySelectorAll('label.mac-doc')].find(x=>x.innerText.includes('secret.pdf')); if(!l) return 'absent'; l.querySelector('input').click(); T.btn('Joindre').click(); await new Promise(r=>setTimeout(r,2500)); return document.querySelector('.composer, main').innerText.includes('secret.pdf')",
+  "expect": true
+ },
+ {
+  "name": "the Mac read it by name, nothing downloaded",
+  "eval": "return window.__calls.some(c=>c.startsWith('POST /gulliver/v1/extract {\"document\":\"secret.pdf\"'))+'|'+window.__calls.some(c=>c.startsWith('GET /gulliver/v1/documents/'))",
+  "expect": "true|false"
+ },
+ {
+  "name": "ask about the Mac document",
+  "eval": "T.ask('Quel est le mot secret de ce PDF ? Réponds par ce mot seulement.'); return true"
+ },
+ {
+  "name": "Mac document answer",
+  "until": "return T.done(1)",
+  "timeout": 120000
+ },
+ {
+  "name": "Mac document answer has the word",
+  "eval": "return /rhinoceros/i.test(T.done(1))",
+  "expect": true
+ },
+ {
   "name": "new project",
   "eval": "document.querySelector('.item.new-item').click(); await new Promise(r=>setTimeout(r,400)); const d=document.querySelector('.dialog'); d.querySelector('input').value='Projet doc'; [...d.querySelectorAll('button')].find(b=>b.classList.contains('primary')).click(); await new Promise(r=>setTimeout(r,800)); return location.hash.startsWith('#/p/')",
   "expect": true
