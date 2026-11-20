@@ -27,7 +27,7 @@ Point de la feuille de route « comparer Gulliver à d'autres moteurs locaux sur
 
 ## Ce qu'on en tire
 
-- **Lecture : llama.cpp va environ 3 fois plus vite** (×2,6 à ×3,3). La cause principale est connue : pour un prompt, Gulliver développe chaque matrice compressée en floats de 32 bits, puis la multiplie par Metal Performance Shaders ; llama.cpp multiplie directement les poids compressés, développés à la volée en demi-précision dans la mémoire rapide du GPU (`kernel_mul_mm`). Les experts de Gulliver ont déjà un tel noyau (`mm_id`) : c'est la piste.
+- **Lecture : llama.cpp va environ 3 fois plus vite** (×2,6 à ×3,3). Première hypothèse, écrite avant les essais : le développement des poids en floats de 32 bits avant le produit. **Corrigé après les essais de la même nuit** : un produit compressé sans développement n'allait pas plus vite ; la cause est la précision du produit, en float32 chez Gulliver (environ 6 000 milliards d'opérations par seconde, le plafond du GPU), en demi-précision chez llama.cpp. D'où Gulliver 6.7.0, ci-dessous.
 - **Écriture : llama.cpp va 1,3 à 1,8 fois plus vite**, l'écart grandissant avec le contexte (×1,4 à 512 tokens pour le 2B, ×1,5 à 1,6 à 16 384). L'attention de l'écriture de Gulliver lit des clés et valeurs en 8 bits qu'elle doit développer ; llama.cpp les lit en demi-précision avec une attention fusionnée.
 - Ces écarts ne disent rien de la justesse : sur les modèles comparés, les deux moteurs écrivent les mêmes réponses (voir les notes pour l'auteur).
 
