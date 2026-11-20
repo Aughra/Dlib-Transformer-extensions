@@ -13,7 +13,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <dlib/data_io/gguf_dequantize.h>
+#include "../common/gguf_dequantize.h"
 
 namespace gulliver
 {
@@ -52,7 +52,7 @@ namespace gulliver
     model_file::model_file(const std::string& utf8_path) : path_(utf8_path)
     {
         file_.reset(new mapped_file(utf8_path));
-        reader_.reset(new dlib::gguf_reader(file_->data(), file_->size()));
+        reader_.reset(new gulliver::gguf_reader(file_->data(), file_->size()));
         const uint64_t base = reader_->data_offset();
         tensors_.reserve(reader_->tensors().size());
         for (const auto& t : reader_->tensors())
@@ -139,7 +139,7 @@ namespace gulliver
             throw std::runtime_error("tensor " + name + " holds " + std::to_string(t->elements())
                 + " values, expected " + std::to_string(count));
         out.resize(count);
-        const long block = static_cast<long>(dlib::get_ggml_type_traits(t->type).block_size);
+        const long block = static_cast<long>(gulliver::get_ggml_type_traits(t->type).block_size);
         if (count % static_cast<size_t>(block) != 0)
             throw std::runtime_error("tensor " + name + " is not block aligned");
         qk_dequantize_row(t->type, t->data, out.data(), static_cast<long>(count));

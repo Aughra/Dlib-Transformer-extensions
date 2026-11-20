@@ -70,9 +70,9 @@
 #include <thread>
 #include <vector>
 
-#include <dlib/data_io/gguf_dequantize.h>
-#include <dlib/data_io/gguf_reader.h>
-#include <dlib/tokenizer/hf_tokenizer.h>
+#include "../common/gguf_dequantize.h"
+#include "../common/gguf_reader.h"
+#include "../engine/hf_tokenizer.h"
 
 #include "../common/builtin_models.h"
 #include "../common/json.h"
@@ -87,10 +87,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-using dlib::ggml_type;
-using dlib::gguf_type;
-using dlib::gguf_tensor_info;
-using dlib::gguf_value;
+using gulliver::ggml_type;
+using gulliver::gguf_type;
+using gulliver::gguf_tensor_info;
+using gulliver::gguf_value;
 
 namespace gulliver
 {
@@ -143,7 +143,7 @@ namespace
 
     float from_half(uint16_t h)
     {
-        return dlib::gguf_half_to_float(h);
+        return gulliver::gguf_half_to_float(h);
     }
 
     void put_half(uint8_t* p, uint16_t h)
@@ -364,7 +364,7 @@ namespace
             for (int j = 0; j < 8; ++j)
             {
                 uint8_t s, m;
-                dlib::gguf_get_scale_min_k4(j, sc, s, m);
+                gulliver::gguf_get_scale_min_k4(j, sc, s, m);
                 const float dd = from_half(d) * s;
                 if (!dd) continue;
                 const float dm = from_half(dmin) * m;
@@ -492,7 +492,7 @@ namespace
 
     uint64_t row_bytes(ggml_type t, uint64_t n)
     {
-        const dlib::ggml_type_traits tr = dlib::get_ggml_type_traits(t);
+        const gulliver::ggml_type_traits tr = gulliver::get_ggml_type_traits(t);
         return n / tr.block_size * tr.type_size;
     }
 
@@ -565,7 +565,7 @@ namespace
         uint64_t offset = 0;
     };
 
-    std::vector<tensor_plan> plan_tensors(const dlib::gguf_reader& r, const std::string& quantization,
+    std::vector<tensor_plan> plan_tensors(const gulliver::gguf_reader& r, const std::string& quantization,
         const std::string& published, int n_layers)
     {
         std::vector<const gguf_tensor_info*> order;
@@ -763,7 +763,7 @@ namespace
         part.offset = 0;
         part.nbytes = rb * nrows;
         const std::vector<uint8_t> bytes(raw + row0 * rb, raw + (row0 + nrows) * rb);
-        dlib::gguf_dequantize(part, bytes, out);
+        gulliver::gguf_dequantize(part, bytes, out);
     }
 
     // L'erreur relative d'une ligne quantifiée par rapport à sa source.
@@ -847,7 +847,7 @@ namespace
 
     void convert(model_entry& m, unsigned threads, std::string& sha, uint64_t& size)
     {
-        dlib::gguf_reader r(m.source);
+        gulliver::gguf_reader r(m.source);
         // Les tenseurs des deux fichiers commencent à des multiples de l'alignement, une puissance de
         // deux dans le format.
         const uint64_t alignment = r.alignment();
@@ -990,7 +990,7 @@ namespace
     {
         model_file file(path);
         const model_config cfg = read_model_config(file);
-        dlib::hf_tokenizer tok;
+        gulliver::hf_tokenizer tok;
         tok.load_from_gguf(file.reader());
         if (static_cast<long>(tok.size()) != cfg.vocab)
             throw std::runtime_error("the vocabulary and the output layer of the model disagree");
@@ -1009,7 +1009,7 @@ namespace
             format = chat_format::detect(tok, cfg.chat_template)->name();
             if (format == "plain") throw std::runtime_error("the engine does not recognize the chat template");
         }
-        const dlib::gguf_reader& r = file.reader();
+        const gulliver::gguf_reader& r = file.reader();
         uint64_t parameters = 0;
         for (const auto& t : r.tensors()) parameters += t.n_elements();
         json info = json::object();
@@ -1031,7 +1031,7 @@ namespace
     */
     json check_projector(const std::string& projector, const std::string& decoder)
     {
-        const dlib::gguf_reader p(projector);
+        const gulliver::gguf_reader p(projector);
         if (p.get_str("general.architecture") != "clip")
             throw std::runtime_error(projector + " is not a projector (general.architecture is not clip)");
         if (p.get_int("clip.has_vision_encoder", 1) == 0)
@@ -1041,9 +1041,9 @@ namespace
             for (int64_t v : p.at("clip.vision.is_deepstack_layers").arr_int) deepstack += v != 0 ? 1 : 0;
         int64_t width = p.get_int("clip.vision.projection_dim", 0) * (1 + deepstack);
         // Un projecteur LLaVA ne nomme aucune largeur de projection : sa dernière couche la donne.
-        const dlib::gguf_tensor_info* last = p.find_tensor("mm.2.weight");
+        const gulliver::gguf_tensor_info* last = p.find_tensor("mm.2.weight");
         if (width <= 0 && last && last->dims.size() >= 2) width = static_cast<int64_t>(last->dims[1]);
-        const dlib::gguf_reader d(decoder);
+        const gulliver::gguf_reader d(decoder);
         const std::string arch = d.get_str("general.architecture");
         const int64_t wanted = d.get_int(arch + ".embedding_length", 0)
             * (1 + d.get_int(arch + ".n_deepstack_layers", 0));

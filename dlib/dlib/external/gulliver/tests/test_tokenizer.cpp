@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
-    Compare la tokenisation de dlib::hf_tokenizer, chargé à partir de fichiers GGUF, avec les
+    Compare la tokenisation de gulliver::hf_tokenizer, chargé à partir de fichiers GGUF, avec les
     identifiants de tokens produits par les tokenizers de référence des mêmes modèles.
 
         test_tokenizer texts.json expected.json name=model.gguf [name=model.gguf...]
@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-#include <dlib/tokenizer/hf_tokenizer.h>
+#include "../engine/hf_tokenizer.h"
 
 #include "../common/json.h"
 
@@ -59,8 +59,8 @@ int main(int argc, char** argv)
         const std::string spec = argv[a];
         const size_t eq = spec.find('=');
         const std::string name = spec.substr(0, eq);
-        dlib::gguf_reader g(spec.substr(eq + 1));
-        dlib::hf_tokenizer tok;
+        gulliver::gguf_reader g(spec.substr(eq + 1));
+        gulliver::hf_tokenizer tok;
         tok.load_from_gguf(g);
         const gulliver::json& exp = expected[name];
         int ok = 0;
@@ -80,9 +80,9 @@ int main(int argc, char** argv)
             // Le décodage redonne le texte, tokens spéciaux compris, dans sa composition
             // canonique quand le vocabulaire le normalise.
             const std::string back = tok.decode(got, false);
-            const std::string original = dlib::hf_tok_impl::pre_normalizes_nfc(tok.pretokenizer())
-                ? dlib::hf_tok_impl::nfc_compose(text) : text;
-            if (back != original && !(tok.type() == dlib::hf_tokenizer::kind::spm && back == original.substr(1)))
+            const std::string original = gulliver::hf_tok_impl::pre_normalizes_nfc(tok.pretokenizer())
+                ? gulliver::hf_tok_impl::nfc_compose(text) : text;
+            if (back != original && !(tok.type() == gulliver::hf_tokenizer::kind::spm && back == original.substr(1)))
             {
                 ++failures;
                 std::printf("%s: text %zu does not decode back\n", name.c_str(), i);

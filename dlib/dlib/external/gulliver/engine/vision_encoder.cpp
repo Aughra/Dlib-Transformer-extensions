@@ -22,26 +22,26 @@ namespace gulliver
         // quelques mégaoctets de mémoire de travail quelle que soit la taille de l'image.
         const long chunk_rows = 512;
 
-        std::string type_name(dlib::ggml_type t)
+        std::string type_name(gulliver::ggml_type t)
         {
             switch (t)
             {
-            case dlib::ggml_type::F32: return "F32";
-            case dlib::ggml_type::F16: return "F16";
-            case dlib::ggml_type::BF16: return "BF16";
-            case dlib::ggml_type::Q8_0: return "Q8_0";
-            case dlib::ggml_type::Q4_0: return "Q4_0";
-            case dlib::ggml_type::Q4_1: return "Q4_1";
-            case dlib::ggml_type::Q5_0: return "Q5_0";
-            case dlib::ggml_type::Q5_1: return "Q5_1";
-            case dlib::ggml_type::Q4_K: return "Q4_K";
-            case dlib::ggml_type::Q5_K: return "Q5_K";
-            case dlib::ggml_type::Q6_K: return "Q6_K";
+            case gulliver::ggml_type::F32: return "F32";
+            case gulliver::ggml_type::F16: return "F16";
+            case gulliver::ggml_type::BF16: return "BF16";
+            case gulliver::ggml_type::Q8_0: return "Q8_0";
+            case gulliver::ggml_type::Q4_0: return "Q4_0";
+            case gulliver::ggml_type::Q4_1: return "Q4_1";
+            case gulliver::ggml_type::Q5_0: return "Q5_0";
+            case gulliver::ggml_type::Q5_1: return "Q5_1";
+            case gulliver::ggml_type::Q4_K: return "Q4_K";
+            case gulliver::ggml_type::Q5_K: return "Q5_K";
+            case gulliver::ggml_type::Q6_K: return "Q6_K";
             default: return "quantized";
             }
         }
 
-        long metadata_int(const dlib::gguf_reader& g, const std::string& key, long lo, long hi)
+        long metadata_int(const gulliver::gguf_reader& g, const std::string& key, long lo, long hi)
         {
             if (!g.has(key)) throw std::runtime_error("the image encoder lacks the metadata " + key);
             const int64_t v = g.get_int(key, 0);
@@ -65,7 +65,7 @@ namespace gulliver
         : file_(std::move(file)), pool_(pool)
     {
         const model_file& f = *file_;
-        const dlib::gguf_reader& g = f.reader();
+        const gulliver::gguf_reader& g = f.reader();
         // Un projecteur qui lit aussi le son (Gemma 4) nomme le type de sa partie images à part.
         const std::string type = g.get_str("clip.projector_type", g.get_str("clip.vision.projector_type", ""));
         if (type == "qwen3vl_merger" || type == "qwen3vl")
@@ -178,8 +178,8 @@ namespace gulliver
             const tensor_view* t = f.find(name);
             if (!t) continue;
             if (t->elements() != static_cast<uint64_t>(hidden_ * K) || t->dims.empty()
-                || static_cast<long>(t->dims[0]) != patch_ || (t->type != dlib::ggml_type::F32
-                && t->type != dlib::ggml_type::F16 && t->type != dlib::ggml_type::BF16))
+                || static_cast<long>(t->dims[0]) != patch_ || (t->type != gulliver::ggml_type::F32
+                && t->type != gulliver::ggml_type::F16 && t->type != gulliver::ggml_type::BF16))
                 throw std::runtime_error(std::string("tensor ") + name + " does not hold the patch embedding");
             const size_t row_bytes = qk_row_bytes(t->type, K);
             for (long o = 0; o < hidden_; ++o)
@@ -189,7 +189,7 @@ namespace gulliver
                 for (long k = 0; k < K; ++k) dst[k] += row[static_cast<size_t>(k)];
             }
         }
-        patch_matrix_.type = dlib::ggml_type::F32;
+        patch_matrix_.type = gulliver::ggml_type::F32;
         patch_matrix_.data = reinterpret_cast<const uint8_t*>(patch_w_.data());
         patch_matrix_.rows = hidden_;
         patch_matrix_.cols = K;
@@ -209,13 +209,13 @@ namespace gulliver
                 throw std::runtime_error("tensor v.position_embd.weight does not hold the two position tables of Gemma 4");
             pos_cells_ = static_cast<long>(pos->dims[1]);
             pos_table_ = f.matrix("v.position_embd.weight", 2 * pos_cells_, hidden_);
-            if (pos_table_.type != dlib::ggml_type::F32)
+            if (pos_table_.type != gulliver::ggml_type::F32)
             {
                 pos_.resize(static_cast<size_t>(2 * pos_cells_ * hidden_));
                 for (long c = 0; c < 2 * pos_cells_; ++c)
                     qk_dequantize_row(pos_table_.type, pos_table_.data + static_cast<size_t>(c) * pos_table_.row_bytes,
                         pos_.data() + c * hidden_, hidden_);
-                pos_table_.type = dlib::ggml_type::F32;
+                pos_table_.type = gulliver::ggml_type::F32;
                 pos_table_.data = reinterpret_cast<const uint8_t*>(pos_.data());
                 pos_table_.row_bytes = static_cast<size_t>(hidden_) * sizeof(float);
             }
@@ -474,7 +474,7 @@ namespace gulliver
                 for (long o = 0; o < out_dim_; ++o) col[static_cast<size_t>(o * D + i)] = row[static_cast<size_t>(o)];
             }
             for (long o = 0; o < out_dim_; ++o) qk_float_to_half_row(col.data() + o * D, half + o * D, D);
-            input_proj_.type = dlib::ggml_type::F16;
+            input_proj_.type = gulliver::ggml_type::F16;
             input_proj_.data = reinterpret_cast<const uint8_t*>(half);
             input_proj_.rows = out_dim_;
             input_proj_.cols = D;
@@ -523,7 +523,7 @@ namespace gulliver
                             order[static_cast<size_t>(k * D + c)] = row[static_cast<size_t>(c * m2 + k)];
                     qk_float_to_half_row(order.data(), half + o * M4, M4);
                 }
-                patch_merger_.type = dlib::ggml_type::F16;
+                patch_merger_.type = gulliver::ggml_type::F16;
                 patch_merger_.data = reinterpret_cast<const uint8_t*>(half);
                 patch_merger_.rows = D;
                 patch_merger_.cols = M4;
@@ -628,7 +628,7 @@ namespace gulliver
 
     weight_matrix vision_encoder::readable(const weight_matrix& m)
     {
-        if (m.type != dlib::ggml_type::BF16 || !m.valid()) return m;
+        if (m.type != gulliver::ggml_type::BF16 || !m.valid()) return m;
         owned_.emplace_back(static_cast<size_t>(m.rows) * static_cast<size_t>(m.cols));
         uint16_t* half = owned_.back().data();
         // Sur le thread de chargement : les threads du thread pool peuvent être en train de calculer les
@@ -640,7 +640,7 @@ namespace gulliver
             qk_float_to_half_row(row.data(), half + static_cast<size_t>(r) * static_cast<size_t>(m.cols), m.cols);
         }
         weight_matrix c = m;
-        c.type = dlib::ggml_type::F16;
+        c.type = gulliver::ggml_type::F16;
         c.data = reinterpret_cast<const uint8_t*>(half);
         c.row_bytes = static_cast<size_t>(m.cols) * sizeof(uint16_t);
         return c;

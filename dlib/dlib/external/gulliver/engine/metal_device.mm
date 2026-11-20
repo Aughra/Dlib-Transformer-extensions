@@ -325,18 +325,18 @@ namespace gulliver
         impl_->close();
     }
 
-    bool metal_device::commands::dequantize(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view out,
+    bool metal_device::commands::dequantize(gulliver::ggml_type type, metal_view W, long rows, long cols, metal_view out,
         unsigned out_stride)
     {
         int k;
-        if (type == dlib::ggml_type::Q4_K) k = k_dequant_q4_K;
-        else if (type == dlib::ggml_type::Q6_K) k = k_dequant_q6_K;
-        else if (type == dlib::ggml_type::Q5_K) k = k_dequant_q5_K;
-        else if (type == dlib::ggml_type::Q8_0) k = k_dequant_q8_0;
-        else if (type == dlib::ggml_type::Q5_0) k = k_dequant_q5_0;
+        if (type == gulliver::ggml_type::Q4_K) k = k_dequant_q4_K;
+        else if (type == gulliver::ggml_type::Q6_K) k = k_dequant_q6_K;
+        else if (type == gulliver::ggml_type::Q5_K) k = k_dequant_q5_K;
+        else if (type == gulliver::ggml_type::Q8_0) k = k_dequant_q8_0;
+        else if (type == gulliver::ggml_type::Q5_0) k = k_dequant_q5_0;
         else return false;
         if (rows == 0) return true;
-        const bool small_blocks = type == dlib::ggml_type::Q8_0 || type == dlib::ggml_type::Q5_0;
+        const bool small_blocks = type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0;
         if (cols % (small_blocks ? 32 : 256) != 0)
             throw std::invalid_argument("metal_device: a matrix of other columns than its kernel takes");
         impl_->use(k);
@@ -396,15 +396,15 @@ namespace gulliver
         impl_->grid(cols / 4, rows, 1);
     }
 
-    bool metal_device::commands::dequantize_half(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view out,
+    bool metal_device::commands::dequantize_half(gulliver::ggml_type type, metal_view W, long rows, long cols, metal_view out,
         unsigned out_stride)
     {
         kernel_index k;
-        if (type == dlib::ggml_type::Q4_K) k = k_dequant_h_q4_K;
-        else if (type == dlib::ggml_type::Q5_K) k = k_dequant_h_q5_K;
-        else if (type == dlib::ggml_type::Q6_K) k = k_dequant_h_q6_K;
-        else if (type == dlib::ggml_type::Q8_0) k = k_dequant_h_q8_0;
-        else if (type == dlib::ggml_type::Q5_0) k = k_dequant_h_q5_0;
+        if (type == gulliver::ggml_type::Q4_K) k = k_dequant_h_q4_K;
+        else if (type == gulliver::ggml_type::Q5_K) k = k_dequant_h_q5_K;
+        else if (type == gulliver::ggml_type::Q6_K) k = k_dequant_h_q6_K;
+        else if (type == gulliver::ggml_type::Q8_0) k = k_dequant_h_q8_0;
+        else if (type == gulliver::ggml_type::Q5_0) k = k_dequant_h_q5_0;
         else return false;
         if (rows == 0) return true;
         impl_->use(k);
@@ -416,18 +416,18 @@ namespace gulliver
         return true;
     }
 
-    bool metal_device::commands::matvec(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view x,
+    bool metal_device::commands::matvec(gulliver::ggml_type type, metal_view W, long rows, long cols, metal_view x,
         unsigned tokens, unsigned x_stride, metal_view y, unsigned y_stride, float alpha, float beta)
     {
         kernel_index k;
-        if (type == dlib::ggml_type::Q4_K) k = tokens > 1 ? k_mv_q4_K_n : k_mv_q4_K;
-        else if (type == dlib::ggml_type::Q6_K) k = tokens > 1 ? k_mv_q6_K_n : k_mv_q6_K;
-        else if (type == dlib::ggml_type::Q5_K) k = tokens > 1 ? k_mv_q5_K_n : k_mv_q5_K;
-        else if (type == dlib::ggml_type::Q8_0) k = tokens > 1 ? k_mv_q8_0_n : k_mv_q8_0;
-        else if (type == dlib::ggml_type::Q5_0) k = tokens > 1 ? k_mv_q5_0_n : k_mv_q5_0;
+        if (type == gulliver::ggml_type::Q4_K) k = tokens > 1 ? k_mv_q4_K_n : k_mv_q4_K;
+        else if (type == gulliver::ggml_type::Q6_K) k = tokens > 1 ? k_mv_q6_K_n : k_mv_q6_K;
+        else if (type == gulliver::ggml_type::Q5_K) k = tokens > 1 ? k_mv_q5_K_n : k_mv_q5_K;
+        else if (type == gulliver::ggml_type::Q8_0) k = tokens > 1 ? k_mv_q8_0_n : k_mv_q8_0;
+        else if (type == gulliver::ggml_type::Q5_0) k = tokens > 1 ? k_mv_q5_0_n : k_mv_q5_0;
         else return false;
         if (tokens == 0) return true;
-        if (tokens > max_tokens || cols % (type == dlib::ggml_type::Q8_0 || type == dlib::ggml_type::Q5_0 ? 32 : 256) != 0)
+        if (tokens > max_tokens || cols % (type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0 ? 32 : 256) != 0)
             throw std::invalid_argument("metal_device: a product of more tokens or other columns than its kernel takes");
         impl_->use(k);
         impl_->bind(W, 0);
@@ -441,16 +441,16 @@ namespace gulliver
         return true;
     }
 
-    bool metal_device::commands::matvec2(dlib::ggml_type type, metal_view W, long rows, metal_view W2, long rows2,
+    bool metal_device::commands::matvec2(gulliver::ggml_type type, metal_view W, long rows, metal_view W2, long rows2,
         long cols, metal_view x, unsigned tokens, unsigned x_stride, metal_view y, unsigned y_stride, metal_view y2,
         unsigned y2_stride)
     {
         kernel_index k;
-        if (type == dlib::ggml_type::Q4_K) k = tokens > 1 ? k_mv_q4_K_n : k_mv_q4_K;
-        else if (type == dlib::ggml_type::Q6_K) k = tokens > 1 ? k_mv_q6_K_n : k_mv_q6_K;
-        else if (type == dlib::ggml_type::Q5_K) k = tokens > 1 ? k_mv_q5_K_n : k_mv_q5_K;
-        else if (type == dlib::ggml_type::Q8_0) k = tokens > 1 ? k_mv_q8_0_n : k_mv_q8_0;
-        else if (type == dlib::ggml_type::Q5_0) k = tokens > 1 ? k_mv_q5_0_n : k_mv_q5_0;
+        if (type == gulliver::ggml_type::Q4_K) k = tokens > 1 ? k_mv_q4_K_n : k_mv_q4_K;
+        else if (type == gulliver::ggml_type::Q6_K) k = tokens > 1 ? k_mv_q6_K_n : k_mv_q6_K;
+        else if (type == gulliver::ggml_type::Q5_K) k = tokens > 1 ? k_mv_q5_K_n : k_mv_q5_K;
+        else if (type == gulliver::ggml_type::Q8_0) k = tokens > 1 ? k_mv_q8_0_n : k_mv_q8_0;
+        else if (type == gulliver::ggml_type::Q5_0) k = tokens > 1 ? k_mv_q5_0_n : k_mv_q5_0;
         else return false;
         if (tokens == 0) return true;
         // Les lignes d'un simdgroup (ROWS) ne chevauchent jamais les deux matrices.
@@ -649,19 +649,19 @@ namespace gulliver
         const unsigned mm_tile_slots = 16, mm_tile_rows = 32, mm_tile_cols = 64;
     }
 
-    bool metal_device::commands::matvec_id(dlib::ggml_type type, metal_view W, long rows, long cols,
+    bool metal_device::commands::matvec_id(gulliver::ggml_type type, metal_view W, long rows, long cols,
         uint64_t expert_bytes, metal_view x, unsigned x_stride, unsigned x_div, metal_view ids, unsigned slots,
         metal_view y, unsigned y_stride)
     {
         kernel_index k;
-        if (type == dlib::ggml_type::Q4_K) k = k_mv_q4_K_id;
-        else if (type == dlib::ggml_type::Q5_K) k = k_mv_q5_K_id;
-        else if (type == dlib::ggml_type::Q6_K) k = k_mv_q6_K_id;
-        else if (type == dlib::ggml_type::Q8_0) k = k_mv_q8_0_id;
-        else if (type == dlib::ggml_type::Q5_0) k = k_mv_q5_0_id;
+        if (type == gulliver::ggml_type::Q4_K) k = k_mv_q4_K_id;
+        else if (type == gulliver::ggml_type::Q5_K) k = k_mv_q5_K_id;
+        else if (type == gulliver::ggml_type::Q6_K) k = k_mv_q6_K_id;
+        else if (type == gulliver::ggml_type::Q8_0) k = k_mv_q8_0_id;
+        else if (type == gulliver::ggml_type::Q5_0) k = k_mv_q5_0_id;
         else return false;
         if (slots == 0) return true;
-        if (cols % (type == dlib::ggml_type::Q8_0 || type == dlib::ggml_type::Q5_0 ? 32 : 256) != 0 || x_div == 0)
+        if (cols % (type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0 ? 32 : 256) != 0 || x_div == 0)
             throw std::invalid_argument("metal_device: an expert product of other columns than its kernel takes");
         impl_->use(k);
         impl_->bind(W, 0);
@@ -703,16 +703,16 @@ namespace gulliver
         return (slots + mm_tile_slots - 1) / mm_tile_slots + experts;
     }
 
-    bool metal_device::commands::matmul_id(dlib::ggml_type type, metal_view W, long rows, long cols, uint64_t expert_bytes,
+    bool metal_device::commands::matmul_id(gulliver::ggml_type type, metal_view W, long rows, long cols, uint64_t expert_bytes,
         uint64_t row_bytes, metal_view x, unsigned x_stride, unsigned x_div, metal_view list, metal_view counts,
         metal_view work, unsigned capacity, metal_view dispatch, unsigned which, metal_view y, unsigned y_stride)
     {
         kernel_index k;
-        if (type == dlib::ggml_type::Q4_K) k = k_mm_id_q4_K;
-        else if (type == dlib::ggml_type::Q5_K) k = k_mm_id_q5_K;
-        else if (type == dlib::ggml_type::Q6_K) k = k_mm_id_q6_K;
-        else if (type == dlib::ggml_type::Q8_0) k = k_mm_id_q8_0;
-        else if (type == dlib::ggml_type::Q5_0) k = k_mm_id_q5_0;
+        if (type == gulliver::ggml_type::Q4_K) k = k_mm_id_q4_K;
+        else if (type == gulliver::ggml_type::Q5_K) k = k_mm_id_q5_K;
+        else if (type == gulliver::ggml_type::Q6_K) k = k_mm_id_q6_K;
+        else if (type == gulliver::ggml_type::Q8_0) k = k_mm_id_q8_0;
+        else if (type == gulliver::ggml_type::Q5_0) k = k_mm_id_q5_0;
         else return false;
         if (rows % mm_tile_rows != 0 || cols % mm_tile_cols != 0 || x_div == 0)
             throw std::invalid_argument("metal_device: a grouped expert product of other sizes than its kernel takes");

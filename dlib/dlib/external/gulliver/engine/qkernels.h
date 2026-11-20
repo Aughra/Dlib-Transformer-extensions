@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include <dlib/data_io/gguf_reader.h>
+#include "../common/gguf_reader.h"
 
 #include "../common/system_info.h"
 
@@ -45,7 +45,7 @@ namespace gulliver
 
     struct weight_matrix
     {
-        dlib::ggml_type type = dlib::ggml_type::F32;
+        gulliver::ggml_type type = gulliver::ggml_type::F32;
         const uint8_t* data = nullptr;   // rows * row_bytes octets
         long rows = 0;                   // caractéristiques de sortie
         long cols = 0;                   // caractéristiques d'entrée
@@ -56,9 +56,9 @@ namespace gulliver
 
     // Indique si les noyaux du processeur prennent en charge un type de tenseur, et le format
     // d'activation qu'il leur faut pour lui.
-    bool qk_supported(dlib::ggml_type type);
-    act_format qk_activation_format(dlib::ggml_type type);
-    size_t qk_row_bytes(dlib::ggml_type type, long cols);
+    bool qk_supported(gulliver::ggml_type type);
+    act_format qk_activation_format(gulliver::ggml_type type);
+    size_t qk_row_bytes(gulliver::ggml_type type, long cols);
 
     // Octets d'une ligne d'activations de n valeurs quantifiée au format f.
     size_t qk_activation_row_bytes(act_format f, long n);
@@ -69,14 +69,14 @@ namespace gulliver
     // Produit scalaire de la ligne de poids w (type t, n valeurs) avec une ligne d'activations
     // préparée dans le format correspondant par qk_quantize_row(), ou donnée en floats pour F32,
     // F16 et BF16.
-    float qk_dot(dlib::ggml_type t, const uint8_t* w, const void* act, long n);
+    float qk_dot(gulliver::ggml_type t, const uint8_t* w, const void* act, long n);
 
     // La version portable de qk_dot(), quel que soit le build : la référence par rapport à
     // laquelle les noyaux vectoriels sont vérifiés.
-    float qk_dot_portable(dlib::ggml_type t, const uint8_t* w, const void* act, long n);
+    float qk_dot_portable(gulliver::ggml_type t, const uint8_t* w, const void* act, long n);
 
     // Développe une ligne de poids en floats (chemin de référence et recherche d'embedding).
-    void qk_dequantize_row(dlib::ggml_type t, const uint8_t* w, float* dst, long n);
+    void qk_dequantize_row(gulliver::ggml_type t, const uint8_t* w, float* dst, long n);
 
     /*!
         Un allocateur dont les blocs commencent sur 64 octets.  Les tampons des activations et de

@@ -50,29 +50,29 @@ namespace
 
     // Une matrice de rows x cols en Q4_K ou Q6_K, ses octets aléatoires et ses échelles dans une plage
     // raisonnable.
-    std::vector<uint8_t> random_matrix(dlib::ggml_type type, long rows, long cols)
+    std::vector<uint8_t> random_matrix(gulliver::ggml_type type, long rows, long cols)
     {
         const size_t rb = qk_row_bytes(type, cols);
         std::vector<uint8_t> w(rb * rows);
         for (auto& b : w) b = static_cast<uint8_t>(rng());
         // L'échelle de chaque bloc remise dans une plage raisonnable, à sa place dans le bloc de chaque format (Q5_K,
         // Q8_0 et Q5_0 depuis Gulliver 6.8.0 : sans cela, des octets au hasard donnaient des échelles infinies).
-        const bool small = type == dlib::ggml_type::Q8_0 || type == dlib::ggml_type::Q5_0;
+        const bool small = type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0;
         const long nb = cols / (small ? 32 : 256);
-        const size_t block = type == dlib::ggml_type::Q4_K ? 144 : type == dlib::ggml_type::Q5_K ? 176
-            : type == dlib::ggml_type::Q6_K ? 210 : type == dlib::ggml_type::Q8_0 ? 34 : 22;
+        const size_t block = type == gulliver::ggml_type::Q4_K ? 144 : type == gulliver::ggml_type::Q5_K ? 176
+            : type == gulliver::ggml_type::Q6_K ? 210 : type == gulliver::ggml_type::Q8_0 ? 34 : 22;
         for (long r = 0; r < rows; ++r)
             for (long b = 0; b < nb; ++b)
             {
                 uint8_t* blk = w.data() + r * rb + b * block;
-                if (type == dlib::ggml_type::Q4_K || type == dlib::ggml_type::Q5_K)
+                if (type == gulliver::ggml_type::Q4_K || type == gulliver::ggml_type::Q5_K)
                 {
                     const uint16_t d = qk_float_to_half(uniform(0.001f, 0.02f));
                     const uint16_t m = qk_float_to_half(uniform(0.0f, 0.02f));
                     std::memcpy(blk, &d, 2);
                     std::memcpy(blk + 2, &m, 2);
                 }
-                else if (type == dlib::ggml_type::Q6_K)
+                else if (type == gulliver::ggml_type::Q6_K)
                 {
                     const uint16_t d = qk_float_to_half(uniform(0.0005f, 0.01f));
                     std::memcpy(blk + 208, &d, 2);
@@ -86,7 +86,7 @@ namespace
         return w;
     }
 
-    void test_matvec(metal_device& gpu, dlib::ggml_type type, const char* name)
+    void test_matvec(metal_device& gpu, gulliver::ggml_type type, const char* name)
     {
         const long rows = 1000, cols = 2560;
         const std::vector<uint8_t> w = random_matrix(type, rows, cols);
@@ -138,14 +138,14 @@ namespace
         matmul_id les multiplie ; chaque case comparée à son expert développé par qk_dequantize_row().  Des
         octets aléatoires, l'échelle de chaque bloc remise dans une plage raisonnable.
     */
-    void test_matmul_id(metal_device& gpu, dlib::ggml_type type, const char* name)
+    void test_matmul_id(metal_device& gpu, gulliver::ggml_type type, const char* name)
     {
         const long E = 6, rows = 64, cols = 512;
         const unsigned tokens = 37, top_k = 2, slots = tokens * top_k, x_stride = cols + 64, y_stride = rows + 8;
-        const bool small = type == dlib::ggml_type::Q8_0 || type == dlib::ggml_type::Q5_0;
+        const bool small = type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0;
         const long values = small ? 32 : 256;
-        const size_t block = type == dlib::ggml_type::Q4_K ? 144 : type == dlib::ggml_type::Q5_K ? 176
-            : type == dlib::ggml_type::Q6_K ? 210 : type == dlib::ggml_type::Q8_0 ? 34 : 22;
+        const size_t block = type == gulliver::ggml_type::Q4_K ? 144 : type == gulliver::ggml_type::Q5_K ? 176
+            : type == gulliver::ggml_type::Q6_K ? 210 : type == gulliver::ggml_type::Q8_0 ? 34 : 22;
         const size_t rb = qk_row_bytes(type, cols), expert_bytes = rb * rows;
         std::vector<uint8_t> w(expert_bytes * E);
         for (auto& b : w) b = static_cast<uint8_t>(rng());
@@ -154,9 +154,9 @@ namespace
             {
                 uint8_t* blk = w.data() + r * rb + b * block;
                 const uint16_t d = qk_float_to_half(uniform(0.001f, 0.02f)), m = qk_float_to_half(uniform(0.0f, 0.02f));
-                if (type == dlib::ggml_type::Q6_K) std::memcpy(blk + 208, &d, 2);
+                if (type == gulliver::ggml_type::Q6_K) std::memcpy(blk + 208, &d, 2);
                 else std::memcpy(blk, &d, 2);
-                if (type == dlib::ggml_type::Q4_K || type == dlib::ggml_type::Q5_K) std::memcpy(blk + 2, &m, 2);
+                if (type == gulliver::ggml_type::Q4_K || type == gulliver::ggml_type::Q5_K) std::memcpy(blk + 2, &m, 2);
             }
         // Les experts de chaque token, distincts ; l'expert 5 n'est jamais choisi.
         std::vector<int> ids(slots);
@@ -208,7 +208,7 @@ namespace
     }
 
     // Les poids développés en flottants, puis un produit d'un prompt par Metal Performance Shaders.
-    void test_dequantize_gemm(metal_device& gpu, dlib::ggml_type type, const char* name)
+    void test_dequantize_gemm(metal_device& gpu, gulliver::ggml_type type, const char* name)
     {
         const long rows = 300, cols = 1024;
         const unsigned tokens = 37, stride = cols + 32, y_stride = rows + 4;
@@ -255,7 +255,7 @@ namespace
     // Le produit d'un prompt en demi-précision (Gulliver 6.7.0) : poids développés en half, entrées copiées en half,
     // MPS en half avec un résultat en floats.  Poids et entrées arrondis chacun à 2^-11 près : une erreur d'au plus
     // environ 1e-3 rapportée à la somme des |w x|.
-    void test_half_gemm(metal_device& gpu, dlib::ggml_type type, const char* name)
+    void test_half_gemm(metal_device& gpu, gulliver::ggml_type type, const char* name)
     {
         const long rows = 320, cols = 1024;
         const unsigned tokens = 37, rows32 = 64, x_stride = cols + 32, y_stride = rows + 4;
@@ -641,20 +641,20 @@ int main()
         return 0;
     }
     std::printf("test_metal: %s, %d kernels\n", gpu->name().c_str(), gpu->kernel_count());
-    test_matvec(*gpu, dlib::ggml_type::Q4_K, "mv_q4_K");
-    test_matvec(*gpu, dlib::ggml_type::Q6_K, "mv_q6_K");
-    test_dequantize_gemm(*gpu, dlib::ggml_type::Q4_K, "q4_K");
-    test_dequantize_gemm(*gpu, dlib::ggml_type::Q6_K, "q6_K");
-    test_half_gemm(*gpu, dlib::ggml_type::Q4_K, "q4_K");
-    test_half_gemm(*gpu, dlib::ggml_type::Q5_K, "q5_K");
-    test_half_gemm(*gpu, dlib::ggml_type::Q6_K, "q6_K");
-    test_half_gemm(*gpu, dlib::ggml_type::Q8_0, "q8_0");
-    test_half_gemm(*gpu, dlib::ggml_type::Q5_0, "q5_0");
-    test_matmul_id(*gpu, dlib::ggml_type::Q4_K, "q4_K");
-    test_matmul_id(*gpu, dlib::ggml_type::Q5_K, "q5_K");
-    test_matmul_id(*gpu, dlib::ggml_type::Q6_K, "q6_K");
-    test_matmul_id(*gpu, dlib::ggml_type::Q8_0, "q8_0");
-    test_matmul_id(*gpu, dlib::ggml_type::Q5_0, "q5_0");
+    test_matvec(*gpu, gulliver::ggml_type::Q4_K, "mv_q4_K");
+    test_matvec(*gpu, gulliver::ggml_type::Q6_K, "mv_q6_K");
+    test_dequantize_gemm(*gpu, gulliver::ggml_type::Q4_K, "q4_K");
+    test_dequantize_gemm(*gpu, gulliver::ggml_type::Q6_K, "q6_K");
+    test_half_gemm(*gpu, gulliver::ggml_type::Q4_K, "q4_K");
+    test_half_gemm(*gpu, gulliver::ggml_type::Q5_K, "q5_K");
+    test_half_gemm(*gpu, gulliver::ggml_type::Q6_K, "q6_K");
+    test_half_gemm(*gpu, gulliver::ggml_type::Q8_0, "q8_0");
+    test_half_gemm(*gpu, gulliver::ggml_type::Q5_0, "q5_0");
+    test_matmul_id(*gpu, gulliver::ggml_type::Q4_K, "q4_K");
+    test_matmul_id(*gpu, gulliver::ggml_type::Q5_K, "q5_K");
+    test_matmul_id(*gpu, gulliver::ggml_type::Q6_K, "q6_K");
+    test_matmul_id(*gpu, gulliver::ggml_type::Q8_0, "q8_0");
+    test_matmul_id(*gpu, gulliver::ggml_type::Q5_0, "q5_0");
     test_norm_rope_gate(*gpu);
     test_attention(*gpu, kv_format::q8);
     test_attention(*gpu, kv_format::f16);

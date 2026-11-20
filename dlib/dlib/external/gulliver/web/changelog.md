@@ -2,6 +2,16 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.12.0 — 20 novembre 2026
+
+### Plateforme
+
+- **Gulliver ne lit plus rien de dlib.** La lecture des fichiers GGUF, le tokenizer, la lecture des archives ZIP (documents Word, Excel, PowerPoint, OpenDocument) et l'accès à la base sont repris dans Gulliver, sous la licence de dlib (Boost) ; sa construction n'a plus de chemin vers dlib.
+- **SQLite et zlib sont ceux de macOS** : la copie de SQLite est retirée. La base s'ouvre en mode sûr entre fils (« serialized »), avec l'effacement sécurisé et les tables temporaires en mémoire, comme avec la copie. La décompression des archives ZIP et leur contrôle CRC passent par la zlib de macOS.
+- Aucun changement de comportement : le texte extrait de documents Word, Excel et OpenDocument est identique à celui de la version précédente, archives compressées ou non ; une archive tronquée ou abîmée est refusée de la même façon.
+
+---
+
 ## 6.11.0 — 20 novembre 2026
 
 ### Plateforme

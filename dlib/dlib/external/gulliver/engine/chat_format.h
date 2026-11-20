@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include <dlib/tokenizer/hf_tokenizer.h>
+#include "hf_tokenizer.h"
 
 #include "../common/json.h"
 
@@ -202,13 +202,13 @@ namespace gulliver
                   vocabulaire, en se rabattant sur chatml quand le vocabulaire en a les
                   marqueurs et sur une simple disposition "role: text" sinon.
         !*/
-        static std::unique_ptr<chat_format> detect(const dlib::hf_tokenizer& tok, const std::string& chat_template);
+        static std::unique_ptr<chat_format> detect(const gulliver::hf_tokenizer& tok, const std::string& chat_template);
 
         // Tokenise un prompt rendu, le balisage avec tokens de contrôle et le texte sans.
-        static std::vector<int> tokenize(const dlib::hf_tokenizer& tok, const std::vector<prompt_piece>& pieces);
+        static std::vector<int> tokenize(const gulliver::hf_tokenizer& tok, const std::vector<prompt_piece>& pieces);
 
     protected:
-        void add_markers(const dlib::hf_tokenizer& tok, const std::vector<std::string>& markers);
+        void add_markers(const gulliver::hf_tokenizer& tok, const std::vector<std::string>& markers);
 
         std::vector<int> stop_tokens_;
         std::vector<int> marker_tokens_;

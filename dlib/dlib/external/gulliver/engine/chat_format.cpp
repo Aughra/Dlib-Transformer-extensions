@@ -1927,7 +1927,7 @@ namespace gulliver
         class chatml_format : public chat_format
         {
         public:
-            chatml_format(const dlib::hf_tokenizer& tok, const std::string& tmpl)
+            chatml_format(const gulliver::hf_tokenizer& tok, const std::string& tmpl)
             {
                 const int end = tok.token_id("<|im_end|>");
                 if (end >= 0) stop_tokens_.push_back(end);
@@ -2178,7 +2178,7 @@ namespace gulliver
         class mistral_format : public chat_format
         {
         public:
-            mistral_format(const dlib::hf_tokenizer& tok, const std::string& tmpl)
+            mistral_format(const gulliver::hf_tokenizer& tok, const std::string& tmpl)
             {
                 bos_ = tok.bos_id() >= 0 ? tok.id_to_token(tok.bos_id()) : std::string();
                 eos_ = tok.eos_id() >= 0 ? tok.id_to_token(tok.eos_id()) : std::string("</s>");
@@ -2328,7 +2328,7 @@ namespace gulliver
         class llama3_format : public chat_format
         {
         public:
-            llama3_format(const dlib::hf_tokenizer& tok, const std::string& tmpl)
+            llama3_format(const gulliver::hf_tokenizer& tok, const std::string& tmpl)
             {
                 for (const char* t : { "<|eot_id|>", "<|eom_id|>", "<|end_of_text|>" })
                 {
@@ -2432,7 +2432,7 @@ namespace gulliver
         class granite_format : public chat_format
         {
         public:
-            granite_format(const dlib::hf_tokenizer& tok, const std::string&)
+            granite_format(const gulliver::hf_tokenizer& tok, const std::string&)
             {
                 const int end = tok.token_id("<|end_of_text|>");
                 if (end >= 0) stop_tokens_.push_back(end);
@@ -2527,7 +2527,7 @@ namespace gulliver
         class granite4_format : public chat_format
         {
         public:
-            explicit granite4_format(const dlib::hf_tokenizer& tok)
+            explicit granite4_format(const gulliver::hf_tokenizer& tok)
             {
                 for (const char* t : { "<|im_end|>", "<|end_of_text|>" })
                 {
@@ -2726,7 +2726,7 @@ namespace gulliver
         class foundation_sec_format : public chat_format
         {
         public:
-            foundation_sec_format(const dlib::hf_tokenizer& tok, const std::string& tmpl)
+            foundation_sec_format(const gulliver::hf_tokenizer& tok, const std::string& tmpl)
             {
                 for (const char* t : { "<|end_of_text|>", "<|eot_id|>" })
                 {
@@ -2809,7 +2809,7 @@ namespace gulliver
         class role_tags_format : public chat_format
         {
         public:
-            explicit role_tags_format(const dlib::hf_tokenizer& tok)
+            explicit role_tags_format(const gulliver::hf_tokenizer& tok)
             {
                 for (const char* t : { "<|end_of_text|>", "<|eot_id|>" })
                 {
@@ -2868,7 +2868,7 @@ namespace gulliver
         class phi_format : public chat_format
         {
         public:
-            explicit phi_format(const dlib::hf_tokenizer& tok)
+            explicit phi_format(const gulliver::hf_tokenizer& tok)
             {
                 for (const char* t : { "<|end|>", "<|endoftext|>" })
                 {
@@ -2928,7 +2928,7 @@ namespace gulliver
         class gemma4_format : public chat_format
         {
         public:
-            gemma4_format(const dlib::hf_tokenizer& tok, const std::string& tmpl)
+            gemma4_format(const gulliver::hf_tokenizer& tok, const std::string& tmpl)
             {
                 // Le template du 26B-A4B (pas celui du E2B) écrit un raisonnement vide quand il n'en demande pas.
                 empty_thought_ = tmpl.find("'<|channel>thought\\n<channel|>'") != std::string::npos;
@@ -3391,7 +3391,7 @@ namespace gulliver
         class gemma3_format : public chat_format
         {
         public:
-            explicit gemma3_format(const dlib::hf_tokenizer& tok)
+            explicit gemma3_format(const gulliver::hf_tokenizer& tok)
             {
                 for (const char* t : { "<end_of_turn>", "<eos>" })
                 {
@@ -3457,7 +3457,7 @@ namespace gulliver
         class lfm2_format : public chat_format
         {
         public:
-            lfm2_format(const dlib::hf_tokenizer& tok, const std::string& tmpl)
+            lfm2_format(const gulliver::hf_tokenizer& tok, const std::string& tmpl)
             {
                 for (const char* t : { "<|im_end|>", "<|endoftext|>" })
                 {
@@ -3655,7 +3655,7 @@ namespace gulliver
         class mistral_v1_format : public chat_format
         {
         public:
-            explicit mistral_v1_format(const dlib::hf_tokenizer& tok)
+            explicit mistral_v1_format(const gulliver::hf_tokenizer& tok)
             {
                 bos_ = tok.bos_id() >= 0 ? tok.id_to_token(tok.bos_id()) : std::string();
                 eos_ = tok.eos_id() >= 0 ? tok.id_to_token(tok.eos_id()) : std::string("</s>");
@@ -3741,7 +3741,7 @@ namespace gulliver
         };
     }
 
-    void chat_format::add_markers(const dlib::hf_tokenizer& tok, const std::vector<std::string>& markers)
+    void chat_format::add_markers(const gulliver::hf_tokenizer& tok, const std::vector<std::string>& markers)
     {
         for (const auto& m : markers)
         {
@@ -3752,7 +3752,7 @@ namespace gulliver
         marker_tokens_.erase(std::unique(marker_tokens_.begin(), marker_tokens_.end()), marker_tokens_.end());
     }
 
-    std::unique_ptr<chat_format> chat_format::detect(const dlib::hf_tokenizer& tok, const std::string& tmpl)
+    std::unique_ptr<chat_format> chat_format::detect(const gulliver::hf_tokenizer& tok, const std::string& tmpl)
     {
         auto has = [&](const char* s) { return tmpl.find(s) != std::string::npos; };
         if (has("[INST]") && (tok.token_id("[INST]") >= 0))
@@ -3798,7 +3798,7 @@ namespace gulliver
         return std::unique_ptr<chat_format>(new plain_format());
     }
 
-    std::vector<int> chat_format::tokenize(const dlib::hf_tokenizer& tok, const std::vector<prompt_piece>& pieces)
+    std::vector<int> chat_format::tokenize(const gulliver::hf_tokenizer& tok, const std::vector<prompt_piece>& pieces)
     {
         /*
             On cherche les tokens de contrôle dans le balisage ; le texte entre deux d'entre eux,
@@ -3833,7 +3833,7 @@ namespace gulliver
             for (int id : marked)
             {
                 const int type = tok.token_type(id);
-                if (type == dlib::hf_tokenizer::TT_CONTROL || type == dlib::hf_tokenizer::TT_USER_DEFINED)
+                if (type == gulliver::hf_tokenizer::TT_CONTROL || type == gulliver::hf_tokenizer::TT_USER_DEFINED)
                 {
                     pending += stretch;
                     stretch.clear();

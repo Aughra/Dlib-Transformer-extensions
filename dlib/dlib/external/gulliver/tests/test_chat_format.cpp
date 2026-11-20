@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#include <dlib/tokenizer/hf_tokenizer.h>
+#include "../engine/hf_tokenizer.h"
 
 #include "../engine/chat_format.h"
 
@@ -34,13 +34,13 @@ namespace
     }
 
     // Un vocabulaire au niveau de l'octet avec les tokens de contrôle de ChatML et les marqueurs de Qwen3.
-    dlib::hf_tokenizer tokenizer(
+    gulliver::hf_tokenizer tokenizer(
         const std::vector<std::string>& control = { "<|endoftext|>", "<|im_start|>", "<|im_end|>" },
         const std::vector<std::string>& markers = { "<tool_call>", "</tool_call>", "<tool_response>",
             "</tool_response>", "<think>", "</think>" })
     {
-        dlib::hf_tokenizer::vocab_data v;
-        v.family = dlib::hf_tokenizer::kind::bpe;
+        gulliver::hf_tokenizer::vocab_data v;
+        v.family = gulliver::hf_tokenizer::kind::bpe;
         v.pretokenizer = "qwen2";
         int extra = 0;
         for (int b = 0; b < 256; ++b)
@@ -55,17 +55,17 @@ namespace
                 s += static_cast<char>(0x80 | (cp & 0x3F));
             }
             v.tokens.push_back(s);
-            v.types.push_back(dlib::hf_tokenizer::TT_NORMAL);
+            v.types.push_back(gulliver::hf_tokenizer::TT_NORMAL);
         }
         for (const auto& t : control)
         {
             v.tokens.push_back(t);
-            v.types.push_back(dlib::hf_tokenizer::TT_CONTROL);
+            v.types.push_back(gulliver::hf_tokenizer::TT_CONTROL);
         }
         for (const auto& t : markers)
         {
             v.tokens.push_back(t);
-            v.types.push_back(dlib::hf_tokenizer::TT_USER_DEFINED);
+            v.types.push_back(gulliver::hf_tokenizer::TT_USER_DEFINED);
         }
         for (size_t i = 0; i < control.size(); ++i)
         {
@@ -73,7 +73,7 @@ namespace
             if (control[i] == "<|im_end|>" || control[i] == "<|end_of_text|>" || control[i] == "</s>")
                 v.eos_id = 256 + static_cast<int>(i);
         }
-        dlib::hf_tokenizer tok;
+        gulliver::hf_tokenizer tok;
         tok.load(v);
         return tok;
     }
@@ -132,7 +132,7 @@ namespace
 
 int main()
 {
-    const dlib::hf_tokenizer tok = tokenizer();
+    const gulliver::hf_tokenizer tok = tokenizer();
     const std::string tmpl = "{%- if tools %}<tool_call>{%- endif %}<|im_start|>{%- if enable_thinking %}{%- endif %}";
     const std::unique_ptr<chat_format> f = chat_format::detect(tok, tmpl);
     expect(std::string(f->name()) == "chatml" && f->supports_tools() && f->supports_reasoning(), "ChatML detected");
@@ -490,7 +490,7 @@ int main()
     // Foundation-Sec-8B-Reasoning : des tours <|system|>, <|user|>, <|assistant|>, une réponse après le
     // raisonnement.
     {
-        const dlib::hf_tokenizer ftok = tokenizer({ "<|begin_of_text|>", "<|end_of_text|>", "<|system|>",
+        const gulliver::hf_tokenizer ftok = tokenizer({ "<|begin_of_text|>", "<|end_of_text|>", "<|system|>",
             "<|user|>", "<|assistant|>" }, { "<think>", "</think>" });
         const std::string ftmpl = "{{ bos_token }}{%- if not has_system %}\n<|system|>\nYou are Metis.\n\n"
             "{%- endif %}<|user|>\n<|assistant|>";
@@ -523,7 +523,7 @@ int main()
         f2->render(q, fopt, pieces);
         const std::vector<int> ids = chat_format::tokenize(ftok, pieces);
         expect(!ids.empty() && ids.back() == ftok.token_id("<think>"), "the prompt ends with the token <think>");
-        const dlib::hf_tokenizer gtok = tokenizer({ "<|begin_of_text|>", "<|end_of_text|>", "<|system|>", "<|user|>",
+        const gulliver::hf_tokenizer gtok = tokenizer({ "<|begin_of_text|>", "<|end_of_text|>", "<|system|>", "<|user|>",
             "<|assistant|>", "<think>", "</think>" }, {});
         const std::unique_ptr<chat_format> f3 = chat_format::detect(gtok, ftmpl);
         std::vector<prompt_piece> gpieces;
@@ -548,7 +548,7 @@ int main()
     // Foundation-Sec 1.1 8B Instruct : ses fichiers GGUF ne portent pas de template, que donne le dépôt
     // du modèle.
     {
-        const dlib::hf_tokenizer itok = tokenizer({ "<|begin_of_text|>", "<|end_of_text|>", "<|start_header_id|>",
+        const gulliver::hf_tokenizer itok = tokenizer({ "<|begin_of_text|>", "<|end_of_text|>", "<|start_header_id|>",
             "<|end_header_id|>", "<|eot_id|>" }, {});
         const std::string itmpl = published_template("Foundation Sec 1.1 8B Instruct");
         expect(!itmpl.empty() && published_template("Foundation Sec 8B Reasoning").empty(), "published template");
@@ -578,7 +578,7 @@ int main()
 
     // Phi-4-mini.
     {
-        const dlib::hf_tokenizer ptok = tokenizer({ "<|endoftext|>", "<|system|>", "<|user|>", "<|assistant|>",
+        const gulliver::hf_tokenizer ptok = tokenizer({ "<|endoftext|>", "<|system|>", "<|user|>", "<|assistant|>",
             "<|end|>" }, {});
         const std::unique_ptr<chat_format> p = chat_format::detect(ptok,
             "{{ '<|' + message['role'] + '|>' + message['content'] + '<|end|>' }}");
@@ -599,7 +599,7 @@ int main()
     // Mistral (Devstral Small 2, Ministral 3) : les prompts, et les appels avec ou sans leur
     // identifiant.
     {
-        const dlib::hf_tokenizer mtok = tokenizer({ "<s>", "</s>", "[INST]", "[/INST]", "[SYSTEM_PROMPT]",
+        const gulliver::hf_tokenizer mtok = tokenizer({ "<s>", "</s>", "[INST]", "[/INST]", "[SYSTEM_PROMPT]",
             "[/SYSTEM_PROMPT]", "[AVAILABLE_TOOLS]", "[/AVAILABLE_TOOLS]", "[TOOL_RESULTS]", "[/TOOL_RESULTS]",
             "[TOOL_CALLS]", "[ARGS]", "[CALL_ID]" }, {});
         // Le template de Devstral Small 2 déclare un prompt système par défaut vide.
@@ -706,7 +706,7 @@ int main()
             les outils avant la dernière question, l'identifiant de chaque appel après [CALL_ID] et
             celui de l'appel auquel répond un résultat avant [TOOL_CONTENT].
         */
-        const dlib::hf_tokenizer stok = tokenizer({ "<s>", "</s>", "[INST]", "[/INST]", "[SYSTEM_PROMPT]",
+        const gulliver::hf_tokenizer stok = tokenizer({ "<s>", "</s>", "[INST]", "[/INST]", "[SYSTEM_PROMPT]",
             "[/SYSTEM_PROMPT]", "[AVAILABLE_TOOLS]", "[/AVAILABLE_TOOLS]", "[TOOL_RESULTS]", "[/TOOL_RESULTS]",
             "[TOOL_CALLS]", "[ARGS]", "[CALL_ID]", "[TOOL_CONTENT]" }, {});
         const std::string small_template =
@@ -781,7 +781,7 @@ int main()
     // Llama 3 : une réponse qui est un objet JSON entier est un appel quand elle nomme un outil de la
     // requête.
     {
-        const dlib::hf_tokenizer ltok = tokenizer({ "<|begin_of_text|>", "<|end_of_text|>", "<|start_header_id|>",
+        const gulliver::hf_tokenizer ltok = tokenizer({ "<|begin_of_text|>", "<|end_of_text|>", "<|start_header_id|>",
             "<|end_header_id|>", "<|eot_id|>", "<|eom_id|>", "<|python_tag|>" }, {});
         const std::unique_ptr<chat_format> l = chat_format::detect(ltok,
             "{{- '<|start_header_id|>' + message['role'] + '<|end_header_id|>\\n\\n' }}");
@@ -832,7 +832,7 @@ int main()
 
         // Le template de SmolLM2-135M-Instruct, avec un vocabulaire qui n'a pas de marqueurs de
         // raisonnement.
-        const dlib::hf_tokenizer stok = tokenizer({ "<|endoftext|>", "<|im_start|>", "<|im_end|>" }, {});
+        const gulliver::hf_tokenizer stok = tokenizer({ "<|endoftext|>", "<|im_start|>", "<|im_end|>" }, {});
         const std::unique_ptr<chat_format> smol = chat_format::detect(stok, "{% for message in messages %}{% if "
             "loop.first and messages[0]['role'] != 'system' %}{{ '<|im_start|>system\nYou are a helpful AI "
             "assistant named SmolLM, trained by Hugging Face<|im_end|>\n' }}{% endif %}{{'<|im_start|>' + "
@@ -912,7 +912,7 @@ int main()
         const parsed p = read(*f, opt, "<tool_call>\n{\"name\": \"run_javascript\", \"arguments\": {\"code\": \""
             + code + "\"}}\n</tool_call>", 1);
         expect(p.calls.size() == 1 && p.calls[0].arguments.size() == code.size() + 12, "a long ChatML argument");
-        const dlib::hf_tokenizer mtok = tokenizer({ "<s>", "</s>", "[INST]", "[/INST]", "[TOOL_CALLS]", "[ARGS]" },
+        const gulliver::hf_tokenizer mtok = tokenizer({ "<s>", "</s>", "[INST]", "[/INST]", "[TOOL_CALLS]", "[ARGS]" },
             {});
         const std::unique_ptr<chat_format> d = chat_format::detect(mtok, "[INST]");
         const parsed q = read(*d, render_options(), "[TOOL_CALLS]run_javascript[ARGS]{\"code\": \"" + code + "\"}", 1);
@@ -921,7 +921,7 @@ int main()
 
     // Gemma 4 : outils déclarés, appelés et leurs résultats dans la notation de Gemma (fork pour macOS).
     {
-        const dlib::hf_tokenizer gtok = tokenizer({ "<bos>", "<eos>", "<|turn>", "<turn|>", "<|think|>", "<|tool>",
+        const gulliver::hf_tokenizer gtok = tokenizer({ "<bos>", "<eos>", "<|turn>", "<turn|>", "<|think|>", "<|tool>",
             "<tool|>" }, { "<|channel>", "<channel|>", "<|tool_call>", "<tool_call|>", "<|tool_response>",
             "<tool_response|>", "<|\"|>" });
         const std::unique_ptr<chat_format> g = chat_format::detect(gtok, "{{- '<|turn>' + role + '\\n' }}");
@@ -984,7 +984,7 @@ What is the weather in Paris right now?<turn|>
 
     // Gemma 3 : tours <start_of_turn>, système en tête du premier tour, textes rognés (fork pour macOS).
     {
-        const dlib::hf_tokenizer gtok = tokenizer({ "<bos>", "<eos>", "<start_of_turn>", "<end_of_turn>" }, {});
+        const gulliver::hf_tokenizer gtok = tokenizer({ "<bos>", "<eos>", "<start_of_turn>", "<end_of_turn>" }, {});
         const std::unique_ptr<chat_format> g = chat_format::detect(gtok,
             "{{ bos_token }}{{ '<start_of_turn>' + role + '\\n' }}");
         expect(std::string(g->name()) == "gemma3" && !g->supports_tools() && !g->supports_reasoning(), "Gemma 3 detected");
@@ -1008,7 +1008,7 @@ What is the weather in Paris right now?<turn|>
 
     // LFM2 : le BOS, les pensées passées selon le template, le raisonnement ouvert par le modèle (fork pour macOS).
     {
-        const dlib::hf_tokenizer ltok = tokenizer({ "<|startoftext|>", "<|endoftext|>", "<|im_start|>", "<|im_end|>" },
+        const gulliver::hf_tokenizer ltok = tokenizer({ "<|startoftext|>", "<|endoftext|>", "<|im_start|>", "<|im_end|>" },
             { "<think>", "</think>", "<|tool_call_start|>", "<|tool_call_end|>" });
         // Des extraits des templates de LFM2.5-1.2B-Instruct et de LFM2.5-8B-A1B.
         const std::string small = "{{- bos_token -}}{%- set keep_past_thinking = keep_past_thinking | default(false) -%}"

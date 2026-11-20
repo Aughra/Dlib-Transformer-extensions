@@ -9,7 +9,7 @@
     nomme ses passages d'après ces lignes et le texte doit concorder.
 
     Les formats Office et OpenDocument sont des archives ZIP : on les lit avec le lecteur ZIP
-    en mémoire de dlib (dlib::zip_archive_reader), puis on lit leur XML avec un petit extracteur
+    en mémoire de Gulliver (zip_reader.h, repris de dlib, sur la zlib de macOS), puis on lit leur XML avec un petit extracteur
     de texte linéaire, suffisant pour reproduire le RÉSULTAT des regex et du DOMParser du JS
     (on n'imite pas la technique, seulement la sortie).  Le PDF est délégué à extract_pdf_text()
     (host/doc_extract_pdf.cpp), le RTF, l'HTML et le texte brut sont lus directement.
@@ -27,7 +27,7 @@
 #include <string>
 #include <vector>
 
-#include <dlib/zip.h>
+#include "zip_reader.h"
 
 namespace gulliver
 {
@@ -604,13 +604,13 @@ namespace gulliver
             return out;
         }
 
-        // L'interface ZIP qu'attendent les extracteurs : un lecteur dlib enveloppé pour donner un
+        // L'interface ZIP qu'attendent les extracteurs : le lecteur ZIP de Gulliver (zip_reader.h) enveloppé pour donner un
         // accès par nom et par liste, avec décodage du texte.
         struct archive
         {
-            const dlib::zip_archive_reader& zip;
+            const zip_archive_reader& zip;
 
-            explicit archive(const dlib::zip_archive_reader& z) : zip(z) {}
+            explicit archive(const zip_archive_reader& z) : zip(z) {}
 
             bool has(const std::string& name) const { return zip.contains(name); }
 
@@ -631,7 +631,7 @@ namespace gulliver
                 if (!zip.contains(name)) return std::string();
                 std::string bytes;
                 try { bytes = zip.read(name); }
-                catch (const dlib::zip_error& e) { throw doc_error("zip-invalid", e.info); }
+                catch (const zip_error& e) { throw doc_error("zip-invalid", e.info); }
                 catch (const std::exception& e) { throw doc_error("zip-invalid", e.what()); }
                 return decode_text(bytes);
             }
@@ -1856,18 +1856,18 @@ namespace gulliver
             return trim(out);
         }
 
-        // Ouvre une archive et exécute un extracteur, en traduisant les erreurs ZIP de dlib.
+        // Ouvre une archive et exécute un extracteur, en traduisant les erreurs ZIP.
         template <class Fn>
         std::string with_archive(const std::string& bytes, Fn&& fn)
         {
             try
             {
-                dlib::zip_archive_reader reader(bytes);
+                zip_archive_reader reader(bytes);
                 archive zip(reader);
                 return fn(zip);
             }
             catch (const doc_error&) { throw; }
-            catch (const dlib::zip_error& e) { throw doc_error("zip-invalid", e.info); }
+            catch (const zip_error& e) { throw doc_error("zip-invalid", e.info); }
             catch (const std::exception& e) { throw doc_error("zip-invalid", e.what()); }
         }
     } // namespace

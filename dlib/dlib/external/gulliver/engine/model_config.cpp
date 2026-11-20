@@ -10,7 +10,7 @@
 #include <stdexcept>
 #include <string>
 
-#include <dlib/data_io/gguf_model_spec.h>
+#include "../common/gguf_reader.h"
 
 namespace gulliver
 {
@@ -23,7 +23,7 @@ namespace gulliver
             des modèles publiés ; une valeur qui les dépasse vient d'un fichier endommagé, dont
             les tailles feraient déborder les produits qui dimensionnent la mémoire du runtime.
         */
-        long bounded_int(const dlib::gguf_reader& g, const std::string& key, int64_t def, int64_t lo, int64_t hi)
+        long bounded_int(const gulliver::gguf_reader& g, const std::string& key, int64_t def, int64_t lo, int64_t hi)
         {
             const int64_t v = g.get_int(key, def);
             if (v < lo || v > hi)
@@ -33,7 +33,7 @@ namespace gulliver
         }
 
         // Un nombre réel des métadonnées, qui doit être fini.
-        double finite_double(const dlib::gguf_reader& g, const std::string& key, double def)
+        double finite_double(const gulliver::gguf_reader& g, const std::string& key, double def)
         {
             const double v = g.get_double(key, def);
             if (!std::isfinite(v)) throw std::runtime_error("the model metadata holds an invalid " + key);
@@ -52,10 +52,10 @@ namespace gulliver
 
     model_config read_model_config(const model_file& f)
     {
-        const dlib::gguf_reader& g = f.reader();
+        const gulliver::gguf_reader& g = f.reader();
         model_config c;
         c.arch = g.get_str("general.architecture", "");
-        c.name = dlib::clean_model_name(g.get_str("general.name", c.arch));
+        c.name = gulliver::clean_model_name(g.get_str("general.name", c.arch));
         const std::string a = c.arch;
 
         const bool llama_like = a == "llama" || a == "mistral" || a == "mistral3" || a == "granite";

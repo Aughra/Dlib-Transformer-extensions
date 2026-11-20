@@ -9,7 +9,7 @@
 #include <cstring>
 #include <stdexcept>
 
-#include <dlib/data_io/gguf_dequantize.h>
+#include "../common/gguf_dequantize.h"
 
 #include "thread_pool.h"
 
@@ -28,7 +28,7 @@
 
 namespace gulliver
 {
-    using dlib::ggml_type;
+    using gulliver::ggml_type;
 
     // Demi-précision
 
@@ -41,7 +41,7 @@ namespace gulliver
             half_table()
             {
                 for (uint32_t h = 0; h < 65536; ++h)
-                    v[h] = dlib::gguf_half_to_float(static_cast<uint16_t>(h));
+                    v[h] = gulliver::gguf_half_to_float(static_cast<uint16_t>(h));
             }
         };
         const half_table half_values;
@@ -316,7 +316,7 @@ namespace gulliver
 
     size_t qk_row_bytes(ggml_type type, long cols)
     {
-        const dlib::ggml_type_traits tr = dlib::get_ggml_type_traits(type);
+        const gulliver::ggml_type_traits tr = gulliver::get_ggml_type_traits(type);
         return static_cast<size_t>(cols) / tr.block_size * tr.type_size;
     }
 
@@ -766,18 +766,18 @@ namespace gulliver
                 dst[i] = bf2f(h);
             }
             return;
-        case ggml_type::Q4_0: fn = dlib::gguf_dq_q4_0; qk = 32; bytes = 18; break;
-        case ggml_type::Q4_1: fn = dlib::gguf_dq_q4_1; qk = 32; bytes = 20; break;
-        case ggml_type::Q5_0: fn = dlib::gguf_dq_q5_0; qk = 32; bytes = 22; break;
-        case ggml_type::Q5_1: fn = dlib::gguf_dq_q5_1; qk = 32; bytes = 24; break;
-        case ggml_type::Q8_0: fn = dlib::gguf_dq_q8_0; qk = 32; bytes = 34; break;
-        case ggml_type::IQ4_NL: fn = dlib::gguf_dq_iq4_nl; qk = 32; bytes = 18; break;
-        case ggml_type::Q2_K: fn = dlib::gguf_dq_q2_K; qk = 256; bytes = 84; break;
-        case ggml_type::Q3_K: fn = dlib::gguf_dq_q3_K; qk = 256; bytes = 110; break;
-        case ggml_type::Q4_K: fn = dlib::gguf_dq_q4_K; qk = 256; bytes = 144; break;
-        case ggml_type::Q5_K: fn = dlib::gguf_dq_q5_K; qk = 256; bytes = 176; break;
+        case ggml_type::Q4_0: fn = gulliver::gguf_dq_q4_0; qk = 32; bytes = 18; break;
+        case ggml_type::Q4_1: fn = gulliver::gguf_dq_q4_1; qk = 32; bytes = 20; break;
+        case ggml_type::Q5_0: fn = gulliver::gguf_dq_q5_0; qk = 32; bytes = 22; break;
+        case ggml_type::Q5_1: fn = gulliver::gguf_dq_q5_1; qk = 32; bytes = 24; break;
+        case ggml_type::Q8_0: fn = gulliver::gguf_dq_q8_0; qk = 32; bytes = 34; break;
+        case ggml_type::IQ4_NL: fn = gulliver::gguf_dq_iq4_nl; qk = 32; bytes = 18; break;
+        case ggml_type::Q2_K: fn = gulliver::gguf_dq_q2_K; qk = 256; bytes = 84; break;
+        case ggml_type::Q3_K: fn = gulliver::gguf_dq_q3_K; qk = 256; bytes = 110; break;
+        case ggml_type::Q4_K: fn = gulliver::gguf_dq_q4_K; qk = 256; bytes = 144; break;
+        case ggml_type::Q5_K: fn = gulliver::gguf_dq_q5_K; qk = 256; bytes = 176; break;
         case ggml_type::Q6_K:
-            fn = dlib::gguf_dq_q6_K;
+            fn = gulliver::gguf_dq_q6_K;
             qk = 256;
             bytes = 210;
             break;

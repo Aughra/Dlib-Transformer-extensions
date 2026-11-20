@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-#include <dlib/data_io/gguf_reader.h>
+#include "../common/gguf_reader.h"
 
 #include "../common/json.h"
 
@@ -110,18 +110,18 @@ namespace gulliver
                 lignes de cols valeurs.  Renvoie false, sans rien encoder, pour un type sans noyau
                 (Q4_K, Q5_K, Q6_K et Q8_0 en ont un).
             !*/
-            bool matvec(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view x, unsigned tokens,
+            bool matvec(gulliver::ggml_type type, metal_view W, long rows, long cols, metal_view x, unsigned tokens,
                 unsigned x_stride, metal_view y, unsigned y_stride, float alpha = 1.0f, float beta = 0.0f);
 
             // Deux produits de matrices de même type et de mêmes colonnes sur les mêmes activations, W dans y
             // et W2 dans y2, en un seul dispatch (alpha 1, beta 0) ; rows un multiple de 16.
-            bool matvec2(dlib::ggml_type type, metal_view W, long rows, metal_view W2, long rows2, long cols,
+            bool matvec2(gulliver::ggml_type type, metal_view W, long rows, metal_view W2, long rows2, long cols,
                 metal_view x, unsigned tokens, unsigned x_stride, metal_view y, unsigned y_stride, metal_view y2,
                 unsigned y2_stride);
 
             // La ligne r de W (rows lignes de cols valeurs, type GGUF Q4_K ou Q6_K) développée en floats
             // dans out + r * out_stride, comme le fait qk_dequantize_row() ; false pour un autre type.
-            bool dequantize(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view out,
+            bool dequantize(gulliver::ggml_type type, metal_view W, long rows, long cols, metal_view out,
                 unsigned out_stride);
 
             /*!
@@ -134,7 +134,7 @@ namespace gulliver
             void gemm_half(metal_view X, unsigned rows, unsigned inner, unsigned x_stride, metal_view Wh, unsigned cols,
                 unsigned w_stride, metal_view Y, unsigned y_stride, float alpha = 1.0f, float beta = 0.0f);
             void to_half(metal_view x, unsigned rows, unsigned cols, unsigned x_stride, metal_view y, unsigned y_stride);
-            bool dequantize_half(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view out, unsigned out_stride);
+            bool dequantize_half(gulliver::ggml_type type, metal_view W, long rows, long cols, metal_view out, unsigned out_stride);
             void gemm(metal_view X, unsigned rows, unsigned inner, unsigned x_stride, metal_view Wf, unsigned cols,
                 unsigned w_stride, metal_view Y, unsigned y_stride, float alpha = 1.0f, float beta = 0.0f);
 
@@ -257,7 +257,7 @@ namespace gulliver
                 ids[s] (int32) d'un tenseur d'experts dont W est le premier et expert_bytes le pas,
                 sur la ligne s / x_div de x ; false pour un type sans noyau.
             !*/
-            bool matvec_id(dlib::ggml_type type, metal_view W, long rows, long cols, uint64_t expert_bytes,
+            bool matvec_id(gulliver::ggml_type type, metal_view W, long rows, long cols, uint64_t expert_bytes,
                 metal_view x, unsigned x_stride, unsigned x_div, metal_view ids, unsigned slots, metal_view y,
                 unsigned y_stride);
             /*!
@@ -272,7 +272,7 @@ namespace gulliver
             void moe_group(metal_view ids, unsigned slots, unsigned experts, unsigned capacity, metal_view list,
                 metal_view counts, metal_view work, metal_view dispatch, unsigned rows_a, unsigned rows_b);
             static unsigned moe_tiles_most(unsigned slots, unsigned experts);
-            bool matmul_id(dlib::ggml_type type, metal_view W, long rows, long cols, uint64_t expert_bytes,
+            bool matmul_id(gulliver::ggml_type type, metal_view W, long rows, long cols, uint64_t expert_bytes,
                 uint64_t row_bytes, metal_view x, unsigned x_stride, unsigned x_div, metal_view list, metal_view counts,
                 metal_view work, unsigned capacity, metal_view dispatch, unsigned which, metal_view y, unsigned y_stride);
             // y[t * y_stride + r] = sum_i W[r][i] x[t * x_stride + i], W en floats (le routeur).

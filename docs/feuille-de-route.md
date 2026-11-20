@@ -23,9 +23,9 @@ Relevé le 2026-11-19 : 10 fichiers d'en-tête, et le moteur n'utilise pas la pa
 |---|---|---|
 | ~~Bibliothèques d'autres projets~~ | ~~`external/httplib`, sqlite, `external/libpng`, `external/libjpeg`, mbedtls~~ — **copiées telles quelles dans `gulliver/third_party/` le 2026-11-20 (Gulliver 6.8.1)** | 21 Mo |
 | ~~SHA-256~~ | ~~`crypto/sha256.h`~~ — **fait le 2026-11-19 (Gulliver 6.4.1)** : `engine/image_input.cpp` passe par CommonCrypto, comme `host/crypto.cpp` ; test `test_image_input` | 326 lignes |
-| Lecture des ZIP, enveloppe de sqlite | `zip/`, `sqlite/` | petites |
-| Lecture des GGUF | `data_io/gguf_reader.h`, `gguf_dequantize.h`, `gguf_model_spec.h` | 1 411 lignes |
-| Tokenizer | `tokenizer/hf_tokenizer.h` | 1 166 lignes |
+| ~~Lecture des ZIP, enveloppe de sqlite~~ | ~~`zip/`, `sqlite/`~~ — **fait le 2026-11-20 (Gulliver 6.12.0)** : `host/zip_reader.h` (le lecteur de dlib, décompression et CRC par la zlib de macOS), `host/sqlite_db.h` (l'enveloppe, sur le SQLite de macOS, ouvert en mode « serialized ») | petites |
+| ~~Lecture des GGUF~~ | ~~`data_io/gguf_reader.h`, `gguf_dequantize.h`, `gguf_model_spec.h`~~ — **fait le 2026-11-20 (6.12.0)** : `common/gguf_reader.h` (avec `clean_model_name`, seule fonction prise à `gguf_model_spec.h`), `common/gguf_dequantize.h` | 1 411 lignes |
+| ~~Tokenizer~~ | ~~`tokenizer/hf_tokenizer.h`~~ — **fait le 2026-11-20 (6.12.0)** : `engine/hf_tokenizer.h`, `engine/hf_unicode.h`, sans la sérialisation de dlib | 1 166 lignes |
 
 ### L'ordre, un morceau par fin de chantier
 
@@ -33,11 +33,11 @@ Relevé le 2026-11-19 : 10 fichiers d'en-tête, et le moteur n'utilise pas la pa
 |---|---|---|---|
 | 1 | ~~SHA-256 → CommonCrypto d'Apple~~ **fait (6.4.1)** | `host/`, `engine/` | Le service s'en servait déjà (4.2.0) ; restait l'empreinte des images du moteur |
 | 2 | ~~Bibliothèques d'autres projets~~ **fait (6.8.1)** | `gulliver/third_party/` | aucune ligne changée ; le build de Gulliver ne construit plus dlib (copiées et non déplacées : dlib et Pseudalis s'en servent encore) |
-| 3 | Lecture des ZIP, enveloppe de sqlite | `host/` | |
-| 4 | Lecture des GGUF | `engine/` | premières optimisations |
-| 5 | Tokenizer | là où le moteur et le service le partagent | optimisable ensuite, notamment pour le français |
+| 3 | ~~Lecture des ZIP, enveloppe de sqlite~~ **fait (6.12.0)** | `host/` | demande de l'humain du 2026-11-20 : les morceaux 3 à 5 faits ensemble |
+| 4 | ~~Lecture des GGUF~~ **fait (6.12.0)** | `common/` | optimisations à venir |
+| 5 | ~~Tokenizer~~ **fait (6.12.0)** | `engine/` | optimisable ensuite, notamment pour le français |
 
-Après le morceau 5, Gulliver (service et moteur) ne dépend plus de dlib.
+**Depuis Gulliver 6.12.0 (2026-11-20), Gulliver (service et moteur) ne lit plus rien de dlib** : son build n'a plus de chemin d'inclusion vers dlib, et la liste des en-têtes que lit la compilation n'en contient aucun (`ninja -t deps`). Il vit encore dans le dossier de dlib (`dlib/dlib/external/gulliver`). Le code repris garde la licence de dlib (Boost), copiée dans `resources/dlib-license.txt`.
 
 ### L'atelier, de la même façon
 

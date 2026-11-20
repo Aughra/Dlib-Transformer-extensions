@@ -2,7 +2,7 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 /*
     Vérifie les noyaux quantifiés du moteur par rapport à la déquantification de référence de
-    dlib (dlib/data_io/gguf_dequantize.h).
+    gguf_dequantize.h (common/, repris de dlib).
 
     Pour chaque format de poids, des blocs aléatoires sont générés, une ligne d'activations est
     quantifiée dans le format qu'attend le noyau, et le produit scalaire entier est comparé au
@@ -25,13 +25,13 @@
 #include <thread>
 #include <vector>
 
-#include <dlib/data_io/gguf_dequantize.h>
+#include "../common/gguf_dequantize.h"
 
 #include "../engine/qkernels.h"
 #include "../engine/thread_pool.h"
 
 using namespace gulliver;
-using dlib::ggml_type;
+using gulliver::ggml_type;
 
 namespace
 {
@@ -201,7 +201,7 @@ namespace
         }
     }
 
-    // Le développement des formats qui ont un noyau vectoriel à eux, bit pour bit celui de dlib.
+    // Le développement des formats qui ont un noyau vectoriel à eux, bit pour bit celui de gguf_dequantize.h.
     void test_dequantization(std::mt19937& rng)
     {
         for (const fmt& f : formats())
@@ -215,11 +215,11 @@ namespace
                 std::vector<float> got(static_cast<size_t>(n)), ref(static_cast<size_t>(n));
                 qk_dequantize_row(f.type, w.data(), got.data(), n);
                 for (long b = 0; b < n / f.block; ++b)
-                    dlib::gguf_dq_q6_K(w.data() + b * f.bytes, ref.data() + b * f.block);
+                    gulliver::gguf_dq_q6_K(w.data() + b * f.bytes, ref.data() + b * f.block);
                 if (std::memcmp(got.data(), ref.data(), sizeof(float) * got.size()) != 0) ++differ;
             }
-            check(differ == 0, "expansion bit for bit with dlib", static_cast<double>(differ), 0);
-            std::printf("  expansion %-7s compared with dlib on 50 rows\n", f.name);
+            check(differ == 0, "expansion bit for bit with gguf_dequantize", static_cast<double>(differ), 0);
+            std::printf("  expansion %-7s compared with gguf_dequantize on 50 rows\n", f.name);
         }
     }
 

@@ -7,7 +7,7 @@
 #include <ctime>
 #include <stdexcept>
 
-#include <dlib/sqlite.h>
+#include "sqlite_db.h"
 
 #include "../common/log.h"
 #include "../common/platform.h"
@@ -21,7 +21,7 @@ namespace gulliver
         const char* const model_columns = "id, name, file, size, sha256, source, installed_at, verified_at, "
             "descriptor, projector, projector_size, projector_sha256";
 
-        installed_model model_of(dlib::statement& st)
+        installed_model model_of(gulliver::statement& st)
         {
             installed_model m;
             m.id = st.get_column_as_text(0);
@@ -50,7 +50,7 @@ namespace gulliver
             de côté et en commence une nouvelle, plutôt que dans les requêtes qui suivent.
         */
         {
-            dlib::statement st(*db_, "PRAGMA quick_check");
+            gulliver::statement st(*db_, "PRAGMA quick_check");
             st.exec();
             const std::string result = st.move_next() ? st.get_column_as_text(0) : std::string("no answer");
             if (result != "ok") throw std::runtime_error("database disk image is malformed (" + result + ")");
@@ -65,7 +65,7 @@ namespace gulliver
         // Les colonnes des projecteurs, qui manquent aux bases des versions antérieures.
         std::vector<std::string> columns;
         {
-            dlib::statement st(*db_, "PRAGMA table_info(models)");
+            gulliver::statement st(*db_, "PRAGMA table_info(models)");
             st.exec();
             while (st.move_next()) columns.push_back(st.get_column_as_text(1));
         }
@@ -145,7 +145,7 @@ namespace gulliver
         // passage appartient à un index (vide = l'index par défaut, pour les passages d'avant).
         {
             std::vector<std::string> cols;
-            dlib::statement st(*db_, "PRAGMA table_info(profile_chunks)");
+            gulliver::statement st(*db_, "PRAGMA table_info(profile_chunks)");
             st.exec();
             while (st.move_next()) cols.push_back(st.get_column_as_text(1));
             if (std::find(cols.begin(), cols.end(), "index_id") == cols.end())
@@ -170,7 +170,7 @@ namespace gulliver
 
     void store::connect()
     {
-        db_.reset(new dlib::database(path_));
+        db_.reset(new gulliver::database(path_));
         /*
             Une base qu'un autre programme tient un moment, une sauvegarde ou une copie du
             fichier par exemple, est attendue jusqu'à cinq secondes avant qu'une opération
@@ -180,6 +180,13 @@ namespace gulliver
         db_->exec("PRAGMA journal_mode=WAL");
         db_->exec("PRAGMA synchronous=NORMAL");
         db_->exec("PRAGMA foreign_keys=ON");
+        /*
+            Deux réglages que la copie de SQLite de Gulliver avait à la compilation, et que le
+            SQLite de macOS n'a pas (2026-11-20) : les données effacées sont recouvertes de zéros,
+            et les tables temporaires restent en mémoire.
+        */
+        db_->exec("PRAGMA secure_delete=ON");
+        db_->exec("PRAGMA temp_store=MEMORY");
     }
 
     void store::writing(const std::function<void()>& work)
@@ -203,7 +210,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<installed_model> out;
-        dlib::statement st(*db_, std::string("SELECT ") + model_columns + " FROM models ORDER BY name");
+        gulliver::statement st(*db_, std::string("SELECT ") + model_columns + " FROM models ORDER BY name");
         st.exec();
         while (st.move_next()) out.push_back(model_of(st));
         return out;
@@ -213,7 +220,7 @@ namespace gulliver
     {
         // La ligne du seul modèle, par sa clé, plutôt que tous les modèles avec leur description.
         std::lock_guard<std::mutex> lock(m_);
-        dlib::statement st(*db_, std::string("SELECT ") + model_columns + " FROM models WHERE id = ?");
+        gulliver::statement st(*db_, std::string("SELECT ") + model_columns + " FROM models WHERE id = ?");
         st.bind(1, id);
         st.exec();
         if (!st.move_next()) return false;
@@ -225,20 +232,20 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "INSERT OR REPLACE INTO models (id, name, file, size, sha256, source, "
+            gulliver::statement st(*db_, "INSERT OR REPLACE INTO models (id, name, file, size, sha256, source, "
                 "installed_at, verified_at, descriptor, projector, projector_size, projector_sha256) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             st.bind(1, m.id);
             st.bind(2, m.name);
             st.bind(3, m.file);
-            st.bind_int64(4, static_cast<dlib::int64>(m.size));
+            st.bind_int64(4, static_cast<std::int64_t>(m.size));
             st.bind(5, m.sha256);
             st.bind(6, m.source);
             st.bind_int64(7, m.installed_at);
             st.bind_int64(8, m.verified_at);
             st.bind(9, m.descriptor.dump());
             st.bind(10, m.projector);
-            st.bind_int64(11, static_cast<dlib::int64>(m.projector_size));
+            st.bind_int64(11, static_cast<std::int64_t>(m.projector_size));
             st.bind(12, m.projector_sha256);
             st.exec();
         });
@@ -248,7 +255,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<pending_projector> out;
-        dlib::statement st(*db_, "SELECT sha256, file, size, name, descriptor, received_at FROM projectors "
+        gulliver::statement st(*db_, "SELECT sha256, file, size, name, descriptor, received_at FROM projectors "
             "ORDER BY received_at");
         st.exec();
         while (st.move_next())
@@ -269,11 +276,11 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "INSERT OR REPLACE INTO projectors (sha256, file, size, name, descriptor, "
+            gulliver::statement st(*db_, "INSERT OR REPLACE INTO projectors (sha256, file, size, name, descriptor, "
                 "received_at) VALUES (?, ?, ?, ?, ?, ?)");
             st.bind(1, p.sha256);
             st.bind(2, p.file);
-            st.bind_int64(3, static_cast<dlib::int64>(p.size));
+            st.bind_int64(3, static_cast<std::int64_t>(p.size));
             st.bind(4, p.name);
             st.bind(5, p.descriptor.dump());
             st.bind_int64(6, p.received_at);
@@ -285,7 +292,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "DELETE FROM projectors WHERE sha256 = ?");
+            gulliver::statement st(*db_, "DELETE FROM projectors WHERE sha256 = ?");
             st.bind(1, sha256);
             st.exec();
         });
@@ -295,7 +302,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "DELETE FROM models WHERE id = ?");
+            gulliver::statement st(*db_, "DELETE FROM models WHERE id = ?");
             st.bind(1, id);
             st.exec();
         });
@@ -305,7 +312,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "UPDATE models SET verified_at = ? WHERE id = ?");
+            gulliver::statement st(*db_, "UPDATE models SET verified_at = ? WHERE id = ?");
             st.bind_int64(1, when);
             st.bind(2, id);
             st.exec();
@@ -315,7 +322,7 @@ namespace gulliver
     json store::download_state(const std::string& id)
     {
         std::lock_guard<std::mutex> lock(m_);
-        dlib::statement st(*db_, "SELECT state FROM downloads WHERE id = ?");
+        gulliver::statement st(*db_, "SELECT state FROM downloads WHERE id = ?");
         st.bind(1, id);
         st.exec();
         if (st.move_next()) return json::parse_or_null(st.get_column_as_text(0));
@@ -326,7 +333,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "INSERT OR REPLACE INTO downloads (id, state, updated_at) VALUES (?, ?, ?)");
+            gulliver::statement st(*db_, "INSERT OR REPLACE INTO downloads (id, state, updated_at) VALUES (?, ?, ?)");
             st.bind(1, id);
             st.bind(2, state.dump());
             st.bind_int64(3, now_unix());
@@ -338,7 +345,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "DELETE FROM downloads WHERE id = ?");
+            gulliver::statement st(*db_, "DELETE FROM downloads WHERE id = ?");
             st.bind(1, id);
             st.exec();
         });
@@ -348,7 +355,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<std::string> out;
-        dlib::statement st(*db_, "SELECT id FROM downloads ORDER BY updated_at");
+        gulliver::statement st(*db_, "SELECT id FROM downloads ORDER BY updated_at");
         st.exec();
         while (st.move_next()) out.push_back(st.get_column_as_text(0));
         return out;
@@ -359,7 +366,7 @@ namespace gulliver
         const std::string day = iso_time(now_unix()).substr(0, 10);
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_,
+            gulliver::statement st(*db_,
                 "INSERT INTO usage (day, prompt_tokens, generated_tokens, requests) VALUES (?, ?, ?, ?) "
                 "ON CONFLICT(day) DO UPDATE SET prompt_tokens = prompt_tokens + excluded.prompt_tokens, "
                 "generated_tokens = generated_tokens + excluded.generated_tokens, "
@@ -376,7 +383,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         json out = json::array();
-        dlib::statement st(*db_,
+        gulliver::statement st(*db_,
             "SELECT day, prompt_tokens, generated_tokens, requests FROM usage ORDER BY day DESC LIMIT ?");
         st.bind(1, days);
         st.exec();
@@ -395,7 +402,7 @@ namespace gulliver
     std::string store::value(const std::string& key, const std::string& def)
     {
         std::lock_guard<std::mutex> lock(m_);
-        dlib::statement st(*db_, "SELECT value FROM settings WHERE key = ?");
+        gulliver::statement st(*db_, "SELECT value FROM settings WHERE key = ?");
         st.bind(1, key);
         st.exec();
         if (st.move_next()) return st.get_column_as_text(0);
@@ -406,7 +413,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
+            gulliver::statement st(*db_, "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
             st.bind(1, key);
             st.bind(2, v);
             st.exec();
@@ -419,7 +426,7 @@ namespace gulliver
     namespace
     {
         // Une ligne de la table profiles lue dans l'ordre des colonnes de profile_columns.
-        profile profile_of(dlib::statement& st)
+        profile profile_of(gulliver::statement& st)
         {
             profile p;
             p.id = st.get_column_as_text(0);
@@ -435,7 +442,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<profile> out;
-        dlib::statement st(*db_, std::string("SELECT ") + profile_columns +
+        gulliver::statement st(*db_, std::string("SELECT ") + profile_columns +
             " FROM profiles ORDER BY last_used DESC, name");
         st.exec();
         while (st.move_next()) out.push_back(profile_of(st));
@@ -445,7 +452,7 @@ namespace gulliver
     bool store::find_profile(const std::string& id, profile& p)
     {
         std::lock_guard<std::mutex> lock(m_);
-        dlib::statement st(*db_, std::string("SELECT ") + profile_columns + " FROM profiles WHERE id = ?");
+        gulliver::statement st(*db_, std::string("SELECT ") + profile_columns + " FROM profiles WHERE id = ?");
         st.bind(1, id);
         st.exec();
         if (!st.move_next()) return false;
@@ -456,7 +463,7 @@ namespace gulliver
     bool store::find_profile_by_name(const std::string& name, profile& p)
     {
         std::lock_guard<std::mutex> lock(m_);
-        dlib::statement st(*db_, std::string("SELECT ") + profile_columns + " FROM profiles WHERE name = ?");
+        gulliver::statement st(*db_, std::string("SELECT ") + profile_columns + " FROM profiles WHERE name = ?");
         st.bind(1, name);
         st.exec();
         if (!st.move_next()) return false;
@@ -472,7 +479,7 @@ namespace gulliver
         // conflit de nom, donc effacé ce profil-là ; on ne l'utilise pas pour cette raison.)
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "INSERT INTO profiles (id, name, created, last_used) VALUES (?, ?, ?, ?) "
+            gulliver::statement st(*db_, "INSERT INTO profiles (id, name, created, last_used) VALUES (?, ?, ?, ?) "
                 "ON CONFLICT(id) DO UPDATE SET name = excluded.name, last_used = excluded.last_used");
             st.bind(1, p.id);
             st.bind(2, p.name);
@@ -486,7 +493,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "DELETE FROM profiles WHERE id = ?");
+            gulliver::statement st(*db_, "DELETE FROM profiles WHERE id = ?");
             st.bind(1, id);
             st.exec();
         });
@@ -496,7 +503,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "UPDATE profiles SET last_used = ? WHERE id = ?");
+            gulliver::statement st(*db_, "UPDATE profiles SET last_used = ? WHERE id = ?");
             st.bind_int64(1, when);
             st.bind(2, id);
             st.exec();
@@ -510,7 +517,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<std::string> out;
-        dlib::statement st(*db_, "SELECT doc FROM profile_conversations WHERE profile = ? ORDER BY updated DESC");
+        gulliver::statement st(*db_, "SELECT doc FROM profile_conversations WHERE profile = ? ORDER BY updated DESC");
         st.bind(1, profile);
         st.exec();
         while (st.move_next()) out.push_back(st.get_column_as_text(0));
@@ -520,7 +527,7 @@ namespace gulliver
     bool store::get_conversation(const std::string& profile, const std::string& id, std::string& doc)
     {
         std::lock_guard<std::mutex> lock(m_);
-        dlib::statement st(*db_, "SELECT doc FROM profile_conversations WHERE profile = ? AND id = ?");
+        gulliver::statement st(*db_, "SELECT doc FROM profile_conversations WHERE profile = ? AND id = ?");
         st.bind(1, profile);
         st.bind(2, id);
         st.exec();
@@ -539,7 +546,7 @@ namespace gulliver
             {
                 // La révision optimiste : la valeur en base doit être celle qu'on croyait avoir lue,
                 // ou la ligne doit être absente et expected_updated == 0.
-                dlib::statement cur(*db_, "SELECT updated FROM profile_conversations WHERE profile = ? AND id = ?");
+                gulliver::statement cur(*db_, "SELECT updated FROM profile_conversations WHERE profile = ? AND id = ?");
                 cur.bind(1, profile);
                 cur.bind(2, id);
                 cur.exec();
@@ -549,7 +556,7 @@ namespace gulliver
                 }
                 else if (expected_updated != 0) { ok = false; return; }
             }
-            dlib::statement st(*db_, "INSERT OR REPLACE INTO profile_conversations (profile, id, project, updated, doc) "
+            gulliver::statement st(*db_, "INSERT OR REPLACE INTO profile_conversations (profile, id, project, updated, doc) "
                 "VALUES (?, ?, ?, ?, ?)");
             st.bind(1, profile);
             st.bind(2, id);
@@ -565,7 +572,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "DELETE FROM profile_conversations WHERE profile = ? AND id = ?");
+            gulliver::statement st(*db_, "DELETE FROM profile_conversations WHERE profile = ? AND id = ?");
             st.bind(1, profile);
             st.bind(2, id);
             st.exec();
@@ -576,7 +583,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<std::string> out;
-        dlib::statement st(*db_, "SELECT doc FROM profile_projects WHERE profile = ? ORDER BY name");
+        gulliver::statement st(*db_, "SELECT doc FROM profile_projects WHERE profile = ? ORDER BY name");
         st.bind(1, profile);
         st.exec();
         while (st.move_next()) out.push_back(st.get_column_as_text(0));
@@ -586,7 +593,7 @@ namespace gulliver
     bool store::get_project(const std::string& profile, const std::string& id, std::string& doc)
     {
         std::lock_guard<std::mutex> lock(m_);
-        dlib::statement st(*db_, "SELECT doc FROM profile_projects WHERE profile = ? AND id = ?");
+        gulliver::statement st(*db_, "SELECT doc FROM profile_projects WHERE profile = ? AND id = ?");
         st.bind(1, profile);
         st.bind(2, id);
         st.exec();
@@ -600,7 +607,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "INSERT OR REPLACE INTO profile_projects (profile, id, name, doc) "
+            gulliver::statement st(*db_, "INSERT OR REPLACE INTO profile_projects (profile, id, name, doc) "
                 "VALUES (?, ?, ?, ?)");
             st.bind(1, profile);
             st.bind(2, id);
@@ -615,11 +622,11 @@ namespace gulliver
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
             // Les discussions du projet sont détachées (project vide), puis le projet est supprimé.
-            dlib::statement detach(*db_, "UPDATE profile_conversations SET project = '' WHERE profile = ? AND project = ?");
+            gulliver::statement detach(*db_, "UPDATE profile_conversations SET project = '' WHERE profile = ? AND project = ?");
             detach.bind(1, profile);
             detach.bind(2, id);
             detach.exec();
-            dlib::statement st(*db_, "DELETE FROM profile_projects WHERE profile = ? AND id = ?");
+            gulliver::statement st(*db_, "DELETE FROM profile_projects WHERE profile = ? AND id = ?");
             st.bind(1, profile);
             st.bind(2, id);
             st.exec();
@@ -630,7 +637,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         json out = json::object();
-        dlib::statement st(*db_, "SELECT key, value FROM profile_page_settings WHERE profile = ?");
+        gulliver::statement st(*db_, "SELECT key, value FROM profile_page_settings WHERE profile = ?");
         st.bind(1, profile);
         st.exec();
         while (st.move_next()) out[st.get_column_as_text(0)] = st.get_column_as_text(1);
@@ -641,7 +648,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "INSERT OR REPLACE INTO profile_page_settings (profile, key, value) "
+            gulliver::statement st(*db_, "INSERT OR REPLACE INTO profile_page_settings (profile, key, value) "
                 "VALUES (?, ?, ?)");
             st.bind(1, profile);
             st.bind(2, key);
@@ -657,7 +664,7 @@ namespace gulliver
     {
         const char* const chunk_columns = "id, owner, doc, ordinal, name, where_, start_, end_, text, model, vector";
 
-        chunk_record chunk_of(dlib::statement& st)
+        chunk_record chunk_of(gulliver::statement& st)
         {
             chunk_record c;
             c.id = st.get_column_as_text(0);
@@ -680,9 +687,9 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::transaction t(*db_);
+            gulliver::transaction t(*db_);
             {
-                dlib::statement del(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND doc = ? AND index_id = ?");
+                gulliver::statement del(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND doc = ? AND index_id = ?");
                 del.bind(1, profile);
                 del.bind(2, doc);
                 del.bind(3, index_id);
@@ -690,7 +697,7 @@ namespace gulliver
             }
             for (const chunk_record& c : records)
             {
-                dlib::statement st(*db_, "INSERT INTO profile_chunks "
+                gulliver::statement st(*db_, "INSERT INTO profile_chunks "
                     "(profile, id, owner, doc, ordinal, name, where_, start_, end_, text, model, vector, index_id) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 st.bind(1, profile);
@@ -717,7 +724,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<chunk_record> out;
-        dlib::statement st(*db_, std::string("SELECT ") + chunk_columns +
+        gulliver::statement st(*db_, std::string("SELECT ") + chunk_columns +
             " FROM profile_chunks WHERE profile = ? AND owner = ? AND index_id = ? ORDER BY doc, ordinal");
         st.bind(1, profile);
         st.bind(2, owner);
@@ -732,7 +739,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<chunk_record> out;
-        dlib::statement st(*db_, std::string("SELECT ") + chunk_columns +
+        gulliver::statement st(*db_, std::string("SELECT ") + chunk_columns +
             " FROM profile_chunks WHERE profile = ? AND doc = ? AND index_id = ? ORDER BY ordinal");
         st.bind(1, profile);
         st.bind(2, doc);
@@ -749,7 +756,7 @@ namespace gulliver
         std::vector<chunk_status_row> out;
         // Par document : le nombre de passages, ceux dont le vecteur est du modèle demandé, et un
         // modèle représentatif.  Le comptage se fait en SQL, sans transférer les vecteurs.
-        dlib::statement st(*db_,
+        gulliver::statement st(*db_,
             "SELECT doc, COUNT(*), SUM(CASE WHEN vector IS NOT NULL AND model = ? THEN 1 ELSE 0 END), MAX(model) "
             "FROM profile_chunks WHERE profile = ? AND owner = ? AND index_id = ? GROUP BY doc");
         st.bind(1, model);
@@ -774,7 +781,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<std::pair<std::string, std::string>> out;
-        dlib::statement st(*db_, "SELECT DISTINCT owner, doc FROM profile_chunks WHERE profile = ? AND index_id = ?");
+        gulliver::statement st(*db_, "SELECT DISTINCT owner, doc FROM profile_chunks WHERE profile = ? AND index_id = ?");
         st.bind(1, profile);
         st.bind(2, index_id);
         st.exec();
@@ -787,7 +794,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND owner = ? AND index_id = ?");
+            gulliver::statement st(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND owner = ? AND index_id = ?");
             st.bind(1, profile);
             st.bind(2, owner);
             st.bind(3, index_id);
@@ -800,7 +807,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND doc = ? AND index_id = ?");
+            gulliver::statement st(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND doc = ? AND index_id = ?");
             st.bind(1, profile);
             st.bind(2, doc);
             st.bind(3, index_id);
@@ -813,7 +820,7 @@ namespace gulliver
 
     namespace
     {
-        index_record index_of(dlib::statement& st)
+        index_record index_of(gulliver::statement& st)
         {
             index_record r;
             r.id = st.get_column_as_text(0);
@@ -832,7 +839,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<index_record> out;
-        dlib::statement st(*db_, std::string("SELECT ") + index_columns +
+        gulliver::statement st(*db_, std::string("SELECT ") + index_columns +
             " FROM profile_indexes WHERE profile = ? ORDER BY created");
         st.bind(1, profile);
         st.exec();
@@ -843,7 +850,7 @@ namespace gulliver
     bool store::find_index(const std::string& profile, const std::string& id, index_record& out)
     {
         std::lock_guard<std::mutex> lock(m_);
-        dlib::statement st(*db_, std::string("SELECT ") + index_columns +
+        gulliver::statement st(*db_, std::string("SELECT ") + index_columns +
             " FROM profile_indexes WHERE profile = ? AND id = ?");
         st.bind(1, profile);
         st.bind(2, id);
@@ -856,7 +863,7 @@ namespace gulliver
     std::string store::active_index(const std::string& profile)
     {
         std::lock_guard<std::mutex> lock(m_);
-        dlib::statement st(*db_, "SELECT id FROM profile_indexes WHERE profile = ? AND active = 1 LIMIT 1");
+        gulliver::statement st(*db_, "SELECT id FROM profile_indexes WHERE profile = ? AND active = 1 LIMIT 1");
         st.bind(1, profile);
         st.exec();
         return st.move_next() ? st.get_column_as_text(0) : std::string();
@@ -866,7 +873,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "INSERT OR REPLACE INTO profile_indexes "
+            gulliver::statement st(*db_, "INSERT OR REPLACE INTO profile_indexes "
                 "(profile, id, name, embed_model, passage_chars, overlap_chars, created, active) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
             st.bind(1, profile);
@@ -885,14 +892,14 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::transaction t(*db_);
+            gulliver::transaction t(*db_);
             {
-                dlib::statement off(*db_, "UPDATE profile_indexes SET active = 0 WHERE profile = ?");
+                gulliver::statement off(*db_, "UPDATE profile_indexes SET active = 0 WHERE profile = ?");
                 off.bind(1, profile);
                 off.exec();
             }
             {
-                dlib::statement on(*db_, "UPDATE profile_indexes SET active = 1 WHERE profile = ? AND id = ?");
+                gulliver::statement on(*db_, "UPDATE profile_indexes SET active = 1 WHERE profile = ? AND id = ?");
                 on.bind(1, profile);
                 on.bind(2, id);
                 on.exec();
@@ -905,15 +912,15 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::transaction t(*db_);
+            gulliver::transaction t(*db_);
             {
-                dlib::statement chunks(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND index_id = ?");
+                gulliver::statement chunks(*db_, "DELETE FROM profile_chunks WHERE profile = ? AND index_id = ?");
                 chunks.bind(1, profile);
                 chunks.bind(2, id);
                 chunks.exec();
             }
             {
-                dlib::statement idx(*db_, "DELETE FROM profile_indexes WHERE profile = ? AND id = ?");
+                gulliver::statement idx(*db_, "DELETE FROM profile_indexes WHERE profile = ? AND id = ?");
                 idx.bind(1, profile);
                 idx.bind(2, id);
                 idx.exec();
@@ -929,7 +936,7 @@ namespace gulliver
     {
         const char* const image_columns = "id, owner, name, type, size, width, height, added, blob_bytes, thumb_bytes";
 
-        image_record image_of(dlib::statement& st)
+        image_record image_of(gulliver::statement& st)
         {
             image_record r;
             r.id = st.get_column_as_text(0);
@@ -950,7 +957,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         std::vector<image_record> out;
-        dlib::statement st(*db_, std::string("SELECT ") + image_columns +
+        gulliver::statement st(*db_, std::string("SELECT ") + image_columns +
             " FROM profile_images WHERE profile = ? AND owner = ? ORDER BY added");
         st.bind(1, profile);
         st.bind(2, owner);
@@ -962,7 +969,7 @@ namespace gulliver
     bool store::find_image(const std::string& profile, const std::string& id, image_record& out)
     {
         std::lock_guard<std::mutex> lock(m_);
-        dlib::statement st(*db_, std::string("SELECT ") + image_columns + " FROM profile_images WHERE profile = ? AND id = ?");
+        gulliver::statement st(*db_, std::string("SELECT ") + image_columns + " FROM profile_images WHERE profile = ? AND id = ?");
         st.bind(1, profile);
         st.bind(2, id);
         st.exec();
@@ -975,7 +982,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "INSERT OR REPLACE INTO profile_images "
+            gulliver::statement st(*db_, "INSERT OR REPLACE INTO profile_images "
                 "(profile, id, owner, name, type, size, width, height, added, blob_bytes, thumb_bytes) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             st.bind(1, profile);
@@ -997,7 +1004,7 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            dlib::statement st(*db_, "DELETE FROM profile_images WHERE profile = ? AND id = ?");
+            gulliver::statement st(*db_, "DELETE FROM profile_images WHERE profile = ? AND id = ?");
             st.bind(1, profile);
             st.bind(2, id);
             st.exec();
@@ -1009,14 +1016,14 @@ namespace gulliver
         std::lock_guard<std::mutex> lock(m_);
         std::vector<std::string> ids;
         {
-            dlib::statement st(*db_, "SELECT id FROM profile_images WHERE profile = ? AND owner = ?");
+            gulliver::statement st(*db_, "SELECT id FROM profile_images WHERE profile = ? AND owner = ?");
             st.bind(1, profile);
             st.bind(2, owner);
             st.exec();
             while (st.move_next()) ids.push_back(st.get_column_as_text(0));
         }
         writing([&]() {
-            dlib::statement st(*db_, "DELETE FROM profile_images WHERE profile = ? AND owner = ?");
+            gulliver::statement st(*db_, "DELETE FROM profile_images WHERE profile = ? AND owner = ?");
             st.bind(1, profile);
             st.bind(2, owner);
             st.exec();
@@ -1027,7 +1034,7 @@ namespace gulliver
     void store::image_usage(const std::string& profile, int64_t& count, int64_t& bytes)
     {
         std::lock_guard<std::mutex> lock(m_);
-        dlib::statement st(*db_, "SELECT COUNT(*), COALESCE(SUM(blob_bytes + thumb_bytes), 0) "
+        gulliver::statement st(*db_, "SELECT COUNT(*), COALESCE(SUM(blob_bytes + thumb_bytes), 0) "
             "FROM profile_images WHERE profile = ?");
         st.bind(1, profile);
         st.exec();

@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 6.11.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 6.12.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -48,8 +48,9 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
-get_filename_component(GULLIVER_DLIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
-get_filename_component(GULLIVER_INCLUDE_DIR "${GULLIVER_DLIB_DIR}/.." ABSOLUTE)
+# Gulliver ne lit plus rien de dlib (fil rouge, morceau 3, 2026-11-20) : le code qu'il en a repris est
+# dans common/ (lecture des GGUF), engine/ (tokenizer) et host/ (SQLite, ZIP), et la licence de dlib,
+# sous laquelle ce code reste, dans resources/dlib-license.txt.
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(GULLIVER_ENGINE_DIR ${CMAKE_BINARY_DIR}/bin/engines)
@@ -60,8 +61,7 @@ function(gulliver_output_dir target dir)
 endfunction()
 
 # Les bibliothèques d'autres projets vivent dans third_party/, copiées telles quelles de
-# dlib/external (fil rouge, morceau 2) : le build de Gulliver ne construit plus dlib, dont il ne
-# prend encore que des en-têtes (lecture des GGUF, tokenizer, ZIP, enveloppe de sqlite).
+# dlib/external (fil rouge, morceau 2) : le build de Gulliver ne construit plus dlib.
 set(GULLIVER_THIRD_PARTY "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 find_package(Threads REQUIRED)
 
@@ -121,7 +121,6 @@ set(GULLIVER_ENGINE_SOURCES
 
 # Les noyaux quantifiés (NEON, Accelerate), partagés par le moteur, les outils et les tests.
 add_library(gulliver-kernels OBJECT engine/qkernels.cpp)
-target_include_directories(gulliver-kernels PRIVATE ${GULLIVER_INCLUDE_DIR})
 target_compile_options(gulliver-kernels PRIVATE ${GULLIVER_WARNINGS})
 set_target_properties(gulliver-kernels PROPERTIES POSITION_INDEPENDENT_CODE ON
    C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
@@ -130,7 +129,6 @@ set_target_properties(gulliver-kernels PROPERTIES POSITION_INDEPENDENT_CODE ON
 function(gulliver_engine variant)
    set(target gulliver-engine-${variant})
    add_library(${target} SHARED ${GULLIVER_ENGINE_SOURCES} $<TARGET_OBJECTS:gulliver-kernels> ${ARGN})
-   target_include_directories(${target} PRIVATE ${GULLIVER_INCLUDE_DIR})
    target_compile_definitions(${target} PRIVATE GULLIVER_ENGINE_BUILD GULLIVER_ENGINE_VARIANT="${variant}")
    target_compile_options(${target} PRIVATE ${GULLIVER_WARNINGS})
    target_link_libraries(${target} PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
@@ -144,18 +142,15 @@ if (GULLIVER_PROGRAMS)
 endif()
 
 if (GULLIVER_PROGRAMS)
-   # Bibliothèque compilée dans les programmes : SQLite, de third_party ; zlib est celle de macOS.
-   add_library(gulliver_sqlite STATIC ${GULLIVER_THIRD_PARTY}/sqlite/sqlite3.c)
-   target_include_directories(gulliver_sqlite PUBLIC ${GULLIVER_THIRD_PARTY}/sqlite)
-   target_compile_definitions(gulliver_sqlite PRIVATE SQLITE_THREADSAFE=1 SQLITE_DQS=0 SQLITE_DEFAULT_MEMSTATUS=0
-      SQLITE_DEFAULT_WAL_SYNCHRONOUS=1 SQLITE_LIKE_DOESNT_MATCH_BLOBS SQLITE_TEMP_STORE=2 SQLITE_SECURE_DELETE
-      SQLITE_ENABLE_API_ARMOR SQLITE_ENABLE_FTS5 SQLITE_ENABLE_MATH_FUNCTIONS SQLITE_OMIT_LOAD_EXTENSION)
-   target_link_libraries(gulliver_sqlite PUBLIC ${CMAKE_DL_LIBS} m)
+   # SQLite et zlib sont ceux de macOS (fork, 2026-11-20 : plus de copie de SQLite).  L'enveloppe de
+   # Gulliver (host/sqlite_db.h) ouvre la base en mode « serialized » et pose les réglages que la copie
+   # avait à la compilation (host/store.cpp).
+   add_library(gulliver_sqlite INTERFACE)
+   target_link_libraries(gulliver_sqlite INTERFACE sqlite3)
 
    # Code partagé par le service et les outils.
    add_library(gulliver_common STATIC common/log.cpp common/platform.cpp common/system_info.cpp
       common/engine_loader.cpp)
-   target_include_directories(gulliver_common PUBLIC ${GULLIVER_INCLUDE_DIR})
    target_compile_options(gulliver_common PRIVATE ${GULLIVER_WARNINGS})
    target_link_libraries(gulliver_common PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
 
@@ -235,10 +230,10 @@ if (GULLIVER_PROGRAMS)
    # (fork pour macOS : l'installateur Windows de l'original les assemblait, cmake/payload.cmake).
    set(gulliver_licenses
       gulliver.txt     ${CMAKE_CURRENT_SOURCE_DIR}/resources/license.txt
-      dlib.txt        ${GULLIVER_INCLUDE_DIR}/LICENSE.txt
+      dlib.txt        ${CMAKE_CURRENT_SOURCE_DIR}/resources/dlib-license.txt
       mbedtls.txt     ${GULLIVER_THIRD_PARTY}/mbedtls/LICENSE
       cpp-httplib.txt ${GULLIVER_THIRD_PARTY}/httplib/LICENSE
-      sqlite.txt      ${GULLIVER_THIRD_PARTY}/sqlite/README.txt)
+      sqlite.txt      ${CMAKE_CURRENT_SOURCE_DIR}/resources/sqlite.txt)
    set(gulliver_license_commands)
    set(gulliver_license_sources)
    list(LENGTH gulliver_licenses gulliver_license_count)
@@ -278,7 +273,6 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
       else()
          add_executable(${t} tests/${t}.cpp engine/cpu_runtime.cpp engine/cpu_runtime_metal.cpp engine/metal_device.mm
             engine/model_config.cpp engine/model_file.cpp $<TARGET_OBJECTS:gulliver-kernels> common/system_info.cpp)
-         target_include_directories(${t} PRIVATE ${GULLIVER_INCLUDE_DIR})
          target_link_libraries(${t} PRIVATE Threads::Threads)
       endif()
       gulliver_output_dir(${t} ${CMAKE_BINARY_DIR}/tests)
@@ -286,17 +280,14 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    # Les noyaux Metal comparés au processeur, sur des données aléatoires (portage macOS).
    add_executable(test_metal tests/test_metal.cpp engine/metal_device.mm $<TARGET_OBJECTS:gulliver-kernels>
       common/system_info.cpp)
-   target_include_directories(test_metal PRIVATE ${GULLIVER_INCLUDE_DIR})
    target_compile_options(test_metal PRIVATE ${GULLIVER_WARNINGS})
    target_link_libraries(test_metal PRIVATE Threads::Threads)
    gulliver_output_dir(test_metal ${CMAKE_BINARY_DIR}/tests)
    # L'empreinte SHA-256 du moteur (CommonCrypto) et celle des images (fork pour macOS).
    add_executable(test_image_input tests/test_image_input.cpp engine/image_input.cpp)
-   target_include_directories(test_image_input PRIVATE ${GULLIVER_INCLUDE_DIR})
    target_compile_options(test_image_input PRIVATE ${GULLIVER_WARNINGS})
    gulliver_output_dir(test_image_input ${CMAKE_BINARY_DIR}/tests)
    # Le format de chat des agents : les prompts avec outils, et les appels d'outils relus.
    add_executable(test_chat_format tests/test_chat_format.cpp engine/chat_format.cpp)
-   target_include_directories(test_chat_format PRIVATE ${GULLIVER_INCLUDE_DIR})
    gulliver_output_dir(test_chat_format ${CMAKE_BINARY_DIR}/tests)
 endif()

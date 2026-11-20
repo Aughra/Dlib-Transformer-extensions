@@ -12,7 +12,7 @@
 
 #include "../common/json.h"
 
-namespace dlib { class database; }
+namespace gulliver { class database; }
 
 namespace gulliver
 {
@@ -260,7 +260,7 @@ namespace gulliver
 
         std::mutex m_;
         std::string path_;
-        std::unique_ptr<dlib::database> db_;
+        std::unique_ptr<database> db_;
     };
 
 }

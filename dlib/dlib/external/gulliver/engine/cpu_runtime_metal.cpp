@@ -99,14 +99,14 @@ namespace gulliver
     {
         bool gpu_format(const weight_matrix& W)
         {
-            return W.type == dlib::ggml_type::Q4_K || W.type == dlib::ggml_type::Q6_K;
+            return W.type == gulliver::ggml_type::Q4_K || W.type == gulliver::ggml_type::Q6_K;
         }
 
         // Les formats des produits d'une étape : Q5_K et Q8_0 en plus, qu'emploient les modèles qwen35.
         bool step_format(const weight_matrix& W)
         {
-            return gpu_format(W) || W.type == dlib::ggml_type::Q5_K || W.type == dlib::ggml_type::Q8_0
-                || W.type == dlib::ggml_type::Q5_0;
+            return gpu_format(W) || W.type == gulliver::ggml_type::Q5_K || W.type == gulliver::ggml_type::Q8_0
+                || W.type == gulliver::ggml_type::Q5_0;
         }
 
         metal_buffer need(metal_device& d, size_t bytes)
@@ -155,7 +155,7 @@ namespace gulliver
             : "weights in other formats than Q4_K and Q6_K";
         // Une matrice d'experts lue par colonnes de 256 valeurs, ou de 32 en Q8_0.
         auto expert_columns = [&](const weight_matrix& W) {
-            return W.cols % (W.type == dlib::ggml_type::Q8_0 || W.type == dlib::ggml_type::Q5_0 ? 32 : 256) == 0;
+            return W.cols % (W.type == gulliver::ggml_type::Q8_0 || W.type == gulliver::ggml_type::Q5_0 ? 32 : 256) == 0;
         };
         /*
             Gemma 3 passe au GPU depuis Gulliver 4.22.0, les étapes de Gemma 4 depuis Gulliver 4.26.0 (têtes de 256 et
@@ -182,8 +182,8 @@ namespace gulliver
         else if (cfg_.attn_temp_scale != 0.0) why = "a temperature of the attention";
         else if (cfg_.d_model % 256 != 0 || cfg_.d_ffn % 256 != 0 || cfg_.q_dim() % 256 != 0 || !layer_widths())
             why = "widths that are not multiples of 256";
-        else if (gemma4 && cfg_.d_per_layer > 0 && (cfg_.d_per_layer % 4 != 0 || layers_[0].ple_gate.type != dlib::ggml_type::F32
-            || layers_[0].ple_proj.type != dlib::ggml_type::F32))
+        else if (gemma4 && cfg_.d_per_layer > 0 && (cfg_.d_per_layer % 4 != 0 || layers_[0].ple_gate.type != gulliver::ggml_type::F32
+            || layers_[0].ple_proj.type != gulliver::ggml_type::F32))
             why = "per-layer inputs of this form";
         else if (!formats(output_)) why = "an output matrix in " + formats_why.substr(11);
         else
@@ -200,7 +200,7 @@ namespace gulliver
                 {
                     for (const weight_matrix* W : { &L.e_gate[0], &L.e_up[0], &L.e_down[0] }) all.push_back(W);
                     if (!L.sh_gate_inp.empty()) for (const weight_matrix* W : { &L.sh_gate, &L.sh_up, &L.sh_down }) all.push_back(W);
-                    if (L.router.type != dlib::ggml_type::F32) all.push_back(&L.router);
+                    if (L.router.type != gulliver::ggml_type::F32) all.push_back(&L.router);
                     if (!expert_columns(L.e_gate[0]) || !expert_columns(L.e_down[0]))
                         why = "experts of other widths than its kernels take";
                 }
@@ -209,7 +209,7 @@ namespace gulliver
                 // ssm_alpha et ssm_beta (2 048 x 32) restent en floats dans certains fichiers (Qwen3.6-35B-A3B
                 // UD-Q4_K_M d'unsloth) : le GPU les lit tels quels, comme le routeur (Gulliver 6.5.0).
                 for (const weight_matrix* W : all)
-                    if (!formats(*W) && !(W->type == dlib::ggml_type::F32 && (W == &L.w_alpha || W == &L.w_beta)))
+                    if (!formats(*W) && !(W->type == gulliver::ggml_type::F32 && (W == &L.w_alpha || W == &L.w_beta)))
                         why = formats_why;
             }
         if (!why.empty())
@@ -885,7 +885,7 @@ namespace gulliver
                            float alpha, float beta) {
             // Une matrice en floats dans le fichier (ssm_alpha, ssm_beta) : sans développement, par mv_f32 pour
             // une étape, par MPS pour un prompt.
-            if (M.type == dlib::ggml_type::F32)
+            if (M.type == gulliver::ggml_type::F32)
             {
                 if (step && alpha == 1.0f && beta == 0.0f)
                     c->matvec_f32(at(g.weights, g.weight(M)), static_cast<unsigned>(M.rows), static_cast<unsigned>(M.cols),
@@ -1064,7 +1064,7 @@ namespace gulliver
                 // pondérée ajoutée à x.
                 const long E = cfg_.n_experts, K = cfg_.n_experts_used, de = cfg_.d_ffn_expert;
                 const unsigned slots = uT * static_cast<unsigned>(K);
-                if (L.router.type == dlib::ggml_type::F32)
+                if (L.router.type == gulliver::ggml_type::F32)
                 {
                     // Le routeur, en floats dans le fichier : par MPS pour un prompt, sans développement.
                     if (step)

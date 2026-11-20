@@ -38,7 +38,7 @@
 #include <string>
 #include <vector>
 
-#include <dlib/tokenizer/hf_tokenizer.h>
+#include "../engine/hf_tokenizer.h"
 
 #include "../engine/cpu_runtime.h"
 #include "tiny_gguf.h"
@@ -93,7 +93,7 @@ namespace
         {
             auto file = std::make_shared<model_file>(path);
             const model_config cfg = read_model_config(*file);
-            dlib::hf_tokenizer tok;
+            gulliver::hf_tokenizer tok;
             tok.load_from_gguf(file->reader());
             if (static_cast<long>(tok.size()) != cfg.vocab) return "vocabulary";
             thread_pool pool(2);
@@ -165,7 +165,7 @@ namespace
     }
 
     // Les octets d'un tenseur lus par r, ou un vecteur vide avec la raison dans why.
-    std::vector<uint8_t> tensor_bytes(dlib::gguf_reader& r, const std::string& name, std::string& why)
+    std::vector<uint8_t> tensor_bytes(gulliver::gguf_reader& r, const std::string& name, std::string& why)
     {
         try
         {
@@ -256,12 +256,12 @@ namespace
         try
         {
             mapped_file m(path);
-            dlib::gguf_reader mapped(m.data(), m.size());
+            gulliver::gguf_reader mapped(m.data(), m.size());
             std::string why;
             expect(mapped.size() == size, "the mapped reader gives " + std::to_string(mapped.size()) + " bytes");
             expect(holds_pattern(tensor_bytes(mapped, "output_norm.weight", why), count),
                 "the mapped reader does not read the values of the tensor beyond 2 GiB " + why);
-            dlib::gguf_reader stream(path);
+            gulliver::gguf_reader stream(path);
             expect(stream.size() == size, "the file reader gives " + std::to_string(stream.size()) + " bytes");
             expect(holds_pattern(tensor_bytes(stream, "output_norm.weight", why), count),
                 "the file reader does not read the values of the tensor beyond 2 GiB " + why);

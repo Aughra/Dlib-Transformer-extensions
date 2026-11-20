@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <dlib/data_io/gguf_reader.h>
+#include "../common/gguf_reader.h"
 
 #include "qkernels.h"
 
@@ -48,7 +48,7 @@ namespace gulliver
     struct tensor_view
     {
         std::string name;
-        dlib::ggml_type type = dlib::ggml_type::F32;
+        gulliver::ggml_type type = gulliver::ggml_type::F32;
         std::vector<uint64_t> dims;   // ordre ggml, dims[0] contigu
         const uint8_t* data = nullptr;
         uint64_t nbytes = 0;
@@ -66,13 +66,13 @@ namespace gulliver
         /*!
             WHAT THIS OBJECT REPRESENTS
                 Un modèle GGUF ouvert pour l'inférence : ses métadonnées, analysées par
-                dlib::gguf_reader depuis le mappage, et une vue de chaque tenseur pointant
+                gulliver::gguf_reader depuis le mappage, et une vue de chaque tenseur pointant
                 dans le mappage.
         !*/
     public:
         explicit model_file(const std::string& utf8_path);
 
-        const dlib::gguf_reader& reader() const { return *reader_; }
+        const gulliver::gguf_reader& reader() const { return *reader_; }
         const std::string& path() const { return path_; }
         uint64_t size() const { return file_->size(); }
         // Le premier octet du mappage du fichier, sur une page : le GPU le prend en entier
@@ -104,7 +104,7 @@ namespace gulliver
     private:
         std::string path_;
         std::unique_ptr<mapped_file> file_;
-        std::unique_ptr<dlib::gguf_reader> reader_;
+        std::unique_ptr<gulliver::gguf_reader> reader_;
         std::vector<tensor_view> tensors_;
         std::unordered_map<std::string, size_t> index_;
     };

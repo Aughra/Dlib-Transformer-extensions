@@ -107,26 +107,26 @@ namespace gulliver
             return static_cast<long>(i);
         }
 
-        std::string type_name(dlib::ggml_type t)
+        std::string type_name(gulliver::ggml_type t)
         {
             switch (t)
             {
-            case dlib::ggml_type::F32: return "F32";
-            case dlib::ggml_type::F16: return "F16";
-            case dlib::ggml_type::BF16: return "BF16";
-            case dlib::ggml_type::Q4_0: return "Q4_0";
-            case dlib::ggml_type::Q4_1: return "Q4_1";
-            case dlib::ggml_type::Q5_0: return "Q5_0";
-            case dlib::ggml_type::Q5_1: return "Q5_1";
-            case dlib::ggml_type::Q8_0: return "Q8_0";
-            case dlib::ggml_type::Q8_1: return "Q8_1";
-            case dlib::ggml_type::Q2_K: return "Q2_K";
-            case dlib::ggml_type::Q3_K: return "Q3_K";
-            case dlib::ggml_type::Q4_K: return "Q4_K";
-            case dlib::ggml_type::Q5_K: return "Q5_K";
-            case dlib::ggml_type::Q6_K: return "Q6_K";
-            case dlib::ggml_type::Q8_K: return "Q8_K";
-            case dlib::ggml_type::IQ4_NL: return "IQ4_NL";
+            case gulliver::ggml_type::F32: return "F32";
+            case gulliver::ggml_type::F16: return "F16";
+            case gulliver::ggml_type::BF16: return "BF16";
+            case gulliver::ggml_type::Q4_0: return "Q4_0";
+            case gulliver::ggml_type::Q4_1: return "Q4_1";
+            case gulliver::ggml_type::Q5_0: return "Q5_0";
+            case gulliver::ggml_type::Q5_1: return "Q5_1";
+            case gulliver::ggml_type::Q8_0: return "Q8_0";
+            case gulliver::ggml_type::Q8_1: return "Q8_1";
+            case gulliver::ggml_type::Q2_K: return "Q2_K";
+            case gulliver::ggml_type::Q3_K: return "Q3_K";
+            case gulliver::ggml_type::Q4_K: return "Q4_K";
+            case gulliver::ggml_type::Q5_K: return "Q5_K";
+            case gulliver::ggml_type::Q6_K: return "Q6_K";
+            case gulliver::ggml_type::Q8_K: return "Q8_K";
+            case gulliver::ggml_type::IQ4_NL: return "IQ4_NL";
             }
             return "unknown";
         }
@@ -290,7 +290,7 @@ namespace gulliver
         std::string path;
         std::shared_ptr<model_file> file;
         model_config cfg;
-        dlib::hf_tokenizer tok;
+        gulliver::hf_tokenizer tok;
         std::unique_ptr<chat_format> format;
         std::unique_ptr<model_runtime> runtime;
         long context = 0;
@@ -2621,7 +2621,7 @@ namespace gulliver
         // La fin d'un raisonnement qu'écrit le moteur n'est pas un texte du modèle pour ses pénalités.
         if (!r.forcing) r.smp->accept(token);
         // Les tokens de contrôle ne sont pas du texte, sauf les marqueurs que lit l'analyseur de sortie.
-        if (m.tok.token_type(token) != dlib::hf_tokenizer::TT_CONTROL
+        if (m.tok.token_type(token) != gulliver::hf_tokenizer::TT_CONTROL
             || std::binary_search(m.format->marker_tokens().begin(), m.format->marker_tokens().end(), token))
             r.pending_bytes += m.tok.token_bytes(token);
         const size_t n = complete_utf8(r.pending_bytes);

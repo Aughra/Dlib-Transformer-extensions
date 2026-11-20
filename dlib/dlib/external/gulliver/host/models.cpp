@@ -22,7 +22,7 @@
 
 #include <zlib.h>
 
-#include <dlib/data_io/gguf_reader.h>
+#include "../common/gguf_reader.h"
 
 #include "../common/builtin_models.h"
 #include "../common/log.h"
@@ -329,7 +329,7 @@ namespace gulliver
         json d = json::object();
         try
         {
-            dlib::gguf_reader g(path);
+            gulliver::gguf_reader g(path);
             const std::string arch = g.get_str("general.architecture", "");
             d["name"] = g.get_str("general.name", file_name(path));
             d["gguf_name"] = g.get_str("general.name", "");
@@ -377,7 +377,7 @@ namespace gulliver
                     : width_of(g.get_int("clip.vision.projection_dim", 0), deepstack);
                 for (const char* last : { "mm.2.weight", "mm.0.weight" })
                 {
-                    const dlib::gguf_tensor_info* t = width > 0 ? nullptr : g.find_tensor(last);
+                    const gulliver::gguf_tensor_info* t = width > 0 ? nullptr : g.find_tensor(last);
                     if (t && t->dims.size() >= 2) width = width_of(static_cast<int64_t>(t->dims[1]), 0);
                 }
                 d["projection_width"] = width;
