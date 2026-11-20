@@ -1143,6 +1143,9 @@ int run_serve_dat(const std::string& dat_path,
    read against a reference implementation, and a per-position argmax that says where two
    runs first diverge. Worth having on an archive and not only on a container, since an
    archive is what a fine-tuning run consumes and produces. */
+/* Where --dump-logits writes the log-probabilities of every position, empty for none. */
+std::string dump_logits_path;
+
 int probe_prompt(generator_type& generator, hf_tokenizer& tok, const std::string& prompt)
 {
     /* Tokenize with the model's own declared conventions (tokenizer.ggml.add_bos_token
@@ -1190,6 +1193,25 @@ int probe_prompt(generator_type& generator, hf_tokenizer& tok, const std::string
         for (long i = 1; i < V; ++i) if (rp[i] > mx) { mx = rp[i]; am = i; }
         std::vector<int> one{ static_cast<int>(am) };
         cout << "  " << p << ": " << am << " '" << tok.decode(one, false) << "' " << mx << "\n";
+    }
+
+    /* The network ends with a softmax, so the rows written are log-probabilities: logits up to
+       a constant per row, which leaves a softmax, a KL divergence and an argmax unchanged. The
+       format is the one of gulliver/tests/reference_forward.py, raw float32 rows [position][vocab],
+       so that test_runtime can compare a runtime against the imported network. */
+    if (!dump_logits_path.empty())
+    {
+        std::vector<float> out(static_cast<size_t>(seq_len) * V);
+        for (long p = 0; p < seq_len; ++p)
+        {
+            const float* rp = probs.host() + tensor_index(probs, 0, 0, p, 0);
+            for (long i = 0; i < V; ++i)
+                out[static_cast<size_t>(p) * V + i] = std::log(std::max(rp[i], 1e-30f));
+        }
+        std::ofstream f(dump_logits_path, std::ios::binary);
+        f.write(reinterpret_cast<const char*>(out.data()), static_cast<std::streamsize>(out.size() * sizeof(float)));
+        if (!f) { cerr << "Error: cannot write " << dump_logits_path << "\n"; return 1; }
+        cout << "\nLog-probabilities of " << seq_len << " positions written to " << dump_logits_path << "\n";
     }
 
     network_context::reset();
@@ -1369,6 +1391,7 @@ int main(int argc, char** argv)
         parser.add_option("convert", "Load the model and serialize it to <out-prefix>.dat");
         parser.add_option("probe-logits", "Print the most probable next tokens for --prompt (weight validation)");
         parser.add_option("prompt", "Prompt used by --probe-logits (default: 'The capital of France is')", 1);
+        parser.add_option("dump-logits", "With --probe-logits, write the log-probabilities of every position as raw float32 rows to <arg>", 1);
         parser.add_option("probe-ids", "Print next-token predictions for an explicit space-separated id list", 1);
         parser.add_option("context", "KV cache length for --chat (default: 512)", 1);
         parser.add_option("temperature", "Sampling temperature (default: model template preset)", 1);
@@ -1467,6 +1490,10 @@ int main(int argc, char** argv)
             return 1;
 #endif
         }
+
+#ifdef WITH_IMPORTED_MODEL
+        if (parser.option("dump-logits")) dump_logits_path = parser.option("dump-logits").argument();
+#endif
 
         /* The probe over an archive: same five probabilities, no container needed. */
         if (parser.option("load") && parser.option("probe-logits"))

@@ -2,6 +2,20 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.8.2 — 20 novembre 2026
+
+### Atelier
+
+- Premier pas de l'atelier d'entraînement : un modèle GGUF importé en réseau dlib (le réseau que l'on pourra entraîner) est comparé au moteur de Gulliver par `tools/atelier/compare_dlib_import.sh`. Pour Qwen3-0.6B, les deux donnent les mêmes probabilités (divergence moyenne 4,2e-7 sur 25 positions, même token le plus probable partout).
+- `test_runtime` accepte des log-probabilités comme référence (`logprobs`).
+
+### Corrections
+
+- L'import d'un GGUF en réseau dlib s'arrêtait pour tout modèle (« assigned 170 of 171 parameter tensors ») : la table des embeddings était comptée deux fois. Corrigé dans dlib.
+- `test_runtime` exigeait, hors du mode exact, des résultats identiques au bit près entre une séquence seule et la même séquence dans un lot, alors que les deux ne passent pas forcément par les mêmes calculs (8 bits sous 16 tokens, Accelerate au-dessus) : il compare désormais leurs distributions. Il refuse aussi une suite de moins de 4 tokens au lieu de s'arrêter sur une erreur.
+
+---
+
 ## 6.8.1 — 20 novembre 2026
 
 ### Plateforme

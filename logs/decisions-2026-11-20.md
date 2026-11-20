@@ -2,6 +2,13 @@
 
 Consigne de l'humain, le matin : « ARRÊT les tests de perfs, et continue la roadmap ». Ce fichier dit ce que j'ai décidé seul, et pourquoi. Le plus récent est en haut.
 
+## 4. R1 commence par vérifier l'import de dlib, avec un petit Qwen3
+
+- **Quoi** : avant d'écrire du neuf, faire tourner ce que dlib a déjà (`slm_gguf_import_ex`) sur un petit modèle de la famille la mieux couverte, Qwen3-0.6B (640 Mo, téléchargé chez Qwen), et comparer son réseau au moteur de Gulliver.
+- **Pourquoi** : la feuille de route disait « relevé par une recherche dans le code, pas encore vérifié en le lançant ». Bien m'en a pris : l'import s'arrêtait pour tout modèle (défaut de l'original, corrigé et noté pour l'auteur, n° 27), et il refuse les modèles à experts, contrairement à ce que supposait le relevé.
+- **Comment comparer** : le réseau de dlib finit par un softmax ; il écrit donc des log-probabilités, que `test_runtime` sait maintenant lire (`logprobs`). C'est la même mesure que les autres tests du moteur (divergence KL, token le plus probable), sans nouvel outil de comparaison.
+- **Ordre de la suite** : Gemma 3 (le format que l'humain sert déjà, et une famille que dlib connaît presque, par Gemma 2), puis Qwen 3.5, LFM2, Mistral 3. Les MoE (R11) viendront après : il faut d'abord apprendre à dlib à remplir sa couche d'experts.
+
 ## 3. Morceau 2 du fil rouge : copier, pas déplacer
 
 - **Quoi** : cpp-httplib, Mbed TLS, SQLite, libpng et libjpeg sont **copiés** sans changement de `dlib/external/` vers `gulliver/third_party/` (21 Mo). Le CMake de Gulliver a ses propres cibles (`gulliver_httplib`, `gulliver_mbedtls`) et ne fait plus `add_subdirectory` de dlib. Gulliver 6.8.1.

@@ -3,10 +3,12 @@
 /*
     Vérifie le runtime du processeur sur un vrai modèle.
 
-        test_runtime model.gguf reference.bin [exact] id id id ...
+        test_runtime model.gguf reference.bin [exact] [logprobs] id id id ...
 
     reference.bin contient les logits de chaque position de la suite de tokens calculés par
-    tests/reference_forward.py.  Le programme les compare aux logits du runtime, puis vérifie
+    tests/reference_forward.py.  Avec "logprobs", il contient des log-probabilités (celles
+    qu'écrit slm_gguf_import_ex --dump-logits, le réseau dlib finissant par un softmax) : les
+    logits du runtime sont alors ramenés en log-probabilités avant la comparaison.  Le programme les compare aux logits du runtime, puis vérifie
     que le runtime donne les mêmes résultats quelle que soit la découpe du travail : toute la
     suite en une passe, un prompt suivi d'un token à la fois, deux séquences partageant un lot,
     et une séquence tronquée puis prolongée à nouveau ; les clés et valeurs sur 8 bits
@@ -218,7 +220,7 @@ int main(int argc, char** argv)
         return synthetic(argc > 2 ? std::string(argv[2]) + "/" : std::string());
     if (argc < 4)
     {
-        std::printf("usage: test_runtime model.gguf reference.bin [exact] id...\n");
+        std::printf("usage: test_runtime model.gguf reference.bin [exact] [logprobs] id...\n");
         return 2;
     }
     int arg = 3;
@@ -228,9 +230,21 @@ int main(int argc, char** argv)
         exact = true;
         ++arg;
     }
+    bool logprobs = false;
+    if (arg < argc && std::string(argv[arg]) == "logprobs")
+    {
+        logprobs = true;
+        ++arg;
+    }
     std::vector<int> tokens;
     for (; arg < argc; ++arg) tokens.push_back(std::atoi(argv[arg]));
     const long T = static_cast<long>(tokens.size());
+    // Les découpes ci-dessous (un tiers, une moitié) demandent quelques tokens.
+    if (T < 4)
+    {
+        std::printf("test_runtime needs at least 4 token ids, got %ld\n", T);
+        return 2;
+    }
 
     auto file = std::make_shared<model_file>(argv[1]);
     const model_config cfg = read_model_config(*file);
@@ -258,7 +272,19 @@ int main(int argc, char** argv)
     auto t0 = std::chrono::steady_clock::now();
     const std::vector<float> whole = run_whole(rt, tokens);
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-    const stats s = compare(ref.data(), whole.data(), T, V);
+    std::vector<float> compared = whole;
+    if (logprobs)
+        for (long t = 0; t < T; ++t)
+        {
+            // log softmax de la ligne, calculé en double.
+            float* r = compared.data() + t * V;
+            const double m = *std::max_element(r, r + V);
+            double sum = 0;
+            for (long i = 0; i < V; ++i) sum += std::exp(r[i] - m);
+            const double lse = m + std::log(sum);
+            for (long i = 0; i < V; ++i) r[i] = static_cast<float>(r[i] - lse);
+        }
+    const stats s = compare(ref.data(), compared.data(), T, V);
     report(exact ? "reference (exact products)" : "reference (quantized activations)", s);
     std::printf("  one pass of %ld tokens: %.1f ms\n", T, ms);
     if (exact)
@@ -349,8 +375,20 @@ int main(int argc, char** argv)
         const stats d2 = compare(whole.data(), logits.data() + (T - h) * V, T, V);
         report("batched, short sequence", d1);
         report("batched, long sequence", d2);
-        expect(d1.max_abs <= 1e-3 * std::max(1.0, d1.scale), "batched short sequence");
-        expect(d2.max_abs <= 1e-3 * std::max(1.0, d2.scale), "batched long sequence");
+        // Hors du mode exact, la séquence seule et la même séquence dans le lot ne passent pas
+        // forcément par les mêmes noyaux : sous accelerate_min_tokens tokens, les produits sont
+        // entiers (activations sur 8 bits) ; au-dessus, Accelerate les fait en flottants.  On
+        // compare alors les distributions, comme pour les autres découpes.
+        if (exact)
+        {
+            expect(d1.max_abs <= 1e-3 * std::max(1.0, d1.scale), "batched short sequence");
+            expect(d2.max_abs <= 1e-3 * std::max(1.0, d2.scale), "batched long sequence");
+        }
+        else
+        {
+            expect(d1.mean_kl < 0.05 && d1.top1 >= 0.85, "batched short sequence");
+            expect(d2.mean_kl < 0.05 && d2.top1 >= 0.85, "batched long sequence");
+        }
         rt.release_sequence(a);
         rt.release_sequence(c);
         expect(rt.kv_bytes_used() == 0, "every block returned");

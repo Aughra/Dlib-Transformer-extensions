@@ -39,6 +39,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 24 | Avertissement | `dlib/privacy/pii_lexicons.h:2110` | Une entrée de liste écrite en deux littéraux, prise par clang pour une virgule oubliée : l'exemple de l'anonymiseur ne compile plus avec `-Werror` (corrigé dans le fork). | Aussi sous Windows avec clang ; gcc et Visual Studio ne disent rien |
 | 25 | Remarque, exactitude | `albireo/engine/cpu_runtime.cpp:532` | Le découpage de l'attention de l'écriture dépend du nombre de threads : la même question peut recevoir une autre réponse sur une autre machine ou avec un autre réglage (corrigé dans le fork, détail au changement 27, partie 4). | Aussi sous Windows, déduit du code |
 | 26 | Bug | `albireo/engine/chat_format.cpp:1886` | Mixtral 8x7B et Mistral 7B v0.1/v0.2 reçoivent le format sans template (« User: … Assistant: ») : `[INST]` n'est pas un token de leur vocabulaire (corrigé dans le fork). | Aussi sous Windows, déduit du code |
+| 27 | Bug | `dlib/data_io/gguf_weight_loader.h:230` | L'import d'un GGUF en réseau dlib (`slm_gguf_import_ex --probe-logits`, `--convert`, `--chat`) s'arrête pour tout modèle : « assigned 170 of 171 parameter tensors; the layer order assumption is wrong » ; la couche `embeddings_` expose sa table par `get_layer_params()` depuis le 2026-10-24 (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
 | Registre | dlib | `dlib/dlib`, `dlib/examples` | Tout ce que le fork change dans dlib, fichier par fichier (partie 5). | Voir chaque ligne |
 | 22 | Remarque, exactitude | `gulliver/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant (corrigé dans le fork). | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
 
@@ -262,6 +263,44 @@ Après (le fork ajoute la classe `mistral_v1_format`, voir `engine/chat_format.c
 
 - **Vérifié** : prompt de 23 tokens dans les deux moteurs ; avec ce format, Mixtral (conversion de mradermacher, SHA-256 `9f8d778c…0ed01d44`) répond comme llama.cpp jusqu'à une égalité de probabilités, où llama.cpp change lui-même de mot entre son GPU et son processeur ; étape « mixtral chat format » de `test_macos.sh`. Non vérifié : Mistral 7B v0.1/v0.2 (même template, pas essayé).
 - **Mac ou Windows** : aussi sous Windows (code commun), déduit du code, non vérifié sous Windows.
+
+### 27. L'import d'un GGUF en réseau dlib compte la table des embeddings deux fois
+
+- **Où** : `dlib/dlib/data_io/gguf_weight_loader.h`, ligne 230 (`import_gguf_weights`, la liste `params`) et ligne 375 (le commentaire qui suppose le contraire), au commit `184ea00` comme dans `upstream/main` à `966c178`. La cause est `dlib/dlib/dnn/layers.h`, ligne 5992 : depuis le commit `1eb9bc69` (2026-10-24), `embeddings_::get_layer_params()` renvoie la table `embs`, alors que le chargeur (écrit en juin) la croit hors de `get_layer_params()` et la remplit à part par `get_embeddings()`.
+- **Ce qui se passe** : le chargeur range les tenseurs de paramètres dans l'ordre de visite (sortie, norme finale, puis six par bloc) et vérifie qu'il les a tous remplis. La table des embeddings y apparaît en plus : pour Qwen3-0.6B (28 blocs), il en remplit 1 + 1 + 28 × 6 = 170 sur 171 et s'arrête :
+
+```
+Importing weights into the network...
+  RoPE theta applied : 1e+06  cos@pos1: dim0=0.540302 dim1=0.692504 last=1
+  loaded block 27  loaded block 24  loaded block 16  loaded block 8  loaded block 0Error: import_gguf_weights: assigned 170 of 171 parameter tensors; the layer order assumption is wrong
+```
+
+  Toute la phase 2 de `slm_gguf_import_ex` (`--probe-logits`, `--convert`, `--chat`, `--serve`) est touchée, quel que soit le modèle.
+- **Reproduire** : `slm_gguf_import_ex --input Qwen3-0.6B-Q8_0.gguf --out-prefix slm_imported_model` (phase 1), recompiler l'exemple avec l'en-tête produit, puis `slm_gguf_import_ex --input Qwen3-0.6B-Q8_0.gguf --probe-logits`. Fichier : `Qwen/Qwen3-0.6B-GGUF`, `Qwen3-0.6B-Q8_0.gguf`, SHA-256 `9465e63a…6d043bb031`.
+- **Correction du fork** ([COMMIT_R1A](https://github.com/Aughra/Dlib-Transformer-extensions/commit/COMMIT_R1A)) : le chargeur repère la table par un visiteur et la laisse hors de la liste. Avant (lignes 227 à 231) :
+
+```cpp
+        std::vector<tensor*> params;
+        visit_computational_layers(net, [&params](auto& layer) {
+            tensor& p = layer.get_layer_params();
+            if (p.size() > 0) params.push_back(&p);
+        });
+```
+
+Après (avec un visiteur `embedding_finder`, construit comme `embedding_loader` du même fichier, qui note `&layer.get_embeddings()`) :
+
+```cpp
+        const tensor* embedding_table = nullptr;
+        visit_computational_layers(net, embedding_finder{ &embedding_table });
+        std::vector<tensor*> params;
+        visit_computational_layers(net, [&params, embedding_table](auto& layer) {
+            tensor& p = layer.get_layer_params();
+            if (p.size() > 0 && &p != embedding_table) params.push_back(&p);
+        });
+```
+
+- **Vérifié** : le réseau de Qwen3-0.6B se charge (« loaded 170 parameter tensors plus the embedding table ») et répond « Paris » à 0,649 sur « The capital of France is » ; sur 25 positions, ses log-probabilités sont celles du moteur d'inférence d'Albireo (renommé Gulliver dans le fork), écart maximal 0,0102, divergence KL moyenne 4,2e-7, même token le plus probable aux 25 positions (`test_runtime … exact logprobs`, l'exemple écrivant ses log-probabilités par une option `--dump-logits` ajoutée par le fork). Non vérifié : `--convert`, `--chat` et les autres familles.
+- **Mac ou Windows** : aussi sous Windows (code commun, en-têtes seulement), déduit du code, non vérifié sous Windows.
 
 ## 2. Portabilité vers macOS sur puce Apple
 
@@ -1033,6 +1072,8 @@ Le fork modifie aussi dlib depuis le 2026-11-14, quand le portage le demande. Ch
 | `dlib/dlib/cuda/metal_kernels.mm`, `metal_dispatch.h`, `tensor_tools.cpp`, `dlib/dlib/test/metal.cpp` | Backend Metal, phase 8 : formes à scalaires de `tt::affine_transform` (et `affine_transform_range`) et `tt::compute_adam_update` sur Metal | Les pas de SGD et d'Adam sur le GPU | [92324b2](https://github.com/Aughra/Dlib-Transformer-extensions/commit/92324b2) | Optimiseurs identiques au bit près sur 25 et 30 pas ; un petit réseau entraîné 40 pas sur les deux dispositifs : pertes à 1,5e-7 près en relatif | Propre au Mac (Metal) |
 | `dlib/dlib/dnn/solvers.h` (`sgd`, `adam`) | Quand leur état est encore vide, `v` (et `m`, `s` pour Adam) prend le dispositif des gradients (`set_tensor_device(params_grad.get_tensor_device())`) avant `copy_size` | Sans cela, l'état d'un solveur naît sur le processeur et l'aiguillage refuse de le mêler à des gradients sur Metal | [92324b2](https://github.com/Aughra/Dlib-Transformer-extensions/commit/92324b2) | `--test_dnn` passe dans le build CPU (le dispositif y est toujours le processeur : aucun changement) ; trajectoires Metal | Sans effet sous Windows (le dispositif y est toujours le processeur ; non testé sous Windows) |
 
+| `dlib/dlib/data_io/gguf_weight_loader.h` (`import_gguf_weights`) | Visiteur `embedding_finder` ; la table des embeddings est laissée hors de la liste des tenseurs de paramètres | Entrée n° 27 : l'import s'arrêtait pour tout modèle, la couche `embeddings_` exposant sa table par `get_layer_params()` | [COMMIT_R1A](https://github.com/Aughra/Dlib-Transformer-extensions/commit/COMMIT_R1A) | Qwen3-0.6B importé, log-probabilités identiques au moteur de Gulliver (KL 4,2e-7 sur 25 positions) | Aussi sous Windows (code commun ; non testé sous Windows) |
+| `dlib/examples/slm_gguf_import_ex.cpp` | Option `--dump-logits <fichier>` de `--probe-logits` : les log-probabilités de chaque position, en lignes de float32 | Comparer le réseau importé au moteur de Gulliver (`test_runtime … logprobs`, script `gulliver/tools/atelier/compare_dlib_import.sh`) : atelier, R1 | [COMMIT_R1A](https://github.com/Aughra/Dlib-Transformer-extensions/commit/COMMIT_R1A) | Fichier écrit, relu par `test_runtime` | Sans effet sous Windows tant que l'option n'est pas donnée |
 ---
 
 *Écrit pour l'auteur de l'original et tenu à jour par le fork : les entrées les plus récentes peuvent se trouver en fin de section. Ce document ne contient aucun chemin de machine privée, aucune clé et aucun jeton.*

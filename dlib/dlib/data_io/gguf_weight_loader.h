@@ -80,8 +80,8 @@ namespace dlib
                 std::memset(h + src.size(), 0, (dst.size() - src.size()) * sizeof(float));
         }
 
-        /* The embedding layer keeps its table in a private member exposed by get_embeddings,
-           not in get_layer_params. This visitor targets exactly that layer (SFINAE on the
+        /* The embedding layer keeps its table in a private member exposed by get_embeddings
+           (and also by get_layer_params). This visitor targets exactly that layer (SFINAE on the
            presence of get_embeddings) and copies the table directly, no transpose, since GGUF
            token_embd is [vocab, d_model] and the Dlib table is [vocab, d_model] too. */
         struct embedding_loader
@@ -100,6 +100,21 @@ namespace dlib
             }
             template <typename T> void set(T&, long) {}
             template <typename T> void operator()(T& layer) { set(layer, 0); }
+        };
+
+        /* Finds the embedding table, so that the parameter walk below can leave it out: the
+           embeddings layer also exposes the table through get_layer_params, and the table is
+           assigned on its own, through get_embeddings, after the walk. */
+        struct embedding_finder
+        {
+            const tensor** found;
+            template <typename T>
+            auto get(T& layer, int) -> decltype((void)layer.get_embeddings())
+            {
+                *found = &layer.get_embeddings();
+            }
+            template <typename T> void get(T&, long) {}
+            template <typename T> void operator()(T& layer) { get(layer, 0); }
         };
 
         /* Pushes the model's runtime attention settings into every attention layer that
@@ -224,10 +239,12 @@ namespace dlib
         /* Collect the writable parameter tensors of the parameter-bearing computational
            layers, in network visit order. The vector is captured by reference so the result
            survives even though visit_computational_layers takes the visitor by value. */
+        const tensor* embedding_table = nullptr;
+        visit_computational_layers(net, embedding_finder{ &embedding_table });
         std::vector<tensor*> params;
-        visit_computational_layers(net, [&params](auto& layer) {
+        visit_computational_layers(net, [&params, embedding_table](auto& layer) {
             tensor& p = layer.get_layer_params();
-            if (p.size() > 0) params.push_back(&p);
+            if (p.size() > 0 && &p != embedding_table) params.push_back(&p);
         });
 
         /* Expected order, from the output side inward (the order visit_computational_layers
@@ -372,8 +389,8 @@ namespace dlib
                 + " of " + std::to_string(params.size())
                 + " parameter tensors; the layer order assumption is wrong");
 
-        /* The embedding table is held by the embeddings layer outside get_layer_params, so it
-           is assigned separately through get_embeddings. */
+        /* The embedding table, left out of the walk above, is assigned separately through
+           get_embeddings. */
         {
             std::vector<float> emb = fetch(g, "token_embd.weight");
             bool done = false;

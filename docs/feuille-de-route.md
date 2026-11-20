@@ -153,6 +153,8 @@ Relevé par une recherche dans le code le 2026-11-19, **pas encore vérifié en 
 | R1 | Convertir un GGUF (Qwen, Gemma, LFM2, Mistral) en réseau dlib entraînable. | — |
 | R11 | Entraîner et convertir les modèles MoE (Qwen 3.6 MoE, LFM2-MoE) comme les autres. | R1 |
 
+**Avancement de R1 (2026-11-20)** : l'import de dlib (`slm_gguf_import_ex`) tourne sur le Mac mini une fois corrigé (notes pour l'auteur n° 27) ; **Qwen3-0.6B** importé donne les log-probabilités du moteur de Gulliver (KL moyenne 4,2e-7, 25 positions, `tools/atelier/compare_dlib_import.sh`, Gulliver 6.8.2). Constaté : l'import ne connaît que `llama`, `mistral`, `gemma`, `gemma2`, `qwen2`, `qwen3` (et refuse `mixtral`, `granitemoe` : « MoE models import only through the runtime engine », R11 part donc de plus loin que prévu) ; ni Qwen 3.5, ni Gemma 3/4, ni LFM2, ni `mistral3`. Le réseau dlib est en float32 : 4 octets par paramètre (un 4B ≈ 16 Go, un 8B ≈ 32 Go). Suite : les familles manquantes de R1, dans l'ordre Gemma 3, Qwen 3.5, LFM2, Mistral.
+
 Critère : le réseau converti donne les mêmes logits que le moteur de Gulliver sur le même prompt (à une tolérance près, notée), pour chaque architecture.
 
 ### Phase B — Affiner
