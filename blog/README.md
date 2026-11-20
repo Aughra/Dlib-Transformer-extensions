@@ -61,5 +61,6 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 55. [Le navigateur se vide](55-le-navigateur-se-vide.md)
 56. [Le premier soir sur le Mac mini](56-le-premier-soir-sur-le-mac-mini.md)
 57. [Les grands modèles à experts](57-les-grands-modeles-a-experts.md)
+58. [La demi-précision](58-la-demi-precision.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).
