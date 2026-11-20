@@ -22,7 +22,7 @@
 
 namespace dlib
 {
-    enum class arch_family { llama, mistral, gemma, gemma2, qwen2, qwen3, mixtral, granite_moe, unknown };
+    enum class arch_family { llama, mistral, gemma, gemma2, gemma3, qwen2, qwen3, mixtral, granite_moe, unknown };
 
     inline arch_family arch_family_from_name(const std::string& a)
     {
@@ -30,6 +30,7 @@ namespace dlib
         if (a == "mistral") return arch_family::mistral;
         if (a == "gemma")   return arch_family::gemma;
         if (a == "gemma2")  return arch_family::gemma2;
+        if (a == "gemma3")  return arch_family::gemma3;
         if (a == "qwen2")   return arch_family::qwen2;
         if (a == "qwen3")   return arch_family::qwen3;
         if (a == "mixtral") return arch_family::mixtral;
@@ -76,6 +77,15 @@ namespace dlib
         bool embedding_model = false;
         bool quantized = false;                 // at least one tensor is neither F32 nor F16
         bool qk_norm = false;                   // per-head RMSNorm on Q and K (Qwen3)
+
+        /* Gemma 3: five layers out of six attend over a sliding window of sliding_window
+           positions and rotate with rope_freq_base_swa; the sixth attends globally with
+           rope_freq_base. The blocks carry two more norms (gemma_blocks) and the input is
+           multiplied by sqrt(d_model). */
+        bool gemma_blocks = false;
+        long sliding_window = 0;
+        long sliding_window_pattern = 0;        // one global layer every this many
+        double rope_freq_base_swa = 10000.0;
     };
 
     inline long gcd_long(long a, long b)
@@ -203,6 +213,16 @@ namespace dlib
         s.pooling_type = static_cast<long>(gguf_bounded_int(g, p + ".pooling_type", -1, -1, 16));
         s.embedding_model = s.tied_embeddings && s.pooling_type >= 0;
         s.qk_norm = (g.find_tensor("blk.0.attn_q_norm.weight") != nullptr);
+        if (s.family == arch_family::gemma3)
+        {
+            /* The pattern and the local base are not stored by the GGUF conversion of
+               Gemma 3; llama.cpp hard-codes them (one global layer in six, base 10000). */
+            s.gemma_blocks = true;
+            s.sliding_window = static_cast<long>(gguf_bounded_int(g, p + ".attention.sliding_window", 0, 0,
+                int64_t(1) << 26));
+            s.sliding_window_pattern = 6;
+            s.rope_freq_base_swa = gguf_bounded_double(g, p + ".rope.freq_base_swa", 10000.0, 1e-3, 1e12);
+        }
         for (const auto& t : g.tensors()) if (t.is_quantized()) { s.quantized = true; break; }
         return s;
     }
@@ -294,9 +314,15 @@ namespace dlib
            unread, and a network computing something else than the model, without a word. */
         if (s.family == arch_family::unknown)
             r.blockers.push_back("architecture '" + s.arch_name + "' is not one of the supported families "
-                "(llama, mistral, qwen2, qwen3, mixtral, granitemoe)");
+                "(llama, mistral, qwen2, qwen3, gemma3, mixtral, granitemoe)");
         if (s.family == arch_family::gemma || s.family == arch_family::gemma2)
             r.blockers.push_back("Gemma family needs (1+w) RMSNorm, embedding scaling and GeGLU, not available yet");
+        /* Gemma 3 as converted by llama.cpp: the conversion already adds 1 to every norm
+           weight, so the plain RMSNorm reads them as they are. */
+        if (s.family == arch_family::gemma3 && s.sliding_window > 0)
+            r.notes.push_back("sliding window of " + std::to_string(s.sliding_window)
+                + " positions not applied yet: the network matches the model on sequences of up to "
+                + std::to_string(s.sliding_window) + " tokens only");
         /* qwen2 QKV biases are held by the bias slots the fused attention packing
            allocates for the families that carry them; the first support tranche applies
            them in the inference forwards and freezes them during training (their
@@ -321,7 +347,12 @@ namespace dlib
             else if (s.n_experts_used <= 0 || s.n_experts_used > s.n_experts)
                 r.blockers.push_back("invalid expert_used_count in metadata");
         }
-        if (s.rope_scaling_type == "linear" && s.rope_scaling_factor > 0.0)
+        /* Linear scaling is applied by the import for Gemma 3 (global layers only, the
+           convention of the family); elsewhere it stays a blocker. */
+        if (s.rope_scaling_type == "linear" && s.rope_scaling_factor > 0.0 && s.family == arch_family::gemma3)
+            r.notes.push_back("linear RoPE scaling (factor " + std::to_string(s.rope_scaling_factor)
+                + ") applied to the global layers");
+        else if (s.rope_scaling_type == "linear" && s.rope_scaling_factor > 0.0)
             r.blockers.push_back("declared linear RoPE scaling (factor "
                 + std::to_string(s.rope_scaling_factor)
                 + ") is applied to every position by the reference and is not supported yet");
@@ -360,6 +391,10 @@ namespace dlib
                 "expects " + std::to_string(s.d_model)
                 + "; the two files do not belong to the same model");
 
+        if (vs && s.gemma_blocks)
+            throw std::runtime_error("emit_header: the multimodal configuration has no Gemma "
+                "blocks yet; import the text model without its projector");
+
         std::ofstream out(path);
         if (!out) throw std::runtime_error("emit_header: cannot write " + path);
 
@@ -385,7 +420,8 @@ namespace dlib
             << "    static constexpr bool USE_QK_NORM   = " << (s.qk_norm ? "true" : "false") << ";\n"
             << "    static constexpr long FFN_NUM       = " << s.ffn_num
             << ";  // hidden = EMBEDDING_DIM * FFN_NUM / FFN_DEN = " << s.d_ffn << "\n"
-            << "    static constexpr long FFN_DEN       = " << s.ffn_den << ";\n\n"
+            << "    static constexpr long FFN_DEN       = " << s.ffn_den << ";\n"
+            << "    static constexpr bool GEMMA_BLOCKS  = " << (s.gemma_blocks ? "true" : "false") << ";\n\n"
             << "    static constexpr bool HAS_VISION    = " << (vs ? "true" : "false") << ";\n\n";
 
         if (vs)
@@ -410,7 +446,8 @@ namespace dlib
         {
             out << "    using config = dlib::decoder_transformer_config<\n"
                 << "        VOCAB_SIZE, NUM_LAYERS, NUM_HEADS, NUM_KV_HEADS, EMBEDDING_DIM, FFN_NUM, FFN_DEN,\n"
-                << "        HEAD_DIM, USE_QK_NORM>;\n\n";
+                << "        HEAD_DIM, USE_QK_NORM"
+                << (s.gemma_blocks ? ", dlib::no_modality, dlib::norm_placement::gemma" : "") << ">;\n\n";
         }
 
         out
@@ -427,6 +464,8 @@ namespace dlib
             << (s.qk_norm ? "    //   blk.{i}.attn_q_norm.weight, blk.{i}.attn_k_norm.weight\n" : "")
             << "    //   blk.{i}.ffn_norm.weight\n"
             << "    //   blk.{i}.ffn_gate.weight, blk.{i}.ffn_up.weight, blk.{i}.ffn_down.weight\n"
+            << (s.gemma_blocks ? "    //   blk.{i}.post_attention_norm.weight, blk.{i}.post_ffw_norm.weight\n"
+                                 "    // The embedding table is stored multiplied by sqrt(EMBEDDING_DIM) (Gemma input scale).\n" : "")
             << "}\n\n"
             << "/* The first imported-model header included in a translation unit claims the\n"
             << "   generic `imported_model` alias, so single-model programs compile unchanged\n"

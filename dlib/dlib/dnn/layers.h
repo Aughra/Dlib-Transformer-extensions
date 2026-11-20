@@ -4821,6 +4821,100 @@ namespace dlib
 
 // ----------------------------------------------------------------------------------------
 
+    /* GELU in its tanh approximation, 0.5 x (1 + tanh(sqrt(2/pi) (x + 0.044715 x^3))), the
+       form the Gemma models were trained with (gelu_pytorch_tanh). gelu_ above computes the
+       exact erf form; the two differ by up to about 1e-3, which an imported model would
+       carry as a systematic error into every layer. Computed on the host. */
+    class gelu_tanh_
+    {
+    public:
+        gelu_tanh_()
+        {
+        }
+
+        template <typename SUBNET>
+        void setup (const SUBNET& /*sub*/)
+        {
+        }
+
+        template <typename SUBNET>
+        void forward(
+            const SUBNET& sub,
+            resizable_tensor& data_output
+        )
+        {
+            const tensor& in = sub.get_output();
+            data_output.copy_size(in);
+            const float* x = in.host();
+            float* y = data_output.host_write_only();
+            for (size_t i = 0; i < in.size(); ++i)
+            {
+                const float v = x[i];
+                y[i] = 0.5f * v * (1.0f + std::tanh(sqrt_2_over_pi * (v + 0.044715f * v * v * v)));
+            }
+        }
+
+        template <typename SUBNET>
+        void backward(
+            const tensor& gradient_input,
+            SUBNET& sub,
+            tensor&
+        )
+        {
+            const tensor& in = sub.get_output();
+            const float* x = in.host();
+            const float* g = gradient_input.host();
+            float* out = sub.get_gradient_input().host();
+            for (size_t i = 0; i < in.size(); ++i)
+            {
+                const float v = x[i];
+                const float t = std::tanh(sqrt_2_over_pi * (v + 0.044715f * v * v * v));
+                const float d = 0.5f * (1.0f + t)
+                    + 0.5f * v * (1.0f - t * t) * sqrt_2_over_pi * (1.0f + 3.0f * 0.044715f * v * v);
+                out[i] += d * g[i];
+            }
+        }
+
+        inline dpoint map_input_to_output (const dpoint& p) const { return p; }
+        inline dpoint map_output_to_input (const dpoint& p) const { return p; }
+
+        const tensor& get_layer_params() const { return params; }
+        tensor& get_layer_params() { return params; }
+
+        friend void serialize(const gelu_tanh_& /*item*/, std::ostream& out)
+        {
+            serialize("gelu_tanh_", out);
+        }
+
+        friend void deserialize(gelu_tanh_& /*item*/, std::istream& in)
+        {
+            std::string version;
+            deserialize(version, in);
+            if (version != "gelu_tanh_")
+                throw serialization_error("Unexpected version '"+version+"' found while deserializing dlib::gelu_tanh_.");
+        }
+
+        friend std::ostream& operator<<(std::ostream& out, const gelu_tanh_& /*item*/)
+        {
+            out << "gelu_tanh";
+            return out;
+        }
+
+        friend void to_xml(const gelu_tanh_& /*item*/, std::ostream& out)
+        {
+            out << "<gelu_tanh/>\n";
+        }
+
+    private:
+        static constexpr float sqrt_2_over_pi = 0.7978845608028654f;
+        resizable_tensor params;
+    };
+
+    template <typename SUBNET>
+    using gelu_tanh = add_layer<gelu_tanh_, SUBNET>;
+
+// ----------------------------------------------------------------------------------------
+
     class smelu_
     {
     public:
@@ -6477,6 +6571,13 @@ namespace dlib
     using swiglu = LINEAR<d_model, mult_fprev1<LINEAR<(d_model* hidden_num) / hidden_denom, fskip0<
         ftag1<silu<LINEAR<(d_model* hidden_num) / hidden_denom, ftag0<SUBNET>>>>>>>>;
 
+    // GeGLU: the SwiGLU layout with a tanh GELU in place of SiLU on the gate, the
+    // feed-forward of the Gemma models. Same parameters, same visit order (down, up, gate).
+    template <long d_model, long hidden_num, long hidden_denom, typename SUBNET,
+        template <unsigned long, typename> class LINEAR = linear>
+    using geglu =LINEAR<d_model, mult_fprev1<LINEAR<(d_model* hidden_num) / hidden_denom, fskip0<
+        ftag1<gelu_tanh<LINEAR<(d_model* hidden_num) / hidden_denom, ftag0<SUBNET>>>>>>>>;
+
     // Adaptive Computation Time (ACT) layer
     //
     // This layer wraps a transition network and applies it iteratively, learning when
@@ -7128,6 +7229,7 @@ namespace dlib
             seq_len(other.seq_len),
             d_head(other.d_head),
             theta_base(other.theta_base),
+            position_scale(other.position_scale),
             cos_cache(other.cos_cache),
             sin_cache(other.sin_cache),
             yarn(other.yarn)
@@ -7140,6 +7242,7 @@ namespace dlib
                 seq_len = other.seq_len;
                 d_head = other.d_head;
                 theta_base = other.theta_base;
+                position_scale = other.position_scale;
                 cos_cache = other.cos_cache;
                 sin_cache = other.sin_cache;
                 yarn = other.yarn;
@@ -7155,6 +7258,16 @@ namespace dlib
         }
 
         float get_theta_base() const { return theta_base; }
+
+        // Linear position scaling: every position is multiplied by scale before the
+        // rotation (1 / factor for a model declaring rope.scaling.type = linear). Like the
+        // base, set it before the first forward pass.
+        void set_position_scale(float scale)
+        {
+            DLIB_CASSERT(scale > 0, "Position scale must be positive");
+            position_scale = scale;
+        }
+        float get_position_scale() const { return position_scale; }
         long get_seq_len() const { return seq_len; }
         long get_d_head() const { return d_head; }
 
@@ -7315,8 +7428,13 @@ namespace dlib
 
         friend void serialize(const rotary_positional_embedding_& item, std::ostream& out)
         {
-            serialize("rotary_positional_embedding_", out);
+            /* The position scale is written only when it is not 1, under a second version
+               tag, so that the archives of every other model keep their exact format. The
+               std::string matters: a bare const char* would be serialized as a bool. */
+            const bool scaled = item.position_scale != 1.0f;
+            serialize(std::string(scaled ? "rotary_positional_embedding_2" : "rotary_positional_embedding_"), out);
             serialize(item.theta_base, out);
+            if (scaled) serialize(item.position_scale, out);
             serialize(item.cos_cache, out);
             serialize(item.sin_cache, out);
 
@@ -7331,11 +7449,13 @@ namespace dlib
         {
             std::string version;
             deserialize(version, in);
-            if (version != "rotary_positional_embedding_")
+            if (version != "rotary_positional_embedding_" && version != "rotary_positional_embedding_2")
                 throw serialization_error("Unexpected version '" + version +
                     "' while deserializing rotary_positional_embedding_");
 
             deserialize(item.theta_base, in);
+            item.position_scale = 1.0f;
+            if (version == "rotary_positional_embedding_2") deserialize(item.position_scale, in);
             deserialize(item.cos_cache, in);
             deserialize(item.sin_cache, in);
 
@@ -7423,7 +7543,7 @@ namespace dlib
             {
                 for (long i = 0; i < half_dim; ++i)
                 {
-                    float pos_scaled = static_cast<float>(pos);
+                    float pos_scaled = static_cast<float>(pos) * position_scale;
 
                     if (yarn.enabled)
                     {
@@ -7454,6 +7574,7 @@ namespace dlib
         long seq_len;
         long d_head;
         float theta_base;
+        float position_scale = 1.0f;
 
         // Precomputed trigonometric values
         // Shape: (1, 1, seq_len, d_head/2)

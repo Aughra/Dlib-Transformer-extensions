@@ -28,7 +28,8 @@ namespace dlib
         long ffn_den,
         long head_dim = embedding_dim / num_heads,
         bool use_qk_norm = false,
-        template <typename> class MODALITY = no_modality
+        template <typename> class MODALITY = no_modality,
+        norm_placement placement = norm_placement::pre
     >
     struct decoder_transformer_config
     {
@@ -42,6 +43,7 @@ namespace dlib
         static constexpr long FFN_NUM       = ffn_num;
         static constexpr long FFN_DEN       = ffn_den;
         static constexpr long FFN_HIDDEN    = embedding_dim * ffn_num / ffn_den;
+        static constexpr norm_placement PLACEMENT = placement;
 
         /* The decoder stack: num_layers pre-norm GQA + SwiGLU blocks over the token
            embeddings, with ACT disabled, the exact feed-forward ratio, and bias-free
@@ -55,7 +57,7 @@ namespace dlib
             NUM_LAYERS, EMBEDDING_DIM, NUM_HEADS, NUM_KV_HEADS,
             MODALITY<embeddings<VOCAB_SIZE, EMBEDDING_DIM, input<matrix<int, 0, 1>>>>,
             /*UseAct=*/false, FFN_NUM, FFN_DEN, /*FFN linear=*/linear_no_bias,
-            /*head_dim=*/HEAD_DIM, /*use_qk_norm=*/USE_QK_NORM>;
+            /*head_dim=*/HEAD_DIM, /*use_qk_norm=*/USE_QK_NORM, /*causal=*/true, placement>;
 
         /* The full network: final RMSNorm + bias-free output projection + per-token loss
            head. The is_training flag is accepted for API symmetry with the other
@@ -76,6 +78,8 @@ namespace dlib
                   << ", head_dim " << HEAD_DIM << ")\n"
                   << "  d_model      : " << EMBEDDING_DIM << "\n"
                   << "  qk_norm      : " << (USE_QK_NORM ? "on" : "off") << "\n"
+                  << "  blocks       : " << (placement == norm_placement::gemma ? "gemma (sandwich norms, GeGLU)"
+                                            : placement == norm_placement::post ? "post-norm" : "pre-norm") << "\n"
                   << "  ffn_hidden   : " << FFN_HIDDEN
                   << " (= d_model * " << FFN_NUM << " / " << FFN_DEN << ")";
                 return o.str();

@@ -179,6 +179,12 @@ namespace dlib
         {
             return rope_q_helper_.get().get_theta_base();
         }
+        // Linear RoPE position scaling (1 / factor), set before the first forward pass.
+        void set_rope_position_scale(float scale)
+        {
+            rope_q_helper_.get().set_position_scale(scale);
+            rope_k_helper_.get().set_position_scale(scale);
+        }
         // Read one cosine value of the rotary cache at the given position, ensuring
         // the cache covers it. A negative dim selects the last frequency dimension.
         // Diagnostic accessor: cos(pos=1, dim=0) must equal cos(1) ~= 0.5403 for any
@@ -1589,8 +1595,11 @@ namespace dlib
          post  Each sublayer reads the stream and adds its output to it, and the sum is
                normalized without a gain, so the block always returns unit RMS. The blocks
                of the Hierarchical Reasoning Model are built this way.
+         gemma Pre-norm, and each sublayer output is normalized again (with its own gain)
+               before it is added to the stream; the feed-forward is a GeGLU (tanh GELU).
+               The blocks of Gemma 2 and Gemma 3 are built this way.
     */
-    enum class norm_placement { pre, post };
+    enum class norm_placement { pre, post, gemma };
 
     // Multi-head Grouped Query Attention, fused into a single layer
     namespace gqa_transformer_unified
@@ -1654,6 +1663,20 @@ namespace dlib
             unit_rms_norm<add_prev1<multihead_attention_gqa<d_model, num_heads, num_kv_heads, tag1<
             SUBNET>, head_dim, use_qk_norm, causal>>>>, LINEAR>>>;
 
+        // Transformer block of the Gemma 2 and 3 models: every sublayer reads a normalized
+        // copy of the stream, and its output is normalized again before the residual add
+        // (post_attention_norm, post_ffw_norm); the feed-forward is a GeGLU. In visit order
+        // (output to input) its parameters are: post_ffw_norm, ffn_down, ffn_up, ffn_gate,
+        // ffn_norm, post_attention_norm, attention, attn_norm. UseAct is not supported.
+        template<long d_model, long num_heads, long num_kv_heads,
+            long hidden_num, long hidden_den, typename SUBNET,
+            template <unsigned long, typename> class LINEAR = linear,
+            long head_dim = d_model / num_heads, bool use_qk_norm = false, bool causal = true>
+        using gemma_transformer_block =
+            add_prev5<rms_norm<geglu<d_model, hidden_num, hidden_den, rms_norm<tag5<
+            add_prev1<rms_norm<multihead_attention_gqa<d_model, num_heads, num_kv_heads, rms_norm<tag1<
+            SUBNET>>, head_dim, use_qk_norm, causal>>>>>, LINEAR>>>;
+
         // Block selector by norm placement.
         template<norm_placement placement, bool UseAct, long d_model, long num_heads,
             long num_kv_heads, long hidden_num, long hidden_den, typename SUBNET,
@@ -1672,6 +1695,17 @@ namespace dlib
             hidden_num, hidden_den, SUBNET, LINEAR, head_dim, use_qk_norm, causal>
         {
             using type = post_norm_transformer_block<UseAct, d_model, num_heads, num_kv_heads,
+                hidden_num, hidden_den, SUBNET, LINEAR, head_dim, use_qk_norm, causal>;
+        };
+        template<bool UseAct, long d_model, long num_heads, long num_kv_heads,
+            long hidden_num, long hidden_den, typename SUBNET,
+            template <unsigned long, typename> class LINEAR, long head_dim, bool use_qk_norm,
+            bool causal>
+        struct block_selector<norm_placement::gemma, UseAct, d_model, num_heads, num_kv_heads,
+            hidden_num, hidden_den, SUBNET, LINEAR, head_dim, use_qk_norm, causal>
+        {
+            static_assert(!UseAct, "the Gemma block has no Adaptive Computation Time variant");
+            using type = gemma_transformer_block<d_model, num_heads, num_kv_heads,
                 hidden_num, hidden_den, SUBNET, LINEAR, head_dim, use_qk_norm, causal>;
         };
 

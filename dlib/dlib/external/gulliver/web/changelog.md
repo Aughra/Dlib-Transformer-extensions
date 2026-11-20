@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.8.3 — 20 novembre 2026
+
+### Atelier
+
+- **Gemma 3** s'importe en réseau dlib : Gemma 3 1B et 4B donnent les mêmes probabilités que le moteur de Gulliver (divergence moyenne 1,2e-7 et 1,1e-7 sur 26 positions, même token le plus probable partout). La fenêtre glissante de Gemma 3 n'est pas encore appliquée : le réseau ne correspond au modèle que jusqu'à 512 tokens (1B) ou 1 024 (4B).
+- `tools/atelier/compare_dlib_import.sh` ne juge plus que la comparaison au réseau dlib ; les vérifications du moteur seul sont signalées à part.
+
+---
+
 ## 6.8.2 — 20 novembre 2026
 
 ### Atelier

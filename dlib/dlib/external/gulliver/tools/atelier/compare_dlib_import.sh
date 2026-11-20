@@ -9,7 +9,7 @@
 #    et écrit les log-probabilités de chaque position (--dump-logits) ;
 # 3. test_runtime de Gulliver (build/macos-gulliver) lit les mêmes tokens et compare, en
 #    produits exacts puis en fonctionnement normal.
-# Le code de sortie est le nombre de comparaisons échouées.
+# Le code de sortie est le nombre de comparaisons au réseau dlib échouées.
 
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -52,13 +52,22 @@ if [ -z "$IDS" ] || [ ! -f "$WORK/logprobs.bin" ]; then
 fi
 sed -n '/Most probable/,/^$/p' "$WORK/probe.log"
 
-# 3. Le moteur de Gulliver sur les mêmes tokens.
+# 3. Le moteur de Gulliver sur les mêmes tokens.  Seules les vérifications contre la référence
+#    (le réseau dlib) jugent l'import ; les autres vérifications de test_runtime portent sur le
+#    moteur seul (découpes du travail, 8 bits contre flottants) et sont signalées à part.
 FAILED=0
 for mode in "exact logprobs" "logprobs"; do
+  log="$WORK/compare-${mode// /-}.log"
   # shellcheck disable=SC2086
-  "$GULLIVER/tests/test_runtime" "$MODEL" "$WORK/logprobs.bin" $mode $IDS > "$WORK/compare-${mode// /-}.log" 2>&1
-  code=$?
-  line=$(grep -E "^  reference" "$WORK/compare-${mode// /-}.log")
-  if [ $code -eq 0 ]; then echo "PASS  $line"; else echo "FAIL  $line  ($WORK/compare-${mode// /-}.log)"; FAILED=$((FAILED + 1)); fi
+  "$GULLIVER/tests/test_runtime" "$MODEL" "$WORK/logprobs.bin" $mode $IDS > "$log" 2>&1
+  line=$(grep -E "^  reference" "$log")
+  if grep -qE "FAILED: (exact logits|exact distribution|exact argmax|distribution against the reference|argmax against the reference)" "$log" \
+     || [ -z "$line" ]; then
+    echo "FAIL  $line  ($log)"; FAILED=$((FAILED + 1))
+  else
+    echo "PASS  $line"
+  fi
+  others=$(grep "^FAILED:" "$log" | grep -vE "exact logits|exact distribution|exact argmax|against the reference" | sed 's/^FAILED: //' | paste -sd, -)
+  [ -n "$others" ] && echo "      engine alone, $mode: $others (not about the import)"
 done
 exit $FAILED

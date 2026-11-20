@@ -2,6 +2,15 @@
 
 Consigne de l'humain, le matin : « ARRÊT les tests de perfs, et continue la roadmap ». Ce fichier dit ce que j'ai décidé seul, et pourquoi. Le plus récent est en haut.
 
+## 5. Gemma 3 dans dlib : six choix
+
+- **GELU tanh, couche nouvelle** plutôt que la GELU exacte de dlib : Gemma a été entraîné avec la version tanh, et Gulliver l'utilise ; la GELU exacte aurait été une erreur systématique dans chaque couche.
+- **√d dans la table des embeddings** plutôt qu'une couche d'échelle : la sortie est un tenseur à part dans le réseau de dlib, donc elle n'est pas touchée ; aucune couche de plus à sérialiser. À retenir pour l'export (R6) : diviser la table par √d.
+- **Un troisième placement des normes (`gemma`)** plutôt qu'un nouvel empilement : le constructeur de la pile choisit déjà ses blocs par le placement, c'était l'endroit naturel.
+- **La règle « une couche globale sur six, base locale 10 000 » écrite dans dlib**, comme llama.cpp, faute de la trouver dans le GGUF (le 1B et le 4B ne la stockent pas) ; elle se lit de la clé `rope.freq_base_swa` si un fichier la porte.
+- **L'échelle linéaire du 4B tout de suite**, sur les couches globales seulement : sans elle le 4B restait refusé, et c'est le modèle qu'on affinera plutôt que le 1B.
+- **La fenêtre glissante plus tard**, dans une sous-étape à elle : elle touche les passes avant et arrière de la couche d'attention fusionnée (environ 900 lignes) ; sans elle le réseau est juste jusqu'à 512 tokens (1B) ou 1 024 (4B), et l'import le dit en note.
+
 ## 4. R1 commence par vérifier l'import de dlib, avec un petit Qwen3
 
 - **Quoi** : avant d'écrire du neuf, faire tourner ce que dlib a déjà (`slm_gguf_import_ex`) sur un petit modèle de la famille la mieux couverte, Qwen3-0.6B (640 Mo, téléchargé chez Qwen), et comparer son réseau au moteur de Gulliver.

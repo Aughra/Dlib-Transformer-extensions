@@ -10,6 +10,7 @@
 #ifndef DLIB_GGUF_WEIGHT_LOADER_H_
 #define DLIB_GGUF_WEIGHT_LOADER_H_
 
+#include <cmath>
 #include "gguf_weight_loader_abstract.h"
 
 #include <vector>
@@ -130,10 +131,33 @@ namespace dlib
             float rope_base;
             double qk_eps;
             bool qkv_bias = false;
+            /* Gemma 3: the layers alternate between two bases, one global layer every
+               swa_pattern (the others use swa_base). The visit goes from the output to the
+               input, so the k-th attention layer met is block n_layers - 1 - k; the counter
+               lives outside, the visitor being passed by value. */
+            long swa_pattern = 0;
+            float swa_base = 0.f;
+            long n_layers = 0;
+            long* visited = nullptr;
+            /* Linear position scaling of the global layers (Gemma 3 4B and up: 1 / 8); the
+               sliding-window layers keep unscaled positions, as in llama.cpp. */
+            float global_position_scale = 1.f;
             template <typename T>
             auto set(T& layer, int) -> decltype((void)layer.set_rope_theta_base(0.f))
             {
-                layer.set_rope_theta_base(rope_base);
+                float base = rope_base;
+                float position_scale = global_position_scale;
+                if (swa_pattern > 0 && visited)
+                {
+                    const long b = n_layers - 1 - (*visited)++;
+                    if ((b + 1) % swa_pattern != 0)
+                    {
+                        base = swa_base;
+                        position_scale = 1.f;
+                    }
+                }
+                layer.set_rope_theta_base(base);
+                layer.set_rope_position_scale(position_scale);
                 layer.set_qk_norm_eps(qk_eps);
                 layer.set_yarn_params(0.0f, 0.0f, 0, false); // classical RoPE only
                 layer.set_qkv_bias_enabled(qkv_bias);
@@ -204,9 +228,16 @@ namespace dlib
            forward, so the RoPE caches are built with the right base (they are not rebuilt on a
            later change) and QK-Norm uses the model's epsilon. No-op for other layers. */
         {
+            long visited = 0;
             attention_config_setter cfg{ static_cast<float>(spec.rope_freq_base), spec.rms_eps,
-                has_qkv_bias };
+                has_qkv_bias, spec.gemma_blocks ? spec.sliding_window_pattern : 0,
+                static_cast<float>(spec.rope_freq_base_swa), spec.n_layers, &visited,
+                spec.gemma_blocks && spec.rope_scaling_type == "linear" && spec.rope_scaling_factor > 0
+                    ? static_cast<float>(1.0 / spec.rope_scaling_factor) : 1.f };
             visit_computational_layers(net, cfg);
+            if (spec.gemma_blocks && visited != spec.n_layers)
+                throw std::runtime_error("import_gguf_weights: met " + std::to_string(visited)
+                    + " attention layers for " + std::to_string(spec.n_layers) + " blocks");
             norm_eps_setter neps{ spec.rms_eps };
             visit_computational_layers(net, neps);
         }
@@ -249,7 +280,9 @@ namespace dlib
 
         /* Expected order, from the output side inward (the order visit_computational_layers
            produces): lm_head, output_norm, then for each block from the last to the first
-           [ffn_down, ffn_a, ffn_b, ffn_norm, attention, attn_norm], then the embedding. */
+           [ffn_down, ffn_a, ffn_b, ffn_norm, attention, attn_norm], then the embedding. The
+           Gemma blocks add post_ffw_norm before ffn_down and post_attention_norm before the
+           attention. */
         size_t k = 0;
         auto next = [&](const std::string& what) -> tensor& {
             if (k >= params.size())
@@ -275,6 +308,8 @@ namespace dlib
         {
             const std::string p = "blk." + std::to_string(b) + ".";
 
+            if (spec.gemma_blocks)
+                copy_into(next("post_ffw_norm"), fetch(g, p + "post_ffw_norm.weight"), p + "post_ffw_norm");
             /* ffn_down: [d_model, ff] in GGUF -> [ff, d_model]. */
             {
                 std::vector<float> src = fetch(g, p + "ffn_down.weight"), dst(static_cast<size_t>(ff) * d);
@@ -294,6 +329,9 @@ namespace dlib
                 copy_into(next("ffn_gate"), dst, p + gate_inner);
             }
             copy_into(next("ffn_norm"), fetch(g, p + "ffn_norm.weight"), p + "ffn_norm");
+            if (spec.gemma_blocks)
+                copy_into(next("post_attention_norm"), fetch(g, p + "post_attention_norm.weight"),
+                    p + "post_attention_norm");
 
             /* Attention: one packed tensor [wq | wk | wv | wo (| gamma_q | gamma_k)]. wq is
                [d, qd] and wo is [qd, d] with qd = n_heads * head_dim, which equals d for the
@@ -314,7 +352,7 @@ namespace dlib
                 /* qwen families keep the split-half (NeoX) Q/K layout; llama-family
                    files come pre-permuted for the interleaved kernel. */
                 const bool neox_layout = opt.rope_permute
-                    || spec.arch_name == "qwen2" || spec.arch_name == "qwen3";
+                    || spec.arch_name == "qwen2" || spec.arch_name == "qwen3" || spec.arch_name == "gemma3";
                 transpose_into(sq, qd, d, fused.data(), nh, hd, neox_layout);          // wq (RoPE)
                 transpose_into(sk, kv, d, fused.data() + nq, spec.n_kv_heads, hd, neox_layout); // wk (RoPE)
                 transpose_into(sv, kv, d, fused.data() + nq + nkv, 0, 0, false);            // wv
@@ -393,6 +431,15 @@ namespace dlib
            get_embeddings. */
         {
             std::vector<float> emb = fetch(g, "token_embd.weight");
+            /* Gemma multiplies the embeddings by sqrt(d_model) before the first block. The
+               factor goes into the table: the output projection is a tensor of its own in the
+               network (filled above from the unscaled table), so it is not affected. An
+               export back to GGUF divides it out. */
+            if (spec.gemma_blocks)
+            {
+                const float scale = std::sqrt(static_cast<float>(d));
+                for (float& v : emb) v *= scale;
+            }
             bool done = false;
             embedding_loader el{ &emb, &done };
             visit_computational_layers(net, el);

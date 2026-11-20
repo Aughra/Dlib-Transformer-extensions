@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-20 — Gulliver 6.8.3 : importer Gemma 3 en réseau dlib (atelier, R1)
+
+- **Quoi** : dans dlib, couche `gelu_tanh_` et `geglu`, bloc `gemma_transformer_block` (`norm_placement::gemma`), paramètre `placement` de `decoder_transformer_config`, échelle linéaire des positions de RoPE (`set_position_scale`, sérialisée sous `rotary_positional_embedding_2` seulement si elle n'est pas 1), famille `gemma3` dans la détection (une couche globale sur six, base locale 10 000, fenêtre glissante signalée en note), chargeur (base et échelle par couche, deux normes de plus par bloc, NeoX, table des embeddings × √d) ; tests de dlib ; le script de comparaison ne juge plus que la comparaison au réseau dlib.
+- **Fichiers** : `dlib/dlib/dnn/{layers.h,transformer.h,decoder_transformer_config.h,decoder_transformer_config_abstract.h}`, `dlib/dlib/data_io/{gguf_model_spec.h,gguf_model_spec_abstract.h,gguf_weight_loader.h}`, `dlib/examples/slm_gguf_import_ex.cpp`, `dlib/dlib/test/dnn.cpp`, `gulliver/tools/atelier/compare_dlib_import.sh`, `gulliver/web/{changelog.md,openapi.json}`, `gulliver/common/version.h`, `gulliver/CMakeLists.txt` ; `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,feuille-de-route.md,memo-portage-macos-arm64.md}`, `logs/{reprise.md,decisions-2026-11-20.md}`, ce journal.
+- **Pourquoi** : R1 de l'atelier, deuxième famille (Gemma 3), sans laquelle on ne pourrait pas affiner les modèles Gemma que l'humain sert.
+- **Étapes** : Gemma 3 1B : KL 1,17e-7, écart 0,0081, top-1 100 % (exact) ; 4B : KL 1,13e-7, écart 0,0175, top-1 100 % ; Qwen3-0.6B inchangé (4,24e-7). `dtest --test_dnn` : d'abord deux échecs de mes tests (un réseau appelé par `forward` sans son entrée ; l'étiquette de version en `const char*`, écrite comme un booléen, le piège que décrit le test de `gqa_attention`), corrigés ; puis « All tests completed successfully » ; `dtest --test_metal` : 4 041. Le moteur seul signale « batched short sequence » en mode normal pour le 1B (11 sur 13 positions concordent entre 8 bits et flottants) : sans rapport avec l'import, déjà connu (4.19.0). Vrai service relancé en 6.8.2 avant cette étape.
+
 ## 2026-11-20 — Bloquer dans l'import de dlib une architecture inconnue (atelier, R1)
 
 - **Quoi** : `check_compatibility` bloque `arch_family::unknown` ; la description de `gguf_model_spec_abstract.h` le dit.

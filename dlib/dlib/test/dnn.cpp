@@ -2853,6 +2853,29 @@ namespace
         }
         {
             print_spinner();
+            gelu_tanh_ l;
+            auto res = test_layer(l);
+            DLIB_TEST_MSG(res, res);
+        }
+        {
+            // The tanh approximation of GELU, against its formula and against the erf form.
+            print_spinner();
+            const float values[] = { -4.0f, -1.5f, -0.3f, 0.0f, 0.25f, 1.0f, 3.5f };
+            matrix<float> x(1, 7);
+            for (long i = 0; i < 7; ++i) x(0, i) = values[i];
+            gelu_tanh<input<matrix<float>>> net;
+            const tensor& y = net(x);
+            for (long i = 0; i < 7; ++i)
+            {
+                const double v = values[i];
+                const double expected = 0.5 * v * (1.0 + std::tanh(std::sqrt(2.0 / pi) * (v + 0.044715 * v * v * v)));
+                const double exact = 0.5 * v * (1.0 + std::erf(v / std::sqrt(2.0)));
+                DLIB_TEST_MSG(std::abs(y.host()[i] - expected) < 1e-6, "gelu_tanh at " << v << ": " << y.host()[i] << " vs " << expected);
+                DLIB_TEST(std::abs(expected - exact) < 2e-3);
+            }
+        }
+        {
+            print_spinner();
             smelu_ l;
             auto res = test_layer(l);
             DLIB_TEST_MSG(res, res);
@@ -6612,6 +6635,18 @@ void test_multm_prev()
         gqa_attention_<32, 4, 1, 8, false, true>  wide;
         DLIB_TEST(loads(c1, c2));
         DLIB_TEST(loads(b1, b2));
+        {
+            // A linear position scale (Gemma 3) survives a round trip; an unscaled helper
+            // keeps the original tag, so its archives are unchanged.
+            rotary_positional_embedding_ r1, r2, r3;
+            r1.set_position_scale(0.125f);
+            DLIB_TEST(loads(r1, r2));
+            DLIB_TEST(r2.get_position_scale() == 0.125f);
+            std::ostringstream o; serialize(r3, o);
+            DLIB_TEST(o.str().find("rotary_positional_embedding_2") == std::string::npos);
+            r2 = r3;
+            DLIB_TEST(r2.get_position_scale() == 1.0f);
+        }
         DLIB_TEST(!loads(c1, b2));
         DLIB_TEST(!loads(b1, c2));
         DLIB_TEST(!loads(c1, wide));

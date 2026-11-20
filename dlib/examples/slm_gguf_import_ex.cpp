@@ -273,6 +273,11 @@ void build_expected_tensors(const model_spec& s, std::vector<expected_tensor>& o
         out.push_back({ p + "ffn_gate.weight",    d * ff });
         out.push_back({ p + "ffn_up.weight",      d * ff });
         out.push_back({ p + "ffn_down.weight",    ff * d });
+        if (s.gemma_blocks)
+        {
+            out.push_back({ p + "post_attention_norm.weight", d });
+            out.push_back({ p + "post_ffw_norm.weight",       d });
+        }
     }
 }
 
@@ -457,7 +462,8 @@ bool model_matches_header(const model_spec& s)
         && s.head_dim == imported_model::HEAD_DIM
         && s.qk_norm == imported_model::USE_QK_NORM
         && s.ffn_num == imported_model::FFN_NUM
-        && s.ffn_den == imported_model::FFN_DEN;
+        && s.ffn_den == imported_model::FFN_DEN
+        && s.gemma_blocks == imported_model::GEMMA_BLOCKS;
 }
 
 using infer_net = imported_model::network_type<false>;

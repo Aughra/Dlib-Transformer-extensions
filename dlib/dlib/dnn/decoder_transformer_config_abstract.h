@@ -19,7 +19,9 @@ namespace dlib
         long ffn_num,
         long ffn_den,
         long head_dim = embedding_dim / num_heads,
-        bool use_qk_norm = false
+        bool use_qk_norm = false,
+        template <typename> class MODALITY = no_modality,
+        norm_placement placement = norm_placement::pre
     >
     struct decoder_transformer_config
     {
@@ -81,6 +83,10 @@ namespace dlib
                 - EMBEDDING_DIM == embedding_dim
                 - HEAD_DIM      == head_dim
                 - USE_QK_NORM   == use_qk_norm
+                - PLACEMENT     == placement: norm_placement::pre builds the Llama-family
+                  blocks; norm_placement::gemma builds the Gemma 2/3 blocks (a second norm
+                  on each sublayer output before the residual add, GeGLU feed-forward with
+                  the tanh GELU).
                 - FFN_NUM       == ffn_num
                 - FFN_DEN       == ffn_den
                 - FFN_HIDDEN    == embedding_dim * ffn_num / ffn_den

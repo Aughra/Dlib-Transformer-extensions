@@ -48,6 +48,9 @@ namespace dlib
                 mistral  - Mistral models declaring the "mistral" architecture
                 gemma    - Gemma first generation
                 gemma2   - Gemma second generation
+                gemma3   - Gemma third generation (text decoder: sandwich norms, GeGLU,
+                           input scaled by sqrt(d_model), one global layer in six, the
+                           others on a sliding window with their own RoPE base)
                 qwen2    - Qwen2 family (QKV biases, tied embeddings on small sizes)
                 qwen3    - Qwen3 family (per-head QK-Norm, decoupled head_dim)
                 mixtral  - Mixture-of-experts Mistral variants
@@ -135,6 +138,12 @@ namespace dlib
         bool tied_embeddings;
         bool quantized;
         bool qk_norm;
+        // Gemma 3: Gemma blocks, sliding window size, one global layer every
+        // sliding_window_pattern layers, RoPE base of the sliding-window layers.
+        bool gemma_blocks;
+        long sliding_window;
+        long sliding_window_pattern;
+        double rope_freq_base_swa;
     };
 
     // ---------------------------------------------------------------------------------
@@ -262,8 +271,9 @@ namespace dlib
               layers and returns the blockers and notes.
             - #compat_result::ok == true if and only if no blocker was found.
             - Current blockers include: an architecture outside the known families
-              (arch_family::unknown), the Gemma families (require (1+w) RMSNorm,
-              embedding scaling and GeGLU), declared linear RoPE scaling, odd or
+              (arch_family::unknown), the first two Gemma generations (require (1+w)
+              RMSNorm, embedding scaling and GeGLU; gemma3 is accepted, its sliding
+              window reported as a note), declared linear RoPE scaling, odd or
               missing head_dim, n_heads not a multiple of n_kv_heads, and incomplete
               dimension metadata.
             - Mixture-of-experts models: blocked on the template path
