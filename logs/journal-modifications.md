@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-20 — Bloquer dans l'import de dlib une architecture inconnue (atelier, R1)
+
+- **Quoi** : `check_compatibility` bloque `arch_family::unknown` ; la description de `gguf_model_spec_abstract.h` le dit.
+- **Fichiers** : `dlib/dlib/data_io/gguf_model_spec.h`, `gguf_model_spec_abstract.h` ; `docs/{notes-pour-l-auteur.md,differences-mac-windows.md}`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : Gemma 3 1B passait la détection comme un Llama générique (288 tenseurs attendus sur 340, normes propres ignorées, en-tête écrit) : défaut de l'original, notes pour l'auteur n° 28.
+- **Étapes** : Gemma 3 1B refusé (« BLOCKER: architecture 'gemma3' … ») ; `compare_dlib_import.sh` sur Qwen3-0.6B : PASS, PASS. Gulliver ne change pas (pas de nouvelle version) ; aucun autre usage de `check_compatibility` dans `dlib/test`, Gulliver ni Pseudalis.
+
 ## 2026-11-20 — Gulliver 6.8.2 : faire tourner l'import GGUF de dlib et le comparer au moteur (atelier, R1)
 
 - **Quoi** : `gguf_weight_loader.h` laisse la table des embeddings hors de sa liste de paramètres (la couche `embeddings_` l'expose par `get_layer_params()` depuis l'original du 2026-10-24 : l'import s'arrêtait pour tout modèle, « assigned 170 of 171 ») ; option `--dump-logits` de `slm_gguf_import_ex` ; `test_runtime` : mot `logprobs` (référence en log-probabilités), lots courts comparés en distribution hors du mode exact (seuil `accelerate_min_tokens` de 16), refus d'une suite de moins de 4 tokens (elle finissait sur `std::length_error`) ; script `tools/atelier/compare_dlib_import.sh`. Modèle `build/models/Qwen3-0.6B-Q8_0.gguf` (Qwen officiel, SHA-256 `9465e63a…` conforme à Hugging Face).

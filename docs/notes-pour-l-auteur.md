@@ -40,6 +40,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 25 | Remarque, exactitude | `albireo/engine/cpu_runtime.cpp:532` | Le découpage de l'attention de l'écriture dépend du nombre de threads : la même question peut recevoir une autre réponse sur une autre machine ou avec un autre réglage (corrigé dans le fork, détail au changement 27, partie 4). | Aussi sous Windows, déduit du code |
 | 26 | Bug | `albireo/engine/chat_format.cpp:1886` | Mixtral 8x7B et Mistral 7B v0.1/v0.2 reçoivent le format sans template (« User: … Assistant: ») : `[INST]` n'est pas un token de leur vocabulaire (corrigé dans le fork). | Aussi sous Windows, déduit du code |
 | 27 | Bug | `dlib/data_io/gguf_weight_loader.h:230` | L'import d'un GGUF en réseau dlib (`slm_gguf_import_ex --probe-logits`, `--convert`, `--chat`) s'arrête pour tout modèle : « assigned 170 of 171 parameter tensors; the layer order assumption is wrong » ; la couche `embeddings_` expose sa table par `get_layer_params()` depuis le 2026-10-24 (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
+| 28 | Bug | `dlib/data_io/gguf_model_spec.h:291` | Une architecture inconnue de l'import (`gemma3`, `lfm2`, `qwen35`…) passe la vérification de compatibilité sans aucun blocage : elle est lue comme un Llama générique, ses tenseurs propres ignorés (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
 | Registre | dlib | `dlib/dlib`, `dlib/examples` | Tout ce que le fork change dans dlib, fichier par fichier (partie 5). | Voir chaque ligne |
 | 22 | Remarque, exactitude | `gulliver/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant (corrigé dans le fork). | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
 
@@ -300,6 +301,47 @@ Après (avec un visiteur `embedding_finder`, construit comme `embedding_loader` 
 ```
 
 - **Vérifié** : le réseau de Qwen3-0.6B se charge (« loaded 170 parameter tensors plus the embedding table ») et répond « Paris » à 0,649 sur « The capital of France is » ; sur 25 positions, ses log-probabilités sont celles du moteur d'inférence d'Albireo (renommé Gulliver dans le fork), écart maximal 0,0102, divergence KL moyenne 4,2e-7, même token le plus probable aux 25 positions (`test_runtime … exact logprobs`, l'exemple écrivant ses log-probabilités par une option `--dump-logits` ajoutée par le fork). Non vérifié : `--convert`, `--chat` et les autres familles.
+- **Mac ou Windows** : aussi sous Windows (code commun, en-têtes seulement), déduit du code, non vérifié sous Windows.
+
+### 28. Une architecture inconnue passe la vérification de compatibilité
+
+- **Où** : `dlib/dlib/data_io/gguf_model_spec.h`, `check_compatibility`, ligne 291 au commit `184ea00` (ligne 377 dans `upstream/main` à `966c178`).
+- **Ce qui se passe** : `arch_family_from_name` rend `arch_family::unknown` pour toute architecture hors de `llama`, `mistral`, `gemma`, `gemma2`, `qwen2`, `qwen3`, `mixtral`, `granitemoe`, mais `check_compatibility` ne bloque que Gemma et Gemma 2 par leur nom. Gemma 3 (`gemma3`), par exemple, passe sans un mot : l'en-tête du réseau est écrit comme pour un Llama, et l'inventaire des poids ne cherche que 288 tenseurs sur les 340 du fichier, oubliant les normes propres à Gemma 3 (après l'attention et après le bloc de calcul). Le réseau obtenu ne calculerait pas le modèle.
+
+```
+Architecture       : gemma3
+...
+Generated model header: slm_imported_model.h
+...
+Tensors expected    : 288
+Missing             : 0
+Shape mismatches    : 0
+...
+Weight inventory and shapes match the detected architecture.
+```
+
+- **Reproduire** : `slm_gguf_import_ex --input gemma-3-1b-it-Q4_K_M.gguf --out-prefix slm_imported_model` (unsloth, `gemma-3-1b-it-GGUF`).
+- **Correction du fork** ([COMMIT_R1B](https://github.com/Aughra/Dlib-Transformer-extensions/commit/COMMIT_R1B)) : un blocage pour la famille inconnue, en tête de la vérification. Avant (lignes 291 à 293) :
+
+```cpp
+        compat_result r;
+        if (s.family == arch_family::gemma || s.family == arch_family::gemma2)
+            r.blockers.push_back("Gemma family needs (1+w) RMSNorm, embedding scaling and GeGLU, not available yet");
+```
+
+Après :
+
+```cpp
+        compat_result r;
+        if (s.family == arch_family::unknown)
+            r.blockers.push_back("architecture '" + s.arch_name + "' is not one of the supported families "
+                "(llama, mistral, qwen2, qwen3, mixtral, granitemoe)");
+        if (s.family == arch_family::gemma || s.family == arch_family::gemma2)
+            r.blockers.push_back("Gemma family needs (1+w) RMSNorm, embedding scaling and GeGLU, not available yet");
+```
+
+  et la même phrase dans `gguf_model_spec_abstract.h`.
+- **Vérifié** : Gemma 3 1B refusé (« BLOCKER: architecture 'gemma3' is not one of the supported families », pas d'en-tête écrit) ; Qwen3-0.6B toujours importé et identique au moteur de Gulliver. Non vérifié : `slm_gguf_runtime_ex`, qui fait la même vérification (`fused_attention_path = false`) et refuse donc lui aussi désormais une architecture inconnue.
 - **Mac ou Windows** : aussi sous Windows (code commun, en-têtes seulement), déduit du code, non vérifié sous Windows.
 
 ## 2. Portabilité vers macOS sur puce Apple
@@ -1074,6 +1116,7 @@ Le fork modifie aussi dlib depuis le 2026-11-14, quand le portage le demande. Ch
 
 | `dlib/dlib/data_io/gguf_weight_loader.h` (`import_gguf_weights`) | Visiteur `embedding_finder` ; la table des embeddings est laissée hors de la liste des tenseurs de paramètres | Entrée n° 27 : l'import s'arrêtait pour tout modèle, la couche `embeddings_` exposant sa table par `get_layer_params()` | [e99b5db](https://github.com/Aughra/Dlib-Transformer-extensions/commit/e99b5db) | Qwen3-0.6B importé, log-probabilités identiques au moteur de Gulliver (KL 4,2e-7 sur 25 positions) | Aussi sous Windows (code commun ; non testé sous Windows) |
 | `dlib/examples/slm_gguf_import_ex.cpp` | Option `--dump-logits <fichier>` de `--probe-logits` : les log-probabilités de chaque position, en lignes de float32 | Comparer le réseau importé au moteur de Gulliver (`test_runtime … logprobs`, script `gulliver/tools/atelier/compare_dlib_import.sh`) : atelier, R1 | [e99b5db](https://github.com/Aughra/Dlib-Transformer-extensions/commit/e99b5db) | Fichier écrit, relu par `test_runtime` | Sans effet sous Windows tant que l'option n'est pas donnée |
+| `dlib/dlib/data_io/gguf_model_spec.h` (`check_compatibility`), `gguf_model_spec_abstract.h` | Blocage d'une architecture hors des familles connues (`arch_family::unknown`) | Entrée n° 28 : Gemma 3, LFM2, Qwen 3.5… passaient comme des Llama | [COMMIT_R1B](https://github.com/Aughra/Dlib-Transformer-extensions/commit/COMMIT_R1B) | Gemma 3 1B refusé, Qwen3-0.6B toujours importé et identique au moteur | Aussi sous Windows (code commun ; non testé sous Windows) |
 ---
 
 *Écrit pour l'auteur de l'original et tenu à jour par le fork : les entrées les plus récentes peuvent se trouver en fin de section. Ce document ne contient aucun chemin de machine privée, aucune clé et aucun jeton.*

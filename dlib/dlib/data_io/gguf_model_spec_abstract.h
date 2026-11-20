@@ -261,7 +261,8 @@ namespace dlib
             - Checks s against the capabilities of the current Dlib transformer
               layers and returns the blockers and notes.
             - #compat_result::ok == true if and only if no blocker was found.
-            - Current blockers include: the Gemma families (require (1+w) RMSNorm,
+            - Current blockers include: an architecture outside the known families
+              (arch_family::unknown), the Gemma families (require (1+w) RMSNorm,
               embedding scaling and GeGLU), declared linear RoPE scaling, odd or
               missing head_dim, n_heads not a multiple of n_kv_heads, and incomplete
               dimension metadata.

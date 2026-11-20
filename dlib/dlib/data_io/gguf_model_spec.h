@@ -289,6 +289,12 @@ namespace dlib
            and the runtime engine, which passes false. Both hold the QKV biases of the
            qwen2 family, so no check depends on it at present. */
         compat_result r;
+        /* An architecture outside the known families would otherwise be read as a generic
+           llama: its own tensors (extra norms, convolutions, recurrent states...) left
+           unread, and a network computing something else than the model, without a word. */
+        if (s.family == arch_family::unknown)
+            r.blockers.push_back("architecture '" + s.arch_name + "' is not one of the supported families "
+                "(llama, mistral, qwen2, qwen3, mixtral, granitemoe)");
         if (s.family == arch_family::gemma || s.family == arch_family::gemma2)
             r.blockers.push_back("Gemma family needs (1+w) RMSNorm, embedding scaling and GeGLU, not available yet");
         /* qwen2 QKV biases are held by the bias slots the fused attention packing
