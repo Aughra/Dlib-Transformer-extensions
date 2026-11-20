@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.9.0 — 20 novembre 2026
+
+### Accès et documents
+
+- La page de discussion peut être servie par **Cloudflare Pages**, derrière une connexion GitHub (Cloudflare Access), le calcul restant sur le Mac, joint par un tunnel Cloudflare (connexion sortante, aucun port ouvert sur la box). Une passerelle ne transmet au Mac que la discussion, le calcul et les données des profils ; l'administration du service (modèles, réglages, redémarrage, journaux) en est refusée. Le dossier `cloudflare/` du dépôt contient la passerelle, l'assemblage de la page, le lancement du tunnel et le mode d'emploi.
+- Servie par cette passerelle, la page cache les onglets « Modèles » et « Service » et leurs raccourcis du menu.
+
+---
+
 ## 6.8.4 — 20 novembre 2026
 
 ### Atelier

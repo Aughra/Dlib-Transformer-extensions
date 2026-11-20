@@ -57,16 +57,18 @@ function menuButton() {
   const openApi = () => window.open('/docs/', '_blank');
   return iconButton('menu', 'Menu', (e) => {
     const inChat = state.view === 'chat' && !!state.current;
+    // Hors du Mac (par la passerelle de Cloudflare), pas d'accès à l'administration du service.
+    const remote = Boolean(state.status && state.status.remote);
     const context = { label: 'Contexte de la prochaine question', action: () => contextPreview(), disabled: !inChat,
       hint: 'Ouvrez une discussion pour voir ce que le modèle lira.' };
     showPanel(e.currentTarget, [
       { title: 'Les réglages', entries: [
         { label: t('general'), action: () => settingsDialog('general') },
-        { label: t('modelsTab'), action: () => settingsDialog('modelsTab') },
+        ...(remote ? [] : [{ label: t('modelsTab'), action: () => settingsDialog('modelsTab') }]),
         { label: t('model'), action: () => settingsDialog('model') },
         { label: t('memoryTab'), action: () => settingsDialog('memoryTab') }] },
       { title: 'Le Mac', entries: [
-        { label: t('serviceTab'), action: () => settingsDialog('serviceTab') },
+        ...(remote ? [] : [{ label: t('serviceTab'), action: () => settingsDialog('serviceTab') }]),
         { label: t('data'), action: () => settingsDialog('data') },
         { label: t('profileSwitch'), action: () => switchProfile(dialog, h, t) }] },
       { title: 'Cette discussion', entries: [context] },

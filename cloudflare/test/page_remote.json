@@ -1,0 +1,14 @@
+[
+  { "name": "page ready", "until": "return document.querySelector('.composer .md-field') ? 'ok' : ''", "timeout": 30000 },
+  { "name": "status marked remote", "until": "const r=await fetch('/gulliver/v1/status'); return r.headers.get('X-Gulliver-Remote')==='1' ? 'remote' : ''", "timeout": 10000 },
+  { "name": "menu without the administration", "expect": true,
+    "eval": "document.querySelector('button[title=Menu]').click(); await new Promise(r=>setTimeout(r,500)); const txt=document.body.innerText; const ok=txt.includes('Génération') && !txt.includes('Modèles') && !/\\nService\\n/.test(txt); window.__menu=txt.slice(0,200); return ok" },
+  { "name": "settings without the two tabs", "expect": true,
+    "eval": "const item=[...document.querySelectorAll('button,.item,[role=menuitem]')].find(b=>(b.innerText||'').trim()==='Général'); item.click(); await new Promise(r=>setTimeout(r,600)); const tabs=[...document.querySelectorAll('.dialog .tabs button')].map(b=>b.dataset.tab); window.__tabs=tabs; return tabs.length===5 && !tabs.includes('modelsTab') && !tabs.includes('serviceTab')" },
+  { "name": "tabs shown", "eval": "return window.__tabs" },
+  { "name": "close settings", "expect": true, "eval": "[...document.querySelectorAll('.dialog button')].find(b=>b.classList.contains('primary')).click(); await new Promise(r=>setTimeout(r,300)); return true" },
+  { "name": "ask through the gateway", "expect": true,
+    "eval": "const a=document.querySelector('.composer .md-field'); a.value='Quelle est la capitale du Japon ? Un mot.'; a.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('button.send').click(); return true" },
+  { "name": "answer streamed back", "timeout": 120000,
+    "until": "const m=[...document.querySelectorAll('.message.assistant')]; return m.length && !document.querySelector('.message.assistant.live') && /Tokyo|Tōkyō/i.test(m[m.length-1].innerText) ? m[m.length-1].innerText.trim().slice(-80) : ''" }
+]

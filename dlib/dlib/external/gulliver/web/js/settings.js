@@ -33,7 +33,13 @@ import { broadcast, refreshViews, syncLists } from './tabs.js';
 
 export function settingsDialog(initialTab) {
   dialog((box, close) => {
-    const tabs = ['general', 'modelsTab', 'model', 'memoryTab', 'data', 'serviceTab', 'about'];
+    // Servie par la passerelle de Cloudflare (hors du Mac), la page n'a pas l'administration du service : ses
+    // onglets sont cachés, et la passerelle refuserait leurs actions de toute façon.
+    const remote = Boolean(state.status && state.status.remote);
+    const adminTabs = ['modelsTab', 'serviceTab'];
+    const tabs = ['general', 'modelsTab', 'model', 'memoryTab', 'data', 'serviceTab', 'about']
+      .filter((tab) => !remote || !adminTabs.includes(tab));
+    if (remote && adminTabs.includes(initialTab)) initialTab = 'general';
     const tabBar = h('div', { class: 'tabs' });
     const body = h('div');
     const show = (tab) => {

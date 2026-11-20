@@ -44,6 +44,11 @@
      "path": "docs/plan-discussion-en-ligne.md",
      "title": "La discussion en ligne",
      "desc": "Plan : la page chez Cloudflare Pages, le calcul sur le Mac."
+    },
+    {
+     "path": "cloudflare/README.md",
+     "title": "Mode d'emploi : la discussion en ligne",
+     "desc": "Les réglages Cloudflare (tunnel, Access, Pages) et les essais."
     }
    ]
   },

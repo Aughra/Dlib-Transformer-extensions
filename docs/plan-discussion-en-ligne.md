@@ -1,6 +1,6 @@
 # Plan : la discussion de Gulliver en ligne, le calcul sur le Mac
 
-Demande de l'humain (2026-11-20) : la page de discussion publiée comme `dev.tortuetech.com` (des fichiers servis par Cloudflare Pages, derrière le login GitHub de Cloudflare Access), **le Mac ne faisant que le calcul**, sans Tailscale. Rien n'est encore fait : ce document est le plan, à valider.
+Demande de l'humain (2026-11-20) : la page de discussion publiée comme `dev.tortuetech.com` (des fichiers servis par Cloudflare Pages, derrière le login GitHub de Cloudflare Access), **le Mac ne faisant que le calcul**, sans Tailscale. **Étapes 1, 2 et 4 préparées le 2026-11-20 (Gulliver 6.9.0)**, choix de l'humain : dossier `cloudflare/` (passerelle, assemblage, tunnel, [mode d'emploi](../cloudflare/README.md)), essayées sur le Mac avec `wrangler pages dev` ; reste ce qui se fait dans le compte Cloudflare (tunnel, jeton de service, deux applications Access, projet Pages). L'étape 3 (les données chez Cloudflare) est à rediscuter.
 
 ## Ce qu'on a relevé dans le code
 

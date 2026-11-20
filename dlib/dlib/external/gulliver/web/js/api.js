@@ -132,8 +132,13 @@ export async function* streamChat(body, signal) {
 }
 
 // L'état du service, qu'un service qui ne répond plus laisse inconnu au bout d'un moment.
-export function status() {
-  return getJSON('/gulliver/v1/status', timeout(8000));
+export async function status() {
+  const r = await fetch('/gulliver/v1/status', { cache: 'no-store', signal: timeout(8000) });
+  if (!r.ok) throw await errorOf(r);
+  const s = await r.json();
+  // La passerelle de Cloudflare marque ses réponses : la page sait alors qu'elle est servie hors du Mac.
+  s.remote = r.headers.get('X-Gulliver-Remote') === '1';
+  return s;
 }
 
 // Les modèles du service et de son catalogue, lus dans le délai de l'état (repris de l'original, Albireo 1.0.16) : la
