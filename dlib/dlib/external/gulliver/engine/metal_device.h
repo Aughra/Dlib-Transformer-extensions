@@ -129,6 +129,12 @@ namespace gulliver
                 t < rows, n < cols, k < inner, en floats simple précision, via Metal Performance
                 Shaders : les produits des prompts, Wf étant les poids que dequantize() a développés.
             !*/
+            // La même chose en demi-précision (X et Wh en half, Y en floats), et ses deux préparations : les poids
+            // développés en half, des lignes de floats copiées en half (Gulliver 6.7.0).
+            void gemm_half(metal_view X, unsigned rows, unsigned inner, unsigned x_stride, metal_view Wh, unsigned cols,
+                unsigned w_stride, metal_view Y, unsigned y_stride, float alpha = 1.0f, float beta = 0.0f);
+            void to_half(metal_view x, unsigned rows, unsigned cols, unsigned x_stride, metal_view y, unsigned y_stride);
+            bool dequantize_half(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view out, unsigned out_stride);
             void gemm(metal_view X, unsigned rows, unsigned inner, unsigned x_stride, metal_view Wf, unsigned cols,
                 unsigned w_stride, metal_view Y, unsigned y_stride, float alpha = 1.0f, float beta = 0.0f);
 

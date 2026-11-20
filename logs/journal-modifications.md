@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-20 — Gulliver 6.7.0 : les produits des prompts en demi-précision sur le GPU
+
+- **Quoi** : comparaison de Gulliver à llama.cpp (lecture environ 3 fois plus lente) ; essai d'un produit compressé `mm_dense` (non gardé, plus lent) ; produits des prompts en demi-précision : noyaux `dequant_h_*` et `to_half`, `metal_device::commands::{gemm_half,to_half,dequantize_half}`, tampon `xh`, `product()` en demi-précision ; contrôle du chargement en deux essais (demi-précision, puis floats) avec `gpu_state::half_prompts` ; fiche « GPU » de l'onglet Service.
+- **Fichiers** : `gulliver/engine/{metal_kernels.metal,metal_device.h,metal_device.mm,cpu_runtime_metal.cpp}`, `gulliver/web/{js/service.js,changelog.md,openapi.json}`, `gulliver/common/version.h`, `gulliver/CMakeLists.txt` ; `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,memo-portage-macos-arm64.md,feuille-de-route.md,mesures/2026-11-20-gulliver-contre-llama-cpp.md}`, `macos/site-docs/sommaire.json`, `logs/{reprise.md,nuit-2026-11-19.md}`, ce journal.
+- **Pourquoi** : point de la feuille de route « comparer Gulliver à d'autres moteurs » ; la comparaison a montré l'écart, et un calcul d'ordre de grandeur sa cause (produits en float32 au plafond du GPU).
+- **Étapes** : mesures alternées 6.6.0 / 6.7.0 sur huit modèles et trois longueurs (6.6.0 construite dans une copie de travail, supprimée ensuite) : lecture ×1,2 à ×2,7, écriture inchangée ; LFM2.5-8B-A1B échouait au contrôle en demi-précision, d'où le second essai en floats ; build sans avertissement ; `test_metal` ; `test_macos.sh` 70 étapes sans échec ; banc de la page 136. Notes pour l'auteur : changement 30.
+
 ## 2026-11-20 — Gulliver 6.6.0 : les mélanges d'experts essayés, leurs prompts sur le GPU, le format de Mixtral
 
 - **Quoi** : premiers essais de granitemoe, qwen3moe et mixtral contre llama.cpp (même prompt, choix glouton) ; prompts de tous les mélanges d'experts sur le GPU (`gpu_state::moe_prompts`) ; format `mistral_v1_format` pour les modèles dont le template écrit `[INST]` en texte (Mixtral, Mistral 7B v0.1/v0.2), qui recevaient le format sans template ; étapes de `test_macos.sh` pour les trois modèles et le format ; fiche « GPU » de l'onglet Service.

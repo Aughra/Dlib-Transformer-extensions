@@ -30,3 +30,23 @@ Point de la feuille de route « comparer Gulliver à d'autres moteurs locaux sur
 - **Lecture : llama.cpp va environ 3 fois plus vite** (×2,6 à ×3,3). La cause principale est connue : pour un prompt, Gulliver développe chaque matrice compressée en floats de 32 bits, puis la multiplie par Metal Performance Shaders ; llama.cpp multiplie directement les poids compressés, développés à la volée en demi-précision dans la mémoire rapide du GPU (`kernel_mul_mm`). Les experts de Gulliver ont déjà un tel noyau (`mm_id`) : c'est la piste.
 - **Écriture : llama.cpp va 1,3 à 1,8 fois plus vite**, l'écart grandissant avec le contexte (×1,4 à 512 tokens pour le 2B, ×1,5 à 1,6 à 16 384). L'attention de l'écriture de Gulliver lit des clés et valeurs en 8 bits qu'elle doit développer ; llama.cpp les lit en demi-précision avec une attention fusionnée.
 - Ces écarts ne disent rien de la justesse : sur les modèles comparés, les deux moteurs écrivent les mêmes réponses (voir les notes pour l'auteur).
+
+## Après Gulliver 6.7.0 (produits des prompts en demi-précision), même nuit
+
+Lecture seule (l'écriture ne change pas), mêmes réglages ; 2B et 4B en mesures alternées avec la 6.6.0 (deux tours), Qwen3-30B en un tour.
+
+| Modèle | Contexte | Gulliver 6.6.0 | Gulliver 6.7.0 | llama.cpp |
+|---|---|---|---|---|
+| Qwen3-VL 2B Instruct Q4_K_M | 512 | 1 803 à 1 870 | 4 567 à 4 772 | 5 765 à 5 930 |
+| Qwen3-VL 2B Instruct Q4_K_M | 4 096 | 1 706 à 1 743 | 3 445 à 3 477 | 4 786 à 4 918 |
+| Qwen3-VL 2B Instruct Q4_K_M | 16 384 | 966 à 970 | 1 282 à 1 326 | 2 857 à 2 923 |
+| Qwen3-VL 4B Thinking Q4_K_M | 512 | 750 à 761 | 2 041 à 2 100 | 2 494 à 2 564 |
+| Qwen3-VL 4B Thinking Q4_K_M | 4 096 | 649 à 674 | 1 304 à 1 367 | 1 801 à 1 972 |
+| Qwen3-VL 4B Thinking Q4_K_M | 16 384 | 367 à 377 | 530 à 532 | 1 136 à 1 172 |
+| Qwen3-30B-A3B-Instruct-2507 Q4_K_M | 512 | 608 | 683 | 1 993 à 1 994 |
+| Qwen3-30B-A3B-Instruct-2507 Q4_K_M | 4 096 | 556 à 557 | 601 | 1 595 |
+| Qwen3-30B-A3B-Instruct-2507 Q4_K_M | 16 384 | 301 | 300 | 854 à 858 |
+
+- Sur les contextes courts et moyens des modèles denses, l'écart tombe de ×3 à ×1,2-1,4.
+- Il reste grand sur les longs contextes (×2,2 pour le 4B à 16 384 tokens) : l'attention des prompts de Gulliver calcule en float32 ; c'est la piste suivante.
+- Il reste grand pour le mélange d'experts (×2,9) : les experts passent par le noyau `mm_id` de Gulliver, en float32, pas par MPS ; à porter en demi-précision ensuite.

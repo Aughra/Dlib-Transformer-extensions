@@ -81,6 +81,10 @@ namespace gulliver
         // Les poids d'un produit d'un prompt développés en floats, deux tampons à tour de rôle.
         metal_buffer expanded[2];
         size_t expanded_floats = 0;
+        // Les entrées d'un produit de prompt en demi-précision (Gulliver 6.7.0) : 32 lignes de plus que les tokens au plus.
+        metal_buffer xh;
+        // Les produits des prompts en demi-précision ; false quand le contrôle ne passe qu'en floats (gpu_ready()).
+        bool half_prompts = true;
         int turn = 0;
 
         size_t weight(const weight_matrix& W) const
@@ -320,6 +324,16 @@ namespace gulliver
         // Deux listes de tuiles (attention_tiles()) : pour les têtes du modèle, puis pour celles des couches à fenêtre
         // quand elles sont d'une autre largeur (Gemma 4 : 512 et 256) ; au plus une tuile par token chacune.
         g.tiles = need(device, T * 4 * sizeof(int));
+        if (tokens > metal_device::max_tokens)
+        {
+            // Les entrées des produits d'un prompt, en demi-précision : la plus large des matrices, T lignes.
+            size_t widest = static_cast<size_t>(output_.cols);
+            for (const layer& L : layers_)
+                for (const weight_matrix* M : { &L.wq, &L.wk, &L.wv, &L.wo, &L.w_gate, &L.w_up, &L.w_down, &L.w_mix,
+                         &L.w_z, &L.w_alpha, &L.w_beta, &L.w_ssm_out, &L.sh_gate, &L.sh_up, &L.sh_down })
+                    widest = std::max(widest, static_cast<size_t>(M->cols));
+            g.xh = need(device, T * widest * 2);
+        }
         if (cfg_.gemma4)
         {
             g.cs_swa = need(device, T * std::max<long>(cfg_.rope_dims_swa, 2) * f);
@@ -455,11 +469,12 @@ namespace gulliver
         // Un prompt assez long pour le chemin des prompts sur le GPU, et dont la longueur n'est pas un multiple de
         // 32 : les produits des prompts arrondissent leurs lignes (voir product() dans run_gpu()).
         const long n = std::max<long>(29, gpu_prompt_min_), V = cfg_.vocab;
-        const int a = create_sequence(), b = create_sequence();
+        int a = create_sequence(), b = create_sequence();
         struct release
         {
             cpu_runtime& rt;
-            int a, b;
+            int& a;
+            int& b;
             ~release()
             {
                 rt.release_sequence(a);
@@ -471,107 +486,141 @@ namespace gulliver
             gpu_->wait = 64;
             return false;
         }
-        forward_batch prompt;
-        for (long i = 0; i < n; ++i) prompt.tokens.push_back(static_cast<int>((1009 + 7919 * i) % V));
-        std::vector<float> on_gpu, on_cpu;
-        struct floats_scope
+        /*
+            Deux essais : les produits des prompts en demi-précision, puis, si le contrôle ne passe pas alors que
+            le prompt va au GPU, en floats, avec deux séquences neuves (Gulliver 6.7.0 : LFM2.5-8B-A1B, dont les
+            experts en 8 bits basculent sur un écart d'arrondi, ne passe qu'en floats).
+        */
+        std::string checked;          // le détail du contrôle qui a passé
+        bool prompt_checked = false;  // le prompt du contrôle est passé par le GPU
+        for (int attempt = 0;; ++attempt)
         {
-            bool& flag;
-            ~floats_scope() { flag = false; }
-        } floats{ float_products_ };
-        float_products_ = true;
-        std::ostringstream detail;
-        bool agree = true;
-        // Les logits d'une passe sur le GPU contre ceux du processeur, dans detail.
-        auto compare = [&](const char* what, double limit) {
-            double diff = 0, norm = 0;
-            long ig = 0, ic = 0;
-            for (long i = 0; i < V; ++i)
+            gpu_->half_prompts = attempt == 0;
+            if (attempt > 0)
             {
-                diff += (static_cast<double>(on_gpu[i]) - on_cpu[i]) * (static_cast<double>(on_gpu[i]) - on_cpu[i]);
-                norm += static_cast<double>(on_cpu[i]) * on_cpu[i];
-                if (on_gpu[i] > on_gpu[ig]) ig = i;
-                if (on_cpu[i] > on_cpu[ic]) ic = i;
+                release_sequence(a);
+                release_sequence(b);
+                a = create_sequence();
+                b = create_sequence();
+                if (!reserve_sequence(a, n + 2) || !reserve_sequence(b, n + 2))
+                {
+                    gpu_->wait = 64;
+                    return false;
+                }
             }
-            const double relative = std::sqrt(diff / std::max(norm, 1e-30));
-            detail << (detail.tellp() > 0 ? "; " : "") << what << ": logits within " << relative * 100
-                << "% of those of the processor, most likely token " << (ig == ic ? "the same" : "different");
-            // Écrit de sorte qu'une valeur qui n'est pas un nombre échoue.
-            if (!(relative <= limit) || ig != ic) agree = false;
-        };
-        // Le prompt : sur le GPU pour la première séquence quand les prompts y vont, sur le processeur
-        // sinon.
-        const bool gpu_prompt = (!cfg_.is_moe() || gpu_->moe_prompts) && n >= gpu_prompt_min_
-            && n <= gpu_prompt_context_;
-        prompt.logit_rows.assign(1, n - 1);
-        prompt.segments.assign(1, { a, 0, n });
-        try
-        {
-            if (gpu_prompt) run_gpu(prompt, on_gpu);
-            else run(prompt, on_gpu, false);
-        }
-        catch (const std::exception& e)
-        {
-            drop_gpu(std::string("the check failed on the GPU: ") + e.what());
-            return false;
-        }
-        prompt.segments.assign(1, { b, 0, n });
-        run(prompt, on_cpu, false);
-        /*
-            Un prompt écrit les clés et valeurs de tous ses tokens : en 8 bits, une valeur qu'une différence
-            d'arrondi de 1e-7 fait passer de l'autre côté du milieu de deux entiers prend l'autre entier, un
-            pas d'environ 1 % de son groupe, que les couches suivantes portent et multiplient.  Ses logits
-            diffèrent alors de ceux du processeur d'un ou deux pour cent avec des noyaux sains (1,5 % sur
-            le 2B, 16 tokens ; 0,04 % avec les clés et valeurs en demi-précision).  Un défaut donne bien
-            plus, et un autre token le plus probable.
-        */
-        /*
-            Un mélange d'experts en 8 bits (fork pour macOS) : une différence d'arrondi d'une clé ou d'une valeur suffit à
-            faire changer un token d'expert, ce qui déplace ses logits d'un coup ; le prompt du contrôle, des tokens pris
-            au hasard, met souvent des experts à égalité.  LFM2.5-8B-A1B : 7,7 % sur le prompt et 13,6 % à la première
-            étape en 8 bits, 0,13 % et 0,11 % en demi-précision, le même token le plus probable chaque fois.  Un défaut
-            donne des logits sans rapport et un autre token.
-        */
-        const bool q8_check = kv_.format() == kv_format::q8;
-        const double q8_limit = cfg_.is_moe() ? 0.25 : 0.05;
-        if (gpu_prompt) compare("prompt", q8_check ? q8_limit : 0.01);
-        for (int step = 0; step < 2; ++step)
-        {
-            forward_batch one;
-            one.tokens.push_back(static_cast<int>((4243 + 104729 * step) % V));
-            one.logit_rows.push_back(0);
-            one.segments.assign(1, { a, 0, 1 });
+            forward_batch prompt;
+            for (long i = 0; i < n; ++i) prompt.tokens.push_back(static_cast<int>((1009 + 7919 * i) % V));
+            std::vector<float> on_gpu, on_cpu;
+            struct floats_scope
+            {
+                bool& flag;
+                ~floats_scope() { flag = false; }
+            } floats{ float_products_ };
+            float_products_ = true;
+            std::ostringstream detail;
+            bool agree = true;
+            // Les logits d'une passe sur le GPU contre ceux du processeur, dans detail.
+            auto compare = [&](const char* what, double limit) {
+                double diff = 0, norm = 0;
+                long ig = 0, ic = 0;
+                for (long i = 0; i < V; ++i)
+                {
+                    diff += (static_cast<double>(on_gpu[i]) - on_cpu[i]) * (static_cast<double>(on_gpu[i]) - on_cpu[i]);
+                    norm += static_cast<double>(on_cpu[i]) * on_cpu[i];
+                    if (on_gpu[i] > on_gpu[ig]) ig = i;
+                    if (on_cpu[i] > on_cpu[ic]) ic = i;
+                }
+                const double relative = std::sqrt(diff / std::max(norm, 1e-30));
+                detail << (detail.tellp() > 0 ? "; " : "") << what << ": logits within " << relative * 100
+                    << "% of those of the processor, most likely token " << (ig == ic ? "the same" : "different");
+                // Écrit de sorte qu'une valeur qui n'est pas un nombre échoue.
+                if (!(relative <= limit) || ig != ic) agree = false;
+            };
+            // Le prompt : sur le GPU pour la première séquence quand les prompts y vont, sur le processeur
+            // sinon.
+            const bool gpu_prompt = (!cfg_.is_moe() || gpu_->moe_prompts) && n >= gpu_prompt_min_
+                && n <= gpu_prompt_context_;
+            prompt.logit_rows.assign(1, n - 1);
+            prompt.segments.assign(1, { a, 0, n });
             try
             {
-                run_gpu(one, on_gpu);
+                if (gpu_prompt) run_gpu(prompt, on_gpu);
+                else run(prompt, on_gpu, false);
             }
             catch (const std::exception& e)
             {
                 drop_gpu(std::string("the check failed on the GPU: ") + e.what());
                 return false;
             }
-            one.segments.assign(1, { b, 0, 1 });
-            run(one, on_cpu, false);
+            prompt.segments.assign(1, { b, 0, n });
+            run(prompt, on_cpu, false);
             /*
-                Les étapes lisent les clés et valeurs que le prompt a écrites : après un prompt sur le GPU en 8 bits,
-                elles en héritent les différences d'arrondi, et reçoivent la même limite (fork pour macOS ; LFM2.5-1.2B,
-                dont six couches d'attention portent seules la mémoire du texte : 2,2 % à la première étape en 8 bits,
-                0,10 % en demi-précision).
+                Un prompt écrit les clés et valeurs de tous ses tokens : en 8 bits, une valeur qu'une différence
+                d'arrondi de 1e-7 fait passer de l'autre côté du milieu de deux entiers prend l'autre entier, un
+                pas d'environ 1 % de son groupe, que les couches suivantes portent et multiplient.  Ses logits
+                diffèrent alors de ceux du processeur d'un ou deux pour cent avec des noyaux sains (1,5 % sur
+                le 2B, 16 tokens ; 0,04 % avec les clés et valeurs en demi-précision).  Un défaut donne bien
+                plus, et un autre token le plus probable.
             */
-            compare(step == 0 ? "step 1" : "step 2", gpu_prompt && q8_check ? q8_limit : 0.01);
-        }
-        if (!agree)
-        {
-            drop_gpu("its check disagrees with the processor (" + detail.str() + ")");
-            return false;
+            /*
+                Un mélange d'experts en 8 bits (fork pour macOS) : une différence d'arrondi d'une clé ou d'une valeur suffit à
+                faire changer un token d'expert, ce qui déplace ses logits d'un coup ; le prompt du contrôle, des tokens pris
+                au hasard, met souvent des experts à égalité.  LFM2.5-8B-A1B : 7,7 % sur le prompt et 13,6 % à la première
+                étape en 8 bits, 0,13 % et 0,11 % en demi-précision, le même token le plus probable chaque fois.  Un défaut
+                donne des logits sans rapport et un autre token.
+            */
+            const bool q8_check = kv_.format() == kv_format::q8;
+            const double q8_limit = cfg_.is_moe() ? 0.25 : 0.05;
+            if (gpu_prompt) compare("prompt", q8_check ? q8_limit : 0.01);
+            for (int step = 0; step < 2; ++step)
+            {
+                forward_batch one;
+                one.tokens.push_back(static_cast<int>((4243 + 104729 * step) % V));
+                one.logit_rows.push_back(0);
+                one.segments.assign(1, { a, 0, 1 });
+                try
+                {
+                    run_gpu(one, on_gpu);
+                }
+                catch (const std::exception& e)
+                {
+                    drop_gpu(std::string("the check failed on the GPU: ") + e.what());
+                    return false;
+                }
+                one.segments.assign(1, { b, 0, 1 });
+                run(one, on_cpu, false);
+                /*
+                    Les étapes lisent les clés et valeurs que le prompt a écrites : après un prompt sur le GPU en 8 bits,
+                    elles en héritent les différences d'arrondi, et reçoivent la même limite (fork pour macOS ; LFM2.5-1.2B,
+                    dont six couches d'attention portent seules la mémoire du texte : 2,2 % à la première étape en 8 bits,
+                    0,10 % en demi-précision).
+                */
+                compare(step == 0 ? "step 1" : "step 2", gpu_prompt && q8_check ? q8_limit : 0.01);
+            }
+            if (!agree && attempt == 0 && gpu_prompt)
+            {
+                if (gpu_->log)
+                    gpu_->log(GULLIVER_LOG_INFO, "GPU: the check disagrees with half precision prompt products (" + detail.str()
+                        + "), checked again with float products");
+                continue;
+            }
+            if (!agree)
+            {
+                drop_gpu("its check disagrees with the processor (" + detail.str() + ")");
+                return false;
+            }
+            checked = detail.str();
+            prompt_checked = gpu_prompt;
+            break;
         }
         gpu_->state = gpu_state::ready;
         note_gpu();
         if (gpu_->log)
             gpu_->log(GULLIVER_LOG_INFO, "GPU " + gpu_->device->name() + ": the generation steps"
-                + std::string(gpu_prompt ? " and the prompts of " + std::to_string(gpu_prompt_min_)
-                    + " tokens or more, up to " + std::to_string(gpu_prompt_context_) + " positions," : "")
-                + " run on it (" + detail.str() + ")");
+                + std::string(prompt_checked ? " and the prompts of " + std::to_string(gpu_prompt_min_)
+                    + " tokens or more, up to " + std::to_string(gpu_prompt_context_) + " positions"
+                + std::string(gpu_->half_prompts ? "," : " (float products),") : "")
+                + " run on it (" + checked + ")");
         return true;
     }
 
@@ -852,15 +901,33 @@ namespace gulliver
                 c->matvec(M.type, at(g.weights, g.weight(M)), M.rows, M.cols, x, uT, x_stride, y, y_stride, alpha, beta);
                 return;
             }
+            /*
+                Les poids développés en demi-précision, les entrées aussi, le résultat en floats (Gulliver 6.7.0) :
+                Metal Performance Shaders multiplie alors sur les unités matricielles du GPU, comme le fait
+                llama.cpp.  Sur le Mac mini, la lecture d'un prompt du 4B passe de 655-764 à 1 224-2 165 tokens/s
+                (512 tokens) ; le contrôle du chargement compare toujours au processeur.
+            */
             const metal_buffer& e = g.expanded[g.turn];
             g.turn ^= 1;
-            c->dequantize(M.type, at(g.weights, g.weight(M)), M.rows, M.cols, e, M.cols);
             /*
                 Metal Performance Shaders calcule sur un nombre de lignes multiple de 32, que les tampons contiennent
                 (grow_gpu()) : avec 24 à 31 lignes, ou 40, un produit de Qwen3.5-0.8B (attn_qkv, 6 144 x 1 024 en
                 floats) rendait des NaN.  Les lignes au-delà des tokens sont calculées pour rien.
             */
-            c->gemm(x, static_cast<unsigned>((T + 31) / 32 * 32), M.cols, x_stride, e, M.rows, M.cols, y, y_stride, alpha, beta);
+            const unsigned R = static_cast<unsigned>((T + 31) / 32 * 32);
+            if (g.half_prompts)
+            {
+                c->dequantize_half(M.type, at(g.weights, g.weight(M)), M.rows, M.cols, e, M.cols);
+                c->to_half(x, R, static_cast<unsigned>(M.cols), static_cast<unsigned>(x_stride), g.xh,
+                    static_cast<unsigned>(M.cols));
+                c->gemm_half(g.xh, R, M.cols, M.cols, e, M.rows, M.cols, y, y_stride, alpha, beta);
+            }
+            else
+            {
+                // En floats, quand le contrôle l'a demandé (gpu_ready()), comme avant Gulliver 6.7.0.
+                c->dequantize(M.type, at(g.weights, g.weight(M)), M.rows, M.cols, e, M.cols);
+                c->gemm(x, R, M.cols, x_stride, e, M.rows, M.cols, y, y_stride, alpha, beta);
+            }
         };
         for (long li = 0; li < cfg_.n_layers; ++li)
         {

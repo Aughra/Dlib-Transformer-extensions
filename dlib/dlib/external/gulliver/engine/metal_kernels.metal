@@ -611,6 +611,42 @@ kernel void dequant(device const uchar* W [[buffer(0)]], device float* out [[buf
     for (uint i = 0; i < 8; ++i) y[i] = v[i];
 }
 
+// La même chose en demi-précision, pour les produits des prompts en demi-précision (Gulliver 6.7.0).
+template <typename F>
+kernel void dequant_h(device const uchar* W [[buffer(0)]], device half* out [[buffer(1)]],
+    constant dequant_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+{
+    const long nb = a.cols / F::values;
+    const long b = g.x / (F::values / 8);
+    if (b >= nb) return;
+    const uint v0 = (g.x % (F::values / 8)) * 8;
+    float v[8];
+    F::dq8(W + long(g.y) * nb * F::bytes + b * F::bytes, v0, v);
+    device half* y = out + long(g.y) * a.out_stride + b * F::values + v0;
+    for (uint i = 0; i < 8; ++i) y[i] = half(v[i]);
+}
+template [[host_name("dequant_h_q4_K")]] kernel void dequant_h<fmt_q4_K>(device const uchar*, device half*, constant dequant_args&, uint2);
+template [[host_name("dequant_h_q6_K")]] kernel void dequant_h<fmt_q6_K>(device const uchar*, device half*, constant dequant_args&, uint2);
+template [[host_name("dequant_h_q5_K")]] kernel void dequant_h<fmt_q5_K>(device const uchar*, device half*, constant dequant_args&, uint2);
+template [[host_name("dequant_h_q8_0")]] kernel void dequant_h<fmt_q8_0>(device const uchar*, device half*, constant dequant_args&, uint2);
+template [[host_name("dequant_h_q5_0")]] kernel void dequant_h<fmt_q5_0>(device const uchar*, device half*, constant dequant_args&, uint2);
+
+// Des lignes de floats copiées en demi-précision : grille (colonnes / 4, lignes).
+struct to_half_args
+{
+    uint cols;
+    uint x_stride;
+    uint y_stride;
+};
+kernel void to_half(device const float* x [[buffer(0)]], device half* y [[buffer(1)]],
+    constant to_half_args& a [[buffer(2)]], uint2 g [[thread_position_in_grid]])
+{
+    const uint c = g.x * 4;
+    if (c >= a.cols) return;
+    const float4 v = *(device const float4*)(x + ulong(g.y) * a.x_stride + c);
+    *(device half4*)(y + ulong(g.y) * a.y_stride + c) = half4(v);
+}
+
 template [[host_name("dequant_q4_K")]] kernel void dequant<fmt_q4_K>(device const uchar*, device float*,
     constant dequant_args&, uint2);
 template [[host_name("dequant_q6_K")]] kernel void dequant<fmt_q6_K>(device const uchar*, device float*,

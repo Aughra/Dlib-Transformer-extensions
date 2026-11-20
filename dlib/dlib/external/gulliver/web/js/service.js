@@ -319,8 +319,8 @@ const items = {
       "fichier GGUF sont pris sans copie (newBufferWithBytesNoCopy sur la projection mmap alignée sur les pages), de même " +
       "que la zone des clés et valeurs. Un pas d’écriture (1 à 8 tokens) est encodé en une seule commande : matvec Q4_K/Q6_K " +
       "en simdgroups, RMSNorm, RoPE, écriture des clés et valeurs q8 tournées (Walsh-Hadamard), attention en ligne par morceaux de 256 " +
-      "positions puis fusion. Un prompt de 24 tokens ou plus décompresse chaque matrice en float32 puis passe par " +
-      "MPSMatrixMultiplication (les experts des mélanges d’experts par produits groupés, matmul_id) ; son attention multiplie des " +
+      "positions puis fusion. Un prompt de 24 tokens ou plus décompresse chaque matrice en float16, convertit ses entrées en float16, puis passe par " +
+      "MPSMatrixMultiplication (résultat en float32, sur les unités matricielles du GPU ; avant la 6.7.0, tout en float32, 2 à 3 fois plus lent) (les experts des mélanges d’experts par produits groupés, matmul_id) ; son attention multiplie des " +
       "matrices 8 × 8 (simdgroup_matrix), les têtes de 512 de Gemma 4 en deux tranches de 256 pour tenir dans les 32 Ko " +
       "de mémoire de threadgroup. Au chargement, une sonde de 29 tokens et deux pas sont comparés au processeur en " +
       "produits flottants : logits à 1 % près (5 % en clés 8 bits, 25 % pour un mélange d’experts en 8 bits), même " +

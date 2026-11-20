@@ -921,6 +921,29 @@ Corrigé dans le fork (Gulliver 6.4.0) ; non testé sous Windows.
 
 **Mac ou Windows** : propre au Mac (Metal).
 
+### Changement 30 : les produits des prompts en demi-précision sur le GPU (Gulliver 6.7.0)
+
+- **Avant** : un produit de prompt (24 tokens ou plus) développait la matrice compressée en floats de 32 bits (`dequant_*`), puis la multipliait par `MPSMatrixMultiplication` en float32. Le 4B Thinking lisait 512 tokens à 750-761 tokens/s, soit environ 6 000 milliards d'opérations par seconde, le plafond du GPU du M5 Pro en float32 ; llama.cpp lisait 2 494 à 2 564 tokens/s, ce qui n'est possible qu'en demi-précision (comparaison du 2026-11-20, `docs/mesures/`).
+- **Changement** : les poids sont développés en float16 (`dequant_h_*`), les entrées copiées en float16 (`to_half`, tampon `xh` dimensionné sur la plus large des matrices), et MPS multiplie en float16 avec un résultat en float32 (`gemm_half`) : les sommes restent en float32, comme dans `kernel_mul_mm` de llama.cpp. Les matrices restées en floats dans le fichier (routeur, `ssm_alpha`, `ssm_beta`) et les experts (`mm_id`) ne changent pas.
+- **Avant cela, essayé et non gardé** : un produit compressé sans développement (`mm_dense`, tiré de `mm_id`), en float32 puis en float16 dans la mémoire du threadgroup : 30 à 40 % plus lent, puis égal à 512 tokens et plus lent à 4 096. La précision du produit, pas le développement, faisait l'écart.
+- **Exactitude** : contrôle au chargement à 0,27 % pour le 4B (0,18 % avant) ; aucun modèle renvoyé au processeur sur les huit mesurés. Un modèle ne passe pas en demi-précision : LFM2.5-8B-A1B (mélange d'experts en clés 8 bits), dont le deuxième pas du contrôle change de token le plus probable (prompt à 6,0 %, pas à 12,1 et 7,2 %). Le contrôle (`gpu_ready`) fait donc deux essais : en demi-précision, puis, si le prompt est passé par le GPU, en floats avec deux séquences neuves ; LFM2.5-8B-A1B garde ainsi le GPU, ses prompts en floats (« (float products) » dans le journal). `test_macos.sh` passe, longs journaux compris.
+- **Vitesse** (Mac mini M5 Pro, `bench_runtime … 18 N 16 1 q8 metal`, 6.6.0 et 6.7.0 en alternance, deux tours) :
+
+| Modèle | 512 tokens | 4 096 tokens | 16 384 tokens |
+|---|---|---|---|
+| Qwen3-VL 2B Instruct Q4_K_M | 1 803-1 870 → 4 567-4 772 | 1 706-1 743 → 3 445-3 477 | 966-970 → 1 282-1 326 |
+| Qwen3-VL 4B Thinking Q4_K_M | 750-761 → 2 041-2 100 | 649-674 → 1 304-1 367 | 367-377 → 530-532 |
+| Qwen3.5-0.8B Q8_0 | 1 910 → 1 732-2 607 | 1 721-1 729 → 2 222-2 231 | 1 054 → 1 222-1 223 |
+| Qwen3.5-4B Q4_K_M | 566 → 1 114-1 122 | 504-507 → 909-912 | 338 → 482 |
+| Qwen 3.6 11B-A3B Q4_K_M | 717-719 → 962-964 | 606 → 769-770 | 352 → 402-403 |
+| Gemma 4 E2B Q4_K_M | 2 460-2 501 → 3 423-3 666 | 1 508-1 520 → 1 797-1 799 | 581-582 → 603-604 |
+| Gemma 3 4B Q4_K_M | 838-847 → 2 167-2 196 | 778-792 → 1 597-1 643 | 620-628 → 1 000-1 010 |
+| LFM2.5 1.2B Q8_0 | 1 960-2 032 → 4 985-5 206 | 1 962-1 976 → 4 909-4 911 | 1 633-1 641 → 3 185-3 201 |
+
+L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l'attention des prompts, toujours en float32, prend le dessus : c'est la piste suivante.
+
+**Mac ou Windows** : propre au Mac (Metal Performance Shaders).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -930,6 +953,7 @@ Corrigé dans le fork (Gulliver 6.4.0) ; non testé sous Windows.
 | Prompt de 512 tokens | pas mesuré | 418 à 422 tokens/s sur le GPU ; 217 à 224 sur le processeur (64 à 72 avec les changements 1 à 3) |
 | Prompt de 4 096 tokens | pas mesuré | 156 à 166 tokens/s, en demi-précision ou, avec le changement 7, en 8 bits (36 à 38 en 8 bits sans lui ; 50 à 58 avec les changements 1 à 3, 25 avec 1 et 2) |
 | Génération après 4 096 tokens | pas mesuré | 26,5 à 28,5 tokens/s sur le GPU ; 20 à 23 sur le processeur (9 en 8 bits sans le changement 7 ; 7,5 à 9 avec les changements 1 et 2 seuls) |
+| Mac mini M5 Pro, 4B Thinking, lecture de 512 tokens sur le GPU | pas mesuré | 2 041 à 2 100 tokens/s avec le changement 30 (750 à 761 avant) ; 16 384 tokens en 31 s (44 avant) |
 | Mac mini M5 Pro, Qwen3-30B-A3B (mélange d'experts) | lecture de 512 tokens sur le processeur, environ 96 à 115 tokens/s (rien d'autre) | 592 tokens/s sur le GPU avec le changement 29 |
 | Mac mini M5 Pro, Qwen3.6-35B-A3B (fork seulement) | non lu par le moteur | lecture de 512 tokens 464 à 465 tokens/s sur le GPU avec le changement 28 (103 à 124 sur le processeur) ; écriture 49 à 52 (29 à 36) |
 | Mac mini M5 Pro, 4B Thinking, écriture sur le processeur après 512 tokens | pas mesuré | 64 tokens/s avec le changement 26 (38 à 41 avant) ; 71 sur le GPU |

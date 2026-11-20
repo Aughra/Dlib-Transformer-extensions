@@ -49,7 +49,8 @@ namespace gulliver
             "attention_mtile_8_64", "attention_mtile_8_128", "attention_mtile_8_256", "restore_outputs", "short_conv",
             "gelu_mul", "add_rows",
             "attention_part_1_16", "attention_part_2_16", "attention_part_4_16", "attention_part_8_16",
-            "attention_mtile_1_512", "attention_mtile_2_512", "attention_mtile_4_512", "attention_mtile_8_512" };
+            "attention_mtile_1_512", "attention_mtile_2_512", "attention_mtile_4_512", "attention_mtile_8_512",
+            "dequant_h_q4_K", "dequant_h_q5_K", "dequant_h_q6_K", "dequant_h_q8_0", "dequant_h_q5_0", "to_half" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -62,7 +63,9 @@ namespace gulliver
             k_moe_group, k_moe_tiles, k_mm_id_q4_K, k_mm_id_q5_K, k_mm_id_q6_K, k_mm_id_q8_0, k_mm_id_q5_0,
             k_attention_part, k_attention_mtile = k_attention_part + 12, k_restore_outputs = k_attention_mtile + 12,
             k_short_conv, k_gelu_mul, k_add_rows, k_attention_part_512, k_attention_mtile_512 = k_attention_part_512 + 4,
-            k_count = k_attention_mtile_512 + 4
+            k_dequant_h_q4_K = k_attention_mtile_512 + 4, k_dequant_h_q5_K, k_dequant_h_q6_K, k_dequant_h_q8_0,
+            k_dequant_h_q5_0, k_to_half,
+            k_count
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -361,6 +364,56 @@ namespace gulliver
             transposeRight:YES resultRows:rows resultColumns:cols interiorColumns:inner alpha:alpha beta:beta];
         [mm encodeToCommandBuffer:impl_->buffer leftMatrix:matrix(X, rows, inner, x_stride)
             rightMatrix:matrix(Wf, cols, inner, w_stride) resultMatrix:matrix(Y, rows, cols, y_stride)];
+    }
+
+    void metal_device::commands::gemm_half(metal_view X, unsigned rows, unsigned inner, unsigned x_stride, metal_view Wh,
+        unsigned cols, unsigned w_stride, metal_view Y, unsigned y_stride, float alpha, float beta)
+    {
+        if (rows == 0 || cols == 0) return;
+        impl_->close();
+        id<MTLDevice> device = impl_->device->device;
+        auto matrix = [](metal_view v, unsigned r, unsigned c, unsigned stride, MPSDataType t, size_t bytes) {
+            MPSMatrixDescriptor* d = [MPSMatrixDescriptor matrixDescriptorWithRows:r columns:c
+                rowBytes:stride * bytes dataType:t];
+            return [[MPSMatrix alloc] initWithBuffer:v.buffer->impl_->buffer offset:v.offset descriptor:d];
+        };
+        MPSMatrixMultiplication* mm = [[MPSMatrixMultiplication alloc] initWithDevice:device transposeLeft:NO
+            transposeRight:YES resultRows:rows resultColumns:cols interiorColumns:inner alpha:alpha beta:beta];
+        [mm encodeToCommandBuffer:impl_->buffer leftMatrix:matrix(X, rows, inner, x_stride, MPSDataTypeFloat16, 2)
+            rightMatrix:matrix(Wh, cols, inner, w_stride, MPSDataTypeFloat16, 2)
+            resultMatrix:matrix(Y, rows, cols, y_stride, MPSDataTypeFloat32, 4)];
+    }
+
+    void metal_device::commands::to_half(metal_view x, unsigned rows, unsigned cols, unsigned x_stride, metal_view y,
+        unsigned y_stride)
+    {
+        if (rows == 0 || cols == 0) return;
+        impl_->use(k_to_half);
+        impl_->bind(x, 0);
+        impl_->bind(y, 1);
+        struct { unsigned cols, x_stride, y_stride; } a = { cols, x_stride, y_stride };
+        impl_->args(a, 2);
+        impl_->grid(cols / 4, rows, 1);
+    }
+
+    bool metal_device::commands::dequantize_half(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view out,
+        unsigned out_stride)
+    {
+        kernel_index k;
+        if (type == dlib::ggml_type::Q4_K) k = k_dequant_h_q4_K;
+        else if (type == dlib::ggml_type::Q5_K) k = k_dequant_h_q5_K;
+        else if (type == dlib::ggml_type::Q6_K) k = k_dequant_h_q6_K;
+        else if (type == dlib::ggml_type::Q8_0) k = k_dequant_h_q8_0;
+        else if (type == dlib::ggml_type::Q5_0) k = k_dequant_h_q5_0;
+        else return false;
+        if (rows == 0) return true;
+        impl_->use(k);
+        impl_->bind(W, 0);
+        impl_->bind(out, 1);
+        const dequant_args a = { cols, out_stride };
+        impl_->args(a, 2);
+        impl_->grid(static_cast<unsigned>(cols / 8), static_cast<unsigned>(rows), 1);
+        return true;
     }
 
     bool metal_device::commands::matvec(dlib::ggml_type type, metal_view W, long rows, long cols, metal_view x,
