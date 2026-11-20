@@ -321,7 +321,7 @@ Weight inventory and shapes match the detected architecture.
 ```
 
 - **Reproduire** : `slm_gguf_import_ex --input gemma-3-1b-it-Q4_K_M.gguf --out-prefix slm_imported_model` (unsloth, `gemma-3-1b-it-GGUF`).
-- **Correction du fork** ([COMMIT_R1B](https://github.com/Aughra/Dlib-Transformer-extensions/commit/COMMIT_R1B)) : un blocage pour la famille inconnue, en tête de la vérification. Avant (lignes 291 à 293) :
+- **Correction du fork** ([fb9e42b](https://github.com/Aughra/Dlib-Transformer-extensions/commit/fb9e42b)) : un blocage pour la famille inconnue, en tête de la vérification. Avant (lignes 291 à 293) :
 
 ```cpp
         compat_result r;
@@ -1116,7 +1116,7 @@ Le fork modifie aussi dlib depuis le 2026-11-14, quand le portage le demande. Ch
 
 | `dlib/dlib/data_io/gguf_weight_loader.h` (`import_gguf_weights`) | Visiteur `embedding_finder` ; la table des embeddings est laissée hors de la liste des tenseurs de paramètres | Entrée n° 27 : l'import s'arrêtait pour tout modèle, la couche `embeddings_` exposant sa table par `get_layer_params()` | [e99b5db](https://github.com/Aughra/Dlib-Transformer-extensions/commit/e99b5db) | Qwen3-0.6B importé, log-probabilités identiques au moteur de Gulliver (KL 4,2e-7 sur 25 positions) | Aussi sous Windows (code commun ; non testé sous Windows) |
 | `dlib/examples/slm_gguf_import_ex.cpp` | Option `--dump-logits <fichier>` de `--probe-logits` : les log-probabilités de chaque position, en lignes de float32 | Comparer le réseau importé au moteur de Gulliver (`test_runtime … logprobs`, script `gulliver/tools/atelier/compare_dlib_import.sh`) : atelier, R1 | [e99b5db](https://github.com/Aughra/Dlib-Transformer-extensions/commit/e99b5db) | Fichier écrit, relu par `test_runtime` | Sans effet sous Windows tant que l'option n'est pas donnée |
-| `dlib/dlib/data_io/gguf_model_spec.h` (`check_compatibility`), `gguf_model_spec_abstract.h` | Blocage d'une architecture hors des familles connues (`arch_family::unknown`) | Entrée n° 28 : Gemma 3, LFM2, Qwen 3.5… passaient comme des Llama | [COMMIT_R1B](https://github.com/Aughra/Dlib-Transformer-extensions/commit/COMMIT_R1B) | Gemma 3 1B refusé, Qwen3-0.6B toujours importé et identique au moteur | Aussi sous Windows (code commun ; non testé sous Windows) |
+| `dlib/dlib/data_io/gguf_model_spec.h` (`check_compatibility`), `gguf_model_spec_abstract.h` | Blocage d'une architecture hors des familles connues (`arch_family::unknown`) | Entrée n° 28 : Gemma 3, LFM2, Qwen 3.5… passaient comme des Llama | [fb9e42b](https://github.com/Aughra/Dlib-Transformer-extensions/commit/fb9e42b) | Gemma 3 1B refusé, Qwen3-0.6B toujours importé et identique au moteur | Aussi sous Windows (code commun ; non testé sous Windows) |
 ---
 
 *Écrit pour l'auteur de l'original et tenu à jour par le fork : les entrées les plus récentes peuvent se trouver en fin de section. Ce document ne contient aucun chemin de machine privée, aucune clé et aucun jeton.*
