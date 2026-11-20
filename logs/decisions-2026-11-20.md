@@ -2,6 +2,15 @@
 
 Consigne de l'humain, le matin : « ARRÊT les tests de perfs, et continue la roadmap ». Ce fichier dit ce que j'ai décidé seul, et pourquoi. Le plus récent est en haut.
 
+## 7. LFM2 avant Qwen 3.5, et la forme de la pile mixte
+
+- **LFM2 passe avant Qwen 3.5** (l'ordre de la feuille de route était Gemma 3, Qwen 3.5, LFM2, Mistral 3) : les deux mêlent des blocs d'attention à des couches linéaires, et la pile qui les mêle est la même. LFM2 la pose avec une couche neuve simple (une convolution de 3 poids par canal, dérivée en quelques lignes) ; Qwen 3.5 demande en plus la règle delta entraînable (dérivée à travers toute la séquence) et une attention à porte avec rotation partielle. On sépare ainsi la mise au point de la pile de celle de la couche difficile.
+- **Le motif des couches dans le type, en masque de bits** (`ATTENTION_MASK`, 64 couches au plus) : un réseau dlib fixe sa forme à la compilation, et l'import écrit déjà un en-tête propre à chaque modèle ; le motif de LFM2 est irrégulier (2, 5, 8, 10, 12, 14), donc ni « une sur quatre » ni un compte ne suffisent. 64 couches couvrent les modèles visés (LFM2 16, Qwen 3.5 de 24 à 64).
+- **La convolution entre deux couches linéaires de dlib** plutôt qu'une couche qui porte les trois matrices : in_proj et out_proj restent des `linear_no_bias`, que le chargeur, LoRA et l'export savent déjà traiter ; la couche neuve ne garde que ses poids de convolution.
+- **Un état gardé pour l'écriture token par token**, comme le cache de l'attention : sans lui, une génération dans dlib serait fausse après le premier token. Le décalage du cache des longues générations n'a pas d'équivalent (l'état est une fenêtre glissante), c'est écrit dans la notice.
+- **`test_runtime` corrigé plutôt que contourné** : il plantait sur tout modèle récurrent en voulant revenir au milieu d'une séquence, ce que le moteur refuse à juste titre ; la troncature repart de 0 (le seul retour permis sans point de reprise), l'essai du préfixe partagé est sauté avec un message.
+- **`transpose_into` contrôlé dans la fonction elle-même** (entrée n° 29 des notes) plutôt que seulement dans le bloc neuf : le défaut est une lecture hors du vecteur, possible pour tout appel ; `copy_into`, qui remplit de zéros, est laissée telle quelle faute de savoir si c'est voulu.
+
 ## 6. La fenêtre glissante : un champ toujours écrit
 
 - **Quoi** : la fenêtre de `gqa_attention_` est écrite à la fin de chaque archive de la couche, qu'elle vaille 0 ou non.

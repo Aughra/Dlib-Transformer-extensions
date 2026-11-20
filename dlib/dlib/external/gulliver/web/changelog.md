@@ -2,6 +2,19 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.10.1 — 20 novembre 2026
+
+### Atelier
+
+- **LFM2** s'importe en réseau dlib : LFM2.5-1.2B donne les mêmes probabilités que le moteur de Gulliver (divergence moyenne 3,2e-7 sur 26 positions, même token le plus probable partout). dlib reçoit une couche de convolution courte entraînable et une pile qui mêle, couche par couche, blocs d'attention et blocs à convolution.
+
+### Corrections
+
+- `test_runtime` ne s'arrête plus sur un modèle à état récurrent (LFM2, Qwen 3.5) : la troncature y repart de la position 0, et l'essai du préfixe partagé, qui coupe une séquence au milieu d'un bloc, est sauté avec un message.
+- L'import de dlib refuse un tenseur plus petit que prévu au lieu de le lire au-delà de sa fin.
+
+---
+
 ## 6.10.0 — 20 novembre 2026
 
 ### Accès et documents

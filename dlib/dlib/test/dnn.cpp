@@ -6589,6 +6589,86 @@ void test_multm_prev()
 
 // ----------------------------------------------------------------------------------------
 
+    void test_short_conv()
+    {
+        /* The gated short convolution of LFM2: its gradients, its values against the formula
+           y[t] = C[t] * sum_i w[i] * (B * X)[t - K + 1 + i], decoding one token at a time after
+           a prefill gives the rows of the full pass, and the weights survive serialization. */
+        print_spinner();
+        {
+            dlib::timpl::test_layer_params p({ 0, 0, 0, 12 });
+            short_conv_<3> l;
+            auto res = test_layer(l, p);
+            DLIB_TEST_MSG(res, res);
+        }
+        const long D = 4, K = 3, N = 9;
+        using net_type = short_conv<K, input_tensor>;
+        resizable_tensor x(1, 1, N, 3 * D);
+        tt::tensor_rand rnd(5); rnd.fill_gaussian(x);
+        net_type net;
+        {
+            std::vector<resizable_tensor> one(1, x); resizable_tensor staged;
+            net.to_tensor(one.begin(), one.end(), staged);
+            network_context::reset();
+            net.forward(x);
+        }
+        tensor& w = layer<0>(net).layer_details().get_layer_params();
+        DLIB_TEST(w.num_samples() == D && w.k() == K);
+        rnd.fill_gaussian(w);
+        network_context::reset();
+        network_context::set_inference_mode(network_context::inference_mode::full);
+        net.forward(x);
+        resizable_tensor full; full = net.get_output();
+        double worst = 0;
+        for (long t = 0; t < N; ++t)
+            for (long c = 0; c < D; ++c)
+            {
+                double s = 0;
+                for (long i = 0; i < K; ++i)
+                {
+                    const long u = t - K + 1 + i;
+                    if (u < 0) continue;
+                    const float* r = x.host() + u * 3 * D;
+                    s += w.host()[c * K + i] * r[c] * r[2 * D + c];
+                }
+                const double expected = x.host()[t * 3 * D + D + c] * s;
+                worst = std::max(worst, std::abs(full.host()[t * D + c] - expected));
+            }
+        DLIB_TEST_MSG(worst < 1e-5, "short_conv differs from its formula by " << worst);
+
+        // A prefill of four tokens, then one token at a time.
+        network_context::reset();
+        network_context::request_kv_cache_clear();
+        const long first = 4;
+        worst = 0;
+        for (long t0 = 0; t0 < N; t0 = (t0 == 0 ? first : t0 + 1))
+        {
+            const long n = t0 == 0 ? first : 1;
+            network_context::set_inference_mode(t0 == 0 ? network_context::inference_mode::prefill
+                                                        : network_context::inference_mode::incremental);
+            resizable_tensor xi(1, 1, n, 3 * D);
+            std::copy(x.host() + t0 * 3 * D, x.host() + (t0 + n) * 3 * D, xi.host());
+            net.forward(xi);
+            if (t0 == 0) network_context::clear_kv_cache_request();
+            const tensor& y = net.get_output();
+            for (long j = 0; j < n * D; ++j)
+                worst = std::max<double>(worst, std::abs(y.host()[j] - full.host()[t0 * D + j]));
+        }
+        network_context::reset();
+        DLIB_TEST_MSG(worst < 1e-6, "incremental short_conv differs from the full pass by " << worst);
+
+        std::ostringstream o; serialize(layer<0>(net).layer_details(), o);
+        short_conv_<K> back;
+        std::istringstream in(o.str()); deserialize(back, in);
+        DLIB_TEST(back.get_channels() == D);
+        DLIB_TEST(max(abs(mat(back.get_layer_params()) - mat(w))) == 0);
+        short_conv_<K + 1> other;
+        std::istringstream in2(o.str());
+        DLIB_TEST_MSG((
+            [&]() { try { deserialize(other, in2); } catch (const serialization_error&) { return true; } return false; }()),
+            "a kernel of another width must be refused");
+    }
+
     void test_gqa_attention_sliding_window()
     {
         /* A sliding window of W positions (Gemma 3) must hide exactly the keys older than W
@@ -6841,6 +6921,7 @@ void test_multm_prev()
 
             test_gqa_attention_causality();
             test_gqa_attention_sliding_window();
+            test_short_conv();
             test_tagging();
 #ifdef DLIB_USE_CUDA
             test_affine_rect();

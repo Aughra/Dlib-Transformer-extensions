@@ -144,6 +144,11 @@ namespace dlib
         long sliding_window;
         long sliding_window_pattern;
         double rope_freq_base_swa;
+        // LFM2: short-convolution blocks of conv_kernel taps on the layers whose bit is
+        // clear in attention_mask (bit i set: layer i attends). Final norm token_embd_norm.
+        bool conv_blocks;
+        unsigned long long attention_mask;
+        long conv_kernel;
     };
 
     // ---------------------------------------------------------------------------------

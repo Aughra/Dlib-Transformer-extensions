@@ -89,6 +89,74 @@ namespace dlib
 
 // ----------------------------------------------------------------------------------------
 
+    /* A decoder whose layers mix pre-norm attention blocks and short-convolution blocks,
+       the LFM2 models. Bit i of attention_mask set makes layer i (from the input) an
+       attention block; the others are short_conv_block of conv_kernel taps. Embeddings,
+       final RMSNorm and output head as in decoder_transformer_config. */
+    template <
+        long vocab_size,
+        long num_layers,
+        long num_heads,
+        long num_kv_heads,
+        long embedding_dim,
+        long ffn_num,
+        long ffn_den,
+        long head_dim,
+        bool use_qk_norm,
+        unsigned long long attention_mask,
+        long conv_kernel
+    >
+    struct short_conv_transformer_config
+    {
+        static constexpr long VOCAB_SIZE    = vocab_size;
+        static constexpr long NUM_LAYERS    = num_layers;
+        static constexpr long NUM_HEADS     = num_heads;
+        static constexpr long NUM_KV_HEADS  = num_kv_heads;
+        static constexpr long EMBEDDING_DIM = embedding_dim;
+        static constexpr long HEAD_DIM      = head_dim;
+        static constexpr bool USE_QK_NORM   = use_qk_norm;
+        static constexpr long FFN_NUM       = ffn_num;
+        static constexpr long FFN_DEN       = ffn_den;
+        static constexpr long FFN_HIDDEN    = embedding_dim * ffn_num / ffn_den;
+        static constexpr unsigned long long ATTENTION_MASK = attention_mask;
+        static constexpr long CONV_KERNEL   = conv_kernel;
+
+        template <typename SUBNET>
+        using conv_block = gqa_transformer_unified::short_conv_block<EMBEDDING_DIM, CONV_KERNEL,
+            FFN_NUM, FFN_DEN, SUBNET, linear_no_bias>;
+
+        using subnet = gqa_transformer_unified::hybrid_stack<
+            NUM_LAYERS, ATTENTION_MASK, conv_block, EMBEDDING_DIM, NUM_HEADS, NUM_KV_HEADS,
+            FFN_NUM, FFN_DEN, embeddings<VOCAB_SIZE, EMBEDDING_DIM, input<matrix<int, 0, 1>>>,
+            linear_no_bias, HEAD_DIM, USE_QK_NORM>;
+
+        template <bool is_training>
+        using network_type = loss_cross_entropy_per_token<linear_no_bias<VOCAB_SIZE, rms_norm<subnet>>>;
+
+        struct model_info
+        {
+            static std::string describe()
+            {
+                long attention = 0;
+                for (long i = 0; i < NUM_LAYERS; ++i) attention += (ATTENTION_MASK >> i) & 1ull;
+                std::ostringstream o;
+                o << "short_conv_transformer_config\n"
+                  << "  vocab        : " << VOCAB_SIZE << "\n"
+                  << "  layers       : " << NUM_LAYERS << " (" << attention << " attention, "
+                  << NUM_LAYERS - attention << " short convolution of " << CONV_KERNEL << " taps)\n"
+                  << "  heads        : " << NUM_HEADS << " (kv " << NUM_KV_HEADS
+                  << ", head_dim " << HEAD_DIM << ")\n"
+                  << "  d_model      : " << EMBEDDING_DIM << "\n"
+                  << "  qk_norm      : " << (USE_QK_NORM ? "on" : "off") << "\n"
+                  << "  ffn_hidden   : " << FFN_HIDDEN
+                  << " (= d_model * " << FFN_NUM << " / " << FFN_DEN << ")";
+                return o.str();
+            }
+        };
+    };
+
+// ----------------------------------------------------------------------------------------
+
     /* A decoder and a vision tower as one parameterizable model.
 
        This exists so that the composition is named once, here, rather than assembled by

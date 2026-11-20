@@ -253,13 +253,25 @@ void build_expected_tensors(const model_spec& s, std::vector<expected_tensor>& o
     const long long ff = s.d_ffn;
 
     out.push_back({ "token_embd.weight", static_cast<long long>(s.vocab_size) * d });
-    out.push_back({ "output_norm.weight", d });
+    out.push_back({ s.conv_blocks ? "token_embd_norm.weight" : "output_norm.weight", d });
     if (!s.tied_embeddings) out.push_back({ "output.weight", static_cast<long long>(s.vocab_size) * d });
 
     for (long i = 0; i < s.n_layers; ++i)
     {
         const string p = "blk." + std::to_string(i) + ".";
         out.push_back({ p + "attn_norm.weight",   d });
+        if (s.conv_blocks && !((s.attention_mask >> i) & 1ull))
+        {
+            // A short-convolution block of LFM2 in place of the attention.
+            out.push_back({ p + "shortconv.in_proj.weight",  3 * d * d });
+            out.push_back({ p + "shortconv.conv.weight",     d * s.conv_kernel });
+            out.push_back({ p + "shortconv.out_proj.weight", d * d });
+            out.push_back({ p + "ffn_norm.weight",    d });
+            out.push_back({ p + "ffn_gate.weight",    d * ff });
+            out.push_back({ p + "ffn_up.weight",      d * ff });
+            out.push_back({ p + "ffn_down.weight",    ff * d });
+            continue;
+        }
         out.push_back({ p + "attn_q.weight",      d * q });
         out.push_back({ p + "attn_k.weight",      d * kv });
         out.push_back({ p + "attn_v.weight",      d * kv });
@@ -463,7 +475,9 @@ bool model_matches_header(const model_spec& s)
         && s.qk_norm == imported_model::USE_QK_NORM
         && s.ffn_num == imported_model::FFN_NUM
         && s.ffn_den == imported_model::FFN_DEN
-        && s.gemma_blocks == imported_model::GEMMA_BLOCKS;
+        && s.gemma_blocks == imported_model::GEMMA_BLOCKS
+        && s.attention_mask == imported_model::ATTENTION_MASK
+        && s.conv_kernel == imported_model::CONV_KERNEL;
 }
 
 using infer_net = imported_model::network_type<false>;

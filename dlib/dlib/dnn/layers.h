@@ -4915,6 +4915,238 @@ namespace dlib
 
 // ----------------------------------------------------------------------------------------
 
+    /* The gated short convolution of the LFM2 models (llama.cpp, build_lfm_shortconv). The
+       input rows hold, per token, three blocks of D values, B, C and X, as an in_proj linear
+       of width 3 * D produces them; the output rows hold D values:
+
+           v[t] = B[t] * X[t],   s[t] = sum_i w[i] * v[t - kernel_size + 1 + i],   y[t] = C[t] * s[t]
+
+       per channel, w being that channel's kernel_size weights (the last one weighs the current
+       token), and v zero before the sequence and on its left padding. The parameters are a
+       D x kernel_size tensor, one row per channel, laid out as the GGUF shortconv.conv.weight.
+
+       In prefill and incremental modes the layer keeps, per sample, the last kernel_size - 1
+       values of v, so an incremental pass carries the convolution on from them, the
+       counterpart of the attention's KV cache; a cache-clear request drops them. The KV cache
+       shift of long generations has no counterpart here: the state is a running window. */
+    template <long kernel_size>
+    class short_conv_
+    {
+        static_assert(kernel_size >= 1, "the short convolution needs at least one tap");
+
+    public:
+        short_conv_() = default;
+
+        double get_learning_rate_multiplier() const { return learning_rate_multiplier; }
+        double get_weight_decay_multiplier() const { return weight_decay_multiplier; }
+        void set_learning_rate_multiplier(double v) { learning_rate_multiplier = v; }
+        void set_weight_decay_multiplier(double v) { weight_decay_multiplier = v; }
+
+        long get_channels() const { return channels; }
+        void reset_state() { state.clear(); state_planes = 0; }
+
+        template <typename SUBNET>
+        void setup(const SUBNET& sub)
+        {
+            const tensor& in = sub.get_output();
+            DLIB_CASSERT(in.nc() % 3 == 0, "short_conv_ needs rows of three blocks B, C, X");
+            channels = in.nc() / 3;
+            params.set_size(channels, kernel_size);
+            /* A pass-through start: the current token weighs 1, the previous ones 0. */
+            float* w = params.host();
+            for (long c = 0; c < channels; ++c)
+                for (long i = 0; i < kernel_size; ++i)
+                    w[c * kernel_size + i] = (i == kernel_size - 1) ? 1.0f : 0.0f;
+            reset_state();
+        }
+
+        template <typename SUBNET>
+        void forward(const SUBNET& sub, resizable_tensor& output)
+        {
+            const tensor& in = sub.get_output();
+            DLIB_CASSERT(in.nc() == 3 * channels, "short_conv_ input width changed after setup");
+            const auto mode = network_context::get_inference_mode();
+            if (network_context::consume_kv_cache_clear_request())
+                reset_state();
+            const long N = in.num_samples(), P = in.k(), T = in.nr(), D = channels, W = kernel_size - 1;
+            const long planes = N * P;
+            const bool keeps = mode == network_context::inference_mode::prefill
+                || mode == network_context::inference_mode::incremental;
+            const bool carries = mode == network_context::inference_mode::incremental && state_planes == planes;
+            if (keeps && !carries)
+            {
+                state.assign(static_cast<size_t>(planes * D * W), 0.0f);
+                state_planes = planes;
+            }
+
+            output.set_size(N, P, T, D);
+            const float* x = in.host();
+            const float* w = params.host();
+            float* y = output.host_write_only();
+            std::vector<float> hist(static_cast<size_t>(W));
+            for (long n = 0; n < N; ++n)
+            {
+                /* Positions before pad are left padding: their v is zero. A new token of an
+                   incremental pass is never padding. */
+                const long pad = (!carries && network_context::is_padding_set())
+                    ? std::min(T, network_context::get_padding_length(n)) : 0;
+                for (long p = 0; p < P; ++p)
+                {
+                    const long plane = n * P + p;
+                    const float* rows = x + plane * T * 3 * D;
+                    float* out = y + plane * T * D;
+                    for (long c = 0; c < D; ++c)
+                    {
+                        const float* wc = w + c * kernel_size;
+                        float* kept = keeps ? state.data() + (plane * D + c) * W : nullptr;
+                        if (carries) std::copy(kept, kept + W, hist.begin());
+                        else std::fill(hist.begin(), hist.end(), 0.0f);
+                        for (long t = 0; t < T; ++t)
+                        {
+                            const float* r = rows + t * 3 * D;
+                            const float v = t < pad ? 0.0f : r[c] * r[2 * D + c];
+                            float s = v * wc[W];
+                            for (long i = 0; i < W; ++i) s += hist[static_cast<size_t>(i)] * wc[i];
+                            for (long i = 0; i + 1 < W; ++i) hist[static_cast<size_t>(i)] = hist[static_cast<size_t>(i + 1)];
+                            if (W > 0) hist[static_cast<size_t>(W - 1)] = v;
+                            out[t * D + c] = r[D + c] * s;
+                        }
+                        if (keeps) std::copy(hist.begin(), hist.end(), kept);
+                    }
+                }
+            }
+        }
+
+        /* The backward pass follows a full pass (training): no carried state. */
+        template <typename SUBNET>
+        void backward(const tensor& gradient_input, SUBNET& sub, tensor& params_grad)
+        {
+            const tensor& in = sub.get_output();
+            const long N = in.num_samples(), P = in.k(), T = in.nr(), D = channels, W = kernel_size - 1;
+            const float* x = in.host();
+            const float* w = params.host();
+            const float* g = gradient_input.host();
+            float* gx = sub.get_gradient_input().host();
+            float* gw = params_grad.host();
+            std::fill(gw, gw + params_grad.size(), 0.0f);
+            std::vector<float> v(static_cast<size_t>(T)), ds(static_cast<size_t>(T));
+            for (long n = 0; n < N; ++n)
+            {
+                const long pad = network_context::is_padding_set()
+                    ? std::min(T, network_context::get_padding_length(n)) : 0;
+                for (long p = 0; p < P; ++p)
+                {
+                    const long plane = n * P + p;
+                    const float* rows = x + plane * T * 3 * D;
+                    float* grows = gx + plane * T * 3 * D;
+                    const float* gout = g + plane * T * D;
+                    for (long c = 0; c < D; ++c)
+                    {
+                        const float* wc = w + c * kernel_size;
+                        float* gwc = gw + c * kernel_size;
+                        for (long t = 0; t < T; ++t)
+                        {
+                            const float* r = rows + t * 3 * D;
+                            v[static_cast<size_t>(t)] = t < pad ? 0.0f : r[c] * r[2 * D + c];
+                        }
+                        for (long t = 0; t < T; ++t)
+                        {
+                            float s = 0.0f;
+                            for (long i = 0; i <= W; ++i)
+                            {
+                                const long u = t - W + i;
+                                if (u >= 0) s += wc[i] * v[static_cast<size_t>(u)];
+                            }
+                            const float go = gout[t * D + c];
+                            grows[t * 3 * D + D + c] += go * s;                       // dC
+                            ds[static_cast<size_t>(t)] = go * rows[t * 3 * D + D + c];
+                        }
+                        for (long u = 0; u < T; ++u)
+                        {
+                            /* dv[u] gathers the outputs that read v[u]; dw[i] the products
+                               with the values each tap read. */
+                            float dv = 0.0f;
+                            for (long i = 0; i <= W; ++i)
+                            {
+                                const long t = u + W - i;
+                                if (t < T)
+                                {
+                                    dv += ds[static_cast<size_t>(t)] * wc[i];
+                                    gwc[i] += ds[static_cast<size_t>(t)] * v[static_cast<size_t>(u)];
+                                }
+                            }
+                            if (u < pad) continue;
+                            const float* r = rows + u * 3 * D;
+                            grows[u * 3 * D + c] += dv * r[2 * D + c];                // dB
+                            grows[u * 3 * D + 2 * D + c] += dv * r[c];                // dX
+                        }
+                    }
+                }
+            }
+        }
+
+        inline dpoint map_input_to_output(const dpoint& p) const { return p; }
+        inline dpoint map_output_to_input(const dpoint& p) const { return p; }
+
+        const tensor& get_layer_params() const { return params; }
+        tensor& get_layer_params() { return params; }
+
+        void clean() { reset_state(); }
+
+        friend void serialize(const short_conv_& item, std::ostream& out)
+        {
+            serialize("short_conv_", out);
+            serialize(kernel_size, out);
+            serialize(item.channels, out);
+            serialize(item.learning_rate_multiplier, out);
+            serialize(item.weight_decay_multiplier, out);
+            serialize(item.params, out);
+        }
+
+        friend void deserialize(short_conv_& item, std::istream& in)
+        {
+            std::string version;
+            deserialize(version, in);
+            if (version != "short_conv_")
+                throw serialization_error("Unexpected version '"+version+"' found while deserializing dlib::short_conv_.");
+            long k = 0;
+            deserialize(k, in);
+            if (k != kernel_size)
+                throw serialization_error("short_conv_: the archive has a kernel of " + std::to_string(k)
+                    + " taps, this layer " + std::to_string(kernel_size));
+            deserialize(item.channels, in);
+            deserialize(item.learning_rate_multiplier, in);
+            deserialize(item.weight_decay_multiplier, in);
+            deserialize(item.params, in);
+            item.reset_state();
+        }
+
+        friend std::ostream& operator<<(std::ostream& out, const short_conv_& item)
+        {
+            out << "short_conv (kernel=" << kernel_size << ", channels=" << item.channels << ")";
+            return out;
+        }
+
+        friend void to_xml(const short_conv_& item, std::ostream& out)
+        {
+            out << "<short_conv kernel='" << kernel_size << "' channels='" << item.channels << "'>\n"
+                << mat(item.params) << "</short_conv>\n";
+        }
+
+    private:
+        long channels = 0;
+        double learning_rate_multiplier = 1;
+        double weight_decay_multiplier = 1;
+        resizable_tensor params;
+        std::vector<float> state;
+        long state_planes = 0;
+    };
+
+    template <long kernel_size, typename SUBNET>
+    using short_conv = add_layer<short_conv_<kernel_size>, SUBNET>;
+
+// ----------------------------------------------------------------------------------------
+
     class smelu_
     {
     public:

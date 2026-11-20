@@ -120,6 +120,31 @@ namespace dlib
 
     // ----------------------------------------------------------------------------------------
 
+    template <
+        long vocab_size, long num_layers, long num_heads, long num_kv_heads,
+        long embedding_dim, long ffn_num, long ffn_den, long head_dim, bool use_qk_norm,
+        unsigned long long attention_mask, long conv_kernel
+    >
+    struct short_conv_transformer_config
+    {
+        /*!
+            REQUIREMENTS ON TEMPLATE PARAMETERS
+                - As decoder_transformer_config, and num_layers <= 64, conv_kernel >= 1.
+
+            WHAT THIS OBJECT REPRESENTS
+                The decoder of the LFM2 models: a stack whose layer i (counted from the
+                input) is a pre-norm attention block when bit i of attention_mask is set,
+                and a short-convolution block otherwise (gqa_transformer_unified::
+                short_conv_block: RMSNorm, in_proj of width 3*embedding_dim, short_conv_
+                of conv_kernel taps, out_proj, residual add, then the SwiGLU sublayer).
+                Embeddings, final RMSNorm and output head as decoder_transformer_config.
+                It exports the same constants, plus ATTENTION_MASK and CONV_KERNEL, the
+                subnet and network_type<is_training> types and model_info::describe().
+        !*/
+    };
+
+    // ----------------------------------------------------------------------------------------
+
 
 // ----------------------------------------------------------------------------------------
 

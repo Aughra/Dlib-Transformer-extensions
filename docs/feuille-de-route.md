@@ -157,6 +157,8 @@ Relevé par une recherche dans le code le 2026-11-19, **pas encore vérifié en 
 
 **Plan de Gemma 3 dans dlib (relevé du 2026-11-20)**, chaque point vérifié par `compare_dlib_import.sh` sur `gemma-3-1b-it-Q4_K_M.gguf` puis le 4B. **Points 1 à 5 faits (Gulliver 6.8.3)**, avec en plus l'échelle linéaire des positions des couches globales du 4B (facteur 8) : 1B et 4B identiques au moteur (KL 1,2e-7 et 1,1e-7). **Point 6 fait (6.8.4)** : 1B sur 1 303 tokens identique au moteur (KL 3,8e-7). Gemma 3 est terminé pour R1 ; suite : Qwen 3.5, LFM2, Mistral 3.
 
+**LFM2 fait (Gulliver 6.10.1)**, passé avant Qwen 3.5 (décision du 2026-11-20 : il pose la pile mixte dont Qwen 3.5 aura besoin, avec une couche neuve bien plus simple que la règle delta) : couche `short_conv_` dans dlib (dérivée, état gardé pour l'écriture token par token), `hybrid_stack` choisie par un masque de bits, `short_conv_transformer_config` ; LFM2.5-1.2B identique au moteur (KL 3,2e-7). Suite : **Qwen 3.5** (couche Gated DeltaNet entraînable, attention à porte de sortie et rotation partielle, sur la même pile), puis Mistral 3 (le Mistral-Small-3.2-24B du Mac fait 96 Go en float32 : un plus petit Mistral 3 sera à télécharger).
+
 1. Les normes de Gemma n'ont pas besoin de « (1+w) » : la conversion de llama.cpp ajoute déjà 1 aux poids (`output_norm` du 1B : moyenne 8,04). Le blocage « Gemma family needs (1+w) RMSNorm » se lève pour `gemma3` en lisant les poids tels quels.
 2. Entrée multipliée par √d (une couche d'échelle fixe après `embeddings`).
 3. GeGLU : variante de `swiglu` avec GELU (approximation tanh) à la place de SiLU.

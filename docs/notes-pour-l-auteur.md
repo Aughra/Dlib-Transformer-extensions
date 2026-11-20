@@ -41,6 +41,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 26 | Bug | `albireo/engine/chat_format.cpp:1886` | Mixtral 8x7B et Mistral 7B v0.1/v0.2 reçoivent le format sans template (« User: … Assistant: ») : `[INST]` n'est pas un token de leur vocabulaire (corrigé dans le fork). | Aussi sous Windows, déduit du code |
 | 27 | Bug | `dlib/data_io/gguf_weight_loader.h:230` | L'import d'un GGUF en réseau dlib (`slm_gguf_import_ex --probe-logits`, `--convert`, `--chat`) s'arrête pour tout modèle : « assigned 170 of 171 parameter tensors; the layer order assumption is wrong » ; la couche `embeddings_` expose sa table par `get_layer_params()` depuis le 2026-10-24 (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
 | 28 | Bug | `dlib/data_io/gguf_model_spec.h:291` | Une architecture inconnue de l'import (`gemma3`, `lfm2`, `qwen35`…) passe la vérification de compatibilité sans aucun blocage : elle est lue comme un Llama générique, ses tenseurs propres ignorés (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
+| 29 | Bug | `dlib/data_io/gguf_weight_loader.h:39` | `transpose_into` lit `out_dim × in_dim` valeurs sans regarder la taille du tenseur lu : un tenseur plus petit que prévu est lu au-delà de sa fin (lecture hors de la mémoire du vecteur) ; seul l'inventaire de `slm_gguf_import_ex` l'évite (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
 | Registre | dlib | `dlib/dlib`, `dlib/examples` | Tout ce que le fork change dans dlib, fichier par fichier (partie 5). | Voir chaque ligne |
 | 22 | Remarque, exactitude | `gulliver/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant (corrigé dans le fork). | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
 
@@ -343,6 +344,38 @@ Après :
   et la même phrase dans `gguf_model_spec_abstract.h`.
 - **Vérifié** : Gemma 3 1B refusé (« BLOCKER: architecture 'gemma3' is not one of the supported families », pas d'en-tête écrit) ; Qwen3-0.6B toujours importé et identique au moteur de Gulliver. Non vérifié : `slm_gguf_runtime_ex`, qui fait la même vérification (`fused_attention_path = false`) et refuse donc lui aussi désormais une architecture inconnue.
 - **Mac ou Windows** : aussi sous Windows (code commun, en-têtes seulement), déduit du code, non vérifié sous Windows.
+
+### 29. `transpose_into` peut lire au-delà de la fin d'un tenseur
+
+- **Où** : `dlib/dlib/data_io/gguf_weight_loader.h`, `gguf_load_impl::transpose_into`, lignes 39 à 58 dans `upstream/main` à `966c178`.
+- **Ce qui se passe** : la fonction recopie `out_dim × in_dim` valeurs depuis `src.data()` sans comparer ce nombre à `src.size()`. Tous les appels de `import_gguf_weights` lui donnent les dimensions attendues par le réseau, pas celles du tenseur du fichier : un fichier dont un tenseur est plus petit que prévu (modèle mal converti, famille mal détectée) fait lire la mémoire au-delà du vecteur, sans message. Dans `slm_gguf_import_ex`, l'inventaire des formes (`validate_weights`) passe avant et arrête l'import ; un autre programme qui appelle `import_gguf_weights` directement n'a pas ce garde-fou. Sa voisine `copy_into`, elle, complète en silence par des zéros une source plus petite que la couche.
+- **Reproduire** : non reproduit sur un fichier réel (l'inventaire l'a toujours empêché) ; déduit du code. Un appel `transpose_into(src, 4, 4, dst, 0, 0, false)` avec un `src` de 8 valeurs lit 8 valeurs hors du vecteur.
+- **Correction du fork** (ce commit) : un contrôle en tête de la fonction. Avant (lignes 39 à 42) :
+
+```cpp
+        inline void transpose_into(const std::vector<float>& src, long out_dim, long in_dim,
+            float* dst, long num_heads, long head_dim, bool rope_permute)
+        {
+            for (long o = 0; o < out_dim; ++o)
+```
+
+Après :
+
+```cpp
+        inline void transpose_into(const std::vector<float>& src, long out_dim, long in_dim,
+            float* dst, long num_heads, long head_dim, bool rope_permute)
+        {
+            /* The loop reads out_dim * in_dim values: a smaller tensor in the file would be read
+               past its end. */
+            if (src.size() != static_cast<size_t>(out_dim) * static_cast<size_t>(in_dim))
+                throw std::runtime_error("import_gguf_weights: a tensor holds " + std::to_string(src.size())
+                    + " values where " + std::to_string(out_dim) + " x " + std::to_string(in_dim) + " are expected");
+            for (long o = 0; o < out_dim; ++o)
+```
+
+  `copy_into` est laissée telle quelle (le remplissage par des zéros peut être voulu) ; les tenseurs de la convolution de LFM2, ajoutés par le fork, sont vérifiés à la taille exacte.
+- **Vérifié** : Qwen3-0.6B, Gemma 3 1B et LFM2.5-1.2B toujours importés, identiques au moteur de Gulliver (aucun appel ne passait une taille différente). Non vérifié : le message sur un fichier réellement tronqué.
+- **Mac ou Windows** : aussi sous Windows (code commun, en-tête seulement), déduit du code, non vérifié sous Windows.
 
 ## 2. Portabilité vers macOS sur puce Apple
 
@@ -1127,6 +1160,13 @@ Le fork modifie aussi dlib depuis le 2026-11-14, quand le portage le demande. Ch
 | `dlib/dlib/dnn/transformer.h` (`gqa_attention_`) | Fenêtre glissante (`set_sliding_window`) : scores à −∞ au-delà de W positions dans la passe complète et dans la passe incrémentale ; champ `sliding_window_` sérialisé à la fin de la couche (règle du format de la couche : une seule disposition, les anciennes archives de cette couche ne se relisent plus) | Gemma 3 au-delà de 512 tokens (1B) ou 1 024 (4B) | [d03a1bf](https://github.com/Aughra/Dlib-Transformer-extensions/commit/d03a1bf) | Test neuf `test_gqa_attention_sliding_window` (lignes avant W inchangées, lignes après W changées, décodage token par token = passe complète à 1e-4, aller-retour) ; Gemma 3 1B sur 1 303 tokens identique au moteur de Gulliver | Aussi sous Windows (code commun ; non testé) |
 | `dlib/dlib/data_io/gguf_weight_loader.h`, `gguf_model_spec.h` | La fenêtre réglée sur les cinq couches locales sur six ; la note de l'import ne dit plus « not applied yet » | Gemma 3 dans l'import | [d03a1bf](https://github.com/Aughra/Dlib-Transformer-extensions/commit/d03a1bf) | Idem | Aussi sous Windows (code commun ; non testé) |
 | `dlib/dlib/test/dnn.cpp` | `test_gqa_attention_sliding_window` | Couvrir la fenêtre | [d03a1bf](https://github.com/Aughra/Dlib-Transformer-extensions/commit/d03a1bf) | `dtest --test_dnn` : 794 495 vérifications | Aussi sous Windows (non testé) |
+| `dlib/dlib/dnn/layers.h`, `layers_abstract.h` | Couche `short_conv_<K>` : la convolution courte à portes de LFM2 (`y = C · conv(B · X)`, une rangée de K poids par canal), avec sa dérivée, le remplissage à gauche mis à zéro, et la fenêtre des K − 1 dernières valeurs gardée entre une passe de lecture et les passes incrémentales | LFM2 dans l'import (atelier, R1) | ce commit | `test_layer(short_conv_<3>)` (différences finies), valeurs contre la formule, décodage token par token = passe complète à 1e-6, aller-retour, noyau d'une autre taille refusé | Ajout, aussi sous Windows (code commun ; non testé) |
+| `dlib/dlib/dnn/transformer.h` | `short_conv_block` (bloc pré-norme dont l'attention est remplacée par in_proj, `short_conv`, out_proj) et `hybrid_stack` (un masque de bits choisit, couche par couche, le bloc d'attention ou un autre bloc, 64 couches au plus) | Les modèles qui mêlent attention et couches linéaires (LFM2, puis Qwen 3.5) | ce commit | LFM2.5-1.2B importé identique au moteur de Gulliver | Ajout, aussi sous Windows (code commun ; non testé) |
+| `dlib/dlib/dnn/decoder_transformer_config.h`, `decoder_transformer_config_abstract.h` | `short_conv_transformer_config` (constantes `ATTENTION_MASK`, `CONV_KERNEL`) | L'en-tête importé de LFM2 | ce commit | En-tête de LFM2.5-1.2B compilé ; ceux de Qwen3 et Gemma 3 inchangés | Ajout, aussi sous Windows (code commun ; non testé) |
+| `dlib/dlib/data_io/gguf_model_spec.h`, `gguf_model_spec_abstract.h` | Famille `lfm2` : motif des couches lu dans le tableau `attention.head_count_kv` (0 pour une convolution), `shortconv.l_cache`, normes Q/K lues sur la première couche d'attention ; champs `conv_blocks`, `attention_mask`, `conv_kernel` ; en-tête avec `ATTENTION_MASK` et `CONV_KERNEL` | LFM2 dans l'import | ce commit | Détection de LFM2.5-1.2B : couches d'attention 2, 5, 8, 10, 12, 14 | Aussi sous Windows (code commun ; non testé) |
+| `dlib/dlib/data_io/gguf_weight_loader.h` | Tenseurs `shortconv.*` des blocs à convolution (taille exacte vérifiée), norme finale `token_embd_norm`, disposition NeoX pour `lfm2` ; contrôle de taille dans `transpose_into` (entrée n° 29) | LFM2 dans l'import ; lecture hors du vecteur | ce commit | LFM2.5-1.2B : KL 3,2e-7 contre le moteur de Gulliver, même argmax aux 26 positions ; Qwen3-0.6B et Gemma 3 1B inchangés | Aussi sous Windows (code commun ; non testé) |
+| `dlib/examples/slm_gguf_import_ex.cpp` | Inventaire des blocs à convolution et de `token_embd_norm` ; vérification de `ATTENTION_MASK` et `CONV_KERNEL` contre l'en-tête | LFM2 dans l'import | ce commit | Inventaire de LFM2.5-1.2B complet | Aussi sous Windows (code commun ; non testé) |
+| `dlib/dlib/test/dnn.cpp` | `test_short_conv` | Couvrir la couche | ce commit | `dtest --test_dnn` : 794 509 vérifications | Aussi sous Windows (non testé) |
 ---
 
 *Écrit pour l'auteur de l'original et tenu à jour par le fork : les entrées les plus récentes peuvent se trouver en fin de section. Ce document ne contient aucun chemin de machine privée, aucune clé et aucun jeton.*

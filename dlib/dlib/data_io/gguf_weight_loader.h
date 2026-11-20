@@ -40,6 +40,11 @@ namespace dlib
         inline void transpose_into(const std::vector<float>& src, long out_dim, long in_dim,
             float* dst, long num_heads, long head_dim, bool rope_permute)
         {
+            /* The loop reads out_dim * in_dim values: a smaller tensor in the file would be read
+               past its end. */
+            if (src.size() != static_cast<size_t>(out_dim) * static_cast<size_t>(in_dim))
+                throw std::runtime_error("import_gguf_weights: a tensor holds " + std::to_string(src.size())
+                    + " values where " + std::to_string(out_dim) + " x " + std::to_string(in_dim) + " are expected");
             for (long o = 0; o < out_dim; ++o)
             {
                 long od = o;
@@ -307,7 +312,9 @@ namespace dlib
             transpose_into(src, V, d, dst.data(), 0, 0, false);
             copy_into(next("lm_head"), dst, "lm_head");
         }
-        copy_into(next("output_norm"), fetch(g, "output_norm.weight"), "output_norm");
+        /* LFM2 stores its final norm as token_embd_norm (llama.cpp, LLM_TENSOR_OUTPUT_NORM_LFM2). */
+        copy_into(next("output_norm"), fetch(g, spec.conv_blocks ? "token_embd_norm.weight" : "output_norm.weight"),
+            "output_norm");
 
         for (long b = L - 1; b >= 0; --b)
         {
@@ -334,6 +341,35 @@ namespace dlib
                 copy_into(next("ffn_gate"), dst, p + gate_inner);
             }
             copy_into(next("ffn_norm"), fetch(g, p + "ffn_norm.weight"), p + "ffn_norm");
+
+            /* A short-convolution block of LFM2: out_proj [d, d], the D x kernel weights as the
+               file lays them out (one row of taps per channel), in_proj [d, 3d]. */
+            if (spec.conv_blocks && !((spec.attention_mask >> b) & 1ull))
+            {
+                /* transpose_into reads out_dim * in_dim values: each source is checked first. */
+                auto sized = [&](const std::string& name, size_t n) {
+                    std::vector<float> v = fetch(g, name);
+                    if (v.size() != n)
+                        throw std::runtime_error("import_gguf_weights: " + name + " holds " + std::to_string(v.size())
+                            + " values, expected " + std::to_string(n));
+                    return v;
+                };
+                const size_t dd = static_cast<size_t>(d);
+                {
+                    std::vector<float> src = sized(p + "shortconv.out_proj.weight", dd * dd), dst(dd * dd);
+                    transpose_into(src, d, d, dst.data(), 0, 0, false);
+                    copy_into(next("out_proj"), dst, p + "shortconv.out_proj");
+                }
+                tensor& conv = next("short_conv");
+                copy_into(conv, sized(p + "shortconv.conv.weight", conv.size()), p + "shortconv.conv");
+                {
+                    std::vector<float> src = sized(p + "shortconv.in_proj.weight", 3 * dd * dd), dst(3 * dd * dd);
+                    transpose_into(src, 3 * d, d, dst.data(), 0, 0, false);
+                    copy_into(next("in_proj"), dst, p + "shortconv.in_proj");
+                }
+                copy_into(next("attn_norm"), fetch(g, p + "attn_norm.weight"), p + "attn_norm");
+                continue;
+            }
             if (spec.gemma_blocks)
                 copy_into(next("post_attention_norm"), fetch(g, p + "post_attention_norm.weight"),
                     p + "post_attention_norm");
@@ -357,7 +393,8 @@ namespace dlib
                 /* qwen families keep the split-half (NeoX) Q/K layout; llama-family
                    files come pre-permuted for the interleaved kernel. */
                 const bool neox_layout = opt.rope_permute
-                    || spec.arch_name == "qwen2" || spec.arch_name == "qwen3" || spec.arch_name == "gemma3";
+                    || spec.arch_name == "qwen2" || spec.arch_name == "qwen3" || spec.arch_name == "gemma3"
+                    || spec.arch_name == "lfm2";
                 transpose_into(sq, qd, d, fused.data(), nh, hd, neox_layout);          // wq (RoPE)
                 transpose_into(sk, kv, d, fused.data() + nq, spec.n_kv_heads, hd, neox_layout); // wk (RoPE)
                 transpose_into(sv, kv, d, fused.data() + nq + nkv, 0, 0, false);            // wv

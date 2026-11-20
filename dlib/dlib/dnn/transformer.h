@@ -1783,6 +1783,57 @@ namespace dlib
             num_heads, num_kv_heads, hidden_num, hidden_den, SUBNET, LINEAR, head_dim, use_qk_norm,
             causal, placement>::type;
 
+        /* The short-convolution block of the LFM2 models: the pre-norm block whose attention
+           is replaced by in_proj (3 * d_model wide: B, C, X), the gated short convolution and
+           out_proj. In visit order (output to input) its parameters are: ffn_down, ffn_up,
+           ffn_gate, ffn_norm, out_proj, the convolution weights, in_proj, the block norm. */
+        template<long d_model, long conv_kernel, long hidden_num, long hidden_den, typename SUBNET,
+            template <unsigned long, typename> class LINEAR = linear>
+        using short_conv_block =
+            add_prev5<swiglu<d_model, hidden_num, hidden_den, rms_norm<tag5<
+            add_prev1<LINEAR<d_model, short_conv<conv_kernel, LINEAR<3 * d_model,
+            rms_norm<tag1<SUBNET>>>>>>>>, LINEAR>>;
+
+        /* A stack mixing attention blocks with another kind of block (LFM2, Qwen 3.5): bit i
+           of attention_mask set makes layer i, counted from the input, a pre-norm attention
+           block, and clear makes it a LINEAR_BLOCK, a one-parameter template the
+           configuration binds. The pattern is part of the type, as the layer count is: up
+           to 64 layers. */
+        template<long remaining_layers, unsigned long long attention_mask,
+            template <typename> class LINEAR_BLOCK, long d_model, long num_heads, long num_kv_heads,
+            long hidden_num, long hidden_den, typename SUBNET,
+            template <unsigned long, typename> class LINEAR, long head_dim, bool use_qk_norm,
+            typename enabled = void>
+        struct hybrid_stack_impl
+        {
+            static_assert(remaining_layers <= 64, "a hybrid stack holds at most 64 layers");
+            using below = typename hybrid_stack_impl<remaining_layers - 1, attention_mask, LINEAR_BLOCK,
+                d_model, num_heads, num_kv_heads, hidden_num, hidden_den, SUBNET, LINEAR, head_dim,
+                use_qk_norm>::type;
+            static constexpr bool attention = ((attention_mask >> (remaining_layers - 1)) & 1ull) != 0;
+            using type = std::conditional_t<attention,
+                transformer_block<false, d_model, num_heads, num_kv_heads, hidden_num, hidden_den,
+                    below, LINEAR, head_dim, use_qk_norm, true>,
+                LINEAR_BLOCK<below>>;
+        };
+        template<unsigned long long attention_mask, template <typename> class LINEAR_BLOCK,
+            long d_model, long num_heads, long num_kv_heads, long hidden_num, long hidden_den,
+            typename SUBNET, template <unsigned long, typename> class LINEAR, long head_dim,
+            bool use_qk_norm>
+        struct hybrid_stack_impl<0, attention_mask, LINEAR_BLOCK, d_model, num_heads, num_kv_heads,
+            hidden_num, hidden_den, SUBNET, LINEAR, head_dim, use_qk_norm, void>
+        {
+            using type = tag10<SUBNET>;
+        };
+
+        template<long num_layers, unsigned long long attention_mask, template <typename> class LINEAR_BLOCK,
+            long d_model, long num_heads, long num_kv_heads, long hidden_num, long hidden_den,
+            typename SUBNET, template <unsigned long, typename> class LINEAR = linear,
+            long head_dim = d_model / num_heads, bool use_qk_norm = false>
+        using hybrid_stack = typename hybrid_stack_impl<num_layers, attention_mask, LINEAR_BLOCK,
+            d_model, num_heads, num_kv_heads, hidden_num, hidden_den, SUBNET, LINEAR, head_dim,
+            use_qk_norm>::type;
+
     } // namespace gqa_transformer_unified
 
     // ----------------------------------------------------------------------------------------

@@ -336,8 +336,10 @@ int main(int argc, char** argv)
         else
             expect(d.mean_kl < 0.05 && d.top1 >= 0.85, "single steps against one pass");
 
-        // 4. Troncature : retirer le dernier tiers et le recalculer.
-        const long m = std::max<long>(1, 2 * T / 3);
+        // 4. Troncature : retirer le dernier tiers et le recalculer.  Un modèle à état récurrent
+        //    (qwen35, lfm2) ne revient qu'à 0 ou à un point de reprise (tous les 256 tokens) : il
+        //    repart alors de 0 et recalcule toute la suite.
+        const long m = cfg.recurrent() ? 0 : std::max<long>(1, 2 * T / 3);
         rt.truncate_sequence(seq, m);
         expect(rt.sequence_length(seq) == m, "length after truncation");
         // Les blocs au-delà des positions gardées sont retournés au pool.
@@ -398,7 +400,11 @@ int main(int argc, char** argv)
     }
 
     // 5. Une séquence qui commence par les positions d'une autre : les blocs pleins sont partagés,
-    //    le dernier copié, et une séquence qui écrit dans un bloc partagé le copie d'abord.
+    //    le dernier copié, et une séquence qui écrit dans un bloc partagé le copie d'abord.  L'essai
+    //    coupe une séquence au milieu d'un bloc, ce qu'un état récurrent ne permet pas : sauté.
+    if (cfg.recurrent())
+        std::printf("  shared prefix: skipped (a recurrent state cannot go back to the middle of a block)\n");
+    else
     {
         const long B = 16;
         const long h = std::min(T - 1, B + 1 + T / 4);

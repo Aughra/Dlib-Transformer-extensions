@@ -3604,6 +3604,41 @@ namespace dlib
 
 // ----------------------------------------------------------------------------------------
 
+    template <long kernel_size>
+    class short_conv_
+    {
+        /*!
+            REQUIREMENTS ON kernel_size
+                - kernel_size >= 1
+
+            WHAT THIS OBJECT REPRESENTS
+                This is an implementation of the EXAMPLE_COMPUTATIONAL_LAYER_ interface
+                defined above: the gated short convolution of the LFM2 models. Each row
+                of its input (one token, nc() == 3*D) holds three blocks of D values, B,
+                C and X; each row of its output holds D values:
+                    v[t] = B[t]*X[t]
+                    y[t] = C[t] * sum_i w[c][i] * v[t-kernel_size+1+i]
+                per channel c, v being zero before the sequence and on the left padding
+                declared to network_context. The parameters are a D x kernel_size tensor,
+                one row of taps per channel, the last tap weighing the current token.
+
+                In the prefill and incremental inference modes the layer keeps, per
+                sample, the last kernel_size-1 values of v, so an incremental pass carries
+                the convolution on from the previous tokens; a KV cache clear request of
+                network_context drops them. The backward pass assumes a full pass.
+        !*/
+    public:
+        long get_channels() const;
+        void reset_state();
+        // Plus the members of EXAMPLE_COMPUTATIONAL_LAYER_ (setup, forward, backward,
+        // parameters, learning rate and weight decay multipliers, serialization).
+    };
+
+    template <long kernel_size, typename SUBNET>
+    using short_conv = add_layer<short_conv_<kernel_size>, SUBNET>;
+
+// ----------------------------------------------------------------------------------------
+
     class smelu_
     {
         /*!

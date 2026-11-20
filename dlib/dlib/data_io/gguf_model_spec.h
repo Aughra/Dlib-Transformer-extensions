@@ -22,7 +22,7 @@
 
 namespace dlib
 {
-    enum class arch_family { llama, mistral, gemma, gemma2, gemma3, qwen2, qwen3, mixtral, granite_moe, unknown };
+    enum class arch_family { llama, mistral, gemma, gemma2, gemma3, qwen2, qwen3, mixtral, granite_moe, lfm2, unknown };
 
     inline arch_family arch_family_from_name(const std::string& a)
     {
@@ -35,6 +35,7 @@ namespace dlib
         if (a == "qwen3")   return arch_family::qwen3;
         if (a == "mixtral") return arch_family::mixtral;
         if (a == "granitemoe") return arch_family::granite_moe;
+        if (a == "lfm2")    return arch_family::lfm2;
         return arch_family::unknown;
     }
 
@@ -86,6 +87,13 @@ namespace dlib
         long sliding_window = 0;
         long sliding_window_pattern = 0;        // one global layer every this many
         double rope_freq_base_swa = 10000.0;
+
+        /* LFM2: the layers whose key/value head count is zero are short-convolution blocks
+           of conv_kernel taps (conv_blocks); bit i of attention_mask is set for the layers
+           that attend. The final norm is stored as token_embd_norm. */
+        bool conv_blocks = false;
+        unsigned long long attention_mask = 0;
+        long conv_kernel = 0;
     };
 
     inline long gcd_long(long a, long b)
@@ -223,6 +231,35 @@ namespace dlib
             s.sliding_window_pattern = 6;
             s.rope_freq_base_swa = gguf_bounded_double(g, p + ".rope.freq_base_swa", 10000.0, 1e-3, 1e12);
         }
+        if (s.family == arch_family::lfm2)
+        {
+            /* One key/value head count per layer, zero for a convolution layer; the attention
+               layers share one count. */
+            const std::string key = p + ".attention.head_count_kv";
+            if (!g.has(key) || !g.at(key).is_array() || s.n_layers > 64
+                || static_cast<long>(g.at(key).arr_int.size()) < s.n_layers)
+                throw std::runtime_error("gguf: the LFM2 model lacks the key/value heads of each of its "
+                    "layers, or has more than 64 layers");
+            s.conv_blocks = true;
+            s.n_kv_heads = 0;
+            for (long i = 0; i < s.n_layers; ++i)
+            {
+                const int64_t v = g.at(key).arr_int[static_cast<size_t>(i)];
+                if (v == 0) continue;
+                if (v < 0 || v > s.n_heads || (s.n_kv_heads != 0 && v != s.n_kv_heads))
+                    throw std::runtime_error("gguf: the attention layers of this LFM2 model differ in their key/value heads");
+                s.n_kv_heads = static_cast<long>(v);
+                s.attention_mask |= 1ull << i;
+            }
+            s.conv_kernel = static_cast<long>(gguf_bounded_int(g, p + ".shortconv.l_cache", 0, 0, 64));
+            /* Layer 0 is a convolution: the QK-Norm is read on the first attention layer. */
+            for (long i = 0; i < s.n_layers; ++i)
+                if ((s.attention_mask >> i) & 1ull)
+                {
+                    s.qk_norm = g.find_tensor("blk." + std::to_string(i) + ".attn_q_norm.weight") != nullptr;
+                    break;
+                }
+        }
         for (const auto& t : g.tensors()) if (t.is_quantized()) { s.quantized = true; break; }
         return s;
     }
@@ -283,6 +320,12 @@ namespace dlib
               << ", residual " << s.residual_scale
               << ", attention " << s.attention_scale
               << ", logit " << s.logit_scale << "\n";
+        if (s.conv_blocks)
+        {
+            o << "Attention layers   :";
+            for (long i = 0; i < s.n_layers; ++i) if ((s.attention_mask >> i) & 1ull) o << " " << i;
+            o << " (the others: short convolution of " << s.conv_kernel << " taps)\n";
+        }
         o << "QK-Norm            : " << (s.qk_norm ? "yes" : "no") << "\n"
           << "Tied embeddings    : " << (s.tied_embeddings ? "yes" : "no") << "\n"
           << (s.embedding_model
@@ -314,11 +357,13 @@ namespace dlib
            unread, and a network computing something else than the model, without a word. */
         if (s.family == arch_family::unknown)
             r.blockers.push_back("architecture '" + s.arch_name + "' is not one of the supported families "
-                "(llama, mistral, qwen2, qwen3, gemma3, mixtral, granitemoe)");
+                "(llama, mistral, qwen2, qwen3, gemma3, lfm2, mixtral, granitemoe)");
         if (s.family == arch_family::gemma || s.family == arch_family::gemma2)
             r.blockers.push_back("Gemma family needs (1+w) RMSNorm, embedding scaling and GeGLU, not available yet");
         /* Gemma 3 as converted by llama.cpp: the conversion already adds 1 to every norm
            weight, so the plain RMSNorm reads them as they are. */
+        if (s.conv_blocks && (s.conv_kernel < 1 || s.n_kv_heads == 0))
+            r.blockers.push_back("LFM2 metadata without a convolution width or without attention layers");
         if (s.family == arch_family::gemma3 && s.sliding_window > 0)
             r.notes.push_back("sliding window of " + std::to_string(s.sliding_window)
                 + " positions on five layers out of six");
@@ -390,9 +435,9 @@ namespace dlib
                 "expects " + std::to_string(s.d_model)
                 + "; the two files do not belong to the same model");
 
-        if (vs && s.gemma_blocks)
+        if (vs && (s.gemma_blocks || s.conv_blocks))
             throw std::runtime_error("emit_header: the multimodal configuration has no Gemma "
-                "blocks yet; import the text model without its projector");
+                "or short-convolution blocks yet; import the text model without its projector");
 
         std::ofstream out(path);
         if (!out) throw std::runtime_error("emit_header: cannot write " + path);
@@ -420,7 +465,10 @@ namespace dlib
             << "    static constexpr long FFN_NUM       = " << s.ffn_num
             << ";  // hidden = EMBEDDING_DIM * FFN_NUM / FFN_DEN = " << s.d_ffn << "\n"
             << "    static constexpr long FFN_DEN       = " << s.ffn_den << ";\n"
-            << "    static constexpr bool GEMMA_BLOCKS  = " << (s.gemma_blocks ? "true" : "false") << ";\n\n"
+            << "    static constexpr bool GEMMA_BLOCKS  = " << (s.gemma_blocks ? "true" : "false") << ";\n"
+            << "    // Bit i set: layer i attends; clear: a short-convolution block (LFM2).\n"
+            << "    static constexpr unsigned long long ATTENTION_MASK = " << s.attention_mask << "ull;\n"
+            << "    static constexpr long CONV_KERNEL   = " << s.conv_kernel << ";\n\n"
             << "    static constexpr bool HAS_VISION    = " << (vs ? "true" : "false") << ";\n\n";
 
         if (vs)
@@ -440,6 +488,12 @@ namespace dlib
                 << "    // Positions a prompt must reserve for one image.\n"
                 << "    static constexpr long VISUAL_TOKENS = config::VISUAL_TOKENS;\n"
                 << "    using vision_tower = config::vision_tower;\n\n";
+        }
+        else if (s.conv_blocks)
+        {
+            out << "    using config = dlib::short_conv_transformer_config<\n"
+                << "        VOCAB_SIZE, NUM_LAYERS, NUM_HEADS, NUM_KV_HEADS, EMBEDDING_DIM, FFN_NUM, FFN_DEN,\n"
+                << "        HEAD_DIM, USE_QK_NORM, ATTENTION_MASK, CONV_KERNEL>;\n\n";
         }
         else
         {
@@ -465,6 +519,9 @@ namespace dlib
             << "    //   blk.{i}.ffn_gate.weight, blk.{i}.ffn_up.weight, blk.{i}.ffn_down.weight\n"
             << (s.gemma_blocks ? "    //   blk.{i}.post_attention_norm.weight, blk.{i}.post_ffw_norm.weight\n"
                                  "    // The embedding table is stored multiplied by sqrt(EMBEDDING_DIM) (Gemma input scale).\n" : "")
+            << (s.conv_blocks ? "    // Convolution layers: blk.{i}.shortconv.in_proj.weight, blk.{i}.shortconv.conv.weight,\n"
+                                "    //   blk.{i}.shortconv.out_proj.weight in place of the attention tensors;\n"
+                                "    //   the final norm is token_embd_norm.weight.\n" : "")
             << "}\n\n"
             << "/* The first imported-model header included in a translation unit claims the\n"
             << "   generic `imported_model` alias, so single-model programs compile unchanged\n"
