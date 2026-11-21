@@ -1185,7 +1185,7 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (mesures alternées) : **78,4 / 65,7-66,0 / 40,8-42,2 tokens/s** (+11 %, +13 %, +36 à +45 %).
 - **Mac ou Windows** : propre au Mac (Metal), utile sur toutes les puces Apple.
 
-### Changement 36 : une ligne par simdgroup dans les produits d'un token (Gulliver 6.19.2)
+### Changement 36 : une ligne par simdgroup dans les produits d'un token (Gulliver 6.19.2, [c14f295](https://github.com/Aughra/Dlib-Transformer-extensions/commit/c14f295))
 
 - **Avant** : les produits par les poids (`mv_q4_K`, `mv_q6_K`… de `metal_kernels.metal`) calculaient 4 lignes par simdgroup, 4 simdgroups par threadgroup, pour un token comme pour plusieurs. La sonde Metal (`macos/metal-sonde`, tous les poids du 4B relus en une commande) : **10,70 ms**, Q4_K 225 Go/s, Q6_K 247 Go/s.
 - **Changement** : `ROWS` dépend du nombre de tokens de la variante du noyau : 1 ligne pour un token (`*_1`), 4 pour plusieurs (`*_n`) ; l'hôte compte 4 ou 16 lignes par threadgroup (`mv_rows_per_group(tokens)`). La sonde, avec une ligne : **9,72 à 9,80 ms**, Q4_K 247-255 Go/s, Q6_K 253-257 (2 x 2, comme llama.cpp : 10,68 ms). **Exactitude** : `test_metal` (mêmes écarts) ; perplexité pas à pas (4 morceaux de 1 024) 13,3591, en lecture d'un coup 13,3632.
