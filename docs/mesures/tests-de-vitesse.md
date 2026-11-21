@@ -69,7 +69,7 @@ Sur le GPU, deux essais en alternance, en jetons par seconde : la lecture de la 
 | 4 096 tokens | 753 à 809 | 80,5 à 80,9 |
 | 16 384 tokens | 576 | 43,5 à 43,6 |
 
-MLX écrit le plus vite sur les questions courtes, mais lit les questions bien plus lentement que les deux autres. C'est MLX 0.29.3, la dernière version que permet le Python 3.9 du Mac ; une version plus récente pourrait faire mieux.
+Ces chiffres sont ceux de MLX 0.29.3, la dernière version que permettait le Python 3.9 du Mac. Avec un Python récent (Homebrew, le même jour), **MLX 0.32.4 lit une question de 512 tokens en 2 880 jetons/s au lieu de 869** (une mesure, machine encore chargée), plus vite que llama.cpp et que Gulliver, et écrit toujours environ 103 mots/s : l'ancienne version faussait la comparaison de la lecture. Les mesures du dimanche utilisent désormais la nouvelle version.
 
 ### Les réglages essayés
 

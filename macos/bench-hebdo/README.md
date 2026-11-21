@@ -10,4 +10,4 @@ Un agent launchd de l'utilisateur lance chaque dimanche à 4 h `gulliver/tools/b
 | Voir s'il est installé | `launchctl print gui/$(id -u)/fr.fork.gulliver.bench-hebdo` |
 | Journal | `build/bench/hebdo/hebdo.log` |
 
-Pour MLX, il faut l'environnement `build/mlx-venv` (`python3 -m venv build/mlx-venv && build/mlx-venv/bin/pip install mlx-lm`) et le modèle `build/bench-moteurs/models/Qwen3-4B-mlx-4bit` ; sans eux, MLX est simplement sauté. Les versions de llama.cpp (Homebrew) et de MLX ne sont jamais mises à jour par l'agent : chaque tableau note celles qu'il a mesurées.
+Pour MLX, il faut l'environnement `build/mlx-venv` (`/opt/homebrew/bin/python3.13 -m venv build/mlx-venv && build/mlx-venv/bin/pip install mlx-lm` : un Python de Homebrew, celui de macOS, 3.9, bloquant MLX à une version ancienne) et le modèle `build/bench-moteurs/models/Qwen3-4B-mlx-4bit` ; sans eux, MLX est simplement sauté. Les versions de llama.cpp (Homebrew) et de MLX ne sont jamais mises à jour par l'agent : chaque tableau note celles qu'il a mesurées.

@@ -118,7 +118,7 @@ LOAD_END=$(sysctl -n vm.loadavg)
   echo "| macOS | $(sw_vers -productVersion) ($(sw_vers -buildVersion)) |"
   echo "| Gulliver | $(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null)) |"
   echo "| llama.cpp | $("$LLAMA" --version 2>&1 | sed -n 's/^version: //p' | head -1) (Homebrew) |"
-  echo "| MLX | $("$ROOT/build/mlx-venv/bin/pip" show mlx 2>/dev/null | awk '/^Version/{print $2}') (mlx-lm $("$ROOT/build/mlx-venv/bin/pip" show mlx-lm 2>/dev/null | awk '/^Version/{print $2}'), Python 3.9 du système) |"
+  echo "| MLX | $("$ROOT/build/mlx-venv/bin/pip" show mlx 2>/dev/null | awk '/^Version/{print $2}') (mlx-lm $("$ROOT/build/mlx-venv/bin/pip" show mlx-lm 2>/dev/null | awk '/^Version/{print $2}'), $("$ROOT/build/mlx-venv/bin/python" --version 2>&1)) |"
   [ -x "$ALBIREO" ] && echo "| Albireo d'origine | $(awk '/#define ALBIREO_VERSION_(MAJOR|MINOR|PATCH) /{print $3}' "$ALBIREO_DIR/dlib/dlib/external/albireo/common/version.h" | paste -sd. -) ($(git -C "$ALBIREO_DIR" rev-parse --short HEAD)), tel quel : processeur seul, noyaux portables, jusqu'à $ALBIREO_MAX tokens |"
   echo "| Charge | $LOAD_START au début, $LOAD_END à la fin |"
   echo

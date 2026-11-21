@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — MLX 0.32.4 sur un Python de Homebrew
+
+- **Quoi** : Python 3.13.18 installé par Homebrew (`brew install python@3.13`, à côté de celui de macOS, non touché) ; `build/mlx-venv` refait avec lui : `mlx` 0.32.4, `mlx-lm` 0.32.2 (au lieu de 0.29.3 / 0.29.1, plafond du Python 3.9 du système). `bench_moteurs.sh` affiche la version de Python de l'environnement ; README de `macos/bench-hebdo` et rubrique « Tests de vitesse » mis à jour.
+- **Fichiers** : `gulliver/tools/bench_moteurs.sh`, `macos/bench-hebdo/README.md`, `docs/mesures/tests-de-vitesse.md`, ce journal.
+- **Pourquoi** : l'humain : « tu as le droit de mettre à jour Python ». Dépendance système ajoutée : Python 3.13 de Homebrew (pour MLX seulement).
+- **Étapes** : Qwen3-4B MLX 4 bits, question de 512 tokens, un essai (charge 6,3) : lecture 2 880 jetons/s (869 avec 0.29.3), écriture 103 ; perplexité sur 2 morceaux 16,214 (16,203 avec 0.29.3).
+
 ## 2026-11-21 — Gulliver 6.16.0 : l'Albireo d'origine dans les tests, tableaux côte à côte
 
 - **Quoi** : `macos/albireo-original/` : `COMMIT` (`upstream/main` du jour, `af5c811`, Albireo 1.0.27), `build.sh` (worktree d'`upstream` à part, `../albireo-original`, avec son dlib ; compile son `bench_runtime` et `perplexity_albireo`), `perplexity_albireo.cpp` (variante de `perplexity_runtime` pour le moteur de l'original, processeur seul), README. `bench_moteurs.sh` : colonne Albireo (jusqu'à `BENCH_ALBIREO_MAX`, 4 096), tableaux « Lecture » et « Écriture » une ligne par modèle et taille, moteurs côte à côte avec l'écart à Gulliver en %, tableau « Les autres réglages » ; « ne lit pas ce modèle » pour une architecture refusée. `justesse_moteurs.sh` : colonne Albireo, une ligne par modèle avec l'écart de perplexité en %. `bench_hebdo.sh` construit l'original et `perplexity_runtime`.
