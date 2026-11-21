@@ -224,6 +224,7 @@ namespace gulliver
         c["metal"] = s.accelerator != "none";
         c["gpu_prompt_tokens"] = s.gpu_prompt_tokens;
         c["gpu_prompt_context"] = s.gpu_prompt_context;
+        c["draft_tokens"] = s.draft_tokens;
         c["warm_history"] = s.warm_history;
         c["spin_us"] = s.spin_us;
         c["device"] = device;

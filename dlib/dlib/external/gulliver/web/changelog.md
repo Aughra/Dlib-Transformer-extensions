@@ -2,6 +2,23 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.22.0 — 21 novembre 2026
+
+### Performances
+
+- Sur les Mac à puce M5, les passes de plusieurs tokens (l'écriture de plusieurs réponses à la fois, la vérification des brouillons) passent par les accélérateurs neuronaux : chaque poids est développé une seule fois pour tous les tokens. Mac mini M5 Pro, modèle du service : écriture de 4 réponses à la fois de 123 à 239 tokens/s au total, de 8 réponses de 130 à 465 ; l'écriture d'une seule réponse est inchangée ; justesse inchangée.
+- Brouillons de l'écriture (décodage spéculatif, repris de l'original) : le moteur propose la suite des derniers mots écrits quand elle figure déjà dans la conversation, et le modèle la vérifie en une passe. Modèle du service : recopie d'un texte de 78,5 à 245 tokens/s, réponse à une question sur un document +26 %, code +9 %, résumé +8 %, réponse libre +1 %. Le texte reste celui que le modèle choisit, aux arrondis de calcul près.
+
+### Réglages
+
+- Nouveau réglage « Brouillons de l'écriture » (`draft_tokens`, de 0 à 7 mots, 7 par défaut) dans l'onglet « Service ».
+
+### Outils de mesure
+
+- `perplexity_runtime` accepte le mode `stepsN`, qui donne la seconde moitié de chaque morceau N tokens à la fois.
+
+---
+
 ## 6.21.1 — 21 novembre 2026
 
 ### Performances

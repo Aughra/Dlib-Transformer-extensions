@@ -464,7 +464,7 @@ namespace gulliver
         // Les réglages que contient un instantané de /gulliver/v1/settings/profiles : ceux que change l'application
         // web.
         const char* const profile_keys[] = { "accelerator", "threads", "max_sequences", "context", "kv_mb", "kv_type",
-            "warm_history", "spin_us", "gpu_prompt_tokens", "gpu_prompt_context", "lan", "lan_port", "port",
+            "warm_history", "spin_us", "gpu_prompt_tokens", "gpu_prompt_context", "draft_tokens", "lan", "lan_port", "port",
             "models_dir", "offline", "web_access", "web_search", "proxy" };
         std::mutex profiles_m;
 
@@ -1232,7 +1232,7 @@ namespace gulliver
             static const char* const keys[] = { "port", "language", "engine", "accelerator",
                 "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "offline",
                 "proxy", "web_access", "web_search", "lan", "lan_port", "warm_history", "spin_us",
-                "gpu_prompt_tokens", "gpu_prompt_context", "models_dir", "reserve_gb", "library_dir", "relay",
+                "gpu_prompt_tokens", "gpu_prompt_context", "draft_tokens", "models_dir", "reserve_gb", "library_dir", "relay",
                 "rag_engine", "rag_top_k", "rag_rerank" };
             for (const auto& kv : body.items())
             {
@@ -1287,6 +1287,7 @@ namespace gulliver
             return one_of("web_search", { "wikipedia", "none" }) && boolean("web_access") && boolean("lan")
                 && in_range("lan_port", 1024, 65535) && boolean("warm_history") && in_range("spin_us", 0, 100000)
                 && in_range("gpu_prompt_tokens", 9, 1 << 20) && in_range("gpu_prompt_context", 0, 1 << 20)
+                && in_range("draft_tokens", 0, 7)
                 && one_of("language", { "auto", "fr" })
                 && one_of("kv_type", { "auto", "q8", "f16" })
                 && one_of("engine", { "auto" })
@@ -3217,7 +3218,8 @@ namespace gulliver
                 || after.lan != before.lan || after.lan_port != before.lan_port
                 || after.warm_history != before.warm_history || after.spin_us != before.spin_us
                 || after.gpu_prompt_tokens != before.gpu_prompt_tokens
-                || after.gpu_prompt_context != before.gpu_prompt_context || after.models_dir != before.models_dir;
+                || after.gpu_prompt_context != before.gpu_prompt_context || after.draft_tokens != before.draft_tokens
+                || after.models_dir != before.models_dir;
             json o = ok_result(true);
             o["restart"] = restart;
             send_json(res, 200, o);

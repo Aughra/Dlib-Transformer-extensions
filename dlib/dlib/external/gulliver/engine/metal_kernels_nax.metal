@@ -367,3 +367,128 @@ MM_ID_NAX(q4_K, fmt_q4_K, 64) MM_ID_NAX(q5_K, fmt_q5_K, 64) MM_ID_NAX(q6_K, fmt_
 MM_ID_NAX(q5_0, fmt_q5_0, 64)
 MM_ID_NAX(q4_K, fmt_q4_K, 128) MM_ID_NAX(q5_K, fmt_q5_K, 128) MM_ID_NAX(q6_K, fmt_q6_K, 128)
 MM_ID_NAX(q8_0, fmt_q8_0, 128) MM_ID_NAX(q5_0, fmt_q5_0, 128)
+
+// ---------------------------------------------------------------------------------------------
+// Les produits des petits lots (2 à 16 tokens : les étapes de plusieurs séquences, les brouillons) sur les
+// accélérateurs (chantier Vitesse, 2026-11-21) : y[t][r] = alpha * sum_i W[r][i] x[t][i] + beta * y[t][r], comme les
+// noyaux mv_*_n de metal_kernels.metal, qui font une multiplication par poids et par token sur les unités ordinaires
+// et coûtent presque autant de fois un token qu'ils en ont.  Ici chaque poids est développé une fois en demi-précision,
+// et les produits passent par matmul2d (16 tokens x 32 lignes x 16 colonnes).  Un threadgroup calcule 32 lignes ;
+// ses MVN_SG simdgroups se partagent les colonnes, par morceaux de 64, puis leurs sommes partielles s'additionnent en
+// mémoire de threadgroup.  Les poids et les activations passent directement de la mémoire du GPU aux registres, sans
+// barrière : dans un morceau de 32 colonnes, chaque voie tient les colonnes c.x + 0..3 de deux fragments de 16, qui
+// sont, dans le fichier, les huit valeurs consécutives 2 c.x .. 2 c.x + 7 (l'ordre des colonnes d'une somme est libre,
+// pourvu que les poids et les activations le partagent) : un seul développement de huit valeurs par ligne.  Comme
+// mv_*, W puis W2 (rows lignes, puis rows2), deux multiples de 32 ; les colonnes, un multiple de 64.
+#define MVN_SG 8
+
+struct mv_args
+{
+    long rows;
+    long cols;
+    uint tokens;
+    uint x_stride;
+    uint y_stride;
+    float alpha;
+    float beta;
+    uint y2_stride;
+    long rows2;
+};
+
+template <typename F>
+kernel void mv_nax(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
+    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
+    ushort tid [[thread_index_in_threadgroup]], ushort sg [[simdgroup_index_in_threadgroup]],
+    ushort lane [[thread_index_in_simdgroup]])
+{
+    threadgroup float part[MVN_SG][16 * 32];
+    long r0 = long(tg) * 32;
+    device const uchar* W = W0;
+    device float* y = y0;
+    long rows = a.rows;
+    uint ys = a.y_stride;
+    if (r0 >= a.rows)
+    {
+        W = W2;
+        y = y2;
+        r0 -= a.rows;
+        rows = a.rows2;
+        ys = a.y2_stride;
+    }
+    const short2 c = nax_coord(lane);
+    const ulong row_bytes = ulong(a.cols / F::values) * F::bytes;
+    // Les quatre lignes de poids de la voie (c.y, c.y + 8 du premier fragment, puis + 16) et ses deux tokens.
+    device const uchar* wr[4];
+    for (uint q = 0; q < 4; ++q) wr[q] = W + ulong(r0 + (q / 2) * 16 + c.y + (q % 2) * 8) * row_bytes;
+    device const float* xr[2];
+    bool has[2];
+    for (uint h = 0; h < 2; ++h)
+    {
+        const uint t = c.y + h * 8;
+        has[h] = t < a.tokens;
+        xr[h] = x + ulong(has[h] ? t : 0) * a.x_stride;
+    }
+
+    constexpr auto desc = mpp::tensor_ops::matmul2d_descriptor(16, 32, 16, false, true, true,
+        mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate);
+    mpp::tensor_ops::matmul2d<desc, execution_simdgroup> op;
+    auto ct_a = op.template get_left_input_cooperative_tensor<half, half, float>();
+    auto ct_b = op.template get_right_input_cooperative_tensor<half, half, float>();
+    auto ct_c = op.template get_destination_cooperative_tensor<
+        metal::remove_addrspace_t<decltype(ct_a)>, metal::remove_addrspace_t<decltype(ct_b)>, float>();
+    for (uint i = 0; i < 16; ++i) ct_c[i] = 0.0f;
+
+    const uint pieces = uint(a.cols / 64);
+    for (uint pc = sg; pc < pieces; pc += MVN_SG)
+        for (uint hf = 0; hf < 2; ++hf)
+        {
+            const uint k0 = pc * 64 + hf * 32 + 2 * uint(c.x);
+            half xa[2][8], wb[4][8];
+            for (uint h = 0; h < 2; ++h)
+            {
+                const float4 u0 = *(device const float4*)(xr[h] + k0), u1 = *(device const float4*)(xr[h] + k0 + 4);
+                const half4 v0 = has[h] ? half4(u0) : half4(0.0h), v1 = has[h] ? half4(u1) : half4(0.0h);
+                for (uint i = 0; i < 4; ++i)
+                {
+                    xa[h][i] = v0[i];
+                    xa[h][4 + i] = v1[i];
+                }
+            }
+            for (uint q = 0; q < 4; ++q)
+            {
+                float v[8];
+                F::dq8(wr[q] + (k0 / F::values) * F::bytes, k0 % F::values, v);
+                for (uint i = 0; i < 8; ++i) wb[q][i] = half(v[i]);
+            }
+            for (uint f = 0; f < 2; ++f)
+            {
+                for (uint e = 0; e < 8; ++e)
+                {
+                    ct_a[e] = xa[e / 4][f * 4 + e % 4];
+                    ct_b[e] = wb[e / 4][f * 4 + e % 4];
+                    ct_b[8 + e] = wb[2 + e / 4][f * 4 + e % 4];
+                }
+                op.run(ct_a, ct_b, ct_c);
+            }
+        }
+
+    // La sortie de la voie : tokens c.y + (i / 4) * 8, lignes f * 16 + c.x + i % 4.
+    for (uint f = 0; f < 2; ++f)
+        for (uint i = 0; i < 8; ++i)
+            part[sg][(c.y + (i / 4) * 8) * 32 + f * 16 + c.x + i % 4] = ct_c[f * 8 + i];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint idx = tid; idx < 16 * 32; idx += MVN_SG * 32)
+    {
+        const uint t = idx / 32, r = idx % 32;
+        if (t >= a.tokens || r0 + r >= rows) continue;
+        float v = 0.0f;
+        for (uint s = 0; s < MVN_SG; ++s) v += part[s][idx];
+        device float* out = y + ulong(t) * ys + r0 + r;
+        *out = a.beta != 0.0f ? a.alpha * v + a.beta * *out : a.alpha * v;
+    }
+}
+
+#define MV_NAX(N, F) template [[host_name("mv_nax_" #N)]] kernel void mv_nax<F>(device const uchar*, \
+    device const float*, device float*, constant mv_args&, device const uchar*, device float*, uint, ushort, ushort, ushort);
+MV_NAX(q4_K, fmt_q4_K) MV_NAX(q5_K, fmt_q5_K) MV_NAX(q6_K, fmt_q6_K) MV_NAX(q8_0, fmt_q8_0) MV_NAX(q5_0, fmt_q5_0)

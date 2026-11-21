@@ -152,6 +152,25 @@ Mêmes mesures que plus haut, deux essais en alternance, sans l'Albireo d'origin
 
 En une phrase : **Gulliver lit désormais plus vite que llama.cpp** sur les modèles Qwen et sur LFM2 aux longues questions, et l'écart d'écriture avec llama.cpp est passé d'environ +30 % à +12 % ; MLX reste devant, et Gulliver reste loin sur Gemma 3 (têtes de 256 valeurs, que les nouveaux noyaux ne prennent pas encore) et sur le mélange d'experts (V3). Tableau complet : page « Mesures du dimanche » (prochaine mesure : dimanche 4 h).
 
+### Plusieurs mots par passe (Gulliver 6.22.0)
+
+Écrire, c'est une passe par mot, et chaque passe relit tous les poids du modèle : c'est la mémoire qui fixe la cadence, comme un livreur qui ferait l'aller-retour à l'entrepôt pour chaque colis. Si l'on pouvait vérifier plusieurs mots d'une seule passe, le même aller-retour servirait plusieurs fois. Deux changements le permettent :
+
+- **Les passes de plusieurs mots sur les accélérateurs du M5** (`mv_nax`). Jusque-là, une passe de 4 mots coûtait 2,7 fois une passe d'un mot : le GPU faisait une multiplication par poids et par mot sur ses unités ordinaires, et le calcul, plus que la mémoire, fixait le temps. Désormais chaque poids est développé une fois, et les multiplications passent par les unités matricielles. Une passe de 8 mots ne coûte plus que 1,37 fois une passe d'un mot. Plusieurs réponses à la fois en profitent directement : 4 réponses passent de 123 à **239 jetons/s** au total, 8 de 130 à **465**.
+- **Les brouillons** (repris de l'Albireo d'origine 1.0.27) : quand les derniers mots écrits figurent déjà dans la conversation, le moteur propose leur suite, et le modèle vérifie jusqu'à 7 mots d'un coup. Sur le modèle du service, en choix glouton :
+
+| Tâche | Sans brouillon | Avec (7 mots) |
+|---|---|---|
+| Recopier un texte | 78,5 | **245** (×3,1) |
+| Répondre à une question sur un document | 76,6 | **96,3** (+26 %) |
+| Écrire du code | 79,2 | **85,7** (+9 %) |
+| Résumer un document | 76,3 | **82,5** (+8 %) |
+| Réponse libre | 79,3 | 80,0 (+1 %) |
+
+Le texte écrit est le même avec et sans brouillon sur quatre tâches sur cinq ; sur la réponse libre, il diverge au 2 335e caractère sur 3 586, à un endroit où deux mots étaient presque à égalité : les sommes d'une passe de plusieurs mots ne se font pas tout à fait dans le même ordre. La perplexité calculée par passes de 8 mots (15,372) est celle d'un mot à la fois (15,368), à l'incertitude près (±0,95).
+
+Les tableaux d'écriture plus haut sont mesurés **sans** brouillon, pour Gulliver comme pour llama.cpp et MLX, qui savent aussi en faire (llama.cpp par `llama-lookup` ou un petit modèle, MLX par un petit modèle) mais pas dans leur réglage par défaut : la comparaison reste à faire à armes égales. Reste aussi à faire passer les mélanges d'experts par le même chemin : Qwen3-30B-A3B gagne 6 % sur une question sur un document mais perd 2,5 % en réponse libre.
+
 ## Pour que Gulliver soit le plus rapide
 
 Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (deux pistes au même but sont essayées toutes les deux, mesurées, et la meilleure est gardée) :
@@ -161,7 +180,7 @@ Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (
 3. **V3, les mélanges d'experts**, et le contrôle du GPU qui les renvoie au processeur en demi-précision.
 4. **V4, un format de poids plus compact** : à juger sur la vitesse et sur la perplexité, modèle par modèle, puisque celui de MLX n'est pas toujours meilleur.
 5. **V5 ou V6, pour la lecture** : les accélérateurs neuronaux du M5 par Metal 4, ou le Neural Engine.
-6. **V7 ou V8, pour l'écriture** : le décodage spéculatif (un petit modèle propose plusieurs mots, le gros les vérifie d'un coup) ou la devinette par répétition ; tous deux gardent la sortie identique.
+6. **V7 ou V8, pour l'écriture** : le décodage spéculatif (un petit modèle propose plusieurs mots, le gros les vérifie d'un coup) ou la devinette par répétition. La devinette (V8) est faite en 6.22.0 (ci-dessus) ; reste le petit modèle (V7), à comparer.
 7. **V9, une seule commande au GPU par mot**, et **V10, lire mistral.rs**, en plus de MLX et llama.cpp.
 
 Chaque changement sera mesuré en alternance contre la version d'avant, et sa justesse vérifiée par la perplexité, avant d'être gardé.

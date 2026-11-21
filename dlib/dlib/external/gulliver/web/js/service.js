@@ -200,6 +200,11 @@ const schemas = {
     `<rect x="60" y="66" width="190" height="28" rx="6" class="s-gold"/>` + text(155, 85, 'processeur') +
     `<rect x="250" y="66" width="310" height="28" rx="6" class="s-blue"/>` + text(405, 85, 'GPU') +
     text(300, 176, 'mesuré sur le M2 : le GPU perd à 16 tokens, gagne dès 24', 's-f'), 195),
+  draft_tokens: schema('Un brouillon, vérifié en une passe',
+    box(20, 70, 150, 56, 'Conversation', 's-soft', '« … le moteur Metal »') + arrow(170, 98, 230, 98) +
+    box(230, 70, 150, 56, 'Brouillon', 's-gold', 'jusqu’à 7 mots') + arrow(380, 98, 440, 98) +
+    box(440, 70, 140, 56, 'Une passe', 's-blue', 'garde les bons') +
+    text(300, 160, 'les mots justes sont gardés ; au premier faux, le modèle reprend la main', 's-f'), 185),
   gpu_prompt_context: schema('Jusqu’à quelle longueur le GPU lit',
     `<rect x="40" y="70" width="320" height="40" rx="8" class="s-blue"/>` + text(200, 95, 'GPU') +
     `<rect x="360" y="70" width="200" height="40" rx="8" class="s-gold"/>` + text(460, 95, 'processeur') +
@@ -246,6 +251,7 @@ function formatMb(n) {
 const recommended = {
   accelerator: 'auto',        // GPU : écriture 21-22 contre 18-19 tokens/s (4B), lecture x1,7 (épisodes 19, 20)
   gpu_prompt_tokens: 24,      // le GPU perd à 16 tokens, gagne dès 24 (épisode 20)
+  draft_tokens: 7,            // Mac mini, 4B, 2026-11-21 : recopie 78,5 -> 245, question sur un texte +26 %, code +9 %, résumé +8 %, réponse libre +1 % (4 : 192,6 / +24 % / +9 % / +8 % / +1 %)
   gpu_prompt_context: 262144, // attention matricielle (4.11.0), 2B, mesures alternées : GPU 423-424 / 295 / 171 contre 170-177 / 115-117 / 67 à 4 096 / 8 192 / 16 384
   threads: 0,                 // tous les cœurs physiques (épisode 16) ; 18 sur le M5 Pro, meilleur que 14, 12, 10, 6 (mesure du 2026-11-19)
   spin_us: 2000,
@@ -267,8 +273,8 @@ const groups = [
   {
     title: 'Le moteur',
     note: 'Ces réglages demandent un redémarrage du service : quelques secondes, le temps de recharger les modèles.',
-    items: ['accelerator', 'gpu_prompt_tokens', 'gpu_prompt_context', 'threads', 'spin_us', 'max_sequences', 'context',
-      'kv_mb', 'kv_type', 'warm_history']
+    items: ['accelerator', 'gpu_prompt_tokens', 'gpu_prompt_context', 'draft_tokens', 'threads', 'spin_us', 'max_sequences',
+      'context', 'kv_mb', 'kv_type', 'warm_history']
   },
   {
     title: 'Documents',
@@ -600,6 +606,36 @@ const items = {
       "couteau. Pour un sac entier, le robot gagne. Ce réglage dit à partir de combien de carottes on le sort.",
     bee: "Trop bas, les petites questions démarrent plus lentement. Trop haut, les documents moyens sont lus deux fois " +
       "moins vite qu’ils pourraient l’être."
+  },
+  draft_tokens: {
+    title: 'Brouillons de l’écriture',
+    control: { kind: 'range', values: () => [0, 1, 2, 3, 4, 5, 6, 7], label: (v) => v === 0 ? 'aucun' : v + (v > 1 ? ' mots' : ' mot') },
+    restart: true,
+    effect: 'Combien de mots le moteur devine à l’avance, en les reprenant de la conversation, puis vérifie en une seule passe.',
+    principle: 'Quand la réponse recopie des mots déjà présents (un document, du code, une citation), le moteur propose la suite ' +
+      'et le modèle la vérifie d’un coup : chaque mot juste est un pas d’écriture gagné.',
+    pros: ['Recopie, citations, questions sur un document : jusqu’à trois fois plus vite (mesuré sur le Mac mini).',
+      'Rien ne change au choix des mots : un mot n’est gardé que si le modèle l’aurait écrit.'],
+    cons: ['Une réponse libre, qui ne recopie rien, gagne peu (1 % mesuré).',
+      'Sans GPU, la vérification coûte presque autant que les mots gagnés : de −4 % à +4 % sur le processeur.'],
+    normal: "Pour écrire, le modèle fait une passe par mot. Or une réponse reprend souvent des morceaux de la conversation : " +
+      "le nom d’un fichier, une phrase du document, une ligne de code. Le moteur cherche dans ce qui précède la suite des " +
+      "derniers mots écrits et la propose comme brouillon ; une seule passe vérifie tous les mots du brouillon à la fois et " +
+      "garde ceux que le modèle aurait choisis. Ce réglage dit la longueur maximale d’un brouillon.",
+    owl: "Décodage spéculatif par recherche dans le prompt (prompt lookup), repris de l’Albireo d’origine : les 2 à 4 " +
+      "derniers tokens sont cherchés dans les 65 536 précédents, la suite trouvée sert de brouillon, et la passe suivante " +
+      "calcule les logits de tous ses tokens ; le tirage accepte chaque token avec sa probabilité (en glouton : s’il est le " +
+      "plus probable), puis tire le suivant normalement. Après des échecs répétés, le moteur fait une pause. Une passe de 8 " +
+      "tokens passe par mv_nax (accélérateurs du M5, Gulliver 6.22.0) et ne coûte que 1,37 fois une passe d’un token. Mesures " +
+      "(4B, glouton, 400 tokens) : 0 / 4 / 7 mots, recopie 78,5 / 192,6 / 245,3 tokens/s ; question sur un texte 76,6 / " +
+      "94,6 / 96,3 ; code 79,2 / 86,6 / 85,7 ; résumé 76,3 / 82,4 / 82,5 ; réponse libre 79,3 / 80,1 / 80,0. Le texte est " +
+      "identique sauf aux quasi-égalités : les additions d’une passe de plusieurs tokens se font en demi-précision et dans " +
+      "un autre ordre (réponse libre : premier écart au caractère 2 335 sur 3 586). Sans effet sur les modèles récurrents.",
+    marmot: "C’est comme dicter une lettre à quelqu’un qui connaît déjà le texte : au lieu d’attendre chaque mot, il écrit " +
+      "toute la phrase qu’il devine, et tu n’as qu’à dire « oui » d’un coup d’œil. S’il se trompe, tu reprends au mot faux.",
+    bee: "À 0, chaque mot coûte une passe, même pour recopier un document mot pour mot : trois fois plus lent. Au maximum " +
+      "(7), rien ne se perd sur le GPU : un brouillon faux ne coûte qu’un peu plus qu’une passe ordinaire, et le moteur " +
+      "arrête d’en proposer quand ils échouent."
   },
   gpu_prompt_context: {
     title: 'GPU : prompts jusqu’à',

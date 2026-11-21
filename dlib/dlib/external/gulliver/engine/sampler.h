@@ -47,8 +47,21 @@ namespace gulliver
     public:
         explicit sampler(const sampling_params& p);
 
-        // Tire le token suivant d'une ligne de logits (modifiée sur place).
-        int sample(float* logits, long vocab);
+        /*!
+            ensures
+                - Tire le token suivant d'une ligne de logits (modifiée sur place).
+                - Les n_pending tokens de pending comptent pour les pénalités comme des tokens de
+                  l'historique, après ceux qu'a enregistrés accept() : les tokens tirés avant celui-ci
+                  dans la vérification d'un brouillon, que le moteur n'enregistre qu'une fois gardés.
+                - Avec draft >= 0, le token qu'un brouillon propose à cette place (repris à la main de
+                  l'original, Albireo 1.0.27, 2026-11-21) : à température nulle, le token le plus
+                  probable est rendu, comme sans brouillon ; sinon le brouillon est rendu avec la
+                  probabilité que lui donnent les filtres, et à défaut un token tiré parmi les autres
+                  candidats en proportion de leurs probabilités.  Les tokens suivent alors la loi des
+                  tirages sans brouillon (échantillonnage spéculatif) ; l'appelant compare le résultat
+                  au brouillon.
+        !*/
+        int sample(float* logits, long vocab, int draft = -1, const int* pending = nullptr, size_t n_pending = 0);
 
         // Enregistre un token de la séquence (généré ou du prompt) pour les pénalités.
         void accept(int token);

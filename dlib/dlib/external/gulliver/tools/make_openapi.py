@@ -370,6 +370,10 @@ schemas = {
         "gpu_prompt_context": {"type": "integer", "minimum": 0, "default": 262144,
                                "description": "... tant que leur contexte se termine dans autant de positions ; 0 "
                                               "laisse chaque prompt au processeur."},
+        "draft_tokens": {"type": "integer", "minimum": 0, "maximum": 7, "default": 7,
+                         "description": "Les tokens d'un brouillon qu'une étape de l'écriture vérifie au plus, repris "
+                                        "des mots déjà présents dans la conversation (décodage spéculatif) ; 0 n'en "
+                                        "propose aucun."},
         "models_dir": {"type": "string", "description": "Le dossier des modèles, un dossier existant, ou vide pour le "
                        "dossier des modèles dans les données."},
         "library_dir": {"type": "string", "description": "La bibliothèque du Mac : un dossier de fichiers GGUF que "

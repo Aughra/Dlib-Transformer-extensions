@@ -296,6 +296,8 @@ namespace gulliver
         long context = 0;
         long max_sequences = 8;
         long batch_tokens = 512;
+        // Les tokens d'un brouillon qu'une étape vérifie au plus pour une réponse, 0 pour aucun (draft_tokens).
+        long draft_tokens = 0;
         kv_format kv_type = kv_format::f16;
         std::vector<int> stops;
         std::vector<cache_entry> idle;
@@ -343,6 +345,9 @@ namespace gulliver
         // préchauffages actifs ou en attente, que n_active et les requêtes en attente des
         // statistiques laissent de côté.
         std::atomic<uint64_t> warmed{0};
+        // Les tokens des brouillons que les étapes ont vérifiés, et ceux que le modèle a gardés.
+        std::atomic<uint64_t> drafted{0};
+        std::atomic<uint64_t> draft_kept{0};
         std::atomic<long> n_warming{0};
     };
 
@@ -429,6 +434,18 @@ namespace gulliver
         std::vector<int> closing;
         std::deque<int> forced;
         bool forcing = false;
+        /*
+            La vérification des brouillons (propose_draft()) : les tokens proposés après next_token, que
+            l'étape calcule avec lui, les tokens tirés de leurs logits (les brouillons que le modèle garde,
+            puis le token qui les suit), les tokens que le prochain brouillon peut contenir, les étapes
+            qui n'en proposent aucun après des brouillons refusés, et les vérifications de suite qui
+            n'ont rien gardé.
+        */
+        std::vector<int> draft;
+        std::vector<int> drawn;
+        long draft_room = 0;
+        long draft_pause = 0;
+        long draft_misses = 0;
         bool brief = false;
         long answer_tokens = -1;
         /*
@@ -650,6 +667,70 @@ namespace gulliver
         // Les tokens de prompts qu'une passe lit au plus tant que des réponses s'écrivent, dans
         // n'importe quel modèle.
         const long prefill_while_answering = 64;
+
+        /*
+            Les brouillons des réponses (décodage spéculatif, repris à la main de l'original, Albireo 1.0.27, le
+            2026-11-21) : une étape calcule, après le token suivant d'une réponse, les tokens qu'une recherche dans
+            son contexte propose de lui faire suivre, et garde ceux que le modèle aurait tirés lui-même : plusieurs
+            tokens pour la lecture des poids d'une seule étape.  La recherche prend les tokens qui suivaient la
+            dernière occurrence des derniers tokens du contexte (« prompt lookup decoding ») : une réponse qui
+            reprend un document, un code, une liste qu'on lui a donnés, ou son propre texte, y trouve des suites
+            entières.
+                - draft_match : la longueur de l'occurrence cherchée, au plus ; la plus longue gagne, la plus
+                  récente à égalité.
+                - draft_min_match : la longueur sous laquelle une occurrence ne propose rien.
+                - draft_span : les derniers tokens du contexte que lit la recherche.
+                - draft_pass_tokens : les tokens des réponses qu'une passe calcule au plus avec leurs brouillons,
+                  partagés entre ses réponses : les étapes du GPU prennent au plus metal_device::max_tokens tokens.
+                - draft_misses_pause : les vérifications de suite qui ne gardent rien, après lesquelles une réponse
+                  ne propose plus de brouillon pendant draft_pause_steps étapes, doublées à chaque pause jusqu'à
+                  draft_pause_most.
+        */
+        const long draft_match = 4;
+        const long draft_min_match = 2;
+        const long draft_span = 65536;
+        const long draft_pass_tokens = 8;
+        const long draft_misses_pause = 2;
+        const long draft_pause_steps = 4;
+        const long draft_pause_most = 64;
+
+        /*
+            Écrit dans draft les tokens, most au plus, qui suivaient la plus longue et la plus récente des
+            occurrences précédentes des derniers tokens du contexte, keys suivi de next : aucun quand aucune
+            occurrence n'atteint draft_min_match tokens.  Un brouillon s'arrête avant la clé d'une image, qui
+            n'est pas un token du vocabulaire.
+        */
+        void propose_draft(const std::vector<int>& keys, int next, long most, long vocab, std::vector<int>& draft)
+        {
+            draft.clear();
+            const long n = static_cast<long>(keys.size());
+            if (most <= 0 || n < draft_min_match) return;
+            // Le token i du contexte, next étant le token n.
+            auto token = [&](long i) { return i == n ? next : keys[static_cast<size_t>(i)]; };
+            long best = -1, best_length = 0;
+            const long first = std::max<long>(0, n - draft_span);
+            for (long j = n - 1; j >= first; --j)
+            {
+                if (keys[static_cast<size_t>(j)] != next) continue;
+                long length = 1;
+                while (length < draft_match && j - length >= 0
+                    && keys[static_cast<size_t>(j - length)] == token(n - length))
+                    ++length;
+                if (length > best_length)
+                {
+                    best_length = length;
+                    best = j;
+                    if (length == draft_match) break;
+                }
+            }
+            if (best < 0 || best_length < draft_min_match) return;
+            for (long i = best + 1; i <= n && static_cast<long>(draft.size()) < most; ++i)
+            {
+                const int t = token(i);
+                if (t < 0 || t >= vocab) break;
+                draft.push_back(t);
+            }
+        }
         // Les pixels d'images décodés que les requêtes d'un modèle peuvent détenir à la fois, en
         // attente d'encodage.
         const size_t queued_pixels_budget = size_t(1) << 30;
@@ -1225,6 +1306,12 @@ namespace gulliver
         if (m->cfg.recurrent()) m->max_sequences = std::min<long>(m->max_sequences, 16);
         m->batch_tokens = embedding && !options.contains("batch_tokens") ? 256
             : std::max<long>(16, static_cast<long>(setting("batch_tokens", 512, 0, 65536)));
+        /*
+            Les brouillons des réponses (propose_draft()) : 4 tokens par défaut, 0 pour aucun, 7 au plus.  Aucun pour
+            un modèle à état récurrent, dont l'état ne sait pas rendre les tokens d'un brouillon refusé.
+        */
+        m->draft_tokens = embedding || m->cfg.recurrent() ? 0
+            : static_cast<long>(setting("draft_tokens", 7, 0, draft_pass_tokens - 1));
 
         /*
             Le stockage des clés et valeurs (kv_format) : auto prend les entiers sur 8 bits pour
@@ -1582,6 +1669,7 @@ namespace gulliver
             || !(presence >= -100 && presence <= 100) || !(frequency >= -100 && frequency <= 100))
             throw std::invalid_argument("sampling parameters out of range");
         r->smp.reset(new sampler(sp));
+        r->draft_room = m->draft_tokens;
 
         const long room = m->context - static_cast<long>(r->prompt.size());
         // Comparé avant toute réduction : long fait 32 bits sous Windows.
@@ -2316,10 +2404,13 @@ namespace gulliver
         b.hidden_only = m.cfg.is_embedding();
         const bool multimodal = m.cfg.multimodal_rope();
         long budget = budget_tokens;
+        // Les réponses dont la passe calcule le token suivant, chacune avec la mémoire de ce token.
+        std::vector<request_state*> answers;
         for (auto& rp : m.active)
         {
             request_state& r = *rp;
             if (r.ph != request_state::phase::decode) continue;
+            r.draft.clear();
             const long len = m.runtime->sequence_length(r.seq);
             if (len + 1 > m.context)
             {
@@ -2334,17 +2425,46 @@ namespace gulliver
                 fail(r, "out_of_memory", "no memory left for the keys and values of this answer");
                 continue;
             }
-            b.segments.push_back({ r.seq, static_cast<long>(b.tokens.size()), 1 });
-            b.logit_rows.push_back(static_cast<long>(b.tokens.size()));
+            answers.push_back(&r);
+        }
+        // Les tokens de brouillon que chaque réponse peut ajouter à la passe.
+        const long n_answers = static_cast<long>(answers.size());
+        const long draft_share = n_answers > 0 ? std::max<long>(0, draft_pass_tokens - n_answers) / n_answers : 0;
+        for (request_state* rp : answers)
+        {
+            request_state& r = *rp;
+            const long len = m.runtime->sequence_length(r.seq);
+            /*
+                Un brouillon, dans le contexte, et dans la mémoire que le pool garde une fois que chaque réponse
+                tient la place de son token suivant : un brouillon ne prend aucun bloc à une séquence en cache ou
+                à un prompt en cours de lecture.  Aucun tant que le moteur écrit la fin d'un raisonnement.
+            */
+            const long most = std::min(std::min(draft_share, r.draft_room), m.context - len - 1);
+            if (r.draft_pause > 0)
+            {
+                --r.draft_pause;
+            }
+            else if (most > 0 && r.forced.empty())
+            {
+                propose_draft(r.kv_tokens, r.next_token, most, m.cfg.vocab, r.draft);
+                if (!r.draft.empty()
+                    && !m.runtime->reserve_sequence(r.seq, len + 1 + static_cast<long>(r.draft.size())))
+                    r.draft.clear();
+            }
+            const long count = 1 + static_cast<long>(r.draft.size());
+            const long row0 = static_cast<long>(b.tokens.size());
+            b.segments.push_back({ r.seq, row0, count });
+            for (long i = 0; i < count; ++i) b.logit_rows.push_back(row0 + i);
             b.tokens.push_back(r.next_token);
+            b.tokens.insert(b.tokens.end(), r.draft.begin(), r.draft.end());
             if (multimodal)
             {
                 // Un token généré suit la dernière position du prompt.
                 const long p = r.next_position + len - static_cast<long>(r.prompt.size());
-                b.positions.insert(b.positions.end(), { p, p, p });
+                for (long i = 0; i < count; ++i) b.positions.insert(b.positions.end(), { p + i, p + i, p + i });
             }
-            rows.push_back({ &r, 1, true });
-            --budget;
+            rows.push_back({ &r, count, true });
+            budget -= count;
         }
         requeue_preempted(m);
         // Tant que des réponses aux utilisateurs s'écrivent, dans ce modèle ou un autre, une passe lit
@@ -2537,7 +2657,9 @@ namespace gulliver
                 }
             }
             if (!w.logits) continue;
-            const long this_row = static_cast<long>(logit_row++);
+            const long this_row = static_cast<long>(logit_row);
+            // La ligne d'une réponse contient les logits de son token suivant et de son brouillon.
+            logit_row += r.ph == request_state::phase::decode ? static_cast<size_t>(w.count) : 1;
             if (r.job)
             {
                 // Une entrée d'une requête d'embedding, lue jusqu'au bout.
@@ -2567,15 +2689,42 @@ namespace gulliver
             }
             draws.push_back({ &r, lg, -1 });
         }
+        /*
+            Le tirage d'une réponse avec un brouillon parcourt ses logits dans l'ordre : chaque token du brouillon
+            tiré de nouveau est gardé, et le premier que le tirage refuse termine la vérification, avec le token
+            tiré à sa place ; un brouillon gardé en entier gagne le token que tirent ses derniers logits.  Les
+            pénalités de chaque tirage comptent les tokens tirés avant lui.
+        */
+        auto sample = [&](draw& d) {
+            request_state& r = *d.r;
+            if (r.draft.empty())
+            {
+                d.token = r.smp->sample(d.logits, V);
+                return;
+            }
+            r.drawn.clear();
+            for (size_t i = 0; i <= r.draft.size(); ++i)
+            {
+                const int proposed = i < r.draft.size() ? r.draft[i] : -1;
+                const int t = r.smp->sample(d.logits + static_cast<long>(i) * V, V, proposed, r.drawn.data(),
+                    r.drawn.size());
+                r.drawn.push_back(t);
+                if (t != proposed) break;
+            }
+            d.token = r.drawn.front();
+        };
         if (draws.size() == 1)
-            draws[0].token = draws[0].r->smp->sample(draws[0].logits, V);
+            sample(draws[0]);
         else if (draws.size() > 1)
-            pool_->parallel_for(static_cast<long>(draws.size()), [&](long i, int) {
-                draw& d = draws[static_cast<size_t>(i)];
-                d.token = d.r->smp->sample(d.logits, V);
-            });
+            pool_->parallel_for(static_cast<long>(draws.size()),
+                [&](long i, int) { sample(draws[static_cast<size_t>(i)]); });
         for (const draw& d : draws)
         {
+            if (!d.r->draft.empty())
+            {
+                generated += verify_draft(m, *d.r);
+                continue;
+            }
             ++generated;
             int token = d.token;
             // La fin d'un raisonnement qui a atteint son budget prend la place des tokens tirés.
@@ -2610,7 +2759,53 @@ namespace gulliver
         return true;
     }
 
-    void engine::handle_token(loaded_model& m, request_state& r, int token)
+    long engine::verify_draft(loaded_model& m, request_state& r)
+    {
+        /*
+            Les clés et valeurs de l'étape : le token suivant, puis le brouillon.  Le modèle garde les drawn - 1
+            premiers tokens du brouillon, le dernier token tiré les suivant ; les clés et valeurs des tokens du
+            brouillon qu'il a refusés retournent au pool.
+        */
+        const long proposed = static_cast<long>(r.draft.size());
+        const long kept = static_cast<long>(r.drawn.size()) - 1;
+        const long base = m.runtime->sequence_length(r.seq) - proposed;
+        m.drafted += static_cast<uint64_t>(proposed);
+        m.draft_kept += static_cast<uint64_t>(kept);
+        if (kept < proposed) m.runtime->truncate_sequence(r.seq, base + kept);
+        long handled = 0;
+        for (long i = 0; i <= kept; ++i)
+        {
+            if (i > 0) r.kv_tokens.push_back(r.draft[static_cast<size_t>(i - 1)]);
+            ++handled;
+            r.forcing = false;
+            handle_token(m, r, r.drawn[static_cast<size_t>(i)], base + i);
+            if (r.ph == request_state::phase::done) break;
+            if (!r.forced.empty() && i < kept)
+            {
+                // Le moteur écrit la fin du raisonnement à partir d'ici : le brouillon après ce token s'en va.
+                m.runtime->truncate_sequence(r.seq, base + i);
+                break;
+            }
+        }
+        /*
+            Le prochain brouillon contient un token de plus que celui-ci n'en a gardé ; des vérifications de suite
+            qui ne gardent rien mettent les brouillons en pause, plus longue à chaque pause.
+        */
+        r.draft_room = std::min(m.draft_tokens, std::max<long>(1, kept + 1));
+        if (kept > 0)
+        {
+            r.draft_misses = 0;
+        }
+        else if (++r.draft_misses % draft_misses_pause == 0)
+        {
+            const long pauses = std::min<long>(r.draft_misses / draft_misses_pause - 1, 4);
+            r.draft_pause = std::min(draft_pause_most, draft_pause_steps << pauses);
+        }
+        r.draft.clear();
+        return handled;
+    }
+
+    void engine::handle_token(loaded_model& m, request_state& r, int token, long length)
     {
         if (std::binary_search(m.stops.begin(), m.stops.end(), token))
         {
@@ -2672,7 +2867,9 @@ namespace gulliver
             r.forced.assign(r.closing.begin(), r.closing.end());
             r.closing.clear();
         }
-        if (r.generated >= r.max_tokens || m.runtime->sequence_length(r.seq) + 1 >= m.context)
+        // La longueur de la séquence après ce token : donnée par verify_draft(), qui la lit avant la fin du brouillon.
+        if (length < 0) length = m.runtime->sequence_length(r.seq);
+        if (r.generated >= r.max_tokens || length + 1 >= m.context)
         {
             finish(m, r, "length");
             return;
@@ -3131,6 +3328,8 @@ namespace gulliver
             j["generated_total"] = static_cast<unsigned long long>(m.generated.load());
             j["prompt_total"] = static_cast<unsigned long long>(m.prompted.load());
             j["warmed_total"] = static_cast<unsigned long long>(m.warmed.load());
+            j["drafted_total"] = static_cast<unsigned long long>(m.drafted.load());
+            j["draft_kept_total"] = static_cast<unsigned long long>(m.draft_kept.load());
             active += m.n_active.load();
             waiting += queued;
             models.push_back(j);

@@ -39,9 +39,10 @@ namespace gulliver
             "attention_nax_8_128", "attention_nax_1_256", "attention_nax_2_256", "attention_nax_4_256",
             "attention_nax_8_256", "mm_id_nax64_q4_K", "mm_id_nax64_q5_K", "mm_id_nax64_q6_K", "mm_id_nax64_q8_0",
             "mm_id_nax64_q5_0", "mm_id_nax128_q4_K", "mm_id_nax128_q5_K", "mm_id_nax128_q6_K", "mm_id_nax128_q8_0",
-            "mm_id_nax128_q5_0" };
-        // mm_id_nax, après les douze attention_nax : tuiles de 64 cases, puis de 128.
-        const int nax_mm_id = 12, nax_mm_id_128 = 17;
+            "mm_id_nax128_q5_0", "mv_nax_q4_K", "mv_nax_q6_K", "mv_nax_q5_K", "mv_nax_q8_0", "mv_nax_q5_0" };
+        // mm_id_nax, après les douze attention_nax : tuiles de 64 cases, puis de 128 ; puis mv_nax, dans l'ordre des
+        // formats des noyaux mv_*_n.
+        const int nax_mm_id = 12, nax_mm_id_128 = 17, nax_mv = 22;
         // Les simdgroups d'une tuile d'attention_nax, 16 lignes de requête chacun (GULLIVER_NAX_SG pour les essais).
         unsigned nax_simdgroups()
         {
@@ -199,7 +200,7 @@ namespace gulliver
         // Les lignes que calcule un threadgroup des produits : ROWS * SG_PER_TG de metal_kernels.metal.
         // ROWS x SG_PER_TG de metal_kernels.metal : une ligne par simdgroup pour un token, quatre pour plusieurs.
         long mv_rows_per_group(unsigned tokens) { return tokens > 1 ? 16 : 4; }
-        const unsigned mv_threads = 128;
+        const unsigned mv_threads = 128, mv_nax_threads = 256;
         const unsigned attention_threads = 128;   // ATT_SG simdgroups
     }
 
@@ -279,6 +280,23 @@ namespace gulliver
             if (profiling()) profiled_encoder(kernel_names[k]);
             else if (!encoder) encoder = [buffer computeCommandEncoder];
             [encoder setComputePipelineState:device->pipelines[static_cast<size_t>(k)]];
+        }
+        /* Le noyau mv_nax des petits lots (metal_kernels_nax.metal) pour un produit de plusieurs tokens, ou -1 : sur
+           les accélérateurs, quand les lignes de chaque matrice sont un multiple de 32 et les colonnes de 64.
+           GULLIVER_NO_NAX_MV garde les noyaux mv_*_n pour les mesures. */
+        int mv_nax_index(gulliver::ggml_type type, unsigned tokens, long rows, long rows2, long cols) const
+        {
+            static const bool off = std::getenv("GULLIVER_NO_NAX_MV") != nullptr;
+            if (off || tokens < 2 || device->nax.empty() || rows % 32 != 0 || rows2 % 32 != 0 || cols % 64 != 0) return -1;
+            switch (type)
+            {
+            case gulliver::ggml_type::Q4_K: return nax_mv;
+            case gulliver::ggml_type::Q6_K: return nax_mv + 1;
+            case gulliver::ggml_type::Q5_K: return nax_mv + 2;
+            case gulliver::ggml_type::Q8_0: return nax_mv + 3;
+            case gulliver::ggml_type::Q5_0: return nax_mv + 4;
+            default: return -1;
+            }
         }
         void use_nax(int k)
         {
@@ -601,7 +619,9 @@ namespace gulliver
         if (tokens == 0) return true;
         if (tokens > max_tokens || cols % (type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0 ? 32 : 256) != 0)
             throw std::invalid_argument("metal_device: a product of more tokens or other columns than its kernel takes");
-        impl_->use(k);
+        const int nax = impl_->mv_nax_index(type, tokens, rows, 0, cols);
+        if (nax >= 0) impl_->use_nax(nax);
+        else impl_->use(k);
         impl_->bind(W, 0);
         impl_->bind(x, 1);
         impl_->bind(y, 2);
@@ -609,7 +629,8 @@ namespace gulliver
         impl_->bind(y, 5);
         const mv_args a = { rows, cols, tokens, x_stride, y_stride, alpha, beta, y_stride, 0 };
         impl_->args(a, 3);
-        impl_->groups(static_cast<unsigned>((rows + mv_rows_per_group(tokens) - 1) / mv_rows_per_group(tokens)), 1, 1, mv_threads);
+        if (nax >= 0) impl_->groups(static_cast<unsigned>(rows / 32), 1, 1, mv_nax_threads);
+        else impl_->groups(static_cast<unsigned>((rows + mv_rows_per_group(tokens) - 1) / mv_rows_per_group(tokens)), 1, 1, mv_threads);
         return true;
     }
 
@@ -628,7 +649,9 @@ namespace gulliver
         // Les lignes d'un simdgroup (ROWS) ne chevauchent jamais les deux matrices.
         if (tokens > max_tokens || cols % 256 != 0 || rows % 16 != 0)
             throw std::invalid_argument("metal_device: a double product of more tokens or other shapes than its kernel takes");
-        impl_->use(k);
+        const int nax = impl_->mv_nax_index(type, tokens, rows, rows2, cols);
+        if (nax >= 0) impl_->use_nax(nax);
+        else impl_->use(k);
         impl_->bind(W, 0);
         impl_->bind(x, 1);
         impl_->bind(y, 2);
@@ -636,7 +659,8 @@ namespace gulliver
         impl_->bind(y2, 5);
         const mv_args a = { rows, cols, tokens, x_stride, y_stride, 1.0f, 0.0f, y2_stride, rows2 };
         impl_->args(a, 3);
-        impl_->groups(static_cast<unsigned>((rows + rows2 + mv_rows_per_group(tokens) - 1) / mv_rows_per_group(tokens)), 1, 1,
+        if (nax >= 0) impl_->groups(static_cast<unsigned>((rows + rows2) / 32), 1, 1, mv_nax_threads);
+        else impl_->groups(static_cast<unsigned>((rows + rows2 + mv_rows_per_group(tokens) - 1) / mv_rows_per_group(tokens)), 1, 1,
             mv_threads);
         return true;
     }

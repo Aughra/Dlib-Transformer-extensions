@@ -186,6 +186,7 @@ namespace gulliver
         j["spin_us"] = spin_us;
         j["gpu_prompt_tokens"] = gpu_prompt_tokens;
         j["gpu_prompt_context"] = gpu_prompt_context;
+        j["draft_tokens"] = draft_tokens;
         json a = json::object();
         for (const auto& kv : active) a[kv.first] = kv.second;
         j["active"] = a;
@@ -232,6 +233,7 @@ namespace gulliver
             j["gpu_prompt_tokens"].as_int(d.gpu_prompt_tokens))));
         gpu_prompt_context = static_cast<int>(std::max<long long>(0, std::min<long long>(1 << 20,
             j["gpu_prompt_context"].as_int(d.gpu_prompt_context))));
+        draft_tokens = static_cast<int>(std::max<long long>(0, std::min<long long>(7, j["draft_tokens"].as_int(d.draft_tokens))));
         active.clear();
         for (const auto& kv : j["active"].items())
         {

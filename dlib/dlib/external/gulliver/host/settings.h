@@ -104,6 +104,7 @@ namespace gulliver
         int spin_us = 2000;                     // l'attente des threads entre deux passes, en microsecondes
         int gpu_prompt_tokens = 24;             // les prompts d'autant de tokens ou plus vont au GPU...
         int gpu_prompt_context = 262144;          // ...s'ils finissent en deçà d'autant de positions (0 : jamais)
+        int draft_tokens = 7;                   // les tokens des brouillons d'une réponse (décodage spéculatif), 0 : aucun
         std::map<std::string, std::string> active;   // rôle -> identifiant du modèle
         bool default_model = true;              // télécharger le modèle par défaut du catalogue au premier démarrage
         int reserve_gb = 200;                   // la réserve des modèles non installés, en Go (0 : rien de plus)

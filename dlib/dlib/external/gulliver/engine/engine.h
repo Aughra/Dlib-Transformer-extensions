@@ -125,7 +125,10 @@ namespace gulliver
         void abandon(loaded_model& m, const std::string& code, const std::string& message);
         void trim_after_failure(loaded_model& m);
         void trim_idle(const std::vector<std::shared_ptr<loaded_model>>& models);
-        void handle_token(loaded_model& m, request_state& r, int token);
+        // Les tokens d'une réponse dont l'étape a vérifié un brouillon ; renvoie le nombre de tokens traités.
+        long verify_draft(loaded_model& m, request_state& r);
+        // length : la longueur de la séquence après ce token, -1 pour la lire (sequence_length).
+        void handle_token(loaded_model& m, request_state& r, int token, long length = -1);
         void emit_text(loaded_model& m, request_state& r, const std::string& text);
         void finish(loaded_model& m, request_state& r, const std::string& reason, bool keep_cache = true);
         // Met en file la lecture de l'historique de la réponse de r, dont la séquence contient les

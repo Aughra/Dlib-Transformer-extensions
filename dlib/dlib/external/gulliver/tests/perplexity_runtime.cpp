@@ -5,7 +5,7 @@
     calcule (llama-perplexity), pour comparer la justesse des deux moteurs sur le même fichier
     (fork pour macOS, 2026-11-21) :
 
-        perplexity_runtime model.gguf texte.txt [contexte=512] [morceaux=0] [f16|q8] [metal|cpu] [steps]
+        perplexity_runtime model.gguf texte.txt [contexte=512] [morceaux=0] [f16|q8] [metal|cpu] [steps|stepsN]
 
     Le texte est tokenisé en entier (avec le BOS si le modèle le demande), puis coupé en
     morceaux de « contexte » tokens ; le premier token de chaque morceau devient le BOS quand le
@@ -14,7 +14,9 @@
     entiers du texte.  Affiche la perplexité, son incertitude, et la part des positions où le
     token suivant est le plus probable du modèle.  Avec « steps », la première moitié de chaque
     morceau est lue d'un coup et la seconde donnée token par token, comme pendant l'écriture d'une
-    réponse : la même perplexité, calculée par le chemin des étapes.
+    réponse : la même perplexité, calculée par le chemin des étapes.  Avec « stepsN » (steps4, steps8),
+    la seconde moitié est donnée N tokens à la fois, comme la vérification des brouillons : le chemin
+    des étapes de plusieurs tokens.
 */
 
 #include <algorithm>
@@ -49,7 +51,9 @@ int main(int argc, char** argv)
     long chunks = argc > 4 ? std::atol(argv[4]) : 0;
     const kv_format format = argc > 5 && std::string(argv[5]) == "q8" ? kv_format::q8 : kv_format::f16;
     const bool metal = argc > 6 && std::string(argv[6]) == "metal";
-    const bool steps = argc > 7 && std::string(argv[7]) == "steps";
+    const std::string mode = argc > 7 ? argv[7] : "";
+    const bool steps = mode.compare(0, 5, "steps") == 0;
+    const long group = steps && mode.size() > 5 ? std::max(1L, std::atol(mode.c_str() + 5)) : 1;
     if (ctx < 16) { std::printf("perplexity_runtime: context must be at least 16\n"); return 2; }
 
     std::string text;
@@ -119,12 +123,16 @@ int main(int argc, char** argv)
             b.logit_rows.push_back(first);
             rt.forward(b, one);
             all.insert(all.end(), one.begin(), one.end());
-            for (long i = first + 1; i < ctx - 1; ++i)
+            for (long i = first + 1; i < ctx - 1; i += group)
             {
+                const long n = std::min(group, ctx - 1 - i);
                 b.clear();
-                b.tokens.push_back(chunk[static_cast<size_t>(i)]);
-                b.segments.push_back({ seq, 0, 1 });
-                b.logit_rows.push_back(0);
+                for (long j = 0; j < n; ++j)
+                {
+                    b.tokens.push_back(chunk[static_cast<size_t>(i + j)]);
+                    b.logit_rows.push_back(j);
+                }
+                b.segments.push_back({ seq, 0, n });
                 rt.forward(b, one);
                 all.insert(all.end(), one.begin(), one.end());
             }

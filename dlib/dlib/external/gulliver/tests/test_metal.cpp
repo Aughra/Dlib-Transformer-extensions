@@ -86,9 +86,13 @@ namespace
         return w;
     }
 
-    void test_matvec(metal_device& gpu, gulliver::ggml_type type, const char* name)
+    /*
+        rows = 1000 : les noyaux mv_* ; rows = 1024, plusieurs tokens et les accélérateurs du M5 : mv_nax, en
+        demi-précision, d'où la tolérance des produits groupés des experts.
+    */
+    void test_matvec(metal_device& gpu, gulliver::ggml_type type, const char* name, long rows = 1000)
     {
-        const long rows = 1000, cols = 2560;
+        const long cols = 2560;
         const std::vector<uint8_t> w = random_matrix(type, rows, cols);
         const size_t rb = qk_row_bytes(type, cols);
         for (unsigned tokens : { 1u, 3u, 8u })
@@ -128,8 +132,9 @@ namespace
             for (unsigned t = 0; t < tokens; ++t)
                 for (unsigned r = rows; r < y_stride; ++r)
                     untouched = untouched && y[t * y_stride + r] == before[t * y_stride + r];
-            check(encoded && worst < 1e-5 && untouched, std::string(name) + ", " + std::to_string(tokens)
-                + " tokens: largest error " + sci(worst) + ", the rows beyond the matrix untouched");
+            const bool half = rows % 32 == 0 && tokens > 1 && gpu.neural_accelerators();
+            check(encoded && worst < (half ? 1e-3 : 1e-5) && untouched, std::string(name) + (half ? " (mv_nax), " : ", ")
+                + std::to_string(rows) + " rows, " + std::to_string(tokens) + " tokens: largest error " + sci(worst) + ", the rows beyond the matrix untouched");
         }
     }
 
@@ -643,6 +648,11 @@ int main()
     std::printf("test_metal: %s, %d kernels\n", gpu->name().c_str(), gpu->kernel_count());
     test_matvec(*gpu, gulliver::ggml_type::Q4_K, "mv_q4_K");
     test_matvec(*gpu, gulliver::ggml_type::Q6_K, "mv_q6_K");
+    test_matvec(*gpu, gulliver::ggml_type::Q4_K, "mv_q4_K", 1024);
+    test_matvec(*gpu, gulliver::ggml_type::Q6_K, "mv_q6_K", 1024);
+    test_matvec(*gpu, gulliver::ggml_type::Q5_K, "mv_q5_K", 1024);
+    test_matvec(*gpu, gulliver::ggml_type::Q8_0, "mv_q8_0", 1024);
+    test_matvec(*gpu, gulliver::ggml_type::Q5_0, "mv_q5_0", 1024);
     test_dequantize_gemm(*gpu, gulliver::ggml_type::Q4_K, "q4_K");
     test_dequantize_gemm(*gpu, gulliver::ggml_type::Q6_K, "q6_K");
     test_half_gemm(*gpu, gulliver::ggml_type::Q4_K, "q4_K");

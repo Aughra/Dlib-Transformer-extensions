@@ -114,20 +114,75 @@ static inline void mv_q4_K_body(device const uchar* W0, device const float* x, d
     float acc[ROWS][NT];
     for (int r = 0; r < ROWS; ++r)
         for (uint t = 0; t < NT; ++t) acc[r][t] = 0.0f;
-    for (long b = lane / 8; b < nb; b += 4)
-        for (uint t = 0; t < NT; ++t)
-        {
-            if (NT > 1 && t >= a.tokens) break;
-            device const float4* xl = (device const float4*)(x + t * a.x_stride + b * 256 + 64 * j + p);
-            device const float4* xh = xl + 8;
-            float4 vl[4], vh[4];
-            float slo = 0, shi = 0;
-            for (int i = 0; i < 4; ++i)
+    if (NT == 1)
+    {
+        for (long b = lane / 8; b < nb; b += 4)
+            for (uint t = 0; t < NT; ++t)
             {
-                vl[i] = xl[i];
-                vh[i] = xh[i];
-                slo += vl[i].x + vl[i].y + vl[i].z + vl[i].w;
-                shi += vh[i].x + vh[i].y + vh[i].z + vh[i].w;
+                device const float4* xl = (device const float4*)(x + t * a.x_stride + b * 256 + 64 * j + p);
+                device const float4* xh = xl + 8;
+                float4 vl[4], vh[4];
+                float slo = 0, shi = 0;
+                for (int i = 0; i < 4; ++i)
+                {
+                    vl[i] = xl[i];
+                    vh[i] = xh[i];
+                    slo += vl[i].x + vl[i].y + vl[i].z + vl[i].w;
+                    shi += vh[i].x + vh[i].y + vh[i].z + vh[i].w;
+                }
+                for (int r = 0; r < ROWS; ++r)
+                {
+                    const long row = r0 + r;
+                    if (row >= m.rows) break;
+                    device const uchar* blk = W + row * row_bytes + b * 144;
+                    device const uint* u = (device const uint*)(blk + 4);
+                    const uint u0 = u[0], u1 = u[1], u2 = u[2];
+                    // Les échelles et les minimums des sous-blocs 2j et 2j + 1, tels que get_scale_min_k4 les décode.
+                    const uint sc_lo = u0 & 0x3F3F3F3F, sc_hi = (u2 & 0x0F0F0F0F) | (((u0 >> 6) & 0x03030303) << 4);
+                    const uint mn_lo = u1 & 0x3F3F3F3F, mn_hi = ((u2 >> 4) & 0x0F0F0F0F) | (((u1 >> 6) & 0x03030303) << 4);
+                    const float sc1 = float(((s1 < 4 ? sc_lo : sc_hi) >> (8 * (s1 & 3))) & 0xFF);
+                    const float sc2 = float(((s2 < 4 ? sc_lo : sc_hi) >> (8 * (s2 & 3))) & 0xFF);
+                    const float m1 = float(((s1 < 4 ? mn_lo : mn_hi) >> (8 * (s1 & 3))) & 0xFF);
+                    const float m2 = float(((s2 < 4 ? mn_lo : mn_hi) >> (8 * (s2 & 3))) & 0xFF);
+                    const half2 dd = *(device const half2*)blk;
+                    device const uchar4* qv = (device const uchar4*)(blk + 16 + 16 * k);
+                    float plo = 0, phi = 0;
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        const uchar4 q = qv[i];
+                        plo += dot(float4(q & uchar(0xF)), vl[i]);
+                        phi += dot(float4(q >> uchar(4)), vh[i]);
+                    }
+                    acc[r][t] += float(dd.x) * (sc1 * plo + sc2 * phi) - float(dd.y) * (m1 * slo + m2 * shi);
+                }
+            }
+    }
+    else
+    {
+        const uint nt = NT > 1 ? min(uint(NT), uint(a.tokens)) : 1u;
+        /*
+            Pour plusieurs tokens, les poids d'un bloc sont développés une fois puis appliqués à chaque token (chantier
+            Vitesse, 2026-11-21) : la boucle des tokens était autour de celle des lignes, si bien que chaque bloc était relu
+            et développé une fois par token.  Les additions se font dans le même ordre que pour un seul token : chaque token
+            d'un lot reçoit exactement le résultat qu'il aurait seul.  Un seul token garde la boucle d'origine, plus rapide
+            pour lui (80 contre 74 tokens/s mesurés en écriture).
+        */
+        for (long b = lane / 8; b < nb; b += 4)
+        {
+            float slo[NT], shi[NT];
+            for (uint t = 0; t < nt; ++t)
+            {
+                device const float4* xl = (device const float4*)(x + t * a.x_stride + b * 256 + 64 * j + p);
+                device const float4* xh = xl + 8;
+                float sl = 0, sh = 0;
+                for (int i = 0; i < 4; ++i)
+                {
+                    const float4 vl = xl[i], vh = xh[i];
+                    sl += vl.x + vl.y + vl.z + vl.w;
+                    sh += vh.x + vh.y + vh.z + vh.w;
+                }
+                slo[t] = sl;
+                shi[t] = sh;
             }
             for (int r = 0; r < ROWS; ++r)
             {
@@ -145,16 +200,28 @@ static inline void mv_q4_K_body(device const uchar* W0, device const float* x, d
                 const float m2 = float(((s2 < 4 ? mn_lo : mn_hi) >> (8 * (s2 & 3))) & 0xFF);
                 const half2 dd = *(device const half2*)blk;
                 device const uchar4* qv = (device const uchar4*)(blk + 16 + 16 * k);
-                float plo = 0, phi = 0;
+                float4 ql[4], qh[4];
                 for (int i = 0; i < 4; ++i)
                 {
                     const uchar4 q = qv[i];
-                    plo += dot(float4(q & uchar(0xF)), vl[i]);
-                    phi += dot(float4(q >> uchar(4)), vh[i]);
+                    ql[i] = float4(q & uchar(0xF));
+                    qh[i] = float4(q >> uchar(4));
                 }
-                acc[r][t] += float(dd.x) * (sc1 * plo + sc2 * phi) - float(dd.y) * (m1 * slo + m2 * shi);
+                for (uint t = 0; t < nt; ++t)
+                {
+                    device const float4* xl = (device const float4*)(x + t * a.x_stride + b * 256 + 64 * j + p);
+                    device const float4* xh = xl + 8;
+                    float plo = 0, phi = 0;
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        plo += dot(ql[i], xl[i]);
+                        phi += dot(qh[i], xh[i]);
+                    }
+                    acc[r][t] += float(dd.x) * (sc1 * plo + sc2 * phi) - float(dd.y) * (m1 * slo[t] + m2 * shi[t]);
+                }
             }
         }
+    }
     store_rows(m, a, lane, acc);
 }
 

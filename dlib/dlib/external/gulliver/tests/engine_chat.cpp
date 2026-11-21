@@ -46,6 +46,7 @@
         --kv TYPE            auto, q8 ou f16 : le stockage des clés et valeurs
         --gpu-prompt-tokens N  les prompts de N tokens ou plus vont au GPU (24 par défaut)
         --threads N, --context N
+        --draft N            tokens des brouillons des réponses (décodage spéculatif), 0 pour aucun (7 par défaut)
 
     Affiche le raisonnement entre crochets, la réponse, les appels d'outils, puis les
     statistiques de chaque requête.  Renvoie 0 quand chaque requête s'est terminée normalement.
@@ -327,6 +328,7 @@ int main(int argc, char** argv)
     double pause = 0;
     int threads = 0;
     long context = 4096;
+    long draft = -1;
     std::vector<std::string> questions;
     std::string system, device, routing, reference, projector, detail, tool_result, kv_type;
     long gpu_prompt_tokens = 0;
@@ -359,6 +361,7 @@ int main(int argc, char** argv)
         else if (a == "--render" && i + 1 < argc) ++i;
         else if (a == "--threads" && i + 1 < argc) threads = std::atoi(argv[++i]);
         else if (a == "--context" && i + 1 < argc) context = std::atol(argv[++i]);
+        else if (a == "--draft" && i + 1 < argc) draft = std::atol(argv[++i]);
         else if (a == "--device" && i + 1 < argc) device = argv[++i];
         else if (a == "--routing" && i + 1 < argc) routing = argv[++i];
         else if (a == "--reference" && i + 1 < argc) reference = argv[++i];
@@ -453,6 +456,8 @@ int main(int argc, char** argv)
     if (!projector.empty()) options["projector"] = projector;
     // Le stockage des clés et valeurs (auto, q8 ou f16), pour comparer à une référence en demi-précision.
     if (!kv_type.empty()) options["kv_type"] = kv_type;
+    // Les tokens des brouillons des réponses (décodage spéculatif), 0 pour aucun.
+    if (draft >= 0) options["draft_tokens"] = draft;
     if (lib.load_model(e, "m", argv[2], options.dump().c_str(), err, sizeof(err)) != GULLIVER_OK)
     {
         std::printf("load: %s\n", err);
