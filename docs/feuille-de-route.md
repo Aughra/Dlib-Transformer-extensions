@@ -130,7 +130,15 @@ But : devancer llama.cpp et MLX sur le Mac mini, en lecture et en écriture, jus
 | V1 | L'attention des questions en demi-précision, d'un seul tenant (« fusionnée »), sur le GPU ; lire celle de MLX (`scaled_dot_product_attention`) et de llama.cpp | lecture ×1,2 (512 tokens) à ×2,2 (16 384) |
 | V2 | L'étape d'écriture mesurée noyau par noyau (capture Metal) : Gulliver à 69 % du plafond de la mémoire, MLX à 93 % ; lire ses noyaux quantifiés (`qmv`) et sa façon d'enchaîner les commandes | écriture ×1,3 à ×1,6 |
 | V3 | Les produits groupés des mélanges d'experts (`mm_id`) ; le contrôle du GPU qui renvoie les mélanges d'experts au processeur en demi-précision | lecture ×2,5, écriture ×1,7 |
-| V4 | Un format de poids plus compact et plus juste, comme le 4 bits de MLX (Gulliver le lirait, sans embarquer MLX) | qualité : 17,16 contre 17,71 de perplexité sur Qwen3-4B |
+| V4 | Un format de poids plus compact et plus juste, comme le 4 bits de MLX (Gulliver le lirait, sans embarquer MLX) ; essayer aussi des poids plus petits (3 bits) | qualité : 17,16 contre 17,71 de perplexité sur Qwen3-4B ; écriture proportionnelle à la taille |
+| V5 | **Lecture : les accélérateurs neuronaux du M5** (calcul de matrices dans chaque cœur du GPU, par les tenseurs de Metal 4 ; llama.cpp les teste au démarrage) ; d'abord une sonde de ce que Metal 4 permet sur le Mac mini | lecture, à mesurer |
+| V6 | **Lecture : le Neural Engine** (Core ML), en concurrence de V5 | lecture des petits modèles, à mesurer |
+| V7 | **Écriture : le décodage spéculatif** (un petit modèle propose plusieurs mots, le gros les vérifie en une passe ; sortie identique mot pour mot ; l'original avait des brouillons) | écriture, souvent ×1,5 à ×2,5 ailleurs |
+| V8 | **Écriture : la devinette par répétition** (« prompt lookup » : propositions tirées du texte déjà présent ; sortie identique), en concurrence ou en complément de V7 | écriture sur documents et code |
+| V9 | **Écriture : une seule commande au GPU par mot** (tous les noyaux d'une étape envoyés d'un bloc), à décider après la capture de V2 | une partie des 30 % sous le plafond de la mémoire |
+| V10 | Lire **mistral.rs** (moteur en Rust avec Metal) en plus de MLX et llama.cpp, pour ses noyaux et son décodage spéculatif | idées |
+
+**Pistes en concurrence** (choix de l'humain, 2026-11-21) : quand deux pistes visent le même but (V5 ou V6 pour la lecture ; V7 ou V8 pour l'écriture), on essaie les deux, on les mesure en alternance, et on garde la meilleure (ou les deux si elles s'ajoutent). Ollama et LM Studio ne sont pas des pistes : ils habillent llama.cpp et MLX.
 
 Règles : chaque changement mesuré en alternance contre la version d'avant (`tools/bench_moteurs.sh`), perplexité vérifiée (`tools/justesse_moteurs.sh`), notes pour l'auteur (partie Vitesse) et tableau des différences tenus. MLX n'est pas embarqué dans Gulliver (choix de l'humain, 2026-11-21 : option B, apprendre de lui) ; le relayer par son serveur reste un essai possible, pas une solution.
 

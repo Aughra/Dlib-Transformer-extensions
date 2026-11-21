@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — Toutes les pistes de vitesse dans la feuille de route
+
+- **Quoi** : chantier « Vitesse » complété de V5 à V10 (accélérateurs neuronaux du M5 par Metal 4, Neural Engine, décodage spéculatif, devinette par répétition, une commande GPU par mot, lire mistral.rs ; V4 étendu aux poids de 3 bits) et règle des pistes en concurrence (mesurer les deux, garder la meilleure).
+- **Fichiers** : `docs/feuille-de-route.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : l'humain : « toutes les pistes, et on prendra la meilleure entre les deux après un test de vitesse ».
+- **Étapes** : documents seulement.
+
 ## 2026-11-21 — Priorité : le Gulliver le plus rapide possible
 
 - **Quoi** : CLAUDE.md (« Le projet ») : la priorité du fork est un Gulliver qui devance llama.cpp et MLX sur le Mac mini, justesse identique, en apprenant de MLX sans l'embarquer ; chaque optimisation mesurée en alternance et sa perplexité vérifiée. Feuille de route : chantier « Vitesse » (V1 à V4), l'arrêt des mesures du 2026-11-20 levé. Reprise : priorité en tête de l'état.
