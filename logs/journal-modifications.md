@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — V9 essayé : encodeurs concurrents, rejeté
+
+- **Quoi** : essai, sans commit de code : encodeurs `MTLDispatchTypeConcurrent` avec une barrière (`memoryBarrierWithScope:MTLBarrierScopeBuffers`) avant chaque lancement, même résultat qu'en série.
+- **Fichiers** : `logs/reprise.md`, ce journal (le code de l'essai est retiré).
+- **Pourquoi** : chantier « Vitesse », V9 : un pas d'écriture lance environ 600 noyaux (1 000 pour Qwen3-30B-A3B).
+- **Étapes** : programme jetable (600 noyaux à la suite) : série 3,44 µs (4 096 fils) / 5,19 µs (65 536) par noyau ; concurrent avec barrières 4,27 / 2,41 ; concurrent sans barrière 0,59 / 1,07. Dans le moteur (mesures alternées, écriture après 512 tokens) : Qwen3-VL 4B 80,6/80,5 → 78,2/79,5 ; Qwen3-VL 2B 163,0/164,4 → 155,3/157,1 ; Qwen3-30B-A3B 73,9/73,6 → 70,7/70,8 : rejeté. Un essai sans barrières (résultats faux) n'a rien mesuré : le contrôle du GPU au chargement l'a refusé et l'écriture est retombée sur le processeur.
+
 ## 2026-11-21 — Gulliver 6.21.1 : 64 colonnes à la fois dans mm_id_nax
 
 - **Quoi** : `metal_kernels_nax.metal` : `MMN_KC` 64, chargement des activations généralisé (`XPT` valeurs par fil) ; `metal_device.mm` : `mm_nax_cols` 64.
