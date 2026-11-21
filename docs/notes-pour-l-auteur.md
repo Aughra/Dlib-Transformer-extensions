@@ -1163,7 +1163,7 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (mesures alternées dans la même séance, Mac mini M5 Pro, charge 1,5) : **7 s et 7 s**, au lieu de 779 et 780, soit **environ 110 fois** plus vite. Le pic de mémoire ne change pas (17 Go pour ce petit essai).
 - **Mac ou Windows** : sous Windows, la même option trouverait une BLAS installée (OpenBLAS, MKL) ; non vérifié.
 
-### Changement 33 : les poids des prompts gardés en demi-précision d'une passe à l'autre (Gulliver 6.17.0)
+### Changement 33 : les poids des prompts gardés en demi-précision d'une passe à l'autre (Gulliver 6.17.0, [9186e28](https://github.com/Aughra/Dlib-Transformer-extensions/commit/9186e28))
 
 - **Avant** : chaque produit d'une passe de prompt sur le GPU développait sa matrice de poids (Q4_K, Q6_K…) en demi-précision dans un tampon de travail (`dequantize_half`), puis la donnait à `MPSMatrixMultiplication` ; à la passe suivante, tout recommençait. Pour un 4B, environ 17 Go de mémoire lus et écrits par passe, rien que pour ces développements. Qwen3-VL 4B Thinking Q4_K_M, prompt de 512 tokens, Mac mini M5 Pro : **2 060 à 2 159 tokens/s**.
 - **Changement** (`engine/cpu_runtime_metal.cpp`, `gpu_state::half_weights`) : une matrice développée une fois est gardée dans un tampon à elle et reprise aux passes suivantes, tant que l'ensemble reste sous un quart de la mémoire du Mac (16 Go sur le Mac mini, de quoi garder un 8B ; `GULLIVER_GPU_HALF_WEIGHTS_MB` force une autre limite pour les mesures). Au-delà, les matrices restantes sont développées comme avant. **Exactitude** : les poids gardés sont ceux que la passe aurait développés ; perplexité identique sur 8 morceaux de 512 tokens (15,3646 avec et sans).
