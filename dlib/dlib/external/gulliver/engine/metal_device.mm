@@ -821,7 +821,7 @@ namespace gulliver
         // Les dimensions des tuiles de mm_id (MM_TT, MM_NR, MM_KC dans metal_kernels.metal).
         const unsigned mm_tile_slots = 16, mm_tile_rows = 32, mm_tile_cols = 64;
         // mm_id_nax (accélérateurs du M5) : 64 cases et 64 lignes par tuile, 32 colonnes à la fois.
-        const unsigned mm_nax_rows = 64, mm_nax_cols = 32;
+        const unsigned mm_nax_rows = 64, mm_nax_cols = 64;
     }
 
     bool metal_device::commands::matvec_id(gulliver::ggml_type type, metal_view W, long rows, long cols,

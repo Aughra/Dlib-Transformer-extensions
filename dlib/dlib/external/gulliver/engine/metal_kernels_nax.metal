@@ -260,7 +260,7 @@ ATT_NAX(1, 256) ATT_NAX(2, 256) ATT_NAX(4, 256) ATT_NAX(8, 256)
 // mémoire de threadgroup, 32 colonnes à la fois ; chaque simdgroup calcule 16 cases x 64 lignes.  Grille : (lignes / 64,
 // tuiles), TT / 16 simdgroups.  Les tuiles viennent de moe_tiles, réglé sur TT cases.
 #define MMN_NR 64
-#define MMN_KC 32
+#define MMN_KC 64
 
 struct mm_args
 {
@@ -299,9 +299,10 @@ kernel void mm_id_nax(device const uchar* W [[buffer(0)]], device const float* x
     for (uint j = 0; j < 2; ++j)
         for (uint i = 0; i < 16; ++i) acc[j][i] = 0.0f;
 
-    // Chaque fil charge 16 valeurs d'une case, et WPT poids d'une ligne (16 pour 64 cases, 8 pour 128) par passage.
+    // Chaque fil charge XPT valeurs d'une case et WPT poids d'une ligne par passage.
     constexpr uint NTH = TT * 2, WPT = MMN_NR * MMN_KC / NTH, WPR = MMN_KC / WPT;
-    const uint xt = tid / 2, xc = (tid % 2) * 16;
+    constexpr uint XPT = TT * MMN_KC / NTH, XPR = MMN_KC / XPT;
+    const uint xt = tid / XPR, xc = (tid % XPR) * XPT;
     const int xr = src[xt];
     device const float* xrow = xr >= 0 ? x + ulong(uint(xr) / a.x_div) * a.x_stride : x;
     const uint wr = tid / WPR, wc = (tid % WPR) * WPT;
@@ -310,13 +311,13 @@ kernel void mm_id_nax(device const uchar* W [[buffer(0)]], device const float* x
     {
         threadgroup half* dx = xs + xt * MMN_KC + xc;
         if (xr >= 0)
-            for (uint i = 0; i < 4; ++i)
+            for (uint i = 0; i < XPT / 4; ++i)
             {
                 const float4 u = *(device const float4*)(xrow + k0 + xc + 4 * i);
                 *(threadgroup half4*)(dx + 4 * i) = half4(u);
             }
         else
-            for (uint i = 0; i < 4; ++i) *(threadgroup half4*)(dx + 4 * i) = half4(0.0h);
+            for (uint i = 0; i < XPT / 4; ++i) *(threadgroup half4*)(dx + 4 * i) = half4(0.0h);
         for (uint h = 0; h < WPT / 8; ++h)
         {
             const uint cw = k0 + wc + 8 * h;

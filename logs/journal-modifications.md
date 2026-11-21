@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — Gulliver 6.21.1 : 64 colonnes à la fois dans mm_id_nax
+
+- **Quoi** : `metal_kernels_nax.metal` : `MMN_KC` 64, chargement des activations généralisé (`XPT` valeurs par fil) ; `metal_device.mm` : `mm_nax_cols` 64.
+- **Fichiers** : `gulliver/engine/{metal_kernels_nax.metal,metal_device.mm}`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/notes-pour-l-auteur.md`, ce journal.
+- **Pourquoi** : chantier « Vitesse », V3, réglage.
+- **Étapes** : 128 lignes par tuile contre 64 (alternance, Qwen3-30B-A3B) : 512 : 803/803 contre 1 165/1 163 ; 4 096 : 1 119/1 103 contre 1 408/1 399 : rejeté. 64 colonnes contre 32 : 512 : 1 193/1 193 contre 1 161/1 164 ; 4 096 : 1 432/1 386 contre 1 403/1 358 : gardé. `test_metal` all checks passed ; perplexité 6,2352 identique ; `test_macos.sh` 0 étape en échec.
+
 ## 2026-11-21 — Gulliver 6.21.0 : les produits groupés des experts sur les accélérateurs (V3)
 
 - **Quoi** : `engine/metal_formats.metal` (nouveau : `dq8_*` et `fmt_*` sortis de `metal_kernels.metal`, placés par CMake en tête des deux sources Metal) ; `metal_kernels_nax.metal` : `mm_id_nax<F, TT>` (TT 64 et 128, 64 lignes, 32 colonnes à la fois, `matmul2d`) ; `metal_kernels.metal` : `tiles_args::per_tile`, `moe_tiles` en tient compte ; `metal_device.mm` : noms des noyaux, `moe_group` décide (`mm_nax`, `mm_tt`, `GULLIVER_NO_NAX_MM`, `GULLIVER_NAX_MM_TT`), `matmul_id` suit ; `CMakeLists.txt`.
