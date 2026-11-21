@@ -41,11 +41,11 @@ MODELS=()
 add() { [ -f "$2" ] && [[ -z "$BENCH_ONLY" || "$1" == *"$BENCH_ONLY"* ]] && MODELS+=("$1|$2|$3"); }
 add "Qwen3-4B Q4_K_M" "$M/Qwen3-4B-Q4_K_M.gguf" "$M/Qwen3-4B-mlx-4bit"
 add "Qwen3-4B Q8_0 (référence)" "$M/Qwen3-4B-Q8_0.gguf" ""
-add "Qwen3-VL 4B Thinking Q4_K_M (service)" "$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.gguf" ""
-add "Qwen3-VL 2B Instruct Q4_K_M" "$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf" ""
-add "Gemma 3 4B Q4_K_M" "$ROOT/build/models/gemma-3-4b-it-Q4_K_M.gguf" ""
-add "LFM2.5-1.2B Q8_0" "$ROOT/build/models/LFM2.5-1.2B-Instruct-Q8_0.gguf" ""
-add "Qwen3-30B-A3B Q4_K_M (MoE)" "$ROOT/build/models/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf" ""
+add "Qwen3-VL 4B Thinking Q4_K_M (service)" "$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.gguf" "$M/Qwen3-VL-4B-Thinking-4bit"
+add "Qwen3-VL 2B Instruct Q4_K_M" "$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf" "$M/Qwen3-VL-2B-Instruct-4bit"
+add "Gemma 3 4B Q4_K_M" "$ROOT/build/models/gemma-3-4b-it-Q4_K_M.gguf" "$M/gemma-3-4b-it-4bit"
+add "LFM2.5-1.2B Q8_0" "$ROOT/build/models/LFM2.5-1.2B-Instruct-Q8_0.gguf" "$M/LFM2.5-1.2B-Instruct-8bit"
+add "Qwen3-30B-A3B Q4_K_M (MoE)" "$ROOT/build/models/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf" "$M/Qwen3-30B-A3B-Instruct-2507-4bit"
 
 # « perplexité|incertitude|top-1 » d'une sortie de perplexity_runtime, perplexity_mlx.py ou
 # perplexity_albireo ; « nonlu » pour une architecture que le moteur ne lit pas.
@@ -65,7 +65,7 @@ for entry in "${MODELS[@]}"; do
       | sed -n 's/.*Final estimate: PPL = \([0-9.]*\) +\/- \([0-9.]*\).*$/\1|\2|/p')
     echo "$name|llama|${p:-||}" >> "$RAW"
   fi
-  if [ -n "$mlxdir" ] && [ -x "$MLXPY" ]; then
+  if [ -d "$mlxdir" ] && [ -x "$MLXPY" ]; then
     echo "$name|mlx|$("$MLXPY" -I "$TOOLS/perplexity_mlx.py" "$mlxdir" "$TEXT" 512 "$CHUNKS" 2>&1 | tee -a "$LOG" | ours)" >> "$RAW"
   fi
   if [ -x "$ALBIREO" ]; then
@@ -87,7 +87,7 @@ for line in open(sys.argv[1], encoding="utf-8"):
     name, key = parts[0], parts[1]
     data.setdefault(name, {})[key] = parts[2] if len(parts) > 2 else ""
 COLS = [("gulliver_gpu", "Gulliver, GPU"), ("gulliver_cpu", "Gulliver, processeur"), ("llama", "llama.cpp, GPU"),
-        ("mlx", "MLX (son fichier 4 bits)"), ("albireo", "Albireo d'origine, processeur")]
+        ("mlx", "MLX (son propre fichier)"), ("albireo", "Albireo d'origine, processeur")]
 cols = [(k, l) for k, l in COLS if any(k in m for m in data.values())]
 def val(v):
     try: return float(v)

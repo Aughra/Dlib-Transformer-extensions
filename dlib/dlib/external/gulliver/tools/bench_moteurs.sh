@@ -42,11 +42,11 @@ LOG=$OUTDIR/moteurs-$STAMP.log
 MODELS=()
 add() { [ -f "$2" ] && [[ -z "$BENCH_ONLY" || "$1" == *"$BENCH_ONLY"* ]] && MODELS+=("$1|$2|$3"); }
 add "Qwen3-4B Q4_K_M" "$M/Qwen3-4B-Q4_K_M.gguf" "$M/Qwen3-4B-mlx-4bit"
-add "Qwen3-VL 4B Thinking Q4_K_M (service)" "$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.gguf" ""
-add "Qwen3-VL 2B Instruct Q4_K_M" "$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf" ""
-add "Gemma 3 4B Q4_K_M" "$ROOT/build/models/gemma-3-4b-it-Q4_K_M.gguf" ""
-add "LFM2.5-1.2B Q8_0" "$ROOT/build/models/LFM2.5-1.2B-Instruct-Q8_0.gguf" ""
-add "Qwen3-30B-A3B Q4_K_M (MoE)" "$ROOT/build/models/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf" ""
+add "Qwen3-VL 4B Thinking Q4_K_M (service)" "$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.gguf" "$M/Qwen3-VL-4B-Thinking-4bit"
+add "Qwen3-VL 2B Instruct Q4_K_M" "$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf" "$M/Qwen3-VL-2B-Instruct-4bit"
+add "Gemma 3 4B Q4_K_M" "$ROOT/build/models/gemma-3-4b-it-Q4_K_M.gguf" "$M/gemma-3-4b-it-4bit"
+add "LFM2.5-1.2B Q8_0" "$ROOT/build/models/LFM2.5-1.2B-Instruct-Q8_0.gguf" "$M/LFM2.5-1.2B-Instruct-8bit"
+add "Qwen3-30B-A3B Q4_K_M (MoE)" "$ROOT/build/models/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf" "$M/Qwen3-30B-A3B-Instruct-2507-4bit"
 [ ${#MODELS[@]} -gt 0 ] || { echo "no model to measure"; exit 1; }
 
 # Une mesure : écrit « modèle|taille|réglage|lecture|écriture » dans RAW.
@@ -101,7 +101,7 @@ for ((r = 1; r <= ROUNDS; ++r)); do
       [ -n "$LLAMA" ] && llama "$name" "$file" "$n" llama
       gulliver "$name" "$file" "$n" f16
       [ -n "$LLAMA" ] && llama "$name" "$file" "$n" llama_q8 -fa 1 -ctk q8_0 -ctv q8_0
-      [ -n "$mlxdir" ] && [ -x "$MLX" ] && mlx "$name" "$mlxdir" "$n"
+      [ -d "$mlxdir" ] && [ -x "$MLX" ] && mlx "$name" "$mlxdir" "$n"
       [ -x "$ALBIREO" ] && [ "$n" -le "$ALBIREO_MAX" ] && albireo "$name" "$file" "$n"
     done
   done

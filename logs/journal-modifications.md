@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — Les six modèles des tests ont leur version MLX
+
+- **Quoi** : téléchargées de `mlx-community` (Hugging Face) dans `build/bench-moteurs/models/` : Qwen3-VL-4B-Thinking-4bit, Qwen3-VL-2B-Instruct-4bit, gemma-3-4b-it-4bit, LFM2.5-1.2B-Instruct-8bit (comme le Q8_0), Qwen3-30B-A3B-Instruct-2507-4bit (16 Go) ; branchées dans `bench_moteurs.sh` et `justesse_moteurs.sh` (MLX seulement si le dossier existe ; colonne « MLX (son propre fichier) »).
+- **Fichiers** : `gulliver/tools/{bench_moteurs.sh,justesse_moteurs.sh}`, `macos/bench-hebdo/README.md`, ce journal.
+- **Pourquoi** : l'humain : « et pour les autres modèles ? » (MLX n'avait que Qwen3-4B).
+- **Étapes** : chaque modèle lu par `mlx_lm.benchmark` 0.32 (64 tokens, 16 écrits) : lecture 922 / 2 115 / 986 / 3 211 / 362 jetons/s, écriture 116 / 247 / 114 / 226 / 115 (machine chargée, à titre de contrôle seulement).
+
 ## 2026-11-21 — MLX 0.32.4 sur un Python de Homebrew
 
 - **Quoi** : Python 3.13.18 installé par Homebrew (`brew install python@3.13`, à côté de celui de macOS, non touché) ; `build/mlx-venv` refait avec lui : `mlx` 0.32.4, `mlx-lm` 0.32.2 (au lieu de 0.29.3 / 0.29.1, plafond du Python 3.9 du système). `bench_moteurs.sh` affiche la version de Python de l'environnement ; README de `macos/bench-hebdo` et rubrique « Tests de vitesse » mis à jour.
