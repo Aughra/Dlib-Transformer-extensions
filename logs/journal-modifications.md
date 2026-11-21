@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — Gulliver 6.19.2 : une ligne par simdgroup dans les produits d'un token
+
+- **Quoi** : `metal_kernels.metal` : `#define ROWS (NT == 1 ? 1 : 4)`, `mv_select` devient un gabarit en `NT` ; `metal_device.mm` : `mv_rows_per_group(tokens)` (4 ou 16).
+- **Fichiers** : `gulliver/engine/{metal_kernels.metal,metal_device.mm}`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md}`, `logs/{reprise.md,sieste-2026-11-21.md}`, ce journal.
+- **Pourquoi** : chantier « Vitesse », V2 : les produits par les poids font environ 75 % d'un pas d'écriture.
+- **Étapes** : sonde (binaire existant, `macos/metal-sonde/kernels.metal` relu à chaque lancement ; le source de la sonde ne compile plus avec les en-têtes actuels, à mettre à jour) : découpages 4x4 10,70 ms, 1x4 9,72-9,80, 1x2 9,99, 1x8 9,83, 2x2 10,68, 2x4 10,42, 4x2 10,77, 2x8 10,80. Moteur, mesures alternées (voir la sieste) : un token +2,5 à +6 % ; une ligne pour tout : quatre séquences −6 à −10 %, d'où la version mixte (quatre séquences 121 inchangé). `test_metal`, `test_host` : all checks passed ; `test_macos.sh` : 0 étape en échec ; perplexité pas à pas 13,3591 (lecture d'un coup 13,3632).
+
 ## 2026-11-21 — Gulliver 6.19.1 : le journal du moteur nomme les accélérateurs neuronaux
 
 - **Quoi** : `engine.cpp` ajoute `metal_device::accelerator_note()` à la ligne « GPU … through Metal ».

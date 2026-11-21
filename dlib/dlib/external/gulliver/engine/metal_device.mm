@@ -190,7 +190,8 @@ namespace gulliver
         }
 
         // Les lignes que calcule un threadgroup des produits : ROWS * SG_PER_TG de metal_kernels.metal.
-        const long mv_rows_per_group = 16;
+        // ROWS x SG_PER_TG de metal_kernels.metal : une ligne par simdgroup pour un token, quatre pour plusieurs.
+        long mv_rows_per_group(unsigned tokens) { return tokens > 1 ? 16 : 4; }
         const unsigned mv_threads = 128;
         const unsigned attention_threads = 128;   // ATT_SG simdgroups
     }
@@ -593,7 +594,7 @@ namespace gulliver
         impl_->bind(y, 5);
         const mv_args a = { rows, cols, tokens, x_stride, y_stride, alpha, beta, y_stride, 0 };
         impl_->args(a, 3);
-        impl_->groups(static_cast<unsigned>((rows + mv_rows_per_group - 1) / mv_rows_per_group), 1, 1, mv_threads);
+        impl_->groups(static_cast<unsigned>((rows + mv_rows_per_group(tokens) - 1) / mv_rows_per_group(tokens)), 1, 1, mv_threads);
         return true;
     }
 
@@ -620,7 +621,8 @@ namespace gulliver
         impl_->bind(y2, 5);
         const mv_args a = { rows, cols, tokens, x_stride, y_stride, 1.0f, 0.0f, y2_stride, rows2 };
         impl_->args(a, 3);
-        impl_->groups(static_cast<unsigned>((rows + rows2 + mv_rows_per_group - 1) / mv_rows_per_group), 1, 1, mv_threads);
+        impl_->groups(static_cast<unsigned>((rows + rows2 + mv_rows_per_group(tokens) - 1) / mv_rows_per_group(tokens)), 1, 1,
+            mv_threads);
         return true;
     }
 
@@ -828,7 +830,7 @@ namespace gulliver
         impl_->bind(ids, 4);
         const moe_args m = { expert_bytes, x_div };
         impl_->args(m, 5);
-        impl_->groups(static_cast<unsigned>((rows + mv_rows_per_group - 1) / mv_rows_per_group), slots, 1, mv_threads);
+        impl_->groups(static_cast<unsigned>((rows + mv_rows_per_group(1) - 1) / mv_rows_per_group(1)), slots, 1, mv_threads);
         return true;
     }
 

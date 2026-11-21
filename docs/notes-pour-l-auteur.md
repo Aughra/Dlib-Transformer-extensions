@@ -1185,6 +1185,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (mesures alternées) : **78,4 / 65,7-66,0 / 40,8-42,2 tokens/s** (+11 %, +13 %, +36 à +45 %).
 - **Mac ou Windows** : propre au Mac (Metal), utile sur toutes les puces Apple.
 
+### Changement 36 : une ligne par simdgroup dans les produits d'un token (Gulliver 6.19.2)
+
+- **Avant** : les produits par les poids (`mv_q4_K`, `mv_q6_K`… de `metal_kernels.metal`) calculaient 4 lignes par simdgroup, 4 simdgroups par threadgroup, pour un token comme pour plusieurs. La sonde Metal (`macos/metal-sonde`, tous les poids du 4B relus en une commande) : **10,70 ms**, Q4_K 225 Go/s, Q6_K 247 Go/s.
+- **Changement** : `ROWS` dépend du nombre de tokens de la variante du noyau : 1 ligne pour un token (`*_1`), 4 pour plusieurs (`*_n`) ; l'hôte compte 4 ou 16 lignes par threadgroup (`mv_rows_per_group(tokens)`). La sonde, avec une ligne : **9,72 à 9,80 ms**, Q4_K 247-255 Go/s, Q6_K 253-257 (2 x 2, comme llama.cpp : 10,68 ms). **Exactitude** : `test_metal` (mêmes écarts) ; perplexité pas à pas (4 morceaux de 1 024) 13,3591, en lecture d'un coup 13,3632.
+- **Après** (mesures alternées, écriture après 512 tokens) : Qwen3-VL 4B Thinking 77,9-78,2 → **80,7-82,0 tokens/s** ; Qwen3-VL 2B 154,1-154,2 → 162,5-162,7 ; Gemma 3 4B 75,2-75,8 → 77,1-77,3 ; Qwen3-30B-A3B 69,9-70,1 → 74,2-74,4. Une ligne pour plusieurs tokens aussi faisait perdre 6 à 10 % à quatre séquences ensemble : d'où les deux réglages.
+- **Mac ou Windows** : propre au Mac (Metal).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

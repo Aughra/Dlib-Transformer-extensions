@@ -22,7 +22,11 @@ using namespace metal;
 // lignes, dans y2) : les produits des requêtes et des clés, ou de la porte et de la branche up,
 // lisent les mêmes activations, et un dispatch coûte plus que ses quelques lignes sur ce GPU.
 
-#define ROWS 4
+// Une ligne par simdgroup pour un seul token, quatre pour plusieurs (chantier Vitesse, 2026-11-21) : mesuré sur le Mac
+// mini, un token du 4B relit tous ses poids en 9,72 ms au lieu de 10,70 avec 4 lignes (sonde Metal ; écriture +5 %),
+// mais quatre séquences ensemble perdent 6 à 10 % avec une ligne : les activations de plusieurs tokens s'amortissent
+// sur plusieurs lignes.  ROWS dépend donc de NT, le nombre de tokens de la variante du noyau.
+#define ROWS (NT == 1 ? 1 : 4)
 #define SG_PER_TG 4
 
 struct mv_args
@@ -56,6 +60,7 @@ struct mv_target
     long r0;
 };
 
+template <uint NT>
 static inline mv_target mv_select(device const uchar* W, device float* y, device const uchar* W2, device float* y2,
     constant mv_args& a, uint tg, uint sg)
 {
@@ -96,7 +101,7 @@ template <uint NT>
 static inline void mv_q4_K_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
     device const uchar* W2, device float* y2, uint tg, uint sg, uint lane)
 {
-    const mv_target m = mv_select(W0, y0, W2, y2, a, tg, sg);
+    const mv_target m = mv_select<NT>(W0, y0, W2, y2, a, tg, sg);
     if (m.r0 >= m.rows) return;
     device const uchar* W = m.W;
     const long r0 = m.r0;
@@ -160,7 +165,7 @@ template <uint NT>
 static inline void mv_q6_K_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
     device const uchar* W2, device float* y2, uint tg, uint sg, uint lane)
 {
-    const mv_target m = mv_select(W0, y0, W2, y2, a, tg, sg);
+    const mv_target m = mv_select<NT>(W0, y0, W2, y2, a, tg, sg);
     if (m.r0 >= m.rows) return;
     device const uchar* W = m.W;
     const long r0 = m.r0;
@@ -220,7 +225,7 @@ template <uint NT>
 static inline void mv_q5_K_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
     device const uchar* W2, device float* y2, uint tg, uint sg, uint lane)
 {
-    const mv_target m = mv_select(W0, y0, W2, y2, a, tg, sg);
+    const mv_target m = mv_select<NT>(W0, y0, W2, y2, a, tg, sg);
     if (m.r0 >= m.rows) return;
     device const uchar* W = m.W;
     const long r0 = m.r0;
@@ -286,7 +291,7 @@ template <uint NT>
 static inline void mv_q5_0_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
     device const uchar* W2, device float* y2, uint tg, uint sg, uint lane)
 {
-    const mv_target m = mv_select(W0, y0, W2, y2, a, tg, sg);
+    const mv_target m = mv_select<NT>(W0, y0, W2, y2, a, tg, sg);
     if (m.r0 >= m.rows) return;
     device const uchar* W = m.W;
     const long r0 = m.r0;
@@ -346,7 +351,7 @@ template <uint NT>
 static inline void mv_q8_0_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
     device const uchar* W2, device float* y2, uint tg, uint sg, uint lane)
 {
-    const mv_target m = mv_select(W0, y0, W2, y2, a, tg, sg);
+    const mv_target m = mv_select<NT>(W0, y0, W2, y2, a, tg, sg);
     if (m.r0 >= m.rows) return;
     device const uchar* W = m.W;
     const long r0 = m.r0;
