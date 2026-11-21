@@ -7,9 +7,10 @@
 #
 # Il attend une machine au repos (charge sur une minute sous BENCH_MAX_LOAD, 3 par défaut ; un essai
 # par heure, 6 au plus), reconstruit Gulliver (build/macos-gulliver), lance bench_moteurs.sh et, s'il
-# existe, justesse_moteurs.sh, puis copie les tableaux dans build/bench/hebdo/ : « dernier.md » (lu
-# par le carnet, rubrique « Tests de vitesse ») et un historique daté.  Rien n'est commité : le
-# carnet lit ces fichiers sur le disque.
+# existe, justesse_moteurs.sh, puis met la mesure de la semaine, sous un titre daté, en tête de
+# build/bench/hebdo/mesures.md (lu par le carnet, rubrique « Tests de vitesse » : les semaines de
+# la plus récente à la plus ancienne), avec une copie datée.  Rien n'est commité : le carnet lit
+# ces fichiers sur le disque.
 
 ROOT=$(cd "$(dirname "$0")/../../../../.." && pwd)
 TOOLS=$ROOT/dlib/dlib/external/gulliver/tools
@@ -41,21 +42,34 @@ cmake --build "$ROOT/build/macos-gulliver" --target bench_runtime > "$HEBDO/buil
   || { echo "build en échec, voir $HEBDO/build.log"; exit 1; }
 
 STAMP=$(date +%Y-%m-%d)
-: > "$HEBDO/dernier.tmp"
+WHEN=$(LC_ALL=fr_FR.UTF-8 date '+%A %e %B %Y à %H h %M' | sed 's/  / /')
+WEEK=$HEBDO/semaine.tmp
+echo "## Mesure du $WHEN" > "$WEEK"
+found=0
 for script in bench_moteurs.sh justesse_moteurs.sh; do
   [ -f "$TOOLS/$script" ] || continue
   echo "lancement de $script"
   table=$(bash "$TOOLS/$script" 2 | sed -n 's/^table: //p' | tail -1)
   if [ -n "$table" ] && [ -f "$table" ]; then
-    cat "$table" >> "$HEBDO/dernier.tmp"; echo >> "$HEBDO/dernier.tmp"
+    # Les titres du tableau descendent de deux crans, sous celui de la semaine.
+    { echo; sed 's/^#/###/' "$table"; } >> "$WEEK"; found=1
   else
     echo "$script n'a pas produit de tableau"
   fi
 done
-if [ -s "$HEBDO/dernier.tmp" ]; then
-  mv "$HEBDO/dernier.tmp" "$HEBDO/dernier.md"
-  cp "$HEBDO/dernier.md" "$HEBDO/$STAMP.md"
-  echo "=== $(date '+%Y-%m-%d %H:%M') fini : $HEBDO/dernier.md"
-else
-  rm -f "$HEBDO/dernier.tmp"; echo "=== aucune mesure"
-fi
+if [ $found -eq 0 ]; then rm -f "$WEEK"; echo "=== aucune mesure"; exit 0; fi
+
+# La page du carnet : les semaines de la plus récente à la plus ancienne.  historique.md garde
+# les semaines seules ; mesures.md y ajoute l'en-tête.
+cp "$WEEK" "$HEBDO/$STAMP.md"
+{ cat "$WEEK"; [ -f "$HEBDO/historique.md" ] && { echo; echo "---"; echo; cat "$HEBDO/historique.md"; }; } > "$HEBDO/historique.tmp"
+mv "$HEBDO/historique.tmp" "$HEBDO/historique.md"
+rm -f "$WEEK"
+{
+  echo "# Mesures du dimanche : Gulliver contre les autres moteurs"
+  echo
+  echo "Refaites par le Mac chaque dimanche à 4 h (\`macos/bench-hebdo/\`), la plus récente en tête. Vitesse en jetons par seconde sur le GPU, puis justesse (perplexité d'un même texte). L'explication des écarts est dans « Gulliver contre les autres moteurs »."
+  echo
+  cat "$HEBDO/historique.md"
+} > "$HEBDO/mesures.md"
+echo "=== $(date '+%Y-%m-%d %H:%M') fini : $HEBDO/mesures.md"

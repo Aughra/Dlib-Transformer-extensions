@@ -92,9 +92,9 @@
      "desc": "Vitesse et justesse face à llama.cpp et MLX, et d'où viennent les écarts."
     },
     {
-     "path": "build/bench/hebdo/dernier.md",
-     "title": "Dernière mesure de la semaine",
-     "desc": "Les tableaux bruts que le Mac refait lui-même chaque dimanche à 4 h."
+     "path": "build/bench/hebdo/mesures.md",
+     "title": "Mesures du dimanche",
+     "desc": "Les tableaux que le Mac refait lui-même chaque dimanche à 4 h, datés, la semaine la plus récente en tête."
     },
     {
      "path": "docs/mesures/2026-11-19-m2-contre-mac-mini.md",

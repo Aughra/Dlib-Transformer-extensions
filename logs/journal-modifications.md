@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — Gulliver 6.15.1 : les mesures du dimanche datées, la plus récente en tête
+
+- **Quoi** : `bench_hebdo.sh` met la mesure de la semaine, sous « ## Mesure du <jour date à heure> » (date en français), en tête de `build/bench/hebdo/historique.md`, et écrit `mesures.md` (en-tête + historique) ; les titres des tableaux descendent de deux crans. Carnet : « Mesures du dimanche » (`build/bench/hebdo/mesures.md`) au lieu de « Dernière mesure de la semaine » (`dernier.md`, retiré) ; page remplie avec la mesure du 21 novembre.
+- **Fichiers** : `gulliver/tools/bench_hebdo.sh`, `macos/site-docs/sommaire.json`, `macos/bench-hebdo/README.md`, `docs/mesures/tests-de-vitesse.md`, `CLAUDE.md`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain : « tu mettras la date, classé antichronologique ».
+- **Étapes** : `bash -n` ; dates françaises vérifiées (`LC_ALL=fr_FR.UTF-8 date`) ; le carnet du vrai service sert la page (200) et la rubrique pointe sur `mesures.md`. Pas encore passé par l'agent (premier passage : dimanche 22 novembre, 4 h).
+
 ## 2026-11-21 — Affiner Gemma 3 4B : des fils de 16 Mo de pile dans dlib (R2) ; épisode 60
 
 - **Quoi** : `thread_pool_implementation` crée ses fils par `pthread_create` avec une pile de 16 Mo (au lieu de `std::thread`, 512 Ko sur macOS) et les rejoint par `pthread_join` ; `spawn_thread` (`threads_kernel_2.cpp`) de même. Gemma 3 4B affiné sur le blog. Épisode 60 du blog, notes de version de 6.15.0 complétées (rubrique « Atelier d'entraînement »), notes pour l'auteur n° 32 et registre.

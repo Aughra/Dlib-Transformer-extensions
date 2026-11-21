@@ -3,7 +3,7 @@
 Ce document compare Gulliver à deux autres moteurs qui tournent sur le Mac, avec les mêmes modèles : **llama.cpp**, le moteur de référence des fichiers GGUF, et **MLX**, le moteur d'Apple. Il mesure la vitesse, puis la justesse, et explique d'où viennent les écarts. Le but est que Gulliver devienne le plus rapide sans rien perdre en justesse.
 
 - **Mesures de ce document** : 21 novembre 2026, Mac mini M5 Pro (64 Go), Gulliver 6.14.2, llama.cpp 1.0.0 (Homebrew), MLX 0.29.3.
-- **Chaque dimanche** : les mêmes mesures sont refaites par le Mac lui-même ; le dernier tableau est dans « Dernière mesure de la semaine », juste à côté dans le carnet (mode d'emploi : `macos/bench-hebdo/README.md`).
+- **Chaque dimanche** : les mêmes mesures sont refaites par le Mac lui-même, à 4 h ; elles s'ajoutent, datées et la plus récente en tête, à la page « Mesures du dimanche », juste à côté dans le carnet (mode d'emploi : `macos/bench-hebdo/README.md`).
 
 ## En bref
 
@@ -36,7 +36,7 @@ Les deux autres moteurs tournent donc presque aussi vite que la mémoire le perm
 
 ## Les mesures de vitesse
 
-Sur le GPU, deux essais en alternance, en jetons par seconde : la lecture de la question, puis l'écriture de 64 jetons après elle. Les tableaux complets, réglage par réglage, sont dans `build/bench/` sur le Mac et dans la dernière mesure de la semaine ; ici, le réglage du service pour Gulliver (mémoire de conversation en 8 bits) et les réglages par défaut de llama.cpp.
+Sur le GPU, deux essais en alternance, en jetons par seconde : la lecture de la question, puis l'écriture de 64 jetons après elle. Les tableaux complets, réglage par réglage, sont dans `build/bench/` sur le Mac et dans les mesures du dimanche ; ici, le réglage du service pour Gulliver (mémoire de conversation en 8 bits) et les réglages par défaut de llama.cpp.
 
 ### Le modèle du service, Qwen3-VL 4B Thinking (Q4_K_M)
 
