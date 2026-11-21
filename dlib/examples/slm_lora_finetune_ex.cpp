@@ -125,15 +125,16 @@ static void report_cost(size_t windows, const stage_settings& st, size_t paramet
          << " positions per epoch, " << (windows / std::max<long>(1, st.batch_size))
          << " steps\n";
 
-    /* The steady state is what decides whether a run survives, and it is set by the whole
-       parameter blob rather than by the trainable share: the trainer allocates a gradient
-       for every layer, and the optimizer two moments for every layer it may move. Printed
-       because the failure it causes is a process kill with no message of its own. */
+    /* Ce qui décide si une passe tient en mémoire, affiché parce que l'échec qu'il cause
+       est un arrêt du processus sans message. Depuis le brouillon commun de core.h (fork
+       pour macOS, 2026-11-21), les couches gelées n'ont plus de tampon de dérivées à
+       elles : restent les poids, les dérivées et les moments de l'optimiseur des couches
+       adaptées, et surtout les activations, qui grandissent avec --window et --batch-size. */
     const double gb = 4.0 / 1e9;
     cout << "  memory      : about "
-         << static_cast<long>(parameters * gb + 0.5) << " GB of weights, as much again in\n"
-         << "                gradients, and two optimizer moments on the adapted layers,\n"
-         << "                before activations. Lower --window or --batch-size first.\n";
+         << static_cast<long>(parameters * gb + 0.5) << " GB of weights; gradients and two\n"
+         << "                optimizer moments on the adapted layers only, then the\n"
+         << "                activations. Lower --window or --batch-size first.\n";
 }
 
 /* Answers with the encoder's parameter count on a fusion layer and with zero on anything
@@ -421,12 +422,26 @@ static bool stage_knowledge(train_net& net, const hf_tokenizer& tok,
     cout << "  window      : " << st.window << "\n" << indent(rep.describe()) << "\n";
     if (X.empty()) { cerr << "  no window could be built\n"; return false; }
 
+    /* Fenêtres mises de côté pour la validation (fork pour macOS, 2026-11-21), comme à
+       l'étape des questions et réponses : sans elles, rien ne dit si la perte qui baisse
+       vient d'un modèle qui apprend le domaine ou qui récite ses fenêtres. Les fenêtres
+       ne se chevauchent pas : celles qui sont mises de côté sont un texte jamais vu. */
+    std::vector<matrix<int, 0, 1>> VX;
+    std::vector<matrix<unsigned long, 0, 1>> VY;
+    if (st.valid_fraction > 0.0 && X.size() > 8)
+    {
+        std::vector<matrix<int, 0, 1>> TX;
+        std::vector<matrix<unsigned long, 0, 1>> TY;
+        split_training_dataset(X, Y, st.valid_fraction, 1, TX, TY, VX, VY);
+        X.swap(TX);
+        Y.swap(TY);
+        cout << "  validation  : " << VX.size() << " windows, held out from the training set\n";
+    }
+
     report_cost(X.size(), st, count_trainable_parameters(net).total);
     report_adapters(net, ad);
     if (st.dry_run) { cout << "  dry run, no training\n"; return true; }
 
-    std::vector<matrix<int, 0, 1>> VX;
-    std::vector<matrix<unsigned long, 0, 1>> VY;
     last_loss = run_training(net, X, Y, VX, VY, st, sync_file,
         tok.pad_id() >= 0 ? tok.pad_id() : 0);
     return true;
