@@ -135,6 +135,23 @@ Aller vite ne sert à rien si le calcul est faux. On mesure la **perplexité** :
 - **Gulliver 6.19.0** réécrit l'attention de l'écriture (32 positions à la fois, lectures groupées) : sur le modèle du service, l'écriture passe de 70,7 à **78,4 jetons/s** après 512 tokens, de 58,3 à **66** après 4 096, de 28-31 à **41-42** après 16 384 (llama.cpp : 92, 78, 51 ; MLX : 106, 88, 56). Un profil par noyau montre ce qui reste : les produits par les poids, environ 75 % d'un pas.
 - Une sonde a montré que les produits de matrices de Gulliver (par MPS) passent **déjà** par les accélérateurs neuronaux du M5 (31,6 Tflop/s) : l'avance de MLX en lecture tient donc surtout à son attention et à ce qui entoure les produits, pas aux produits eux-mêmes.
 
+### Après la sieste du 21 novembre (Gulliver 6.19.2, mesure de 17 h 50)
+
+Mêmes mesures que plus haut, deux essais en alternance, sans l'Albireo d'origine (ses chiffres ne bougent pas). Charge du Mac : 4 à 9 pendant la mesure. Écart à Gulliver entre parenthèses.
+
+| Modèle | Question | Lecture : Gulliver | llama.cpp | MLX | Écriture : Gulliver | llama.cpp | MLX |
+|---|---|---|---|---|---|---|---|
+| Qwen3-VL 4B Thinking (service) | 512 | **2 744** | 2 590 (−6 %) | 2 901 (+6 %) | 82,1 | 92,1 (+12 %) | 106 (+29 %) |
+| Qwen3-VL 4B Thinking (service) | 4 096 | **2 263** | 2 046 (−10 %) | 2 917 (+29 %) | 69,2 | 77,9 (+13 %) | 88,3 (+28 %) |
+| Qwen3-VL 4B Thinking (service) | 16 384 | **1 208** | 1 183 (−2 %) | 2 036 (+69 %) | 44,0 | 50,5 (+15 %) | 56,2 (+28 %) |
+| Qwen3-VL 2B | 4 096 | **5 457** | 4 896 (−10 %) | 7 572 (+39 %) | 131 | 142 (+9 %) | 168 (+28 %) |
+| Qwen3-VL 2B | 16 384 | **3 111** | 2 911 (−6 %) | 5 018 (+61 %) | **84,7** | 81,5 (−4 %) | 90,5 (+7 %) |
+| LFM2.5-1.2B Q8_0 | 4 096 | **8 567** | 8 331 (−3 %) | 11 590 (+35 %) | 187 | 188 (+1 %) | 189 (+1 %) |
+| Gemma 3 4B | 4 096 | 1 731 | 2 757 (+59 %) | 3 207 (+85 %) | 69,0 | 87,2 (+26 %) | 101 (+46 %) |
+| Qwen3-30B-A3B (mélange d'experts) | 4 096 | 870 | 1 564 (+80 %) | 2 769 (+218 %) | 65,7 | 81,3 (+24 %) | 90,3 (+38 %) |
+
+En une phrase : **Gulliver lit désormais plus vite que llama.cpp** sur les modèles Qwen et sur LFM2 aux longues questions, et l'écart d'écriture avec llama.cpp est passé d'environ +30 % à +12 % ; MLX reste devant, et Gulliver reste loin sur Gemma 3 (têtes de 256 valeurs, que les nouveaux noyaux ne prennent pas encore) et sur le mélange d'experts (V3). Tableau complet : page « Mesures du dimanche » (prochaine mesure : dimanche 4 h).
+
 ## Pour que Gulliver soit le plus rapide
 
 Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (deux pistes au même but sont essayées toutes les deux, mesurées, et la meilleure est gardée) :
