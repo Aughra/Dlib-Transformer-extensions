@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.16.0 — 21 novembre 2026
+
+### Performances
+
+- Les tests de vitesse et de justesse comparent aussi l'Albireo d'origine (version 1.0.27 du 21 novembre 2026), construit à part et sans modification (`macos/albireo-original/`) : sur ce Mac, il tourne sur le processeur seul, avec ses noyaux portables.
+- Nouvelle présentation des tableaux : une ligne par modèle et par longueur de question, Gulliver, llama.cpp, MLX et l'Albireo d'origine côte à côte, chacun avec son écart à Gulliver en pourcentage (positif s'il est plus rapide, négatif s'il est plus lent) ; la justesse de la même façon, avec l'écart de perplexité.
+
+---
+
 ## 6.15.1 — 21 novembre 2026
 
 ### Accès et documents

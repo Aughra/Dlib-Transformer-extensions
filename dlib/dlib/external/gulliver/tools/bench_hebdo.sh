@@ -6,8 +6,8 @@
 #   bash dlib/dlib/external/gulliver/tools/bench_hebdo.sh
 #
 # Il attend une machine au repos (charge sur une minute sous BENCH_MAX_LOAD, 3 par défaut ; un essai
-# par heure, 6 au plus), reconstruit Gulliver (build/macos-gulliver), lance bench_moteurs.sh et, s'il
-# existe, justesse_moteurs.sh, puis met la mesure de la semaine, sous un titre daté, en tête de
+# par heure, 6 au plus), reconstruit Gulliver (build/macos-gulliver) et l'Albireo d'origine
+# (macos/albireo-original/build.sh), lance bench_moteurs.sh et, s'il existe, justesse_moteurs.sh, puis met la mesure de la semaine, sous un titre daté, en tête de
 # build/bench/hebdo/mesures.md (lu par le carnet, rubrique « Tests de vitesse » : les semaines de
 # la plus récente à la plus ancienne), avec une copie datée.  Rien n'est commité : le carnet lit
 # ces fichiers sur le disque.
@@ -38,8 +38,12 @@ for try in 1 2 3 4 5 6; do
 done
 
 echo "charge $(load1) : reconstruction de Gulliver"
-cmake --build "$ROOT/build/macos-gulliver" --target bench_runtime > "$HEBDO/build.log" 2>&1 \
+cmake --build "$ROOT/build/macos-gulliver" --target bench_runtime perplexity_runtime > "$HEBDO/build.log" 2>&1 \
   || { echo "build en échec, voir $HEBDO/build.log"; exit 1; }
+# L'Albireo d'origine, figé sur macos/albireo-original/COMMIT, pour sa colonne des tableaux ; sans
+# lui, les mesures se font quand même.
+bash "$ROOT/macos/albireo-original/build.sh" >> "$HEBDO/build.log" 2>&1 \
+  || echo "Albireo d'origine non construit, voir $HEBDO/build.log"
 
 STAMP=$(date +%Y-%m-%d)
 WHEN=$(LC_ALL=fr_FR.UTF-8 date '+%A %e %B %Y à %H h %M' | sed 's/  / /')
