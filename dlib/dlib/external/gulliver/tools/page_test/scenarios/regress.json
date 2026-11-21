@@ -58,6 +58,11 @@
   "expect": true
  },
  {
+  "name": "answer speeds",
+  "eval": "const s=[...document.querySelectorAll('.stats')].pop(); return !!s && /lecture [\\d\\s\\u202f,]+ jetons\\/s · écriture [\\d\\s\\u202f,]+ jetons\\/s/.test(s.innerText)",
+  "expect": true
+ },
+ {
   "name": "context bar",
   "until": "const l=document.querySelector('.context-line:not(.hidden)'); if (!l) return ''; const c=l.querySelector('.count').innerText; return /^[\\d\\s\\u202f]+ \\/ [\\d\\s\\u202f]+$/.test(c) && l.querySelector('.meter > div').style.width ? c + ' | ' + l.title : ''",
   "timeout": 30000

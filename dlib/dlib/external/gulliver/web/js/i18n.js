@@ -192,7 +192,8 @@ const texts = {
     contextLabel: 'Contexte',
     contextUse: 'Contexte de la discussion : {n} jetons sur {total} ({p} %), le contexte du modèle, au-delà de la '
       + 'moitié duquel les échanges les plus anciens sont résumés',
-    engine: 'Moteur', tokensPerSecond: '{n} jetons/s', version: 'Version', service: 'Service',
+    engine: 'Moteur', tokensPerSecond: '{n} jetons/s', readPerSecond: 'lecture {n} jetons/s',
+    writePerSecond: 'écriture {n} jetons/s', version: 'Version', service: 'Service',
     memory: 'Mémoire', processor: 'Processeur', models: 'Modèles', usage: 'Utilisation sur 30 jours', requests: 'Requêtes',
     usageDay: '{date} : {generated}, {read}', tokensGenerated_one: '{n} jeton généré',
     tokensGenerated_other: '{n} jetons générés', tokensRead_one: '{n} jeton lu', tokensRead_other: '{n} jetons lus',

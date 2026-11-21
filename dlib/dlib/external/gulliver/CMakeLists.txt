@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 6.14.2 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 6.15.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -255,7 +255,9 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    target_compile_options(test_host PRIVATE ${GULLIVER_WARNINGS})
    gulliver_output_dir(test_host ${CMAKE_BINARY_DIR}/tests)
    # test_model_file : fichiers de modèle abîmés ; test_engine_api : l'interface C d'une bibliothèque de moteur.
-   foreach (t test_qkernels test_runtime test_tokenizer engine_chat bench_runtime test_model_file test_engine_api)
+   # perplexity_runtime : la justesse comparée à llama-perplexity (fork pour macOS).
+   foreach (t test_qkernels test_runtime test_tokenizer engine_chat bench_runtime perplexity_runtime test_model_file
+         test_engine_api)
       if (t STREQUAL "engine_chat" OR t STREQUAL "test_engine_api")
          add_executable(${t} tests/${t}.cpp)
          target_link_libraries(${t} PRIVATE gulliver_common)

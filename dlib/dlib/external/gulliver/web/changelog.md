@@ -2,6 +2,20 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.15.0 — 21 novembre 2026
+
+### Accès et documents
+
+- Sous chaque réponse, la ligne d'information donne désormais deux vitesses : la lecture de la question et l'écriture de la réponse, en jetons par seconde (auparavant, l'écriture seule).
+- Le carnet du portage gagne une rubrique « Tests de vitesse » : Gulliver comparé à llama.cpp et à MLX sur les mêmes modèles, en vitesse et en justesse, avec l'explication des écarts, et la dernière mesure hebdomadaire.
+
+### Performances
+
+- Nouveaux outils de mesure : `tools/bench_moteurs.sh` (vitesse de Gulliver, llama.cpp et MLX, en alternance), `tools/justesse_moteurs.sh` et `tests/perplexity_runtime` (perplexité d'un même texte, découpée comme llama-perplexity), `tools/bench_hebdo.sh` (les deux, lancés chaque dimanche par un agent launchd de l'utilisateur, `macos/bench-hebdo/`).
+- Constat du 21 novembre (Mac mini M5 Pro) : sur le modèle du service, llama.cpp lit 1,2 fois (512 tokens) à 2,2 fois (16 384 tokens) plus vite et écrit 1,3 à 1,6 fois plus vite ; la perplexité est identique entre les deux moteurs (écarts de 0,02 à 0,35 %).
+
+---
+
 ## 6.14.2 — 21 novembre 2026
 
 ### Performances

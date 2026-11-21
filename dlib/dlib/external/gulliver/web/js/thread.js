@@ -635,8 +635,14 @@ function statsText(m) {
   if (m.usage && m.usage.completion_tokens) {
     parts.push(tn('tokensCount', m.usage.completion_tokens, { n: formatNumber(m.usage.completion_tokens) }));
   }
+  // Les deux vitesses de la réponse (demande de l'humain, 2026-11-21) : la lecture de la question
+  // (les jetons que le moteur a vraiment calculés, hors du début repris du cache) et l'écriture.
+  const speed = (v) => formatDecimal(v, v >= 100 ? 0 : 1);
+  if (m.timings && m.timings.prompt_per_second > 0.05) {
+    parts.push(t('readPerSecond', { n: speed(m.timings.prompt_per_second) }));
+  }
   if (m.timings && m.timings.generation_per_second) {
-    parts.push(t('tokensPerSecond', { n: formatDecimal(m.timings.generation_per_second, 1) }));
+    parts.push(t('writePerSecond', { n: speed(m.timings.generation_per_second) }));
   }
   return parts.join(' · ');
 }
