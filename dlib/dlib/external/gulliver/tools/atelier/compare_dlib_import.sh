@@ -21,8 +21,11 @@ WORK=$ROOT/build/atelier/$NAME
 EXAMPLES=$ROOT/build/macos-arm64-cpu
 MODEL_BUILD=$ROOT/build/macos-atelier-$NAME
 GULLIVER=$ROOT/build/macos-gulliver
+# BLAS activé : sur le Mac, CMake y trouve Accelerate (libcblas du SDK) ; les produits de
+# matrices de dlib passent alors par lui, un pas d'affinage de Qwen3-0.6B en 7 s au lieu de
+# 780, au résultat identique à l'octet près (2026-11-21).
 OPTIONS=(-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DDLIB_NO_GUI_SUPPORT=ON
-  -DDLIB_USE_CUDA=OFF -DDLIB_USE_NPU=OFF -DDLIB_USE_BLAS=OFF -DDLIB_USE_LAPACK=OFF -DDLIB_USE_MKL_FFT=OFF
+  -DDLIB_USE_CUDA=OFF -DDLIB_USE_NPU=OFF -DDLIB_USE_BLAS=ON -DDLIB_USE_LAPACK=OFF -DDLIB_USE_MKL_FFT=OFF
   -DDLIB_USE_FFMPEG=OFF -DDLIB_JPEG_SUPPORT=OFF -DDLIB_PNG_SUPPORT=OFF -DDLIB_GIF_SUPPORT=OFF
   -DDLIB_WEBP_SUPPORT=OFF -DDLIB_JXL_SUPPORT=OFF)
 

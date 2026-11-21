@@ -245,7 +245,11 @@ static double run_training(train_net& net,
     trainer.set_learning_rate_shrink_factor(st.shrink);
     trainer.set_iterations_without_progress_threshold(
         st.patience > 0 ? st.patience : std::max<long>(200, static_cast<long>(X.size() / 4)));
-    trainer.be_verbose();
+    /* Quiet trainer, progress printed below (fork pour macOS, 2026-11-21) : l'affichage
+       périodique de dnn_trainer remet à zéro sa moyenne des pertes toutes les 40 secondes,
+       si bien que la « moyenne de l'époque » ne portait que sur les pas qui suivaient la
+       dernière ligne affichée, et changeait avec la vitesse de la machine. */
+    trainer.be_quiet();
     if (!sync_file.empty())
         trainer.set_synchronization_file(sync_file, std::chrono::minutes(10));
 
@@ -304,10 +308,13 @@ static double run_training(train_net& net,
     const auto started = std::chrono::steady_clock::now();
     const size_t batch = static_cast<size_t>(std::max<long>(1, st.batch_size));
     double last_loss = 0.0;
+    auto last_print = started;
+    const size_t steps_per_epoch = X.size() / batch;
 
     for (long epoch = 0; epoch < st.epochs; ++epoch)
     {
         shuffle_training_dataset(X, Y, 1 + static_cast<unsigned long>(epoch));
+        size_t step = 0;
         for (size_t i = 0; i + batch <= X.size(); i += batch)
         {
             /* The barrier before touching the context: the trainer prepares one batch
@@ -322,6 +329,17 @@ static double run_training(train_net& net,
             network_context::set_learning_rate(trainer.get_learning_rate());
             announce_padding(X.begin() + i, X.begin() + i + batch, pad_token);
             trainer.train_one_step(X.begin() + i, X.begin() + i + batch, Y.begin() + i);
+            ++step;
+            /* Toutes les 40 secondes, la moyenne depuis le début de l'époque, sans la
+               remettre à zéro. */
+            const auto now = std::chrono::steady_clock::now();
+            if (now - last_print > std::chrono::seconds(40))
+            {
+                last_print = now;
+                cout << "  step " << step << "/" << steps_per_epoch
+                     << "  learning rate " << trainer.get_learning_rate()
+                     << "  average loss so far " << trainer.get_average_loss() << endl;
+            }
             if (trainer.get_learning_rate() < trainer.get_min_learning_rate()) break;
         }
         const double train_loss = trainer.get_average_loss();

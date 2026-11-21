@@ -2,6 +2,18 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.14.2 — 21 novembre 2026
+
+### Performances
+
+- **Atelier d'entraînement** : le script de l'atelier (`tools/atelier/compare_dlib_import.sh`) construit désormais dlib avec Accelerate. Un affinage LoRA de Qwen3-0.6B (deux pas de quatre fenêtres de 256 tokens) passe de 780 s à 7 s sur le Mac mini M5 Pro, pour un résultat identique à l'octet près.
+
+### Corrections
+
+- L'affinage (`slm_lora_finetune_ex`) affiche la perte moyenne de toute l'époque. L'entraîneur de dlib remettait sa moyenne à zéro à chaque ligne affichée, si bien que le chiffre dépendait de la vitesse de la machine.
+
+---
+
 ## 6.14.1 — 21 novembre 2026
 
 ### Plateforme

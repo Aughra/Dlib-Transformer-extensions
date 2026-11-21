@@ -43,6 +43,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 28 | Bug | `dlib/data_io/gguf_model_spec.h:291` | Une architecture inconnue de l'import (`gemma3`, `lfm2`, `qwen35`…) passe la vérification de compatibilité sans aucun blocage : elle est lue comme un Llama générique, ses tenseurs propres ignorés (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
 | 29 | Bug | `dlib/data_io/gguf_weight_loader.h:39` | `transpose_into` lit `out_dim × in_dim` valeurs sans regarder la taille du tenseur lu : un tenseur plus petit que prévu est lu au-delà de sa fin (lecture hors de la mémoire du vecteur) ; seul l'inventaire de `slm_gguf_import_ex` l'évite (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
 | 30 | Bug | `dlib/data_io/gguf_model_spec.h:425` | Un modèle YaRN (`rope.scaling.type = yarn`) passe l'import avec la note « sequences beyond the original context length will degrade » : YaRN change pourtant les angles des basses fréquences à toutes les positions, et le réseau importé calcule autre chose dès un texte court (corrigé dans le fork : YaRN appliqué comme llama.cpp). | **Aussi sous Windows**, déduit du code |
+| 31 | Bug | `dlib/examples/slm_lora_finetune_ex.cpp:248`, `dlib/dnn/trainer.h:1284` | La « average loss » d'une époque de l'affinage LoRA ne porte que sur les pas qui suivent la dernière ligne affichée par `dnn_trainer` (qui remet sa moyenne à zéro toutes les 40 s) : le chiffre change avec la vitesse de la machine (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
 | Registre | dlib | `dlib/dlib`, `dlib/examples` | Tout ce que le fork change dans dlib, fichier par fichier (partie 5). | Voir chaque ligne |
 | 22 | Remarque, exactitude | `gulliver/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant (corrigé dans le fork). | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
 
@@ -412,6 +413,41 @@ Après :
   avec le calcul dans `rotary_positional_embedding_::compute_and_cache_trig_values` (voir le registre, partie 5).
 - **Vérifié** : Ministral 3 3B, chiffres ci-dessus, contre le moteur de Gulliver (qui suit llama.cpp) ; test de dlib (décodage token par token = passe complète avec YaRN, aller-retour). Non vérifié : un autre modèle YaRN (Qwen à long contexte, par exemple).
 - **Mac ou Windows** : aussi sous Windows (code commun, en-têtes seulement), déduit du code, non vérifié sous Windows.
+
+### 31. La perte moyenne d'une époque d'affinage dépend de la vitesse de la machine
+
+- **Où** : `dlib/examples/slm_lora_finetune_ex.cpp`, ligne 248 (`trainer.be_verbose()`) et ligne 327 (`trainer.get_average_loss()` en fin d'époque), dans `upstream/main` à `966c178` comme au commit `184ea00` ; la cause est dans `dlib/dlib/dnn/trainer.h`, `print_periodic_verbose_status`, lignes 1269 à 1284 : l'affichage, au plus toutes les 40 secondes, appelle `clear_average_loss()`.
+- **Ce qui se passe** : la ligne « epoch 1/1 … average loss » de l'exemple ne donne pas la moyenne de l'époque, mais celle des pas qui suivent la dernière ligne « step# » affichée par l'entraîneur. Sur une machine lente, ou avec un grand modèle, elle ne compte que les derniers pas ; sur une machine rapide, tous. Deux calculs identiques affichent deux chiffres différents, et comparer deux réglages ou deux machines par ce chiffre est trompeur.
+- **Reproduire** : Qwen3-0.6B importé, un corpus de 2 048 positions (8 fenêtres de 256, lots de 4, donc 2 pas), `--initial-windows 0`. Build sans BLAS (un pas dure 390 s, la ligne « step#: 1 … average loss: 3.33375 » s'affiche et efface la moyenne) : « average loss 3.63315 », la perte du second pas seule. Build avec BLAS (un pas dure 3 s, rien ne s'affiche) : « average loss 3.48345 », soit (3,33375 + 3,63315) / 2. Les deux modèles écrits après le premier pas sont pourtant identiques à l'octet près (`cmp`, 3 022 904 155 octets).
+- **Correction du fork** (commit de cette entrée, voir le registre) : l'exemple fait taire l'entraîneur et affiche lui-même, toutes les 40 secondes, la moyenne depuis le début de l'époque, sans la remettre à zéro. Avant (ligne 248) :
+
+```cpp
+    trainer.be_verbose();
+```
+
+Après :
+
+```cpp
+    trainer.be_quiet();
+```
+
+et, dans la boucle des pas, après `train_one_step` :
+
+```cpp
+            ++step;
+            const auto now = std::chrono::steady_clock::now();
+            if (now - last_print > std::chrono::seconds(40))
+            {
+                last_print = now;
+                cout << "  step " << step << "/" << steps_per_epoch
+                     << "  learning rate " << trainer.get_learning_rate()
+                     << "  average loss so far " << trainer.get_average_loss() << endl;
+            }
+```
+
+  `dnn_trainer` n'est pas changé : sa remise à zéro sert son propre affichage (« moyenne depuis la dernière ligne »), mais elle mériterait d'être dite dans `trainer_abstract.h`, puisque `get_average_loss()` en dépend.
+- **Vérifié** : sur le Mac, avec la correction, le même essai affiche 3,48345 (build avec Accelerate, où l'entraîneur n'affichait déjà rien) ; la ligne périodique ne remet plus rien à zéro, lu dans le code. Non vérifié : le build sans BLAS relancé avec la correction (13 minutes), et l'étape « task alignment » (`--dataset`), qui passe par la même boucle.
+- **Mac ou Windows** : aussi sous Windows (code commun), déduit du code, non vérifié sous Windows.
 
 ## 2. Portabilité vers macOS sur puce Apple
 
@@ -1110,6 +1146,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 
 **Mac ou Windows** : propre au Mac (Metal).
 
+### Changement 32 : l'atelier d'entraînement compile dlib avec Accelerate (Gulliver 6.14.2)
+
+- **Avant** : le script de l'atelier (`gulliver/tools/atelier/compare_dlib_import.sh`) construisait dlib avec `-DDLIB_USE_BLAS=OFF`, comme le guide de construction CPU du fork ; les produits de matrices de `tt::gemm` passaient par les boucles portables de `dlib/matrix`, sur un seul cœur. Affinage LoRA de Qwen3-0.6B (rang 8 sur Q et V, fenêtres de 256 tokens, lots de 4, 2 pas) : **779 et 780 s**.
+- **Changement** : `-DDLIB_USE_BLAS=ON`. Sur le Mac, la recherche de `find_blas.cmake` trouve `libcblas` du SDK, c'est-à-dire Accelerate (vecLib), sans rien installer ; `matrix_blas_bindings.h` appelle alors `cblas_sgemm`. **Exactitude** : les log-probabilités du réseau importé sont identiques à l'octet près (25 positions), le modèle écrit après un pas aussi (`cmp`), et `slm_lora_adapter_check_ex` passe dans les deux builds.
+- **Après** (mesures alternées dans la même séance, Mac mini M5 Pro, charge 1,5) : **7 s et 7 s**, au lieu de 779 et 780, soit **environ 110 fois** plus vite. Le pic de mémoire ne change pas (17 Go pour ce petit essai).
+- **Mac ou Windows** : sous Windows, la même option trouverait une BLAS installée (OpenBLAS, MKL) ; non vérifié.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -1137,6 +1180,7 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 | Gemma 4 E2B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 20,9 à 23,8 tokens/s ; lecture de 512 tokens 463 à 471 tokens/s avec le changement 24 (143 à 156 avant), 671 à 685 sur le GPU (233 à 237 avant) ; de 4 096 tokens 371 à 383 sur le processeur, 241 à 249 sur le GPU (changements 16 et 24) |
 | LFM2.5-8B-A1B Q4_K_M (mélange d'experts, fork seulement), processeur | non lu par le moteur | écriture 34,2 à 34,3 tokens/s ; lecture de 512 tokens 141 à 149 tokens/s (changement 17) ; le 1.2B en Q8_0 : 35,3 à 36,1 et 253 à 281, et sur le GPU 40,4 et 433 à 462 (changement 19) |
 | Gemma 3 4B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 16,3 à 17,2 tokens/s ; lecture de 512 tokens 88 à 92 tokens/s (changement 18) ; le 1B : 25,0 à 28,2 et 396 à 436 |
+| Mac mini M5 Pro, affinage LoRA de Qwen3-0.6B, 2 pas de 4 fenêtres de 256 tokens (atelier) | 779 à 780 s (boucles portables de dlib) | 7 s avec Accelerate (changement 32) |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.
 
@@ -1214,6 +1258,8 @@ Le fork modifie aussi dlib depuis le 2026-11-14, quand le portage le demande. Ch
 | `dlib/dlib/dnn/transformer.h`, `transformer_abstract.h` | `gqa_attention_` : `set_rope_ggml_yarn` ; température d'attention (`set_attention_temperature` : requête de la position p multipliée par 1 + s·ln(1 + ⌊p/L⌋), dans les passes complète, incrémentale et arrière ; deux champs écrits à la fin de l'archive, règle du format de la couche) | Mistral 3 (et Llama 4) | [0e9af77](https://github.com/Aughra/Dlib-Transformer-extensions/commit/0e9af77) | Test neuf : premières positions inchangées, suivantes changées, décodage token par token = passe complète à 1e-4, aller-retour | Ajouts, aussi sous Windows (code commun ; non testé) |
 | `dlib/dlib/data_io/gguf_model_spec.h`, `gguf_model_spec_abstract.h`, `gguf_weight_loader.h` | Famille `mistral3` (un Llama) ; réglages YaRN (`yarn_beta_fast`, `yarn_beta_slow`, amplitude tirée de `yarn_log_multiplier` et `attn_factor` comme llama.cpp) et température (`attention.temperature_scale`, `temperature_length`) lus et posés sur chaque couche d'attention ; note YaRN corrigée (entrée n° 30) | Mistral 3 dans l'import | [0e9af77](https://github.com/Aughra/Dlib-Transformer-extensions/commit/0e9af77) | Détection de Ministral 3 3B (26 couches, sortie liée à la table d'entrée) | Aussi sous Windows (code commun ; non testé) |
 | `dlib/dlib/test/dnn.cpp` | `test_gqa_attention_temperature_yarn` | Couvrir les ajouts | [0e9af77](https://github.com/Aughra/Dlib-Transformer-extensions/commit/0e9af77) | `dtest --test_dnn` : 794 553 vérifications | Aussi sous Windows (non testé) |
+| `dlib/examples/slm_lora_finetune_ex.cpp` | Entraîneur muet, moyenne de l'époque affichée par l'exemple toutes les 40 s sans remise à zéro | Entrée n° 31 (la moyenne dépendait de la vitesse de la machine) | ce commit | Même essai : 3,48345 avec Accelerate ; sans BLAS non relancé | Aussi sous Windows (code commun ; non testé) |
+
 ---
 
 *Écrit pour l'auteur de l'original et tenu à jour par le fork : les entrées les plus récentes peuvent se trouver en fin de section. Ce document ne contient aucun chemin de machine privée, aucune clé et aucun jeton.*
