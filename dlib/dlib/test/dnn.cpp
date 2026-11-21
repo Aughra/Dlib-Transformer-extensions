@@ -6802,6 +6802,42 @@ void test_multm_prev()
         DLIB_TEST(!loads(c1, wide));
     }
 
+    void test_frozen_params_grad_scratch()
+    {
+        /* Fork pour macOS (2026-11-21) : une couche gelée écrit ses dérivées dans un
+           brouillon commun, son get_parameter_gradient() reste vide, et les dérivées des
+           autres couches ne changent pas. */
+        print_spinner();
+        using net_type = loss_mean_squared_multioutput<fc<3, relu<fc<16, fc<8, input<matrix<float>>>>>>>;
+        dlib::rand rnd(7);
+        std::vector<matrix<float>> x(5);
+        std::vector<matrix<float>> y(5);
+        for (auto& m : x) m = matrix_cast<float>(gaussian_randm(6, 1, rnd.get_random_32bit_number()));
+        for (auto& m : y) m = matrix_cast<float>(gaussian_randm(3, 1, rnd.get_random_32bit_number()));
+
+        net_type a;
+        a(x[0]);   // pose les dimensions des couches
+        net_type b = a;
+
+        a.compute_parameter_gradients(x.begin(), x.end(), y.begin());
+        set_learning_rate_multiplier(layer<3>(b).layer_details(), 0);   // fc<16> gelée
+        set_learning_rate_multiplier(layer<1>(b).layer_details(), 0);   // fc<3> gelée
+        b.compute_parameter_gradients(x.begin(), x.end(), y.begin());
+
+        DLIB_TEST(layer<3>(b).get_parameter_gradient().size() == 0);
+        DLIB_TEST(layer<1>(b).get_parameter_gradient().size() == 0);
+        const tensor& ga = layer<4>(a).get_parameter_gradient();
+        const tensor& gb = layer<4>(b).get_parameter_gradient();
+        DLIB_TEST(ga.size() != 0 && ga.size() == gb.size());
+        DLIB_TEST(max(abs(mat(ga) - mat(gb))) == 0);
+        DLIB_TEST(max(abs(mat(a.get_final_data_gradient()) - mat(b.get_final_data_gradient()))) == 0);
+
+        /* Dégelée, la couche retrouve son propre tampon. */
+        set_learning_rate_multiplier(layer<3>(b).layer_details(), 1);
+        b.compute_parameter_gradients(x.begin(), x.end(), y.begin());
+        DLIB_TEST(max(abs(mat(layer<3>(a).get_parameter_gradient()) - mat(layer<3>(b).get_parameter_gradient()))) == 0);
+    }
+
     void test_gqa_attention_temperature_yarn()
     {
         /* Mistral 3 attention: YaRN as llama.cpp computes it and the attention temperature.
@@ -7231,6 +7267,7 @@ void test_multm_prev()
             test_gqa_attention_gate_partial_rope();
             test_gated_delta_net();
             test_gqa_attention_temperature_yarn();
+            test_frozen_params_grad_scratch();
             test_tagging();
 #ifdef DLIB_USE_CUDA
             test_affine_rect();

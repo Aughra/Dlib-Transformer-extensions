@@ -599,6 +599,10 @@ namespace dlib
                   the gradient in get_parameter_gradient() to perform the update.
                   Therefore, you should consider get_parameter_gradient() as an input to
                   update_parameters().
+                - Fork pour macOS : quand get_learning_rate_multiplier(layer_details()) vaut
+                  0, la couche est gelée et update_parameters() la saute ; ses dérivées sont
+                  alors écrites dans un brouillon commun à toutes les couches gelées et
+                  get_parameter_gradient().size() == 0.
         !*/
 
         tensor& get_parameter_gradient (

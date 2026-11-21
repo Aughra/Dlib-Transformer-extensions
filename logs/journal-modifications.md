@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — Ne plus réserver de tampon de dérivées pour les couches gelées (R2, dlib)
+
+- **Quoi** : `add_layer::back_propagate_error` (deux versions) passe par `impl::call_layer_backward_into` : une couche dont le multiplicateur du pas vaut 0 écrit ses dérivées dans un brouillon commun par fil (`frozen_params_grad_scratch`), et son `params_grad` reste vide. Documenté dans `core_abstract.h` ; test `test_frozen_params_grad_scratch`.
+- **Fichiers** : `dlib/dlib/dnn/core.h`, `dlib/dlib/dnn/core_abstract.h`, `dlib/dlib/test/dnn.cpp`, `docs/notes-pour-l-auteur.md` (registre), `logs/reprise.md`, ce journal.
+- **Pourquoi** : pour un 4B en float32, ces tampons pèseraient 16 Go. Lecteurs vérifiés : `update_parameters` (saute déjà ces couches), moyenne entre plusieurs cartes (CUDA, ignore les tampons vides), accumulateur de `layers.h` (ignore les vides), `tied_embeddings_` de l'exemple de compression (vérifie la taille).
+- **Étapes** : `dtest --test_dnn` 794 565 vérifications (premier build : test mal écrit, indices de couches décalés, corrigé) ; Qwen3-0.6B, 2 pas : perte 3,48345 inchangée, pic 16,96 → 16,61 Go (fenêtres de 256 par 4) et 8,40 → 7,76 Go (64 par 1). Sonde de mémoire (programme jetable) : la passe d'entraînement prend 10,5 Go au-delà des poids pour 1 024 positions, dont environ 7 Go de sorties et de dérivées gardées par les couches (les linéaires 2,9 Go, dont la tête du vocabulaire 1,24 Go) et 3,4 Go de tampons internes. Le gain est petit sur le 0.6B, où les activations dominent ; il compte sur un 4B.
+
 ## 2026-11-21 — Gulliver 6.14.2 : affiner avec Accelerate dans l'atelier (R2, première sous-étape)
 
 - **Quoi** : le script de l'atelier construit dlib avec `-DDLIB_USE_BLAS=ON` (CMake trouve `libcblas` du SDK, c'est-à-dire Accelerate) ; `slm_lora_finetune_ex` fait taire `dnn_trainer` et affiche lui-même la moyenne de l'époque, toutes les 40 s, sans la remettre à zéro (notes n° 31).

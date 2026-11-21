@@ -457,6 +457,47 @@ namespace dlib
             layer.backward_inplace(gradient_input,sub.get_gradient_input(),params_grad);
         }
 
+        /* Brouillon commun des dérivées des couches gelées (fork pour macOS, 2026-11-21).
+
+           Une couche dont le multiplicateur du pas d'apprentissage vaut zéro ne bouge pas :
+           update_parameters() la saute, et personne ne relit ses dérivées. Lui réserver un
+           tampon de la taille de ses paramètres coûte pourtant autant de mémoire que le
+           modèle entier quand on n'affine que des adaptateurs (3 Go pour un modèle de 0,6
+           milliard de paramètres, 16 Go pour 4 milliards). Les couches gelées écrivent donc
+           leurs dérivées dans ce brouillon, de la taille de la plus grande d'entre elles, et
+           leur get_parameter_gradient() reste vide. Un brouillon par fil : dnn_trainer fait
+           ses passes sur son propre fil. */
+        inline resizable_tensor& frozen_params_grad_scratch()
+        {
+            thread_local resizable_tensor scratch;
+            return scratch;
+        }
+
+        template <typename layer_type, typename SUBNET>
+        void call_layer_backward_into(
+            layer_type& layer,
+            const tensor& computed_output,
+            const tensor& gradient_input,
+            SUBNET& sub,
+            resizable_tensor& params_grad
+        )
+        {
+            const tensor& params = layer.get_layer_params();
+            if (params.size() != 0 && get_learning_rate_multiplier(layer) == 0)
+            {
+                params_grad.clear();
+                resizable_tensor& scratch = frozen_params_grad_scratch();
+                if (scratch.size() < params.size())
+                    scratch.set_size(static_cast<long long>(params.size()));
+                alias_tensor shape(params.num_samples(), params.k(), params.nr(), params.nc());
+                auto view = shape(scratch, 0);
+                call_layer_backward(layer, computed_output, gradient_input, sub, static_cast<tensor&>(view));
+                return;
+            }
+            params_grad.copy_size(params);
+            call_layer_backward(layer, computed_output, gradient_input, sub, static_cast<tensor&>(params_grad));
+        }
+
 
         template <typename layer_type, typename SUBNET>
         auto call_layer_forward(
@@ -983,9 +1024,8 @@ namespace dlib
         )
         {
             dimpl::subnet_wrapper<subnet_type> wsub(*subnetwork);
-            params_grad.copy_size(details.get_layer_params());
-            impl::call_layer_backward(details, private_get_output(),
-                gradient_input, wsub, static_cast<tensor&>(params_grad));
+            impl::call_layer_backward_into(details, private_get_output(),
+                gradient_input, wsub, params_grad);
 
             subnetwork->back_propagate_error(x, zero_grads); 
 
@@ -1372,9 +1412,8 @@ namespace dlib
             grad_final = 0;  
 
             subnet_wrapper wsub(x, grad_final, _sample_expansion_factor);
-            params_grad.copy_size(details.get_layer_params());
-            impl::call_layer_backward(details, private_get_output(),
-                gradient_input, wsub, static_cast<tensor&>(params_grad));
+            impl::call_layer_backward_into(details, private_get_output(),
+                gradient_input, wsub, params_grad);
 
             // zero out get_gradient_input()
             gradient_input_is_stale = zero_grads == zero_gradients::yes;
