@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — Campagne complète avec MLX 0.32 et l'Albireo d'origine ; rubrique réécrite
+
+- **Quoi** : première campagne par `bench_hebdo.sh` (11 h 30 – 13 h 12, entrée datée dans `build/bench/hebdo/mesures.md`) ; `docs/mesures/tests-de-vitesse.md` réécrite avec ces chiffres ; V4 nuancé dans la feuille de route.
+- **Fichiers** : `docs/mesures/tests-de-vitesse.md`, `docs/feuille-de-route.md`, ce journal.
+- **Pourquoi** : résultats de la campagne demandée (Albireo d'origine, MLX pour les six modèles, Python à jour).
+- **Étapes** : charge 1,07 au départ (premier essai reporté d'une heure à 7,26). MLX 0.32.4 premier partout (lecture +32 à +460 %, écriture +13 à +129 % sur Gulliver), sauf l'écriture de LFM2 à 16 384 tokens (llama.cpp 168, MLX 146, Gulliver 123) ; llama.cpp lecture +19 à +174 %, écriture +8 à +84 %. Albireo d'origine (processeur, noyaux portables) : lecture −97 à −99 %, écriture −62 à −79 %, refuse LFM2 et Gemma 3. Justesse : Gulliver = llama.cpp = original (écarts ≤ 0,35 %) ; fichiers MLX : −3,01 % (Qwen3-4B) mais +3,6 à +9,2 % sur les autres : la première version de la rubrique (« plus petit et plus juste ») est corrigée.
+
 ## 2026-11-21 — Toutes les pistes de vitesse dans la feuille de route
 
 - **Quoi** : chantier « Vitesse » complété de V5 à V10 (accélérateurs neuronaux du M5 par Metal 4, Neural Engine, décodage spéculatif, devinette par répétition, une commande GPU par mot, lire mistral.rs ; V4 étendu aux poids de 3 bits) et règle des pistes en concurrence (mesurer les deux, garder la meilleure).
