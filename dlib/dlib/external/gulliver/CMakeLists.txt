@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 6.14.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 6.14.1 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -65,23 +65,11 @@ endfunction()
 set(GULLIVER_THIRD_PARTY "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 find_package(Threads REQUIRED)
 
-# Mbed TLS, pour le HTTPS de cpp-httplib (réglages dans third_party/mbedtls/config).
-set(mbedtls_dir ${GULLIVER_THIRD_PARTY}/mbedtls)
-file(GLOB gulliver_mbedtls_sources ${mbedtls_dir}/library/*.c)
-add_library(gulliver_mbedtls STATIC EXCLUDE_FROM_ALL ${gulliver_mbedtls_sources})
-set_target_properties(gulliver_mbedtls PROPERTIES POSITION_INDEPENDENT_CODE ON C_STANDARD 99)
-target_include_directories(gulliver_mbedtls PUBLIC ${mbedtls_dir}/include ${mbedtls_dir}/config
-   PRIVATE ${mbedtls_dir}/library)
-# Toute unité qui inclut un en-tête de Mbed TLS doit voir la configuration de sa compilation.
-target_compile_definitions(gulliver_mbedtls PUBLIC "MBEDTLS_USER_CONFIG_FILE=\"gulliver_mbedtls_config.h\"")
-target_link_libraries(gulliver_mbedtls PUBLIC Threads::Threads)
-
-# cpp-httplib (un seul en-tête) : HTTP et HTTPS, les certificats du trousseau de macOS lus par
-# CoreFoundation et Security.
+# cpp-httplib (un seul en-tête), en HTTP seulement : le TLS du serveur et des connexions sortantes est fait
+# par Network.framework (host/tls_gate.mm, host/tls_client.mm).
 add_library(gulliver_httplib INTERFACE)
 target_include_directories(gulliver_httplib INTERFACE ${GULLIVER_THIRD_PARTY}/httplib)
-target_compile_definitions(gulliver_httplib INTERFACE CPPHTTPLIB_MBEDTLS_SUPPORT)
-target_link_libraries(gulliver_httplib INTERFACE gulliver_mbedtls Threads::Threads
+target_link_libraries(gulliver_httplib INTERFACE Threads::Threads
    "-framework CoreFoundation" "-framework Security")
 
 set(GULLIVER_WARNINGS -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers)
@@ -233,7 +221,6 @@ if (GULLIVER_PROGRAMS)
    set(gulliver_licenses
       gulliver.txt     ${CMAKE_CURRENT_SOURCE_DIR}/resources/license.txt
       dlib.txt        ${CMAKE_CURRENT_SOURCE_DIR}/resources/dlib-license.txt
-      mbedtls.txt     ${GULLIVER_THIRD_PARTY}/mbedtls/LICENSE
       cpp-httplib.txt ${GULLIVER_THIRD_PARTY}/httplib/LICENSE
       sqlite.txt      ${CMAKE_CURRENT_SOURCE_DIR}/resources/sqlite.txt)
    set(gulliver_license_commands)

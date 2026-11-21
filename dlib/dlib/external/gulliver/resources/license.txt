@@ -34,7 +34,6 @@ Components of Gulliver distributed under their own licenses
 ----------------------------------------------------------
 
 dlib and Dlib-Transformer-extensions    Boost Software License 1.0
-Mbed TLS 3.6                            Apache License 2.0
 cpp-httplib                             MIT License
 SQLite                                  Public domain
 zlib                                    zlib License

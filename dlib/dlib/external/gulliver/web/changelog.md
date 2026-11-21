@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.14.1 — 21 novembre 2026
+
+### Plateforme
+
+- **Mbed TLS est retiré** de Gulliver : tout le chiffrement (le serveur local, les connexions sortantes, les certificats) passe par Network.framework et Security, de macOS. cpp-httplib ne sert plus qu'en HTTP, derrière eux. Gulliver n'embarque plus que cpp-httplib et PDFium, d'autres projets ; SQLite, zlib, le décodage des images et le TLS sont ceux de macOS.
+- La page « Composants et licences » ne liste plus Mbed TLS ; la fiche du réglage du port décrit le portier TLS de macOS.
+
+---
+
 ## 6.14.0 — 21 novembre 2026
 
 ### Sécurité

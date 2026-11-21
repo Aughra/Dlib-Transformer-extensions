@@ -510,7 +510,8 @@ const items = {
     normal: "C’est la porte d’Gulliver sur le Mac lui-même. La page que tu regardes y est servie. Le navigateur range " +
       "les conversations selon l’adresse exacte : en changeant de port, tu arrives sur une page neuve, et les anciennes " +
       "conversations restent à l’ancienne adresse (exporte-les d’abord depuis l’onglet Données).",
-    owl: "Serveur httplib SSLServer lié à 127.0.0.1:port, certificat émis par l’autorité locale du dossier de données. " +
+    owl: "Portier TLS de Network.framework lié à 127.0.0.1:port (TLS 1.2 au moins), qui passe le HTTP au serveur httplib " +
+      "par une prise Unix privée ; certificat émis par l’autorité locale du dossier de données. " +
       "Le stockage de la page (IndexedDB, localStorage) dépend de l’origine https://localhost:port. Le service vérifie " +
       "que le port est libre avant d’enregistrer ; au démarrage, un port pris le fait revenir au dernier port servi.",
     marmot: "C’est le numéro de ta chambre dans un hôtel. Si tu changes de chambre, tes affaires restent dans " +

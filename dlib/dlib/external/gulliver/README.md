@@ -448,7 +448,7 @@ et, pour le développement, dans une console avec `--console`. Il :
   pour ceux que son environnement d'exécution a écartés, la raison qu'il donne (le message de chaque plugin
   d'OpenVINO, par exemple) ;
 - démarre le moteur choisi et les modèles actifs, et sert `https://localhost:<port>/` avec
-  cpp-httplib et Mbed TLS, avec un certificat émis par sa propre autorité, qu'il ajoute aux
+  cpp-httplib derrière le TLS de Network.framework (macOS), avec un certificat émis par sa propre autorité, qu'il ajoute aux
   racines de confiance de la machine quand l'installation l'a choisi (voir [Sécurité](#sécurité)) ;
 - garde ses réglages dans `settings.json`, les modèles, les téléchargements et l'utilisation dans une base
   SQLite, et son journal dans `logs\service.log` ;

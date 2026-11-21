@@ -461,7 +461,7 @@ let licensesSequence = 0;
 // Le rôle et la licence de chaque texte du dossier des licences, par son fichier.
 const programTexts = {
   'gulliver.txt': ['gulliver', 'Boost Software License 1.0'], 'dlib.txt': ['dlib', 'Boost Software License 1.0'],
-  'mbedtls.txt': ['mbedtls', 'Apache License 2.0 or GPL 2.0 or later'], 'cpp-httplib.txt': ['httplib', 'MIT License'],
+  'cpp-httplib.txt': ['httplib', 'MIT License'],
   'sqlite.txt': ['sqlite', null]
 };
 

@@ -789,14 +789,14 @@ paths = {
     "/gulliver/v1/licenses": {"get": {
         "tags": ["Service"], "summary": "Textes des licences de l'installation",
         "description": "Les textes du dossier des licences des programmes, que remplit l'installateur : ceux des "
-                       "composants des programmes (Gulliver, dlib, Mbed TLS, cpp-httplib, zlib, SQLite) et des "
+                       "composants des programmes (Gulliver, dlib, cpp-httplib, zlib, SQLite) et des "
                        "environnements d'exécution du moteur. La liste est vide sans ce dossier, comme dans un "
                        "dossier de build. Les composants de l'application web sont listés par "
                        "/vendor/components.json.",
         "responses": {"200": reply("Les textes, par les noms de leurs fichiers", {"type": "array", "items": {
             "type": "object", "properties": {
-                "file": {"type": "string", "example": "mbedtls.txt"},
-                "name": {"type": "string", "example": "Mbed TLS"}, "size": {"type": "integer"},
+                "file": {"type": "string", "example": "cpp-httplib.txt"},
+                "name": {"type": "string", "example": "cpp-httplib"}, "size": {"type": "integer"},
                 "version": {"type": "string", "description": "La version avec laquelle le service a été construit, "
                             "quand il la connaît."}}}})}}},
     "/gulliver/v1/licenses/{file}": {"get": {

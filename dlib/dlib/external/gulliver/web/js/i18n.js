@@ -309,7 +309,6 @@ const texts = {
     component_swagger: 'Affiche la documentation interactive de l\'interface',
     program_gulliver: 'Le service et cette interface',
     program_dlib: 'Moteur d\'inférence et bibliothèque des modèles',
-    program_mbedtls: 'Chiffrement du serveur HTTPS local, et empreintes',
     program_httplib: 'Serveur web local et téléchargements',
     program_sqlite: 'Base de données du service',
     program_runtime: 'Environnement d\'exécution d\'un moteur',

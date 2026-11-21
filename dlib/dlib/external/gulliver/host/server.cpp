@@ -23,7 +23,6 @@
 
 
 #include <httplib.h>
-#include <mbedtls/build_info.h>
 #include <sqlite3.h>
 #include <zlib.h>
 
@@ -582,14 +581,8 @@ namespace gulliver
         */
         bool client_left(const httplib::Request& req)
         {
-            if (req.is_connection_closed()) return true;
-#if defined(CPPHTTPLIB_MBEDTLS_SUPPORT)
-            auto session = static_cast<httplib::tls::impl::MbedTlsSession*>(const_cast<void*>(req.ssl));
-            return session && session->sock != INVALID_SOCKET
-                && httplib::tls::is_peer_closed(session, session->sock);
-#else
-            return false;
-#endif
+            // Le serveur reçoit du HTTP en clair du portier TLS (tls_gate.h) : sa prise suffit.
+            return req.is_connection_closed();
         }
 
         /*
@@ -1544,7 +1537,6 @@ namespace gulliver
         const license_component license_components[] = {
             {"gulliver.txt", "Gulliver", GULLIVER_VERSION},
             {"dlib.txt", "dlib", ""},
-            {"mbedtls.txt", "Mbed TLS", MBEDTLS_VERSION_STRING},
             {"cpp-httplib.txt", "cpp-httplib", CPPHTTPLIB_VERSION},
             {"zlib.txt", "zlib", ZLIB_VERSION},
             {"sqlite.txt", "SQLite", SQLITE_VERSION}
