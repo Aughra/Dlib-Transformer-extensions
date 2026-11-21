@@ -1,3 +1,3 @@
 {
-  "cmake.sourceDirectory": "/Users/barbidou/dev/Dlib-Transformer-extensions/dlib"
+  "cmake.sourceDirectory": "${workspaceFolder}/dlib"
 }

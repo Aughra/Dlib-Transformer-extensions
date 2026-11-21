@@ -169,7 +169,7 @@ BENCH_SIZES="512" bash dlib/dlib/external/gulliver/tools/bench_macos.sh 1   # un
 
 Le tableau (machine, version de Gulliver, mode économie, charge, puis lecture et écriture de chaque modèle) va dans `build/bench/<modèle du Mac>-<date>.md`. Les modèles mesurés : ceux du portage présents dans `build/models` et `build/gulliver-home/models`, et tout `.gguf` de `build/bench-models/`.
 
-Les tableaux de référence sont gardés dans le dépôt, sous `docs/mesures/` : le M2 et le Mac mini M5 Pro au 2026-11-19 (Gulliver 6.3.0), et leur comparaison ([2026-11-19-m2-contre-mac-mini.md](mesures/2026-11-19-m2-contre-mac-mini.md)). Pour mesurer le M2 depuis le Mac mini : `ssh barbidou@192.168.1.12`, dépôt `~/dev/Dlib-Transformer-extensions`, même commit, puis rapatrier `build/bench/*.md` par `scp`.
+Les tableaux de référence sont gardés dans le dépôt, sous `docs/mesures/` : le M2 et le Mac mini M5 Pro au 2026-11-19 (Gulliver 6.3.0), et leur comparaison ([2026-11-19-m2-contre-mac-mini.md](mesures/2026-11-19-m2-contre-mac-mini.md)). Pour mesurer le M2 depuis le Mac mini : `ssh m2`, dépôt `~/dev/Dlib-Transformer-extensions`, même commit, puis rapatrier `build/bench/*.md` par `scp`.
 
 ### Vérifier la page web
 

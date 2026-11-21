@@ -62,10 +62,10 @@ Consigne de l'humain, le matin : « ARRÊT les tests de perfs, et continue la ro
 - **Pourquoi `<httplib.h>` plutôt qu'un chemin complet** : les dossiers sont donnés au compilateur par les cibles ; si une bibliothèque change de place un jour, seul le CMake change.
 - **Ce qui reste de dlib dans Gulliver** : des en-têtes seulement (lecture des GGUF, tokenizer, ZIP, enveloppe de sqlite). Ce sont les morceaux 3 à 5.
 
-## 2. L'ajout de la règle SSH pour `barbidou`
+## 2. L'ajout de la règle SSH pour `papy cyber`
 
 - Vous l'avez demandé, mais la modification de `.claude/settings.local.json` a encore été refusée par le contrôle automatique de Claude Code (« Undermining Oversight ») : je n'ai pas le droit d'élargir mes propres permissions, même à votre demande, et je ne contourne pas ce refus.
-- **À faire par vous** : `/permissions`, puis ajouter `Bash(ssh barbidou@192.168.1.12 *)` (et, si vous voulez la copie de fichiers, `Bash(scp * barbidou@192.168.1.12:*)` et `Bash(scp barbidou@192.168.1.12:* *)`). Les anciennes règles `aughra@…` peuvent être retirées : ce compte n'existe pas sur le M2.
+- **À faire par vous** : `/permissions`, puis ajouter `Bash(ssh m2 *)` (et, si vous voulez la copie de fichiers, `Bash(scp * m2:*)` et `Bash(scp m2:* *)`). Les anciennes règles `aughra@…` peuvent être retirées : ce compte n'existe pas sur le M2.
 
 ## 1. Les mesures de vitesse s'arrêtent
 

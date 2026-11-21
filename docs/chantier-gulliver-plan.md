@@ -39,7 +39,7 @@ navigateur**. Conséquences que l'utilisateur veut supprimer :
 
 **But** : ajouter au **service C++** un stockage **par profil** (un simple nom, **sans mot
 de passe** — usage perso sur un seul Mac) qui garde tout. La page lit et écrit alors côté
-service. Un profil « barbidou » retrouve ses discussions, projets et documents indexés
+service. Un profil « papy cyber » retrouve ses discussions, projets et documents indexés
 depuis n'importe quel navigateur, **sans rien exporter**.
 
 **Vrai cas d'usage** : assistant cybersécurité local confidentiel — les documents client ne
@@ -366,11 +366,11 @@ rtf/html) et le décodage/redimensionnement des images restent **au navigateur**
 ## Vérification de bout en bout (sur le Mac)
 
 1. Lancer le service, ouvrir `https://localhost:<port>` dans Safari.
-2. Créer le profil « barbidou », une discussion, poser une question.
+2. Créer le profil « papy cyber », une discussion, poser une question.
 3. Joindre un document à un projet, l'indexer, vérifier les extraits.
-4. Ouvrir dans **Chrome**, choisir « barbidou » → retrouver tout (RAG **sans réindexation**).
-5. 2ᵉ profil « test » → app vide ; revenir à « barbidou » → tout est là.
-6. Depuis le téléphone (Wi-Fi) : choisir « barbidou » → mêmes données (accès ouvert).
+4. Ouvrir dans **Chrome**, choisir « papy cyber » → retrouver tout (RAG **sans réindexation**).
+5. 2ᵉ profil « test » → app vide ; revenir à « papy cyber » → tout est là.
+6. Depuis le téléphone (Wi-Fi) : choisir « papy cyber » → mêmes données (accès ouvert).
 7. (Bloc B) Changer le moteur de RAG, vérifier que les extraits changent, que « mots seuls »
    marche sans modèle d'embedding.
 

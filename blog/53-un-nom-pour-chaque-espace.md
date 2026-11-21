@@ -10,7 +10,7 @@ Jusqu'ici, tout ce que l'application gardait — les discussions, les projets, l
 
 Le remède : déménager tout ça dans le **service**, le programme qui tourne sur le Mac. Le service, lui, est unique ; il sert tous les navigateurs. S'il garde les données, alors Safari, Chrome, le téléphone voient la même chose.
 
-Restait une question toute bête : s'il garde les données de **qui** ? Il n'y a pas de compte, pas de mot de passe. La réponse tient en un mot : un **profil**, qui n'est qu'un nom. On en choisit un au démarrage — « barbidou », par exemple — et le service range ses affaires sous ce nom. On peut en avoir plusieurs, comme plusieurs cahiers sur une étagère, chacun étiqueté. Aucun mot de passe : c'est un usage personnel, sur un Mac à soi, derrière un Wi-Fi à soi.
+Restait une question toute bête : s'il garde les données de **qui** ? Il n'y a pas de compte, pas de mot de passe. La réponse tient en un mot : un **profil**, qui n'est qu'un nom. On en choisit un au démarrage — « papy cyber », par exemple — et le service range ses affaires sous ce nom. On peut en avoir plusieurs, comme plusieurs cahiers sur une étagère, chacun étiqueté. Aucun mot de passe : c'est un usage personnel, sur un Mac à soi, derrière un Wi-Fi à soi.
 
 ## Ce que le service a appris à garder
 

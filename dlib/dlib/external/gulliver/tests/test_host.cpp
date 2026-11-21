@@ -417,7 +417,7 @@ int main(int argc, char** argv)
 
         gulliver::profile a;
         a.id = gulliver::random_hex(12);
-        a.name = "barbidou";
+        a.name = "papy-cyber";
         a.created = 1000;
         a.last_used = 1000;
         db.put_profile(a);
@@ -431,20 +431,20 @@ int main(int argc, char** argv)
 
         auto all = db.profiles();
         check(all.size() == 2, "two profiles are listed");
-        // Le plus récemment utilisé d'abord : essai (2000) avant barbidou (1000).
-        check(all[0].name == "essai" && all[1].name == "barbidou", "profiles are listed most recently used first");
+        // Le plus récemment utilisé d'abord : essai (2000) avant papy-cyber (1000).
+        check(all[0].name == "essai" && all[1].name == "papy-cyber", "profiles are listed most recently used first");
 
         gulliver::profile got;
-        check(db.find_profile(a.id, got) && got.name == "barbidou" && got.created == 1000,
+        check(db.find_profile(a.id, got) && got.name == "papy-cyber" && got.created == 1000,
             "a profile is found by its id");
         check(db.find_profile_by_name("essai", got) && got.id == b.id, "a profile is found by its name");
         check(!db.find_profile("absent", got) && !db.find_profile_by_name("absent", got),
             "an absent profile is not found, by id or by name");
 
         // Renommer : même id, nouveau nom.
-        a.name = "barbidou-pro";
+        a.name = "papy-cyber-pro";
         db.put_profile(a);
-        check(db.find_profile(a.id, got) && got.name == "barbidou-pro", "a profile keeps its id when renamed");
+        check(db.find_profile(a.id, got) && got.name == "papy-cyber-pro", "a profile keeps its id when renamed");
 
         // Noter l'usage change l'ordre de la liste.
         db.touch_profile(a.id, 3000);
