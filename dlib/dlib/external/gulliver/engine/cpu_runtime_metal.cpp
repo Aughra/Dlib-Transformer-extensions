@@ -19,6 +19,9 @@
 #include <sstream>
 #include <string>
 #include <stdexcept>
+#include <unordered_map>
+
+#include <sys/sysctl.h>
 
 #include "../common/engine_api.h"
 #include "metal_device.h"
@@ -85,6 +88,14 @@ namespace gulliver
         metal_buffer xh;
         // Les produits des prompts en demi-précision ; false quand le contrôle ne passe qu'en floats (gpu_ready()).
         bool half_prompts = true;
+        /* Les poids développés en demi-précision gardés d'une passe à l'autre (essai du chantier Vitesse, 2026-11-21) :
+           développer chaque matrice à chaque passe coûte, pour un 4B, environ 17 Go de mémoire lus et écrits par passe.
+           Une matrice développée une fois est reprise aux passes suivantes, tant que half_kept ne dépasse pas
+           half_limit : un quart de la mémoire du Mac (16 Go sur le Mac mini, de quoi garder un 8B), ou
+           GULLIVER_GPU_HALF_WEIGHTS_MB pour les mesures (0 coupe).  Mesuré sur le Mac mini (Qwen3-VL 4B, prompt de
+           512 tokens, mesures alternées) : 2 060-2 159 -> 2 613-2 622 tokens/s ; perplexité identique. */
+        std::unordered_map<size_t, metal_buffer> half_weights;
+        size_t half_kept = 0, half_limit = 0;
         int turn = 0;
 
         size_t weight(const weight_matrix& W) const
@@ -761,6 +772,14 @@ namespace gulliver
             g.expanded[0] = need(dev, largest * sizeof(float));
             g.expanded[1] = need(dev, largest * sizeof(float));
             g.expanded_floats = largest;
+            if (const char* mb = std::getenv("GULLIVER_GPU_HALF_WEIGHTS_MB"))
+                g.half_limit = static_cast<size_t>(std::atoll(mb)) << 20;
+            else
+            {
+                uint64_t memory = 0;
+                size_t length = sizeof memory;
+                if (sysctlbyname("hw.memsize", &memory, &length, nullptr, 0) == 0) g.half_limit = memory / 4;
+            }
             note_gpu();
         }
 
@@ -917,10 +936,26 @@ namespace gulliver
             const unsigned R = static_cast<unsigned>((T + 31) / 32 * 32);
             if (g.half_prompts)
             {
-                c->dequantize_half(M.type, at(g.weights, g.weight(M)), M.rows, M.cols, e, M.cols);
+                // La matrice développée gardée d'une passe à l'autre quand la limite le permet, sinon développée ici.
+                const metal_buffer* w = &e;
+                const size_t key = g.weight(M), bytes = static_cast<size_t>(M.rows) * static_cast<size_t>(M.cols) * 2;
+                auto kept = g.half_weights.find(key);
+                if (kept != g.half_weights.end())
+                    w = &kept->second;
+                else if (g.half_kept + bytes <= g.half_limit)
+                {
+                    metal_buffer b = dev.allocate(bytes);
+                    if (b.valid())
+                    {
+                        c->dequantize_half(M.type, at(g.weights, g.weight(M)), M.rows, M.cols, b, M.cols);
+                        g.half_kept += bytes;
+                        w = &g.half_weights.emplace(key, std::move(b)).first->second;
+                    }
+                }
+                if (w == &e) c->dequantize_half(M.type, at(g.weights, g.weight(M)), M.rows, M.cols, e, M.cols);
                 c->to_half(x, R, static_cast<unsigned>(M.cols), static_cast<unsigned>(x_stride), g.xh,
                     static_cast<unsigned>(M.cols));
-                c->gemm_half(g.xh, R, M.cols, M.cols, e, M.rows, M.cols, y, y_stride, alpha, beta);
+                c->gemm_half(g.xh, R, M.cols, M.cols, *w, M.rows, M.cols, y, y_stride, alpha, beta);
             }
             else
             {

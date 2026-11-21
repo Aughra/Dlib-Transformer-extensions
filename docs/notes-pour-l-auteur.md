@@ -1163,6 +1163,14 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (mesures alternées dans la même séance, Mac mini M5 Pro, charge 1,5) : **7 s et 7 s**, au lieu de 779 et 780, soit **environ 110 fois** plus vite. Le pic de mémoire ne change pas (17 Go pour ce petit essai).
 - **Mac ou Windows** : sous Windows, la même option trouverait une BLAS installée (OpenBLAS, MKL) ; non vérifié.
 
+### Changement 33 : les poids des prompts gardés en demi-précision d'une passe à l'autre (Gulliver 6.17.0)
+
+- **Avant** : chaque produit d'une passe de prompt sur le GPU développait sa matrice de poids (Q4_K, Q6_K…) en demi-précision dans un tampon de travail (`dequantize_half`), puis la donnait à `MPSMatrixMultiplication` ; à la passe suivante, tout recommençait. Pour un 4B, environ 17 Go de mémoire lus et écrits par passe, rien que pour ces développements. Qwen3-VL 4B Thinking Q4_K_M, prompt de 512 tokens, Mac mini M5 Pro : **2 060 à 2 159 tokens/s**.
+- **Changement** (`engine/cpu_runtime_metal.cpp`, `gpu_state::half_weights`) : une matrice développée une fois est gardée dans un tampon à elle et reprise aux passes suivantes, tant que l'ensemble reste sous un quart de la mémoire du Mac (16 Go sur le Mac mini, de quoi garder un 8B ; `GULLIVER_GPU_HALF_WEIGHTS_MB` force une autre limite pour les mesures). Au-delà, les matrices restantes sont développées comme avant. **Exactitude** : les poids gardés sont ceux que la passe aurait développés ; perplexité identique sur 8 morceaux de 512 tokens (15,3646 avec et sans).
+- **Après** (mesures alternées, charge 1,1) : **2 613 à 2 622 tokens/s** (+21 à +27 %) ; avec le réglage par défaut, 2 593 à 2 708. À 4 096 tokens, +1 % seulement : le développement ne coûte qu'une fois par passe, et l'attention domine. L'écriture ne change pas (70,0 à 70,5).
+- **Trouvé en chemin** : une sonde (`macos/metal-sonde/nax_probe.mm`) montre que `MPSMatrixMultiplication` en demi-précision passe déjà par les accélérateurs neuronaux du M5 (31,6 Tflop/s sur 512 × 2 560 × 9 728, même écart au calcul en double qu'un noyau écrit avec `MetalPerformancePrimitives`).
+- **Mac ou Windows** : propre au Mac (chemin Metal) ; l'idée vaudrait pour tout moteur qui développe ses poids avant chaque produit.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -1190,6 +1198,7 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 | Gemma 4 E2B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 20,9 à 23,8 tokens/s ; lecture de 512 tokens 463 à 471 tokens/s avec le changement 24 (143 à 156 avant), 671 à 685 sur le GPU (233 à 237 avant) ; de 4 096 tokens 371 à 383 sur le processeur, 241 à 249 sur le GPU (changements 16 et 24) |
 | LFM2.5-8B-A1B Q4_K_M (mélange d'experts, fork seulement), processeur | non lu par le moteur | écriture 34,2 à 34,3 tokens/s ; lecture de 512 tokens 141 à 149 tokens/s (changement 17) ; le 1.2B en Q8_0 : 35,3 à 36,1 et 253 à 281, et sur le GPU 40,4 et 433 à 462 (changement 19) |
 | Gemma 3 4B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 16,3 à 17,2 tokens/s ; lecture de 512 tokens 88 à 92 tokens/s (changement 18) ; le 1B : 25,0 à 28,2 et 396 à 436 |
+| Mac mini M5 Pro, Qwen3-VL 4B Thinking, lecture de 512 tokens sur le GPU | pas mesuré | 2 593 à 2 708 tokens/s avec le changement 33 (2 060 à 2 159 avant) |
 | Mac mini M5 Pro, affinage LoRA de Qwen3-0.6B, 2 pas de 4 fenêtres de 256 tokens (atelier) | 779 à 780 s (boucles portables de dlib) | 7 s avec Accelerate (changement 32) |
 
 Le service, avec son modèle par défaut Qwen3-VL 4B Thinking, répond à une question courte à 14 tokens/s (mesuré avant le changement 4). En génération, les autres formats de poids (Q8_0, Q5_K…) passent encore par les noyaux entiers portables sur le Mac ; en prompt, depuis le changement 4, tous les formats passent par Accelerate, et l'attention de l'encodeur d'images aussi depuis le changement 5.

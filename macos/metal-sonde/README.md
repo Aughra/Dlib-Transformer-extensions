@@ -55,3 +55,21 @@ GPU de 10 cœurs, `lowpowermode 0`, charge 3 à 4. Meilleurs noyaux : `mv3_q4_K`
 - Aller-retour avec le GPU : 186 à 188 µs (médiane).
 - Exactitude du GPU : écart de 2,8e-8 au plus, rapporté à la somme des |w x|. Le processeur, qui arrondit les activations en 8 bits, est à 8,8e-4.
 - Q4_K seul : 38,6 Go/s avec `mv_q4_K`, 26,9 avec `mv2_q4_K` (lectures de 4 octets), 52,9 avec `mv3_q4_K` (16 octets alignés par thread, 8 threads par bloc). Q6_K seul : 57 à 60 Go/s avec `mv_q6_K`.
+
+## Les accélérateurs neuronaux du M5 (2026-11-21)
+
+`nax_probe.mm` et `nax_kernels.metal` comparent un même produit de matrices en demi-précision, C = A · Bᵀ (A : M × K, B : N × K comme des poids), par MPS (`MPSMatrixMultiplication`, ce que Gulliver utilise pour les prompts), par un noyau `simdgroup_matrix` et par un noyau sur les accélérateurs du M5 (`MetalPerformancePrimitives`, `matmul2d` en fragments 16 × 16, disposition reprise de MLX). Les deux noyaux sont naïfs (lectures directes dans la mémoire du GPU, sans mémoire de threadgroup).
+
+```sh
+clang++ -std=c++17 -O2 -fobjc-arc -o build/nax-sonde macos/metal-sonde/nax_probe.mm \
+  -framework Metal -framework MetalPerformanceShaders -framework Foundation
+build/nax-sonde macos/metal-sonde/nax_kernels.metal 512 9728 2560 20
+```
+
+| Mac mini M5 Pro, 512 × 2 560 × 9 728 (charge 1,3) | Temps | Débit | Écart au calcul en double |
+|---|---|---|---|
+| MPS | 0,806 à 0,815 ms | 31,6 Tflop/s | 2,69e-6 |
+| Noyau naïf sur les accélérateurs | 1,79 à 1,82 ms | 14,2 Tflop/s | 2,69e-6 |
+| Noyau naïf `simdgroup_matrix` | 66 à 68 ms | 0,4 Tflop/s | 5,24e-6 |
+
+MPS et le noyau des accélérateurs donnent exactement le même écart : **MPS passe déjà par les accélérateurs du M5**. Les produits des prompts de Gulliver y sont donc déjà ; l'écart avec MLX en lecture est ailleurs (voir `docs/mesures/tests-de-vitesse.md`).

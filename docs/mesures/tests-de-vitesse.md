@@ -128,6 +128,11 @@ Aller vite ne sert à rien si le calcul est faux. On mesure la **perplexité** :
 - **Gulliver, llama.cpp et l'Albireo d'origine calculent la même chose** : sur un même fichier, leurs écarts (0,35 % au plus) sont au moins vingt fois plus petits que l'incertitude de la mesure (environ ±1, ±0,7 pour le mélange d'experts).
 - **Les fichiers de MLX ne sont pas toujours meilleurs.** Sur Qwen3-4B, le sien prévoit mieux le texte que le Q4_K_M (17,17 contre 17,71, la référence 8 bits étant à 16,51) ; sur les autres, il fait moins bien, jusqu'à +9 % sur le modèle du service. Une partie de la vitesse de MLX se paie donc en justesse sur ces modèles-là. Une correction de ce document : sa première version, écrite avec le seul Qwen3-4B, disait le format de MLX « à la fois plus petit et plus juste ». Ce n'est vrai que pour ce modèle.
 
+## Depuis ces mesures
+
+- **Gulliver 6.17.0** garde les poids développés en demi-précision d'une passe de lecture à l'autre, au lieu de les redévelopper à chaque passe : la lecture d'une question de 512 tokens passe de 2 060-2 159 à **2 593-2 708 jetons/s** sur le modèle du service, **devant llama.cpp** (2 590), encore derrière MLX (2 930). À 4 096 tokens, le gain est de 1 % : l'attention domine (V1).
+- Une sonde a montré que les produits de matrices de Gulliver (par MPS) passent **déjà** par les accélérateurs neuronaux du M5 (31,6 Tflop/s) : l'avance de MLX en lecture tient donc surtout à son attention et à ce qui entoure les produits, pas aux produits eux-mêmes.
+
 ## Pour que Gulliver soit le plus rapide
 
 Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (deux pistes au même but sont essayées toutes les deux, mesurées, et la meilleure est gardée) :

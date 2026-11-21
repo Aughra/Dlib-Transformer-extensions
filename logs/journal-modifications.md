@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — Gulliver 6.17.0 : les poids des prompts gardés en demi-précision ; sonde des accélérateurs du M5
+
+- **Quoi** : `cpu_runtime_metal.cpp` : `gpu_state::half_weights` garde chaque matrice développée en demi-précision pour les produits des prompts (`gemm_half`), sous un quart de la mémoire du Mac (`hw.memsize / 4`, ou `GULLIVER_GPU_HALF_WEIGHTS_MB`). Sonde `macos/metal-sonde/nax_probe.mm` + `nax_kernels.metal` (MPS, `simdgroup_matrix`, `MetalPerformancePrimitives`).
+- **Fichiers** : `gulliver/engine/cpu_runtime_metal.cpp`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `macos/metal-sonde/{nax_probe.mm,nax_kernels.metal,README.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,mesures/tests-de-vitesse.md}`, `logs/{reprise.md,sieste-2026-11-21.md}`, ce journal.
+- **Pourquoi** : chantier « Vitesse » ; la sonde a montré que MPS passe déjà par les accélérateurs du M5 (31,6 Tflop/s ; noyau naïf MPP 14,2 ; même écart 2,69e-6), d'où la recherche de l'écart ailleurs : `dequantize_half` avant chaque `gemm_half`, à chaque passe.
+- **Étapes** : mesures alternées, Qwen3-VL 4B Thinking, 512 tokens : 2 159 / 2 060 → 2 622 / 2 613 ; 4 096 : 1 454 / 1 458 → 1 471 / 1 469 ; par défaut : 2 708 / 2 593 ; écriture 70,0-70,5 inchangée. Perplexité 15,3646 avec et sans. `test_metal` : all checks passed ; `test_macos.sh` (port 18473) : 0 étape en échec.
+
 ## 2026-11-21 — V1 commencé : lecture des attentions de Gulliver, MLX et llama.cpp ; MLX utilise les accélérateurs du M5
 
 - **Quoi** : lecture de `attention_mtile` (Gulliver), de `steel_attention` et `steel_attention_nax` (MLX 0.32.4, source téléchargée pour lecture dans le dossier temporaire) et du dossier `ggml-metal` de llama.cpp. Rubrique corrigée (l'attention des prompts de Gulliver est déjà fusionnée en demi-précision : l'écart tient à son organisation) ; feuille de route : V1 précisé, V5 à faire en premier.
