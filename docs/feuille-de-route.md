@@ -112,7 +112,7 @@ Le plan détaillé est [docs/mac-mini-premier-jour.md](mac-mini-premier-jour.md)
 
 Repris de la liste « À faire » de la reprise et des suites du bloc C :
 
-**Mesures de vitesse arrêtées (décision de l'humain, 2026-11-20 : « arrêt les tests de perfs, et continue la roadmap »)** : la comparaison avec Ollama et MLX, le découpage de l'attention des longues questions, plusieurs tokens par pas et les mesures de la recherche documentaire sont mis de côté. On passe au morceau 2 du fil rouge, puis à la partie 3. Gemma 4 26B-A4B sur le GPU reste ici, à reprendre plus tard.
+**Mesures de vitesse reprises (décision de l'humain, 2026-11-21 : « je veux un Gulliver le plus rapide possible maintenant que nous sommes sur le mini »)** : voir le chantier « Vitesse » ci-dessous, prioritaire. Avant, le 2026-11-20 : **mesures de vitesse arrêtées** (« arrêt les tests de perfs, et continue la roadmap ») : la comparaison avec Ollama et MLX, le découpage de l'attention des longues questions, plusieurs tokens par pas et les mesures de la recherche documentaire sont mis de côté. On passe au morceau 2 du fil rouge, puis à la partie 3. Gemma 4 26B-A4B sur le GPU reste ici, à reprendre plus tard.
 
 
 - Gemma 4 26B-A4B sur le GPU (mesure de la partie 1 : 126-129 tokens/s en lecture, 27 en écriture, sur le processeur seul) ; Gemma 4 E4B, 12B, 31B jamais essayés.
@@ -120,6 +120,19 @@ Repris de la liste « À faire » de la reprise et des suites du bloc C :
 - Mesures de la recherche documentaire en C++ contre l'ancienne en JS ; reranker neuronal si le reranker par mots ne suffit pas.
 - Plusieurs tokens par pas (brouillons), repris de l'original, s'il reste du temps.
 - **Mesure faite pour llama.cpp (2026-11-20, `docs/mesures/2026-11-20-gulliver-contre-llama-cpp.md`) : llama.cpp lit les prompts environ 3 fois plus vite et écrit 1,3 à 1,8 fois plus vite ; Ollama et MLX à installer si l'humain le veut.** Comparer Gulliver à d'autres moteurs locaux sur les longues questions (demande de l'humain, 2026-11-19) : llama.cpp (déjà installé), Ollama, et éventuellement un moteur MLX, sur le même modèle et le même fichier GGUF, prompts de 512 à 16 384 tokens, lecture et écriture, en alternance. Critère : un tableau « temps avant le premier mot » par moteur, dans les notes pour l'auteur et le tableau des différences. Raison : un retour d'usage lu par l'humain (Ollama abandonné parce que les longues requêtes « prenaient une éternité »).
+
+### Chantier « Vitesse » — le Gulliver le plus rapide (prioritaire depuis le 2026-11-21)
+
+But : devancer llama.cpp et MLX sur le Mac mini, en lecture et en écriture, justesse identique. Écarts et explications : [mesures/tests-de-vitesse.md](mesures/tests-de-vitesse.md) ; mesure hebdomadaire (dimanche 4 h) dans le carnet. Dans l'ordre du gain attendu :
+
+| N° | Chantier | Écart à combler (21 novembre) |
+|---|---|---|
+| V1 | L'attention des questions en demi-précision, d'un seul tenant (« fusionnée »), sur le GPU ; lire celle de MLX (`scaled_dot_product_attention`) et de llama.cpp | lecture ×1,2 (512 tokens) à ×2,2 (16 384) |
+| V2 | L'étape d'écriture mesurée noyau par noyau (capture Metal) : Gulliver à 69 % du plafond de la mémoire, MLX à 93 % ; lire ses noyaux quantifiés (`qmv`) et sa façon d'enchaîner les commandes | écriture ×1,3 à ×1,6 |
+| V3 | Les produits groupés des mélanges d'experts (`mm_id`) ; le contrôle du GPU qui renvoie les mélanges d'experts au processeur en demi-précision | lecture ×2,5, écriture ×1,7 |
+| V4 | Un format de poids plus compact et plus juste, comme le 4 bits de MLX (Gulliver le lirait, sans embarquer MLX) | qualité : 17,16 contre 17,71 de perplexité sur Qwen3-4B |
+
+Règles : chaque changement mesuré en alternance contre la version d'avant (`tools/bench_moteurs.sh`), perplexité vérifiée (`tools/justesse_moteurs.sh`), notes pour l'auteur (partie Vitesse) et tableau des différences tenus. MLX n'est pas embarqué dans Gulliver (choix de l'humain, 2026-11-21 : option B, apprendre de lui) ; le relayer par son serveur reste un essai possible, pas une solution.
 
 ---
 
