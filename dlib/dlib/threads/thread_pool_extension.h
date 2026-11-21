@@ -12,6 +12,7 @@
 #include "../member_function_pointer.h"
 #include "../bound_function_pointer.h"
 #include "threads_kernel.h"
+#include <pthread.h>
 #include "auto_mutex_extension.h"
 #include "../uintn.h"
 #include "../array.h"
@@ -475,7 +476,11 @@ namespace dlib
         signaler task_ready_signaler;
         bool we_are_destructing;
 
-        std::vector<std::thread> threads;
+        /* Des fils POSIX plutôt que std::thread (fork pour macOS, 2026-11-21) : std::thread ne
+           laisse pas choisir la taille de la pile, et celle de macOS (512 Ko) est trop petite
+           pour la passe d'un réseau dnn profond (voir thread_pool_extension.cpp). */
+        std::vector<pthread_t> threads;
+        static void* thread_starter(void* self);
 
         // restricted functions
         thread_pool_implementation(thread_pool_implementation&);        // copy constructor

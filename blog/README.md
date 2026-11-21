@@ -63,5 +63,6 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 57. [Les grands modèles à experts](57-les-grands-modeles-a-experts.md)
 58. [La demi-précision](58-la-demi-precision.md)
 59. [Quatre familles dans dlib](59-quatre-familles-dans-dlib.md)
+60. [Un modèle qui a lu le blog](60-un-modele-qui-a-lu-le-blog.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).

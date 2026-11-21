@@ -5,6 +5,7 @@
 
 #include "thread_pool_extension.h"
 #include <memory>
+#include <system_error>
 
 namespace dlib
 {
@@ -20,11 +21,41 @@ namespace dlib
         we_are_destructing(false)
     {
         tasks.resize(num_threads);
-        threads.resize(num_threads);
+        threads.reserve(num_threads);
+        /* Une pile de 16 Mo par fil (fork pour macOS, 2026-11-21), comme spawn_thread() dans
+           threads_kernel_2.cpp : macOS ne donne que 512 Ko à un fil secondaire, et la passe
+           d'entraînement de Gemma 3 4B (34 blocs) débordait dans le fil de dnn_trainer.  La
+           pile n'est que réservée : macOS ne fournit ses pages qu'à l'usage. */
+        pthread_attr_t attr;
+        if (int err = pthread_attr_init(&attr))
+            throw std::system_error(err, std::generic_category(), "thread_pool: pthread_attr_init");
+        pthread_attr_setstacksize(&attr, size_t(16) << 20);
         for (unsigned long i = 0; i < num_threads; ++i)
         {
-            threads[i] = std::thread([&](){this->thread();});
+            pthread_t id;
+            if (int err = pthread_create(&id, &attr, &thread_pool_implementation::thread_starter, this))
+            {
+                pthread_attr_destroy(&attr);
+                {
+                    auto_mutex M(m);
+                    we_are_destructing = true;
+                    task_ready_signaler.broadcast();
+                }
+                for (pthread_t t : threads) pthread_join(t, nullptr);
+                throw std::system_error(err, std::generic_category(), "thread_pool: pthread_create");
+            }
+            threads.push_back(id);
         }
+        pthread_attr_destroy(&attr);
+    }
+
+    void* thread_pool_implementation::
+    thread_starter (
+        void* self
+    )
+    {
+        static_cast<thread_pool_implementation*>(self)->thread();
+        return nullptr;
     }
 
 // ----------------------------------------------------------------------------------------
@@ -61,8 +92,8 @@ namespace dlib
         }
 
         // wait for all threads to terminate
-        for (auto& t : threads)
-            t.join();
+        for (pthread_t t : threads)
+            pthread_join(t, nullptr);
         threads.clear();
 
         // Throw any unhandled exceptions.  Since shutdown_pool() is only called in the

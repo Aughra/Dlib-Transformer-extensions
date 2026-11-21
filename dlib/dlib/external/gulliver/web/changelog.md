@@ -9,6 +9,10 @@ Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo
 - Sous chaque réponse, la ligne d'information donne désormais deux vitesses : la lecture de la question et l'écriture de la réponse, en jetons par seconde (auparavant, l'écriture seule).
 - Le carnet du portage gagne une rubrique « Tests de vitesse » : Gulliver comparé à llama.cpp et à MLX sur les mêmes modèles, en vitesse et en justesse, avec l'explication des écarts, et la dernière mesure hebdomadaire.
 
+### Atelier d'entraînement
+
+- Premier affinage d'un modèle de 4 milliards de paramètres sur le Mac : Gemma 3 4B, affiné par adaptateurs LoRA sur les 59 épisodes du blog du portage (perte sur un texte mis de côté de 4,61 à 2,28 en une lecture, 30 minutes). Les changements portent sur dlib : un tampon commun pour les dérivées des couches gelées, une part de validation pour l'étape « corpus », et des fils d'exécution de 16 Mo de pile (512 Ko par défaut sur macOS, insuffisants pour un réseau de 34 blocs).
+
 ### Performances
 
 - Nouveaux outils de mesure : `tools/bench_moteurs.sh` (vitesse de Gulliver, llama.cpp et MLX, en alternance), `tools/justesse_moteurs.sh` et `tests/perplexity_runtime` (perplexité d'un même texte, découpée comme llama-perplexity), `tools/bench_hebdo.sh` (les deux, lancés chaque dimanche par un agent launchd de l'utilisateur, `macos/bench-hebdo/`).
