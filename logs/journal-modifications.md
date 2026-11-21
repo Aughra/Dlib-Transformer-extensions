@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — Gulliver 6.19.3 : têtes de 256 dans l'attention de l'écriture (Gemma 3)
+
+- **Quoi** : `metal_kernels.metal` : instances `attention_dec_{1,2,4}_256` ; `metal_device.mm` : trois noyaux de plus, choisis pour les têtes de 256 avec 4 têtes de requête au plus.
+- **Fichiers** : `gulliver/engine/{metal_kernels.metal,metal_device.mm}`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/notes-pour-l-auteur.md`, `logs/sieste-2026-11-21.md`, ce journal.
+- **Pourquoi** : Gemma 3 restait le plus en retard sur llama.cpp (écriture +26 % à 4 096 tokens).
+- **Étapes** : `test_metal` all checks passed (il ne couvre les têtes de 256 qu'avec 8 têtes de requête : l'ancien noyau) ; Gemma 3 4B, mesures alternées : voir la sieste ; perplexité pas à pas 15,3644 contre 15,3764 ; `test_macos.sh` 0 étape en échec.
+
 ## 2026-11-21 — Gulliver 6.19.2 : une ligne par simdgroup dans les produits d'un token
 
 - **Quoi** : `metal_kernels.metal` : `#define ROWS (NT == 1 ? 1 : 4)`, `mv_select` devient un gabarit en `NT` ; `metal_device.mm` : `mv_rows_per_group(tokens)` (4 ou 16).

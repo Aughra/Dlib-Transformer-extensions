@@ -1228,6 +1228,9 @@ kernel void attention_dec(device const float* q [[buffer(0)]], device const ucha
     device const float*, device const uchar*, device const int*, device const int*, device float*, \
     constant attention_args&, device float*, uint3, uint, uint);
 ATT_DEC(1, 64) ATT_DEC(1, 128) ATT_DEC(2, 64) ATT_DEC(2, 128) ATT_DEC(4, 64) ATT_DEC(4, 128) ATT_DEC(8, 64) ATT_DEC(8, 128)
+// Têtes de 256 valeurs (Gemma 3) : 1, 2 ou 4 têtes de requête par tête de clés (la sortie du threadgroup, 4 x REP x 256
+// floats, tient en 16 Ko).
+ATT_DEC(1, 256) ATT_DEC(2, 256) ATT_DEC(4, 256)
 
 // Les tailles que prennent les modèles : têtes de requête par tête de clés et valeurs (REP) et valeurs
 // d'une tête par voie (PER = hd / 32).

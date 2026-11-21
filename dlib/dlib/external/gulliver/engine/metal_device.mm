@@ -79,7 +79,8 @@ namespace gulliver
             "attention_mtile_1_512", "attention_mtile_2_512", "attention_mtile_4_512", "attention_mtile_8_512",
             "dequant_h_q4_K", "dequant_h_q5_K", "dequant_h_q6_K", "dequant_h_q8_0", "dequant_h_q5_0", "to_half",
             "attention_dec_1_64", "attention_dec_1_128", "attention_dec_2_64", "attention_dec_2_128",
-            "attention_dec_4_64", "attention_dec_4_128", "attention_dec_8_64", "attention_dec_8_128" };
+            "attention_dec_4_64", "attention_dec_4_128", "attention_dec_8_64", "attention_dec_8_128",
+            "attention_dec_1_256", "attention_dec_2_256", "attention_dec_4_256" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -94,7 +95,7 @@ namespace gulliver
             k_short_conv, k_gelu_mul, k_add_rows, k_attention_part_512, k_attention_mtile_512 = k_attention_part_512 + 4,
             k_dequant_h_q4_K = k_attention_mtile_512 + 4, k_dequant_h_q5_K, k_dequant_h_q6_K, k_dequant_h_q8_0,
             k_dequant_h_q5_0, k_to_half, k_attention_dec,
-            k_count = k_attention_dec + 8
+            k_count = k_attention_dec + 11
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -1035,11 +1036,12 @@ namespace gulliver
         if (tokens == 0) return;
         int kernel = attention_kernel(rep, l.hd);
         if (kernel < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
-        // attention_dec (« flash-decoding ») pour les têtes de 64 et 128 valeurs ; GULLIVER_OLD_DECODE garde
-        // attention_part pour les mesures.
+        // attention_dec (« flash-decoding ») pour les têtes de 64 et 128 valeurs, et de 256 avec 4 têtes de requête au plus ;
+        // GULLIVER_OLD_DECODE garde attention_part pour les mesures.
         static const bool old_decode = std::getenv("GULLIVER_OLD_DECODE") != nullptr;
         const int r = rep == 1 ? 0 : rep == 2 ? 1 : rep == 4 ? 2 : rep == 8 ? 3 : -1;
         if (!old_decode && r >= 0 && (l.hd == 64 || l.hd == 128)) kernel = k_attention_dec + 2 * r + (l.hd == 128 ? 1 : 0);
+        else if (!old_decode && r >= 0 && r <= 2 && l.hd == 256) kernel = k_attention_dec + 8 + r;
         const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, part_len, parts, q_stride,
             table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l) };
         impl_->use(kernel);
