@@ -250,3 +250,4 @@ kernel void attention_nax(device const float* q [[buffer(0)]], device const ucha
     constant attention_args&, device float*, uint3, ushort, ushort, ushort);
 ATT_NAX(1, 64) ATT_NAX(2, 64) ATT_NAX(4, 64) ATT_NAX(8, 64)
 ATT_NAX(1, 128) ATT_NAX(2, 128) ATT_NAX(4, 128) ATT_NAX(8, 128)
+ATT_NAX(1, 256) ATT_NAX(2, 256) ATT_NAX(4, 256) ATT_NAX(8, 256)

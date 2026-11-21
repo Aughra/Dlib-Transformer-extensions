@@ -2,6 +2,18 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.20.0 — 21 novembre 2026
+
+### Performances
+
+- L'attention de la lecture sur les accélérateurs du M5 prend aussi les têtes de 256 valeurs (Gemma 3, couches à fenêtre de Gemma 4). Gemma 3 4B, Mac mini M5 Pro : lecture d'une question de 4 096 tokens de 1 670 à 2 775 tokens/s (+66 %, au niveau de llama.cpp), de 16 384 tokens de 1 102-1 116 à 2 240-2 372 ; justesse inchangée.
+
+### Outils de mesure
+
+- `GULLIVER_GPU_PROFILE=N` donne le tableau des noyaux toutes les N passes (une seule passe pour une lecture).
+
+---
+
 ## 6.19.3 — 21 novembre 2026
 
 ### Performances

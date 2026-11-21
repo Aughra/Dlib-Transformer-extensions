@@ -36,7 +36,8 @@ namespace gulliver
         // attention_nax, dans l'ordre (rep 1, 2, 4, 8) x (têtes de 64, 128 valeurs).
         const char* const nax_attention_names[] = { "attention_nax_1_64", "attention_nax_1_128", "attention_nax_2_64",
             "attention_nax_2_128", "attention_nax_4_64", "attention_nax_4_128", "attention_nax_8_64",
-            "attention_nax_8_128" };
+            "attention_nax_8_128", "attention_nax_1_256", "attention_nax_2_256", "attention_nax_4_256",
+            "attention_nax_8_256" };
         // Les simdgroups d'une tuile d'attention_nax, 16 lignes de requête chacun (GULLIVER_NAX_SG pour les essais).
         unsigned nax_simdgroups()
         {
@@ -50,6 +51,7 @@ namespace gulliver
         int nax_attention_index(unsigned rep, unsigned hd)
         {
             const int r = rep == 1 ? 0 : rep == 2 ? 1 : rep == 4 ? 2 : rep == 8 ? 3 : -1;
+            if (r >= 0 && hd == 256 && !std::getenv("GULLIVER_NO_NAX256")) return 8 + r;
             const int h = hd == 64 ? 0 : hd == 128 ? 1 : -1;
             return r < 0 || h < 0 ? -1 : 2 * r + h;
         }
@@ -225,7 +227,8 @@ namespace gulliver
         // Les noyaux vont à un encodeur de calcul, que ferme un produit de Metal Performance Shaders.
         /* GULLIVER_GPU_PROFILE : pour les mesures du chantier Vitesse, chaque noyau dans un encodeur à lui, horodaté par
            le GPU au début et à la fin (compteurs aux limites de passe) ; finish() additionne le temps par noyau et en
-           donne le tableau toutes les 64 passes, dans la sortie d'erreur.  Les encodeurs séparés ralentissent un peu le
+           donne le tableau toutes les N passes (la valeur de la variable, 64 si elle n'en est pas une), dans la sortie
+           d'erreur.  Les encodeurs séparés ralentissent un peu le
            tout : la répartition compte, pas le total. */
         static bool profiling()
         {
@@ -299,7 +302,11 @@ namespace gulliver
                 e.second += 1;
             }
             sampled.clear();
-            if (++passes < 64) return;
+            static const int period = [] {
+                const int v = std::atoi(std::getenv("GULLIVER_GPU_PROFILE"));
+                return v > 0 ? v : 64;
+            }();
+            if (++passes < period) return;
             std::vector<std::pair<double, std::string>> rows;
             double sum = 0;
             for (const auto& e : total)

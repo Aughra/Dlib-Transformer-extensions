@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — Gulliver 6.20.0 : têtes de 256 dans l'attention des prompts sur les accélérateurs (Gemma)
+
+- **Quoi** : `metal_kernels_nax.metal` : instances `attention_nax_{1,2,4,8}_256` ; `metal_device.mm` : quatre noyaux de plus, `nax_attention_index` pour les têtes de 256 (`GULLIVER_NO_NAX256` les coupe), période du profil réglable (`GULLIVER_GPU_PROFILE=N`).
+- **Fichiers** : `gulliver/engine/{metal_kernels_nax.metal,metal_device.mm}`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md}`, `logs/sieste-2026-11-21.md`, ce journal.
+- **Pourquoi** : Gemma 3 restait à +59 % derrière llama.cpp en lecture à 4 096 tokens ; le profil mettait l'ancienne attention des têtes de 256 à environ 1,1 s sur 2,46.
+- **Étapes** : mesures alternées (Gemma 3 4B) : 512 : 2 495/2 499 → 2 896/3 061 ; 4 096 : 1 677/1 670 → 2 779/2 772 ; 16 384 : 1 116/1 102 → 2 372/2 240. Perplexité 12,0855 identique (5 x 4 096). `test_metal` all checks passed ; `test_macos.sh` 0 étape en échec (Gemma 3 et 4, dont « gemma 3 long prompt on the GPU »).
+
 ## 2026-11-21 — Gulliver 6.19.3 : têtes de 256 dans l'attention de l'écriture (Gemma 3)
 
 - **Quoi** : `metal_kernels.metal` : instances `attention_dec_{1,2,4}_256` ; `metal_device.mm` : trois noyaux de plus, choisis pour les têtes de 256 avec 4 têtes de requête au plus.
