@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — Gulliver 6.18.1 : 128 lignes de requête par tuile dans attention_nax
+
+- **Quoi** : `attention_nax` lit le nombre de simdgroups du threadgroup (`simdgroups_per_threadgroup`) ; `metal_device.mm` : `nax_simdgroups()` (8 par défaut, `GULLIVER_NAX_SG` 2, 4 ou 8 pour les mesures), `tile_tokens()` = 16 x simdgroups / rep ; `NAX_BK` (positions d'un pas, 32) et boucles générales sur les fragments de positions.
+- **Fichiers** : `gulliver/engine/{metal_kernels_nax.metal,metal_device.mm}`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,mesures/tests-de-vitesse.md}`, `logs/sieste-2026-11-21.md`, ce journal.
+- **Pourquoi** : chantier « Vitesse », réglage de V1 ; détail des essais (pas de 64, double tampon, exp2 : rejetés) dans `logs/sieste-2026-11-21.md`.
+- **Étapes** : mesures alternées (voir la sieste) ; `test_metal` all checks passed ; `test_host` all checks passed ; perplexité 8,0904 (morceaux de 4 096) et 15,3646 (512), identiques.
+
 ## 2026-11-21 — Gulliver 6.18.0 : l'attention des prompts sur les accélérateurs neuronaux du M5 (V1)
 
 - **Quoi** : `engine/metal_kernels_nax.metal` (nouveau, `attention_nax<REP, HD>` pour REP 1, 2, 4, 8 et HD 64, 128 ; `matmul2d` de `MetalPerformancePrimitives`, disposition des fragments de MLX ; clés et valeurs du pas en mémoire de threadgroup en demi-précision ; softmax dans les registres), `engine/metal_kernels_nax.inc.in` et `CMakeLists.txt` (source embarqué), `metal_device.mm` (bibliothèque compilée en `MTLLanguageVersion4_0` si l'architecture est de génération 17 ou plus, 18 pour « p », et macOS 26.2 ou plus ; `GULLIVER_NO_NAX` ; `tile_tokens()` devient une méthode : 64 / rep avec les accélérateurs ; `attention_tiles()` choisit `attention_nax`), `metal_device.h` (`neural_accelerators()`, `accelerator_note()`), `cpu_runtime_metal.cpp` et `tests/test_metal.cpp` (appel de `tile_tokens`).

@@ -35,6 +35,16 @@ namespace gulliver
         const char* const nax_attention_names[] = { "attention_nax_1_64", "attention_nax_1_128", "attention_nax_2_64",
             "attention_nax_2_128", "attention_nax_4_64", "attention_nax_4_128", "attention_nax_8_64",
             "attention_nax_8_128" };
+        // Les simdgroups d'une tuile d'attention_nax, 16 lignes de requête chacun (GULLIVER_NAX_SG pour les essais).
+        unsigned nax_simdgroups()
+        {
+            static const unsigned n = [] {
+                const char* v = std::getenv("GULLIVER_NAX_SG");
+                const int k = v ? std::atoi(v) : 8;
+                return static_cast<unsigned>(k == 2 || k == 4 ? k : 8);
+            }();
+            return n;
+        }
         int nax_attention_index(unsigned rep, unsigned hd)
         {
             const int r = rep == 1 ? 0 : rep == 2 ? 1 : rep == 4 ? 2 : rep == 8 ? 3 : -1;
@@ -965,8 +975,8 @@ namespace gulliver
 
     unsigned metal_device::tile_tokens(unsigned rep, unsigned hd) const
     {
-        // attention_nax : 64 lignes de requête par tuile.
-        if (!impl_->nax.empty() && nax_attention_index(rep, hd) >= 0) return 64 / rep;
+        // attention_nax : 16 lignes de requête par simdgroup, 8 simdgroups (128 lignes) par défaut.
+        if (!impl_->nax.empty() && nax_attention_index(rep, hd) >= 0) return 16 * nax_simdgroups() / rep;
         // Comme les instances d'attention_mtile (metal_kernels.metal) : 32 lignes de requête (16 pour des têtes de 256
         // valeurs, 8 pour 512), rep par token.
         if ((rep != 1 && rep != 2 && rep != 4 && rep != 8) || (hd != 64 && hd != 128 && hd != 256 && hd != 512)) return 0;
@@ -991,8 +1001,8 @@ namespace gulliver
             impl_->bind(tiles, 4);
             impl_->args(a, 5);
             impl_->bind(ctx, 6);
-            // 4 simdgroups de 16 lignes.
-            impl_->groups(n_tiles, l.heads, 1, 128);
+            // nax_simdgroups() simdgroups de 16 lignes.
+            impl_->groups(n_tiles, l.heads, 1, 32 * nax_simdgroups());
             return;
         }
         const int base = attention_kernel(rep, l.hd);

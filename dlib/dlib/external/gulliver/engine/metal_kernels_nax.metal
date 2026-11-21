@@ -13,6 +13,11 @@
 #include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>
 using namespace metal;
 
+// Les positions d'un pas.
+#ifndef NAX_BK
+#define NAX_BK 32
+#endif
+
 struct attention_args
 {
     uint hd;
@@ -73,7 +78,7 @@ kernel void attention_nax(device const float* q [[buffer(0)]], device const ucha
     device const int* blocks [[buffer(2)]], device const int* lengths [[buffer(3)]], device const int* tiles [[buffer(4)]],
     constant attention_args& a [[buffer(5)]], device float* ctx [[buffer(6)]],
     uint3 tg [[threadgroup_position_in_grid]], ushort sg [[simdgroup_index_in_threadgroup]],
-    ushort lane [[thread_index_in_simdgroup]])
+    ushort lane [[thread_index_in_simdgroup]], ushort nsg [[simdgroups_per_threadgroup]])
 {
     constexpr uint TD = HD / 16;
     const uint kvh = tg.y;
@@ -119,14 +124,15 @@ kernel void attention_nax(device const float* q [[buffer(0)]], device const ucha
 
     // Les clés et valeurs d'un pas, chargées une fois par le threadgroup, en demi-précision (développées des 8 bits
     // une seule fois), puis lues en fragments par les 4 simdgroups.
-    threadgroup half ks[32 * HD];
-    threadgroup half vs[32 * HD];
+    constexpr uint BK = NAX_BK, NF = BK / 16;
+    threadgroup half ks[BK * HD];
+    threadgroup half vs[BK * HD];
     const uint tid = sg * 32 + lane;
 
-    for (long p0 = first; p0 < last; p0 += 32)
+    for (long p0 = first; p0 < last; p0 += BK)
     {
         // Huit valeurs consécutives par fil et par passage : 32 positions x HD valeurs, 128 fils.
-        for (uint idx = tid * 8; idx < 32 * HD; idx += 128 * 8)
+        for (uint idx = tid * 8; idx < BK * HD; idx += uint(nsg) * 32 * 8)
         {
             const uint jj = idx / HD, e = idx % HD;
             const long p = p0 + jj;
@@ -147,9 +153,10 @@ kernel void attention_nax(device const float* q [[buffer(0)]], device const ucha
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
         // S = Q K^T : 16 lignes x 32 positions (deux fragments).
-        float s[16];
-        for (uint e = 0; e < 16; ++e) s[e] = 0.0f;
+        float s[NF * 8];
+        for (uint e = 0; e < NF * 8; ++e) s[e] = 0.0f;
         for (uint d = 0; d < TD; ++d)
+        for (uint f2 = 0; f2 < NF; f2 += 2)
         {
             auto ct_a = op_qk.template get_left_input_cooperative_tensor<half, half, float>();
             auto ct_b = op_qk.template get_right_input_cooperative_tensor<half, half, float>();
@@ -159,19 +166,19 @@ kernel void attention_nax(device const float* q [[buffer(0)]], device const ucha
             for (uint f = 0; f < 2; ++f)
                 for (uint k = 0; k < 2; ++k)
                 {
-                    const half4 v = *(threadgroup const half4*)(ks + (f * 16 + c.y + k * 8) * HD + d * 16 + c.x);
+                    const half4 v = *(threadgroup const half4*)(ks + ((f2 + f) * 16 + c.y + k * 8) * HD + d * 16 + c.x);
                     for (uint j = 0; j < 4; ++j) ct_b[f * 8 + k * 4 + j] = v[j];
                 }
-            for (uint e = 0; e < 16; ++e) ct_c[e] = s[e];
+            for (uint e = 0; e < 16; ++e) ct_c[e] = s[f2 * 8 + e];
             op_qk.run(ct_a, ct_b, ct_c);
-            for (uint e = 0; e < 16; ++e) s[e] = ct_c[e];
+            for (uint e = 0; e < 16; ++e) s[f2 * 8 + e] = ct_c[e];
         }
 
         // Le softmax en ligne, ligne par ligne (k), les scores restant dans les registres.
         for (uint k = 0; k < 2; ++k)
         {
             float mx = -INFINITY;
-            for (uint f = 0; f < 2; ++f)
+            for (uint f = 0; f < NF; ++f)
                 for (uint j = 0; j < 4; ++j)
                 {
                     const uint idx = f * 8 + k * 4 + j;
@@ -184,7 +191,7 @@ kernel void attention_nax(device const float* q [[buffer(0)]], device const ucha
             const float mn = max(m[k], mx);
             const float shrink = mn == -INFINITY ? 1.0f : exp(m[k] - mn);
             float sum = 0.0f;
-            for (uint f = 0; f < 2; ++f)
+            for (uint f = 0; f < NF; ++f)
                 for (uint j = 0; j < 4; ++j)
                 {
                     const uint idx = f * 8 + k * 4 + j;
@@ -200,7 +207,7 @@ kernel void attention_nax(device const float* q [[buffer(0)]], device const ucha
 
         // O += P V : deux fragments de dimensions à la fois, les deux fragments de positions l'un après l'autre.
         for (uint dp = 0; dp < TD; dp += 2)
-            for (uint f = 0; f < 2; ++f)
+            for (uint f = 0; f < NF; ++f)
             {
                 auto ct_a = op_pv.template get_left_input_cooperative_tensor<half, half, float>();
                 auto ct_b = op_pv.template get_right_input_cooperative_tensor<half, half, float>();
@@ -240,6 +247,6 @@ kernel void attention_nax(device const float* q [[buffer(0)]], device const ucha
 
 #define ATT_NAX(R, H) template [[host_name("attention_nax_" #R "_" #H)]] kernel void attention_nax<R, H>( \
     device const float*, device const uchar*, device const int*, device const int*, device const int*, \
-    constant attention_args&, device float*, uint3, ushort, ushort);
+    constant attention_args&, device float*, uint3, ushort, ushort, ushort);
 ATT_NAX(1, 64) ATT_NAX(2, 64) ATT_NAX(4, 64) ATT_NAX(8, 64)
 ATT_NAX(1, 128) ATT_NAX(2, 128) ATT_NAX(4, 128) ATT_NAX(8, 128)
