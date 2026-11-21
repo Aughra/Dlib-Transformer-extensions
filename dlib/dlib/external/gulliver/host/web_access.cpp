@@ -24,6 +24,8 @@
 #include "../common/version.h"
 #include "crypto.h"
 #include "http_fetch.h"
+#include "tls_client.h"
+#include "certificates.h"
 
 namespace gulliver
 {
@@ -899,27 +901,50 @@ namespace gulliver
                 fail = timed_out(host);
                 return false;
             }
-            const auto c = std::make_shared<httplib::Client>(origin_of(a));
-            if (!c->is_valid())
+            // La connexion et la négociation TLS, chacune dans la moitié du temps restant et connect_seconds.
+            const long long connect_ms = std::min<long long>(connect_seconds * 1000LL, left / 2);
+            std::shared_ptr<httplib::Client> c;
+            if (a.scheme == "https")
             {
-                fail = failure(502, "unreachable", host + " cannot be reached by the client of the web access");
-                return false;
-            }
-            if (pin)
-            {
-                c->set_direct_hostname_addr_map({ { c->host(), pin->text } });
+                // Le TLS d'Apple (tls_client.h) : l'adresse épinglée, ou le mandataire, sont ceux du pont.
+                tls_route route;
+                route.host = a.literal ? a.ip.text : a.host;
+                route.port = a.port;
+                route.connect_seconds = static_cast<int>(std::max<long long>(1, (connect_ms + 999) / 1000));
+                if (pin) route.address = pin->text;
+                else
+                {
+                    route.proxy_host = proxy.host;
+                    route.proxy_port = proxy.port;
+                    route.proxy_user = proxy.user;
+                    route.proxy_password = proxy.password;
+                }
+                std::string error;
+                c = https_client(route, error);
+                wipe_secret(route.proxy_password);
             }
             else
             {
-                c->set_proxy(proxy.host, proxy.port);
-                if (!proxy.user.empty()) c->set_proxy_basic_auth(proxy.user, proxy.password);
+                c = std::make_shared<httplib::Client>(origin_of(a));
+                if (c && pin)
+                {
+                    c->set_direct_hostname_addr_map({ { c->host(), pin->text } });
+                }
+                else if (c)
+                {
+                    c->set_proxy(proxy.host, proxy.port);
+                    if (!proxy.user.empty()) c->set_proxy_basic_auth(proxy.user, proxy.password);
+                }
+            }
+            if (!c || !c->is_valid())
+            {
+                fail = failure(502, "unreachable", host + " cannot be reached by the client of the web access");
+                return false;
             }
             c->set_follow_location(false);
             c->set_keep_alive(false);
             // La cible est déjà encodée (request_target()) et va telle quelle dans la ligne de requête.
             c->set_path_encode(false);
-            // La connexion et la négociation TLS, chacune dans la moitié du temps restant et connect_seconds.
-            const long long connect_ms = std::min<long long>(connect_seconds * 1000LL, left / 2);
             c->set_connection_timeout(static_cast<time_t>(connect_ms / 1000),
                 static_cast<time_t>(connect_ms % 1000 * 1000));
             c->set_read_timeout(read_seconds, 0);
@@ -1012,7 +1037,7 @@ namespace gulliver
                 if (got.status == 0) read_head(*result, got);
                 return true;
             }
-            switch (result.error())
+            switch (tls_error(*c, result.error()))
             {
             case httplib::Error::Connection:
                 unreachable = true;
@@ -1043,7 +1068,7 @@ namespace gulliver
                         + " s");
                 else
                     fail = failure(502, "unreachable", "the answer of " + host + " cannot be read ("
-                        + lower(httplib::to_string(result.error())) + ")");
+                        + lower(httplib::to_string(tls_error(*c, result.error()))) + ")");
                 break;
             }
             return false;

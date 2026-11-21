@@ -3,6 +3,9 @@
 
 
 #include "http_fetch.h"
+#include "tls_client.h"
+#include "certificates.h"
+#include "../common/log.h"
 
 #include <algorithm>
 #include <atomic>
@@ -251,15 +254,45 @@ namespace gulliver
             return p;
         }
 
+        int port_of(const std::string& origin);
+
         std::shared_ptr<httplib::Client> make_client(const std::string& origin, const std::string& proxy,
             int timeout_seconds)
         {
-            std::shared_ptr<httplib::Client> c = std::make_shared<httplib::Client>(origin);
+            std::shared_ptr<httplib::Client> c;
             proxy_address p;
-            if (!proxy.empty() && parse_proxy(proxy, p))
+            const bool proxied = !proxy.empty() && parse_proxy(proxy, p);
+            if (origin.compare(0, 8, "https://") == 0)
             {
-                c->set_proxy(p.host, p.port);
-                if (!p.user.empty()) c->set_proxy_basic_auth(p.user, p.password);
+                // Le TLS d'Apple (tls_client.h) : le mandataire est celui du pont, pas celui d'httplib.
+                tls_route route;
+                route.host = host_of(origin);
+                route.port = port_of(origin);
+                route.connect_seconds = connect_seconds;
+                if (proxied)
+                {
+                    route.proxy_host = p.host;
+                    route.proxy_port = p.port;
+                    route.proxy_user = p.user;
+                    route.proxy_password = p.password;
+                }
+                std::string error;
+                c = https_client(route, error);
+                wipe_secret(route.proxy_password);
+                if (!c)
+                {
+                    log_warning("http: " + error);
+                    return nullptr;
+                }
+            }
+            else
+            {
+                c = std::make_shared<httplib::Client>(origin);
+                if (proxied)
+                {
+                    c->set_proxy(p.host, p.port);
+                    if (!p.user.empty()) c->set_proxy_basic_auth(p.user, p.password);
+                }
             }
             // Les redirections sont suivies ici, une requête à la fois, pour que chacune
             // soit bornée et puisse être annulée.
@@ -592,7 +625,8 @@ namespace gulliver
                 else if (page) error = web_page_text;
                 else if (answered != 0 && answered != 200) error = status_text(answered);
                 else if (!r || r.error() != httplib::Error::Success)
-                    error = failure_of(r.error(), last_data, deadline, read_seconds, total_seconds, via_proxy);
+                    error = failure_of(tls_error(*c, r.error()), last_data, deadline, read_seconds, total_seconds,
+                        via_proxy);
                 else
                     return true;
                 return false;
@@ -734,7 +768,8 @@ namespace gulliver
                 else if (other_range) error = "the server answers with another range than the one asked";
                 else if (answered != 0 && answered != 200 && answered != 206) error = status_text(answered);
                 else if (!r || r.error() != httplib::Error::Success)
-                    error = failure_of(r.error(), last_data, clock_type::time_point::max(), read_seconds, 0, via_proxy);
+                    error = failure_of(tls_error(*c, r.error()), last_data, clock_type::time_point::max(), read_seconds,
+                        0, via_proxy);
                 else if (limited && delivered < wanted) error = "the answer ends before the bytes asked for";
                 else
                     return true;

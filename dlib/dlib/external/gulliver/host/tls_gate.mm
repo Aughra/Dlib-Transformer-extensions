@@ -26,6 +26,11 @@
 
 namespace gulliver
 {
+    /*
+        Les fonctions qui créent des blocs prennent leur shared_ptr par valeur : un bloc garde une
+        référence C++ telle quelle, et non l'objet qu'elle désigne ; une référence à un shared_ptr
+        tenu par un autre bloc, libéré entre-temps, pointerait dans le vide.
+    */
 
     namespace
     {
@@ -134,7 +139,7 @@ namespace gulliver
         }
 
         // Du client vers le serveur : une lecture TLS, son écriture dans fd, puis la suivante.
-        void upstream(const std::shared_ptr<gate_relay>& r)
+        void upstream(std::shared_ptr<gate_relay> r)
         {
             nw_connection_receive(r->conn, 1, static_cast<uint32_t>(chunk_bytes),
                 ^(dispatch_data_t content, nw_content_context_t, bool is_complete, nw_error_t error) {
@@ -163,7 +168,7 @@ namespace gulliver
         }
 
         // Du serveur vers le client : une lecture de fd, son envoi TLS, puis la suivante.
-        void downstream(const std::shared_ptr<gate_relay>& r)
+        void downstream(std::shared_ptr<gate_relay> r)
         {
             r->source = dispatch_source_create(DISPATCH_SOURCE_TYPE_READ, static_cast<uintptr_t>(r->fd), 0, r->q);
             const int fd = r->fd;

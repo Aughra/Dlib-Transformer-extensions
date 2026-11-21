@@ -25,6 +25,7 @@
 #include "certificates.h"
 #include "crypto.h"
 #include "http_fetch.h"
+#include "tls_client.h"
 
 namespace gulliver
 {
@@ -523,8 +524,26 @@ namespace gulliver
             }
             std::string address;
             if (!local_host(origin_host(origin), error, code, address)) return nullptr;
-            auto c = std::make_shared<httplib::Client>(origin);
-            if (!address.empty()) c->set_direct_hostname_addr_map({ { written_host(origin), address } });
+            std::shared_ptr<httplib::Client> c;
+            if (origin.compare(0, 8, "https://") == 0)
+            {
+                // Le TLS d'Apple (tls_client.h), à l'adresse vérifiée par local_host().
+                tls_route route;
+                route.host = written_host(origin);
+                const size_t colon = origin.rfind(':');
+                const bool has_port = colon != std::string::npos && colon > 6 && origin.find(']', colon) == std::string::npos
+                    && origin.find_first_not_of("0123456789", colon + 1) == std::string::npos;
+                route.port = has_port ? std::atoi(origin.c_str() + colon + 1) : 443;
+                route.address = address;
+                route.connect_seconds = connect_seconds;
+                c = https_client(route, error);
+                if (!c) return nullptr;
+            }
+            else
+            {
+                c = std::make_shared<httplib::Client>(origin);
+                if (!address.empty()) c->set_direct_hostname_addr_map({ { written_host(origin), address } });
+            }
             c->set_follow_location(false);
             c->set_connection_timeout(connect_seconds, 0);
             c->set_read_timeout(timeout_seconds, 0);
@@ -588,7 +607,7 @@ namespace gulliver
             {
                 // Une requête non envoyée, ou arrêtée par son socket, est une annulation.
                 out.transfer = (control && control->cancelled()) || (!offline && http_cancelled())
-                    ? httplib::Error::Canceled : res.error();
+                    ? httplib::Error::Canceled : tls_error(*client, res.error());
                 return out;
             }
             out.status = res->status;
@@ -1704,6 +1723,7 @@ namespace gulliver
             // L'annulation des requêtes du service, avant la connexion.
             transfer = httplib::Error::Canceled;
         }
+        if (!sent && transfer != httplib::Error::Canceled) transfer = tls_error(*client, transfer);
         req.body.clear();
         req.headers.clear();
         j->control.release();

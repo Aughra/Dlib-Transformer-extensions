@@ -15,6 +15,7 @@
 #include "certificates.h"
 #include "crypto.h"
 #include "http_fetch.h"
+#include "tls_client.h"
 
 namespace gulliver
 {
@@ -311,15 +312,22 @@ namespace gulliver
         const auto start = std::chrono::steady_clock::now();
         for (;;)
         {
-            const auto c = std::make_shared<httplib::Client>(e.origin);
-            if (!e.ca.empty())
+            std::shared_ptr<httplib::Client> c;
+            if (!e.ca.empty() && e.origin.compare(0, 8, "https://") == 0)
             {
-                // Le certificat nomme localhost, joint en 127.0.0.1 seulement, où aucun autre compte n'écoute.
-                c->set_direct_hostname_addr_map({ { "localhost", "127.0.0.1" } });
-                c->enable_system_ca(false);
-                c->set_ca_cert_path(e.ca);
-                c->enable_server_certificate_verification(true);
+                // Le certificat nomme localhost, joint en 127.0.0.1 seulement, où aucun autre compte n'écoute ;
+                // il est vérifié contre l'autorité de Pseudalis seule, par le TLS d'Apple (tls_client.h).
+                tls_route route;
+                route.host = "localhost";
+                route.address = "127.0.0.1";
+                const size_t colon = e.origin.rfind(':');
+                route.port = colon != std::string::npos ? std::atoi(e.origin.c_str() + colon + 1) : 443;
+                route.ca_path = e.ca;
+                route.connect_seconds = 3;
+                c = https_client(route, error);
+                if (!c) return false;
             }
+            else c = std::make_shared<httplib::Client>(e.origin);
             c->set_connection_timeout(3);
             // La détection dans un long texte prend son temps sur le processeur.
             c->set_read_timeout(300);
