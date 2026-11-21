@@ -998,7 +998,7 @@ namespace gulliver
             if (gpu_)
                 log(GULLIVER_LOG_INFO, "GPU " + gpu_->name() + " through Metal, " + std::to_string(gpu_->kernel_count())
                     + " kernels compiled, " + std::to_string(gpu_->working_set_bytes() >> 20) + " MB advised, buffers of "
-                    + std::to_string(gpu_->max_buffer_bytes() >> 20) + " MB at most");
+                    + std::to_string(gpu_->max_buffer_bytes() >> 20) + " MB at most; " + gpu_->accelerator_note());
             else
             {
                 log(GULLIVER_LOG_WARNING, "GPU: " + why);

@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : demande de l'humain (enlever les bibliothèques que macOS fournit), règle « pur Apple ».
 - **Étapes** : 338 images (58 PNG du dépôt et écrits à la main pour chaque type, 280 JPEG du dépôt et convertis par `sips`) décodées par l'ancien et le nouveau code : PNG identiques au pixel près ; JPEG 76,9 % des valeurs identiques, 17,4 % à 1 niveau, 3,5 % à 2, 1,8 % de 3 à 8, 0,4 % au-delà, écart moyen médian 0,41 et maximal 1,67 par image ; build sans avertissement ; `test_image_input` « all checks passed » ; banc de la page 142 vérifications ; `test_macos.sh` (port 18471) 0 étape en échec.
 
+## 2026-11-21 — Gulliver 6.19.1 : le journal du moteur nomme les accélérateurs neuronaux
+
+- **Quoi** : `engine.cpp` ajoute `metal_device::accelerator_note()` à la ligne « GPU … through Metal ».
+- **Fichiers** : `gulliver/engine/engine.cpp`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, ce journal.
+- **Pourquoi** : savoir, en lisant le journal du service, si l'attention des prompts passe par les accélérateurs du M5.
+- **Étapes** : build sans avertissement ; vrai service relancé, ligne vérifiée.
+
 ## 2026-11-21 — Gulliver 6.19.0 : l'attention de l'écriture à la manière du « flash-decoding » (V2) ; mesures par noyau
 
 - **Quoi** : `metal_kernels.metal` : `attention_dec<REP, HD>` (HD 64, 128 ; une position par voie, softmax par paquets de 32, somme des valeurs quatre positions à la fois avec bloc et ligne échangés par `simd_shuffle`) ; `metal_device.mm` : 8 noyaux de plus, choisis par `commands::attention()` (`GULLIVER_OLD_DECODE` pour l'ancien), profilage par noyau (`GULLIVER_GPU_PROFILE` : un encodeur par noyau, horodatage aux limites de passe, tableau toutes les 64 passes) ; `cpu_runtime_metal.cpp` : parties de 128 positions jusqu'à 2 048 de contexte, 256 au-delà (`GULLIVER_ATT_PART` pour les mesures), `GULLIVER_GPU_TIMING` (écriture des commandes, passe, GPU) ; `tests/perplexity_runtime.cpp` : mode `steps`.
