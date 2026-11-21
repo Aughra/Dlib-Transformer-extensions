@@ -815,7 +815,7 @@ namespace gulliver
         for (int w = 0; w < 2 && tiled; ++w)
         {
             if (w == 1 && hd_swa == hd) break;
-            const long per_tile = static_cast<long>(metal_device::tile_tokens(static_cast<unsigned>(rep),
+            const long per_tile = static_cast<long>(g.device->tile_tokens(static_cast<unsigned>(rep),
                 static_cast<unsigned>(w == 0 ? hd : hd_swa)));
             if (per_tile == 0) tiled = false;
             int* tl = static_cast<int*>(g.tiles.contents()) + w * 2 * T;

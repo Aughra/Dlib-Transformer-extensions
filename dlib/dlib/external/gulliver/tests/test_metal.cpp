@@ -534,7 +534,7 @@ namespace
         metal_buffer PART = gpu.allocate(sizeof(float) * T * heads * parts * rep * (hd + 2));
         // La même attention par les tuiles des prompts (attention_tiles), tile_tokens tokens au plus par tuile.
         metal_buffer CT = gpu.allocate(sizeof(float) * q_stride * T), TILES = gpu.allocate(sizeof(int) * 2 * T);
-        const unsigned per_tile = metal_device::tile_tokens(rep, static_cast<unsigned>(hd));
+        const unsigned per_tile = gpu.tile_tokens(rep, static_cast<unsigned>(hd));
         unsigned n_tiles = 0;
         for (unsigned t = 0; per_tile > 0 && t < T; t += per_tile, ++n_tiles)
         {

@@ -1171,6 +1171,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Trouvé en chemin** : une sonde (`macos/metal-sonde/nax_probe.mm`) montre que `MPSMatrixMultiplication` en demi-précision passe déjà par les accélérateurs neuronaux du M5 (31,6 Tflop/s sur 512 × 2 560 × 9 728, même écart au calcul en double qu'un noyau écrit avec `MetalPerformancePrimitives`).
 - **Mac ou Windows** : propre au Mac (chemin Metal) ; l'idée vaudrait pour tout moteur qui développe ses poids avant chaque produit.
 
+### Changement 34 : l'attention des prompts sur les accélérateurs neuronaux du M5 (Gulliver 6.18.0)
+
+- **Avant** : l'attention des prompts sur le GPU passait par `attention_mtile` (instructions `simdgroup_matrix` 8 × 8, Gulliver 4.11.0) : pas de 32 positions, scores et facteurs du softmax passés par la mémoire de threadgroup, 32 lignes de requête par tuile. Qwen3-VL 4B Thinking, clés en 8 bits, Mac mini M5 Pro : prompt de 4 096 tokens **1 467 à 1 469 tokens/s**, de 16 384 tokens **524 à 528**.
+- **Changement** (`engine/metal_kernels_nax.metal`, `attention_nax` ; `metal_device.mm`) : un noyau compilé à part en Metal 4, sur les accélérateurs neuronaux du M5 (`MetalPerformancePrimitives`, `matmul2d` en fragments 16 × 16), organisé comme l'attention de MLX (`steel_attention_nax.h`, licence MIT) : 4 simdgroups de 16 lignes de requête (64 lignes par tuile, têtes regroupées), pas de 32 positions, clés et valeurs du pas chargées une fois par le threadgroup en demi-précision dans la mémoire de threadgroup, scores gardés dans les registres et softmax en ligne par échanges entre les quatre voies d'une même ligne. Mêmes entrées qu'`attention_mtile` (mémoire de conversation par blocs, clés en 8 bits ou en demi-précision). Activé quand le GPU annonce une génération 17 ou plus de son architecture (18 pour les puces « p », la règle de MLX ; `applegpu_g17s` sur le Mac mini) et macOS 26.2 ou plus ; têtes de 64 et 128 valeurs ; `GULLIVER_NO_NAX` le coupe. **Exactitude** : `test_metal` (écarts de 7e-5 à 1,2e-4 au processeur) ; perplexité identique avec les deux noyaux sur 8 morceaux de 512 tokens (15,3646) et sur 5 morceaux de 4 096 (8,0904, 10 235 positions).
+- **Après** (mesures alternées avec `GULLIVER_NO_NAX`) : 4 096 tokens **2 100 à 2 128 tokens/s** (+44 %), 16 384 tokens **984 à 1 021** (+90 %). Une première version, où chaque simdgroup lisait lui-même les clés, ne gagnait que +23 % et +48 %.
+- **Mac ou Windows** : propre au Mac (accélérateurs du M5).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -1198,6 +1205,7 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 | Gemma 4 E2B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 20,9 à 23,8 tokens/s ; lecture de 512 tokens 463 à 471 tokens/s avec le changement 24 (143 à 156 avant), 671 à 685 sur le GPU (233 à 237 avant) ; de 4 096 tokens 371 à 383 sur le processeur, 241 à 249 sur le GPU (changements 16 et 24) |
 | LFM2.5-8B-A1B Q4_K_M (mélange d'experts, fork seulement), processeur | non lu par le moteur | écriture 34,2 à 34,3 tokens/s ; lecture de 512 tokens 141 à 149 tokens/s (changement 17) ; le 1.2B en Q8_0 : 35,3 à 36,1 et 253 à 281, et sur le GPU 40,4 et 433 à 462 (changement 19) |
 | Gemma 3 4B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 16,3 à 17,2 tokens/s ; lecture de 512 tokens 88 à 92 tokens/s (changement 18) ; le 1B : 25,0 à 28,2 et 396 à 436 |
+| Mac mini M5 Pro, Qwen3-VL 4B Thinking, lecture de 4 096 / 16 384 tokens sur le GPU | pas mesuré | 2 100 à 2 128 / 984 à 1 021 tokens/s avec le changement 34 (1 467 / 524 avant) |
 | Mac mini M5 Pro, Qwen3-VL 4B Thinking, lecture de 512 tokens sur le GPU | pas mesuré | 2 593 à 2 708 tokens/s avec le changement 33 (2 060 à 2 159 avant) |
 | Mac mini M5 Pro, affinage LoRA de Qwen3-0.6B, 2 pas de 4 fenêtres de 256 tokens (atelier) | 779 à 780 s (boucles portables de dlib) | 7 s avec Accelerate (changement 32) |
 

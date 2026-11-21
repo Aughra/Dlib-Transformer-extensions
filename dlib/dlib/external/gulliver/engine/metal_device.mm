@@ -27,6 +27,21 @@ namespace gulliver
 #include "metal_kernels.inc"
             ;
 
+        // Les noyaux des accélérateurs neuronaux du M5, compilés à part en Metal 4 (metal_kernels_nax.metal).
+        const char* const metal_nax_source =
+#include "metal_kernels_nax.inc"
+            ;
+        // attention_nax, dans l'ordre (rep 1, 2, 4, 8) x (têtes de 64, 128 valeurs).
+        const char* const nax_attention_names[] = { "attention_nax_1_64", "attention_nax_1_128", "attention_nax_2_64",
+            "attention_nax_2_128", "attention_nax_4_64", "attention_nax_4_128", "attention_nax_8_64",
+            "attention_nax_8_128" };
+        int nax_attention_index(unsigned rep, unsigned hd)
+        {
+            const int r = rep == 1 ? 0 : rep == 2 ? 1 : rep == 4 ? 2 : rep == 8 ? 3 : -1;
+            const int h = hd == 64 ? 0 : hd == 128 ? 1 : -1;
+            return r < 0 || h < 0 ? -1 : 2 * r + h;
+        }
+
         // Les noyaux, dans l'ordre de l'énumération ci-dessous ; chacun doit se compiler en pipeline.
         // L'attention existe en une variante pour chaque regroupement des têtes de requête (1, 2, 4, 8) et
         // chaque largeur de tête (64, 128, 256 valeurs : 2, 4, 8 par voie ; 512 valeurs, 16 par voie, pour les
@@ -178,6 +193,11 @@ namespace gulliver
         id<MTLLibrary> library = nil;
         std::vector<id<MTLComputePipelineState>> pipelines;
         std::string name;
+        /* Les noyaux des accélérateurs neuronaux (attention_nax), vides quand le GPU n'en a pas : M5 (génération 17 de
+           l'architecture, 18 pour les puces « p », la règle de MLX) et macOS 26.2 ou plus ; GULLIVER_NO_NAX les coupe
+           pour les mesures. */
+        std::vector<id<MTLComputePipelineState>> nax;
+        std::string nax_note;
     };
 
     struct metal_device::commands::impl
@@ -191,6 +211,11 @@ namespace gulliver
         {
             if (!encoder) encoder = [buffer computeCommandEncoder];
             [encoder setComputePipelineState:device->pipelines[static_cast<size_t>(k)]];
+        }
+        void use_nax(int k)
+        {
+            if (!encoder) encoder = [buffer computeCommandEncoder];
+            [encoder setComputePipelineState:device->nax[static_cast<size_t>(k)]];
         }
         void close()
         {
@@ -262,6 +287,42 @@ namespace gulliver
                 }
                 m.pipelines.push_back(p);
             }
+            auto open_nax = [](metal_device::impl& m)
+            {
+                if (std::getenv("GULLIVER_NO_NAX")) { m.nax_note = "neural accelerators off (GULLIVER_NO_NAX)"; return; }
+                if (@available(macOS 26.2, *))
+                {
+                    const std::string arch = m.device.architecture.name.UTF8String;   // « applegpu_g17s »
+                    const size_t g = arch.find("_g");
+                    const int gen = g == std::string::npos ? 0 : std::atoi(arch.c_str() + g + 2);
+                    const bool p_chip = !arch.empty() && arch.back() == 'p';
+                    if (gen < (p_chip ? 18 : 17)) { m.nax_note = "no neural accelerators (" + arch + ")"; return; }
+                    NSError* error = nil;
+                    MTLCompileOptions* options = [MTLCompileOptions new];
+                    options.languageVersion = MTLLanguageVersion4_0;
+                    id<MTLLibrary> lib = [m.device newLibraryWithSource:[NSString stringWithUTF8String:metal_nax_source]
+                        options:options error:&error];
+                    if (!lib)
+                    {
+                        m.nax_note = std::string("neural accelerator kernels do not compile: ")
+                            + (error ? error.localizedDescription.UTF8String : "unknown error");
+                        return;
+                    }
+                    std::vector<id<MTLComputePipelineState>> p;
+                    for (const char* k : nax_attention_names)
+                    {
+                        id<MTLFunction> f = [lib newFunctionWithName:[NSString stringWithUTF8String:k]];
+                        id<MTLComputePipelineState> s = f ? [m.device newComputePipelineStateWithFunction:f error:&error] : nil;
+                        if (!s) { m.nax_note = std::string("the kernel ") + k + " cannot be prepared"; return; }
+                        p.push_back(s);
+                    }
+                    m.nax = std::move(p);
+                    m.nax_note = "neural accelerators (" + arch + ")";
+                }
+                else
+                    m.nax_note = "no neural accelerators (macOS before 26.2)";
+            };
+            open_nax(m);
             return d;
         }
     }
@@ -898,8 +959,14 @@ namespace gulliver
         impl_->groups(l.heads * rep, tokens, 1, l.hd);
     }
 
-    unsigned metal_device::tile_tokens(unsigned rep, unsigned hd)
+    bool metal_device::neural_accelerators() const { return !impl_->nax.empty(); }
+
+    const std::string& metal_device::accelerator_note() const { return impl_->nax_note; }
+
+    unsigned metal_device::tile_tokens(unsigned rep, unsigned hd) const
     {
+        // attention_nax : 64 lignes de requête par tuile.
+        if (!impl_->nax.empty() && nax_attention_index(rep, hd) >= 0) return 64 / rep;
         // Comme les instances d'attention_mtile (metal_kernels.metal) : 32 lignes de requête (16 pour des têtes de 256
         // valeurs, 8 pour 512), rep par token.
         if ((rep != 1 && rep != 2 && rep != 4 && rep != 8) || (hd != 64 && hd != 128 && hd != 256 && hd != 512)) return 0;
@@ -911,6 +978,23 @@ namespace gulliver
         const kv_layout& l)
     {
         if (n_tiles == 0) return;
+        const int nax = impl_->device->nax.empty() ? -1 : nax_attention_index(rep, l.hd);
+        if (nax >= 0)
+        {
+            const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, 0, 1, q_stride,
+                table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l) };
+            impl_->use_nax(nax);
+            impl_->bind(q, 0);
+            impl_->bind(region, 1);
+            impl_->bind(blocks, 2);
+            impl_->bind(lengths, 3);
+            impl_->bind(tiles, 4);
+            impl_->args(a, 5);
+            impl_->bind(ctx, 6);
+            // 4 simdgroups de 16 lignes.
+            impl_->groups(n_tiles, l.heads, 1, 128);
+            return;
+        }
         const int base = attention_kernel(rep, l.hd);
         if (base < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
         // Les têtes de 512 valeurs ont leurs instances à part, en deux tranches de 256 (troisième dimension de la grille).

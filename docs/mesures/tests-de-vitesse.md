@@ -131,6 +131,7 @@ Aller vite ne sert à rien si le calcul est faux. On mesure la **perplexité** :
 ## Depuis ces mesures
 
 - **Gulliver 6.17.0** garde les poids développés en demi-précision d'une passe de lecture à l'autre, au lieu de les redévelopper à chaque passe : la lecture d'une question de 512 tokens passe de 2 060-2 159 à **2 593-2 708 jetons/s** sur le modèle du service, **devant llama.cpp** (2 590), encore derrière MLX (2 930). À 4 096 tokens, le gain est de 1 % : l'attention domine (V1).
+- **Gulliver 6.18.0** fait l'attention de la lecture sur les accélérateurs neuronaux du M5 (Metal 4, organisation reprise de MLX) : sur le modèle du service, 4 096 tokens passent de 1 467 à **2 100-2 128 jetons/s** (devant llama.cpp, 2 063), 16 384 tokens de 524 à **984-1 021** (llama.cpp 1 209, MLX 2 074). Justesse identique.
 - Une sonde a montré que les produits de matrices de Gulliver (par MPS) passent **déjà** par les accélérateurs neuronaux du M5 (31,6 Tflop/s) : l'avance de MLX en lecture tient donc surtout à son attention et à ce qui entoure les produits, pas aux produits eux-mêmes.
 
 ## Pour que Gulliver soit le plus rapide

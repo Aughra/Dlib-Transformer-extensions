@@ -319,7 +319,12 @@ namespace gulliver
         std::unique_ptr<commands> begin();
 
         // Les tokens d'une tuile d'attention_tiles() pour rep têtes de requête par tête de clés et des têtes de hd valeurs.
-        static unsigned tile_tokens(unsigned rep, unsigned hd);
+        unsigned tile_tokens(unsigned rep, unsigned hd) const;
+
+        // Vrai quand les noyaux des accélérateurs neuronaux du M5 sont prêts (attention_nax pour les prompts) ;
+        // accelerator_note() le dit en une ligne pour les journaux.
+        bool neural_accelerators() const;
+        const std::string& accelerator_note() const;
 
     private:
         metal_device();
