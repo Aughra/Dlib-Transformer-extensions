@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 6.20.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 6.21.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -80,11 +80,16 @@ link_libraries("-framework Accelerate" "-framework Metal" "-framework MetalPerfo
 
 # La source des noyaux Metal, intégrée au moteur sous forme d'une chaîne que macOS compile quand
 # le moteur ouvre le GPU : le build n'a besoin d'aucun compilateur Metal.
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels.metal" GULLIVER_METAL_SOURCE)
+# Les formats des poids (metal_formats.metal) en tête des deux sources Metal, qui les partagent.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_formats.metal" GULLIVER_METAL_FORMATS)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels.metal" GULLIVER_METAL_MAIN)
+set(GULLIVER_METAL_SOURCE "${GULLIVER_METAL_FORMATS}${GULLIVER_METAL_MAIN}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_formats.metal")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels.metal")
 configure_file(engine/metal_kernels.inc.in ${CMAKE_BINARY_DIR}/generated/metal_kernels.inc @ONLY)
 # Les noyaux des accélérateurs neuronaux du M5 (Metal 4), compilés à part (metal_device::open()).
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels_nax.metal" GULLIVER_METAL_NAX_SOURCE)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels_nax.metal" GULLIVER_METAL_NAX_MAIN)
+set(GULLIVER_METAL_NAX_SOURCE "${GULLIVER_METAL_FORMATS}${GULLIVER_METAL_NAX_MAIN}")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/engine/metal_kernels_nax.metal")
 configure_file(engine/metal_kernels_nax.inc.in ${CMAKE_BINARY_DIR}/generated/metal_kernels_nax.inc @ONLY)
 set_source_files_properties(engine/metal_device.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc"

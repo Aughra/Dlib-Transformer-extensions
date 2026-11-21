@@ -37,7 +37,11 @@ namespace gulliver
         const char* const nax_attention_names[] = { "attention_nax_1_64", "attention_nax_1_128", "attention_nax_2_64",
             "attention_nax_2_128", "attention_nax_4_64", "attention_nax_4_128", "attention_nax_8_64",
             "attention_nax_8_128", "attention_nax_1_256", "attention_nax_2_256", "attention_nax_4_256",
-            "attention_nax_8_256" };
+            "attention_nax_8_256", "mm_id_nax64_q4_K", "mm_id_nax64_q5_K", "mm_id_nax64_q6_K", "mm_id_nax64_q8_0",
+            "mm_id_nax64_q5_0", "mm_id_nax128_q4_K", "mm_id_nax128_q5_K", "mm_id_nax128_q6_K", "mm_id_nax128_q8_0",
+            "mm_id_nax128_q5_0" };
+        // mm_id_nax, après les douze attention_nax : tuiles de 64 cases, puis de 128.
+        const int nax_mm_id = 12, nax_mm_id_128 = 17;
         // Les simdgroups d'une tuile d'attention_nax, 16 lignes de requête chacun (GULLIVER_NAX_SG pour les essais).
         unsigned nax_simdgroups()
         {
@@ -223,6 +227,9 @@ namespace gulliver
         metal_device::impl* device = nullptr;
         id<MTLCommandBuffer> buffer = nil;
         id<MTLComputeCommandEncoder> encoder = nil;
+        // Les produits groupés des experts sur les accélérateurs (moe_group() le décide pour matmul_id()).
+        bool mm_nax = false;
+        unsigned mm_tt = 64;
 
         // Les noyaux vont à un encodeur de calcul, que ferme un produit de Metal Performance Shaders.
         /* GULLIVER_GPU_PROFILE : pour les mesures du chantier Vitesse, chaque noyau dans un encodeur à lui, horodaté par
@@ -804,7 +811,7 @@ namespace gulliver
         };
         struct tiles_args
         {
-            unsigned experts, tiles_a, tiles_b;
+            unsigned experts, tiles_a, tiles_b, per_tile;
         };
         struct mm_args
         {
@@ -813,6 +820,8 @@ namespace gulliver
         };
         // Les dimensions des tuiles de mm_id (MM_TT, MM_NR, MM_KC dans metal_kernels.metal).
         const unsigned mm_tile_slots = 16, mm_tile_rows = 32, mm_tile_cols = 64;
+        // mm_id_nax (accélérateurs du M5) : 64 cases et 64 lignes par tuile, 32 colonnes à la fois.
+        const unsigned mm_nax_rows = 64, mm_nax_cols = 32;
     }
 
     bool metal_device::commands::matvec_id(gulliver::ggml_type type, metal_view W, long rows, long cols,
@@ -848,6 +857,18 @@ namespace gulliver
         if (slots == 0) return;
         if (rows_a % mm_tile_rows != 0 || rows_b % mm_tile_rows != 0)
             throw std::invalid_argument("metal_device: grouped expert products of rows that are not multiples of 32");
+        /* Les tuiles des accélérateurs quand le GPU en a et que les lignes s'y prêtent ; matmul_id() suit ce choix, gardé
+           jusqu'au prochain moe_group().  GULLIVER_NO_NAX_MM garde mm_id pour les mesures. */
+        static const bool no_nax_mm = std::getenv("GULLIVER_NO_NAX_MM") != nullptr;
+        impl_->mm_nax = !no_nax_mm && !impl_->device->nax.empty() && rows_a % mm_nax_rows == 0 && rows_b % mm_nax_rows == 0;
+        // Tuiles de 64 cases (GULLIVER_NAX_MM_TT=128 pour les mesures : mesuré sur Qwen3-30B-A3B, 128 cases perdent
+        // à 512 tokens, 831-834 contre 1 143-1 149 tokens/s, comme à 4 096, 1 188-1 190 contre 1 369-1 371).
+        static const unsigned forced_tt = [] {
+            const char* v = std::getenv("GULLIVER_NAX_MM_TT");
+            return v ? static_cast<unsigned>(std::atoi(v)) : 0u;
+        }();
+        impl_->mm_tt = forced_tt == 128 ? 128u : 64u;
+        const unsigned tile_rows = impl_->mm_nax ? mm_nax_rows : mm_tile_rows;
         impl_->use(k_moe_group);
         impl_->bind(ids, 0);
         impl_->bind(list, 1);
@@ -859,7 +880,7 @@ namespace gulliver
         impl_->bind(counts, 0);
         impl_->bind(work, 1);
         impl_->bind(dispatch, 2);
-        const tiles_args b = { experts, rows_a / mm_tile_rows, rows_b / mm_tile_rows };
+        const tiles_args b = { experts, rows_a / tile_rows, rows_b / tile_rows, impl_->mm_nax ? impl_->mm_tt : mm_tile_slots };
         impl_->args(b, 3);
         impl_->groups(1, 1, 1, 256);
     }
@@ -882,7 +903,10 @@ namespace gulliver
         else return false;
         if (rows % mm_tile_rows != 0 || cols % mm_tile_cols != 0 || x_div == 0)
             throw std::invalid_argument("metal_device: a grouped expert product of other sizes than its kernel takes");
-        impl_->use(k);
+        if (impl_->mm_nax && (rows % mm_nax_rows != 0 || cols % mm_nax_cols != 0))
+            throw std::invalid_argument("metal_device: a grouped expert product that its tiles do not fit");
+        if (impl_->mm_nax) impl_->use_nax((impl_->mm_tt == 128 ? nax_mm_id_128 : nax_mm_id) + (k - k_mm_id_q4_K));
+        else impl_->use(k);
         impl_->bind(W, 0);
         impl_->bind(x, 1);
         impl_->bind(y, 2);
@@ -892,7 +916,7 @@ namespace gulliver
         const mm_args a = { expert_bytes, static_cast<unsigned>(row_bytes), static_cast<unsigned>(cols), x_stride, x_div,
             y_stride, capacity };
         impl_->args(a, 6);
-        impl_->groups_indirect(dispatch, which == 0 ? 0 : 3 * sizeof(uint32_t), 128);
+        impl_->groups_indirect(dispatch, which == 0 ? 0 : 3 * sizeof(uint32_t), impl_->mm_nax ? 2 * impl_->mm_tt : 128);
         return true;
     }
 

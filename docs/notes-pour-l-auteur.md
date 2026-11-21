@@ -1194,6 +1194,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (mesures alternées, écriture après 512 tokens) : Qwen3-VL 4B Thinking 77,9-78,2 → **80,7-82,0 tokens/s** ; Qwen3-VL 2B 154,1-154,2 → 162,5-162,7 ; Gemma 3 4B 75,2-75,8 → 77,1-77,3 ; Qwen3-30B-A3B 69,9-70,1 → 74,2-74,4. Une ligne pour plusieurs tokens aussi faisait perdre 6 à 10 % à quatre séquences ensemble : d'où les deux réglages.
 - **Mac ou Windows** : propre au Mac (Metal).
 
+### Changement 37 : les produits groupés des experts sur les accélérateurs du M5 (Gulliver 6.21.0)
+
+- **Avant** : `mm_id` (produits groupés des experts des prompts, `metal_kernels.metal`) calculait par tuiles de 16 cases x 32 lignes, avec `simdgroup_matrix` 8 x 8, les poids de chaque tuile développés en demi-précision dans la mémoire de threadgroup. Un profil par noyau d'une lecture de 4 096 tokens de Qwen3-30B-A3B le mettait à 75 % de la passe (environ 4,4 s sur 4,8). Lecture : **835-838 tokens/s** à 512 tokens, **851-853** à 4 096.
+- **Changement** (`metal_kernels_nax.metal`, `mm_id_nax<F, TT>` ; `metal_kernels.metal`, `moe_tiles` lit la taille d'une tuile ; `metal_device.mm`) : sur les accélérateurs (`matmul2d`), par tuiles de **64 cases** x 64 lignes : les poids d'un expert sont relus et développés quatre fois moins souvent. Activé avec les accélérateurs quand les lignes sont multiples de 64 ; `GULLIVER_NO_NAX_MM` garde `mm_id`. Les fonctions de développement des formats (`dq8_*`, `fmt_*`) passent dans `metal_formats.metal`, placé par CMake en tête des deux sources Metal. Des tuiles de 128 cases, essayées, perdent (831-834 tokens/s à 512, 1 188-1 190 à 4 096). **Exactitude** : `test_metal` (cinq formats, écarts de 7e-5 à 9e-5) ; perplexité identique (10,9383 en morceaux de 512, 6,2352 en morceaux de 4 096).
+- **Après** (mesures alternées) : **1 135 à 1 149 tokens/s** à 512 tokens (+36 %), **1 342 à 1 371** à 4 096 (+58 %) ; 16 384 tokens à 831 (24 Go au plus). llama.cpp : 1 973 et 1 564.
+- **Mac ou Windows** : propre au Mac (accélérateurs du M5).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

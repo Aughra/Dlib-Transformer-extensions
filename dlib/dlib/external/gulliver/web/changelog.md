@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.21.0 — 21 novembre 2026
+
+### Performances
+
+- Sur les Mac à puce M5, le produit groupé des experts de la lecture des questions (modèles à mélange d'experts) passe par les accélérateurs neuronaux, par tuiles de 64 tokens au lieu de 16. Qwen3-30B-A3B, Mac mini M5 Pro : lecture de 512 tokens de 835-838 à 1 135-1 149 tokens/s, de 4 096 tokens de 851-853 à 1 342-1 371 ; justesse inchangée.
+
+---
+
 ## 6.20.0 — 21 novembre 2026
 
 ### Performances
