@@ -1,4 +1,4 @@
-// Copyright (C) 2026  TortueTech
+// Copyright (C) 2026  papy cyber
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 #include <dlib/dnn.h>

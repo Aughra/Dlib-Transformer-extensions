@@ -1,4 +1,4 @@
-// Copyright (C) 2026  TortueTech
+// Copyright (C) 2026  papy cyber
 // License: Boost Software License   See LICENSE.txt for the full license.
 #ifndef DLIB_METAL_DISPATCH_H_
 #define DLIB_METAL_DISPATCH_H_
