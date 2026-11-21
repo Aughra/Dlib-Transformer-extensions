@@ -21,7 +21,8 @@
 #include "settings.h"
 #include "store.h"
 
-namespace httplib { class SSLServer; class Server; }
+namespace httplib { class Server; }
+namespace gulliver { class tls_gate; }
 namespace gulliver { class relay_service; }
 
 namespace gulliver
@@ -367,7 +368,14 @@ namespace gulliver
         // Protège le serveur, le gestionnaire de modèles et le relais pendant que run() les crée et
         // les libère, pour stop(), qu'un thread du système peut appeler à tout moment.
         std::mutex server_m_;
-        std::unique_ptr<httplib::SSLServer> server_;
+        /*
+            Le serveur local : cpp-httplib en HTTP sur une prise Unix privée (backend_path_), derrière
+            le portier TLS de Network.framework qui écoute sur 127.0.0.1:port_ (fork pour macOS,
+            2026-11-20 : le TLS d'Apple à la place de Mbed TLS).
+        */
+        std::unique_ptr<httplib::Server> server_;
+        std::unique_ptr<tls_gate> gate_;
+        std::string backend_path_;
         // Le serveur HTTP du réseau local (réglages lan, lan_port), et son thread.
         std::unique_ptr<httplib::Server> lan_server_;
         std::thread lan_thread_;

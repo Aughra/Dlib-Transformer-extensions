@@ -2,6 +2,16 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par TortueTech. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.13.0 — 21 novembre 2026
+
+### Sécurité
+
+- Le chiffrement du service local (`https://localhost:18443`) est fait par **Network.framework**, de macOS, au lieu de Mbed TLS : TLS 1.3 et 1.2, TLS 1.1 refusé, certificat du serveur suivi de l'autorité locale. Le serveur HTTP de Gulliver ne reçoit plus que des requêtes déchiffrées, par une prise Unix d'un dossier réservé au compte, joignable par aucune autre machine ni aucun autre compte. L'adresse ne change pas.
+- Mêmes limites qu'avant : 128 connexions au plus, une connexion inactive fermée après 5 secondes ; aucun autre programme ne peut écouter sur le port du service.
+- Différence : une requête en HTTP non chiffré envoyée au port HTTPS est fermée après 10 secondes, au lieu de l'être aussitôt.
+
+---
+
 ## 6.12.1 — 20 novembre 2026
 
 ### Plateforme

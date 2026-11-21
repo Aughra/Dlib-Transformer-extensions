@@ -23,6 +23,7 @@
 #include "../common/system_info.h"
 #include "../common/version.h"
 #include "certificates.h"
+#include "tls_gate.h"
 #include "crypto.h"
 #include "http_fetch.h"
 #include "hub.h"
@@ -146,6 +147,16 @@ namespace gulliver
         }
 
         // Les options de la socket sur laquelle le serveur écoute.
+        // L'identité TLS du serveur, libérée sur tous les chemins.
+        struct cf_identity
+        {
+            SecIdentityRef ref;
+            explicit cf_identity(SecIdentityRef r) : ref(r) {}
+            ~cf_identity() { if (ref) CFRelease(ref); }
+            cf_identity(const cf_identity&) = delete;
+            cf_identity& operator=(const cf_identity&) = delete;
+        };
+
         void set_listen_options(httplib::Server& server)
         {
             server.set_socket_options([](socket_t sock) {
@@ -356,52 +367,73 @@ namespace gulliver
         }
 
         // Les moteurs démarrent en arrière-plan (start_engines()), une fois que le serveur répond.
-        // La clé du serveur parvient au serveur TLS depuis la mémoire, déchiffrée ici seulement.
-        std::string cert_pem, key_pem;
-        if (!read_file(certificate_paths(cert_dir).server_cert, cert_pem) || !read_server_key(cert_dir, key_pem))
+        /*
+            Le serveur TLS (fork pour macOS, 2026-11-20) : le portier de Network.framework termine le
+            TLS avec l'identité du serveur (son certificat et sa clé, en mémoire seulement), suivie de
+            l'autorité locale, et passe le HTTP au serveur de cpp-httplib par une prise Unix d'un
+            dossier privé du compte.
+        */
+        cf_identity identity(server_identity(cert_dir));
+        const std::string ca_der = certificate_der(certificate_paths(cert_dir).ca_cert);
+        if (!identity.ref || ca_der.empty())
         {
-            wipe_secret(key_pem);
             error = "the certificate or the key of the local server cannot be read in " + cert_dir;
+            return false;
+        }
+        CFDataRef ca_data = CFDataCreate(nullptr, reinterpret_cast<const UInt8*>(ca_der.data()),
+            static_cast<CFIndex>(ca_der.size()));
+        SecCertificateRef ca_cert = SecCertificateCreateWithData(nullptr, ca_data);
+        CFRelease(ca_data);
+        const void* chain_items[] = { ca_cert };
+        CFArrayRef chain = ca_cert ? CFArrayCreate(nullptr, chain_items, 1, &kCFTypeArrayCallBacks) : nullptr;
+        if (ca_cert) CFRelease(ca_cert);
+        backend_path_ = private_socket_path("https.sock");
+        if (backend_path_.empty())
+        {
+            if (chain) CFRelease(chain);
+            error = "the private socket of the local server cannot be created";
             return false;
         }
         {
             std::lock_guard<std::mutex> lock(server_m_);
             if (stopping_)
             {
-                wipe_secret(key_pem);
+                if (chain) CFRelease(chain);
+                remove_private_socket(backend_path_);
                 return true;
             }
-            httplib::SSLServer::PemMemory pem = {};
-            pem.cert_pem = cert_pem.c_str();
-            pem.cert_pem_len = cert_pem.size();
-            pem.key_pem = key_pem.c_str();
-            pem.key_pem_len = key_pem.size();
-            server_.reset(new httplib::SSLServer(pem));
+            server_.reset(new httplib::Server);
+            gate_.reset(new tls_gate(identity.ref, chain));
         }
-        wipe_secret(key_pem);
-        if (!server_->is_valid())
-        {
-            error = "the TLS configuration of the server failed";
-            return false;
-        }
+        if (chain) CFRelease(chain);
         /*
             Les limites des corps sont celles de chaque route (server.cpp).  Une attente d'un client
-            dure 30 secondes au plus, pendant sa poignée de main TLS, sa requête ou l'écriture d'une
-            réponse : un client qui cale libère son thread et la place de sa requête dans le moteur.
-            Huit threads servent les connexions, jusqu'à 64 quand ils sont occupés, car une réponse
-            en flux tient son thread ; 128 connexions au plus en attendent un, et les suivantes sont
-            fermées aussitôt, pour qu'un afflux de connexions tienne un nombre borné de sockets.  Une
-            connexion gardée entre deux requêtes tient aussi son thread : elle est fermée après
-            5 secondes sans requête, pour que les connexions inactives des navigateurs de plusieurs
-            utilisateurs laissent les threads aux requêtes.
+            dure 30 secondes au plus, pendant sa requête ou l'écriture d'une réponse (le portier
+            borne de même sa poignée de main TLS) : un client qui cale libère son thread et la
+            place de sa requête dans le moteur.  Huit threads servent les connexions, jusqu'à 64
+            quand ils sont occupés, car une réponse en flux tient son thread ; 128 connexions au
+            plus en attendent un, et les suivantes sont fermées aussitôt, pour qu'un afflux de
+            connexions tienne un nombre borné de sockets (le portier en tient 128 au plus lui
+            aussi).  Une connexion gardée entre deux requêtes tient aussi son thread : elle est
+            fermée après 5 secondes sans requête, pour que les connexions inactives des navigateurs
+            de plusieurs utilisateurs laissent les threads aux requêtes.
         */
         server_->set_payload_max_length(0);
         server_->set_keep_alive_timeout(5);
         server_->set_read_timeout(30);
         server_->set_write_timeout(30);
         server_->new_task_queue = []() { return new httplib::ThreadPool(8, 64, 128); };
-        set_listen_options(*server_);
-        if (!server_->bind_to_port("127.0.0.1", port_))
+        server_->set_address_family(AF_UNIX);
+        // Le port est sans objet sur une prise Unix ; 0 ferait chercher à cpp-httplib un port choisi
+        // par le système, qu'une prise Unix n'a pas.
+        if (!server_->bind_to_port(backend_path_, 1))
+        {
+            remove_private_socket(backend_path_);
+            error = "the private socket of the local server cannot be opened";
+            return false;
+        }
+        std::string gate_error;
+        if (!gate_->listen("127.0.0.1", port_, backend_path_, gate_error))
         {
             /*
                 Le port des réglages est pris par un autre programme, ou réservé par le système depuis
@@ -417,10 +449,10 @@ namespace gulliver
             {
                 log_warning(std::string("server: the last port served on cannot be read: ") + e.what());
             }
-            // Un bind qui a échoué laisse le serveur refuser le suivant jusqu'à stop().
-            if (last != port_ && last >= 1024 && last <= 65535) server_->stop();
-            if (last == port_ || last < 1024 || last > 65535 || !server_->bind_to_port("127.0.0.1", last))
+            if (last == port_ || last < 1024 || last > 65535 || !gate_->listen("127.0.0.1", last, backend_path_, gate_error))
             {
+                server_->stop();
+                remove_private_socket(backend_path_);
                 error = "the port " + std::to_string(port_) + " is in use or cannot be opened";
                 return false;
             }
@@ -470,6 +502,8 @@ namespace gulliver
         });
         server_->listen_after_bind();
         const bool stopped = stopping_;
+        if (gate_) gate_->stop();
+        remove_private_socket(backend_path_);
 
         // Arrêt : les requêtes vers le réseau se terminent d'abord, pour que rien ne les attende,
         // puis les tâches de fond, les téléchargements (leur progression est gardée), le moteur.
@@ -479,6 +513,7 @@ namespace gulliver
         std::unique_ptr<model_manager> models;
         {
             std::lock_guard<std::mutex> lock(server_m_);
+            gate_.reset();
             server_.reset();
             lan_server_.reset();
             models = std::move(models_);
@@ -523,6 +558,7 @@ namespace gulliver
         // Les réponses du relais finissent, pour que les requêtes du serveur qui les attendent finissent aussi.
         if (relay_) relay_->stop();
         if (models_) models_->stop();
+        if (gate_) gate_->stop();
         if (server_) server_->stop();
         if (lan_server_) lan_server_->stop();
     }

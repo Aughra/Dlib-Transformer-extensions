@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 6.12.1 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 6.13.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -88,7 +88,7 @@ set(GULLIVER_WARNINGS -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-ini
 # Les produits des longues passes passent par Accelerate (engine/qkernels_accelerate.inc) ; le
 # GPU par Metal (engine/metal_device.mm).
 link_libraries("-framework Accelerate" "-framework Metal" "-framework MetalPerformanceShaders" "-framework Foundation"
-   "-framework ImageIO" "-framework CoreGraphics" "-framework CoreFoundation")
+   "-framework ImageIO" "-framework CoreGraphics" "-framework CoreFoundation" "-framework Security" "-framework Network")
 
 # La source des noyaux Metal, intégrée au moteur sous forme d'une chaîne que macOS compile quand
 # le moteur ouvre le GPU : le build n'a besoin d'aucun compilateur Metal.
@@ -158,7 +158,8 @@ if (GULLIVER_PROGRAMS)
    add_executable(gulliver-service host/main.cpp host/service.cpp host/server.cpp host/settings.cpp host/store.cpp
       host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/crypto.cpp
       host/certificates.cpp host/web_access.cpp host/hub.cpp host/carnet.cpp host/relay.cpp host/pseudonyms.cpp
-      host/rag_engine.cpp host/doc_extract.cpp host/doc_extract_pdf.cpp)
+      host/rag_engine.cpp host/doc_extract.cpp host/doc_extract_pdf.cpp host/tls_gate.mm)
+   set_source_files_properties(host/tls_gate.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
    target_include_directories(gulliver-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
    # Le carnet du portage lit les documents du dépôt où le service est construit (host/carnet.h).
    get_filename_component(GULLIVER_FORK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
