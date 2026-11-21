@@ -1,6 +1,6 @@
 # Albireo
 
-> **Fork macOS** (TortueTech, version 2.0.0 et suivantes) : Albireo pour les Mac Apple Silicon seulement, son
+> **Fork macOS** (papy cyber, version 2.0.0 et suivantes) : Albireo pour les Mac Apple Silicon seulement, son
 > interface en français seulement, sans synthèse vocale (retirée en 3.0.0). Depuis 4.0.0, il ne détient aucune clé :
 > le catalogue n'est pas signé et vient de son adresse dans le dépôt de l'original ou d'un
 > dossier, et l'espace de publication, le flux signé, les mises à jour et les outils de signature sont retirés.

@@ -2,7 +2,7 @@ Gulliver
 Copyright (C) 2026 Cydral Technology
 Created by Aldric Pierrain (cydraltechnology@gmail.com), based on the open source
 Dlib-Transformer-extensions library.
-This version for macOS on Apple silicon is a fork maintained by TortueTech.
+This version for macOS on Apple silicon is a fork maintained by papy cyber.
 
 Gulliver is distributed under the Boost Software License, Version 1.0:
 

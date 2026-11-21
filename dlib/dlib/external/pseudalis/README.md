@@ -1,6 +1,6 @@
 # Pseudalis
 
-> **Fork macOS** (TortueTech) : Pseudalis pour les Mac Apple Silicon seulement. Son application web parle
+> **Fork macOS** (papy cyber) : Pseudalis pour les Mac Apple Silicon seulement. Son application web parle
 > anglais et français seulement ; les modèles de reconnaissance de dlib lisent toujours les autres langues
 > citées plus bas. Le reste de ce document décrit l'original, pour Windows.
 

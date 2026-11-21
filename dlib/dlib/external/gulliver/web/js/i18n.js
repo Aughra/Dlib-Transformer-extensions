@@ -282,7 +282,7 @@ const texts = {
     agentRepeats: 'L\'agent répétait ses appels : ses outils ont été arrêtés pour qu\'il réponde avec les résultats obtenus.',
     agentSearchLimit: 'L\'agent a atteint ses {n} recherches : ses outils ont été arrêtés pour qu\'il réponde avec les résultats obtenus.',
     aboutText: 'Gulliver Community Edition exécute des modèles de langage localement, sur le processeur et le processeur graphique de ce Mac, en reposant sur la bibliothèque open source Dlib-Transformer-extensions.',
-    createdBy: 'Créé par {author}', changelog: 'Notes de version', home: 'Accueil : nouvelle discussion, saisie effacée', forkedBy: 'Fork pour macOS (Apple Silicon), modifié par TortueTech', forkShort: 'fork macOS',
+    createdBy: 'Créé par {author}', changelog: 'Notes de version', home: 'Accueil : nouvelle discussion, saisie effacée', forkedBy: 'Fork pour macOS (Apple Silicon), modifié par papy cyber', forkShort: 'fork macOS',
     thirdParty: 'Composants tiers', apiDocs: 'Documentation de l\'interface', close: 'Fermer', confirm: 'Confirmer',
     licensesTitle: 'Composants et licences',
     licensesIntro: 'Gulliver fonctionne sans réseau : les bibliothèques, les programmes et les modèles sur lesquels ' +
