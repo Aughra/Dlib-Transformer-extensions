@@ -1078,6 +1078,152 @@ kernel void attention_part(device const float* q [[buffer(0)]], device const uch
 }
 
 
+// L'attention d'une étape d'écriture, à la manière du « flash-decoding » (chantier Vitesse, 2026-11-21) : mêmes entrées
+// et mêmes sorties qu'attention_part, mais chaque voie d'un simdgroup prend une position, 32 positions à la fois, au lieu
+// d'une position par simdgroup.  Les scores des REP têtes de la voie se calculent sur toute la tête (requêtes dans la
+// mémoire de threadgroup), le softmax en ligne avance par paquets de 32 positions (une réduction par paquet et par tête
+// au lieu d'une par position), puis la somme des valeurs se fait ligne par ligne, chaque voie gardant PER valeurs de la
+// sortie et recevant de ses voisines le poids de chaque position.
+template <uint REP, uint HD>
+kernel void attention_dec(device const float* q [[buffer(0)]], device const uchar* region [[buffer(1)]],
+    device const int* blocks [[buffer(2)]], device const int* lengths [[buffer(3)]],
+    device float* partial [[buffer(4)]], constant attention_args& a [[buffer(5)]], device float* ctx [[buffer(6)]],
+    uint3 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]])
+{
+    constexpr uint PER = HD / 32;
+    threadgroup float qs[REP * HD];
+    threadgroup float tm[ATT_SG][MAX_REP], tl[ATT_SG][MAX_REP];
+    threadgroup float to[ATT_SG][REP][HD];
+    const uint part = tg.x, kvh = tg.y, t = tg.z;
+    const uint e0 = lane * PER;
+    const long length = lengths[t];
+    long p0 = long(part) * a.part_len;
+    const long p1 = min(length, p0 + long(a.part_len));
+    if (a.window > 0) p0 = max(p0, length - long(a.window));
+    device float* out = partial + ((ulong(t) * a.kv_heads + kvh) * a.parts + part) * (a.rep * (a.hd + 2));
+    for (uint idx = sg * 32 + lane; idx < REP * HD; idx += ATT_SG * 32)
+        qs[idx] = q[t * a.q_stride + (kvh * REP + idx / HD) * HD + idx % HD];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    float m[REP], l[REP], o[REP][PER];
+    for (uint i = 0; i < REP; ++i)
+    {
+        m[i] = -INFINITY;
+        l[i] = 0.0f;
+        for (uint e = 0; e < PER; ++e) o[i][e] = 0.0f;
+    }
+    device const int* table = blocks + ulong(t) * a.table_stride;
+    for (long pb = p0 + long(sg) * 32; pb < p1; pb += ATT_SG * 32)
+    {
+        // Les scores de la position de la voie, pour ses REP têtes.
+        const long p = pb + lane;
+        const bool ok = p < p1;
+        float sc[REP];
+        for (uint i = 0; i < REP; ++i) sc[i] = 0.0f;
+        if (ok)
+        {
+            const ulong head = ulong(table[p / a.positions]) * a.block_stride + ulong(kvh) * a.head_stride;
+            const ulong row = ulong(p % a.positions);
+            device const uchar* ks = region + head + a.k_slab;
+            for (uint e = 0; e < HD; e += 4)
+            {
+                float4 kv;
+                if (a.q8)
+                {
+                    const float d = float(as_type<half>(*(device const ushort*)(ks + a.scales + row * (HD / 32) * 2 + (e / 32) * 2)));
+                    kv = d * float4(*(device const char4*)(ks + row * HD + e));
+                }
+                else
+                    kv = float4(*(device const half4*)((device const half*)ks + row * HD + e));
+                for (uint i = 0; i < REP; ++i) sc[i] += dot(kv, *(threadgroup const float4*)(qs + i * HD + e));
+            }
+        }
+        // Le softmax en ligne, un paquet de 32 positions à la fois.
+        float pk[REP];
+        for (uint i = 0; i < REP; ++i)
+        {
+            const float s = ok ? sc[i] : -INFINITY;
+            const float mn = max(m[i], simd_max(s));
+            const float shrink = mn == -INFINITY ? 1.0f : exp(m[i] - mn);
+            pk[i] = ok ? exp(s - mn) : 0.0f;
+            l[i] = l[i] * shrink + simd_sum(pk[i]);
+            m[i] = mn;
+            for (uint e = 0; e < PER; ++e) o[i][e] *= shrink;
+        }
+        // La somme des valeurs : position par position, chaque voie ses PER valeurs de la ligne.
+        // Quatre positions à la fois, leurs adresses calculées d'avance, pour que leurs lectures partent ensemble ;
+        // l'adresse de la ligne de la voie (sa position) sert aux autres voies par simd_shuffle.
+        const uint n = uint(min(32L, p1 - pb));
+        const int vblk = ok ? table[p / a.positions] : 0;
+        const uint vrw = ok ? uint(p % a.positions) : 0u;
+        device const uchar* vhead = region + ulong(kvh) * a.head_stride + a.v_slab;
+        for (uint j0 = 0; j0 < n; j0 += 4)
+        {
+            float vf[4][PER];
+            for (uint u = 0; u < 4; ++u)
+            {
+                const ushort j = ushort(min(j0 + u, n - 1));
+                const int blk = simd_shuffle(vblk, j);
+                const uint row = simd_shuffle(vrw, j);
+                device const uchar* base = vhead + ulong(blk) * a.block_stride;
+                load_row<PER>(base, row, e0, a, vf[u]);
+            }
+            for (uint u = 0; u < 4 && j0 + u < n; ++u)
+                for (uint i = 0; i < REP; ++i)
+                {
+                    const float w = simd_shuffle(pk[i], ushort(j0 + u));
+                    for (uint e = 0; e < PER; ++e) o[i][e] += w * vf[u][e];
+                }
+        }
+    }
+    // Les simdgroups réunis, comme dans attention_part.
+    for (uint i = 0; i < REP; ++i)
+        if (lane == 0)
+        {
+            tm[sg][i] = m[i];
+            tl[sg][i] = l[i];
+        }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    float jm[REP], jl[REP];
+    for (uint i = 0; i < REP; ++i)
+    {
+        float mx = -INFINITY;
+        for (uint s = 0; s < ATT_SG; ++s) mx = max(mx, tm[s][i]);
+        jm[i] = mx;
+        float sum = 0;
+        for (uint s = 0; s < ATT_SG; ++s)
+            if (tl[s][i] > 0.0f) sum += tl[s][i] * exp(tm[s][i] - mx);
+        jl[i] = sum;
+    }
+    for (uint i = 0; i < REP; ++i)
+    {
+        const float f = l[i] > 0.0f ? exp(m[i] - jm[i]) : 0.0f;
+        for (uint e = 0; e < PER; ++e) to[sg][i][e0 + e] = o[i][e] * f;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (sg == 0)
+        for (uint i = 0; i < REP; ++i)
+            for (uint idx = lane; idx < HD; idx += 32)
+            {
+                float sum = 0;
+                for (uint s = 0; s < ATT_SG; ++s) sum += to[s][i][idx];
+                if (a.parts == 1) ctx[t * a.q_stride + (kvh * REP + i) * HD + idx] = jl[i] > 0.0f ? sum / jl[i] : 0.0f;
+                else out[i * HD + idx] = sum;
+            }
+    if (a.parts > 1 && sg == 0 && lane == 0)
+        for (uint i = 0; i < REP; ++i)
+        {
+            out[REP * HD + i] = jm[i];
+            out[REP * HD + REP + i] = jl[i];
+        }
+}
+
+#define ATT_DEC(R, H) template [[host_name("attention_dec_" #R "_" #H)]] kernel void attention_dec<R, H>( \
+    device const float*, device const uchar*, device const int*, device const int*, device float*, \
+    constant attention_args&, device float*, uint3, uint, uint);
+ATT_DEC(1, 64) ATT_DEC(1, 128) ATT_DEC(2, 64) ATT_DEC(2, 128) ATT_DEC(4, 64) ATT_DEC(4, 128) ATT_DEC(8, 64) ATT_DEC(8, 128)
+
 // Les tailles que prennent les modèles : têtes de requête par tête de clés et valeurs (REP) et valeurs
 // d'une tête par voie (PER = hd / 32).
 template [[host_name("attention_part_1_2")]] kernel void attention_part<1, 2>(device const float*, device const uchar*,

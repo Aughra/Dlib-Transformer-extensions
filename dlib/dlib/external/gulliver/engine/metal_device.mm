@@ -14,6 +14,8 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <map>
+#include <vector>
 #include <unistd.h>
 #include <vector>
 
@@ -75,7 +77,9 @@ namespace gulliver
             "gelu_mul", "add_rows",
             "attention_part_1_16", "attention_part_2_16", "attention_part_4_16", "attention_part_8_16",
             "attention_mtile_1_512", "attention_mtile_2_512", "attention_mtile_4_512", "attention_mtile_8_512",
-            "dequant_h_q4_K", "dequant_h_q5_K", "dequant_h_q6_K", "dequant_h_q8_0", "dequant_h_q5_0", "to_half" };
+            "dequant_h_q4_K", "dequant_h_q5_K", "dequant_h_q6_K", "dequant_h_q8_0", "dequant_h_q5_0", "to_half",
+            "attention_dec_1_64", "attention_dec_1_128", "attention_dec_2_64", "attention_dec_2_128",
+            "attention_dec_4_64", "attention_dec_4_128", "attention_dec_8_64", "attention_dec_8_128" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -89,8 +93,8 @@ namespace gulliver
             k_attention_part, k_attention_mtile = k_attention_part + 12, k_restore_outputs = k_attention_mtile + 12,
             k_short_conv, k_gelu_mul, k_add_rows, k_attention_part_512, k_attention_mtile_512 = k_attention_part_512 + 4,
             k_dequant_h_q4_K = k_attention_mtile_512 + 4, k_dequant_h_q5_K, k_dequant_h_q6_K, k_dequant_h_q8_0,
-            k_dequant_h_q5_0, k_to_half,
-            k_count
+            k_dequant_h_q5_0, k_to_half, k_attention_dec,
+            k_count = k_attention_dec + 8
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -217,15 +221,96 @@ namespace gulliver
         id<MTLComputeCommandEncoder> encoder = nil;
 
         // Les noyaux vont à un encodeur de calcul, que ferme un produit de Metal Performance Shaders.
+        /* GULLIVER_GPU_PROFILE : pour les mesures du chantier Vitesse, chaque noyau dans un encodeur à lui, horodaté par
+           le GPU au début et à la fin (compteurs aux limites de passe) ; finish() additionne le temps par noyau et en
+           donne le tableau toutes les 64 passes, dans la sortie d'erreur.  Les encodeurs séparés ralentissent un peu le
+           tout : la répartition compte, pas le total. */
+        static bool profiling()
+        {
+            static const bool p = std::getenv("GULLIVER_GPU_PROFILE") != nullptr;
+            return p;
+        }
+        id<MTLCounterSampleBuffer> samples = nil;
+        std::vector<const char*> sampled;
+        void profiled_encoder(const char* name)
+        {
+            close();
+            if (!samples)
+            {
+                for (id<MTLCounterSet> set in device->device.counterSets)
+                    if ([set.name isEqualToString:MTLCommonCounterSetTimestamp])
+                    {
+                        MTLCounterSampleBufferDescriptor* d = [MTLCounterSampleBufferDescriptor new];
+                        d.counterSet = set;
+                        d.storageMode = MTLStorageModeShared;
+                        d.sampleCount = 2048;
+                        NSError* e = nil;
+                        samples = [device->device newCounterSampleBufferWithDescriptor:d error:&e];
+                        if (!samples)
+                            std::fprintf(stderr, "gpu profile: %s\n", e ? e.localizedDescription.UTF8String : "no sample buffer");
+                    }
+            }
+            if (!samples || sampled.size() >= 1024)
+            {
+                encoder = [buffer computeCommandEncoder];
+                return;
+            }
+            MTLComputePassDescriptor* d = [MTLComputePassDescriptor computePassDescriptor];
+            d.sampleBufferAttachments[0].sampleBuffer = samples;
+            d.sampleBufferAttachments[0].startOfEncoderSampleIndex = 2 * sampled.size();
+            d.sampleBufferAttachments[0].endOfEncoderSampleIndex = 2 * sampled.size() + 1;
+            encoder = [buffer computeCommandEncoderWithDescriptor:d];
+            sampled.push_back(name);
+        }
         void use(int k)
         {
-            if (!encoder) encoder = [buffer computeCommandEncoder];
+            if (profiling()) profiled_encoder(kernel_names[k]);
+            else if (!encoder) encoder = [buffer computeCommandEncoder];
             [encoder setComputePipelineState:device->pipelines[static_cast<size_t>(k)]];
         }
         void use_nax(int k)
         {
-            if (!encoder) encoder = [buffer computeCommandEncoder];
+            if (profiling()) profiled_encoder(nax_attention_names[k]);
+            else if (!encoder) encoder = [buffer computeCommandEncoder];
             [encoder setComputePipelineState:device->nax[static_cast<size_t>(k)]];
+        }
+        void report_profile()
+        {
+            if (!samples || sampled.empty())
+            {
+                static bool told = false;
+                if (!told) std::fprintf(stderr, "gpu profile: no samples (%s)\n", samples ? "nothing sampled" : "no sample buffer");
+                told = true;
+                return;
+            }
+            NSData* data = [samples resolveCounterRange:NSMakeRange(0, 2 * sampled.size())];
+            if (!data) { std::fprintf(stderr, "gpu profile: the samples do not resolve\n"); return; }
+            const MTLCounterResultTimestamp* t = (const MTLCounterResultTimestamp*)data.bytes;
+            static std::map<std::string, std::pair<double, long>> total;
+            static int passes = 0;
+            for (size_t i = 0; i < sampled.size(); ++i)
+            {
+                const uint64_t a = t[2 * i].timestamp, b = t[2 * i + 1].timestamp;
+                if (a == MTLCounterErrorValue || b == MTLCounterErrorValue || b < a) continue;
+                auto& e = total[sampled[i]];
+                e.first += double(b - a);
+                e.second += 1;
+            }
+            sampled.clear();
+            if (++passes < 64) return;
+            std::vector<std::pair<double, std::string>> rows;
+            double sum = 0;
+            for (const auto& e : total)
+            {
+                rows.push_back({ e.second.first, e.first + " x" + std::to_string(e.second.second / passes) });
+                sum += e.second.first;
+            }
+            std::sort(rows.rbegin(), rows.rend());
+            std::fprintf(stderr, "gpu profile over %d passes (timestamp units per pass, share):\n", passes);
+            for (const auto& e : rows)
+                std::fprintf(stderr, "  %-34s %10.0f  %5.1f %%\n", e.second.c_str(), e.first / passes, 100.0 * e.first / sum);
+            total.clear();
+            passes = 0;
         }
         void close()
         {
@@ -946,8 +1031,13 @@ namespace gulliver
         metal_view ctx, const kv_layout& l, unsigned part_len)
     {
         if (tokens == 0) return;
-        const int kernel = attention_kernel(rep, l.hd);
+        int kernel = attention_kernel(rep, l.hd);
         if (kernel < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
+        // attention_dec (« flash-decoding ») pour les têtes de 64 et 128 valeurs ; GULLIVER_OLD_DECODE garde
+        // attention_part pour les mesures.
+        static const bool old_decode = std::getenv("GULLIVER_OLD_DECODE") != nullptr;
+        const int r = rep == 1 ? 0 : rep == 2 ? 1 : rep == 4 ? 2 : rep == 8 ? 3 : -1;
+        if (!old_decode && r >= 0 && (l.hd == 64 || l.hd == 128)) kernel = k_attention_dec + 2 * r + (l.hd == 128 ? 1 : 0);
         const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, part_len, parts, q_stride,
             table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l) };
         impl_->use(kernel);
@@ -1029,6 +1119,7 @@ namespace gulliver
         impl_->close();
         [impl_->buffer commit];
         [impl_->buffer waitUntilCompleted];
+        if (impl::profiling()) impl_->report_profile();
         if (impl_->buffer.status == MTLCommandBufferStatusError)
             throw std::runtime_error(std::string("the GPU failed the commands: ")
                 + (impl_->buffer.error ? impl_->buffer.error.localizedDescription.UTF8String : "unknown error"));

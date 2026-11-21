@@ -12,6 +12,7 @@
 #include "cpu_runtime.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -752,7 +753,16 @@ namespace gulliver
         // L'attention d'une étape se fait par parties de attention_part positions ; un prompt a assez de
         // tokens pour remplir le GPU avec une partie chacun.
         bool step = T <= static_cast<long>(metal_device::max_tokens);
-        const unsigned part_len = step ? metal_device::attention_part : static_cast<unsigned>(max_pos + 1);
+        /* Les parties d'une étape (attention_dec) : 128 positions jusqu'à 2 048 de contexte, 256 au-delà ; mesuré sur le
+           Mac mini (Qwen3-VL 4B, mesures alternées) : 512 positions 73-74 tokens/s en parties de 256, 78 en 128 ;
+           4 096 : 66 en 256, 65,5 en 128 ; 16 384 : 42-45 en 256, 40-41 en 128, 39-40 en 512.  GULLIVER_ATT_PART
+           impose une taille pour les mesures. */
+        static const unsigned step_part = [] {
+            const char* v = std::getenv("GULLIVER_ATT_PART");
+            return v ? static_cast<unsigned>(std::max(8, std::atoi(v))) : 0u;
+        }();
+        const unsigned part_len = !step ? static_cast<unsigned>(max_pos + 1)
+            : step_part ? step_part : max_pos + 1 <= 2048 ? 128u : 256u;
         const unsigned parts = static_cast<unsigned>((max_pos + 1 + part_len - 1) / part_len);
         const size_t partial = parts > 1 ? static_cast<size_t>(T) * KVH * parts * rep * (hd + 2) : 1;
         if (g.partial_capacity < partial)
@@ -828,6 +838,10 @@ namespace gulliver
                 }
         }
         unsigned uT = static_cast<unsigned>(T);
+        // GULLIVER_GPU_TIMING : pour les mesures du chantier Vitesse, le temps d'écriture des commandes, de la passe
+        // entière et du GPU seul, en moyenne sur 32 pas d'écriture, dans la sortie d'erreur.
+        static const bool timing = std::getenv("GULLIVER_GPU_TIMING") != nullptr;
+        const auto t_begin = std::chrono::steady_clock::now();
         auto c = dev.begin();
         /*
             Les couches qui lisent les clés et valeurs d'une autre (Gemma 4) ne servent que les lignes dont la passe
@@ -1199,7 +1213,24 @@ namespace gulliver
         if (R > 0)
             c->matvec(output_.type, at(g.weights, g.weight(output_)), cfg_.vocab, d, g.hidden, static_cast<unsigned>(R), d,
                 g.logits, cfg_.vocab, logit);
+        const auto t_encoded = std::chrono::steady_clock::now();
         c->finish();
+        if (timing && T == 1)
+        {
+            static double enc = 0, wall = 0, gpu = 0;
+            static int n = 0;
+            const auto t_end = std::chrono::steady_clock::now();
+            enc += std::chrono::duration<double, std::milli>(t_encoded - t_begin).count();
+            wall += std::chrono::duration<double, std::milli>(t_end - t_begin).count();
+            gpu += c->gpu_milliseconds();
+            if (++n == 32)
+            {
+                std::fprintf(stderr, "gpu timing: step %.3f ms, of which encoding %.3f ms, GPU %.3f ms\n",
+                    wall / n, enc / n, gpu / n);
+                enc = wall = gpu = 0;
+                n = 0;
+            }
+        }
 
         for (const auto& s : batch.segments)
             sequences_[static_cast<size_t>(s.sequence)]->length += s.count;

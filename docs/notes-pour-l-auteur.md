@@ -1178,6 +1178,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (mesures alternées avec `GULLIVER_NO_NAX`) : 4 096 tokens **2 100 à 2 128 tokens/s** (+44 %), 16 384 tokens **984 à 1 021** (+90 %). Une première version, où chaque simdgroup lisait lui-même les clés, ne gagnait que +23 % et +48 %. En **6.18.1**, 8 simdgroups (128 lignes par tuile) au lieu de 4 : 4 096 tokens **2 186 à 2 280**, 16 384 **1 093 à 1 255** (llama.cpp : 2 063 et 1 209). Essayés et rejetés en mesures alternées : des pas de 64 positions (−10 à −20 %), un double tampon, des exponentielles en base 2 (sans gain).
 - **Mac ou Windows** : propre au Mac (accélérateurs du M5).
 
+### Changement 35 : l'attention de l'écriture à la manière du « flash-decoding » (Gulliver 6.19.0)
+
+- **Avant** : chaque mot écrit passait par `attention_part` : un threadgroup par partie de 256 positions et par tête de clés, chaque simdgroup traitant une position à la fois (une réduction entre voies et deux exponentielles par position et par tête de requête). Un profil par noyau (nouveau mode `GULLIVER_GPU_PROFILE` du moteur, un encodeur horodaté par noyau) montrait l'attention à 16 % d'un pas après 600 positions et 29 % après 4 096, pour quelques dizaines de Mo lus : le GPU attendait. Qwen3-VL 4B Thinking, clés en 8 bits, Mac mini M5 Pro : écriture après 512 / 4 096 / 16 384 positions **70,7 / 58,3 / 28-31 tokens/s**.
+- **Changement** (`engine/metal_kernels.metal`, `attention_dec`, têtes de 64 et 128 valeurs ; `metal_device.mm`, `cpu_runtime_metal.cpp`) : chaque voie d'un simdgroup prend une position, 32 positions à la fois ; les scores de ses têtes de requête sur toute la tête (requêtes dans la mémoire de threadgroup) ; le softmax en ligne par paquets de 32 (une réduction par paquet au lieu d'une par position) ; la somme des valeurs ligne par ligne, quatre positions à la fois, leur bloc et leur ligne échangés entre voies pour que les lectures partent ensemble. Parties de 128 positions jusqu'à 2 048 de contexte, 256 au-delà (mesuré). Mêmes entrées et sorties qu'`attention_part`, réunion des parties inchangée ; `GULLIVER_OLD_DECODE` garde l'ancien noyau. Une première version sans les lectures groupées ne gagnait rien. **Exactitude** : `test_metal` (7e-8) ; perplexité calculée token par token sur 2 morceaux de 4 096 (nouveau mode `steps` de `perplexity_runtime`) : 8,6962 contre 8,6944 avec l'ancien noyau (8,6954 en lecture d'un coup).
+- **Après** (mesures alternées) : **78,4 / 65,7-66,0 / 40,8-42,2 tokens/s** (+11 %, +13 %, +36 à +45 %).
+- **Mac ou Windows** : propre au Mac (Metal), utile sur toutes les puces Apple.
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -1205,6 +1212,7 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 | Gemma 4 E2B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 20,9 à 23,8 tokens/s ; lecture de 512 tokens 463 à 471 tokens/s avec le changement 24 (143 à 156 avant), 671 à 685 sur le GPU (233 à 237 avant) ; de 4 096 tokens 371 à 383 sur le processeur, 241 à 249 sur le GPU (changements 16 et 24) |
 | LFM2.5-8B-A1B Q4_K_M (mélange d'experts, fork seulement), processeur | non lu par le moteur | écriture 34,2 à 34,3 tokens/s ; lecture de 512 tokens 141 à 149 tokens/s (changement 17) ; le 1.2B en Q8_0 : 35,3 à 36,1 et 253 à 281, et sur le GPU 40,4 et 433 à 462 (changement 19) |
 | Gemma 3 4B Q4_K_M (fork seulement), processeur | non lu par le moteur | écriture 16,3 à 17,2 tokens/s ; lecture de 512 tokens 88 à 92 tokens/s (changement 18) ; le 1B : 25,0 à 28,2 et 396 à 436 |
+| Mac mini M5 Pro, Qwen3-VL 4B Thinking, écriture après 512 / 4 096 / 16 384 tokens sur le GPU | pas mesuré | 78,4 / 66 / 41-42 tokens/s avec le changement 35 (70,7 / 58,3 / 28-31 avant) |
 | Mac mini M5 Pro, Qwen3-VL 4B Thinking, lecture de 4 096 / 16 384 tokens sur le GPU | pas mesuré | 2 100 à 2 128 / 984 à 1 021 tokens/s avec le changement 34 (1 467 / 524 avant) |
 | Mac mini M5 Pro, Qwen3-VL 4B Thinking, lecture de 512 tokens sur le GPU | pas mesuré | 2 593 à 2 708 tokens/s avec le changement 33 (2 060 à 2 159 avant) |
 | Mac mini M5 Pro, affinage LoRA de Qwen3-0.6B, 2 pas de 4 fenêtres de 256 tokens (atelier) | 779 à 780 s (boucles portables de dlib) | 7 s avec Accelerate (changement 32) |

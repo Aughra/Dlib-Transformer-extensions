@@ -5,14 +5,16 @@
     calcule (llama-perplexity), pour comparer la justesse des deux moteurs sur le même fichier
     (fork pour macOS, 2026-11-21) :
 
-        perplexity_runtime model.gguf texte.txt [contexte=512] [morceaux=0] [f16|q8] [metal]
+        perplexity_runtime model.gguf texte.txt [contexte=512] [morceaux=0] [f16|q8] [metal|cpu] [steps]
 
     Le texte est tokenisé en entier (avec le BOS si le modèle le demande), puis coupé en
     morceaux de « contexte » tokens ; le premier token de chaque morceau devient le BOS quand le
     modèle en met un, et seules les prédictions de la seconde moitié du morceau comptent (la
     première sert de contexte), comme dans llama-perplexity.  morceaux = 0 : tous les morceaux
     entiers du texte.  Affiche la perplexité, son incertitude, et la part des positions où le
-    token suivant est le plus probable du modèle.
+    token suivant est le plus probable du modèle.  Avec « steps », la première moitié de chaque
+    morceau est lue d'un coup et la seconde donnée token par token, comme pendant l'écriture d'une
+    réponse : la même perplexité, calculée par le chemin des étapes.
 */
 
 #include <algorithm>
@@ -47,6 +49,7 @@ int main(int argc, char** argv)
     long chunks = argc > 4 ? std::atol(argv[4]) : 0;
     const kv_format format = argc > 5 && std::string(argv[5]) == "q8" ? kv_format::q8 : kv_format::f16;
     const bool metal = argc > 6 && std::string(argv[6]) == "metal";
+    const bool steps = argc > 7 && std::string(argv[7]) == "steps";
     if (ctx < 16) { std::printf("perplexity_runtime: context must be at least 16\n"); return 2; }
 
     std::string text;
@@ -100,10 +103,33 @@ int main(int argc, char** argv)
         const int seq = rt.create_sequence();
         rt.reserve_sequence(seq, ctx);
         forward_batch b;
-        b.tokens = chunk;
-        b.segments.push_back({ seq, 0, ctx });
-        for (long i = first; i < ctx - 1; ++i) b.logit_rows.push_back(i);
-        rt.forward(b, logits);
+        if (!steps)
+        {
+            b.tokens = chunk;
+            b.segments.push_back({ seq, 0, ctx });
+            for (long i = first; i < ctx - 1; ++i) b.logit_rows.push_back(i);
+            rt.forward(b, logits);
+        }
+        else
+        {
+            // Le début lu d'un coup jusqu'à la position first, puis un token à la fois.
+            std::vector<float> all, one;
+            b.tokens.assign(chunk.begin(), chunk.begin() + first + 1);
+            b.segments.push_back({ seq, 0, first + 1 });
+            b.logit_rows.push_back(first);
+            rt.forward(b, one);
+            all.insert(all.end(), one.begin(), one.end());
+            for (long i = first + 1; i < ctx - 1; ++i)
+            {
+                b.clear();
+                b.tokens.push_back(chunk[static_cast<size_t>(i)]);
+                b.segments.push_back({ seq, 0, 1 });
+                b.logit_rows.push_back(0);
+                rt.forward(b, one);
+                all.insert(all.end(), one.begin(), one.end());
+            }
+            logits.swap(all);
+        }
         rt.release_sequence(seq);
         for (long r = 0; r < ctx - 1 - first; ++r)
         {
