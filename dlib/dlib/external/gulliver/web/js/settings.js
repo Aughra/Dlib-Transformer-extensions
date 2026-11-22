@@ -26,6 +26,7 @@ import { forgetMemory, memoryAbort, memoryParagraph, memorySentences } from './m
 import { modelsTab } from './models.js';
 import { go } from './navigation.js';
 import { applyTheme, saveSetting } from './preferences.js';
+import { currentAccount } from './profile.js';
 import { serviceTab } from './service.js';
 import { accountsTab } from './accounts.js';
 import { clearedSettings, roles, state, ui } from './state.js';
@@ -36,11 +37,15 @@ export function settingsDialog(initialTab) {
   dialog((box, close) => {
     // Servie par la passerelle de Cloudflare (hors du Mac), la page n'a pas l'administration du service : ses
     // onglets sont cachés, et la passerelle refuserait leurs actions de toute façon.
-    const remote = Boolean(state.status && state.status.remote);
+    // Depuis le réseau de la maison, un profil qui n'est pas l'administrateur ne les voit pas non plus : le
+    // service lui refuse leurs actions (host/server.cpp, require_manager).  Sur le Mac lui-même, il les permet.
+    const account = currentAccount();
+    const onMac = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(location.hostname);
+    const hidden = Boolean(state.status && state.status.remote) || Boolean(account && !account.admin && !onMac);
     const adminTabs = ['modelsTab', 'serviceTab'];
     const tabs = ['general', 'modelsTab', 'model', 'memoryTab', 'data', 'accountsTab', 'serviceTab', 'about']
-      .filter((tab) => !remote || !adminTabs.includes(tab));
-    if (remote && adminTabs.includes(initialTab)) initialTab = 'general';
+      .filter((tab) => !hidden || !adminTabs.includes(tab));
+    if (hidden && adminTabs.includes(initialTab)) initialTab = 'general';
     const tabBar = h('div', { class: 'tabs' });
     const body = h('div');
     const show = (tab) => {

@@ -8,7 +8,9 @@
 # seule fois, jamais par la passerelle (X-Gulliver-Remote) ; les données exigent une session et ne s'ouvrent jamais
 # pour un autre profil ; seul l'administrateur gère les profils, et jamais par la passerelle ; un mauvais mot de passe
 # est refusé, puis freiné après 5 essais ; changer un mot de passe ferme les autres sessions ; la déconnexion ferme la
-# session ; une base d'avant les comptes fait de son plus ancien profil l'administrateur, sans mot de passe.
+# session ; une base d'avant les comptes fait de son plus ancien profil l'administrateur, sans mot de passe ; les actions
+# qui changent le service (réglages, modèles, journal) restent libres depuis le Mac, et depuis le réseau de la maison
+# (port 18496, appelé par l'adresse du Mac sur ce réseau) sont réservées à la session de l'administrateur.
 import json
 import os
 import shutil
@@ -24,6 +26,7 @@ ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 WORK = os.path.join(ROOT, "build", "comptes-test")
 SERVICE = os.environ.get("GULLIVER_SERVICE", os.path.join(ROOT, "build", "macos-gulliver", "bin", "gulliver-service"))
 PORT = 18494
+LAN_PORT = 18496
 BASE = f"https://127.0.0.1:{PORT}"
 CTX = ssl.create_default_context()
 CTX.check_hostname = False
@@ -37,14 +40,24 @@ def check(ok, what):
     failures += 0 if ok else 1
 
 
-def call(method, path, body=None, token=None, headers=None):
+def lan_address():
+    """L'adresse du Mac sur le réseau de la maison (interface de la route par défaut), ou None."""
+    try:
+        route = subprocess.run(["route", "-n", "get", "default"], capture_output=True, text=True).stdout
+        iface = next(l.split()[-1] for l in route.splitlines() if "interface:" in l)
+        return subprocess.run(["ipconfig", "getifaddr", iface], capture_output=True, text=True).stdout.strip() or None
+    except Exception:
+        return None
+
+
+def call(method, path, body=None, token=None, headers=None, base=None):
     """(statut, corps JSON)."""
     h = {"Content-Type": "application/json"}
     if token:
         h["X-Gulliver-Session"] = token
     h.update(headers or {})
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(BASE + path, data=data, method=method, headers=h)
+    req = urllib.request.Request((base or BASE) + path, data=data, method=method, headers=h)
     try:
         with urllib.request.urlopen(req, context=CTX, timeout=60) as r:
             return r.status, json.load(r)
@@ -86,7 +99,7 @@ def main():
     home = os.path.join(WORK, "home")
     os.makedirs(home, mode=0o700)
     with open(os.path.join(home, "settings.json"), "w") as f:
-        json.dump({"port": PORT, "offline": True, "default_model": False, "lan": False}, f)
+        json.dump({"port": PORT, "offline": True, "default_model": False, "lan": True, "lan_port": LAN_PORT}, f)
     proc = start()
     try:
         st, body = call("GET", "/gulliver/v1/profiles")
@@ -147,6 +160,30 @@ def main():
 
         st, body = call("DELETE", f"/gulliver/v1/profiles/{admin_id}", token=admin)
         check(st == 409 and code(body) == "admin_kept", "l'administrateur ne peut pas se supprimer")
+
+        # Les actions qui changent le service : le journal est la plus inoffensive à appeler.
+        st, body = call("GET", "/gulliver/v1/logs")
+        check(st == 200, "depuis le Mac, le journal du service se lit sans session (agents et outils du Mac)")
+        st, body = call("GET", "/gulliver/v1/logs", token=admin, headers={"X-Gulliver-Remote": "1"})
+        check(st == 403 and code(body) == "admin_required", "par la passerelle, le journal est refusé, même à l'administrateur")
+        ip = lan_address()
+        if not ip:
+            check(False, "l'adresse du Mac sur le réseau de la maison est introuvable")
+        else:
+            lan = f"http://{ip}:{LAN_PORT}"
+            st, body = call("GET", "/gulliver/v1/logs", base=lan)
+            check(st == 401 and code(body) == "session_required", "depuis le réseau de la maison, il faut une session")
+            st, body = call("PUT", "/gulliver/v1/settings", {"lan": False}, token=lui, base=lan)
+            check(st == 403 and code(body) == "admin_required",
+                  "depuis le réseau de la maison, un profil simple ne change pas les réglages")
+            st, body = call("POST", "/gulliver/v1/models/refresh", token=lui, base=lan)
+            check(st == 403 and code(body) == "admin_required", "ni les modèles")
+            st, body = call("GET", "/gulliver/v1/logs", token=admin, base=lan)
+            check(st == 200, "depuis le réseau de la maison, l'administrateur lit le journal")
+            st, body = call("GET", "/gulliver/v1/settings", token=lui, base=lan)
+            check(st == 200, "les réglages restent lisibles par chacun")
+            st, body = call("GET", "/gulliver/v1/logs", base=f"http://127.0.0.1:{LAN_PORT}")
+            check(st == 200, "par la porte du réseau appelée depuis le Mac lui-même, pas de session demandée")
 
         st, body = call("POST", "/gulliver/v1/login", {"name": "Lui", "password": "mot-de-passe-3"})
         lui2 = body.get("token")

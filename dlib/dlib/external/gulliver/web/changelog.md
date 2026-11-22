@@ -2,6 +2,16 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.33.0 — 22 novembre 2026
+
+### Sécurité
+
+- Les actions qui changent le service pour tous (installer, activer, vérifier ou supprimer un modèle, changer les réglages, redémarrer, lancer une mesure, lire le journal du service) sont réservées à l'administrateur depuis le réseau de la maison : sans session, le service répond 401, et pour un autre profil 403. Depuis le Mac lui-même, elles restent libres (les agents de mesure et les outils s'en servent sans session) ; par la discussion en ligne, elles restent refusées. Jusqu'ici, tout appareil du Wi-Fi pouvait changer les réglages, par exemple fermer l'accès réseau.
+- La page joint la session à chacun de ses appels au service. Depuis le réseau de la maison, un profil qui n'est pas l'administrateur ne voit plus les onglets Modèles et Service.
+- La description de l'interface (`/docs`) dit quelles routes demandent une session ; elle disait encore que toutes étaient ouvertes.
+
+---
+
 ## 6.32.0 — 22 novembre 2026
 
 ### Performances

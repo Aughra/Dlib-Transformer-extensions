@@ -2,8 +2,8 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "6.32.0",
-  "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
+  "version": "6.33.0",
+  "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS. Les données d'un profil demandent sa session (en-tête X-Gulliver-Session, ouverte par /gulliver/v1/login). Les actions qui changent le service (modèles, réglages, redémarrage, mesures, journal) sont libres depuis le Mac lui-même ; depuis le port réseau, elles demandent la session de l'administrateur (401 session_required, 403 admin_required) ; par la passerelle de Cloudflare, elles sont refusées. Les autres routes (discussion, état, catalogue) sont ouvertes.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
    "url": "https://www.boost.org/LICENSE_1_0.txt"
@@ -946,6 +946,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -1516,6 +1536,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -1655,6 +1695,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -1714,6 +1774,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    },
@@ -1749,6 +1829,26 @@
            "type": "string"
           }
          }
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -1833,6 +1933,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -1892,6 +2012,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -1921,6 +2061,26 @@
        "application/json": {
         "schema": {
          "type": "object"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -1980,6 +2140,26 @@
            "type": "string"
           }
          }
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -2079,6 +2259,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -2147,6 +2347,26 @@
            }
           }
          ]
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -2643,6 +2863,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -2715,6 +2955,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -2777,6 +3037,26 @@
      },
      "409": {
       "description": "Le nouveau port est occupé ou ne peut pas être ouvert (code port_unavailable)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -2986,6 +3266,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -3055,6 +3355,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    },
@@ -3094,6 +3414,26 @@
      },
      "404": {
       "description": "Aucun réglage enregistré sous cette étiquette (code label)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -3280,6 +3620,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -3322,6 +3682,26 @@
         }
        }
       }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -3339,6 +3719,26 @@
        "application/json": {
         "schema": {
          "type": "object"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Depuis le port réseau, sans session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }

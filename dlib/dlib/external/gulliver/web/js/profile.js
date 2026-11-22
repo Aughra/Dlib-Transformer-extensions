@@ -72,6 +72,23 @@ function setSession(value) {
   writeStore(SESSION, token || null);
 }
 
+/*
+    Chaque appel de la page au service (adresses qui commencent par « / ») porte la session : les routes
+    qui changent le service (modèles, réglages) la demandent depuis le réseau de la maison, où seul
+    l'administrateur y a droit.  Un seul endroit plutôt qu'un en-tête ajouté à chaque appel.
+*/
+const nativeFetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+  const url = typeof input === 'string' ? input : (input && input.url) || '';
+  const same = url.startsWith('/') ? !url.startsWith('//') : url.startsWith(location.origin + '/');
+  if (same && sessionToken()) {
+    const headers = new Headers((init && init.headers) || (typeof input === 'string' ? undefined : input.headers));
+    if (!headers.has('X-Gulliver-Session')) headers.set('X-Gulliver-Session', sessionToken());
+    init = Object.assign({}, init, { headers });
+  }
+  return nativeFetch(input, init);
+};
+
 // La fiche du profil connecté : {id, name, admin}, ou null.
 export function currentAccount() {
   return account;
@@ -122,7 +139,7 @@ export function accountError(e) {
     name_taken: 'Un profil porte déjà ce nom.',
     setup_remote: 'Le premier mot de passe se choisit depuis le Mac ou le réseau de la maison.',
     setup_done: 'L’administrateur a déjà un mot de passe : connectez-vous.',
-    admin_required: 'Seul l’administrateur gère les profils, depuis le Mac ou le réseau de la maison.',
+    admin_required: 'Seul l’administrateur gère les profils, les modèles et les réglages du service, depuis le Mac ou le réseau de la maison.',
     admin_kept: 'Le profil de l’administrateur ne se supprime pas.'
   }[e.code] || e.message;
 }

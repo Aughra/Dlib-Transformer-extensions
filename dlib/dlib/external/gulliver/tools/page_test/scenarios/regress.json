@@ -387,7 +387,7 @@
  },
  {
   "name": "accounts: the data of a profile are refused without a session",
-  "eval": "const r=await fetch('/gulliver/v1/profile/conversations'); return r.status",
+  "eval": "const r=await fetch('/gulliver/v1/profile/conversations', {headers:{'X-Gulliver-Session':''}}); return r.status",
   "expect": 401
  },
  {

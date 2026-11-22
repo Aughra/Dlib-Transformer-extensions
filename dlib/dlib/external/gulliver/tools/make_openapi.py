@@ -1512,6 +1512,29 @@ here = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(here, "..", "common", "version.h"), encoding="utf-8") as f:
     version = re.search(r'#define GULLIVER_VERSION "([0-9.]+)"', f.read()).group(1)
 
+# Les actions qui changent le service (host/server.cpp, require_manager) : libres depuis le Mac, réservées à
+# l'administrateur depuis le port réseau.
+manager_replies = {
+    "401": reply("Depuis le port réseau, sans session valable (code session_required)", ref("Error")),
+    "403": reply("Depuis le port réseau, réservé à l'administrateur ; toujours refusé par la passerelle "
+                 "(code admin_required)", ref("Error")),
+}
+for route, method in (("/gulliver/v1/relay/test", "post"), ("/gulliver/v1/models/refresh", "post"),
+                      ("/gulliver/v1/hub/add", "post"), ("/gulliver/v1/models/{id}/download", "post"),
+                      ("/gulliver/v1/models/{id}/download", "delete"), ("/gulliver/v1/models/{id}/activate", "post"),
+                      ("/gulliver/v1/models/{id}/deactivate", "post"), ("/gulliver/v1/models/{id}/verify", "post"),
+                      ("/gulliver/v1/models/{id}", "delete"), ("/gulliver/v1/import", "post"),
+                      ("/gulliver/v1/models/import", "post"), ("/gulliver/v1/library/load", "post"),
+                      ("/gulliver/v1/models/upload", "post"), ("/gulliver/v1/reserve", "delete"),
+                      ("/gulliver/v1/settings/profiles", "post"), ("/gulliver/v1/settings/profiles", "delete"),
+                      ("/gulliver/v1/settings", "put"), ("/gulliver/v1/restart", "post"),
+                      ("/gulliver/v1/engines/benchmark", "post"), ("/gulliver/v1/logs", "get")):
+    op = paths.get(route, {}).get(method)
+    if op is None:
+        raise SystemExit("make_openapi: no operation " + method + " " + route)
+    for status, r in manager_replies.items():
+        op.setdefault("responses", {}).setdefault(status, r)
+
 doc = {
     "openapi": "3.0.3",
     "info": {
@@ -1526,8 +1549,12 @@ doc = {
                        "gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son "
                        "travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les "
                        "documents.\n\n"
-                       "Une version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur "
-                       "le Mac comme sur le port réseau.\n\n"
+                       "Une version personnelle pour macOS. Les données d'un profil demandent sa session (en-tête "
+                       "X-Gulliver-Session, ouverte par /gulliver/v1/login). Les actions qui changent le service "
+                       "(modèles, réglages, redémarrage, mesures, journal) sont libres depuis le Mac lui-même ; depuis "
+                       "le port réseau, elles demandent la session de l'administrateur (401 session_required, 403 "
+                       "admin_required) ; par la passerelle de Cloudflare, elles sont refusées. Les autres routes "
+                       "(discussion, état, catalogue) sont ouvertes.\n\n"
                        "Les requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : "
                        "un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. "
                        "GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en "

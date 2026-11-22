@@ -345,6 +345,39 @@ namespace gulliver
         }
 
         /*
+            Les actions qui changent le service pour tous (modèles, réglages, redémarrage, mesures,
+            journal) : permises depuis le Mac lui-même (le service principal n'écoute que sur
+            127.0.0.1, et les agents et outils du Mac s'en servent sans session), et depuis le réseau
+            de la maison à la seule session de l'administrateur ; jamais par la passerelle.  Avant
+            les comptes, tout appareil du Wi-Fi pouvait changer les réglages (fork pour macOS,
+            2026-11-22).
+        */
+        bool from_home_network(service& svc, const httplib::Request& req)
+        {
+            const host_settings st = svc.settings().get();
+            if (!st.lan || req.local_port != st.lan_port) return false;
+            return req.remote_addr != "127.0.0.1" && req.remote_addr != "::1" && req.remote_addr != "::ffff:127.0.0.1";
+        }
+
+        bool require_manager(service& svc, const httplib::Request& req, httplib::Response& res)
+        {
+            if (!is_remote(req) && !from_home_network(svc, req)) return true;
+            profile me;
+            if (!is_remote(req) && !session_of(svc, req, me))
+            {
+                send_error(res, 401, "invalid_request_error", "this request needs a session", "session_required");
+                return false;
+            }
+            if (is_remote(req) || !me.admin)
+            {
+                send_error(res, 403, "invalid_request_error",
+                    "only the administrator changes the service, from the Mac or the home network", "admin_required");
+                return false;
+            }
+            return true;
+        }
+
+        /*
             La réponse à une requête dont le modèle n'est pas encore dans le moteur, parce que
             le service démarre ou que le modèle se charge : 503 avec un code et le délai après
             lequel réessayer.  Renvoie false quand le modèle manque définitivement.
@@ -2010,7 +2043,8 @@ namespace gulliver
         srv.Get("/gulliver/v1/reserve", [s](const httplib::Request&, httplib::Response& res) {
             send_json(res, 200, s->models().reserve_status());
         });
-        srv.Delete("/gulliver/v1/reserve", [s](const httplib::Request&, httplib::Response& res) {
+        srv.Delete("/gulliver/v1/reserve", [s](const httplib::Request& req, httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             uint64_t freed = 0;
             const size_t removed = s->models().clear_reserve(freed);
             json o = ok_result(true);
@@ -2207,6 +2241,7 @@ namespace gulliver
             send_json(res, 200, o);
         });
         srv.Post("/gulliver/v1/relay/test", [s](const httplib::Request& req, httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             // L'essai joint le fournisseur avec la clé enregistrée.  (Le relais se règle et s'essaie
             // depuis n'importe quel appareil du Wi-Fi, téléphone compris : choix de l'humain, 2026-11-17.)
             json body;
@@ -2229,6 +2264,7 @@ namespace gulliver
 
         // Le catalogue est téléchargé en arrière-plan ; son état est dans /gulliver/v1/models.
         srv.Post("/gulliver/v1/models/refresh", [s](const httplib::Request& req, httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             if (refuse_offline(*s, res)) return;
             s->models().refresh_catalog_async();
             json o = ok_result(true);
@@ -2280,6 +2316,7 @@ namespace gulliver
             send_json(res, 200, o);
         });
         srv.Post("/gulliver/v1/hub/add", [s](const httplib::Request& req, httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             if (refuse_offline(*s, res)) return;
             json body;
             if (!parse_body(req, res, body)) return;
@@ -2307,17 +2344,20 @@ namespace gulliver
         });
         srv.Post(R"(/gulliver/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,
                                                                                httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             user_error error;
             const bool ok = s->models().start_download(req.matches[1], error, s->settings().get().offline);
             send_json(res, ok ? 202 : 400, ok_result(ok, error));
         });
         srv.Delete(R"(/gulliver/v1/models/([A-Za-z0-9._-]+)/download)", [s](const httplib::Request& req,
                                                                                  httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             s->models().cancel_download(req.matches[1]);
             send_json(res, 200, ok_result(true));
         });
         srv.Post(R"(/gulliver/v1/models/([A-Za-z0-9._-]+)/activate)", [s](const httplib::Request& req,
                                                                                httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             json body;
             if (!parse_body(req, res, body)) return;
             user_error error;
@@ -2326,16 +2366,19 @@ namespace gulliver
         });
         srv.Post(R"(/gulliver/v1/models/([A-Za-z0-9._-]+)/deactivate)", [s](const httplib::Request& req,
                                                                                  httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             user_error error;
             const bool ok = s->deactivate(req.matches[1], error);
             send_json(res, ok ? 200 : 400, ok_result(ok, error));
         });
         srv.Post(R"(/gulliver/v1/models/([A-Za-z0-9._-]+)/verify)", [s](const httplib::Request& req,
                                                                              httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             send_json(res, 200, s->models().verify(req.matches[1]));
         });
         srv.Delete(R"(/gulliver/v1/models/([A-Za-z0-9._-]+))", [s](const httplib::Request& req,
                                                                         httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             const std::string id = req.matches[1];
             user_error error;
             bool pending = false;
@@ -2349,6 +2392,7 @@ namespace gulliver
             que le service lit avec ses propres droits : un refus vient avec son code et le chemin.
         */
         auto import = [s](const httplib::Request& req, httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             json body;
             if (!parse_body(req, res, body)) return;
             user_error refusal;
@@ -2372,6 +2416,7 @@ namespace gulliver
             else send_json(res, 200, r);
         });
         srv.Post("/gulliver/v1/library/load", [s](const httplib::Request& req, httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             json body;
             if (!parse_body(req, res, body)) return;
             user_error refusal;
@@ -2390,6 +2435,7 @@ namespace gulliver
         // que le service ne lit jamais.
         srv.Post(upload_route, [s](const httplib::Request& req, httplib::Response& res,
                                     const httplib::ContentReader& reader) {
+            if (!require_manager(*s, req, res)) return;
             const std::string name = file_name(req.get_param_value("name"));
             const uint64_t length = content_length(req);
             if (name.empty() || length == 0 || req.has_header("Transfer-Encoding"))
@@ -2568,6 +2614,7 @@ namespace gulliver
             send_json(res, 200, o);
         });
         srv.Post("/gulliver/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             json body;
             if (!parse_body(req, res, body)) return;
             const std::string label = body["label"].as_string();
@@ -2600,6 +2647,7 @@ namespace gulliver
             send_json(res, 200, p);
         });
         srv.Delete("/gulliver/v1/settings/profiles", [s](const httplib::Request& req, httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             const std::string label = req.get_param_value("label");
             std::lock_guard<std::mutex> lock(profiles_m);
             const json profiles = read_profiles(*s);
@@ -3453,6 +3501,7 @@ namespace gulliver
             send_json(res, 200, public_settings(*s));
         });
         srv.Put("/gulliver/v1/settings", [s](const httplib::Request& req, httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             json body;
             if (!parse_body(req, res, body)) return;
             std::string error;
@@ -3547,15 +3596,18 @@ namespace gulliver
             if (restart) s->request_restart();
         });
         srv.Post("/gulliver/v1/restart", [s](const httplib::Request& req, httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             send_json(res, 202, ok_result(true));
             s->request_restart();
         });
         srv.Post("/gulliver/v1/engines/benchmark", [s](const httplib::Request& req, httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             // Une mesure déjà en cours refuse la seconde avec 409.
             const json r = s->benchmark_engines();
             send_json(res, r["code"].as_string() == "benchmark_running" ? 409 : 200, r);
         });
-        srv.Get("/gulliver/v1/logs", [](const httplib::Request& req, httplib::Response& res) {
+        srv.Get("/gulliver/v1/logs", [s](const httplib::Request& req, httplib::Response& res) {
+            if (!require_manager(*s, req, res)) return;
             json lines = json::array();
             for (const auto& l : log_file::instance().recent()) lines.push_back(l);
             json o = json::object();
