@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.23.3 — 22 novembre 2026
+
+### Outils de mesure
+
+- Les campagnes de mesure (`tools/bench_moteurs.sh`, et donc la mesure du dimanche) notent la température de la puce au début et à la fin, lue par le nouvel outil `macos/temperature/` (état thermique de macOS et sondes de la puce, sans droits d'administrateur).
+
+---
+
 ## 6.23.2 — 22 novembre 2026
 
 ### Performances

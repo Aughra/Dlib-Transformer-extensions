@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.23.3 : la température de la puce dans les mesures
+
+- **Quoi** : `macos/temperature/` (nouveau, propre au fork) : `temperature.m` lit l'état thermique de macOS (`NSProcessInfo.thermalState`) et les sondes `PMU tdie` de la puce par `IOHIDEventSystemClient` (interface interne d'Apple, sans droits d'administrateur), README. `tools/bench_moteurs.sh` construit l'outil s'il manque et ajoute au tableau de la machine la sonde la plus chaude au début et à la fin. Notes pour l'auteur (changement 43) et rubrique « Tests de vitesse » : la remarque sur la chaleur corrigée.
+- **Fichiers** : `macos/temperature/{temperature.m,README.md}`, `gulliver/tools/bench_moteurs.sh`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,mesures/tests-de-vitesse.md}`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : question de l'humain, qui a surélevé le Mac mini (« il y a une sonde de température ? »).
+- **Étapes** : au repos, 23,2 °C en moyenne sur 42 sondes, 24,6 au plus (les sondes absentes rendent environ −9 200 °C, écartées). Six essais d'affilée de Gemma 3 4B à 16 384 tokens, Mac surélevé : lecture 2 511,7 / 2 532,7 / 2 514,1 / 2 520,9 / 2 523,5 / 2 519,5, écriture 74,9 / 74,9 / 75,0 / 75,0 / 74,9 / 74,8, sonde la plus chaude 27,4 / 30,3 / 33,4 / 36,6 / 40,1 / 42,8 °C, état « normal ». La baisse du matin (69,3 → 59,9) ne s'est pas reproduite ; la chaleur en reste la cause la plus probable, non vérifiée. `bash -n` du script, fonction de lecture essayée (40,5 °C). Version 6.23.3.
+
 ## 2026-11-22 — Gulliver 6.23.2 : la réunion des parties de l'attention, poids partagés ; la chaleur du GPU
 
 - **Quoi** : `engine/metal_kernels.metal` : `merge_attention` réécrit (maximum et poids des parties partagés en mémoire de threadgroup, 2 048 parties au plus, l'ancien calcul au-delà). Rubrique « Tests de vitesse » : la chaleur du GPU dans les mesures.

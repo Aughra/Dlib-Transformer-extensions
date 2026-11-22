@@ -92,6 +92,11 @@ albireo() {  # $1 nom, $2 fichier, $3 taille : l'original, processeur seul, clé
 }
 
 LOAD_START=$(sysctl -n vm.loadavg)
+# La température de la puce (macos/temperature, construit s'il manque), au début et à la fin.
+TEMP_TOOL=$ROOT/build/temperature
+[ -x "$TEMP_TOOL" ] || clang -fobjc-arc -framework Foundation -framework IOKit -o "$TEMP_TOOL" "$ROOT/macos/temperature/temperature.m" 2>/dev/null
+chip_temp() { [ -x "$TEMP_TOOL" ] && "$TEMP_TOOL" | sed -n 's/^puce : \([0-9.]*\) °C au plus.*/\1 °C/p' | sed 's/\./,/'; }
+TEMP_START=$(chip_temp)
 for ((r = 1; r <= ROUNDS; ++r)); do
   for entry in "${MODELS[@]}"; do
     IFS='|' read -r name file mlxdir <<< "$entry"
@@ -107,6 +112,7 @@ for ((r = 1; r <= ROUNDS; ++r)); do
   done
 done
 LOAD_END=$(sysctl -n vm.loadavg)
+TEMP_END=$(chip_temp)
 
 # Le tableau : pour chaque modèle et chaque taille, la plage des essais de chaque réglage.
 {
@@ -121,6 +127,7 @@ LOAD_END=$(sysctl -n vm.loadavg)
   echo "| MLX | $("$ROOT/build/mlx-venv/bin/pip" show mlx 2>/dev/null | awk '/^Version/{print $2}') (mlx-lm $("$ROOT/build/mlx-venv/bin/pip" show mlx-lm 2>/dev/null | awk '/^Version/{print $2}'), $("$ROOT/build/mlx-venv/bin/python" --version 2>&1)) |"
   [ -x "$ALBIREO" ] && echo "| Albireo d'origine | $(awk '/#define ALBIREO_VERSION_(MAJOR|MINOR|PATCH) /{print $3}' "$ALBIREO_DIR/dlib/dlib/external/albireo/common/version.h" | paste -sd. -) ($(git -C "$ALBIREO_DIR" rev-parse --short HEAD)), tel quel : processeur seul, noyaux portables, jusqu'à $ALBIREO_MAX tokens |"
   echo "| Charge | $LOAD_START au début, $LOAD_END à la fin |"
+  [ -n "$TEMP_START$TEMP_END" ] && echo "| Puce, sonde la plus chaude | ${TEMP_START:-?} au début, ${TEMP_END:-?} à la fin |"
   echo
   echo "Jetons par seconde ; lecture de la question, puis écriture de $STEPS jetons après elle ; $ROUNDS essais en alternance (moyenne des essais). Gulliver, llama.cpp et MLX sur le GPU, l'Albireo d'origine sur le processeur. Entre parenthèses : l'écart à Gulliver (+ : plus rapide que Gulliver, − : plus lent)."
   echo
