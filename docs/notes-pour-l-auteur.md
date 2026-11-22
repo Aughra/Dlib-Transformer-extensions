@@ -1378,6 +1378,14 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (bancs compilés côte à côte, deux tours en alternance) : 30B-A3B 512 tokens 64 → 32 → 16 colonnes : 1 424-1 433 → 1 618-1 650 → 1 695-1 701 ; 2 048 tokens 1 815-1 816 → 1 974-1 992 ; 4 096 tokens, 32 et 16 colonnes à égalité (1 853-1 919 et 1 875-1 878) ; LFM2.5-8B-A1B 512 tokens 1 937-1 945 → 2 193-2 195 ; Qwen3.6-35B-A3B 782-789 → 827-832. Tuiles de 32 et 128 cases réessayées après le déroulement : toujours plus lentes que 64.
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 54 : l'attention façon MLX pour les têtes de 256 valeurs (Gulliver 6.41.0)
+
+- **Avant** : `attention_flat` (changement 50) ne prenait que les têtes de 64 et 128 valeurs ; avec 256, un simdgroup aurait tenu 128 sommes par voie. Qwen3.5-4B (couches d'attention de 256 valeurs) gardait `attention_nax` : 4 096 tokens 1 451-1 456 tokens/s, 16 384 tokens 1 198-1 217.
+- **Changement** (`engine/metal_kernels_nax.metal`, `engine/metal_device.mm`, `engine/cpu_runtime_metal.cpp`) : `attention_flat_split`, comme le « dsplit » de MLX : 8 simdgroups, deux par 16 tokens, qui se partagent les dimensions (128 chacun) ; chacun calcule les scores sur sa moitié, les deux moitiés passent par la mémoire de threadgroup (16 Ko) et s'additionnent dans le même ordre des deux côtés (mêmes scores au bit près, donc même softmax) ; chacun calcule ensuite la moitié de la sortie. La barrière sans mémoire du produit par les valeurs garantit que les lectures des moitiés sont finies avant le pas suivant. `GULLIVER_NO_FLAT_256` garde l'ancien noyau pour les mesures. **Exactitude** : `test_metal` (deux formes nouvelles de 256 valeurs, 8 bits et demi-précision) : erreur 1,1 à 1,7e-4 contre la somme en double précision ; perplexité GPU, morceaux de 4 096 : Qwen3.5-4B 7,8940 / 7,8934 (±0,25), Gemma 3 4B 12,9147 / 12,9202 (±0,63), Gemma 4 E2B inchangé (45,8852 : ses têtes de 256 ont une fenêtre, celles de 512 restent à l'ancien noyau).
+- **Après** (deux tours en alternance) : Qwen3.5-4B 4 096 tokens 1 525-1 526 (+5 %), 16 384 tokens 1 391-1 397 (+15 %) ; Gemma 3 4B 4 096 tokens 2 494-2 539 → 2 545-2 592 (+2 % : une couche sur six est globale).
+- **Reste** : les fenêtres glissantes (les autres couches de Gemma 3 et 4) et les têtes de 512 valeurs.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

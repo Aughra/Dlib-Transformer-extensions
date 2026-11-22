@@ -494,6 +494,194 @@ template <uint HD>
     }
 }
 
+/*
+    Les têtes de 256 valeurs (Qwen 3.5, Gemma 3) : comme attention_flat, mais deux simdgroups par 16 tokens, qui se
+    partagent les dimensions (128 chacun, comme le « dsplit » de MLX) : chacun calcule les scores sur sa moitié, les
+    deux moitiés passent par la mémoire de threadgroup et s'additionnent dans le même ordre des deux côtés (les mêmes
+    scores au bit près, donc le même softmax), puis chacun calcule la moitié de la sortie.  8 simdgroups.
+*/
+[[kernel, max_total_threads_per_threadgroup(256)]] void attention_flat_split(device const half* q [[buffer(0)]], device const half* K [[buffer(1)]],
+    device const half* V [[buffer(2)]], constant flat_args& a [[buffer(3)]], device float* o [[buffer(4)]],
+    uint2 tg [[threadgroup_position_in_grid]], ushort sg [[simdgroup_index_in_threadgroup]],
+    ushort lane [[thread_index_in_simdgroup]])
+{
+    constexpr uint HD = 256, DH = 128, TD = DH / 16;
+    threadgroup float sx[4][2][32][16];
+    const uint rg = sg / 2, dh = sg % 2;
+    constexpr float neg = -3.402823466e+38f;
+    const uint h = tg.y;
+    device const half* Kh = K + ulong(h / a.gqa) * a.kv_pad * HD;
+    device const half* Vh = V + ulong(h / a.gqa) * a.kv_pad * HD;
+    const short2 c = nax_coord(lane);
+    const int q0 = int(tg.x) * 64 + int(rg) * 16;
+    // Les deux lignes de la voie (c.y et c.y + 8) : leur token, et l'adresse de leur requête.
+    bool qv[2];
+    device const half* qr[2];
+    _Pragma("clang loop unroll(full)")
+    for (uint i = 0; i < 2; ++i)
+    {
+        const int t = q0 + c.y + int(i) * 8;
+        qv[i] = t < int(a.q_len);
+        qr[i] = q + ulong(qv[i] ? t : 0) * a.q_stride + h * HD + dh * DH + c.x;
+    }
+    float acc[TD][8];
+    _Pragma("clang loop unroll(full)")
+    for (uint d = 0; d < TD; ++d)
+        _Pragma("clang loop unroll(full)")
+        for (uint e = 0; e < 8; ++e) acc[d][e] = 0.0f;
+    float mx[2] = { neg, neg }, sm[2] = { 0.0f, 0.0f };
+
+    // Les pas de 32 positions que voit le threadgroup (masque causal), et le premier qu'il faut masquer.
+    const int kb_lim = min((int(tg.x + 1) * 64 + int(a.q_off) + 31) / 32, int(a.kv_pad / 32));
+    const int kb_causal = (int(tg.x) * 64 + int(a.q_off)) / 32;
+
+    constexpr auto dqk = mpp::tensor_ops::matmul2d_descriptor(16, 32, 16, false, true, true,
+        mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate);
+    constexpr auto dpv = mpp::tensor_ops::matmul2d_descriptor(16, 32, 16, false, false, true,
+        mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate);
+    mpp::tensor_ops::matmul2d<dqk, execution_simdgroup> op_qk;
+    mpp::tensor_ops::matmul2d<dpv, execution_simdgroup> op_pv;
+
+    for (int kb = 0; kb < kb_lim; ++kb)
+    {
+        device const half* Kb = Kh + ulong(kb) * 32 * HD + dh * DH;
+        device const half* Vb = Vh + ulong(kb) * 32 * HD + dh * DH;
+        // S = Q K^T : 16 tokens x 32 positions.
+        float s[16];
+        _Pragma("clang loop unroll(full)")
+        for (uint e = 0; e < 16; ++e) s[e] = 0.0f;
+#pragma clang loop unroll_count(4)
+        for (uint d = 0; d < TD; ++d)
+        {
+            auto ct_a = op_qk.template get_left_input_cooperative_tensor<half, half, float>();
+            auto ct_b = op_qk.template get_right_input_cooperative_tensor<half, half, float>();
+            auto ct_c = op_qk.template get_destination_cooperative_tensor<
+                metal::remove_addrspace_t<decltype(ct_a)>, metal::remove_addrspace_t<decltype(ct_b)>, float>();
+            _Pragma("clang loop unroll(full)")
+            for (uint i = 0; i < 2; ++i)
+            {
+                const half4 qx = qv[i] ? *(device const half4*)(qr[i] + d * 16) : half4(0.0h);
+                _Pragma("clang loop unroll(full)")
+                for (uint j = 0; j < 4; ++j) ct_a[i * 4 + j] = qx[j];
+            }
+            _Pragma("clang loop unroll(full)")
+            for (uint f = 0; f < 2; ++f)
+                _Pragma("clang loop unroll(full)")
+                for (uint i = 0; i < 2; ++i)
+                {
+                    const half4 v = *(device const half4*)(Kb + (f * 16 + c.y + i * 8) * HD + d * 16 + c.x);
+                    _Pragma("clang loop unroll(full)")
+                    for (uint j = 0; j < 4; ++j) ct_b[f * 8 + i * 4 + j] = v[j];
+                }
+            _Pragma("clang loop unroll(full)")
+            for (uint e = 0; e < 16; ++e) ct_c[e] = s[e];
+            op_qk.run(ct_a, ct_b, ct_c);
+            _Pragma("clang loop unroll(full)")
+            for (uint e = 0; e < 16; ++e) s[e] = ct_c[e];
+        }
+        // Les deux moitiés des scores, additionnées dans le même ordre par les deux simdgroups.
+        _Pragma("clang loop unroll(full)")
+        for (uint e = 0; e < 16; ++e) sx[rg][dh][lane][e] = s[e];
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        _Pragma("clang loop unroll(full)")
+        for (uint e = 0; e < 16; ++e) s[e] = sx[rg][0][lane][e] + sx[rg][1][lane][e];
+        // En base 2 (les requêtes portent déjà l'échelle), puis les masques : les positions au-delà de la séquence,
+        // et, dans les pas qui croisent la diagonale, celles qui suivent le token.
+        _Pragma("clang loop unroll(full)")
+        for (uint f = 0; f < 2; ++f)
+            _Pragma("clang loop unroll(full)")
+            for (uint i = 0; i < 2; ++i)
+                _Pragma("clang loop unroll(full)")
+                for (uint j = 0; j < 4; ++j)
+                {
+                    const uint idx = f * 8 + i * 4 + j;
+                    const int col = kb * 32 + int(f * 16 + j) + c.x;
+                    const int row = int(a.q_off) + q0 + c.y + int(i) * 8;
+                    s[idx] *= M_LOG2E_F;
+                    if (col >= int(a.kv_len) || (kb >= kb_causal && col > row)) s[idx] = neg;
+                }
+        // Le softmax en ligne.
+        _Pragma("clang loop unroll(full)")
+        for (uint i = 0; i < 2; ++i)
+        {
+            float m = mx[i];
+            _Pragma("clang loop unroll(full)")
+            for (uint f = 0; f < 2; ++f)
+                _Pragma("clang loop unroll(full)")
+                for (uint j = 0; j < 4; ++j) m = max(m, s[f * 8 + i * 4 + j]);
+            m = row_max(m);
+            float sum = 0.0f;
+            _Pragma("clang loop unroll(full)")
+            for (uint f = 0; f < 2; ++f)
+                _Pragma("clang loop unroll(full)")
+                for (uint j = 0; j < 4; ++j)
+                {
+                    const uint idx = f * 8 + i * 4 + j;
+                    s[idx] = fast::exp2(s[idx] - m);
+                    sum += s[idx];
+                }
+            const float factor = fast::exp2(mx[i] - m);
+            mx[i] = m;
+            sm[i] = sm[i] * factor + row_sum(sum);
+            _Pragma("clang loop unroll(full)")
+            for (uint d = 0; d < TD; ++d)
+                _Pragma("clang loop unroll(full)")
+                for (uint j = 0; j < 4; ++j) acc[d][i * 4 + j] *= factor;
+        }
+        simdgroup_barrier(mem_flags::mem_none);
+        // O += P V, deux fragments de dimensions à la fois ; à mi-chemin, les simdgroups se retrouvent (MLX).
+        _Pragma("clang loop unroll(full)")
+        for (uint dp = 0; dp < TD; dp += 2)
+        {
+            // À mi-chemin, tous les simdgroups se retrouvent : les lectures de sx sont alors finies.
+            if (dp == 4) threadgroup_barrier(mem_flags::mem_none);
+            _Pragma("clang loop unroll(full)")
+            for (uint f = 0; f < 2; ++f)
+            {
+                auto ct_a = op_pv.template get_left_input_cooperative_tensor<float, half, float>();
+                auto ct_b = op_pv.template get_right_input_cooperative_tensor<float, half, float>();
+                auto ct_c = op_pv.template get_destination_cooperative_tensor<
+                    metal::remove_addrspace_t<decltype(ct_a)>, metal::remove_addrspace_t<decltype(ct_b)>, float>();
+                _Pragma("clang loop unroll(full)")
+                for (uint e = 0; e < 8; ++e) ct_a[e] = s[f * 8 + e];
+                _Pragma("clang loop unroll(full)")
+                for (uint hh = 0; hh < 2; ++hh)
+                    _Pragma("clang loop unroll(full)")
+                    for (uint i = 0; i < 2; ++i)
+                    {
+                        const half4 v = *(device const half4*)(Vb + (f * 16 + c.y + i * 8) * HD + (dp + hh) * 16 + c.x);
+                        _Pragma("clang loop unroll(full)")
+                        for (uint j = 0; j < 4; ++j) ct_b[hh * 8 + i * 4 + j] = v[j];
+                    }
+                _Pragma("clang loop unroll(full)")
+                for (uint e = 0; e < 8; ++e)
+                {
+                    ct_c[e] = acc[dp][e];
+                    ct_c[8 + e] = acc[dp + 1][e];
+                }
+                op_pv.run(ct_a, ct_b, ct_c);
+                _Pragma("clang loop unroll(full)")
+                for (uint e = 0; e < 8; ++e)
+                {
+                    acc[dp][e] = ct_c[e];
+                    acc[dp + 1][e] = ct_c[8 + e];
+                }
+            }
+        }
+    }
+    _Pragma("clang loop unroll(full)")
+    for (uint i = 0; i < 2; ++i)
+    {
+        if (!qv[i]) continue;
+        const float inv = sm[i] > 0.0f ? 1.0f / sm[i] : 0.0f;
+        device float* out = o + ulong(q0 + c.y + int(i) * 8) * a.q_stride + h * HD + dh * DH + c.x;
+        _Pragma("clang loop unroll(full)")
+        for (uint d = 0; d < TD; ++d)
+            _Pragma("clang loop unroll(full)")
+            for (uint j = 0; j < 4; ++j) out[d * 16 + j] = acc[d][i * 4 + j] * inv;
+    }
+}
+
 template [[host_name("attention_flat_64")]] [[kernel]] void attention_flat<64>(device const half*, device const half*,
     device const half*, constant flat_args&, device float*, uint2, ushort, ushort);
 template [[host_name("attention_flat_128")]] [[kernel]] void attention_flat<128>(device const half*, device const half*,

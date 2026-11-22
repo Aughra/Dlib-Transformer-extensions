@@ -1162,12 +1162,12 @@ namespace gulliver
             const metal_view qtemp(g.qtemp);
             c->prepare_queries(g.q, uT, H, lhd, lqd, lscale, q8, cfg_.attn_temp_scale != 0.0 ? &qtemp : nullptr);
             /*
-                Un prompt dont les têtes ont 64 ou 128 valeurs, sans fenêtre glissante : l'attention de MLX sur les clés
+                Un prompt dont les têtes ont 64, 128 ou 256 valeurs, sans fenêtre glissante : l'attention de MLX sur les clés
                 et valeurs de chaque séquence rangées en demi-précision (attention_flat, chantier Vitesse, 2026-11-22).
                 GULLIVER_NO_FLAT_ATT garde attention_tiles, pour les mesures.
             */
             static const bool no_flat = std::getenv("GULLIVER_NO_FLAT_ATT") != nullptr;
-            bool flat = tiled && !no_flat && kl.window == 0 && lhd == hd && (lhd == 64 || lhd == 128)
+            bool flat = tiled && !no_flat && kl.window == 0 && lhd == hd && (lhd == 64 || lhd == 128 || lhd == 256)
                 && metal_device::commands::flat_available(dev);
             if (flat)
             {

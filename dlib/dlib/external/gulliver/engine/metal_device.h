@@ -310,7 +310,7 @@ namespace gulliver
                 L'attention des q_tokens tokens d'un prompt d'une seule séquence (chantier Vitesse, 2026-11-22) : ses
                 clés et valeurs, kv_len positions dont table (int32) donne les blocs, rangées en demi-précision dans
                 k et v (flat_bytes() octets chacun), puis l'attention causale de MLX (le prompt occupe les dernières
-                positions).  Des têtes de 64 ou 128 valeurs, sans fenêtre ; les requêtes préparées (prepare_queries).
+                positions).  Des têtes de 64, 128 ou 256 valeurs, sans fenêtre ; les requêtes préparées (prepare_queries).
                 Renvoie false, sans rien écrire, quand le GPU n'a pas les accélérateurs ou que la couche ne s'y prête
                 pas : l'appelant prend attention_tiles().
             !*/

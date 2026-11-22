@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Gulliver 6.41.0 : l'attention façon MLX pour les têtes de 256 valeurs
+
+- **Quoi** : noyau `attention_flat_split` (8 simdgroups, dimensions partagées par deux, moitiés des scores additionnées par la mémoire de threadgroup) ; `commands::attention_flat()` le prend pour des têtes de 256 valeurs (256 fils), `GULLIVER_NO_FLAT_256` ; `run_gpu()` : têtes de 256 admises ; `test_metal` : deux formes de 256 valeurs.
+- **Fichiers** : `gulliver/engine/{metal_kernels_nax.metal,metal_device.h,metal_device.mm,cpu_runtime_metal.cpp}`, `gulliver/tests/test_metal.cpp`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,mesures/tests-de-vitesse.md}`, `logs/{reprise.md,nuit-2026-11-22.md}`, ce journal.
+- **Pourquoi** : V1 ; les têtes de 256 valeurs (Qwen 3.5, Gemma 3) restaient sur l'ancien noyau.
+- **Étapes** : `test_metal` all checks passed (1,1-1,7e-4) ; perplexité Qwen3.5-4B, Gemma 3 4B, Gemma 4 E2B (voir changement 54) ; mesures alternées ; `test_macos_copie.sh` 0 échec. Version 6.41.0.
+
 ## 2026-11-23 — Gulliver 6.40.0 : le produit groupé des experts par morceaux de 16 colonnes
 
 - **Quoi** : `MMN_KC` 64 → 16 dans `mm_id_nax`.

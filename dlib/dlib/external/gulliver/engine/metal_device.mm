@@ -40,7 +40,7 @@ namespace gulliver
             "attention_nax_8_256", "mm_id_nax64_q4_K", "mm_id_nax64_q5_K", "mm_id_nax64_q6_K", "mm_id_nax64_q8_0",
             "mm_id_nax64_q5_0", "mm_id_nax128_q4_K", "mm_id_nax128_q5_K", "mm_id_nax128_q6_K", "mm_id_nax128_q8_0",
             "mm_id_nax128_q5_0", "mv_nax_q4_K", "mv_nax_q6_K", "mv_nax_q5_K", "mv_nax_q8_0", "mv_nax_q5_0",
-            "kv_gather", "attention_flat_64", "attention_flat_128" };
+            "kv_gather", "attention_flat_64", "attention_flat_128", "attention_flat_split" };
         // mm_id_nax, après les douze attention_nax : tuiles de 64 cases, puis de 128 ; puis mv_nax, dans l'ordre des
         // formats des noyaux mv_*_n.
         const int nax_mm_id = 12, nax_mm_id_128 = 17, nax_mv = 22, nax_kv_gather = 27, nax_flat = 28;
@@ -1237,7 +1237,9 @@ namespace gulliver
     bool metal_device::commands::attention_flat(metal_view q, metal_view region, metal_view table, unsigned q_tokens,
         unsigned kv_len, unsigned q_heads, unsigned q_stride, const kv_layout& l, metal_view k, metal_view v, metal_view ctx)
     {
-        if (impl_->device->nax.empty() || l.window != 0 || (l.hd != 64 && l.hd != 128) || q_heads % l.heads != 0
+        static const bool no_split = std::getenv("GULLIVER_NO_FLAT_256") != nullptr;
+        if (impl_->device->nax.empty() || l.window != 0 || (l.hd != 64 && l.hd != 128 && (l.hd != 256 || no_split))
+            || q_heads % l.heads != 0
             || kv_len < q_tokens)
             return false;
         if (q_tokens == 0) return true;
@@ -1257,13 +1259,14 @@ namespace gulliver
         impl_->groups(pad, l.heads, 1, l.hd);
         struct { uint32_t q_len, kv_len, kv_pad, q_off, gqa, q_stride; } a =
             { q_tokens, kv_len, pad, kv_len - q_tokens, q_heads / l.heads, q_stride };
-        impl_->use_nax(nax_flat + (l.hd == 128 ? 1 : 0));
+        // Les têtes de 256 valeurs : deux simdgroups par 16 tokens (attention_flat_split), 256 fils.
+        impl_->use_nax(nax_flat + (l.hd == 256 ? 2 : l.hd == 128 ? 1 : 0));
         impl_->bind(q, 0);
         impl_->bind(k, 1);
         impl_->bind(v, 2);
         impl_->args(a, 3);
         impl_->bind(ctx, 4);
-        impl_->groups((q_tokens + 63) / 64, q_heads, 1, 128);
+        impl_->groups((q_tokens + 63) / 64, q_heads, 1, l.hd == 256 ? 256 : 128);
         return true;
     }
 

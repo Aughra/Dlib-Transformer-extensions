@@ -726,6 +726,9 @@ int main()
     test_attention(*gpu, kv_format::q8, 64, 3);
     test_attention(*gpu, kv_format::q8, 128, 4, 0, true);
     test_attention(*gpu, kv_format::f16, 128, 4, 0, true);
+    // Des têtes de 256 valeurs dans une mémoire de têtes de 256 (Qwen 3.5, Gemma 3) : attention_flat_split.
+    test_attention(*gpu, kv_format::q8, 256, 4);
+    test_attention(*gpu, kv_format::f16, 256, 2);
     std::printf(failures ? "test_metal: %d checks failed\n" : "test_metal: all checks passed\n", failures);
     return failures;
 }
