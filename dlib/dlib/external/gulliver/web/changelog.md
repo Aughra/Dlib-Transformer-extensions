@@ -2,6 +2,29 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.31.0 — 22 novembre 2026
+
+### Sécurité
+
+- Chaque profil est protégé par un mot de passe. La page s'ouvre sur un écran de connexion (profil et mot de passe) ; la session reste ouverte 30 jours sans servir, et « Se déconnecter » la ferme. Le service ne sert les discussions, projets, documents et images d'un profil qu'à une session de ce profil : l'en-tête qui nommait le profil ne suffit plus.
+- Le premier profil est l'administrateur, le seul : lui seul crée, renomme ou supprime les autres profils et change leur mot de passe, depuis le Mac ou le réseau de la maison (jamais par la discussion en ligne). Un profil créé n'est jamais administrateur.
+- Mises à jour d'une installation existante : le plus ancien profil devient l'administrateur et choisit son mot de passe à la première ouverture de la page ; les autres profils attendent que l'administrateur leur en donne un.
+- Les mots de passe sont rangés sous forme d'empreinte PBKDF2-SHA256 (600 000 tours, sel de 16 octets) ; la base ne garde que l'empreinte des jetons de session. Après 5 mauvais mots de passe de suite, chaque essai attend 30 secondes, puis le double (une heure au plus).
+
+### Interface
+
+- Onglet « Profils » des paramètres (et entrées « Profils » et « Se déconnecter » du menu) : changer son mot de passe ; pour l'administrateur, la liste des profils, la création, le renommage, le changement de mot de passe et la suppression. Le profil connecté est affiché en bas de la barre latérale.
+
+### Interfaces (API)
+
+- Nouvelles routes : `POST /gulliver/v1/setup`, `/gulliver/v1/login`, `/gulliver/v1/logout`, `GET /gulliver/v1/session`, `POST /gulliver/v1/session/password`. Les routes `/gulliver/v1/profile/…` exigent l'en-tête `X-Gulliver-Session`. L'interface compatible avec OpenAI (`/v1/…`) ne change pas.
+
+### Outils de mesure
+
+- `tools/test_rag.py` : la justesse de la recherche dans les documents, sur les épisodes du blog et 40 questions figées, par moteur, avec et sans tri fin, pour 6, 12 et 20 passages. Premier relevé : le réglage par défaut (hybride, 12 passages) trouve le bon passage pour 95 % des questions.
+
+---
+
 ## 6.30.1 — 22 novembre 2026
 
 ### Corrections

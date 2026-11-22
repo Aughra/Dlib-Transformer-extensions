@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "6.30.1",
+  "version": "6.31.0",
   "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -3351,10 +3351,10 @@
     "tags": [
      "Profils"
     ],
-    "summary": "Liste les profils",
+    "summary": "Liste les profils (pour l'écran de connexion)",
     "responses": {
      "200": {
-      "description": "Les profils",
+      "description": "Les profils, et s'il faut choisir le premier mot de passe",
       "content": {
        "application/json": {
         "schema": {
@@ -3365,6 +3365,10 @@
            "items": {
             "$ref": "#/components/schemas/Profile"
            }
+          },
+          "setup": {
+           "type": "boolean",
+           "description": "Vrai sans profil, ou quand l'administrateur n'a pas encore de mot de passe : /gulliver/v1/setup."
           }
          }
         }
@@ -3377,7 +3381,18 @@
     "tags": [
      "Profils"
     ],
-    "summary": "Crée un profil",
+    "summary": "Crée un profil (administrateur)",
+    "parameters": [
+     {
+      "name": "X-Gulliver-Session",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+     }
+    ],
     "requestBody": {
      "required": true,
      "content": {
@@ -3385,12 +3400,17 @@
        "schema": {
         "type": "object",
         "required": [
-         "name"
+         "name",
+         "password"
         ],
         "properties": {
          "name": {
           "type": "string",
           "description": "De 1 à 80 caractères, une fois retirées les espaces à ses extrémités."
+         },
+         "password": {
+          "type": "string",
+          "description": "De 8 à 256 octets."
          }
         }
        }
@@ -3399,7 +3419,7 @@
     },
     "responses": {
      "200": {
-      "description": "Le profil créé",
+      "description": "Le profil créé (jamais administrateur)",
       "content": {
        "application/json": {
         "schema": {
@@ -3409,7 +3429,27 @@
       }
      },
      "400": {
-      "description": "Nom vide ou trop long (code name)",
+      "description": "Nom ou mot de passe hors bornes (code name ou password)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Pas de session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Réservé à l'administrateur, depuis le Mac ou la maison (code admin_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -3436,7 +3476,8 @@
     "tags": [
      "Profils"
     ],
-    "summary": "Renomme un profil",
+    "summary": "Renomme un profil ou change son mot de passe (administrateur)",
+    "description": "Un mot de passe changé ferme les sessions ouvertes du profil.",
     "parameters": [
      {
       "name": "id",
@@ -3445,6 +3486,15 @@
       "schema": {
        "type": "string"
       }
+     },
+     {
+      "name": "X-Gulliver-Session",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
      }
     ],
     "requestBody": {
@@ -3453,13 +3503,14 @@
       "application/json": {
        "schema": {
         "type": "object",
-        "required": [
-         "name"
-        ],
         "properties": {
          "name": {
           "type": "string",
           "description": "De 1 à 80 caractères."
+         },
+         "password": {
+          "type": "string",
+          "description": "De 8 à 256 octets."
          }
         }
        }
@@ -3478,7 +3529,27 @@
       }
      },
      "400": {
-      "description": "Nom vide ou trop long (code name)",
+      "description": "Nom ou mot de passe hors bornes (code name ou password)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Pas de session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Réservé à l'administrateur, depuis le Mac ou la maison (code admin_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -3513,8 +3584,8 @@
     "tags": [
      "Profils"
     ],
-    "summary": "Supprime un profil et toutes ses données",
-    "description": "La suppression efface en cascade les discussions, projets, réglages de page, passages de l'index RAG et images du profil.",
+    "summary": "Supprime un profil et toutes ses données (administrateur)",
+    "description": "La suppression efface en cascade les discussions, projets, réglages de page, passages de l'index RAG, images et sessions du profil. L'administrateur est gardé.",
     "parameters": [
      {
       "name": "id",
@@ -3523,6 +3594,15 @@
       "schema": {
        "type": "string"
       }
+     },
+     {
+      "name": "X-Gulliver-Session",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
      }
     ],
     "responses": {
@@ -3544,8 +3624,383 @@
        }
       }
      },
+     "401": {
+      "description": "Pas de session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Réservé à l'administrateur, depuis le Mac ou la maison (code admin_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
      "404": {
       "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "Le profil de l'administrateur est gardé (code admin_kept)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/setup": {
+   "post": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Choisit le premier mot de passe",
+    "description": "Sans profil, crée l'administrateur {name, password} ; sinon donne son mot de passe à l'administrateur qui n'en a pas (une base d'avant les comptes). Une seule fois, et jamais par la passerelle de Cloudflare.",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "password"
+        ],
+        "properties": {
+         "name": {
+          "type": "string"
+         },
+         "password": {
+          "type": "string",
+          "description": "De 8 à 256 octets."
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "La session de l'administrateur",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "token": {
+           "type": "string",
+           "description": "Le jeton de session, à envoyer dans X-Gulliver-Session ; donné une seule fois."
+          },
+          "profile": {
+           "$ref": "#/components/schemas/Profile"
+          }
+         }
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Nom ou mot de passe hors bornes",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Par la passerelle (code setup_remote)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "L'administrateur a déjà un mot de passe (code setup_done)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/login": {
+   "post": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Ouvre une session",
+    "description": "Après 5 mauvais mots de passe de suite pour un profil, chaque essai attend 30 secondes, puis le double (une heure au plus).",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "password"
+        ],
+        "properties": {
+         "profile": {
+          "type": "string",
+          "description": "L'identifiant du profil (ou name)."
+         },
+         "name": {
+          "type": "string"
+         },
+         "password": {
+          "type": "string"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "La session",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "token": {
+           "type": "string",
+           "description": "Le jeton de session, à envoyer dans X-Gulliver-Session ; donné une seule fois."
+          },
+          "profile": {
+           "$ref": "#/components/schemas/Profile"
+          }
+         }
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Profil ou mot de passe faux (code wrong_password)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Le profil n'a pas de mot de passe (code password_not_set)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "429": {
+      "description": "Trop d'essais manqués (code login_throttled, en-tête Retry-After)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/logout": {
+   "post": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Ferme la session",
+    "parameters": [
+     {
+      "name": "X-Gulliver-Session",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Fermée",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/session": {
+   "get": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Le profil de la session",
+    "parameters": [
+     {
+      "name": "X-Gulliver-Session",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Le profil",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "profile": {
+           "$ref": "#/components/schemas/Profile"
+          }
+         }
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Pas de session valable (code session_required)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/session/password": {
+   "post": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Change son propre mot de passe",
+    "description": "Les autres sessions du profil sont fermées ; celle-ci reste ouverte.",
+    "parameters": [
+     {
+      "name": "X-Gulliver-Session",
+      "in": "header",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "current",
+         "password"
+        ],
+        "properties": {
+         "current": {
+          "type": "string"
+         },
+         "password": {
+          "type": "string",
+          "description": "De 8 à 256 octets."
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Changé",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "ok": {
+           "type": "boolean"
+          },
+          "error": {
+           "type": "string"
+          }
+         }
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Nouveau mot de passe hors bornes (code password)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Pas de session, ou mot de passe actuel faux",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "429": {
+      "description": "Trop d'essais manqués (code login_throttled)",
       "content": {
        "application/json": {
         "schema": {
@@ -3569,8 +4024,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -3579,8 +4034,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -3630,8 +4085,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -3640,8 +4095,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucune discussion de cet identifiant dans le profil (code not_found)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -3656,6 +4111,16 @@
        "application/json": {
         "schema": {
          "type": "object"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucune discussion de cet identifiant dans le profil (code not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -3681,8 +4146,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "Objet doc manquant (code doc)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -3691,8 +4156,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -3715,6 +4180,16 @@
            "type": "string"
           }
          }
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Objet doc manquant (code doc)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -3781,8 +4256,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -3791,8 +4266,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -3834,8 +4309,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -3844,8 +4319,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -3895,8 +4370,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -3905,8 +4380,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun projet de cet identifiant dans le profil (code not_found)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -3921,6 +4396,16 @@
        "application/json": {
         "schema": {
          "type": "object"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Aucun projet de cet identifiant dans le profil (code not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -3946,8 +4431,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -3956,8 +4441,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4024,8 +4509,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4034,8 +4519,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4077,8 +4562,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4087,8 +4572,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4121,8 +4606,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4131,8 +4616,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4202,8 +4687,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "Il faut exactement un paramètre, owner ou doc (code owner_or_doc)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4212,8 +4697,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4236,6 +4721,16 @@
            }
           }
          }
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Il faut exactement un paramètre, owner ou doc (code owner_or_doc)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -4269,8 +4764,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "Il faut exactement un paramètre, owner ou doc (code owner_or_doc)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4279,8 +4774,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4303,6 +4798,16 @@
            "type": "string"
           }
          }
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Il faut exactement un paramètre, owner ou doc (code owner_or_doc)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -4338,8 +4843,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4348,8 +4853,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4407,8 +4912,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4417,8 +4922,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4476,8 +4981,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "Tableau records manquant (code records)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4486,8 +4991,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4510,6 +5015,16 @@
            "type": "string"
           }
          }
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Tableau records manquant (code records)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
         }
        }
       }
@@ -4559,8 +5074,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "Propriétaire manquant (code owner)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4569,8 +5084,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4581,6 +5096,16 @@
      },
      "200": {
       "description": "Un flux d'événements (text/event-stream) : des lignes de progression «: progress {done,total}», puis «data: {passages,vectors[,error]}» et «data: [DONE]». error est présent si le modèle d'embedding s'est arrêté (les passages restants sont rangés sans vecteur)."
+     },
+     "400": {
+      "description": "Propriétaire manquant (code owner)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     },
     "requestBody": {
@@ -4624,8 +5149,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4634,8 +5159,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4756,8 +5281,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4766,8 +5291,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4816,8 +5341,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "Paramètre owner manquant (code owner)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4826,8 +5351,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4853,6 +5378,16 @@
         }
        }
       }
+     },
+     "400": {
+      "description": "Paramètre owner manquant (code owner)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -4869,8 +5404,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4879,8 +5414,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4930,8 +5465,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4940,8 +5475,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucune image de cet identifiant, ou son fichier manque (code not_found)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4952,6 +5487,16 @@
      },
      "200": {
       "description": "Les octets de l'image, avec son type de média."
+     },
+     "404": {
+      "description": "Aucune image de cet identifiant, ou son fichier manque (code not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -4976,8 +5521,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -4986,8 +5531,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucune image de cet identifiant, ou son fichier manque (code not_found)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -4998,6 +5543,16 @@
      },
      "200": {
       "description": "Les octets de la vignette, avec le type de média de l'image."
+     },
+     "404": {
+      "description": "Aucune image de cet identifiant, ou son fichier manque (code not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
      }
     }
    }
@@ -5022,8 +5577,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -5032,8 +5587,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -5120,8 +5675,8 @@
      }
     ],
     "responses": {
-     "400": {
-      "description": "L'en-tête X-Gulliver-Profile manque (code profile_required)",
+     "401": {
+      "description": "Pas de session valable (code session_required)",
       "content": {
        "application/json": {
         "schema": {
@@ -5130,8 +5685,8 @@
        }
       }
      },
-     "404": {
-      "description": "Aucun profil n'a cet identifiant (code profile_unknown)",
+     "403": {
+      "description": "X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
       "content": {
        "application/json": {
         "schema": {
@@ -6664,6 +7219,14 @@
      "last_used": {
       "type": "integer",
       "description": "Dernier usage, en secondes Unix ; chaque requête de données du profil le met à jour."
+     },
+     "admin": {
+      "type": "boolean",
+      "description": "L'administrateur (le premier profil, le seul) : lui seul gère les profils."
+     },
+     "has_password": {
+      "type": "boolean",
+      "description": "Le profil a un mot de passe (l'empreinte ne sort jamais du service)."
      }
     }
    },
@@ -6752,13 +7315,13 @@
   },
   "parameters": {
    "ProfileHeader": {
-    "name": "X-Gulliver-Profile",
+    "name": "X-Gulliver-Session",
     "in": "header",
     "required": true,
     "schema": {
      "type": "string"
     },
-    "description": "L'identifiant du profil dont on lit ou écrit les données, tel que /gulliver/v1/profiles le liste."
+    "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
    }
   }
  }

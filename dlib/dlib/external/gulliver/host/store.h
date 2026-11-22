@@ -116,6 +116,10 @@ namespace gulliver
         std::string name;            // le nom choisi, unique, affiché et renommable
         int64_t created = 0;
         int64_t last_used = 0;
+        // Les comptes (fork pour macOS, 2026-11-22, host/accounts.h) : l'empreinte du mot de passe
+        // (vide : pas encore de mot de passe) et le rôle d'administrateur (un seul, le premier profil).
+        std::string password;
+        bool admin = false;
     };
 
     class store
@@ -180,6 +184,16 @@ namespace gulliver
         void put_profile(const profile& p);
         void remove_profile(const std::string& id);
         void touch_profile(const std::string& id, int64_t when);
+
+        // Les sessions des profils (fork pour macOS) : la clé est l'empreinte du jeton (session_key()),
+        // jamais le jeton.  session_profile() rend l'identifiant du profil d'une session encore valable
+        // (servie il y a moins de max_idle secondes) et note son usage, ou une chaîne vide (une session
+        // trop ancienne est effacée).  remove_sessions_of() efface celles d'un profil, sauf keep.  Les
+        // sessions d'un profil supprimé partent avec lui (ON DELETE CASCADE).
+        void add_session(const std::string& key, const std::string& profile, int64_t now);
+        std::string session_profile(const std::string& key, int64_t now, int64_t max_idle);
+        void remove_session(const std::string& key);
+        void remove_sessions_of(const std::string& profile, const std::string& keep = std::string());
 
         // Les discussions et les projets d'un profil.  `doc` est le JSON entier que la page gère.
         // *_docs() rend tous les documents d'un profil (discussions triées du plus récent au plus

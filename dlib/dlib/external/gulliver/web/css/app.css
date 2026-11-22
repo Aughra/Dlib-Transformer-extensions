@@ -144,6 +144,16 @@ a { color: var(--blue); }
 .item .pin { color: var(--gold-strong); }
 .empty-note { color: var(--text-faint); font-size: 13px; padding: 6px 10px; }
 .sidebar-footer { border-top: 1px solid var(--border); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+/* Le profil connecté (comptes, fork pour macOS). */
+.profile-line { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 0; border: 0; background: none;
+  color: var(--text-soft); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
+.profile-line:hover { color: var(--text); }
+.profile-dot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--accent, #6b7cff); color: #fff; font-size: 11px; font-weight: 600; }
+.account-row { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin: 8px 0;
+  display: flex; flex-direction: column; gap: 6px; }
+.account-row .inline input { flex: 1; min-width: 0; }
+.account-password { display: flex; flex-direction: column; gap: 6px; }
 .status-line { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-soft); }
 .status-line .led { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.04); }
 .status-line .led.ok { background: var(--success); }

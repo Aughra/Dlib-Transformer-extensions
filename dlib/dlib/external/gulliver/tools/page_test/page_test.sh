@@ -123,19 +123,17 @@ else
   echo "lint: skipped (no npm)"
 fi
 
-# Un profil par défaut pour les scénarios : les données vivent côté service, rangées par profil, et la page
-# demande d'en choisir un au démarrage.  On en crée un et on le pose dans localStorage (PAGE_TEST_PROFILE, que
-# cdp.mjs injecte avant le chargement de la page), pour que les scénarios partent d'un profil choisi.  Le
-# dossier du service d'essai survit d'un passage à l'autre : le profil « banc » d'un passage précédent est
-# d'abord supprimé, avec ses discussions, sinon sa création répond 409 et les scénarios héritent de ses données.
-for old in $(curl -sk "$URL/gulliver/v1/profiles" \
-    | python3 -c 'import json,sys; [print(p["id"]) for p in json.load(sys.stdin).get("profiles", []) if p.get("name") == "banc"]' \
-    2>/dev/null); do
-  curl -sk -X DELETE "$URL/gulliver/v1/profiles/$old" > /dev/null
-done
-PAGE_TEST_PROFILE=$(curl -sk -H "Content-Type: application/json" -d '{"name":"banc"}' "$URL/gulliver/v1/profiles" \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))' 2>/dev/null)
-export PAGE_TEST_PROFILE
+# Un profil et sa session pour les scénarios : les données vivent côté service, rangées par profil, et chaque
+# profil a un mot de passe (comptes, Gulliver 6.31.0).  Le dossier du service d'essai survit d'un passage à
+# l'autre : son administrateur « banc » a un mot de passe tiré au hasard au premier passage et gardé dans
+# $WORK/banc.pass (dossier d'essai sous build/, jamais commité).  À chaque passage, l'administrateur supprime les
+# profils « scenarios-* » d'avant (avec leurs données), en crée un neuf et s'y connecte ; le profil et le jeton
+# sont posés dans localStorage (PAGE_TEST_PROFILE, PAGE_TEST_SESSION, que cdp.mjs injecte avant la page).
+PASS_FILE=$WORK/banc.pass
+[ -s "$PASS_FILE" ] || { (umask 077; openssl rand -hex 16 > "$PASS_FILE"); }
+read -r PAGE_TEST_PROFILE PAGE_TEST_SESSION < <(python3 "$HERE/session.py" "$URL" "$PASS_FILE")
+export PAGE_TEST_PROFILE PAGE_TEST_SESSION
+[ -n "$PAGE_TEST_SESSION" ] || { echo "page_test: no session for the scenarios"; }
 
 # Les scénarios.
 cd "$WORK" || exit 1

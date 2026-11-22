@@ -17,20 +17,20 @@
 */
 
 import { state } from './state.js';
-import { currentProfile, hasProfile } from './profile.js';
+import { authHeaders, hasProfile } from './profile.js';
 
 const BASE = '/gulliver/v1/profile';
 
 /*
     Un appel au service sur une route de données du profil.  method est le verbe HTTP, path le reste de
     l'adresse après BASE (par exemple '/conversations/<id>'), body l'objet JSON du corps, le cas échéant.
-    Ajoute l'en-tête X-Gulliver-Profile, vérifie que la réponse est bonne (sinon lève une erreur qui porte
+    Ajoute les en-têtes de la session (profile.js), vérifie que la réponse est bonne (sinon lève une erreur qui porte
     son code HTTP, pour distinguer 404 et 409), et renvoie le JSON de la réponse.
 */
 async function req(method, path, body) {
   const res = await fetch(BASE + path, {
     method,
-    headers: { 'Content-Type': 'application/json', 'X-Gulliver-Profile': currentProfile() || '' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: body ? JSON.stringify(body) : undefined
   });
   if (!res.ok) {
@@ -327,8 +327,8 @@ export async function getImage(id) {
   const key = encodeURIComponent(id);
   try {
     const [blobRes, thumbRes] = await Promise.all([
-      fetch(BASE + '/images/' + key + '/blob', { headers: { 'X-Gulliver-Profile': currentProfile() || '' } }),
-      fetch(BASE + '/images/' + key + '/thumb', { headers: { 'X-Gulliver-Profile': currentProfile() || '' } })
+      fetch(BASE + '/images/' + key + '/blob', { headers: authHeaders() }),
+      fetch(BASE + '/images/' + key + '/thumb', { headers: authHeaders() })
     ]);
     if (blobRes.status === 404 || thumbRes.status === 404) return undefined;
     if (!blobRes.ok || !thumbRes.ok) return undefined;

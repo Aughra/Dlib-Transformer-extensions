@@ -16,6 +16,7 @@ import { searchDelay } from './lists.js';
 import { escapeHtml } from './markdown.js';
 import { markdownField } from './mdfield.js';
 import { goHome, leaveCurrent, newChat, newConversation, showDiscussion } from './navigation.js';
+import { currentAccount } from './profile.js';
 import { agentHelp, renderSidebar } from './sidebar.js';
 import { state, ui } from './state.js';
 import { chatRole, relayKey, relayStatus, roleCapabilities, webChosen, webUnavailable } from './status.js';
@@ -70,7 +71,7 @@ export function buildLayout() {
     h('div', { class: 'search' }, h('span', { html: icon('search') }), search),
     ui.sideScroll,
     // Les paramètres et la page de l'interface s'ouvrent par la barre du haut (fork pour macOS).
-    h('div', { class: 'sidebar-footer' }, ui.statusLine, ui.speedLine, ui.contextLine));
+    h('div', { class: 'sidebar-footer' }, profileLine(), ui.statusLine, ui.speedLine, ui.contextLine));
 
   ui.topbar = h('header', { class: 'topbar' });
   ui.banner = h('div', { class: 'banner hidden', html: icon('incognito') + '<span>' + escapeHtml(t('incognitoBanner')) + '</span>' });
@@ -232,4 +233,17 @@ function appSwitch() {
     box.hidden = false;
   }).catch(() => { /* Pseudalis absent */ });
   return box;
+}
+
+/*
+    Le profil connecté, en bas de la barre latérale (fork pour macOS, comptes) : son nom, et un clic ouvre l'onglet
+    Profils (mot de passe, déconnexion, et la gestion des profils pour l'administrateur).
+*/
+function profileLine() {
+  const me = currentAccount();
+  if (!me) return null;
+  return h('button', { class: 'profile-line', type: 'button', title: 'Votre profil : mot de passe, déconnexion',
+    onclick: () => import('./settings.js').then((m) => m.settingsDialog('accountsTab')) },
+  h('span', { class: 'profile-dot', 'aria-hidden': 'true' }, me.name.slice(0, 1).toUpperCase()),
+  h('span', { class: 'grow' }, me.name + (me.admin ? ' · administrateur' : '')));
 }

@@ -13,8 +13,12 @@ const ALLOWED = [
   [['POST'], /^\/gulliver\/v1\/web\/(fetch|search)$/, 'calcul'],
 
   // Les données de la discussion, rangées par le Mac.
-  [['GET', 'POST'], /^\/gulliver\/v1\/profiles$/, 'données'],
-  [['PUT', 'DELETE'], /^\/gulliver\/v1\/profiles\/[^/]+$/, 'données'],
+  // La connexion (comptes, Gulliver 6.31.0) : la liste des profils, se connecter, se déconnecter, sa session et son
+  // mot de passe.  La gestion des profils (créer, renommer, supprimer) et le premier mot de passe restent au Mac et
+  // à la maison : la passerelle les refuse, et le service aussi (en-tête X-Gulliver-Remote).
+  [['GET'], /^\/gulliver\/v1\/profiles$/, 'connexion'],
+  [['POST'], /^\/gulliver\/v1\/(login|logout|session\/password)$/, 'connexion'],
+  [['GET'], /^\/gulliver\/v1\/session$/, 'connexion'],
   [['GET', 'POST', 'PUT', 'DELETE'], /^\/gulliver\/v1\/profile(\/[^?#]*)?$/, 'données'],
   [['GET', 'POST'], /^\/gulliver\/v1\/documents$/, 'données'],
   [['GET', 'DELETE'], /^\/gulliver\/v1\/documents\/[^/]+$/, 'données'],

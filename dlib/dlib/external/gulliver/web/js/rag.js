@@ -16,7 +16,7 @@
 */
 
 import * as store from './store.js';
-import { currentProfile } from './profile.js';
+import { authHeaders } from './profile.js';
 
 // Le modèle d'embedding du service : {id, dimensions}, ou null.
 let model = null;
@@ -148,7 +148,7 @@ export async function indexDocument(owner, doc, options = {}) {
       '/gulliver/v1/profile/documents/' + encodeURIComponent(doc.id) + '/index',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Gulliver-Profile': currentProfile() || '' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         signal,
         body: JSON.stringify({ owner, doc: doc.id, name: doc.name, text: doc.text || '', persistent: true })
       }
@@ -270,7 +270,7 @@ async function searchInService(owners, question, options = {}) {
   try {
     const r = await fetch('/gulliver/v1/profile/search', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Gulliver-Profile': currentProfile() || '' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       signal,
       body: JSON.stringify({
         question,

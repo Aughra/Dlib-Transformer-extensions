@@ -536,7 +536,11 @@ schemas = {
                     "id": {"type": "string"}, "name": {"type": "string", "description": "De 1 à 80 caractères."},
                     "created": {"type": "integer", "description": "Création, en secondes Unix."},
                     "last_used": {"type": "integer", "description": "Dernier usage, en secondes Unix ; chaque requête "
-                                  "de données du profil le met à jour."}}},
+                                  "de données du profil le met à jour."},
+                    "admin": {"type": "boolean", "description": "L'administrateur (le premier profil, le seul) : lui "
+                              "seul gère les profils."},
+                    "has_password": {"type": "boolean", "description": "Le profil a un mot de passe (l'empreinte ne "
+                                     "sort jamais du service)."}}},
     "Chunk": {"type": "object", "description": "Un passage (chunk) de l'index RAG d'un document.", "properties": {
         "id": {"type": "string"}, "owner": {"type": "string", "description": "Le propriétaire du document (une "
                "conversation, un projet…)."},
@@ -559,16 +563,27 @@ schemas = {
                   "ensemble."}}},
 }
 
-# L'en-tête qui désigne le profil d'une requête de données ; toutes les routes /gulliver/v1/profile/ l'exigent.
-profile_header = {"name": "X-Gulliver-Profile", "in": "header", "required": True,
+# L'en-tête de la session d'une requête de données (comptes, Gulliver 6.31.0) ; toutes les routes
+# /gulliver/v1/profile/ l'exigent et servent le profil de la session.
+profile_header = {"name": "X-Gulliver-Session", "in": "header", "required": True,
                   "schema": {"type": "string"},
-                  "description": "L'identifiant du profil dont on lit ou écrit les données, tel que "
-                                 "/gulliver/v1/profiles le liste."}
-# Les erreurs communes aux routes de données d'un profil : en-tête X-Gulliver-Profile absent, ou profil inconnu.
+                  "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères "
+                                 "hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête "
+                                 "X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."}
+# Les erreurs communes aux routes de données d'un profil : pas de session valable, ou un autre profil nommé.
 profile_replies = {
-    "400": reply("L'en-tête X-Gulliver-Profile manque (code profile_required)", ref("Error")),
-    "404": reply("Aucun profil n'a cet identifiant (code profile_unknown)", ref("Error")),
+    "401": reply("Pas de session valable (code session_required)", ref("Error")),
+    "403": reply("X-Gulliver-Profile nomme un autre profil que celui de la session (code profile_mismatch)",
+                 ref("Error")),
 }
+session_param = [profile_header]
+admin_replies = {
+    "401": reply("Pas de session valable (code session_required)", ref("Error")),
+    "403": reply("Réservé à l'administrateur, depuis le Mac ou la maison (code admin_required)", ref("Error")),
+}
+password_schema = {"type": "string", "description": "De 8 à 256 octets."}
+session_reply = {"type": "object", "properties": {"token": {"type": "string", "description": "Le jeton de session, "
+                 "à envoyer dans X-Gulliver-Session ; donné une seule fois."}, "profile": ref("Profile")}}
 
 
 def profile_op(tags, summary, more_replies, extra_params=None, **rest):
@@ -1227,36 +1242,87 @@ paths = {
     "/gulliver/v1/logs": {"get": {"tags": ["Administration"], "summary": "Dernières lignes du journal",
                                  "responses": {"200": reply("Les lignes", {"type": "object"})}}},
 
-    # Les profils : chacun est un espace de données séparé. Les routes /gulliver/v1/profiles gèrent la liste des
-    # profils ; les routes /gulliver/v1/profile/ lisent et écrivent les données du profil désigné par l'en-tête
-    # X-Gulliver-Profile.
+    # Les profils : chacun est un espace de données séparé, protégé par un mot de passe (comptes, Gulliver 6.31.0).
+    # Le premier profil est l'administrateur : lui seul crée, renomme, supprime les autres et change leur mot de passe.
+    # Les routes /gulliver/v1/profile/ lisent et écrivent les données du profil de la session (X-Gulliver-Session).
     "/gulliver/v1/profiles": {
-        "get": {"tags": ["Profils"], "summary": "Liste les profils",
-                "responses": {"200": reply("Les profils", {"type": "object", "properties": {
-                    "profiles": {"type": "array", "items": ref("Profile")}}})}},
-        "post": {"tags": ["Profils"], "summary": "Crée un profil",
-                 "requestBody": json_body({"type": "object", "required": ["name"], "properties": {
+        "get": {"tags": ["Profils"], "summary": "Liste les profils (pour l'écran de connexion)",
+                "responses": {"200": reply("Les profils, et s'il faut choisir le premier mot de passe",
+                    {"type": "object", "properties": {
+                        "profiles": {"type": "array", "items": ref("Profile")},
+                        "setup": {"type": "boolean", "description": "Vrai sans profil, ou quand l'administrateur n'a "
+                                  "pas encore de mot de passe : /gulliver/v1/setup."}}})}},
+        "post": {"tags": ["Profils"], "summary": "Crée un profil (administrateur)",
+                 "parameters": session_param,
+                 "requestBody": json_body({"type": "object", "required": ["name", "password"], "properties": {
                      "name": {"type": "string", "description": "De 1 à 80 caractères, une fois retirées les espaces à "
-                              "ses extrémités."}}}),
-                 "responses": {"200": reply("Le profil créé", ref("Profile")),
-                               "400": reply("Nom vide ou trop long (code name)", ref("Error")),
+                              "ses extrémités."}, "password": password_schema}}),
+                 "responses": {"200": reply("Le profil créé (jamais administrateur)", ref("Profile")),
+                               "400": reply("Nom ou mot de passe hors bornes (code name ou password)", ref("Error")),
+                               **admin_replies,
                                "409": reply("Un profil porte déjà ce nom (code name_taken)", ref("Error"))}}},
     "/gulliver/v1/profiles/{id}": {
-        "put": {"tags": ["Profils"], "summary": "Renomme un profil",
-                "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
-                "requestBody": json_body({"type": "object", "required": ["name"], "properties": {
-                    "name": {"type": "string", "description": "De 1 à 80 caractères."}}}),
+        "put": {"tags": ["Profils"], "summary": "Renomme un profil ou change son mot de passe (administrateur)",
+                "description": "Un mot de passe changé ferme les sessions ouvertes du profil.",
+                "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}]
+                + session_param,
+                "requestBody": json_body({"type": "object", "properties": {
+                    "name": {"type": "string", "description": "De 1 à 80 caractères."}, "password": password_schema}}),
                 "responses": {"200": reply("Le profil", ref("Profile")),
-                              "400": reply("Nom vide ou trop long (code name)", ref("Error")),
+                              "400": reply("Nom ou mot de passe hors bornes (code name ou password)", ref("Error")),
+                              **admin_replies,
                               "404": reply("Aucun profil n'a cet identifiant (code profile_unknown)", ref("Error")),
                               "409": reply("Un autre profil porte déjà ce nom (code name_taken)", ref("Error"))}},
-        "delete": {"tags": ["Profils"], "summary": "Supprime un profil et toutes ses données",
+        "delete": {"tags": ["Profils"], "summary": "Supprime un profil et toutes ses données (administrateur)",
                    "description": "La suppression efface en cascade les discussions, projets, réglages de page, "
-                                  "passages de l'index RAG et images du profil.",
-                   "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
-                   "responses": {"200": reply("Supprimé", ok),
-                                 "404": reply("Aucun profil n'a cet identifiant (code profile_unknown)",
+                                  "passages de l'index RAG, images et sessions du profil. L'administrateur est gardé.",
+                   "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}]
+                   + session_param,
+                   "responses": {"200": reply("Supprimé", ok), **admin_replies,
+                                 "404": reply("Aucun profil n'a cet identifiant (code profile_unknown)", ref("Error")),
+                                 "409": reply("Le profil de l'administrateur est gardé (code admin_kept)",
                                               ref("Error"))}}},
+    "/gulliver/v1/setup": {
+        "post": {"tags": ["Profils"], "summary": "Choisit le premier mot de passe",
+                 "description": "Sans profil, crée l'administrateur {name, password} ; sinon donne son mot de passe à "
+                                "l'administrateur qui n'en a pas (une base d'avant les comptes). Une seule fois, et "
+                                "jamais par la passerelle de Cloudflare.",
+                 "requestBody": json_body({"type": "object", "required": ["password"], "properties": {
+                     "name": {"type": "string"}, "password": password_schema}}),
+                 "responses": {"200": reply("La session de l'administrateur", session_reply),
+                               "400": reply("Nom ou mot de passe hors bornes", ref("Error")),
+                               "403": reply("Par la passerelle (code setup_remote)", ref("Error")),
+                               "409": reply("L'administrateur a déjà un mot de passe (code setup_done)",
+                                            ref("Error"))}}},
+    "/gulliver/v1/login": {
+        "post": {"tags": ["Profils"], "summary": "Ouvre une session",
+                 "description": "Après 5 mauvais mots de passe de suite pour un profil, chaque essai attend 30 "
+                                "secondes, puis le double (une heure au plus).",
+                 "requestBody": json_body({"type": "object", "required": ["password"], "properties": {
+                     "profile": {"type": "string", "description": "L'identifiant du profil (ou name)."},
+                     "name": {"type": "string"}, "password": {"type": "string"}}}),
+                 "responses": {"200": reply("La session", session_reply),
+                               "401": reply("Profil ou mot de passe faux (code wrong_password)", ref("Error")),
+                               "403": reply("Le profil n'a pas de mot de passe (code password_not_set)", ref("Error")),
+                               "429": reply("Trop d'essais manqués (code login_throttled, en-tête Retry-After)",
+                                            ref("Error"))}}},
+    "/gulliver/v1/logout": {
+        "post": {"tags": ["Profils"], "summary": "Ferme la session", "parameters": session_param,
+                 "responses": {"200": reply("Fermée", ok)}}},
+    "/gulliver/v1/session": {
+        "get": {"tags": ["Profils"], "summary": "Le profil de la session", "parameters": session_param,
+                "responses": {"200": reply("Le profil", {"type": "object", "properties": {"profile": ref("Profile")}}),
+                              "401": reply("Pas de session valable (code session_required)", ref("Error"))}}},
+    "/gulliver/v1/session/password": {
+        "post": {"tags": ["Profils"], "summary": "Change son propre mot de passe",
+                 "description": "Les autres sessions du profil sont fermées ; celle-ci reste ouverte.",
+                 "parameters": session_param,
+                 "requestBody": json_body({"type": "object", "required": ["current", "password"], "properties": {
+                     "current": {"type": "string"}, "password": password_schema}}),
+                 "responses": {"200": reply("Changé", ok),
+                               "400": reply("Nouveau mot de passe hors bornes (code password)", ref("Error")),
+                               "401": reply("Pas de session, ou mot de passe actuel faux", ref("Error")),
+                               "429": reply("Trop d'essais manqués (code login_throttled)", ref("Error"))}}},
     "/gulliver/v1/profile/conversations": {
         "get": profile_op(["Profils"], "Les discussions d'un profil",
                           {"200": reply("Les discussions, objets entiers", {"type": "object", "properties": {

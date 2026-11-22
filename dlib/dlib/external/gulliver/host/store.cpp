@@ -96,6 +96,27 @@ namespace gulliver
             "CREATE TABLE IF NOT EXISTS profiles ("
             " id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE,"
             " created INTEGER NOT NULL, last_used INTEGER NOT NULL DEFAULT 0)");
+        // Les comptes (fork pour macOS, 2026-11-22) : l'empreinte du mot de passe et le rôle
+        // d'administrateur, ajoutés aux bases d'avant ; puis les sessions.
+        {
+            std::vector<std::string> cols;
+            gulliver::statement st(*db_, "PRAGMA table_info(profiles)");
+            st.exec();
+            while (st.move_next()) cols.push_back(st.get_column_as_text(1));
+            const char* const added[][2] = { { "password", "TEXT NOT NULL DEFAULT ''" },
+                { "admin", "INTEGER NOT NULL DEFAULT 0" } };
+            for (const auto& c : added)
+                if (std::find(cols.begin(), cols.end(), c[0]) == cols.end())
+                {
+                    db_->exec(std::string("ALTER TABLE profiles ADD COLUMN ") + c[0] + " " + c[1]);
+                    log_info(std::string("store: the column ") + c[0] + " is added to the profiles of " + path_);
+                }
+        }
+        db_->exec(
+            "CREATE TABLE IF NOT EXISTS profile_sessions ("
+            " key TEXT PRIMARY KEY, profile TEXT NOT NULL,"
+            " created INTEGER NOT NULL, last_used INTEGER NOT NULL,"
+            " FOREIGN KEY (profile) REFERENCES profiles(id) ON DELETE CASCADE)");
         // Les données d'un profil.  Chaque table porte la colonne profile en tête de clé et une clé
         // étrangère ON DELETE CASCADE : supprimer un profil emporte toutes ses données.  Le document
         // (doc) est le JSON entier que la page gère déjà (une discussion avec ses messages, un projet
@@ -433,9 +454,11 @@ namespace gulliver
             p.name = st.get_column_as_text(1);
             p.created = st.get_column_as_int64(2);
             p.last_used = st.get_column_as_int64(3);
+            p.password = st.get_column_as_text(4);
+            p.admin = st.get_column_as_int64(5) != 0;
             return p;
         }
-        const char* const profile_columns = "id, name, created, last_used";
+        const char* const profile_columns = "id, name, created, last_used, password, admin";
     }
 
     std::vector<profile> store::profiles()
@@ -479,12 +502,15 @@ namespace gulliver
         // conflit de nom, donc effacé ce profil-là ; on ne l'utilise pas pour cette raison.)
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            gulliver::statement st(*db_, "INSERT INTO profiles (id, name, created, last_used) VALUES (?, ?, ?, ?) "
-                "ON CONFLICT(id) DO UPDATE SET name = excluded.name, last_used = excluded.last_used");
+            gulliver::statement st(*db_, "INSERT INTO profiles (id, name, created, last_used, password, admin) "
+                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, "
+                "last_used = excluded.last_used, password = excluded.password, admin = excluded.admin");
             st.bind(1, p.id);
             st.bind(2, p.name);
             st.bind_int64(3, p.created);
             st.bind_int64(4, p.last_used);
+            st.bind(5, p.password);
+            st.bind_int64(6, p.admin ? 1 : 0);
             st.exec();
         });
     }
@@ -495,6 +521,67 @@ namespace gulliver
         writing([&]() {
             gulliver::statement st(*db_, "DELETE FROM profiles WHERE id = ?");
             st.bind(1, id);
+            st.exec();
+        });
+    }
+
+    void store::add_session(const std::string& key, const std::string& profile, int64_t now)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            gulliver::statement st(*db_, "INSERT INTO profile_sessions (key, profile, created, last_used) "
+                "VALUES (?, ?, ?, ?)");
+            st.bind(1, key);
+            st.bind(2, profile);
+            st.bind_int64(3, now);
+            st.bind_int64(4, now);
+            st.exec();
+        });
+    }
+
+    std::string store::session_profile(const std::string& key, int64_t now, int64_t max_idle)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        std::string profile;
+        int64_t last = 0;
+        {
+            gulliver::statement st(*db_, "SELECT profile, last_used FROM profile_sessions WHERE key = ?");
+            st.bind(1, key);
+            st.exec();
+            if (!st.move_next()) return std::string();
+            profile = st.get_column_as_text(0);
+            last = st.get_column_as_int64(1);
+        }
+        const bool expired = now - last > max_idle;
+        // L'usage n'est noté qu'une fois par minute au plus, pour ne pas écrire à chaque requête.
+        if (expired || now - last >= 60)
+            writing([&]() {
+                gulliver::statement st(*db_, expired ? "DELETE FROM profile_sessions WHERE key = ?"
+                                                     : "UPDATE profile_sessions SET last_used = ? WHERE key = ?");
+                if (expired) st.bind(1, key);
+                else { st.bind_int64(1, now); st.bind(2, key); }
+                st.exec();
+            });
+        return expired ? std::string() : profile;
+    }
+
+    void store::remove_session(const std::string& key)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            gulliver::statement st(*db_, "DELETE FROM profile_sessions WHERE key = ?");
+            st.bind(1, key);
+            st.exec();
+        });
+    }
+
+    void store::remove_sessions_of(const std::string& profile, const std::string& keep)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        writing([&]() {
+            gulliver::statement st(*db_, "DELETE FROM profile_sessions WHERE profile = ? AND key <> ?");
+            st.bind(1, profile);
+            st.bind(2, keep);
             st.exec();
         });
     }

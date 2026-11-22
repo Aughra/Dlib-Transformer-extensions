@@ -54,6 +54,7 @@
 #include "../common/log.h"
 #include "../common/platform.h"
 #include "../common/version.h"
+#include "accounts.h"
 #include "carnet.h"
 #include "thermal.h"
 #include "crypto.h"
@@ -135,6 +136,8 @@ namespace gulliver
             o["name"] = p.name;
             o["created"] = static_cast<long long>(p.created);
             o["last_used"] = static_cast<long long>(p.last_used);
+            o["admin"] = p.admin;
+            o["has_password"] = !p.password.empty();
             return o;
         }
 
@@ -223,29 +226,121 @@ namespace gulliver
         }
 
         /*
-            Le profil d'une requête de données, lu dans l'en-tête X-Gulliver-Profile.  Renvoie true
-            et remplit `out` quand l'en-tête nomme un profil connu (dont il note l'usage), sinon
-            envoie l'erreur et renvoie false : 400 profile_required si l'en-tête manque, 404
-            profile_unknown s'il nomme un profil qui n'existe pas (ou plus).  Les routes de données
-            d'un profil commencent toutes par cet appel.
+            Les comptes (fork pour macOS, 2026-11-22, host/accounts.h).  Une session est ouverte par
+            /gulliver/v1/login (ou /gulliver/v1/setup pour le premier mot de passe) ; la page envoie son
+            jeton dans l'en-tête X-Gulliver-Session (pas de cookie : la passerelle de Cloudflare les
+            retire).  Une session non servie depuis 30 jours expire.  Une requête venue par la
+            passerelle porte X-Gulliver-Remote: 1, que la passerelle pose elle-même : la création du
+            premier mot de passe et la gestion des comptes lui sont refusées.
         */
+        constexpr int64_t session_idle = 30LL * 24 * 3600;
+        login_throttle throttle;
 
+        bool is_remote(const httplib::Request& req)
+        {
+            return req.get_header_value("X-Gulliver-Remote") == "1";
+        }
+
+        // Le profil de la session de la requête, ou false sans session valable.
+        bool session_of(service& svc, const httplib::Request& req, profile& out)
+        {
+            const std::string token = req.get_header_value("X-Gulliver-Session");
+            if (token.size() != 64) return false;
+            const std::string id = svc.db().session_profile(session_key(token), now_unix(), session_idle);
+            return !id.empty() && svc.db().find_profile(id, out);
+        }
+
+        // Faut-il créer le premier mot de passe ?  Sans aucun profil, ou quand l'administrateur n'en a pas.
+        bool setup_needed(service& svc)
+        {
+            const std::vector<profile> all = svc.db().profiles();
+            if (all.empty()) return true;
+            for (const profile& p : all)
+                if (p.admin) return p.password.empty();
+            return true;
+        }
+
+        // Une base d'avant les comptes : le plus ancien profil devient l'administrateur.
+        void ensure_admin(service& svc)
+        {
+            std::vector<profile> all = svc.db().profiles();
+            if (all.empty()) return;
+            for (const profile& p : all)
+                if (p.admin) return;
+            profile* first = &all[0];
+            for (profile& p : all)
+                if (p.created < first->created) first = &p;
+            first->admin = true;
+            svc.db().put_profile(*first);
+            log_info("accounts: the profile " + first->id + " is the administrator");
+        }
+
+        // Ouvre une session pour p et rend {token, profile}.
+        json open_session(service& svc, const profile& p)
+        {
+            const std::string token = new_session_token();
+            svc.db().add_session(session_key(token), p.id, now_unix());
+            svc.db().touch_profile(p.id, now_unix());
+            json o = json::object();
+            o["token"] = token;
+            o["profile"] = profile_json(p);
+            return o;
+        }
+
+        // Le mot de passe d'un corps, vérifié (longueur) ; envoie l'erreur et rend false sinon.
+        bool password_of(const json& body, const char* key, httplib::Response& res, std::string& out)
+        {
+            out = body.contains(key) ? body[key].as_string() : std::string();
+            if (out.size() < password_min || out.size() > password_max)
+            {
+                send_error(res, 400, "invalid_request_error", "a password of 8 to 256 characters is required", key);
+                return false;
+            }
+            return true;
+        }
+
+        /*
+            Le profil d'une requête de données : celui de sa session (en-tête X-Gulliver-Session).
+            Renvoie true et remplit `out` (dont il note l'usage), sinon envoie l'erreur et renvoie
+            false : 401 session_required sans session valable, 403 profile_mismatch quand l'en-tête
+            X-Gulliver-Profile, s'il est envoyé, nomme un autre profil que celui de la session (on ne
+            lit jamais les données d'un autre).  Les routes de données d'un profil commencent toutes
+            par cet appel.
+        */
         bool resolve_profile(service& svc, const httplib::Request& req, httplib::Response& res, profile& out)
         {
-            const std::string id = req.get_header_value("X-Gulliver-Profile");
-            if (id.empty())
+            if (!session_of(svc, req, out))
             {
-                send_error(res, 400, "invalid_request_error",
-                    "this request needs a profile: send its id in the X-Gulliver-Profile header", "profile_required");
+                send_error(res, 401, "invalid_request_error",
+                    "this request needs a session: log in and send its token in the X-Gulliver-Session header",
+                    "session_required");
                 return false;
             }
-            if (!svc.db().find_profile(id, out))
+            const std::string named = req.get_header_value("X-Gulliver-Profile");
+            if (!named.empty() && named != out.id)
             {
-                send_error(res, 404, "invalid_request_error",
-                    "no profile has this id; create one or choose another", "profile_unknown");
+                send_error(res, 403, "invalid_request_error", "the session belongs to another profile",
+                    "profile_mismatch");
                 return false;
             }
-            svc.db().touch_profile(id, now_unix());
+            svc.db().touch_profile(out.id, now_unix());
+            return true;
+        }
+
+        // L'administrateur de la requête : 401 sans session, 403 pour un autre profil ou par la passerelle.
+        bool require_admin(service& svc, const httplib::Request& req, httplib::Response& res, profile& me)
+        {
+            if (!session_of(svc, req, me))
+            {
+                send_error(res, 401, "invalid_request_error", "this request needs a session", "session_required");
+                return false;
+            }
+            if (!me.admin || is_remote(req))
+            {
+                send_error(res, 403, "invalid_request_error",
+                    "only the administrator manages the profiles, from the Mac or the home network", "admin_required");
+                return false;
+            }
             return true;
         }
 
@@ -2528,15 +2623,152 @@ namespace gulliver
         // À ne pas confondre avec /settings/profiles ci-dessus, qui sont des instantanés de réglages.
         // Lister ; créer avec un nom ; renommer par son id ; supprimer par son id (ses données
         // partent avec lui par la cascade des tables de profil).
+        // Les comptes (fork pour macOS, 2026-11-22) : voir resolve_profile().
+        ensure_admin(svc);
+        // La liste des profils (noms et rôles, pour l'écran de connexion) et s'il faut créer le premier
+        // mot de passe.
         srv.Get("/gulliver/v1/profiles", [s](const httplib::Request&, httplib::Response& res) {
             json list = json::array();
             for (const auto& p : s->db().profiles())
                 list.push_back(profile_json(p));
             json o = json::object();
             o["profiles"] = list;
+            o["setup"] = setup_needed(*s);
             send_json(res, 200, o);
         });
+        // Le premier mot de passe : sans profil, crée l'administrateur {name, password} ; sinon donne son
+        // mot de passe à l'administrateur qui n'en a pas.  Depuis le Mac ou la maison seulement.
+        srv.Post("/gulliver/v1/setup", [s](const httplib::Request& req, httplib::Response& res) {
+            if (is_remote(req))
+            {
+                send_error(res, 403, "invalid_request_error",
+                    "the first password is chosen from the Mac or the home network", "setup_remote");
+                return;
+            }
+            json body;
+            if (!parse_body(req, res, body)) return;
+            std::string password;
+            if (!password_of(body, "password", res, password)) return;
+            static std::mutex setup_lock;
+            std::lock_guard<std::mutex> lock(setup_lock);
+            if (!setup_needed(*s))
+            {
+                send_error(res, 409, "invalid_request_error", "the administrator already has a password", "setup_done");
+                return;
+            }
+            const std::vector<profile> all = s->db().profiles();
+            profile p;
+            bool found = false;
+            for (const profile& q : all)
+                if (q.admin) { p = q; found = true; }
+            if (!found)
+            {
+                const std::string name = profile_name_of(body);
+                if (name.empty())
+                {
+                    send_error(res, 400, "invalid_request_error", "a name of 1 to 80 characters is required", "name");
+                    return;
+                }
+                p.id = random_hex(12);
+                p.name = name;
+                p.created = now_unix();
+                p.last_used = p.created;
+                p.admin = true;
+            }
+            p.password = hash_password(password);
+            s->db().put_profile(p);
+            log_info("accounts: the administrator " + p.id + " has a password");
+            send_json(res, 200, open_session(*s, p));
+        });
+        // La connexion : {profile (identifiant) ou name, password} ; rend {token, profile}.
+        srv.Post("/gulliver/v1/login", [s](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string id = body.contains("profile") ? body["profile"].as_string() : std::string();
+            const std::string password = body.contains("password") ? body["password"].as_string() : std::string();
+            profile p;
+            const bool known = !id.empty() ? s->db().find_profile(id, p)
+                                           : s->db().find_profile_by_name(profile_name_of(body), p);
+            const std::string key = known ? p.id : std::string("?");
+            const int64_t wait = throttle.wait(key, now_unix());
+            if (wait > 0)
+            {
+                res.set_header("Retry-After", std::to_string(wait));
+                send_error(res, 429, "invalid_request_error", "too many wrong passwords: wait "
+                    + std::to_string(wait) + " seconds", "login_throttled");
+                return;
+            }
+            if (known && p.password.empty())
+            {
+                send_error(res, 403, "invalid_request_error",
+                    "this profile has no password yet: the administrator gives it one", "password_not_set");
+                return;
+            }
+            if (!known || password.size() > password_max || !verify_password(password, p.password))
+            {
+                throttle.failed(key, now_unix());
+                log_warning("accounts: a wrong password for " + (known ? p.id : std::string("an unknown profile")));
+                send_error(res, 401, "invalid_request_error", "wrong profile or password", "wrong_password");
+                return;
+            }
+            throttle.succeeded(key);
+            send_json(res, 200, open_session(*s, p));
+        });
+        srv.Post("/gulliver/v1/logout", [s](const httplib::Request& req, httplib::Response& res) {
+            const std::string token = req.get_header_value("X-Gulliver-Session");
+            if (!token.empty()) s->db().remove_session(session_key(token));
+            send_json(res, 200, ok_result(true));
+        });
+        // Le profil de la session.
+        srv.Get("/gulliver/v1/session", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!session_of(*s, req, p))
+            {
+                send_error(res, 401, "invalid_request_error", "no session", "session_required");
+                return;
+            }
+            json o = json::object();
+            o["profile"] = profile_json(p);
+            send_json(res, 200, o);
+        });
+        // Son propre mot de passe : {current, password} ; les autres sessions du profil sont fermées.
+        srv.Post("/gulliver/v1/session/password", [s](const httplib::Request& req, httplib::Response& res) {
+            profile p;
+            if (!session_of(*s, req, p))
+            {
+                send_error(res, 401, "invalid_request_error", "this request needs a session", "session_required");
+                return;
+            }
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const int64_t wait = throttle.wait(p.id, now_unix());
+            if (wait > 0)
+            {
+                res.set_header("Retry-After", std::to_string(wait));
+                send_error(res, 429, "invalid_request_error", "too many wrong passwords", "login_throttled");
+                return;
+            }
+            const std::string current = body.contains("current") ? body["current"].as_string() : std::string();
+            if (current.size() > password_max || !verify_password(current, p.password))
+            {
+                throttle.failed(p.id, now_unix());
+                send_error(res, 401, "invalid_request_error", "the current password is wrong", "wrong_password");
+                return;
+            }
+            std::string password;
+            if (!password_of(body, "password", res, password)) return;
+            throttle.succeeded(p.id);
+            p.password = hash_password(password);
+            s->db().put_profile(p);
+            s->db().remove_sessions_of(p.id, session_key(req.get_header_value("X-Gulliver-Session")));
+            log_info("accounts: " + p.id + " changed its password");
+            send_json(res, 200, ok_result(true));
+        });
+        // La gestion des profils, par l'administrateur seul : créer {name, password} (jamais un autre
+        // administrateur), renommer ou changer le mot de passe {name?, password?}, supprimer (pas lui-même).
         srv.Post("/gulliver/v1/profiles", [s](const httplib::Request& req, httplib::Response& res) {
+            profile me;
+            if (!require_admin(*s, req, res, me)) return;
             json body;
             if (!parse_body(req, res, body)) return;
             const std::string name = profile_name_of(body);
@@ -2546,6 +2778,8 @@ namespace gulliver
                     "a name of 1 to 80 characters is required", "name");
                 return;
             }
+            std::string password;
+            if (!password_of(body, "password", res, password)) return;
             profile exists;
             if (s->db().find_profile_by_name(name, exists))
             {
@@ -2557,6 +2791,7 @@ namespace gulliver
             p.name = name;
             p.created = now_unix();
             p.last_used = p.created;
+            p.password = hash_password(password);
             try { s->db().put_profile(p); }
             catch (const std::exception&)
             {
@@ -2568,6 +2803,8 @@ namespace gulliver
             send_json(res, 200, profile_json(p));
         });
         srv.Put(R"(/gulliver/v1/profiles/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile me;
+            if (!require_admin(*s, req, res, me)) return;
             json body;
             if (!parse_body(req, res, body)) return;
             const std::string id = req.matches[1];
@@ -2577,33 +2814,58 @@ namespace gulliver
                 send_error(res, 404, "invalid_request_error", "no profile has this id", "profile_unknown");
                 return;
             }
-            const std::string name = profile_name_of(body);
-            if (name.empty())
+            if (body.contains("name"))
             {
-                send_error(res, 400, "invalid_request_error", "a name of 1 to 80 characters is required", "name");
-                return;
+                const std::string name = profile_name_of(body);
+                if (name.empty())
+                {
+                    send_error(res, 400, "invalid_request_error", "a name of 1 to 80 characters is required", "name");
+                    return;
+                }
+                profile other;
+                if (s->db().find_profile_by_name(name, other) && other.id != id)
+                {
+                    send_error(res, 409, "invalid_request_error", "another profile already has this name", "name_taken");
+                    return;
+                }
+                p.name = name;
             }
-            profile other;
-            if (s->db().find_profile_by_name(name, other) && other.id != id)
+            const bool new_password = body.contains("password");
+            if (new_password)
             {
-                send_error(res, 409, "invalid_request_error", "another profile already has this name", "name_taken");
-                return;
+                std::string password;
+                if (!password_of(body, "password", res, password)) return;
+                p.password = hash_password(password);
             }
-            p.name = name;
             try { s->db().put_profile(p); }
             catch (const std::exception&)
             {
                 send_error(res, 409, "invalid_request_error", "another profile already has this name", "name_taken");
                 return;
             }
+            // Un mot de passe changé ferme les sessions du profil (sauf celle de l'administrateur qui le change).
+            if (new_password)
+            {
+                s->db().remove_sessions_of(p.id, p.id == me.id
+                    ? session_key(req.get_header_value("X-Gulliver-Session")) : std::string());
+                throttle.succeeded(p.id);
+                log_info("accounts: the administrator set the password of " + p.id);
+            }
             send_json(res, 200, profile_json(p));
         });
         srv.Delete(R"(/gulliver/v1/profiles/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
+            profile me;
+            if (!require_admin(*s, req, res, me)) return;
             const std::string id = req.matches[1];
             profile p;
             if (!s->db().find_profile(id, p))
             {
                 send_error(res, 404, "invalid_request_error", "no profile has this id", "profile_unknown");
+                return;
+            }
+            if (p.admin)
+            {
+                send_error(res, 409, "invalid_request_error", "the administrator profile is kept", "admin_kept");
                 return;
             }
             s->db().remove_profile(id);

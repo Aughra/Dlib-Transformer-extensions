@@ -1126,7 +1126,8 @@ et un autre fournisseur de recherche, lu comme `wikipedia`, en disparaissent au 
 ## Interfaces
 
 L'interface compatible avec OpenAI ne prend aucune clé : le service écoute sur l'interface de bouclage
-(et, dans le fork macOS, sur le port réseau une fois l'accès réseau activé, sans mot de passe).
+(et, dans le fork macOS, sur le port réseau une fois l'accès réseau activé, sans mot de passe ; les données de
+chaque profil, elles, demandent une session ouverte par son mot de passe depuis Gulliver 6.31.0).
 Le champ `model` prend
 l'identifiant d'un modèle chargé, une fonction (`general`, `code`, `security`, ou `albireo-code` et
 ses semblables), `albireo-background` pour le modèle livré avec Albireo, ou `auto` ; le `model`
@@ -1643,7 +1644,8 @@ taille et son SHA-256, et l'exécutent en mode mise à jour à leur démarrage s
 ## Sécurité
 
 - Le service n'écoute que sur `127.0.0.1` (le fork macOS ajoute le port réseau, en HTTP simple,
-  sans mot de passe, et ne vérifie plus ni `Host` ni `Origin`), ne prend que des corps JSON, de 64 Mo et
+  sans mot de passe pour le service, mais avec un mot de passe par profil pour ses données depuis 6.31.0, et ne
+  vérifie plus ni `Host` ni `Origin`), ne prend que des corps JSON, de 64 Mo et
   524 288 valeurs au plus, et aucun corps sur `GET`, `HEAD`, `DELETE` et `OPTIONS`, et répond avec
   `nosniff`, `no-referrer`, une politique de sécurité du contenu et des protections contre l'intégration en cadre. Il lit au plus quatre
   corps de plus de 8 Mo à la fois, chacun compté jusqu'à ce que sa réponse soit écrite, et tient environ 2 millions

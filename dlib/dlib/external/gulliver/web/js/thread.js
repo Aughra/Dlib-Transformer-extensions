@@ -12,9 +12,9 @@ import { autoGrow, busyHere, liveMessage, regenerate, renderComposerState, sendM
 import { maxContextImages } from './context.js';
 import { attachmentIds, conversationMenu, deleteQuestion, exportAnswer, liveCopy, moveMenu,
   persist } from './conversations.js';
-import { dialog, showMenu, showPanel } from './dialogs.js';
+import { showMenu, showPanel } from './dialogs.js';
 import { extension } from './documents.js';
-import { switchProfile } from './profile.js';
+import { logout } from './profile.js';
 import { copyText, download, formatDecimal, formatDuration, formatNumber, formatShortDuration, formatSize, h,
   iconButton, mimeOf, toast } from './dom.js';
 import { attachMenu, contextImages, imageIds, imageLimitText, imageRoom, imageThumb, pastedFiles, pendingImageCount,
@@ -70,7 +70,8 @@ function menuButton() {
       { title: 'Le Mac', entries: [
         ...(remote ? [] : [{ label: t('serviceTab'), action: () => settingsDialog('serviceTab') }]),
         { label: t('data'), action: () => settingsDialog('data') },
-        { label: t('profileSwitch'), action: () => switchProfile(dialog, h, t) }] },
+        { label: 'Profils', action: () => settingsDialog('accountsTab') },
+        { label: 'Se déconnecter', action: () => logout() }] },
       { title: 'Cette discussion', entries: [context] },
       { title: 'En savoir plus', entries: [
         { label: t('about'), action: () => settingsDialog('about') },

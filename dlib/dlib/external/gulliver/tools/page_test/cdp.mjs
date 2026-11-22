@@ -64,11 +64,12 @@ const { targetId } = await send('Target.createTarget', { url: 'about:blank' }, n
 ({ sessionId: session } = await send('Target.attachToTarget', { targetId, flatten: true }, null));
 await send('Runtime.enable'); await send('Log.enable'); await send('Page.enable');
 await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
-// Le profil du banc (page_test.sh l'a créé) posé dans localStorage avant tout script de la page, pour que
+// Le profil des scénarios et sa session (page_test.sh les a créés) posés dans localStorage avant tout script de la page, pour que
 // la page démarre sur un profil choisi au lieu d'ouvrir son sélecteur.  Les données vivent côté service.
 if (process.env.PAGE_TEST_PROFILE) {
   await send('Page.addScriptToEvaluateOnNewDocument', {
-    source: `try { localStorage.setItem('gulliver.profile', ${JSON.stringify(process.env.PAGE_TEST_PROFILE)}); } catch (e) {}`
+    source: `try { localStorage.setItem('gulliver.profile', ${JSON.stringify(process.env.PAGE_TEST_PROFILE)}); ` +
+      `localStorage.setItem('gulliver.session', ${JSON.stringify(process.env.PAGE_TEST_SESSION || '')}); } catch (e) {}`
   });
 }
 await send('Page.navigate', { url });

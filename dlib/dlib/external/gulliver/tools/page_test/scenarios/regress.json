@@ -374,5 +374,25 @@
    true,
    true
   ]
+ },
+ {
+  "name": "accounts: the profile of the session at the bottom of the sidebar",
+  "eval": "const l=document.querySelector('.sidebar .profile-line'); return !!(l && l.innerText.includes('scenarios-'))",
+  "expect": true
+ },
+ {
+  "name": "accounts: a simple profile changes its password but does not manage the profiles",
+  "eval": "for(const d of document.querySelectorAll('.dialog')){ const c=[...d.querySelectorAll('button')].find(x=>x.innerText.trim()==='Fermer'); if(c) c.click(); } (await import('/js/settings.js')).settingsDialog('accountsTab'); await new Promise(r=>setTimeout(r,800)); const d=[...document.querySelectorAll('.dialog')].pop(); const text=d?d.innerText:''; const ok=text.includes('Connecté en tant que')&&text.includes('Mon mot de passe')&&!text.includes('Nouveau profil'); const c=d&&[...d.querySelectorAll('button')].find(x=>x.innerText.trim()==='Fermer'); if(c) c.click(); return ok",
+  "expect": true
+ },
+ {
+  "name": "accounts: the data of a profile are refused without a session",
+  "eval": "const r=await fetch('/gulliver/v1/profile/conversations'); return r.status",
+  "expect": 401
+ },
+ {
+  "name": "accounts: the login dialog lists the profiles and refuses a wrong password",
+  "eval": "const pr=await import('/js/profile.js'); const {dialog}=await import('/js/dialogs.js'); const {h}=await import('/js/dom.js'); const list=(await pr.listProfiles()).profiles; pr.loginDialog(dialog,h,list); await new Promise(r=>setTimeout(r,400)); const d=[...document.querySelectorAll('.dialog')].find(x=>x.innerText.includes('Se connecter')); if(!d) return 'no dialog'; const opts=[...d.querySelectorAll('select option')].map(o=>o.textContent); const pw=d.querySelector('input[type=password]'); pw.value='pas-le-bon-mot'; [...d.querySelectorAll('button')].find(b=>b.innerText.trim()==='Se connecter').click(); let msg=''; for(let i=0;i<40&&!msg;i++){ await new Promise(r=>setTimeout(r,250)); msg=(d.querySelector('[role=alert]')||{}).textContent||''; } (d.closest('.overlay')||d).remove(); return opts.some(o=>o.includes('(administrateur)')) && msg==='Mot de passe incorrect.'",
+  "expect": true
  }
 ]

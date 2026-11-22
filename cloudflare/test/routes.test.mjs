@@ -10,7 +10,8 @@ test('le calcul et les données passent', () => {
     ['POST', '/v1/chat/completions'], ['POST', '/v1/embeddings'], ['GET', '/v1/models'],
     ['POST', '/gulliver/v1/extract'], ['POST', '/gulliver/v1/count'], ['POST', '/gulliver/v1/web/search'],
     ['GET', '/gulliver/v1/status'], ['HEAD', '/gulliver/v1/status'], ['GET', '/gulliver/v1/models'],
-    ['GET', '/gulliver/v1/profiles'], ['POST', '/gulliver/v1/profiles'], ['DELETE', '/gulliver/v1/profiles/abc'],
+    ['GET', '/gulliver/v1/profiles'], ['POST', '/gulliver/v1/login'], ['POST', '/gulliver/v1/logout'],
+    ['GET', '/gulliver/v1/session'], ['POST', '/gulliver/v1/session/password'],
     ['GET', '/gulliver/v1/profile/conversations'], ['PUT', '/gulliver/v1/profile/conversations/42'],
     ['POST', '/gulliver/v1/profile/search'], ['POST', '/gulliver/v1/profile/documents/d1/index'],
     ['GET', '/gulliver/v1/profile/images/7/blob'], ['GET', '/gulliver/v1/documents/rapport.pdf'],
@@ -30,6 +31,8 @@ test("l'administration est refusée", () => {
     ['POST', '/gulliver/v1/engines/benchmark'], ['POST', '/gulliver/v1/relay/test'],
     ['POST', '/gulliver/v1/settings/profiles'], ['DELETE', '/gulliver/v1/settings/profiles'],
     ['DELETE', '/gulliver/v1/documents'], ['POST', '/gulliver/v1/une-route-future'], ['GET', '/gulliver/v1'],
+    ['POST', '/gulliver/v1/profiles'], ['PUT', '/gulliver/v1/profiles/abc'], ['DELETE', '/gulliver/v1/profiles/abc'],
+    ['POST', '/gulliver/v1/setup'],
   ]) assert.equal(allowed(m, p), null, m + ' ' + p);
 });
 
@@ -58,6 +61,8 @@ test("chaque route de l'interface du service est classée", () => {
     'GET /gulliver/v1/library', 'POST /gulliver/v1/library/load', 'GET /gulliver/v1/reserve', 'DELETE /gulliver/v1/reserve',
     'POST /gulliver/v1/engines/benchmark', 'POST /gulliver/v1/relay/test',
     'POST /gulliver/v1/settings/profiles', 'DELETE /gulliver/v1/settings/profiles',
+    'POST /gulliver/v1/profiles', 'PUT /gulliver/v1/profiles/{id}', 'DELETE /gulliver/v1/profiles/{id}',
+    'POST /gulliver/v1/setup',
   ]);
   for (const [path, ops] of Object.entries(spec.paths)) {
     for (const method of Object.keys(ops).filter((k) => ['get', 'post', 'put', 'delete', 'patch'].includes(k))) {

@@ -1,0 +1,246 @@
+{
+ "generated": "2026-11-22 17:54",
+ "seed": 7,
+ "questions": [
+  {
+   "question": "Comment peut-on expliquer les variations de résultats obtenus pour une même valeur numérique selon que l'on utilise des calculs en entiers ou en flottants exacts dans un algorithme de génération de texte, et pourquoi certaines lignes d'un texte généré ne semblent-elles pas influencer les suivantes ?",
+   "doc": "34-la-lampe-de-poche",
+   "name": "34-la-lampe-de-poche.md",
+   "snippet": "(0,26 ou 0,33, contre 0,12 pour llama.cpp). Et elle ne sert"
+  },
+  {
+   "question": "Comment fonctionne la différence d'entraînement et d'exécution des réseaux de neurones dans ce projet sur les plateformes Apple et Windows, et quels composants matériels (CPU/GPU) sont utilisés pour chaque étape selon le système d'exploitation ?",
+   "doc": "51-un-gpu-pour-apprendre",
+   "name": "51-un-gpu-pour-apprendre.md",
+   "snippet": "ou sur le GPU. dlib, la bibliothèque sur laquelle tout repo"
+  },
+  {
+   "question": "Comment le système d'exploitation macOS optimise-t-il l'utilisation des ressources CPU en fonction de la longueur des requêtes traitées par le moteur, et quel rôle jouent les threads inactifs dans ce processus ?",
+   "doc": "16-deux-equipes",
+   "name": "16-deux-equipes.md",
+   "snippet": "ntage, c'est une lecture : il prend la grande. Les threads d"
+  },
+  {
+   "question": "Comment fonctionne exactement la méthode de traitement des images dans un encodeur de modèle de vision par transformation, et en quoi cette approche diffère-t-elle de celle utilisée pour les modèles de langage où chaque élément ne prend en compte que ses prédécesseurs ?",
+   "doc": "14-le-zebre-et-le-perroquet",
+   "name": "14-le-zebre-et-le-perroquet.md",
+   "snippet": "ns les deux sens : c'est une classe où chaque élève compare"
+  },
+  {
+   "question": "Pourquoi le temps de compilation de dlib peut-il devenir très long avec des réseaux neuronaux complexes, alors que l'exécution finale de ces réseaux est généralement rapide ?",
+   "doc": "02-compiler-dlib-et-les-exemples",
+   "name": "02-compiler-dlib-et-les-exemples.md",
+   "snippet": "ce plan, et plus le réseau est gros, plus l'assemblage est"
+  },
+  {
+   "question": "Quels sont les changements récents concernant l'utilisation du GPU et du processeur pour les modèles Gemma 4, Qwen 3.6 et LFM2, ainsi que les corrections apportées aux fiches de réglage et d'avis sur les modèles dans l'interface ?",
+   "doc": "46-l-etagere-du-mac",
+   "name": "46-l-etagere-du-mac.md",
+   "snippet": "mpts sur le processeur, ce qui n'est plus vrai depuis l'épis"
+  },
+  {
+   "question": "Comment les différents modèles de traitement des appels vociaux dans ce système se distinguent-ils dans leur manière de transcrire et d’intégrer ces échanges dans la conversation écrite, et pourquoi cette diversité pose-t-elle un défi technique comparé à la solution utilisée par llama.cpp ?",
+   "doc": "37-le-tiroir-voisin",
+   "name": "37-le-tiroir-voisin.md",
+   "snippet": "de l'Audio entoure les résultats de marqueurs à lui. C'est c"
+  },
+  {
+   "question": "Pourquoi l'auteur du blog décide-t-il d'anticiper le passage à un Mac mini M5 Pro avec 64 Go de RAM pour exécuter un modèle de langage comme Qwen3.6-35B-A3B, alors que le MacBook Air M2 avec 24 Go ne semble pas adapté à cette tâche ?",
+   "doc": "28-le-comite-d-experts",
+   "name": "28-le-comite-d-experts.md",
+   "snippet": "rangés en mémoire, 22 Go en Q4_K_M, mais 3 milliards seuleme"
+  },
+  {
+   "question": "Comment s'articule exactement le processus de traitement du modèle Q8_0 lors de la lecture d'un texte, et quels sont les temps respectifs consacrés à l'étape de \"décompression\" (ou équivalent) et à la phase de multiplication des données en flottants ?",
+   "doc": "13-l-atelier-d-a-cote",
+   "name": "13-l-atelier-d-a-cote.md",
+   "snippet": "nt d'en utiliser le contenu. Le déballage ne prenait que 2 à"
+  },
+  {
+   "question": "Pourquoi les navigateurs web sont-ils capables de traiter des fichiers comme les PDF ou les documents Word de manière aussi efficace, alors que ces formats ne sont pas du texte brut et que cette capacité semblait initialement réservée uniquement aux navigateurs ?",
+   "doc": "55-le-navigateur-se-vide",
+   "name": "55-le-navigateur-se-vide.md",
+   "snippet": "aire les mots. Le navigateur sait faire cela — c'est même un"
+  },
+  {
+   "question": "Comment le nouveau système de calcul optimise-t-il le traitement des demi-nombres et des données de scores dans la puce, et en quoi consiste précisément la modification apportée à la lecture des tokens pour les scores par rapport à la structure originale du code ?",
+   "doc": "11-deux-facons-d-arrondir",
+   "name": "11-deux-facons-d-arrondir.md",
+   "snippet": "édents, chaque case du registre suit une seule somme, du pre"
+  },
+  {
+   "question": "Comment le processeur M2 optimise-t-il son fonctionnement en utilisant uniquement ses cœurs rapides pour les tâches d'écriture, et pourquoi cette stratégie améliore-t-elle ses performances ?",
+   "doc": "56-le-premier-soir-sur-le-mac-mini",
+   "name": "56-le-premier-soir-sur-le-mac-mini.md",
+   "snippet": "appris, il y a plusieurs semaines, à confier l'écriture aux"
+  },
+  {
+   "question": "Comment le modèle Gemma 3 optimise-t-il la gestion de sa mémoire pour traiter efficacement des fenêtres de texte variables, notamment en exploitant des zones réservées initialement pour l'alignement, et en quoi cela diffère-t-il de l'approche utilisée par le modèle 4B ?",
+   "doc": "38-la-fenetre-du-gpu",
+   "name": "38-la-fenetre-du-gpu.md",
+   "snippet": "rdaient toujours tout le texte. On leur a appris à commencer"
+  },
+  {
+   "question": "Comment fonctionne exactement ce script `tools/bench_macos.sh` et quelles informations précises permet-il d’obtenir sur les performances des modèles testés, tant au niveau du processeur que du GPU, ainsi que sur la configuration matérielle et logicielle de la machine utilisée ?",
+   "doc": "30-la-table-de-multiplication",
+   "name": "30-la-table-de-multiplication.md",
+   "snippet": "économie d'énergie, charge), puis fait lire et écrire chaque"
+  },
+  {
+   "question": "Pourquoi certaines vérifications automatisées ont-elles échoué avec un message d’erreur 422, et quel problème technique lié à un fichier PDF de 7,6 Mo, absent dans le dépôt initial, a finalement été identifié comme cause principale ?",
+   "doc": "56-le-premier-soir-sur-le-mac-mini",
+   "name": "56-le-premier-soir-sur-le-mac-mini.md",
+   "snippet": "gée dans le dépôt (elle pèse 7,6 Mo et se télécharge à part)"
+  },
+  {
+   "question": "Comment ce système de contrôle de chargement et cette fenêtre de traitement permettent-ils de vérifier que le modèle génère des réponses cohérentes et identiques sur différents supports (GPU et processeur) tout en distinguant clairement les cas où la fenêtre de traitement est activée ou désactivée ?",
+   "doc": "38-la-fenetre-du-gpu",
+   "name": "38-la-fenetre-du-gpu.md",
+   "snippet": "et une réponse de 150 tokens écrite ensuite est identique o"
+  },
+  {
+   "question": "Comment le nouveau modèle Gemma 4 procède-t-il pour segmenter et recomposer les mots dans son traitement du texte, et en quoi cette méthode diffère-t-elle de celles utilisées par les versions précédentes de Google ou dlib ?",
+   "doc": "34-la-lampe-de-poche",
+   "name": "34-la-lampe-de-poche.md",
+   "snippet": "emble ensuite les lettres selon une liste de 514 906 fusions"
+  },
+  {
+   "question": "Pourquoi le GPU obtient-il des résultats plus précis que le processeur lors de l'addition de grands ensembles de nombres, et en quoi cette différence s'explique-t-elle par des méthodes d'accumulation distinctes plutôt que par une erreur systématique d'un des deux composants ?",
+   "doc": "51-un-gpu-pour-apprendre",
+   "name": "51-un-gpu-pour-apprendre.md",
+   "snippet": "onne des milliers de nombres un par un, et perd un peu à cha"
+  },
+  {
+   "question": "Comment une boucle de code a-t-elle pu provoquer une perte de données dans le processus de sauvegarde, et quelle solution a finalement permis de corriger ce dysfonctionnement ?",
+   "doc": "22-les-documents-du-mac",
+   "name": "22-les-documents-du-mac.md",
+   "snippet": "me avant même d'être parcourue : c'est lire une liste de cou"
+  },
+  {
+   "question": "Comment se positionne exactement Gulliver par rapport à llama.cpp et à MLX en termes de performance et de précision selon les tests menés, et quels sont les domaines spécifiques où il surpasse ou est dépassé par ces autres modèles ?",
+   "doc": "61-la-course",
+   "name": "61-la-course.md",
+   "snippet": "este derrière, de 6 à 18 % le plus souvent. MLX garde la têt"
+  },
+  {
+   "question": "Comment le logiciel communique-t-il désormais les modifications apportées aux utilisateurs, et quelle est la différence entre cette nouvelle méthode et le format précédent du blog ?",
+   "doc": "23-deux-point-zero",
+   "name": "23-deux-point-zero.md",
+   "snippet": "un engrenage, désormais présent en haut de chaque page. Ell"
+  },
+  {
+   "question": "Quels avantages et inconvénients spécifiques présente l’utilisation de la bibliothèque Accelerate fournie par Apple dans macOS, comparée à l’implémentation originale du projet, et pourquoi ce choix a-t-il été privilégié malgré les différences de résultats ?",
+   "doc": "13-l-atelier-d-a-cote",
+   "name": "13-l-atelier-d-a-cote.md",
+   "snippet": "le livre avec macOS. Ses résultats diffèrent au dernier chif"
+  },
+  {
+   "question": "Comment des erreurs d'arrondi ou des différences dans l'ordre d'exécution parallèle peuvent-elles influencer la sortie d'un modèle de langage, même lorsque le calcul en lui-même ne présente aucune défaillance technique ?",
+   "doc": "56-le-premier-soir-sur-le-mac-mini",
+   "name": "56-le-premier-soir-sur-le-mac-mini.md",
+   "snippet": "ition de nombres à virgule ne donne pas tout à fait le même"
+  },
+  {
+   "question": "Quelle a été la décision prise concernant l'intégration des modifications apportées par le fork dans le projet original après que des commits récents aient réécrit des parties du moteur, et pourquoi cette décision a-t-elle été adoptée ?",
+   "doc": "18-le-grand-menage",
+   "name": "18-le-grand-menage.md",
+   "snippet": "percer des murs. L'humain a donc tranché : le fork ne fusio"
+  },
+  {
+   "question": "Comment fonctionne la sécurité de l'application Albireo lorsqu'elle permet d'accéder à son contenu depuis un téléphone en se connectant au serveur du Mac à domicile, et quels sont les mécanismes mis en place pour protéger cette connexion et gérer les tentatives d'accès non autorisées ?",
+   "doc": "21-le-tableau-de-bord",
+   "name": "21-le-tableau-de-bord.md",
+   "snippet": "n'en garde qu'une empreinte, impossible à remonter, calculé"
+  },
+  {
+   "question": "Comment fonctionne exactement la collaboration entre le processeur (CPU) et le GPU sur un Mac pour exécuter un modèle de langage sans déplacer les données, et en quoi cette organisation optimise-t-elle le traitement des requêtes ?",
+   "doc": "19-le-gpu-prend-la-plume",
+   "name": "19-le-gpu-prend-la-plume.md",
+   "snippet": "insi. Le processeur lit toujours la question, ce qu'il fait"
+  },
+  {
+   "question": "Comment fonctionne exactement la gestion des brouillons dans cet outil pour compléter automatiquement une réponse en s’appuyant sur des éléments déjà présents dans la conversation ou les documents, et en quoi cela diffère-t-il d’une génération classique mot à mot ?",
+   "doc": "61-la-course",
+   "name": "61-la-course.md",
+   "snippet": "ose leur suite comme brouillon, et le modèle vérifie tout le"
+  },
+  {
+   "question": "Comment fonctionne exactement ESLint pour détecter les erreurs liées aux noms non définis ou mal importés dans un code, et quels types de problèmes spécifiques, comme celui mentionné avec les doublons d'importations, peut-il identifier et corriger ?",
+   "doc": "31-le-grand-rangement",
+   "name": "31-le-grand-rangement.md",
+   "snippet": "s. Il a d'ailleurs rattrapé une erreur de l'outil de déménag"
+  },
+  {
+   "question": "Comment se comparent les performances en termes de génération de texte et de compréhension linguistique entre les moteurs llama.cpp, Gulliver et MLX sur un Mac, en utilisant des modèles identiques et des critères objectifs comme la perplexité ?",
+   "doc": "61-la-course",
+   "name": "61-la-course.md",
+   "snippet": "er. On a posé les trois sur la même piste : mêmes modèles, m"
+  },
+  {
+   "question": "Comment des optimisations dans la répartition des tâches entre plusieurs unités de calcul (comme les cœurs du GPU) ont-elles permis d’améliorer significativement les performances d’un modèle de traitement de langage, en passant de 13 à 26 tokens par seconde dans deux cas précis ?",
+   "doc": "28-le-comite-d-experts",
+   "name": "28-le-comite-d-experts.md",
+   "snippet": "semble la même page. Une fois les 32 mains mises sur la même"
+  },
+  {
+   "question": "Comment peut-on transformer un modèle de langage au format GGUF en un réseau ajustable avec la bibliothèque dlib pour améliorer ses performances sur des textes spécifiques, et en quoi consiste exactement la première étape de ce processus appelée R1 ?",
+   "doc": "59-quatre-familles-dans-dlib",
+   "name": "59-quatre-familles-dans-dlib.md",
+   "snippet": "e poids peut être corrigé, ce que dlib sait faire. Le premie"
+  },
+  {
+   "question": "Comment se compare la vitesse de chargement des poids d'un modèle entre un GPU optimisé et un processeur classique, et quels sont les gains concrets en termes de temps et de capacité maximale de transfert ?",
+   "doc": "17-la-sonde",
+   "name": "17-la-sonde.md",
+   "snippet": "eads du processeur ; un tiers de mieux sur le petit modèle."
+  },
+  {
+   "question": "Comment le passage décrit-il concrètement la source d'une optimisation inattendue dans le temps d'exécution du noyau, et quels détails techniques précis ont permis de réduire significativement les pertes de performance initiales ?",
+   "doc": "30-la-table-de-multiplication",
+   "name": "30-la-table-de-multiplication.md",
+   "snippet": "e calcul, alors que le temps se perdait ailleurs. Les mains"
+  },
+  {
+   "question": "Comment fonctionne exactement la technologie de \"copie légère\" utilisée par Albireo pour installer un modèle comme Gemma 3 4B, et pourquoi l'espace disque reste-t-il inchangé même après le chargement, alors que le fichier semble présent et utilisable ?",
+   "doc": "46-l-etagere-du-mac",
+   "name": "46-l-etagere-du-mac.md",
+   "snippet": "iginal, elle ne prend aucune place tant qu'aucun des deux fi"
+  },
+  {
+   "question": "Comment la cinquième phase du modèle dlib a-t-elle implémenté le mécanisme d'attention de manière unifiée et efficace, et quels sont les avantages et limites de cette approche par rapport à une solution plus traditionnelle ou à une version optimisée par tuiles ?",
+   "doc": "51-un-gpu-pour-apprendre",
+   "name": "51-un-gpu-pour-apprendre.md",
+   "snippet": "rices, un masque qui empêche un mot de voir ceux qui le suiv"
+  },
+  {
+   "question": "Pourquoi les échanges de données entre un téléphone et un Mac via une porte Wi-Fi non sécurisée ne sont-ils pas protégés par chiffrement, et quelles sont les conséquences concrètes sur le fonctionnement des applications comme les conversations ou la gestion du presse-papiers ?",
+   "doc": "21-le-tableau-de-bord",
+   "name": "21-le-tableau-de-bord.md",
+   "snippet": "car les navigateurs le réservent aux pages chiffrées. La cop"
+  },
+  {
+   "question": "Comment fonctionne exactement ce système automatisé de tests pour une page web, et quelles sont les différentes étapes ou vérifications qu’il effectue pour s’assurer de son bon fonctionnement, depuis sa création jusqu’à son utilisation pour des mises à jour futures ?",
+   "doc": "31-le-grand-rangement",
+   "name": "31-le-grand-rangement.md",
+   "snippet": "carré rouge et demande sa couleur, régénère une réponse, re"
+  },
+  {
+   "question": "Comment ce réarrangement des paramètres du modèle de 0,8 milliard de paramètres a-t-il influencé sa capacité à produire des réponses cohérentes, et en quoi cette instabilité diffère-t-elle de la stabilité observée dans le modèle plus grand de 4 milliards de paramètres ?",
+   "doc": "27-le-carnet-sur-le-gpu",
+   "name": "27-le-carnet-sur-le-gpu.md",
+   "snippet": "tombent sur des quasi-égalités du modèle : 0,464 contre 0,4"
+  },
+  {
+   "question": "Pourquoi Albireo et llama.cpp donnent-ils des réponses différentes pour une même question, et comment la rotation des clés et des valeurs dans les modèles de langage influence-t-elle la précision des résultats ?",
+   "doc": "36-le-post-it-et-la-photocopie",
+   "name": "36-le-post-it-et-la-photocopie.md",
+   "snippet": "les cartes avant de les ranger en piles égales. Il ne le fai"
+  },
+  {
+   "question": "Quelles sont les conséquences concrètes sur les fonctionnalités linguistiques et le contenu du logiciel après avoir supprimé les langues autres que le français, et comment cela se traduit-il en termes de dictionnaires, voix et exemples disponibles ?",
+   "doc": "23-deux-point-zero",
+   "name": "23-deux-point-zero.md",
+   "snippet": "six. Avec eux sont partis les listes de mots qui servaient à"
+  }
+ ]
+}

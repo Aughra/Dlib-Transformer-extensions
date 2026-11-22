@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
 // License: Boost Software License   See LICENSE.txt for the full license.
 
-// Les paramètres de la page et leurs onglets (Général, Modèles, Génération, Mémoire, Données, Service, À propos), les
+// Les paramètres de la page et leurs onglets (Général, Modèles, Génération, Mémoire, Données, Profils, Service, À propos), les
 // notes de version et la page des composants et licences (fork pour macOS : sortis d'app.js).
 
 import * as api from './api.js';
@@ -27,6 +27,7 @@ import { modelsTab } from './models.js';
 import { go } from './navigation.js';
 import { applyTheme, saveSetting } from './preferences.js';
 import { serviceTab } from './service.js';
+import { accountsTab } from './accounts.js';
 import { clearedSettings, roles, state, ui } from './state.js';
 import { backgroundContext, modelName, refreshStatus, searchProvider } from './status.js';
 import { broadcast, refreshViews, syncLists } from './tabs.js';
@@ -37,7 +38,7 @@ export function settingsDialog(initialTab) {
     // onglets sont cachés, et la passerelle refuserait leurs actions de toute façon.
     const remote = Boolean(state.status && state.status.remote);
     const adminTabs = ['modelsTab', 'serviceTab'];
-    const tabs = ['general', 'modelsTab', 'model', 'memoryTab', 'data', 'serviceTab', 'about']
+    const tabs = ['general', 'modelsTab', 'model', 'memoryTab', 'data', 'accountsTab', 'serviceTab', 'about']
       .filter((tab) => !remote || !adminTabs.includes(tab));
     if (remote && adminTabs.includes(initialTab)) initialTab = 'general';
     const tabBar = h('div', { class: 'tabs' });
@@ -50,6 +51,7 @@ export function settingsDialog(initialTab) {
       else if (tab === 'model') modelTab(body);
       else if (tab === 'memoryTab') memoryTab(body);
       else if (tab === 'data') dataTab(body, close);
+      else if (tab === 'accountsTab') accountsTab(body);
       else if (tab === 'serviceTab') serviceTab(body, { h, toast, status: () => state.status, refreshStatus });
       else if (tab === 'modelsTab') modelsTab(body, { h, toast, status: () => state.status, refreshStatus });
       else aboutTab(body, close);
