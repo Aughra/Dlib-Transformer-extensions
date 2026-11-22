@@ -1357,6 +1357,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Reste** : les têtes de 256 et 512 valeurs, et les fenêtres glissantes, sur l'ancien noyau.
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 51 : le produit groupé des experts aux boucles déroulées (Gulliver 6.38.0)
+
+- **Avant** : `mm_id_nax` (produit groupé des experts des prompts, sur les accélérateurs) laissait au compilateur ses petites boucles (fragments, colonnes, chargements). Qwen3-VL 30B-A3B, question de 512 tokens : 1 168 à 1 194 tokens/s ; llama.cpp 1 835 à 1 950. Le produit prenait 81 % du temps des noyaux.
+- **Changement** (`engine/metal_kernels_nax.metal`) : `_Pragma("clang loop unroll(full)")` devant chacune de ses boucles de taille fixe (toutes sauf celle des colonnes, `k0`), la leçon de l'attention de MLX (changement 50). **Exactitude** : mêmes opérations dans le même ordre ; perplexité GPU (morceaux de 4 096, 3 morceaux) 6,0575 avant et après, contrôle du chargement identique (12,777 %) ; `test_metal` all checks passed.
+- **Après** (deux bancs compilés côte à côte, trois tours en alternance, charge 2,3 à 3,6) : 512 tokens 1 187,8 / 1 167,8 / 1 194,2 → 1 452,0 / 1 466,1 / 1 452,9 tokens/s (+23 %) ; 4 096 tokens 1 639,1 / 1 603,5 / 1 547,6 → 1 795,2 / 1 779,5 / 1 707,7 (+10 % ; llama.cpp 1 345 à 1 516).
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

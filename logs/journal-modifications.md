@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.38.0 : dérouler les boucles du produit groupé des experts
+
+- **Quoi** : `mm_id_nax` : boucles de taille fixe déroulées (`_Pragma("clang loop unroll(full)")`), sauf celle des colonnes.
+- **Fichiers** : `gulliver/engine/metal_kernels_nax.metal`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,mesures/tests-de-vitesse.md}`, `logs/{reprise.md,nuit-2026-11-22.md}`, ce journal.
+- **Pourquoi** : la leçon de l'attention (changement 50) appliquée au produit qui prenait 81 % de la lecture du 30B.
+- **Étapes** : bancs `bench_runtime` compilés avec et sans, en alternance (3 tours, charge 2,3 à 3,6) : 512 tokens +23 %, 4 096 +10 % ; perplexité 6,0575 / 6,0575 ; `test_metal` all checks passed ; `test_macos_copie.sh` 0 échec. Version 6.38.0.
+
 ## 2026-11-22 — Gulliver 6.37.0 : l'attention des questions à la façon de MLX
 
 - **Quoi** : noyaux `kv_gather` (clés et valeurs d'une séquence rangées en demi-précision, à la suite, lignes au-delà à zéro) et `attention_flat<64|128>` (organisation de `steel_attention_nax.h` de MLX, licence MIT : lectures directes, barrière sans mémoire au milieu du produit P V, softmax en base 2, boucles déroulées, `max_total_threads_per_threadgroup(128)`) ; `commands::attention_flat()`, `flat_available()`, `flat_bytes()` ; `run_gpu()` : chemin pris pour un prompt aux têtes de 64 ou 128 valeurs sans fenêtre, une paire de lancements par séquence de la passe, requêtes converties en demi-précision dans `g.xh`, tampons `flat_k`, `flat_v` ; `GULLIVER_NO_FLAT_ATT` ; `test_metal` : `attention_flat` contre la référence en double précision (sept formes).
