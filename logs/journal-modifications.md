@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Produits Q4_K de l'écriture : relevé par matrice, variante à deux lignes rejetée
+
+- **Quoi** : relevé temporaire (non commité) du profil par noyau avec la taille de chaque produit, puis essai d'une variante du produit Q4_K d'un token à deux lignes par simdgroup (`mv_q4_K_r<2>`, paires ligne-bloc réparties entre les groupes de 8 fils) ; retirée.
+- **Fichiers** : aucun gardé (essai dans `engine/metal_kernels.metal` et `engine/metal_device.mm`, remis à `0cb7bc7`) ; ce journal, `logs/reprise.md`.
+- **Pourquoi** : trouver l'écart d'écriture avec llama.cpp (82 contre 92 jetons/s sur le 4B du service).
+- **Étapes** : octets par format du 4B (`llama-gguf`) : Q4_K 1 765 Mo, Q6_K 726 Mo (dont la table des mots, 319 Mo). Profil d'une étape (unités ≈ ns, 13,9 M pour 14,5 ms) : `mv_q4_K_1` 8,0 ms (221 Go/s), `mv_q6_K_1` 3,3 ms (219 Go/s), environ 85 % du plafond. Par matrice : porte et montée Q4_K 19 456 x 2 560, 135,5 µs (207 Go/s) ; requêtes et clés 5 120 x 2 560, 39,8 µs (185) ; sortie de l'attention 2 560 x 4 096 (184) ; descente Q4_K 2 560 x 9 728 (208) ; descente Q6_K (224) ; table de sortie Q6_K (231) ; valeurs 1 024 x 2 560, 112 (Q4_K) et 95 (Q6_K). Hypothèse : 10 blocs par ligne sur des tours de 4 laissent 17 % des fils sans travail. Variante à deux lignes : au profil, porte et montée 135,5 → 119,8 µs (234 Go/s), requêtes et clés 39,8 → 37,5, descente 67,4 → 69,0 (réservée ensuite aux lignes à tours pleins à moins de 90 %) ; mais en mesure de bout en bout, alternée, elle perd : 4B 81,8 / 82,8 → 78,8 / 79,0, 2B 166,1 / 167,7 → 165,3 / 167,0, Gemma 3 4B 80,2 / 80,2 → 77,0 / 77,0. Rejetée. Leçon : le profil par noyau (un encodeur par noyau) ne prédit pas l'enchaînement réel ; seule la mesure de bout en bout tranche.
+
 ## 2026-11-22 — Gulliver 6.22.2 : norme par tête et rotation en un seul noyau ; test_metal échoue sur une erreur de compilation
 
 - **Quoi** : `engine/metal_kernels.metal` : noyau `qk_norm_rope` (norme par tête des requêtes et des clés, puis positions rotatives, un threadgroup par tête et par token, même réduction que `rms_norm`) ; `engine/metal_device.{h,mm}` : `commands::qk_norm_rope` ; `engine/cpu_runtime_metal.cpp` : employé quand la couche a `q_norm` (`GULLIVER_NO_QK_FUSE` pour comparer). `tests/test_metal.cpp` : code 1 (« FAIL ») quand les noyaux ou ceux des accélérateurs ne compilent pas, « skipped » réservé au Mac sans GPU.
