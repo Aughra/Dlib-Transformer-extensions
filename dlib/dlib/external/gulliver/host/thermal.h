@@ -30,11 +30,16 @@ namespace gulliver
         double max_c = -1;
         double mean_c = -1;
         std::string state;
+        // La charge moyenne depuis le relevé précédent, en % (-1 inconnue) : le processeur (tous ses cœurs, par leurs
+        // compteurs de temps) et le GPU (« Device Utilization % », lu toutes les dix secondes).
+        double cpu = -1;
+        double gpu = -1;
     };
 
     /*!
-        L'historique de la température (fork pour macOS, 2026-11-22) : start_thermal_history() lance, une seule fois,
-        un fil qui relève read_chip_thermal() toutes les thermal_period secondes (cinq minutes, demande de l'humain) et garde les dernières 24 heures ;
+        L'historique de la température et de la charge (fork pour macOS, 2026-11-22) : start_thermal_history() lance,
+        une seule fois, un fil qui relève read_chip_thermal() toutes les thermal_period secondes (cinq minutes, demande
+        de l'humain), avec la charge moyenne du processeur et du GPU sur la période, et garde les dernières 24 heures ;
         thermal_history() rend les relevés des minutes dernières minutes, du plus ancien au plus récent.
     !*/
     const int thermal_period = 300;

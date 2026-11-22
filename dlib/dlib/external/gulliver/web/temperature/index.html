@@ -6,7 +6,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gulliver · température de la puce</title>
+  <title>Gulliver · température et charge</title>
   <link rel="icon" href="../img/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../docs/docs.css">
   <link rel="stylesheet" href="temperature.css">
@@ -16,7 +16,7 @@
   <header class="docs-head">
     <img src="../img/gulliver-mark.svg" alt="">
     <span class="brand">Gulliver</span>
-    <span class="what">Température de la puce</span>
+    <span class="what">Température et charge de la puce</span>
     <nav>
       <a href="../">← Retour à l’application</a>
       <button type="button" id="theme" title="Thème clair, sombre ou celui du système">Thème</button>
@@ -29,9 +29,17 @@
       <button type="button" data-minutes="360">6 h</button>
       <button type="button" data-minutes="1440">24 h</button>
     </div>
-    <div class="chart" id="chart"></div>
+    <h3 class="chart-title">Température de la puce</h3>
+    <div class="chart" id="chart-temp"></div>
     <p class="legend"><span class="key max"></span> la sonde la plus chaude · <span class="key mean"></span> la moyenne
-      des sondes</p>
+      des sondes · <span class="key stat"></span> le haut, la moyenne et le bas de la sonde la plus chaude sur la
+      période</p>
+    <h3 class="chart-title">Utilisation du processeur</h3>
+    <div class="chart" id="chart-cpu"></div>
+    <h3 class="chart-title">Utilisation du GPU</h3>
+    <div class="chart" id="chart-gpu"></div>
+    <p class="legend"><span class="key load"></span> la charge moyenne de chaque période de cinq minutes ·
+      <span class="key stat"></span> le haut, la moyenne et le bas sur la période affichée</p>
     <h2>Ce que montre cette page</h2>
     <p>La puce du Mac a une quarantaine de sondes de température. Gulliver les relit toutes les cinq minutes depuis son
       démarrage et garde les dernières 24 heures : la courbe pleine est la sonde la plus chaude, la courbe fine leur
@@ -40,6 +48,10 @@
       continu sur le GPU. Une puce Apple ne réduit sa cadence que bien plus haut, vers 95 à 105 °C. La valeur passe en
       orange quand macOS juge la machine « assez chaude », en rouge quand il la juge « chaude » : c’est alors qu’il
       commence à freiner, et que le moteur ralentit.</p>
+    <p>Le processeur et le GPU : pour chaque point, la charge moyenne des cinq minutes qui précèdent (le processeur,
+      tous ses cœurs ensemble, par ses compteurs de temps ; le GPU par une lecture toutes les dix secondes). 100 % veut
+      dire que tous les cœurs, ou tout le GPU, ont travaillé sans arrêt. Pendant l’écriture d’une réponse sur le GPU, le
+      processeur reste presque au repos ; un modèle qui tourne sur le processeur, lui, le remplit et chauffe la puce.</p>
     <p class="faint">Les sondes sont lues par une interface interne de macOS, sans droits d’administrateur
       (<code>host/thermal.mm</code>). Les mesures de vitesse du dimanche notent aussi la température au début et à la
       fin.</p>

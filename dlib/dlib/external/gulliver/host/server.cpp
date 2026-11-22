@@ -1877,6 +1877,8 @@ namespace gulliver
                 o["max"] = std::round(t.max_c * 10) / 10;
                 o["mean"] = std::round(t.mean_c * 10) / 10;
                 o["state"] = t.state;
+                if (t.cpu >= 0) o["cpu"] = std::round(t.cpu * 10) / 10;
+                if (t.gpu >= 0) o["gpu"] = std::round(t.gpu * 10) / 10;
                 samples.push_back(o);
             }
             json o = json::object();

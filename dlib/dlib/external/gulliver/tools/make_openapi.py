@@ -1029,17 +1029,18 @@ paths = {
                 "image": {"type": "boolean"}, "settings": {"type": "object", "properties": {
                     "kv_type": {"type": "string", "enum": ["q8", "f16"]}, "draft_tokens": {"type": "integer"}}}}}}}})}}},
     "/gulliver/v1/thermal/history": {"get": {
-        "tags": ["Service"], "summary": "L'historique de la température de la puce",
+        "tags": ["Service"], "summary": "L'historique de la température et de la charge de la puce",
         "description": "Les relevés de la température de la puce du Mac, pris toutes les cinq minutes depuis le "
                        "démarrage du service et gardés 24 heures : la sonde la plus chaude, la moyenne des sondes et "
-                       "l'état thermique de macOS, sur les « minutes » dernières minutes (60 par défaut, 1 440 au "
+                       "l'état thermique de macOS, et l'utilisation moyenne du processeur et du GPU sur chaque période de cinq minutes, sur les « minutes » dernières minutes (60 par défaut, 1 440 au "
                        "plus). La page /temperature/ en trace la courbe.",
         "parameters": [{"name": "minutes", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 1440}}],
         "responses": {"200": reply("Les relevés", {"type": "object", "properties": {
             "period": {"type": "integer"}, "minutes": {"type": "integer"},
             "samples": {"type": "array", "items": {"type": "object", "properties": {
                 "t": {"type": "integer"}, "max": {"type": "number"}, "mean": {"type": "number"},
-                "state": {"type": "string"}}}}}})}}},
+                "state": {"type": "string"}, "cpu": {"type": "number", "description": "Utilisation moyenne du processeur sur la période, en %."},
+                "gpu": {"type": "number", "description": "Utilisation moyenne du GPU sur la période, en %."}}}}}})}}},
     "/gulliver/v1/pseudalis": {"get": {
         "tags": ["Service"], "summary": "Pseudalis sur ce Mac",
         "description": "Si Pseudalis est installé sur ce Mac (son dossier de données : PSEUDALIS_HOME, ou "

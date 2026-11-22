@@ -3,6 +3,8 @@
 
 #import <Foundation/Foundation.h>
 #include <IOKit/hidsystem/IOHIDEventSystemClient.h>
+#include <IOKit/IOKitLib.h>
+#include <mach/mach.h>
 
 #include <algorithm>
 #include <chrono>
@@ -91,27 +93,101 @@ namespace gulliver
         const size_t history_most = 24 * 3600 / thermal_period;
     }
 
+    namespace
+    {
+        // Les tics de tous les cœurs : occupés et total.
+        void cpu_ticks(unsigned long long& busy, unsigned long long& total)
+        {
+            natural_t n = 0;
+            processor_info_array_t info = nullptr;
+            mach_msg_type_number_t count = 0;
+            busy = total = 0;
+            if (host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &n, &info, &count) != KERN_SUCCESS) return;
+            for (natural_t i = 0; i < n; ++i)
+            {
+                const integer_t* t = info + i * CPU_STATE_MAX;
+                const unsigned long long used = static_cast<unsigned long long>(t[CPU_STATE_USER])
+                    + static_cast<unsigned long long>(t[CPU_STATE_SYSTEM]) + static_cast<unsigned long long>(t[CPU_STATE_NICE]);
+                busy += used;
+                total += used + static_cast<unsigned long long>(t[CPU_STATE_IDLE]);
+            }
+            vm_deallocate(mach_task_self(), reinterpret_cast<vm_address_t>(info), count * sizeof(integer_t));
+        }
+
+        // L'utilisation du GPU en %, que macOS publie dans les statistiques de l'IOAccelerator ; -1 sans elle.
+        int gpu_use()
+        {
+            io_iterator_t it;
+            if (IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOAccelerator"), &it) != KERN_SUCCESS)
+                return -1;
+            int use = -1;
+            io_object_t o;
+            while ((o = IOIteratorNext(it)))
+            {
+                CFTypeRef stats = IORegistryEntryCreateCFProperty(o, CFSTR("PerformanceStatistics"), kCFAllocatorDefault, 0);
+                if (stats && CFGetTypeID(stats) == CFDictionaryGetTypeID())
+                {
+                    const auto v = static_cast<CFNumberRef>(CFDictionaryGetValue(static_cast<CFDictionaryRef>(stats),
+                        CFSTR("Device Utilization %")));
+                    int x = 0;
+                    if (v && CFNumberGetValue(v, kCFNumberIntType, &x) && x > use) use = x;
+                }
+                if (stats) CFRelease(stats);
+                IOObjectRelease(o);
+            }
+            IOObjectRelease(it);
+            return use;
+        }
+    }
+
     void start_thermal_history()
     {
         static std::once_flag once;
         std::call_once(once, [] {
-            // Un fil détaché pour la vie du service : une lecture toutes les cinq minutes, la première au démarrage.
+            /*
+                Un fil détaché pour la vie du service : toutes les dix secondes, l'utilisation du GPU ; toutes les
+                thermal_period secondes (et dix secondes après le démarrage, pour un premier point), un relevé : la
+                température du moment, la charge moyenne du processeur (ses compteurs de temps depuis le relevé
+                précédent) et celle du GPU (la moyenne des lectures de la période).
+            */
             std::thread([] {
+                unsigned long long busy0 = 0, total0 = 0;
+                cpu_ticks(busy0, total0);
+                double gpu_sum = 0;
+                int gpu_count = 0;
+                auto last = std::chrono::steady_clock::now();
+                bool first = true;
                 for (;;)
                 {
-                    const chip_thermal t = read_chip_thermal();
-                    if (t.sensors > 0)
+                    std::this_thread::sleep_for(std::chrono::seconds(10));
+                    const int g = gpu_use();
+                    if (g >= 0)
                     {
-                        thermal_sample s;
-                        s.time = static_cast<long long>(std::time(nullptr));
-                        s.max_c = t.max_c;
-                        s.mean_c = t.mean_c;
-                        s.state = t.state;
-                        std::lock_guard<std::mutex> lock(history_m);
-                        history.push_back(s);
-                        while (history.size() > history_most) history.pop_front();
+                        gpu_sum += g;
+                        ++gpu_count;
                     }
-                    std::this_thread::sleep_for(std::chrono::seconds(thermal_period));
+                    const auto now = std::chrono::steady_clock::now();
+                    if (!first && now - last < std::chrono::seconds(thermal_period)) continue;
+                    first = false;
+                    last = now;
+                    unsigned long long busy = 0, total = 0;
+                    cpu_ticks(busy, total);
+                    const chip_thermal t = read_chip_thermal();
+                    thermal_sample s;
+                    s.time = static_cast<long long>(std::time(nullptr));
+                    s.max_c = t.max_c;
+                    s.mean_c = t.mean_c;
+                    s.state = t.state;
+                    if (total > total0) s.cpu = 100.0 * static_cast<double>(busy - busy0) / static_cast<double>(total - total0);
+                    if (gpu_count > 0) s.gpu = gpu_sum / gpu_count;
+                    busy0 = busy;
+                    total0 = total;
+                    gpu_sum = 0;
+                    gpu_count = 0;
+                    if (t.sensors == 0 && s.cpu < 0 && s.gpu < 0) continue;
+                    std::lock_guard<std::mutex> lock(history_m);
+                    history.push_back(s);
+                    while (history.size() > history_most) history.pop_front();
                 }
             }).detach();
         });

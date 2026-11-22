@@ -2,6 +2,12 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.29.0 : processeur et GPU dans la page de température
+
+- **Quoi** : demande de l'humain : « un graphe au même endroit que la température, et mets la moyenne, le haut, le bas sur le même graphe de chacun ». `host/thermal.{h,mm}` : `thermal_sample.cpu` et `.gpu` ; le fil de l'historique se réveille toutes les dix secondes (lecture du GPU, « Device Utilization % » de l'IOAccelerator) et enregistre un point toutes les cinq minutes (et dix secondes après le démarrage) : la température du moment, la charge moyenne du processeur depuis le point précédent (tics de `host_processor_info`) et celle du GPU (moyenne des lectures) ; `host/server.cpp` : `cpu` et `gpu` dans `thermal/history` ; `web/temperature/` : trois graphiques (température : sonde la plus chaude et moyenne des sondes ; processeur ; GPU), chacun avec le haut, la moyenne et le bas de la période en pointillés et leur valeur à droite ; `tools/make_openapi.py`.
+- **Fichiers** : `gulliver/host/{thermal.h,thermal.mm,server.cpp}`, `gulliver/web/temperature/{index.html,temperature.js,temperature.css}`, `gulliver/tools/make_openapi.py`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/differences-mac-windows.md`, `logs/reprise.md`, ce journal.
+- **Étapes** : service relancé : premier point dix secondes après le démarrage, 29,8 °C, processeur 18,6 %, GPU 5 % ; ESLint de `web/temperature/*.js` ; banc de la page : lint, 144 scénarios, 0 échec ; `test_macos.sh` (port 18473) : 0 échec. Version 6.29.0.
+
 ## 2026-11-22 — Gulliver 6.28.1 : processeur et GPU dans la mesure de la semaine
 
 - **Quoi** : demande de l'humain : « quand tu mettras la température dans les tests de vitesse, ajoute l'utilisation du CPU, l'utilisation du GPU, et l'idéal pour les trois : le minimum, le maximum, la moyenne ». `macos/temperature/temperature.m` : ligne « charge : processeur X %, GPU Y % » (processeur : tics de `host_processor_info` relus à une seconde d'écart ; GPU : « Device Utilization % » des `PerformanceStatistics` de l'`IOAccelerator`). `tools/bench_modeles.sh` : relevé « température processeur GPU » toutes les 20 s, minimum, moyenne et maximum de chacune ; `tools/conseil_modeles.py` : trois lignes dans le tableau de la machine et une phrase dans la section de la semaine du document de vitesse.

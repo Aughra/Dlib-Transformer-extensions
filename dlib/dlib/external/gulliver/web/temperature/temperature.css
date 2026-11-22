@@ -27,3 +27,9 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--
 .legend .key { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; }
 .legend .key.max { background: #e8962e; }
 .legend .key.mean { background: var(--brand); }
+.chart-title { font-size: 1em; margin: 18px 0 6px; }
+.chart .load { fill: none; stroke: #5b8def; stroke-width: 2; stroke-linejoin: round; }
+.chart .stat { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.8; }
+.chart .stat-label { fill: var(--faint); font: 11px var(--font); }
+.legend .key.load { background: #5b8def; }
+.legend .key.stat { background: none; border-top: 2px dashed var(--faint); height: 0; }
