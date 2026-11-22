@@ -2,6 +2,12 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.28.1 : processeur et GPU dans la mesure de la semaine
+
+- **Quoi** : demande de l'humain : « quand tu mettras la température dans les tests de vitesse, ajoute l'utilisation du CPU, l'utilisation du GPU, et l'idéal pour les trois : le minimum, le maximum, la moyenne ». `macos/temperature/temperature.m` : ligne « charge : processeur X %, GPU Y % » (processeur : tics de `host_processor_info` relus à une seconde d'écart ; GPU : « Device Utilization % » des `PerformanceStatistics` de l'`IOAccelerator`). `tools/bench_modeles.sh` : relevé « température processeur GPU » toutes les 20 s, minimum, moyenne et maximum de chacune ; `tools/conseil_modeles.py` : trois lignes dans le tableau de la machine et une phrase dans la section de la semaine du document de vitesse.
+- **Fichiers** : `macos/temperature/{temperature.m,README.md}`, `gulliver/tools/{bench_modeles.sh,conseil_modeles.py}`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `logs/reprise.md`, ce journal.
+- **Étapes** : outil au repos : 56,1 à 60 °C, processeur 4 %, GPU 9 à 13 % (94 % juste après le démarrage du service) ; `ioreg -c IOAccelerator` et `top -l 2` donnent les mêmes ordres de grandeur. Calcul sur trois relevés d'essai (60,0 5 90 ; 70,5 40 99 ; 50,2 12 0) : 50,2|60,2|70,5|5|19|40|0|63|99|3 ; tableau et section essayés sur une copie du document. Version 6.28.1.
+
 ## 2026-11-22 — Gulliver 6.28.0 : les regroupements de têtes sans noyau sur le GPU (Qwen2.5)
 
 - **Quoi** : `engine/metal_device.mm` : `regroup()` (rep hors de 1, 2, 4, 8 : REP 1, têtes × rep, `kv_div` = rep) à l'entrée de `attention()` et `attention_tiles()`, et dans `tile_tokens()` ; `engine/metal_kernels.metal` et `metal_kernels_nax.metal` : `attention_args.kv_div`, adresse des clés `(kvh / kv_div) · head_stride` (cinq endroits) ; `engine/cpu_runtime_metal.cpp` : le refus ne garde que les têtes qui ne se partagent pas exactement.

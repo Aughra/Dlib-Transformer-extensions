@@ -5,13 +5,14 @@
 # sortie et, avec --json, dans conseil.json (lu par l'onglet Modèles : GET /gulliver/v1/models/advice).
 #
 #   python3 tools/conseil_modeles.py modeles-….raw [--previous id] [--new "id …"] [--rounds n]
-#       [--machine "modèle|puce|macOS|Gulliver|charge|température"] [--temperature "moyenne|maximum|relevés"]
+#       [--machine "modèle|puce|macOS|Gulliver|charge|température"]
+#       [--temperature "t_min|t_moy|t_max|c_min|c_moy|c_max|g_min|g_moy|g_max|relevés"]
 #       [--late] [--json conseil.json] [--doc docs/mesures/tests-de-vitesse.md]
 #
 # Les lignes de llama.cpp et de MLX (identifiants « llama.cpp:… », « mlx:… ») entrent dans le tableau comme les autres,
 # pas dans le conseil (le bouton « Choisir » applique un modèle de Gulliver).  Avec --doc, la section de la semaine du
 # document de vitesse (entre « <!-- semaine : début --> » et « <!-- semaine : fin --> ») est réécrite : les chiffres de
-# Gulliver seuls, sur les modèles mesurés, et la température moyenne de la puce pendant la mesure.
+# Gulliver seuls, sur les modèles mesurés, et la charge de la machine pendant la mesure.
 #
 # Les perplexités ne se comparent qu'entre modèles qui découpent le texte de la même façon : la famille Qwen3 (même
 # vocabulaire) ; les autres ont le leur.
@@ -55,9 +56,16 @@ def main():
     ap.add_argument("--temperature", default="")
     ap.add_argument("--doc")
     args = ap.parse_args()
-    temp = args.temperature.split("|") if args.temperature else []
-    temp_text = (f"{temp[0].replace('.', ',')} °C en moyenne pendant la mesure, {temp[1].replace('.', ',')} °C au plus "
-                 f"({temp[2]} relevés)") if len(temp) == 3 else ""
+    # « t_min|t_moy|t_max|c_min|c_moy|c_max|g_min|g_moy|g_max|relevés » (bench_modeles.sh) : la température de la puce,
+    # l'utilisation du processeur et du GPU pendant la mesure.
+    load = args.temperature.split("|") if args.temperature else []
+    num = lambda v: v.replace(".", ",")
+    loads = ([("Température de la puce", "°C", load[0:3]), ("Utilisation du processeur", "%", load[3:6]),
+              ("Utilisation du GPU", "%", load[6:9])] if len(load) == 10 else [])
+    load_rows = [(label, f"{num(v[1])} {unit} en moyenne, de {num(v[0])} à {num(v[2])} {unit}") for label, unit, v in loads]
+    temp_text = ("pendant la mesure (" + load[9] + " relevés, toutes les 20 secondes) : " + " ; ".join(
+        f"{label.lower()} {num(v[1])} {unit} en moyenne (de {num(v[0])} à {num(v[2])})" for label, unit, v in loads)
+        if loads else "")
     new = set(args.new.split())
 
     names, image, where, ppl = {}, {}, {}, {}
@@ -113,8 +121,8 @@ def main():
         print("|---|---|")
         for label, value in zip(labels, args.machine.split("|")):
             print(f"| {label} | {value} |")
-        if temp_text:
-            print(f"| Température de la puce | {temp_text} |")
+        for label, text in load_rows:
+            print(f"| {label} | {text} |")
         print()
     print(f"Gulliver sur chacun de ses modèles installés, et llama.cpp et MLX sur le modèle de référence : lecture d'une question puis écriture de 64 jetons après elle, en jetons par "
           f"seconde, mémoire de conversation en 8 bits, {args.rounds} essais en alternance (moyenne) ; perplexité d'un "
@@ -213,7 +221,7 @@ def update_doc(path, models, names, where, get, ppl, previous, advice, temp_text
     lines = [begin, "", f"## La mesure de la semaine ({when})", "",
              "Écrite par le Mac à chaque mesure de la semaine, le lundi (`tools/bench_modeles.sh`) : Gulliver seul, "
              "sur chacun de ses modèles installés ; jetons par seconde, mémoire de conversation en 8 bits."
-             + (f" Température de la puce : {temp_text}." if temp_text else "")
+             + (f" Charge de la machine {temp_text}." if temp_text else "")
              + (" L'heure limite a coupé la mesure avant la fin." if late else ""), "",
              "| Modèle | Calcul | Lecture 512 | Lecture 4 096 | Écriture 512 | Écriture 4 096 | Perplexité |",
              "|---|---|---|---|---|---|---|"]

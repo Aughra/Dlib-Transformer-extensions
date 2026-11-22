@@ -11,8 +11,9 @@
 # et MLX (s'il a la version MLX du modèle) sont mesurés de la même façon sur le modèle de référence, comme deux lignes de
 # plus du tableau (décision de l'humain : « un modèle à comparer comme un autre »).  Passent d'abord le choix de la
 # semaine dernière (conseil.json, sinon le modèle actif), puis les nouveaux de la nuit (nouveaux.json, tools/modeles_semaine.py), puis les autres ;
-# une mesure commencée avant BENCH_DEADLINE heures (12 par défaut) s'arrête à cette heure-là.  La température de la puce
-# est relevée toutes les 20 secondes pendant la mesure (moyenne et maximum).  Écrit les chiffres bruts dans
+# une mesure commencée avant BENCH_DEADLINE heures (12 par défaut) s'arrête à cette heure-là.  La température de la puce,
+# l'utilisation du processeur et celle du GPU sont relevées toutes les 20 secondes pendant la mesure (macos/temperature :
+# minimum, moyenne et maximum de chacune).  Écrit les chiffres bruts dans
 # build/bench/modeles-<date>.raw, puis la page de la semaine et le conseil (tools/conseil_modeles.py), et met à jour la
 # section de la semaine de docs/mesures/tests-de-vitesse.md : « table: <fichier .md> » en dernière ligne.
 #
@@ -102,10 +103,13 @@ TEMP_TOOL=$ROOT/build/temperature
 [ -x "$TEMP_TOOL" ] || clang -fobjc-arc -framework Foundation -framework IOKit -o "$TEMP_TOOL" "$ROOT/macos/temperature/temperature.m" 2>/dev/null
 chip_temp() { [ -x "$TEMP_TOOL" ] && "$TEMP_TOOL" | sed -n 's/^puce : \([0-9.]*\) °C au plus.*/\1 °C/p' | sed 's/\./,/'; }
 TEMP_START=$(chip_temp)
-# La température toutes les 20 secondes pendant la mesure, pour sa moyenne.
+# La température, le processeur et le GPU toutes les 20 secondes pendant la mesure : « température processeur GPU ».
 TEMPS=$OUTDIR/modeles-$STAMP.temp
 : > "$TEMPS"
-( while :; do [ -x "$TEMP_TOOL" ] && "$TEMP_TOOL" | sed -n 's/^puce : \([0-9.]*\) °C au plus.*/\1/p' >> "$TEMPS"; sleep 20; done ) &
+( while :; do
+    [ -x "$TEMP_TOOL" ] && "$TEMP_TOOL" | awk '/^puce :/ {t = $3} /^charge :/ {c = $4; g = $7} END {if (t != "") print t, c, g}' >> "$TEMPS"
+    sleep 20
+  done ) &
 SAMPLER=$!
 engines() {  # llama.cpp et MLX sur le modèle de référence, pour une taille
   local n=$1 p g out
@@ -164,7 +168,9 @@ fi
 kill "$SAMPLER" 2>/dev/null
 LOAD_END=$(sysctl -n vm.loadavg)
 TEMP_END=$(chip_temp)
-TEMP_MEAN=$(awk '{s += $1; if ($1 > m) m = $1; n++} END {if (n) printf "%.1f|%.1f|%d", s / n, m, n}' "$TEMPS")
+# Minimum, moyenne et maximum de chaque grandeur : « t_min|t_moy|t_max|c_min|c_moy|c_max|g_min|g_moy|g_max|relevés ».
+TEMP_MEAN=$(awk 'NF >= 3 {for (i = 1; i <= 3; ++i) {v = $i + 0; s[i] += v; if (n == 0 || v < lo[i]) lo[i] = v; if (n == 0 || v > hi[i]) hi[i] = v}; n++}
+  END {if (n) printf "%.1f|%.1f|%.1f|%.0f|%.0f|%.0f|%.0f|%.0f|%.0f|%d", lo[1], s[1] / n, hi[1], lo[2], s[2] / n, hi[2], lo[3], s[3] / n, hi[3], n}' "$TEMPS")
 
 python3 -I "$TOOLS/conseil_modeles.py" "$RAW" --previous "$PREVIOUS" --new "$NEW" --rounds "$ROUNDS" \
   --machine "$(sysctl -n hw.model)|$(sysctl -n machdep.cpu.brand_string), $(( $(sysctl -n hw.memsize) / 1073741824 )) Go|$(sw_vers -productVersion) ($(sw_vers -buildVersion))|$(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null))|$LOAD_START au début, $LOAD_END à la fin|${TEMP_START:-?} au début, ${TEMP_END:-?} à la fin" \
