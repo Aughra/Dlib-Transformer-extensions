@@ -1252,6 +1252,14 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** : lecture de 512 tokens **1 444 tokens/s** (×17), de 16 384 tokens 880 ; écriture **50,7** (llama.cpp : 1 280 et 48,9).
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 45 : les regroupements de têtes que les noyaux de l'attention ne prennent pas (Gulliver 6.28.0)
+
+- **Avant** : les noyaux de l'attention sur le GPU (`attention_dec`, `attention_part`, `attention_mtile`, `attention_nax`) sont instanciés pour 1, 2, 4 ou 8 têtes de requête par tête de clés (REP) ; un autre regroupement laissait le modèle au processeur (« the kernels do not cover query heads grouped otherwise »). Qwen2.5-Coder 1,5B (12 têtes de requête, 2 de clés : 6) : lecture de 512 tokens **510 tokens/s**, écriture **112**.
+- **Changement** (`metal_device.mm`, `regroup()` ; `metal_kernels.metal`, `metal_kernels_nax.metal`, `attention_args.kv_div` ; `cpu_runtime_metal.cpp`) : un regroupement sans noyau passe par REP = 1, une tête de requête par « tête » de la grille (rep fois plus de têtes), chacune lisant les clés de la tête `kvh / kv_div` ; `kv_div` vaut 1 pour tous les autres modèles, dont rien ne change. Chaque tête de clés est alors lue par chacune de ses têtes de requête, au lieu d'une fois pour toutes. **Exactitude** : contrôle au chargement 0,54 à 0,77 % ; perplexité (4 morceaux de 2 048) : processeur 12,5970, GPU par passes de 8 tokens 12,5959.
+- **Après** : lecture **5 598 tokens/s** (×11), écriture **179** (+60 %).
+- **Reste** : Qwen2.5-0.5B (7 par tête) bute ensuite sur ses largeurs (896, 4 864), qui ne sont pas des multiples de 256.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

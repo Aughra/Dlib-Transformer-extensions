@@ -1207,6 +1207,9 @@ struct attention_args
     ulong v_slab;
     ulong head_stride;
     ulong scales;      // les octets entre les clés d'une tête et leurs échelles (kv_args)
+    // Un regroupement que les noyaux ne prennent pas (Qwen2.5 : 7 têtes de requête par tête de clés) passe par
+    // REP = 1, une tête de requête par « tête » de la grille : sa tête de clés est kvh / kv_div (1 sinon).
+    uint kv_div;
 };
 
 template <uint PER>
@@ -1261,7 +1264,7 @@ kernel void attention_part(device const float* q [[buffer(0)]], device const uch
     {
         const ulong block = ulong(blocks[t * a.table_stride + p / a.positions]);
         const ulong row = ulong(p % a.positions);
-        const ulong head = block * a.block_stride + ulong(kvh) * a.head_stride;
+        const ulong head = block * a.block_stride + ulong(kvh / a.kv_div) * a.head_stride;
         float kf[PER], vf[PER];
         load_row<PER>(region + head + a.k_slab, row, e0, a, kf);
         load_row<PER>(region + head + a.v_slab, row, e0, a, vf);
@@ -1380,7 +1383,7 @@ kernel void attention_dec(device const float* q [[buffer(0)]], device const ucha
         for (uint i = 0; i < REP; ++i) sc[i] = 0.0f;
         if (ok)
         {
-            const ulong head = ulong(table[p / a.positions]) * a.block_stride + ulong(kvh) * a.head_stride;
+            const ulong head = ulong(table[p / a.positions]) * a.block_stride + ulong(kvh / a.kv_div) * a.head_stride;
             const ulong row = ulong(p % a.positions);
             device const uchar* ks = region + head + a.k_slab;
             for (uint e = 0; e < HD; e += 4)
@@ -1414,7 +1417,7 @@ kernel void attention_dec(device const float* q [[buffer(0)]], device const ucha
         const uint n = uint(min(32L, p1 - pb));
         const int vblk = ok ? table[p / a.positions] : 0;
         const uint vrw = ok ? uint(p % a.positions) : 0u;
-        device const uchar* vhead = region + ulong(kvh) * a.head_stride + a.v_slab;
+        device const uchar* vhead = region + ulong(kvh / a.kv_div) * a.head_stride + a.v_slab;
         for (uint j0 = 0; j0 < n; j0 += 4)
         {
             float vf[4][PER];
@@ -1582,7 +1585,7 @@ kernel void attention_mtile(device const float* q [[buffer(0)]], device const uc
                 continue;
             }
             const long p = p0 + jj;
-            const ulong head = ulong(table[p / a.positions]) * a.block_stride + ulong(kvh) * a.head_stride;
+            const ulong head = ulong(table[p / a.positions]) * a.block_stride + ulong(kvh / a.kv_div) * a.head_stride;
             device const uchar* s = region + head + slab;
             const ulong row = ulong(p % a.positions);
             if (a.q8)

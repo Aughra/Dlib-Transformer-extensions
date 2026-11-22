@@ -35,6 +35,7 @@ struct attention_args
     ulong v_slab;
     ulong head_stride;
     ulong scales;
+    uint kv_div;       // les têtes de requête par tête de clés quand rep vaut 1 pour un regroupement sans noyau
 };
 
 // Un fragment 16 x 16 : la voie lane tient 8 valeurs, aux lignes fm et fm + 8, colonnes fn à fn + 3 (disposition des
@@ -143,7 +144,7 @@ kernel void attention_nax(device const float* q [[buffer(0)]], device const ucha
                 kd[0] = kd[1] = vd[0] = vd[1] = half4(0.0h);
                 continue;
             }
-            const ulong head = ulong(table[p / a.positions]) * a.block_stride + ulong(kvh) * a.head_stride;
+            const ulong head = ulong(table[p / a.positions]) * a.block_stride + ulong(kvh / a.kv_div) * a.head_stride;
             const ulong row = ulong(p % a.positions);
             kd[0] = load4<HD>(region + head + a.k_slab, row, e, true, a);
             kd[1] = load4<HD>(region + head + a.k_slab, row, e + 4, true, a);

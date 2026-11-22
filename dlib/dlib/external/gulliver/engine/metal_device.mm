@@ -204,7 +204,28 @@ namespace gulliver
             uint64_t v_slab;
             uint64_t head_stride;
             uint64_t scales;
+            uint32_t kv_div;
         };
+        /*
+            Un regroupement des têtes que les noyaux de l'attention ne prennent pas (fork pour macOS, 2026-11-22 : Qwen2.5,
+            7 têtes de requête par tête de clés ; ils prennent 1, 2, 4 et 8) : une tête de requête par « tête » de la grille
+            (REP = 1), rep fois plus de têtes, chacune lisant les clés de la tête kvh / kv_div.  Chaque tête de clés est
+            alors lue par chacune de ses têtes de requête au lieu d'une fois pour toutes.
+        */
+        struct grouping
+        {
+            unsigned rep;
+            unsigned kv_div;
+            metal_device::commands::kv_layout l;
+        };
+        bool grouped_by_kernels(unsigned rep) { return rep == 1 || rep == 2 || rep == 4 || rep == 8; }
+        grouping regroup(unsigned rep, const metal_device::commands::kv_layout& l)
+        {
+            if (grouped_by_kernels(rep)) return { rep, 1, l };
+            grouping g{ 1, rep, l };
+            g.l.heads = l.heads * rep;
+            return g;
+        }
         // Les octets entre les clés d'une tête et leurs échelles (kv_layout::scales).
         uint64_t scales_at(const metal_device::commands::kv_layout& l)
         {
@@ -1141,10 +1162,13 @@ namespace gulliver
     }
 
     void metal_device::commands::attention(metal_view q, metal_view region, metal_view blocks, metal_view lengths,
-        unsigned table_stride, unsigned tokens, unsigned rep, unsigned parts, unsigned q_stride, metal_view partial,
-        metal_view ctx, const kv_layout& l, unsigned part_len)
+        unsigned table_stride, unsigned tokens, unsigned rep0, unsigned parts, unsigned q_stride, metal_view partial,
+        metal_view ctx, const kv_layout& l0, unsigned part_len)
     {
         if (tokens == 0) return;
+        const grouping gr = regroup(rep0, l0);
+        const unsigned rep = gr.rep;
+        const kv_layout& l = gr.l;
         int kernel = attention_kernel(rep, l.hd);
         if (kernel < 0) throw std::invalid_argument("metal_device: an attention of other heads than its kernels take");
         // attention_dec (« flash-decoding ») pour les têtes de 64 et 128 valeurs, et de 256 avec 4 têtes de requête au plus ;
@@ -1154,7 +1178,7 @@ namespace gulliver
         if (!old_decode && r >= 0 && (l.hd == 64 || l.hd == 128)) kernel = k_attention_dec + 2 * r + (l.hd == 128 ? 1 : 0);
         else if (!old_decode && r >= 0 && r <= 2 && l.hd == 256) kernel = k_attention_dec + 8 + r;
         const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, part_len, parts, q_stride,
-            table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l) };
+            table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l), gr.kv_div };
         impl_->use(kernel);
         impl_->bind(q, 0);
         impl_->bind(region, 1);
@@ -1180,6 +1204,7 @@ namespace gulliver
 
     unsigned metal_device::tile_tokens(unsigned rep, unsigned hd) const
     {
+        if (!grouped_by_kernels(rep)) rep = 1;   // regroup()
         // attention_nax : 16 lignes de requête par simdgroup, 8 simdgroups (128 lignes) par défaut.
         if (!impl_->nax.empty() && nax_attention_index(rep, hd) >= 0) return 16 * nax_simdgroups() / rep;
         // Comme les instances d'attention_mtile (metal_kernels.metal) : 32 lignes de requête (16 pour des têtes de 256
@@ -1189,15 +1214,18 @@ namespace gulliver
     }
 
     void metal_device::commands::attention_tiles(metal_view q, metal_view region, metal_view blocks, metal_view lengths,
-        unsigned table_stride, metal_view tiles, unsigned n_tiles, unsigned rep, unsigned q_stride, metal_view ctx,
-        const kv_layout& l)
+        unsigned table_stride, metal_view tiles, unsigned n_tiles, unsigned rep0, unsigned q_stride, metal_view ctx,
+        const kv_layout& l0)
     {
         if (n_tiles == 0) return;
+        const grouping gr = regroup(rep0, l0);
+        const unsigned rep = gr.rep;
+        const kv_layout& l = gr.l;
         const int nax = impl_->device->nax.empty() ? -1 : nax_attention_index(rep, l.hd);
         if (nax >= 0)
         {
             const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, 0, 1, q_stride,
-                table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l) };
+                table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l), gr.kv_div };
             impl_->use_nax(nax);
             impl_->bind(q, 0);
             impl_->bind(region, 1);
@@ -1216,7 +1244,7 @@ namespace gulliver
         const bool wide = l.hd == 512;
         const int kernel = wide ? base - k_attention_part_512 + k_attention_mtile_512 : base - k_attention_part + k_attention_mtile;
         const attention_args a = { l.hd, rep, l.heads, l.q8 ? 1u : 0u, l.positions, 0, 1, q_stride,
-            table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l) };
+            table_stride, l.window, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l), gr.kv_div };
         impl_->use(kernel);
         impl_->bind(q, 0);
         impl_->bind(region, 1);

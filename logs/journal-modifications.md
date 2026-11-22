@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.28.0 : les regroupements de têtes sans noyau sur le GPU (Qwen2.5)
+
+- **Quoi** : `engine/metal_device.mm` : `regroup()` (rep hors de 1, 2, 4, 8 : REP 1, têtes × rep, `kv_div` = rep) à l'entrée de `attention()` et `attention_tiles()`, et dans `tile_tokens()` ; `engine/metal_kernels.metal` et `metal_kernels_nax.metal` : `attention_args.kv_div`, adresse des clés `(kvh / kv_div) · head_stride` (cinq endroits) ; `engine/cpu_runtime_metal.cpp` : le refus ne garde que les têtes qui ne se partagent pas exactement.
+- **Fichiers** : `gulliver/engine/{metal_device.mm,metal_kernels.metal,metal_kernels_nax.metal,cpu_runtime_metal.cpp}`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md}`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : la mesure de la semaine montrait Qwen2.5-0.5B sur le processeur ; Qwen2.5-Coder 1,5B (6) et 7B (7) arrivent lundi.
+- **Étapes** : Qwen2.5-0.5B : accepté pour le regroupement, puis refusé pour ses largeurs (896, 4 864 : « widths that are not multiples of 256 ») ; laissé au processeur. Qwen2.5-Coder 1,5B téléchargé par le catalogue (1 117 320 768 octets, empreinte vérifiée par le service ; il l'aurait été lundi) : GPU accepté (contrôle 0,54 à 0,77 %), lecture de 512 tokens 5 597,7 contre 510,4 sur le processeur, écriture 179,2 contre 112,3. Perplexité (4 morceaux de 2 048) : processeur 12,5970 (20,3 s), GPU en lecture d'un coup 12,5970 (21,4 s : retombée sur le processeur, comme pour Ministral), GPU par passes de 8 tokens 12,5959 (9,5 s). `test_metal` passe ; `test_macos.sh` (port 18473) : 0 échec. Version 6.28.0. À regarder : pourquoi `perplexity_runtime` en lecture d'un coup retombe sur le processeur (les milliers de lignes de logits), et les largeurs qui ne sont pas des multiples de 256.
+
 ## 2026-11-22 — Gulliver 6.27.0 : Mistral 3 sur le GPU (température de l'attention)
 
 - **Quoi** : `engine/metal_kernels.metal` : `query_args.per_token` et un tampon `factors` dans `prepare_queries` ; `engine/metal_device.{h,mm}` : `prepare_queries(…, const metal_view* factors)` ; `engine/cpu_runtime_metal.cpp` : tampon `qtemp` (un float par token) rempli avec les tables de rotation, passé à `prepare_queries` ; refus « a temperature of the attention » retiré.

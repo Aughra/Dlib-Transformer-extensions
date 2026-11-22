@@ -153,7 +153,6 @@ namespace gulliver
     {
         gpu_.reset();
         const long hd = cfg_.head_dim;
-        const long rep = cfg_.n_kv_heads > 0 ? cfg_.n_heads / cfg_.n_kv_heads : 0;
         // Les modèles que couvrent les noyaux : leurs têtes de 64 à 256 valeurs, chaque produit en Q4_K ou Q6_K
         // (et les formats de step_format pour les modèles ci-dessous).
         std::string why;
@@ -191,7 +190,9 @@ namespace gulliver
         else if (hd != 64 && hd != 128 && hd != 256 && !(gemma4 && hd == 512)) why = "heads of " + std::to_string(hd) + " values";
         else if (gemma4 && cfg_.head_dim_swa != 256 && cfg_.head_dim_swa != hd)
             why = "sliding window heads of " + std::to_string(cfg_.head_dim_swa) + " values";
-        else if ((rep != 1 && rep != 2 && rep != 4 && rep != 8) || cfg_.n_heads % cfg_.n_kv_heads != 0)
+        // Les regroupements que les noyaux ne prennent pas passent par une tête de requête par groupe (regroup(),
+        // metal_device.mm) ; les têtes doivent seulement se partager exactement.
+        else if (cfg_.n_heads % cfg_.n_kv_heads != 0)
             why = "query heads grouped otherwise";
         else if (cfg_.d_model % 256 != 0 || cfg_.d_ffn % 256 != 0 || cfg_.q_dim() % 256 != 0 || !layer_widths())
             why = "widths that are not multiples of 256";
