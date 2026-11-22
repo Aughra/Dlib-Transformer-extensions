@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Deux essais écartés : produits d'un token déroulés, rangement 8 bits remis en place
+
+- **Quoi** : (1) les boucles `for (short …)` de `mv_q4_K_1l_body` et `mv_q6_K_1l_body` déroulées : écriture inchangée (Qwen3-VL 4B 89,0-90,4 contre 88,3-90,3 tokens/s, Ministral 3 8B 50,7-51,4 contre 50,8-51,3 ; trois tours, bancs côte à côte) : le compilateur les déroulait déjà. (2) Avec des clés et valeurs 8 bits, `kv_gather` les remettait en place (rotation inverse de Walsh-Hadamard) pour que les requêtes ne soient plus tournées ni les sorties remises en place (relevé par noyau : `prepare_queries` 53 ms et `restore_outputs` 30 ms par question de 4 096 tokens) : lecture inchangée à l'incertitude près (512 : 2 966-3 144 contre 3 012-3 045 ; 4 096 : 2 653-2 815 contre 2 648-2 822 ; 16 384 : 1 583-1 682 contre 1 585-1 641 ; trois tours), perplexité 8,5896 contre 8,5913 ; `test_metal` passait (5 à 7e-4). Le relevé par noyau, qui sépare chaque noyau dans son encodeur, grossit les petits noyaux. Les deux retirés.
+- **Fichiers** : ce journal, `logs/nuit-2026-11-22.md`.
+- **Pourquoi** : règle du projet, une optimisation n'est gardée que si elle gagne.
+- **Étapes** : mesures ci-dessus ; moteur remis à la 6.39.0, `test_metal` all checks passed.
+
 ## 2026-11-22 — Gulliver 6.39.0 : dérouler les boucles du produit des petits lots
 
 - **Quoi** : `mv_nax` : boucles de taille fixe déroulées.
