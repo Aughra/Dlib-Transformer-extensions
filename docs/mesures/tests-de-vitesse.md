@@ -278,7 +278,7 @@ Sur les longues questions, l'écart avec MLX tient à l'attention. Seule, celle 
 
 La même nuit, l'attention a été réécrite d'après celle de MLX (licence MIT). À chaque couche, les clés et valeurs de la question sont d'abord rangées à la suite, en demi-précision, comme les fiches d'un classeur remises dans l'ordre avant la lecture. Ensuite, chaque groupe de calcul du GPU les lit directement, en restant au même pas que ses trois voisins, pour que ce qu'un groupe vient de lire serve aussi aux autres. Deux détails de MLX ont fait la différence : dérouler entièrement les petites boucles, et cette halte commune au milieu du calcul. L'attention seule passe de 52 à 21 ms par couche à 8 192 tokens (MLX : 19). Modèle du service, en alternance : 4 096 tokens lus à **2 493-2 614** jetons/s (2 223-2 334 avant), 16 384 tokens à **1 534-1 571** (996-1 148), désormais devant llama.cpp (1 205) ; MLX reste devant (2 076). Justesse inchangée.
 
-En 6.41.0, la même attention couvre les têtes de 256 valeurs, sans fenêtre (Qwen 3.5, couches globales de Gemma 3) : deux groupes de calcul s'y partagent les dimensions, comme dans MLX. Qwen3.5-4B lit 4 096 tokens 5 % plus vite et 16 384 tokens 15 % plus vite (1 391-1 397 jetons/s).
+En 6.41.0, la même attention couvre les têtes de 256 valeurs, sans fenêtre (Qwen 3.5, couches globales de Gemma 3) : deux groupes de calcul s'y partagent les dimensions, comme dans MLX. Qwen3.5-4B lit 4 096 tokens 5 % plus vite et 16 384 tokens 15 % plus vite (1 391-1 397 jetons/s). En 6.42.0, elle prend aussi les couches à fenêtre glissante : Gemma 3 4B +7 % à 4 096 tokens.
 
 ### Le mélange d'experts, même leçon (Gulliver 6.38.0)
 

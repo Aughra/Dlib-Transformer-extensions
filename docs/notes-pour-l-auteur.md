@@ -1386,6 +1386,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Reste** : les fenêtres glissantes (les autres couches de Gemma 3 et 4) et les têtes de 512 valeurs.
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 55 : l'attention façon MLX avec une fenêtre glissante (Gulliver 6.42.0)
+
+- **Avant** : les couches à fenêtre glissante (Gemma 3 : 5 sur 6, chaque token voit ses 1 024 dernières positions) gardaient `attention_nax`. Gemma 3 4B : 4 096 tokens 3 040-3 056 tokens/s, 16 384 tokens 2 457-2 718.
+- **Changement** (`engine/metal_kernels_nax.metal`, `engine/metal_device.mm`, `engine/cpu_runtime_metal.cpp`) : `attention_flat` et `attention_flat_split` reçoivent la fenêtre (`flat_args::window`) : chaque threadgroup commence au premier pas que voit son premier token, et les positions hors de la fenêtre sont masquées ; une ligne sans position visible dans un pas (possible seulement avec une fenêtre) y garde des poids nuls au lieu de exp2(0). `GULLIVER_NO_FLAT_WINDOW` garde l'ancien noyau pour ces couches. **Exactitude** : `test_metal`, `test_attention` avec une fenêtre de 100 positions sur 300 (8 bits, 256 valeurs ; demi-précision, 128 valeurs) : `attention_flat` 3,3e-4 et 2,0e-4 contre la somme en double précision, `attention` et `attention_tiles` aussi vérifiés avec la fenêtre ; perplexité Gemma 3 4B (morceaux de 4 096) 12,9173 / 12,9147 (±0,63).
+- **Après** (trois tours en alternance, charge 3) : 4 096 tokens 3 247-3 274 (+7 %) ; 16 384 tokens 2 558-2 793 (+5 %). Gemma 4 n'en profite pas : ses têtes à fenêtre ont 256 valeurs dans une mémoire de têtes de 512.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

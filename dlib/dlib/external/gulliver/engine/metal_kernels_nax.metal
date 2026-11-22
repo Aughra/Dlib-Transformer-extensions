@@ -317,6 +317,7 @@ struct flat_args
     uint q_off;        // kv_len - q_len : la position du premier token du prompt
     uint gqa;          // les têtes de requête par tête de clés
     uint q_stride;     // les floats d'un token dans q et o
+    uint window;       // la fenêtre glissante : un token voit ses window dernières positions ; 0 sans fenêtre
 };
 
 // 128 fils au plus (comme MLX) : le compilateur peut donner à chacun plus de registres, sans en ranger en mémoire.
@@ -353,6 +354,8 @@ template <uint HD>
     // Les pas de 32 positions que voit le threadgroup (masque causal), et le premier qu'il faut masquer.
     const int kb_lim = min((int(tg.x + 1) * 64 + int(a.q_off) + 31) / 32, int(a.kv_pad / 32));
     const int kb_causal = (int(tg.x) * 64 + int(a.q_off)) / 32;
+    // Avec une fenêtre, le premier pas que voit le premier token du threadgroup.
+    const int kb_first = a.window ? max(0, (int(tg.x) * 64 + int(a.q_off) - int(a.window) + 1) / 32) : 0;
 
     constexpr auto dqk = mpp::tensor_ops::matmul2d_descriptor(16, 32, 16, false, true, true,
         mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate);
@@ -361,7 +364,7 @@ template <uint HD>
     mpp::tensor_ops::matmul2d<dqk, execution_simdgroup> op_qk;
     mpp::tensor_ops::matmul2d<dpv, execution_simdgroup> op_pv;
 
-    for (int kb = 0; kb < kb_lim; ++kb)
+    for (int kb = kb_first; kb < kb_lim; ++kb)
     {
         device const half* Kb = Kh + ulong(kb) * 32 * HD;
         device const half* Vb = Vh + ulong(kb) * 32 * HD;
@@ -411,7 +414,9 @@ template <uint HD>
                     const int col = kb * 32 + int(f * 16 + j) + c.x;
                     const int row = int(a.q_off) + q0 + c.y + int(i) * 8;
                     s[idx] *= M_LOG2E_F;
-                    if (col >= int(a.kv_len) || (kb >= kb_causal && col > row)) s[idx] = neg;
+                    if (col >= int(a.kv_len) || (kb >= kb_causal && col > row)
+                        || (a.window != 0 && col <= row - int(a.window)))
+                        s[idx] = neg;
                 }
         // Le softmax en ligne.
         _Pragma("clang loop unroll(full)")
@@ -430,7 +435,7 @@ template <uint HD>
                 for (uint j = 0; j < 4; ++j)
                 {
                     const uint idx = f * 8 + i * 4 + j;
-                    s[idx] = fast::exp2(s[idx] - m);
+                    s[idx] = m == neg ? 0.0f : fast::exp2(s[idx] - m);
                     sum += s[idx];
                 }
             const float factor = fast::exp2(mx[i] - m);
@@ -534,6 +539,8 @@ template <uint HD>
     // Les pas de 32 positions que voit le threadgroup (masque causal), et le premier qu'il faut masquer.
     const int kb_lim = min((int(tg.x + 1) * 64 + int(a.q_off) + 31) / 32, int(a.kv_pad / 32));
     const int kb_causal = (int(tg.x) * 64 + int(a.q_off)) / 32;
+    // Avec une fenêtre, le premier pas que voit le premier token du threadgroup.
+    const int kb_first = a.window ? max(0, (int(tg.x) * 64 + int(a.q_off) - int(a.window) + 1) / 32) : 0;
 
     constexpr auto dqk = mpp::tensor_ops::matmul2d_descriptor(16, 32, 16, false, true, true,
         mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate);
@@ -542,7 +549,7 @@ template <uint HD>
     mpp::tensor_ops::matmul2d<dqk, execution_simdgroup> op_qk;
     mpp::tensor_ops::matmul2d<dpv, execution_simdgroup> op_pv;
 
-    for (int kb = 0; kb < kb_lim; ++kb)
+    for (int kb = kb_first; kb < kb_lim; ++kb)
     {
         device const half* Kb = Kh + ulong(kb) * 32 * HD + dh * DH;
         device const half* Vb = Vh + ulong(kb) * 32 * HD + dh * DH;
@@ -598,7 +605,9 @@ template <uint HD>
                     const int col = kb * 32 + int(f * 16 + j) + c.x;
                     const int row = int(a.q_off) + q0 + c.y + int(i) * 8;
                     s[idx] *= M_LOG2E_F;
-                    if (col >= int(a.kv_len) || (kb >= kb_causal && col > row)) s[idx] = neg;
+                    if (col >= int(a.kv_len) || (kb >= kb_causal && col > row)
+                        || (a.window != 0 && col <= row - int(a.window)))
+                        s[idx] = neg;
                 }
         // Le softmax en ligne.
         _Pragma("clang loop unroll(full)")
@@ -617,7 +626,7 @@ template <uint HD>
                 for (uint j = 0; j < 4; ++j)
                 {
                     const uint idx = f * 8 + i * 4 + j;
-                    s[idx] = fast::exp2(s[idx] - m);
+                    s[idx] = m == neg ? 0.0f : fast::exp2(s[idx] - m);
                     sum += s[idx];
                 }
             const float factor = fast::exp2(mx[i] - m);

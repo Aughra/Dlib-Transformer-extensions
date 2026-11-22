@@ -419,7 +419,7 @@ namespace
         facteur par token dans prepare_queries (la température de l'attention de Mistral 3).  Fork pour macOS, 2026-11-22.
     */
     void test_attention(metal_device& gpu, kv_format format, long hd = 128, unsigned rep = 4, long pool_hd = 0,
-        bool temperature = false)
+        bool temperature = false, unsigned window = 0)
     {
         if (pool_hd == 0) pool_hd = hd;
         const bool q8 = format == kv_format::q8;
@@ -443,6 +443,8 @@ namespace
         layout.v_slab = pool.slab_offset(true, layer, 0);
         layout.head_stride = pool.slab_offset(false, layer, 1) - pool.slab_offset(false, layer, 0);
         layout.scales = pool.scales_offset(false, layer, 0) - pool.slab_offset(false, layer, 0);
+        // La fenêtre glissante (Gemma 3) : le token de longueur seen voit ses window dernières positions.
+        layout.window = window;
 
         std::vector<float> keys(L * heads * hd), values(L * heads * hd);
         for (auto& v : keys) v = uniform(-2.0f, 2.0f);
@@ -603,7 +605,9 @@ namespace
                 double mx = -1e300;
                 std::vector<float> kf(hd), vf(hd);
                 std::vector<std::vector<float>> vals(seen, std::vector<float>(hd));
-                for (long p = 0; p < seen; ++p)
+                const long from = window ? std::max(0L, seen - static_cast<long>(window)) : 0;
+                for (long p = 0; p < from; ++p) s[p] = -1e300;
+                for (long p = from; p < seen; ++p)
                 {
                     const int b = blocks[p / B];
                     const long r = p % B;
@@ -626,11 +630,11 @@ namespace
                     mx = std::max(mx, d);
                 }
                 double sum = 0;
-                for (long p = 0; p < seen; ++p) sum += std::exp(s[p] - mx);
+                for (long p = from; p < seen; ++p) sum += std::exp(s[p] - mx);
                 for (long i = 0; i < hd; ++i)
                 {
                     double o = 0, mag = 0;
-                    for (long p = 0; p < seen; ++p)
+                    for (long p = from; p < seen; ++p)
                     {
                         const double w = std::exp(s[p] - mx) / sum;
                         o += w * vals[p][i];
@@ -644,7 +648,8 @@ namespace
             }
         check(worst < 1e-4, std::string("attention ") + (q8 ? "q8" : "f16") + ", heads of " + std::to_string(hd)
             + (pool_hd != hd ? " in a pool of " + std::to_string(pool_hd) : std::string())
-            + ", rep " + std::to_string(rep) + (temperature ? ", temperature" : "") + ", over " + std::to_string(L)
+            + ", rep " + std::to_string(rep) + (temperature ? ", temperature" : "")
+            + (window ? ", window " + std::to_string(window) : std::string()) + ", over " + std::to_string(L)
             + " positions in blocks of " + std::to_string(B) + ", " + std::to_string(T) + " tokens: largest error "
             + sci(worst));
         // Les tuiles calculent en demi-précision (requêtes, clés, valeurs et poids du softmax), d'où la marge.
@@ -654,7 +659,8 @@ namespace
             + " tiles: largest error " + sci(worst_tiles));
         if (flat_taken)
             check(worst_flat < 1e-3, std::string("attention_flat ") + (q8 ? "q8" : "f16") + ", heads of " + std::to_string(hd)
-                + ", rep " + std::to_string(rep) + (temperature ? ", temperature" : "") + ": largest error " + sci(worst_flat));
+                + ", rep " + std::to_string(rep) + (temperature ? ", temperature" : "")
+                + (window ? ", window " + std::to_string(window) : std::string()) + ": largest error " + sci(worst_flat));
         if (q8)
         {
             // Les sorties sur des valeurs tournées, remises en place par le GPU comme par qk_unrotate_row().
@@ -729,6 +735,9 @@ int main()
     // Des têtes de 256 valeurs dans une mémoire de têtes de 256 (Qwen 3.5, Gemma 3) : attention_flat_split.
     test_attention(*gpu, kv_format::q8, 256, 4);
     test_attention(*gpu, kv_format::f16, 256, 2);
+    // Une fenêtre glissante qui coupe les positions vues (Gemma 3 : 1 024 ; ici 100 sur 300).
+    test_attention(*gpu, kv_format::q8, 256, 4, 0, false, 100);
+    test_attention(*gpu, kv_format::f16, 128, 4, 0, false, 100);
     std::printf(failures ? "test_metal: %d checks failed\n" : "test_metal: all checks passed\n", failures);
     return failures;
 }

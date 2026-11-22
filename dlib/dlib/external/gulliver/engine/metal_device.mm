@@ -1238,7 +1238,7 @@ namespace gulliver
         unsigned kv_len, unsigned q_heads, unsigned q_stride, const kv_layout& l, metal_view k, metal_view v, metal_view ctx)
     {
         static const bool no_split = std::getenv("GULLIVER_NO_FLAT_256") != nullptr;
-        if (impl_->device->nax.empty() || l.window != 0 || (l.hd != 64 && l.hd != 128 && (l.hd != 256 || no_split))
+        if (impl_->device->nax.empty() || (l.hd != 64 && l.hd != 128 && (l.hd != 256 || no_split))
             || q_heads % l.heads != 0
             || kv_len < q_tokens)
             return false;
@@ -1257,8 +1257,10 @@ namespace gulliver
         impl_->bind(k, 3);
         impl_->bind(v, 4);
         impl_->groups(pad, l.heads, 1, l.hd);
-        struct { uint32_t q_len, kv_len, kv_pad, q_off, gqa, q_stride; } a =
-            { q_tokens, kv_len, pad, kv_len - q_tokens, q_heads / l.heads, q_stride };
+        static const bool no_window = std::getenv("GULLIVER_NO_FLAT_WINDOW") != nullptr;
+        if (l.window != 0 && no_window) return false;
+        struct { uint32_t q_len, kv_len, kv_pad, q_off, gqa, q_stride, window; } a =
+            { q_tokens, kv_len, pad, kv_len - q_tokens, q_heads / l.heads, q_stride, l.window };
         // Les têtes de 256 valeurs : deux simdgroups par 16 tokens (attention_flat_split), 256 fils.
         impl_->use_nax(nax_flat + (l.hd == 256 ? 2 : l.hd == 128 ? 1 : 0));
         impl_->bind(q, 0);

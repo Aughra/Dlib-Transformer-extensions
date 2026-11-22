@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.41.0, 23 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.42.0, 23 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -51,6 +51,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Produit des pas de plusieurs tokens | — (pas de GPU sur Mac) | Ses petites boucles entièrement déroulées | Même leçon que les experts | 4 réponses à la fois +4,5 %, 8 +5,6 % (Qwen3-VL 4B), résultats identiques | changement 52, v. 6.39.0 |
 | Morceaux du produit groupé des experts | — (pas de GPU sur Mac) | 16 colonnes au lieu de 64 : 4 Ko de mémoire partagée au lieu de 16 | Plus de calculs à la fois sur chaque cœur du GPU | Lecture à 512 tokens : 30B-A3B +19 %, LFM2.5-8B-A1B +13 %, Qwen3.6-35B-A3B +6 %, résultats identiques | changement 53, v. 6.40.0 |
 | Attention de la lecture, têtes de 256 valeurs | — (pas de GPU sur Mac) | Deux groupes de calcul se partagent les dimensions de chaque tête (comme MLX) | Ces têtes restaient à l'ancienne attention | Qwen3.5-4B +5 % à 4 096 tokens, +15 % à 16 384 ; Gemma 3 +2 % ; justesse inchangée | changement 54, v. 6.41.0 |
+| Attention de la lecture, fenêtres glissantes | — (pas de GPU sur Mac) | Les couches à fenêtre (Gemma 3) passent aussi par l'attention façon MLX | Elles restaient à l'ancienne attention | Gemma 3 4B +7 % à 4 096 tokens, +5 % à 16 384 | changement 55, v. 6.42.0 |
 
 ## 2. Modèles : téléchargement, vérification, réserve
 
