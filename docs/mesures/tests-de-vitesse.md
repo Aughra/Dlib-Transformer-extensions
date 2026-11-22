@@ -28,7 +28,7 @@ Il mesure la vitesse, puis la justesse, et explique d'où viennent les écarts. 
 | Qwen3.5-4B Q4_K_M | GPU | 1 411 | 1 436 | 72,2 | 70,8 | 11,50 |
 | Ministral 3 8B Q4_K_M | processeur | 86,0 | 104 | 38,3 | 33,0 | 10,00 |
 
-Conseillé : pour tout faire, Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) ; le plus rapide, Qwen2.5-0.5B-Instruct Q4_K_M. Les tableaux complets, avec llama.cpp et MLX, sont dans « Mesures de la semaine ».
+Conseillé : pour tout faire, Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) ; le plus rapide, Qwen3-VL 4B Thinking Q4_K_M (parmi les modèles d'au moins 3 milliards de paramètres : Qwen2.5-0.5B, conseillé d'abord, répétait la question au lieu d'y répondre). Les tableaux complets, avec llama.cpp et MLX, sont dans « Mesures de la semaine ».
 
 <!-- semaine : fin -->
 

@@ -15,11 +15,16 @@
 # Gulliver seuls, sur les modèles mesurés, et la charge de la machine pendant la mesure.
 #
 # Les perplexités ne se comparent qu'entre modèles qui découpent le texte de la même façon : la famille Qwen3 (même
-# vocabulaire) ; les autres ont le leur.
+# vocabulaire) ; les autres ont le leur.  Le plus rapide n'est choisi que parmi les modèles d'au moins 3 milliards de
+# paramètres (taille lue dans le nom) : les plus petits vont très vite mais répètent la question au lieu d'y répondre
+# (Qwen2.5-0.5B, conseillé le 22 novembre 2026, l'a fait dès la première question de l'humain).
 import argparse
 import collections
 import datetime
 import json
+import re
+
+MIN_BILLIONS = 3
 
 
 def fmt(v):
@@ -27,6 +32,12 @@ def fmt(v):
         return "—"
     s = f"{v:,.0f}" if v >= 100 else f"{v:.1f}"
     return s.replace(",", " ").replace(".", ",")
+
+
+def billions(name):
+    """Le nombre de paramètres en milliards, lu dans le nom (« 0.5B », « 8B », « 30B A3B » : 30) ; None s'il n'y est pas."""
+    m = re.search(r"(?<![\w.])(\d+(?:\.\d+)?)B\b", name)
+    return float(m.group(1)) if m else None
 
 
 def comparable(name):
@@ -180,13 +191,14 @@ def main():
                     print(f"\n{'Gulliver' if e == 'gulliver' else 'llama.cpp'} : arrêté sur une erreur ({service[e]['error'][:160]}).")
     if not usable:
         return
-    fastest = max(usable, key=lambda m: write[m])
+    big = [m for m in usable if (billions(names[m]) or MIN_BILLIONS) >= MIN_BILLIONS]
+    fastest = max(big, key=lambda m: write[m]) if big else None
     family = [m for m in usable if comparable(names[m]) and m in ppl]
     accurate = min(family, key=lambda m: ppl[m]) if family else None
     seeing = [m for m in usable if image.get(m) and write[m] >= 40 and where.get(m) == "gpu"]
     seeing_family = [m for m in seeing if m in family]
     general = (min(seeing_family, key=lambda m: ppl[m]) if seeing_family
-               else max(seeing, key=lambda m: write[m]) if seeing else fastest)
+               else max(seeing, key=lambda m: write[m]) if seeing else fastest or max(usable, key=lambda m: write[m]))
 
     def entry(role, m, why):
         return {"role": role, "id": m, "name": names[m], "why": why, "write_512": write.get(m),
@@ -198,8 +210,10 @@ def main():
     if accurate and accurate != general:
         advice.append(entry("accurate", accurate, "Les réponses les plus justes : la perplexité la plus basse de la "
                             "famille Qwen3, la seule dont les perplexités se comparent."))
-    if fastest not in (general, accurate):
-        advice.append(entry("fastest", fastest, "Le plus rapide : la meilleure écriture après 512 tokens."))
+    if fastest and fastest not in (general, accurate):
+        advice.append(entry("fastest", fastest, "Le plus rapide : la meilleure écriture après 512 tokens, parmi les "
+                            "modèles d'au moins 3 milliards de paramètres (les plus petits répètent la question au lieu "
+                            "d'y répondre)."))
     labels = {"general": "Pour tout faire, images comprises", "accurate": "Pour les réponses les plus justes",
               "fastest": "Pour aller vite"}
     print()

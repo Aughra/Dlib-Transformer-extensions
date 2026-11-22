@@ -5,9 +5,10 @@
 #   python3 tools/test_conseil.py
 #
 # Vérifie : le modèle pour tout faire (le plus juste des Qwen3 qui voient les images et écrivent au moins 40 jetons/s
-# sur le GPU), le plus juste, le plus rapide ; que llama.cpp et MLX sont dans le tableau mais jamais conseillés ; la
-# règle de la mémoire de conversation (demi-précision seulement si elle écrit au moins 3 % plus vite) ; la charge de la
-# machine ; et la réécriture de la section de la semaine du document entre ses marqueurs, le reste du document intact.
+# sur le GPU), le plus juste, le plus rapide ; que llama.cpp et MLX sont dans le tableau mais jamais conseillés, ni les
+# modèles de moins de 3 milliards de paramètres ; la règle de la mémoire de conversation (demi-précision seulement si
+# elle écrit au moins 3 % plus vite) ; la charge de la machine ; et la réécriture de la section de la semaine du
+# document entre ses marqueurs, le reste du document intact.
 import json
 import os
 import subprocess
@@ -45,6 +46,8 @@ raw += rows("c", "Petit C", 0, "processeur", {("512", "q8"): (1500, 190), ("512"
 # D : Qwen3 très juste mais trop lent pour « tout faire » (sous 40 jetons/s) ; il reste le plus juste.
 raw += rows("d", "Qwen3 D", 1, "gpu", {("512", "q8"): (300, 30), ("512", "f16"): (300, 30),
                                      ("4096", "q8"): (250, 25), ("4096", "f16"): (250, 25)})
+# E : un tout petit modèle (0,5 milliard de paramètres), plus rapide que tous : jamais conseillé.
+raw += rows("e", "Minuscule E 0.5B", 0, "processeur", {("512", "q8"): (5000, 250), ("4096", "q8"): (4000, 230)})
 # llama.cpp, plus rapide que tous : dans le tableau, jamais conseillé.
 raw += rows("llama.cpp:a", "llama.cpp · Qwen3-VL 4B A", 0, "gpu", {("512", "q8"): (2500, 300), ("4096", "q8"): (2000, 290)})
 raw += ["ppl|a|15.36", "ppl|b|10.93", "ppl|c|25.75", "ppl|d|9.50", "ppl|llama.cpp:a|15.38"]
@@ -71,6 +74,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check(roles.get("general") == "b", "pour tout faire : B, le plus juste des Qwen3 qui voient les images et écrivent vite")
     check(roles.get("accurate") == "d", "le plus juste : D, même trop lent pour tout faire")
     check(roles.get("fastest") == "c", "le plus rapide : C (llama.cpp, plus rapide, n'est pas conseillé)")
+    check("e" not in roles.values(), "un modèle de moins de 3 milliards de paramètres n'est jamais conseillé")
     check(all(":" not in a["id"] for a in advice), "llama.cpp et MLX ne sont jamais conseillés")
     kv = {a["id"]: a["settings"]["kv_type"] for a in advice}
     check(kv.get("b") == "f16" and kv.get("c") == "q8", "mémoire : demi-précision pour B (+5 %), 8 bits pour C")
