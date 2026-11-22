@@ -52,8 +52,21 @@ int main(int argc, char** argv)
     const kv_format format = argc > 5 && std::string(argv[5]) == "q8" ? kv_format::q8 : kv_format::f16;
     const bool metal = argc > 6 && std::string(argv[6]) == "metal";
     const std::string mode = argc > 7 ? argv[7] : "";
-    const bool steps = mode.compare(0, 5, "steps") == 0;
-    const long group = steps && mode.size() > 5 ? std::max(1L, std::atol(mode.c_str() + 5)) : 1;
+    bool steps = mode.compare(0, 5, "steps") == 0;
+    long group = steps && mode.size() > 5 ? std::max(1L, std::atol(mode.c_str() + 5)) : 1;
+    /*
+        Sur le GPU, une passe ne rend au plus que metal_device::max_tokens lignes de logits (le service n'en demande
+        qu'une par réponse) : la lecture d'un coup, qui en demande des milliers, retombait sur le processeur sans le dire
+        (fork pour macOS, 2026-11-22 : les colonnes « GPU » des mesures de justesse étaient calculées sur le processeur).
+        Avec « metal », la seconde moitié passe donc par paquets de max_tokens, sur le GPU, et le programme le dit.
+    */
+    if (metal && (!steps || group > static_cast<long>(metal_device::max_tokens)))
+    {
+        steps = true;
+        group = static_cast<long>(metal_device::max_tokens);
+        std::printf("note: on the GPU, the scored half goes in passes of %ld tokens (a pass gives at most %u rows of "
+                    "logits); the first half is read at once\n", group, metal_device::max_tokens);
+    }
     if (ctx < 16) { std::printf("perplexity_runtime: context must be at least 16\n"); return 2; }
 
     std::string text;

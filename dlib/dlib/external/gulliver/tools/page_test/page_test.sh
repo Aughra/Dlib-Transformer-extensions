@@ -78,7 +78,15 @@ mkdir -p "$HOME_DIR/library" && chmod 700 "$HOME_DIR/library"
 if [ -f "$LIBRARY_MODEL" ] && [ ! -f "$HOME_DIR/library/Qwen3.5-0.8B-Q8_0.gguf" ]; then
   cp -c "$LIBRARY_MODEL" "$HOME_DIR/library/"
 fi
-GULLIVER_HOME=$HOME_DIR "$BIN/gulliver-service" --console > "$WORK/service.log" 2>&1 &
+# Le conseil de la mesure de la semaine du service d'essai : son propre modèle, avec les réglages qu'il a déjà (le clic
+# sur « Choisir » ne redémarre donc pas le service), pour le scénario de la carte du conseil.
+cat > "$WORK/advice.json" <<'JSON'
+{"date": "essai du banc", "previous": null, "new": [], "late": false, "advice": [
+ {"role": "general", "id": "qwen3-vl-2b-test", "name": "Qwen3-VL 2B (essai)", "why": "essai",
+  "write_512": 160.0, "read_4096": 5000.0, "perplexity": 18.6, "image": true,
+  "settings": {"kv_type": "q8", "draft_tokens": 7}}]}
+JSON
+GULLIVER_HOME=$HOME_DIR GULLIVER_ADVICE_FILE=$WORK/advice.json "$BIN/gulliver-service" --console > "$WORK/service.log" 2>&1 &
 SERVICE=$!
 stop() { [ "${PAGE_TEST_KEEP:-0}" = 1 ] || kill -TERM "$SERVICE" 2>/dev/null; }
 trap stop EXIT

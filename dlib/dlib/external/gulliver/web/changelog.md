@@ -2,6 +2,18 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.29.1 — 22 novembre 2026
+
+### Corrections
+
+- `perplexity_runtime` sur le GPU passe la seconde moitié de chaque morceau par paquets de 8 tokens, et le dit : une passe du GPU ne rend au plus que 8 lignes de logits, et la lecture d'un coup, qui en demandait des milliers, retombait sur le processeur sans le dire. Les colonnes « Gulliver, GPU » des mesures de justesse antérieures avaient donc été calculées sur le processeur (leurs chiffres restent justes pour lui).
+
+### Outils de mesure
+
+- `test_metal` contrôle les regroupements de têtes sans noyau (3, 6 et 7 têtes de requête par tête de clés) et la température de l'attention ; le banc de la page clique sur « Choisir » dans la carte du conseil (sur son service d'essai, avec son propre conseil : `GULLIVER_ADVICE_FILE`) et vérifie le modèle et la fenêtre « Ce qui a changé » ; `tools/test_conseil.py` vérifie le conseil sur des chiffres figés ; `tools/test_macos_copie.sh` lance le test complet sur une copie des programmes, qu'une recompilation ne peut plus fausser.
+
+---
+
 ## 6.29.0 — 22 novembre 2026
 
 ### Accès et documents

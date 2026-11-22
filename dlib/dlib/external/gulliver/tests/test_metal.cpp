@@ -413,7 +413,13 @@ namespace
         dans un pool de têtes de 512 (pool_hd), comme les couches à fenêtre de Gemma 4, leurs échelles après 512
         valeurs.
     */
-    void test_attention(metal_device& gpu, kv_format format, long hd = 128, unsigned rep = 4, long pool_hd = 0)
+    /*
+        rep : les têtes de requête par tête de clés ; 3, 6 ou 7 passent par regroup() de metal_device.mm (une tête de
+        requête par groupe, kv_div), 1, 2, 4 et 8 par leurs noyaux.  temperature : les requêtes multipliées d'abord par un
+        facteur par token dans prepare_queries (la température de l'attention de Mistral 3).  Fork pour macOS, 2026-11-22.
+    */
+    void test_attention(metal_device& gpu, kv_format format, long hd = 128, unsigned rep = 4, long pool_hd = 0,
+        bool temperature = false)
     {
         if (pool_hd == 0) pool_hd = hd;
         const bool q8 = format == kv_format::q8;
@@ -552,9 +558,13 @@ namespace
             static_cast<int*>(TILES.contents())[2 * n_tiles] = static_cast<int>(t);
             static_cast<int*>(TILES.contents())[2 * n_tiles + 1] = static_cast<int>(std::min(per_tile, T - t));
         }
+        // Les facteurs de la température, différents pour chaque token.
+        metal_buffer FAC = gpu.allocate(sizeof(float) * T);
+        for (unsigned t = 0; t < T; ++t) static_cast<float*>(FAC.contents())[t] = temperature ? 1.0f + 0.25f * t : 1.0f;
+        const metal_view fac(FAC);
         {
             auto c = gpu.begin();
-            c->prepare_queries(Q, T, H, hd, q_stride, scale, q8);
+            c->prepare_queries(Q, T, H, hd, q_stride, scale, q8, temperature ? &fac : nullptr);
             c->attention(Q, region, TABLE, LEN, table_stride, T, rep, parts, q_stride, PART, C, layout);
             c->attention_tiles(Q, region, TABLE, LEN, table_stride, TILES, n_tiles, rep, q_stride, CT, layout);
             c->finish();
@@ -570,7 +580,8 @@ namespace
             {
                 const long h = hq / rep;
                 std::vector<float> qr(queries.begin() + t * q_stride + hq * hd, queries.begin() + t * q_stride + hq * hd + hd);
-                for (auto& v : qr) v *= scale;
+                const float f = temperature ? 1.0f + 0.25f * t : 1.0f;
+                for (auto& v : qr) v = v * f * scale;
                 if (q8) qk_rotate_row(qr.data(), hd);
                 const long seen = L - T + t + 1;
                 std::vector<double> s(seen);
@@ -616,13 +627,14 @@ namespace
             }
         check(worst < 1e-4, std::string("attention ") + (q8 ? "q8" : "f16") + ", heads of " + std::to_string(hd)
             + (pool_hd != hd ? " in a pool of " + std::to_string(pool_hd) : std::string())
-            + ", rep " + std::to_string(rep) + ", over " + std::to_string(L)
+            + ", rep " + std::to_string(rep) + (temperature ? ", temperature" : "") + ", over " + std::to_string(L)
             + " positions in blocks of " + std::to_string(B) + ", " + std::to_string(T) + " tokens: largest error "
             + sci(worst));
         // Les tuiles calculent en demi-précision (requêtes, clés, valeurs et poids du softmax), d'où la marge.
         check(worst_tiles < 1e-3, std::string("attention in tiles ") + (q8 ? "q8" : "f16") + ", heads of " + std::to_string(hd)
             + (pool_hd != hd ? " in a pool of " + std::to_string(pool_hd) : std::string())
-            + ", rep " + std::to_string(rep) + ", " + std::to_string(n_tiles) + " tiles: largest error " + sci(worst_tiles));
+            + ", rep " + std::to_string(rep) + (temperature ? ", temperature" : "") + ", " + std::to_string(n_tiles)
+            + " tiles: largest error " + sci(worst_tiles));
         if (q8)
         {
             // Les sorties sur des valeurs tournées, remises en place par le GPU comme par qk_unrotate_row().
@@ -688,6 +700,12 @@ int main()
     test_attention(*gpu, kv_format::f16, 512, 8);
     test_attention(*gpu, kv_format::q8, 256, 8, 512);
     test_attention(*gpu, kv_format::f16, 256, 8, 512);
+    // Les regroupements sans noyau (Qwen2.5 : 6, 7 ; 3 pour la forme), et la température de l'attention (Mistral 3).
+    test_attention(*gpu, kv_format::q8, 128, 7);
+    test_attention(*gpu, kv_format::f16, 128, 6);
+    test_attention(*gpu, kv_format::q8, 64, 3);
+    test_attention(*gpu, kv_format::q8, 128, 4, 0, true);
+    test_attention(*gpu, kv_format::f16, 128, 4, 0, true);
     std::printf(failures ? "test_metal: %d checks failed\n" : "test_metal: all checks passed\n", failures);
     return failures;
 }

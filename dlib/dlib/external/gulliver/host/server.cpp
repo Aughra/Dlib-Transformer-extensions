@@ -1820,10 +1820,17 @@ namespace gulliver
         srv.Get("/gulliver/v1/models/advice", [](const httplib::Request&, httplib::Response& res) {
             json o = json::object();
             o["found"] = false;
-            const std::string root = carnet_root();
+            // GULLIVER_ADVICE_FILE : un autre fichier, pour le banc de la page (son service d'essai a ses propres modèles).
+            std::string root = carnet_root(), path = root.empty() ? std::string() : join_path(root, "build/bench/hebdo/conseil.json");
+            if (const char* f = std::getenv("GULLIVER_ADVICE_FILE"))
+            {
+                path = f;
+                const size_t slash = path.find_last_of('/');
+                root = slash == std::string::npos ? std::string(".") : path.substr(0, slash);
+            }
             std::string body;
             json advice;
-            if (!root.empty() && read_file_link_free(join_path(root, "build/bench/hebdo/conseil.json"), root, body, 1u << 20)
+            if (!path.empty() && read_file_link_free(path, root, body, 1u << 20)
                 && json::parse(body, advice) && advice.is_object() && advice["advice"].is_array())
             {
                 o = advice;

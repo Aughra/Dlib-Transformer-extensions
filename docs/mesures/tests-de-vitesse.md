@@ -167,6 +167,8 @@ MLX ne lit pas les fichiers GGUF : il a son propre format, et chaque modèle a s
 
 ## La justesse
 
+> **Correction du 22 novembre 2026** : dans les tableaux de justesse de ce document et des mesures jusqu'au 22 novembre, la colonne « Gulliver, GPU » a en fait été calculée **sur le processeur** : une passe du GPU ne rend au plus que 8 lignes de logits, et l'outil (`perplexity_runtime`), qui en demandait des milliers, retombait sur le processeur sans le dire. Ses chiffres restent justes, mais pour le processeur. Depuis Gulliver 6.29.1, l'outil passe sur le GPU par paquets de 8 tokens et le dit ; le GPU y donne les mêmes perplexités que le processeur à quelques dix-millièmes près (Qwen2.5-Coder 1,5B : 12,5959 contre 12,5970 ; Ministral 3 8B : 5,8183 contre 5,8187).
+
 Aller vite ne sert à rien si le calcul est faux. On mesure la **perplexité** : à quel point le modèle est « surpris » par un vrai texte, ici dix épisodes du blog du portage, en français, en 8 morceaux de 512 tokens, comme le fait l'outil `llama-perplexity` de llama.cpp (seule la seconde moitié de chaque morceau est notée). Plus elle est basse, mieux le modèle prévoit le texte. **Deux moteurs justes donnent la même perplexité sur le même fichier.**
 
 | Modèle | Gulliver, GPU | Gulliver, processeur | llama.cpp, GPU | Albireo d'origine | MLX (son fichier) |
