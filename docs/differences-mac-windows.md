@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.38.0, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.39.0, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -48,6 +48,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Entrées des produits d'une question | — (pas de GPU sur Mac) | Une seule conversion en demi-précision pour les requêtes, clés et valeurs, une pour la porte et la montée ; l'activation écrite directement en demi-précision | Les mêmes entrées étaient converties jusqu'à trois fois | Lecture +5,5 % à 512 tokens, +2,2 % à 4 096 (Qwen3-VL 4B), réponses identiques | changement 49, v. 6.36.0 |
 | Attention de la lecture d'une question | — (pas de GPU sur Mac) | Les clés et valeurs de la séquence rangées en demi-précision à chaque couche, puis l'attention organisée comme celle de MLX (lectures directes, simdgroups au même pas) | L'attention prenait 2,7 fois le temps de celle de MLX | Lecture +12 % à 4 096 tokens, +45 % à 16 384 (Qwen3-VL 4B), justesse inchangée | changement 50, v. 6.37.0 |
 | Produit groupé des experts d'une question | — (pas de GPU sur Mac) | Ses petites boucles entièrement déroulées | Les registres des produits étaient indexés par une variable | Lecture du 30B-A3B +23 % à 512 tokens, +10 % à 4 096, résultats identiques | changement 51, v. 6.38.0 |
+| Produit des pas de plusieurs tokens | — (pas de GPU sur Mac) | Ses petites boucles entièrement déroulées | Même leçon que les experts | 4 réponses à la fois +4,5 %, 8 +5,6 % (Qwen3-VL 4B), résultats identiques | changement 52, v. 6.39.0 |
 
 ## 2. Modèles : téléchargement, vérification, réserve
 

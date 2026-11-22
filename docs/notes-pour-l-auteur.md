@@ -1364,6 +1364,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (deux bancs compilés côte à côte, trois tours en alternance, charge 2,3 à 3,6) : 512 tokens 1 187,8 / 1 167,8 / 1 194,2 → 1 452,0 / 1 466,1 / 1 452,9 tokens/s (+23 %) ; 4 096 tokens 1 639,1 / 1 603,5 / 1 547,6 → 1 795,2 / 1 779,5 / 1 707,7 (+10 % ; llama.cpp 1 345 à 1 516).
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 52 : le produit des petits lots aux boucles déroulées (Gulliver 6.39.0)
+
+- **Avant** : `mv_nax` (produits des pas de 2 à 16 tokens sur les accélérateurs : plusieurs réponses à la fois, vérification des brouillons, changement 38) laissait au compilateur ses boucles de taille fixe. Qwen3-VL 4B, `bench_runtime … 18 512 64 <4|8> q8 metal` : 4 séquences 247,0 à 248,1 tokens/s au total, 8 séquences 446,1 à 461,0.
+- **Changement** (`engine/metal_kernels_nax.metal`) : `_Pragma("clang loop unroll(full)")` devant ses boucles de taille fixe, comme `mm_id_nax` (changement 51). **Exactitude** : perplexité GPU par paquets de 8 tokens (le chemin de ce noyau ; 8 morceaux de 512) 15,3686 avant et après ; `test_metal` all checks passed.
+- **Après** (deux bancs compilés côte à côte, deux tours en alternance) : 4 séquences 258,8 et 258,8 (+4,5 %) ; 8 séquences 484,7 et 473,0 (+5,6 %). Essayé la même nuit et rejeté : le même déroulement dans `attention_dec` (attention de l'écriture) : jusqu'à deux fois plus lent après 4 096 positions, ce noyau tenait déjà dans ses registres.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

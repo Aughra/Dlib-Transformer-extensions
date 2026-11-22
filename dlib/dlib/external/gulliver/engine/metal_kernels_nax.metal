@@ -659,6 +659,8 @@ struct mv_args
     long rows2;
 };
 
+// Les petites boucles déroulées entièrement (chantier Vitesse, 2026-11-22, comme mm_id_nax et attention_flat) :
+// 4 réponses à la fois +4,5 %, 8 +5,6 % (Qwen3-VL 4B), mêmes résultats.
 template <typename F>
 kernel void mv_nax(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
     device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
@@ -684,9 +686,11 @@ kernel void mv_nax(device const uchar* W0 [[buffer(0)]], device const float* x [
     const ulong row_bytes = ulong(a.cols / F::values) * F::bytes;
     // Les quatre lignes de poids de la voie (c.y, c.y + 8 du premier fragment, puis + 16) et ses deux tokens.
     device const uchar* wr[4];
+    _Pragma("clang loop unroll(full)")
     for (uint q = 0; q < 4; ++q) wr[q] = W + ulong(r0 + (q / 2) * 16 + c.y + (q % 2) * 8) * row_bytes;
     device const float* xr[2];
     bool has[2];
+    _Pragma("clang loop unroll(full)")
     for (uint h = 0; h < 2; ++h)
     {
         const uint t = c.y + h * 8;
@@ -701,32 +705,40 @@ kernel void mv_nax(device const uchar* W0 [[buffer(0)]], device const float* x [
     auto ct_b = op.template get_right_input_cooperative_tensor<half, half, float>();
     auto ct_c = op.template get_destination_cooperative_tensor<
         metal::remove_addrspace_t<decltype(ct_a)>, metal::remove_addrspace_t<decltype(ct_b)>, float>();
+    _Pragma("clang loop unroll(full)")
     for (uint i = 0; i < 16; ++i) ct_c[i] = 0.0f;
 
     const uint pieces = uint(a.cols / 64);
     for (uint pc = sg; pc < pieces; pc += MVN_SG)
+        _Pragma("clang loop unroll(full)")
         for (uint hf = 0; hf < 2; ++hf)
         {
             const uint k0 = pc * 64 + hf * 32 + 2 * uint(c.x);
             half xa[2][8], wb[4][8];
+            _Pragma("clang loop unroll(full)")
             for (uint h = 0; h < 2; ++h)
             {
                 const float4 u0 = *(device const float4*)(xr[h] + k0), u1 = *(device const float4*)(xr[h] + k0 + 4);
                 const half4 v0 = has[h] ? half4(u0) : half4(0.0h), v1 = has[h] ? half4(u1) : half4(0.0h);
+                _Pragma("clang loop unroll(full)")
                 for (uint i = 0; i < 4; ++i)
                 {
                     xa[h][i] = v0[i];
                     xa[h][4 + i] = v1[i];
                 }
             }
+            _Pragma("clang loop unroll(full)")
             for (uint q = 0; q < 4; ++q)
             {
                 float v[8];
                 F::dq8(wr[q] + (k0 / F::values) * F::bytes, k0 % F::values, v);
+                _Pragma("clang loop unroll(full)")
                 for (uint i = 0; i < 8; ++i) wb[q][i] = half(v[i]);
             }
+            _Pragma("clang loop unroll(full)")
             for (uint f = 0; f < 2; ++f)
             {
+                _Pragma("clang loop unroll(full)")
                 for (uint e = 0; e < 8; ++e)
                 {
                     ct_a[e] = xa[e / 4][f * 4 + e % 4];
@@ -738,7 +750,9 @@ kernel void mv_nax(device const uchar* W0 [[buffer(0)]], device const float* x [
         }
 
     // La sortie de la voie : tokens c.y + (i / 4) * 8, lignes f * 16 + c.x + i % 4.
+    _Pragma("clang loop unroll(full)")
     for (uint f = 0; f < 2; ++f)
+        _Pragma("clang loop unroll(full)")
         for (uint i = 0; i < 8; ++i)
             part[sg][(c.y + (i / 4) * 8) * 32 + f * 16 + c.x + i % 4] = ct_c[f * 8 + i];
     threadgroup_barrier(mem_flags::mem_threadgroup);
