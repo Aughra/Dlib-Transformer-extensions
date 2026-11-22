@@ -282,6 +282,18 @@ La même nuit, l'attention a été réécrite d'après celle de MLX (licence MIT
 
 Le produit groupé des experts, qui faisait 81 % de la lecture d'une question sur Qwen3-VL 30B-A3B, déroule désormais entièrement ses petites boucles, comme l'attention de MLX. Sans rien changer aux calculs, ce modèle lit 512 tokens à **1 452-1 466** jetons/s au lieu de 1 168-1 194 (+23 %), et 4 096 tokens à **1 708-1 795** au lieu de 1 548-1 639 (+10 %), devant llama.cpp (1 345-1 516). À 512 tokens, llama.cpp reste devant (1 835-1 950).
 
+### Le modèle de l'humain, Ministral 3 8B (Gulliver 6.38.0)
+
+Mesure du 22 novembre à 23 h 35, deux tours en alternance avec llama.cpp (`llama-bench -fa 1 -ctk q8_0 -ctv q8_0`), mémoire de conversation en 8 bits, charge 2 à 6 :
+
+| Ministral 3 8B Q4_K_M | Gulliver | llama.cpp |
+|---|---|---|
+| Lecture, 512 tokens | 1 008 à 1 309 | 1 073 à 1 201 |
+| Lecture, 4 096 tokens | **1 217 à 1 325** | 954 à 1 011 |
+| Écriture (128 mots) | **49,9 à 50,4** | 47,2 |
+
+Gulliver lit 25 à 30 % plus vite les longues questions et écrit 6 % plus vite ; sur les questions courtes, les deux se valent.
+
 ## Pour que Gulliver soit le plus rapide
 
 Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (deux pistes au même but sont essayées toutes les deux, mesurées, et la meilleure est gardée) :

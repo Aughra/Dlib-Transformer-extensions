@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Mesurer Ministral 3 8B contre llama.cpp ; un déroulement rejeté
+
+- **Quoi** : Ministral 3 8B Q4_K_M (le modèle de l'humain), `bench_runtime … 18 <512|4096> 128 1 q8 metal` contre `llama-bench -p 512,4096 -n 128 -fa 1 -ctk q8_0 -ctv q8_0 -r 2`, deux tours en alternance : lecture 512 1 008-1 309 / 1 073-1 201, 4 096 1 217-1 325 / 954-1 011, écriture 49,9-50,4 / 47,2. Essai rejeté : les boucles d'`attention_dec` (attention de l'écriture) déroulées entièrement : Qwen3-VL 4B 89,5 → 80,5 tokens/s après 512 positions, 73 → 46 après 4 096 ; 30B-A3B 84,7 → 70,0 et 72 → 35 (deux tours, deux bancs compilés côte à côte) ; ce noyau tenait dans ses registres, le déroulement les fait déborder. Code retiré.
+- **Fichiers** : `docs/mesures/tests-de-vitesse.md`, `logs/{reprise.md,nuit-2026-11-22.md}`, ce journal.
+- **Pourquoi** : savoir où en est le modèle employé chaque jour, après les 6.37.0 et 6.38.0.
+- **Étapes** : mesures ci-dessus (charge 2,1 à 7,3).
+
 ## 2026-11-22 — Gulliver 6.38.0 : dérouler les boucles du produit groupé des experts
 
 - **Quoi** : `mm_id_nax` : boucles de taille fixe déroulées (`_Pragma("clang loop unroll(full)")`), sauf celle des colonnes.
