@@ -93,8 +93,8 @@
     },
     {
      "path": "build/bench/hebdo/mesures.md",
-     "title": "Mesures du dimanche",
-     "desc": "Les tableaux que le Mac refait lui-même chaque dimanche à 4 h, datés, la semaine la plus récente en tête."
+     "title": "Mesures de la semaine",
+     "desc": "Les tableaux que le Mac refait lui-même chaque lundi à 8 h sur tous les modèles de Gulliver, datés, la semaine la plus récente en tête."
     },
     {
      "path": "docs/mesures/2026-11-19-m2-contre-mac-mini.md",

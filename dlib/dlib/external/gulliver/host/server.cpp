@@ -1815,7 +1815,7 @@ namespace gulliver
             status["web"] = web_capability(s->settings().get());
             send_json(res, 200, status);
         });
-        // Le conseil de la dernière mesure du dimanche (fork pour macOS, 2026-11-22) : build/bench/hebdo/conseil.json
+        // Le conseil de la dernière mesure de la semaine (fork pour macOS, 2026-11-22) : build/bench/hebdo/conseil.json
         // du dépôt (tools/conseil_modeles.py), pour la carte « Conseil » de l'onglet Modèles ; found false sans lui.
         srv.Get("/gulliver/v1/models/advice", [](const httplib::Request&, httplib::Response& res) {
             json o = json::object();

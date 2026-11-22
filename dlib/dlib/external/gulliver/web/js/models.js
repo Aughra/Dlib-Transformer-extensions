@@ -311,7 +311,7 @@ export function modelsTab(body, env) {
   async function load() {
     try {
       data = await api.models('fr');
-      // Le conseil de la mesure du dimanche (GET /gulliver/v1/models/advice) ; la carte manque sans lui.
+      // Le conseil de la mesure de la semaine (GET /gulliver/v1/models/advice) ; la carte manque sans lui.
       try { advice = await api.getJSON('/gulliver/v1/models/advice'); } catch (e) { advice = null; }
     } catch (e) {
       list.replaceChildren(h('p', { class: 'help' }, 'Le catalogue ne se lit pas : ' + e.message));
@@ -337,7 +337,7 @@ export function modelsTab(body, env) {
   }
 
   /*
-      Le conseil de la mesure du dimanche (fork pour macOS, 2026-11-22) : les modèles que tools/conseil_modeles.py a
+      Le conseil de la mesure de la semaine (fork pour macOS, 2026-11-22) : les modèles que tools/conseil_modeles.py a
       tirés des mesures (pour tout faire, le plus juste, le plus rapide), avec leurs réglages.  « Choisir » montre les
       changements, active le modèle pour la discussion, le code et la sécurité, envoie les réglages qui changent et
       attend le service s'il redémarre.
@@ -365,7 +365,7 @@ export function modelsTab(body, env) {
     if ('kv_type' in changes) lines.push('Mémoire de conversation : ' + kvLabel(changes.kv_type));
     if ('draft_tokens' in changes) lines.push('Brouillons de l’écriture : ' + changes.draft_tokens + ' mots');
     if (Object.keys(changes).length) lines.push('', 'Le service redémarrera (quelques secondes).');
-    if (!window.confirm('Choisir le conseil de la mesure du dimanche ?\n\n' + lines.join('\n'))) return;
+    if (!window.confirm('Choisir le conseil de la mesure de la semaine ?\n\n' + lines.join('\n'))) return;
     try {
       for (const role of ['general', 'code', 'security']) {
         await api.postJSON('/gulliver/v1/models/' + encodeURIComponent(m.id) + '/activate', { role });
@@ -410,7 +410,7 @@ export function modelsTab(body, env) {
           h('tbody', null, ...rows)),
         h('p', { class: 'help' }, (restarted ? 'Le service a redémarré pour prendre les nouveaux réglages. ' : '') +
           'Le modèle se charge à la première question : la première réponse peut prendre quelques secondes de plus. ' +
-          'Les réglages se retrouvent dans l’onglet Service, et le conseil change chaque dimanche avec les mesures.'),
+          'Les réglages se retrouvent dans l’onglet Service, et le conseil change chaque lundi avec les mesures.'),
         h('div', { class: 'actions' }, h('button', { class: 'button primary', type: 'button', onclick: () => close(true) },
           'Fermer')));
     });
@@ -434,7 +434,7 @@ export function modelsTab(body, env) {
           onclick: () => applyAdvice(a, m) }, here ? 'Remettre ses réglages' : 'Choisir'));
     });
     return h('div', { class: 'svc-card advice-card' },
-      h('div', { class: 'svc-title' }, h('span', null, 'Conseil de la mesure du dimanche')),
+      h('div', { class: 'svc-title' }, h('span', null, 'Conseil de la mesure de la semaine')),
       h('p', { class: 'svc-effect' }, 'Tiré des mesures de vitesse et de justesse du ' + (advice.date || '?') +
         ' sur ce Mac. « Choisir » active le modèle et met les réglages qui lui vont le mieux.'), ...rows);
   }

@@ -8,9 +8,6 @@
 #   - Gulliver (bench_runtime), clés et valeurs en 8 bits (le réglage du service) puis en demi-précision ;
 #   - llama.cpp (llama-bench de Homebrew), réglages par défaut puis clés et valeurs en 8 bits ;
 #   - MLX (mlx_lm.benchmark, environnement build/mlx-venv), pour le modèle qui a sa version MLX ;
-#   - l'Albireo d'origine (son bench_runtime, construit par macos/albireo-original/build.sh, tel quel :
-#     processeur seul, noyaux portables), jusqu'à BENCH_ALBIREO_MAX tokens (4096 par défaut : au-delà,
-#     une seule mesure lui prendrait plus d'un quart d'heure).
 # Les réglages se suivent en alternance (A, B, C, D, puis de nouveau A…), essais fois (2 par défaut),
 # comme le veut la règle de mesure de CLAUDE.md.  Les tableaux mettent les moteurs côte à côte, chacun
 # avec son écart à Gulliver en pourcentage (+ : plus rapide que Gulliver, − : plus lent).  Ils vont
@@ -24,9 +21,6 @@ STEPS=64
 BENCH=$ROOT/build/macos-gulliver/tests/bench_runtime
 LLAMA=$(command -v llama-bench)
 MLX=$ROOT/build/mlx-venv/bin/mlx_lm.benchmark
-ALBIREO_DIR=${ALBIREO_ORIGINAL_DIR:-$(cd "$ROOT/.." && pwd)/albireo-original}
-ALBIREO=$ALBIREO_DIR/build-mac/bench_runtime
-ALBIREO_MAX=${BENCH_ALBIREO_MAX:-4096}
 M=$ROOT/build/bench-moteurs/models
 [ -x "$BENCH" ] || { echo "no $BENCH: build Gulliver first"; exit 1; }
 
@@ -38,33 +32,16 @@ RAW=$OUTDIR/moteurs-$STAMP.raw
 LOG=$OUTDIR/moteurs-$STAMP.log
 : > "$RAW"; : > "$LOG"
 
-# Les modèles : nom|fichier GGUF|dossier MLX (vide s'il n'y en a pas)|1 si l'Albireo d'origine le mesure.
+# Les modèles : nom|fichier GGUF|dossier MLX (vide s'il n'y en a pas).  Les modèles installés dans Gulliver sont
+# mesurés chaque semaine par bench_modeles.sh, Gulliver seul.
 MODELS=()
-add() { [ -f "$2" ] && [[ -z "$BENCH_ONLY" || "$1" == *"$BENCH_ONLY"* ]] && MODELS+=("$1|$2|$3|${4:-1}"); }
+add() { [ -f "$2" ] && [[ -z "$BENCH_ONLY" || "$1" == *"$BENCH_ONLY"* ]] && MODELS+=("$1|$2|$3"); }
 add "Qwen3-4B Q4_K_M" "$M/Qwen3-4B-Q4_K_M.gguf" "$M/Qwen3-4B-mlx-4bit"
 add "Qwen3-VL 4B Thinking Q4_K_M" "$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.gguf" "$M/Qwen3-VL-4B-Thinking-4bit"
 add "Qwen3-VL 2B Instruct Q4_K_M" "$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf" "$M/Qwen3-VL-2B-Instruct-4bit"
 add "Gemma 3 4B Q4_K_M" "$ROOT/build/models/gemma-3-4b-it-Q4_K_M.gguf" "$M/gemma-3-4b-it-4bit"
 add "LFM2.5-1.2B Q8_0" "$ROOT/build/models/LFM2.5-1.2B-Instruct-Q8_0.gguf" "$M/LFM2.5-1.2B-Instruct-8bit"
 add "Qwen3-30B-A3B Q4_K_M (MoE)" "$ROOT/build/models/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf" "$M/Qwen3-30B-A3B-Instruct-2507-4bit"
-# Puis tous les modèles installés dans Gulliver (tools/modeles_installes.py, fork pour macOS, 2026-11-22), pour le
-# conseil du modèle : sans MLX (pas de version MLX) ni Albireo d'origine (des heures pour un 8B sur le processeur).
-# IDS (à côté du tableau) donne pour chaque nom l'identifiant du modèle dans Gulliver, s'il est actif et s'il lit les
-# images : nom|identifiant|actif|images.
-IDS=$OUTDIR/moteurs-$STAMP.ids
-: > "$IDS"
-if [ -z "$BENCH_NO_INSTALLED" ]; then
-  while IFS='|' read -r iname ifile iid iactive iimage; do
-    [ -n "$iid" ] || continue
-    known=""
-    for entry in "${MODELS[@]}"; do
-      IFS='|' read -r ename efile _ <<< "$entry"
-      [ "$(realpath "$efile")" = "$(realpath "$ifile")" ] && known=$ename
-    done
-    if [ -n "$known" ]; then echo "$known|$iid|$iactive|$iimage" >> "$IDS"
-    else add "$iname" "$ifile" "" 0 && echo "$iname|$iid|$iactive|$iimage" >> "$IDS"; fi
-  done < <(python3 -I "$ROOT/dlib/dlib/external/gulliver/tools/modeles_installes.py" "${GULLIVER_HOME:-$ROOT/build/gulliver-home}")
-fi
 [ ${#MODELS[@]} -gt 0 ] || { echo "no model to measure"; exit 1; }
 
 # Une mesure : écrit « modèle|taille|réglage|lecture|écriture » dans RAW.
@@ -98,16 +75,6 @@ mlx() {  # $1 nom, $2 dossier, $3 taille
   g=$(printf '%s\n' "$out" | sed -n 's/.*generation_tps=\([0-9.]*\).*/\1/p' | tail -1)
   echo "$1|$3|mlx|${p:-—}|${g:-—}" >> "$RAW"
 }
-albireo() {  # $1 nom, $2 fichier, $3 taille : l'original, processeur seul, clés en 8 bits
-  local out p g
-  out=$("$ALBIREO" "$2" "$(sysctl -n hw.physicalcpu)" "$3" "$STEPS" 1 q8 2>&1)
-  printf '== albireo %s %s\n%s\n' "$1" "$3" "$out" >> "$LOG"
-  p=$(printf '%s\n' "$out" | sed -n 's/^prompt: .* \([0-9.]*\) tokens\/s$/\1/p' | head -1)
-  g=$(printf '%s\n' "$out" | sed -n 's/^generation: .* \([0-9.]*\) tokens\/s$/\1/p' | head -1)
-  # Une architecture que l'original ne lit pas (LFM2, Gemma 3…) : la case le dira.
-  printf '%s\n' "$out" | grep -q "is not supported by this engine" && p=nonlu && g=nonlu
-  echo "$1|$3|albireo|${p:-—}|${g:-—}" >> "$RAW"
-}
 
 LOAD_START=$(sysctl -n vm.loadavg)
 # La température de la puce (macos/temperature, construit s'il manque), au début et à la fin.
@@ -117,7 +84,7 @@ chip_temp() { [ -x "$TEMP_TOOL" ] && "$TEMP_TOOL" | sed -n 's/^puce : \([0-9.]*\
 TEMP_START=$(chip_temp)
 for ((r = 1; r <= ROUNDS; ++r)); do
   for entry in "${MODELS[@]}"; do
-    IFS='|' read -r name file mlxdir original <<< "$entry"
+    IFS='|' read -r name file mlxdir <<< "$entry"
     for n in $SIZES; do
       echo "essai $r : $name, $n tokens"
       gulliver "$name" "$file" "$n" q8
@@ -125,7 +92,6 @@ for ((r = 1; r <= ROUNDS; ++r)); do
       gulliver "$name" "$file" "$n" f16
       [ -n "$LLAMA" ] && llama "$name" "$file" "$n" llama_q8 -fa 1 -ctk q8_0 -ctv q8_0
       [ -d "$mlxdir" ] && [ -x "$MLX" ] && mlx "$name" "$mlxdir" "$n"
-      [ -x "$ALBIREO" ] && [ "$original" = 1 ] && [ "$n" -le "$ALBIREO_MAX" ] && albireo "$name" "$file" "$n"
     done
   done
 done
@@ -143,11 +109,10 @@ TEMP_END=$(chip_temp)
   echo "| Gulliver | $(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null)) |"
   echo "| llama.cpp | $("$LLAMA" --version 2>&1 | sed -n 's/^version: //p' | head -1) (Homebrew) |"
   echo "| MLX | $("$ROOT/build/mlx-venv/bin/pip" show mlx 2>/dev/null | awk '/^Version/{print $2}') (mlx-lm $("$ROOT/build/mlx-venv/bin/pip" show mlx-lm 2>/dev/null | awk '/^Version/{print $2}'), $("$ROOT/build/mlx-venv/bin/python" --version 2>&1)) |"
-  [ -x "$ALBIREO" ] && echo "| Albireo d'origine | $(awk '/#define ALBIREO_VERSION_(MAJOR|MINOR|PATCH) /{print $3}' "$ALBIREO_DIR/dlib/dlib/external/albireo/common/version.h" | paste -sd. -) ($(git -C "$ALBIREO_DIR" rev-parse --short HEAD)), tel quel : processeur seul, noyaux portables, jusqu'à $ALBIREO_MAX tokens |"
   echo "| Charge | $LOAD_START au début, $LOAD_END à la fin |"
   [ -n "$TEMP_START$TEMP_END" ] && echo "| Puce, sonde la plus chaude | ${TEMP_START:-?} au début, ${TEMP_END:-?} à la fin |"
   echo
-  echo "Jetons par seconde ; lecture de la question, puis écriture de $STEPS jetons après elle ; $ROUNDS essais en alternance (moyenne des essais). Gulliver, llama.cpp et MLX sur le GPU, l'Albireo d'origine sur le processeur. Entre parenthèses : l'écart à Gulliver (+ : plus rapide que Gulliver, − : plus lent)."
+  echo "Jetons par seconde ; lecture de la question, puis écriture de $STEPS jetons après elle ; $ROUNDS essais en alternance (moyenne des essais). Gulliver, llama.cpp et MLX sur le GPU. Entre parenthèses : l'écart à Gulliver (+ : plus rapide que Gulliver, − : plus lent)."
   echo
   python3 -I - "$RAW" <<'EOF'
 import sys, collections
@@ -168,7 +133,7 @@ def cell(x, base):
     if base is None or base == "nonlu" or base == 0: return num(x)
     d = round(100.0 * (x / base - 1.0))
     return f"{num(x)} ({'±' if d == 0 else '+' if d > 0 else '−'}{abs(d)} %)"
-MAIN = [("gulliver_q8", "Gulliver"), ("llama", "llama.cpp"), ("mlx", "MLX"), ("albireo", "Albireo d'origine")]
+MAIN = [("gulliver_q8", "Gulliver"), ("llama", "llama.cpp"), ("mlx", "MLX")]
 OTHER = [("gulliver_f16", "Gulliver, clés en demi-précision"), ("llama_q8", "llama.cpp, clés en 8 bits")]
 for what, idx in (("Lecture de la question", 0), ("Écriture de la réponse", 1)):
     cols = [(k, l) for k, l in MAIN if any(k in s for m in data.values() for s in m.values())]
@@ -179,7 +144,7 @@ for what, idx in (("Lecture de la question", 0), ("Écriture de la réponse", 1)
         for n, cfg in sizes.items():
             base = mean(v[idx] for v in cfg.get("gulliver_q8", []))
             row = [num(base)] + [cell(mean(v[idx] for v in cfg[k]), base) if k in cfg
-                                 else ("non mesuré" if k == "albireo" else "—") for k, _ in cols[1:]]
+                                 else "—" for k, _ in cols[1:]]
             print(f"| {name} | {n} | " + " | ".join(row) + " |")
 print("\n## Les autres réglages\n")
 print("Écart au réglage du service de Gulliver (clés et valeurs en 8 bits), lecture puis écriture.\n")

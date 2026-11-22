@@ -1,13 +1,14 @@
 #!/bin/bash
-# Les tests de vitesse et de justesse de Gulliver contre les autres moteurs, une fois par semaine
-# (fork pour macOS, 2026-11-21, demande de l'humain).  Lancé par l'agent launchd de
-# macos/bench-hebdo/ (dimanche, 4 h), ou à la main :
+# Les modèles de Gulliver mesurés une fois par semaine (fork pour macOS, 2026-11-21, demande de l'humain ; depuis le
+# 2026-11-22, Gulliver sur tous ses modèles installés, avec llama.cpp et MLX sur le modèle de référence, comparés au
+# choix de la semaine dernière).  Lancé par l'agent launchd de macos/bench-hebdo/ (lundi, 8 h, arrêt à 19 h :
+# BENCH_DEADLINE), ou à la main :
 #
 #   bash dlib/dlib/external/gulliver/tools/bench_hebdo.sh
 #
 # Il attend une machine au repos (charge sur une minute sous BENCH_MAX_LOAD, 3 par défaut ; un essai
-# par heure, 6 au plus), reconstruit Gulliver (build/macos-gulliver) et l'Albireo d'origine
-# (macos/albireo-original/build.sh), lance bench_moteurs.sh et, s'il existe, justesse_moteurs.sh, puis met la mesure de la semaine, sous un titre daté, en tête de
+# par heure, 6 au plus), reconstruit Gulliver (build/macos-gulliver), lance bench_modeles.sh (qui écrit
+# aussi build/bench/hebdo/conseil.json, lu par l'onglet Modèles), puis met la mesure de la semaine, sous un titre daté, en tête de
 # build/bench/hebdo/mesures.md (lu par le carnet, rubrique « Tests de vitesse » : les semaines de
 # la plus récente à la plus ancienne), avec une copie datée.  Rien n'est commité : le carnet lit
 # ces fichiers sur le disque.
@@ -20,6 +21,12 @@ mkdir -p "$HEBDO"
 LOCK=$HEBDO/.en-cours
 exec >> "$HEBDO/hebdo.log" 2>&1
 echo "=== $(date '+%Y-%m-%d %H:%M') début"
+
+# Jamais le samedi ni le dimanche de 9 h à 21 h : l'humain se sert alors du Mac (launchd lance au réveil une tâche
+# manquée pendant le sommeil du Mac ; elle attendra la semaine suivante).
+if [ "$(date +%u)" -ge 6 ] && [ "$(date +%H)" -ge 9 ] && [ "$(date +%H)" -lt 21 ]; then
+  echo "samedi ou dimanche en journée : pas de mesure"; exit 0
+fi
 
 # Une seule campagne à la fois.
 if ! mkdir "$LOCK" 2>/dev/null; then echo "une campagne tourne déjà, abandon"; exit 0; fi
@@ -40,35 +47,14 @@ done
 echo "charge $(load1) : reconstruction de Gulliver"
 cmake --build "$ROOT/build/macos-gulliver" --target bench_runtime perplexity_runtime > "$HEBDO/build.log" 2>&1 \
   || { echo "build en échec, voir $HEBDO/build.log"; exit 1; }
-# L'Albireo d'origine, figé sur macos/albireo-original/COMMIT, pour sa colonne des tableaux ; sans
-# lui, les mesures se font quand même.
-bash "$ROOT/macos/albireo-original/build.sh" >> "$HEBDO/build.log" 2>&1 \
-  || echo "Albireo d'origine non construit, voir $HEBDO/build.log"
 
 STAMP=$(date +%Y-%m-%d)
 WHEN=$(LC_ALL=fr_FR.UTF-8 date '+%A %e %B %Y à %H h %M' | sed 's/  / /')
 WEEK=$HEBDO/semaine.tmp
-echo "## Mesure du $WHEN" > "$WEEK"
-found=0
-for script in bench_moteurs.sh justesse_moteurs.sh; do
-  [ -f "$TOOLS/$script" ] || continue
-  echo "lancement de $script"
-  table=$(bash "$TOOLS/$script" 2 | sed -n 's/^table: //p' | tail -1)
-  [ "$script" = bench_moteurs.sh ] && speed_table=$table
-  if [ -n "$table" ] && [ -f "$table" ]; then
-    # Les titres du tableau descendent de deux crans, sous celui de la semaine.
-    { echo; sed 's/^#/###/' "$table"; } >> "$WEEK"; found=1
-  else
-    echo "$script n'a pas produit de tableau"
-  fi
-done
-if [ $found -eq 0 ]; then rm -f "$WEEK"; echo "=== aucune mesure"; exit 0; fi
-# Le conseil de la semaine : quel modèle employer, tiré des tableaux ci-dessus.
-# Avec les modèles installés dans Gulliver (le .ids de bench_moteurs.sh) : conseil.json, que lit l'onglet Modèles.
-ids_args=()
-[ -n "$speed_table" ] && [ -f "${speed_table%.md}.ids" ] && ids_args=(--ids "${speed_table%.md}.ids")
-conseil=$(python3 "$TOOLS/conseil_modeles.py" "$WEEK" "${ids_args[@]}" --json "$HEBDO/conseil.json" 2>> "$HEBDO/build.log")
-[ -n "$conseil" ] && { echo; echo "$conseil"; } >> "$WEEK"
+echo "lancement de bench_modeles.sh"
+table=$(bash "$TOOLS/bench_modeles.sh" 2 | sed -n 's/^table: //p' | tail -1)
+if [ -z "$table" ] || [ ! -s "$table" ]; then echo "=== aucune mesure"; exit 0; fi
+{ echo "## Mesure du $WHEN"; echo; cat "$table"; } > "$WEEK"
 
 # La page du carnet : les semaines de la plus récente à la plus ancienne.  historique.md garde
 # les semaines seules ; mesures.md y ajoute l'en-tête.
@@ -77,9 +63,9 @@ cp "$WEEK" "$HEBDO/$STAMP.md"
 mv "$HEBDO/historique.tmp" "$HEBDO/historique.md"
 rm -f "$WEEK"
 {
-  echo "# Mesures du dimanche : Gulliver contre les autres moteurs"
+  echo "# Mesures de la semaine : les modèles de Gulliver"
   echo
-  echo "Refaites par le Mac chaque dimanche à 4 h (\`macos/bench-hebdo/\`), la plus récente en tête. Vitesse en jetons par seconde sur le GPU, puis justesse (perplexité d'un même texte). L'explication des écarts est dans « Gulliver contre les autres moteurs »."
+  echo "Refaites par le Mac chaque lundi à 8 h (\`macos/bench-hebdo/\`), après la mise à jour des modèles de la nuit (\`macos/modeles-semaine/\`), la plus récente en tête : tous les modèles installés dans Gulliver, sa vitesse et sa justesse sur chacun, comparés au choix de la semaine précédente, puis le conseil que l'onglet Modèles applique d'un clic. Les semaines jusqu'au 22 novembre 2026 comparaient Gulliver à d'autres moteurs sur six modèles."
   echo
   cat "$HEBDO/historique.md"
 } > "$HEBDO/mesures.md"

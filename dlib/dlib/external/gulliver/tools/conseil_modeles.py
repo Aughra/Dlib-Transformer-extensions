@@ -1,173 +1,236 @@
 #!/usr/bin/env python3
-# Le conseil de la semaine (fork pour macOS, 2026-11-22) : quel modèle employer avec Gulliver, et avec quels réglages,
-# tiré des tableaux d'une mesure du dimanche (bench_moteurs.sh puis justesse_moteurs.sh, tels que bench_hebdo.sh les
-# assemble).  Écrit la section « Conseil » en Markdown sur la sortie ; avec --ids, les modèles installés dans Gulliver
-# (le fichier .ids de bench_moteurs.sh : nom|identifiant|actif|images) ; avec --json, le conseil que lit l'onglet
-# Modèles (GET /gulliver/v1/models/advice).
+# La page de la semaine et le conseil du modèle (fork pour macOS, 2026-11-22) : à partir des chiffres bruts de
+# tools/bench_modeles.sh, le tableau de tous les modèles installés dans Gulliver, comparés au choix de la semaine
+# dernière, puis le conseil (pour tout faire, le plus juste, le plus rapide, avec leurs réglages), en Markdown sur la
+# sortie et, avec --json, dans conseil.json (lu par l'onglet Modèles : GET /gulliver/v1/models/advice).
 #
-#   python3 tools/conseil_modeles.py semaine.md [--ids moteurs-….ids] [--json conseil.json]
+#   python3 tools/conseil_modeles.py modeles-….raw [--previous id] [--new "id …"] [--rounds n]
+#       [--machine "modèle|puce|macOS|Gulliver|charge|température"] [--temperature "moyenne|maximum|relevés"]
+#       [--late] [--json conseil.json] [--doc docs/mesures/tests-de-vitesse.md]
 #
-# Seules les colonnes de Gulliver comptent (vitesse sur le GPU, perplexité sur le GPU).  Les perplexités ne se
-# comparent qu'entre modèles qui découpent le texte de la même façon : la famille Qwen3 (même vocabulaire) ; Gemma,
-# LFM2, Mistral et les autres ont le leur.
+# Les lignes de llama.cpp et de MLX (identifiants « llama.cpp:… », « mlx:… ») entrent dans le tableau comme les autres,
+# pas dans le conseil (le bouton « Choisir » applique un modèle de Gulliver).  Avec --doc, la section de la semaine du
+# document de vitesse (entre « <!-- semaine : début --> » et « <!-- semaine : fin --> ») est réécrite : les chiffres de
+# Gulliver seuls, sur les modèles mesurés, et la température moyenne de la puce pendant la mesure.
+#
+# Les perplexités ne se comparent qu'entre modèles qui découpent le texte de la même façon : la famille Qwen3 (même
+# vocabulaire) ; les autres ont le leur.
 import argparse
+import collections
 import datetime
 import json
-import re
-
-
-def number(cell):
-    """Le premier nombre d'une case (« 2 679 », « 82,0 (+4 %) ») ou None."""
-    m = re.match(r"\s*([\d   ]+(?:,\d+)?)", cell)
-    if not m:
-        return None
-    try:
-        return float(re.sub(r"[\s  ]", "", m.group(1)).replace(",", "."))
-    except ValueError:
-        return None
-
-
-def percents(cell):
-    """Les écarts en % d'une case des autres réglages (« 2 205 (±0 %) / 71,7 (+1 %) ») : (lecture, écriture)."""
-    found = re.findall(r"\(([±+−-])(\d+) %\)", cell)
-    vals = [(-1 if s in "−-" else 1) * int(v) for s, v in found]
-    return (vals[0], vals[1]) if len(vals) == 2 else (None, None)
-
-
-def tables(text):
-    """Les tableaux du texte, chacun avec le titre qui le précède : [(titre, [lignes de cases])]."""
-    out, title, rows = [], "", None
-    for line in text.splitlines():
-        if line.startswith("#"):
-            title = line.lstrip("#").strip()
-        if line.startswith("|"):
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            if rows is None:
-                rows = []
-                out.append((title, rows))
-            if not all(re.fullmatch(r"-+", c) for c in cells):
-                rows.append(cells)
-        else:
-            rows = None
-    return out
 
 
 def fmt(v):
     if v is None:
-        return "?"
-    s = f"{v:,.0f}" if v >= 1000 else (f"{v:.0f}" if v >= 100 else f"{v:.1f}")
+        return "—"
+    s = f"{v:,.0f}" if v >= 100 else f"{v:.1f}"
     return s.replace(",", " ").replace(".", ",")
 
 
 def comparable(name):
-    """Les modèles dont la perplexité se compare : la famille Qwen3 (pas Qwen3.5, qui a son propre vocabulaire)."""
+    """La famille Qwen3 (pas Qwen3.5, qui a son propre vocabulaire)."""
     return name.startswith("Qwen3-") or name.startswith("Qwen3 ")
+
+
+def mean(values):
+    nums = []
+    for v in values:
+        try:
+            nums.append(float(v))
+        except ValueError:
+            pass
+    return sum(nums) / len(nums) if nums else None
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("week")
-    ap.add_argument("--ids")
+    ap.add_argument("raw")
+    ap.add_argument("--previous", default="")
+    ap.add_argument("--new", default="")
+    ap.add_argument("--rounds", default="2")
+    ap.add_argument("--machine", default="")
+    ap.add_argument("--late", action="store_true")
     ap.add_argument("--json")
+    ap.add_argument("--temperature", default="")
+    ap.add_argument("--doc")
     args = ap.parse_args()
-    text = open(args.week, encoding="utf-8").read()
-    read, write, ppl, f16 = {}, {}, {}, {}
-    for title, rows in tables(text):
-        if not rows:
+    temp = args.temperature.split("|") if args.temperature else []
+    temp_text = (f"{temp[0].replace('.', ',')} °C en moyenne pendant la mesure, {temp[1].replace('.', ',')} °C au plus "
+                 f"({temp[2]} relevés)") if len(temp) == 3 else ""
+    new = set(args.new.split())
+
+    names, image, where, ppl = {}, {}, {}, {}
+    runs = collections.defaultdict(lambda: collections.defaultdict(list))   # (id, taille) -> mémoire -> [(lecture, écriture)]
+    for line in open(args.raw, encoding="utf-8"):
+        p = line.rstrip("\n").split("|")
+        if p[0] == "ppl" and len(p) == 3:
+            try:
+                ppl[p[1]] = float(p[2])
+            except ValueError:
+                pass
             continue
-        head = rows[0]
-        if title.startswith("Lecture") and head[:3] == ["Modèle", "Question", "Gulliver"]:
-            for r in rows[1:]:
-                read[(r[0], r[1])] = number(r[2])
-        elif title.startswith("Écriture") and head[:3] == ["Modèle", "Question", "Gulliver"]:
-            for r in rows[1:]:
-                write[(r[0], r[1])] = number(r[2])
-        elif title.startswith("Les autres réglages") and head[:3] == ["Modèle", "Question", "Gulliver, clés en demi-précision"]:
-            for r in rows[1:]:
-                f16.setdefault(r[0], []).append(percents(r[2]))
-        elif head[:2] == ["Modèle", "Gulliver, GPU"]:
-            for r in rows[1:]:
-                if "référence" not in r[0]:
-                    ppl[r[0]] = number(r[1])
-    models = [m for m in dict.fromkeys(k[0] for k in write) if write.get((m, "512"))]
+        if len(p) != 8:
+            continue
+        mid, name, img, n, kv, r, w, calc = p
+        names[mid], image[mid] = name, img == "1"
+        # Le pire de ses essais : ne lit pas, puis processeur, puis GPU.
+        rank = {"nonlu": 2, "processeur": 1, "gpu": 0}
+        if rank.get(calc, 0) >= rank.get(where.get(mid, "gpu"), 0):
+            where[mid] = calc
+        runs[(mid, n)][kv].append((r, w))
+    models = list(names)
     if not models:
         return
-    # Les modèles installés dans Gulliver : seuls ceux-là peuvent être choisis depuis l'onglet Modèles.
-    ids, active, image = {}, None, set()
-    if args.ids:
-        try:
-            for line in open(args.ids, encoding="utf-8"):
-                parts = line.rstrip("\n").split("|")
-                if len(parts) >= 3 and parts[0] in models:
-                    ids[parts[0]] = parts[1]
-                    if parts[2] == "1":
-                        active = parts[0]
-                    if len(parts) >= 4 and parts[3] == "1":
-                        image.add(parts[0])
-        except OSError:
-            pass
-    pool = [m for m in models if m in ids] or models
 
-    def kv_type(m):
-        """La mémoire de conversation : demi-précision seulement si elle écrit au moins 3 % plus vite en moyenne,
-        sans lire plus lentement ; sinon 8 bits, deux fois moins de mémoire pour les mêmes réponses."""
-        vals = [v for v in f16.get(m, []) if v[0] is not None]
-        if not vals:
-            return "q8"
-        w = sum(v[1] for v in vals) / len(vals)
-        r = sum(v[0] for v in vals) / len(vals)
-        return "f16" if w >= 3 and r >= 0 else "q8"
+    def get(mid, n, kv="q8", i=1):
+        return mean(v[i] for v in runs[(mid, n)].get(kv, []))
 
-    fastest = max(pool, key=lambda m: write[(m, "512")])
-    family = [m for m in pool if comparable(m) and ppl.get(m)]
+    def kv_type(mid):
+        """Demi-précision seulement si elle écrit au moins 3 % plus vite en moyenne sans lire plus lentement ; sinon
+        8 bits, deux fois moins de mémoire pour les mêmes réponses."""
+        dw, dr = [], []
+        for n in ("512", "4096"):
+            a, b = get(mid, n, "q8"), get(mid, n, "f16")
+            ra, rb = get(mid, n, "q8", 0), get(mid, n, "f16", 0)
+            if a and b:
+                dw.append(b / a - 1)
+            if ra and rb:
+                dr.append(rb / ra - 1)
+        return "f16" if dw and sum(dw) / len(dw) >= 0.03 and (not dr or sum(dr) / len(dr) >= 0) else "q8"
+
+    engine = lambda m: ":" in m   # llama.cpp et MLX : comparés, jamais conseillés
+    usable = [m for m in models if where.get(m) != "nonlu" and get(m, "512") and not engine(m)]
+    write = {m: get(m, "512") for m in models if get(m, "512")}
+    previous = args.previous if args.previous in names else ""
+    base = write.get(previous)
+
+    print(f"### Les modèles de Gulliver — {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print()
+    if args.machine:
+        labels = ["Modèle de Mac", "Puce", "macOS", "Gulliver", "Charge", "Puce, sonde la plus chaude"]
+        print("| Machine | |")
+        print("|---|---|")
+        for label, value in zip(labels, args.machine.split("|")):
+            print(f"| {label} | {value} |")
+        if temp_text:
+            print(f"| Température de la puce | {temp_text} |")
+        print()
+    print(f"Gulliver sur chacun de ses modèles installés, et llama.cpp et MLX sur le modèle de référence : lecture d'une question puis écriture de 64 jetons après elle, en jetons par "
+          f"seconde, mémoire de conversation en 8 bits, {args.rounds} essais en alternance (moyenne) ; perplexité d'un "
+          f"même texte français (plus basse, mieux le modèle prévoit le texte). "
+          + (f"Référence : **{names[previous]}**, le choix de la semaine dernière ; l'écart est celui de l'écriture "
+             f"après 512 tokens (+ : plus rapide que lui)." if previous else
+             "Pas encore de choix de la semaine dernière pour référence."))
+    if new & set(names):
+        print()
+        print("Nouveaux cette semaine (téléchargés la nuit précédente) : " + ", ".join(names[m] for m in names if m in new) + ".")
+    if args.late:
+        print()
+        print("L'heure limite est passée avant la fin : les modèles manquants n'ont pas été mesurés cette semaine.")
+    print()
+    print("| Modèle | Calcul | Lecture 512 | Lecture 4 096 | Écriture 512 | Écriture 4 096 | Écart | Perplexité "
+          "| Mémoire conseillée |")
+    print("|---|---|---|---|---|---|---|---|---|")
+    order = sorted(models, key=lambda m: -(write.get(m) or 0))
+    for m in order:
+        tag = " (nouveau)" if m in new else ""
+        tag += " (choix précédent)" if m == previous else ""
+        if where.get(m) == "nonlu":
+            print(f"| {names[m]}{tag} | ne lit pas ce modèle | — | — | — | — | — | — | — |")
+            continue
+        d = ""
+        if base and write.get(m) and m != previous:
+            pct = round(100 * (write[m] / base - 1))
+            d = f"{'±' if pct == 0 else '+' if pct > 0 else '−'}{abs(pct)} %"
+        p = f"{ppl[m]:.2f}".replace(".", ",") if m in ppl else "—"
+        memory = "—" if engine(m) else ("demi-précision" if kv_type(m) == "f16" else "8 bits")
+        print(f"| {names[m]}{tag} | {'GPU' if where.get(m) == 'gpu' else 'processeur'} | {fmt(get(m, '512', i=0))} "
+              f"| {fmt(get(m, '4096', i=0))} | {fmt(get(m, '512'))} | {fmt(get(m, '4096'))} | {d or '—'} | {p} "
+              f"| {memory} |")
+
+    if not usable:
+        return
+    fastest = max(usable, key=lambda m: write[m])
+    family = [m for m in usable if comparable(names[m]) and m in ppl]
     accurate = min(family, key=lambda m: ppl[m]) if family else None
-    seeing = [m for m in pool if m in image and write[(m, "512")] >= 40]
+    seeing = [m for m in usable if image.get(m) and write[m] >= 40 and where.get(m) == "gpu"]
     seeing_family = [m for m in seeing if m in family]
     general = (min(seeing_family, key=lambda m: ppl[m]) if seeing_family
-               else max(seeing, key=lambda m: write[(m, "512")]) if seeing else fastest)
+               else max(seeing, key=lambda m: write[m]) if seeing else fastest)
 
     def entry(role, m, why):
-        return {"role": role, "id": ids.get(m), "name": m, "why": why,
-                "write_512": write.get((m, "512")), "read_4096": read.get((m, "4096")), "perplexity": ppl.get(m),
-                "image": m in image, "settings": {"kv_type": kv_type(m), "draft_tokens": 7}}
+        return {"role": role, "id": m, "name": names[m], "why": why, "write_512": write.get(m),
+                "read_4096": get(m, "4096", i=0), "perplexity": ppl.get(m), "image": image.get(m, False),
+                "settings": {"kv_type": kv_type(m), "draft_tokens": 7}}
 
     advice = [entry("general", general, "Pour tout faire, images comprises : le plus juste des modèles qui voient les "
-                    "images et écrivent au moins 40 jetons/s.")]
+                    "images et écrivent au moins 40 jetons/s sur le GPU.")]
     if accurate and accurate != general:
         advice.append(entry("accurate", accurate, "Les réponses les plus justes : la perplexité la plus basse de la "
                             "famille Qwen3, la seule dont les perplexités se comparent."))
     if fastest not in (general, accurate):
         advice.append(entry("fastest", fastest, "Le plus rapide : la meilleure écriture après 512 tokens."))
-
-    def line(m):
-        moe = " ; modèle à experts : tout le fichier reste en mémoire" if "MoE" in m else ""
-        p = ", perplexité " + f"{ppl[m]:.2f}".replace(".", ",") if ppl.get(m) else ""
-        state = " ; c'est le modèle actif" if m == active else ""
-        return (f"**{m}** : écriture {fmt(write.get((m, '512')))} jetons/s après 512 tokens, "
-                f"lecture {fmt(read.get((m, '4096')))} jetons/s d'une question de 4 096 tokens{p}{moe}{state} ; "
-                f"mémoire de conversation conseillée : {'demi-précision' if kv_type(m) == 'f16' else '8 bits'}")
-
     labels = {"general": "Pour tout faire, images comprises", "accurate": "Pour les réponses les plus justes",
               "fastest": "Pour aller vite"}
+    print()
     print("### Conseil : quel modèle employer avec Gulliver")
     print()
-    print("Tiré des tableaux de cette semaine (colonnes de Gulliver, sur le GPU)"
-          + (", parmi les modèles installés dans Gulliver ; le bouton « Choisir » de l'onglet Modèles applique le "
-             "modèle et ses réglages" if ids else "") + ".")
-    print()
     for a in advice:
-        print(f"- **{labels[a['role']]}** : {line(a['name'])}.")
-    if active and active not in [a["name"] for a in advice]:
-        print(f"- Le modèle actif aujourd'hui : {line(active)}.")
+        m = a["id"]
+        p = ", perplexité " + f"{ppl[m]:.2f}".replace(".", ",") if m in ppl else ""
+        print(f"- **{labels[a['role']]}** : **{names[m]}**, écriture {fmt(write[m])} jetons/s après 512 tokens{p} ; "
+              f"mémoire de conversation conseillée : {'demi-précision' if a['settings']['kv_type'] == 'f16' else '8 bits'}.")
+    if previous:
+        print()
+        print("Par rapport à la semaine dernière : " + ("le conseil pour tout faire ne change pas."
+              if general == previous else f"le conseil pour tout faire passe de {names[previous]} à {names[general]}."))
     print()
-    print("À lire avec deux précautions : la perplexité mesure la façon dont un modèle prévoit un texte français "
-          "(dix épisodes du blog), pas la qualité de ses raisonnements ; et elle ne se compare qu'entre modèles de "
-          "la même famille (les Qwen3 entre eux). L'écriture est mesurée sans brouillon : sur une recopie ou une "
-          "question sur un document, les brouillons la multiplient par 1,3 à 3.")
+    print("Le bouton « Choisir » de l'onglet Modèles de Gulliver applique le modèle et ses réglages. À lire avec deux "
+          "précautions : la perplexité mesure la façon dont un modèle prévoit un texte français, pas la qualité de ses "
+          "raisonnements, et elle ne se compare qu'entre modèles Qwen3 ; l'écriture est mesurée sans brouillon (sur une "
+          "recopie ou une question sur un document, les brouillons la multiplient par 1,3 à 3).")
+    if args.doc:
+        update_doc(args.doc, [m for m in order if not engine(m) and where.get(m) != "nonlu"], names, where, get, ppl,
+                   previous, advice, temp_text, args.late)
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
-            json.dump({"date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), "active": ids.get(active),
-                       "advice": advice}, f, ensure_ascii=False, indent=1)
+            json.dump({"date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), "previous": previous or None,
+                       "new": sorted(new & set(names)), "late": args.late, "advice": advice}, f, ensure_ascii=False,
+                      indent=1)
+
+
+def update_doc(path, models, names, where, get, ppl, previous, advice, temp_text, late):
+    """La section de la semaine du document de vitesse : Gulliver seul, sur les modèles mesurés cette semaine."""
+    begin, end = "<!-- semaine : début -->", "<!-- semaine : fin -->"
+    try:
+        text = open(path, encoding="utf-8").read()
+    except OSError:
+        return
+    if begin not in text or end not in text:
+        return
+    when = datetime.datetime.now().strftime("%d/%m/%Y à %H h %M")
+    lines = [begin, "", f"## La mesure de la semaine ({when})", "",
+             "Écrite par le Mac à chaque mesure de la semaine, le lundi (`tools/bench_modeles.sh`) : Gulliver seul, "
+             "sur chacun de ses modèles installés ; jetons par seconde, mémoire de conversation en 8 bits."
+             + (f" Température de la puce : {temp_text}." if temp_text else "")
+             + (" L'heure limite a coupé la mesure avant la fin." if late else ""), "",
+             "| Modèle | Calcul | Lecture 512 | Lecture 4 096 | Écriture 512 | Écriture 4 096 | Perplexité |",
+             "|---|---|---|---|---|---|---|"]
+    for m in models:
+        tag = " (choix précédent)" if m == previous else ""
+        p = f"{ppl[m]:.2f}".replace(".", ",") if m in ppl else "—"
+        lines.append(f"| {names[m]}{tag} | {'GPU' if where.get(m) == 'gpu' else 'processeur'} | {fmt(get(m, '512', i=0))} "
+                     f"| {fmt(get(m, '4096', i=0))} | {fmt(get(m, '512'))} | {fmt(get(m, '4096'))} | {p} |")
+    if advice:
+        lines += ["", "Conseillé : " + " ; ".join(
+            {"general": "pour tout faire", "accurate": "le plus juste", "fastest": "le plus rapide"}[a["role"]] + ", "
+            + names[a["id"]] for a in advice) + ". Les tableaux complets, avec llama.cpp et MLX, sont dans « Mesures de "
+                                                    "la semaine »."]
+    lines += ["", end]
+    a, b = text.index(begin), text.index(end) + len(end)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text[:a] + "\n".join(lines) + text[b:])
 
 
 if __name__ == "__main__":

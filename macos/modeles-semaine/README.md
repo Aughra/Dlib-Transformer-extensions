@@ -1,0 +1,20 @@
+# Les mises à jour des modèles, chaque semaine
+
+Un agent launchd de l'utilisateur lance chaque **lundi à 1 h** `gulliver/tools/modeles_semaine.py`, qui tient à jour les modèles de Gulliver avant la mesure du **lundi à 8 h** (`macos/bench-hebdo/`), par le service qui tourne sur le Mac. Les créneaux évitent les heures où l'humain se sert du Mac (du lundi au vendredi, de 8 h à 20 h, l'humain est au travail ; le samedi et le dimanche, de 10 h à 21 h, l'humain essaie Gulliver) :
+
+1. le catalogue est rafraîchi ;
+2. un modèle du catalogue installé dont le catalogue donne une nouvelle version (une autre empreinte) est retéléchargé ;
+3. un modèle ajouté depuis Hugging Face dont le fichier a changé là-bas (empreinte lue dans l'en-tête `X-Linked-Etag`, sans télécharger le fichier) est réajouté, ce qui télécharge sa nouvelle version ;
+4. les modèles du catalogue qui tiennent dans le Mac sont téléchargés : une architecture que le moteur lit, un fichier (avec son projecteur) d'au plus les trois quarts de la mémoire (48 Go sur le Mac mini de 64 Go), un modèle qui répond aux questions.
+
+Les modèles installés cette nuit-là (empreinte vérifiée par le service) sont écrits dans `build/bench/hebdo/nouveaux.json` : la mesure du lundi les mesure en premier, les signale « (nouveau) », et conseille le meilleur de tous dans l'onglet « Modèles » de Gulliver. Chaque semaine repart d'une liste vide. Les anciennes versions restent dans la réserve du service (clones APFS, sans place prise tant qu'elles sont identiques).
+
+| Action | Commande |
+|---|---|
+| Installer | `bash macos/modeles-semaine/install.sh` |
+| Retirer | `bash macos/modeles-semaine/install.sh --retirer` |
+| Voir ce qu'il ferait, sans rien lancer | `python3 dlib/dlib/external/gulliver/tools/modeles_semaine.py build/gulliver-home --essai` |
+| Lancer tout de suite | `launchctl kickstart gui/$(id -u)/fr.fork.gulliver.modeles-semaine` |
+| Journal | `build/bench/hebdo/modeles.log` |
+
+Les nouveaux modèles viennent du catalogue de Gulliver (celui de l'Albireo d'origine) et des modèles déjà ajoutés depuis Hugging Face : aucune recherche libre sur Hugging Face, dont les modèles inconnus n'ont ni qualité ni licence vérifiées.

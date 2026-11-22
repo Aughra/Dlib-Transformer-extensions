@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-# Les modèles du mardi (fork pour macOS, 2026-11-22) : tenir à jour les modèles de Gulliver avant la mesure du dimanche.
+# Les mises à jour des modèles de la semaine (fork pour macOS, 2026-11-22) : tenir à jour les modèles de Gulliver avant la
+# mesure de la semaine (lundi 1 h, puis la mesure à 8 h : macos/modeles-semaine, macos/bench-hebdo).
 #
-#   python3 tools/modeles_mardi.py [GULLIVER_HOME] [--essai]
+#   python3 tools/modeles_semaine.py [GULLIVER_HOME] [--essai]
 #
 # Par le service qui tourne sur ce Mac (https://127.0.0.1:<port de ses réglages>, certificat du service accepté sans
 # vérification : c'est le même Mac) :
@@ -13,8 +14,9 @@
 #   4. les modèles du catalogue qui tiennent dans ce Mac et qu'il ne possède pas encore sont téléchargés : une
 #      architecture que le moteur lit, un fichier (avec son projecteur) d'au plus les trois quarts de la mémoire, un
 #      modèle qui répond aux questions (pas un modèle de recherche dans les documents).
-# Puis il attend la fin des téléchargements (six heures au plus).  Avec --essai, il ne fait que dire ce qu'il ferait.
-# Les modèles ainsi installés entrent dans la mesure du dimanche (tools/modeles_installes.py).
+# Puis il attend la fin des téléchargements (six heures au plus ; le service vérifie l'empreinte de chaque fichier) et
+# écrit les modèles installés dans build/bench/hebdo/nouveaux.json : la mesure de la semaine (tools/bench_modeles.sh) les
+# mesure en premier et les signale.  Avec --essai, il ne fait que dire ce qu'il ferait.
 import json
 import os
 import ssl
@@ -84,13 +86,24 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     trial = "--essai" in sys.argv
     home = args[0] if args else os.environ.get("GULLIVER_HOME", "")
+    # Jamais le samedi ni le dimanche de 9 h à 21 h : l'humain se sert alors du Mac.
+    now = time.localtime()
+    if now.tm_wday >= 5 and 9 <= now.tm_hour < 21 and not trial:
+        say("samedi ou dimanche en journée : pas de téléchargement")
+        return
     service = Service(home)
     memory = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True).stdout.strip() or 0)
     budget = memory * 3 // 4
     if service.call("GET", "/gulliver/v1/models").get("offline"):
         say("le service est hors ligne : rien à faire")
         return
+    news = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                         "../../../../../build/bench/hebdo/nouveaux.json"))
     if not trial:
+        # Les nouveaux de la semaine repartent de zéro : une semaine sans nouveauté n'en annonce aucune à la mesure.
+        os.makedirs(os.path.dirname(news), exist_ok=True)
+        with open(news, "w", encoding="utf-8") as f:
+            json.dump({"date": time.strftime("%Y-%m-%d %H:%M"), "ids": []}, f)
         service.call("POST", "/gulliver/v1/models/refresh")
         for _ in range(60):
             time.sleep(5)
@@ -148,8 +161,17 @@ def main():
         if not busy:
             break
     final = {m["id"]: m for m in service.call("GET", "/gulliver/v1/models").get("models", [])}
+    installed = []
     for mid in started:
-        say(f"{mid} : {'installé' if final.get(mid, {}).get('installed') else 'pas installé, voir le journal du service'}")
+        ok = bool(final.get(mid, {}).get("installed"))
+        say(f"{mid} : {'installé, empreinte vérifiée' if ok else 'pas installé, voir le journal du service'}")
+        if ok:
+            installed.append(mid)
+    # Les nouveaux de la semaine, pour la mesure de la semaine (bench_modeles.sh les mesure en premier et les signale).
+    if installed:
+        with open(news, "w", encoding="utf-8") as f:
+            json.dump({"date": time.strftime("%Y-%m-%d %H:%M"), "ids": installed}, f, ensure_ascii=False, indent=1)
+        say(f"{len(installed)} nouveaux pour la mesure de la semaine : {news}")
 
 
 if __name__ == "__main__":

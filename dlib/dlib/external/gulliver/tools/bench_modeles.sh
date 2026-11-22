@@ -1,0 +1,173 @@
+#!/bin/bash
+# Les modèles de Gulliver, mesurés chaque semaine (fork pour macOS, 2026-11-22, demande de l'humain : « le but est
+# d'avoir le plus rapide toutes les semaines », comparé au choix de la semaine dernière).
+#
+#   bash dlib/dlib/external/gulliver/tools/bench_modeles.sh [essais]
+#
+# Pour chaque modèle installé dans Gulliver (tools/modeles_installes.py) : la lecture d'une question de 512 et de 4 096
+# tokens (BENCH_SIZES) puis l'écriture de 64 tokens après elle (bench_runtime, GPU), mémoire de conversation en 8 bits
+# puis en demi-précision, essais fois en alternance (2 par défaut) ; puis la perplexité sur le GPU (perplexity_runtime,
+# 8 morceaux de 512 du texte de justesse_moteurs.sh).  llama.cpp (llama-bench, llama-perplexity, réglages par défaut)
+# et MLX (s'il a la version MLX du modèle) sont mesurés de la même façon sur le modèle de référence, comme deux lignes de
+# plus du tableau (décision de l'humain : « un modèle à comparer comme un autre »).  Passent d'abord le choix de la
+# semaine dernière (conseil.json, sinon le modèle actif), puis les nouveaux de la nuit (nouveaux.json, tools/modeles_semaine.py), puis les autres ;
+# une mesure commencée avant BENCH_DEADLINE heures (12 par défaut) s'arrête à cette heure-là.  La température de la puce
+# est relevée toutes les 20 secondes pendant la mesure (moyenne et maximum).  Écrit les chiffres bruts dans
+# build/bench/modeles-<date>.raw, puis la page de la semaine et le conseil (tools/conseil_modeles.py), et met à jour la
+# section de la semaine de docs/mesures/tests-de-vitesse.md : « table: <fichier .md> » en dernière ligne.
+#
+# Lignes brutes : id|nom|images|taille|mémoire|lecture|écriture|calcul (gpu, processeur, nonlu) ; ppl|id|perplexité.
+# L'identifiant de llama.cpp et de MLX est « llama.cpp:<id> » et « mlx:<id> » (pas un modèle de Gulliver).
+
+ROOT=$(cd "$(dirname "$0")/../../../../.." && pwd)
+TOOLS=$ROOT/dlib/dlib/external/gulliver/tools
+ROUNDS=${1:-2}
+SIZES=${BENCH_SIZES:-512 4096}
+DEADLINE=${BENCH_DEADLINE:-12}
+STEPS=64
+BENCH=$ROOT/build/macos-gulliver/tests/bench_runtime
+PPL=$ROOT/build/macos-gulliver/tests/perplexity_runtime
+HEBDO=$ROOT/build/bench/hebdo
+LLAMA=$(command -v llama-bench)
+LLAMA_PPL=$(command -v llama-perplexity)
+MLX=$ROOT/build/mlx-venv/bin/mlx_lm.benchmark
+MLXPY=$ROOT/build/mlx-venv/bin/python
+MLXDIR=$ROOT/build/bench-moteurs/models
+TEXT=$ROOT/build/bench-moteurs/texte.txt
+[ -x "$BENCH" ] && [ -x "$PPL" ] || { echo "no $BENCH or $PPL: build Gulliver first"; exit 1; }
+mkdir -p "$(dirname "$TEXT")" "$HEBDO"
+[ -f "$TEXT" ] || cat "$ROOT"/blog/5[0-9]-*.md > "$TEXT"
+
+STAMP=$(date +%Y%m%d-%H%M)
+OUTDIR=$ROOT/build/bench
+RAW=$OUTDIR/modeles-$STAMP.raw
+LOG=$OUTDIR/modeles-$STAMP.log
+OUT=$OUTDIR/modeles-$STAMP.md
+: > "$RAW"; : > "$LOG"
+
+# Le choix de la semaine dernière et les nouveaux de la nuit, pour l'ordre de passage.
+PREVIOUS=$(python3 -I -c 'import json,sys
+try: print(json.load(open(sys.argv[1]))["advice"][0]["id"] or "")
+except Exception: print("")' "$HEBDO/conseil.json")
+NEW=$(python3 -I -c 'import json,sys
+try: print(" ".join(json.load(open(sys.argv[1])).get("ids", [])))
+except Exception: print("")' "$HEBDO/nouveaux.json")
+
+LIST=$(python3 -I "$TOOLS/modeles_installes.py" "${GULLIVER_HOME:-$ROOT/build/gulliver-home}")
+[ -n "$LIST" ] || { echo "the Gulliver service gives no model: is it running?"; exit 1; }
+rank() {  # 0 : le choix de la semaine dernière ; 1 : un nouveau ; 2 : les autres
+  local id=$1
+  [ "$id" = "$PREVIOUS" ] && { echo 0; return; }
+  for n in $NEW; do [ "$n" = "$id" ] && { echo 1; return; }; done
+  echo 2
+}
+MODELS=()
+REF_ID="" REF_NAME="" REF_FILE="" ACTIVE_ID=""
+while IFS='|' read -r name file id active image; do
+  [ -n "$id" ] || continue
+  MODELS+=("$(rank "$id")|$name|$file|$id|$image")
+  [ "$active" = 1 ] && [ -z "$ACTIVE_ID" ] && ACTIVE_ID=$id
+done <<< "$LIST"
+# Le modèle de référence : le choix de la semaine dernière, sinon le modèle actif ; llama.cpp et MLX le mesurent.
+REF_ID=${PREVIOUS:-$ACTIVE_ID}
+while IFS='|' read -r name file id _; do
+  [ "$id" = "$REF_ID" ] && REF_NAME=$name && REF_FILE=$file
+done <<< "$LIST"
+# La version MLX du modèle de référence, quand build/bench-moteurs/models l'a.
+case "$REF_ID" in
+  qwen3-vl-4b-thinking) REF_MLX=$MLXDIR/Qwen3-VL-4B-Thinking-4bit ;;
+  qwen3-vl-2b-instruct) REF_MLX=$MLXDIR/Qwen3-VL-2B-Instruct-4bit ;;
+  *) REF_MLX="" ;;
+esac
+IFS=$'\n' MODELS=($(printf '%s\n' "${MODELS[@]}" | sort -t'|' -k1,1n)); unset IFS
+
+# L'heure limite ne vaut que pour une mesure commencée avant elle (le lundi à 8 h, BENCH_DEADLINE=19) ; lancée plus tard, à la main, la
+# mesure va jusqu'au bout.
+if [ "$(date +%H)" -ge "$DEADLINE" ]; then DEADLINE=99; fi
+past_deadline() { [ "$(date +%H)" -ge "$DEADLINE" ]; }
+
+measure() {  # $1 id, $2 nom, $3 fichier, $4 images, $5 taille, $6 q8|f16
+  local out p g where=gpu
+  out=$(BENCH_GPU_CONTEXT=262144 "$BENCH" "$3" "$(sysctl -n hw.physicalcpu)" "$5" "$STEPS" 0 "$6" metal 2>&1)
+  printf '== %s %s %s\n%s\n' "$1" "$5" "$6" "$out" >> "$LOG"
+  p=$(printf '%s\n' "$out" | sed -n 's/^prompt: .* \([0-9.]*\) tokens\/s$/\1/p' | head -1)
+  g=$(printf '%s\n' "$out" | sed -n 's/^generation: .* \([0-9.]*\) tokens\/s$/\1/p' | head -1)
+  printf '%s\n' "$out" | grep -qE "stay on the processor|go back to the processor|no GPU" && where=processeur
+  printf '%s\n' "$out" | grep -q "is not supported by this engine" && where=nonlu
+  echo "$1|$2|$4|$5|$6|${p:-—}|${g:-—}|$where" >> "$RAW"
+}
+
+LOAD_START=$(sysctl -n vm.loadavg)
+TEMP_TOOL=$ROOT/build/temperature
+[ -x "$TEMP_TOOL" ] || clang -fobjc-arc -framework Foundation -framework IOKit -o "$TEMP_TOOL" "$ROOT/macos/temperature/temperature.m" 2>/dev/null
+chip_temp() { [ -x "$TEMP_TOOL" ] && "$TEMP_TOOL" | sed -n 's/^puce : \([0-9.]*\) °C au plus.*/\1 °C/p' | sed 's/\./,/'; }
+TEMP_START=$(chip_temp)
+# La température toutes les 20 secondes pendant la mesure, pour sa moyenne.
+TEMPS=$OUTDIR/modeles-$STAMP.temp
+: > "$TEMPS"
+( while :; do [ -x "$TEMP_TOOL" ] && "$TEMP_TOOL" | sed -n 's/^puce : \([0-9.]*\) °C au plus.*/\1/p' >> "$TEMPS"; sleep 20; done ) &
+SAMPLER=$!
+engines() {  # llama.cpp et MLX sur le modèle de référence, pour une taille
+  local n=$1 p g out
+  if [ -n "$LLAMA" ] && [ -f "$REF_FILE" ]; then
+    p=$("$LLAMA" -m "$REF_FILE" -ngl 99 -p "$n" -n 0 -r 2 -o json 2>>"$LOG" | python3 -I -c 'import json,sys
+try: print(round(json.load(sys.stdin)[0]["avg_ts"],1))
+except Exception: print("—")')
+    g=$("$LLAMA" -m "$REF_FILE" -ngl 99 -p 0 -n "$STEPS" -d "$n" -r 2 -o json 2>>"$LOG" | python3 -I -c 'import json,sys
+try: print(round(json.load(sys.stdin)[0]["avg_ts"],1))
+except Exception: print("—")')
+    echo "llama.cpp:$REF_ID|llama.cpp · $REF_NAME|0|$n|q8|$p|$g|gpu" >> "$RAW"
+  fi
+  if [ -n "$REF_MLX" ] && [ -d "$REF_MLX" ] && [ -x "$MLX" ]; then
+    out=$("$MLX" --model "$REF_MLX" -p "$n" -g "$STEPS" -n 2 2>&1)
+    printf '== mlx %s\n%s\n' "$n" "$out" >> "$LOG"
+    p=$(printf '%s\n' "$out" | sed -n 's/.*prompt_tps=\([0-9.]*\).*/\1/p' | tail -1)
+    g=$(printf '%s\n' "$out" | sed -n 's/.*generation_tps=\([0-9.]*\).*/\1/p' | tail -1)
+    echo "mlx:$REF_ID|MLX · $REF_NAME (son fichier 4 bits)|0|$n|q8|${p:-—}|${g:-—}|gpu" >> "$RAW"
+  fi
+}
+LATE=""
+for ((r = 1; r <= ROUNDS; ++r)); do
+  for entry in "${MODELS[@]}"; do
+    IFS='|' read -r _ name file id image <<< "$entry"
+    if past_deadline; then LATE=1; break 2; fi
+    for n in $SIZES; do
+      echo "essai $r : $name, $n tokens"
+      measure "$id" "$name" "$file" "$image" "$n" q8
+      measure "$id" "$name" "$file" "$image" "$n" f16
+    done
+  done
+  if ! past_deadline && [ -n "$REF_ID" ]; then
+    for n in $SIZES; do echo "essai $r : llama.cpp et MLX, $n tokens"; engines "$n"; done
+  fi
+done
+for entry in "${MODELS[@]}"; do
+  IFS='|' read -r _ name file id image <<< "$entry"
+  if past_deadline; then LATE=1; break; fi
+  echo "justesse : $name"
+  out=$("$PPL" "$file" "$TEXT" 512 8 q8 metal 2>&1)
+  printf '== perplexité %s\n%s\n' "$id" "$out" >> "$LOG"
+  echo "ppl|$id|$(printf '%s\n' "$out" | sed -n 's/^perplexity: \([0-9.]*\) .*/\1/p' | head -1)" >> "$RAW"
+done
+if ! past_deadline && [ -n "$REF_ID" ]; then
+  if [ -n "$LLAMA_PPL" ] && [ -f "$REF_FILE" ]; then
+    p=$("$LLAMA_PPL" -m "$REF_FILE" -f "$TEXT" -c 512 --chunks 8 -ngl 99 2>&1 | tee -a "$LOG" \
+      | sed -n 's/.*Final estimate: PPL = \([0-9.]*\) .*/\1/p')
+    echo "ppl|llama.cpp:$REF_ID|$p" >> "$RAW"
+  fi
+  if [ -n "$REF_MLX" ] && [ -d "$REF_MLX" ] && [ -x "$MLXPY" ]; then
+    p=$("$MLXPY" -I "$TOOLS/perplexity_mlx.py" "$REF_MLX" "$TEXT" 512 8 2>&1 | tee -a "$LOG" \
+      | sed -n 's/^perplexity: \([0-9.]*\) .*/\1/p')
+    echo "ppl|mlx:$REF_ID|$p" >> "$RAW"
+  fi
+fi
+kill "$SAMPLER" 2>/dev/null
+LOAD_END=$(sysctl -n vm.loadavg)
+TEMP_END=$(chip_temp)
+TEMP_MEAN=$(awk '{s += $1; if ($1 > m) m = $1; n++} END {if (n) printf "%.1f|%.1f|%d", s / n, m, n}' "$TEMPS")
+
+python3 -I "$TOOLS/conseil_modeles.py" "$RAW" --previous "$PREVIOUS" --new "$NEW" --rounds "$ROUNDS" \
+  --machine "$(sysctl -n hw.model)|$(sysctl -n machdep.cpu.brand_string), $(( $(sysctl -n hw.memsize) / 1073741824 )) Go|$(sw_vers -productVersion) ($(sw_vers -buildVersion))|$(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null))|$LOAD_START au début, $LOAD_END à la fin|${TEMP_START:-?} au début, ${TEMP_END:-?} à la fin" \
+  --temperature "$TEMP_MEAN" --doc "$ROOT/docs/mesures/tests-de-vitesse.md" \
+  ${LATE:+--late} --json "$HEBDO/conseil.json" > "$OUT"
+echo "table: $OUT"

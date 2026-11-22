@@ -9,11 +9,31 @@ Ce document compare Gulliver à trois autres moteurs, avec les mêmes modèles :
 Il mesure la vitesse, puis la justesse, et explique d'où viennent les écarts. Le but est que Gulliver devienne le plus rapide sans rien perdre en justesse (priorité du projet depuis le 21 novembre 2026, chantier « Vitesse » de la feuille de route).
 
 - **Mesures de ce document** : sauf la partie « Aujourd'hui », 21 novembre 2026, à partir de 11 h 30, Mac mini M5 Pro (64 Go), Gulliver 6.16.0, llama.cpp 1.0.0 (Homebrew), MLX 0.32.4, Albireo d'origine 1.0.27 (`af5c811`).
-- **Chaque dimanche** : les mêmes mesures sont refaites par le Mac lui-même, à 4 h ; elles s'ajoutent, datées et la plus récente en tête, à la page « Mesures du dimanche », juste à côté dans le carnet (mode d'emploi : `macos/bench-hebdo/README.md`). Les tableaux complets, modèle par modèle, sont là.
+- **Chaque semaine**, le lundi : les modèles sont mis à jour la nuit (1 h), puis le Mac mesure lui-même tous les modèles de Gulliver, avec llama.cpp et MLX sur le modèle de référence (8 h, arrêt à 19 h) ; la mesure s'ajoute, datée et la plus récente en tête, à la page « Mesures de la semaine », juste à côté dans le carnet, et réécrit la section « La mesure de la semaine » ci-dessous (mode d'emploi : `macos/bench-hebdo/README.md`).
+
+> **Depuis le 22 novembre 2026** (décisions de l'humain), la mesure de la semaine (le lundi) mesure Gulliver sur **tous ses modèles installés**, et llama.cpp et MLX sur le modèle de référence comme deux lignes de plus, comparés au modèle choisi la semaine précédente, pour conseiller chaque semaine le meilleur (onglet Modèles, bouton « Choisir »). L'Albireo d'origine n'est plus mesuré. Les comparaisons plus bas restent valables à leur date ; celles sur six modèles fixes se refont à la main (`tools/bench_moteurs.sh`, `tools/justesse_moteurs.sh`).
+
+<!-- semaine : début -->
+
+## La mesure de la semaine (22/11/2026 à 12 h 10)
+
+Écrite par le Mac à chaque mesure de la semaine, le lundi (`tools/bench_modeles.sh`) : Gulliver seul, sur chacun de ses modèles installés ; jetons par seconde, mémoire de conversation en 8 bits. Température de la puce : 84,9 °C en moyenne pendant la mesure, 96,6 °C au plus (26 relevés).
+
+| Modèle | Calcul | Lecture 512 | Lecture 4 096 | Écriture 512 | Écriture 4 096 | Perplexité |
+|---|---|---|---|---|---|---|
+| Qwen2.5-0.5B-Instruct Q4_K_M | processeur | 1 592 | 1 486 | 183 | 173 | 25,75 |
+| Qwen3-VL 4B Thinking Q4_K_M (choix précédent) | GPU | 2 632 | 2 188 | 87,8 | 72,8 | 15,36 |
+| Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) | GPU | 1 193 | 1 458 | 83,6 | 73,5 | 10,93 |
+| Qwen3.5-4B Q4_K_M | GPU | 1 411 | 1 436 | 72,2 | 70,8 | 11,50 |
+| Ministral 3 8B Q4_K_M | processeur | 86,0 | 104 | 38,3 | 33,0 | 10,00 |
+
+Conseillé : pour tout faire, Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) ; le plus rapide, Qwen2.5-0.5B-Instruct Q4_K_M. Les tableaux complets, avec llama.cpp et MLX, sont dans « Mesures de la semaine ».
+
+<!-- semaine : fin -->
 
 ## Aujourd'hui (22 novembre, Gulliver 6.22.0)
 
-Mesure du dimanche 22 novembre à 6 h 58 (page « Mesures du dimanche »), après une journée de chantier. Écart à Gulliver : **+** quand l'autre moteur est plus rapide, **−** quand il est plus lent. L'écriture est mesurée sans brouillon, pour les trois moteurs.
+Mesure du dimanche 22 novembre à 6 h 58 (page « Mesures de la semaine »), après une journée de chantier. Écart à Gulliver : **+** quand l'autre moteur est plus rapide, **−** quand il est plus lent. L'écriture est mesurée sans brouillon, pour les trois moteurs.
 
 | Modèle du service (Qwen3-VL 4B) | Gulliver | llama.cpp | MLX |
 |---|---|---|---|
@@ -32,7 +52,7 @@ Mesure du dimanche 22 novembre à 6 h 58 (page « Mesures du dimanche »), aprè
 
 ## Quel modèle employer avec Gulliver (conseil)
 
-D'après la mesure du 22 novembre (Gulliver 6.22.0) et, pour l'écriture, Gulliver 6.23.0 (produits par les poids repris de llama.cpp, +5 à +8 %). Chaque semaine, la page « Mesures du dimanche » refait ce conseil à partir de ses propres chiffres, en mesurant aussi tous les modèles installés dans Gulliver, et l'onglet « Modèles » l'affiche avec un bouton « Choisir » qui applique le modèle et ses réglages (Gulliver 6.25.0).
+D'après la mesure du 22 novembre (Gulliver 6.22.0) et, pour l'écriture, Gulliver 6.23.0 (produits par les poids repris de llama.cpp, +5 à +8 %). Chaque semaine, la page « Mesures de la semaine » refait ce conseil à partir de ses propres chiffres, en mesurant aussi tous les modèles installés dans Gulliver, et l'onglet « Modèles » l'affiche avec un bouton « Choisir » qui applique le modèle et ses réglages (Gulliver 6.25.0).
 
 | Besoin | Modèle conseillé | Pourquoi | Ce qu'il coûte |
 |---|---|---|---|
@@ -184,7 +204,7 @@ Mêmes mesures que plus haut, deux essais en alternance, sans l'Albireo d'origin
 | Gemma 3 4B | 4 096 | 1 731 | 2 757 (+59 %) | 3 207 (+85 %) | 69,0 | 87,2 (+26 %) | 101 (+46 %) |
 | Qwen3-30B-A3B (mélange d'experts) | 4 096 | 870 | 1 564 (+80 %) | 2 769 (+218 %) | 65,7 | 81,3 (+24 %) | 90,3 (+38 %) |
 
-En une phrase : **Gulliver lit désormais plus vite que llama.cpp** sur les modèles Qwen et sur LFM2 aux longues questions, et l'écart d'écriture avec llama.cpp est passé d'environ +30 % à +12 % ; MLX reste devant, et Gulliver reste loin sur Gemma 3 (têtes de 256 valeurs, que les nouveaux noyaux ne prennent pas encore) et sur le mélange d'experts (V3). Tableau complet : page « Mesures du dimanche » (prochaine mesure : dimanche 4 h).
+En une phrase : **Gulliver lit désormais plus vite que llama.cpp** sur les modèles Qwen et sur LFM2 aux longues questions, et l'écart d'écriture avec llama.cpp est passé d'environ +30 % à +12 % ; MLX reste devant, et Gulliver reste loin sur Gemma 3 (têtes de 256 valeurs, que les nouveaux noyaux ne prennent pas encore) et sur le mélange d'experts (V3). Tableau complet : page « Mesures de la semaine ».
 
 ### Plusieurs mots par passe (Gulliver 6.22.0)
 
@@ -223,16 +243,17 @@ Chaque changement sera mesuré en alternance contre la version d'avant, et sa ju
 
 | Mesure | Commande |
 |---|---|
-| Vitesse | `bash dlib/dlib/external/gulliver/tools/bench_moteurs.sh 2` |
-| Justesse | `bash dlib/dlib/external/gulliver/tools/justesse_moteurs.sh` |
-| Les deux, comme le dimanche | `bash dlib/dlib/external/gulliver/tools/bench_hebdo.sh` |
+| La mesure de la semaine, tous les modèles de Gulliver | `bash dlib/dlib/external/gulliver/tools/bench_modeles.sh 2` |
+| Comme le lundi (attente d'une machine au repos, page datée) | `bash dlib/dlib/external/gulliver/tools/bench_hebdo.sh` |
+| Les mises à jour des modèles, sans rien lancer | `python3 dlib/dlib/external/gulliver/tools/modeles_semaine.py build/gulliver-home --essai` |
+| Moteurs comparés sur six modèles fixes, vitesse | `bash dlib/dlib/external/gulliver/tools/bench_moteurs.sh 2` |
+| Moteurs comparés sur six modèles fixes, justesse | `bash dlib/dlib/external/gulliver/tools/justesse_moteurs.sh` |
 | Un seul modèle | `BENCH_ONLY="Gemma" bash …/bench_moteurs.sh 1` |
-| L'Albireo d'origine | `bash macos/albireo-original/build.sh` (copie figée sur `macos/albireo-original/COMMIT`, dans `../albireo-original`) |
 
 - Gulliver : `tests/bench_runtime` (vitesse) et `tests/perplexity_runtime` (justesse), du build `build/macos-gulliver`.
 - llama.cpp : `llama-bench` et `llama-perplexity` de Homebrew, avec `-ngl 99` (tout sur le GPU).
 - MLX : `mlx_lm.benchmark` et `tools/perplexity_mlx.py`, dans l'environnement `build/mlx-venv` (Python 3.13 de Homebrew).
-- L'Albireo d'origine : son propre `tests/bench_runtime.cpp`, compilé tel quel, et `macos/albireo-original/perplexity_albireo.cpp`.
+- L'Albireo d'origine (mesuré jusqu'au 22 novembre 2026) : son propre `tests/bench_runtime.cpp`, compilé tel quel, et un `perplexity_albireo.cpp` du fork, retirés depuis.
 - Les modèles de comparaison (Qwen3-4B en Q4_K_M, en Q8_0, et les versions MLX des six modèles) sont dans `build/bench-moteurs/models/`, téléchargés depuis Hugging Face (`Qwen/Qwen3-4B-GGUF`, empreintes SHA-256 vérifiées ; `mlx-community`).
 - Charge du Mac : 1,2 au début des mesures de vitesse, 9,5 à la fin, pendant les mesures de l'original sur le processeur ; les essais alternés restent proches les uns des autres.
 - Mesure précédente, avant Gulliver 6.7.0 : « Gulliver contre llama.cpp » (20 novembre), dans la même rubrique.

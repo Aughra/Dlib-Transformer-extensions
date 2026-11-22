@@ -1,6 +1,7 @@
 #!/bin/bash
-# Installe (ou retire, avec --retirer) l'agent launchd qui lance les tests de vitesse et de
-# justesse de Gulliver chaque dimanche à 4 h (fork pour macOS, 2026-11-21).  Agent de l'utilisateur
+# Installe (ou retire, avec --retirer) l'agent launchd qui mesure les modèles de Gulliver chaque
+# lundi à 8 h, arrêt à 19 h au plus tard (fork pour macOS, 2026-11-21 ; créneau du 2026-11-22, hors des
+# heures où l'humain se sert du Mac : la nuit de lundi télécharge les modèles, macos/modeles-semaine).  Agent de l'utilisateur
 # seulement (~/Library/LaunchAgents), sans droit d'administrateur ; si le Mac dort à l'heure dite,
 # launchd le lance au réveil.
 LABEL=fr.fork.gulliver.bench-hebdo
@@ -21,12 +22,14 @@ cat > "$PLIST" <<PL
   <key>ProgramArguments</key>
   <array><string>/bin/bash</string><string>$SCRIPT</string></array>
   <key>StartCalendarInterval</key>
-  <dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>4</integer><key>Minute</key><integer>0</integer></dict>
+  <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
   <key>StandardOutPath</key><string>$ROOT/build/bench/hebdo/launchd.log</string>
   <key>StandardErrorPath</key><string>$ROOT/build/bench/hebdo/launchd.log</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>BENCH_DEADLINE</key><string>19</string></dict>
   <key>ProcessType</key><string>Interactive</string>
 </dict>
 </plist>
 PL
 plutil -lint "$PLIST" >/dev/null || { echo "plist invalide"; exit 1; }
-launchctl bootstrap "gui/$(id -u)" "$PLIST" && echo "agent installé : $LABEL (dimanche, 4 h)"
+launchctl bootstrap "gui/$(id -u)" "$PLIST" && echo "agent installé : $LABEL (lundi, 8 h)"

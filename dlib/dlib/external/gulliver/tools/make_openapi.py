@@ -1015,8 +1015,8 @@ paths = {
                                                                "aucune sonde ne répond)."},
             "chip_temp_mean": {"type": "number", "description": "La moyenne des sondes de la puce, en °C."}}})}}},
     "/gulliver/v1/models/advice": {"get": {
-        "tags": ["Service"], "summary": "Le conseil de la dernière mesure du dimanche",
-        "description": "Les modèles que la dernière mesure du dimanche conseille (tools/conseil_modeles.py, fichier "
+        "tags": ["Service"], "summary": "Le conseil de la dernière mesure de la semaine",
+        "description": "Les modèles que la dernière mesure de la semaine (le lundi) conseille (tools/conseil_modeles.py, fichier "
                        "build/bench/hebdo/conseil.json du dépôt) : pour tout faire, le plus juste, le plus rapide, "
                        "chacun avec ses mesures et ses réglages (mémoire de conversation, brouillons). « found » vaut "
                        "false tant qu'aucune mesure n'en a écrit.",

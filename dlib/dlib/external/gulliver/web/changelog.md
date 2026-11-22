@@ -2,6 +2,21 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.26.0 — 22 novembre 2026
+
+### Outils de mesure
+
+- La mesure de la semaine (`tools/bench_modeles.sh`, nouvel outil) mesure Gulliver sur tous ses modèles installés, et llama.cpp et MLX sur le modèle de référence comme deux lignes de plus du même tableau : lecture et écriture à 512 et 4 096 tokens, mémoire de conversation en 8 bits et en demi-précision, perplexité ; chaque modèle comparé au choix de la semaine précédente. Le choix précédent passe en premier, puis les nouveaux modèles de la nuit. La température de la puce est relevée toutes les 20 secondes (moyenne et maximum).
+- Créneaux, hors des heures où l'utilisateur se sert du Mac : mise à jour des modèles le lundi à 1 h (`macos/modeles-semaine/`, `tools/modeles_semaine.py`, qui remplace le passage du mardi), mesure le lundi à 8 h avec arrêt à 19 h au plus tard ; jamais le samedi ni le dimanche entre 9 h et 21 h.
+- Chaque mesure réécrit la section « La mesure de la semaine » du document de vitesse du carnet (Gulliver seul, sur les modèles mesurés, et la température moyenne), et la page « Mesures du dimanche » devient « Mesures de la semaine ».
+- L'Albireo d'origine n'est plus mesuré (`macos/albireo-original/` retiré) ; les comparaisons sur six modèles fixes avec llama.cpp et MLX restent disponibles à la main (`tools/bench_moteurs.sh`, `tools/justesse_moteurs.sh`).
+
+### Modèles
+
+- La carte du conseil s'appelle « Conseil de la mesure de la semaine ».
+
+---
+
 ## 6.25.0 — 22 novembre 2026
 
 ### Modèles
