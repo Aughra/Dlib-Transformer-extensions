@@ -231,6 +231,17 @@ Le texte écrit est le même avec et sans brouillon sur quatre tâches sur cinq 
 
 Les tableaux d'écriture plus haut sont mesurés **sans** brouillon, pour Gulliver comme pour llama.cpp et MLX, qui savent aussi en faire (llama.cpp par `llama-lookup` ou un petit modèle, MLX par un petit modèle) mais pas dans leur réglage par défaut : la comparaison reste à faire à armes égales. Reste aussi à faire passer les mélanges d'experts par le même chemin : Qwen3-30B-A3B gagne 6 % sur une question sur un document mais perd 2,5 % en réponse libre.
 
+### Plusieurs personnes à la fois (Gulliver 6.34.0)
+
+La mesure « comme un utilisateur » (6.30.0) envoie trois documents de 4 000 tokens à la fois : chacun recevait son premier mot après 6 s environ, deux fois plus tard que chez llama.cpp (3,2 s en moyenne). La cause tenait en un réglage de l'original : tant qu'une réponse s'écrit, une passe ne lisait que 64 tokens de prompts, au lieu de 512. C'est comme un guichet qui, dès qu'un client signe, ne traiterait plus que deux lignes du dossier suivant à chaque tour : le dossier traîne, et le client qui signe attend lui aussi. Avec 512 tokens par passe, et le prompt le plus court servi d'abord (Qwen3-VL 4B, GPU, mesures alternées) :
+
+| Situation | Avant | 6.34.0 |
+|---|---|---|
+| Une discussion écrit pendant qu'un document de 8 000 tokens arrive | 19 jetons/s ; premier mot du document après 11,4 s | **31** jetons/s ; **4,8 à 5,1 s** |
+| Trois documents de 4 000 tokens ensemble, premier mot | 6,0 s en moyenne, 6,5 s au pire | **4,2 s** en moyenne (le premier en 2,0 s), 6,3 s au pire |
+
+Llama.cpp reste devant sur la seconde ligne (3,2 s) : il lit chaque document un peu plus vite. À comparer de nouveau dans la mesure de la semaine.
+
 ## Pour que Gulliver soit le plus rapide
 
 Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (deux pistes au même but sont essayées toutes les deux, mesurées, et la meilleure est gardée) :

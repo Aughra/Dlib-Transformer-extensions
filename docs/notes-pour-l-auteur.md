@@ -1299,6 +1299,39 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Reste** : la vitesse des modèles de langage denses en Q8_0 sur le GPU, à mesurer.
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 47 : la lecture des prompts pendant qu'une réponse s'écrit, et l'ordre des prompts (Gulliver 6.34.0)
+
+- **Avant** : dès qu'une réponse à un utilisateur s'écrit, une passe ne lit que 64 tokens de prompts (`prefill_while_answering`), au lieu des 512 de `batch_tokens`. Plusieurs prompts en lecture prennent ce budget à tour de rôle, le premier changeant à chaque étape. Mesures (Mac mini M5 Pro, Qwen3-VL 4B Thinking Q4_K_M sur le GPU, service d'essai, documents neufs à chaque essai) : une discussion écrit 256 tokens pendant qu'un document de 8 000 tokens arrive : elle écrit à **19 tokens/s**, et le document a son premier mot après **11,4 s** ; trois documents de 4 000 tokens envoyés ensemble (réponses de 128 tokens) : premier mot en **6,0 s** en moyenne, 6,5 s au pire.
+- **Ce qui se passe** : le frein, pensé pour garder la réponse fluide, la ralentit. Chaque passe ne lit que 64 tokens du document, si bien que la lecture dure, et la réponse reste ralentie pendant tout ce temps. Avec trois prompts à tour de rôle, tous finissent leur lecture ensemble, à la fin : personne n'a son premier mot avant que les trois soient lus.
+- **Où** : `dlib/dlib/external/albireo/engine/engine.cpp` au commit `af5c811` de `upstream/main` :
+
+  ```cpp
+  // ligne 698
+          const long prefill_while_answering = 64;
+  // lignes 2788 et 2794
+          const size_t first = requests == 0 ? 0 : m.prefill_turn++ % requests;
+  ...
+              const size_t at = k < requests ? (first + k) % requests : k;
+  ```
+
+- **Changement** (fork, `gulliver/engine/engine.cpp`) : 512 tokens de prompts par passe pendant une réponse, et les prompts en lecture triés par ce qu'il leur reste à lire, le plus court d'abord (à égalité, dans l'ordre d'admission) :
+
+  ```cpp
+          const long prefill_while_answering = 512;
+  ...
+          std::stable_sort(reading.begin(), reading.begin() + static_cast<long>(requests),
+              [](const request_state* a, const request_state* b) {
+                  return a->prompt.size() - a->kv_tokens.size() < b->prompt.size() - b->kv_tokens.size();
+              });
+  ...
+              const size_t at = k;
+  ```
+
+  Le compteur `prefill_turn` disparaît. **Exactitude** : seul l'ordre des passes change, pas leurs calculs ; `test_macos_copie.sh` (70 étapes, réponses vérifiées) sans échec.
+- **Après** (mesures alternées, trois tours, charge 2,9 à 5) : la discussion écrit à **31 tokens/s** (19) et le document a son premier mot après **4,8 à 5,1 s** (11,4) ; avec un frein de 128 ou 256, 27 et 29 tokens/s, 6,8 et 5,8 s. Trois documents ensemble : premier mot en **4,2 s** en moyenne (6,0), le premier servi en 2,0 s (5,8), le dernier en 6,3 s (6,5) ; chaque réponse finit à peu près au même moment qu'avant (9 s). Le frein à 512 sans le tri garde le pire à 5,9 s mais la moyenne à 5,7 s : on a gardé le tri. Le tri seul, avec le frein à 64, est pire (7,4 s en moyenne, 12,9 s au pire) : les deux vont ensemble.
+- **Vérifié** : sur le Mac seulement. **Non vérifié** : sous Windows, et sur le processeur seul (le frein y joue de la même façon, mais les passes y sont plus lentes).
+- **Mac ou Windows** : aussi sous Windows (code commun du moteur ; déduit du code, non vérifié faute de machine Windows).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -1317,6 +1350,7 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 | Qwen3.5-0.8B Q5_K_M (fork seulement), écriture sur le processeur | non lu par le moteur | 71,6 à 72,0 tokens/s avec le changement 25 (38,7 à 40,1 avant) |
 | Modèle de recherche (Q8_0), 512 tokens | pas mesuré | 573 à 601 tokens/s (184 à 213 avec les changements 1 à 3) |
 | Mac mini M5 Pro, Qwen3-Embedding 0,6B, vecteurs de 160 passages | pas mesuré | 4,6 s sur le GPU avec le changement 46 (53,4 à 54,4 s sur le processeur) |
+| Mac mini M5 Pro, 4B Thinking, une discussion pendant la lecture d'un document de 8 000 tokens | 19 tokens/s, document lu en 11,4 s | 31 tokens/s, document lu en 4,8 à 5,1 s (changement 47) ; trois documents ensemble, premier mot en 4,2 s en moyenne (6,0) |
 | Encodage d'une image 512 × 512, projecteur du 4B | pas mesuré | 1,8 à 2,2 s (8,9 à 10,3 avec les changements 1 à 3) |
 | 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 21,3 à 21,7 tokens/s sur le GPU ; 18,2 à 18,6 sur le processeur (17,6 à 18,1 sans le changement 8 ; 16,4 à 16,6 sans les changements 6 à 8) |
 | SHA-256 d'un fichier de modèle (vérification, import, restauration) | 283 à 288 Mo/s (mbedtls) | 2 059 à 2 141 Mo/s (changement 11) |
