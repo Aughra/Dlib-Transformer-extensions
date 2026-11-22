@@ -242,6 +242,17 @@ La mesure « comme un utilisateur » (6.30.0) envoie trois documents de 4 000 to
 
 Llama.cpp reste devant sur la seconde ligne (3,2 s) : il lit chaque document un peu plus vite. À comparer de nouveau dans la mesure de la semaine.
 
+### Les modèles en Q8_0 sur le GPU (Gulliver 6.34.0)
+
+Depuis la 6.32.0, les modèles denses compressés en Q8_0 (8 bits par poids, plus fidèles que Q4_K mais deux fois plus lourds) calculent sur le GPU. Mesure du 22 novembre au soir (`bench_runtime`, question de 512 tokens, 64 mots écrits, mémoire de conversation en 8 bits ; deux tours en alternance avec llama.cpp, `llama-bench -fa 1 -ctk q8_0 -ctv q8_0` ; charge 4,4 à 6,6) :
+
+| Modèle (Q8_0) | Lecture, Gulliver | Lecture, llama.cpp | Écriture, Gulliver | Écriture, llama.cpp | Gulliver sur le processeur (18 fils) |
+|---|---|---|---|---|---|
+| Qwen3-4B | 2 755 à 2 896 | 2 750 | 58,5 | 57,7 à 58,7 | lecture 168 à 188, écriture 42 à 46 |
+| Ministral 3 3B | 3 359 à 3 364 | 3 198 à 3 243 | 69,5 | 65,3 à 66,4 | lecture 197 à 217, écriture 46 à 52 |
+
+En Q8_0, Gulliver fait jeu égal avec llama.cpp (Qwen3-4B) ou passe devant de 4 à 5 % (Ministral 3 3B), en lecture comme en écriture. L'écart d'écriture qui reste tient donc aux formats en 4 et 6 bits (Q4_K, Q6_K), ceux des modèles du service : c'est là que porte V2.
+
 ## Pour que Gulliver soit le plus rapide
 
 Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (deux pistes au même but sont essayées toutes les deux, mesurées, et la meilleure est gardée) :

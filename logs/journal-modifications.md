@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Mesurer l'écriture des modèles en Q8_0 sur le GPU
+
+- **Quoi** : mesure restée à faire après la 6.32.0. `bench_runtime <modèle> 18 512 64 1 q8 [metal]` (sur le processeur, deux tours ; avec `metal`, deux tours en alternance avec `llama-bench -p 512 -n 64 -fa 1 -ctk q8_0 -ctv q8_0 -r 2`). Qwen3-4B Q8_0 : GPU lecture 2 755 à 2 896, écriture 58,5 ; llama.cpp 2 750 et 57,7 à 58,7 ; processeur 168 à 188 et 42 à 46. Ministral 3 3B Q8_0 : GPU 3 359 à 3 364 et 69,5 ; llama.cpp 3 198 à 3 243 et 65,3 à 66,4 ; processeur 197 à 217 et 46 à 52. Piège : `bench_runtime` prend 0 fil pour 1 fil (un premier relevé du processeur à 10 tokens/s, écarté).
+- **Fichiers** : `docs/mesures/tests-de-vitesse.md`, `logs/{reprise.md,nuit-2026-11-22.md}`, ce journal.
+- **Pourquoi** : savoir si le GPU est le bon choix pour ces modèles, et où se trouve l'écart d'écriture avec llama.cpp.
+- **Étapes** : mesures ci-dessus (charge 1,7 à 7,6). Le GPU reste le bon choix ; en Q8_0, Gulliver égale ou devance llama.cpp : l'écart d'écriture est dans Q4_K et Q6_K (V2).
+
 ## 2026-11-22 — Gulliver 6.34.0 : lire les prompts pendant une réponse, le plus court d'abord
 
 - **Quoi** : `engine/engine.cpp` : `prefill_while_answering` 64 → 512 (tokens de prompts par passe pendant qu'une réponse s'écrit) ; les prompts en lecture triés par ce qu'il leur reste à lire (`std::stable_sort`), au lieu du tour de rôle (`prefill_turn` retiré).
