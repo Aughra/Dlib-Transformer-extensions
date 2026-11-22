@@ -504,10 +504,13 @@ template [[host_name("attention_flat_128")]] [[kernel]] void attention_flat<128>
 // metal_kernels.metal (y[s][r] = sum_i W_e[r][i] x[s / x_div][i] pour les cases s d'une tuile, e leur expert), mais
 // par tuiles de TT cases (64 ou 128, au lieu de 16 : les poids d'un expert sont relus et développés quatre à huit fois
 // moins souvent) et 64 lignes de poids, les produits par matmul2d.  Les cases de la tuile et les poids développés en demi-précision passent par la
-// mémoire de threadgroup, 32 colonnes à la fois ; chaque simdgroup calcule 16 cases x 64 lignes.  Grille : (lignes / 64,
+// mémoire de threadgroup, MMN_KC colonnes à la fois ; chaque simdgroup calcule 16 cases x 64 lignes.  Grille : (lignes / 64,
 // tuiles), TT / 16 simdgroups.  Les tuiles viennent de moe_tiles, réglé sur TT cases.
 #define MMN_NR 64
-#define MMN_KC 64
+// Les colonnes d'un morceau (chantier Vitesse, 2026-11-23) : 16 plutôt que 64, une fois les boucles déroulées (6.38.0) :
+// moins de mémoire de threadgroup (4 Ko au lieu de 16), donc plus de threadgroups à la fois sur chaque cœur ;
+// Qwen3-VL 30B-A3B lit 512 tokens à 1 695-1 701 tokens/s au lieu de 1 424-1 433, l'ordre des sommes étant le même.
+#define MMN_KC 16
 
 struct mm_args
 {

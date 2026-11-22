@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.39.0, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.40.0, 23 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -49,6 +49,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Attention de la lecture d'une question | — (pas de GPU sur Mac) | Les clés et valeurs de la séquence rangées en demi-précision à chaque couche, puis l'attention organisée comme celle de MLX (lectures directes, simdgroups au même pas) | L'attention prenait 2,7 fois le temps de celle de MLX | Lecture +12 % à 4 096 tokens, +45 % à 16 384 (Qwen3-VL 4B), justesse inchangée | changement 50, v. 6.37.0 |
 | Produit groupé des experts d'une question | — (pas de GPU sur Mac) | Ses petites boucles entièrement déroulées | Les registres des produits étaient indexés par une variable | Lecture du 30B-A3B +23 % à 512 tokens, +10 % à 4 096, résultats identiques | changement 51, v. 6.38.0 |
 | Produit des pas de plusieurs tokens | — (pas de GPU sur Mac) | Ses petites boucles entièrement déroulées | Même leçon que les experts | 4 réponses à la fois +4,5 %, 8 +5,6 % (Qwen3-VL 4B), résultats identiques | changement 52, v. 6.39.0 |
+| Morceaux du produit groupé des experts | — (pas de GPU sur Mac) | 16 colonnes au lieu de 64 : 4 Ko de mémoire partagée au lieu de 16 | Plus de calculs à la fois sur chaque cœur du GPU | Lecture à 512 tokens : 30B-A3B +19 %, LFM2.5-8B-A1B +13 %, Qwen3.6-35B-A3B +6 %, résultats identiques | changement 53, v. 6.40.0 |
 
 ## 2. Modèles : téléchargement, vérification, réserve
 

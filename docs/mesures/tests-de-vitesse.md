@@ -280,7 +280,7 @@ La même nuit, l'attention a été réécrite d'après celle de MLX (licence MIT
 
 ### Le mélange d'experts, même leçon (Gulliver 6.38.0)
 
-Le produit groupé des experts, qui faisait 81 % de la lecture d'une question sur Qwen3-VL 30B-A3B, déroule désormais entièrement ses petites boucles, comme l'attention de MLX. Sans rien changer aux calculs, ce modèle lit 512 tokens à **1 452-1 466** jetons/s au lieu de 1 168-1 194 (+23 %), et 4 096 tokens à **1 708-1 795** au lieu de 1 548-1 639 (+10 %), devant llama.cpp (1 345-1 516). À 512 tokens, llama.cpp reste devant (1 835-1 950).
+Le produit groupé des experts, qui faisait 81 % de la lecture d'une question sur Qwen3-VL 30B-A3B, déroule désormais entièrement ses petites boucles, comme l'attention de MLX. Sans rien changer aux calculs, ce modèle lit 512 tokens à **1 452-1 466** jetons/s au lieu de 1 168-1 194 (+23 %), et 4 096 tokens à **1 708-1 795** au lieu de 1 548-1 639 (+10 %), devant llama.cpp (1 345-1 516). À 512 tokens, llama.cpp reste devant (1 835-1 950). En 6.40.0, le même produit lit ses entrées par morceaux de 16 colonnes au lieu de 64, ce qui laisse tourner plus de calculs à la fois : **1 695-1 701** jetons/s à 512 tokens (+19 % de plus), LFM2.5-8B-A1B +13 %, Qwen3.6-35B-A3B +6 %.
 
 ### Le modèle de l'humain, Ministral 3 8B (Gulliver 6.38.0)
 

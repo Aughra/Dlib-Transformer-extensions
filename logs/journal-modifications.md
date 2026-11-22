@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Gulliver 6.40.0 : le produit groupé des experts par morceaux de 16 colonnes
+
+- **Quoi** : `MMN_KC` 64 → 16 dans `mm_id_nax`.
+- **Fichiers** : `gulliver/engine/metal_kernels_nax.metal`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,mesures/tests-de-vitesse.md}`, `logs/{reprise.md,nuit-2026-11-22.md}`, ce journal.
+- **Pourquoi** : réessayer, après le déroulement (6.38.0), les réglages rejetés plus tôt : les tuiles de 32 et 128 cases restent plus lentes (512 tokens : 64 cases 1 433-1 460, 32 cases 1 276-1 317, 128 cases 1 252-1 262), les morceaux de 32 et 16 colonnes gagnent.
+- **Étapes** : bancs côte à côte en alternance (voir changement 53) ; perplexité 30B-A3B 6,0575 ; `test_metal` all checks passed ; `test_macos_copie.sh` 0 échec. Version 6.40.0.
+
 ## 2026-11-22 — La rotation des 8 bits, remesurée et écartée ; état du chantier Vitesse
 
 - **Quoi** : la trace Metal (`metal-gpu-intervals`, produits de MPS compris) d'une question de 16 384 tokens : produits 4,3 s, attention 3,2 s, petits noyaux 1,1 s, dont `prepare_queries` 200 ms et `restore_outputs` 118 ms ; GPU occupé 8,40 s sur 8,46 s (pas de temps mort ; 1 898 tokens/s au calme). La voie sans rotation (rangement 8 bits remis en place) remesurée sur cinq tours : 8 192 tokens, écarts par paire 0, +51, +30, −32, −53 ms ; 16 384, +168, −44, −228, −323, −210 ms (−1 % en moyenne) ; les temps montent de tour en tour (8 192 : 3 346 → 3 974 ms, la puce à 78 °C) : écartée. Feuille de route et rubrique : état de V1, V2, V3 et V9.

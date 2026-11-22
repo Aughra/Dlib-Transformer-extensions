@@ -1371,6 +1371,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (deux bancs compilés côte à côte, deux tours en alternance) : 4 séquences 258,8 et 258,8 (+4,5 %) ; 8 séquences 484,7 et 473,0 (+5,6 %). Essayé la même nuit et rejeté : le même déroulement dans `attention_dec` (attention de l'écriture) : jusqu'à deux fois plus lent après 4 096 positions, ce noyau tenait déjà dans ses registres.
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 53 : le produit groupé des experts par morceaux de 16 colonnes (Gulliver 6.40.0)
+
+- **Avant** : `mm_id_nax` chargeait ses entrées et ses poids développés par morceaux de 64 colonnes (`MMN_KC`), soit 16 Ko de mémoire de threadgroup. Avant le déroulement (6.38.0), 32 colonnes perdaient (1 147-1 172 contre 1 200 tokens/s) ; après, l'équilibre change. Qwen3-VL 30B-A3B, 512 tokens : 1 424 à 1 433 tokens/s.
+- **Changement** (`engine/metal_kernels_nax.metal`) : `MMN_KC` 64 → 16 (4 Ko). **Exactitude** : les produits accumulent les colonnes dans le même ordre, par pas de 16, quelle que soit la taille du morceau ; contrôle du chargement identique (12,777 %), perplexité 6,0575 avant et après ; `test_metal` all checks passed.
+- **Après** (bancs compilés côte à côte, deux tours en alternance) : 30B-A3B 512 tokens 64 → 32 → 16 colonnes : 1 424-1 433 → 1 618-1 650 → 1 695-1 701 ; 2 048 tokens 1 815-1 816 → 1 974-1 992 ; 4 096 tokens, 32 et 16 colonnes à égalité (1 853-1 919 et 1 875-1 878) ; LFM2.5-8B-A1B 512 tokens 1 937-1 945 → 2 193-2 195 ; Qwen3.6-35B-A3B 782-789 → 827-832. Tuiles de 32 et 128 cases réessayées après le déroulement : toujours plus lentes que 64.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
