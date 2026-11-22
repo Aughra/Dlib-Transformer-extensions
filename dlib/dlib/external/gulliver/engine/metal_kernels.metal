@@ -1142,19 +1142,23 @@ struct query_args
     uint q8;
     uint q_stride;
     float scale;
+    uint per_token;     // 1 : chaque token multiplié en plus par factors[t] (la température de l'attention de Mistral 3)
 };
 
 kernel void prepare_queries(device float* q [[buffer(0)]], constant query_args& a [[buffer(1)]],
-    uint2 tg [[threadgroup_position_in_grid]], uint i [[thread_index_in_threadgroup]])
+    device const float* factors [[buffer(2)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint i [[thread_index_in_threadgroup]])
 {
     threadgroup float row[512];
     device float* r = q + tg.y * a.q_stride + tg.x * a.hd;
+    // Le facteur du token d'abord, comme le processeur (cpu_runtime.cpp : q *= f après la rotation), puis l'échelle.
+    const float x = a.per_token ? r[i] * factors[tg.y] : r[i];
     if (!a.q8)
     {
-        r[i] *= a.scale;
+        r[i] = x * a.scale;
         return;
     }
-    row[i] = r[i] * a.scale;
+    row[i] = x * a.scale;
     threadgroup_barrier(mem_flags::mem_threadgroup);
     rotate_row(row, i, a.hd);
     r[i] = row[i];

@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.27.0 — 22 novembre 2026
+
+### Performances
+
+- Les modèles Mistral 3 (Ministral 3 8B, Ministral 3 3B, Devstral) passent sur le GPU : la « température » de leur attention (les requêtes multipliées par un facteur qui croît avec la position) est appliquée par le GPU, qui les laissait jusqu'ici au processeur. Ministral 3 8B : lecture d'une question de 512 tokens de 86 à 1 444 tokens/s, écriture de 38 à 51 (llama.cpp : 1 280 et 49) ; justesse identique au processeur (perplexité 5,8183 contre 5,8187 sur 16 384 tokens, là où la température agit), et la puce ne chauffe plus à plein.
+
+---
+
 ## 6.26.0 — 22 novembre 2026
 
 ### Outils de mesure

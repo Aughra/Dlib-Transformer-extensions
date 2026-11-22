@@ -1245,6 +1245,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Remarque sur la mesure** : une série de six essais d'affilée (Gemma 3 4B après 16 384 tokens) a vu la vitesse baisser d'environ 15 % (lecture 2 383 → 2 051 tokens/s, écriture 69,3 → 59,9), revenue après deux minutes de repos (71,5 et 71,8), sans avertissement de `pmset -g therm` ; le processeur n'y était pour rien (environ 0,7 cœur occupé). La même série refaite après que le Mac mini a été surélevé (son entrée d'air est en dessous), avec un relevé des sondes de la puce (`macos/temperature/`) : aucune baisse (74,8 à 75,0 tokens/s), la sonde la plus chaude de 27 à 43 °C. La première baisse venait très probablement de la chaleur, mais sans relevé de température ce n'est pas vérifié. Les mesures alternées restent équitables dans les deux cas.
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 44 : la température de l'attention de Mistral 3 sur le GPU (Gulliver 6.27.0)
+
+- **Avant** : un modèle `mistral3` dont le fichier donne `attention.temperature_scale` (Ministral 3) restait sur le processeur : « the kernels do not cover a temperature of the attention » (`cpu_runtime_metal.cpp`). Ministral 3 8B Q4_K_M : lecture de 512 tokens **86 tokens/s**, écriture **38,3** ; les 18 cœurs à plein (puce jusqu'à 96,6 °C pendant la mesure de la semaine).
+- **Changement** (`metal_kernels.metal`, `prepare_queries` ; `metal_device.{h,mm}` ; `cpu_runtime_metal.cpp`) : le facteur de chaque token, `1 + attn_temp_scale · log(1 + floor(pos / attn_temp_length))` comme `cpu_runtime.cpp`, calculé par le processeur avec les tables de rotation dans un tampon d'un float par token ; `prepare_queries` (qui met déjà les requêtes à l'échelle) le multiplie d'abord, pour la lecture et l'écriture. **Exactitude** : contrôle au chargement 0,21 à 0,22 % ; perplexité d'un morceau de 16 384 tokens (seconde moitié notée, au-delà de 8 192 positions, là où le facteur dépasse 1) : processeur 5,8187, GPU par passes de 8 tokens 5,8183. Piège rencontré : `perplexity_runtime` en lecture d'un coup sur 16 384 tokens a rendu 5,8187 « sur le GPU » en autant de temps que le processeur (233 contre 229 s) : avec 8 191 lignes de logits, la passe ne tient pas sur le GPU et retombe sur le processeur sans le dire ; le mode `steps8` passe, lui, par le GPU (87 s).
+- **Après** : lecture de 512 tokens **1 444 tokens/s** (×17), de 16 384 tokens 880 ; écriture **50,7** (llama.cpp : 1 280 et 48,9).
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

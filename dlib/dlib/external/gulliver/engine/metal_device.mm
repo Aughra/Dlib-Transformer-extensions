@@ -185,6 +185,7 @@ namespace gulliver
             uint32_t q8;
             uint32_t q_stride;
             float scale;
+            uint32_t per_token;
         };
         struct attention_args
         {
@@ -1117,13 +1118,14 @@ namespace gulliver
     }
 
     void metal_device::commands::prepare_queries(metal_view q, unsigned tokens, unsigned heads, unsigned hd,
-        unsigned q_stride, float scale, bool q8)
+        unsigned q_stride, float scale, bool q8, const metal_view* factors)
     {
         if (tokens == 0) return;
         impl_->use(k_prepare_queries);
         impl_->bind(q, 0);
-        const query_args a = { hd, q8 ? 1u : 0u, q_stride, scale };
+        const query_args a = { hd, q8 ? 1u : 0u, q_stride, scale, factors ? 1u : 0u };
         impl_->args(a, 1);
+        impl_->bind(factors ? *factors : q, 2);
         impl_->groups(heads, tokens, 1, hd);
     }
 

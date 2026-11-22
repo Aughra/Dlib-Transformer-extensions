@@ -202,9 +202,10 @@ namespace gulliver
             void kv_store(metal_view k, metal_view v, unsigned kv_stride, metal_view region, metal_view blocks,
                 metal_view rows, unsigned tokens, const kv_layout& layout);
 
-            // Les requêtes de tokens tokens, heads têtes de hd valeurs, mises à l'échelle, et tournées en q8.
+            // Les requêtes de tokens tokens, heads têtes de hd valeurs, mises à l'échelle, et tournées en q8 ; avec
+            // factors, chaque token t d'abord multiplié par factors[t] (float32 : la température de l'attention).
             void prepare_queries(metal_view q, unsigned tokens, unsigned heads, unsigned hd, unsigned q_stride,
-                float scale, bool q8);
+                float scale, bool q8, const metal_view* factors = nullptr);
 
             // Les sorties de l'attention sur des valeurs q8, stockées tournées : chaque tête remise en place
             // (qk_unrotate_row ; fork pour macOS).

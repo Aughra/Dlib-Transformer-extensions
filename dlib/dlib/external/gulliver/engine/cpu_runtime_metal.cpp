@@ -69,6 +69,8 @@ namespace gulliver
         // Gemma 3 et 4 : les cosinus et sinus des couches à fenêtre glissante, et la sortie d'un bloc avant sa norme ;
         // Gemma 4 : les entrées par couche, rangées couche par couche, et leur porte.
         metal_buffer cs_swa, out, ple, ple_g;
+        // Mistral 3 : le facteur de température de l'attention de chaque token (attn_temp_scale), pour prepare_queries.
+        metal_buffer qtemp;
         // qwen35 : les canaux de la convolution, la porte de sortie, l'oubli et la force, les sorties des têtes,
         // la requête et sa porte, la porte de l'attention, les segments du lot ; l'état des séquences, pris
         // sans copie dans la zone de cpu_runtime.
@@ -191,7 +193,6 @@ namespace gulliver
             why = "sliding window heads of " + std::to_string(cfg_.head_dim_swa) + " values";
         else if ((rep != 1 && rep != 2 && rep != 4 && rep != 8) || cfg_.n_heads % cfg_.n_kv_heads != 0)
             why = "query heads grouped otherwise";
-        else if (cfg_.attn_temp_scale != 0.0) why = "a temperature of the attention";
         else if (cfg_.d_model % 256 != 0 || cfg_.d_ffn % 256 != 0 || cfg_.q_dim() % 256 != 0 || !layer_widths())
             why = "widths that are not multiples of 256";
         else if (gemma4 && cfg_.d_per_layer > 0 && (cfg_.d_per_layer % 4 != 0 || layers_[0].ple_gate.type != gulliver::ggml_type::F32
@@ -330,6 +331,7 @@ namespace gulliver
         g.gate = need(device, T * cfg_.d_ffn * f);
         g.up = need(device, T * cfg_.d_ffn * f);
         g.cs = need(device, T * std::max<long>(cfg_.rope_dims, 2) * f);
+        if (cfg_.attn_temp_scale != 0.0) g.qtemp = need(device, T * f);
         g.blocks = need(device, T * sizeof(int));
         g.rows = need(device, T * sizeof(int));
         g.lengths = need(device, T * sizeof(int));
@@ -441,7 +443,7 @@ namespace gulliver
             const gpu_state& g = *gpu_;
             u.state = g.state == gpu_state::ready ? "on" : "checking";
             for (const metal_buffer* b : { &g.vectors, &g.x, &g.xn, &g.q, &g.k, &g.v, &g.ctx, &g.gate, &g.up,
-                     &g.hidden, &g.logits, &g.cs, &g.blocks, &g.rows, &g.lengths, &g.table, &g.partial,
+                     &g.hidden, &g.logits, &g.cs, &g.qtemp, &g.blocks, &g.rows, &g.lengths, &g.table, &g.partial,
                      &g.expanded[0], &g.expanded[1], &g.mix, &g.z, &g.alpha, &g.beta, &g.lin_out, &g.qg,
                      &g.attn_gate, &g.segments, &g.moe_logits, &g.moe_ids, &g.moe_w, &g.moe_g, &g.moe_u, &g.moe_y,
                      &g.sh_g, &g.sh_u, &g.sh, &g.sh_gate, &g.tiles, &g.cs_swa, &g.out })
@@ -723,6 +725,10 @@ namespace gulliver
         for (long t = 0; t < T; ++t)
         {
             const long pos = positions_[static_cast<size_t>(t)];
+            // La température de l'attention (Mistral 3), même formule que le processeur (cpu_runtime.cpp).
+            if (cfg_.attn_temp_scale != 0.0)
+                static_cast<float*>(g.qtemp.contents())[t] = static_cast<float>(1.0 + cfg_.attn_temp_scale
+                    * std::log(1.0 + std::floor(static_cast<double>(pos) / cfg_.attn_temp_length)));
             const float* c = given ? given_cos_.data() + t * half : rope_cos_.data() + pos * half;
             const float* s = given ? given_sin_.data() + t * half : rope_sin_.data() + pos * half;
             std::memcpy(cs + t * 2 * half, c, sizeof(float) * half);
@@ -1101,7 +1107,8 @@ namespace gulliver
                 if (owns) c->rope(g.k, g.cs, uT, KVH, lhd, half, neox, lkvd, 2 * half);
             }
             if (owns) c->kv_store(g.k, g.v, lkvd, g.region, g.blocks, g.rows, uT, kl);
-            c->prepare_queries(g.q, uT, H, lhd, lqd, lscale, q8);
+            const metal_view qtemp(g.qtemp);
+            c->prepare_queries(g.q, uT, H, lhd, lqd, lscale, q8, cfg_.attn_temp_scale != 0.0 ? &qtemp : nullptr);
             if (tiled)
             {
                 const int w = lhd != hd ? 1 : 0;
