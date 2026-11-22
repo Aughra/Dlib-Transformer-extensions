@@ -45,6 +45,7 @@ La dernière partie donne les vitesses mesurées sur le Mac, avant et après les
 | 30 | Bug | `dlib/data_io/gguf_model_spec.h:425` | Un modèle YaRN (`rope.scaling.type = yarn`) passe l'import avec la note « sequences beyond the original context length will degrade » : YaRN change pourtant les angles des basses fréquences à toutes les positions, et le réseau importé calcule autre chose dès un texte court (corrigé dans le fork : YaRN appliqué comme llama.cpp). | **Aussi sous Windows**, déduit du code |
 | 31 | Bug | `dlib/examples/slm_lora_finetune_ex.cpp:248`, `dlib/dnn/trainer.h:1284` | La « average loss » d'une époque de l'affinage LoRA ne porte que sur les pas qui suivent la dernière ligne affichée par `dnn_trainer` (qui remet sa moyenne à zéro toutes les 40 s) : le chiffre change avec la vitesse de la machine (corrigé dans le fork). | **Aussi sous Windows**, déduit du code |
 | 32 | Portabilité macOS | `dlib/threads/thread_pool_extension.cpp:26`, `threads_kernel_2.cpp:58` | Les fils de dlib reçoivent la pile par défaut de macOS (512 Ko) : la passe d'entraînement de Gemma 3 4B (34 blocs) y déborde dans le fil de `dnn_trainer` (corrigé dans le fork : 16 Mo). | Propre au Mac (Windows : 1 Mo, non vérifié) |
+| 33 | Bug, toutes plateformes | `albireo/host/service.cpp:2129` | Sans modèle de recherche (embedding) actif, une requête qui ne nomme pas son modèle reçoit « no model is active » : le nom vide de la requête est pris pour celui du modèle de recherche (corrigé dans le fork, Gulliver 6.30.0). | **Aussi sous Windows** (code commun ; déduit du code, non vérifié sous Windows) |
 | Registre | dlib | `dlib/dlib`, `dlib/examples` | Tout ce que le fork change dans dlib, fichier par fichier (partie 5). | Voir chaque ligne |
 | 22 | Remarque, exactitude | `gulliver/engine/cpu_runtime.cpp:479` | En 8 bits, les clés sont tournées avant l'arrondi, pas les valeurs ; un modèle peut alors perdre un détail lu longtemps avant (corrigé dans le fork). | **Aussi sous Windows** (code commun ; constaté avec un modèle que l'original ne lit pas) |
 
@@ -449,6 +450,36 @@ et, dans la boucle des pas, après `train_one_step` :
   `dnn_trainer` n'est pas changé : sa remise à zéro sert son propre affichage (« moyenne depuis la dernière ligne »), mais elle mériterait d'être dite dans `trainer_abstract.h`, puisque `get_average_loss()` en dépend.
 - **Vérifié** : sur le Mac, avec la correction, le même essai affiche 3,48345 (build avec Accelerate, où l'entraîneur n'affichait déjà rien) ; la ligne périodique ne remet plus rien à zéro, lu dans le code. Non vérifié : le build sans BLAS relancé avec la correction (13 minutes), et l'étape « task alignment » (`--dataset`), qui passe par la même boucle.
 - **Mac ou Windows** : aussi sous Windows (code commun), déduit du code, non vérifié sous Windows.
+
+### 33. Sans modèle de recherche actif, une requête qui ne nomme pas son modèle n'est servie par aucun modèle
+
+- **Où** : `dlib/dlib/external/albireo/host/service.cpp`, `service::resolve_model()`, ligne 2129 dans `upstream/main` (commit `af5c811`).
+- **Ce qui se passe** : une requête `POST /v1/chat/completions` sans champ `model` (ou avec `"auto"`) reçoit une erreur 404, alors qu'un modèle général est actif et chargé :
+
+  ```
+  {"error":{"message":"no model is active","type":"invalid_request_error","param":null,"code":"model_not_found"}}
+  ```
+
+  La fonction écarte le modèle de recherche dans les documents (`embedder`, le modèle actif du rôle `embedding`). Quand aucun n'est actif, `embedder` est la chaîne vide ; le nom demandé par une requête qui n'en donne pas est vide lui aussi, et la comparaison `requested == embedder` est vraie : la fonction rend « aucun modèle ».
+- **Reproduire** : un service sans modèle de recherche actif (par exemple des données neuves, hors ligne, où l'on a seulement chargé un modèle de langage par la bibliothèque du Mac), puis `curl -sk https://127.0.0.1:<port>/v1/chat/completions -H 'Content-Type: application/json' -d '{"messages":[{"role":"user","content":"Bonjour."}],"max_tokens":4}'`. Avec un modèle de recherche actif (le cas habituel, le service l'installe par défaut), le défaut ne se voit pas ; la page d'Albireo nomme toujours le modèle, ce qui le cache aussi.
+- **Code avant** (`upstream/main`, `albireo/host/service.cpp`, lignes 2127 à 2129) :
+
+  ```cpp
+  const auto embedding = st.active.find(embedding_role);
+  const std::string embedder = embedding == st.active.end() ? std::string() : embedding->second;
+  if (role == embedding_role || requested == embedder) return std::string();
+  ```
+
+- **Code après** (corrigé dans le fork, `gulliver/host/service.cpp`, Gulliver 6.30.0) :
+
+  ```cpp
+  const auto embedding = st.active.find(embedding_role);
+  const std::string embedder = embedding == st.active.end() ? std::string() : embedding->second;
+  if (role == embedding_role || (!embedder.empty() && requested == embedder)) return std::string();
+  ```
+
+- **Vérifié** : sur le Mac, le service d'essai des mesures « comme un utilisateur » (`tools/bench_service.py`, sans modèle de recherche) : 404 avant, réponses ensuite ; `test_macos.sh` sans échec. **Non vérifié** : sous Windows.
+- **Mac ou Windows** : **aussi sous Windows** (code commun du service ; déduit du code, non vérifié sous Windows).
 
 ## 2. Portabilité vers macOS sur puce Apple
 

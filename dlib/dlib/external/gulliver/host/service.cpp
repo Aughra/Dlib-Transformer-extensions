@@ -1878,7 +1878,9 @@ namespace gulliver
         }
         const auto embedding = st.active.find(embedding_role);
         const std::string embedder = embedding == st.active.end() ? std::string() : embedding->second;
-        if (role == embedding_role || requested == embedder) return std::string();
+        // Sans modèle de recherche actif, embedder est vide, comme le nom d'une requête qui n'en donne pas : la comparaison
+        // ne vaut que pour un vrai nom (fork pour macOS, 2026-11-22 ; sinon « no model is active »).
+        if (role == embedding_role || (!embedder.empty() && requested == embedder)) return std::string();
         if (is_role(role))
         {
             auto it = st.active.find(role);

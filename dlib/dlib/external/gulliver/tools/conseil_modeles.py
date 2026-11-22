@@ -55,6 +55,7 @@ def main():
     ap.add_argument("--json")
     ap.add_argument("--temperature", default="")
     ap.add_argument("--doc")
+    ap.add_argument("--service", help="le JSON de tools/bench_service.py : les mesures « comme un utilisateur »")
     args = ap.parse_args()
     # « t_min|t_moy|t_max|c_min|c_moy|c_max|g_min|g_moy|g_max|relevés » (bench_modeles.sh) : la température de la puce,
     # l'utilisation du processeur et du GPU pendant la mesure.
@@ -157,6 +158,26 @@ def main():
               f"| {fmt(get(m, '4096', i=0))} | {fmt(get(m, '512'))} | {fmt(get(m, '4096'))} | {d or '—'} | {p} "
               f"| {memory} |")
 
+    if args.service:
+        try:
+            service = json.load(open(args.service, encoding="utf-8"))
+        except (OSError, ValueError):
+            service = None
+        if service:
+            print()
+            print(f"### Comme un utilisateur, par le service : {service.get('model', '?')}")
+            print()
+            print("Un service d'essai isolé (jamais celui de l'utilisateur) et llama-server (llama.cpp) sur le même fichier, "
+                  "par l'interface de discussion ; les temps viennent des réponses. La conversation de 32k : un document "
+                  "d'environ 32 768 tokens, une réponse de 512 au plus.")
+            print()
+            print("| Mesure | Gulliver | llama.cpp |")
+            print("|---|---|---|")
+            for label, vals in service_rows(service):
+                print(f"| {label} | " + " | ".join(vals) + " |")
+            for e in ("gulliver", "llama"):
+                if (service.get(e) or {}).get("error"):
+                    print(f"\n{'Gulliver' if e == 'gulliver' else 'llama.cpp'} : arrêté sur une erreur ({service[e]['error'][:160]}).")
     if not usable:
         return
     fastest = max(usable, key=lambda m: write[m])
@@ -199,8 +220,12 @@ def main():
           "raisonnements, et elle ne se compare qu'entre modèles Qwen3 ; l'écriture est mesurée sans brouillon (sur une "
           "recopie ou une question sur un document, les brouillons la multiplient par 1,3 à 3).")
     if args.doc:
+        try:
+            service = json.load(open(args.service, encoding="utf-8")) if args.service else None
+        except (OSError, ValueError):
+            service = None
         update_doc(args.doc, [m for m in order if not engine(m) and where.get(m) != "nonlu"], names, where, get, ppl,
-                   previous, advice, temp_text, args.late)
+                   previous, advice, temp_text, args.late, service)
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump({"date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), "previous": previous or None,
@@ -208,7 +233,45 @@ def main():
                       indent=1)
 
 
-def update_doc(path, models, names, where, get, ppl, previous, advice, temp_text, late):
+def service_rows(service, engines=("gulliver", "llama")):
+    """Les lignes du tableau « comme un utilisateur » (tools/bench_service.py) : [(libellé, [valeur par moteur])]."""
+    def f(v, unit="", digits=None):
+        if v is None:
+            return "—"
+        return (fmt(v) if digits is None else f"{v:.{digits}f}".replace(".", ",")) + unit
+    def get(e, *keys):
+        d = service.get(e) or {}
+        for k in keys:
+            d = d.get(k) if isinstance(d, dict) else None
+        return d
+    rows = []
+    for label, keys, unit, digits in (
+            ("Chargement du modèle (jusqu'à une première réponse)", ("load_s",), " s", 1),
+            ("Conversation de 32k : lecture", ("long_drafts", "read"), " jetons/s", None),
+            ("Conversation de 32k : écriture, avec brouillons", ("long_drafts", "write"), " jetons/s", None),
+            ("Conversation de 32k : écriture, sans brouillons", ("long_plain", "write"), " jetons/s", None),
+            ("4 requêtes à la fois : écriture totale", ("four", "total_write"), " jetons/s", None),
+            ("3 documents de 4 000 tokens à la fois : temps total", ("three_docs", "total_s"), " s", 1),
+            ("3 documents à la fois : attente moyenne du premier mot", ("three_docs", "mean_first_token_s"), " s", 1)):
+        vals = []
+        for e in engines:
+            v = get(e, *keys)
+            if e == "llama" and keys[0] == "long_drafts" and keys[1] == "read":
+                v = get(e, "long_plain", "read")
+            vals.append(f(v, unit, digits))
+        rows.append((label, vals))
+    big = []
+    for e in engines:
+        b = get(e, "largest")
+        text = f"{b['context']:,}".replace(",", " ") + " tokens" if isinstance(b, dict) and b.get("context") else "—"
+        if isinstance(b, dict) and b.get("refused"):
+            text += f" ({b['refused']:,} refusés)".replace(",", " ")
+        big.append(text)
+    rows.append(("Le plus grand contexte qui tient (essayés : 65 536 et 131 072)", big))
+    return rows
+
+
+def update_doc(path, models, names, where, get, ppl, previous, advice, temp_text, late, service=None):
     """La section de la semaine du document de vitesse : Gulliver seul, sur les modèles mesurés cette semaine."""
     begin, end = "<!-- semaine : début -->", "<!-- semaine : fin -->"
     try:
@@ -235,6 +298,10 @@ def update_doc(path, models, names, where, get, ppl, previous, advice, temp_text
             {"general": "pour tout faire", "accurate": "le plus juste", "fastest": "le plus rapide"}[a["role"]] + ", "
             + names[a["id"]] for a in advice) + ". Les tableaux complets, avec llama.cpp et MLX, sont dans « Mesures de "
                                                     "la semaine »."]
+    if service and service.get("gulliver"):
+        lines += ["", f"Comme un utilisateur, par le service, sur {service.get('model', '?')} :", "", "| Mesure | Gulliver |",
+                  "|---|---|"]
+        lines += [f"| {label} | {vals[0]} |" for label, vals in service_rows(service, ("gulliver",))]
     lines += ["", end]
     a, b = text.index(begin), text.index(end) + len(end)
     with open(path, "w", encoding="utf-8") as f:

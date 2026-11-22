@@ -50,13 +50,19 @@ raw += rows("llama.cpp:a", "llama.cpp · Qwen3-VL 4B A", 0, "gpu", {("512", "q8"
 raw += ["ppl|a|15.36", "ppl|b|10.93", "ppl|c|25.75", "ppl|d|9.50", "ppl|llama.cpp:a|15.38"]
 
 with tempfile.TemporaryDirectory() as tmp:
-    rawp, jsonp, docp = (os.path.join(tmp, f) for f in ("essai.raw", "conseil.json", "doc.md"))
+    rawp, jsonp, docp, servp = (os.path.join(tmp, f) for f in ("essai.raw", "conseil.json", "doc.md", "service.json"))
+    json.dump({"model": "Qwen3-VL 4B A", "gulliver": {"load_s": 1.7, "long_drafts": {"read": 729.0, "write": 33.8},
+               "long_plain": {"read": 728.0, "write": 36.1}, "four": {"total_write": 235.4},
+               "three_docs": {"total_s": 15.4, "mean_first_token_s": 6.8},
+               "largest": {"context": 131072, "refused": 262144}},
+               "llama": {"load_s": 1.1, "long_plain": {"read": 768.0, "write": 34.4}, "four": {"total_write": 229.6},
+                         "three_docs": {"total_s": 12.4, "mean_first_token_s": 3.2}}}, open(servp, "w"))
     open(rawp, "w", encoding="utf-8").write("\n".join(raw) + "\n")
     doc = "avant\n<!-- semaine : début -->\nancien\n<!-- semaine : fin -->\naprès\n"
     open(docp, "w", encoding="utf-8").write(doc)
     out = subprocess.run([sys.executable, "-I", os.path.join(HERE, "conseil_modeles.py"), rawp, "--previous", "a",
                           "--new", "b", "--machine", "Mac|M5 Pro, 64 Go|27.2|6.29.0|1 au début, 2 à la fin|30 au début",
-                          "--temperature", "50.0|60.0|70.0|5|19|40|0|63|99|3", "--json", jsonp, "--doc", docp],
+                          "--temperature", "50.0|60.0|70.0|5|19|40|0|63|99|3", "--json", jsonp, "--doc", docp, "--service", servp],
                          capture_output=True, text=True)
     check(out.returncode == 0, "conseil_modeles.py s'exécute (" + out.stderr.strip()[-200:] + ")")
     page = out.stdout
@@ -73,7 +79,12 @@ with tempfile.TemporaryDirectory() as tmp:
     check("le conseil pour tout faire passe de Qwen3-VL 4B A à Qwen3-VL 30B B (MoE)" in page, "le changement de conseil est dit")
     check("60,0 °C en moyenne, de 50,0 à 70,0 °C" in page and "63 % en moyenne, de 0 à 99 %" in page,
           "la température et la charge : minimum, moyenne, maximum")
+    check("| Conversation de 32k : écriture, sans brouillons | 36,1 jetons/s | 34,4 jetons/s |" in page
+          and "| 3 documents à la fois : attente moyenne du premier mot | 6,8 s | 3,2 s |" in page
+          and "131 072 tokens (262 144 refusés)" in page, "le tableau « comme un utilisateur », Gulliver et llama.cpp")
     after = open(docp, encoding="utf-8").read()
+    check("| Chargement du modèle (jusqu'à une première réponse) | 1,7 s |" in after and "3,2 s" not in after,
+          "dans le document, le tableau « comme un utilisateur » de Gulliver seul")
     check(after.startswith("avant\n<!-- semaine : début -->") and after.endswith("<!-- semaine : fin -->\naprès\n")
           and "ancien" not in after and "## La mesure de la semaine" in after,
           "la section du document est réécrite entre ses marqueurs, le reste intact")

@@ -2,6 +2,18 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.30.0 — 22 novembre 2026
+
+### Corrections
+
+- Sans modèle de recherche dans les documents actif, une requête de l'interface qui ne nommait pas son modèle recevait « no model is active » alors qu'un modèle général était chargé : le nom vide de la requête était pris pour celui du modèle de recherche. Défaut présent dans l'original (notes pour l'auteur, n° 33).
+
+### Outils de mesure
+
+- La mesure de la semaine mesure aussi le modèle de référence « comme un utilisateur », par le vrai service (`tools/bench_service.py`), sur un service d'essai isolé et sur llama-server : le temps de chargement, une conversation d'environ 32 768 tokens avec une réponse de 512 (avec et sans brouillons), 4 requêtes à la fois, 3 documents de 4 000 tokens à la fois, et le plus grand contexte qui tient (65 536 puis 131 072 tokens). Le tableau va dans la page « Mesures de la semaine » (Gulliver et llama.cpp) et dans le document de vitesse (Gulliver seul).
+
+---
+
 ## 6.29.1 — 22 novembre 2026
 
 ### Corrections
