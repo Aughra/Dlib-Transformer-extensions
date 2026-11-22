@@ -55,6 +55,7 @@
 #include "../common/platform.h"
 #include "../common/version.h"
 #include "carnet.h"
+#include "thermal.h"
 #include "crypto.h"
 #include "http_fetch.h"
 #include "hub.h"
@@ -1834,8 +1835,39 @@ namespace gulliver
             send_json(res, 200, o);
         });
         // Le débit du moteur, lu en direct par l'application (fork pour macOS).
+        // Avec la température de la puce (host/thermal.h), pour l'affichage en direct.
         srv.Get("/gulliver/v1/speed", [s](const httplib::Request&, httplib::Response& res) {
-            send_json(res, 200, s->speed());
+            json o = s->speed();
+            const chip_thermal t = read_chip_thermal();
+            o["thermal_state"] = t.state;
+            if (t.sensors > 0)
+            {
+                o["chip_temp_max"] = std::round(t.max_c * 10) / 10;
+                o["chip_temp_mean"] = std::round(t.mean_c * 10) / 10;
+            }
+            send_json(res, 200, o);
+        });
+        // L'historique de la température de la puce (host/thermal.h), pour la page /temperature/.
+        start_thermal_history();
+        srv.Get("/gulliver/v1/thermal/history", [](const httplib::Request& req, httplib::Response& res) {
+            int minutes = 60;
+            if (req.has_param("minutes")) minutes = std::atoi(req.get_param_value("minutes").c_str());
+            minutes = std::max(1, std::min(24 * 60, minutes));
+            json samples = json::array();
+            for (const auto& t : thermal_history(minutes))
+            {
+                json o = json::object();
+                o["t"] = t.time;
+                o["max"] = std::round(t.max_c * 10) / 10;
+                o["mean"] = std::round(t.mean_c * 10) / 10;
+                o["state"] = t.state;
+                samples.push_back(o);
+            }
+            json o = json::object();
+            o["period"] = thermal_period;
+            o["minutes"] = minutes;
+            o["samples"] = samples;
+            send_json(res, 200, o);
         });
         // Pseudalis sur ce Mac (fork pour macOS), pour passer d'une application à l'autre.
         srv.Get("/gulliver/v1/pseudalis", [](const httplib::Request&, httplib::Response& res) {

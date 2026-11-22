@@ -1004,10 +1004,28 @@ paths = {
         "tags": ["Service"], "summary": "Le débit du moteur en direct",
         "description": "Les tokens que le moteur a lus (prompts) et écrits (réponses) sur les cinq dernières "
                        "secondes, par seconde, et les requêtes en cours et en attente ; zéro une fois le moteur au "
-                       "repos. Bien plus léger que /gulliver/v1/status, pour un affichage rafraîchi chaque seconde.",
+                       "repos ; l'état thermique de macOS et la température de la puce, relue au plus toutes les deux "
+                       "secondes. Bien plus léger que /gulliver/v1/status, pour un affichage rafraîchi chaque seconde.",
         "responses": {"200": reply("Le débit", {"type": "object", "properties": {
             "prompt_tokens_per_second": {"type": "number"}, "generation_tokens_per_second": {"type": "number"},
-            "active": {"type": "integer"}, "waiting": {"type": "integer"}}})}}},
+            "active": {"type": "integer"}, "waiting": {"type": "integer"},
+            "thermal_state": {"type": "string", "enum": ["nominal", "fair", "serious", "critical"],
+                              "description": "L'état thermique de macOS."},
+            "chip_temp_max": {"type": "number", "description": "La sonde la plus chaude de la puce, en °C (absente si "
+                                                               "aucune sonde ne répond)."},
+            "chip_temp_mean": {"type": "number", "description": "La moyenne des sondes de la puce, en °C."}}})}}},
+    "/gulliver/v1/thermal/history": {"get": {
+        "tags": ["Service"], "summary": "L'historique de la température de la puce",
+        "description": "Les relevés de la température de la puce du Mac, pris toutes les cinq minutes depuis le "
+                       "démarrage du service et gardés 24 heures : la sonde la plus chaude, la moyenne des sondes et "
+                       "l'état thermique de macOS, sur les « minutes » dernières minutes (60 par défaut, 1 440 au "
+                       "plus). La page /temperature/ en trace la courbe.",
+        "parameters": [{"name": "minutes", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 1440}}],
+        "responses": {"200": reply("Les relevés", {"type": "object", "properties": {
+            "period": {"type": "integer"}, "minutes": {"type": "integer"},
+            "samples": {"type": "array", "items": {"type": "object", "properties": {
+                "t": {"type": "integer"}, "max": {"type": "number"}, "mean": {"type": "number"},
+                "state": {"type": "string"}}}}}})}}},
     "/gulliver/v1/pseudalis": {"get": {
         "tags": ["Service"], "summary": "Pseudalis sur ce Mac",
         "description": "Si Pseudalis est installé sur ce Mac (son dossier de données : PSEUDALIS_HOME, ou "

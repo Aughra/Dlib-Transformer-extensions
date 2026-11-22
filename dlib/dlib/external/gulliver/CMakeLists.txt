@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 6.23.3 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 6.24.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -156,14 +156,14 @@ if (GULLIVER_PROGRAMS)
       host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/crypto.cpp
       host/certificates.cpp host/web_access.cpp host/hub.cpp host/carnet.cpp host/relay.cpp host/pseudonyms.cpp
       host/rag_engine.cpp host/doc_extract.cpp host/doc_extract_pdf.cpp host/tls_gate.mm
-      host/tls_client.mm)
-   set_source_files_properties(host/tls_gate.mm host/tls_client.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+      host/tls_client.mm host/thermal.mm)
+   set_source_files_properties(host/tls_gate.mm host/tls_client.mm host/thermal.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
    target_include_directories(gulliver-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
    # Le carnet du portage lit les documents du dépôt où le service est construit (host/carnet.h).
    get_filename_component(GULLIVER_FORK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
    target_compile_definitions(gulliver-service PRIVATE GULLIVER_FORK_ROOT_DEFAULT="${GULLIVER_FORK_ROOT}")
    target_link_libraries(gulliver-service PRIVATE gulliver_common gulliver_sqlite ZLIB::ZLIB gulliver_httplib
-      "-framework CoreFoundation")
+      "-framework CoreFoundation" "-framework IOKit")
    target_compile_options(gulliver-service PRIVATE ${GULLIVER_WARNINGS})
 
    # L'extraction du texte des PDF passe par PDFium (third_party/pdfium, licence MIT), chargée au

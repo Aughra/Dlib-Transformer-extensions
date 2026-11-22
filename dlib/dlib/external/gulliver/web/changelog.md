@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.24.0 — 22 novembre 2026
+
+### Accès et documents
+
+- La ligne du débit, sous la zone de saisie, montre aussi la température de la puce du Mac (la sonde la plus chaude, la moyenne au survol), relue toutes les deux secondes ; la case passe en orange quand macOS juge la machine assez chaude, en rouge quand il commence à freiner. `GET /gulliver/v1/speed` rend `thermal_state`, `chip_temp_max` et `chip_temp_mean`.
+- Un clic sur cette case ouvre une nouvelle page, « Température de la puce » (`/temperature/`) : la courbe de la sonde la plus chaude et de la moyenne des sondes sur 1 heure, 6 heures ou 24 heures, mise à jour chaque minute. Le service relève la température toutes les cinq minutes depuis son démarrage et garde les dernières 24 heures (`GET /gulliver/v1/thermal/history`, permise aussi par la discussion en ligne). Dans une colonne étroite, les cases du débit et de la température se resserrent (unités et mot « Puce » effacés).
+
+---
+
 ## 6.23.3 — 22 novembre 2026
 
 ### Outils de mesure

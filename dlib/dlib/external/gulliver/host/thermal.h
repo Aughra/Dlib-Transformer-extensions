@@ -1,0 +1,45 @@
+// La température de la puce du Mac (fork pour macOS, 2026-11-22), pour l'affichage en direct de l'application.
+#ifndef GULLIVER_HOST_THERMAL_H
+#define GULLIVER_HOST_THERMAL_H
+
+#include <string>
+#include <vector>
+
+namespace gulliver
+{
+    struct chip_thermal
+    {
+        // L'état thermique de macOS (NSProcessInfo.thermalState) : nominal, fair, serious, critical.
+        std::string state = "nominal";
+        // La plus chaude et la moyenne des sondes de la puce (« PMU tdie »), en degrés ; -1 si aucune n'a répondu.
+        double max_c = -1;
+        double mean_c = -1;
+        int sensors = 0;
+    };
+
+    /*!
+        La lecture la plus récente, refaite au plus toutes les deux secondes (les sondes passent par
+        IOHIDEventSystemClient, une interface interne d'Apple, sans droits d'administrateur ; celle de
+        macos/temperature).  Sûre depuis plusieurs fils.
+    !*/
+    chip_thermal read_chip_thermal();
+
+    struct thermal_sample
+    {
+        long long time = 0;     // secondes depuis 1970
+        double max_c = -1;
+        double mean_c = -1;
+        std::string state;
+    };
+
+    /*!
+        L'historique de la température (fork pour macOS, 2026-11-22) : start_thermal_history() lance, une seule fois,
+        un fil qui relève read_chip_thermal() toutes les thermal_period secondes (cinq minutes, demande de l'humain) et garde les dernières 24 heures ;
+        thermal_history() rend les relevés des minutes dernières minutes, du plus ancien au plus récent.
+    !*/
+    const int thermal_period = 300;
+    void start_thermal_history();
+    std::vector<thermal_sample> thermal_history(int minutes);
+}
+
+#endif

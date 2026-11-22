@@ -549,7 +549,13 @@ function speedHelp() {
       'retombe à zéro au bout de cinq secondes ; la dernière valeur mesurée reste alors affichée, en plus pâle.',
     'Image : la lecture, c’est parcourir une page d’un coup d’œil ; l’écriture, c’est la recopier à la main, lettre ' +
       'par lettre. Le compteur regarde les cinq dernières secondes, comme le compteur de vitesse d’une voiture, pas ' +
-      'la moyenne du trajet.'
+      'la moyenne du trajet.',
+    'Puce : la température de la sonde la plus chaude de la puce du Mac (le survol donne la moyenne des sondes), ' +
+      'relue toutes les deux secondes. Elle sert à comprendre un ralentissement : une puce Apple ne réduit sa cadence ' +
+      'que bien plus haut, vers 95 à 105 °C. La case passe en orange quand macOS juge la machine « assez chaude », en ' +
+      'rouge quand il la juge « chaude » : c’est alors qu’il commence à freiner. Mesuré sur le Mac mini surélevé : ' +
+      '23 °C au repos, 43 °C au plus après une minute de calcul continu sur le GPU. Un clic sur la case ouvre la ' +
+      'courbe des dernières 24 heures (un relevé toutes les cinq minutes).'
   ];
 }
 
@@ -603,7 +609,19 @@ async function pollSpeed() {
       h('b', null, value(read, lastSpeed.read)), h('span', { class: 'unit' }, 'jetons/s')),
     h('span', { class: 'gauge' + (write > 0.05 ? ' on' : '') }, h('span', { class: 'label' }, 'Écriture'),
       h('b', null, value(write, lastSpeed.write)), h('span', { class: 'unit' }, 'jetons/s')),
+    chipGauge(s),
     helpButton('Le débit', speedHelp));
+}
+
+// La température de la puce (fork pour macOS, 2026-11-22), lue avec le débit : la sonde la plus chaude, et l'état
+// thermique de macOS en couleur (orange : assez chaud ; rouge : chaud ou critique).
+function chipGauge(s) {
+  if (typeof s.chip_temp_max !== 'number') return null;
+  const level = s.thermal_state === 'fair' ? ' warm' : s.thermal_state === 'serious' || s.thermal_state === 'critical' ? ' hot' : '';
+  // Un clic ouvre la courbe dans le temps (web/temperature/).
+  return h('a', { class: 'gauge chip' + level, href: 'temperature/', target: '_blank', rel: 'noopener',
+    title: 'Moyenne des sondes : ' + formatDecimal(s.chip_temp_mean || 0, 1) + ' °C. Cliquer pour la courbe dans le temps.' },
+    h('span', { class: 'label' }, 'Puce'), h('b', null, formatDecimal(s.chip_temp_max, 0)), h('span', { class: 'unit' }, '°C'));
 }
 
 export function startSpeed() {

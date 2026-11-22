@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "6.23.3",
+  "version": "6.24.0",
   "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -2160,7 +2160,7 @@
      "Service"
     ],
     "summary": "Le débit du moteur en direct",
-    "description": "Les tokens que le moteur a lus (prompts) et écrits (réponses) sur les cinq dernières secondes, par seconde, et les requêtes en cours et en attente ; zéro une fois le moteur au repos. Bien plus léger que /gulliver/v1/status, pour un affichage rafraîchi chaque seconde.",
+    "description": "Les tokens que le moteur a lus (prompts) et écrits (réponses) sur les cinq dernières secondes, par seconde, et les requêtes en cours et en attente ; zéro une fois le moteur au repos ; l'état thermique de macOS et la température de la puce, relue au plus toutes les deux secondes. Bien plus léger que /gulliver/v1/status, pour un affichage rafraîchi chaque seconde.",
     "responses": {
      "200": {
       "description": "Le débit",
@@ -2180,6 +2180,84 @@
           },
           "waiting": {
            "type": "integer"
+          },
+          "thermal_state": {
+           "type": "string",
+           "enum": [
+            "nominal",
+            "fair",
+            "serious",
+            "critical"
+           ],
+           "description": "L'état thermique de macOS."
+          },
+          "chip_temp_max": {
+           "type": "number",
+           "description": "La sonde la plus chaude de la puce, en °C (absente si aucune sonde ne répond)."
+          },
+          "chip_temp_mean": {
+           "type": "number",
+           "description": "La moyenne des sondes de la puce, en °C."
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/thermal/history": {
+   "get": {
+    "tags": [
+     "Service"
+    ],
+    "summary": "L'historique de la température de la puce",
+    "description": "Les relevés de la température de la puce du Mac, pris toutes les cinq minutes depuis le démarrage du service et gardés 24 heures : la sonde la plus chaude, la moyenne des sondes et l'état thermique de macOS, sur les « minutes » dernières minutes (60 par défaut, 1 440 au plus). La page /temperature/ en trace la courbe.",
+    "parameters": [
+     {
+      "name": "minutes",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 1440
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Les relevés",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "period": {
+           "type": "integer"
+          },
+          "minutes": {
+           "type": "integer"
+          },
+          "samples": {
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "t": {
+              "type": "integer"
+             },
+             "max": {
+              "type": "number"
+             },
+             "mean": {
+              "type": "number"
+             },
+             "state": {
+              "type": "string"
+             }
+            }
+           }
           }
          }
         }

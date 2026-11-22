@@ -1,0 +1,29 @@
+/* Copyright (C) 2026 Cydral Technology (cydraltechnology@gmail.com)
+   License: Boost Software License   See LICENSE.txt for the full license. */
+
+/* La température de la puce dans le temps (fork pour macOS). */
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
+.thermal { max-width: 860px; margin: 0 auto; padding: 18px 16px 72px; font-size: 16px; line-height: 1.6; }
+.thermal .faint { color: var(--faint); font-size: 14.5px; }
+.thermal code { background: var(--soft); padding: 1px 5px; border-radius: 5px; font: 0.88em var(--mono); }
+.thermal h2 { font-size: 1.2em; margin-top: 1.8em; }
+.now { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin: 6px 0 14px; }
+.now .big { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.now .big.warm { color: #d98a14; }
+.now .big.hot { color: #d93b3b; }
+.now .detail { color: var(--faint); }
+.periods { display: flex; gap: 6px; margin-bottom: 10px; }
+.periods button { font: inherit; font-size: 14px; padding: 5px 12px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--card); color: var(--text); }
+.periods button.on { border-color: var(--brand); color: var(--brand); font-weight: 600; }
+.chart { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
+.chart svg { display: block; width: 100%; height: auto; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis { fill: var(--faint); font: 11px var(--font); }
+.chart .max { fill: none; stroke: #e8962e; stroke-width: 2; stroke-linejoin: round; }
+.chart .mean { fill: none; stroke: var(--brand); stroke-width: 1.2; stroke-linejoin: round; opacity: 0.8; }
+.chart .empty { fill: var(--faint); font: 14px var(--font); }
+.legend { color: var(--faint); font-size: 14px; margin: 6px 2px; }
+.legend .key { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; }
+.legend .key.max { background: #e8962e; }
+.legend .key.mean { background: var(--brand); }
