@@ -1291,6 +1291,14 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Reste** : Qwen2.5-0.5B (7 par tête) bute ensuite sur ses largeurs (896, 4 864), qui ne sont pas des multiples de 256.
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 46 : le modèle de recherche et les modèles denses en Q8_0, Q5_K et Q5_0 sur le GPU (Gulliver 6.32.0)
+
+- **Avant** : un modèle dense ne passait au GPU que si tous ses produits étaient en Q4_K ou Q6_K, matrice de sortie comprise ; seuls les modèles à couches linéaires et les mélanges d'experts lisaient aussi Q5_K, Q8_0 et Q5_0. Qwen3-Embedding 0,6B (Q8_0, sa matrice de sortie est la table des tokens) restait sur le processeur (« the kernels do not cover an output matrix in other formats than Q4_K and Q6_K », puis « weights in other formats than Q4_K and Q6_K ») ; de même tout modèle de langage dense en Q8_0. Vecteurs de 160 passages de 1 200 caractères : **53,4 à 54,4 s** ; indexation des 61 épisodes du blog : **136 s**.
+- **Changement** (`engine/cpu_runtime_metal.cpp`) : les modèles denses prennent les cinq formats des étapes (`step_format`) ; leurs étapes ont déjà ces produits (`mv_*_1`, `mv_*_n`, `mv_nax_*`) et leurs prompts les développent en demi-précision (`dequant_h_*`) avant le produit de MPS. Un modèle de recherche ne lit pas sa matrice de sortie (son format n'est plus exigé) ; ses passes « états seulement » (`hidden_only`) vont au GPU, qui s'arrête aux états normalisés ; le contrôle du chargement compare alors les états, pas les logits. **Exactitude** : vecteurs GPU contre processeur, cosinus 0,999999 au plus bas sur 160 passages ; contrôle du chargement 0,07 à 0,12 % ; test du RAG (40 questions) identique au chiffre près ; perplexité (8 morceaux de 512) processeur / GPU par passes de 8 : Qwen3-4B Q8_0 16,5132 / 16,5142, Ministral 3 3B Q8_0 12,3784 / 12,3780, Qwen3-0.6B Q8_0 27,7933 / 27,7951, LFM2.5-1.2B Q8_0 22,4408 / 22,4401, même premier choix.
+- **Après** (mesures alternées GPU, processeur, GPU, processeur, charge 5,0) : 160 vecteurs en **4,59 et 4,66 s** contre 53,40 et 54,37 s (×11,6) ; indexation des 61 épisodes **12 s** (×11).
+- **Reste** : la vitesse des modèles de langage denses en Q8_0 sur le GPU, à mesurer.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
@@ -1308,6 +1316,7 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 | Mac mini M5 Pro, 4B Thinking, écriture sur le processeur après 512 tokens | pas mesuré | 64 tokens/s avec le changement 26 (38 à 41 avant) ; 71 sur le GPU |
 | Qwen3.5-0.8B Q5_K_M (fork seulement), écriture sur le processeur | non lu par le moteur | 71,6 à 72,0 tokens/s avec le changement 25 (38,7 à 40,1 avant) |
 | Modèle de recherche (Q8_0), 512 tokens | pas mesuré | 573 à 601 tokens/s (184 à 213 avec les changements 1 à 3) |
+| Mac mini M5 Pro, Qwen3-Embedding 0,6B, vecteurs de 160 passages | pas mesuré | 4,6 s sur le GPU avec le changement 46 (53,4 à 54,4 s sur le processeur) |
 | Encodage d'une image 512 × 512, projecteur du 4B | pas mesuré | 1,8 à 2,2 s (8,9 à 10,3 avec les changements 1 à 3) |
 | 4B Thinking (modèle du service), clés en 8 bits, génération | pas mesuré | 21,3 à 21,7 tokens/s sur le GPU ; 18,2 à 18,6 sur le processeur (17,6 à 18,1 sans le changement 8 ; 16,4 à 16,6 sans les changements 6 à 8) |
 | SHA-256 d'un fichier de modèle (vérification, import, restauration) | 283 à 288 Mo/s (mbedtls) | 2 059 à 2 141 Mo/s (changement 11) |

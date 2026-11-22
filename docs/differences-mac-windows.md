@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.31.1, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.32.0, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -42,6 +42,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Reprise d'une conversation Qwen 3.5 au milieu | — (architecture non lue) | Points de reprise de l'état toutes les 256 positions | L'état d'une couche linéaire ne revient pas en arrière ; sans eux, tout serait relu | prompt système de 794 tokens partagé : 768 tokens repris | v. 4.8.0 |
 | Attention des prompts sur le GPU | CUDA (cartes NVIDIA) | Noyau Metal en tuiles, scores et somme par produits de matrices 8 × 8 (`simdgroup_matrix`), clés chargées huit valeurs à la fois ; prompts lus par le GPU jusqu'à 262 144 positions | L'attention précédente relisait toutes les clés pour chaque token et perdait au-delà de 2 048 positions ; la première version en tuiles, au-delà de 4 096 | 2B, 4 096 tokens : 145 → 198 (v. 4.10.0) → 423 tokens/s ; 8 192 tokens : 295 contre 115 à 117 sur le processeur | ch. 13, 14, v. 4.10.0, 4.11.0 |
 | Contrôle au chargement | — | Le GPU est comparé au processeur à chaque chargement ; retour au processeur s'il diffère | Le GPU n'est pas exact au bit près ; on vérifie qu'il donne le même mot | logits à 0,1 à 0,2 % du processeur, même token | ch. 9, 10 |
+| Modèle de recherche et modèles denses en Q8_0, Q5_K, Q5_0 | Processeur (le moteur d'origine n'a pas de GPU sur Mac) | Sur le GPU du Mac : le modèle de recherche ne lit plus sa matrice de sortie, les modèles denses prennent les cinq formats des étapes | Indexer les documents plus vite | Vecteurs ×11,6 (160 passages : 4,6 s contre 54 s) ; indexation du blog 12 s contre 136 | changement 46, v. 6.32.0 |
 
 ## 2. Modèles : téléchargement, vérification, réserve
 

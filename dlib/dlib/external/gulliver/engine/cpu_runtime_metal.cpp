@@ -162,10 +162,14 @@ namespace gulliver
             (run_gpu_checkpointed).  Les prompts des mélanges d'experts y vont avec leurs experts en produits groupés
             (matmul_id) : qwen35moe et LFM2-MoE d'abord, qwen3moe, granitemoe et mixtral depuis Gulliver 6.6.0.
         */
-        const bool steps_only = cfg_.recurrent() || cfg_.is_moe();
-        auto formats = [&](const weight_matrix& W) { return steps_only ? step_format(W) : gpu_format(W); };
-        const std::string formats_why = steps_only ? "weights in other formats than Q4_K, Q5_K, Q6_K, Q5_0 and Q8_0"
-            : "weights in other formats than Q4_K and Q6_K";
+        /*
+            Les modèles denses lisent aussi Q5_K, Q8_0 et Q5_0 depuis Gulliver 6.32.0 (fork pour macOS, 2026-11-22) : les
+            étapes ont leurs produits dans ces formats (mv_*_1, mv_*_n, mv_nax), et les prompts les développent en
+            demi-précision (dequant_h_*) avant le produit de MPS, comme pour Q4_K et Q6_K.  Qwen3-Embedding 0,6B (Q8_0)
+            restait sur le processeur pour cette seule raison.
+        */
+        auto formats = [&](const weight_matrix& W) { return step_format(W); };
+        const std::string formats_why = "weights in other formats than Q4_K, Q5_K, Q6_K, Q5_0 and Q8_0";
         // Une matrice d'experts lue par colonnes de 256 valeurs, ou de 32 en Q8_0.
         auto expert_columns = [&](const weight_matrix& W) {
             return W.cols % (W.type == gulliver::ggml_type::Q8_0 || W.type == gulliver::ggml_type::Q5_0 ? 32 : 256) == 0;
@@ -199,7 +203,10 @@ namespace gulliver
         else if (gemma4 && cfg_.d_per_layer > 0 && (cfg_.d_per_layer % 4 != 0 || layers_[0].ple_gate.type != gulliver::ggml_type::F32
             || layers_[0].ple_proj.type != gulliver::ggml_type::F32))
             why = "per-layer inputs of this form";
-        else if (!formats(output_)) why = "an output matrix in " + formats_why.substr(11);
+        // Un modèle de recherche (embedding) rend les états de ses tokens, jamais de logits : sa matrice de sortie
+        // (souvent la table des tokens, en Q8_0 ou F16) n'est pas lue, son format n'empêche pas le GPU (fork pour macOS,
+        // 2026-11-22 : Qwen3-Embedding restait sur le processeur pour cette seule raison).
+        else if (!cfg_.is_embedding() && !formats(output_)) why = "an output matrix in " + formats_why.substr(11);
         else
             for (long li = 0; li < cfg_.n_layers && why.empty(); ++li)
             {
@@ -424,7 +431,7 @@ namespace gulliver
         // Les prompts des mélanges d'experts dont les experts n'ont pas la forme des produits groupés restent sur le processeur.
         if (cfg_.is_moe() && !(gpu_ && gpu_->moe_prompts)) long_pass = false;
         return gpu_ && gpu_->state != gpu_state::dropped && (step || long_pass)
-            && batch.embedding_rows.empty() && !batch.hidden_only
+            && batch.embedding_rows.empty() && (!batch.hidden_only || cfg_.is_embedding())
             && batch.logit_rows.size() <= metal_device::max_tokens;
     }
 
@@ -523,9 +530,18 @@ namespace gulliver
                     return false;
                 }
             }
+            /*
+                Un modèle de recherche (embedding) ne rend que les états de ses tokens (hidden_only) : le contrôle
+                compare alors ces états, ceux qui deviennent les vecteurs, et pas de token le plus probable (fork pour
+                macOS, 2026-11-22).
+            */
+            const bool states = cfg_.is_embedding();
+            const long width = states ? cfg_.d_model : V;
             forward_batch prompt;
+            prompt.hidden_only = states;
             for (long i = 0; i < n; ++i) prompt.tokens.push_back(static_cast<int>((1009 + 7919 * i) % V));
             std::vector<float> on_gpu, on_cpu;
+            auto keep_states = [&](std::vector<float>& out) { if (states) out = hidden_out_; };
             struct floats_scope
             {
                 bool& flag;
@@ -538,7 +554,7 @@ namespace gulliver
             auto compare = [&](const char* what, double limit) {
                 double diff = 0, norm = 0;
                 long ig = 0, ic = 0;
-                for (long i = 0; i < V; ++i)
+                for (long i = 0; i < width; ++i)
                 {
                     diff += (static_cast<double>(on_gpu[i]) - on_cpu[i]) * (static_cast<double>(on_gpu[i]) - on_cpu[i]);
                     norm += static_cast<double>(on_cpu[i]) * on_cpu[i];
@@ -546,10 +562,11 @@ namespace gulliver
                     if (on_cpu[i] > on_cpu[ic]) ic = i;
                 }
                 const double relative = std::sqrt(diff / std::max(norm, 1e-30));
-                detail << (detail.tellp() > 0 ? "; " : "") << what << ": logits within " << relative * 100
-                    << "% of those of the processor, most likely token " << (ig == ic ? "the same" : "different");
+                detail << (detail.tellp() > 0 ? "; " : "") << what << (states ? ": states within " : ": logits within ")
+                    << relative * 100 << "% of those of the processor";
+                if (!states) detail << ", most likely token " << (ig == ic ? "the same" : "different");
                 // Écrit de sorte qu'une valeur qui n'est pas un nombre échoue.
-                if (!(relative <= limit) || ig != ic) agree = false;
+                if (!(relative <= limit) || (!states && ig != ic)) agree = false;
             };
             // Le prompt : sur le GPU pour la première séquence quand les prompts y vont, sur le processeur
             // sinon.
@@ -561,6 +578,7 @@ namespace gulliver
             {
                 if (gpu_prompt) run_gpu(prompt, on_gpu);
                 else run(prompt, on_gpu, false);
+                keep_states(on_gpu);
             }
             catch (const std::exception& e)
             {
@@ -569,6 +587,7 @@ namespace gulliver
             }
             prompt.segments.assign(1, { b, 0, n });
             run(prompt, on_cpu, false);
+            keep_states(on_cpu);
             /*
                 Un prompt écrit les clés et valeurs de tous ses tokens : en 8 bits, une valeur qu'une différence
                 d'arrondi de 1e-7 fait passer de l'autre côté du milieu de deux entiers prend l'autre entier, un
@@ -597,12 +616,14 @@ namespace gulliver
             for (int step = 0; step < 2; ++step)
             {
                 forward_batch one;
+                one.hidden_only = states;
                 one.tokens.push_back(static_cast<int>((4243 + 104729 * step) % V));
                 one.logit_rows.push_back(0);
                 one.segments.assign(1, { a, 0, 1 });
                 try
                 {
                     run_gpu(one, on_gpu);
+                    keep_states(on_gpu);
                 }
                 catch (const std::exception& e)
                 {
@@ -611,6 +632,7 @@ namespace gulliver
                 }
                 one.segments.assign(1, { b, 0, 1 });
                 run(one, on_cpu, false);
+                keep_states(on_cpu);
                 /*
                     Les étapes lisent les clés et valeurs que le prompt a écrites : après un prompt sur le GPU en 8 bits,
                     elles en héritent les différences d'arrondi, et reçoivent la même limite (fork pour macOS ; LFM2.5-1.2B,
@@ -1238,7 +1260,8 @@ namespace gulliver
             c->rms_norm(at(g.x, sizeof(float) * out_rows[static_cast<size_t>(r)] * d), at(g.vectors, g.output_norm),
                 at(g.hidden, sizeof(float) * r * d), 1, d, d, d, eps);
         const float logit = cfg_.logit_scale != 1.0 ? static_cast<float>(1.0 / cfg_.logit_scale) : 1.0f;
-        if (R > 0)
+        // Une passe « états seulement » (modèle de recherche) s'arrête aux états normalisés, sans la matrice de sortie.
+        if (R > 0 && !batch.hidden_only)
             c->matvec(output_.type, at(g.weights, g.weight(output_)), cfg_.vocab, d, g.hidden, static_cast<unsigned>(R), d,
                 g.logits, cfg_.vocab, logit);
         const auto t_encoded = std::chrono::steady_clock::now();
@@ -1262,8 +1285,12 @@ namespace gulliver
 
         for (const auto& s : batch.segments)
             sequences_[static_cast<size_t>(s.sequence)]->length += s.count;
-        logits.resize(static_cast<size_t>(R * cfg_.vocab));
-        if (R > 0) std::memcpy(logits.data(), g.logits.contents(), sizeof(float) * R * cfg_.vocab);
+        if (batch.hidden_only) logits.clear();
+        else
+        {
+            logits.resize(static_cast<size_t>(R * cfg_.vocab));
+            if (R > 0) std::memcpy(logits.data(), g.logits.contents(), sizeof(float) * R * cfg_.vocab);
+        }
         // Le plafond des logits (Gemma 4) : softcap * tanh(logits / softcap), comme le processeur.
         if (cfg_.final_softcap > 0.0)
         {

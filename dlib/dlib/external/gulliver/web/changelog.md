@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.32.0 — 22 novembre 2026
+
+### Performances
+
+- Le modèle de recherche dans les documents (Qwen3-Embedding 0,6B) calcule sur le GPU : ses vecteurs vont 11,6 fois plus vite (160 passages en 4,6 s au lieu de 54 s), et l'indexation des 61 épisodes du blog prend 12 s au lieu de 136. Les vecteurs sont identiques à ceux du processeur (cosinus 0,999999) ; la recherche trouve les mêmes passages.
+- Les modèles de langage denses en Q8_0, Q5_K ou Q5_0 passent aussi sur le GPU (ils restaient sur le processeur) ; leur justesse y est la même (Qwen3-4B Q8_0 : perplexité 16,5142 contre 16,5132 sur le processeur).
+
+---
+
 ## 6.31.1 — 22 novembre 2026
 
 ### Outils de mesure

@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.32.0 : le modèle de recherche et les modèles en Q8_0 sur le GPU
+
+- **Quoi** : `engine/cpu_runtime_metal.cpp` : `set_gpu()` prend pour tous les modèles les cinq formats des étapes (Q4_K, Q5_K, Q6_K, Q8_0, Q5_0) et n'exige plus le format de la matrice de sortie d'un modèle de recherche ; `takes_gpu()` accepte les passes `hidden_only` d'un modèle de recherche ; `run_gpu()` saute le produit de sortie dans ces passes ; `gpu_ready()` compare les états (pas les logits ni le token le plus probable) pour un modèle de recherche.
+- **Fichiers** : `gulliver/engine/cpu_runtime_metal.cpp`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md}`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : vu en faisant le test du RAG : Qwen3-Embedding restait sur le processeur. Une fois la matrice de sortie écartée, il butait sur ses poids en Q8_0, que les noyaux savaient déjà lire.
+- **Étapes** : vecteurs de 160 passages (service d'essai isolé, `accelerator` auto puis none, en alternance, charge 5,0) : GPU 4,59 et 4,66 s, processeur 53,40 et 54,37 s, cosinus 0,999999 au plus bas ; contrôle du chargement 0,07 à 0,12 % ; `test_metal` : all checks passed ; perplexité processeur / GPU (8 morceaux de 512) : Qwen3-4B Q8_0 16,5132 / 16,5142, Ministral 3 3B Q8_0 12,3784 / 12,3780, Qwen3-0.6B Q8_0 27,7933 / 27,7951, LFM2.5-1.2B Q8_0 22,4408 / 22,4401, passes vérifiées sur le GPU (« run on it ») ; `test_macos_copie.sh` 0 échec ; `test_rag.py` : mêmes rappels, indexation 12 s au lieu de 136. Reste : la vitesse d'écriture des modèles de langage en Q8_0 sur le GPU, à mesurer (pas pendant les heures d'essai de l'humain). Version 6.32.0.
+
 ## 2026-11-22 — La recherche dans les documents entre dans la mesure de la semaine
 
 - **Quoi** : `tools/bench_modeles.sh` lance `tools/test_rag.py` après les mesures « comme un utilisateur » (avant l'heure limite) ; `tools/conseil_modeles.py --rag` : tableau par moteur (trouvé dans les 6, 12, 20 premiers, rang réciproque) dans la page de la semaine et dans la section du document, et le meilleur réglage (le plus de questions trouvées dans les 12 premiers, puis le meilleur rang) ; `tools/test_conseil.py` : deux contrôles de plus (17). Le réglage par défaut du service n'est pas changé automatiquement : avec 40 questions, les meilleurs réglages ne se départagent qu'à une question près (hybride 0,95 et rang 0,71 ; sens + tri fin 0,95 et 0,73).
