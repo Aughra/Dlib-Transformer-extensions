@@ -2,6 +2,20 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Conseil du modèle à employer, dans la mesure du dimanche et dans l'article
+
+- **Quoi** : `tools/conseil_modeles.py` (nouveau) lit les tableaux d'une semaine (lecture, écriture, justesse ; colonnes de Gulliver) et écrit la section « Conseil : quel modèle employer avec Gulliver » : le modèle du service, le plus juste des Qwen3 (seule famille dont les perplexités se comparent), le plus rapide, avec les précautions de lecture ; `tools/bench_hebdo.sh` l'ajoute à chaque semaine. Semaine du 22 novembre complétée à la main (`build/bench/hebdo/{2026-11-22.md,historique.md,mesures.md}`, hors dépôt). Rubrique « Tests de vitesse » : section « Quel modèle employer avec Gulliver (conseil) » (Qwen3-VL 4B par défaut ; Qwen3-30B-A3B pour la justesse en texte seul, perplexité 10,94 contre 15,37 ; Qwen3-VL 2B pour la vitesse).
+- **Fichiers** : `gulliver/tools/{conseil_modeles.py,bench_hebdo.sh}`, `gulliver/web/changelog.md` (6.23.0), `docs/mesures/tests-de-vitesse.md`, ce journal.
+- **Pourquoi** : demande de l'humain (« dans la mesure du dimanche, un conseil conclusion sur ce que tu conseilles d'utiliser pour Gulliver comme modèle, dans l'article »).
+- **Étapes** : sortie de l'outil sur `build/bench/hebdo/2026-11-22.md` relue ; tailles des fichiers relevées (4B 2,50 Go, 30B-A3B 18,56 Go, 2B 1,11 Go, LFM2.5-1.2B 1,25 Go).
+
+## 2026-11-22 — Gulliver 6.23.0 : les produits Q4_K et Q6_K d'un token repris de llama.cpp
+
+- **Quoi** : `engine/metal_kernels.metal` : `mv_q4_K_1l` et `mv_q6_K_1l`, organisation reprise de `kernel_mul_mv_q4_K_f32_impl` et `kernel_mul_mv_q6_K_f32_impl` de llama.cpp (licence MIT, citée), `MVL_NR` 1 et `MVL_NSG` 4 ; `engine/metal_device.mm` : employés pour un token en Q4_K et Q6_K dans `matvec` et `matvec2` (`GULLIVER_OLD_MV` pour les anciens). Sources de llama.cpp lues dans `build/ext/llama.cpp` (clone partiel de `ggml/src/ggml-metal`, commit `e300919`, jamais commité).
+- **Fichiers** : `gulliver/engine/{metal_kernels.metal,metal_device.mm}`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md}`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : chantier « Vitesse », écriture : `GULLIVER_GPU_TIMING` donnait 12,0 ms par mot dont 11,75 ms de GPU et 0,1 ms d'écriture des commandes, pour 9,72 ms de lecture des poids au plafond ; produits à 80-88 % du plafond.
+- **Étapes** : essais sans effet ou perdants, mesurés de bout en bout : 2 ou 8 simdgroups par threadgroup pour `mv_q4_K_1` (83,1 / 82,9-83,1 / 83,1-83,3 : rien) ; deux blocs par tour (83,0 → 81,3). Noyaux de llama.cpp : Q4_K seul 82,9-83,1 → 85,8-86,0 (4B), 168,0-168,7 → 170,2-170,6 (2B), 80,5 → 82,5-82,7 (Gemma 3) ; avec le Q6_K 88,0-88,4 et 85,5. Découpages (4B, deux tours) : 2 x 2 88,1-88,2, 4 x 2 84,5-84,6, 2 x 4 87,8-88,2, 1 x 4 89,2-89,4, 4 x 1 84,4-84,5, 1 x 2 89,0-89,2, 1 x 8 88,7-89,1 ; Gemma 3 1 x 2 86,0-86,1, 1 x 4 86,1-86,2, 1 x 8 85,7-85,8 : 1 x 4 gardé. Final (alterné, même binaire) : 4B 82,9 → 89,2-89,3, 2B 167,3-167,6 → 174,9-175,7, Gemma 3 80,2-80,3 → 86,2-86,4, 30B 75,1 → 76,0-76,2, 4B après 4 096 tokens 69,4 → 73,3. Perplexité par les étapes : 15,3689 / 15,3676 (4B), 21,9057 / 21,9140 (Gemma 3). `test_metal` passe ; `test_macos.sh` (port 18473) : 70 étapes, 0 échec. Version 6.23.0.
+
 ## 2026-11-22 — Produits Q4_K de l'écriture : relevé par matrice, variante à deux lignes rejetée
 
 - **Quoi** : relevé temporaire (non commité) du profil par noyau avec la taille de chaque produit, puis essai d'une variante du produit Q4_K d'un token à deux lignes par simdgroup (`mv_q4_K_r<2>`, paires ligne-bloc réparties entre les groupes de 8 fils) ; retirée.

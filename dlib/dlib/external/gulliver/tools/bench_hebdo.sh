@@ -62,6 +62,9 @@ for script in bench_moteurs.sh justesse_moteurs.sh; do
   fi
 done
 if [ $found -eq 0 ]; then rm -f "$WEEK"; echo "=== aucune mesure"; exit 0; fi
+# Le conseil de la semaine : quel modèle employer, tiré des tableaux ci-dessus.
+conseil=$(python3 "$TOOLS/conseil_modeles.py" "$WEEK" 2>> "$HEBDO/build.log")
+[ -n "$conseil" ] && { echo; echo "$conseil"; } >> "$WEEK"
 
 # La page du carnet : les semaines de la plus récente à la plus ancienne.  historique.md garde
 # les semaines seules ; mesures.md y ajoute l'en-tête.

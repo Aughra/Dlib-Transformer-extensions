@@ -456,6 +456,167 @@ kernel void mv_q4_K(device const uchar* W0 [[buffer(0)]], device const float* x 
     mv_q4_K_body<NT>(W0, x, y0, a, W2, y2, tg, sg, lane);
 }
 
+// Le produit Q4_K d'un token repris de llama.cpp (ggml-metal, kernels/mul_mv.metal, kernel_mul_mv_q4_K_f32_impl,
+// licence MIT ; chantier Vitesse, 2026-11-22) : les quarts d'octet pris par masques de 16 bits sans décalage, le facteur
+// 1/16 ou 1/256 appliqué une fois à la somme ; 32 activations par fil et par bloc, partagées entre les MVL_NR lignes du
+// simdgroup.  llama.cpp prend deux lignes et deux simdgroups ; une ligne et quatre simdgroups vont plus vite ici.
+// Écriture du 4B du service : 83,0 tokens/s avec mv_q4_K_1, 85,9 avec celui-ci, 88,2 avec aussi mv_q6_K_1l, 89,3 en 1 x 4.
+#define MVL_NR 1
+#define MVL_NSG 4
+kernel void mv_q4_K_1l(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
+    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
+    ushort sg [[simdgroup_index_in_threadgroup]], ushort lane [[thread_index_in_simdgroup]])
+{
+    constexpr ushort kmask1 = 0x3f3f, kmask2 = 0x0f0f, kmask3 = 0xc0c0;
+    device const uchar* W = W0;
+    device float* y = y0;
+    long rows = a.rows, first_row = (long(tg) * MVL_NSG + sg) * MVL_NR;
+    if (first_row >= a.rows)
+    {
+        W = W2;
+        y = y2;
+        first_row -= a.rows;
+        rows = a.rows2;
+    }
+    if (first_row >= rows) return;
+    const short ix = lane / 8, it = lane % 8, iq = it / 4, ir = it % 4;
+    const int nb = int(a.cols / 256);
+    const long row_bytes = long(nb) * 144;
+    device const uchar* blocks = W + first_row * row_bytes;
+    float yl[16], yh[16];
+    float sumf[MVL_NR] = { 0.0f };
+    device const float* y4 = x + ix * 256 + 64 * iq + 8 * ir;
+    ushort sc16[4];
+    thread const uchar* sc8 = (thread const uchar*)sc16;
+    for (int ib = ix; ib < nb; ib += 4)
+    {
+        float4 sumy = { 0.0f, 0.0f, 0.0f, 0.0f };
+        for (short i = 0; i < 8; ++i)
+        {
+            yl[i + 0] = y4[i + 0];   sumy[0] += yl[i + 0];
+            yl[i + 8] = y4[i + 32];  sumy[1] += yl[i + 8];
+            yh[i + 0] = y4[i + 128]; sumy[2] += yh[i + 0];
+            yh[i + 8] = y4[i + 160]; sumy[3] += yh[i + 8];
+        }
+        device const uchar* blk = blocks + long(ib) * 144;
+        device const ushort* sc = (device const ushort*)(blk + 4) + iq;
+        device const ushort* q1 = (device const ushort*)(blk + 16) + 16 * iq + 4 * ir;
+        device const half* dh = (device const half*)blk;
+        for (short row = 0; row < MVL_NR; ++row)
+        {
+            sc16[0] = sc[0] & kmask1;
+            sc16[1] = sc[2] & kmask1;
+            sc16[2] = ((sc[4] >> 0) & kmask2) | ((sc[0] & kmask3) >> 2);
+            sc16[3] = ((sc[4] >> 4) & kmask2) | ((sc[2] & kmask3) >> 2);
+            device const ushort* q2 = q1 + 32;
+            float4 acc1 = { 0.0f, 0.0f, 0.0f, 0.0f }, acc2 = { 0.0f, 0.0f, 0.0f, 0.0f };
+            for (short i = 0; i < 4; ++i)
+            {
+                acc1[0] += yl[2 * i + 0] * (q1[i] & 0x000F);
+                acc1[1] += yl[2 * i + 1] * (q1[i] & 0x0F00);
+                acc1[2] += yl[2 * i + 8] * (q1[i] & 0x00F0);
+                acc1[3] += yl[2 * i + 9] * (q1[i] & 0xF000);
+                acc2[0] += yh[2 * i + 0] * (q2[i] & 0x000F);
+                acc2[1] += yh[2 * i + 1] * (q2[i] & 0x0F00);
+                acc2[2] += yh[2 * i + 8] * (q2[i] & 0x00F0);
+                acc2[3] += yh[2 * i + 9] * (q2[i] & 0xF000);
+            }
+            sumf[row] += float(dh[0]) * ((acc1[0] + 1.f / 256.f * acc1[1]) * sc8[0]
+                + (acc1[2] + 1.f / 256.f * acc1[3]) * sc8[1] * 1.f / 16.f
+                + (acc2[0] + 1.f / 256.f * acc2[1]) * sc8[4]
+                + (acc2[2] + 1.f / 256.f * acc2[3]) * sc8[5] * 1.f / 16.f)
+                - float(dh[1]) * (sumy[0] * sc8[2] + sumy[1] * sc8[3] + sumy[2] * sc8[6] + sumy[3] * sc8[7]);
+            q1 += row_bytes / 2;
+            sc += row_bytes / 2;
+            dh += row_bytes / 2;
+        }
+        y4 += 4 * 256;
+    }
+    for (short row = 0; row < MVL_NR; ++row)
+    {
+        const float v = simd_sum(sumf[row]);
+        const long r = first_row + row;
+        if (lane == 0 && r < rows)
+        {
+            device float* out = y + r;
+            *out = a.beta != 0.0f ? a.alpha * v + a.beta * *out : a.alpha * v;
+        }
+    }
+}
+
+// Le produit Q6_K d'un token repris de llama.cpp de la même façon (kernel_mul_mv_q6_K_f32_impl, licence MIT) :
+// MVL_NR lignes par simdgroup, MVL_NSG simdgroups par threadgroup, seize activations par fil partagées entre les lignes.
+kernel void mv_q6_K_1l(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
+    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
+    ushort sg [[simdgroup_index_in_threadgroup]], ushort lane [[thread_index_in_simdgroup]])
+{
+    constexpr uchar kmask1 = 0x03, kmask2 = 0x0C, kmask3 = 0x30, kmask4 = 0xC0;
+    device const uchar* W = W0;
+    device float* y = y0;
+    long rows = a.rows, first_row = (long(tg) * MVL_NSG + sg) * MVL_NR;
+    if (first_row >= a.rows)
+    {
+        W = W2;
+        y = y2;
+        first_row -= a.rows;
+        rows = a.rows2;
+    }
+    if (first_row >= rows) return;
+    const int nb = int(a.cols / 256);
+    const long row_bytes = long(nb) * 210;
+    device const uchar* blocks = W + first_row * row_bytes;
+    float sumf[MVL_NR] = { 0.0f };
+    float yl[16];
+    const short tid = lane / 2, ix = lane % 2, ip = tid / 8, il = tid % 8, l0 = 4 * il, is = 8 * ip + l0 / 16;
+    const short y_offset = 128 * ip + l0, q_offset_l = 64 * ip + l0, q_offset_h = 32 * ip + l0;
+    for (int i = ix; i < nb; i += 2)
+    {
+        device const uchar* blk = blocks + long(i) * 210;
+        device const uchar* q1 = blk + q_offset_l;
+        device const uchar* q2 = q1 + 32;
+        device const uchar* qh = blk + 128 + q_offset_h;
+        device const char* sc = (device const char*)(blk + 192) + is;
+        device const half* dh = (device const half*)(blk + 208);
+        device const float* yy = x + long(i) * 256 + y_offset;
+        for (short l = 0; l < 4; ++l)
+        {
+            yl[4 * l + 0] = yy[l + 0];
+            yl[4 * l + 1] = yy[l + 32];
+            yl[4 * l + 2] = yy[l + 64];
+            yl[4 * l + 3] = yy[l + 96];
+        }
+        for (short row = 0; row < MVL_NR; ++row)
+        {
+            float4 sums = { 0.0f, 0.0f, 0.0f, 0.0f };
+            for (short l = 0; l < 4; ++l)
+            {
+                sums[0] += yl[4 * l + 0] * float(int(char((q1[l] & 0xF) | ((qh[l] & kmask1) << 4))) - 32);
+                sums[1] += yl[4 * l + 1] * float(int(char((q2[l] & 0xF) | ((qh[l] & kmask2) << 2))) - 32);
+                sums[2] += yl[4 * l + 2] * float(int(char((q1[l] >> 4) | ((qh[l] & kmask3) << 0))) - 32);
+                sums[3] += yl[4 * l + 3] * float(int(char((q2[l] >> 4) | ((qh[l] & kmask4) >> 2))) - 32);
+            }
+            sumf[row] += float(dh[0]) * (sums[0] * sc[0] + sums[1] * sc[2] + sums[2] * sc[4] + sums[3] * sc[6]);
+            q1 += row_bytes;
+            q2 += row_bytes;
+            qh += row_bytes;
+            sc += row_bytes;
+            dh += row_bytes / 2;
+        }
+    }
+    for (short row = 0; row < MVL_NR; ++row)
+    {
+        const float v = simd_sum(sumf[row]);
+        const long r = first_row + row;
+        if (lane == 0 && r < rows)
+        {
+            device float* out = y + r;
+            *out = a.beta != 0.0f ? a.alpha * v + a.beta * *out : a.alpha * v;
+        }
+    }
+}
+
 // La variante par expert (mélange d'experts) : la case tg.y du lot lit les poids de l'expert ids[tg.y], ses
 // activations à la ligne tg.y / x_div de x, et écrit sa ligne de y.
 kernel void mv_q4_K_id(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],

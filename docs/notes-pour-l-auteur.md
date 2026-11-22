@@ -1223,6 +1223,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (mesures alternées, deux tours) : **82,7-82,8** (+1,2 %) ; 2B 166,9-167,6 (+1,6 %) ; Gemma 3 4B 80,2-80,3 (+1,2 %). Gain modeste : un lancement de noyau coûte de l'ordre d'une microseconde sur ce GPU, et la part de `rms_norm` dans le profil par noyau (7,5 %) venait surtout du profilage, qui met chaque noyau dans son propre encodeur.
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 41 : les produits Q4_K et Q6_K d'un token repris de llama.cpp (Gulliver 6.23.0)
+
+- **Avant** : `mv_q4_K_1` et `mv_q6_K_1` (`metal_kernels.metal`), une ligne par simdgroup et quatre simdgroups par threadgroup ; chaque fil développait 32 valeurs d'un bloc (Q4_K) par conversion de chaque quart d'octet. Un relevé par matrice (profil, un encodeur par noyau) donnait le Q4_K à 184-208 Go/s et le Q6_K à 224-231 Go/s, pour un plafond de 254-260 Go/s. Écriture du 4B du service après 512 tokens : **82,9 tokens/s** (llama.cpp : 92).
+- **Changement** (`metal_kernels.metal`, `mv_q4_K_1l` et `mv_q6_K_1l` ; `metal_device.mm`) : l'organisation de `kernel_mul_mv_q4_K_f32_impl` et `kernel_mul_mv_q6_K_f32_impl` de llama.cpp (`ggml/src/ggml-metal/kernels/mul_mv.metal`, commit `e300919` du 22 novembre 2026, licence MIT), reprise et citée : pour le Q4_K, chaque fil charge 32 activations par bloc et leurs sommes, puis lit les quarts d'octet par mots de 16 bits masqués (`0x000F`, `0x0F00`, `0x00F0`, `0xF000`) sans décalage, les facteurs 1/16 et 1/256 appliqués une fois à la somme ; les échelles décodées par masques de 16 bits. llama.cpp prend deux lignes par simdgroup et deux simdgroups ; mesuré ici, une ligne et quatre simdgroups vont plus vite (89,1-89,4 contre 88,1-88,2 tokens/s ; quatre lignes : 84,4-84,6). `GULLIVER_OLD_MV` garde les anciens noyaux. Deux essais rejetés avant celui-ci : deux lignes par simdgroup avec les activations rechargées pour chaque paire (−4 %), deux blocs par tour (−2 %). **Exactitude** : `test_metal` (1,4e-8 à 1,7e-8) ; perplexité par les étapes (8 morceaux de 512) 15,3689 contre 15,3676 (4B), 21,9057 contre 21,9140 (Gemma 3 4B).
+- **Après** (mesures alternées, deux tours, même binaire) : 4B **89,2-89,3** (+7,7 %) ; Qwen3-VL 2B 167,3-167,6 → **174,9-175,7** (+4,8 %) ; Gemma 3 4B 80,2-80,3 → **86,2-86,4** (+7,6 %) ; Qwen3-30B-A3B 75,1 → 76,0-76,2 (+1,3 % : ses experts passent par `mv_*_id`) ; 4B après 4 096 tokens 69,4 → 73,3.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

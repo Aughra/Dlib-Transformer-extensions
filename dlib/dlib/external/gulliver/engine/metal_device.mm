@@ -87,7 +87,7 @@ namespace gulliver
             "dequant_h_q4_K", "dequant_h_q5_K", "dequant_h_q6_K", "dequant_h_q8_0", "dequant_h_q5_0", "to_half",
             "attention_dec_1_64", "attention_dec_1_128", "attention_dec_2_64", "attention_dec_2_128",
             "attention_dec_4_64", "attention_dec_4_128", "attention_dec_8_64", "attention_dec_8_128",
-            "attention_dec_1_256", "attention_dec_2_256", "attention_dec_4_256", "qk_norm_rope" };
+            "attention_dec_1_256", "attention_dec_2_256", "attention_dec_4_256", "qk_norm_rope", "mv_q4_K_1l", "mv_q6_K_1l" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -102,7 +102,7 @@ namespace gulliver
             k_short_conv, k_gelu_mul, k_add_rows, k_attention_part_512, k_attention_mtile_512 = k_attention_part_512 + 4,
             k_dequant_h_q4_K = k_attention_mtile_512 + 4, k_dequant_h_q5_K, k_dequant_h_q6_K, k_dequant_h_q8_0,
             k_dequant_h_q5_0, k_to_half, k_attention_dec,
-            k_qk_norm_rope = k_attention_dec + 11,
+            k_qk_norm_rope = k_attention_dec + 11, k_mv_q4_K_1l, k_mv_q6_K_1l,
             k_count
         };
 
@@ -214,6 +214,10 @@ namespace gulliver
         // ROWS x SG_PER_TG de metal_kernels.metal : une ligne par simdgroup pour un token, quatre pour plusieurs.
         long mv_rows_per_group(unsigned tokens) { return tokens > 1 ? 16 : 4; }
         const unsigned mv_threads = 128, mv_nax_threads = 256;
+        // MVL_NR x MVL_NSG lignes et MVL_NSG simdgroups par threadgroup des produits repris de llama.cpp (metal_kernels.metal) :
+        // une ligne et quatre simdgroups, mesurés le meilleur (2026-11-22, 4B : 89,1-89,4 tokens/s contre 88,1-88,2 pour les
+        // deux lignes et deux simdgroups de llama.cpp, 84,4-84,6 pour quatre lignes).
+        const unsigned mvl_rows = 1 * 4, mvl_threads = 32 * 4;
         const unsigned attention_threads = 128;   // ATT_SG simdgroups
     }
 
@@ -633,6 +637,12 @@ namespace gulliver
         if (tokens > max_tokens || cols % (type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0 ? 32 : 256) != 0)
             throw std::invalid_argument("metal_device: a product of more tokens or other columns than its kernel takes");
         const int nax = impl_->mv_nax_index(type, tokens, rows, 0, cols);
+        // Un token en Q4_K ou Q6_K : les produits repris de llama.cpp (mv_q4_K_1l, mv_q6_K_1l) ; GULLIVER_OLD_MV garde
+        // mv_q4_K_1 et mv_q6_K_1 pour les mesures.
+        static const bool old_mv = std::getenv("GULLIVER_OLD_MV") != nullptr;
+        const bool ql = nax < 0 && tokens == 1 && !old_mv
+            && (type == gulliver::ggml_type::Q4_K || type == gulliver::ggml_type::Q6_K);
+        if (ql) k = type == gulliver::ggml_type::Q4_K ? k_mv_q4_K_1l : k_mv_q6_K_1l;
         if (nax >= 0) impl_->use_nax(nax);
         else impl_->use(k);
         impl_->bind(W, 0);
@@ -643,6 +653,7 @@ namespace gulliver
         const mv_args a = { rows, cols, tokens, x_stride, y_stride, alpha, beta, y_stride, 0 };
         impl_->args(a, 3);
         if (nax >= 0) impl_->groups(static_cast<unsigned>(rows / 32), 1, 1, mv_nax_threads);
+        else if (ql) impl_->groups(static_cast<unsigned>((rows + mvl_rows - 1) / mvl_rows), 1, 1, mvl_threads);
         else impl_->groups(static_cast<unsigned>((rows + mv_rows_per_group(tokens) - 1) / mv_rows_per_group(tokens)), 1, 1, mv_threads);
         return true;
     }
@@ -663,6 +674,12 @@ namespace gulliver
         if (tokens > max_tokens || cols % 256 != 0 || rows % 16 != 0)
             throw std::invalid_argument("metal_device: a double product of more tokens or other shapes than its kernel takes");
         const int nax = impl_->mv_nax_index(type, tokens, rows, rows2, cols);
+        // Un token en Q4_K ou Q6_K : les produits repris de llama.cpp (mv_q4_K_1l, mv_q6_K_1l) ; GULLIVER_OLD_MV garde
+        // mv_q4_K_1 et mv_q6_K_1 pour les mesures.
+        static const bool old_mv = std::getenv("GULLIVER_OLD_MV") != nullptr;
+        const bool ql = nax < 0 && tokens == 1 && !old_mv
+            && (type == gulliver::ggml_type::Q4_K || type == gulliver::ggml_type::Q6_K);
+        if (ql) k = type == gulliver::ggml_type::Q4_K ? k_mv_q4_K_1l : k_mv_q6_K_1l;
         if (nax >= 0) impl_->use_nax(nax);
         else impl_->use(k);
         impl_->bind(W, 0);
@@ -673,6 +690,7 @@ namespace gulliver
         const mv_args a = { rows, cols, tokens, x_stride, y_stride, 1.0f, 0.0f, y2_stride, rows2 };
         impl_->args(a, 3);
         if (nax >= 0) impl_->groups(static_cast<unsigned>((rows + rows2) / 32), 1, 1, mv_nax_threads);
+        else if (ql) impl_->groups(static_cast<unsigned>((rows + rows2 + mvl_rows - 1) / mvl_rows), 1, 1, mvl_threads);
         else impl_->groups(static_cast<unsigned>((rows + rows2 + mv_rows_per_group(tokens) - 1) / mv_rows_per_group(tokens)), 1, 1,
             mv_threads);
         return true;

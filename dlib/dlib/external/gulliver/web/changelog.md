@@ -2,6 +2,18 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.23.0 — 22 novembre 2026
+
+### Performances
+
+- Les produits par les poids de l'écriture d'une réponse (formats Q4_K et Q6_K) reprennent l'organisation des noyaux de llama.cpp (licence MIT) : activations chargées une fois par bloc et quarts d'octet lus par masques, sans décalage. Écriture sur le GPU, Mac mini M5 Pro, après 512 tokens : modèle du service de 82,9 à 89,2-89,3 tokens/s (+7,7 %), Qwen3-VL 2B de 167 à 175 (+4,8 %), Gemma 3 4B de 80,2 à 86,3 (+7,6 %), Qwen3-30B-A3B +1,3 % ; après 4 096 tokens, modèle du service de 69,4 à 73,3. Justesse inchangée (perplexité 15,3689 contre 15,3676 sur le modèle du service).
+
+### Accès et documents
+
+- Chaque mesure du dimanche se termine par un conseil sur le modèle à employer (`tools/conseil_modeles.py`, tiré des tableaux de la semaine : le modèle du service, le plus juste de la famille Qwen3, le plus rapide), et la rubrique « Tests de vitesse » du carnet gagne une conclusion « Quel modèle employer avec Gulliver ».
+
+---
+
 ## 6.22.2 — 22 novembre 2026
 
 ### Performances

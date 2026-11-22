@@ -6,9 +6,9 @@
 // Version des programmes et des moteurs de Gulliver, comparée par le flux de mises à
 // jour et par l'installateur sur une installation existante.
 #define GULLIVER_VERSION_MAJOR 6
-#define GULLIVER_VERSION_MINOR 22
-#define GULLIVER_VERSION_PATCH 2
-#define GULLIVER_VERSION "6.22.2"
+#define GULLIVER_VERSION_MINOR 23
+#define GULLIVER_VERSION_PATCH 0
+#define GULLIVER_VERSION "6.23.0"
 
 // Gulliver : le portage macOS (Apple Silicon) du service de chat nommé « Albireo » chez
 // l'original (Cydral Technology).  L'auteur et le copyright ci-dessous restent ceux de

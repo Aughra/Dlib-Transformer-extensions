@@ -29,6 +29,21 @@ Mesure du dimanche 22 novembre à 6 h 58 (page « Mesures du dimanche »), aprè
 - **Corrigé en 6.22.1** : dans cette mesure, Qwen3-30B-A3B avec la mémoire de conversation en demi-précision lisait à 120 jetons/s au lieu de 1 136 (−89 %). Le contrôle du GPU au chargement lui appliquait la limite des modèles ordinaires, et une quasi-égalité entre deux experts renvoyait tout au processeur. Il lit désormais à 1 208 jetons/s et écrit à 75, avec la même perplexité (réglage non employé par le service, qui est en 8 bits).
 - **Une mesure écartée** : celle de la nuit du 21 au 22, lancée par l'agent en priorité de tâche de fond. macOS l'avait cantonnée aux cœurs lents, et ses chiffres étaient faux (l'Albireo d'origine dix fois plus lent). L'agent tourne désormais en priorité normale.
 
+## Quel modèle employer avec Gulliver (conseil)
+
+D'après la mesure du 22 novembre (Gulliver 6.22.0) et, pour l'écriture, Gulliver 6.23.0 (produits par les poids repris de llama.cpp, +5 à +8 %). Chaque semaine, la page « Mesures du dimanche » refait ce conseil à partir de ses propres chiffres.
+
+| Besoin | Modèle conseillé | Pourquoi | Ce qu'il coûte |
+|---|---|---|---|
+| **Tout faire, images comprises** (le réglage par défaut) | **Qwen3-VL 4B Thinking** (le modèle du service, 2,5 Go) | Voit les images, raisonne, écrit vite : 89 jetons/s après 512 tokens en 6.23.0, lit une question de 4 096 tokens à 2 258 jetons/s | Rien de plus |
+| **Les réponses les plus justes, en texte seul** | **Qwen3-30B-A3B Instruct** (18,6 Go) | Perplexité 10,94 contre 15,37 pour le modèle du service, 29 % plus basse sur le même découpage en mots : le modèle le plus juste mesuré. Ses 128 experts n'en font travailler que 8 par mot : il écrit presque aussi vite qu'un 4B (72 à 76 jetons/s) | Plus de mémoire (le fichier entier reste chargé, à l'aise sur 64 Go) ; lit les longues questions 1,5 fois moins vite (1 447 jetons/s à 4 096 tokens) ; ne voit pas les images |
+| **Aller vite sur des tâches simples** | **Qwen3-VL 2B Instruct** (1,1 Go) | Deux fois plus rapide que le 4B (164 jetons/s en 6.22.0, 175 en 6.23.0), même famille, voit les images | Se trompe davantage (perplexité 18,67) |
+| Le plus rapide de tous | LFM2.5-1.2B (1,3 Go) | 194 jetons/s en écriture | Petit modèle, à réserver aux tâches très simples |
+
+En une phrase : **garder le modèle du service par défaut, et passer à Qwen3-30B-A3B quand la justesse de la réponse compte plus que les images et la lecture de très longs documents.** Le Mac mini a la mémoire qu'il faut pour les deux.
+
+Deux précautions. La perplexité mesure la façon dont un modèle prévoit un texte français (dix épisodes du blog), pas la qualité de ses raisonnements ; elle ne se compare qu'entre modèles qui découpent le texte de la même façon (les Qwen3 entre eux : Gemma 3 et LFM2 ont leur propre découpage, leurs chiffres ne se rangent pas sur la même échelle). Et l'écriture est mesurée sans brouillon : sur une recopie ou une question sur un document, les brouillons la multiplient par 1,3 à 3 pour tous ces modèles.
+
 ## En bref, au départ (21 novembre, Gulliver 6.16.0)
 
 | | Gulliver | llama.cpp | MLX | Albireo d'origine (sur ce Mac) |
