@@ -240,7 +240,7 @@ La mesure « comme un utilisateur » (6.30.0) envoie trois documents de 4 000 to
 | Une discussion écrit pendant qu'un document de 8 000 tokens arrive | 19 jetons/s ; premier mot du document après 11,4 s | **31** jetons/s ; **4,8 à 5,1 s** |
 | Trois documents de 4 000 tokens ensemble, premier mot | 6,0 s en moyenne, 6,5 s au pire | **4,2 s** en moyenne (le premier en 2,0 s), 6,3 s au pire |
 
-Llama.cpp reste devant sur la seconde ligne (3,2 s) : il lit chaque document un peu plus vite. À comparer de nouveau dans la mesure de la semaine.
+Llama.cpp reste devant sur la seconde ligne (3,2 s) : il lit chaque document un peu plus vite. Avec les noyaux de la nuit (6.40.0, mesure du 23 novembre à 0 h 15, deux tours), l'attente moyenne descend à **3,8-3,9 s** (1,8-1,9 s pour le premier servi, 5,7-6,1 s pour le dernier). À comparer de nouveau dans la mesure de la semaine.
 
 ### Les modèles en Q8_0 sur le GPU (Gulliver 6.34.0)
 
