@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.31.1 — 22 novembre 2026
+
+### Outils de mesure
+
+- `tools/justesse_reference.py` : la justesse de Gulliver comparée au modèle d'origine publié sur Hugging Face, calculé en pleine précision par PyTorch (environnement à part, `build/torch-venv`, dont Gulliver ne dépend pas). `perplexity_runtime` écrit, avec la variable `GULLIVER_PPL_DUMP`, la probabilité du token suivant et les 20 candidats préférés de chaque position. Premier relevé (Qwen3-VL 4B Thinking Q4_K_M, 20 morceaux de 512 tokens) : perplexité 13,80 contre 13,53 pour l'origine (+2,0 %), même premier choix que l'origine pour 89,8 % des positions, découpage en tokens identique ; llama.cpp donne 13,81 sur le même fichier : l'écart vient de la compression en 4 bits, pas du moteur.
+
+---
+
 ## 6.31.0 — 22 novembre 2026
 
 ### Sécurité

@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.31.0, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.31.1, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 

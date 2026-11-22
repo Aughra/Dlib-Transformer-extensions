@@ -17,6 +17,11 @@
     réponse : la même perplexité, calculée par le chemin des étapes.  Avec « stepsN » (steps4, steps8),
     la seconde moitié est donnée N tokens à la fois, comme la vérification des brouillons : le chemin
     des étapes de plusieurs tokens.
+
+    Avec la variable GULLIVER_PPL_DUMP=<fichier>, chaque morceau (ses tokens) et chaque position notée (le token
+    suivant, sa log-probabilité et les 20 candidats les plus probables avec la leur) sont écrits dans ce fichier, en
+    JSON par lignes : tools/justesse_reference.py les compare au modèle d'origine calculé par PyTorch (fork pour macOS,
+    2026-11-22).
 */
 
 #include <algorithm>
@@ -110,6 +115,11 @@ int main(int argc, char** argv)
 
     const long V = cfg.vocab;
     const long first = ctx / 2;
+    const char* dump_path = std::getenv("GULLIVER_PPL_DUMP");
+    std::FILE* dump = dump_path && *dump_path ? std::fopen(dump_path, "w") : nullptr;
+    if (dump_path && *dump_path && !dump) { std::printf("cannot write %s\n", dump_path); return 2; }
+    constexpr long dump_top = 20;
+    std::vector<long> order(static_cast<size_t>(V));
     double nll = 0, nll2 = 0;
     long count = 0, top1 = 0;
     std::vector<float> logits;
@@ -152,6 +162,12 @@ int main(int argc, char** argv)
             logits.swap(all);
         }
         rt.release_sequence(seq);
+        if (dump)
+        {
+            std::fprintf(dump, "{\"chunk\":%ld,\"first\":%ld,\"tokens\":[", c, first);
+            for (size_t i = 0; i < chunk.size(); ++i) std::fprintf(dump, i ? ",%d" : "%d", chunk[i]);
+            std::fprintf(dump, "]}\n");
+        }
         for (long r = 0; r < ctx - 1 - first; ++r)
         {
             const float* row = logits.data() + r * V;
@@ -164,6 +180,18 @@ int main(int argc, char** argv)
             nll2 += lp * lp;
             ++count;
             if (std::max_element(row, row + V) - row == next) ++top1;
+            if (dump)
+            {
+                for (long i = 0; i < V; ++i) order[static_cast<size_t>(i)] = i;
+                std::partial_sort(order.begin(), order.begin() + dump_top, order.end(),
+                                  [row](long a, long b) { return row[a] > row[b]; });
+                const double lse = m + std::log(sum);
+                std::fprintf(dump, "{\"c\":%ld,\"p\":%ld,\"next\":%d,\"lp\":%.6f,\"top\":[", c, first + r, next, lp);
+                for (long k = 0; k < dump_top; ++k)
+                    std::fprintf(dump, "%s[%ld,%.6f]", k ? "," : "", order[static_cast<size_t>(k)],
+                                 static_cast<double>(row[order[static_cast<size_t>(k)]]) - lse);
+                std::fprintf(dump, "]}\n");
+            }
         }
         std::printf("[%ld] %.4f\n", c + 1, std::exp(nll / count));
         std::fflush(stdout);
@@ -174,5 +202,6 @@ int main(int argc, char** argv)
     std::printf("tokens: %zu, chunks: %ld of %ld, scored positions: %ld\n", tokens.size(), chunks, ctx, count);
     std::printf("perplexity: %.4f +/- %.4f\n", std::exp(mean), err);
     std::printf("top-1: %.2f %%\n", 100.0 * top1 / count);
+    if (dump) std::fclose(dump);
     return 0;
 }
