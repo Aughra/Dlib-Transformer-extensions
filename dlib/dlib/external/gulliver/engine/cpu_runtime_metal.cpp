@@ -581,9 +581,16 @@ namespace gulliver
                 étape en 8 bits, 0,13 % et 0,11 % en demi-précision, le même token le plus probable chaque fois.  Un défaut
                 donne des logits sans rapport et un autre token.
             */
+            /*
+                En demi-précision aussi, un mélange d'experts change d'expert à une quasi-égalité (fork pour macOS, 2026-11-22) :
+                Qwen3-30B-A3B (128 experts, 8 par token), clés et valeurs en demi-précision, 1,2 % sur le prompt, 1,4 % et 4,1 %
+                aux deux étapes, le même token le plus probable chaque fois ; la limite de 1 % le renvoyait au processeur (lecture
+                de 512 tokens 119 jetons/s au lieu de 1 136).  Les mélanges d'experts gardent donc 25 % dans les deux formats.
+            */
             const bool q8_check = kv_.format() == kv_format::q8;
             const double q8_limit = cfg_.is_moe() ? 0.25 : 0.05;
-            if (gpu_prompt) compare("prompt", q8_check ? q8_limit : 0.01);
+            const double f16_limit = cfg_.is_moe() ? 0.25 : 0.01;
+            if (gpu_prompt) compare("prompt", q8_check ? q8_limit : f16_limit);
             for (int step = 0; step < 2; ++step)
             {
                 forward_batch one;
@@ -607,7 +614,7 @@ namespace gulliver
                     dont six couches d'attention portent seules la mémoire du texte : 2,2 % à la première étape en 8 bits,
                     0,10 % en demi-précision).
                 */
-                compare(step == 0 ? "step 1" : "step 2", gpu_prompt && q8_check ? q8_limit : 0.01);
+                compare(step == 0 ? "step 1" : "step 2", gpu_prompt && q8_check ? q8_limit : f16_limit);
             }
             if (!agree && attempt == 0 && gpu_prompt)
             {

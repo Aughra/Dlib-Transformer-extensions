@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.22.1 : le contrôle du GPU garde les mélanges d'experts en demi-précision
+
+- **Quoi** : `engine/cpu_runtime_metal.cpp`, contrôle au chargement : la limite des mélanges d'experts (25 %) vaut aussi pour les clés et valeurs en demi-précision (`f16_limit`) ; les modèles denses gardent 1 % en demi-précision et 5 % en 8 bits ; le token le plus probable doit toujours être le même.
+- **Fichiers** : `gulliver/engine/cpu_runtime_metal.cpp`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/mesures/tests-de-vitesse.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : la mesure du dimanche donnait Qwen3-30B-A3B en clés f16 à 120 jetons/s en lecture (−89 %) et −37 % en écriture. Le journal du moteur : « the check disagrees … prompt 1,21 %, step 1 1,42 %, step 2 4,13 %, most likely token the same », puis « the passes go back to the processor ». Une quasi-égalité entre experts suffit à déplacer les logits, en demi-précision aussi (le commentaire d'origine, mesuré sur LFM2.5-8B-A1B, donnait 0,13 %).
+- **Étapes** : `bench_runtime … 512 64 0 f16 metal` : lecture 118,6 → 1 207,5, écriture 45,3 → 75,4 (q8 : 1 197,7 et 74,2) ; perplexité (8 morceaux de 512, f16, GPU) 10,9015 (processeur f16 10,902, llama.cpp 10,926, GPU q8 10,938) ; `test_metal` passe ; `test_macos.sh` (port 18473) : 70 étapes, 0 échec. Code du fork (le contrôle n'existe pas dans l'original) : pas d'entrée aux notes pour l'auteur. Version 6.22.1.
+
 ## 2026-11-22 — Mesure du dimanche publiée, épisode 61 du blog
 
 - **Quoi** : campagne refaite en priorité normale (6 h 58 à 8 h 33, charge 1,45 au départ ; Gulliver 6.22.0, `a3acdcc`), ajoutée par l'agent en tête de `build/bench/hebdo/mesures.md` (page « Mesures du dimanche » du carnet). Rubrique « Tests de vitesse » : partie « Aujourd'hui » en tête, l'ancien résumé renommé « au départ ». Blog : épisode 61 (« La course », chantier Vitesse de 6.15.0 à 6.22.0), au sommaire ; aucun changement de dlib dans cette étape.
