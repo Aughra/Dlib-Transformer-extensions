@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Mesure du dimanche publiée, épisode 61 du blog
+
+- **Quoi** : campagne refaite en priorité normale (6 h 58 à 8 h 33, charge 1,45 au départ ; Gulliver 6.22.0, `a3acdcc`), ajoutée par l'agent en tête de `build/bench/hebdo/mesures.md` (page « Mesures du dimanche » du carnet). Rubrique « Tests de vitesse » : partie « Aujourd'hui » en tête, l'ancien résumé renommé « au départ ». Blog : épisode 61 (« La course », chantier Vitesse de 6.15.0 à 6.22.0), au sommaire ; aucun changement de dlib dans cette étape.
+- **Fichiers** : `docs/mesures/tests-de-vitesse.md`, `blog/{61-la-course.md,README.md}`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain (« publie le dans vitesse du dimanche », « continue le roadmap »).
+- **Étapes** : chiffres (modèle du service) : lecture 2 679 / 2 258 / 1 256 jetons/s à 512 / 4 096 / 16 384 tokens (llama.cpp 2 579 / 2 057 / 1 205, MLX 2 781 / 3 099 / 2 076) ; écriture 82,0 / 68,9 / 47,4 (llama.cpp 92,0 / 77,7 / 50,2, MLX 106 / 87,7 / 55,9). Gulliver lit plus vite que llama.cpp sur 14 lignes sur 18 ; écrit de 6 à 18 % moins vite, sauf LFM2 (égal) et le 2B après 16 384 (+5 %). Justesse : écarts de 0,35 % au plus entre Gulliver, llama.cpp et l'original. Anomalie relevée : Qwen3-30B-A3B en clés f16, lecture 120 jetons/s (−89 %), écriture −37 %.
+
 ## 2026-11-22 — Agent de la mesure du dimanche : priorité normale
 
 - **Quoi** : `macos/bench-hebdo/install.sh` écrit `ProcessType = Interactive` au lieu de `Background` ; README : le réglage et la vérification (`launchctl print` : `spawn type = interactive`). Agent réinstallé ; la campagne de la nuit, arrêtée, est relancée (elle attend une charge sous 3).

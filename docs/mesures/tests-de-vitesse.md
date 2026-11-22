@@ -8,10 +8,28 @@ Ce document compare Gulliver à trois autres moteurs, avec les mêmes modèles :
 
 Il mesure la vitesse, puis la justesse, et explique d'où viennent les écarts. Le but est que Gulliver devienne le plus rapide sans rien perdre en justesse (priorité du projet depuis le 21 novembre 2026, chantier « Vitesse » de la feuille de route).
 
-- **Mesures de ce document** : 21 novembre 2026, à partir de 11 h 30, Mac mini M5 Pro (64 Go), Gulliver 6.16.0, llama.cpp 1.0.0 (Homebrew), MLX 0.32.4, Albireo d'origine 1.0.27 (`af5c811`).
+- **Mesures de ce document** : sauf la partie « Aujourd'hui », 21 novembre 2026, à partir de 11 h 30, Mac mini M5 Pro (64 Go), Gulliver 6.16.0, llama.cpp 1.0.0 (Homebrew), MLX 0.32.4, Albireo d'origine 1.0.27 (`af5c811`).
 - **Chaque dimanche** : les mêmes mesures sont refaites par le Mac lui-même, à 4 h ; elles s'ajoutent, datées et la plus récente en tête, à la page « Mesures du dimanche », juste à côté dans le carnet (mode d'emploi : `macos/bench-hebdo/README.md`). Les tableaux complets, modèle par modèle, sont là.
 
-## En bref
+## Aujourd'hui (22 novembre, Gulliver 6.22.0)
+
+Mesure du dimanche 22 novembre à 6 h 58 (page « Mesures du dimanche »), après une journée de chantier. Écart à Gulliver : **+** quand l'autre moteur est plus rapide, **−** quand il est plus lent. L'écriture est mesurée sans brouillon, pour les trois moteurs.
+
+| Modèle du service (Qwen3-VL 4B) | Gulliver | llama.cpp | MLX |
+|---|---|---|---|
+| Lecture, 512 tokens | 2 679 | 2 579 (−4 %) | 2 781 (+4 %) |
+| Lecture, 4 096 tokens | 2 258 | 2 057 (−9 %) | 3 099 (+37 %) |
+| Lecture, 16 384 tokens | 1 256 | 1 205 (−4 %) | 2 076 (+65 %) |
+| Écriture après 512 | 82,0 | 92,0 (+12 %) | 106 (+29 %) |
+| Écriture après 16 384 | 47,4 | 50,2 (+6 %) | 55,9 (+18 %) |
+
+- **Lecture : Gulliver passe devant llama.cpp** sur presque tous les modèles et toutes les longueurs (de 1 à 9 % devant), sauf les questions courtes du 2B et de LFM2 (12 et 16 % derrière) et le mélange d'experts Qwen3-30B-A3B (69 % derrière à 512 tokens, 4 à 9 % au-delà). Hier matin, il était derrière partout, jusqu'à 2,3 fois. MLX reste devant, surtout sur les longues questions (+23 à +116 %).
+- **Écriture : Gulliver reste derrière llama.cpp**, de 6 à 18 % en général (24 à 36 % sur le 30B à 512 et 4 096 tokens, 47 % sur Gemma 3 après 16 384), fait jeu égal sur LFM2 et passe devant sur le 2B après 16 384 tokens (5 %). Hier matin, l'écart était de 30 à 70 %. Les brouillons (6.22.0) ne comptent pas dans ces tableaux : sur une recopie ou une question sur un document, ils font écrire Gulliver 1,3 à 3 fois plus vite (voir plus bas).
+- **Justesse : inchangée.** Sur le même fichier, Gulliver, llama.cpp et l'original restent à 0,35 % au plus les uns des autres.
+- **À surveiller** : Qwen3-30B-A3B avec la mémoire de conversation en demi-précision lit à 120 jetons/s au lieu de 1 136 (−89 %) et écrit 37 % moins vite. Le calcul repasse probablement au processeur : à corriger (réglage non employé par le service, qui est en 8 bits).
+- **Une mesure écartée** : celle de la nuit du 21 au 22, lancée par l'agent en priorité de tâche de fond. macOS l'avait cantonnée aux cœurs lents, et ses chiffres étaient faux (l'Albireo d'origine dix fois plus lent). L'agent tourne désormais en priorité normale.
+
+## En bref, au départ (21 novembre, Gulliver 6.16.0)
 
 | | Gulliver | llama.cpp | MLX | Albireo d'origine (sur ce Mac) |
 |---|---|---|---|---|
