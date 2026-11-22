@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.23.1 : les produits par expert de l'écriture avec le calcul de la 6.23.0
+
+- **Quoi** : `engine/metal_kernels.metal` : les corps `mv_q4_K_1l_body` et `mv_q6_K_1l_body`, et les noyaux par expert `mv_q4_K_idl`, `mv_q6_K_idl` ; `engine/metal_device.mm` : `matvec_id` les emploie (`GULLIVER_OLD_MV` pour les anciens). `tests/test_metal.cpp` : `test_matmul_id(…, step)` contrôle `matvec_id` (3 tokens, 2 experts chacun, cinq formats).
+- **Fichiers** : `gulliver/engine/{metal_kernels.metal,metal_device.mm}`, `gulliver/tests/test_metal.cpp`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md}`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : le profil d'une étape du 30B mettait `mv_q4_K_id` à 38 % et `mv_q6_K_id` à 12 %.
+- **Étapes** : mesures alternées contre le binaire de la 6.23.0 (charge 3,7 à 5,1) : Qwen3-30B-A3B 76,2 / 76,3 → 83,9 / 83,7 ; LFM2.5-8B-A1B 181,0 / 180,5 → 189,9 / 190,9. Perplexité par les étapes (30B, 8 morceaux de 512) : 10,9446 contre 10,9541 avec `GULLIVER_OLD_MV`. `test_metal` : `mv_id_*` passent (nouveaux et anciens noyaux) ; `test_macos.sh` (port 18473) : 70 étapes, 0 échec. Version 6.23.1.
+
 ## 2026-11-22 — Conseil du modèle à employer, dans la mesure du dimanche et dans l'article
 
 - **Quoi** : `tools/conseil_modeles.py` (nouveau) lit les tableaux d'une semaine (lecture, écriture, justesse ; colonnes de Gulliver) et écrit la section « Conseil : quel modèle employer avec Gulliver » : le modèle du service, le plus juste des Qwen3 (seule famille dont les perplexités se comparent), le plus rapide, avec les précautions de lecture ; `tools/bench_hebdo.sh` l'ajoute à chaque semaine. Semaine du 22 novembre complétée à la main (`build/bench/hebdo/{2026-11-22.md,historique.md,mesures.md}`, hors dépôt). Rubrique « Tests de vitesse » : section « Quel modèle employer avec Gulliver (conseil) » (Qwen3-VL 4B par défaut ; Qwen3-30B-A3B pour la justesse en texte seul, perplexité 10,94 contre 15,37 ; Qwen3-VL 2B pour la vitesse).

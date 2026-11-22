@@ -463,10 +463,8 @@ kernel void mv_q4_K(device const uchar* W0 [[buffer(0)]], device const float* x 
 // Écriture du 4B du service : 83,0 tokens/s avec mv_q4_K_1, 85,9 avec celui-ci, 88,2 avec aussi mv_q6_K_1l, 89,3 en 1 x 4.
 #define MVL_NR 1
 #define MVL_NSG 4
-kernel void mv_q4_K_1l(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
-    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
-    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
-    ushort sg [[simdgroup_index_in_threadgroup]], ushort lane [[thread_index_in_simdgroup]])
+static inline void mv_q4_K_1l_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
+    device const uchar* W2, device float* y2, uint tg, ushort sg, ushort lane)
 {
     constexpr ushort kmask1 = 0x3f3f, kmask2 = 0x0f0f, kmask3 = 0xc0c0;
     device const uchar* W = W0;
@@ -547,10 +545,8 @@ kernel void mv_q4_K_1l(device const uchar* W0 [[buffer(0)]], device const float*
 
 // Le produit Q6_K d'un token repris de llama.cpp de la même façon (kernel_mul_mv_q6_K_f32_impl, licence MIT) :
 // MVL_NR lignes par simdgroup, MVL_NSG simdgroups par threadgroup, seize activations par fil partagées entre les lignes.
-kernel void mv_q6_K_1l(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
-    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
-    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
-    ushort sg [[simdgroup_index_in_threadgroup]], ushort lane [[thread_index_in_simdgroup]])
+static inline void mv_q6_K_1l_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
+    device const uchar* W2, device float* y2, uint tg, ushort sg, ushort lane)
 {
     constexpr uchar kmask1 = 0x03, kmask2 = 0x0C, kmask3 = 0x30, kmask4 = 0xC0;
     device const uchar* W = W0;
@@ -615,6 +611,46 @@ kernel void mv_q6_K_1l(device const uchar* W0 [[buffer(0)]], device const float*
             *out = a.beta != 0.0f ? a.alpha * v + a.beta * *out : a.alpha * v;
         }
     }
+}
+
+kernel void mv_q4_K_1l(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
+    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
+    ushort sg [[simdgroup_index_in_threadgroup]], ushort lane [[thread_index_in_simdgroup]])
+{
+    mv_q4_K_1l_body(W0, x, y0, a, W2, y2, tg, sg, lane);
+}
+
+// Les produits par expert avec le même corps (chantier Vitesse, 2026-11-22), comme mv_q4_K_id.
+kernel void mv_q4_K_idl(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const int* ids [[buffer(4)]],
+    constant moe_args& m [[buffer(5)]], uint2 tg [[threadgroup_position_in_grid]],
+    ushort sg [[simdgroup_index_in_threadgroup]], ushort lane [[thread_index_in_simdgroup]])
+{
+    const uint slot = tg.y;
+    device const uchar* W = W0 + ulong(ids[slot]) * m.expert_bytes;
+    device float* y = y0 + ulong(slot) * a.y_stride;
+    mv_q4_K_1l_body(W, x + ulong(slot / m.x_div) * a.x_stride, y, a, W, y, tg.x, sg, lane);
+}
+
+kernel void mv_q6_K_1l(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],
+    device float* y2 [[buffer(5)]], uint tg [[threadgroup_position_in_grid]],
+    ushort sg [[simdgroup_index_in_threadgroup]], ushort lane [[thread_index_in_simdgroup]])
+{
+    mv_q6_K_1l_body(W0, x, y0, a, W2, y2, tg, sg, lane);
+}
+
+// Les produits par expert avec le même corps (chantier Vitesse, 2026-11-22), comme mv_q6_K_id.
+kernel void mv_q6_K_idl(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const int* ids [[buffer(4)]],
+    constant moe_args& m [[buffer(5)]], uint2 tg [[threadgroup_position_in_grid]],
+    ushort sg [[simdgroup_index_in_threadgroup]], ushort lane [[thread_index_in_simdgroup]])
+{
+    const uint slot = tg.y;
+    device const uchar* W = W0 + ulong(ids[slot]) * m.expert_bytes;
+    device float* y = y0 + ulong(slot) * a.y_stride;
+    mv_q6_K_1l_body(W, x + ulong(slot / m.x_div) * a.x_stride, y, a, W, y, tg.x, sg, lane);
 }
 
 // La variante par expert (mélange d'experts) : la case tg.y du lot lit les poids de l'expert ids[tg.y], ses

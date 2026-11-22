@@ -144,10 +144,12 @@ namespace
         matmul_id les multiplie ; chaque case comparée à son expert développé par qk_dequantize_row().  Des
         octets aléatoires, l'échelle de chaque bloc remise dans une plage raisonnable.
     */
-    void test_matmul_id(metal_device& gpu, gulliver::ggml_type type, const char* name)
+    // step : les produits par expert d'une étape d'écriture (matvec_id, une case par lancement de lignes) au lieu des
+    // produits groupés d'un prompt (fork pour macOS, 2026-11-22 : ils n'étaient contrôlés nulle part).
+    void test_matmul_id(metal_device& gpu, gulliver::ggml_type type, const char* name, bool step = false)
     {
         const long E = 6, rows = 64, cols = 512;
-        const unsigned tokens = 37, top_k = 2, slots = tokens * top_k, x_stride = cols + 64, y_stride = rows + 8;
+        const unsigned tokens = step ? 3 : 37, top_k = 2, slots = tokens * top_k, x_stride = cols + 64, y_stride = rows + 8;
         const bool small = type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0;
         const long values = small ? 32 : 256;
         const size_t block = type == gulliver::ggml_type::Q4_K ? 144 : type == gulliver::ggml_type::Q5_K ? 176
@@ -183,9 +185,11 @@ namespace
         for (size_t i = 0; i < x_stride * tokens; ++i) x[i] = uniform(-1.0f, 1.0f);
         for (size_t i = 0; i < y_stride * slots; ++i) y[i] = 7.0f;
         auto c = gpu.begin();
-        c->moe_group(I, slots, E, tokens, list, counts, work, dispatch, rows, rows);
-        const bool encoded = c->matmul_id(type, W, rows, cols, expert_bytes, rb, X, x_stride, top_k, list, counts, work,
-            tokens, dispatch, 0, Y, y_stride);
+        if (!step) c->moe_group(I, slots, E, tokens, list, counts, work, dispatch, rows, rows);
+        else std::memset(counts.contents(), 0, sizeof(int) * E);
+        const bool encoded = step ? c->matvec_id(type, W, rows, cols, expert_bytes, X, x_stride, top_k, I, slots, Y, y_stride)
+            : c->matmul_id(type, W, rows, cols, expert_bytes, rb, X, x_stride, top_k, list, counts, work, tokens, dispatch, 0, Y,
+                y_stride);
         c->finish();
         double worst = 0;
         bool untouched = true;
@@ -209,7 +213,8 @@ namespace
         const int* n = static_cast<const int*>(counts.contents());
         // Les poids de mm_id en demi-précision (Gulliver 6.8.0) : chacun arrondi à 2^-11 près au plus, d'où une erreur
         // d'au plus environ 4,9e-4 rapportée à la somme des |w x| (mesuré : 5e-5 à 8e-5) ; un défaut donne de l'ordre de 1.
-        check(encoded && worst < 1e-3 && untouched && n[5] == 0, std::string("mm_id_") + name + ", " + std::to_string(slots)
+        // Les produits d'une étape restent en floats : la tolérance des produits mv_*.
+        check(encoded && worst < (step ? 1e-5 : 1e-3) && untouched && n[5] == 0, std::string(step ? "mv_id_" : "mm_id_") + name + ", " + std::to_string(slots)
             + " cases over 5 of 6 experts: largest error " + sci(worst) + ", the rows beyond the matrix untouched");
     }
 
@@ -672,6 +677,10 @@ int main()
     test_matmul_id(*gpu, gulliver::ggml_type::Q6_K, "q6_K");
     test_matmul_id(*gpu, gulliver::ggml_type::Q8_0, "q8_0");
     test_matmul_id(*gpu, gulliver::ggml_type::Q5_0, "q5_0");
+    for (auto f : { std::make_pair(gulliver::ggml_type::Q4_K, "q4_K"), std::make_pair(gulliver::ggml_type::Q5_K, "q5_K"),
+             std::make_pair(gulliver::ggml_type::Q6_K, "q6_K"), std::make_pair(gulliver::ggml_type::Q8_0, "q8_0"),
+             std::make_pair(gulliver::ggml_type::Q5_0, "q5_0") })
+        test_matmul_id(*gpu, f.first, f.second, true);
     test_norm_rope_gate(*gpu);
     test_attention(*gpu, kv_format::q8);
     test_attention(*gpu, kv_format::f16);
