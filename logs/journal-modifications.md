@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.37.0 : l'attention des questions à la façon de MLX
+
+- **Quoi** : noyaux `kv_gather` (clés et valeurs d'une séquence rangées en demi-précision, à la suite, lignes au-delà à zéro) et `attention_flat<64|128>` (organisation de `steel_attention_nax.h` de MLX, licence MIT : lectures directes, barrière sans mémoire au milieu du produit P V, softmax en base 2, boucles déroulées, `max_total_threads_per_threadgroup(128)`) ; `commands::attention_flat()`, `flat_available()`, `flat_bytes()` ; `run_gpu()` : chemin pris pour un prompt aux têtes de 64 ou 128 valeurs sans fenêtre, une paire de lancements par séquence de la passe, requêtes converties en demi-précision dans `g.xh`, tampons `flat_k`, `flat_v` ; `GULLIVER_NO_FLAT_ATT` ; `test_metal` : `attention_flat` contre la référence en double précision (sept formes).
+- **Fichiers** : `gulliver/engine/{metal_kernels_nax.metal,metal_device.h,metal_device.mm,cpu_runtime_metal.cpp}`, `gulliver/tests/test_metal.cpp`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,mesures/tests-de-vitesse.md}`, `logs/{reprise.md,nuit-2026-11-22.md}`, ce journal.
+- **Pourquoi** : V1. L'attention de MLX était 2,7 fois plus rapide (19,1 contre 52 ms par couche à 8 192 tokens). Une première version du noyau (même organisation, sans déroulement) ne gagnait que 7 % (4 387 → 4 087 ms à 8 192), puis 4 % de plus avec les requêtes en demi-précision ; le déroulement complet, comme dans MLX, a fait passer le débordement de 272 à 160 octets et la lecture de 2 079 à 2 436 tokens/s.
+- **Étapes** : `test_metal` all checks passed (erreurs 1,2-1,9e-4) ; perplexité GPU morceaux de 4 096 identique à l'incertitude près sur quatre modèles ; juge de référence inchangé (90,74 / 90,71 % de premiers choix communs) ; mesures alternées (voir changement 50) ; `test_macos_copie.sh` 0 échec. Version 6.37.0.
+
 ## 2026-11-22 — Gulliver 6.36.1 : relever les débordements de registres des noyaux
 
 - **Quoi** : `tools/gpu_debordements.sh` (trace « Metal System Trace » par `xctrace`, tables `graphics-compiler-spill-events` et `metal-application-encoders-list`, débordements par noyau) ; `metal_device.mm` : en mode relevé, chaque encodeur est nommé d'après son noyau.

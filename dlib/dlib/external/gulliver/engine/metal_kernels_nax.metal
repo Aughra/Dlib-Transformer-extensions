@@ -254,6 +254,252 @@ ATT_NAX(1, 128) ATT_NAX(2, 128) ATT_NAX(4, 128) ATT_NAX(8, 128)
 ATT_NAX(1, 256) ATT_NAX(2, 256) ATT_NAX(4, 256) ATT_NAX(8, 256)
 
 // ---------------------------------------------------------------------------------------------
+// L'attention d'un prompt sur des clés et valeurs contiguës (chantier Vitesse, V1, 2026-11-22).  L'organisation est
+// celle de l'attention de MLX (mlx/backend/metal/kernels/steel/attn/kernels/steel_attention_nax.h, Apple, licence
+// MIT) : un threadgroup de 4 simdgroups par (64 tokens, tête de requête), 16 tokens par simdgroup ; chaque simdgroup
+// lit ses requêtes, ses clés et ses valeurs directement dans la mémoire du GPU (pas de mémoire de threadgroup), et une
+// barrière sans mémoire, au milieu du produit par les valeurs, garde les quatre simdgroups au même pas, pour qu'ils se
+// partagent les lectures dans le cache ; le softmax en base 2.  attention_nax lit la mémoire de conversation par
+// blocs, et ses simdgroups attendent leurs chargements en commun : à 8 192 tokens, il passait environ 52 ms par couche
+// du modèle du service, l'attention de MLX 19.  kv_gather range d'abord les clés et valeurs de la séquence, en
+// demi-précision, ligne après ligne (les 8 bits développés, encore tournés : les requêtes le sont aussi, et
+// restore_outputs remet les sorties en place).
+
+struct gather_args
+{
+    uint hd;
+    uint q8;
+    uint positions;
+    uint kv_len;       // les positions de la séquence
+    uint kv_pad;       // kv_len arrondi à 32 : les lignes au-delà sont des zéros
+    ulong block_stride;
+    ulong k_slab;
+    ulong v_slab;
+    ulong head_stride;
+    ulong scales;
+};
+
+// Grille : (kv_pad, têtes de clés), hd fils : K[h][p][i] et V[h][p][i] en demi-précision.
+kernel void kv_gather(device const uchar* region [[buffer(0)]], device const int* table [[buffer(1)]],
+    constant gather_args& a [[buffer(2)]], device half* K [[buffer(3)]], device half* V [[buffer(4)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint i [[thread_index_in_threadgroup]])
+{
+    const uint p = tg.x, h = tg.y;
+    const ulong out = (ulong(h) * a.kv_pad + p) * a.hd + i;
+    if (p >= a.kv_len)
+    {
+        K[out] = 0.0h;
+        V[out] = 0.0h;
+        return;
+    }
+    const ulong head = ulong(table[p / a.positions]) * a.block_stride + ulong(h) * a.head_stride;
+    const ulong row = p % a.positions;
+    device const uchar* ks = region + head + a.k_slab;
+    device const uchar* vs = region + head + a.v_slab;
+    if (a.q8)
+    {
+        const ulong sc = a.scales + row * (a.hd / 32) * 2 + (i / 32) * 2;
+        K[out] = half(float(as_type<half>(*(device const ushort*)(ks + sc))) * float(*(device const char*)(ks + row * a.hd + i)));
+        V[out] = half(float(as_type<half>(*(device const ushort*)(vs + sc))) * float(*(device const char*)(vs + row * a.hd + i)));
+    }
+    else
+    {
+        K[out] = ((device const half*)ks)[row * a.hd + i];
+        V[out] = ((device const half*)vs)[row * a.hd + i];
+    }
+}
+
+struct flat_args
+{
+    uint q_len;        // les tokens du prompt (de la séquence)
+    uint kv_len;       // les positions qu'ils voient, prompt compris
+    uint kv_pad;
+    uint q_off;        // kv_len - q_len : la position du premier token du prompt
+    uint gqa;          // les têtes de requête par tête de clés
+    uint q_stride;     // les floats d'un token dans q et o
+};
+
+// 128 fils au plus (comme MLX) : le compilateur peut donner à chacun plus de registres, sans en ranger en mémoire.
+template <uint HD>
+[[kernel, max_total_threads_per_threadgroup(128)]] void attention_flat(device const half* q [[buffer(0)]], device const half* K [[buffer(1)]],
+    device const half* V [[buffer(2)]], constant flat_args& a [[buffer(3)]], device float* o [[buffer(4)]],
+    uint2 tg [[threadgroup_position_in_grid]], ushort sg [[simdgroup_index_in_threadgroup]],
+    ushort lane [[thread_index_in_simdgroup]])
+{
+    constexpr uint TD = HD / 16;
+    constexpr float neg = -3.402823466e+38f;
+    const uint h = tg.y;
+    device const half* Kh = K + ulong(h / a.gqa) * a.kv_pad * HD;
+    device const half* Vh = V + ulong(h / a.gqa) * a.kv_pad * HD;
+    const short2 c = nax_coord(lane);
+    const int q0 = int(tg.x) * 64 + int(sg) * 16;
+    // Les deux lignes de la voie (c.y et c.y + 8) : leur token, et l'adresse de leur requête.
+    bool qv[2];
+    device const half* qr[2];
+    _Pragma("clang loop unroll(full)")
+    for (uint i = 0; i < 2; ++i)
+    {
+        const int t = q0 + c.y + int(i) * 8;
+        qv[i] = t < int(a.q_len);
+        qr[i] = q + ulong(qv[i] ? t : 0) * a.q_stride + h * HD + c.x;
+    }
+    float acc[TD][8];
+    _Pragma("clang loop unroll(full)")
+    for (uint d = 0; d < TD; ++d)
+        _Pragma("clang loop unroll(full)")
+        for (uint e = 0; e < 8; ++e) acc[d][e] = 0.0f;
+    float mx[2] = { neg, neg }, sm[2] = { 0.0f, 0.0f };
+
+    // Les pas de 32 positions que voit le threadgroup (masque causal), et le premier qu'il faut masquer.
+    const int kb_lim = min((int(tg.x + 1) * 64 + int(a.q_off) + 31) / 32, int(a.kv_pad / 32));
+    const int kb_causal = (int(tg.x) * 64 + int(a.q_off)) / 32;
+
+    constexpr auto dqk = mpp::tensor_ops::matmul2d_descriptor(16, 32, 16, false, true, true,
+        mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate);
+    constexpr auto dpv = mpp::tensor_ops::matmul2d_descriptor(16, 32, 16, false, false, true,
+        mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate);
+    mpp::tensor_ops::matmul2d<dqk, execution_simdgroup> op_qk;
+    mpp::tensor_ops::matmul2d<dpv, execution_simdgroup> op_pv;
+
+    for (int kb = 0; kb < kb_lim; ++kb)
+    {
+        device const half* Kb = Kh + ulong(kb) * 32 * HD;
+        device const half* Vb = Vh + ulong(kb) * 32 * HD;
+        // S = Q K^T : 16 tokens x 32 positions.
+        float s[16];
+        _Pragma("clang loop unroll(full)")
+        for (uint e = 0; e < 16; ++e) s[e] = 0.0f;
+#pragma clang loop unroll_count(4)
+        for (uint d = 0; d < TD; ++d)
+        {
+            auto ct_a = op_qk.template get_left_input_cooperative_tensor<half, half, float>();
+            auto ct_b = op_qk.template get_right_input_cooperative_tensor<half, half, float>();
+            auto ct_c = op_qk.template get_destination_cooperative_tensor<
+                metal::remove_addrspace_t<decltype(ct_a)>, metal::remove_addrspace_t<decltype(ct_b)>, float>();
+            _Pragma("clang loop unroll(full)")
+            for (uint i = 0; i < 2; ++i)
+            {
+                const half4 qx = qv[i] ? *(device const half4*)(qr[i] + d * 16) : half4(0.0h);
+                _Pragma("clang loop unroll(full)")
+                for (uint j = 0; j < 4; ++j) ct_a[i * 4 + j] = qx[j];
+            }
+            _Pragma("clang loop unroll(full)")
+            for (uint f = 0; f < 2; ++f)
+                _Pragma("clang loop unroll(full)")
+                for (uint i = 0; i < 2; ++i)
+                {
+                    const half4 v = *(device const half4*)(Kb + (f * 16 + c.y + i * 8) * HD + d * 16 + c.x);
+                    _Pragma("clang loop unroll(full)")
+                    for (uint j = 0; j < 4; ++j) ct_b[f * 8 + i * 4 + j] = v[j];
+                }
+            _Pragma("clang loop unroll(full)")
+            for (uint e = 0; e < 16; ++e) ct_c[e] = s[e];
+            op_qk.run(ct_a, ct_b, ct_c);
+            _Pragma("clang loop unroll(full)")
+            for (uint e = 0; e < 16; ++e) s[e] = ct_c[e];
+        }
+        // En base 2 (les requêtes portent déjà l'échelle), puis les masques : les positions au-delà de la séquence,
+        // et, dans les pas qui croisent la diagonale, celles qui suivent le token.
+        _Pragma("clang loop unroll(full)")
+        for (uint f = 0; f < 2; ++f)
+            _Pragma("clang loop unroll(full)")
+            for (uint i = 0; i < 2; ++i)
+                _Pragma("clang loop unroll(full)")
+                for (uint j = 0; j < 4; ++j)
+                {
+                    const uint idx = f * 8 + i * 4 + j;
+                    const int col = kb * 32 + int(f * 16 + j) + c.x;
+                    const int row = int(a.q_off) + q0 + c.y + int(i) * 8;
+                    s[idx] *= M_LOG2E_F;
+                    if (col >= int(a.kv_len) || (kb >= kb_causal && col > row)) s[idx] = neg;
+                }
+        // Le softmax en ligne.
+        _Pragma("clang loop unroll(full)")
+        for (uint i = 0; i < 2; ++i)
+        {
+            float m = mx[i];
+            _Pragma("clang loop unroll(full)")
+            for (uint f = 0; f < 2; ++f)
+                _Pragma("clang loop unroll(full)")
+                for (uint j = 0; j < 4; ++j) m = max(m, s[f * 8 + i * 4 + j]);
+            m = row_max(m);
+            float sum = 0.0f;
+            _Pragma("clang loop unroll(full)")
+            for (uint f = 0; f < 2; ++f)
+                _Pragma("clang loop unroll(full)")
+                for (uint j = 0; j < 4; ++j)
+                {
+                    const uint idx = f * 8 + i * 4 + j;
+                    s[idx] = fast::exp2(s[idx] - m);
+                    sum += s[idx];
+                }
+            const float factor = fast::exp2(mx[i] - m);
+            mx[i] = m;
+            sm[i] = sm[i] * factor + row_sum(sum);
+            _Pragma("clang loop unroll(full)")
+            for (uint d = 0; d < TD; ++d)
+                _Pragma("clang loop unroll(full)")
+                for (uint j = 0; j < 4; ++j) acc[d][i * 4 + j] *= factor;
+        }
+        simdgroup_barrier(mem_flags::mem_none);
+        // O += P V, deux fragments de dimensions à la fois ; à mi-chemin, les simdgroups se retrouvent (MLX).
+        _Pragma("clang loop unroll(full)")
+        for (uint dp = 0; dp < TD; dp += 2)
+        {
+            if (HD == 128 && dp == 4) threadgroup_barrier(mem_flags::mem_none);
+            _Pragma("clang loop unroll(full)")
+            for (uint f = 0; f < 2; ++f)
+            {
+                auto ct_a = op_pv.template get_left_input_cooperative_tensor<float, half, float>();
+                auto ct_b = op_pv.template get_right_input_cooperative_tensor<float, half, float>();
+                auto ct_c = op_pv.template get_destination_cooperative_tensor<
+                    metal::remove_addrspace_t<decltype(ct_a)>, metal::remove_addrspace_t<decltype(ct_b)>, float>();
+                _Pragma("clang loop unroll(full)")
+                for (uint e = 0; e < 8; ++e) ct_a[e] = s[f * 8 + e];
+                _Pragma("clang loop unroll(full)")
+                for (uint hh = 0; hh < 2; ++hh)
+                    _Pragma("clang loop unroll(full)")
+                    for (uint i = 0; i < 2; ++i)
+                    {
+                        const half4 v = *(device const half4*)(Vb + (f * 16 + c.y + i * 8) * HD + (dp + hh) * 16 + c.x);
+                        _Pragma("clang loop unroll(full)")
+                        for (uint j = 0; j < 4; ++j) ct_b[hh * 8 + i * 4 + j] = v[j];
+                    }
+                _Pragma("clang loop unroll(full)")
+                for (uint e = 0; e < 8; ++e)
+                {
+                    ct_c[e] = acc[dp][e];
+                    ct_c[8 + e] = acc[dp + 1][e];
+                }
+                op_pv.run(ct_a, ct_b, ct_c);
+                _Pragma("clang loop unroll(full)")
+                for (uint e = 0; e < 8; ++e)
+                {
+                    acc[dp][e] = ct_c[e];
+                    acc[dp + 1][e] = ct_c[8 + e];
+                }
+            }
+        }
+    }
+    _Pragma("clang loop unroll(full)")
+    for (uint i = 0; i < 2; ++i)
+    {
+        if (!qv[i]) continue;
+        const float inv = sm[i] > 0.0f ? 1.0f / sm[i] : 0.0f;
+        device float* out = o + ulong(q0 + c.y + int(i) * 8) * a.q_stride + h * HD + c.x;
+        _Pragma("clang loop unroll(full)")
+        for (uint d = 0; d < TD; ++d)
+            _Pragma("clang loop unroll(full)")
+            for (uint j = 0; j < 4; ++j) out[d * 16 + j] = acc[d][i * 4 + j] * inv;
+    }
+}
+
+template [[host_name("attention_flat_64")]] [[kernel]] void attention_flat<64>(device const half*, device const half*,
+    device const half*, constant flat_args&, device float*, uint2, ushort, ushort);
+template [[host_name("attention_flat_128")]] [[kernel]] void attention_flat<128>(device const half*, device const half*,
+    device const half*, constant flat_args&, device float*, uint2, ushort, ushort);
+
+// ---------------------------------------------------------------------------------------------
 // Le produit groupé des experts des prompts sur les accélérateurs (chantier Vitesse, V3) : comme mm_id de
 // metal_kernels.metal (y[s][r] = sum_i W_e[r][i] x[s / x_div][i] pour les cases s d'une tuile, e leur expert), mais
 // par tuiles de TT cases (64 ou 128, au lieu de 16 : les poids d'un expert sont relus et développés quatre à huit fois

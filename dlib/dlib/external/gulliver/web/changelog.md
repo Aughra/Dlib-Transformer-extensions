@@ -2,6 +2,16 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.37.0 — 22 novembre 2026
+
+### Performances
+
+- L'attention de la lecture d'une question suit l'organisation de celle de MLX (licence MIT) : à chaque couche, les clés et valeurs de la séquence sont rangées en demi-précision, à la suite, puis chaque groupe de calcul du GPU les lit directement, en restant au même pas que ses voisins pour partager le cache. Qwen3-VL 4B : 4 096 tokens lus à 2 493-2 614 jetons par seconde au lieu de 2 223-2 334 (+12 %), 16 384 tokens à 1 534-1 571 au lieu de 996-1 148 (+45 %, devant llama.cpp, 1 205) ; Ministral 3 8B +13 % et Qwen3-VL 30B-A3B +12 % à 4 096 tokens. À 8 192 tokens, l'attention passe de 52 à 21 ms par couche (MLX : 19).
+- Justesse inchangée : perplexité sur des morceaux de 4 096 tokens identique à l'incertitude près sur quatre modèles (Qwen3-VL 4B 8,5913 contre 8,5907, ±0,28) ; accord avec le modèle d'origine (PyTorch) inchangé, 90,74 % de premiers choix communs contre 90,71 %.
+- Les têtes de 256 ou 512 valeurs (Gemma 3, Gemma 4, Qwen 3.5) et les couches à fenêtre glissante gardent l'attention précédente.
+
+---
+
 ## 6.36.1 — 22 novembre 2026
 
 ### Outils de mesure

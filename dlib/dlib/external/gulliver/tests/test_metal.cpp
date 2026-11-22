@@ -569,10 +569,25 @@ namespace
             c->attention_tiles(Q, region, TABLE, LEN, table_stride, TILES, n_tiles, rep, q_stride, CT, layout);
             c->finish();
         }
+        // La même attention par attention_flat (les clés et valeurs rangées en demi-précision, l'attention de MLX), quand
+        // le GPU a les accélérateurs et que les têtes s'y prêtent (64 ou 128 valeurs, sans fenêtre).
+        metal_buffer QH = gpu.allocate(2 * q_stride * T), CF = gpu.allocate(sizeof(float) * q_stride * T);
+        const size_t flat = metal_device::commands::flat_bytes(static_cast<unsigned>(L), static_cast<unsigned>(heads),
+            static_cast<unsigned>(hd));
+        metal_buffer KF = gpu.allocate(flat), VF = gpu.allocate(flat);
+        bool flat_taken = false;
+        if (pool_hd == hd)
+        {
+            auto c = gpu.begin();
+            c->to_half(Q, T, q_stride, q_stride, QH, q_stride);
+            flat_taken = c->attention_flat(QH, region, TABLE, T, static_cast<unsigned>(L), H, q_stride, layout, KF, VF, CF);
+            c->finish();
+        }
         check(per_tile > 0, "tiles of the prompts for heads of " + std::to_string(hd) + ", rep " + std::to_string(rep));
         // La référence : les clés et valeurs telles que le pool les contient, développées, en double
         // précision ; worst pour attention(), worst_tiles pour attention_tiles().
-        double worst = 0, worst_tiles = 0;
+        double worst = 0, worst_tiles = 0, worst_flat = 0;
+        const float* ctx_flat = static_cast<const float*>(CF.contents());
         const float* ctx = static_cast<const float*>(C.contents());
         const float* ctx_tiles = static_cast<const float*>(CT.contents());
         for (unsigned t = 0; t < T; ++t)
@@ -623,6 +638,8 @@ namespace
                     }
                     worst = std::max(worst, std::fabs(ctx[t * q_stride + hq * hd + i] - o) / (mag + 1e-6));
                     worst_tiles = std::max(worst_tiles, std::fabs(ctx_tiles[t * q_stride + hq * hd + i] - o) / (mag + 1e-6));
+                    if (flat_taken)
+                        worst_flat = std::max(worst_flat, std::fabs(ctx_flat[t * q_stride + hq * hd + i] - o) / (mag + 1e-6));
                 }
             }
         check(worst < 1e-4, std::string("attention ") + (q8 ? "q8" : "f16") + ", heads of " + std::to_string(hd)
@@ -635,6 +652,9 @@ namespace
             + (pool_hd != hd ? " in a pool of " + std::to_string(pool_hd) : std::string())
             + ", rep " + std::to_string(rep) + (temperature ? ", temperature" : "") + ", " + std::to_string(n_tiles)
             + " tiles: largest error " + sci(worst_tiles));
+        if (flat_taken)
+            check(worst_flat < 1e-3, std::string("attention_flat ") + (q8 ? "q8" : "f16") + ", heads of " + std::to_string(hd)
+                + ", rep " + std::to_string(rep) + (temperature ? ", temperature" : "") + ": largest error " + sci(worst_flat));
         if (q8)
         {
             // Les sorties sur des valeurs tournées, remises en place par le GPU comme par qk_unrotate_row().

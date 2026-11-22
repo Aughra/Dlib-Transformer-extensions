@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.36.0, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.37.0, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -46,6 +46,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Lecture des prompts pendant une réponse, et leur ordre | 64 tokens de prompts par passe tant qu'une réponse s'écrit ; plusieurs prompts à tour de rôle | 512 tokens par passe ; le prompt qui a le moins à lire passe d'abord | Le frein ralentissait la réponse qu'il devait protéger, et trois prompts à tour de rôle n'avaient leur premier mot qu'à la fin des trois | Une discussion pendant la lecture d'un document de 8 000 tokens : 31 tokens/s au lieu de 19, document lu en 4,8 s au lieu de 11,4 ; trois documents ensemble : premier mot en 4,2 s en moyenne au lieu de 6,0 (Mac mini) | changement 47, v. 6.34.0 |
 | Envoi des commandes d'une étape au GPU | — (pas de GPU sur Mac) | La première couche part au calcul dès qu'elle est écrite, le reste suit dans un second tampon | Le GPU attendait l'écriture de toutes les commandes | Écriture +1 % (Qwen3-VL 4B : 89,8 → 90,7 tokens/s), calculs identiques | changement 48, v. 6.35.0 |
 | Entrées des produits d'une question | — (pas de GPU sur Mac) | Une seule conversion en demi-précision pour les requêtes, clés et valeurs, une pour la porte et la montée ; l'activation écrite directement en demi-précision | Les mêmes entrées étaient converties jusqu'à trois fois | Lecture +5,5 % à 512 tokens, +2,2 % à 4 096 (Qwen3-VL 4B), réponses identiques | changement 49, v. 6.36.0 |
+| Attention de la lecture d'une question | — (pas de GPU sur Mac) | Les clés et valeurs de la séquence rangées en demi-précision à chaque couche, puis l'attention organisée comme celle de MLX (lectures directes, simdgroups au même pas) | L'attention prenait 2,7 fois le temps de celle de MLX | Lecture +12 % à 4 096 tokens, +45 % à 16 384 (Qwen3-VL 4B), justesse inchangée | changement 50, v. 6.37.0 |
 
 ## 2. Modèles : téléchargement, vérification, réserve
 

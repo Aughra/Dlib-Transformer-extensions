@@ -306,6 +306,22 @@ namespace gulliver
                 consécutifs d'une même séquence, tile_tokens(rep, hd) au plus par tuile ; le reste
                 comme attention(), sans parties.
             !*/
+            /*!
+                L'attention des q_tokens tokens d'un prompt d'une seule séquence (chantier Vitesse, 2026-11-22) : ses
+                clés et valeurs, kv_len positions dont table (int32) donne les blocs, rangées en demi-précision dans
+                k et v (flat_bytes() octets chacun), puis l'attention causale de MLX (le prompt occupe les dernières
+                positions).  Des têtes de 64 ou 128 valeurs, sans fenêtre ; les requêtes préparées (prepare_queries).
+                Renvoie false, sans rien écrire, quand le GPU n'a pas les accélérateurs ou que la couche ne s'y prête
+                pas : l'appelant prend attention_tiles().
+            !*/
+            bool attention_flat(metal_view q, metal_view region, metal_view table, unsigned q_tokens, unsigned kv_len,
+                unsigned q_heads, unsigned q_stride, const kv_layout& layout, metal_view k, metal_view v, metal_view ctx);
+            static bool flat_available(const metal_device& device);
+            static size_t flat_bytes(unsigned kv_len, unsigned kv_heads, unsigned hd)
+            {
+                return static_cast<size_t>((kv_len + 31) / 32 * 32) * kv_heads * hd * 2;
+            }
+
             void attention_tiles(metal_view q, metal_view region, metal_view blocks, metal_view lengths,
                 unsigned table_stride, metal_view tiles, unsigned n_tiles, unsigned rep, unsigned q_stride,
                 metal_view ctx, const kv_layout& layout);

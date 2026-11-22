@@ -39,10 +39,11 @@ namespace gulliver
             "attention_nax_8_128", "attention_nax_1_256", "attention_nax_2_256", "attention_nax_4_256",
             "attention_nax_8_256", "mm_id_nax64_q4_K", "mm_id_nax64_q5_K", "mm_id_nax64_q6_K", "mm_id_nax64_q8_0",
             "mm_id_nax64_q5_0", "mm_id_nax128_q4_K", "mm_id_nax128_q5_K", "mm_id_nax128_q6_K", "mm_id_nax128_q8_0",
-            "mm_id_nax128_q5_0", "mv_nax_q4_K", "mv_nax_q6_K", "mv_nax_q5_K", "mv_nax_q8_0", "mv_nax_q5_0" };
+            "mm_id_nax128_q5_0", "mv_nax_q4_K", "mv_nax_q6_K", "mv_nax_q5_K", "mv_nax_q8_0", "mv_nax_q5_0",
+            "kv_gather", "attention_flat_64", "attention_flat_128" };
         // mm_id_nax, après les douze attention_nax : tuiles de 64 cases, puis de 128 ; puis mv_nax, dans l'ordre des
         // formats des noyaux mv_*_n.
-        const int nax_mm_id = 12, nax_mm_id_128 = 17, nax_mv = 22;
+        const int nax_mm_id = 12, nax_mm_id_128 = 17, nax_mv = 22, nax_kv_gather = 27, nax_flat = 28;
         // Les simdgroups d'une tuile d'attention_nax, 16 lignes de requête chacun (GULLIVER_NAX_SG pour les essais).
         unsigned nax_simdgroups()
         {
@@ -1226,6 +1227,44 @@ namespace gulliver
         // valeurs, 8 pour 512), rep par token.
         if ((rep != 1 && rep != 2 && rep != 4 && rep != 8) || (hd != 64 && hd != 128 && hd != 256 && hd != 512)) return 0;
         return (hd == 512 ? 8 : hd == 256 ? 16 : 32) / rep;
+    }
+
+    bool metal_device::commands::flat_available(const metal_device& device)
+    {
+        return !device.impl_->nax.empty();
+    }
+
+    bool metal_device::commands::attention_flat(metal_view q, metal_view region, metal_view table, unsigned q_tokens,
+        unsigned kv_len, unsigned q_heads, unsigned q_stride, const kv_layout& l, metal_view k, metal_view v, metal_view ctx)
+    {
+        if (impl_->device->nax.empty() || l.window != 0 || (l.hd != 64 && l.hd != 128) || q_heads % l.heads != 0
+            || kv_len < q_tokens)
+            return false;
+        if (q_tokens == 0) return true;
+        const unsigned pad = (kv_len + 31) / 32 * 32;
+        // Les arguments ont la disposition de gather_args et flat_args (metal_kernels_nax.metal).
+        struct
+        {
+            uint32_t hd, q8, positions, kv_len, kv_pad;
+            uint64_t block_stride, k_slab, v_slab, head_stride, scales;
+        } g = { l.hd, l.q8 ? 1u : 0u, l.positions, kv_len, pad, l.block_stride, l.k_slab, l.v_slab, l.head_stride, scales_at(l) };
+        impl_->use_nax(nax_kv_gather);
+        impl_->bind(region, 0);
+        impl_->bind(table, 1);
+        impl_->args(g, 2);
+        impl_->bind(k, 3);
+        impl_->bind(v, 4);
+        impl_->groups(pad, l.heads, 1, l.hd);
+        struct { uint32_t q_len, kv_len, kv_pad, q_off, gqa, q_stride; } a =
+            { q_tokens, kv_len, pad, kv_len - q_tokens, q_heads / l.heads, q_stride };
+        impl_->use_nax(nax_flat + (l.hd == 128 ? 1 : 0));
+        impl_->bind(q, 0);
+        impl_->bind(k, 1);
+        impl_->bind(v, 2);
+        impl_->args(a, 3);
+        impl_->bind(ctx, 4);
+        impl_->groups((q_tokens + 63) / 64, q_heads, 1, 128);
+        return true;
     }
 
     void metal_device::commands::attention_tiles(metal_view q, metal_view region, metal_view blocks, metal_view lengths,

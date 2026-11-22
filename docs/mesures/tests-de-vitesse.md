@@ -274,6 +274,10 @@ Avant chaque produit, la lecture d'une question convertit son entrée en demi-pr
 
 Sur les longues questions, l'écart avec MLX tient à l'attention. Seule, celle de MLX passe 19,1 ms par couche pour 8 192 tokens (près de 29 Tflop/s), celle de Gulliver environ 52 (10,6 Tflop/s). Les deux noyaux sont bâtis pareil (tuiles de 64 lignes, pas de 32 positions, quatre simdgroups, produits par les accélérateurs). Une différence mesurée : celui de Gulliver manque de registres et en range 272 octets en mémoire, au cœur de sa boucle, celui de MLX 128 (`tools/gpu_debordements.sh`). Six réglages simples ont été essayés et mesurés ; tous allaient moins vite (journal du 22 novembre). La suite demande une refonte du noyau, vérifiée trace à l'appui. Même constat pour le mélange d'experts à 512 tokens : son produit groupé prend 81 % du temps, et trois réglages simples n'y ont rien gagné.
 
+### L'attention des longues questions, à la façon de MLX (Gulliver 6.37.0)
+
+La même nuit, l'attention a été réécrite d'après celle de MLX (licence MIT). À chaque couche, les clés et valeurs de la question sont d'abord rangées à la suite, en demi-précision, comme les fiches d'un classeur remises dans l'ordre avant la lecture. Ensuite, chaque groupe de calcul du GPU les lit directement, en restant au même pas que ses trois voisins, pour que ce qu'un groupe vient de lire serve aussi aux autres. Deux détails de MLX ont fait la différence : dérouler entièrement les petites boucles, et cette halte commune au milieu du calcul. L'attention seule passe de 52 à 21 ms par couche à 8 192 tokens (MLX : 19). Modèle du service, en alternance : 4 096 tokens lus à **2 493-2 614** jetons/s (2 223-2 334 avant), 16 384 tokens à **1 534-1 571** (996-1 148), désormais devant llama.cpp (1 205) ; MLX reste devant (2 076). Justesse inchangée.
+
 ## Pour que Gulliver soit le plus rapide
 
 Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (deux pistes au même but sont essayées toutes les deux, mesurées, et la meilleure est gardée) :

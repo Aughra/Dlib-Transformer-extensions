@@ -83,6 +83,9 @@ namespace gulliver
         metal_buffer moe_list, moe_counts, moe_work, moe_dispatch;
         // Les tuiles de l'attention des prompts : (premier token, nombre de tokens).
         metal_buffer tiles;
+        // Les clés et valeurs d'une séquence rangées en demi-précision pour attention_flat, et leur taille en octets.
+        metal_buffer flat_k, flat_v;
+        size_t flat_bytes = 0;
         size_t capacity = 0, table_capacity = 0, partial_capacity = 0;
         // Les poids d'un produit d'un prompt développés en floats, deux tampons à tour de rôle.
         metal_buffer expanded[2];
@@ -1158,7 +1161,42 @@ namespace gulliver
             if (owns) c->kv_store(g.k, g.v, lkvd, g.region, g.blocks, g.rows, uT, kl);
             const metal_view qtemp(g.qtemp);
             c->prepare_queries(g.q, uT, H, lhd, lqd, lscale, q8, cfg_.attn_temp_scale != 0.0 ? &qtemp : nullptr);
-            if (tiled)
+            /*
+                Un prompt dont les têtes ont 64 ou 128 valeurs, sans fenêtre glissante : l'attention de MLX sur les clés
+                et valeurs de chaque séquence rangées en demi-précision (attention_flat, chantier Vitesse, 2026-11-22).
+                GULLIVER_NO_FLAT_ATT garde attention_tiles, pour les mesures.
+            */
+            static const bool no_flat = std::getenv("GULLIVER_NO_FLAT_ATT") != nullptr;
+            bool flat = tiled && !no_flat && kl.window == 0 && lhd == hd && (lhd == 64 || lhd == 128)
+                && metal_device::commands::flat_available(dev);
+            if (flat)
+            {
+                long most = 0;
+                for (const auto& s : batch.segments)
+                    most = std::max(most, sequences_[static_cast<size_t>(s.sequence)]->length + s.count);
+                const size_t bytes = metal_device::commands::flat_bytes(static_cast<unsigned>(most), static_cast<unsigned>(KVH),
+                    static_cast<unsigned>(lhd));
+                if (g.flat_bytes < bytes)
+                {
+                    g.flat_bytes = bytes + bytes / 2;
+                    g.flat_k = need(dev, g.flat_bytes);
+                    g.flat_v = need(dev, g.flat_bytes);
+                    note_gpu();
+                }
+                // Les requêtes en demi-précision, comme les lit attention_flat (g.xh est libre entre deux produits).
+                c->to_half(g.q, uT, static_cast<unsigned>(lqd), static_cast<unsigned>(lqd), g.xh, static_cast<unsigned>(lqd));
+                for (const auto& s : batch.segments)
+                {
+                    if (s.count == 0) continue;
+                    const unsigned kv_len = static_cast<unsigned>(sequences_[static_cast<size_t>(s.sequence)]->length + s.count);
+                    flat = flat && c->attention_flat(at(g.xh, 2 * static_cast<size_t>(s.start * lqd)), g.region,
+                        at(g.table, sizeof(int) * static_cast<size_t>(s.start) * table_stride), static_cast<unsigned>(s.count),
+                        kv_len, static_cast<unsigned>(H), static_cast<unsigned>(lqd), kl, g.flat_k, g.flat_v,
+                        at(g.ctx, sizeof(float) * static_cast<size_t>(s.start * lqd)));
+                }
+            }
+            if (flat) {}
+            else if (tiled)
             {
                 const int w = lhd != hd ? 1 : 0;
                 c->attention_tiles(g.q, g.region, g.table, g.lengths, static_cast<unsigned>(table_stride),
