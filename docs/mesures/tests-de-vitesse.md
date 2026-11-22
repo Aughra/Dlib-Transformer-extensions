@@ -298,9 +298,9 @@ Gulliver lit 25 à 30 % plus vite les longues questions et écrit 6 % plus vite 
 
 Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (deux pistes au même but sont essayées toutes les deux, mesurées, et la meilleure est gardée) :
 
-1. **V1, l'attention des questions en demi-précision, d'un seul tenant, sur le GPU** : les longues questions, où l'écart est le plus grand.
-2. **V2, l'étape d'écriture mesurée noyau par noyau**, pour aller chercher les 30 % qui manquent sous le plafond de la mémoire.
-3. **V3, les mélanges d'experts**, et le contrôle du GPU qui les renvoie au processeur en demi-précision.
+1. **V1, l'attention des questions en demi-précision, d'un seul tenant, sur le GPU** : les longues questions, où l'écart est le plus grand. *Fait pour les têtes de 64 et 128 valeurs (6.37.0) ; reste les têtes de 256 et 512 valeurs et les fenêtres glissantes.*
+2. **V2, l'étape d'écriture mesurée noyau par noyau**, pour aller chercher les 30 % qui manquent sous le plafond de la mémoire. *Mesurée le 22 novembre : le GPU passe 10,45 ms par mot, les produits par les poids en font 82 % à environ 85 % du débit de la mémoire ; avec la mémoire de conversation en 8 bits, Gulliver écrit déjà plus vite que llama.cpp.*
+3. **V3, les mélanges d'experts**, et le contrôle du GPU qui les renvoie au processeur en demi-précision. *Produit groupé +23 % à 512 tokens (6.38.0) ; llama.cpp reste devant sur les questions courtes (1 835-1 950 contre 1 452-1 466).*
 4. **V4, un format de poids plus compact** : à juger sur la vitesse et sur la perplexité, modèle par modèle, puisque celui de MLX n'est pas toujours meilleur.
 5. **V5 ou V6, pour la lecture** : les accélérateurs neuronaux du M5 par Metal 4, ou le Neural Engine.
 6. **V7 ou V8, pour l'écriture** : le décodage spéculatif (un petit modèle propose plusieurs mots, le gros les vérifie d'un coup) ou la devinette par répétition. La devinette (V8) est faite en 6.22.0 (ci-dessus) ; reste le petit modèle (V7), à comparer.
