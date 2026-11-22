@@ -270,6 +270,10 @@ En 8 bits, Gulliver devance llama.cpp en lecture (+9 à +15 %) et en écriture (
 
 Avant chaque produit, la lecture d'une question convertit son entrée en demi-précision, le format que le GPU multiplie le plus vite. Les requêtes, les clés et les valeurs d'une couche lisent la même entrée, convertie jusqu'ici trois fois ; la porte et la montée, deux fois. C'est comme photocopier trois fois la même page pour trois lecteurs assis à la même table. Une seule conversion sert désormais à tous, et l'activation de la porte s'écrit directement en demi-précision. Modèle du service (trois tours en alternance) : 512 tokens lus à **2 920-3 075** jetons/s au lieu de 2 790-2 853 (+5,5 %), 4 096 tokens à **2 384-2 409** au lieu de 2 341-2 355 (+2,2 %). À 16 384 tokens, rien ne change : l'attention y prend l'essentiel du temps, et c'est là que MLX garde son avance.
 
+### Ce que la nuit du 22 novembre a appris sur l'attention
+
+Sur les longues questions, l'écart avec MLX tient à l'attention. Seule, celle de MLX passe 19,1 ms par couche pour 8 192 tokens (près de 29 Tflop/s), celle de Gulliver environ 52 (10,6 Tflop/s). Les deux noyaux sont bâtis pareil (tuiles de 64 lignes, pas de 32 positions, quatre simdgroups, produits par les accélérateurs). Une différence mesurée : celui de Gulliver manque de registres et en range 272 octets en mémoire, au cœur de sa boucle, celui de MLX 128 (`tools/gpu_debordements.sh`). Six réglages simples ont été essayés et mesurés ; tous allaient moins vite (journal du 22 novembre). La suite demande une refonte du noyau, vérifiée trace à l'appui. Même constat pour le mélange d'experts à 512 tokens : son produit groupé prend 81 % du temps, et trois réglages simples n'y ont rien gagné.
+
 ## Pour que Gulliver soit le plus rapide
 
 Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (deux pistes au même but sont essayées toutes les deux, mesurées, et la meilleure est gardée) :

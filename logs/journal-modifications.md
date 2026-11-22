@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.36.1 : relever les débordements de registres des noyaux
+
+- **Quoi** : `tools/gpu_debordements.sh` (trace « Metal System Trace » par `xctrace`, tables `graphics-compiler-spill-events` et `metal-application-encoders-list`, débordements par noyau) ; `metal_device.mm` : en mode relevé, chaque encodeur est nommé d'après son noyau.
+- **Fichiers** : `gulliver/tools/gpu_debordements.sh`, `gulliver/engine/metal_device.mm`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/mesures/tests-de-vitesse.md`, `logs/{reprise.md,nuit-2026-11-22.md}`, ce journal.
+- **Pourquoi** : comprendre l'écart d'attention avec MLX sur les longues questions. Mesures de la nuit : attention seule de MLX (`mx.fast.scaled_dot_product_attention`, causale, 32 têtes de requête, 8 de clés, 128 valeurs) 5,0 / 19,1 / 81,4 ms par couche à 4 096 / 8 192 / 16 384 tokens (27 à 29 Tflop/s) ; Gulliver environ 52 ms par couche à 8 192 (10,6 Tflop/s ; 80 % du temps de ses noyaux, hors produits de MPS). Débordements : `attention_nax_4_128` et `_8_128` 272 octets, `attention_dec_8_128` 16 ; MLX 128. Essais, tous plus lents ou pires et retirés : pas de 64 positions (946 tokens/s contre 1 772 à 8 192 : les noyaux sur accélérateurs ne tiennent plus), lecture directe des clés et valeurs par simdgroup sans mémoire partagée (1 334 en 8 bits, 1 591 en demi-précision contre 1 792), déroulement complet des boucles (1 651 ; 432 octets débordés), requêtes relues à chaque pas (1 711-1 763 ; toujours 272), positions en 32 bits (272), sommes et scores gardés dans les tenseurs du produit (1 379 ; 336). Mélange d'experts (Qwen3-VL 30B-A3B, 512 tokens : 1 043-1 199 contre 1 835-1 950 pour llama.cpp) : le produit groupé `mm_id_nax64` prend 81 % du temps, sans débordement ; tuiles de 32 cases (1 058 contre 1 200), développement Q4_K vectorisé (1 186, sans effet), morceaux de 32 colonnes (1 147-1 172) : rejetés.
+- **Étapes** : `gpu_debordements.sh` essayé (272 octets sur `attention_nax_4_128`) ; `test_metal` all checks passed ; build sans avertissement. Version 6.36.1.
+
 ## 2026-11-22 — Gulliver 6.36.0 : moins de conversions en demi-précision dans la lecture d'une question
 
 - **Quoi** : `run_gpu()` : `xh_ready` (l'entrée du produit déjà convertie : clés et valeurs après les requêtes, montée après la porte) ; noyau `silu_mul_half` (activation de la porte écrite en demi-précision dans `g.xh`, sur les lignes arrondies à 32) ; réglages de mesure `GULLIVER_NO_SHARED_XH` et `GULLIVER_NO_SILU_HALF`.

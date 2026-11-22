@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.36.1 — 22 novembre 2026
+
+### Outils de mesure
+
+- `tools/gpu_debordements.sh` : les débordements de registres des noyaux Metal, relevés par la trace « Metal System Trace » d'Instruments pendant une lecture et quelques pas d'écriture. En mode relevé (`GULLIVER_GPU_PROFILE`), chaque encodeur porte désormais le nom de son noyau, ce qui permet de relier la trace aux noyaux. Premier relevé : l'attention de la lecture déborde de 272 octets sur le modèle du service, celle de MLX de 128.
+
+---
+
 ## 6.36.0 — 22 novembre 2026
 
 ### Performances

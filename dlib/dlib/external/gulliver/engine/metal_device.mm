@@ -315,6 +315,7 @@ namespace gulliver
             d.sampleBufferAttachments[0].startOfEncoderSampleIndex = 2 * sampled.size();
             d.sampleBufferAttachments[0].endOfEncoderSampleIndex = 2 * sampled.size() + 1;
             encoder = [buffer computeCommandEncoderWithDescriptor:d];
+            encoder.label = [NSString stringWithUTF8String:name];
             sampled.push_back(name);
         }
         void use(int k)
