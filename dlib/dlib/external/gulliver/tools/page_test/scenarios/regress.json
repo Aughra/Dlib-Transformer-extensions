@@ -146,6 +146,11 @@
   "expect": true
  },
  {
+  "name": "models tab: the advice of the Sunday measure",
+  "eval": "const c=document.querySelector('.dialog .advice-card'); if(!fetch) return false; const a=await (await fetch('/gulliver/v1/models/advice')).json(); return a.found ? !!(c && c.innerText.includes('Conseil de la mesure du dimanche') && c.querySelector('.advice-row button')) : !c",
+  "expect": true
+ },
+ {
   "shot": "settings-models.png"
  },
  {

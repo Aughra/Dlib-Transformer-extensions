@@ -25,6 +25,7 @@ const ALLOWED = [
   [['GET'], /^\/gulliver\/v1\/licenses\/[^/]+$/, 'lecture'],
   [['GET'], /^\/gulliver\/v1\/carnet(\/file)?$/, 'lecture'],
   [['GET'], /^\/gulliver\/v1\/thermal\/history$/, 'lecture'],
+  [['GET'], /^\/gulliver\/v1\/models\/advice$/, 'lecture'],
 ];
 
 // Une requête vers l'interface du service ? (les autres chemins sont les fichiers de la page)

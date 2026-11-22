@@ -38,14 +38,26 @@ LOG=$OUTDIR/justesse-$STAMP.log
 : > "$LOG"; : > "$RAW"
 
 MODELS=()
-add() { [ -f "$2" ] && [[ -z "$BENCH_ONLY" || "$1" == *"$BENCH_ONLY"* ]] && MODELS+=("$1|$2|$3"); }
+add() { [ -f "$2" ] && [[ -z "$BENCH_ONLY" || "$1" == *"$BENCH_ONLY"* ]] && MODELS+=("$1|$2|$3|${4:-1}"); }
 add "Qwen3-4B Q4_K_M" "$M/Qwen3-4B-Q4_K_M.gguf" "$M/Qwen3-4B-mlx-4bit"
 add "Qwen3-4B Q8_0 (référence)" "$M/Qwen3-4B-Q8_0.gguf" ""
-add "Qwen3-VL 4B Thinking Q4_K_M (service)" "$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.gguf" "$M/Qwen3-VL-4B-Thinking-4bit"
+add "Qwen3-VL 4B Thinking Q4_K_M" "$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.gguf" "$M/Qwen3-VL-4B-Thinking-4bit"
 add "Qwen3-VL 2B Instruct Q4_K_M" "$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf" "$M/Qwen3-VL-2B-Instruct-4bit"
 add "Gemma 3 4B Q4_K_M" "$ROOT/build/models/gemma-3-4b-it-Q4_K_M.gguf" "$M/gemma-3-4b-it-4bit"
 add "LFM2.5-1.2B Q8_0" "$ROOT/build/models/LFM2.5-1.2B-Instruct-Q8_0.gguf" "$M/LFM2.5-1.2B-Instruct-8bit"
 add "Qwen3-30B-A3B Q4_K_M (MoE)" "$ROOT/build/models/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf" "$M/Qwen3-30B-A3B-Instruct-2507-4bit"
+# Puis les modèles installés dans Gulliver, comme bench_moteurs.sh (sans MLX ni Albireo d'origine).
+if [ -z "$BENCH_NO_INSTALLED" ]; then
+  while IFS='|' read -r iname ifile iid iactive iimage; do
+    [ -n "$iid" ] || continue
+    known=""
+    for entry in "${MODELS[@]}"; do
+      IFS='|' read -r _ efile _ <<< "$entry"
+      [ "$(realpath "$efile")" = "$(realpath "$ifile")" ] && known=1
+    done
+    [ -n "$known" ] || add "$iname" "$ifile" "" 0
+  done < <(python3 -I "$TOOLS/modeles_installes.py" "${GULLIVER_HOME:-$ROOT/build/gulliver-home}")
+fi
 
 # « perplexité|incertitude|top-1 » d'une sortie de perplexity_runtime, perplexity_mlx.py ou
 # perplexity_albireo ; « nonlu » pour une architecture que le moteur ne lit pas.
@@ -56,7 +68,7 @@ ours() {
 }
 
 for entry in "${MODELS[@]}"; do
-  IFS='|' read -r name file mlxdir <<< "$entry"
+  IFS='|' read -r name file mlxdir original <<< "$entry"
   echo "justesse : $name"
   echo "$name|gulliver_gpu|$("$PPL" "$file" "$TEXT" 512 "$CHUNKS" q8 metal 2>&1 | tee -a "$LOG" | ours)" >> "$RAW"
   echo "$name|gulliver_cpu|$("$PPL" "$file" "$TEXT" 512 "$CHUNKS" f16 2>&1 | tee -a "$LOG" | ours)" >> "$RAW"
@@ -68,7 +80,7 @@ for entry in "${MODELS[@]}"; do
   if [ -d "$mlxdir" ] && [ -x "$MLXPY" ]; then
     echo "$name|mlx|$("$MLXPY" -I "$TOOLS/perplexity_mlx.py" "$mlxdir" "$TEXT" 512 "$CHUNKS" 2>&1 | tee -a "$LOG" | ours)" >> "$RAW"
   fi
-  if [ -x "$ALBIREO" ]; then
+  if [ -x "$ALBIREO" ] && [ "$original" = 1 ]; then
     echo "$name|albireo|$("$ALBIREO" "$file" "$TEXT" 512 "$CHUNKS" q8 2>&1 | tee -a "$LOG" | ours)" >> "$RAW"
   fi
 done
@@ -76,7 +88,7 @@ done
 {
   echo "# Justesse : Gulliver contre les autres moteurs — $(sysctl -n hw.model), $(date '+%Y-%m-%d %H:%M')"
   echo
-  echo "Perplexité d'un même texte (dix épisodes du blog du portage, en français), $CHUNKS morceaux de 512 tokens, seconde moitié de chaque morceau notée, comme \`llama-perplexity\`. Plus elle est basse, mieux le modèle prévoit le texte ; deux moteurs justes donnent la même sur le même fichier. Entre parenthèses : l'écart à Gulliver sur le GPU (le réglage du service). MLX lit son propre fichier 4 bits : son écart mesure la compression, pas le moteur."
+  echo "Perplexité d'un même texte (dix épisodes du blog du portage, en français), $CHUNKS morceaux de 512 tokens, seconde moitié de chaque morceau notée, comme \`llama-perplexity\`. Plus elle est basse, mieux le modèle prévoit le texte ; deux moteurs justes donnent la même sur le même fichier. Entre parenthèses : l'écart à Gulliver sur le GPU (clés et valeurs en 8 bits, le réglage par défaut). MLX lit son propre fichier 4 bits : son écart mesure la compression, pas le moteur."
   echo
   echo "Gulliver $(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ; llama.cpp $(llama-bench --version 2>&1 | sed -n 's/^version: //p' | head -1) ; MLX $("$ROOT/build/mlx-venv/bin/pip" show mlx 2>/dev/null | awk '/^Version/{print $2}')$([ -x "$ALBIREO" ] && echo " ; Albireo d'origine $(awk '/#define ALBIREO_VERSION_(MAJOR|MINOR|PATCH) /{print $3}' "$ALBIREO_DIR/dlib/dlib/external/albireo/common/version.h" | paste -sd. -) ($(git -C "$ALBIREO_DIR" rev-parse --short HEAD)), processeur")."
   python3 -I - "$RAW" <<'EOF'

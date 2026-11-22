@@ -54,6 +54,7 @@ for script in bench_moteurs.sh justesse_moteurs.sh; do
   [ -f "$TOOLS/$script" ] || continue
   echo "lancement de $script"
   table=$(bash "$TOOLS/$script" 2 | sed -n 's/^table: //p' | tail -1)
+  [ "$script" = bench_moteurs.sh ] && speed_table=$table
   if [ -n "$table" ] && [ -f "$table" ]; then
     # Les titres du tableau descendent de deux crans, sous celui de la semaine.
     { echo; sed 's/^#/###/' "$table"; } >> "$WEEK"; found=1
@@ -63,7 +64,10 @@ for script in bench_moteurs.sh justesse_moteurs.sh; do
 done
 if [ $found -eq 0 ]; then rm -f "$WEEK"; echo "=== aucune mesure"; exit 0; fi
 # Le conseil de la semaine : quel modèle employer, tiré des tableaux ci-dessus.
-conseil=$(python3 "$TOOLS/conseil_modeles.py" "$WEEK" 2>> "$HEBDO/build.log")
+# Avec les modèles installés dans Gulliver (le .ids de bench_moteurs.sh) : conseil.json, que lit l'onglet Modèles.
+ids_args=()
+[ -n "$speed_table" ] && [ -f "${speed_table%.md}.ids" ] && ids_args=(--ids "${speed_table%.md}.ids")
+conseil=$(python3 "$TOOLS/conseil_modeles.py" "$WEEK" "${ids_args[@]}" --json "$HEBDO/conseil.json" 2>> "$HEBDO/build.log")
 [ -n "$conseil" ] && { echo; echo "$conseil"; } >> "$WEEK"
 
 # La page du carnet : les semaines de la plus récente à la plus ancienne.  historique.md garde

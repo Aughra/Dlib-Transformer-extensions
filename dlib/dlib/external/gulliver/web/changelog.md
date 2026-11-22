@@ -2,6 +2,19 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.25.0 — 22 novembre 2026
+
+### Modèles
+
+- L'onglet « Modèles » affiche le conseil de la dernière mesure du dimanche : le modèle pour tout faire (images comprises), le plus juste et le plus rapide, parmi les modèles installés, avec leurs mesures. Le bouton « Choisir » montre les changements, active le modèle pour la discussion, le code et la sécurité, met les réglages qui lui vont le mieux (mémoire de conversation en 8 bits ou en demi-précision selon les mesures, brouillons) et redémarre le service s'il le faut (`GET /gulliver/v1/models/advice`) ; une fenêtre récapitule ensuite ce qui a changé, avant et après (modèle, mémoire de conversation, brouillons).
+
+### Outils de mesure
+
+- La mesure du dimanche (`tools/bench_moteurs.sh`, `tools/justesse_moteurs.sh`) mesure aussi tous les modèles installés dans Gulliver (`tools/modeles_installes.py`, sans MLX ni l'Albireo d'origine), et écrit son conseil dans `build/bench/hebdo/conseil.json` (`tools/conseil_modeles.py`). Le modèle d'essai Qwen3-VL 4B Thinking n'y porte plus la mention « service ».
+- Chaque mardi à 4 h, un agent du Mac (`macos/modeles-mardi/`, `tools/modeles_mardi.py`) rafraîchit le catalogue, retélécharge les modèles dont une nouvelle version est parue (dans le catalogue ou sur Hugging Face, empreinte comparée sans télécharger le fichier) et télécharge les modèles du catalogue qui tiennent dans le Mac (architecture lue par le moteur, au plus les trois quarts de la mémoire), pour que la mesure du dimanche les compare tous.
+
+---
+
 ## 6.24.0 — 22 novembre 2026
 
 ### Accès et documents

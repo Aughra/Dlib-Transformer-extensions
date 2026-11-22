@@ -38,15 +38,33 @@ RAW=$OUTDIR/moteurs-$STAMP.raw
 LOG=$OUTDIR/moteurs-$STAMP.log
 : > "$RAW"; : > "$LOG"
 
-# Les modèles : nom|fichier GGUF|dossier MLX (vide s'il n'y en a pas).
+# Les modèles : nom|fichier GGUF|dossier MLX (vide s'il n'y en a pas)|1 si l'Albireo d'origine le mesure.
 MODELS=()
-add() { [ -f "$2" ] && [[ -z "$BENCH_ONLY" || "$1" == *"$BENCH_ONLY"* ]] && MODELS+=("$1|$2|$3"); }
+add() { [ -f "$2" ] && [[ -z "$BENCH_ONLY" || "$1" == *"$BENCH_ONLY"* ]] && MODELS+=("$1|$2|$3|${4:-1}"); }
 add "Qwen3-4B Q4_K_M" "$M/Qwen3-4B-Q4_K_M.gguf" "$M/Qwen3-4B-mlx-4bit"
-add "Qwen3-VL 4B Thinking Q4_K_M (service)" "$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.gguf" "$M/Qwen3-VL-4B-Thinking-4bit"
+add "Qwen3-VL 4B Thinking Q4_K_M" "$ROOT/build/gulliver-home/models/qwen3-vl-4b-thinking.gguf" "$M/Qwen3-VL-4B-Thinking-4bit"
 add "Qwen3-VL 2B Instruct Q4_K_M" "$ROOT/build/models/Qwen3VL-2B-Instruct-Q4_K_M.gguf" "$M/Qwen3-VL-2B-Instruct-4bit"
 add "Gemma 3 4B Q4_K_M" "$ROOT/build/models/gemma-3-4b-it-Q4_K_M.gguf" "$M/gemma-3-4b-it-4bit"
 add "LFM2.5-1.2B Q8_0" "$ROOT/build/models/LFM2.5-1.2B-Instruct-Q8_0.gguf" "$M/LFM2.5-1.2B-Instruct-8bit"
 add "Qwen3-30B-A3B Q4_K_M (MoE)" "$ROOT/build/models/Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf" "$M/Qwen3-30B-A3B-Instruct-2507-4bit"
+# Puis tous les modèles installés dans Gulliver (tools/modeles_installes.py, fork pour macOS, 2026-11-22), pour le
+# conseil du modèle : sans MLX (pas de version MLX) ni Albireo d'origine (des heures pour un 8B sur le processeur).
+# IDS (à côté du tableau) donne pour chaque nom l'identifiant du modèle dans Gulliver, s'il est actif et s'il lit les
+# images : nom|identifiant|actif|images.
+IDS=$OUTDIR/moteurs-$STAMP.ids
+: > "$IDS"
+if [ -z "$BENCH_NO_INSTALLED" ]; then
+  while IFS='|' read -r iname ifile iid iactive iimage; do
+    [ -n "$iid" ] || continue
+    known=""
+    for entry in "${MODELS[@]}"; do
+      IFS='|' read -r ename efile _ <<< "$entry"
+      [ "$(realpath "$efile")" = "$(realpath "$ifile")" ] && known=$ename
+    done
+    if [ -n "$known" ]; then echo "$known|$iid|$iactive|$iimage" >> "$IDS"
+    else add "$iname" "$ifile" "" 0 && echo "$iname|$iid|$iactive|$iimage" >> "$IDS"; fi
+  done < <(python3 -I "$ROOT/dlib/dlib/external/gulliver/tools/modeles_installes.py" "${GULLIVER_HOME:-$ROOT/build/gulliver-home}")
+fi
 [ ${#MODELS[@]} -gt 0 ] || { echo "no model to measure"; exit 1; }
 
 # Une mesure : écrit « modèle|taille|réglage|lecture|écriture » dans RAW.
@@ -99,7 +117,7 @@ chip_temp() { [ -x "$TEMP_TOOL" ] && "$TEMP_TOOL" | sed -n 's/^puce : \([0-9.]*\
 TEMP_START=$(chip_temp)
 for ((r = 1; r <= ROUNDS; ++r)); do
   for entry in "${MODELS[@]}"; do
-    IFS='|' read -r name file mlxdir <<< "$entry"
+    IFS='|' read -r name file mlxdir original <<< "$entry"
     for n in $SIZES; do
       echo "essai $r : $name, $n tokens"
       gulliver "$name" "$file" "$n" q8
@@ -107,7 +125,7 @@ for ((r = 1; r <= ROUNDS; ++r)); do
       gulliver "$name" "$file" "$n" f16
       [ -n "$LLAMA" ] && llama "$name" "$file" "$n" llama_q8 -fa 1 -ctk q8_0 -ctv q8_0
       [ -d "$mlxdir" ] && [ -x "$MLX" ] && mlx "$name" "$mlxdir" "$n"
-      [ -x "$ALBIREO" ] && [ "$n" -le "$ALBIREO_MAX" ] && albireo "$name" "$file" "$n"
+      [ -x "$ALBIREO" ] && [ "$original" = 1 ] && [ "$n" -le "$ALBIREO_MAX" ] && albireo "$name" "$file" "$n"
     done
   done
 done

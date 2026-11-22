@@ -13,6 +13,8 @@
 */
 
 import * as api from './api.js';
+import { formatDecimal } from './dom.js';
+import { dialog } from './dialogs.js';
 import { portraits, box, text, schema } from './service.js';
 
 // Les mesures du portage sur MacBook Air M2 (journal du fork) : le modèle de 4B, 2,5 Go de poids, écrit 21,5
@@ -304,11 +306,13 @@ export function modelsTab(body, env) {
   body.append(h('div', { class: 'svc-intro' }, h('p', null, 'Le modèle qui répond à vos questions. Chaque modèle a ses ' +
     'spécialités et une mention selon ce Mac ; le ', h('b', null, '?'), ' ouvre sa fiche, avec le hibou, la marmotte et ' +
     'l’abeille.')), list);
-  let data = null, timer = 0;
+  let data = null, timer = 0, advice = null;
 
   async function load() {
     try {
       data = await api.models('fr');
+      // Le conseil de la mesure du dimanche (GET /gulliver/v1/models/advice) ; la carte manque sans lui.
+      try { advice = await api.getJSON('/gulliver/v1/models/advice'); } catch (e) { advice = null; }
     } catch (e) {
       list.replaceChildren(h('p', { class: 'help' }, 'Le catalogue ne se lit pas : ' + e.message));
       return;
@@ -330,6 +334,109 @@ export function modelsTab(body, env) {
     } catch (e) {
       toast(e.message, true);
     }
+  }
+
+  /*
+      Le conseil de la mesure du dimanche (fork pour macOS, 2026-11-22) : les modèles que tools/conseil_modeles.py a
+      tirés des mesures (pour tout faire, le plus juste, le plus rapide), avec leurs réglages.  « Choisir » montre les
+      changements, active le modèle pour la discussion, le code et la sécurité, envoie les réglages qui changent et
+      attend le service s'il redémarre.
+  */
+  const adviceRoles = { general: 'Pour tout faire, images comprises', accurate: 'Les réponses les plus justes',
+    fastest: 'Le plus rapide' };
+  const kvLabel = (v) => v === 'f16' ? 'demi-précision' : '8 bits';
+  async function applyAdvice(a, m) {
+    let settings = {};
+    try { settings = await api.getJSON('/gulliver/v1/settings'); } catch (e) { settings = {}; }
+    const wanted = { kv_type: a.settings.kv_type, draft_tokens: a.settings.draft_tokens };
+    const changes = {};
+    for (const [k, v] of Object.entries(wanted)) {
+      // « auto » vaut 8 bits pour la mémoire de conversation.
+      const now = k === 'kv_type' && settings[k] === 'auto' ? 'q8' : settings[k];
+      if (v !== undefined && now !== v) changes[k] = v;
+    }
+    const activeBefore = data.active && data.active.general;
+    const before = {
+      model: ((data.models || []).find((x) => x.id === activeBefore) || {}).name || activeBefore || 'aucun',
+      kv: kvLabel(settings.kv_type === 'f16' ? 'f16' : 'q8'),
+      draft: settings.draft_tokens === undefined ? '?' : settings.draft_tokens + ' mots'
+    };
+    const lines = ['Modèle : ' + m.name + ' (discussion, code et sécurité)'];
+    if ('kv_type' in changes) lines.push('Mémoire de conversation : ' + kvLabel(changes.kv_type));
+    if ('draft_tokens' in changes) lines.push('Brouillons de l’écriture : ' + changes.draft_tokens + ' mots');
+    if (Object.keys(changes).length) lines.push('', 'Le service redémarrera (quelques secondes).');
+    if (!window.confirm('Choisir le conseil de la mesure du dimanche ?\n\n' + lines.join('\n'))) return;
+    try {
+      for (const role of ['general', 'code', 'security']) {
+        await api.postJSON('/gulliver/v1/models/' + encodeURIComponent(m.id) + '/activate', { role });
+      }
+      if (Object.keys(changes).length) {
+        const r = await api.putJSON('/gulliver/v1/settings', changes);
+        if (r && r.restart) {
+          toast('Redémarrage du service…');
+          await new Promise((res) => setTimeout(res, 1500));
+          for (let i = 0; i < 120; ++i) {
+            try {
+              const st = await api.status();
+              if (st && st.engine && st.engine.running) break;
+            } catch (e) {
+              // Pas encore revenu.
+            }
+            await new Promise((res) => setTimeout(res, 1000));
+          }
+        }
+      }
+      if (env.refreshStatus) env.refreshStatus();
+      load();
+      changesDialog(before, {
+        model: m.name, kv: kvLabel(wanted.kv_type), draft: wanted.draft_tokens + ' mots'
+      }, Object.keys(changes).length > 0);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  }
+  // Le récapitulatif de ce que « Choisir » a changé : avant, après, et ce qui était déjà en place.
+  function changesDialog(before, after, restarted) {
+    const rows = [['Modèle qui répond', 'model'], ['Mémoire de conversation', 'kv'], ['Brouillons de l’écriture', 'draft']]
+      .map(([label, k]) => {
+        const same = before[k] === after[k];
+        return h('tr', null, h('th', null, label), h('td', null, before[k]),
+          h('td', null, same ? 'inchangé' : h('b', null, after[k])));
+      });
+    dialog((box, close) => {
+      box.append(h('h2', null, 'Ce qui a changé'),
+        h('table', { class: 'changes-table' },
+          h('thead', null, h('tr', null, h('th', null, ''), h('th', null, 'Avant'), h('th', null, 'Maintenant'))),
+          h('tbody', null, ...rows)),
+        h('p', { class: 'help' }, (restarted ? 'Le service a redémarré pour prendre les nouveaux réglages. ' : '') +
+          'Le modèle se charge à la première question : la première réponse peut prendre quelques secondes de plus. ' +
+          'Les réglages se retrouvent dans l’onglet Service, et le conseil change chaque dimanche avec les mesures.'),
+        h('div', { class: 'actions' }, h('button', { class: 'button primary', type: 'button', onclick: () => close(true) },
+          'Fermer')));
+    });
+  }
+
+  function adviceCard(activeId) {
+    if (!advice || !advice.found || !(advice.advice || []).length) return null;
+    const rows = advice.advice.map((a) => {
+      const m = (data.models || []).find((x) => x.id === a.id);
+      const usable = !!(m && m.installed);
+      const facts = [a.write_512 ? 'écriture ' + formatDecimal(a.write_512, a.write_512 >= 100 ? 0 : 1) + ' jetons/s' : null,
+        a.read_4096 ? 'lecture ' + formatDecimal(a.read_4096, 0) + ' jetons/s (4 096 tokens)' : null,
+        a.perplexity ? 'perplexité ' + formatDecimal(a.perplexity, 2) : null,
+        'mémoire de conversation ' + kvLabel(a.settings && a.settings.kv_type)].filter(Boolean).join(' · ');
+      const here = a.id && a.id === activeId;
+      return h('div', { class: 'advice-row' },
+        h('div', { class: 'advice-text' }, h('span', { class: 'advice-role' }, adviceRoles[a.role] || a.role),
+          h('b', null, m ? m.name : a.name), h('span', { class: 'help' }, facts)),
+        h('button', { class: 'button' + (here ? '' : ' primary'), type: 'button', disabled: !usable,
+          title: usable ? 'Active ce modèle et ses réglages conseillés' : 'Ce modèle n’est pas installé dans Gulliver',
+          onclick: () => applyAdvice(a, m) }, here ? 'Remettre ses réglages' : 'Choisir'));
+    });
+    return h('div', { class: 'svc-card advice-card' },
+      h('div', { class: 'svc-title' }, h('span', null, 'Conseil de la mesure du dimanche')),
+      h('p', { class: 'svc-effect' }, 'Tiré des mesures de vitesse et de justesse du ' + (advice.date || '?') +
+        ' sur ce Mac. « Choisir » active le modèle et met les réglages qui lui vont le mieux.'), ...rows);
   }
 
   async function act(method, url, ok) {
@@ -434,6 +541,7 @@ export function modelsTab(body, env) {
         h('div', { class: 'svc-title' }, h('span', null, 'Modèle utilisé : ' + (current ? current.name : 'aucun'))), refresh),
         h('p', { class: 'svc-effect' }, 'Catalogue mis à jour : ' + updated + ' · ' + (data.models || []).length +
           ' modèles · place libre : ' + gb(data.free || 0) + (data.offline ? ' · hors ligne : restauration locale seulement' : ''))),
+      adviceCard(activeId),
       sheetCard(h, specialtiesSheet),
       h('section', { class: 'svc-group' }, h('h4', null, 'Les modèles'),
         h('p', { class: 'help' }, 'Installés d’abord, puis du plus conseillé au moins conseillé pour ce Mac. Ceux ajoutés ' +

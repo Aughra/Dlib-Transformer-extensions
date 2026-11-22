@@ -1815,6 +1815,22 @@ namespace gulliver
             status["web"] = web_capability(s->settings().get());
             send_json(res, 200, status);
         });
+        // Le conseil de la dernière mesure du dimanche (fork pour macOS, 2026-11-22) : build/bench/hebdo/conseil.json
+        // du dépôt (tools/conseil_modeles.py), pour la carte « Conseil » de l'onglet Modèles ; found false sans lui.
+        srv.Get("/gulliver/v1/models/advice", [](const httplib::Request&, httplib::Response& res) {
+            json o = json::object();
+            o["found"] = false;
+            const std::string root = carnet_root();
+            std::string body;
+            json advice;
+            if (!root.empty() && read_file_link_free(join_path(root, "build/bench/hebdo/conseil.json"), root, body, 1u << 20)
+                && json::parse(body, advice) && advice.is_object() && advice["advice"].is_array())
+            {
+                o = advice;
+                o["found"] = true;
+            }
+            send_json(res, 200, o);
+        });
         srv.Get("/gulliver/v1/models", [s](const httplib::Request& req, httplib::Response& res) {
             std::string lang = req.get_param_value("lang");
             if (lang.empty() || lang == "auto") lang = "fr";

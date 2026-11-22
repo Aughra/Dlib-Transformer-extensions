@@ -32,7 +32,7 @@ Mesure du dimanche 22 novembre à 6 h 58 (page « Mesures du dimanche »), aprè
 
 ## Quel modèle employer avec Gulliver (conseil)
 
-D'après la mesure du 22 novembre (Gulliver 6.22.0) et, pour l'écriture, Gulliver 6.23.0 (produits par les poids repris de llama.cpp, +5 à +8 %). Chaque semaine, la page « Mesures du dimanche » refait ce conseil à partir de ses propres chiffres.
+D'après la mesure du 22 novembre (Gulliver 6.22.0) et, pour l'écriture, Gulliver 6.23.0 (produits par les poids repris de llama.cpp, +5 à +8 %). Chaque semaine, la page « Mesures du dimanche » refait ce conseil à partir de ses propres chiffres, en mesurant aussi tous les modèles installés dans Gulliver, et l'onglet « Modèles » l'affiche avec un bouton « Choisir » qui applique le modèle et ses réglages (Gulliver 6.25.0).
 
 | Besoin | Modèle conseillé | Pourquoi | Ce qu'il coûte |
 |---|---|---|---|

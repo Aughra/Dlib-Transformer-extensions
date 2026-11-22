@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "6.24.0",
+  "version": "6.25.0",
   "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS : chaque route est ouverte, sans jeton ni mot de passe, sur le Mac comme sur le port réseau.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -2198,6 +2198,105 @@
           "chip_temp_mean": {
            "type": "number",
            "description": "La moyenne des sondes de la puce, en °C."
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/models/advice": {
+   "get": {
+    "tags": [
+     "Service"
+    ],
+    "summary": "Le conseil de la dernière mesure du dimanche",
+    "description": "Les modèles que la dernière mesure du dimanche conseille (tools/conseil_modeles.py, fichier build/bench/hebdo/conseil.json du dépôt) : pour tout faire, le plus juste, le plus rapide, chacun avec ses mesures et ses réglages (mémoire de conversation, brouillons). « found » vaut false tant qu'aucune mesure n'en a écrit.",
+    "responses": {
+     "200": {
+      "description": "Le conseil",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "found": {
+           "type": "boolean"
+          },
+          "date": {
+           "type": "string"
+          },
+          "active": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "advice": {
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "role": {
+              "type": "string",
+              "enum": [
+               "general",
+               "accurate",
+               "fastest"
+              ]
+             },
+             "id": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "name": {
+              "type": "string"
+             },
+             "why": {
+              "type": "string"
+             },
+             "write_512": {
+              "type": [
+               "number",
+               "null"
+              ]
+             },
+             "read_4096": {
+              "type": [
+               "number",
+               "null"
+              ]
+             },
+             "perplexity": {
+              "type": [
+               "number",
+               "null"
+              ]
+             },
+             "image": {
+              "type": "boolean"
+             },
+             "settings": {
+              "type": "object",
+              "properties": {
+               "kv_type": {
+                "type": "string",
+                "enum": [
+                 "q8",
+                 "f16"
+                ]
+               },
+               "draft_tokens": {
+                "type": "integer"
+               }
+              }
+             }
+            }
+           }
           }
          }
         }

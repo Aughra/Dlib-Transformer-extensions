@@ -1014,6 +1014,20 @@ paths = {
             "chip_temp_max": {"type": "number", "description": "La sonde la plus chaude de la puce, en °C (absente si "
                                                                "aucune sonde ne répond)."},
             "chip_temp_mean": {"type": "number", "description": "La moyenne des sondes de la puce, en °C."}}})}}},
+    "/gulliver/v1/models/advice": {"get": {
+        "tags": ["Service"], "summary": "Le conseil de la dernière mesure du dimanche",
+        "description": "Les modèles que la dernière mesure du dimanche conseille (tools/conseil_modeles.py, fichier "
+                       "build/bench/hebdo/conseil.json du dépôt) : pour tout faire, le plus juste, le plus rapide, "
+                       "chacun avec ses mesures et ses réglages (mémoire de conversation, brouillons). « found » vaut "
+                       "false tant qu'aucune mesure n'en a écrit.",
+        "responses": {"200": reply("Le conseil", {"type": "object", "properties": {
+            "found": {"type": "boolean"}, "date": {"type": "string"}, "active": {"type": ["string", "null"]},
+            "advice": {"type": "array", "items": {"type": "object", "properties": {
+                "role": {"type": "string", "enum": ["general", "accurate", "fastest"]}, "id": {"type": ["string", "null"]},
+                "name": {"type": "string"}, "why": {"type": "string"}, "write_512": {"type": ["number", "null"]},
+                "read_4096": {"type": ["number", "null"]}, "perplexity": {"type": ["number", "null"]},
+                "image": {"type": "boolean"}, "settings": {"type": "object", "properties": {
+                    "kv_type": {"type": "string", "enum": ["q8", "f16"]}, "draft_tokens": {"type": "integer"}}}}}}}})}}},
     "/gulliver/v1/thermal/history": {"get": {
         "tags": ["Service"], "summary": "L'historique de la température de la puce",
         "description": "Les relevés de la température de la puce du Mac, pris toutes les cinq minutes depuis le "

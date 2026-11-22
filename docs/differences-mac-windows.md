@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.24.0, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.25.0, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -101,6 +101,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Ce qui change | Original (Windows) | Fork (Mac) | Pourquoi | Où |
 |---|---|---|---|---|
 | Langues | Anglais, français, allemand, italien, espagnol | Français seulement, pages de l'interface de programmation comprises (descriptions des routes et libellés de Swagger UI) ; Pseudalis aussi | Décision de l'humain : « tout en français » | v. 2.0.0, v. 4.32.0 |
+| Conseil du modèle | Une mention « Conseillé » estimée d'après la taille du modèle et la mémoire | En plus, la carte « Conseil de la mesure du dimanche » de l'onglet Modèles : les modèles installés mesurés chaque semaine (vitesse et justesse), le conseillé pour tout faire, le plus juste et le plus rapide, appliqués d'un clic avec leurs réglages | Choisir sur des mesures et non sur une estimation (demande de l'humain) | v. 6.25.0 |
 | Température de la puce | Rien | Sous la zone de saisie, à côté du débit : la sonde la plus chaude de la puce, en couleur selon l'état thermique de macOS (`GET /gulliver/v1/speed`) ; un clic ouvre la courbe des dernières 24 heures, un relevé toutes les 5 minutes (page `/temperature/`, `GET /gulliver/v1/thermal/history`) | Comprendre un ralentissement (le Mac mini aspire son air par-dessous ; demande de l'humain) | v. 6.24.0 |
 | Où vivent les données (discussions, projets, index, images) | Dans la base IndexedDB du navigateur : perdues en changeant de navigateur ou de machine, sauf export/import manuel (qui n'emporte pas l'index) | Dans le service, rangées par **profil** (un simple nom, sans mot de passe) : retrouvées depuis n'importe quel navigateur ou appareil de la maison. Discussions privées gardées en mémoire du navigateur comme avant | Les retrouver depuis le téléphone ou le futur Mac mini sans rien exporter (demande de l'humain) | v. 6.1.0 |
 | Recherche dans les documents | Calculée dans le navigateur (JavaScript) ; une seule façon de chercher | Portée en C++ dans le service, avec le **choix du moteur** (mots et sens, sens seul, mots seuls) et des **index nommés** (plusieurs indexations, bascule instantanée sans réindexer) | Confidentialité (le calcul quitte le navigateur) et choix du moteur ; garder côte à côte des index de modèles ou de découpages différents | v. 6.2.0 |
