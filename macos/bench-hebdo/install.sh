@@ -24,7 +24,7 @@ cat > "$PLIST" <<PL
   <dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>4</integer><key>Minute</key><integer>0</integer></dict>
   <key>StandardOutPath</key><string>$ROOT/build/bench/hebdo/launchd.log</string>
   <key>StandardErrorPath</key><string>$ROOT/build/bench/hebdo/launchd.log</string>
-  <key>ProcessType</key><string>Background</string>
+  <key>ProcessType</key><string>Interactive</string>
 </dict>
 </plist>
 PL
