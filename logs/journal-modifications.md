@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.22.2 : norme par tête et rotation en un seul noyau ; test_metal échoue sur une erreur de compilation
+
+- **Quoi** : `engine/metal_kernels.metal` : noyau `qk_norm_rope` (norme par tête des requêtes et des clés, puis positions rotatives, un threadgroup par tête et par token, même réduction que `rms_norm`) ; `engine/metal_device.{h,mm}` : `commands::qk_norm_rope` ; `engine/cpu_runtime_metal.cpp` : employé quand la couche a `q_norm` (`GULLIVER_NO_QK_FUSE` pour comparer). `tests/test_metal.cpp` : code 1 (« FAIL ») quand les noyaux ou ceux des accélérateurs ne compilent pas, « skipped » réservé au Mac sans GPU.
+- **Fichiers** : `gulliver/engine/{metal_kernels.metal,metal_device.h,metal_device.mm,cpu_runtime_metal.cpp}`, `gulliver/tests/test_metal.cpp`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md}`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : chantier « Vitesse », écriture (6 à 18 % derrière llama.cpp) : le profil par noyau donnait `rms_norm` à 7,5 % d'une étape (145 lancements). Avant : un essai du chemin groupé des experts pour les étapes de plusieurs tokens (`moe_group` + `matmul_id`), rejeté : Qwen3-30B-A3B, 4 séquences 129,7-129,8 → 74,3 jetons/s, 8 séquences 151,1-155,7 → 112,9-114,5 ; code retiré.
+- **Étapes** : premier essai refusé par le compilateur Metal (attributs `uint2` et `uint` mêlés) alors que `test_metal` répondait « skipped » avec le code 0 : test corrigé, vérifié par une faute volontaire (code 1), puis retirée. Perplexité (4B du service, 4 morceaux de 512, q8, GPU) avec et sans fusion : 16,9223 / 16,9223 d'un coup, 16,9258 / 16,9258 par les étapes. Mesures alternées (`bench_runtime … 512 64 0 q8 metal`, deux tours, charge 6,5 à 9,7 au départ) : écriture 4B 82,0 / 81,7 → 82,7 / 82,8 ; 2B 164,5 / 165,4 → 167,6 / 166,9 ; Gemma 3 4B 79,4 / 79,3 → 80,2 / 80,3 ; lecture trop dispersée pour conclure. `test_metal` passe. Version 6.22.2.
+
 ## 2026-11-22 — Gulliver 6.22.1 : le contrôle du GPU garde les mélanges d'experts en demi-précision
 
 - **Quoi** : `engine/cpu_runtime_metal.cpp`, contrôle au chargement : la limite des mélanges d'experts (25 %) vaut aussi pour les clés et valeurs en demi-précision (`f16_limit`) ; les modèles denses gardent 1 % en demi-précision et 5 % en 8 bits ; le token le plus probable doit toujours être le même.

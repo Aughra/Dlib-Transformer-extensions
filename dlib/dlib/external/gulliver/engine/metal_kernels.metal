@@ -744,6 +744,86 @@ kernel void rope(device float* x [[buffer(0)]], device const float* cs [[buffer(
     r[i1] = x0 * s + x1 * c;
 }
 
+// La norme par tête des requêtes et des clés (q_norm, k_norm), puis leurs positions rotatives, en un seul lancement
+// (chantier Vitesse, 2026-11-22) : rms_norm puis rope, deux fois, faisaient quatre lancements par couche, chacun suivi
+// d'une barrière.  Un threadgroup par tête et par token : les têtes de requête (q_heads), puis celles des clés
+// (k_heads, 0 pour une couche qui lit les clés d'une autre).  Même nombre de fils et même réduction que rms_norm
+// (min(256, hd) fils), mêmes formules que rope : les résultats sont ceux des quatre noyaux, au bit près.
+struct qk_rope_args
+{
+    uint q_heads;
+    uint k_heads;
+    uint hd;
+    uint half_dims;
+    uint neox;
+    uint q_stride;
+    uint k_stride;
+    uint cs_stride;
+    float eps;
+};
+
+kernel void qk_norm_rope(device float* q [[buffer(0)]], device float* k [[buffer(1)]],
+    device const float* wq [[buffer(2)]], device const float* wk [[buffer(3)]], device const float* cs [[buffer(4)]],
+    constant qk_rope_args& a [[buffer(5)]], uint2 g [[threadgroup_position_in_grid]],
+    uint tid [[thread_index_in_threadgroup]], uint2 tpg [[threads_per_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    threadgroup float v[512];
+    threadgroup float part[32];
+    const uint h = g.x, t = g.y, threads = tpg.x;
+    const bool is_q = h < a.q_heads;
+    device float* r = is_q ? q + t * a.q_stride + h * a.hd : k + t * a.k_stride + (h - a.q_heads) * a.hd;
+    device const float* w = is_q ? wq : wk;
+    float s = 0;
+    for (uint i = tid; i < a.hd; i += threads)
+    {
+        const float x = r[i];
+        v[i] = x;
+        s += x * x;
+    }
+    s = simd_sum(s);
+    if (lane == 0) part[sg] = s;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (sg == 0)
+    {
+        float u = lane < (threads + 31) / 32 ? part[lane] : 0.0f;
+        u = simd_sum(u);
+        if (lane == 0) part[0] = u;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    const float scale = 1.0f / sqrt(part[0] / float(a.hd) + a.eps);
+    for (uint i = tid; i < a.hd; i += threads) v[i] = v[i] * scale * w[i];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint i = tid; i < a.hd; i += threads)
+    {
+        // La paire de i, et sa place dans la paire.
+        uint p, i0, i1;
+        bool first;
+        if (a.neox)
+        {
+            first = i < a.half_dims;
+            p = first ? i : i - a.half_dims;
+            i0 = p;
+            i1 = p + a.half_dims;
+        }
+        else
+        {
+            first = (i & 1) == 0;
+            p = i / 2;
+            i0 = 2 * p;
+            i1 = 2 * p + 1;
+        }
+        if (p >= a.half_dims || (a.neox && i >= 2 * a.half_dims))
+        {
+            r[i] = v[i];
+            continue;
+        }
+        const float c = cs[t * a.cs_stride + p], sn = cs[t * a.cs_stride + a.half_dims + p];
+        const float x0 = v[i0], x1 = v[i1];
+        r[i] = first ? x0 * c - x1 * sn : x0 * sn + x1 * c;
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // La rotation des clés et valeurs 8 bits et des requêtes qui lisent les clés (qk_rotate_row) : les
 // signes d'un hachage, puis une transformée de Walsh-Hadamard sur la plus grande puissance de deux

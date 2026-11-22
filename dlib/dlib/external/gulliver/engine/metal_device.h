@@ -162,6 +162,15 @@ namespace gulliver
                 bool neox, unsigned stride, unsigned cs_stride);
 
             /*!
+                La norme par tête (comme rms_norm, de poids wq pour les q_heads têtes de q, wk pour les k_heads
+                têtes de k) puis les positions rotatives (comme rope) des requêtes et des clés de tokens tokens,
+                en place, en un seul lancement ; k_heads = 0 : les requêtes seules.  hd multiple de 32, au plus 512.
+            !*/
+            void qk_norm_rope(metal_view q, metal_view k, metal_view wq, metal_view wk, metal_view cs, unsigned tokens,
+                unsigned q_heads, unsigned k_heads, unsigned hd, unsigned half, bool neox, unsigned q_stride,
+                unsigned k_stride, unsigned cs_stride, float eps);
+
+            /*!
                 La disposition des clés et valeurs d'une couche dans la région d'un kv_pool :
                 le bloc b à b * block_stride, les clés de la tête h à k_slab + h * head_stride, les
                 valeurs à v_slab + h * head_stride, en entiers 8 bits avec leurs échelles (q8) ou

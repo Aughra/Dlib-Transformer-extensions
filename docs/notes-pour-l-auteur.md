@@ -1216,6 +1216,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Exactitude** : texte identique sur quatre tâches sur cinq ; en réponse libre, premier écart au caractère 2 335 sur 3 586, à une quasi-égalité entre deux tokens (au caractère 1 103 avant le changement 38, 1 535 sur le processeur) : les sommes d'une passe de plusieurs tokens ne se font pas dans le même ordre, ni, avec le changement 38, dans la même précision. Le texte reste un texte du modèle choisi en glouton.
 - **Mac ou Windows** : le principe vient de l'original et y fonctionne déjà ; la mesure des gains est propre au Mac.
 
+### Changement 40 : la norme par tête et les positions rotatives en un seul noyau (Gulliver 6.22.2)
+
+- **Avant** : pour les modèles à normes par tête (`q_norm`, `k_norm` : Qwen3, Gemma 3), chaque couche lançait `rms_norm` sur les requêtes, `rms_norm` sur les clés, puis `rope` deux fois : quatre noyaux, chacun suivi d'une barrière. Écriture, modèle du service : **81,7-82,0 tokens/s** après 512 tokens ; Qwen3-VL 2B 164,5-165,4 ; Gemma 3 4B 79,3-79,4.
+- **Changement** (`metal_kernels.metal`, `qk_norm_rope` ; `metal_device.mm` ; `cpu_runtime_metal.cpp`) : un threadgroup par tête et par token, les têtes des requêtes puis celles des clés ; la norme avec le même nombre de fils et la même réduction que `rms_norm` (min(256, hd)), la rotation avec les formules de `rope`, la tête gardée en mémoire de threadgroup entre les deux. `GULLIVER_NO_QK_FUSE` garde l'ancien chemin. **Exactitude** : perplexité identique au dernier chiffre avec et sans la fusion (4 morceaux de 512 : 16,9223 en lecture d'un coup, 16,9258 par les étapes).
+- **Après** (mesures alternées, deux tours) : **82,7-82,8** (+1,2 %) ; 2B 166,9-167,6 (+1,6 %) ; Gemma 3 4B 80,2-80,3 (+1,2 %). Gain modeste : un lancement de noyau coûte de l'ordre d'une microseconde sur ce GPU, et la part de `rms_norm` dans le profil par noyau (7,5 %) venait surtout du profilage, qui met chaque noyau dans son propre encodeur.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

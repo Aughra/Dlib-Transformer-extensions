@@ -11,7 +11,8 @@
     clés et valeurs qu'écrit le GPU sont comparées octet par octet à celles qu'écrit
     qk_float_to_q8_row(), une valeur entière pouvant différer de un là où son arrondi tombe sur une
     égalité.  Code de sortie : le nombre de vérifications échouées ; 0 avec "skipped" quand le Mac
-    n'a pas de GPU que Metal atteint.
+    n'a pas de GPU que Metal atteint ; 1 quand les noyaux, ou ceux des accélérateurs du M5, ne
+    compilent pas (fork pour macOS, 2026-11-22 : un échec de compilation passait pour un « skipped »).
 */
 
 #include <cmath>
@@ -642,8 +643,14 @@ int main()
     std::unique_ptr<metal_device> gpu = metal_device::open(why);
     if (!gpu)
     {
-        std::printf("test_metal: skipped, %s\n", why.c_str());
-        return 0;
+        const bool absent = why.rfind("no GPU", 0) == 0;
+        std::printf("test_metal: %s, %s\n", absent ? "skipped" : "FAIL", why.c_str());
+        return absent ? 0 : 1;
+    }
+    if (gpu->accelerator_note().find("do not compile") != std::string::npos)
+    {
+        std::printf("test_metal: FAIL, %s\n", gpu->accelerator_note().c_str());
+        return 1;
     }
     std::printf("test_metal: %s, %d kernels\n", gpu->name().c_str(), gpu->kernel_count());
     test_matvec(*gpu, gulliver::ggml_type::Q4_K, "mv_q4_K");

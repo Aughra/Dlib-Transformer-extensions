@@ -87,7 +87,7 @@ namespace gulliver
             "dequant_h_q4_K", "dequant_h_q5_K", "dequant_h_q6_K", "dequant_h_q8_0", "dequant_h_q5_0", "to_half",
             "attention_dec_1_64", "attention_dec_1_128", "attention_dec_2_64", "attention_dec_2_128",
             "attention_dec_4_64", "attention_dec_4_128", "attention_dec_8_64", "attention_dec_8_128",
-            "attention_dec_1_256", "attention_dec_2_256", "attention_dec_4_256" };
+            "attention_dec_1_256", "attention_dec_2_256", "attention_dec_4_256", "qk_norm_rope" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -102,7 +102,8 @@ namespace gulliver
             k_short_conv, k_gelu_mul, k_add_rows, k_attention_part_512, k_attention_mtile_512 = k_attention_part_512 + 4,
             k_dequant_h_q4_K = k_attention_mtile_512 + 4, k_dequant_h_q5_K, k_dequant_h_q6_K, k_dequant_h_q8_0,
             k_dequant_h_q5_0, k_to_half, k_attention_dec,
-            k_count = k_attention_dec + 11
+            k_qk_norm_rope = k_attention_dec + 11,
+            k_count
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -153,6 +154,18 @@ namespace gulliver
             uint32_t neox;
             uint32_t stride;
             uint32_t cs_stride;
+        };
+        struct qk_rope_args
+        {
+            uint32_t q_heads;
+            uint32_t k_heads;
+            uint32_t hd;
+            uint32_t half_dims;
+            uint32_t neox;
+            uint32_t q_stride;
+            uint32_t k_stride;
+            uint32_t cs_stride;
+            float eps;
         };
         struct kv_args
         {
@@ -1043,6 +1056,24 @@ namespace gulliver
         const rope_args a = { heads, hd, half, neox ? 1u : 0u, stride, cs_stride };
         impl_->args(a, 2);
         impl_->grid(half, heads, tokens);
+    }
+
+    void metal_device::commands::qk_norm_rope(metal_view q, metal_view k, metal_view wq, metal_view wk, metal_view cs,
+        unsigned tokens, unsigned q_heads, unsigned k_heads, unsigned hd, unsigned half, bool neox, unsigned q_stride,
+        unsigned k_stride, unsigned cs_stride, float eps)
+    {
+        if (tokens == 0) return;
+        if (hd > 512 || hd % 32 != 0 || 2 * half > hd)
+            throw std::invalid_argument("metal_device: heads of other widths than qk_norm_rope takes");
+        impl_->use(k_qk_norm_rope);
+        impl_->bind(q, 0);
+        impl_->bind(k_heads > 0 ? k : q, 1);
+        impl_->bind(wq, 2);
+        impl_->bind(k_heads > 0 ? wk : wq, 3);
+        impl_->bind(cs, 4);
+        const qk_rope_args a = { q_heads, k_heads, hd, half, neox ? 1u : 0u, q_stride, k_stride, cs_stride, eps };
+        impl_->args(a, 5);
+        impl_->groups(q_heads + k_heads, tokens, 1, std::min(256u, hd));
     }
 
     void metal_device::commands::kv_store(metal_view k, metal_view v, unsigned kv_stride, metal_view region,

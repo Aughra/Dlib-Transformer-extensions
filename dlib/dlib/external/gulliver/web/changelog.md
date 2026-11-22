@@ -2,6 +2,18 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.22.2 — 22 novembre 2026
+
+### Performances
+
+- La norme par tête des requêtes et des clés et leurs positions rotatives (Qwen3, Gemma 3) se font en un seul noyau au lieu de quatre par couche : écriture de 1 à 2 % plus rapide (modèle du service 81,7-82,0 à 82,7-82,8 tokens/s, Qwen3-VL 2B 164,5-165,4 à 166,9-167,6, Gemma 3 4B 79,3-79,4 à 80,2-80,3) ; résultats identiques au bit près.
+
+### Corrections
+
+- `test_metal` échoue (code 1) quand les noyaux Metal ou ceux des accélérateurs du M5 ne compilent pas ; il répondait « skipped » avec le code 0.
+
+---
+
 ## 6.22.1 — 22 novembre 2026
 
 ### Corrections

@@ -1068,7 +1068,14 @@ namespace gulliver
                 c->add_bias(g.k, at(g.vectors, lv.bk), kvd, kvd, uT);
                 c->add_bias(g.v, at(g.vectors, lv.bv), kvd, kvd, uT);
             }
-            if (!L.q_norm.empty())
+            /*
+                Les normes par tête et les positions rotatives des requêtes et des clés en un seul lancement
+                (qk_norm_rope, chantier Vitesse, 2026-11-22), mêmes résultats au bit près que rms_norm puis rope ;
+                GULLIVER_NO_QK_FUSE garde les quatre lancements pour les mesures.
+            */
+            static const bool no_qk_fuse = std::getenv("GULLIVER_NO_QK_FUSE") != nullptr;
+            const bool qk_fused = !L.q_norm.empty() && !no_qk_fuse;
+            if (!L.q_norm.empty() && !qk_fused)
             {
                 c->rms_norm(g.q, at(g.vectors, lv.q_norm), g.q, uT * H, lhd, lhd, lhd, eps);
                 if (owns) c->rms_norm(g.k, at(g.vectors, lv.k_norm), g.k, uT * KVH, lhd, lhd, lhd, eps);
@@ -1076,7 +1083,13 @@ namespace gulliver
             // Gemma 4 normalise aussi ses valeurs, sans poids.
             if (cfg_.value_norm && owns) c->rms_norm(g.v, at(g.vectors, g.ones), g.v, uT * KVH, lhd, lhd, lhd, eps);
             const bool neox = cfg_.rope == rope_style::neox;
-            if (swa)
+            if (qk_fused)
+            {
+                const long rh = swa ? cfg_.rope_dims_swa / 2 : half;
+                c->qk_norm_rope(g.q, g.k, at(g.vectors, lv.q_norm), at(g.vectors, owns ? lv.k_norm : lv.q_norm),
+                    swa ? g.cs_swa : g.cs, uT, H, owns ? KVH : 0, lhd, rh, neox, lqd, lkvd, 2 * rh, eps);
+            }
+            else if (swa)
             {
                 const long hs = cfg_.rope_dims_swa / 2;
                 c->rope(g.q, g.cs_swa, uT, H, lhd, hs, neox, lqd, 2 * hs);
