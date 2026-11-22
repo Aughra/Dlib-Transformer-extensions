@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — La recherche dans les documents entre dans la mesure de la semaine
+
+- **Quoi** : `tools/bench_modeles.sh` lance `tools/test_rag.py` après les mesures « comme un utilisateur » (avant l'heure limite) ; `tools/conseil_modeles.py --rag` : tableau par moteur (trouvé dans les 6, 12, 20 premiers, rang réciproque) dans la page de la semaine et dans la section du document, et le meilleur réglage (le plus de questions trouvées dans les 12 premiers, puis le meilleur rang) ; `tools/test_conseil.py` : deux contrôles de plus (17). Le réglage par défaut du service n'est pas changé automatiquement : avec 40 questions, les meilleurs réglages ne se départagent qu'à une question près (hybride 0,95 et rang 0,71 ; sens + tri fin 0,95 et 0,73).
+- **Fichiers** : `gulliver/tools/{bench_modeles.sh,conseil_modeles.py,test_conseil.py}`, `docs/mesures/tests-de-vitesse.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : suite de la demande de l'humain (« oui, à ajouter ») : suivre chaque semaine la justesse de la recherche, comme la vitesse.
+- **Étapes** : `test_conseil.py` 17 sur 17 ; `bash -n` sur le script. Outils seuls : pas de changement de version.
+
 ## 2026-11-22 — Gulliver 6.31.1 : le juge de justesse de référence (PyTorch)
 
 - **Quoi** : demande de l'humain (« faire du PyTorch en plus de Hugging Face »), en outil à côté. `tests/perplexity_runtime.cpp` : avec `GULLIVER_PPL_DUMP=<fichier>`, les tokens de chaque morceau et, pour chaque position notée, le token suivant, sa log-probabilité et les 20 candidats préférés, en JSON par lignes. `tools/justesse_reference.py` (nouveau) : lance Gulliver (processeur, puis GPU par paquets de 8), charge le modèle d'origine (transformers, float32, MPS) et compare : perplexités, accord du premier choix et des 5 premiers, écart moyen de log-probabilité, KL(Gulliver ‖ origine) sur les 20 candidats, découpage en tokens. Dépendances ajoutées, hors de Gulliver et jamais commitées : `build/torch-venv` (Python 3.13 de Homebrew ; torch 2.15.0, transformers 5.24.0, safetensors, accelerate, huggingface_hub ; 971 Mo), modèle `Qwen/Qwen3-VL-4B-Thinking` dans `build/hf-models/` (8,3 Go).

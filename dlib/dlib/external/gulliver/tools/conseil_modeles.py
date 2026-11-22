@@ -7,7 +7,7 @@
 #   python3 tools/conseil_modeles.py modeles-….raw [--previous id] [--new "id …"] [--rounds n]
 #       [--machine "modèle|puce|macOS|Gulliver|charge|température"]
 #       [--temperature "t_min|t_moy|t_max|c_min|c_moy|c_max|g_min|g_moy|g_max|relevés"]
-#       [--late] [--json conseil.json] [--doc docs/mesures/tests-de-vitesse.md]
+#       [--late] [--json conseil.json] [--doc docs/mesures/tests-de-vitesse.md] [--service service.json] [--rag rag.json]
 #
 # Les lignes de llama.cpp et de MLX (identifiants « llama.cpp:… », « mlx:… ») entrent dans le tableau comme les autres,
 # pas dans le conseil (le bouton « Choisir » applique un modèle de Gulliver).  Avec --doc, la section de la semaine du
@@ -67,6 +67,7 @@ def main():
     ap.add_argument("--temperature", default="")
     ap.add_argument("--doc")
     ap.add_argument("--service", help="le JSON de tools/bench_service.py : les mesures « comme un utilisateur »")
+    ap.add_argument("--rag", help="le JSON de tools/test_rag.py : la justesse de la recherche dans les documents")
     args = ap.parse_args()
     # « t_min|t_moy|t_max|c_min|c_moy|c_max|g_min|g_moy|g_max|relevés » (bench_modeles.sh) : la température de la puce,
     # l'utilisation du processeur et du GPU pendant la mesure.
@@ -189,6 +190,17 @@ def main():
             for e in ("gulliver", "llama"):
                 if (service.get(e) or {}).get("error"):
                     print(f"\n{'Gulliver' if e == 'gulliver' else 'llama.cpp'} : arrêté sur une erreur ({service[e]['error'][:160]}).")
+    rag = load_json(args.rag)
+    if rag and rag.get("results"):
+        print()
+        print("### La recherche dans les documents (RAG)")
+        print()
+        print(rag_text(rag))
+        print()
+        print("| Moteur | Trouvé dans les 6 premiers | Dans les 12 | Dans les 20 | Rang réciproque |")
+        print("|---|---|---|---|---|")
+        for row in rag_rows(rag):
+            print("| " + " | ".join(row) + " |")
     if not usable:
         return
     big = [m for m in usable if (billions(names[m]) or MIN_BILLIONS) >= MIN_BILLIONS]
@@ -239,12 +251,51 @@ def main():
         except (OSError, ValueError):
             service = None
         update_doc(args.doc, [m for m in order if not engine(m) and where.get(m) != "nonlu"], names, where, get, ppl,
-                   previous, advice, temp_text, args.late, service)
+                   previous, advice, temp_text, args.late, service, rag)
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump({"date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), "previous": previous or None,
                        "new": sorted(new & set(names)), "late": args.late, "advice": advice}, f, ensure_ascii=False,
                       indent=1)
+
+
+def load_json(path):
+    try:
+        return json.load(open(path, encoding="utf-8")) if path else None
+    except (OSError, ValueError):
+        return None
+
+
+RAG_LABELS = {"hybrid": "Hybride (mots et sens)", "dense": "Sens seul", "lexical": "Mots seuls"}
+
+
+def rag_best(rag):
+    """Le réglage qui trouve le plus de passages dans les 12 premiers (puis le meilleur rang) : (clé, moteur, tri fin)."""
+    key = max(rag["results"], key=lambda k: (rag["results"][k]["rappel_12"], rag["results"][k]["rang_reciproque"]))
+    engine, _, rerank = key.partition(" + ")
+    return key, engine, bool(rerank)
+
+
+def rag_rows(rag):
+    """Les lignes du tableau du RAG : [moteur, trouvé à 6, 12, 20, rang réciproque]."""
+    pct = lambda v: f"{round(100 * v)} %"
+    best = rag_best(rag)[0]
+    rows = []
+    for key, r in rag["results"].items():
+        engine, _, rerank = key.partition(" + ")
+        label = RAG_LABELS.get(engine, engine) + (" + tri fin" if rerank else "") + (" (le meilleur)" if key == best else "")
+        rows.append([label, pct(r["rappel_6"]), pct(r["rappel_12"]), pct(r["rappel_20"]),
+                     f"{r['rang_reciproque']:.2f}".replace(".", ",")])
+    return rows
+
+
+def rag_text(rag):
+    _, engine, rerank = rag_best(rag)
+    return (f"{rag.get('questions', '?')} questions figées sur les {rag.get('documents', '?')} épisodes du blog, cherchées "
+            f"par un service d'essai isolé ({rag.get('embedder', '?')}, épisodes indexés en "
+            f"{round(rag.get('index_s', 0))} s) ; une question est trouvée quand le passage qui y répond est rendu. Le "
+            f"meilleur réglage : moteur « {RAG_LABELS.get(engine, engine)} », tri fin "
+            f"{'allumé' if rerank else 'éteint'}, 12 passages.")
 
 
 def service_rows(service, engines=("gulliver", "llama")):
@@ -285,7 +336,7 @@ def service_rows(service, engines=("gulliver", "llama")):
     return rows
 
 
-def update_doc(path, models, names, where, get, ppl, previous, advice, temp_text, late, service=None):
+def update_doc(path, models, names, where, get, ppl, previous, advice, temp_text, late, service=None, rag=None):
     """La section de la semaine du document de vitesse : Gulliver seul, sur les modèles mesurés cette semaine."""
     begin, end = "<!-- semaine : début -->", "<!-- semaine : fin -->"
     try:
@@ -316,6 +367,10 @@ def update_doc(path, models, names, where, get, ppl, previous, advice, temp_text
         lines += ["", f"Comme un utilisateur, par le service, sur {service.get('model', '?')} :", "", "| Mesure | Gulliver |",
                   "|---|---|"]
         lines += [f"| {label} | {vals[0]} |" for label, vals in service_rows(service, ("gulliver",))]
+    if rag and rag.get("results"):
+        lines += ["", "La recherche dans les documents (RAG) : " + rag_text(rag), "",
+                  "| Moteur | Trouvé dans les 6 premiers | Dans les 12 | Dans les 20 | Rang réciproque |", "|---|---|---|---|---|"]
+        lines += ["| " + " | ".join(row) + " |" for row in rag_rows(rag)]
     lines += ["", end]
     a, b = text.index(begin), text.index(end) + len(end)
     with open(path, "w", encoding="utf-8") as f:

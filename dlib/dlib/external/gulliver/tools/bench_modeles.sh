@@ -16,7 +16,8 @@
 # minimum, moyenne et maximum de chacune).  Écrit les chiffres bruts dans
 # build/bench/modeles-<date>.raw, puis la page de la semaine et le conseil (tools/conseil_modeles.py), et met à jour la
 # section de la semaine de docs/mesures/tests-de-vitesse.md : « table: <fichier .md> » en dernière ligne.  Enfin, sur le
-# modèle de référence, les mesures « comme un utilisateur » par le vrai service (tools/bench_service.py).
+# modèle de référence, les mesures « comme un utilisateur » par le vrai service (tools/bench_service.py), et la justesse
+# de la recherche dans les documents (tools/test_rag.py).
 #
 # Lignes brutes : id|nom|images|taille|mémoire|lecture|écriture|calcul (gpu, processeur, nonlu) ; ppl|id|perplexité.
 # L'identifiant de llama.cpp et de MLX est « llama.cpp:<id> » et « mlx:<id> » (pas un modèle de Gulliver).
@@ -175,6 +176,15 @@ if ! past_deadline && [ -f "$REF_FILE" ]; then
     SERVICE_JSON=$OUTDIR/service-$STAMP.json
   fi
 fi
+# La justesse de la recherche dans les documents (tools/test_rag.py) : 40 questions figées sur les épisodes du blog, par un
+# service d'essai isolé (quelques minutes).
+RAG_JSON=""
+if ! past_deadline; then
+  echo "recherche dans les documents"
+  if python3 -I "$TOOLS/test_rag.py" --json "$OUTDIR/rag-$STAMP.json" >> "$LOG" 2>&1; then
+    RAG_JSON=$OUTDIR/rag-$STAMP.json
+  fi
+fi
 kill "$SAMPLER" 2>/dev/null
 LOAD_END=$(sysctl -n vm.loadavg)
 TEMP_END=$(chip_temp)
@@ -184,6 +194,6 @@ TEMP_MEAN=$(awk 'NF >= 3 {for (i = 1; i <= 3; ++i) {v = $i + 0; s[i] += v; if (n
 
 python3 -I "$TOOLS/conseil_modeles.py" "$RAW" --previous "$PREVIOUS" --new "$NEW" --rounds "$ROUNDS" \
   --machine "$(sysctl -n hw.model)|$(sysctl -n machdep.cpu.brand_string), $(( $(sysctl -n hw.memsize) / 1073741824 )) Go|$(sw_vers -productVersion) ($(sw_vers -buildVersion))|$(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null))|$LOAD_START au début, $LOAD_END à la fin|${TEMP_START:-?} au début, ${TEMP_END:-?} à la fin" \
-  --temperature "$TEMP_MEAN" --doc "$ROOT/docs/mesures/tests-de-vitesse.md" ${SERVICE_JSON:+--service "$SERVICE_JSON"} \
+  --temperature "$TEMP_MEAN" --doc "$ROOT/docs/mesures/tests-de-vitesse.md" ${SERVICE_JSON:+--service "$SERVICE_JSON"} ${RAG_JSON:+--rag "$RAG_JSON"} \
   ${LATE:+--late} --json "$HEBDO/conseil.json" > "$OUT"
 echo "table: $OUT"
