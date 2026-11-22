@@ -1341,6 +1341,14 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Ce qui reste de l'écart avec llama.cpp** (mémoire en demi-précision, même modèle, alternance) : 94,6 tokens/s contre 90,9 avant ce changement. Le GPU seul (10,45 ms) prend déjà presque tout le temps d'un mot chez llama.cpp (10,57 ms) ; les produits par les poids en font 82 % et lisent les poids à environ 85 % du débit de la mémoire.
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 49 : moins de conversions en demi-précision dans la lecture d'une question (Gulliver 6.36.0)
+
+- **Avant** : chaque produit d'une question (Metal Performance Shaders, poids et entrées en demi-précision) convertissait son entrée en floats vers la demi-précision (`to_half`) : 7 conversions par couche, dont 3 de la même entrée normalisée (requêtes, clés, valeurs) et 2 d'une autre (porte, montée). L'activation de la porte (`silu_mul`) s'écrivait en floats, puis était relue pour être convertie. Relevé par noyau sur une question de 4 096 tokens (Qwen3-VL 4B) : `to_half` environ 103 ms et `silu_mul` 70 ms par question, sur environ 1,75 s.
+- **Changement** (`engine/cpu_runtime_metal.cpp`, `engine/metal_device.{h,mm}`, `engine/metal_kernels.metal`) : `xh_ready` dit au produit que son entrée est déjà convertie, pour les clés et les valeurs après les requêtes, et pour la montée après la porte ; le noyau `silu_mul_half` écrit l'activation directement en demi-précision dans l'entrée du produit de descente, sans écrire la porte en floats. `GULLIVER_NO_SHARED_XH` et `GULLIVER_NO_SILU_HALF` gardent l'ancien chemin pour les mesures. **Exactitude** : les mêmes valeurs sont converties de la même façon (la conversion d'une entrée est la même pour chacun de ses produits) ; contrôle du chargement inchangé (0,209646 %) ; réponses gloutonnes de 60 tokens à une question de 3 604 tokens identiques, octet pour octet, avec et sans, sur Qwen3-VL 4B, Qwen3.5-4B, Gemma 3 4B, Qwen3-VL 30B-A3B et Ministral 3 8B.
+- **Après** (`bench_runtime … 18 <tokens> 1 1 q8 metal`, trois tours en alternance, charge 2,4 à 6) : 512 tokens 183,5 / 179,5 / 179,6 ms → 167,6 / 166,5 / 175,4 (2 790-2 853 → 2 920-3 075 tokens/s, +5,5 %) ; 4 096 tokens 1 746,8 / 1 739,5 / 1 749,8 ms → 1 700,3 / 1 702,0 / 1 718,5 (+2,2 %) ; 16 384 tokens 13 355 / 13 593 / 13 617 ms → 13 607 / 13 285 / 13 484 (+0,5 %, dans le bruit : l'attention domine).
+- **Pas fait** : un `qk_norm_rope` à un simdgroup par tête pour les longues questions (environ 60 ms par question de 4 096 tokens, à 50 Go/s) ; le calcul rapide de Metal compile la même formule autrement dans un autre noyau (vu cette nuit avec un noyau fusionné, changement 48), et les résultats ne seraient plus identiques au bit près.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.36.0 : moins de conversions en demi-précision dans la lecture d'une question
+
+- **Quoi** : `run_gpu()` : `xh_ready` (l'entrée du produit déjà convertie : clés et valeurs après les requêtes, montée après la porte) ; noyau `silu_mul_half` (activation de la porte écrite en demi-précision dans `g.xh`, sur les lignes arrondies à 32) ; réglages de mesure `GULLIVER_NO_SHARED_XH` et `GULLIVER_NO_SILU_HALF`.
+- **Fichiers** : `gulliver/engine/{cpu_runtime_metal.cpp,metal_device.h,metal_device.mm,metal_kernels.metal}`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,mesures/tests-de-vitesse.md}`, `logs/{reprise.md,nuit-2026-11-22.md}`, ce journal.
+- **Pourquoi** : V1 (la lecture). Relevé par noyau d'une question de 4 096 tokens : attention 25 %, `to_half` 103 ms, `silu_mul` 70 ms, `qk_norm_rope` 60 ms, le reste aux produits de MPS.
+- **Étapes** : contrôle du chargement identique (0,209646 %) ; réponses gloutonnes (60 tokens, question de 3 604 tokens) identiques octet pour octet sur cinq modèles (Qwen3-VL 4B, Qwen3.5-4B, Gemma 3 4B, Qwen3-VL 30B-A3B, Ministral 3 8B) ; mesure alternée (trois tours, charge 2,4 à 6) : 512 tokens +5,5 %, 4 096 +2,2 %, 16 384 +0,5 % (bruit) ; `test_metal` all checks passed, `test_macos_copie.sh` 0 échec. Version 6.36.0.
+
 ## 2026-11-22 — Gulliver 6.35.0 : envoyer la première couche d'une étape au GPU sans attendre
 
 - **Quoi** : `metal_device::commands::flush()` (commandes envoyées sans attente, nouveau tampon sur la même file ; `finish()` vérifie chaque tampon, `gpu_milliseconds()` va du premier au dernier) ; `run_gpu()` l'appelle après la première couche d'une étape (`GULLIVER_NO_EARLY_FLUSH` pour les mesures).

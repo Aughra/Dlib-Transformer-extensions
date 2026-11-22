@@ -147,6 +147,8 @@ namespace gulliver
 
             // gate[i] = silu(gate[i]) * up[i], i < n.
             void silu_mul(metal_view gate, metal_view up, unsigned n);
+            // y[i] = silu(gate[i]) * up[i] en demi-précision (y en half), i < n, sans écrire gate.
+            void silu_mul_half(metal_view gate, metal_view up, unsigned n, metal_view y);
             // gate[i] = gelu(gate[i]) * up[i] (approximation tanh), i < n (Gemma 3, fork pour macOS).
             void gelu_mul(metal_view gate, metal_view up, unsigned n);
             // x[i] += s * y[i], i < n (Gemma 3, fork pour macOS).

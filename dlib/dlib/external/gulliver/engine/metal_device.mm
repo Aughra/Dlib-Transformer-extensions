@@ -87,7 +87,8 @@ namespace gulliver
             "dequant_h_q4_K", "dequant_h_q5_K", "dequant_h_q6_K", "dequant_h_q8_0", "dequant_h_q5_0", "to_half",
             "attention_dec_1_64", "attention_dec_1_128", "attention_dec_2_64", "attention_dec_2_128",
             "attention_dec_4_64", "attention_dec_4_128", "attention_dec_8_64", "attention_dec_8_128",
-            "attention_dec_1_256", "attention_dec_2_256", "attention_dec_4_256", "qk_norm_rope", "mv_q4_K_1l", "mv_q6_K_1l", "mv_q4_K_idl", "mv_q6_K_idl" };
+            "attention_dec_1_256", "attention_dec_2_256", "attention_dec_4_256", "qk_norm_rope", "mv_q4_K_1l", "mv_q6_K_1l", "mv_q4_K_idl", "mv_q6_K_idl",
+            "silu_mul_half" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -103,7 +104,7 @@ namespace gulliver
             k_dequant_h_q4_K = k_attention_mtile_512 + 4, k_dequant_h_q5_K, k_dequant_h_q6_K, k_dequant_h_q8_0,
             k_dequant_h_q5_0, k_to_half, k_attention_dec,
             k_qk_norm_rope = k_attention_dec + 11, k_mv_q4_K_1l, k_mv_q6_K_1l, k_mv_q4_K_idl, k_mv_q6_K_idl,
-            k_count
+            k_silu_mul_half, k_count
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -1090,6 +1091,17 @@ namespace gulliver
         impl_->bind(gate, 0);
         impl_->bind(up, 1);
         impl_->args(n, 2);
+        impl_->grid(n, 1, 1);
+    }
+
+    void metal_device::commands::silu_mul_half(metal_view gate, metal_view up, unsigned n, metal_view y)
+    {
+        if (n == 0) return;
+        impl_->use(k_silu_mul_half);
+        impl_->bind(gate, 0);
+        impl_->bind(up, 1);
+        impl_->bind(y, 2);
+        impl_->args(n, 3);
         impl_->grid(n, 1, 1);
     }
 

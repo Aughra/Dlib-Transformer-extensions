@@ -266,6 +266,10 @@ La mesure de la semaine compare Gulliver, mémoire de conversation en 8 bits (le
 
 En 8 bits, Gulliver devance llama.cpp en lecture (+9 à +15 %) et en écriture (+2 %). En demi-précision, il lit plus vite mais écrit encore 4 % moins vite : son GPU passe 10,45 ms par mot, quand llama.cpp boucle tout le mot en 10,57 ms. La 6.35.0 gagne 1 % en envoyant la première couche au GPU sans attendre l'écriture des autres ; quatre autres essais de la nuit, plus lents, ont été écartés (détail dans les notes pour l'auteur, changement 48).
 
+### La lecture, des conversions en moins (Gulliver 6.36.0)
+
+Avant chaque produit, la lecture d'une question convertit son entrée en demi-précision, le format que le GPU multiplie le plus vite. Les requêtes, les clés et les valeurs d'une couche lisent la même entrée, convertie jusqu'ici trois fois ; la porte et la montée, deux fois. C'est comme photocopier trois fois la même page pour trois lecteurs assis à la même table. Une seule conversion sert désormais à tous, et l'activation de la porte s'écrit directement en demi-précision. Modèle du service (trois tours en alternance) : 512 tokens lus à **2 920-3 075** jetons/s au lieu de 2 790-2 853 (+5,5 %), 4 096 tokens à **2 384-2 409** au lieu de 2 341-2 355 (+2,2 %). À 16 384 tokens, rien ne change : l'attention y prend l'essentiel du temps, et c'est là que MLX garde son avance.
+
 ## Pour que Gulliver soit le plus rapide
 
 Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (deux pistes au même but sont essayées toutes les deux, mesurées, et la meilleure est gardée) :

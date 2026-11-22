@@ -949,6 +949,14 @@ namespace gulliver
             c = dev.begin();
         };
         auto at = [&](const metal_buffer& b, size_t offset) { return metal_view(b, offset); };
+        /*
+            L'entrée du prochain produit d'un prompt est déjà dans g.xh, en demi-précision (chantier Vitesse,
+            2026-11-22) : écrite par silu_mul_half, ou convertie pour le produit d'avant, qui lisait la même entrée
+            (les requêtes, clés et valeurs lisent toutes xn, comme la porte et la montée).  GULLIVER_NO_SHARED_XH
+            convertit l'entrée à chaque produit, pour les mesures.
+        */
+        bool xh_ready = false;
+        static const bool no_shared_xh = std::getenv("GULLIVER_NO_SHARED_XH") != nullptr;
         // Un produit de la passe : par blocs en place pour une étape, développé puis via MPS pour un prompt.
         auto product = [&](const weight_matrix& M, const metal_buffer& x, long x_stride, const metal_buffer& y, long y_stride,
                            float alpha, float beta) {
@@ -1003,8 +1011,10 @@ namespace gulliver
                     }
                 }
                 if (w == &e) c->dequantize_half(M.type, at(g.weights, g.weight(M)), M.rows, M.cols, e, M.cols);
-                c->to_half(x, R, static_cast<unsigned>(M.cols), static_cast<unsigned>(x_stride), g.xh,
-                    static_cast<unsigned>(M.cols));
+                if (!xh_ready)
+                    c->to_half(x, R, static_cast<unsigned>(M.cols), static_cast<unsigned>(x_stride), g.xh,
+                        static_cast<unsigned>(M.cols));
+                xh_ready = false;
                 c->gemm_half(g.xh, R, M.cols, M.cols, *w, M.rows, M.cols, y, y_stride, alpha, beta);
             }
             else
@@ -1095,9 +1105,18 @@ namespace gulliver
             else
             {
                 product(L.wq, g.xn, d, g.q, lqd, 1.0f, 0.0f);
+                // La même entrée que le produit d'avant : sa conversion en demi-précision sert encore (prompts).
+                xh_ready = !step && g.half_prompts && L.wq.type != gulliver::ggml_type::F32
+                    && L.wk.type != gulliver::ggml_type::F32 && !no_shared_xh;
                 product(L.wk, g.xn, d, g.k, lkvd, 1.0f, 0.0f);
             }
-            if (owns) product(L.wv, g.xn, d, g.v, lkvd, 1.0f, 0.0f);
+            if (owns)
+            {
+                xh_ready = !step && g.half_prompts && L.wk.type != gulliver::ggml_type::F32
+                    && L.wv.type != gulliver::ggml_type::F32 && !no_shared_xh && !cfg_.attn_output_gate
+                    && !(step && L.wq.type == L.wk.type && lqd % 16 == 0);
+                product(L.wv, g.xn, d, g.v, lkvd, 1.0f, 0.0f);
+            }
             if (!L.bq.empty())
             {
                 c->add_bias(g.q, at(g.vectors, lv.bq), qd, qd, uT);
@@ -1231,6 +1250,8 @@ namespace gulliver
                 else
                 {
                     product(L.w_gate, g.xn, d, g.gate, df, 1.0f, 0.0f);
+                    xh_ready = !step && g.half_prompts && L.w_gate.type != gulliver::ggml_type::F32
+                        && L.w_up.type != gulliver::ggml_type::F32 && !no_shared_xh;
                     product(L.w_up, g.xn, d, g.up, df, 1.0f, 0.0f);
                 }
                 if (cfg_.gemma4)
@@ -1243,7 +1264,18 @@ namespace gulliver
                 }
                 else
                 {
-                    c->silu_mul(g.gate, g.up, static_cast<unsigned>(T * df));
+                    /*
+                        Un prompt dont les produits passent en demi-précision : l'activation va droit à l'entrée du
+                        produit de descente, en demi-précision, sans écrire gate en floats puis le relire (chantier
+                        Vitesse, 2026-11-22).  Les lignes au-delà des tokens, que MPS calcule pour rien, comme to_half.
+                    */
+                    static const bool no_fused_act = std::getenv("GULLIVER_NO_SILU_HALF") != nullptr;
+                    if (!step && g.half_prompts && L.w_down.type != gulliver::ggml_type::F32 && !no_fused_act)
+                    {
+                        c->silu_mul_half(g.gate, g.up, static_cast<unsigned>((T + 31) / 32 * 32 * df), g.xh);
+                        xh_ready = true;
+                    }
+                    else c->silu_mul(g.gate, g.up, static_cast<unsigned>(T * df));
                     product(L.w_down, g.gate, df, g.x, d, rs, 1.0f);
                 }
             }

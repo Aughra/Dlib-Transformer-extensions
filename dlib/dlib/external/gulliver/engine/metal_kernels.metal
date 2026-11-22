@@ -890,6 +890,16 @@ kernel void silu_mul(device float* gate [[buffer(0)]], device const float* up [[
     gate[i] = g / (1.0f + exp(-g)) * up[i];
 }
 
+// silu_mul suivi de to_half, pour l'entrée en demi-précision du produit d'un prompt (chantier Vitesse, 2026-11-22) :
+// y[i] = half(silu(gate[i]) * up[i]), sans écrire gate.
+kernel void silu_mul_half(device const float* gate [[buffer(0)]], device const float* up [[buffer(1)]],
+    device half* y [[buffer(2)]], constant uint& n [[buffer(3)]], uint i [[thread_position_in_grid]])
+{
+    if (i >= n) return;
+    const float g = gate[i];
+    y[i] = half(g / (1.0f + exp(-g)) * up[i]);
+}
+
 // Gemma 3 (fork pour macOS) : gate[i] = gelu(gate[i]) * up[i], l'approximation tanh (qk_gelu_tanh).
 kernel void gelu_mul(device float* gate [[buffer(0)]], device const float* up [[buffer(1)]],
     constant uint& n [[buffer(2)]], uint i [[thread_position_in_grid]])
