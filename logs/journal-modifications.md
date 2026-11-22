@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-22 — Gulliver 6.23.2 : la réunion des parties de l'attention, poids partagés ; la chaleur du GPU
+
+- **Quoi** : `engine/metal_kernels.metal` : `merge_attention` réécrit (maximum et poids des parties partagés en mémoire de threadgroup, 2 048 parties au plus, l'ancien calcul au-delà). Rubrique « Tests de vitesse » : la chaleur du GPU dans les mesures.
+- **Fichiers** : `gulliver/engine/metal_kernels.metal`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md,mesures/tests-de-vitesse.md}`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : l'écart d'écriture le plus grand de la mesure du dimanche (Gemma 3 4B après 16 384 tokens, 54,2 contre 79,7 pour llama.cpp). Profil : `merge_attention` 5,7 %, `attention_dec_2_256` 16,7 %.
+- **Étapes** : la mesure de Gemma 3 après 16 384 tokens varie avec l'échauffement : six essais d'affilée, lecture 2 382,6 / 2 276,2 / 2 159,1 / 2 105,4 / 2 082,7 / 2 050,7, écriture 69,3 / 64,2 / 62,9 / 62,5 / 60,8 / 59,9 ; après deux minutes de repos 71,5 et 71,8 ; `pmset -g therm` : rien ; `/usr/bin/time` d'une écriture de 1 500 tokens sur le GPU : 18,8 s réelles, 7,2 s utilisateur, 6,1 s système (environ 0,7 cœur). Nouveau noyau, ordre A-B-B-A contre le binaire de la 6.23.1 : Gemma 3 71,8 / 74,7 / 74,2 / 68,1 et 65,5 / 67,8 / 66,7 / 63,9 ; 4B 46,3 / 47,5 / 45,9 / 44,7 et 44,6 / 45,7 / 45,5 / 44,3. Perplexité du 4B par les étapes, 2 morceaux de 4 096 : 8,6964. `test_metal` passe ; `test_macos.sh` (port 18473) : 70 étapes, 0 échec. Version 6.23.2.
+
 ## 2026-11-22 — Gulliver 6.23.1 : les produits par expert de l'écriture avec le calcul de la 6.23.0
 
 - **Quoi** : `engine/metal_kernels.metal` : les corps `mv_q4_K_1l_body` et `mv_q6_K_1l_body`, et les noyaux par expert `mv_q4_K_idl`, `mv_q6_K_idl` ; `engine/metal_device.mm` : `matvec_id` les emploie (`GULLIVER_OLD_MV` pour les anciens). `tests/test_metal.cpp` : `test_matmul_id(…, step)` contrôle `matvec_id` (3 tokens, 2 experts chacun, cinq formats).

@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.23.1, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.23.2, 22 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -58,6 +58,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Normes par tête et positions rotatives (Qwen3, Gemma 3) | Pas de GPU sur Mac | Un seul noyau (`qk_norm_rope`) au lieu de quatre par couche, résultats identiques au bit près | Chantier « Vitesse » : moins de lancements par mot | Écriture +1,2 à +1,6 % | ch. 40, v. 6.22.2 |
 | Produits Q4_K et Q6_K de l'écriture | Pas de GPU sur Mac | Organisation reprise des noyaux de llama.cpp (masques sans décalage, activations partagées), une ligne et quatre simdgroups | Chantier « Vitesse » : produits à 80-88 % du plafond de la mémoire | Écriture +4,8 à +7,7 % (4B du service : 82,9 → 89,3) | ch. 41, v. 6.23.0 |
 | Produits par expert de l'écriture (mélanges d'experts) | Pas de GPU sur Mac | Le même calcul que les produits Q4_K et Q6_K repris de llama.cpp | Chantier « Vitesse » | Qwen3-30B-A3B +10 %, LFM2.5-8B-A1B +5 % | ch. 42, v. 6.23.1 |
+| Réunion des parties de l'attention de l'écriture | Pas de GPU sur Mac | Poids des parties calculés une fois par tête et partagés | Chantier « Vitesse » : 5,7 % d'une étape de Gemma 3 après 16 384 tokens | Gemma 3 4B après 16 384 tokens +4 à +5 % | ch. 43, v. 6.23.2 |
 | Attention de l'écriture sur le GPU | Pas de GPU sur Mac | 32 positions à la fois par simdgroup (« flash-decoding », `attention_dec`), lectures groupées, parties de 128 ou 256 positions | Chantier « Vitesse », V2 : l'attention attendait (16 à 29 % d'un pas) | Modèle du service : +11 % (512), +13 % (4 096), +36 à +45 % (16 384) | ch. 35, v. 6.19.0 |
 | Attention des prompts sur le M5 | Pas de GPU sur Mac | Sur les accélérateurs neuronaux du M5 (Metal 4, `attention_nax`, organisation reprise de MLX), têtes de 64, 128 et 256 valeurs (256 depuis 6.20.0 : Gemma 3 4B à 4 096 tokens +66 %) ; ancien noyau sur les autres puces | Chantier « Vitesse », V1/V5 | Modèle du service : 4 096 tokens +44 %, 16 384 tokens +90 % | ch. 34, v. 6.18.0 |
 | Poids des prompts sur le GPU | Pas de GPU sur Mac (CUDA, OpenVINO) | Développés une fois en demi-précision et gardés d'une passe à l'autre (un quart de la mémoire au plus) ; avant 6.17.0, redéveloppés à chaque passe | Chantier « Vitesse » : environ 17 Go de mémoire lus et écrits par passe pour un 4B | Lecture de 512 tokens, modèle du service : +21 à +27 % (2 060-2 159 → 2 593-2 708) | ch. 33, v. 6.17.0 |

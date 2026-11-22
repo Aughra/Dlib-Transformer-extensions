@@ -1691,29 +1691,87 @@ ATT_MTILE(1, 512, 1, 2) ATT_MTILE(2, 512, 1, 2) ATT_MTILE(4, 512, 1, 2) ATT_MTIL
 // Les parties de l'attention réunies : pour le token t et la tête de requête h, les parties qu'atteint
 // sa longueur, chacune pondérée par exp(son maximum - le plus grand), divisées par la somme totale,
 // dans ctx[t * q_stride + h * hd].  Un threadgroup de hd threads par (tête, token).
+//
+// Les poids des parties calculés une fois par threadgroup et partagés (chantier Vitesse, 2026-11-22) : chaque fil
+// recalculait le maximum et l'exponentielle de toutes les parties (64 à 16 384 positions, parties de 256), et le noyau
+// prenait 5,7 % d'une étape de Gemma 3 4B après 16 384 tokens.  Les fils se partagent les parties pour le maximum
+// (réduit par simd_max puis en mémoire de threadgroup) et les poids ; la somme pondérée de chaque valeur garde l'ordre
+// des parties.  Au-delà de MERGE_PARTS parties, l'ancien calcul.
+#define MERGE_PARTS 2048
 kernel void merge_attention(device const float* partial [[buffer(0)]], device const int* lengths [[buffer(1)]],
     device float* ctx [[buffer(2)]], constant attention_args& a [[buffer(3)]],
-    uint2 tg [[threadgroup_position_in_grid]], uint e [[thread_index_in_threadgroup]])
+    uint2 tg [[threadgroup_position_in_grid]], uint e [[thread_index_in_threadgroup]],
+    uint2 tpg [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]])
 {
-    const uint h = tg.x, t = tg.y;
+    threadgroup float wt[MERGE_PARTS];
+    threadgroup float red[32];
+    const uint h = tg.x, t = tg.y, threads = tpg.x, nsg = (threads + 31) / 32;
     const uint kvh = h / a.rep, i = h % a.rep;
     const uint used = uint((lengths[t] + a.part_len - 1) / a.part_len);
     const uint stride = a.rep * (a.hd + 2);
     device const float* first = partial + (ulong(t) * a.kv_heads + kvh) * a.parts * stride;
+    if (used > MERGE_PARTS)
+    {
+        float mx = -INFINITY;
+        for (uint p = 0; p < used; ++p)
+            if (first[p * stride + a.rep * a.hd + a.rep + i] > 0.0f) mx = max(mx, first[p * stride + a.rep * a.hd + i]);
+        float sum = 0, acc = 0;
+        for (uint p = 0; p < used; ++p)
+        {
+            device const float* r = first + p * stride;
+            const float s = r[a.rep * a.hd + a.rep + i];
+            if (s <= 0.0f) continue;
+            const float f = exp(r[a.rep * a.hd + i] - mx);
+            sum += s * f;
+            acc += f * r[i * a.hd + e];
+        }
+        ctx[t * a.q_stride + h * a.hd + e] = acc / sum;
+        return;
+    }
+    // Le maximum des parties qui comptent.
     float mx = -INFINITY;
-    for (uint p = 0; p < used; ++p)
+    for (uint p = e; p < used; p += threads)
         if (first[p * stride + a.rep * a.hd + a.rep + i] > 0.0f) mx = max(mx, first[p * stride + a.rep * a.hd + i]);
-    float sum = 0, acc = 0;
-    for (uint p = 0; p < used; ++p)
+    mx = simd_max(mx);
+    if (lane == 0) red[sg] = mx;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (sg == 0)
+    {
+        float v = lane < nsg ? red[lane] : -INFINITY;
+        v = simd_max(v);
+        if (lane == 0) red[0] = v;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    mx = red[0];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    // Le poids de chaque partie, et sa contribution au dénominateur.
+    float sum = 0;
+    for (uint p = e; p < used; p += threads)
     {
         device const float* r = first + p * stride;
         const float s = r[a.rep * a.hd + a.rep + i];
-        if (s <= 0.0f) continue;
-        const float f = exp(r[a.rep * a.hd + i] - mx);
+        const float f = s > 0.0f ? exp(r[a.rep * a.hd + i] - mx) : 0.0f;
+        wt[p] = f;
         sum += s * f;
-        acc += f * r[i * a.hd + e];
     }
-    ctx[t * a.q_stride + h * a.hd + e] = acc / sum;
+    sum = simd_sum(sum);
+    if (lane == 0) red[sg] = sum;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (sg == 0)
+    {
+        float v = lane < nsg ? red[lane] : 0.0f;
+        v = simd_sum(v);
+        if (lane == 0) red[0] = v;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    float acc = 0;
+    for (uint p = 0; p < used; ++p)
+    {
+        const float f = wt[p];
+        if (f != 0.0f) acc += f * first[p * stride + i * a.hd + e];
+    }
+    ctx[t * a.q_stride + h * a.hd + e] = acc / red[0];
 }
 
 // ---------------------------------------------------------------------------------------------

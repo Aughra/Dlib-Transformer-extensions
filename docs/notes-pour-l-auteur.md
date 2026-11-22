@@ -1237,6 +1237,14 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (mesures alternées, deux tours) : Qwen3-30B-A3B **83,7-83,9** (+10 %) ; LFM2.5-8B-A1B **189,9-190,9** (+5 %).
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 43 : la réunion des parties de l'attention, poids partagés (Gulliver 6.23.2)
+
+- **Avant** : `merge_attention` (`metal_kernels.metal`), un threadgroup de hd fils par tête et par token ; chaque fil parcourait toutes les parties deux fois, relisant leurs maximums et recalculant leurs exponentielles (64 parties à 16 384 positions, parties de 256). Huit threadgroups seulement pour Gemma 3 4B à un token. Profil d'une étape de Gemma 3 4B après 16 384 tokens : **5,7 %** (24 µs par appel). Écriture : **63,9-71,8 tokens/s** selon l'échauffement du GPU (voir la remarque ci-dessous).
+- **Changement** : les fils se partagent les parties pour le maximum (`simd_max`, puis la mémoire de threadgroup) et pour les poids, rangés en mémoire de threadgroup (2 048 parties au plus, l'ancien calcul au-delà) ; la somme pondérée de chaque valeur garde l'ordre des parties. **Exactitude** : tests de l'attention de `test_metal` ; perplexité du 4B par les étapes, 2 morceaux de 4 096 : 8,6964 (8,6962 au changement 35, 8,6954 en lecture d'un coup).
+- **Après** (ordre A-B-B-A, deux tours) : Gemma 3 4B 71,8 / 68,1 et 65,5 / 63,9 → **74,7 / 74,2** et **67,8 / 66,7** (+4 à +5 %) ; 4B du service 46,3 / 44,7 et 44,6 / 44,3 → 47,5 / 45,9 et 45,7 / 45,5 (+2 %).
+- **Remarque sur la mesure** : quand le GPU travaille longtemps sans pause, sa cadence baisse d'environ 15 % (Gemma 3 4B après 16 384 tokens, six essais d'affilée : lecture 2 383 → 2 051 tokens/s, écriture 69,3 → 59,9 ; deux minutes de repos : 71,5 et 71,8), sans qu'aucun avertissement thermique n'apparaisse (`pmset -g therm`). Le processeur n'y est pour rien (environ 0,7 cœur occupé pendant l'écriture sur le GPU). Les mesures alternées restent équitables ; les valeurs absolues dépendent de l'échauffement.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |
