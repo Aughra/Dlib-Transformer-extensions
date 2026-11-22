@@ -1332,6 +1332,15 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Vérifié** : sur le Mac seulement. **Non vérifié** : sous Windows, et sur le processeur seul (le frein y joue de la même façon, mais les passes y sont plus lentes).
 - **Mac ou Windows** : aussi sous Windows (code commun du moteur ; déduit du code, non vérifié faute de machine Windows).
 
+### Changement 48 : la première couche d'une étape envoyée au GPU sans attendre les autres (Gulliver 6.35.0)
+
+- **Avant** : une étape d'écriture (un mot) écrivait toutes ses commandes dans un seul tampon, puis l'envoyait au GPU et l'attendait. Le GPU restait inactif pendant l'écriture des commandes (0,10 ms pour les 36 couches de Qwen3-VL 4B) ; relevé `GULLIVER_GPU_TIMING` : passe 10,74 ms, dont 10,45 ms de GPU.
+- **Changement** (`engine/metal_device.{h,mm}`, `engine/cpu_runtime_metal.cpp`) : `commands::flush()` envoie les commandes déjà écrites et ouvre un nouveau tampon sur la même file, que le GPU exécute après ; `finish()` attend le dernier et vérifie chacun. Une étape envoie sa première couche dès qu'elle est écrite. `GULLIVER_NO_EARLY_FLUSH` garde l'envoi unique pour les mesures ; le relevé par noyau (`GULLIVER_GPU_PROFILE`) garde un seul tampon. **Exactitude** : mêmes noyaux, dans le même ordre ; perplexité sur le GPU par paquets de 8 tokens (4 morceaux de 512, clés en 8 bits) identique au chiffre près avec et sans : Qwen3-VL 4B 16,9303, Qwen3.5-4B 12,3707, Qwen3-VL 30B-A3B 12,9939, Gemma 3 4B 23,4203, Gemma 4 E2B 76,2677 ; `test_metal` all checks passed.
+- **Après** (Qwen3-VL 4B Thinking, `bench_runtime … 18 512 256 1 <kv> metal`, quatre tours en alternance, charge 2 à 6) : mémoire en demi-précision 11,04 / 11,13 / 11,20 / 11,15 ms par mot → 10,88 / 11,10 / 11,07 / 11,03 (89,8 → 90,7 tokens/s) ; en 8 bits 11,24 / 11,23 / 11,18 / 11,21 → 11,17 / 11,09 / 11,09 / 11,08 (89,1 → 90,0). Huit paires gagnées sur huit.
+- **Essayé et écarté la même nuit** (mesures alternées) : attendre la fin du GPU en boucle plutôt qu'en sommeil (aucun gain) ; un encodeur concurrent avec une barrière avant chaque noyau (11,04 → 11,34 ms : les barrières coûtent plus que l'encodeur en série) ; un noyau qui fait à la fois la norme et la rotation des requêtes et des clés, le rangement des clés et valeurs et la préparation des requêtes (72 lancements de moins par mot, mais 10,86 → 10,91 ms, et des requêtes différentes au dernier chiffre près, le calcul rapide de Metal compilant autrement la même formule) ; des parties d'attention de 64 ou 32 positions au lieu de 128 (plus lent).
+- **Ce qui reste de l'écart avec llama.cpp** (mémoire en demi-précision, même modèle, alternance) : 94,6 tokens/s contre 90,9 avant ce changement. Le GPU seul (10,45 ms) prend déjà presque tout le temps d'un mot chez llama.cpp (10,57 ms) ; les produits par les poids en font 82 % et lisent les poids à environ 85 % du débit de la mémoire.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

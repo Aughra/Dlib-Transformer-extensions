@@ -267,6 +267,8 @@ namespace gulliver
         metal_device::impl* device = nullptr;
         id<MTLCommandBuffer> buffer = nil;
         id<MTLComputeCommandEncoder> encoder = nil;
+        // Les tampons déjà envoyés par flush(), dans l'ordre.
+        std::vector<id<MTLCommandBuffer>> sent;
         // Les produits groupés des experts sur les accélérateurs (moe_group() le décide pour matmul_id()).
         bool mm_nax = false;
         unsigned mm_tt = 64;
@@ -1257,20 +1259,35 @@ namespace gulliver
         impl_->groups(n_tiles, l.heads, wide ? 2 : 1, wide ? 32 : l.hd == 256 ? 64 : 128);
     }
 
+    void metal_device::commands::flush()
+    {
+        // Le relevé par noyau (GULLIVER_GPU_PROFILE) lit ses horodatages dans un seul tampon.
+        if (impl::profiling()) return;
+        impl_->close();
+        [impl_->buffer commit];
+        impl_->sent.push_back(impl_->buffer);
+        impl_->buffer = [impl_->device->queue commandBuffer];
+        impl_->encoder = [impl_->buffer computeCommandEncoder];
+    }
+
     void metal_device::commands::finish()
     {
         impl_->close();
         [impl_->buffer commit];
         [impl_->buffer waitUntilCompleted];
         if (impl::profiling()) impl_->report_profile();
-        if (impl_->buffer.status == MTLCommandBufferStatusError)
-            throw std::runtime_error(std::string("the GPU failed the commands: ")
-                + (impl_->buffer.error ? impl_->buffer.error.localizedDescription.UTF8String : "unknown error"));
+        // Les tampons envoyés plus tôt se sont exécutés avant le dernier.
+        impl_->sent.push_back(impl_->buffer);
+        for (id<MTLCommandBuffer> b : impl_->sent)
+            if (b.status == MTLCommandBufferStatusError)
+                throw std::runtime_error(std::string("the GPU failed the commands: ")
+                    + (b.error ? b.error.localizedDescription.UTF8String : "unknown error"));
     }
 
     double metal_device::commands::gpu_milliseconds() const
     {
-        return (impl_->buffer.GPUEndTime - impl_->buffer.GPUStartTime) * 1000.0;
+        const id<MTLCommandBuffer> first = impl_->sent.empty() ? impl_->buffer : impl_->sent.front();
+        return (impl_->buffer.GPUEndTime - first.GPUStartTime) * 1000.0;
     }
 
     json metal_describe()

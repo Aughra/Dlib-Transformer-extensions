@@ -1014,8 +1014,15 @@ namespace gulliver
                 c->gemm(x, R, M.cols, x_stride, e, M.rows, M.cols, y, y_stride, alpha, beta);
             }
         };
+        static const bool no_flush = std::getenv("GULLIVER_NO_EARLY_FLUSH") != nullptr;
         for (long li = 0; li < cfg_.n_layers; ++li)
         {
+            /*
+                Une étape envoie au GPU sa première couche dès qu'elle est écrite (chantier Vitesse, 2026-11-22) : le
+                GPU la calcule pendant que le processeur écrit les suivantes, au lieu d'attendre la passe entière
+                (0,1 ms d'écriture pour 36 couches).  GULLIVER_NO_EARLY_FLUSH garde un seul envoi, pour les mesures.
+            */
+            if (step && li == 1 && !no_flush) c->flush();
             if (narrowing && li == first_shared)
             {
                 narrow();

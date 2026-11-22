@@ -253,6 +253,19 @@ Depuis la 6.32.0, les modèles denses compressés en Q8_0 (8 bits par poids, plu
 
 En Q8_0, Gulliver fait jeu égal avec llama.cpp (Qwen3-4B) ou passe devant de 4 à 5 % (Ministral 3 3B), en lecture comme en écriture. L'écart d'écriture qui reste tient donc aux formats en 4 et 6 bits (Q4_K, Q6_K), ceux des modèles du service : c'est là que porte V2.
 
+### L'écriture du modèle du service, réglage contre réglage (Gulliver 6.35.0)
+
+La mesure de la semaine compare Gulliver, mémoire de conversation en 8 bits (le réglage du service), à llama.cpp dans son réglage par défaut, en demi-précision. À réglage égal (22 novembre au soir, `bench_runtime` et `llama-bench -fa 1`, question de 512 tokens, deux tours en alternance) :
+
+| Qwen3-VL 4B Thinking Q4_K_M | Gulliver | llama.cpp |
+|---|---|---|
+| Lecture, mémoire en 8 bits | 2 748 à 2 900 | 2 523 à 2 529 |
+| Écriture, mémoire en 8 bits | 89,7 à 89,8 | 87,9 à 88,2 |
+| Lecture, mémoire en demi-précision | 2 860 à 2 893 | 2 569 à 2 595 |
+| Écriture, mémoire en demi-précision | 90,8 à 90,9 (90,7 de moyenne en 6.35.0, mesuré à part) | 94,5 à 94,8 |
+
+En 8 bits, Gulliver devance llama.cpp en lecture (+9 à +15 %) et en écriture (+2 %). En demi-précision, il lit plus vite mais écrit encore 4 % moins vite : son GPU passe 10,45 ms par mot, quand llama.cpp boucle tout le mot en 10,57 ms. La 6.35.0 gagne 1 % en envoyant la première couche au GPU sans attendre l'écriture des autres ; quatre autres essais de la nuit, plus lents, ont été écartés (détail dans les notes pour l'auteur, changement 48).
+
 ## Pour que Gulliver soit le plus rapide
 
 Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (deux pistes au même but sont essayées toutes les deux, mesurées, et la meilleure est gardée) :

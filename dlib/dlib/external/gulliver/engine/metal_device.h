@@ -315,6 +315,13 @@ namespace gulliver
             !*/
             void finish();
 
+            /*!
+                ensures
+                    - Envoie au GPU les commandes déjà écrites, sans les attendre ; les suivantes vont
+                      dans un nouveau tampon, que le GPU exécute après elles.  finish() les attend toutes.
+            !*/
+            void flush();
+
             // Le temps que le GPU a mis pour les commandes, en millisecondes, une fois finish() revenu.
             double gpu_milliseconds() const;
 
