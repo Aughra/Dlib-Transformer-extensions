@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — 128 lignes par groupe dans le produit des experts : écarté
+
+- **Quoi** : `MMN_NR` (et `mm_nax_rows`) 64 → 128, bancs côte à côte en alternance (deux tours, charge 6 à 7) : Qwen3-VL 30B-A3B 512 tokens 1 706-1 709 → 1 479-1 531, 4 096 tokens 1 939-1 984 → 2 104-2 130 ; LFM2.5-8B-A1B 512 tokens 2 081-2 133 → 1 875-1 896, 4 096 tokens 2 116-2 155 → 1 763-1 973. Gagne seulement quand chaque expert reçoit beaucoup de tokens, et pas pour tous les modèles : retiré.
+- **Fichiers** : ce journal.
+- **Pourquoi** : le 30B lit encore 10 % moins vite que llama.cpp à 512 tokens.
+- **Étapes** : moteur remis à la 6.42.1.
+
 ## 2026-11-23 — Les nouveaux modèles répondent et lisent les images
 
 - **Quoi** : « Quelle est la capitale de la France ? Réponds en une phrase. » (choix glouton, `engine_chat`) aux 18 modèles arrivés à 1 h : tous répondent « Paris » (les modèles à raisonnement d'abord leur réflexion), sauf Phi-4-mini avant la 6.42.1. L'image du perroquet des tests (`sips -Z 512`) décrite par Qwen3-VL 2B, 4B et 8B Instruct, EuroVLM 9B, Ministral 3 3B et Devstral Small 2 avec leurs projecteurs : un ara rouge, chaque fois.
