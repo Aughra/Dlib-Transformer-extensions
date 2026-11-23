@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : les identifiants de `~/.config/carnets/gardien.env` (copie ancienne, tunnel vers borg) étaient refusés par le Bridge local (454) ; ceux d'auto-agent sont acceptés, avec ou sans STARTTLS. Un tunnel permanent vers borg a été envisagé puis abandonné (tortuetech tourne entièrement sur le Mac mini).
 - **Étapes** : connexion SMTP vérifiée sans envoi ; vrai envoi par le facteur de Gulliver depuis un service d'essai à part (`/setup` vers l'adresse d'alertes de l'humain) : `{"sent":true}`, aucun échec au journal ; service d'essai effacé.
 
+## 2026-11-23 — Arrêter la mesure de la semaine, faire des modèles une veille par mail
+
+- **Quoi** : l'agent de la mesure du lundi (`macos/bench-hebdo/`) est retiré ; la mesure du 23 novembre est la dernière. `tools/modeles_semaine.py` (lundi 1 h) ne télécharge plus rien : il relève les nouvelles versions des modèles installés (catalogue, Hugging Face) et les modèles du catalogue qui tiendraient dans le Mac, et envoie les nouveautés pas encore annoncées par mail à l'administrateur (Bridge du Mac, réglages « Mail des comptes », adresse lue dans la base) ; `build/bench/hebdo/annonces.json` garde ce qui a été annoncé.
+- **Fichiers** : `dlib/dlib/external/gulliver/tools/modeles_semaine.py`, `macos/modeles-semaine/README.md`, `macos/modeles-semaine/install.sh`, `macos/bench-hebdo/README.md`, `docs/mesures/tests-de-vitesse.md`, `CLAUDE.md`, `logs/reprise.md`.
+- **Pourquoi** : décision de l'humain (« on va faire le test de vitesse une seule fois et tu surveilles si des modèles changent de version ou apparaissent, tu m'envoies un mail pour que je décide si on les intègre ou pas, mets-le dans CLAUDE.md »).
+- **Étapes** : `modeles_semaine.py --essai` sur le vrai service (0 nouveauté : la nuit d'avant avait tout téléchargé) ; envoi vérifié sur le faux facteur (`faux_smtp.py` : identifiant et mot de passe reçus, objet et accents justes) ; `install.sh --retirer` de la mesure, agent de veille réinstallé.
+
 ## 2026-11-23 — Gulliver 7.0.1 : l'administrateur au mot de passe oublié guidé
 
 - **Quoi** : la fenêtre « L'adresse mail de l'administrateur » (base d'avant les adresses) dit quoi faire quand le mot de passe actuel est oublié : inscrire l'adresse depuis le Mac par `tools/mot_de_passe.py --email`, puis « Mot de passe oublié ». Sur le vrai service, l'adresse du profil « Moi » est inscrite par cet outil (le service ne demande plus la première installation, vérifié par `GET /profiles`).
