@@ -17,19 +17,62 @@ Il mesure la vitesse, puis la justesse, et explique d'où viennent les écarts. 
 
 <!-- semaine : début -->
 
-## La mesure de la semaine (22/11/2026 à 12 h 10)
+## La mesure de la semaine (23/11/2026 à 12 h 30)
 
-Écrite par le Mac à chaque mesure de la semaine, le lundi (`tools/bench_modeles.sh`) : Gulliver seul, sur chacun de ses modèles installés ; jetons par seconde, mémoire de conversation en 8 bits. Température de la puce : 84,9 °C en moyenne pendant la mesure, 96,6 °C au plus (26 relevés).
+Écrite par le Mac à chaque mesure de la semaine, le lundi (`tools/bench_modeles.sh`) : Gulliver seul, sur chacun de ses modèles installés ; jetons par seconde, mémoire de conversation en 8 bits. Charge de la machine pendant la mesure (86 relevés, toutes les 20 secondes) : température de la puce 90,2 °C en moyenne (de 55,4 à 102,9) ; utilisation du processeur 47 % en moyenne (de 3 à 100) ; utilisation du gpu 75 % en moyenne (de 0 à 100).
 
 | Modèle | Calcul | Lecture 512 | Lecture 4 096 | Écriture 512 | Écriture 4 096 | Perplexité |
 |---|---|---|---|---|---|---|
-| Qwen2.5-0.5B-Instruct Q4_K_M | processeur | 1 592 | 1 486 | 183 | 173 | 25,75 |
-| Qwen3-VL 4B Thinking Q4_K_M (choix précédent) | GPU | 2 632 | 2 188 | 87,8 | 72,8 | 15,36 |
-| Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) | GPU | 1 193 | 1 458 | 83,6 | 73,5 | 10,93 |
-| Qwen3.5-4B Q4_K_M | GPU | 1 411 | 1 436 | 72,2 | 70,8 | 11,50 |
-| Ministral 3 8B Q4_K_M | processeur | 86,0 | 104 | 38,3 | 33,0 | 10,00 |
+| Qwen2.5 Coder 1.5B Q4_K_M | GPU | 5 592 | 6 264 | 174 | 141 | 21,92 |
+| Qwen3-VL 2B Thinking Q4_K_M | GPU | 5 836 | 5 928 | 163 | 127 | 20,32 |
+| Qwen3-VL 2B Instruct Q4_K_M | GPU | 5 797 | 5 986 | 161 | 127 | 18,65 |
+| Ministral 3 3B Q4_K_M | GPU | 3 302 | 2 750 | 108 | 89,6 | 12,51 |
+| Granite 4.2 3B Q4_K_M | GPU | 3 076 | 2 703 | 98,8 | 64,8 | 17,85 |
+| Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) (choix précédent) | GPU | 1 642 | 1 918 | 94,0 | 78,8 | 10,93 |
+| CyberSecQwen 4B Q4_K_M | GPU | 2 889 | 2 620 | 90,2 | 74,5 | 13,67 |
+| Qwen3-VL 4B Thinking Q4_K_M | GPU | 2 610 | 2 397 | 84,4 | 69,3 | 15,37 |
+| Qwen3-VL 4B Instruct Q4_K_M | GPU | 2 522 | 2 241 | 81,5 | 66,2 | 14,83 |
+| Phi-4-mini Q4_K_M | GPU | 2 626 | 2 798 | 79,4 | 63,8 | 20,52 |
+| Qwen2.5-0.5B-Instruct Q4_K_M | processeur | 773 | 974 | 76,2 | 74,9 | 25,79 |
+| Qwen3.5-4B Q4_K_M | GPU | 1 412 | 1 424 | 68,3 | 67,2 | 11,50 |
+| Foundation-Sec 1.1 8B Q4_K_M | GPU | 1 420 | 1 298 | 54,3 | 47,6 | 18,57 |
+| Foundation-Sec 8B Reasoning Q4_K_M | GPU | 1 339 | 1 275 | 54,0 | 47,4 | 13,28 |
+| DeepSeek-R1 Distill Llama 8B Q4_K_M | GPU | 1 253 | 1 445 | 53,9 | 48,0 | 30,01 |
+| Qwen2.5 Coder 7B Q4_K_M | GPU | 1 505 | 1 414 | 51,0 | 43,5 | 16,45 |
+| Qwen3-VL 8B Thinking Q4_K_M | GPU | 1 330 | 1 050 | 48,5 | 42,7 | 12,87 |
+| Qwen3-VL 8B Instruct Q4_K_M | GPU | 1 337 | 1 285 | 48,0 | 42,5 | 12,14 |
+| Granite 4.2 8B Q4_K_M | GPU | 1 198 | 1 108 | 47,8 | 41,6 | 19,55 |
+| EuroVLM 9B Preview Q4_K_M | GPU | 1 242 | 1 142 | 46,7 | 40,6 | 13,33 |
+| Ministral 3 8B Q4_K_M | GPU | 1 301 | 987 | 45,4 | 41,5 | 10,00 |
+| EuroLLM 9B Instruct Q4_K_M | GPU | 1 071 | 1 226 | 45,4 | 41,0 | 13,54 |
+| Devstral Small 2 Q4_K_M | GPU | 438 | 344 | 19,3 | 15,7 | 8,87 |
+| Mistral Small 3.2 24B Q4_K_M | GPU | 413 | 349 | 19,0 | 16,2 | 8,60 |
 
-Conseillé : pour tout faire, Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) ; le plus rapide, Qwen3-VL 4B Thinking Q4_K_M (parmi les modèles d'au moins 3 milliards de paramètres : Qwen2.5-0.5B, conseillé d'abord, répétait la question au lieu d'y répondre). Les tableaux complets, avec llama.cpp et MLX, sont dans « Mesures de la semaine ».
+Conseillé : pour tout faire, Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) ; le plus rapide, Ministral 3 3B Q4_K_M. Les tableaux complets, avec llama.cpp et MLX, sont dans « Mesures de la semaine ».
+
+Comme un utilisateur, par le service, sur Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) :
+
+| Mesure | Gulliver |
+|---|---|
+| Chargement du modèle (jusqu'à une première réponse) | — |
+| Conversation de 32k : lecture | — |
+| Conversation de 32k : écriture, avec brouillons | — |
+| Conversation de 32k : écriture, sans brouillons | — |
+| 4 requêtes à la fois : écriture totale | — |
+| 3 documents de 4 000 tokens à la fois : temps total | — |
+| 3 documents à la fois : attente moyenne du premier mot | — |
+| Le plus grand contexte qui tient (essayés : 65 536 et 131 072) | — |
+
+La recherche dans les documents (RAG) : 40 questions figées sur les 62 épisodes du blog, cherchées par un service d'essai isolé (qwen3-embedding-0.6b, épisodes indexés en 12 s) ; une question est trouvée quand le passage qui y répond est rendu. Le meilleur réglage : moteur « Sens seul », tri fin allumé, 12 passages.
+
+| Moteur | Trouvé dans les 6 premiers | Dans les 12 | Dans les 20 | Rang réciproque |
+|---|---|---|---|---|
+| Hybride (mots et sens) | 88 % | 95 % | 98 % | 0,71 |
+| Hybride (mots et sens) + tri fin | 78 % | 92 % | 98 % | 0,65 |
+| Sens seul | 88 % | 92 % | 95 % | 0,67 |
+| Sens seul + tri fin (le meilleur) | 92 % | 95 % | 95 % | 0,72 |
+| Mots seuls | 82 % | 90 % | 92 % | 0,61 |
+| Mots seuls + tri fin | 80 % | 90 % | 92 % | 0,66 |
 
 <!-- semaine : fin -->
 
