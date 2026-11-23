@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Vérifier plusieurs questions dans une même passe de lecture
+
+- **Quoi** : `engine_chat … --parallel` (trois questions de 1 849, 2 906 et 22 tokens lues ensemble, donc trois paires `kv_gather` + `attention_flat` dans la même passe) contre les trois questions une par une, Qwen3-VL 4B, choix glouton, 48 tokens : réponses identiques octet pour octet.
+- **Fichiers** : ce journal.
+- **Pourquoi** : les tests couvraient mal le cas de plusieurs séquences dans une passe depuis la 6.37.0.
+- **Étapes** : comparaison ci-dessus.
+
 ## 2026-11-23 — Les 18 modèles arrivés à 1 h, passés au banc
 
 - **Quoi** : après le passage de l'agent `macos/modeles-semaine/` (1 h 00 à 1 h 14 : 18 nouveaux modèles installés, empreintes vérifiées ; OLALA 1.0 mini laissé, architecture non lue), chaque modèle installé passé à `bench_runtime … 18 512 32 1 q8 metal` : tous sur le GPU sauf Qwen2.5-0.5B (connu). Cinq comparés à `llama-bench -p 512 -n 64 -fa 1 -ctk q8_0 -ctv q8_0` (tableau dans la rubrique). Mistral Small 3.2 24B à 124 tokens/s sous une charge de 7,8, 428-467 au calme.
