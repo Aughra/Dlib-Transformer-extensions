@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Trois essais d'écriture sans gain, retirés
+
+- **Quoi** : (1) le routeur des experts (`mv_f32`) à un simdgroup par threadgroup (128 au lieu de 32, chaque ligne calculée comme avant) : Qwen3-VL 30B-A3B 85,0-85,4 contre 84,8-85,3 tokens/s ; (2) la porte et la montée des experts d'une étape en un seul lancement (`mv_q4_K_idl2`, `mv_q6_K_idl2`) : 83,1-85,2 contre 84,0-84,9 (quatre tours, charge 2,9 à 3,5) ; (3) les tuiles de 32 et 128 cases et les morceaux de 32 colonnes réessayés avant la 6.40.0 (voir son entrée). Le relevé par noyau attribuait 5,6 % du pas au routeur : il grossit les petits noyaux, chacun dans son encodeur.
+- **Fichiers** : ce journal, `logs/nuit-2026-11-22.md`.
+- **Pourquoi** : l'écriture du 30B reste 8 % derrière llama.cpp (85 contre 92).
+- **Étapes** : mesures en alternance, contrôles du chargement identiques ; moteur remis à la 6.42.0.
+
 ## 2026-11-23 — Gulliver 6.42.0 : l'attention façon MLX avec une fenêtre glissante
 
 - **Quoi** : `flat_args::window`, premier pas et masque de la fenêtre dans les deux noyaux `attention_flat*`, poids nuls pour une ligne sans position visible dans un pas ; `GULLIVER_NO_FLAT_WINDOW` ; `test_metal` : `test_attention` prend une fenêtre (deux formes).
