@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Écrire l'épisode 62 du blog : la nuit à l'atelier
+
+- **Quoi** : épisode 62, « une nuit à l'atelier », qui raconte les versions 6.33.0 à 6.42.1 avec les chiffres de la nuit (la mesure de la semaine, en cours, n'y est pas encore). Ajouté au sommaire du blog.
+- **Fichiers** : `blog/62-une-nuit-a-l-atelier.md`, `blog/README.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : demande de l'humain au réveil (« mets les chiffres de la nuit »). Les notes de version ont déjà leurs sections 6.33.0 à 6.42.1 ; la version ne change pas (documentation seule).
+- **Étapes** : chiffres repris du carnet de nuit, des notes de version et de la rubrique « Tests de vitesse » ; fichiers touchés vérifiés par `git diff --stat c16c84d HEAD` ; dlib inchangé ; aucune adresse e-mail ni chemin privé dans l'épisode.
+
 ## 2026-11-23 — 128 lignes par groupe dans le produit des experts : écarté
 
 - **Quoi** : `MMN_NR` (et `mm_nax_rows`) 64 → 128, bancs côte à côte en alternance (deux tours, charge 6 à 7) : Qwen3-VL 30B-A3B 512 tokens 1 706-1 709 → 1 479-1 531, 4 096 tokens 1 939-1 984 → 2 104-2 130 ; LFM2.5-8B-A1B 512 tokens 2 081-2 133 → 1 875-1 896, 4 096 tokens 2 116-2 155 → 1 763-1 973. Gagne seulement quand chaque expert reçoit beaucoup de tokens, et pas pour tous les modèles : retiré.
