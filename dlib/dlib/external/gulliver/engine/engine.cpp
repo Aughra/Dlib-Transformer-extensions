@@ -1398,6 +1398,25 @@ namespace gulliver
             const memory_info now = read_memory_info();
             return now.commit_available == 0 || now.commit_available >= bytes + reserve;
         });
+        // Le contexte ne dépasse jamais ce que les clés et valeurs peuvent contenir : un prompt
+        // que le moteur accepte peut alors toujours être lu jusqu'au bout, et un plus long est
+        // refusé aussitôt.
+        const long room = static_cast<long>(runtime->kv_bytes_budget() / runtime->kv_bytes_per_token());
+        if (room < m->context)
+        {
+            log(GULLIVER_LOG_INFO, "model '" + id + "': context reduced from " + std::to_string(m->context) + " to "
+                + std::to_string(room) + " tokens, the positions its keys and values can hold in the memory given "
+                "to them");
+            m->context = room;
+        }
+        /*
+            Les diviseurs rotatifs d'un modèle avec LongRoPE suivent le contexte de ses séquences, et se fixent
+            avant toute passe : la vérification du GPU ci-dessous calcule déjà des positions, après quoi ils ne
+            peuvent plus changer (fork pour macOS, 2026-11-23 : Phi-4-mini, au contexte de 131 072 positions, ne se
+            chargeait pas, « the rotary divisors cannot change once positions are computed »).
+        */
+        runtime->set_context(m->context);
+        select_rope_factors(m->cfg, m->context);
         // Les étapes de génération sur le GPU du Mac, quand le moteur l'a ouvert.
         if (gpu_)
         {
@@ -1410,23 +1429,8 @@ namespace gulliver
             // La vérification du GPU au chargement, pour que la première réponse ne l'attende pas.
             runtime->check_gpu();
         }
-        cpu_runtime* const processor = runtime.get();
         m->runtime = std::move(runtime);
 
-        // Le contexte ne dépasse jamais ce que les clés et valeurs peuvent contenir : un prompt
-        // que le moteur accepte peut alors toujours être lu jusqu'au bout, et un plus long est
-        // refusé aussitôt.
-        const long room = static_cast<long>(m->runtime->kv_bytes_budget() / m->runtime->kv_bytes_per_token());
-        if (room < m->context)
-        {
-            log(GULLIVER_LOG_INFO, "model '" + id + "': context reduced from " + std::to_string(m->context) + " to "
-                + std::to_string(room) + " tokens, the positions its keys and values can hold in the memory given "
-                "to them");
-            m->context = room;
-        }
-        // Les diviseurs rotatifs d'un modèle avec LongRoPE suivent le contexte de ses séquences.
-        processor->set_context(m->context);
-        select_rope_factors(m->cfg, m->context);
 
         if (m->tok.eos_id() >= 0) m->stops.push_back(m->tok.eos_id());
         for (int s : m->format->stop_tokens()) m->stops.push_back(s);

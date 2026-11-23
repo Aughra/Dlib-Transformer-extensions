@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.42.1 — 23 novembre 2026
+
+### Corrections
+
+- Phi-4-mini, et tout modèle dont les facteurs de rotation dépendent du contexte (LongRoPE), ne se chargeait pas sur le Mac : la vérification du GPU au chargement calculait déjà des positions avant que le contexte du modèle soit fixé, et le moteur refusait ensuite de changer ces facteurs (« the rotary divisors cannot change once positions are computed »). Le contexte est désormais fixé avant la vérification. Une étape de `test_macos.sh` charge Phi-4-mini et vérifie sa réponse.
+
+---
+
 ## 6.42.0 — 23 novembre 2026
 
 ### Performances

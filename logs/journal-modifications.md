@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Gulliver 6.42.1 : Phi-4-mini se charge (LongRoPE et vérification du GPU)
+
+- **Quoi** : `engine.cpp` : le contexte du modèle (réduit à ce que la mémoire des clés et valeurs peut contenir) et `set_context()` passent avant `set_gpu()` et `check_gpu()` ; variable `processor` retirée ; `test_macos.sh` : étape « phi 4 mini longrope » (`PHI4_MODEL`, par défaut le modèle installé).
+- **Fichiers** : `gulliver/engine/engine.cpp`, `gulliver/tools/test_macos.sh`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `logs/{reprise.md,nuit-2026-11-22.md}`, ce journal.
+- **Pourquoi** : en posant une question simple à chacun des 18 modèles arrivés à 1 h (avant la mesure de 8 h, qui ne juge que la vitesse), Phi-4-mini rendait une réponse vide : `load: cpu_runtime: the rotary divisors cannot change once positions are computed`. Son contexte (131 072) dépasse celui d'entraînement des facteurs courts (4 096) : `set_context()` choisit les facteurs longs, mais `check_gpu()` avait déjà calculé les tables de positions avec les facteurs courts. `bench_runtime` passait (il n'appelle pas `set_context`). Propre au fork : l'original ne vérifie aucun GPU au chargement.
+- **Étapes** : 17 autres modèles répondent juste (« Paris ») ; Phi-4-mini répond « Paris est la capitale de la France. » ; build sans avertissement ; `test_macos_copie.sh` 0 échec (« phi 4 mini longrope » PASS). Version 6.42.1.
+
 ## 2026-11-23 — Vérifier plusieurs questions dans une même passe de lecture
 
 - **Quoi** : `engine_chat … --parallel` (trois questions de 1 849, 2 906 et 22 tokens lues ensemble, donc trois paires `kv_gather` + `attention_flat` dans la même passe) contre les trois questions une par une, Qwen3-VL 4B, choix glouton, 48 tokens : réponses identiques octet pour octet.

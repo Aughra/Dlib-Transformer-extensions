@@ -255,6 +255,13 @@ else
   fi
 fi
 
+# Phi-4-mini (Gulliver 6.42.1) : un modèle à LongRoPE, dont les diviseurs rotatifs suivent le contexte, chargé avec
+# la vérification du GPU ; il ne se chargeait pas (« the rotary divisors cannot change once positions are computed »).
+PHI4=${PHI4_MODEL:-$ROOT/build/gulliver-home/models/phi-4-mini.gguf}
+if [ ! -f "$ENGINE" ] || [ ! -f "$PHI4" ]; then skip "phi 4 mini longrope" "no $PHI4"
+else
+  step "phi 4 mini longrope" "Paris" "$CHAT" "$ENGINE" "$PHI4" --temperature 0 --max 40 "$QUESTION"
+fi
 # Gemma 3 (le chemin de Gemma 4 : fenêtre glissante sur cinq couches sur six, sans norme des valeurs ; Gulliver 4.19.0) :
 # son tokenizer comparé à llama.cpp sur les textes de Gemma 4, une réponse, et le mot de code retrouvé dans un prompt de
 # 2 816 tokens, au-delà de la fenêtre de 512 positions (le 1B se trompe ensuite de voyageur, comme dans llama.cpp ; la
