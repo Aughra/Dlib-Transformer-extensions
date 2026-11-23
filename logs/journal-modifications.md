@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Deux lignes par simdgroup pour les produits par expert aux rangées courtes : essai mis de côté
+
+- **Quoi** : corps `mv_q4_K_1l_body` et `mv_q6_K_1l_body` rendus génériques en lignes par simdgroup ; noyaux d'essai `mv_q4_K_idn2`, `mv_q6_K_idn2` employés par `matvec_id` quand la rangée a 1 024 colonnes au plus (la descente des experts du 30B-A3B : 768 colonnes, 3 blocs, un quart des fils sans bloc dans la disposition de llama.cpp) ; `GULLIVER_IDL_NR=1|2` pour les mesures ; `test_metal` : produits par expert à 512 et 1 280 colonnes.
+- **Fichiers** : `gulliver/engine/{metal_kernels.metal,metal_device.mm}`, `gulliver/tests/test_metal.cpp` (dans `git stash`, pas commités), `logs/reprise.md`, ce journal.
+- **Pourquoi** : relevé par noyau d'un pas du 30B : les produits par expert tirent environ 150 Go/s, les produits ordinaires du même modèle environ 230.
+- **Étapes** : au calme (charge 1,5, trois tours en alternance), Qwen3-VL 30B-A3B : une ligne 84,6-85,6 tokens/s, deux lignes partout 86,6-86,9, quatre lignes 85,1-85,4, deux lignes pour la descente seule 85,7-86,7 ; LFM2.5-8B-A1B perd 1 % avec deux lignes partout (rangées de 2 048 colonnes), d'où la règle des rangées courtes. Règle mesurée sous charge (7 à 23, un autre projet, trois tours en paires) : 30B 80,8-81,0 → 81,4-81,6, Granite 1B-A400M 329,9-333,4 → 333,1-337,2, LFM2.5, Qwen3.6-11B-A3B et Mixtral à égalité. Perplexité du 30B (GPU, paquets de 8) : 10,9160 des deux côtés. `test_metal` : all checks passed. Mis de côté à 7 h 47 parce que l'agent du lundi recompile depuis le dossier de travail à 8 h : la mesure de la semaine porte sur la 6.42.1. À finir ce soir (test complet, version).
+
 ## 2026-11-23 — Écrire l'épisode 62 du blog : la nuit à l'atelier
 
 - **Quoi** : épisode 62, « une nuit à l'atelier », qui raconte les versions 6.33.0 à 6.42.1 avec les chiffres de la nuit (la mesure de la semaine, en cours, n'y est pas encore). Ajouté au sommaire du blog.
