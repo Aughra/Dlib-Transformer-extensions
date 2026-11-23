@@ -273,7 +273,9 @@ export function setupDialog(dialog, h, list) {
     box.append(h('h2', null, legacy ? 'L’adresse mail de l’administrateur' : 'Créer le profil de l’administrateur'));
     box.append(h('p', { class: 'help' }, legacy
       ? 'Gulliver se connecte maintenant par adresse mail, avec un code reçu par mail à chaque connexion. Donnez ' +
-        'l’adresse de l’administrateur et son mot de passe actuel : un code part vers cette adresse pour la vérifier.'
+        'l’adresse de l’administrateur et son mot de passe actuel : un code part vers cette adresse pour la vérifier. ' +
+        'Mot de passe oublié : sur le Mac, « python3 tools/mot_de_passe.py --email VOTRE_ADRESSE » inscrit l’adresse, ' +
+        'puis « Mot de passe oublié » vous envoie un lien.'
       : 'Chaque profil garde ses discussions, ses projets et ses documents. Le premier est l’administrateur : il crée ' +
         'les autres. Donnez votre nom et votre adresse mail : un lien part vers cette adresse pour choisir votre mot de passe.'));
     const name = h('input', { placeholder: 'Un nom, par exemple le vôtre', autocomplete: 'name', style: { width: '100%' } });
