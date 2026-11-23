@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Le produit Q4_K « aplati » pour les rangées de 10 blocs : écarté
+
+- **Quoi** : essai `mv_q4_K_1f` : deux lignes par simdgroup, les quatre quarts du simdgroup parcourant les 2 x nb blocs à la suite (rangées de 2 560 colonnes : 10 blocs, que `mv_q4_K_1l` prend en 3, 3, 2 et 2 tours), pour `matvec` et `matvec2` d'un token quand nb n'est pas multiple de 4. `test_metal` passait (mv_q4_K, 2 560 colonnes : 1,27e-08).
+- **Fichiers** : ce journal (code retiré).
+- **Pourquoi** : l'efficacité de l'écriture du 4B (219 Go/s contre 240 chez MLX) ; la plupart de ses produits Q4_K ont 2 560 colonnes.
+- **Étapes** : trois tours en alternance, charge 1,7 à 3 : Qwen3-VL 4B Thinking 90,6-90,9 → 89,6-90,0 tokens/s ; Gemma 3 4B 87,2-87,4 → 86,4-86,6 (−1,2 %) : la logique de choix du bloc coûte plus que les tours inégaux. Retiré, moteur remis à la 6.44.0.
+
 ## 2026-11-23 — Ce que l'avance de MLX à l'écriture doit au format
 
 - **Quoi** : octets lus par mot sur Qwen3-VL 4B Thinking, tirés des en-têtes des fichiers : GGUF Q4_K_M 2,491 Go (Q4_K 1,765 Go, Q6_K 0,725 Go dont la sortie partagée avec l'embedding, 0,319 Go) ; MLX 4 bits (groupes de 64, affine) 3,094 Go dont 0,831 de vision, soit 2,263 Go de texte (embedding partagé compris). Débits : Gulliver 88 × 2,49 = 219 Go/s, llama.cpp 92 × 2,49 = 229, MLX 106 × 2,26 = 240 (plafond environ 254). Rubrique « Tests de vitesse » : section « Ce que l'avance de MLX à l'écriture doit au format ».
