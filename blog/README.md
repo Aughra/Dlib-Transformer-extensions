@@ -66,6 +66,6 @@ Dlib Transformer Extensions sur macOS : le portage raconté épisode par épisod
 60. [Un modèle qui a lu le blog](60-un-modele-qui-a-lu-le-blog.md)
 61. [La course](61-la-course.md)
 62. [Une nuit à l'atelier](62-une-nuit-a-l-atelier.md)
-63. [Le facteur et la dernière mesure](63-le-facteur-et-la-derniere-mesure.md)
+63. [Le facteur et la balance](63-le-facteur-et-la-balance.md)
 
 Pseudalis a son propre carnet : [le blog de Pseudalis](pseudalis/README.md).

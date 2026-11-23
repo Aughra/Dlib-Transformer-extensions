@@ -1,8 +1,8 @@
-# Dlib Transformer Extensions sur macOS, épisode 63 : le facteur et la dernière mesure
+# Dlib Transformer Extensions sur macOS, épisode 63 : le facteur et la balance
 
 > **Repère de vitesse** (Mac mini M5 Pro, Gulliver 6.44.0, mesure du lundi 23 novembre) : écriture sur le GPU **163 tokens/s** (2B, Qwen3-VL 2B Thinking) et **84 tokens/s** (4B, Qwen3-VL 4B Thinking), mémoire de conversation en 8 bits ; lecture sur le GPU **2 610 tokens/s** sur 512 tokens et **2 397** sur 4 096 (4B).
 
-Suite de [l'épisode 62](62-une-nuit-a-l-atelier.md), qui finissait sur une promesse : le lundi à 8 heures, la mesure de la semaine dirait ce qu'elle pense de la nuit à l'atelier. Elle l'a dit. Entre-temps, Gulliver a appris à envoyer du courrier, et l'humain a décidé que cette mesure du lundi serait la dernière.
+Suite de [l'épisode 62](62-une-nuit-a-l-atelier.md), qui finissait sur une promesse : le lundi à 8 heures, la mesure de la semaine dirait ce qu'elle pense de la nuit à l'atelier. Elle l'a dit. Entre-temps, Gulliver a appris à envoyer du courrier, et ce courrier sert désormais à prévenir l'humain de tout ce qui bouge sur le Mac.
 
 ## Le gros modèle rattrape son voisin
 
@@ -54,11 +54,11 @@ Le facteur, c'est la boîte Proton de l'humain. Proton Mail Bridge tourne déjà
 
 Le premier essai réel a montré un trou. Le profil de l'humain avait un mot de passe, mais pas encore d'adresse. La page lui demandait donc son adresse et son mot de passe actuel, sans bouton « oublié ». Sans le mot de passe, on était coincé devant la porte. Ajouter ce bouton aurait été pire : n'importe qui sur le Wi-Fi de la maison aurait pu y donner sa propre adresse et prendre la place de l'administrateur. L'issue passe donc par le Mac. Un outil y inscrit l'adresse, puis « Mot de passe oublié » fait le reste, et la page l'explique désormais (7.0.1). Le contrôle complet de la connexion se poursuit demain, avec l'humain.
 
-## La dernière mesure du lundi
+## Le courrier du lundi et le gardien de nuit
 
-Le soir, l'humain a tranché : « on va faire le test de vitesse une seule fois ». La mesure de chaque lundi, qui monopolisait le Mac pendant des heures pour un conseil qui ne changeait guère, est retirée. Celle du 23 novembre est la dernière. Les outils restent et se relancent à la main, quand un travail de vitesse le demande.
+Le facteur a vite trouvé d'autres tournées. Le lundi à 1 heure, l'agent des modèles continue de télécharger les nouvelles versions et les nouveaux modèles qui tiennent dans le Mac, mais il écrit maintenant à l'humain ce qu'il a trouvé. À 8 heures, la mesure de la semaine les pèse tous contre le modèle en place, puis envoie son conseil par mail. L'humain décide ensuite de ce qu'on garde. On avait d'abord compris de travers une phrase de l'humain, retiré la mesure du lundi et cessé les téléchargements ; l'humain a corrigé le soir même, et tout est revenu en place.
 
-L'agent des modèles change de métier. Il ne télécharge plus rien de lui-même : il fait la veille. Chaque lundi à 1 heure, il regarde si un modèle installé a une nouvelle version, au catalogue ou sur Hugging Face, et si un modèle du catalogue tiendrait dans le Mac. Il écrit ce qu'il a trouvé dans un mail à l'administrateur, que le facteur de l'après-midi porte. L'humain décide ensuite de ce qui entre. Chaque nouveauté n'est annoncée qu'une fois, et une semaine sans nouveauté n'envoie rien. Ce premier soir, il n'y avait rien à annoncer : la nuit d'avant avait déjà tout téléchargé.
+Un troisième agent veille désormais en continu, comme un gardien de nuit qui fait sa ronde toutes les minutes. Il relève la température de la puce, la charge du processeur et ce que prend chaque programme. Si le Mac reste en souci pendant une demi-heure (processeur occupé à 80 % ou plus, ou puce au-delà de 95 °C), il arrête les programmes qui en sont la cause et prévient l'humain par mail. Il ne touche jamais au système, au service de Gulliver, au tunnel, au facteur lui-même, à VS Code, à Claude, ni à la mesure du lundi, qui chauffe le Mac exprès. Le premier essai a été fait sur trois programmes qui tournaient à vide pour l'occasion : le système de sécurité de Claude avait d'abord refusé un essai qui aurait pu atteindre de vrais programmes, et il avait raison.
 
 ## Pour les curieux : les commandes et les chiffres
 
@@ -89,9 +89,9 @@ La mémoire disponible que lit `read_memory_info()` additionne les pages libres,
 | 7.0.1 | l'administrateur au mot de passe oublié guidé | — |
 | 7.0.2 | le garde-fou de la mémoire ne compte plus deux fois les poids | 32 157 tokens acceptés là où 8 000 étaient refusés |
 
-La veille des modèles : `python3 dlib/dlib/external/gulliver/tools/modeles_semaine.py build/gulliver-home --essai` montre le mail qu'elle enverrait, sans l'envoyer ; mode d'emploi dans `macos/modeles-semaine/README.md`. La mesure arrêtée se relance à la main avec `tools/bench_hebdo.sh`.
+Les agents : `macos/modeles-semaine/` (lundi 1 h), `macos/bench-hebdo/` (lundi 8 h) et `macos/surveillance/` (en continu, `tools/surveillant.py --essai` pour un relevé sans rien arrêter) ; leurs mails partent par `tools/mail_admin.py`.
 
-Fichiers touchés, tous dans Gulliver ou dans les outils du fork : `engine/engine.cpp`, `engine/metal_kernels.metal`, `engine/metal_device.mm`, `tests/test_metal.cpp`, `host/mailer.h` et `host/mailer.cpp` (nouveaux), `host/accounts.h`, `host/accounts.cpp`, `host/store.h`, `host/store.cpp`, `host/settings.h`, `host/settings.cpp`, `host/server.cpp`, `web/js/profile.js`, `web/js/accounts.js`, `web/js/service.js`, `tools/modeles_semaine.py`, `tools/bench_service.py`, `tools/faux_smtp.py` (nouveau), `tools/test_comptes.py`, `tools/mot_de_passe.py`, `cloudflare/lib/routes.js`. **dlib n'a pas changé** dans cette étape.
+Fichiers touchés, tous dans Gulliver ou dans les outils du fork : `engine/engine.cpp`, `engine/metal_kernels.metal`, `engine/metal_device.mm`, `tests/test_metal.cpp`, `host/mailer.h` et `host/mailer.cpp` (nouveaux), `host/accounts.h`, `host/accounts.cpp`, `host/store.h`, `host/store.cpp`, `host/settings.h`, `host/settings.cpp`, `host/server.cpp`, `web/js/profile.js`, `web/js/accounts.js`, `web/js/service.js`, `tools/modeles_semaine.py`, `tools/bench_hebdo.sh`, `tools/bench_service.py`, `tools/mail_admin.py` et `tools/surveillant.py` (nouveaux), `tools/faux_smtp.py` (nouveau), `tools/test_comptes.py`, `tools/mot_de_passe.py`, `cloudflare/lib/routes.js`. **dlib n'a pas changé** dans cette étape.
 
 ## La suite
 

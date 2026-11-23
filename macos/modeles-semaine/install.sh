@@ -1,9 +1,9 @@
 #!/bin/bash
-# Installe (ou retire, avec --retirer) l'agent launchd de la veille des modèles de Gulliver, chaque lundi à 1 h
-# (fork pour macOS, 2026-11-22 ; veille sans téléchargement depuis le 2026-11-23) : tools/modeles_semaine.py relève les
-# nouvelles versions et les modèles qui tiendraient dans ce Mac, et les annonce par mail à l'administrateur.  Agent de l'utilisateur
+# Installe (ou retire, avec --retirer) l'agent launchd qui tient à jour les modèles de Gulliver chaque lundi à 1 h
+# (fork pour macOS, 2026-11-22 ; créneau choisi hors des heures où l'humain se sert du Mac) : tools/modeles_semaine.py (catalogue rafraîchi, nouvelles versions retéléchargées,
+# modèles du catalogue qui tiennent dans ce Mac téléchargés), avant la mesure du lundi à 8 h (macos/bench-hebdo).  Agent de l'utilisateur
 # seulement (~/Library/LaunchAgents), sans droit d'administrateur ; si le Mac dort à l'heure dite, launchd le lance au
-# réveil.  Le service de Gulliver doit tourner : c'est lui qui donne le catalogue.
+# réveil.  Le service de Gulliver doit tourner : c'est lui qui télécharge et vérifie.
 LABEL=fr.fork.gulliver.modeles-semaine
 PLIST=$HOME/Library/LaunchAgents/$LABEL.plist
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)

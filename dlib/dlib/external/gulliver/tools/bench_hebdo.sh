@@ -70,3 +70,14 @@ rm -f "$WEEK"
   cat "$HEBDO/historique.md"
 } > "$HEBDO/mesures.md"
 echo "=== $(date '+%Y-%m-%d %H:%M') fini : $HEBDO/mesures.md"
+# Le conseil de la semaine, par mail à l'administrateur (décision de l'humain du 2026-11-23 : il décide des modèles
+# qu'on garde) : la section « Conseil » de la semaine, puis le tableau.
+{
+  echo "Bonjour,"; echo
+  echo "La mesure de la semaine de Gulliver est finie ($WHEN)."; echo
+  sed -n '/^### Conseil/,$p' "$HEBDO/$STAMP.md" | sed '/^---$/,$d'
+  echo; echo "Le tableau complet :"; echo
+  awk '/^\| Modèle \|/{on=1} on && /^\|/{print; next} on{exit}' "$HEBDO/$STAMP.md"
+  echo; echo "Le bouton « Choisir » de l'onglet Modèles applique le conseil. Gulliver"
+} | python3 -I "$TOOLS/mail_admin.py" "$ROOT/build/gulliver-home" "Gulliver : la mesure de la semaine" \
+  && echo "mail envoyé à l'administrateur" || echo "mail pas envoyé"
