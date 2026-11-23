@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.42.2, 23 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.43.0, 23 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -52,6 +52,7 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Morceaux du produit groupé des experts | — (pas de GPU sur Mac) | 16 colonnes au lieu de 64 : 4 Ko de mémoire partagée au lieu de 16 | Plus de calculs à la fois sur chaque cœur du GPU | Lecture à 512 tokens : 30B-A3B +19 %, LFM2.5-8B-A1B +13 %, Qwen3.6-35B-A3B +6 %, résultats identiques | changement 53, v. 6.40.0 |
 | Attention de la lecture, têtes de 256 valeurs | — (pas de GPU sur Mac) | Deux groupes de calcul se partagent les dimensions de chaque tête (comme MLX) | Ces têtes restaient à l'ancienne attention | Qwen3.5-4B +5 % à 4 096 tokens, +15 % à 16 384 ; Gemma 3 +2 % ; justesse inchangée | changement 54, v. 6.41.0 |
 | Attention de la lecture, fenêtres glissantes | — (pas de GPU sur Mac) | Les couches à fenêtre (Gemma 3) passent aussi par l'attention façon MLX | Elles restaient à l'ancienne attention | Gemma 3 4B +7 % à 4 096 tokens, +5 % à 16 384 | changement 55, v. 6.42.0 |
+| Produits par expert de l'écriture, rangées courtes | — (pas de GPU sur Mac) | Deux lignes par simdgroup quand la rangée a 1 024 colonnes au plus | Un simdgroup d'une ligne avait trop peu à lire (la descente des experts du 30B : 768 colonnes) | Écriture du 30B-A3B +1,6 % au calme (+0,7 % sous charge), les autres modèles à experts à égalité ou mieux, résultats identiques | changement 56, v. 6.43.0 |
 
 ## 2. Modèles : téléchargement, vérification, réserve
 

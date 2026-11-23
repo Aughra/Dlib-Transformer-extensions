@@ -1393,6 +1393,13 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (trois tours en alternance, charge 3) : 4 096 tokens 3 247-3 274 (+7 %) ; 16 384 tokens 2 558-2 793 (+5 %). Gemma 4 n'en profite pas : ses têtes à fenêtre ont 256 valeurs dans une mémoire de têtes de 512.
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 56 : deux lignes par simdgroup pour les produits par expert aux rangées courtes (Gulliver 6.43.0)
+
+- **Avant** : en écriture, les produits par expert en Q4_K et Q6_K (`mv_q4_K_idl`, `mv_q6_K_idl`, corps repris de `kernel_mul_mv_q4_K_f32_impl` de llama.cpp) calculent une ligne par simdgroup. Sur Qwen3-VL 30B-A3B, la descente des experts a 768 colonnes, soit 3 blocs de 256 : dans la disposition de llama.cpp (4 blocs à la fois par simdgroup), un quart des fils n'a aucun bloc, et chaque simdgroup ne lit que 432 octets de poids. Le relevé par noyau d'un pas donnait aux produits par expert environ 150 Go/s, contre 230 aux produits ordinaires du même modèle. Écriture après 512 tokens : 84,6 à 85,6 tokens/s (llama.cpp : 92).
+- **Changement** (`engine/metal_kernels.metal`, `engine/metal_device.mm`) : les corps `mv_q4_K_1l_body` et `mv_q6_K_1l_body` prennent le nombre de lignes par simdgroup en paramètre ; `matvec_id` emploie deux lignes (`mv_q4_K_idn2`, `mv_q6_K_idn2`, comme `nr0 = 2` chez llama.cpp) quand la rangée a 1 024 colonnes au plus. Chaque ligne fait les mêmes sommes, dans le même ordre : résultats identiques. `GULLIVER_IDL_NR=1` garde une ligne, `=2` en met deux partout, pour les mesures. `tests/test_metal.cpp` : produits par expert à 512 et 1 280 colonnes.
+- **Après** (mesures alternées, Mac au calme, charge 1,5, trois tours) : 30B-A3B 86,6 à 86,9 tokens/s (+1,6 %) ; quatre lignes 85,1 à 85,4 ; deux lignes partout, LFM2.5-8B-A1B −1 % (rangées de 2 048 colonnes), d'où le seuil. Règle finale sous charge (7 à 23, trois tours en paires) : 30B 80,8-81,0 → 81,4-81,6, Granite 1B-A400M 329,9-333,4 → 333,1-337,2, LFM2.5-8B-A1B, Qwen3.6-11B-A3B et Mixtral à égalité. Perplexité du 30B (GPU, paquets de 8) : 10,9160 avant comme après.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

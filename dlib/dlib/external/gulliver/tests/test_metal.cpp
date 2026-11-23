@@ -146,9 +146,9 @@ namespace
     */
     // step : les produits par expert d'une étape d'écriture (matvec_id, une case par lancement de lignes) au lieu des
     // produits groupés d'un prompt (fork pour macOS, 2026-11-22 : ils n'étaient contrôlés nulle part).
-    void test_matmul_id(metal_device& gpu, gulliver::ggml_type type, const char* name, bool step = false)
+    void test_matmul_id(metal_device& gpu, gulliver::ggml_type type, const char* name, bool step = false, long cols = 512)
     {
-        const long E = 6, rows = 64, cols = 512;
+        const long E = 6, rows = 64;
         const unsigned tokens = step ? 3 : 37, top_k = 2, slots = tokens * top_k, x_stride = cols + 64, y_stride = rows + 8;
         const bool small = type == gulliver::ggml_type::Q8_0 || type == gulliver::ggml_type::Q5_0;
         const long values = small ? 32 : 256;
@@ -214,7 +214,7 @@ namespace
         // Les poids de mm_id en demi-précision (Gulliver 6.8.0) : chacun arrondi à 2^-11 près au plus, d'où une erreur
         // d'au plus environ 4,9e-4 rapportée à la somme des |w x| (mesuré : 5e-5 à 8e-5) ; un défaut donne de l'ordre de 1.
         // Les produits d'une étape restent en floats : la tolérance des produits mv_*.
-        check(encoded && worst < (step ? 1e-5 : 1e-3) && untouched && n[5] == 0, std::string(step ? "mv_id_" : "mm_id_") + name + ", " + std::to_string(slots)
+        check(encoded && worst < (step ? 1e-5 : 1e-3) && untouched && n[5] == 0, std::string(step ? "mv_id_" : "mm_id_") + name + ", " + std::to_string(cols) + " columns, " + std::to_string(slots)
             + " cases over 5 of 6 experts: largest error " + sci(worst) + ", the rows beyond the matrix untouched");
     }
 
@@ -719,6 +719,9 @@ int main()
              std::make_pair(gulliver::ggml_type::Q6_K, "q6_K"), std::make_pair(gulliver::ggml_type::Q8_0, "q8_0"),
              std::make_pair(gulliver::ggml_type::Q5_0, "q5_0") })
         test_matmul_id(*gpu, f.first, f.second, true);
+    // Les rangées longues gardent une ligne par simdgroup ; jusqu'à 1 024 colonnes, deux (mv_*_idn2).
+    test_matmul_id(*gpu, gulliver::ggml_type::Q4_K, "q4_K", true, 1280);
+    test_matmul_id(*gpu, gulliver::ggml_type::Q6_K, "q6_K", true, 1280);
     test_norm_rope_gate(*gpu);
     test_attention(*gpu, kv_format::q8);
     test_attention(*gpu, kv_format::f16);

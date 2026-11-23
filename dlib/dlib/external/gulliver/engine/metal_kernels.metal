@@ -463,13 +463,14 @@ kernel void mv_q4_K(device const uchar* W0 [[buffer(0)]], device const float* x 
 // Écriture du 4B du service : 83,0 tokens/s avec mv_q4_K_1, 85,9 avec celui-ci, 88,2 avec aussi mv_q6_K_1l, 89,3 en 1 x 4.
 #define MVL_NR 1
 #define MVL_NSG 4
+template <short NR = MVL_NR>
 static inline void mv_q4_K_1l_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
     device const uchar* W2, device float* y2, uint tg, ushort sg, ushort lane)
 {
     constexpr ushort kmask1 = 0x3f3f, kmask2 = 0x0f0f, kmask3 = 0xc0c0;
     device const uchar* W = W0;
     device float* y = y0;
-    long rows = a.rows, first_row = (long(tg) * MVL_NSG + sg) * MVL_NR;
+    long rows = a.rows, first_row = (long(tg) * MVL_NSG + sg) * NR;
     if (first_row >= a.rows)
     {
         W = W2;
@@ -483,7 +484,7 @@ static inline void mv_q4_K_1l_body(device const uchar* W0, device const float* x
     const long row_bytes = long(nb) * 144;
     device const uchar* blocks = W + first_row * row_bytes;
     float yl[16], yh[16];
-    float sumf[MVL_NR] = { 0.0f };
+    float sumf[NR] = { 0.0f };
     device const float* y4 = x + ix * 256 + 64 * iq + 8 * ir;
     ushort sc16[4];
     thread const uchar* sc8 = (thread const uchar*)sc16;
@@ -501,7 +502,7 @@ static inline void mv_q4_K_1l_body(device const uchar* W0, device const float* x
         device const ushort* sc = (device const ushort*)(blk + 4) + iq;
         device const ushort* q1 = (device const ushort*)(blk + 16) + 16 * iq + 4 * ir;
         device const half* dh = (device const half*)blk;
-        for (short row = 0; row < MVL_NR; ++row)
+        for (short row = 0; row < NR; ++row)
         {
             sc16[0] = sc[0] & kmask1;
             sc16[1] = sc[2] & kmask1;
@@ -531,7 +532,7 @@ static inline void mv_q4_K_1l_body(device const uchar* W0, device const float* x
         }
         y4 += 4 * 256;
     }
-    for (short row = 0; row < MVL_NR; ++row)
+    for (short row = 0; row < NR; ++row)
     {
         const float v = simd_sum(sumf[row]);
         const long r = first_row + row;
@@ -545,13 +546,14 @@ static inline void mv_q4_K_1l_body(device const uchar* W0, device const float* x
 
 // Le produit Q6_K d'un token repris de llama.cpp de la même façon (kernel_mul_mv_q6_K_f32_impl, licence MIT) :
 // MVL_NR lignes par simdgroup, MVL_NSG simdgroups par threadgroup, seize activations par fil partagées entre les lignes.
+template <short NR = MVL_NR>
 static inline void mv_q6_K_1l_body(device const uchar* W0, device const float* x, device float* y0, constant mv_args& a,
     device const uchar* W2, device float* y2, uint tg, ushort sg, ushort lane)
 {
     constexpr uchar kmask1 = 0x03, kmask2 = 0x0C, kmask3 = 0x30, kmask4 = 0xC0;
     device const uchar* W = W0;
     device float* y = y0;
-    long rows = a.rows, first_row = (long(tg) * MVL_NSG + sg) * MVL_NR;
+    long rows = a.rows, first_row = (long(tg) * MVL_NSG + sg) * NR;
     if (first_row >= a.rows)
     {
         W = W2;
@@ -563,7 +565,7 @@ static inline void mv_q6_K_1l_body(device const uchar* W0, device const float* x
     const int nb = int(a.cols / 256);
     const long row_bytes = long(nb) * 210;
     device const uchar* blocks = W + first_row * row_bytes;
-    float sumf[MVL_NR] = { 0.0f };
+    float sumf[NR] = { 0.0f };
     float yl[16];
     const short tid = lane / 2, ix = lane % 2, ip = tid / 8, il = tid % 8, l0 = 4 * il, is = 8 * ip + l0 / 16;
     const short y_offset = 128 * ip + l0, q_offset_l = 64 * ip + l0, q_offset_h = 32 * ip + l0;
@@ -583,7 +585,7 @@ static inline void mv_q6_K_1l_body(device const uchar* W0, device const float* x
             yl[4 * l + 2] = yy[l + 64];
             yl[4 * l + 3] = yy[l + 96];
         }
-        for (short row = 0; row < MVL_NR; ++row)
+        for (short row = 0; row < NR; ++row)
         {
             float4 sums = { 0.0f, 0.0f, 0.0f, 0.0f };
             for (short l = 0; l < 4; ++l)
@@ -601,7 +603,7 @@ static inline void mv_q6_K_1l_body(device const uchar* W0, device const float* x
             dh += row_bytes / 2;
         }
     }
-    for (short row = 0; row < MVL_NR; ++row)
+    for (short row = 0; row < NR; ++row)
     {
         const float v = simd_sum(sumf[row]);
         const long r = first_row + row;
@@ -632,6 +634,39 @@ kernel void mv_q4_K_idl(device const uchar* W0 [[buffer(0)]], device const float
     device float* y = y0 + ulong(slot) * a.y_stride;
     mv_q4_K_1l_body(W, x + ulong(slot / m.x_div) * a.x_stride, y, a, W, y, tg.x, sg, lane);
 }
+
+
+// Les produits par expert de NR lignes par simdgroup (chantier Vitesse, 2026-11-23) : sur une rangée courte (768
+// colonnes, la descente des experts de Qwen3-30B-A3B : trois blocs, un quart des fils sans bloc), un simdgroup d'une
+// ligne a trop peu à lire ; avec deux lignes, il partage ses activations entre elles, comme llama.cpp (nr0 = 2).
+// Mesuré en alternance : 30B-A3B 84,6-85,6 -> 86,6-86,9 tokens/s ; quatre lignes 85,1-85,4 ; deux lignes sur les
+// rangées de 2 048 colonnes, LFM2.5-8B-A1B -1 %.  Mêmes sommes, dans le même ordre : résultats identiques.
+template <short NR>
+kernel void mv_q4_K_idn(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const int* ids [[buffer(4)]],
+    constant moe_args& m [[buffer(5)]], uint2 tg [[threadgroup_position_in_grid]],
+    ushort sg [[simdgroup_index_in_threadgroup]], ushort lane [[thread_index_in_simdgroup]])
+{
+    const uint slot = tg.y;
+    device const uchar* W = W0 + ulong(ids[slot]) * m.expert_bytes;
+    device float* y = y0 + ulong(slot) * a.y_stride;
+    mv_q4_K_1l_body<NR>(W, x + ulong(slot / m.x_div) * a.x_stride, y, a, W, y, tg.x, sg, lane);
+}
+template <short NR>
+kernel void mv_q6_K_idn(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const int* ids [[buffer(4)]],
+    constant moe_args& m [[buffer(5)]], uint2 tg [[threadgroup_position_in_grid]],
+    ushort sg [[simdgroup_index_in_threadgroup]], ushort lane [[thread_index_in_simdgroup]])
+{
+    const uint slot = tg.y;
+    device const uchar* W = W0 + ulong(ids[slot]) * m.expert_bytes;
+    device float* y = y0 + ulong(slot) * a.y_stride;
+    mv_q6_K_1l_body<NR>(W, x + ulong(slot / m.x_div) * a.x_stride, y, a, W, y, tg.x, sg, lane);
+}
+#define MVID(T, N) template [[host_name("mv_" #T "_idn" #N)]] kernel void mv_##T##_idn<N>(device const uchar*, \
+    device const float*, device float*, constant mv_args&, device const int*, constant moe_args&, uint2, ushort, ushort);
+MVID(q4_K, 2)
+MVID(q6_K, 2)
 
 kernel void mv_q6_K_1l(device const uchar* W0 [[buffer(0)]], device const float* x [[buffer(1)]],
     device float* y0 [[buffer(2)]], constant mv_args& a [[buffer(3)]], device const uchar* W2 [[buffer(4)]],

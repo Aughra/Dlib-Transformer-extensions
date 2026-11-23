@@ -89,7 +89,7 @@ namespace gulliver
             "attention_dec_1_64", "attention_dec_1_128", "attention_dec_2_64", "attention_dec_2_128",
             "attention_dec_4_64", "attention_dec_4_128", "attention_dec_8_64", "attention_dec_8_128",
             "attention_dec_1_256", "attention_dec_2_256", "attention_dec_4_256", "qk_norm_rope", "mv_q4_K_1l", "mv_q6_K_1l", "mv_q4_K_idl", "mv_q6_K_idl",
-            "silu_mul_half" };
+            "silu_mul_half", "mv_q4_K_idn2", "mv_q6_K_idn2" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -105,7 +105,7 @@ namespace gulliver
             k_dequant_h_q4_K = k_attention_mtile_512 + 4, k_dequant_h_q5_K, k_dequant_h_q6_K, k_dequant_h_q8_0,
             k_dequant_h_q5_0, k_to_half, k_attention_dec,
             k_qk_norm_rope = k_attention_dec + 11, k_mv_q4_K_1l, k_mv_q6_K_1l, k_mv_q4_K_idl, k_mv_q6_K_idl,
-            k_silu_mul_half, k_count
+            k_silu_mul_half, k_mv_q4_K_idn2, k_mv_q6_K_idn2, k_count
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -924,6 +924,15 @@ namespace gulliver
         static const bool old_mv = std::getenv("GULLIVER_OLD_MV") != nullptr;
         const bool idl = !old_mv && (type == gulliver::ggml_type::Q4_K || type == gulliver::ggml_type::Q6_K);
         if (idl) k = type == gulliver::ggml_type::Q4_K ? k_mv_q4_K_idl : k_mv_q6_K_idl;
+        // Deux lignes par simdgroup pour les rangées de 1 024 colonnes au plus (mv_*_idn2, 6.43.0) ; GULLIVER_IDL_NR=1 garde
+        // une ligne, GULLIVER_IDL_NR=2 en met deux partout, pour les mesures.
+        static const int idl_nr = [] { const char* v = std::getenv("GULLIVER_IDL_NR"); return v ? std::atoi(v) : 0; }();
+        unsigned nr = 1;
+        if (idl && rows % 2 == 0 && (idl_nr == 2 || (idl_nr == 0 && cols <= 1024)))
+        {
+            nr = 2;
+            k = type == gulliver::ggml_type::Q4_K ? k_mv_q4_K_idn2 : k_mv_q6_K_idn2;
+        }
         impl_->use(k);
         impl_->bind(W, 0);
         impl_->bind(x, 1);
@@ -933,7 +942,7 @@ namespace gulliver
         impl_->bind(ids, 4);
         const moe_args m = { expert_bytes, x_div };
         impl_->args(m, 5);
-        if (idl) impl_->groups(static_cast<unsigned>((rows + mvl_rows - 1) / mvl_rows), slots, 1, mvl_threads);
+        if (idl) impl_->groups(static_cast<unsigned>((rows + mvl_rows * nr - 1) / (mvl_rows * nr)), slots, 1, mvl_threads);
         else impl_->groups(static_cast<unsigned>((rows + mv_rows_per_group(1) - 1) / mv_rows_per_group(1)), slots, 1, mv_threads);
         return true;
     }

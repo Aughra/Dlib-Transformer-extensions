@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Gulliver 6.43.0 : deux lignes par simdgroup pour les produits par expert aux rangées courtes
+
+- **Quoi** : l'essai mis de côté à 7 h 47 (entrée plus bas), repris : corps `mv_q4_K_1l_body` et `mv_q6_K_1l_body` génériques en lignes par simdgroup, noyaux `mv_q4_K_idn2` et `mv_q6_K_idn2` pour `matvec_id` quand la rangée a 1 024 colonnes au plus, `GULLIVER_IDL_NR=1|2` pour les mesures ; variante à quatre lignes retirée.
+- **Fichiers** : `gulliver/engine/{metal_kernels.metal,metal_device.mm}`, `gulliver/tests/test_metal.cpp`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{notes-pour-l-auteur.md,differences-mac-windows.md}`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : l'écriture du 30B-A3B, 8 % derrière llama.cpp. L'humain : « tu continues, et si ça ralentit je te demanderai de faire une pause » ; la mesure de la semaine n'avait pas démarré (charge 6 à 7 d'un autre projet, nouvel essai toutes les heures).
+- **Étapes** : mesures dans l'entrée plus bas. Compilé sans avertissement ; `test_metal` : all checks passed ; `test_macos_copie.sh` (port 18473) : 71 étapes, 0 échec. Version 6.43.0, changement 56 des notes pour l'auteur.
+
 ## 2026-11-23 — Gulliver 6.42.2 : remettre à neuf un mot de passe oublié, depuis le Mac
 
 - **Quoi** : `tools/mot_de_passe.py` (nouveau) : écrit dans `gulliver.db` l'empreinte d'un nouveau mot de passe (format de `host/accounts.cpp`, PBKDF2-SHA256, 600 000 tours, sel de 16 octets) pour un profil (l'administrateur par défaut), et ferme toutes ses sessions ; mot de passe tapé deux fois sans écho, ou lu sur l'entrée, jamais en argument ; 8 à 256 octets comme le service. `tools/test_comptes.py` : deux contrôles (remise à neuf service lancé, connexion avec le nouveau, l'ancien refusé, sessions fermées ; refus d'un mot de passe trop court), 41 contrôles en tout.
