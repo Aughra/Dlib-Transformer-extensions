@@ -7,7 +7,7 @@ Le détail de chaque changement se trouve ailleurs :
 - la liste par version dans les [notes de version de Gulliver](../dlib/dlib/external/gulliver/web/changelog.md) (« v. x.y.z ») ;
 - l'historique dans le [journal](../logs/journal-modifications.md).
 
-Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.43.0, 23 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
+Base de comparaison : l'original au commit `184ea00` (Albireo 1.0.12, Pseudalis 1.0.5), dernière fusion. Dernière mise à jour de ce tableau : Gulliver 6.44.0, 23 novembre 2026. Ce que le fork change dans Pseudalis est dans [son propre tableau](pseudalis/differences-mac-windows.md).
 
 ## 1. Vitesse du moteur
 
@@ -53,6 +53,8 @@ Modèles mesurés : Qwen3-VL 2B Instruct (« 2B ») et Qwen3-VL 4B Thinking (« 
 | Attention de la lecture, têtes de 256 valeurs | — (pas de GPU sur Mac) | Deux groupes de calcul se partagent les dimensions de chaque tête (comme MLX) | Ces têtes restaient à l'ancienne attention | Qwen3.5-4B +5 % à 4 096 tokens, +15 % à 16 384 ; Gemma 3 +2 % ; justesse inchangée | changement 54, v. 6.41.0 |
 | Attention de la lecture, fenêtres glissantes | — (pas de GPU sur Mac) | Les couches à fenêtre (Gemma 3) passent aussi par l'attention façon MLX | Elles restaient à l'ancienne attention | Gemma 3 4B +7 % à 4 096 tokens, +5 % à 16 384 | changement 55, v. 6.42.0 |
 | Produits par expert de l'écriture, rangées courtes | — (pas de GPU sur Mac) | Deux lignes par simdgroup quand la rangée a 1 024 colonnes au plus | Un simdgroup d'une ligne avait trop peu à lire (la descente des experts du 30B : 768 colonnes) | Écriture du 30B-A3B +1,6 % au calme (+0,7 % sous charge), les autres modèles à experts à égalité ou mieux, résultats identiques | changement 56, v. 6.43.0 |
+| Attention de l'écriture, conversations courtes | — (pas de GPU sur Mac) | Les têtes de requête d'une tête de clés se partagent entre plusieurs threadgroups tant que le GPU en a moins de 64 | Quatre têtes de clés et une conversation courte laissaient le GPU presque vide | 30B-A3B +2,7 à +3,3 % jusqu'à 2 048 tokens, égal au-delà ; justesse inchangée (juge de référence) | changement 57, v. 6.44.0 |
+| Routeur des experts | — (pas de GPU sur Mac) | Quatre colonnes à la fois et quatre sommes indépendantes | 64 additions à la chaîne par voie : le routeur attendait la mémoire | 30B-A3B +4 %, Qwen3.6-11B-A3B +3,5 %, LFM2.5-8B-A1B +4 % ; avec le changement 57, le 30B écrit 91 tokens/s, au niveau de llama.cpp | changement 58, v. 6.44.0 |
 
 ## 2. Modèles : téléchargement, vérification, réserve
 

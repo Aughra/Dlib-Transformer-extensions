@@ -89,7 +89,7 @@ namespace gulliver
             "attention_dec_1_64", "attention_dec_1_128", "attention_dec_2_64", "attention_dec_2_128",
             "attention_dec_4_64", "attention_dec_4_128", "attention_dec_8_64", "attention_dec_8_128",
             "attention_dec_1_256", "attention_dec_2_256", "attention_dec_4_256", "qk_norm_rope", "mv_q4_K_1l", "mv_q6_K_1l", "mv_q4_K_idl", "mv_q6_K_idl",
-            "silu_mul_half", "mv_q4_K_idn2", "mv_q6_K_idn2" };
+            "silu_mul_half", "mv_q4_K_idn2", "mv_q6_K_idn2", "mv_f32_v4" };
         enum kernel_index
         {
             k_mv_q4_K, k_mv_q6_K, k_mv_q4_K_n, k_mv_q6_K_n, k_rms_norm, k_add_bias, k_silu_mul, k_rope, k_kv_store, k_prepare_queries,
@@ -105,7 +105,7 @@ namespace gulliver
             k_dequant_h_q4_K = k_attention_mtile_512 + 4, k_dequant_h_q5_K, k_dequant_h_q6_K, k_dequant_h_q8_0,
             k_dequant_h_q5_0, k_to_half, k_attention_dec,
             k_qk_norm_rope = k_attention_dec + 11, k_mv_q4_K_1l, k_mv_q6_K_1l, k_mv_q4_K_idl, k_mv_q6_K_idl,
-            k_silu_mul_half, k_mv_q4_K_idn2, k_mv_q6_K_idn2, k_count
+            k_silu_mul_half, k_mv_q4_K_idn2, k_mv_q6_K_idn2, k_mv_f32_v4, k_count
         };
 
         // La variante de l'attention pour rep têtes de requête par tête de clés et valeurs et des têtes de hd
@@ -1020,7 +1020,9 @@ namespace gulliver
         unsigned x_stride, metal_view y, unsigned y_stride)
     {
         if (tokens == 0 || rows == 0) return;
-        impl_->use(k_mv_f32);
+        // Quatre colonnes à la fois quand elles s'y prêtent (mv_f32_v4) ; GULLIVER_OLD_F32 garde mv_f32, pour les mesures.
+        static const bool old_f32 = std::getenv("GULLIVER_OLD_F32") != nullptr;
+        impl_->use(!old_f32 && cols % 128 == 0 && x_stride % 4 == 0 ? k_mv_f32_v4 : k_mv_f32);
         impl_->bind(W, 0);
         impl_->bind(x, 1);
         impl_->bind(y, 2);
@@ -1191,7 +1193,23 @@ namespace gulliver
         metal_view ctx, const kv_layout& l0, unsigned part_len)
     {
         if (tokens == 0) return;
-        const grouping gr = regroup(rep0, l0);
+        grouping gr = regroup(rep0, l0);
+        /*
+            Une étape d'une conversation courte ne donne au GPU que parts x têtes de clés threadgroups (Qwen3-30B-A3B à 512
+            positions : 4 x 4), chacun calculant ses REP têtes de requête l'une après l'autre.  Tant qu'il y en a moins de 64,
+            les têtes de requête d'une tête de clés se partagent entre plusieurs threadgroups (deux têtes au moins chacun),
+            qui relisent les mêmes clés et valeurs : à 512 positions, 30B-A3B +3,6 %, mais à 4 096, où les parties suffisent
+            à occuper le GPU, la relecture coûterait 12 % (chantier Vitesse, 2026-11-23).  Mêmes calculs par tête de requête.
+            GULLIVER_DEC_SPLIT=0 garde un threadgroup par tête de clés, pour les mesures.
+        */
+        static const bool no_dec_split = [] { const char* v = std::getenv("GULLIVER_DEC_SPLIT"); return v && v[0] == '0'; }();
+        if (!no_dec_split && (l0.hd == 64 || l0.hd == 128))
+            while (gr.rep >= 4 && gr.rep % 2 == 0 && parts * gr.l.heads * tokens < 64)
+            {
+                gr.kv_div *= 2;
+                gr.l.heads *= 2;
+                gr.rep /= 2;
+            }
         const unsigned rep = gr.rep;
         const kv_layout& l = gr.l;
         int kernel = attention_kernel(rep, l.hd);

@@ -2,6 +2,20 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.44.0 — 23 novembre 2026
+
+### Performances
+
+- L'attention de l'écriture d'une réponse partage les têtes de requête d'une tête de clés entre plusieurs groupes de calcul du GPU tant qu'il en a moins de 64 à faire tourner : avec quatre têtes de clés et une conversation courte, il restait presque vide. Qwen3-VL 30B-A3B écrit 2,7 à 3,3 % plus vite jusqu'à 2 048 tokens de conversation, autant au-delà.
+- Le routeur des modèles à experts lit quatre valeurs à la fois et tient quatre sommes en parallèle : Qwen3-VL 30B-A3B +4 %, Qwen3.6-11B-A3B +3,5 %, LFM2.5-8B-A1B +4 %.
+- Ensemble, Qwen3-VL 30B-A3B écrit 90,6 à 91,7 jetons par seconde au lieu de 82,8 à 85,6, au niveau de llama.cpp (89,5 à 92). Justesse inchangée : perplexité token par token 10,9345 contre 10,9347, et accord avec le modèle d'origine (PyTorch) identique.
+
+### Outils de mesure
+
+- `tools/justesse_reference.py` : mode `metal-steps`, la seconde moitié de chaque morceau token par token sur le GPU, le chemin de l'écriture d'une réponse.
+
+---
+
 ## 6.43.1 — 23 novembre 2026
 
 ### Corrections

@@ -1400,6 +1400,20 @@ L'écriture ne change pas (même chemin). Le gain baisse avec la longueur, où l
 - **Après** (mesures alternées, Mac au calme, charge 1,5, trois tours) : 30B-A3B 86,6 à 86,9 tokens/s (+1,6 %) ; quatre lignes 85,1 à 85,4 ; deux lignes partout, LFM2.5-8B-A1B −1 % (rangées de 2 048 colonnes), d'où le seuil. Règle finale sous charge (7 à 23, trois tours en paires) : 30B 80,8-81,0 → 81,4-81,6, Granite 1B-A400M 329,9-333,4 → 333,1-337,2, LFM2.5-8B-A1B, Qwen3.6-11B-A3B et Mixtral à égalité. Perplexité du 30B (GPU, paquets de 8) : 10,9160 avant comme après.
 - **Mac ou Windows** : propre au Mac (moteur Metal du fork).
 
+### Changement 57 : l'attention de l'écriture répartie sur plus de threadgroups quand la conversation est courte (Gulliver 6.44.0)
+
+- **Avant** : `attention_dec` lance parts x têtes de clés threadgroups, chacun calculant ses REP têtes de requête l'une après l'autre. Qwen3-30B-A3B (4 têtes de clés, 8 têtes de requête chacune) à 512 positions : 4 parties de 128 positions, donc 16 threadgroups pour tout le GPU ; la trace « Metal System Trace » donnait 34 µs par couche pour une attention qui lit à peine 57 Ko (conversation de 24 à 56 tokens).
+- **Changement** (`engine/metal_device.mm`, `commands::attention`) : tant qu'il y a moins de 64 threadgroups (parties x têtes de clés x tokens), les têtes de requête d'une tête de clés se partagent en deux, par le regroupement qui existait déjà pour les rapports que les noyaux ne prennent pas (`kv_div`) : chaque threadgroup calcule REP / 2 têtes (deux au moins) et relit les mêmes clés et valeurs. Au-delà, les parties occupent déjà le GPU, et la relecture coûterait (essai de deux têtes par threadgroup à 4 096 positions : −12 %). `GULLIVER_DEC_SPLIT=0` garde l'ancien lancement, pour les mesures. Les calculs par tête sont les mêmes, mais le compilateur de Metal arrondit un peu autrement les instances à 2 et à 8 têtes : les sorties ne sont pas identiques au bit près.
+- **Après** (mesures alternées, mémoire de conversation en 8 bits) : 30B-A3B +3,3 % après 24 tokens, +2,7 % après 512, +2,8 % après 2 048, égal à 4 096 ; Qwen3-VL 4B +0,4 à +0,5 % jusqu'à 512 ; Ministral 3 8B égal. Justesse : perplexité token par token du 30B (8 morceaux de 512) 10,9345 contre 10,9347 avec le changement 58 ; juge de référence (Qwen3-VL 4B, 20 morceaux, token par token sur le GPU) inchangé, 89,76 % de premiers choix communs avec le modèle d'origine.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
+### Changement 58 : le routeur des experts lit quatre colonnes à la fois (Gulliver 6.44.0)
+
+- **Avant** : `mv_f32` (le routeur des experts, en floats dans le fichier : 128 lignes de 2 048 colonnes sur Qwen3-30B-A3B) enchaînait par voie 64 additions dépendantes d'une valeur chacune ; la trace donnait 19 µs pour 1 Mo (environ 55 Go/s), soit près de 0,9 ms par token sur 48 couches.
+- **Changement** (`engine/metal_kernels.metal`, `engine/metal_device.mm`) : `mv_f32_v4` lit quatre colonnes à la fois et garde quatre sommes indépendantes par voie, quand les colonnes sont des multiples de 128 ; `GULLIVER_OLD_F32` garde `mv_f32`. L'ordre des sommes change : les logits du routeur diffèrent au dernier chiffre. `tests/test_metal.cpp` : le produit contre la somme en double précision, à 2 048 et 200 colonnes.
+- **Après** (mesures alternées, trois tours, Mac au repos pour Gulliver, charge 4 à 7 d'un autre projet) : 30B-A3B 82,8-85,6 → 86,1-87,5 tokens/s, et 90,6-91,7 avec le changement 57 (llama.cpp : 89,5 à 92 en demi-précision, 77 à 81 en 8 bits) ; Qwen3.6-11B-A3B 72,6-72,7 → 75,2-75,3 (+3,5 %) ; LFM2.5-8B-A1B 191,2-194,6 → 201,1-202,3 (+4 %). Justesse : voir le changement 57.
+- **Mac ou Windows** : propre au Mac (moteur Metal du fork).
+
 ### Bilan
 
 | Sur le M2, 8 fils, modèle 2B | Moteur d'origine | Avec les noyaux du fork |

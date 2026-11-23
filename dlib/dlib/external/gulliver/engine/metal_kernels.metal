@@ -2030,6 +2030,23 @@ kernel void mv_f32(device const float* W [[buffer(0)]], device const float* x [[
     if (lane == 0) y[ulong(tg.y) * a.y_stride + row] = s;
 }
 
+// Le même produit, quatre colonnes à la fois et quatre sommes indépendantes par voie (chantier Vitesse, 2026-11-23) :
+// le routeur des experts de Qwen3-30B-A3B (128 lignes de 2 048 floats) enchaînait 64 additions dépendantes par voie et
+// lisait 1 Mo en 19 µs.  Les colonnes en multiples de 128.
+kernel void mv_f32_v4(device const float* W [[buffer(0)]], device const float* x [[buffer(1)]],
+    device float* y [[buffer(2)]], constant f32_args& a [[buffer(3)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]])
+{
+    const uint row = tg.x * 4 + sg;
+    if (row >= a.rows) return;
+    device const float4* w = (device const float4*)(W + ulong(row) * a.cols);
+    device const float4* xt = (device const float4*)(x + ulong(tg.y) * a.x_stride);
+    float4 s = 0.0f;
+    for (uint i = lane; i < a.cols / 4; i += 32) s += w[i] * xt[i];
+    const float r = simd_sum((s.x + s.y) + (s.z + s.w));
+    if (lane == 0) y[ulong(tg.y) * a.y_stride + row] = r;
+}
+
 // Le routage d'un token : softmax des logits des experts, les top_k plus probables, leurs poids renormalisés
 // quand norm ; un thread par token.  Avec sigmoid (LFM2-MoE, fork pour macOS) : le choix sur sigmoid(logit) + bias,
 // le poids sigmoid(logit), renormalisé, la somme bornée au plus petit demi-flottant normal, comme cpu_runtime::moe_ffn().

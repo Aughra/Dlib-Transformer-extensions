@@ -5,7 +5,7 @@
 # Le juge de justesse de référence (fork pour macOS, 2026-11-22) : Gulliver comparé au modèle d'origine.
 #
 #   build/torch-venv/bin/python tools/justesse_reference.py modele.gguf dossier-hf [--text texte.txt] [--ctx 512]
-#       [--chunks 20] [--modes cpu,metal] [--json sortie.json]
+#       [--chunks 20] [--modes cpu,metal,metal-steps] [--json sortie.json]
 #
 # La perplexité contre llama.cpp compare deux copies compressées entre elles.  Ce juge compare Gulliver au modèle
 # publié par ses auteurs, tel que Hugging Face le distribue (poids en pleine précision), calculé en float32 par PyTorch
@@ -40,7 +40,8 @@ WORK = os.path.join(ROOT, "build", "justesse-reference")
 
 def gulliver_dump(gguf, text, ctx, chunks, mode, out):
     """Lance perplexity_runtime et rend (sa sortie, le chemin du fichier position par position)."""
-    args = [PPL, gguf, text, str(ctx), str(chunks), "f16"] + (["metal"] if mode == "metal" else [])
+    # metal-steps : la seconde moitié de chaque morceau token par token sur le GPU, le chemin de l'écriture d'une réponse.
+    args = [PPL, gguf, text, str(ctx), str(chunks), "f16"] + {"metal": ["metal"], "metal-steps": ["metal", "steps"]}.get(mode, [])
     r = subprocess.run(args, env=dict(os.environ, GULLIVER_PPL_DUMP=out), capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError("perplexity_runtime: " + (r.stdout + r.stderr)[-400:])

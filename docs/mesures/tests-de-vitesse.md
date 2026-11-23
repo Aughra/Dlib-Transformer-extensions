@@ -296,6 +296,22 @@ Mesure du 22 novembre à 23 h 35, deux tours en alternance avec llama.cpp (`llam
 
 Gulliver lit 25 à 30 % plus vite les longues questions et écrit 6 % plus vite ; sur les questions courtes, les deux se valent.
 
+### L'écriture du modèle à experts rattrape llama.cpp (Gulliver 6.43.0 et 6.44.0)
+
+Le 23 novembre au matin, Qwen3-VL 30B-A3B écrivait 8 % moins vite que llama.cpp. Remesuré à format égal de la mémoire de conversation, l'écart n'existait qu'en demi-précision (Gulliver 82, llama.cpp 90) ; en 8 bits, les deux faisaient jeu égal (81 contre 77 à 81). La trace « Metal System Trace » d'un pas a désigné trois noyaux qui attendaient plus qu'ils ne calculaient :
+
+- la descente des experts (768 colonnes) : un groupe de 32 fils avait trop peu à lire ; deux lignes par groupe (6.43.0, +1,6 %) ;
+- l'attention de l'écriture : avec quatre têtes de clés et une conversation courte, 16 groupes de calcul seulement pour tout le GPU ; les têtes de requête se partagent entre plusieurs groupes tant qu'il y en a moins de 64 (6.44.0, +3 %) ;
+- le routeur des experts : 64 additions à la chaîne par fil pour lire 1 Mo ; quatre valeurs à la fois et quatre sommes en parallèle (6.44.0, +4 %).
+
+| Qwen3-VL 30B-A3B, écriture après 512 tokens (mémoire en 8 bits) | Tokens/s |
+|---|---|
+| Gulliver 6.42.2 | 82,8 à 85,6 |
+| Gulliver 6.44.0 | **90,6 à 91,7** |
+| llama.cpp, demi-précision / 8 bits | 89,5 à 92 / 77 à 81 |
+
+Mesures alternées, trois tours, charge 4 à 7 (un autre projet tournait). Les deux changements de la 6.44.0 donnent aussi +3,5 % à Qwen3.6-11B-A3B et +4 % à LFM2.5-8B-A1B. La justesse est inchangée (perplexité token par token du 30B 10,9345 contre 10,9347 ; juge de référence du 4B identique).
+
 ### Les modèles arrivés le 23 novembre (Gulliver 6.42.0)
 
 L'agent du lundi à 1 h a installé 18 nouveaux modèles du catalogue (empreintes vérifiées). Passés au banc dans la foulée (`bench_runtime`, 512 tokens lus, mémoire de conversation en 8 bits) : **tous calculent sur le GPU**, sauf Qwen2.5-0.5B (déjà connu : des largeurs qui ne sont pas des multiples de 256). Contre llama.cpp, sur cinq d'entre eux (un tour, charge 2 à 8 ; Granite et EuroLLM remesurés sur deux tours en alternance, charge 3 à 4,6) :

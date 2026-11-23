@@ -218,6 +218,42 @@ namespace
             + " cases over 5 of 6 experts: largest error " + sci(worst) + ", the rows beyond the matrix untouched");
     }
 
+    // Le produit d'un token par une matrice en floats (le routeur des experts) : mv_f32_v4 quand les colonnes sont des
+    // multiples de 128, mv_f32 sinon.
+    void test_matvec_f32(metal_device& gpu, unsigned cols)
+    {
+        const unsigned rows = 130, tokens = 3, x_stride = cols + 4, y_stride = rows + 2;
+        metal_buffer W = gpu.allocate(sizeof(float) * rows * cols), X = gpu.allocate(sizeof(float) * x_stride * tokens),
+            Y = gpu.allocate(sizeof(float) * y_stride * tokens);
+        float* w = static_cast<float*>(W.contents());
+        float* x = static_cast<float*>(X.contents());
+        float* y = static_cast<float*>(Y.contents());
+        for (size_t i = 0; i < size_t(rows) * cols; ++i) w[i] = uniform(-1.0f, 1.0f);
+        for (size_t i = 0; i < size_t(x_stride) * tokens; ++i) x[i] = uniform(-1.0f, 1.0f);
+        for (size_t i = 0; i < size_t(y_stride) * tokens; ++i) y[i] = 7.0f;
+        auto c = gpu.begin();
+        c->matvec_f32(W, rows, cols, X, tokens, x_stride, Y, y_stride);
+        c->finish();
+        double worst = 0;
+        bool untouched = true;
+        for (unsigned t = 0; t < tokens; ++t)
+        {
+            for (unsigned r = 0; r < rows; ++r)
+            {
+                double ref = 0, mag = 0;
+                for (unsigned i = 0; i < cols; ++i)
+                {
+                    ref += double(w[size_t(r) * cols + i]) * x[t * x_stride + i];
+                    mag += std::fabs(double(w[size_t(r) * cols + i]) * x[t * x_stride + i]);
+                }
+                worst = std::max(worst, std::fabs(y[t * y_stride + r] - ref) / mag);
+            }
+            for (unsigned r = rows; r < y_stride; ++r) untouched = untouched && y[t * y_stride + r] == 7.0f;
+        }
+        check(worst < 1e-5 && untouched, "mv_f32, " + std::to_string(rows) + " rows of " + std::to_string(cols)
+            + " columns, " + std::to_string(tokens) + " tokens: largest error " + sci(worst));
+    }
+
     // Les poids développés en flottants, puis un produit d'un prompt par Metal Performance Shaders.
     void test_dequantize_gemm(metal_device& gpu, gulliver::ggml_type type, const char* name)
     {
@@ -722,6 +758,8 @@ int main()
     // Les rangées longues gardent une ligne par simdgroup ; jusqu'à 1 024 colonnes, deux (mv_*_idn2).
     test_matmul_id(*gpu, gulliver::ggml_type::Q4_K, "q4_K", true, 1280);
     test_matmul_id(*gpu, gulliver::ggml_type::Q6_K, "q6_K", true, 1280);
+    test_matvec_f32(*gpu, 2048);
+    test_matvec_f32(*gpu, 200);
     test_norm_rope_gate(*gpu);
     test_attention(*gpu, kv_format::q8);
     test_attention(*gpu, kv_format::f16);
