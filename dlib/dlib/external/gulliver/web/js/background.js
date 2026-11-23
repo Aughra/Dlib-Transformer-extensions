@@ -31,7 +31,7 @@ export function errorText(e) {
     relay_no_answer: 'errRelayFailed', relay_not_interface: 'errRelayFailed', relay_unreachable: 'errRelayUnreachable',
     relay_proxy: 'errRelayUnreachable', relay_certificate: 'errRelayUnreachable', offline: 'errRelayOffline',
     relay_offline: 'errRelayOffline', relay_offline_remote: 'errRelayOffline', relay_offline_unresolved: 'errRelayOffline',
-    pseudonymization_failed: 'errPseudonymization', relay_unavailable: 'errRelayUnavailable' };
+    pseudonymization_failed: 'errPseudonymization', relay_unavailable: 'errRelayUnavailable', out_of_memory: 'errOutOfMemory' };
   if (e && known[e.code]) return t(known[e.code]);
   // Les refus du moteur extérieur que relay.cpp nomme par leur statut HTTP (relay_http_*).
   if (e && typeof e.code === 'string' && e.code.startsWith('relay_http_')) return t('errRelayRefused');

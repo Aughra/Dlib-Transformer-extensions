@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Gulliver 6.43.1 : l'erreur de mémoire en français
+
+- **Quoi** : `web/js/background.js` : le code `out_of_memory` du moteur se traduit (`errOutOfMemory`) ; `web/js/i18n.js` : ce message, et `errService` qui dit que le service redémarre peut-être.
+- **Fichiers** : `gulliver/web/js/{background.js,i18n.js}`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : l'humain a vu vers 9 h 20 « the keys and values of this prompt do not fit in memory » sur une longue discussion. Cause : mes mesures du 30B et d'autres modèles (une vingtaine de Go) tournaient en même temps ; la garde des blocs de clés et valeurs (`set_kv_guard`, `engine.cpp`) refuse un bloc au-delà des 4 096 premières positions quand la mémoire engageable tombe à la réserve. Juste avant, le redémarrage du service à 9 h 17 (passage en 6.43.0) avait coupé une réponse en cours (« Le service Gulliver ne répond pas ») : le journal du service ne montre pas les réponses en train de s'écrire, et je ne me suis fié qu'à lui. Leçon : avant de redémarrer le service de l'humain, ne pas se fier au journal seul ; et une mesure de gros modèles peut lui retirer la mémoire de ses longues discussions.
+- **Étapes** : banc de la page (`page_test.sh`) : lint ok, 149 contrôles, 0 échec. Version 6.43.1.
+
 ## 2026-11-23 — Gulliver 6.43.0 : deux lignes par simdgroup pour les produits par expert aux rangées courtes
 
 - **Quoi** : l'essai mis de côté à 7 h 47 (entrée plus bas), repris : corps `mv_q4_K_1l_body` et `mv_q6_K_1l_body` génériques en lignes par simdgroup, noyaux `mv_q4_K_idn2` et `mv_q6_K_idn2` pour `matvec_id` quand la rangée a 1 024 colonnes au plus, `GULLIVER_IDL_NR=1|2` pour les mesures ; variante à quatre lignes retirée.

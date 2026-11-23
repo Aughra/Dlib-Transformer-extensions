@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.43.1 — 23 novembre 2026
+
+### Corrections
+
+- Quand la mémoire du Mac est trop pleine pour lire une discussion, la page le dit en français et propose de réessayer ou d'ouvrir une nouvelle discussion ; elle affichait le message anglais du moteur (« the keys and values of this prompt do not fit in memory »).
+- « Le service Gulliver ne répond pas » ajoute qu'il redémarre peut-être, et qu'il suffit de réessayer dans un instant.
+
+---
+
 ## 6.43.0 — 23 novembre 2026
 
 ### Performances
