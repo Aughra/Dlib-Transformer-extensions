@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Ce que l'avance de MLX à l'écriture doit au format
+
+- **Quoi** : octets lus par mot sur Qwen3-VL 4B Thinking, tirés des en-têtes des fichiers : GGUF Q4_K_M 2,491 Go (Q4_K 1,765 Go, Q6_K 0,725 Go dont la sortie partagée avec l'embedding, 0,319 Go) ; MLX 4 bits (groupes de 64, affine) 3,094 Go dont 0,831 de vision, soit 2,263 Go de texte (embedding partagé compris). Débits : Gulliver 88 × 2,49 = 219 Go/s, llama.cpp 92 × 2,49 = 229, MLX 106 × 2,26 = 240 (plafond environ 254). Rubrique « Tests de vitesse » : section « Ce que l'avance de MLX à l'écriture doit au format ».
+- **Fichiers** : `docs/mesures/tests-de-vitesse.md`, ce journal.
+- **Pourquoi** : prochain écart du chantier Vitesse (MLX +20 % à l'écriture sur le modèle de référence). La moitié tient au fichier plus léger, et moins juste (perplexité 16,78 contre 15,36 à 15,38, mesure de la semaine du 22 novembre) ; l'autre moitié (219 contre 240 Go/s) est ce qui reste à gagner sans perdre en justesse.
+- **Étapes** : une trace « Metal System Trace » du 4B a été faite, mais les étiquettes des encodeurs y manquent pour une partie des noyaux (produits de MPS) : à reprendre avant d'en tirer un débit par noyau.
+
 ## 2026-11-23 — Gulliver 6.44.0 : l'écriture du 30B au niveau de llama.cpp
 
 - **Quoi** : (1) `engine/metal_device.mm`, `commands::attention` : les têtes de requête d'une tête de clés partagées entre threadgroups (`kv_div`) tant que parts x têtes x tokens < 64, deux têtes au moins par threadgroup ; `GULLIVER_DEC_SPLIT=0`. (2) `engine/metal_kernels.metal` : `mv_f32_v4` (routeur, quatre colonnes et quatre sommes par voie, colonnes multiples de 128) ; `GULLIVER_OLD_F32`. (3) `tests/test_metal.cpp` : `test_matvec_f32` (2 048 et 200 colonnes). (4) `tools/justesse_reference.py` : mode `metal-steps`.

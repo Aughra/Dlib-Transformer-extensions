@@ -312,6 +312,18 @@ Le 23 novembre au matin, Qwen3-VL 30B-A3B écrivait 8 % moins vite que llama.cpp
 
 Mesures alternées, trois tours, charge 4 à 7 (un autre projet tournait). Les deux changements de la 6.44.0 donnent aussi +3,5 % à Qwen3.6-11B-A3B et +4 % à LFM2.5-8B-A1B. La justesse est inchangée (perplexité token par token du 30B 10,9345 contre 10,9347 ; juge de référence du 4B identique).
 
+### Ce que l'avance de MLX à l'écriture doit au format (23 novembre)
+
+Écrire, c'est relire tous les poids à chaque mot. Sur Qwen3-VL 4B Thinking, les deux fichiers ne pèsent pas pareil :
+
+| Qwen3-VL 4B | Lu par mot | Écriture (tokens/s) | Débit tiré de la mémoire |
+|---|---|---|---|
+| Gulliver 6.44.0 (GGUF Q4_K_M) | 2,49 Go | 88 | 219 Go/s |
+| llama.cpp (même fichier) | 2,49 Go | 92 | 229 Go/s |
+| MLX (son fichier 4 bits, groupes de 64) | 2,26 Go | 106 | 240 Go/s |
+
+Le Q4_K_M garde 0,73 Go de poids en 6 bits (la sortie, et la moitié des valeurs et des descentes) ; le fichier de MLX met tout en 4 bits, vision à part. Sur les 20 % d'avance de MLX, environ 10 % tiennent donc au fichier plus léger, qui est aussi moins juste (perplexité 16,78 contre 15,36 à 15,38 pour le GGUF, mesure de la semaine du 22 novembre), et environ 10 % à l'efficacité (240 Go/s contre 219, pour un plafond d'environ 254). C'est cette seconde moitié que le chantier peut gagner sans rien perdre en justesse ; llama.cpp, sur le même fichier, est à mi-chemin.
+
 ### Les modèles arrivés le 23 novembre (Gulliver 6.42.0)
 
 L'agent du lundi à 1 h a installé 18 nouveaux modèles du catalogue (empreintes vérifiées). Passés au banc dans la foulée (`bench_runtime`, 512 tokens lus, mémoire de conversation en 8 bits) : **tous calculent sur le GPU**, sauf Qwen2.5-0.5B (déjà connu : des largeurs qui ne sont pas des multiples de 256). Contre llama.cpp, sur cinq d'entre eux (un tour, charge 2 à 8 ; Granite et EuroLLM remesurés sur deux tours en alternance, charge 3 à 4,6) :
