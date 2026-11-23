@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.0.2 — 23 novembre 2026
+
+### Corrections
+
+- Un long prompt pouvait être refusé avec l'erreur `out_of_memory` (HTTP 500) alors que la mémoire suffisait : avant chaque nouveau bloc de la mémoire de conversation, le moteur retirait le poids du modèle de la mémoire disponible, qui ne le comptait déjà plus. Avec Qwen3-VL 30B A3B (18 Go de poids) et d'autres programmes ouverts, un prompt de 8 000 tokens était refusé ; il passe maintenant jusqu'à 32 000 tokens dans les mêmes conditions. Le premier refus écrit désormais ses chiffres au journal du service.
+
+---
+
 ## 7.0.1 — 23 novembre 2026
 
 ### Corrections

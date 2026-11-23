@@ -114,7 +114,8 @@ class Gulliver:
     def load(self):
         """Le modèle de la bibliothèque dans le service, actif ; rend le temps de chargement (test 5)."""
         name = os.path.basename(self.model)
-        r = call(self.base, "/gulliver/v1/library/load", {"file": name})
+        # La bibliothèque lit tout le fichier avant de répondre : une minute ne suffit pas à un modèle de 18 Go froid.
+        r = call(self.base, "/gulliver/v1/library/load", {"file": name}, timeout=900)
         ids = (r.get("imported") or []) + (r.get("already") or [])
         mid = None
         for _ in range(120):

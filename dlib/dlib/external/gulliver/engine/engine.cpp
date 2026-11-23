@@ -1348,7 +1348,8 @@ namespace gulliver
         */
         const uint64_t weights = static_cast<uint64_t>(m->file->size())
             + (m->projector && m->projector != m->file ? static_cast<uint64_t>(m->projector->size()) : 0);
-        const uint64_t reserve = std::max<uint64_t>(uint64_t(1) << 30, mem.total / 8) + weights;
+        const uint64_t margin = std::max<uint64_t>(uint64_t(1) << 30, mem.total / 8);
+        const uint64_t reserve = margin + weights;
         // La mémoire que peuvent prendre les clés et valeurs, quand le système l'indique.
         const bool known = mem.commit_total > 0;
         const uint64_t room_bytes = mem.commit_total > reserve ? mem.commit_total - reserve : 0;
@@ -1389,14 +1390,30 @@ namespace gulliver
         std::unique_ptr<cpu_runtime> runtime(new cpu_runtime(m->file, m->cfg, *pool_, kv, block_positions,
             m->kv_type));
         /*
-            Un nouveau bloc de clés et valeurs laisse la réserve au système, au-delà des blocs des
-            4096 premières positions, que le modèle a toujours.
+            Un nouveau bloc de clés et valeurs laisse la marge au système et aux autres programmes,
+            au-delà des blocs des 4096 premières positions, que le modèle a toujours.  La marge seule,
+            sans les poids (fork pour macOS, 2026-11-23) : la mémoire disponible que lit
+            read_memory_info() (pages libres, inactives, purgeables) ne compte déjà plus les pages des
+            poids que le modèle lit à chaque token, qui sont actives ; les y retirer une seconde fois
+            refusait la mémoire d'un prompt de 8 000 tokens au modèle Qwen3-VL 30B A3B (18 Go de poids)
+            quand d'autres programmes tenaient la mémoire (HTTP 500 « out_of_memory » de la mesure du
+            23 novembre).  Le premier refus après un bloc donné écrit ses chiffres au journal.
         */
         const size_t floor_bytes = bytes_for(std::min<long>(m->context, 4096));
-        runtime->set_kv_guard([reserve, floor_bytes](size_t bytes, size_t allocated) {
+        const std::shared_ptr<std::atomic<bool>> refusing = std::make_shared<std::atomic<bool>>(false);
+        runtime->set_kv_guard([this, id, margin, floor_bytes, refusing](size_t bytes, size_t allocated) {
             if (allocated + bytes <= floor_bytes) return true;
             const memory_info now = read_memory_info();
-            return now.commit_available == 0 || now.commit_available >= bytes + reserve;
+            if (now.commit_available == 0 || now.commit_available >= bytes + margin)
+            {
+                refusing->store(false, std::memory_order_relaxed);
+                return true;
+            }
+            if (!refusing->exchange(true, std::memory_order_relaxed))
+                log(GULLIVER_LOG_WARNING, "model '" + id + "': no new block of keys and values, "
+                    + std::to_string(now.commit_available >> 20) + " MB of memory available, the engine leaves "
+                    + std::to_string(margin >> 20) + " MB to the system and the other programs");
+            return false;
         });
         // Le contexte ne dépasse jamais ce que les clés et valeurs peuvent contenir : un prompt
         // que le moteur accepte peut alors toujours être lu jusqu'au bout, et un plus long est
