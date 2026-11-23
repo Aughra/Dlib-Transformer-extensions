@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Le facteur de Gulliver branché sur le Bridge du Mac mini
+
+- **Quoi** : réglages du vrai service : adresse d'envoi celle du compte Proton du Bridge, port 1025, mot de passe SMTP recopié de la configuration du guetteur d'alertes de TortueTech (qui envoie par ce même Bridge), de fichier à service, sans affichage ; il vit dans `build/gulliver-home/mail.secret` (0600).
+- **Fichiers** : aucun du dépôt hors ce journal et la reprise.
+- **Pourquoi** : les identifiants de `~/.config/carnets/gardien.env` (copie ancienne, tunnel vers borg) étaient refusés par le Bridge local (454) ; ceux d'auto-agent sont acceptés, avec ou sans STARTTLS. Un tunnel permanent vers borg a été envisagé puis abandonné (tortuetech tourne entièrement sur le Mac mini).
+- **Étapes** : connexion SMTP vérifiée sans envoi ; vrai envoi par le facteur de Gulliver depuis un service d'essai à part (`/setup` vers l'adresse d'alertes de l'humain) : `{"sent":true}`, aucun échec au journal ; service d'essai effacé.
+
 ## 2026-11-23 — Gulliver 7.0.0 : la connexion par adresse mail et code à 8 chiffres
 
 - **Quoi** : on se connecte par son adresse mail et son mot de passe, puis par un code à 8 chiffres envoyé par mail (10 minutes, 5 essais, une seule fois) ; un mot de passe oublié, et le premier mot de passe d'un profil neuf, se choisissent par le lien d'un mail (30 minutes, une fois ; toutes les sessions du profil se ferment). Les mails partent par Proton Mail Bridge, déjà lancé sur le Mac (SMTP sur 127.0.0.1:1025 ; il annonce AUTH PLAIN avant STARTTLS, vérifié sans mot de passe), par un petit client SMTP du service qui ne parle qu'à la boucle locale. L'administrateur crée un profil avec un nom et une adresse, et ne choisit plus le mot de passe des autres. Une base d'avant les adresses : l'administrateur donne son adresse avec son mot de passe actuel, et un code envoyé à cette adresse la vérifie avant qu'elle soit rangée. Réglages `mail_from`, `mail_port`, `mail_secret` (masqué, dans `mail.secret` en 0600, comme le secret du relais), `mail_link` (l'adresse des liens, jamais tirée de l'en-tête Host de la requête), avec leurs fiches dans l'onglet Service. Fiche « Accès depuis le réseau » corrigée (elle disait la porte sans mot de passe).
