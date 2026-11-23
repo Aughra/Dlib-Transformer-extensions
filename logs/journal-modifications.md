@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Gulliver 6.42.2 : remettre à neuf un mot de passe oublié, depuis le Mac
+
+- **Quoi** : `tools/mot_de_passe.py` (nouveau) : écrit dans `gulliver.db` l'empreinte d'un nouveau mot de passe (format de `host/accounts.cpp`, PBKDF2-SHA256, 600 000 tours, sel de 16 octets) pour un profil (l'administrateur par défaut), et ferme toutes ses sessions ; mot de passe tapé deux fois sans écho, ou lu sur l'entrée, jamais en argument ; 8 à 256 octets comme le service. `tools/test_comptes.py` : deux contrôles (remise à neuf service lancé, connexion avec le nouveau, l'ancien refusé, sessions fermées ; refus d'un mot de passe trop court), 41 contrôles en tout.
+- **Fichiers** : `gulliver/tools/{mot_de_passe.py,test_comptes.py}`, `gulliver/{common/version.h,CMakeLists.txt,web/openapi.json,web/changelog.md}`, `docs/{differences-mac-windows.md,memo-portage-macos-arm64.md}`, `CLAUDE.md`, `logs/reprise.md`, ce journal.
+- **Pourquoi** : l'humain veut changer le mot de passe de « Moi » sans se souvenir de l'actuel ; le service l'exige (et seul l'administrateur change celui des autres), donc un administrateur qui l'oublie restait dehors. L'outil ne donne rien de plus à qui a déjà accès aux fichiers du Mac.
+- **Étapes** : essai sur une copie de la base (trop court refusé, profil inconnu refusé, empreinte vérifiée, session fermée) ; puis sur la base du service de l'humain, à sa demande expresse : connexion de « Moi » acceptée par le service sur 127.0.0.1:18443 et par la porte du réseau 8444, sessions d'essai fermées ; le mot de passe n'est écrit dans aucun fichier du dépôt. `test_comptes.py` : all checks passed (41). Pas de recompilation (la mesure de la semaine tourne) : la version 6.42.2 ne change que l'outil et les numéros.
+
 ## 2026-11-23 — Deux lignes par simdgroup pour les produits par expert aux rangées courtes : essai mis de côté
 
 - **Quoi** : corps `mv_q4_K_1l_body` et `mv_q6_K_1l_body` rendus génériques en lignes par simdgroup ; noyaux d'essai `mv_q4_K_idn2`, `mv_q6_K_idn2` employés par `matvec_id` quand la rangée a 1 024 colonnes au plus (la descente des experts du 30B-A3B : 768 colonnes, 3 blocs, un quart des fils sans bloc dans la disposition de llama.cpp) ; `GULLIVER_IDL_NR=1|2` pour les mesures ; `test_metal` : produits par expert à 512 et 1 280 colonnes.

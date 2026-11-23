@@ -209,6 +209,23 @@ def main():
         check(statuses[:5] == [401] * 5 and statuses[5] == 429 and st == 429 and code(body) == "login_throttled",
               "après 5 mauvais mots de passe, les essais sont freinés (même le bon)")
 
+        # Le mot de passe oublié de l'administrateur, remis à neuf depuis le Mac (tools/mot_de_passe.py), service lancé.
+        tool = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mot_de_passe.py")
+        out = subprocess.run([sys.executable, tool, "--home", home], input="oublie-remis-8\n", capture_output=True,
+                             text=True)
+        st, body = call("POST", "/gulliver/v1/login", {"profile": admin_id, "password": "oublie-remis-8"})
+        check(out.returncode == 0 and st == 200 and call("GET", "/gulliver/v1/session", token=admin)[0] == 401
+              and call("POST", "/gulliver/v1/login", {"profile": admin_id, "password": "mot-de-passe-1"})[0] == 401,
+              "mot_de_passe.py remet à neuf le mot de passe de l'administrateur et ferme ses sessions")
+        out = subprocess.run([sys.executable, tool, "--home", home], input="mot-de-passe-1\n", capture_output=True,
+                             text=True)
+        admin = body.get("token")
+        check(out.returncode == 0 and call("GET", "/gulliver/v1/session", token=admin)[0] == 401
+              and subprocess.run([sys.executable, tool, "--home", home], input="court\n", capture_output=True, text=True).returncode != 0,
+              "mot_de_passe.py remet l'ancien, et refuse un mot de passe trop court")
+
+        st, body = call("POST", "/gulliver/v1/login", {"profile": admin_id, "password": "mot-de-passe-1"})
+        admin = body.get("token")
         st, body = call("POST", "/gulliver/v1/logout", token=admin)
         check(st == 200 and call("GET", "/gulliver/v1/session", token=admin)[0] == 401, "la déconnexion ferme la session")
         st, body = call("POST", "/gulliver/v1/login", {"profile": admin_id, "password": "mot-de-passe-1"})

@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 6.42.2 — 23 novembre 2026
+
+### Accès et documents
+
+- `tools/mot_de_passe.py` remet à neuf le mot de passe d'un profil, l'administrateur par défaut, quand il est oublié : le service exige le mot de passe actuel, et seul l'administrateur change celui des autres. L'outil écrit directement dans la base du service ; il ne sert donc que sur le Mac, à qui peut déjà lire les fichiers de Gulliver, jamais depuis le réseau. Le mot de passe se tape deux fois sans s'afficher (ou se lit sur l'entrée), jamais en argument ; l'empreinte est celle du service (PBKDF2-SHA256, 600 000 tours), et toutes les sessions du profil sont fermées. Le service peut tourner pendant ce temps. `tools/test_comptes.py` le vérifie (41 contrôles).
+
+---
+
 ## 6.42.1 — 23 novembre 2026
 
 ### Corrections
