@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Les 18 modèles arrivés à 1 h, passés au banc
+
+- **Quoi** : après le passage de l'agent `macos/modeles-semaine/` (1 h 00 à 1 h 14 : 18 nouveaux modèles installés, empreintes vérifiées ; OLALA 1.0 mini laissé, architecture non lue), chaque modèle installé passé à `bench_runtime … 18 512 32 1 q8 metal` : tous sur le GPU sauf Qwen2.5-0.5B (connu). Cinq comparés à `llama-bench -p 512 -n 64 -fa 1 -ctk q8_0 -ctv q8_0` (tableau dans la rubrique). Mistral Small 3.2 24B à 124 tokens/s sous une charge de 7,8, 428-467 au calme.
+- **Fichiers** : `docs/mesures/tests-de-vitesse.md`, `logs/nuit-2026-11-22.md`, ce journal.
+- **Pourquoi** : s'assurer avant la mesure de 8 h qu'aucun nouveau modèle ne retombe sur le processeur.
+- **Étapes** : mesures ci-dessus.
+
 ## 2026-11-23 — Trois essais d'écriture sans gain, retirés
 
 - **Quoi** : (1) le routeur des experts (`mv_f32`) à un simdgroup par threadgroup (128 au lieu de 32, chaque ligne calculée comme avant) : Qwen3-VL 30B-A3B 85,0-85,4 contre 84,8-85,3 tokens/s ; (2) la porte et la montée des experts d'une étape en un seul lancement (`mv_q4_K_idl2`, `mv_q6_K_idl2`) : 83,1-85,2 contre 84,0-84,9 (quatre tours, charge 2,9 à 3,5) ; (3) les tuiles de 32 et 128 cases et les morceaux de 32 colonnes réessayés avant la 6.40.0 (voir son entrée). Le relevé par noyau attribuait 5,6 % du pas au routeur : il grossit les petits noyaux, chacun dans son encodeur.

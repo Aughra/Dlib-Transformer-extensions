@@ -296,6 +296,20 @@ Mesure du 22 novembre à 23 h 35, deux tours en alternance avec llama.cpp (`llam
 
 Gulliver lit 25 à 30 % plus vite les longues questions et écrit 6 % plus vite ; sur les questions courtes, les deux se valent.
 
+### Les modèles arrivés le 23 novembre (Gulliver 6.42.0)
+
+L'agent du lundi à 1 h a installé 18 nouveaux modèles du catalogue (empreintes vérifiées). Passés au banc dans la foulée (`bench_runtime`, 512 tokens lus, mémoire de conversation en 8 bits) : **tous calculent sur le GPU**, sauf Qwen2.5-0.5B (déjà connu : des largeurs qui ne sont pas des multiples de 256). Contre llama.cpp, sur cinq d'entre eux (un tour, charge 2 à 8) :
+
+| Modèle | Lecture, Gulliver | Lecture, llama.cpp | Écriture, Gulliver | Écriture, llama.cpp |
+|---|---|---|---|---|
+| Phi-4-mini | 3 251 | 2 794 | 90,9 | 89,8 |
+| DeepSeek-R1-Distill-Llama 8B | 1 343 | 1 168 | 53,0 | 53,5 |
+| Granite 4.2 8B | 965 | 1 064 | 48,2 | 47,8 |
+| EuroLLM 9B | 964 | 1 005 | 46,4 | 46,0 |
+| Mistral Small 3.2 24B | 428-467 (au calme) | 378 | 19,4 | 19,0 |
+
+La mesure de la semaine (lundi 8 h) les reprendra tous, en alternance et au calme.
+
 ## Pour que Gulliver soit le plus rapide
 
 Le chantier « Vitesse » de la feuille de route, dans l'ordre du gain attendu (deux pistes au même but sont essayées toutes les deux, mesurées, et la meilleure est gardée) :
