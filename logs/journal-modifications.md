@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-23 — Les nouveaux modèles répondent et lisent les images
+
+- **Quoi** : « Quelle est la capitale de la France ? Réponds en une phrase. » (choix glouton, `engine_chat`) aux 18 modèles arrivés à 1 h : tous répondent « Paris » (les modèles à raisonnement d'abord leur réflexion), sauf Phi-4-mini avant la 6.42.1. L'image du perroquet des tests (`sips -Z 512`) décrite par Qwen3-VL 2B, 4B et 8B Instruct, EuroVLM 9B, Ministral 3 3B et Devstral Small 2 avec leurs projecteurs : un ara rouge, chaque fois.
+- **Fichiers** : ce journal.
+- **Pourquoi** : la mesure de la semaine ne juge que la vitesse.
+- **Étapes** : ci-dessus.
+
 ## 2026-11-23 — Gulliver 6.42.1 : Phi-4-mini se charge (LongRoPE et vérification du GPU)
 
 - **Quoi** : `engine.cpp` : le contexte du modèle (réduit à ce que la mémoire des clés et valeurs peut contenir) et `set_context()` passent avant `set_gpu()` et `check_gpu()` ; variable `processor` retirée ; `test_macos.sh` : étape « phi 4 mini longrope » (`PHI4_MODEL`, par défaut le modèle installé).
