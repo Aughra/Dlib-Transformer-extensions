@@ -4,8 +4,9 @@
 /*
     L'onglet Profils des paramètres (fork pour macOS, 2026-11-22).  Chacun y voit sous quel profil il est
     connecté et y change son mot de passe.  L'administrateur (le premier profil) y gère les autres : en
-    créer un avec son mot de passe, le renommer, lui donner un nouveau mot de passe (ses sessions ouvertes
-    se ferment), le supprimer avec toutes ses données.  Le service vérifie chaque droit
+    créer un avec son adresse mail, le renommer, changer son adresse, le supprimer avec toutes ses données.
+    Depuis le 2026-11-23, chacun choisit son mot de passe par le lien « mot de passe oublié » reçu par mail :
+    l'administrateur ne le choisit plus pour les autres.  Le service vérifie chaque droit
     (host/server.cpp, require_admin) ; la page ne fait que montrer ce qui est permis.  Par la passerelle de
     Cloudflare, la gestion des profils est refusée : seule la partie « mon mot de passe » est montrée.
 */
@@ -25,7 +26,8 @@ export function accountsTab(body) {
     body.append(h('p', { class: 'help' }, 'Aucune session ouverte : la page est en mode mémoire.'));
     return;
   }
-  body.append(h('p', null, 'Connecté en tant que ', h('strong', null, me.name), me.admin ? ' (administrateur).' : '.'),
+  body.append(h('p', null, 'Connecté en tant que ', h('strong', null, me.name), me.email ? ' (' + me.email + ')' : '',
+    me.admin ? ', administrateur.' : '.'),
     h('div', { class: 'actions' }, h('button', { class: 'button', type: 'button', onclick: () => logout() }, 'Se déconnecter')));
 
   // Mon mot de passe.
@@ -71,11 +73,12 @@ export function accountsTab(body) {
     list.replaceChildren(...(data.profiles || []).map(row));
   };
 
-  // Une ligne : le nom, puis renommer, nouveau mot de passe, supprimer.
+  // Une ligne : le nom, puis renommer, changer l'adresse, supprimer.
   const row = (p) => {
     const error = h('p', { class: 'help', role: 'alert' });
     const name = h('input', { value: p.name, 'aria-label': 'Nom du profil' });
-    const pass = password(p.has_password ? 'Nouveau mot de passe' : 'Son mot de passe (il n’en a pas)');
+    const email = h('input', { type: 'email', value: p.email || '', placeholder: 'Son adresse mail',
+      'aria-label': 'Adresse mail du profil', autocomplete: 'off' });
     const save = async (changes, done) => {
       try {
         await updateProfile(p.id, changes);
@@ -101,13 +104,14 @@ export function accountsTab(body) {
     return h('div', { class: 'account-row' },
       h('div', { class: 'account-title' }, h('strong', null, p.name),
         p.admin ? ' · administrateur' : '', p.id === currentAccount().id ? ' · vous' : '',
-        p.has_password ? '' : ' · sans mot de passe'),
+        p.has_password ? '' : ' · sans mot de passe (il le choisit par « Mot de passe oublié »)',
+        p.has_email ? '' : ' · sans adresse : il ne peut pas se connecter'),
       h('div', { class: 'inline' }, name,
         h('button', { class: 'button', type: 'button', onclick: () => save({ name: name.value.trim() }, 'Profil renommé.') },
           'Renommer')),
-      h('div', { class: 'inline' }, pass,
-        h('button', { class: 'button', type: 'button', onclick: () => save({ password: pass.value },
-          'Mot de passe changé ; ses sessions ouvertes sont fermées.') }, 'Changer le mot de passe')),
+      h('div', { class: 'inline' }, email,
+        h('button', { class: 'button', type: 'button', onclick: () => save({ email: email.value.trim() }, 'Adresse changée.') },
+          'Changer l’adresse')),
       p.admin ? null : h('div', { class: 'actions' },
         h('button', { class: 'button danger', type: 'button', onclick: remove }, 'Supprimer ce profil')),
       error);
@@ -115,21 +119,22 @@ export function accountsTab(body) {
 
   // Créer un profil.
   const newName = h('input', { placeholder: 'Nom du nouveau profil', autocomplete: 'off' });
-  const newPass = password('Son mot de passe (8 caractères au moins)');
+  const newMail = h('input', { type: 'email', placeholder: 'Son adresse mail', autocomplete: 'off' });
   const newError = h('p', { class: 'help', role: 'alert' });
   const create = async () => {
     try {
-      const p = await createProfile(newName.value.trim(), newPass.value);
-      newName.value = newPass.value = '';
+      const p = await createProfile(newName.value.trim(), newMail.value.trim());
+      newName.value = newMail.value = '';
       newError.textContent = '';
-      toast('Profil « ' + p.name + ' » créé. Donnez-lui son mot de passe.');
+      toast('Profil « ' + p.name + ' » créé. À sa première connexion, il clique sur « Mot de passe oublié » ' +
+        'et choisit son mot de passe par le lien reçu par mail.');
       render();
     } catch (e) {
       newError.textContent = accountError(e);
     }
   };
   body.append(h('h3', null, 'Nouveau profil'),
-    h('div', { class: 'field account-password' }, newName, newPass, newError),
+    h('div', { class: 'field account-password' }, newName, newMail, newError),
     h('div', { class: 'actions' }, h('button', { class: 'button primary', type: 'button', onclick: create }, 'Créer le profil')));
   render();
 }

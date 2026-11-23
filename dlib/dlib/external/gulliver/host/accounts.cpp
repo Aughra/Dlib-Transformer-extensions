@@ -7,7 +7,9 @@
 #include <CommonCrypto/CommonCryptor.h>
 #include <CommonCrypto/CommonKeyDerivation.h>
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
+#include <iterator>
 #include <vector>
 
 namespace gulliver
@@ -123,5 +125,97 @@ namespace gulliver
     {
         std::lock_guard<std::mutex> lock(m_);
         entries_.erase(profile);
+    }
+
+    void login_codes::prune(int64_t now)
+    {
+        for (auto it = entries_.begin(); it != entries_.end();)
+            it = it->second.expires <= now || it->second.left <= 0 ? entries_.erase(it) : std::next(it);
+    }
+
+    std::string login_codes::issue(const std::string& profile, const std::string& pending_email, int64_t now,
+        std::string& code)
+    {
+        // 8 chiffres tirés uniformément (arc4random_uniform évite le biais d'un modulo).
+        char digits[16];
+        std::snprintf(digits, sizeof(digits), "%08u", arc4random_uniform(100000000u));
+        code = digits;
+        const std::string challenge = new_session_token();
+        std::lock_guard<std::mutex> lock(m_);
+        prune(now);
+        for (auto it = entries_.begin(); it != entries_.end();)
+            it = it->second.profile == profile ? entries_.erase(it) : std::next(it);
+        entry& e = entries_[sha256_hex(challenge)];
+        e.profile = profile;
+        e.pending_email = pending_email;
+        e.code_key = sha256_hex(code);
+        e.expires = now + lifetime;
+        e.left = tries;
+        return challenge;
+    }
+
+    login_codes::result login_codes::check(const std::string& challenge, const std::string& code, int64_t now,
+        std::string& profile, std::string& pending_email, int& left)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        prune(now);
+        const auto it = entries_.find(sha256_hex(challenge));
+        if (challenge.size() != 64 || it == entries_.end()) return unknown;
+        // Les deux empreintes se comparent en temps constant.
+        const std::string given = sha256_hex(code), & expected = it->second.code_key;
+        unsigned char diff = given.size() != expected.size();
+        for (size_t i = 0; i < given.size() && i < expected.size(); ++i)
+            diff |= static_cast<unsigned char>(given[i] ^ expected[i]);
+        if (diff == 0 && code.size() == 8)
+        {
+            profile = it->second.profile;
+            pending_email = it->second.pending_email;
+            entries_.erase(it);
+            return accepted;
+        }
+        left = --it->second.left;
+        if (left <= 0) entries_.erase(it);
+        return wrong;
+    }
+
+    std::string reset_links::issue(const std::string& profile, int64_t now)
+    {
+        const std::string token = new_session_token();
+        std::lock_guard<std::mutex> lock(m_);
+        for (auto it = entries_.begin(); it != entries_.end();)
+            it = it->second.profile == profile || it->second.expires <= now ? entries_.erase(it) : std::next(it);
+        entries_[sha256_hex(token)] = entry{ profile, now + lifetime };
+        return token;
+    }
+
+    bool reset_links::consume(const std::string& token, int64_t now, std::string& profile)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        if (token.size() != 64) return false;
+        const auto it = entries_.find(sha256_hex(token));
+        if (it == entries_.end()) return false;
+        const bool valid = it->second.expires > now;
+        profile = it->second.profile;
+        entries_.erase(it);
+        return valid;
+    }
+
+    void reset_links::forget(const std::string& profile)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        for (auto it = entries_.begin(); it != entries_.end();)
+            it = it->second.profile == profile ? entries_.erase(it) : std::next(it);
+    }
+
+    bool mail_limiter::allow(const std::string& address, int64_t now)
+    {
+        std::lock_guard<std::mutex> lock(m_);
+        sent_.erase(std::remove_if(sent_.begin(), sent_.end(), [now](int64_t t) { return t <= now - 3600; }), sent_.end());
+        for (auto it = last_.begin(); it != last_.end();)
+            it = it->second <= now - 60 ? last_.erase(it) : std::next(it);
+        if (sent_.size() >= 30 || last_.count(address)) return false;
+        last_[address] = now;
+        sent_.push_back(now);
+        return true;
     }
 }

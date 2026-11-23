@@ -355,8 +355,19 @@ schemas = {
                        "description": "L'accès au web du bouton Web, de /gulliver/v1/web/search et de "
                                       "/gulliver/v1/web/fetch ; false le coupe."},
         "lan": {"type": "boolean", "default": False, "description": "L'accès depuis le réseau local : un serveur en "
-                "HTTP simple sur chaque adresse du Mac, au port lan_port, ouvert à tous les appareils du réseau, "
-                "sans mot de passe."},
+                "HTTP simple sur chaque adresse du Mac, au port lan_port, ouvert aux appareils du réseau ; les "
+                "données y exigent une session, et les actions qui changent le service celle de l'administrateur."},
+        "mail_from": {"type": "string", "default": "", "description": "L'adresse d'envoi des codes de connexion et des "
+                      "liens « mot de passe oublié », qui sert aussi d'utilisateur auprès de Proton Mail Bridge ; vide : "
+                      "pas de mail (code mail_unconfigured)."},
+        "mail_port": {"type": "integer", "minimum": 1, "maximum": 65535, "default": 1025,
+                      "description": "Le port SMTP de Proton Mail Bridge, sur 127.0.0.1 seulement."},
+        "mail_secret": {"type": "string", "description": "Le mot de passe SMTP du Bridge, rendu sous la forme ******** "
+                        "et gardé dans mail.secret (0600) ; renvoyé tel quel, ce masque garde le mot de passe "
+                        "enregistré ; vide l'efface."},
+        "mail_link": {"type": "string", "default": "", "description": "L'adresse de la page dans les liens des mails "
+                      "(http ou https, sans ? ni #) ; vide : http://<adresse du Mac>:lan_port/ quand lan, sinon "
+                      "https://localhost:port/."},
         "lan_port": {"type": "integer", "minimum": 1024, "maximum": 65535, "default": 8444,
                      "description": "Le port de l'accès réseau, différent de port."},
         "warm_history": {"type": "boolean", "default": True, "description": "L'historique d'une réponse lu en "
@@ -540,7 +551,10 @@ schemas = {
                     "admin": {"type": "boolean", "description": "L'administrateur (le premier profil, le seul) : lui "
                               "seul gère les profils."},
                     "has_password": {"type": "boolean", "description": "Le profil a un mot de passe (l'empreinte ne "
-                                     "sort jamais du service)."}}},
+                                     "sort jamais du service)."},
+                    "has_email": {"type": "boolean", "description": "Le profil a une adresse de connexion."},
+                    "email": {"type": "string", "description": "L'adresse de connexion, en minuscules : donnée au "
+                              "profil lui-même et à l'administrateur seulement."}}},
     "Chunk": {"type": "object", "description": "Un passage (chunk) de l'index RAG d'un document.", "properties": {
         "id": {"type": "string"}, "owner": {"type": "string", "description": "Le propriétaire du document (une "
                "conversation, un projet…)."},
@@ -567,7 +581,7 @@ schemas = {
 # /gulliver/v1/profile/ l'exigent et servent le profil de la session.
 profile_header = {"name": "X-Gulliver-Session", "in": "header", "required": True,
                   "schema": {"type": "string"},
-                  "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères "
+                  "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères "
                                  "hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête "
                                  "X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."}
 # Les erreurs communes aux routes de données d'un profil : pas de session valable, ou un autre profil nommé.
@@ -582,6 +596,14 @@ admin_replies = {
     "403": reply("Réservé à l'administrateur, depuis le Mac ou la maison (code admin_required)", ref("Error")),
 }
 password_schema = {"type": "string", "description": "De 8 à 256 octets."}
+email_schema = {"type": "string", "description": "Une adresse mail simple (local@domaine), rangée en minuscules."}
+challenge_reply = {"type": "object", "properties": {"challenge": {"type": "string", "description": "Le défi du code "
+                   "envoyé par mail (64 caractères hexadécimaux), à rendre avec le code à /gulliver/v1/login/code."}}}
+sent_reply = {"type": "object", "properties": {"sent": {"type": "boolean", "enum": [True]}}}
+mail_replies = {
+    "503": reply("Pas d'adresse d'envoi (code mail_unconfigured), ou le mail n'a pas pu partir (code mail_failed)",
+                 ref("Error")),
+}
 session_reply = {"type": "object", "properties": {"token": {"type": "string", "description": "Le jeton de session, "
                  "à envoyer dans X-Gulliver-Session ; donné une seule fois."}, "profile": ref("Profile")}}
 
@@ -1243,36 +1265,48 @@ paths = {
                                  "responses": {"200": reply("Les lignes", {"type": "object"})}}},
 
     # Les profils : chacun est un espace de données séparé, protégé par un mot de passe (comptes, Gulliver 6.31.0).
-    # Le premier profil est l'administrateur : lui seul crée, renomme, supprime les autres et change leur mot de passe.
-    # Les routes /gulliver/v1/profile/ lisent et écrivent les données du profil de la session (X-Gulliver-Session).
+    # On s'y connecte par son adresse mail, son mot de passe et un code reçu par mail (Gulliver 7.0.0) ; le mot de
+    # passe se choisit par le lien d'un mail.  Le premier profil est l'administrateur : lui seul crée, renomme,
+    # supprime les autres et change leur adresse.  Les routes /gulliver/v1/profile/ lisent et écrivent les données du
+    # profil de la session (X-Gulliver-Session).
     "/gulliver/v1/profiles": {
-        "get": {"tags": ["Profils"], "summary": "Liste les profils (pour l'écran de connexion)",
-                "responses": {"200": reply("Les profils, et s'il faut choisir le premier mot de passe",
+        "get": {"tags": ["Profils"], "summary": "S'il faut créer le premier compte, et les profils pour une session",
+                "description": "Sans session, la liste est vide. Avec une session, tous les profils ; l'adresse de "
+                               "chacun pour l'administrateur, la sienne seule pour un autre profil.",
+                "responses": {"200": reply("L'état des comptes",
                     {"type": "object", "properties": {
                         "profiles": {"type": "array", "items": ref("Profile")},
                         "setup": {"type": "boolean", "description": "Vrai sans profil, ou quand l'administrateur n'a "
-                                  "pas encore de mot de passe : /gulliver/v1/setup."}}})}},
+                                  "pas encore d'adresse : /gulliver/v1/setup."},
+                        "setup_password": {"type": "boolean", "description": "L'administrateur sans adresse a un mot "
+                                           "de passe : /gulliver/v1/setup le demande avec l'adresse."},
+                        "mail": {"type": "boolean", "description": "Une adresse d'envoi est réglée (mail_from)."}}})}},
         "post": {"tags": ["Profils"], "summary": "Crée un profil (administrateur)",
+                 "description": "Le profil n'a pas de mot de passe : il le choisit par /gulliver/v1/password/forgot.",
                  "parameters": session_param,
-                 "requestBody": json_body({"type": "object", "required": ["name", "password"], "properties": {
+                 "requestBody": json_body({"type": "object", "required": ["name", "email"], "properties": {
                      "name": {"type": "string", "description": "De 1 à 80 caractères, une fois retirées les espaces à "
-                              "ses extrémités."}, "password": password_schema}}),
+                              "ses extrémités."}, "email": email_schema}}),
                  "responses": {"200": reply("Le profil créé (jamais administrateur)", ref("Profile")),
-                               "400": reply("Nom ou mot de passe hors bornes (code name ou password)", ref("Error")),
+                               "400": reply("Nom hors bornes ou adresse mal formée (code name ou email)", ref("Error")),
                                **admin_replies,
-                               "409": reply("Un profil porte déjà ce nom (code name_taken)", ref("Error"))}}},
+                               "409": reply("Un profil porte déjà ce nom ou cette adresse (code name_taken ou "
+                                            "email_taken)", ref("Error"))}}},
     "/gulliver/v1/profiles/{id}": {
-        "put": {"tags": ["Profils"], "summary": "Renomme un profil ou change son mot de passe (administrateur)",
-                "description": "Un mot de passe changé ferme les sessions ouvertes du profil.",
+        "put": {"tags": ["Profils"], "summary": "Renomme un profil ou change son adresse (administrateur)",
+                "description": "Le mot de passe ne se change plus ici (code password_by_mail) : chacun le choisit "
+                               "par le lien d'un mail.",
                 "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}]
                 + session_param,
                 "requestBody": json_body({"type": "object", "properties": {
-                    "name": {"type": "string", "description": "De 1 à 80 caractères."}, "password": password_schema}}),
+                    "name": {"type": "string", "description": "De 1 à 80 caractères."}, "email": email_schema}}),
                 "responses": {"200": reply("Le profil", ref("Profile")),
-                              "400": reply("Nom ou mot de passe hors bornes (code name ou password)", ref("Error")),
+                              "400": reply("Nom hors bornes, adresse mal formée ou mot de passe donné (code name, "
+                                           "email ou password_by_mail)", ref("Error")),
                               **admin_replies,
                               "404": reply("Aucun profil n'a cet identifiant (code profile_unknown)", ref("Error")),
-                              "409": reply("Un autre profil porte déjà ce nom (code name_taken)", ref("Error"))}},
+                              "409": reply("Un autre profil porte déjà ce nom ou cette adresse (code name_taken ou "
+                                           "email_taken)", ref("Error"))}},
         "delete": {"tags": ["Profils"], "summary": "Supprime un profil et toutes ses données (administrateur)",
                    "description": "La suppression efface en cascade les discussions, projets, réglages de page, "
                                   "passages de l'index RAG, images et sessions du profil. L'administrateur est gardé.",
@@ -1283,29 +1317,70 @@ paths = {
                                  "409": reply("Le profil de l'administrateur est gardé (code admin_kept)",
                                               ref("Error"))}}},
     "/gulliver/v1/setup": {
-        "post": {"tags": ["Profils"], "summary": "Choisit le premier mot de passe",
-                 "description": "Sans profil, crée l'administrateur {name, password} ; sinon donne son mot de passe à "
-                                "l'administrateur qui n'en a pas (une base d'avant les comptes). Une seule fois, et "
-                                "jamais par la passerelle de Cloudflare.",
-                 "requestBody": json_body({"type": "object", "required": ["password"], "properties": {
-                     "name": {"type": "string"}, "password": password_schema}}),
-                 "responses": {"200": reply("La session de l'administrateur", session_reply),
-                               "400": reply("Nom ou mot de passe hors bornes", ref("Error")),
+        "post": {"tags": ["Profils"], "summary": "Crée le premier compte",
+                 "description": "Sans profil, {name, email} crée l'administrateur sans mot de passe et lui envoie le "
+                                "lien pour le choisir. Un administrateur d'une base d'avant les adresses donne la "
+                                "sienne : {email, password} avec son mot de passe actuel rend un défi, et le code "
+                                "envoyé à cette adresse la vérifie (/gulliver/v1/login/code) avant qu'elle soit "
+                                "rangée ; {email} seul s'il n'a pas de mot de passe. Jamais par la passerelle.",
+                 "requestBody": json_body({"type": "object", "required": ["email"], "properties": {
+                     "name": {"type": "string"}, "email": email_schema, "password": {"type": "string"}}}),
+                 "responses": {"200": reply("Le lien est parti ({sent}) ou le code est parti ({challenge})",
+                                            {"oneOf": [sent_reply, challenge_reply]}),
+                               "400": reply("Nom hors bornes ou adresse mal formée (code name ou email)", ref("Error")),
+                               "401": reply("Mot de passe de l'administrateur faux (code wrong_password)", ref("Error")),
                                "403": reply("Par la passerelle (code setup_remote)", ref("Error")),
-                               "409": reply("L'administrateur a déjà un mot de passe (code setup_done)",
-                                            ref("Error"))}}},
+                               "409": reply("L'administrateur a déjà une adresse (code setup_done), ou un autre profil "
+                                            "a celle-ci (code email_taken)", ref("Error")),
+                               "429": reply("Trop d'essais manqués (code login_throttled)", ref("Error")),
+                               **mail_replies}}},
     "/gulliver/v1/login": {
-        "post": {"tags": ["Profils"], "summary": "Ouvre une session",
-                 "description": "Après 5 mauvais mots de passe de suite pour un profil, chaque essai attend 30 "
-                                "secondes, puis le double (une heure au plus).",
-                 "requestBody": json_body({"type": "object", "required": ["password"], "properties": {
-                     "profile": {"type": "string", "description": "L'identifiant du profil (ou name)."},
-                     "name": {"type": "string"}, "password": {"type": "string"}}}),
-                 "responses": {"200": reply("La session", session_reply),
-                               "401": reply("Profil ou mot de passe faux (code wrong_password)", ref("Error")),
-                               "403": reply("Le profil n'a pas de mot de passe (code password_not_set)", ref("Error")),
+        "post": {"tags": ["Profils"], "summary": "Connexion, premier temps : adresse et mot de passe",
+                 "description": "Un bon mot de passe envoie un code à 8 chiffres à l'adresse du profil (10 minutes, "
+                                "5 essais, une seule fois). Une adresse inconnue répond comme un mauvais mot de "
+                                "passe. Après 5 mauvais mots de passe de suite pour un profil, chaque essai attend "
+                                "30 secondes, puis le double (une heure au plus).",
+                 "requestBody": json_body({"type": "object", "required": ["email", "password"], "properties": {
+                     "email": email_schema, "password": {"type": "string"}}}),
+                 "responses": {"200": reply("Le code est parti", challenge_reply),
+                               "401": reply("Adresse ou mot de passe faux (code wrong_password)", ref("Error")),
+                               "403": reply("Le profil n'a pas encore de mot de passe (code password_not_set)",
+                                            ref("Error")),
                                "429": reply("Trop d'essais manqués (code login_throttled, en-tête Retry-After)",
+                                            ref("Error")),
+                               **mail_replies}}},
+    "/gulliver/v1/login/code": {
+        "post": {"tags": ["Profils"], "summary": "Connexion, second temps : le code reçu par mail",
+                 "requestBody": json_body({"type": "object", "required": ["challenge", "code"], "properties": {
+                     "challenge": {"type": "string"}, "code": {"type": "string", "description": "Les 8 chiffres ; "
+                                   "les espaces sont ignorés."}}}),
+                 "responses": {"200": reply("La session", session_reply),
+                               "401": reply("Code faux (code wrong_code, avec left : les essais restants), ou défi "
+                                            "inconnu, expiré ou épuisé (code code_expired)", ref("Error")),
+                               "409": reply("Un autre profil a pris l'adresse à vérifier (code email_taken)",
                                             ref("Error"))}}},
+    "/gulliver/v1/password/forgot": {
+        "post": {"tags": ["Profils"], "summary": "Mot de passe oublié, ou premier mot de passe : envoie le lien",
+                 "description": "Envoie à l'adresse, si un profil l'a, un lien vers la page (réglage mail_link) qui "
+                                "permet une fois, pendant 30 minutes, de choisir le mot de passe ; répond de même "
+                                "quand aucun profil ne l'a. Un mail par minute au plus vers une adresse, 30 par heure "
+                                "pour tout le service.",
+                 "requestBody": json_body({"type": "object", "required": ["email"], "properties": {
+                     "email": email_schema}}),
+                 "responses": {"200": reply("Traité", sent_reply),
+                               "400": reply("Adresse mal formée (code email)", ref("Error")),
+                               "429": reply("Un mail vient de partir (code mail_throttled, en-tête Retry-After)",
+                                            ref("Error")),
+                               **mail_replies}}},
+    "/gulliver/v1/password/reset": {
+        "post": {"tags": ["Profils"], "summary": "Choisit le mot de passe par le jeton du lien",
+                 "description": "Ferme toutes les sessions du profil et en ouvre une.",
+                 "requestBody": json_body({"type": "object", "required": ["token", "password"], "properties": {
+                     "token": {"type": "string", "description": "Le jeton du lien (#reset=…)."},
+                     "password": password_schema}}),
+                 "responses": {"200": reply("La session", session_reply),
+                               "400": reply("Mot de passe hors bornes (code password)", ref("Error")),
+                               "401": reply("Lien inconnu, déjà servi ou expiré (code link_expired)", ref("Error"))}}},
     "/gulliver/v1/logout": {
         "post": {"tags": ["Profils"], "summary": "Ferme la session", "parameters": session_param,
                  "responses": {"200": reply("Fermée", ok)}}},
@@ -1550,7 +1625,7 @@ doc = {
                        "travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les "
                        "documents.\n\n"
                        "Une version personnelle pour macOS. Les données d'un profil demandent sa session (en-tête "
-                       "X-Gulliver-Session, ouverte par /gulliver/v1/login). Les actions qui changent le service "
+                       "X-Gulliver-Session, ouverte par /gulliver/v1/login puis /gulliver/v1/login/code). Les actions qui changent le service "
                        "(modèles, réglages, redémarrage, mesures, journal) sont libres depuis le Mac lui-même ; depuis "
                        "le port réseau, elles demandent la session de l'administrateur (401 session_required, 403 "
                        "admin_required) ; par la passerelle de Cloudflare, elles sont refusées. Les autres routes "

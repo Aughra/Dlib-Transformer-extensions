@@ -55,7 +55,9 @@
 #include "../common/platform.h"
 #include "../common/version.h"
 #include "accounts.h"
+#include "mailer.h"
 #include "carnet.h"
+#include "certificates.h"
 #include "thermal.h"
 #include "crypto.h"
 #include "http_fetch.h"
@@ -128,8 +130,9 @@ namespace gulliver
             send_json(res, status, e);
         }
 
-        // Un profil rendu à la page : son id, son nom et ses dates.
-        json profile_json(const profile& p)
+        // Un profil rendu à la page : son id, son nom et ses dates ; son adresse mail pour lui-même et
+        // pour l'administrateur seulement (with_email).
+        json profile_json(const profile& p, bool with_email = false)
         {
             json o = json::object();
             o["id"] = p.id;
@@ -138,6 +141,8 @@ namespace gulliver
             o["last_used"] = static_cast<long long>(p.last_used);
             o["admin"] = p.admin;
             o["has_password"] = !p.password.empty();
+            o["has_email"] = !p.email.empty();
+            if (with_email) o["email"] = p.email;
             return o;
         }
 
@@ -226,8 +231,11 @@ namespace gulliver
         }
 
         /*
-            Les comptes (fork pour macOS, 2026-11-22, host/accounts.h).  Une session est ouverte par
-            /gulliver/v1/login (ou /gulliver/v1/setup pour le premier mot de passe) ; la page envoie son
+            Les comptes (fork pour macOS, 2026-11-22, host/accounts.h).  Depuis le 2026-11-23, on se
+            connecte par son adresse mail et son mot de passe (/gulliver/v1/login), puis par le code à
+            8 chiffres reçu par mail (/gulliver/v1/login/code) ; un mot de passe oublié, ou le premier,
+            se choisit par le lien d'un mail (/gulliver/v1/password/forgot, puis /password/reset).
+            Une session est ouverte par /login/code ou /password/reset ; la page envoie son
             jeton dans l'en-tête X-Gulliver-Session (pas de cookie : la passerelle de Cloudflare les
             retire).  Une session non servie depuis 30 jours expire.  Une requête venue par la
             passerelle porte X-Gulliver-Remote: 1, que la passerelle pose elle-même : la création du
@@ -250,14 +258,27 @@ namespace gulliver
             return !id.empty() && svc.db().find_profile(id, out);
         }
 
-        // Faut-il créer le premier mot de passe ?  Sans aucun profil, ou quand l'administrateur n'en a pas.
+        login_codes codes;
+        reset_links resets;
+        mail_limiter mail_brake;
+
+        // Faut-il créer le premier compte ?  Sans aucun profil, ou quand l'administrateur n'a pas encore
+        // d'adresse mail (une base d'avant les adresses).
         bool setup_needed(service& svc)
         {
             const std::vector<profile> all = svc.db().profiles();
             if (all.empty()) return true;
             for (const profile& p : all)
-                if (p.admin) return p.password.empty();
+                if (p.admin) return p.email.empty();
             return true;
+        }
+
+        // L'adresse mail d'un corps, en minuscules ; vide quand elle manque ou n'est pas valable.
+        std::string email_of(const json& body)
+        {
+            if (!body.contains("email")) return std::string();
+            const std::string e = normalized_mail_address(body["email"].as_string());
+            return valid_mail_address(e) ? e : std::string();
         }
 
         // Une base d'avant les comptes : le plus ancien profil devient l'administrateur.
@@ -283,7 +304,7 @@ namespace gulliver
             svc.db().touch_profile(p.id, now_unix());
             json o = json::object();
             o["token"] = token;
-            o["profile"] = profile_json(p);
+            o["profile"] = profile_json(p, true);
             return o;
         }
 
@@ -667,6 +688,74 @@ namespace gulliver
             json j = svc.settings().get().to_json();
             j["lan_addresses"] = lan_addresses();
             return j;
+        }
+
+        /*
+            Les mails des comptes (fork pour macOS, 2026-11-23, host/mailer.h).  L'adresse de la page
+            dans les liens vient du réglage mail_link, jamais de la requête : un en-tête Host choisi
+            par un autre enverrait sinon le jeton chez lui.  Vide, c'est l'accès du réseau de la maison
+            (http, première adresse du Mac) quand il est ouvert, sinon la page du Mac lui-même.
+        */
+        bool mail_ready(service& svc)
+        {
+            return valid_mail_address(svc.settings().get().mail_from);
+        }
+
+        std::string page_link(service& svc)
+        {
+            const host_settings st = svc.settings().get();
+            std::string base = st.mail_link;
+            if (base.empty() && st.lan)
+            {
+                const json addresses = lan_addresses();
+                if (!addresses.elements().empty())
+                    base = "http://" + addresses.elements().front().as_string() + ":" + std::to_string(st.lan_port) + "/";
+            }
+            if (base.empty()) base = "https://localhost:" + std::to_string(st.port) + "/";
+            if (base.back() != '/') base += '/';
+            return base;
+        }
+
+        // Envoie un mail des comptes ; un échec est noté au journal (sans le code ni le lien).
+        bool account_mail(service& svc, const std::string& to, const std::string& subject, const std::string& body)
+        {
+            const host_settings st = svc.settings().get();
+            mail_server server;
+            server.from = st.mail_from;
+            server.port = st.mail_port;
+            server.secret = st.mail_secret;
+            std::string error;
+            const bool sent = send_mail(server, to, subject, body, error);
+            wipe_secret(server.secret);
+            if (!sent) log_warning("accounts: a mail cannot be sent: " + error);
+            return sent;
+        }
+
+        bool send_code(service& svc, const profile& p, const std::string& to, const std::string& code)
+        {
+            return account_mail(svc, to, "Votre code de connexion à Gulliver",
+                "Bonjour " + p.name + ",\n\n"
+                "Voici votre code de connexion à Gulliver :\n\n"
+                "    " + code + "\n\n"
+                "Il vaut 10 minutes et ne sert qu'une fois.\n\n"
+                "Si vous n'avez pas essayé de vous connecter, quelqu'un connaît votre mot de passe : "
+                "changez-le dans l'onglet Profils des paramètres.\n\n"
+                "Gulliver\n");
+        }
+
+        bool send_reset_link(service& svc, const profile& p)
+        {
+            const std::string token = resets.issue(p.id, now_unix());
+            const bool first = p.password.empty();
+            return account_mail(svc, p.email,
+                first ? "Choisir votre mot de passe Gulliver" : "Remettre à neuf votre mot de passe Gulliver",
+                "Bonjour " + p.name + ",\n\n"
+                + (first ? std::string("Pour choisir le mot de passe de votre profil Gulliver, ouvrez ce lien :\n\n")
+                         : std::string("Pour choisir un nouveau mot de passe Gulliver, ouvrez ce lien :\n\n"))
+                + "    " + page_link(svc) + "#reset=" + token + "\n\n"
+                "Il vaut 30 minutes et ne sert qu'une fois.\n\n"
+                "Si vous n'avez rien demandé, ignorez ce message : votre mot de passe ne change pas.\n\n"
+                "Gulliver\n");
         }
 
 
@@ -1362,7 +1451,7 @@ namespace gulliver
                 "device_mb", "threads", "context", "max_sequences", "kv_mb", "kv_type", "offline",
                 "proxy", "web_access", "web_search", "lan", "lan_port", "warm_history", "spin_us",
                 "gpu_prompt_tokens", "gpu_prompt_context", "draft_tokens", "models_dir", "reserve_gb", "library_dir", "relay",
-                "rag_engine", "rag_top_k", "rag_rerank" };
+                "rag_engine", "rag_top_k", "rag_rerank", "mail_from", "mail_port", "mail_link", "mail_secret" };
             for (const auto& kv : body.items())
             {
                 if (std::find_if(std::begin(keys), std::end(keys), [&](const char* k) { return kv.first == k; })
@@ -1413,7 +1502,33 @@ namespace gulliver
                 return false;
             }
             if (body.contains("relay") && !validate_relay(body["relay"], error)) return false;
-            return one_of("web_search", { "wikipedia", "none" }) && boolean("web_access") && boolean("lan")
+            // Le mail des comptes (2026-11-23) : une adresse d'envoi valable ou rien, une page en http(s) sans
+            // fragment (le lien y ajoute « #reset=… »), un mot de passe sans caractère de contrôle.
+            const json& from = body["mail_from"];
+            if (body.contains("mail_from") && !(from.is_string()
+                && (from.as_string().empty() || valid_mail_address(normalized_mail_address(from.as_string())))))
+            {
+                error = "invalid value for mail_from: a mail address, or empty";
+                return false;
+            }
+            const json& link = body["mail_link"];
+            if (body.contains("mail_link"))
+            {
+                const std::string l = link.as_string();
+                const bool web = l.compare(0, 7, "http://") == 0 || l.compare(0, 8, "https://") == 0;
+                if (!(link.is_string() && plain_text(link, 2048) && (l.empty() || (web && l.find(' ') == std::string::npos
+                    && l.find('#') == std::string::npos && l.find('?') == std::string::npos))))
+                {
+                    error = "invalid value for mail_link: an http(s) address without ? or #, or empty";
+                    return false;
+                }
+            }
+            if (body.contains("mail_secret") && !(body["mail_secret"].is_string() && plain_text(body["mail_secret"], 4096)))
+            {
+                error = "invalid value for mail_secret";
+                return false;
+            }
+            return in_range("mail_port", 1, 65535) && one_of("web_search", { "wikipedia", "none" }) && boolean("web_access") && boolean("lan")
                 && in_range("lan_port", 1024, 65535) && boolean("warm_history") && in_range("spin_us", 0, 100000)
                 && in_range("gpu_prompt_tokens", 9, 1 << 20) && in_range("gpu_prompt_context", 0, 1 << 20)
                 && in_range("draft_tokens", 0, 7)
@@ -2673,42 +2788,99 @@ namespace gulliver
         // partent avec lui par la cascade des tables de profil).
         // Les comptes (fork pour macOS, 2026-11-22) : voir resolve_profile().
         ensure_admin(svc);
-        // La liste des profils (noms et rôles, pour l'écran de connexion) et s'il faut créer le premier
-        // mot de passe.
-        srv.Get("/gulliver/v1/profiles", [s](const httplib::Request&, httplib::Response& res) {
+        // S'il faut créer le premier compte, et la liste des profils pour une session (avec les adresses
+        // pour l'administrateur) ; sans session, la liste est vide : l'écran de connexion demande l'adresse.
+        srv.Get("/gulliver/v1/profiles", [s](const httplib::Request& req, httplib::Response& res) {
+            profile me;
+            const bool signed_in = session_of(*s, req, me);
             json list = json::array();
+            bool admin_has_password = false;
             for (const auto& p : s->db().profiles())
-                list.push_back(profile_json(p));
+            {
+                if (signed_in) list.push_back(profile_json(p, me.admin || p.id == me.id));
+                if (p.admin) admin_has_password = !p.password.empty();
+            }
             json o = json::object();
             o["profiles"] = list;
             o["setup"] = setup_needed(*s);
+            // Le premier compte d'une base d'avant les adresses : l'administrateur a un mot de passe à redonner.
+            o["setup_password"] = admin_has_password;
+            o["mail"] = mail_ready(*s);
             send_json(res, 200, o);
         });
-        // Le premier mot de passe : sans profil, crée l'administrateur {name, password} ; sinon donne son
-        // mot de passe à l'administrateur qui n'en a pas.  Depuis le Mac ou la maison seulement.
+        /*
+            Le premier compte, depuis le Mac ou la maison seulement.  Sans profil : {name, email} crée
+            l'administrateur sans mot de passe et lui envoie le lien pour le choisir.  Un administrateur
+            d'avant les adresses donne la sienne : {email, password} avec son mot de passe actuel, puis
+            le code envoyé à cette adresse la vérifie (/login/code) avant qu'elle soit rangée ; {email}
+            seul quand il n'a pas de mot de passe (le lien suit).
+        */
         srv.Post("/gulliver/v1/setup", [s](const httplib::Request& req, httplib::Response& res) {
             if (is_remote(req))
             {
                 send_error(res, 403, "invalid_request_error",
-                    "the first password is chosen from the Mac or the home network", "setup_remote");
+                    "the first account is made from the Mac or the home network", "setup_remote");
                 return;
             }
             json body;
             if (!parse_body(req, res, body)) return;
-            std::string password;
-            if (!password_of(body, "password", res, password)) return;
+            const std::string email = email_of(body);
+            if (email.empty())
+            {
+                send_error(res, 400, "invalid_request_error", "a valid mail address is required", "email");
+                return;
+            }
+            if (!mail_ready(*s))
+            {
+                send_error(res, 503, "invalid_request_error", "no sending address is set (mail_from)", "mail_unconfigured");
+                return;
+            }
             static std::mutex setup_lock;
             std::lock_guard<std::mutex> lock(setup_lock);
             if (!setup_needed(*s))
             {
-                send_error(res, 409, "invalid_request_error", "the administrator already has a password", "setup_done");
+                send_error(res, 409, "invalid_request_error", "the administrator already has an address", "setup_done");
                 return;
             }
-            const std::vector<profile> all = s->db().profiles();
-            profile p;
+            profile p, other;
             bool found = false;
-            for (const profile& q : all)
+            for (const profile& q : s->db().profiles())
                 if (q.admin) { p = q; found = true; }
+            if (s->db().find_profile_by_email(email, other) && other.id != p.id)
+            {
+                send_error(res, 409, "invalid_request_error", "another profile has this address", "email_taken");
+                return;
+            }
+            if (found && !p.password.empty())
+            {
+                const int64_t wait = throttle.wait(p.id, now_unix());
+                const std::string password = body.contains("password") ? body["password"].as_string() : std::string();
+                if (wait > 0)
+                {
+                    res.set_header("Retry-After", std::to_string(wait));
+                    send_error(res, 429, "invalid_request_error", "too many wrong passwords", "login_throttled");
+                    return;
+                }
+                if (password.size() > password_max || !verify_password(password, p.password))
+                {
+                    throttle.failed(p.id, now_unix());
+                    send_error(res, 401, "invalid_request_error", "the password of the administrator is wrong",
+                        "wrong_password");
+                    return;
+                }
+                throttle.succeeded(p.id);
+                std::string code;
+                const std::string challenge = codes.issue(p.id, email, now_unix(), code);
+                if (!send_code(*s, p, email, code))
+                {
+                    send_error(res, 503, "invalid_request_error", "the mail cannot be sent", "mail_failed");
+                    return;
+                }
+                json o = json::object();
+                o["challenge"] = challenge;
+                send_json(res, 200, o);
+                return;
+            }
             if (!found)
             {
                 const std::string name = profile_name_of(body);
@@ -2723,20 +2895,30 @@ namespace gulliver
                 p.last_used = p.created;
                 p.admin = true;
             }
-            p.password = hash_password(password);
+            p.email = email;
             s->db().put_profile(p);
-            log_info("accounts: the administrator " + p.id + " has a password");
-            send_json(res, 200, open_session(*s, p));
+            log_info("accounts: the administrator " + p.id + " has an address");
+            if (!send_reset_link(*s, p))
+            {
+                send_error(res, 503, "invalid_request_error", "the mail cannot be sent", "mail_failed");
+                return;
+            }
+            json o = json::object();
+            o["sent"] = true;
+            send_json(res, 200, o);
         });
-        // La connexion : {profile (identifiant) ou name, password} ; rend {token, profile}.
+        /*
+            La connexion, premier temps : {email, password}.  Un bon mot de passe envoie un code à 8
+            chiffres à l'adresse du profil et rend {challenge} ; le second temps est /login/code.  Une
+            adresse inconnue et un mauvais mot de passe donnent la même réponse.
+        */
         srv.Post("/gulliver/v1/login", [s](const httplib::Request& req, httplib::Response& res) {
             json body;
             if (!parse_body(req, res, body)) return;
-            const std::string id = body.contains("profile") ? body["profile"].as_string() : std::string();
+            const std::string email = email_of(body);
             const std::string password = body.contains("password") ? body["password"].as_string() : std::string();
             profile p;
-            const bool known = !id.empty() ? s->db().find_profile(id, p)
-                                           : s->db().find_profile_by_name(profile_name_of(body), p);
+            const bool known = s->db().find_profile_by_email(email, p);
             const std::string key = known ? p.id : std::string("?");
             const int64_t wait = throttle.wait(key, now_unix());
             if (wait > 0)
@@ -2749,17 +2931,138 @@ namespace gulliver
             if (known && p.password.empty())
             {
                 send_error(res, 403, "invalid_request_error",
-                    "this profile has no password yet: the administrator gives it one", "password_not_set");
+                    "this profile has no password yet: ask for the link of a forgotten password", "password_not_set");
                 return;
             }
             if (!known || password.size() > password_max || !verify_password(password, p.password))
             {
                 throttle.failed(key, now_unix());
-                log_warning("accounts: a wrong password for " + (known ? p.id : std::string("an unknown profile")));
-                send_error(res, 401, "invalid_request_error", "wrong profile or password", "wrong_password");
+                log_warning("accounts: a wrong password for " + (known ? p.id : std::string("an unknown address")));
+                send_error(res, 401, "invalid_request_error", "wrong address or password", "wrong_password");
                 return;
             }
             throttle.succeeded(key);
+            if (!mail_ready(*s))
+            {
+                send_error(res, 503, "invalid_request_error", "no sending address is set (mail_from)", "mail_unconfigured");
+                return;
+            }
+            std::string code;
+            const std::string challenge = codes.issue(p.id, std::string(), now_unix(), code);
+            if (!send_code(*s, p, p.email, code))
+            {
+                send_error(res, 503, "invalid_request_error", "the mail cannot be sent", "mail_failed");
+                return;
+            }
+            json o = json::object();
+            o["challenge"] = challenge;
+            send_json(res, 200, o);
+        });
+        // La connexion, second temps : {challenge, code} ; rend {token, profile}.
+        srv.Post("/gulliver/v1/login/code", [s](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string challenge = body.contains("challenge") ? body["challenge"].as_string() : std::string();
+            std::string code = body.contains("code") ? body["code"].as_string() : std::string();
+            code.erase(std::remove_if(code.begin(), code.end(), [](unsigned char c) { return std::isspace(c); }), code.end());
+            std::string id, pending;
+            int left = 0;
+            const login_codes::result r = codes.check(challenge, code, now_unix(), id, pending, left);
+            profile p;
+            if (r == login_codes::unknown || (r == login_codes::accepted && !s->db().find_profile(id, p)))
+            {
+                send_error(res, 401, "invalid_request_error", "this code is no longer valid: log in again", "code_expired");
+                return;
+            }
+            if (r == login_codes::wrong)
+            {
+                log_warning("accounts: a wrong code");
+                json e = json::object(), inner = json::object();
+                inner["message"] = "wrong code";
+                inner["type"] = "invalid_request_error";
+                inner["param"] = json();
+                inner["code"] = left > 0 ? "wrong_code" : "code_expired";
+                inner["left"] = static_cast<long long>(left);
+                e["error"] = inner;
+                send_json(res, 401, e);
+                return;
+            }
+            if (!pending.empty())
+            {
+                // La première adresse de l'administrateur, vérifiée par ce code.
+                profile other;
+                if (s->db().find_profile_by_email(pending, other) && other.id != p.id)
+                {
+                    send_error(res, 409, "invalid_request_error", "another profile has this address", "email_taken");
+                    return;
+                }
+                p.email = pending;
+                s->db().put_profile(p);
+                log_info("accounts: the administrator " + p.id + " has an address");
+            }
+            send_json(res, 200, open_session(*s, p));
+        });
+        /*
+            Mot de passe oublié, ou premier mot de passe : {email}.  Envoie le lien à l'adresse quand un
+            profil l'a, et répond de même quand aucun ne l'a (la page ne sert pas à deviner les
+            adresses).  Un mail par minute au plus vers une adresse (429 mail_throttled), 30 par heure
+            pour tout le service.
+        */
+        srv.Post("/gulliver/v1/password/forgot", [s](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            const std::string email = email_of(body);
+            if (email.empty())
+            {
+                send_error(res, 400, "invalid_request_error", "a valid mail address is required", "email");
+                return;
+            }
+            if (!mail_ready(*s))
+            {
+                send_error(res, 503, "invalid_request_error", "no sending address is set (mail_from)", "mail_unconfigured");
+                return;
+            }
+            if (!mail_brake.allow(email, now_unix()))
+            {
+                res.set_header("Retry-After", "60");
+                send_error(res, 429, "invalid_request_error", "a mail has just been sent: wait a minute", "mail_throttled");
+                return;
+            }
+            profile p;
+            if (s->db().find_profile_by_email(email, p))
+            {
+                if (!send_reset_link(*s, p))
+                {
+                    send_error(res, 503, "invalid_request_error", "the mail cannot be sent", "mail_failed");
+                    return;
+                }
+                log_info("accounts: a link to choose the password is sent to " + p.id);
+            }
+            json o = json::object();
+            o["sent"] = true;
+            send_json(res, 200, o);
+        });
+        // Le lien du mail : {token, password} choisit le mot de passe, ferme toutes les sessions du profil
+        // et en ouvre une ; rend {token, profile}.
+        srv.Post("/gulliver/v1/password/reset", [s](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            std::string password;
+            if (!password_of(body, "password", res, password)) return;
+            const std::string token = body.contains("token") ? body["token"].as_string() : std::string();
+            std::string id;
+            profile p;
+            if (!resets.consume(token, now_unix(), id) || !s->db().find_profile(id, p))
+            {
+                send_error(res, 401, "invalid_request_error", "this link is no longer valid: ask for a new one",
+                    "link_expired");
+                return;
+            }
+            p.password = hash_password(password);
+            s->db().put_profile(p);
+            s->db().remove_sessions_of(p.id);
+            throttle.succeeded(p.id);
+            log_info("accounts: " + p.id + " chose its password by mail");
             send_json(res, 200, open_session(*s, p));
         });
         srv.Post("/gulliver/v1/logout", [s](const httplib::Request& req, httplib::Response& res) {
@@ -2776,7 +3079,7 @@ namespace gulliver
                 return;
             }
             json o = json::object();
-            o["profile"] = profile_json(p);
+            o["profile"] = profile_json(p, true);
             send_json(res, 200, o);
         });
         // Son propre mot de passe : {current, password} ; les autres sessions du profil sont fermées.
@@ -2806,14 +3109,17 @@ namespace gulliver
             std::string password;
             if (!password_of(body, "password", res, password)) return;
             throttle.succeeded(p.id);
+            resets.forget(p.id);
             p.password = hash_password(password);
             s->db().put_profile(p);
             s->db().remove_sessions_of(p.id, session_key(req.get_header_value("X-Gulliver-Session")));
             log_info("accounts: " + p.id + " changed its password");
             send_json(res, 200, ok_result(true));
         });
-        // La gestion des profils, par l'administrateur seul : créer {name, password} (jamais un autre
-        // administrateur), renommer ou changer le mot de passe {name?, password?}, supprimer (pas lui-même).
+        // La gestion des profils, par l'administrateur seul : créer {name, email} (jamais un autre
+        // administrateur ; la personne choisit son mot de passe par le lien « mot de passe oublié »),
+        // renommer ou changer l'adresse {name?, email?}, supprimer (pas lui-même).  Depuis le 2026-11-23,
+        // l'administrateur ne choisit plus le mot de passe des autres.
         srv.Post("/gulliver/v1/profiles", [s](const httplib::Request& req, httplib::Response& res) {
             profile me;
             if (!require_admin(*s, req, res, me)) return;
@@ -2826,12 +3132,21 @@ namespace gulliver
                     "a name of 1 to 80 characters is required", "name");
                 return;
             }
-            std::string password;
-            if (!password_of(body, "password", res, password)) return;
+            const std::string email = email_of(body);
+            if (email.empty())
+            {
+                send_error(res, 400, "invalid_request_error", "a valid mail address is required", "email");
+                return;
+            }
             profile exists;
             if (s->db().find_profile_by_name(name, exists))
             {
                 send_error(res, 409, "invalid_request_error", "a profile already has this name", "name_taken");
+                return;
+            }
+            if (s->db().find_profile_by_email(email, exists))
+            {
+                send_error(res, 409, "invalid_request_error", "another profile has this address", "email_taken");
                 return;
             }
             profile p;
@@ -2839,16 +3154,16 @@ namespace gulliver
             p.name = name;
             p.created = now_unix();
             p.last_used = p.created;
-            p.password = hash_password(password);
+            p.email = email;
             try { s->db().put_profile(p); }
             catch (const std::exception&)
             {
-                // Une collision de nom au même instant, par exemple : la base l'a refusée.
+                // Une collision de nom ou d'adresse au même instant, par exemple : la base l'a refusée.
                 send_error(res, 409, "invalid_request_error", "a profile already has this name", "name_taken");
                 return;
             }
             log_info("profiles: created " + p.id);
-            send_json(res, 200, profile_json(p));
+            send_json(res, 200, profile_json(p, true));
         });
         srv.Put(R"(/gulliver/v1/profiles/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
             profile me;
@@ -2878,12 +3193,28 @@ namespace gulliver
                 }
                 p.name = name;
             }
-            const bool new_password = body.contains("password");
-            if (new_password)
+            if (body.contains("password"))
             {
-                std::string password;
-                if (!password_of(body, "password", res, password)) return;
-                p.password = hash_password(password);
+                send_error(res, 400, "invalid_request_error", "each profile chooses its password by mail "
+                    "(forgotten password)", "password_by_mail");
+                return;
+            }
+            if (body.contains("email"))
+            {
+                const std::string email = email_of(body);
+                if (email.empty())
+                {
+                    send_error(res, 400, "invalid_request_error", "a valid mail address is required", "email");
+                    return;
+                }
+                profile other;
+                if (s->db().find_profile_by_email(email, other) && other.id != id)
+                {
+                    send_error(res, 409, "invalid_request_error", "another profile has this address", "email_taken");
+                    return;
+                }
+                if (email != p.email) resets.forget(p.id);
+                p.email = email;
             }
             try { s->db().put_profile(p); }
             catch (const std::exception&)
@@ -2891,15 +3222,7 @@ namespace gulliver
                 send_error(res, 409, "invalid_request_error", "another profile already has this name", "name_taken");
                 return;
             }
-            // Un mot de passe changé ferme les sessions du profil (sauf celle de l'administrateur qui le change).
-            if (new_password)
-            {
-                s->db().remove_sessions_of(p.id, p.id == me.id
-                    ? session_key(req.get_header_value("X-Gulliver-Session")) : std::string());
-                throttle.succeeded(p.id);
-                log_info("accounts: the administrator set the password of " + p.id);
-            }
-            send_json(res, 200, profile_json(p));
+            send_json(res, 200, profile_json(p, true));
         });
         srv.Delete(R"(/gulliver/v1/profiles/([^/]+))", [s](const httplib::Request& req, httplib::Response& res) {
             profile me;
@@ -3561,6 +3884,9 @@ namespace gulliver
                 current.from_json(merged);
                 if (current.proxy == masked_proxy(before.proxy)) current.proxy = before.proxy;
                 current.relay = relay;
+                // Le masque du mot de passe du facteur tient lieu de celui qui est enregistré.
+                if (current.mail_secret == relay_secret_mask) current.mail_secret = before.mail_secret;
+                current.mail_from = normalized_mail_address(current.mail_from);
             });
             if (masked_elsewhere)
             {

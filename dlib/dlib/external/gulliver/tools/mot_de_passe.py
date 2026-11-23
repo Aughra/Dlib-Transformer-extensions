@@ -3,14 +3,16 @@
 # License: Boost Software License   See LICENSE.txt for the full license.
 """Remettre à neuf le mot de passe d'un profil de Gulliver, depuis le Mac seulement (fork pour macOS, 2026-11-23).
 
-    python3 tools/mot_de_passe.py [--home DOSSIER] [--profil NOM]
+    python3 tools/mot_de_passe.py [--home DOSSIER] [--profil NOM | --adresse MAIL] [--email NOUVELLE]
 
 Pour un mot de passe oublié : la page demande le mot de passe actuel, et seul l'administrateur change celui des
 autres ; si c'est le sien qu'il a oublié, plus personne ne peut le changer par le service.  Ce programme écrit
 directement dans la base du service (`gulliver.db` du dossier de données, GULLIVER_HOME par défaut) : il ne marche
 donc que pour qui peut déjà lire et écrire les fichiers de Gulliver sur le Mac, jamais depuis le réseau.
 
-Sans --profil, il prend l'administrateur.  Le nouveau mot de passe se tape deux fois, sans s'afficher ; quand l'entrée
+Sans --profil ni --adresse, il prend l'administrateur.  --email donne au profil sa nouvelle adresse de connexion
+(2026-11-23 : on se connecte par son adresse mail, et une adresse mal tapée par l'administrateur se corrige ici) ;
+avec --email, le mot de passe n'est changé que si --mot-de-passe est aussi donné.  Le nouveau mot de passe se tape deux fois, sans s'afficher ; quand l'entrée
 n'est pas un terminal, il est lu sur la première ligne de l'entrée (jamais en argument : il resterait dans
 l'historique et dans la liste des processus).  L'empreinte suit celle du service (`host/accounts.cpp`) :
 « pbkdf2-sha256$600000$<sel de 16 octets>$<clé de 32 octets> », en hexadécimal.  Toutes les sessions du profil sont
@@ -21,12 +23,15 @@ import argparse
 import getpass
 import hashlib
 import os
+import re
 import secrets
 import sqlite3
 import sys
 
 ROUNDS = 600000          # comme host/accounts.cpp
 PASSWORD_MIN, PASSWORD_MAX = 8, 256  # comme host/accounts.h, en octets UTF-8
+# Une adresse simple, comme valid_mail_address de host/mailer.cpp (en plus strict sur les caractères).
+EMAIL = re.compile(r"[^\s@<>\"(),;:\\\[\]]+@[^\s@<>\"(),;:\\\[\].]+(\.[^\s@<>\"(),;:\\\[\].]+)+")
 
 
 def hash_password(password):
@@ -49,6 +54,10 @@ def main():
     parser.add_argument("--home", default=os.environ.get("GULLIVER_HOME"),
                         help="dossier de données du service (GULLIVER_HOME par défaut)")
     parser.add_argument("--profil", help="nom du profil (l'administrateur par défaut)")
+    parser.add_argument("--adresse", help="adresse mail du profil (au lieu de son nom)")
+    parser.add_argument("--email", help="la nouvelle adresse mail de connexion du profil")
+    parser.add_argument("--mot-de-passe", dest="password", action="store_true",
+                        help="avec --email : changer aussi le mot de passe")
     args = parser.parse_args()
     if not args.home:
         sys.exit("Dossier de données inconnu : donner --home ou GULLIVER_HOME.")
@@ -59,11 +68,25 @@ def main():
     db.execute("PRAGMA foreign_keys=ON")
     if args.profil:
         rows = db.execute("SELECT id, name FROM profiles WHERE name = ?", (args.profil,)).fetchall()
+    elif args.adresse:
+        rows = db.execute("SELECT id, name FROM profiles WHERE email = ?", (args.adresse.strip().lower(),)).fetchall()
     else:
         rows = db.execute("SELECT id, name FROM profiles WHERE admin = 1").fetchall()
     if len(rows) != 1:
         sys.exit("Profil introuvable." if not rows else "Plusieurs profils correspondent : préciser --profil.")
     pid, name = rows[0]
+    if args.email is not None:
+        email = args.email.strip().lower()
+        if not EMAIL.fullmatch(email):
+            sys.exit("Adresse mal formée : rien n'est changé.")
+        if db.execute("SELECT 1 FROM profiles WHERE email = ? AND id <> ?", (email, pid)).fetchone():
+            sys.exit("Un autre profil a déjà cette adresse : rien n'est changé.")
+        with db:
+            db.execute("UPDATE profiles SET email = ? WHERE id = ?", (email, pid))
+        print("Adresse du profil « %s » : %s." % (name, email))
+        if not args.password:
+            db.close()
+            return
     password = read_password()
     if not PASSWORD_MIN <= len(password.encode("utf-8")) <= PASSWORD_MAX:
         sys.exit("Il faut de %d à %d caractères : rien n'est changé." % (PASSWORD_MIN, PASSWORD_MAX))

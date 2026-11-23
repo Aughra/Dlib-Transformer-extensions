@@ -108,8 +108,7 @@ namespace gulliver
 
     // Un profil : l'espace d'un utilisateur (ses discussions, projets, réglages de page,
     // index de documents et images), gardé par le service pour qu'il se retrouve depuis
-    // n'importe quel navigateur.  Pas de mot de passe (usage personnel sur un seul Mac).
-    // L'identifiant est opaque et stable ; le nom, lui, peut être changé.
+    // n'importe quel navigateur.  L'identifiant est opaque et stable ; le nom, lui, peut être changé.
     struct profile
     {
         std::string id;              // identifiant opaque (hex), clé de partition des données
@@ -120,6 +119,9 @@ namespace gulliver
         // (vide : pas encore de mot de passe) et le rôle d'administrateur (un seul, le premier profil).
         std::string password;
         bool admin = false;
+        // L'adresse mail de connexion (fork pour macOS, 2026-11-23), en minuscules, unique ; vide pour
+        // un profil d'avant les adresses, qui ne peut pas se connecter tant qu'il n'en a pas.
+        std::string email;
     };
 
     class store
@@ -181,6 +183,7 @@ namespace gulliver
         std::vector<profile> profiles();
         bool find_profile(const std::string& id, profile& p);
         bool find_profile_by_name(const std::string& name, profile& p);
+        bool find_profile_by_email(const std::string& email, profile& p);
         void put_profile(const profile& p);
         void remove_profile(const std::string& id);
         void touch_profile(const std::string& id, int64_t when);

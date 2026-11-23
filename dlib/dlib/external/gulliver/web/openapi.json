@@ -2,8 +2,8 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "6.44.0",
-  "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS. Les données d'un profil demandent sa session (en-tête X-Gulliver-Session, ouverte par /gulliver/v1/login). Les actions qui changent le service (modèles, réglages, redémarrage, mesures, journal) sont libres depuis le Mac lui-même ; depuis le port réseau, elles demandent la session de l'administrateur (401 session_required, 403 admin_required) ; par la passerelle de Cloudflare, elles sont refusées. Les autres routes (discussion, état, catalogue) sont ouvertes.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
+  "version": "7.0.0",
+  "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS. Les données d'un profil demandent sa session (en-tête X-Gulliver-Session, ouverte par /gulliver/v1/login puis /gulliver/v1/login/code). Les actions qui changent le service (modèles, réglages, redémarrage, mesures, journal) sont libres depuis le Mac lui-même ; depuis le port réseau, elles demandent la session de l'administrateur (401 session_required, 403 admin_required) ; par la passerelle de Cloudflare, elles sont refusées. Les autres routes (discussion, état, catalogue) sont ouvertes.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
    "url": "https://www.boost.org/LICENSE_1_0.txt"
@@ -3751,10 +3751,11 @@
     "tags": [
      "Profils"
     ],
-    "summary": "Liste les profils (pour l'écran de connexion)",
+    "summary": "S'il faut créer le premier compte, et les profils pour une session",
+    "description": "Sans session, la liste est vide. Avec une session, tous les profils ; l'adresse de chacun pour l'administrateur, la sienne seule pour un autre profil.",
     "responses": {
      "200": {
-      "description": "Les profils, et s'il faut choisir le premier mot de passe",
+      "description": "L'état des comptes",
       "content": {
        "application/json": {
         "schema": {
@@ -3768,7 +3769,15 @@
           },
           "setup": {
            "type": "boolean",
-           "description": "Vrai sans profil, ou quand l'administrateur n'a pas encore de mot de passe : /gulliver/v1/setup."
+           "description": "Vrai sans profil, ou quand l'administrateur n'a pas encore d'adresse : /gulliver/v1/setup."
+          },
+          "setup_password": {
+           "type": "boolean",
+           "description": "L'administrateur sans adresse a un mot de passe : /gulliver/v1/setup le demande avec l'adresse."
+          },
+          "mail": {
+           "type": "boolean",
+           "description": "Une adresse d'envoi est réglée (mail_from)."
           }
          }
         }
@@ -3782,6 +3791,7 @@
      "Profils"
     ],
     "summary": "Crée un profil (administrateur)",
+    "description": "Le profil n'a pas de mot de passe : il le choisit par /gulliver/v1/password/forgot.",
     "parameters": [
      {
       "name": "X-Gulliver-Session",
@@ -3790,7 +3800,7 @@
       "schema": {
        "type": "string"
       },
-      "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+      "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
      }
     ],
     "requestBody": {
@@ -3801,16 +3811,16 @@
         "type": "object",
         "required": [
          "name",
-         "password"
+         "email"
         ],
         "properties": {
          "name": {
           "type": "string",
           "description": "De 1 à 80 caractères, une fois retirées les espaces à ses extrémités."
          },
-         "password": {
+         "email": {
           "type": "string",
-          "description": "De 8 à 256 octets."
+          "description": "Une adresse mail simple (local@domaine), rangée en minuscules."
          }
         }
        }
@@ -3829,7 +3839,7 @@
       }
      },
      "400": {
-      "description": "Nom ou mot de passe hors bornes (code name ou password)",
+      "description": "Nom hors bornes ou adresse mal formée (code name ou email)",
       "content": {
        "application/json": {
         "schema": {
@@ -3859,7 +3869,7 @@
       }
      },
      "409": {
-      "description": "Un profil porte déjà ce nom (code name_taken)",
+      "description": "Un profil porte déjà ce nom ou cette adresse (code name_taken ou email_taken)",
       "content": {
        "application/json": {
         "schema": {
@@ -3876,8 +3886,8 @@
     "tags": [
      "Profils"
     ],
-    "summary": "Renomme un profil ou change son mot de passe (administrateur)",
-    "description": "Un mot de passe changé ferme les sessions ouvertes du profil.",
+    "summary": "Renomme un profil ou change son adresse (administrateur)",
+    "description": "Le mot de passe ne se change plus ici (code password_by_mail) : chacun le choisit par le lien d'un mail.",
     "parameters": [
      {
       "name": "id",
@@ -3894,7 +3904,7 @@
       "schema": {
        "type": "string"
       },
-      "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+      "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
      }
     ],
     "requestBody": {
@@ -3908,9 +3918,9 @@
           "type": "string",
           "description": "De 1 à 80 caractères."
          },
-         "password": {
+         "email": {
           "type": "string",
-          "description": "De 8 à 256 octets."
+          "description": "Une adresse mail simple (local@domaine), rangée en minuscules."
          }
         }
        }
@@ -3929,7 +3939,7 @@
       }
      },
      "400": {
-      "description": "Nom ou mot de passe hors bornes (code name ou password)",
+      "description": "Nom hors bornes, adresse mal formée ou mot de passe donné (code name, email ou password_by_mail)",
       "content": {
        "application/json": {
         "schema": {
@@ -3969,7 +3979,7 @@
       }
      },
      "409": {
-      "description": "Un autre profil porte déjà ce nom (code name_taken)",
+      "description": "Un autre profil porte déjà ce nom ou cette adresse (code name_taken ou email_taken)",
       "content": {
        "application/json": {
         "schema": {
@@ -4002,7 +4012,7 @@
       "schema": {
        "type": "string"
       },
-      "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+      "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
      }
     ],
     "responses": {
@@ -4072,8 +4082,8 @@
     "tags": [
      "Profils"
     ],
-    "summary": "Choisit le premier mot de passe",
-    "description": "Sans profil, crée l'administrateur {name, password} ; sinon donne son mot de passe à l'administrateur qui n'en a pas (une base d'avant les comptes). Une seule fois, et jamais par la passerelle de Cloudflare.",
+    "summary": "Crée le premier compte",
+    "description": "Sans profil, {name, email} crée l'administrateur sans mot de passe et lui envoie le lien pour le choisir. Un administrateur d'une base d'avant les adresses donne la sienne : {email, password} avec son mot de passe actuel rend un défi, et le code envoyé à cette adresse la vérifie (/gulliver/v1/login/code) avant qu'elle soit rangée ; {email} seul s'il n'a pas de mot de passe. Jamais par la passerelle.",
     "requestBody": {
      "required": true,
      "content": {
@@ -4081,15 +4091,18 @@
        "schema": {
         "type": "object",
         "required": [
-         "password"
+         "email"
         ],
         "properties": {
          "name": {
           "type": "string"
          },
-         "password": {
+         "email": {
           "type": "string",
-          "description": "De 8 à 256 octets."
+          "description": "Une adresse mail simple (local@domaine), rangée en minuscules."
+         },
+         "password": {
+          "type": "string"
          }
         }
        }
@@ -4098,26 +4111,48 @@
     },
     "responses": {
      "200": {
-      "description": "La session de l'administrateur",
+      "description": "Le lien est parti ({sent}) ou le code est parti ({challenge})",
       "content": {
        "application/json": {
         "schema": {
-         "type": "object",
-         "properties": {
-          "token": {
-           "type": "string",
-           "description": "Le jeton de session, à envoyer dans X-Gulliver-Session ; donné une seule fois."
+         "oneOf": [
+          {
+           "type": "object",
+           "properties": {
+            "sent": {
+             "type": "boolean",
+             "enum": [
+              true
+             ]
+            }
+           }
           },
-          "profile": {
-           "$ref": "#/components/schemas/Profile"
+          {
+           "type": "object",
+           "properties": {
+            "challenge": {
+             "type": "string",
+             "description": "Le défi du code envoyé par mail (64 caractères hexadécimaux), à rendre avec le code à /gulliver/v1/login/code."
+            }
+           }
           }
-         }
+         ]
         }
        }
       }
      },
      "400": {
-      "description": "Nom ou mot de passe hors bornes",
+      "description": "Nom hors bornes ou adresse mal formée (code name ou email)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Mot de passe de l'administrateur faux (code wrong_password)",
       "content": {
        "application/json": {
         "schema": {
@@ -4137,7 +4172,27 @@
       }
      },
      "409": {
-      "description": "L'administrateur a déjà un mot de passe (code setup_done)",
+      "description": "L'administrateur a déjà une adresse (code setup_done), ou un autre profil a celle-ci (code email_taken)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "429": {
+      "description": "Trop d'essais manqués (code login_throttled)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "Pas d'adresse d'envoi (code mail_unconfigured), ou le mail n'a pas pu partir (code mail_failed)",
       "content": {
        "application/json": {
         "schema": {
@@ -4154,8 +4209,8 @@
     "tags": [
      "Profils"
     ],
-    "summary": "Ouvre une session",
-    "description": "Après 5 mauvais mots de passe de suite pour un profil, chaque essai attend 30 secondes, puis le double (une heure au plus).",
+    "summary": "Connexion, premier temps : adresse et mot de passe",
+    "description": "Un bon mot de passe envoie un code à 8 chiffres à l'adresse du profil (10 minutes, 5 essais, une seule fois). Une adresse inconnue répond comme un mauvais mot de passe. Après 5 mauvais mots de passe de suite pour un profil, chaque essai attend 30 secondes, puis le double (une heure au plus).",
     "requestBody": {
      "required": true,
      "content": {
@@ -4163,18 +4218,105 @@
        "schema": {
         "type": "object",
         "required": [
+         "email",
          "password"
         ],
         "properties": {
-         "profile": {
+         "email": {
           "type": "string",
-          "description": "L'identifiant du profil (ou name)."
-         },
-         "name": {
-          "type": "string"
+          "description": "Une adresse mail simple (local@domaine), rangée en minuscules."
          },
          "password": {
           "type": "string"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Le code est parti",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "challenge": {
+           "type": "string",
+           "description": "Le défi du code envoyé par mail (64 caractères hexadécimaux), à rendre avec le code à /gulliver/v1/login/code."
+          }
+         }
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Adresse ou mot de passe faux (code wrong_password)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "403": {
+      "description": "Le profil n'a pas encore de mot de passe (code password_not_set)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "429": {
+      "description": "Trop d'essais manqués (code login_throttled, en-tête Retry-After)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "Pas d'adresse d'envoi (code mail_unconfigured), ou le mail n'a pas pu partir (code mail_failed)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/login/code": {
+   "post": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Connexion, second temps : le code reçu par mail",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "challenge",
+         "code"
+        ],
+        "properties": {
+         "challenge": {
+          "type": "string"
+         },
+         "code": {
+          "type": "string",
+          "description": "Les 8 chiffres ; les espaces sont ignorés."
          }
         }
        }
@@ -4202,7 +4344,7 @@
       }
      },
      "401": {
-      "description": "Profil ou mot de passe faux (code wrong_password)",
+      "description": "Code faux (code wrong_code, avec left : les essais restants), ou défi inconnu, expiré ou épuisé (code code_expired)",
       "content": {
        "application/json": {
         "schema": {
@@ -4211,8 +4353,66 @@
        }
       }
      },
-     "403": {
-      "description": "Le profil n'a pas de mot de passe (code password_not_set)",
+     "409": {
+      "description": "Un autre profil a pris l'adresse à vérifier (code email_taken)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/password/forgot": {
+   "post": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Mot de passe oublié, ou premier mot de passe : envoie le lien",
+    "description": "Envoie à l'adresse, si un profil l'a, un lien vers la page (réglage mail_link) qui permet une fois, pendant 30 minutes, de choisir le mot de passe ; répond de même quand aucun profil ne l'a. Un mail par minute au plus vers une adresse, 30 par heure pour tout le service.",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "email"
+        ],
+        "properties": {
+         "email": {
+          "type": "string",
+          "description": "Une adresse mail simple (local@domaine), rangée en minuscules."
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Traité",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "sent": {
+           "type": "boolean",
+           "enum": [
+            true
+           ]
+          }
+         }
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Adresse mal formée (code email)",
       "content": {
        "application/json": {
         "schema": {
@@ -4222,7 +4422,91 @@
       }
      },
      "429": {
-      "description": "Trop d'essais manqués (code login_throttled, en-tête Retry-After)",
+      "description": "Un mail vient de partir (code mail_throttled, en-tête Retry-After)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "Pas d'adresse d'envoi (code mail_unconfigured), ou le mail n'a pas pu partir (code mail_failed)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/password/reset": {
+   "post": {
+    "tags": [
+     "Profils"
+    ],
+    "summary": "Choisit le mot de passe par le jeton du lien",
+    "description": "Ferme toutes les sessions du profil et en ouvre une.",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "required": [
+         "token",
+         "password"
+        ],
+        "properties": {
+         "token": {
+          "type": "string",
+          "description": "Le jeton du lien (#reset=…)."
+         },
+         "password": {
+          "type": "string",
+          "description": "De 8 à 256 octets."
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "La session",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "token": {
+           "type": "string",
+           "description": "Le jeton de session, à envoyer dans X-Gulliver-Session ; donné une seule fois."
+          },
+          "profile": {
+           "$ref": "#/components/schemas/Profile"
+          }
+         }
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Mot de passe hors bornes (code password)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "Lien inconnu, déjà servi ou expiré (code link_expired)",
       "content": {
        "application/json": {
         "schema": {
@@ -4248,7 +4532,7 @@
       "schema": {
        "type": "string"
       },
-      "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+      "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
      }
     ],
     "responses": {
@@ -4287,7 +4571,7 @@
       "schema": {
        "type": "string"
       },
-      "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+      "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
      }
     ],
     "responses": {
@@ -4334,7 +4618,7 @@
       "schema": {
        "type": "string"
       },
-      "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+      "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
      }
     ],
     "requestBody": {
@@ -7004,7 +7288,28 @@
      "lan": {
       "type": "boolean",
       "default": false,
-      "description": "L'accès depuis le réseau local : un serveur en HTTP simple sur chaque adresse du Mac, au port lan_port, ouvert à tous les appareils du réseau, sans mot de passe."
+      "description": "L'accès depuis le réseau local : un serveur en HTTP simple sur chaque adresse du Mac, au port lan_port, ouvert aux appareils du réseau ; les données y exigent une session, et les actions qui changent le service celle de l'administrateur."
+     },
+     "mail_from": {
+      "type": "string",
+      "default": "",
+      "description": "L'adresse d'envoi des codes de connexion et des liens « mot de passe oublié », qui sert aussi d'utilisateur auprès de Proton Mail Bridge ; vide : pas de mail (code mail_unconfigured)."
+     },
+     "mail_port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "default": 1025,
+      "description": "Le port SMTP de Proton Mail Bridge, sur 127.0.0.1 seulement."
+     },
+     "mail_secret": {
+      "type": "string",
+      "description": "Le mot de passe SMTP du Bridge, rendu sous la forme ******** et gardé dans mail.secret (0600) ; renvoyé tel quel, ce masque garde le mot de passe enregistré ; vide l'efface."
+     },
+     "mail_link": {
+      "type": "string",
+      "default": "",
+      "description": "L'adresse de la page dans les liens des mails (http ou https, sans ? ni #) ; vide : http://<adresse du Mac>:lan_port/ quand lan, sinon https://localhost:port/."
      },
      "lan_port": {
       "type": "integer",
@@ -7627,6 +7932,14 @@
      "has_password": {
       "type": "boolean",
       "description": "Le profil a un mot de passe (l'empreinte ne sort jamais du service)."
+     },
+     "has_email": {
+      "type": "boolean",
+      "description": "Le profil a une adresse de connexion."
+     },
+     "email": {
+      "type": "string",
+      "description": "L'adresse de connexion, en minuscules : donnée au profil lui-même et à l'administrateur seulement."
      }
     }
    },
@@ -7721,7 +8034,7 @@
     "schema": {
      "type": "string"
     },
-    "description": "Le jeton de session rendu par /gulliver/v1/login ou /gulliver/v1/setup (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
+    "description": "Le jeton de session rendu par /gulliver/v1/login/code ou /gulliver/v1/password/reset (64 caractères hexadécimaux). Une session non servie depuis 30 jours expire. L'en-tête X-Gulliver-Profile, facultatif, doit alors nommer le profil de la session."
    }
   }
  }

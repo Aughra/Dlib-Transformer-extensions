@@ -139,6 +139,20 @@ namespace gulliver
         bool lan = false;
         int lan_port = 8444;
         relay_settings relay;
+        /*
+            Le mail des comptes (fork pour macOS, 2026-11-23, mailer.h) : l'adresse d'envoi des codes
+            de connexion et des liens « mot de passe oublié » (vide : pas de mail, donc pas de
+            connexion par code), le port de Proton Mail Bridge sur 127.0.0.1, et l'adresse de la page
+            mise dans les liens (vide : celle du réseau de la maison quand il est ouvert, sinon celle
+            du Mac).  Le mot de passe du Bridge va dans mail.secret, comme celui du relais, avec
+            l'adresse et le port pour lesquels il a été donné ; settings.json n'en montre que le
+            masque.
+        */
+        std::string mail_from;
+        int mail_port = 1025;
+        std::string mail_link;
+        std::string mail_secret;
+        std::string mail_secret_scope() const { return mail_from + "|" + std::to_string(mail_port); }
 
         /*
             Les réglages tels que settings.json et l'interface d'administration les donnent, le

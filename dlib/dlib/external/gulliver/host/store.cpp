@@ -104,7 +104,7 @@ namespace gulliver
             st.exec();
             while (st.move_next()) cols.push_back(st.get_column_as_text(1));
             const char* const added[][2] = { { "password", "TEXT NOT NULL DEFAULT ''" },
-                { "admin", "INTEGER NOT NULL DEFAULT 0" } };
+                { "admin", "INTEGER NOT NULL DEFAULT 0" }, { "email", "TEXT NOT NULL DEFAULT ''" } };
             for (const auto& c : added)
                 if (std::find(cols.begin(), cols.end(), c[0]) == cols.end())
                 {
@@ -112,6 +112,8 @@ namespace gulliver
                     log_info(std::string("store: the column ") + c[0] + " is added to the profiles of " + path_);
                 }
         }
+        // L'adresse de connexion (2026-11-23) : unique parmi les profils qui en ont une.
+        db_->exec("CREATE UNIQUE INDEX IF NOT EXISTS profiles_email ON profiles(email) WHERE email <> ''");
         db_->exec(
             "CREATE TABLE IF NOT EXISTS profile_sessions ("
             " key TEXT PRIMARY KEY, profile TEXT NOT NULL,"
@@ -456,9 +458,10 @@ namespace gulliver
             p.last_used = st.get_column_as_int64(3);
             p.password = st.get_column_as_text(4);
             p.admin = st.get_column_as_int64(5) != 0;
+            p.email = st.get_column_as_text(6);
             return p;
         }
-        const char* const profile_columns = "id, name, created, last_used, password, admin";
+        const char* const profile_columns = "id, name, created, last_used, password, admin, email";
     }
 
     std::vector<profile> store::profiles()
@@ -494,6 +497,18 @@ namespace gulliver
         return true;
     }
 
+    bool store::find_profile_by_email(const std::string& email, profile& p)
+    {
+        if (email.empty()) return false;
+        std::lock_guard<std::mutex> lock(m_);
+        gulliver::statement st(*db_, std::string("SELECT ") + profile_columns + " FROM profiles WHERE email = ?");
+        st.bind(1, email);
+        st.exec();
+        if (!st.move_next()) return false;
+        p = profile_of(st);
+        return true;
+    }
+
     void store::put_profile(const profile& p)
     {
         // Sur un id déjà présent (renommage ou mise à jour de l'usage), les champs sont mis à jour.
@@ -502,15 +517,17 @@ namespace gulliver
         // conflit de nom, donc effacé ce profil-là ; on ne l'utilise pas pour cette raison.)
         std::lock_guard<std::mutex> lock(m_);
         writing([&]() {
-            gulliver::statement st(*db_, "INSERT INTO profiles (id, name, created, last_used, password, admin) "
-                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, "
-                "last_used = excluded.last_used, password = excluded.password, admin = excluded.admin");
+            gulliver::statement st(*db_, "INSERT INTO profiles (id, name, created, last_used, password, admin, email) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, "
+                "last_used = excluded.last_used, password = excluded.password, admin = excluded.admin, "
+                "email = excluded.email");
             st.bind(1, p.id);
             st.bind(2, p.name);
             st.bind_int64(3, p.created);
             st.bind_int64(4, p.last_used);
             st.bind(5, p.password);
             st.bind_int64(6, p.admin ? 1 : 0);
+            st.bind(7, p.email);
             st.exec();
         });
     }

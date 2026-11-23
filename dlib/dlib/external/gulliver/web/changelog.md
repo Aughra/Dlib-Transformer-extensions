@@ -2,6 +2,35 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.0.0 — 23 novembre 2026
+
+### Sécurité
+
+- La connexion se fait par l'adresse mail du profil et son mot de passe, puis par un code à 8 chiffres envoyé à cette adresse (valable 10 minutes, 5 essais, une seule fois). Le choix du profil dans une liste disparaît : sans session, le service ne donne plus la liste des profils.
+- Un mot de passe oublié, et le premier mot de passe d'un profil neuf, se choisissent par le lien d'un mail (« Mot de passe oublié ou première connexion »), valable 30 minutes et une seule fois ; toutes les sessions du profil se ferment. La réponse est la même pour une adresse inconnue, et un même mail ne peut partir qu'une fois par minute vers une adresse (30 par heure pour tout le service).
+- Les mots de passe restent rangés sous forme d'empreinte PBKDF2-HMAC-SHA256 (600 000 tours, sel de 16 octets) ; les codes et les jetons des liens ne sont gardés qu'en mémoire, sous forme de SHA-256.
+- L'administrateur crée un profil avec un nom et une adresse mail, et change l'adresse d'un profil ; il ne choisit plus le mot de passe des autres.
+
+### Réglages
+
+- Nouvelle rubrique « Mail des comptes » dans l'onglet Service : adresse d'envoi, port de Proton Mail Bridge (1025 par défaut), mot de passe du Bridge (masqué, gardé dans `mail.secret`, lisible par le seul compte du service) et adresse de la page dans les liens (par défaut celle du réseau de la maison). Les mails partent par Proton Mail Bridge, sur le Mac lui-même (127.0.0.1) seulement.
+
+### Rupture
+
+- `/gulliver/v1/login` attend `{email, password}` et rend un défi ; la session s'ouvre par `/gulliver/v1/login/code`. Nouvelles routes `/gulliver/v1/password/forgot` et `/gulliver/v1/password/reset`. `/gulliver/v1/setup` attend une adresse au lieu d'un mot de passe. `POST /gulliver/v1/profiles` attend `{name, email}`, et `PUT /gulliver/v1/profiles/{id}` refuse un mot de passe.
+- Une base d'avant cette version : l'administrateur donne son adresse avec son mot de passe actuel, et un code envoyé à cette adresse la vérifie ; il donne ensuite une adresse à chaque autre profil dans l'onglet Profils.
+
+### Outils
+
+- `tools/mot_de_passe.py` : options `--adresse` (retrouver un profil par son adresse) et `--email` (lui donner une nouvelle adresse depuis le Mac).
+- `tools/faux_smtp.py` : un faux serveur d'envoi pour les tests, qui garde les mails en mémoire.
+
+### Corrections
+
+- La fiche du réglage « Accès depuis le réseau » disait encore que la porte du réseau était sans mot de passe et que chaque appareil gardait ses propres conversations.
+
+---
+
 ## 6.44.0 — 23 novembre 2026
 
 ### Performances

@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 6.44.0 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.0.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -153,7 +153,7 @@ if (GULLIVER_PROGRAMS)
 
    # Le service.
    add_executable(gulliver-service host/main.cpp host/service.cpp host/server.cpp host/settings.cpp host/store.cpp
-      host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/crypto.cpp host/accounts.cpp
+      host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/crypto.cpp host/accounts.cpp host/mailer.cpp
       host/certificates.cpp host/web_access.cpp host/hub.cpp host/carnet.cpp host/relay.cpp host/pseudonyms.cpp
       host/rag_engine.cpp host/doc_extract.cpp host/doc_extract_pdf.cpp host/tls_gate.mm
       host/tls_client.mm host/thermal.mm)

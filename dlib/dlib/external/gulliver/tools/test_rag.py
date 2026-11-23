@@ -32,6 +32,9 @@ import sys
 import time
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from faux_smtp import FakeSMTP  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "../../../../.."))
 QUESTIONS = os.path.join(HERE, "rag_questions.json")
@@ -189,9 +192,17 @@ def main():
 
 def evaluate(service, questions):
     embedder = (service.call("GET", "/gulliver/v1/models").get("active") or {}).get("embedding", "")
-    # Le service d'essai est neuf : son premier profil, l'administrateur, reçoit un mot de passe tiré au hasard
-    # (comptes, Gulliver 6.31.0) ; sa session sert pour tout le test.
-    service.token = service.call("POST", "/gulliver/v1/setup", {"name": "essai-rag", "password": os.urandom(16).hex()})["token"]
+    # Le service d'essai est neuf : son premier profil, l'administrateur, choisit un mot de passe tiré au hasard par
+    # le lien du mail de son premier compte (comptes, Gulliver 6.31.0 ; par mail depuis le 2026-11-23, un faux
+    # facteur, tools/faux_smtp.py, gardant le mail) ; sa session sert pour tout le test.
+    smtp = FakeSMTP()
+    try:
+        service.call("PUT", "/gulliver/v1/settings", {"mail_from": "gulliver@essai.invalid", "mail_port": smtp.port})
+        service.call("POST", "/gulliver/v1/setup", {"name": "essai-rag", "email": "rag@essai.invalid"})
+        service.token = service.call("POST", "/gulliver/v1/password/reset", {
+            "token": smtp.reset_for("rag@essai.invalid"), "password": os.urandom(16).hex()})["token"]
+    finally:
+        smtp.close()
     results = {}
     docs = corpus()
     t = time.time()

@@ -49,6 +49,12 @@ namespace gulliver
             return join_path(parent_path(settings_path), "proxy.secret");
         }
 
+        // Le fichier du mot de passe du facteur (mail_secret), avec ce pour quoi il a été donné.
+        std::string mail_secret_path(const std::string& settings_path)
+        {
+            return join_path(parent_path(settings_path), "mail.secret");
+        }
+
         // Le fichier du secret du relais, avec ce pour quoi il a été donné, à côté de settings.json.
         std::string relay_secret_path(const std::string& settings_path)
         {
@@ -204,6 +210,10 @@ namespace gulliver
         j["lan"] = lan;
         j["lan_port"] = lan_port;
         j["relay"] = relay.to_json();
+        j["mail_from"] = mail_from;
+        j["mail_port"] = mail_port;
+        j["mail_link"] = mail_link;
+        j["mail_secret"] = mail_secret.empty() ? std::string() : std::string(relay_secret_mask);
         return j;
     }
 
@@ -264,6 +274,11 @@ namespace gulliver
         lan_port = static_cast<int>(j["lan_port"].as_int(d.lan_port));
         if (lan_port < 1024 || lan_port > 65535) lan_port = d.lan_port;
         relay.from_json(j["relay"]);
+        mail_from = j["mail_from"].str(d.mail_from);
+        mail_port = static_cast<int>(j["mail_port"].as_int(d.mail_port));
+        if (mail_port < 1 || mail_port > 65535) mail_port = d.mail_port;
+        mail_link = j["mail_link"].str(d.mail_link);
+        mail_secret = j["mail_secret"].str(d.mail_secret);
     }
 
     std::string host_settings::effective_models_dir() const
@@ -346,6 +361,21 @@ namespace gulliver
         {
             log_warning("settings: the secret of the relay cannot move from " + path_ + " to relay.secret");
         }
+        if (s_.mail_secret == relay_secret_mask)
+        {
+            // Le mot de passe du Bridge enregistré pour cette adresse et ce port.
+            std::string text;
+            json record;
+            const bool read = read_file(mail_secret_path(path_), text, 64 * 1024) && json::parse(text, record)
+                && record["scope"].as_string() == s_.mail_secret_scope();
+            s_.mail_secret = read ? record["secret"].as_string() : std::string();
+            if (!read) log_warning("settings: the password of the mail server is not stored, mails go without it");
+            wipe_secret(text);
+        }
+        else if (!s_.mail_secret.empty() && !write())
+        {
+            log_warning("settings: the password of the mail server cannot move from " + path_ + " to mail.secret");
+        }
         // Réécrit une fois le mot de passe du proxy revenu dans les réglages : à partir de sa copie, ou sans les
         // réglages d'une version antérieure ni la clé de son fournisseur de recherche.
         if ((restored || obsolete || file_exists(obsolete_key_path(path_))) && !write())
@@ -371,12 +401,25 @@ namespace gulliver
             wipe_secret(text);
             if (!kept) return false;
         }
+        const std::string mail_secret = mail_secret_path(path_);
+        const bool mail_key = !s_.mail_secret.empty();
+        if (mail_key)
+        {
+            json record = json::object();
+            record["scope"] = s_.mail_secret_scope();
+            record["secret"] = s_.mail_secret;
+            std::string text = record.dump();
+            const bool kept = write_file_restricted(mail_secret, text);
+            wipe_secret(text);
+            if (!kept) return false;
+        }
         const std::string text = s_.to_json().dump_formatted(2) + "\n";
         if (!write_file_atomic(path_, text)) return false;
         // La copie lue quand settings.json est abîmé, écrite une fois settings.json en place.
         if (!write_file_atomic(backup_path(path_), text)) log_warning("settings: its copy cannot be written");
         if (!password && file_exists(secret)) remove_file(secret);
         if (!relay_key && file_exists(relay_secret)) remove_file(relay_secret);
+        if (!mail_key && file_exists(mail_secret)) remove_file(mail_secret);
         if (file_exists(obsolete_key_path(path_))) remove_file(obsolete_key_path(path_));
         return true;
     }

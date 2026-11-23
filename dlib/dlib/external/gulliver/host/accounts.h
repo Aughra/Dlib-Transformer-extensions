@@ -7,6 +7,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <vector>
 
 namespace gulliver
 {
@@ -62,6 +63,86 @@ namespace gulliver
         struct entry { int failures = 0; int64_t until = 0; };
         std::mutex m_;
         std::map<std::string, entry> entries_;
+    };
+
+    class login_codes
+    {
+        /*!
+            WHAT THIS OBJECT REPRESENTS
+                Les codes de connexion à 8 chiffres envoyés par mail (fork pour macOS, 2026-11-23) :
+                après un bon mot de passe, la page reçoit un « défi » (32 octets au hasard, en
+                hexadécimal) et la personne tape le code reçu.  Un code vaut 10 minutes et 5 essais ;
+                un nouveau code pour le même profil remplace l'ancien.  Ne sont gardés que le SHA-256
+                du défi et celui du code, en mémoire seulement : un redémarrage les efface (il suffit
+                de se reconnecter).  pending_email, quand il n'est pas vide, est l'adresse que le code
+                vérifie avant qu'elle soit rangée (la première adresse de l'administrateur).
+        !*/
+    public:
+        static constexpr int64_t lifetime = 600;
+        static constexpr int tries = 5;
+
+        // Un code neuf pour profile : rend le défi et met le code dans code.
+        std::string issue(const std::string& profile, const std::string& pending_email, int64_t now, std::string& code);
+
+        enum result { accepted, wrong, unknown };
+        /*!
+            ensures
+                - accepted : le code est le bon ; profile et pending_email sont remplis et le défi
+                  est retiré (un code ne sert qu'une fois).
+                - wrong : le code est faux ; left dit combien d'essais il reste (le défi est retiré
+                  quand il n'en reste plus).
+                - unknown : pas de défi valable (inconnu, expiré ou épuisé).
+        !*/
+        result check(const std::string& challenge, const std::string& code, int64_t now, std::string& profile,
+            std::string& pending_email, int& left);
+
+    private:
+        struct entry { std::string profile, pending_email, code_key; int64_t expires = 0; int left = 0; };
+        void prune(int64_t now);
+        std::mutex m_;
+        std::map<std::string, entry> entries_;   // SHA-256 du défi -> code
+    };
+
+    class reset_links
+    {
+        /*!
+            WHAT THIS OBJECT REPRESENTS
+                Les liens « mot de passe oublié » (et de la première connexion) : un jeton de 32
+                octets au hasard, mis dans le lien du mail, qui permet une fois, pendant 30 minutes,
+                de choisir le mot de passe d'un profil.  Un nouveau lien pour le même profil remplace
+                l'ancien.  Seul le SHA-256 du jeton est gardé, en mémoire seulement.
+        !*/
+    public:
+        static constexpr int64_t lifetime = 1800;
+
+        std::string issue(const std::string& profile, int64_t now);
+        // Le profil du jeton, et le jeton retiré ; false quand il est inconnu ou expiré.
+        bool consume(const std::string& token, int64_t now, std::string& profile);
+        // Retire les liens d'un profil (son mot de passe vient de changer autrement).
+        void forget(const std::string& profile);
+
+    private:
+        struct entry { std::string profile; int64_t expires = 0; };
+        std::mutex m_;
+        std::map<std::string, entry> entries_;
+    };
+
+    class mail_limiter
+    {
+        /*!
+            WHAT THIS OBJECT REPRESENTS
+                Le frein aux mails : un mail par minute au plus vers une même adresse, et 30 par
+                heure au plus pour tout le service, pour que la page « mot de passe oublié » ne
+                serve jamais à inonder une boîte.  En mémoire seulement.
+        !*/
+    public:
+        // Vrai quand un mail vers address peut partir maintenant ; le note alors.
+        bool allow(const std::string& address, int64_t now);
+
+    private:
+        std::mutex m_;
+        std::map<std::string, int64_t> last_;
+        std::vector<int64_t> sent_;
     };
 }
 
