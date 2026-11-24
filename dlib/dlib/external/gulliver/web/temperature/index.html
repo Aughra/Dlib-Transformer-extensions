@@ -28,6 +28,8 @@
       <button type="button" data-minutes="60" class="on">1 h</button>
       <button type="button" data-minutes="360">6 h</button>
       <button type="button" data-minutes="1440">24 h</button>
+      <button type="button" data-minutes="4320">3 j</button>
+      <button type="button" data-minutes="10080">7 j</button>
     </div>
     <h3 class="chart-title">Température de la puce</h3>
     <div class="chart" id="chart-temp"></div>
@@ -42,7 +44,7 @@
       <span class="key stat"></span> le haut, la moyenne et le bas sur la période affichée</p>
     <h2>Ce que montre cette page</h2>
     <p>La puce du Mac a une quarantaine de sondes de température. Gulliver les relit toutes les cinq minutes depuis son
-      démarrage et garde les dernières 24 heures : la courbe pleine est la sonde la plus chaude, la courbe fine leur
+      démarrage et garde les sept derniers jours, même quand il redémarre : la courbe pleine est la sonde la plus chaude, la courbe fine leur
       moyenne. Un trou dans la courbe veut dire que le service ne tournait pas.</p>
     <p>À quoi s’attendre : environ 23 °C au repos sur le Mac mini, une quarantaine de degrés après une minute de calcul
       continu sur le GPU. Une puce Apple ne réduit sa cadence que bien plus haut, vers 95 à 105 °C. La valeur passe en

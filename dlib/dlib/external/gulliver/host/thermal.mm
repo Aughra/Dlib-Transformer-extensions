@@ -9,8 +9,11 @@
 #include <algorithm>
 #include <chrono>
 #include <ctime>
+#include <cstdio>
 #include <deque>
+#include <fstream>
 #include <mutex>
+#include <sstream>
 #include <thread>
 
 // L'interface des événements HID que macOS ne déclare pas dans ses en-têtes publics.
@@ -90,7 +93,60 @@ namespace gulliver
     {
         std::mutex history_m;
         std::deque<thermal_sample> history;
-        const size_t history_most = 24 * 3600 / thermal_period;
+        const size_t history_most = static_cast<size_t>(thermal_keep_minutes) * 60 / thermal_period;
+        std::string history_file;   // vide : la mémoire seule
+        size_t file_lines = 0;
+
+        // Une ligne du fichier : « secondes max moyenne état processeur gpu », séparés par des tabulations.
+        std::string sample_line(const thermal_sample& s)
+        {
+            char buf[160];
+            std::snprintf(buf, sizeof(buf), "%lld\t%.2f\t%.2f\t%s\t%.1f\t%.1f\n", s.time, s.max_c, s.mean_c,
+                s.state.empty() ? "-" : s.state.c_str(), s.cpu, s.gpu);
+            return buf;
+        }
+
+        // Les relevés du fichier encore dans la fenêtre gardée ; le fichier est réécrit avec eux seuls.
+        void load_history()
+        {
+            std::ifstream in(history_file);
+            const long long since = static_cast<long long>(std::time(nullptr)) - 60LL * thermal_keep_minutes;
+            std::string line;
+            while (std::getline(in, line))
+            {
+                std::istringstream f(line);
+                thermal_sample s;
+                if (!(f >> s.time >> s.max_c >> s.mean_c >> s.state >> s.cpu >> s.gpu) || s.time < since) continue;
+                if (s.state == "-") s.state.clear();
+                history.push_back(s);
+            }
+            while (history.size() > history_most) history.pop_front();
+            const std::string tmp = history_file + ".tmp";
+            {
+                std::ofstream out(tmp, std::ios::trunc);
+                for (const auto& s : history) out << sample_line(s);
+            }
+            std::rename(tmp.c_str(), history_file.c_str());
+            file_lines = history.size();
+        }
+
+        // Ajoute un relevé au fichier ; quand il a deux fois plus de lignes que la fenêtre, il est réécrit.
+        void save_sample(const thermal_sample& s)
+        {
+            if (history_file.empty()) return;
+            if (++file_lines > 2 * history_most)
+            {
+                const std::string tmp = history_file + ".tmp";
+                {
+                    std::ofstream out(tmp, std::ios::trunc);
+                    for (const auto& h : history) out << sample_line(h);
+                }
+                std::rename(tmp.c_str(), history_file.c_str());
+                file_lines = history.size();
+                return;
+            }
+            std::ofstream(history_file, std::ios::app) << sample_line(s);
+        }
     }
 
     namespace
@@ -140,10 +196,16 @@ namespace gulliver
         }
     }
 
-    void start_thermal_history()
+    void start_thermal_history(const std::string& file)
     {
         static std::once_flag once;
-        std::call_once(once, [] {
+        std::call_once(once, [file] {
+            if (!file.empty())
+            {
+                std::lock_guard<std::mutex> lock(history_m);
+                history_file = file;
+                load_history();
+            }
             /*
                 Un fil détaché pour la vie du service : toutes les dix secondes, l'utilisation du GPU ; toutes les
                 thermal_period secondes (et dix secondes après le démarrage, pour un premier point), un relevé : la
@@ -188,6 +250,7 @@ namespace gulliver
                     std::lock_guard<std::mutex> lock(history_m);
                     history.push_back(s);
                     while (history.size() > history_most) history.pop_front();
+                    save_sample(s);
                 }
             }).detach();
         });

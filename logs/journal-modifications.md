@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-24 — Garder sept jours de température, dans un fichier (7.1.0)
+
+- **Quoi** : boutons « 3 j » et « 7 j » sur la page de la température ; le service garde 7 jours de relevés (2 016) au lieu de 24 h, et les écrit dans `thermal.tsv` de `GULLIVER_HOME` (une ligne par relevé, relu au démarrage, réécrit quand il double).
+- **Fichiers** : `dlib/dlib/external/gulliver/host/thermal.h`, `host/thermal.mm`, `host/server.cpp` (route `/gulliver/v1/thermal/history` : jusqu'à 10 080 minutes), `web/temperature/index.html`, version 7.1.0, `web/changelog.md`.
+- **Pourquoi** : demande de l'humain (« ajoute 3 jours et 7 jours », puis « raison de plus de les mettre dans un fichier ») ; la courbe du GPU semblait « chuter » à 5 h 42 : c'était le redémarrage du service en 7.0.2, qui avait effacé l'historique tenu en mémoire seulement (premier point à 73 % : le chargement des modèles et leur vérification sur le GPU ; ensuite 1 à 3 %, personne ne s'en servait).
+- **Étapes** : compilé ; service d'essai (port 18499) avec un fichier préparé : le relevé de 8 jours oublié, ceux de 3 jours et d'une heure relus, le nouveau ajouté au fichier ; `page_test.sh` sans erreur.
+
 ## 2026-11-23 — Le facteur de Gulliver branché sur le Bridge du Mac mini
 
 - **Quoi** : réglages du vrai service : adresse d'envoi celle du compte Proton du Bridge, port 1025, mot de passe SMTP recopié de la configuration du guetteur d'alertes de TortueTech (qui envoie par ce même Bridge), de fichier à service, sans affichage ; il vit dans `build/gulliver-home/mail.secret` (0600).

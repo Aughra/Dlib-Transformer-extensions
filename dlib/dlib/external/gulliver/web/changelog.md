@@ -2,6 +2,15 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.1.0 — 24 novembre 2026
+
+### Accès et documents
+
+- La page « Température et charge de la puce » propose deux nouvelles périodes, 3 jours et 7 jours, en plus de 1 h, 6 h et 24 h.
+- Le service garde désormais sept jours de relevés (un toutes les cinq minutes) au lieu de 24 heures, et les écrit dans `thermal.tsv` de son dossier de données : ils sont relus au démarrage, et un redémarrage du service ne les efface plus.
+
+---
+
 ## 7.0.2 — 23 novembre 2026
 
 ### Corrections

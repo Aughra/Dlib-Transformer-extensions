@@ -39,11 +39,15 @@ namespace gulliver
     /*!
         L'historique de la température et de la charge (fork pour macOS, 2026-11-22) : start_thermal_history() lance,
         une seule fois, un fil qui relève read_chip_thermal() toutes les thermal_period secondes (cinq minutes, demande
-        de l'humain), avec la charge moyenne du processeur et du GPU sur la période, et garde les dernières 24 heures ;
-        thermal_history() rend les relevés des minutes dernières minutes, du plus ancien au plus récent.
+        de l'humain), avec la charge moyenne du processeur et du GPU sur la période, et garde les sept derniers jours
+        (2026-11-24, demande de l'humain : les périodes de 3 et 7 jours de la page) ; thermal_history() rend les relevés
+        des minutes dernières minutes, du plus ancien au plus récent.  Avec un fichier (thermal.tsv du dossier de
+        données), les relevés y sont ajoutés un par ligne et relus au démarrage : un redémarrage du service ne les
+        efface plus.
     !*/
     const int thermal_period = 300;
-    void start_thermal_history();
+    const int thermal_keep_minutes = 7 * 24 * 60;
+    void start_thermal_history(const std::string& file = std::string());
     std::vector<thermal_sample> thermal_history(int minutes);
 }
 

@@ -2114,11 +2114,11 @@ namespace gulliver
             send_json(res, 200, o);
         });
         // L'historique de la température de la puce (host/thermal.h), pour la page /temperature/.
-        start_thermal_history();
+        start_thermal_history(join_path(s->data_dir(), "thermal.tsv"));
         srv.Get("/gulliver/v1/thermal/history", [](const httplib::Request& req, httplib::Response& res) {
             int minutes = 60;
             if (req.has_param("minutes")) minutes = std::atoi(req.get_param_value("minutes").c_str());
-            minutes = std::max(1, std::min(24 * 60, minutes));
+            minutes = std::max(1, std::min(thermal_keep_minutes, minutes));
             json samples = json::array();
             for (const auto& t : thermal_history(minutes))
             {
