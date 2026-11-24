@@ -19,14 +19,21 @@
 # Puis il attend la fin des téléchargements (six heures au plus ; le service vérifie l'empreinte de chaque fichier) et
 # écrit les modèles installés dans build/bench/hebdo/nouveaux.json : la mesure de la semaine (tools/bench_modeles.sh) les
 # mesure en premier et les signale.  Avec --essai, il ne fait que dire ce qu'il ferait.
-# 5. les HUB_TOP modèles GGUF les plus téléchargés de Hugging Face (décision de l'humain du 2026-11-23 : « les plus
-#    populaires »), d'éditeurs connus (HUB_EDITORS), sans les versions « abliterated » ou « uncensored », qui tournent sur
-#    ce moteur (architecture et format de poids, d'après le service), en Q4_K_M de préférence, avec leur projecteur
-#    d'images, et qui tiennent dans ce Mac ; un modèle dont le nom est déjà installé est sauté.
+# 5. Hugging Face (décisions de l'humain du 2026-11-23 et du 2026-11-24 : « prends-en 5 parmi tous les tris ») : pour
+#    chacun des cinq ordres de Hugging Face (HUB_SORTS : les plus téléchargés, tendance, aimés, récents, mis à jour),
+#    les HUB_TOP premiers modèles GGUF d'éditeurs connus (HUB_EDITORS), sans les versions « abliterated » ; puis les
+#    HUB_TOP premiers « abliterated » (sans réflexe de refus, pour la cybersécurité, usage autorisé seulement) des
+#    recherches de l'onglet Modèles (HUB_CYBER), d'éditeurs connus ou de ceux qui les publient (HUB_CYBER_EDITORS).
+#    Un modèle compte s'il tourne sur ce moteur (architecture et format de poids, d'après le service), en Q4_K_M de
+#    préférence, avec son projecteur d'images, et tient dans ce Mac.  Un modèle déjà installé compte dans les HUB_TOP
+#    sans être retéléchargé ; un modèle déjà retiré (build/bench/hebdo/retires.json, tools/retrait_modeles.py : le
+#    dernier du classement de chaque lundi) est sauté sans compter, ce qui laisse sa place au suivant.  Rien n'est
+#    ajouté quand le disque garderait moins de DISK_FLOOR octets libres.
 # Ce qu'il a trouvé part ensuite dans un mail à l'administrateur (tools/mail_admin.py ; décision de l'humain du
 # 2026-11-23 : il décide, d'après la mesure du matin, des modèles qu'on garde).
 import json
 import os
+import shutil
 import ssl
 import subprocess
 import sys
@@ -40,11 +47,16 @@ from mail_admin import send_admin  # noqa: E402
 # Les architectures que le moteur lit (engine/model_config.cpp, read_model_config).
 ARCHS = {"llama", "mistral", "mistral3", "granite", "qwen2", "qwen3", "qwen3vl", "mixtral", "granitemoe", "qwen3moe",
          "qwen3vlmoe", "qwen35moe", "phi3", "qwen35", "gemma4", "gemma3", "lfm2", "lfm2moe"}
-HUB_TOP = 10
+HUB_TOP = 5
+HUB_SORTS = [("downloads", "les plus téléchargés"), ("trendingScore", "les plus tendance"), ("likes", "les plus aimés"),
+             ("createdAt", "les plus récents"), ("lastModified", "les derniers mis à jour")]
+HUB_CYBER = ["abliterated GGUF", "Qwen3 abliterated", "Llama 3 abliterated", "dolphin"]   # comme web/js/models.js
+HUB_CYBER_EDITORS = {"huihui-ai", "mlabonne", "mradermacher", "cognitivecomputations", "dphn", "QuantFactory"}
+DISK_FLOOR = 200 * 10**9
 HUB_EDITORS = {"Qwen", "mistralai", "google", "ibm-granite", "microsoft", "meta-llama", "LiquidAI", "ggml-org", "unsloth",
                "bartowski", "lmstudio-community", "HuggingFaceTB", "allenai", "nvidia", "deepseek-ai", "openai",
                "utter-project", "CohereLabs", "tiiuae"}
-HUB_REFUSED = ("abliterated", "uncensored", "heretic")
+HUB_REFUSED = ("abliterated", "uncensored", "heretic")   # hors de la liste « cybersécurité »
 # Les fichiers d'aide d'un dépôt (petits modèles de brouillon), qui ne sont pas le modèle lui-même.
 HUB_HELPERS = ("dflash", "draft", "eagle", "imatrix")
 QUANTS = ("Q4_K_M", "Q4_K_S", "Q6_K", "Q8_0")   # dans l'ordre de préférence
@@ -131,42 +143,71 @@ def core(name):
     return re.sub(r"[^a-z0-9]", "", n)
 
 
-def hub_popular(service, installed, budget):
-    """Les HUB_TOP dépôts populaires à ajouter : [(dépôt, fichier, projecteur, taille)]."""
-    seen, repos = set(), []
-    for q in [""] + sorted(HUB_EDITORS):
-        for m in service.call("GET", "/gulliver/v1/hub/search?q=" + urllib.parse.quote(q)).get("models", []):
+def hub_pick(service, repo, budget):
+    """Le fichier à prendre dans un dépôt : (fichier, projecteur, taille), ou None."""
+    files = service.call("GET", "/gulliver/v1/hub/files?repo=" + urllib.parse.quote(repo))
+    pick = None
+    for quant in QUANTS:
+        pick = next((f for f in files.get("files", []) if f.get("compatible") and f.get("quantization") == quant
+                     and not any(w in f["file"].lower() for w in HUB_HELPERS)), None)
+        if pick:
+            break
+    if not pick:
+        return None
+    projs = files.get("projectors") or []
+    proj = next((x for x in projs if x.get("quantization") == "F16"), projs[0] if projs else None)
+    size = (pick.get("size") or 0) + ((proj or {}).get("size") or 0)
+    return (pick["file"], (proj or {}).get("file", ""), size) if size <= budget else None
+
+
+SORT_KEY = {"downloads": "downloads", "trendingScore": "trending", "likes": "likes", "createdAt": "created",
+            "lastModified": "updated"}
+
+
+def hub_list(service, queries, sort, editors, cyber):
+    """Les modèles compatibles des recherches queries, dans l'ordre sort, des éditeurs editors."""
+    seen, out = set(), []
+    for q in queries:
+        # sort toujours donné : ces recherches restent hors des « recherches gardées » de la page.
+        path = "/gulliver/v1/hub/search?q=" + urllib.parse.quote(q) + "&sort=" + sort
+        for m in service.call("GET", path).get("models", []):
             repo = m.get("repo", "")
             if repo in seen:
                 continue
             seen.add(repo)
-            if (m.get("compatible") and repo.split("/")[0] in HUB_EDITORS
-                    and not any(w in repo.lower() for w in HUB_REFUSED)):
-                repos.append(m)
-    repos.sort(key=lambda m: -(m.get("downloads") or 0))
-    out, cores = [], set(installed)
-    for m in repos:
-        if len(out) >= HUB_TOP:
-            break
-        repo = m["repo"]
-        if core(repo) in cores:
-            continue
-        files = service.call("GET", "/gulliver/v1/hub/files?repo=" + urllib.parse.quote(repo))
-        pick = None
-        for quant in QUANTS:
-            pick = next((f for f in files.get("files", []) if f.get("compatible") and f.get("quantization") == quant
-                         and not any(w in f["file"].lower() for w in HUB_HELPERS)), None)
-            if pick:
+            refused = any(w in repo.lower() for w in HUB_REFUSED)
+            if m.get("compatible") and repo.split("/")[0] in editors and (refused or "dolphin" in repo.lower()) == cyber:
+                out.append(m)
+    key = SORT_KEY[sort]
+    empty = "" if key in ("created", "updated") else 0   # les dates sont des textes ISO, qui se trient comme tels
+    out.sort(key=lambda m: m.get(key) or empty, reverse=True)
+    return out
+
+
+def hub_popular(service, installed, retired, budget):
+    """Les dépôts à ajouter : [(dépôt, fichier, projecteur, taille, raison)], HUB_TOP par liste."""
+    lists = [(sort, label, [""] + sorted(HUB_EDITORS), HUB_EDITORS, False) for sort, label in HUB_SORTS]
+    lists.append(("downloads", "les plus téléchargés des « abliterated » (cybersécurité)", HUB_CYBER,
+                  HUB_EDITORS | HUB_CYBER_EDITORS, True))
+    out, taken = [], set()
+    for sort, label, queries, editors, cyber in lists:
+        count = 0
+        for m in hub_list(service, queries, sort, editors, cyber):
+            if count >= HUB_TOP:
                 break
-        if not pick:
-            continue
-        projs = files.get("projectors") or []
-        proj = next((x for x in projs if x.get("quantization") == "F16"), projs[0] if projs else None)
-        size = (pick.get("size") or 0) + ((proj or {}).get("size") or 0)
-        if size > budget:
-            continue
-        cores.add(core(repo))
-        out.append((repo, pick["file"], (proj or {}).get("file", ""), size, m.get("downloads") or 0))
+            repo = m["repo"]
+            c = core(repo)
+            if c in retired:
+                continue           # déjà essayé et retiré : sa place va au suivant
+            if c in installed or c in taken:
+                count += 1         # déjà là : il compte, sans téléchargement
+                continue
+            pick = hub_pick(service, repo, budget)
+            if not pick:
+                continue
+            taken.add(c)
+            count += 1
+            out.append((repo, pick[0], pick[1], pick[2], label))
     return out
 
 
@@ -174,11 +215,6 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     trial = "--essai" in sys.argv
     home = args[0] if args else os.environ.get("GULLIVER_HOME", "")
-    # Jamais le samedi ni le dimanche de 9 h à 21 h : l'humain se sert alors du Mac.
-    now = time.localtime()
-    if now.tm_wday >= 5 and 9 <= now.tm_hour < 21 and not trial:
-        say("samedi ou dimanche en journée : pas de téléchargement")
-        return
     service = Service(home)
     memory = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True).stdout.strip() or 0)
     budget = memory * 3 // 4
@@ -197,6 +233,15 @@ def main():
             time.sleep(5)
             if (service.call("GET", "/gulliver/v1/models").get("catalog") or {}).get("state") != "checking":
                 break
+    # Les modèles déjà retirés (tools/retrait_modeles.py) : jamais retéléchargés.
+    retired = []
+    try:
+        with open(os.path.join(os.path.dirname(news), "retires.json"), encoding="utf-8") as f:
+            retired = json.load(f)
+    except (OSError, ValueError):
+        pass
+    retired_ids = {r.get("id") for r in retired}
+    retired_cores = {core(r.get("repo") or r.get("name") or "") for r in retired} - {""}
     data = service.call("GET", "/gulliver/v1/models")
     say(f"catalogue : {(data.get('catalog') or {}).get('state', '?')}, {len(data.get('models', []))} modèles ; "
         f"mémoire {memory / 2**30:.0f} Go, au plus {budget / 2**30:.0f} Go par modèle")
@@ -226,6 +271,9 @@ def main():
                 if not trial and service.call("POST", f"/gulliver/v1/models/{mid}/download").get("ok"):
                     started.append(mid)
             continue
+        if mid in retired_ids:
+            say(f"{mid} : laissé (retiré un lundi précédent)")
+            continue
         roles = m.get("roles") or []
         if m.get("arch") not in ARCHS or "embedding" in roles or not size or size > budget:
             why = ("architecture que le moteur ne lit pas" if m.get("arch") not in ARCHS else
@@ -244,9 +292,13 @@ def main():
     installed |= {core(os.path.basename(m.get("file") or "")) for m in data.get("models", []) if m.get("installed")}
     installed |= {core(m.get("name") or "") for m in data.get("models", []) if m.get("installed")}
     installed.discard("")
-    for repo, name, proj, size, downloads in hub_popular(service, installed, budget):
-        count = f"{downloads:,}".replace(",", " ")
-        say(f"{repo} : parmi les plus téléchargés de Hugging Face ({count} téléchargements), {name}"
+    free = shutil.disk_usage(home or ".").free
+    for repo, name, proj, size, why in hub_popular(service, installed, retired_cores, budget):
+        if free - size < DISK_FLOOR:
+            say(f"{repo} : laissé, le disque garderait moins de {DISK_FLOOR // 10**9} Go libres", True)
+            continue
+        free -= size
+        say(f"{repo} : parmi {why} de Hugging Face, {name}"
             f"{' avec ' + proj if proj else ''}, {size / 1e9:.1f} Go, ajouté", True)
         if not trial:
             r = service.call("POST", "/gulliver/v1/hub/add", {"repo": repo, "file": name, "projector": proj})

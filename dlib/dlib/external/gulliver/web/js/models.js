@@ -343,7 +343,7 @@ export function modelsTab(body, env) {
       attend le service s'il redémarre.
   */
   const adviceRoles = { general: 'Pour tout faire, images comprises', accurate: 'Les réponses les plus justes',
-    fastest: 'Le plus rapide' };
+    fastest: 'Le plus rapide', cyber: 'Pour la cybersécurité (usage autorisé)' };
   const kvLabel = (v) => v === 'f16' ? 'demi-précision' : '8 bits';
   async function applyAdvice(a, m) {
     let settings = {};
@@ -424,6 +424,7 @@ export function modelsTab(body, env) {
       const facts = [a.write_512 ? 'écriture ' + formatDecimal(a.write_512, a.write_512 >= 100 ? 0 : 1) + ' jetons/s' : null,
         a.read_4096 ? 'lecture ' + formatDecimal(a.read_4096, 0) + ' jetons/s (4 096 tokens)' : null,
         a.perplexity ? 'perplexité ' + formatDecimal(a.perplexity, 2) : null,
+        typeof a.quiz === 'number' ? 'épreuve ' + Math.round(a.quiz) + '/100' : null,
         'mémoire de conversation ' + kvLabel(a.settings && a.settings.kv_type)].filter(Boolean).join(' · ');
       const here = a.id && a.id === activeId;
       return h('div', { class: 'advice-row' },
@@ -437,6 +438,48 @@ export function modelsTab(body, env) {
       h('div', { class: 'svc-title' }, h('span', null, 'Conseil de la mesure de la semaine')),
       h('p', { class: 'svc-effect' }, 'Tiré des mesures de vitesse et de justesse du ' + (advice.date || '?') +
         ' sur ce Mac. « Choisir » active le modèle et met les réglages qui lui vont le mieux.'), ...rows);
+  }
+
+  /*
+      Les modèles retirés (fork pour macOS, 2026-11-24, demande de l'humain) : chaque lundi, après la mesure, le dernier du
+      classement est retiré de Gulliver (tools/retrait_modeles.py), et la veille ne le retélécharge plus.  Le menu donne
+      la date, la note et la raison de chaque retrait, et « Remettre » le télécharge de nouveau (Hugging Face ou
+      catalogue).  La liste vient de conseil.json (« removed »), lu par GET /gulliver/v1/models/advice.
+  */
+  function removedCard() {
+    const list = (advice && advice.found && advice.removed) || [];
+    if (!list.length) return null;
+    const when = (d) => {
+      const t = new Date(String(d || '').replace(' ', 'T'));
+      return isNaN(t) ? (d || '?') : t.toLocaleDateString('fr-FR', { dateStyle: 'long' });
+    };
+    const rows = list.slice().reverse().map((r) => {
+      const here = (data.models || []).find((x) => x.id === r.id && x.installed);
+      const note = [typeof r.quiz === 'number' ? 'épreuve ' + Math.round(r.quiz) + '/100' : null,
+        r.write_512 ? 'écriture ' + formatDecimal(r.write_512, r.write_512 >= 100 ? 0 : 1) + ' jetons/s' : null,
+        r.why || null].filter(Boolean).join(' · ');
+      const put = async () => {
+        if (r.origin === 'huggingface' && r.repo && r.file) {
+          try {
+            const done = await api.postJSON('/gulliver/v1/hub/add', { repo: r.repo, file: r.file, projector: r.projector || '' });
+            toast((done.name || r.name) + ' remis ; son téléchargement commence.');
+          } catch (e) {
+            toast(e.message, true);
+          }
+          load();
+        } else {
+          act('POST', '/gulliver/v1/models/' + encodeURIComponent(r.id) + '/download', r.name + ' remis ; son téléchargement commence.');
+        }
+      };
+      return h('div', { class: 'advice-row' },
+        h('div', { class: 'advice-text' }, h('span', { class: 'advice-role' }, 'Retiré le ' + when(r.date)),
+          h('b', null, r.name || r.id), h('span', { class: 'help' }, note)),
+        here ? h('span', { class: 'svc-badge' }, 'remis') : h('button', { class: 'button', type: 'button', onclick: put }, 'Remettre'));
+    });
+    return h('details', { class: 'svc-card advice-card removed-card' },
+      h('summary', { class: 'svc-title' }, h('span', null, 'Modèles retirés (' + list.length + ')')),
+      h('p', { class: 'svc-effect' }, 'Chaque lundi, après la mesure, le dernier du classement est retiré de Gulliver pour ' +
+        'laisser la place aux suivants, et la veille ne le retélécharge plus. « Remettre » le télécharge de nouveau.'), ...rows);
   }
 
   async function act(method, url, ok) {
@@ -542,6 +585,7 @@ export function modelsTab(body, env) {
         h('p', { class: 'svc-effect' }, 'Catalogue mis à jour : ' + updated + ' · ' + (data.models || []).length +
           ' modèles · place libre : ' + gb(data.free || 0) + (data.offline ? ' · hors ligne : restauration locale seulement' : ''))),
       adviceCard(activeId),
+      removedCard(),
       sheetCard(h, specialtiesSheet),
       h('section', { class: 'svc-group' }, h('h4', null, 'Les modèles'),
         h('p', { class: 'help' }, 'Installés d’abord, puis du plus conseillé au moins conseillé pour ce Mac. Ceux ajoutés ' +

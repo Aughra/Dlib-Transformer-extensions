@@ -105,5 +105,35 @@ with tempfile.TemporaryDirectory() as tmp:
           "la section du document est réécrite entre ses marqueurs, le reste intact")
     check("llama.cpp" not in after.split("Conseillé")[0], "la section du document ne montre que Gulliver")
 
+# Avec l'épreuve (2026-11-24) : la note sur 100 décide, toutes familles confondues ; les « abliterated » n'ont que leur
+# ligne « cybersécurité » ; le dernier du classement est désigné, jamais un modèle conseillé, précédent ou actif.
+raw2 = list(raw)
+# F : autre famille, voit les images, rapide, la meilleure note : pour tout faire et le plus juste.
+raw2 += rows("f", "Gemma F 12B", 1, "gpu", {("512", "q8"): (2000, 70), ("4096", "q8"): (1800, 60)})
+# G : « abliterated », la meilleure note de tous : jamais conseillé ailleurs que pour la cybersécurité.
+raw2 += rows("g", "Qwen3 G 8B abliterated", 1, "gpu", {("512", "q8"): (2200, 75), ("4096", "q8"): (1900, 65)})
+# H : la plus basse note : retiré.  I : actif, note plus basse encore : gardé.
+raw2 += rows("h", "Faible H 7B", 0, "gpu", {("512", "q8"): (2100, 72), ("4096", "q8"): (1900, 60)})
+raw2 += rows("i", "Actif I 7B", 0, "gpu", {("512", "q8"): (2100, 71), ("4096", "q8"): (1900, 60)})
+raw2 += ["quiz|a|80", "quiz|b|85", "quiz|c|60", "quiz|d|88", "quiz|e|50", "quiz|f|93", "quiz|g|97", "quiz|h|45",
+         "quiz|i|30", "quiz|llama.cpp:a|99"]
+with tempfile.TemporaryDirectory() as tmp:
+    rawp, jsonp, remp = (os.path.join(tmp, f) for f in ("essai.raw", "conseil.json", "retires.json"))
+    open(rawp, "w", encoding="utf-8").write("\n".join(raw2) + "\n")
+    json.dump([{"date": "2026-11-17 12:40", "id": "z", "name": "Ancien Z"}], open(remp, "w"))
+    out = subprocess.run([sys.executable, "-I", os.path.join(HERE, "conseil_modeles.py"), rawp, "--previous", "a",
+                          "--keep", " i ", "--removed", remp, "--json", jsonp], capture_output=True, text=True)
+    check(out.returncode == 0, "conseil_modeles.py s'exécute avec l'épreuve (" + out.stderr.strip()[-200:] + ")")
+    got = json.load(open(jsonp, encoding="utf-8"))
+    roles = {a["role"]: a["id"] for a in got["advice"]}
+    check(roles.get("general") == "f", "épreuve : pour tout faire, F, la meilleure note des modèles qui voient les images")
+    check(roles.get("accurate") in (None, "f"), "épreuve : le plus juste se compare entre familles (F, pas D)")
+    check(roles.get("cyber") == "g" and list(roles.values()).count("g") == 1,
+          "épreuve : l'abliterated G n'est conseillé que pour la cybersécurité")
+    check((got.get("remove") or {}).get("id") == "h", "le dernier du classement H est désigné, pas l'actif I")
+    check([r["id"] for r in got.get("removed", [])] == ["z"], "la liste des modèles déjà retirés est recopiée")
+    check("| 93/100 |" in out.stdout and "retiré de Gulliver : **Faible H 7B**" in out.stdout,
+          "la note est dans le tableau et le retrait est dit")
+
 print("test_conseil: " + ("all checks passed" if failures == 0 else f"{failures} checks failed"))
 sys.exit(1 if failures else 0)

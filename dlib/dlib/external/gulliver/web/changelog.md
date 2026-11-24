@@ -2,6 +2,26 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.2.0 — 24 novembre 2026
+
+### Modèles
+
+- La mesure de la semaine fait passer à chaque modèle une épreuve de 40 questions en français (calcul, logique, connaissances, langue, consignes, compréhension, code) ; elle donne une note sur 100, comparable entre toutes les familles de modèles. La note apparaît dans le détail de chaque modèle de l'onglet Modèles, et le conseil s'appuie sur elle : pour tout faire, la meilleure note parmi les modèles qui voient les images et écrivent au moins 40 jetons/s sur le GPU ; à note égale, le plus rapide.
+- Le conseil comprend un rôle « Pour la cybersécurité (usage autorisé) », réservé aux modèles sans réflexe de refus (abliterated, uncensored, dolphin), qui n'entrent plus dans les autres rôles.
+- Chaque semaine, le dernier du classement (un modèle que le moteur ne lit pas, sinon la plus basse note, puis l'écriture la plus lente ; jamais un modèle conseillé, le choix précédent ni un modèle actif) est retiré de Gulliver. Le menu « Modèles retirés » de l'onglet Modèles les liste avec leur date, leur note et la raison, et les remet d'un clic ; la veille ne les retélécharge plus.
+- La veille du lundi prend cinq modèles dans chacun des cinq tris de Hugging Face (plus téléchargés, tendance, plus aimés, plus récents, mis à jour récemment), ainsi que cinq modèles de chacune des quatre recherches de cybersécurité (abliterated, Qwen3 abliterated, Llama 3 abliterated, dolphin), en laissant au moins 200 Go libres sur le disque.
+
+### Accès et documents
+
+- La recherche Hugging Face du service (`GET /gulliver/v1/hub/search`) accepte un paramètre `sort` (`downloads`, `trendingScore`, `likes`, `createdAt`, `lastModified`) et rend la tendance et la date de création de chaque dépôt ; un tri inconnu est refusé (`hub_sort_invalid`, HTTP 400). Les recherches triées sont gardées à part : celles de la veille n'apparaissent plus dans les « Recherches gardées » de la page.
+
+### Corrections
+
+- Un modèle dont le fichier contient un format de poids que le moteur ne lit pas (`unsupported ggml type`) est désormais compté comme illisible par la mesure de la semaine, au lieu d'apparaître sans chiffres.
+- La mesure et la veille de la semaine n'ont plus d'heure limite : plus d'arrêt à 19 h, ni d'interdit le samedi et le dimanche en journée.
+
+---
+
 ## 7.1.0 — 24 novembre 2026
 
 ### Accès et documents

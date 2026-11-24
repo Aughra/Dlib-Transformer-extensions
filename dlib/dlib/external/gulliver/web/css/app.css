@@ -982,6 +982,9 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .advice-card .advice-role { font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--gold-strong); }
 .advice-card .advice-text .help { margin: 0; }
+/* Le menu des modèles retirés : replié, ouvert d'un clic sur son titre. */
+.removed-card > summary { cursor: pointer; list-style: revert; }
+.removed-card:not([open]) > summary { margin-bottom: 0; }
 .changes-table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 14px; }
 .changes-table th, .changes-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); }
 .changes-table thead th { color: var(--text-faint); font-weight: 600; font-size: 12.5px; }

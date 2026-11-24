@@ -79,12 +79,16 @@ if [ -f "$LIBRARY_MODEL" ] && [ ! -f "$HOME_DIR/library/Qwen3.5-0.8B-Q8_0.gguf" 
   cp -c "$LIBRARY_MODEL" "$HOME_DIR/library/"
 fi
 # Le conseil de la mesure de la semaine du service d'essai : son propre modèle, avec les réglages qu'il a déjà (le clic
-# sur « Choisir » ne redémarre donc pas le service), pour le scénario de la carte du conseil.
+# sur « Choisir » ne redémarre donc pas le service), pour le scénario de la carte du conseil ; un modèle retiré, pour le
+# menu « Modèles retirés ».
 cat > "$WORK/advice.json" <<'JSON'
 {"date": "essai du banc", "previous": null, "new": [], "late": false, "advice": [
  {"role": "general", "id": "qwen3-vl-2b-test", "name": "Qwen3-VL 2B (essai)", "why": "essai",
   "write_512": 160.0, "read_4096": 5000.0, "perplexity": 18.6, "image": true,
-  "settings": {"kv_type": "q8", "draft_tokens": 7}}]}
+  "settings": {"kv_type": "q8", "draft_tokens": 7}}],
+ "removed": [{"date": "2026-11-24 12:40", "id": "ancien-essai", "name": "Ancien modèle (essai)", "origin": "huggingface",
+  "repo": "essai/ancien-GGUF", "file": "ancien-Q4_K_M.gguf", "projector": "", "quiz": 41, "write_512": 52.5,
+  "why": "le dernier du classement"}]}
 JSON
 GULLIVER_HOME=$HOME_DIR GULLIVER_ADVICE_FILE=$WORK/advice.json "$BIN/gulliver-service" --console > "$WORK/service.log" 2>&1 &
 SERVICE=$!

@@ -11,42 +11,52 @@ Il mesure la vitesse, puis la justesse, et explique d'où viennent les écarts. 
 - **Mesures de ce document** : sauf la partie « Aujourd'hui », 21 novembre 2026, à partir de 11 h 30, Mac mini M5 Pro (64 Go), Gulliver 6.16.0, llama.cpp 1.0.0 (Homebrew), MLX 0.32.4, Albireo d'origine 1.0.27 (`af5c811`).
 - **Comme un utilisateur** (depuis Gulliver 6.30.0) : chaque lundi, le modèle de référence est aussi mesuré par le vrai service, sur un service d'essai isolé et sur llama-server : chargement, conversation de 32k (avec et sans brouillons), 4 requêtes à la fois, 3 documents de 4 000 tokens à la fois, plus grand contexte. Premier essai (Qwen3-VL 4B Thinking, 22 novembre) : à égalité avec llama.cpp sur la conversation longue et à 4 requêtes, mais l'attente du premier mot avec 3 longs documents à la fois est deux fois plus longue (6,8 s contre 3,2) : Gulliver lit les questions l'une après l'autre.
 - **La recherche dans les documents** (depuis le 22 novembre) : chaque lundi aussi, `tools/test_rag.py` (40 questions figées sur les épisodes du blog) donne la part des questions dont le bon passage est retrouvé, par moteur ; premier relevé : 95 % dans les 12 premiers passages avec le réglage par défaut.
-- **Chaque semaine**, le lundi : les modèles sont mis à jour la nuit (1 h, nouveautés prévenues par mail), puis le Mac mesure lui-même tous les modèles de Gulliver, avec llama.cpp et MLX sur le modèle de référence (8 h, arrêt à 19 h) ; la mesure s'ajoute, datée et la plus récente en tête, à la page « Mesures de la semaine », juste à côté dans le carnet, et réécrit la section « La mesure de la semaine » ci-dessous (mode d'emploi : `macos/bench-hebdo/README.md`).
+- **Chaque semaine**, le lundi : les modèles sont mis à jour la nuit (1 h, nouveautés prévenues par mail), puis le Mac mesure lui-même tous les modèles de Gulliver, avec llama.cpp et MLX sur le modèle de référence (8 h, jusqu'au bout) ; la mesure s'ajoute, datée et la plus récente en tête, à la page « Mesures de la semaine », juste à côté dans le carnet, et réécrit la section « La mesure de la semaine » ci-dessous (mode d'emploi : `macos/bench-hebdo/README.md`).
 
 > **Depuis le 22 novembre 2026** (décisions de l'humain), la mesure de la semaine (le lundi) mesure Gulliver sur **tous ses modèles installés**, et llama.cpp et MLX sur le modèle de référence comme deux lignes de plus, comparés au modèle choisi la semaine précédente, pour conseiller chaque semaine le meilleur (onglet Modèles, bouton « Choisir »). L'Albireo d'origine n'est plus mesuré. Les comparaisons plus bas restent valables à leur date ; celles sur six modèles fixes se refont à la main (`tools/bench_moteurs.sh`, `tools/justesse_moteurs.sh`).
 
 <!-- semaine : début -->
 
-## La mesure de la semaine (23/11/2026 à 12 h 30)
+## La mesure de la semaine (24/11/2026 à 11 h 04)
 
-Écrite par le Mac à chaque mesure de la semaine, le lundi (`tools/bench_modeles.sh`) : Gulliver seul, sur chacun de ses modèles installés ; jetons par seconde, mémoire de conversation en 8 bits. Charge de la machine pendant la mesure (86 relevés, toutes les 20 secondes) : température de la puce 90,2 °C en moyenne (de 55,4 à 102,9) ; utilisation du processeur 47 % en moyenne (de 3 à 100) ; utilisation du gpu 75 % en moyenne (de 0 à 100).
+Écrite par le Mac à chaque mesure de la semaine, le lundi (`tools/bench_modeles.sh`) : Gulliver seul, sur chacun de ses modèles installés ; jetons par seconde, mémoire de conversation en 8 bits. Charge de la machine pendant la mesure (239 relevés, toutes les 20 secondes) : température de la puce 88,6 °C en moyenne (de 68,0 à 108,0) ; utilisation du processeur 42 % en moyenne (de 12 à 100) ; utilisation du gpu 64 % en moyenne (de 0 à 100).
 
-| Modèle | Calcul | Lecture 512 | Lecture 4 096 | Écriture 512 | Écriture 4 096 | Perplexité |
-|---|---|---|---|---|---|---|
-| Qwen2.5 Coder 1.5B Q4_K_M | GPU | 5 592 | 6 264 | 174 | 141 | 21,92 |
-| Qwen3-VL 2B Thinking Q4_K_M | GPU | 5 836 | 5 928 | 163 | 127 | 20,32 |
-| Qwen3-VL 2B Instruct Q4_K_M | GPU | 5 797 | 5 986 | 161 | 127 | 18,65 |
-| Ministral 3 3B Q4_K_M | GPU | 3 302 | 2 750 | 108 | 89,6 | 12,51 |
-| Granite 4.2 3B Q4_K_M | GPU | 3 076 | 2 703 | 98,8 | 64,8 | 17,85 |
-| Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) (choix précédent) | GPU | 1 642 | 1 918 | 94,0 | 78,8 | 10,93 |
-| CyberSecQwen 4B Q4_K_M | GPU | 2 889 | 2 620 | 90,2 | 74,5 | 13,67 |
-| Qwen3-VL 4B Thinking Q4_K_M | GPU | 2 610 | 2 397 | 84,4 | 69,3 | 15,37 |
-| Qwen3-VL 4B Instruct Q4_K_M | GPU | 2 522 | 2 241 | 81,5 | 66,2 | 14,83 |
-| Phi-4-mini Q4_K_M | GPU | 2 626 | 2 798 | 79,4 | 63,8 | 20,52 |
-| Qwen2.5-0.5B-Instruct Q4_K_M | processeur | 773 | 974 | 76,2 | 74,9 | 25,79 |
-| Qwen3.5-4B Q4_K_M | GPU | 1 412 | 1 424 | 68,3 | 67,2 | 11,50 |
-| Foundation-Sec 1.1 8B Q4_K_M | GPU | 1 420 | 1 298 | 54,3 | 47,6 | 18,57 |
-| Foundation-Sec 8B Reasoning Q4_K_M | GPU | 1 339 | 1 275 | 54,0 | 47,4 | 13,28 |
-| DeepSeek-R1 Distill Llama 8B Q4_K_M | GPU | 1 253 | 1 445 | 53,9 | 48,0 | 30,01 |
-| Qwen2.5 Coder 7B Q4_K_M | GPU | 1 505 | 1 414 | 51,0 | 43,5 | 16,45 |
-| Qwen3-VL 8B Thinking Q4_K_M | GPU | 1 330 | 1 050 | 48,5 | 42,7 | 12,87 |
-| Qwen3-VL 8B Instruct Q4_K_M | GPU | 1 337 | 1 285 | 48,0 | 42,5 | 12,14 |
-| Granite 4.2 8B Q4_K_M | GPU | 1 198 | 1 108 | 47,8 | 41,6 | 19,55 |
-| EuroVLM 9B Preview Q4_K_M | GPU | 1 242 | 1 142 | 46,7 | 40,6 | 13,33 |
-| Ministral 3 8B Q4_K_M | GPU | 1 301 | 987 | 45,4 | 41,5 | 10,00 |
-| EuroLLM 9B Instruct Q4_K_M | GPU | 1 071 | 1 226 | 45,4 | 41,0 | 13,54 |
-| Devstral Small 2 Q4_K_M | GPU | 438 | 344 | 19,3 | 15,7 | 8,87 |
-| Mistral Small 3.2 24B Q4_K_M | GPU | 413 | 349 | 19,0 | 16,2 | 8,60 |
+| Modèle | Calcul | Lecture 512 | Lecture 4 096 | Écriture 512 | Écriture 4 096 | Perplexité | Épreuve |
+|---|---|---|---|---|---|---|---|
+| Qwen2.5 Coder 1.5B Q4_K_M | GPU | 6 325 | 7 071 | 184 | 152 | 21,92 | 43/100 |
+| Qwen3-VL 2B Instruct Q4_K_M | GPU | 6 063 | 6 259 | 181 | 142 | 18,65 | 67/100 |
+| Qwen3-VL 2B Thinking Q4_K_M | GPU | 6 007 | 6 250 | 181 | 142 | 20,32 | 83/100 |
+| Qwen2.5-0.5B-Instruct Q4_K_M | processeur | 1 480 | 1 243 | 134 | 121 | 25,79 | 37/100 |
+| Ministral 3 3B Q4_K_M | GPU | 3 488 | 3 053 | 110 | 91,5 | 12,51 | 73/100 |
+| Granite 4.2 3B Q4_K_M | GPU | 3 412 | 3 131 | 102 | 68,5 | 17,85 | 97/100 |
+| Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) (choix précédent) | GPU | 1 691 | 1 943 | 93,8 | 78,8 | 10,93 | 100/100 |
+| LFM2.5-24B-A2B Q8_0 (MoE) | GPU | 1 086 | 1 196 | 91,9 | 88,2 | 19,57 | 100/100 |
+| Qwen3-VL 4B Instruct Q4_K_M | GPU | 2 897 | 2 493 | 91,8 | 75,0 | 14,83 | 83/100 |
+| Qwen3-VL 4B Thinking Q4_K_M | GPU | 2 886 | 2 432 | 91,7 | 74,7 | 15,37 | 100/100 |
+| CyberSecQwen 4B Q4_K_M | GPU | 2 967 | 2 750 | 91,5 | 73,8 | 13,67 | 87/100 |
+| Qwen3-4B-Instruct-2507 Q4_K_M | GPU | 2 853 | 2 374 | 91,3 | 74,2 | 14,89 | 90/100 |
+| Phi-4-mini Q4_K_M | GPU | 2 965 | 3 016 | 86,0 | 67,1 | 20,52 | 70/100 |
+| gemma-4-E2B-it Q4_K_M | GPU | 4 655 | 2 015 | 77,4 | 67,5 | 69,69 | 93/100 |
+| Qwen3.5-4B Q4_K_M | GPU | 1 442 | 1 501 | 72,9 | 71,4 | 11,50 | 100/100 |
+| gemma-4-E4B-it Q4_K_M | GPU | 2 358 | 1 248 | 62,2 | 54,6 | 36,61 | 97/100 |
+| Qwen3.6-35B-A3B-MTP Q4_K_M (MoE) | GPU | 846 | 865 | 59,3 | 56,3 | 8,66 | 97/100 |
+| Qwen2.5 Coder 7B Q4_K_M | GPU | 1 628 | 1 638 | 58,5 | 50,1 | 16,45 | 70/100 |
+| Foundation-Sec 1.1 8B Q4_K_M | GPU | 1 588 | 1 476 | 54,2 | 48,6 | 18,57 | 57/100 |
+| DeepSeek-R1 Distill Llama 8B Q4_K_M | GPU | 1 440 | 1 490 | 54,0 | 48,0 | 30,01 | 57/100 |
+| Foundation-Sec 8B Reasoning Q4_K_M | GPU | 1 543 | 1 461 | 54,0 | 48,7 | 13,28 | 63/100 |
+| Qwen3-VL 8B Thinking Q4_K_M | GPU | 1 473 | 1 416 | 53,8 | 46,7 | 12,87 | 100/100 |
+| Qwen3-VL 8B Instruct Q4_K_M | GPU | 1 487 | 1 408 | 52,8 | 47,2 | 12,14 | 93/100 |
+| Ministral 3 8B Q4_K_M | GPU | 1 250 | 1 347 | 51,7 | 46,3 | 10,00 | 80/100 |
+| Granite 4.2 8B Q4_K_M | GPU | 1 341 | 1 299 | 49,0 | 43,3 | 19,55 | 97/100 |
+| EuroVLM 9B Preview Q4_K_M | GPU | 1 291 | 1 293 | 46,6 | 41,2 | 13,33 | 67/100 |
+| EuroLLM 9B Instruct Q4_K_M | GPU | 1 147 | 1 258 | 45,1 | 40,4 | 13,54 | 63/100 |
+| MiMo-V2.6-Distill-Qwen-9B Q4_K_M | GPU | 917 | 1 029 | 45,0 | 44,3 | 8,94 | 90/100 |
+| Qwen3.5-9B Q4_K_M | GPU | 846 | 986 | 44,5 | 44,1 | 9,84 | 93/100 |
+| gemma-4-26B-A4B-it Q4_K_M | processeur | 138 | 167 | 25,4 | 23,4 | 2828,56 | 100/100 |
+| gemma-4-12b-it Q4_K_M | processeur | 51,9 | 74,7 | 21,0 | 19,6 | 411,86 | 100/100 |
+| Mistral Small 3.2 24B Q4_K_M | GPU | 470 | 367 | 19,6 | 17,3 | 8,60 | 97/100 |
+| Devstral Small 2 Q4_K_M | GPU | 366 | 338 | 19,1 | 18,0 | 8,87 | 90/100 |
+| Qwen3.8-27B Q4_K_M | GPU | — | — | — | — | — | 0/100 |
 
 Conseillé : pour tout faire, Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) ; le plus rapide, Ministral 3 3B Q4_K_M. Les tableaux complets, avec llama.cpp et MLX, sont dans « Mesures de la semaine ».
 
@@ -54,25 +64,25 @@ Comme un utilisateur, par le service, sur Qwen3-VL 30B A3B Thinking Q4_K_M (MoE)
 
 | Mesure | Gulliver |
 |---|---|
-| Chargement du modèle (jusqu'à une première réponse) | — |
-| Conversation de 32k : lecture | — |
-| Conversation de 32k : écriture, avec brouillons | — |
-| Conversation de 32k : écriture, sans brouillons | — |
-| 4 requêtes à la fois : écriture totale | — |
-| 3 documents de 4 000 tokens à la fois : temps total | — |
-| 3 documents à la fois : attente moyenne du premier mot | — |
-| Le plus grand contexte qui tient (essayés : 65 536 et 131 072) | — |
+| Chargement du modèle (jusqu'à une première réponse) | 8,6 s |
+| Conversation de 32k : lecture | 858 jetons/s |
+| Conversation de 32k : écriture, avec brouillons | 33,8 jetons/s |
+| Conversation de 32k : écriture, sans brouillons | 37,6 jetons/s |
+| 4 requêtes à la fois : écriture totale | 142 jetons/s |
+| 3 documents de 4 000 tokens à la fois : temps total | 13,2 s |
+| 3 documents à la fois : attente moyenne du premier mot | 3,8 s |
+| Le plus grand contexte qui tient (essayés : 65 536 et 131 072) | 131 072 tokens |
 
-La recherche dans les documents (RAG) : 40 questions figées sur les 62 épisodes du blog, cherchées par un service d'essai isolé (qwen3-embedding-0.6b, épisodes indexés en 12 s) ; une question est trouvée quand le passage qui y répond est rendu. Le meilleur réglage : moteur « Sens seul », tri fin allumé, 12 passages.
+La recherche dans les documents (RAG) : 40 questions figées sur les 63 épisodes du blog, cherchées par un service d'essai isolé (qwen3-embedding-0.6b, épisodes indexés en 12 s) ; une question est trouvée quand le passage qui y répond est rendu. Le meilleur réglage : moteur « Sens seul », tri fin allumé, 12 passages.
 
 | Moteur | Trouvé dans les 6 premiers | Dans les 12 | Dans les 20 | Rang réciproque |
 |---|---|---|---|---|
 | Hybride (mots et sens) | 88 % | 95 % | 98 % | 0,71 |
-| Hybride (mots et sens) + tri fin | 78 % | 92 % | 98 % | 0,65 |
+| Hybride (mots et sens) + tri fin | 78 % | 95 % | 98 % | 0,65 |
 | Sens seul | 88 % | 92 % | 95 % | 0,67 |
-| Sens seul + tri fin (le meilleur) | 92 % | 95 % | 95 % | 0,72 |
+| Sens seul + tri fin (le meilleur) | 95 % | 95 % | 95 % | 0,72 |
 | Mots seuls | 82 % | 90 % | 92 % | 0,61 |
-| Mots seuls + tri fin | 80 % | 90 % | 92 % | 0,66 |
+| Mots seuls + tri fin | 82 % | 88 % | 92 % | 0,66 |
 
 <!-- semaine : fin -->
 

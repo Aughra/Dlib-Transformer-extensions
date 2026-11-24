@@ -1,8 +1,8 @@
 #!/bin/bash
 # Les modèles de Gulliver mesurés une fois par semaine (fork pour macOS, 2026-11-21, demande de l'humain ; depuis le
 # 2026-11-22, Gulliver sur tous ses modèles installés, avec llama.cpp et MLX sur le modèle de référence, comparés au
-# choix de la semaine dernière).  Lancé par l'agent launchd de macos/bench-hebdo/ (lundi, 8 h, arrêt à 19 h :
-# BENCH_DEADLINE), ou à la main :
+# choix de la semaine dernière).  Lancé par l'agent launchd de macos/bench-hebdo/ (lundi, 8 h, sans heure
+# limite : décision de l'humain, 2026-11-24), ou à la main :
 #
 #   bash dlib/dlib/external/gulliver/tools/bench_hebdo.sh
 #
@@ -11,7 +11,8 @@
 # aussi build/bench/hebdo/conseil.json, lu par l'onglet Modèles), puis met la mesure de la semaine, sous un titre daté, en tête de
 # build/bench/hebdo/mesures.md (lu par le carnet, rubrique « Tests de vitesse » : les semaines de
 # la plus récente à la plus ancienne), avec une copie datée.  Rien n'est commité : le carnet lit
-# ces fichiers sur le disque.
+# ces fichiers sur le disque.  Enfin, le dernier du classement est retiré (tools/retrait_modeles.py), et le conseil part
+# par mail à l'administrateur.
 
 ROOT=$(cd "$(dirname "$0")/../../../../.." && pwd)
 TOOLS=$ROOT/dlib/dlib/external/gulliver/tools
@@ -21,12 +22,6 @@ mkdir -p "$HEBDO"
 LOCK=$HEBDO/.en-cours
 exec >> "$HEBDO/hebdo.log" 2>&1
 echo "=== $(date '+%Y-%m-%d %H:%M') début"
-
-# Jamais le samedi ni le dimanche de 9 h à 21 h : l'humain se sert alors du Mac (launchd lance au réveil une tâche
-# manquée pendant le sommeil du Mac ; elle attendra la semaine suivante).
-if [ "$(date +%u)" -ge 6 ] && [ "$(date +%H)" -ge 9 ] && [ "$(date +%H)" -lt 21 ]; then
-  echo "samedi ou dimanche en journée : pas de mesure"; exit 0
-fi
 
 # Une seule campagne à la fois.
 if ! mkdir "$LOCK" 2>/dev/null; then echo "une campagne tourne déjà, abandon"; exit 0; fi
@@ -45,7 +40,7 @@ for try in 1 2 3 4 5 6; do
 done
 
 echo "charge $(load1) : reconstruction de Gulliver"
-cmake --build "$ROOT/build/macos-gulliver" --target bench_runtime perplexity_runtime > "$HEBDO/build.log" 2>&1 \
+cmake --build "$ROOT/build/macos-gulliver" --target bench_runtime perplexity_runtime engine_chat > "$HEBDO/build.log" 2>&1 \
   || { echo "build en échec, voir $HEBDO/build.log"; exit 1; }
 
 STAMP=$(date +%Y-%m-%d)
@@ -70,12 +65,17 @@ rm -f "$WEEK"
   cat "$HEBDO/historique.md"
 } > "$HEBDO/mesures.md"
 echo "=== $(date '+%Y-%m-%d %H:%M') fini : $HEBDO/mesures.md"
+# Le dernier du classement, retiré de Gulliver (décision de l'humain du 2026-11-24 : « tu le retires seul ») ; la veille
+# ne le retéléchargera plus, et le menu « Modèles retirés » de l'onglet Modèles le remet d'un clic.
+REMOVED=$(python3 -I "$TOOLS/retrait_modeles.py" "$ROOT/build/gulliver-home" 2>&1 | tail -1)
+echo "$REMOVED"
 # Le conseil de la semaine, par mail à l'administrateur (décision de l'humain du 2026-11-23 : il décide des modèles
 # qu'on garde) : la section « Conseil » de la semaine, puis le tableau.
 {
   echo "Bonjour,"; echo
   echo "La mesure de la semaine de Gulliver est finie ($WHEN)."; echo
   sed -n '/^### Conseil/,$p' "$HEBDO/$STAMP.md" | sed '/^---$/,$d'
+  case "$REMOVED" in retiré*) echo; echo "Modèle ${REMOVED#retiré : }"; echo "(retiré de Gulliver ce matin)." ;; esac
   echo; echo "Le tableau complet :"; echo
   awk '/^\| Modèle \|/{on=1} on && /^\|/{print; next} on{exit}' "$HEBDO/$STAMP.md"
   echo; echo "Le bouton « Choisir » de l'onglet Modèles applique le conseil. Gulliver"

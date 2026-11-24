@@ -1172,10 +1172,15 @@ paths = {
         "parameters": [{"name": "q", "in": "query", "schema": {"type": "string"}, "description": "Mots de la "
                         "recherche ; vide : les modèles les plus téléchargés."},
                        {"name": "local", "in": "query", "schema": {"type": "string", "enum": ["1"]},
-                        "description": "1 : la réponse gardée sur le Mac, sans le réseau."}],
+                        "description": "1 : la réponse gardée sur le Mac, sans le réseau."},
+                       {"name": "sort", "in": "query", "schema": {"type": "string", "enum": [
+                           "downloads", "trendingScore", "likes", "createdAt", "lastModified"]},
+                        "description": "L'ordre de Hugging Face (les plus téléchargés par défaut) ; une recherche avec "
+                                       "sort est gardée à part, hors des recherches gardées de la page (code "
+                                       "hub_sort_invalid pour un autre ordre, 400)."}],
         "responses": {"200": reply("{models: [{repo, architecture, parameters, context, downloads, likes, updated, "
-                                   "compatible, reason, moe}], cached_at}, 40 au plus, les plus téléchargés "
-                                   "d'abord ; cached_at (secondes Unix) quand la réponse vient du Mac",
+                                   "trending, created, compatible, reason, moe}], cached_at}, 40 au plus, dans "
+                                   "l'ordre demandé ; cached_at (secondes Unix) quand la réponse vient du Mac",
                                    {"type": "object"}),
                       "404": reply("Hors ligne ou local=1, et cette recherche n'a jamais été gardée (code "
                                    "hub_not_cached)", ref("Error")),

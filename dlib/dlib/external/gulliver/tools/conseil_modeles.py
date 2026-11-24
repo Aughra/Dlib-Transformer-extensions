@@ -8,6 +8,7 @@
 #       [--machine "modèle|puce|macOS|Gulliver|charge|température"]
 #       [--temperature "t_min|t_moy|t_max|c_min|c_moy|c_max|g_min|g_moy|g_max|relevés"]
 #       [--late] [--json conseil.json] [--doc docs/mesures/tests-de-vitesse.md] [--service service.json] [--rag rag.json]
+#       [--keep "id …"] [--removed retires.json]
 #
 # Les lignes de llama.cpp et de MLX (identifiants « llama.cpp:… », « mlx:… ») entrent dans le tableau comme les autres,
 # pas dans le conseil (le bouton « Choisir » applique un modèle de Gulliver).  Avec --doc, la section de la semaine du
@@ -18,6 +19,16 @@
 # vocabulaire) ; les autres ont le leur.  Le plus rapide n'est choisi que parmi les modèles d'au moins 3 milliards de
 # paramètres (taille lue dans le nom) : les plus petits vont très vite mais répètent la question au lieu d'y répondre
 # (Qwen2.5-0.5B, conseillé le 22 novembre 2026, l'a fait dès la première question de l'humain).
+#
+# L'épreuve (tools/epreuve_modeles.py, 2026-11-24, demande de l'humain) : 40 questions en français, une note sur 100
+# (lignes brutes « quiz|id|note »), qui se compare entre toutes les familles.  Quand elle est là, « pour tout faire » est
+# la meilleure note des modèles qui voient les images et écrivent au moins 40 jetons/s sur le GPU, « le plus juste » la
+# meilleure note de tous ; à note égale, le plus rapide.  Les modèles « abliterated » (sans réflexe de refus : ABLITERATED)
+# n'ont que leur ligne à eux, « pour la cybersécurité » (la meilleure note parmi eux), à réserver à un usage autorisé.
+# Le dernier du classement (la plus basse note, puis la plus lente écriture ; un modèle que le moteur ne lit pas passe
+# avant), hors des modèles conseillés, du choix précédent et des modèles actifs (--keep), est désigné dans « remove » du
+# JSON : tools/retrait_modeles.py le retire de Gulliver.  --removed : la liste des modèles déjà retirés, recopiée dans le
+# JSON (« removed »), pour le menu de l'onglet Modèles.
 import argparse
 import collections
 import datetime
@@ -25,6 +36,7 @@ import json
 import re
 
 MIN_BILLIONS = 3
+ABLITERATED = re.compile(r"abliterat|uncensored|heretic|dolphin", re.IGNORECASE)
 
 
 def fmt(v):
@@ -68,6 +80,8 @@ def main():
     ap.add_argument("--doc")
     ap.add_argument("--service", help="le JSON de tools/bench_service.py : les mesures « comme un utilisateur »")
     ap.add_argument("--rag", help="le JSON de tools/test_rag.py : la justesse de la recherche dans les documents")
+    ap.add_argument("--keep", default="", help="les modèles actifs, jamais retirés")
+    ap.add_argument("--removed", help="la liste des modèles déjà retirés (tools/retrait_modeles.py)")
     args = ap.parse_args()
     # « t_min|t_moy|t_max|c_min|c_moy|c_max|g_min|g_moy|g_max|relevés » (bench_modeles.sh) : la température de la puce,
     # l'utilisation du processeur et du GPU pendant la mesure.
@@ -81,13 +95,13 @@ def main():
         if loads else "")
     new = set(args.new.split())
 
-    names, image, where, ppl = {}, {}, {}, {}
+    names, image, where, ppl, quiz = {}, {}, {}, {}, {}
     runs = collections.defaultdict(lambda: collections.defaultdict(list))   # (id, taille) -> mémoire -> [(lecture, écriture)]
     for line in open(args.raw, encoding="utf-8"):
         p = line.rstrip("\n").split("|")
-        if p[0] == "ppl" and len(p) == 3:
+        if p[0] in ("ppl", "quiz") and len(p) == 3:
             try:
-                ppl[p[1]] = float(p[2])
+                (ppl if p[0] == "ppl" else quiz)[p[1]] = float(p[2])
             except ValueError:
                 pass
             continue
@@ -139,7 +153,8 @@ def main():
         print()
     print(f"Gulliver sur chacun de ses modèles installés, et llama.cpp et MLX sur le modèle de référence : lecture d'une question puis écriture de 64 jetons après elle, en jetons par "
           f"seconde, mémoire de conversation en 8 bits, {args.rounds} essais en alternance (moyenne) ; perplexité d'un "
-          f"même texte français (plus basse, mieux le modèle prévoit le texte). "
+          f"même texte français (plus basse, mieux le modèle prévoit le texte) ; épreuve : la note sur 100 de 30 "
+          f"questions en français (calcul, logique, connaissances, langue, consignes, compréhension, code). "
           + (f"Référence : **{names[previous]}**, le choix de la semaine dernière ; l'écart est celui de l'écriture "
              f"après 512 tokens (+ : plus rapide que lui)." if previous else
              "Pas encore de choix de la semaine dernière pour référence."))
@@ -151,14 +166,14 @@ def main():
         print("L'heure limite est passée avant la fin : les modèles manquants n'ont pas été mesurés cette semaine.")
     print()
     print("| Modèle | Calcul | Lecture 512 | Lecture 4 096 | Écriture 512 | Écriture 4 096 | Écart | Perplexité "
-          "| Mémoire conseillée |")
-    print("|---|---|---|---|---|---|---|---|---|")
+          "| Épreuve | Mémoire conseillée |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
     order = sorted(models, key=lambda m: -(write.get(m) or 0))
     for m in order:
         tag = " (nouveau)" if m in new else ""
         tag += " (choix précédent)" if m == previous else ""
         if where.get(m) == "nonlu":
-            print(f"| {names[m]}{tag} | ne lit pas ce modèle | — | — | — | — | — | — | — |")
+            print(f"| {names[m]}{tag} | ne lit pas ce modèle | — | — | — | — | — | — | — | — |")
             continue
         d = ""
         if base and write.get(m) and m != previous:
@@ -168,7 +183,7 @@ def main():
         memory = "—" if engine(m) else ("demi-précision" if kv_type(m) == "f16" else "8 bits")
         print(f"| {names[m]}{tag} | {'GPU' if where.get(m) == 'gpu' else 'processeur'} | {fmt(get(m, '512', i=0))} "
               f"| {fmt(get(m, '4096', i=0))} | {fmt(get(m, '512'))} | {fmt(get(m, '4096'))} | {d or '—'} | {p} "
-              f"| {memory} |")
+              f"| {quiz_text(quiz, m)} | {memory} |")
 
     if args.service:
         try:
@@ -203,60 +218,100 @@ def main():
             print("| " + " | ".join(row) + " |")
     if not usable:
         return
+    cyber_all = [m for m in usable if ABLITERATED.search(names[m])]
+    usable = [m for m in usable if m not in cyber_all] or usable
+    noted = lambda m: (quiz.get(m, -1), write[m])   # la meilleure note, puis le plus rapide
     big = [m for m in usable if (billions(names[m]) or MIN_BILLIONS) >= MIN_BILLIONS]
     fastest = max(big, key=lambda m: write[m]) if big else None
     family = [m for m in usable if comparable(names[m]) and m in ppl]
-    accurate = min(family, key=lambda m: ppl[m]) if family else None
     seeing = [m for m in usable if image.get(m) and write[m] >= 40 and where.get(m) == "gpu"]
-    seeing_family = [m for m in seeing if m in family]
-    general = (min(seeing_family, key=lambda m: ppl[m]) if seeing_family
-               else max(seeing, key=lambda m: write[m]) if seeing else fastest or max(usable, key=lambda m: write[m]))
+    if any(m in quiz for m in usable):
+        accurate = max([m for m in usable if m in quiz], key=noted)
+        seen = [m for m in seeing if m in quiz]
+        general = (max(seen, key=noted) if seen else max(seeing, key=lambda m: write[m]) if seeing
+                   else fastest or max(usable, key=lambda m: write[m]))
+    else:
+        accurate = min(family, key=lambda m: ppl[m]) if family else None
+        seeing_family = [m for m in seeing if m in family]
+        general = (min(seeing_family, key=lambda m: ppl[m]) if seeing_family
+                   else max(seeing, key=lambda m: write[m]) if seeing else fastest or max(usable, key=lambda m: write[m]))
+    cyber_noted = [m for m in cyber_all if m in quiz]
+    cyber = max(cyber_noted, key=noted) if cyber_noted else None
 
     def entry(role, m, why):
         return {"role": role, "id": m, "name": names[m], "why": why, "write_512": write.get(m),
-                "read_4096": get(m, "4096", i=0), "perplexity": ppl.get(m), "image": image.get(m, False),
+                "read_4096": get(m, "4096", i=0), "perplexity": ppl.get(m), "quiz": quiz.get(m),
+                "image": image.get(m, False),
                 "settings": {"kv_type": kv_type(m), "draft_tokens": 7}}
 
-    advice = [entry("general", general, "Pour tout faire, images comprises : le plus juste des modèles qui voient les "
-                    "images et écrivent au moins 40 jetons/s sur le GPU.")]
+    by_quiz = any(m in quiz for m in usable)
+    advice = [entry("general", general, "Pour tout faire, images comprises : " + (
+        "la meilleure note à l'épreuve des modèles qui voient les images et écrivent au moins 40 jetons/s sur le GPU."
+        if by_quiz else "le plus juste des modèles qui voient les images et écrivent au moins 40 jetons/s sur le GPU."))]
     if accurate and accurate != general:
-        advice.append(entry("accurate", accurate, "Les réponses les plus justes : la perplexité la plus basse de la "
-                            "famille Qwen3, la seule dont les perplexités se comparent."))
+        advice.append(entry("accurate", accurate, "Les réponses les plus justes : " + (
+            "la meilleure note à l'épreuve de 40 questions, toutes familles confondues." if by_quiz else
+            "la perplexité la plus basse de la famille Qwen3, la seule dont les perplexités se comparent.")))
     if fastest and fastest not in (general, accurate):
         advice.append(entry("fastest", fastest, "Le plus rapide : la meilleure écriture après 512 tokens, parmi les "
                             "modèles d'au moins 3 milliards de paramètres (les plus petits répètent la question au lieu "
                             "d'y répondre)."))
+    if cyber:
+        advice.append(entry("cyber", cyber, "Pour la cybersécurité : la meilleure note à l'épreuve des modèles "
+                            "« abliterated » (sans réflexe de refus), à n'utiliser que pour un usage autorisé."))
     labels = {"general": "Pour tout faire, images comprises", "accurate": "Pour les réponses les plus justes",
-              "fastest": "Pour aller vite"}
+              "fastest": "Pour aller vite", "cyber": "Pour la cybersécurité (usage autorisé)"}
+    # Le dernier du classement, retiré par tools/retrait_modeles.py.
+    keep = {a["id"] for a in advice} | set(args.keep.split()) | ({previous} if previous else set())
+    gulliver = [m for m in models if not engine(m) and m not in keep]
+    unread = [m for m in gulliver if where.get(m) == "nonlu"]
+    graded = [m for m in gulliver if m in quiz and m in write]
+    remove = (unread[0] if unread else min(graded, key=noted) if len(graded) > 1 else None)
+    removed = load_json(args.removed) or []
     print()
     print("### Conseil : quel modèle employer avec Gulliver")
     print()
     for a in advice:
         m = a["id"]
         p = ", perplexité " + f"{ppl[m]:.2f}".replace(".", ",") if m in ppl else ""
+        p += f", épreuve {quiz_text(quiz, m)}" if m in quiz else ""
         print(f"- **{labels[a['role']]}** : **{names[m]}**, écriture {fmt(write[m])} jetons/s après 512 tokens{p} ; "
               f"mémoire de conversation conseillée : {'demi-précision' if a['settings']['kv_type'] == 'f16' else '8 bits'}.")
     if previous:
         print()
         print("Par rapport à la semaine dernière : " + ("le conseil pour tout faire ne change pas."
               if general == previous else f"le conseil pour tout faire passe de {names[previous]} à {names[general]}."))
+    if remove:
+        print()
+        print(f"Le dernier du classement, retiré de Gulliver : **{names[remove]}** ("
+              + ("le moteur ne le lit pas" if where.get(remove) == "nonlu" else
+                 f"épreuve {quiz_text(quiz, remove)}, écriture {fmt(write.get(remove))} jetons/s")
+              + ") ; la veille ne le retéléchargera plus, et le menu « Modèles retirés » de l'onglet Modèles le "
+                "remet d'un clic.")
     print()
     print("Le bouton « Choisir » de l'onglet Modèles de Gulliver applique le modèle et ses réglages. À lire avec deux "
-          "précautions : la perplexité mesure la façon dont un modèle prévoit un texte français, pas la qualité de ses "
-          "raisonnements, et elle ne se compare qu'entre modèles Qwen3 ; l'écriture est mesurée sans brouillon (sur une "
-          "recopie ou une question sur un document, les brouillons la multiplient par 1,3 à 3).")
+          "précautions : l'épreuve est courte (40 questions), et elle ne remplace pas l'essai sur vos propres "
+          "questions ; l'écriture est mesurée sans brouillon (sur une recopie ou une question sur un document, les "
+          "brouillons la multiplient par 1,3 à 3).")
     if args.doc:
         try:
             service = json.load(open(args.service, encoding="utf-8")) if args.service else None
         except (OSError, ValueError):
             service = None
         update_doc(args.doc, [m for m in order if not engine(m) and where.get(m) != "nonlu"], names, where, get, ppl,
-                   previous, advice, temp_text, args.late, service, rag)
+                   previous, advice, temp_text, args.late, service, rag, quiz)
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump({"date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), "previous": previous or None,
-                       "new": sorted(new & set(names)), "late": args.late, "advice": advice}, f, ensure_ascii=False,
-                      indent=1)
+                       "new": sorted(new & set(names)), "late": args.late, "advice": advice,
+                       "remove": ({"id": remove, "name": names[remove], "quiz": quiz.get(remove),
+                                   "write_512": write.get(remove), "unread": where.get(remove) == "nonlu"}
+                                  if remove else None),
+                       "removed": removed}, f, ensure_ascii=False, indent=1)
+
+
+def quiz_text(quiz, m):
+    return f"{quiz[m]:.0f}/100" if m in quiz else "—"
 
 
 def load_json(path):
@@ -336,7 +391,8 @@ def service_rows(service, engines=("gulliver", "llama")):
     return rows
 
 
-def update_doc(path, models, names, where, get, ppl, previous, advice, temp_text, late, service=None, rag=None):
+def update_doc(path, models, names, where, get, ppl, previous, advice, temp_text, late, service=None, rag=None, quiz=None):
+    quiz = quiz or {}
     """La section de la semaine du document de vitesse : Gulliver seul, sur les modèles mesurés cette semaine."""
     begin, end = "<!-- semaine : début -->", "<!-- semaine : fin -->"
     try:
@@ -351,16 +407,18 @@ def update_doc(path, models, names, where, get, ppl, previous, advice, temp_text
              "sur chacun de ses modèles installés ; jetons par seconde, mémoire de conversation en 8 bits."
              + (f" Charge de la machine {temp_text}." if temp_text else "")
              + (" L'heure limite a coupé la mesure avant la fin." if late else ""), "",
-             "| Modèle | Calcul | Lecture 512 | Lecture 4 096 | Écriture 512 | Écriture 4 096 | Perplexité |",
-             "|---|---|---|---|---|---|---|"]
+             "| Modèle | Calcul | Lecture 512 | Lecture 4 096 | Écriture 512 | Écriture 4 096 | Perplexité | Épreuve |",
+             "|---|---|---|---|---|---|---|---|"]
     for m in models:
         tag = " (choix précédent)" if m == previous else ""
         p = f"{ppl[m]:.2f}".replace(".", ",") if m in ppl else "—"
         lines.append(f"| {names[m]}{tag} | {'GPU' if where.get(m) == 'gpu' else 'processeur'} | {fmt(get(m, '512', i=0))} "
-                     f"| {fmt(get(m, '4096', i=0))} | {fmt(get(m, '512'))} | {fmt(get(m, '4096'))} | {p} |")
+                     f"| {fmt(get(m, '4096', i=0))} | {fmt(get(m, '512'))} | {fmt(get(m, '4096'))} | {p} "
+                     f"| {quiz_text(quiz, m)} |")
     if advice:
         lines += ["", "Conseillé : " + " ; ".join(
-            {"general": "pour tout faire", "accurate": "le plus juste", "fastest": "le plus rapide"}[a["role"]] + ", "
+            {"general": "pour tout faire", "accurate": "le plus juste", "fastest": "le plus rapide",
+             "cyber": "pour la cybersécurité"}[a["role"]] + ", "
             + names[a["id"]] for a in advice) + ". Les tableaux complets, avec llama.cpp et MLX, sont dans « Mesures de "
                                                     "la semaine »."]
     if service and service.get("gulliver"):

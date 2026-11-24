@@ -140,11 +140,23 @@ namespace gulliver
         }
     }
 
-    bool hub_search(const std::string& query, json& out, std::string& error)
+    bool hub_sort_known(const std::string& sort)
     {
+        return sort == "downloads" || sort == "trendingScore" || sort == "likes" || sort == "createdAt"
+            || sort == "lastModified";
+    }
+
+    bool hub_search(const std::string& query, json& out, std::string& error, const std::string& sort)
+    {
+        if (!hub_sort_known(sort))
+        {
+            error = "unknown order of Hugging Face: " + sort.substr(0, 40);
+            return false;
+        }
         json list;
-        const std::string url = std::string(hub) + "/api/models?filter=gguf&sort=downloads&limit=40" +
+        const std::string url = std::string(hub) + "/api/models?filter=gguf&sort=" + sort + "&limit=40" +
             "&expand%5B%5D=gguf&expand%5B%5D=downloads&expand%5B%5D=likes&expand%5B%5D=lastModified" +
+            "&expand%5B%5D=trendingScore&expand%5B%5D=createdAt" +
             (query.empty() ? std::string() : "&search=" + url_encode(query.substr(0, 100)));
         if (!get_json(url, list, error)) return false;
         json models = json::array();
@@ -159,6 +171,8 @@ namespace gulliver
             o["downloads"] = m["downloads"];
             o["likes"] = m["likes"];
             o["updated"] = m["lastModified"];
+            o["trending"] = m["trendingScore"];
+            o["created"] = m["createdAt"];
             models.push_back(o);
         }
         out = json::object();

@@ -11,13 +11,15 @@
 # et MLX (s'il a la version MLX du modèle) sont mesurés de la même façon sur le modèle de référence, comme deux lignes de
 # plus du tableau (décision de l'humain : « un modèle à comparer comme un autre »).  Passent d'abord le choix de la
 # semaine dernière (conseil.json, sinon le modèle actif), puis les nouveaux de la nuit (nouveaux.json, tools/modeles_semaine.py), puis les autres ;
-# une mesure commencée avant BENCH_DEADLINE heures (12 par défaut) s'arrête à cette heure-là.  La température de la puce,
+# la mesure va toujours jusqu'au bout, sans heure limite (décision de l'humain, 2026-11-24).  La température de la puce,
 # l'utilisation du processeur et celle du GPU sont relevées toutes les 20 secondes pendant la mesure (macos/temperature :
 # minimum, moyenne et maximum de chacune).  Écrit les chiffres bruts dans
 # build/bench/modeles-<date>.raw, puis la page de la semaine et le conseil (tools/conseil_modeles.py), et met à jour la
 # section de la semaine de docs/mesures/tests-de-vitesse.md : « table: <fichier .md> » en dernière ligne.  Enfin, sur le
 # modèle de référence, les mesures « comme un utilisateur » par le vrai service (tools/bench_service.py), et la justesse
-# de la recherche dans les documents (tools/test_rag.py).
+# de la recherche dans les documents (tools/test_rag.py).  Après la perplexité, l'épreuve de 40 questions en français
+# (tools/epreuve_modeles.py, une note sur 100, lignes « quiz|id|note ») sur chaque modèle ; le conseil s'appuie sur elle et
+# désigne le dernier du classement, que bench_hebdo.sh retire ensuite (tools/retrait_modeles.py).
 #
 # Lignes brutes : id|nom|images|taille|mémoire|lecture|écriture|calcul (gpu, processeur, nonlu) ; ppl|id|perplexité.
 # L'identifiant de llama.cpp et de MLX est « llama.cpp:<id> » et « mlx:<id> » (pas un modèle de Gulliver).
@@ -26,7 +28,6 @@ ROOT=$(cd "$(dirname "$0")/../../../../.." && pwd)
 TOOLS=$ROOT/dlib/dlib/external/gulliver/tools
 ROUNDS=${1:-2}
 SIZES=${BENCH_SIZES:-512 4096}
-DEADLINE=${BENCH_DEADLINE:-12}
 STEPS=64
 BENCH=$ROOT/build/macos-gulliver/tests/bench_runtime
 PPL=$ROOT/build/macos-gulliver/tests/perplexity_runtime
@@ -65,11 +66,12 @@ rank() {  # 0 : le choix de la semaine dernière ; 1 : un nouveau ; 2 : les autr
   echo 2
 }
 MODELS=()
-REF_ID="" REF_NAME="" REF_FILE="" ACTIVE_ID=""
+REF_ID="" REF_NAME="" REF_FILE="" ACTIVE_ID="" ACTIVE_ALL=""
 while IFS='|' read -r name file id active image; do
   [ -n "$id" ] || continue
   MODELS+=("$(rank "$id")|$name|$file|$id|$image")
   [ "$active" = 1 ] && [ -z "$ACTIVE_ID" ] && ACTIVE_ID=$id
+  [ "$active" = 1 ] && ACTIVE_ALL="$ACTIVE_ALL $id"
 done <<< "$LIST"
 # Le modèle de référence : le choix de la semaine dernière, sinon le modèle actif ; llama.cpp et MLX le mesurent.
 REF_ID=${PREVIOUS:-$ACTIVE_ID}
@@ -84,11 +86,6 @@ case "$REF_ID" in
 esac
 IFS=$'\n' MODELS=($(printf '%s\n' "${MODELS[@]}" | sort -t'|' -k1,1n)); unset IFS
 
-# L'heure limite ne vaut que pour une mesure commencée avant elle (le lundi à 8 h, BENCH_DEADLINE=19) ; lancée plus tard, à la main, la
-# mesure va jusqu'au bout.
-if [ "$(date +%H)" -ge "$DEADLINE" ]; then DEADLINE=99; fi
-past_deadline() { [ "$(date +%H)" -ge "$DEADLINE" ]; }
-
 measure() {  # $1 id, $2 nom, $3 fichier, $4 images, $5 taille, $6 q8|f16
   local out p g where=gpu
   out=$(BENCH_GPU_CONTEXT=262144 "$BENCH" "$3" "$(sysctl -n hw.physicalcpu)" "$5" "$STEPS" 0 "$6" metal 2>&1)
@@ -96,7 +93,7 @@ measure() {  # $1 id, $2 nom, $3 fichier, $4 images, $5 taille, $6 q8|f16
   p=$(printf '%s\n' "$out" | sed -n 's/^prompt: .* \([0-9.]*\) tokens\/s$/\1/p' | head -1)
   g=$(printf '%s\n' "$out" | sed -n 's/^generation: .* \([0-9.]*\) tokens\/s$/\1/p' | head -1)
   printf '%s\n' "$out" | grep -qE "stay on the processor|go back to the processor|no GPU" && where=processeur
-  printf '%s\n' "$out" | grep -q "is not supported by this engine" && where=nonlu
+  printf '%s\n' "$out" | grep -qE "is not supported by this engine|unsupported ggml type" && where=nonlu
   echo "$1|$2|$4|$5|$6|${p:-—}|${g:-—}|$where" >> "$RAW"
 }
 
@@ -132,30 +129,37 @@ except Exception: print("—")')
     echo "mlx:$REF_ID|MLX · $REF_NAME (son fichier 4 bits)|0|$n|q8|${p:-—}|${g:-—}|gpu" >> "$RAW"
   fi
 }
-LATE=""
 for ((r = 1; r <= ROUNDS; ++r)); do
   for entry in "${MODELS[@]}"; do
     IFS='|' read -r _ name file id image <<< "$entry"
-    if past_deadline; then LATE=1; break 2; fi
     for n in $SIZES; do
       echo "essai $r : $name, $n tokens"
       measure "$id" "$name" "$file" "$image" "$n" q8
       measure "$id" "$name" "$file" "$image" "$n" f16
     done
   done
-  if ! past_deadline && [ -n "$REF_ID" ]; then
+  if [ -n "$REF_ID" ]; then
     for n in $SIZES; do echo "essai $r : llama.cpp et MLX, $n tokens"; engines "$n"; done
   fi
 done
 for entry in "${MODELS[@]}"; do
   IFS='|' read -r _ name file id image <<< "$entry"
-  if past_deadline; then LATE=1; break; fi
   echo "justesse : $name"
   out=$("$PPL" "$file" "$TEXT" 512 8 q8 metal 2>&1)
   printf '== perplexité %s\n%s\n' "$id" "$out" >> "$LOG"
   echo "ppl|$id|$(printf '%s\n' "$out" | sed -n 's/^perplexity: \([0-9.]*\) .*/\1/p' | head -1)" >> "$RAW"
 done
-if ! past_deadline && [ -n "$REF_ID" ]; then
+# L'épreuve : 40 questions en français, une note sur 100 par modèle (de quelques secondes à quelques minutes chacun).
+for entry in "${MODELS[@]}"; do
+  IFS='|' read -r _ name file id image <<< "$entry"
+  grep -q "^$id|.*|nonlu$" "$RAW" && continue
+  echo "épreuve : $name"
+  out=$(python3 -I "$TOOLS/epreuve_modeles.py" "$file" --json "$OUTDIR/epreuve-$STAMP-$id.json" 2>&1)
+  printf '== épreuve %s\n%s\n' "$id" "$out" >> "$LOG"
+  note=$(printf '%s\n' "$out" | sed -n 's/^epreuve: \([0-9]*\) .*/\1/p' | tail -1)
+  [ -n "$note" ] && echo "quiz|$id|$note" >> "$RAW"
+done
+if [ -n "$REF_ID" ]; then
   if [ -n "$LLAMA_PPL" ] && [ -f "$REF_FILE" ]; then
     p=$("$LLAMA_PPL" -m "$REF_FILE" -f "$TEXT" -c 512 --chunks 8 -ngl 99 2>&1 | tee -a "$LOG" \
       | sed -n 's/.*Final estimate: PPL = \([0-9.]*\) .*/\1/p')
@@ -170,7 +174,7 @@ fi
 # Les mesures « comme un utilisateur » (tools/bench_service.py), par le service, sur le modèle de référence : un service
 # d'essai isolé et llama-server, jamais le service de l'utilisateur.  La température et la charge restent relevées.
 SERVICE_JSON=""
-if ! past_deadline && [ -f "$REF_FILE" ]; then
+if [ -f "$REF_FILE" ]; then
   echo "comme un utilisateur : $REF_NAME"
   if python3 -I "$TOOLS/bench_service.py" "$REF_FILE" --name "$REF_NAME" --llama --json "$OUTDIR/service-$STAMP.json" >> "$LOG" 2>&1; then
     SERVICE_JSON=$OUTDIR/service-$STAMP.json
@@ -179,11 +183,9 @@ fi
 # La justesse de la recherche dans les documents (tools/test_rag.py) : 40 questions figées sur les épisodes du blog, par un
 # service d'essai isolé (quelques minutes).
 RAG_JSON=""
-if ! past_deadline; then
-  echo "recherche dans les documents"
-  if python3 -I "$TOOLS/test_rag.py" --json "$OUTDIR/rag-$STAMP.json" >> "$LOG" 2>&1; then
-    RAG_JSON=$OUTDIR/rag-$STAMP.json
-  fi
+echo "recherche dans les documents"
+if python3 -I "$TOOLS/test_rag.py" --json "$OUTDIR/rag-$STAMP.json" >> "$LOG" 2>&1; then
+  RAG_JSON=$OUTDIR/rag-$STAMP.json
 fi
 kill "$SAMPLER" 2>/dev/null
 LOAD_END=$(sysctl -n vm.loadavg)
@@ -195,5 +197,5 @@ TEMP_MEAN=$(awk 'NF >= 3 {for (i = 1; i <= 3; ++i) {v = $i + 0; s[i] += v; if (n
 python3 -I "$TOOLS/conseil_modeles.py" "$RAW" --previous "$PREVIOUS" --new "$NEW" --rounds "$ROUNDS" \
   --machine "$(sysctl -n hw.model)|$(sysctl -n machdep.cpu.brand_string), $(( $(sysctl -n hw.memsize) / 1073741824 )) Go|$(sw_vers -productVersion) ($(sw_vers -buildVersion))|$(sed -n 's/.*GULLIVER_VERSION "\(.*\)".*/\1/p' "$ROOT/dlib/dlib/external/gulliver/common/version.h" | head -1) ($(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null))|$LOAD_START au début, $LOAD_END à la fin|${TEMP_START:-?} au début, ${TEMP_END:-?} à la fin" \
   --temperature "$TEMP_MEAN" --doc "$ROOT/docs/mesures/tests-de-vitesse.md" ${SERVICE_JSON:+--service "$SERVICE_JSON"} ${RAG_JSON:+--rag "$RAG_JSON"} \
-  ${LATE:+--late} --json "$HEBDO/conseil.json" > "$OUT"
+  --keep "$ACTIVE_ALL" --removed "$HEBDO/retires.json" --json "$HEBDO/conseil.json" > "$OUT"
 echo "table: $OUT"

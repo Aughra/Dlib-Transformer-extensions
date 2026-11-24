@@ -151,6 +151,11 @@
   "expect": true
  },
  {
+  "name": "models tab: the menu of the removed models, with their date",
+  "eval": "const d=document.querySelector('.dialog details.removed-card'); if(!d) return 'no menu'; if(d.open) return 'open at first'; d.open=true; const t=d.textContent; return t.includes('Modèles retirés (1)') && t.includes('24 novembre 2026') && t.includes('Ancien modèle (essai)') && t.includes('épreuve 41/100') && [...d.querySelectorAll('button')].some(b=>b.innerText.trim()==='Remettre')",
+  "expect": true
+ },
+ {
   "name": "models tab: « Choisir » applies the advice and shows what changed",
   "eval": "window.confirm=()=>true; const b=document.querySelector('.dialog .advice-card .advice-row button'); if(!b) return 'no button'; b.click(); for(let i=0;i<60;i++){ await new Promise(r=>setTimeout(r,500)); const ds=[...document.querySelectorAll('.dialog')]; const c=ds.find(x=>x.innerText.includes('Ce qui a changé')); if(c){ const m=await (await fetch('/gulliver/v1/models')).json(); const ok=m.active&&m.active.general==='qwen3-vl-2b-test'&&c.innerText.includes('Modèle qui répond'); const close=[...c.querySelectorAll('button')].find(x=>x.innerText.trim()==='Fermer'); if(close) close.click(); return ok; } } return 'no dialog'",
   "expect": true

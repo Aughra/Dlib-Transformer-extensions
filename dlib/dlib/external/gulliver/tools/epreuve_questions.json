@@ -1,0 +1,391 @@
+{
+ "about": "L'épreuve des modèles de Gulliver (tools/epreuve_modeles.py, fork pour macOS, 2026-11-24) : 40 questions en français, chacune avec sa réponse attendue. « nombre » : le premier nombre de la réponse finale ; « mot » : la réponse finale contient l'un des mots attendus et aucun des mots interdits (sans accents ni majuscules) ; « exact » : la réponse finale est exactement l'un des textes attendus ; « motif » : la réponse finale suit l'expression régulière. Durcie le 2026-11-24 après la première mesure (sept modèles à 100/100) : les dix questions les plus faciles remplacées par vingt questions à plusieurs étapes ; les notes d'avant ne se comparent pas à celles d'après.",
+ "questions": [
+  {
+   "id": "calcul-2",
+   "theme": "calcul",
+   "question": "Un train part à 14 h 35 et arrive à 17 h 10. Combien de minutes dure le trajet ?",
+   "type": "nombre",
+   "attendu": 155
+  },
+  {
+   "id": "calcul-3",
+   "theme": "calcul",
+   "question": "Un pull coûte 80 euros. Il est soldé à 25 %, puis le vendeur retire encore 10 euros. Quel est son prix final, en euros ?",
+   "type": "nombre",
+   "attendu": 50
+  },
+  {
+   "id": "calcul-5",
+   "theme": "calcul",
+   "question": "Trois stylos coûtent 4,50 euros. Combien coûtent sept stylos, en euros ?",
+   "type": "nombre",
+   "attendu": 10.5
+  },
+  {
+   "id": "calcul-6",
+   "theme": "calcul",
+   "question": "Quel est le dixième nombre premier ?",
+   "type": "nombre",
+   "attendu": 29
+  },
+  {
+   "id": "calcul-7",
+   "theme": "calcul",
+   "question": "Un fichier de 3 Go se télécharge à 50 Mo par seconde, avec 1 Go = 1 000 Mo. Combien de secondes dure le téléchargement ?",
+   "type": "nombre",
+   "attendu": 60
+  },
+  {
+   "id": "logique-2",
+   "theme": "logique",
+   "question": "Combien de fois la lettre « r » apparaît-elle dans le mot « arrière » ?",
+   "type": "nombre",
+   "attendu": 3
+  },
+  {
+   "id": "logique-3",
+   "theme": "logique",
+   "question": "Marie a trois frères. Chacun de ses frères a deux sœurs. Combien y a-t-il de filles dans la famille ?",
+   "type": "nombre",
+   "attendu": 2
+  },
+  {
+   "id": "logique-4",
+   "theme": "logique",
+   "question": "Aujourd'hui, nous sommes mercredi. Quel jour serons-nous dans 10 jours ?",
+   "type": "mot",
+   "attendu": [
+    "samedi"
+   ],
+   "interdit": [
+    "lundi",
+    "mardi",
+    "jeudi",
+    "vendredi",
+    "dimanche"
+   ]
+  },
+  {
+   "id": "logique-5",
+   "theme": "logique",
+   "question": "Un escargot est au pied d'un mur de 10 mètres. Chaque jour il monte de 3 mètres, et chaque nuit il glisse de 2 mètres. Au bout de combien de jours atteint-il le haut du mur ?",
+   "type": "nombre",
+   "attendu": 8
+  },
+  {
+   "id": "logique-6",
+   "theme": "logique",
+   "question": "Une batte et une balle coûtent 1,10 euro ensemble. La batte coûte 1 euro de plus que la balle. Combien coûte la balle, en centimes ?",
+   "type": "nombre",
+   "attendu": 5
+  },
+  {
+   "id": "savoir-2",
+   "theme": "connaissances",
+   "question": "Quel gaz les plantes absorbent-elles dans l'air pour la photosynthèse ?",
+   "type": "mot",
+   "attendu": [
+    "dioxyde de carbone",
+    "co2",
+    "gaz carbonique",
+    "co₂"
+   ],
+   "interdit": [
+    "oxygene",
+    "azote"
+   ]
+  },
+  {
+   "id": "savoir-5",
+   "theme": "connaissances",
+   "question": "Quel est le plus long fleuve de France ?",
+   "type": "mot",
+   "attendu": [
+    "loire"
+   ],
+   "interdit": [
+    "seine",
+    "rhone",
+    "garonne"
+   ]
+  },
+  {
+   "id": "savoir-6",
+   "theme": "calcul",
+   "question": "On lance deux dés ordinaires à six faces. Quelle est la probabilité que la somme fasse 7 ? Donne une fraction simplifiée.",
+   "type": "motif",
+   "attendu": "^1 ?/ ?6$"
+  },
+  {
+   "id": "langue-2",
+   "theme": "français",
+   "question": "Conjugue le verbe « aller » au futur simple, à la première personne du pluriel.",
+   "type": "mot",
+   "attendu": [
+    "nous irons"
+   ],
+   "interdit": [
+    "allerons"
+   ]
+  },
+  {
+   "id": "langue-3",
+   "theme": "français",
+   "question": "Donne un mot qui est le contraire de « généreux ».",
+   "type": "mot",
+   "attendu": [
+    "avare",
+    "avaricieux",
+    "egoiste",
+    "radin",
+    "pingre",
+    "mesquin",
+    "chiche",
+    "ingrat"
+   ]
+  },
+  {
+   "id": "langue-4",
+   "theme": "français",
+   "question": "Corrige la faute d'accord de cette phrase et réécris-la : « Les enfants sont allé à l'école. »",
+   "type": "mot",
+   "attendu": [
+    "sont alles"
+   ],
+   "interdit": [
+    "sont alle"
+   ]
+  },
+  {
+   "id": "consigne-2",
+   "theme": "consignes",
+   "question": "Donne exactement trois noms de fruits, séparés par des virgules, sur une seule ligne.",
+   "type": "motif",
+   "attendu": "^[^,\\n]+,[^,\\n]+,[^,\\n]+$"
+  },
+  {
+   "id": "consigne-3",
+   "theme": "consignes",
+   "question": "Réponds par oui ou par non : le nombre 91 est-il un nombre premier ?",
+   "type": "mot",
+   "attendu": [
+    "non"
+   ],
+   "interdit": [
+    "oui"
+   ]
+  },
+  {
+   "id": "lecture-1",
+   "theme": "compréhension",
+   "question": "Lis cette phrase : « Paul a prêté son vélo à Léa, car celui de Léa était crevé. » À qui appartient le vélo crevé ? Donne son prénom.",
+   "type": "mot",
+   "attendu": [
+    "lea"
+   ],
+   "interdit": [
+    "paul"
+   ]
+  },
+  {
+   "id": "lecture-2",
+   "theme": "compréhension",
+   "question": "Lis cette phrase : « La réunion, prévue lundi, a été reportée de deux jours. » Quel jour a lieu la réunion ?",
+   "type": "mot",
+   "attendu": [
+    "mercredi"
+   ],
+   "interdit": [
+    "lundi",
+    "mardi",
+    "jeudi"
+   ]
+  },
+  {
+   "id": "calcul-8",
+   "theme": "calcul",
+   "question": "Quel est le reste de la division de 2 puissance 100 par 7 ?",
+   "type": "nombre",
+   "attendu": 2
+  },
+  {
+   "id": "calcul-9",
+   "theme": "calcul",
+   "question": "Par combien de zéros se termine l'écriture du nombre 100! (factorielle de 100) ?",
+   "type": "nombre",
+   "attendu": 24
+  },
+  {
+   "id": "calcul-10",
+   "theme": "calcul",
+   "question": "Une somme de 1 000 euros est placée à 10 % d'intérêts par an, composés chaque année. Combien vaut-elle au bout de 3 ans, en euros ?",
+   "type": "nombre",
+   "attendu": 1331
+  },
+  {
+   "id": "calcul-11",
+   "theme": "calcul",
+   "question": "Combien y a-t-il de nombres entiers de 1 à 1 000 (inclus) qui sont divisibles par 3 ou par 5 ?",
+   "type": "nombre",
+   "attendu": 467
+  },
+  {
+   "id": "calcul-12",
+   "theme": "calcul",
+   "question": "Combien y a-t-il de nombres premiers entre 1 et 50 ?",
+   "type": "nombre",
+   "attendu": 15
+  },
+  {
+   "id": "calcul-13",
+   "theme": "calcul",
+   "question": "Une horloge indique 3 h 15. Quel est le plus petit angle, en degrés, entre l'aiguille des heures et celle des minutes ?",
+   "type": "nombre",
+   "attendu": 7.5
+  },
+  {
+   "id": "calcul-14",
+   "theme": "calcul",
+   "question": "On tire deux cartes, sans remise, d'un jeu de 52 cartes. Quelle est la probabilité que les deux soient des as ? Donne une fraction simplifiée.",
+   "type": "motif",
+   "attendu": "^1 ?/ ?221$"
+  },
+  {
+   "id": "logique-7",
+   "theme": "logique",
+   "question": "Dans une course, tu doubles le coureur qui est deuxième. À quelle place es-tu maintenant ?",
+   "type": "mot",
+   "attendu": [
+    "2",
+    "2e",
+    "2eme",
+    "deuxieme",
+    "second",
+    "seconde"
+   ],
+   "interdit": [
+    "premier",
+    "premiere",
+    "1er",
+    "1ere"
+   ]
+  },
+  {
+   "id": "logique-8",
+   "theme": "logique",
+   "question": "Combien de fois la lettre « n » apparaît-elle dans le mot « anticonstitutionnellement » ?",
+   "type": "nombre",
+   "attendu": 5
+  },
+  {
+   "id": "logique-9",
+   "theme": "logique",
+   "question": "Dans 5 ans, Léo aura le double de l'âge qu'il avait il y a 5 ans. Quel âge a Léo aujourd'hui ?",
+   "type": "nombre",
+   "attendu": 15
+  },
+  {
+   "id": "logique-10",
+   "theme": "logique",
+   "question": "Je suis un nombre à deux chiffres. La somme de mes chiffres est 11, et si on inverse mes deux chiffres, j'augmente de 27. Quel nombre suis-je ?",
+   "type": "nombre",
+   "attendu": 47
+  },
+  {
+   "id": "logique-11",
+   "theme": "logique",
+   "question": "Un mois commence un lundi et compte 31 jours. Quel jour de la semaine est le dernier jour de ce mois ?",
+   "type": "mot",
+   "attendu": [
+    "mercredi"
+   ],
+   "interdit": [
+    "lundi",
+    "mardi",
+    "jeudi",
+    "vendredi",
+    "samedi",
+    "dimanche"
+   ]
+  },
+  {
+   "id": "code-3",
+   "theme": "code",
+   "question": "En Python, que vaut x à la fin de ce programme : x = 1, puis for i in range(1, 5): x = x * i + 1 ?",
+   "type": "nombre",
+   "attendu": 65
+  },
+  {
+   "id": "code-4",
+   "theme": "code",
+   "question": "En Python, qu'affiche print('abcdef'[1:4][::-1]) ?",
+   "type": "mot",
+   "attendu": [
+    "dcb"
+   ],
+   "interdit": [
+    "bcd"
+   ]
+  },
+  {
+   "id": "langue-5",
+   "theme": "français",
+   "question": "Quel est le participe passé du verbe « résoudre » ?",
+   "type": "mot",
+   "attendu": [
+    "resolu"
+   ]
+  },
+  {
+   "id": "langue-6",
+   "theme": "français",
+   "question": "Écris en chiffres le nombre « quatre-vingt-dix-sept mille trois cent deux ».",
+   "type": "nombre",
+   "attendu": 97302
+  },
+  {
+   "id": "consigne-4",
+   "theme": "consignes",
+   "question": "Écris le mot « ordinateur » à l'envers, lettre par lettre, en minuscules.",
+   "type": "exact",
+   "attendu": [
+    "ruetanidro"
+   ]
+  },
+  {
+   "id": "consigne-5",
+   "theme": "consignes",
+   "question": "Combien y a-t-il de voyelles (a, e, i, o, u, y) dans le mot « aujourd'hui » ?",
+   "type": "nombre",
+   "attendu": 6
+  },
+  {
+   "id": "consigne-6",
+   "theme": "consignes",
+   "question": "Réponds uniquement par un nombre écrit en toutes lettres, sans aucun chiffre : combien font 6 fois 7 ?",
+   "type": "mot",
+   "attendu": [
+    "quarante-deux",
+    "quarante deux"
+   ],
+   "interdit": [
+    "42"
+   ]
+  },
+  {
+   "id": "lecture-3",
+   "theme": "compréhension",
+   "question": "Lis ce texte : « Anne est arrivée avant Bernard mais après Claire. David est arrivé le dernier. » Qui est arrivé en premier ? Donne son prénom.",
+   "type": "mot",
+   "attendu": [
+    "claire"
+   ],
+   "interdit": [
+    "anne",
+    "bernard",
+    "david"
+   ]
+  }
+ ]
+}

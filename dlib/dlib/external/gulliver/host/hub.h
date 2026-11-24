@@ -18,8 +18,11 @@ namespace gulliver
         mode hors ligne du service.
     */
 
-    // Les modèles GGUF de la recherche query, les plus téléchargés d'abord : {"models": [...]}.
-    bool hub_search(const std::string& query, json& out, std::string& error);
+    // Les modèles GGUF de la recherche query, les plus téléchargés d'abord : {"models": [...]}.  sort choisit un autre
+    // ordre de Hugging Face : hub_sorts() les donne, « downloads » (le défaut), « trendingScore », « likes », « createdAt »
+    // et « lastModified » ; un ordre inconnu est refusé.
+    bool hub_search(const std::string& query, json& out, std::string& error, const std::string& sort = "downloads");
+    bool hub_sort_known(const std::string& sort);
 
     // Les fichiers GGUF du dépôt repo, les projecteurs d'images (mmproj) à part : {"files": [...], "projectors": [...]}.
     bool hub_files(const std::string& repo, json& out, std::string& error);

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Installe (ou retire, avec --retirer) l'agent launchd qui mesure les modèles de Gulliver chaque
-# lundi à 8 h, arrêt à 19 h au plus tard (fork pour macOS, 2026-11-21 ; créneau du 2026-11-22, hors des
+# lundi à 8 h, sans heure limite (décision de l'humain, 2026-11-24) (fork pour macOS, 2026-11-21 ; créneau du 2026-11-22, hors des
 # heures où l'humain se sert du Mac : la nuit de lundi télécharge les modèles, macos/modeles-semaine).  Agent de l'utilisateur
 # seulement (~/Library/LaunchAgents), sans droit d'administrateur ; si le Mac dort à l'heure dite,
 # launchd le lance au réveil.
@@ -25,8 +25,6 @@ cat > "$PLIST" <<PL
   <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
   <key>StandardOutPath</key><string>$ROOT/build/bench/hebdo/launchd.log</string>
   <key>StandardErrorPath</key><string>$ROOT/build/bench/hebdo/launchd.log</string>
-  <key>EnvironmentVariables</key>
-  <dict><key>BENCH_DEADLINE</key><string>19</string></dict>
   <key>ProcessType</key><string>Interactive</string>
 </dict>
 </plist>
