@@ -4,8 +4,9 @@
 #
 #   python3 tools/test_conseil.py
 #
-# Vérifie : le modèle pour tout faire (le plus juste des Qwen3 qui voient les images et écrivent au moins 40 jetons/s
-# sur le GPU), le plus juste, le plus rapide ; que llama.cpp et MLX sont dans le tableau mais jamais conseillés, ni les
+# Vérifie : le modèle pour tout faire (le plus juste des Qwen3 qui écrivent au moins 40 jetons/s sur le GPU ; la
+# lecture d'images ne filtre plus, 2026-11-24), le plus juste, le plus rapide ; que llama.cpp et MLX sont dans le
+# tableau mais jamais conseillés, ni les
 # modèles de moins de 3 milliards de paramètres ; la règle de la mémoire de conversation (demi-précision seulement si
 # elle écrit au moins 3 % plus vite) ; la charge de la machine ; et la réécriture de la section de la semaine du
 # document entre ses marqueurs, le reste du document intact.
@@ -77,7 +78,7 @@ with tempfile.TemporaryDirectory() as tmp:
     page = out.stdout
     advice = json.load(open(jsonp, encoding="utf-8"))["advice"]
     roles = {a["role"]: a["id"] for a in advice}
-    check(roles.get("general") == "b", "pour tout faire : B, le plus juste des Qwen3 qui voient les images et écrivent vite")
+    check(roles.get("general") == "b", "pour tout faire : B, le plus juste des Qwen3 qui écrivent vite sur le GPU")
     check(roles.get("accurate") == "d", "le plus juste : D, même trop lent pour tout faire")
     check(roles.get("fastest") == "c", "le plus rapide : C (llama.cpp, plus rapide, n'est pas conseillé)")
     check("e" not in roles.values(), "un modèle de moins de 3 milliards de paramètres n'est jamais conseillé")
@@ -126,7 +127,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check(out.returncode == 0, "conseil_modeles.py s'exécute avec l'épreuve (" + out.stderr.strip()[-200:] + ")")
     got = json.load(open(jsonp, encoding="utf-8"))
     roles = {a["role"]: a["id"] for a in got["advice"]}
-    check(roles.get("general") == "f", "épreuve : pour tout faire, F, la meilleure note des modèles qui voient les images")
+    check(roles.get("general") == "f", "épreuve : pour tout faire, F, la meilleure note des modèles assez rapides sur le GPU")
     check(roles.get("accurate") in (None, "f"), "épreuve : le plus juste se compare entre familles (F, pas D)")
     check(roles.get("cyber") == "g" and list(roles.values()).count("g") == 1,
           "épreuve : l'abliterated G n'est conseillé que pour la cybersécurité")

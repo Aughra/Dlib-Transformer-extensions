@@ -17,60 +17,59 @@ Il mesure la vitesse, puis la justesse, et explique d'où viennent les écarts. 
 
 <!-- semaine : début -->
 
-## La mesure de la semaine (24/11/2026 à 11 h 04)
+## La mesure de la semaine (24/11/2026 à 19 h 19)
 
-Écrite par le Mac à chaque mesure de la semaine, le lundi (`tools/bench_modeles.sh`) : Gulliver seul, sur chacun de ses modèles installés ; jetons par seconde, mémoire de conversation en 8 bits. Charge de la machine pendant la mesure (239 relevés, toutes les 20 secondes) : température de la puce 88,6 °C en moyenne (de 68,0 à 108,0) ; utilisation du processeur 42 % en moyenne (de 12 à 100) ; utilisation du gpu 64 % en moyenne (de 0 à 100).
+Écrite par le Mac à chaque mesure de la semaine, le lundi (`tools/bench_modeles.sh`) : Gulliver seul, sur chacun de ses modèles installés ; jetons par seconde, mémoire de conversation en 8 bits. Charge de la machine pendant la mesure (289 relevés, toutes les 20 secondes) : température de la puce 84,8 °C en moyenne (de 60,7 à 102,3) ; utilisation du processeur 44 % en moyenne (de 1 à 100) ; utilisation du gpu 62 % en moyenne (de 0 à 100).
 
 | Modèle | Calcul | Lecture 512 | Lecture 4 096 | Écriture 512 | Écriture 4 096 | Perplexité | Épreuve |
 |---|---|---|---|---|---|---|---|
-| Qwen2.5 Coder 1.5B Q4_K_M | GPU | 6 325 | 7 071 | 184 | 152 | 21,92 | 43/100 |
-| Qwen3-VL 2B Instruct Q4_K_M | GPU | 6 063 | 6 259 | 181 | 142 | 18,65 | 67/100 |
-| Qwen3-VL 2B Thinking Q4_K_M | GPU | 6 007 | 6 250 | 181 | 142 | 20,32 | 83/100 |
-| Qwen2.5-0.5B-Instruct Q4_K_M | processeur | 1 480 | 1 243 | 134 | 121 | 25,79 | 37/100 |
-| Ministral 3 3B Q4_K_M | GPU | 3 488 | 3 053 | 110 | 91,5 | 12,51 | 73/100 |
-| Granite 4.2 3B Q4_K_M | GPU | 3 412 | 3 131 | 102 | 68,5 | 17,85 | 97/100 |
-| Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) (choix précédent) | GPU | 1 691 | 1 943 | 93,8 | 78,8 | 10,93 | 100/100 |
-| LFM2.5-24B-A2B Q8_0 (MoE) | GPU | 1 086 | 1 196 | 91,9 | 88,2 | 19,57 | 100/100 |
-| Qwen3-VL 4B Instruct Q4_K_M | GPU | 2 897 | 2 493 | 91,8 | 75,0 | 14,83 | 83/100 |
-| Qwen3-VL 4B Thinking Q4_K_M | GPU | 2 886 | 2 432 | 91,7 | 74,7 | 15,37 | 100/100 |
-| CyberSecQwen 4B Q4_K_M | GPU | 2 967 | 2 750 | 91,5 | 73,8 | 13,67 | 87/100 |
-| Qwen3-4B-Instruct-2507 Q4_K_M | GPU | 2 853 | 2 374 | 91,3 | 74,2 | 14,89 | 90/100 |
-| Phi-4-mini Q4_K_M | GPU | 2 965 | 3 016 | 86,0 | 67,1 | 20,52 | 70/100 |
-| gemma-4-E2B-it Q4_K_M | GPU | 4 655 | 2 015 | 77,4 | 67,5 | 69,69 | 93/100 |
-| Qwen3.5-4B Q4_K_M | GPU | 1 442 | 1 501 | 72,9 | 71,4 | 11,50 | 100/100 |
-| gemma-4-E4B-it Q4_K_M | GPU | 2 358 | 1 248 | 62,2 | 54,6 | 36,61 | 97/100 |
-| Qwen3.6-35B-A3B-MTP Q4_K_M (MoE) | GPU | 846 | 865 | 59,3 | 56,3 | 8,66 | 97/100 |
-| Qwen2.5 Coder 7B Q4_K_M | GPU | 1 628 | 1 638 | 58,5 | 50,1 | 16,45 | 70/100 |
-| Foundation-Sec 1.1 8B Q4_K_M | GPU | 1 588 | 1 476 | 54,2 | 48,6 | 18,57 | 57/100 |
-| DeepSeek-R1 Distill Llama 8B Q4_K_M | GPU | 1 440 | 1 490 | 54,0 | 48,0 | 30,01 | 57/100 |
-| Foundation-Sec 8B Reasoning Q4_K_M | GPU | 1 543 | 1 461 | 54,0 | 48,7 | 13,28 | 63/100 |
-| Qwen3-VL 8B Thinking Q4_K_M | GPU | 1 473 | 1 416 | 53,8 | 46,7 | 12,87 | 100/100 |
-| Qwen3-VL 8B Instruct Q4_K_M | GPU | 1 487 | 1 408 | 52,8 | 47,2 | 12,14 | 93/100 |
-| Ministral 3 8B Q4_K_M | GPU | 1 250 | 1 347 | 51,7 | 46,3 | 10,00 | 80/100 |
-| Granite 4.2 8B Q4_K_M | GPU | 1 341 | 1 299 | 49,0 | 43,3 | 19,55 | 97/100 |
-| EuroVLM 9B Preview Q4_K_M | GPU | 1 291 | 1 293 | 46,6 | 41,2 | 13,33 | 67/100 |
-| EuroLLM 9B Instruct Q4_K_M | GPU | 1 147 | 1 258 | 45,1 | 40,4 | 13,54 | 63/100 |
-| MiMo-V2.6-Distill-Qwen-9B Q4_K_M | GPU | 917 | 1 029 | 45,0 | 44,3 | 8,94 | 90/100 |
-| Qwen3.5-9B Q4_K_M | GPU | 846 | 986 | 44,5 | 44,1 | 9,84 | 93/100 |
-| gemma-4-26B-A4B-it Q4_K_M | processeur | 138 | 167 | 25,4 | 23,4 | 2828,56 | 100/100 |
-| gemma-4-12b-it Q4_K_M | processeur | 51,9 | 74,7 | 21,0 | 19,6 | 411,86 | 100/100 |
-| Mistral Small 3.2 24B Q4_K_M | GPU | 470 | 367 | 19,6 | 17,3 | 8,60 | 97/100 |
-| Devstral Small 2 Q4_K_M | GPU | 366 | 338 | 19,1 | 18,0 | 8,87 | 90/100 |
-| Qwen3.8-27B Q4_K_M | GPU | — | — | — | — | — | 0/100 |
+| Qwen2.5 Coder 1.5B Q4_K_M | GPU | 6 510 | 7 200 | 185 | 153 | 21,92 | 22/100 |
+| Qwen3-VL 2B Instruct Q4_K_M | GPU | 6 206 | 6 704 | 182 | 142 | 18,65 | 50/100 |
+| Qwen3-VL 2B Thinking Q4_K_M | GPU | 6 109 | 6 675 | 181 | 142 | 20,32 | 78/100 |
+| Qwen2.5-0.5B-Instruct Q4_K_M | processeur | 1 415 | 1 303 | 118 | 118 | 25,79 | 18/100 |
+| Ministral 3 3B Q4_K_M | GPU | 3 612 | 3 381 | 110 | 92,4 | 12,51 | 45/100 |
+| Granite 4.2 3B Q4_K_M | GPU | 3 388 | 3 381 | 102 | 69,5 | 17,85 | 88/100 |
+| Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) (choix précédent) | GPU | 1 677 | 1 960 | 94,4 | 78,8 | 10,93 | 95/100 |
+| LFM2.5-24B-A2B Q8_0 (MoE) | GPU | 1 188 | 1 204 | 92,1 | 87,3 | 19,57 | 98/100 |
+| Qwen3-VL 4B Instruct Q4_K_M | GPU | 2 956 | 2 689 | 91,6 | 75,7 | 14,83 | 78/100 |
+| Qwen3-4B-Instruct-2507 Q4_K_M | GPU | 3 006 | 2 602 | 91,5 | 75,2 | 14,89 | 82/100 |
+| Qwen3-VL 4B Thinking Q4_K_M | GPU | 2 948 | 2 652 | 90,8 | 75,5 | 15,37 | 95/100 |
+| CyberSecQwen 4B Q4_K_M | GPU | 2 867 | 2 792 | 89,1 | 74,5 | 13,67 | 70/100 |
+| Phi-4-mini Q4_K_M | GPU | 2 967 | 3 095 | 86,5 | 67,5 | 20,52 | 42/100 |
+| gemma-4-E2B-it Q4_K_M | GPU | 4 841 | 2 035 | 78,5 | 61,0 | 69,69 | 85/100 |
+| Qwen3.5-4B Q4_K_M | GPU | 1 485 | 1 526 | 73,2 | 71,7 | 11,50 | 92/100 |
+| Qwen3.6-35B-A3B-MTP Q4_K_M (MoE) | GPU | 850 | 869 | 59,5 | 56,3 | 8,66 | 98/100 |
+| Qwen2.5 Coder 7B Q4_K_M | GPU | 1 684 | 1 739 | 58,8 | 50,2 | 16,45 | 58/100 |
+| gemma-4-E4B-it Q4_K_M | GPU | 2 410 | 1 244 | 55,9 | 53,8 | 36,61 | 90/100 |
+| Foundation-Sec 1.1 8B Q4_K_M | GPU | 1 599 | 1 570 | 55,2 | 49,5 | 18,57 | 35/100 |
+| DeepSeek-R1 Distill Llama 8B Q4_K_M | GPU | 1 449 | 1 550 | 54,8 | 49,0 | 30,01 | 48/100 |
+| Foundation-Sec 8B Reasoning Q4_K_M | GPU | 1 464 | 1 583 | 54,7 | 49,5 | 13,28 | 58/100 |
+| Qwen3-VL 8B Instruct Q4_K_M | GPU | 1 539 | 1 526 | 54,0 | 47,8 | 12,14 | 78/100 |
+| Qwen3-VL 8B Thinking Q4_K_M | GPU | 1 557 | 1 559 | 53,8 | 47,8 | 12,87 | 98/100 |
+| Ministral 3 8B Q4_K_M | GPU | 1 501 | 1 475 | 52,3 | 46,5 | 10,00 | 78/100 |
+| Granite 4.2 8B Q4_K_M | GPU | 1 360 | 1 345 | 49,2 | 43,2 | 19,55 | 100/100 |
+| EuroVLM 9B Preview Q4_K_M | GPU | 1 358 | 1 363 | 47,4 | 41,9 | 13,33 | 42/100 |
+| EuroLLM 9B Instruct Q4_K_M | GPU | 1 254 | 1 343 | 46,6 | 41,8 | 13,54 | 32/100 |
+| Qwen3.5-9B Q4_K_M | GPU | 988 | 1 086 | 45,4 | 44,9 | 9,84 | 92/100 |
+| MiMo-V2.6-Distill-Qwen-9B Q4_K_M | GPU | 1 006 | 1 095 | 45,2 | 44,6 | 8,94 | 88/100 |
+| gemma-4-26B-A4B-it Q4_K_M | processeur | 134 | 188 | 23,9 | 22,3 | 2828,56 | 100/100 |
+| gemma-4-12b-it Q4_K_M | processeur | 56,5 | 76,2 | 21,9 | 21,1 | 411,86 | 98/100 |
+| Mistral Small 3.2 24B Q4_K_M | GPU | 500 | 371 | 19,6 | 18,4 | 8,60 | 88/100 |
+| Devstral Small 2 Q4_K_M | GPU | 457 | 391 | 19,3 | 18,3 | 8,87 | 82/100 |
 
-Conseillé : pour tout faire, Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) ; le plus rapide, Ministral 3 3B Q4_K_M. Les tableaux complets, avec llama.cpp et MLX, sont dans « Mesures de la semaine ».
+Conseillé : pour tout faire, Granite 4.2 8B Q4_K_M ; le plus rapide, Ministral 3 3B Q4_K_M. Les tableaux complets, avec llama.cpp et MLX, sont dans « Mesures de la semaine ».
 
 Comme un utilisateur, par le service, sur Qwen3-VL 30B A3B Thinking Q4_K_M (MoE) :
 
 | Mesure | Gulliver |
 |---|---|
-| Chargement du modèle (jusqu'à une première réponse) | 8,6 s |
-| Conversation de 32k : lecture | 858 jetons/s |
-| Conversation de 32k : écriture, avec brouillons | 33,8 jetons/s |
-| Conversation de 32k : écriture, sans brouillons | 37,6 jetons/s |
-| 4 requêtes à la fois : écriture totale | 142 jetons/s |
-| 3 documents de 4 000 tokens à la fois : temps total | 13,2 s |
-| 3 documents à la fois : attente moyenne du premier mot | 3,8 s |
+| Chargement du modèle (jusqu'à une première réponse) | 8,5 s |
+| Conversation de 32k : lecture | 868 jetons/s |
+| Conversation de 32k : écriture, avec brouillons | 34,2 jetons/s |
+| Conversation de 32k : écriture, sans brouillons | 37,5 jetons/s |
+| 4 requêtes à la fois : écriture totale | 164 jetons/s |
+| 3 documents de 4 000 tokens à la fois : temps total | 13,0 s |
+| 3 documents à la fois : attente moyenne du premier mot | 3,7 s |
 | Le plus grand contexte qui tient (essayés : 65 536 et 131 072) | 131 072 tokens |
 
 La recherche dans les documents (RAG) : 40 questions figées sur les 63 épisodes du blog, cherchées par un service d'essai isolé (qwen3-embedding-0.6b, épisodes indexés en 12 s) ; une question est trouvée quand le passage qui y répond est rendu. Le meilleur réglage : moteur « Sens seul », tri fin allumé, 12 passages.

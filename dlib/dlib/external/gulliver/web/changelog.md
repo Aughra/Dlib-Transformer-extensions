@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.2.1 — 24 novembre 2026
+
+### Modèles
+
+- Le rôle « Pour tout faire » du conseil de la semaine ne filtre plus sur la lecture des images. Il retient le modèle à la meilleure note de l'épreuve parmi ceux qui écrivent au moins 40 jetons/s sur le GPU, qu'ils voient ou non les images. Un modèle sans vision mais plus juste est désormais préféré à un modèle multimodal un peu moins juste. L'intitulé « Pour tout faire, images comprises » redevient « Pour tout faire ».
+
+---
+
 ## 7.2.0 — 24 novembre 2026
 
 ### Modèles

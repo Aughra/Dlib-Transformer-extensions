@@ -22,8 +22,9 @@
 #
 # L'épreuve (tools/epreuve_modeles.py, 2026-11-24, demande de l'humain) : 40 questions en français, une note sur 100
 # (lignes brutes « quiz|id|note »), qui se compare entre toutes les familles.  Quand elle est là, « pour tout faire » est
-# la meilleure note des modèles qui voient les images et écrivent au moins 40 jetons/s sur le GPU, « le plus juste » la
-# meilleure note de tous ; à note égale, le plus rapide.  Les modèles « abliterated » (sans réflexe de refus : ABLITERATED)
+# la meilleure note des modèles qui écrivent au moins 40 jetons/s sur le GPU, « le plus juste » la meilleure note de
+# tous ; à note égale, le plus rapide.  La lecture d'images ne pèse pas (demande de l'humain, 2026-11-24 : il ne s'en
+# sert pas).  Les modèles « abliterated » (sans réflexe de refus : ABLITERATED)
 # n'ont que leur ligne à eux, « pour la cybersécurité » (la meilleure note parmi eux), à réserver à un usage autorisé.
 # Le dernier du classement (la plus basse note, puis la plus lente écriture ; un modèle que le moteur ne lit pas passe
 # avant), hors des modèles conseillés, du choix précédent et des modèles actifs (--keep), est désigné dans « remove » du
@@ -224,17 +225,19 @@ def main():
     big = [m for m in usable if (billions(names[m]) or MIN_BILLIONS) >= MIN_BILLIONS]
     fastest = max(big, key=lambda m: write[m]) if big else None
     family = [m for m in usable if comparable(names[m]) and m in ppl]
-    seeing = [m for m in usable if image.get(m) and write[m] >= 40 and where.get(m) == "gpu"]
+    # « Pour tout faire » : le plus juste parmi les modèles assez rapides sur le GPU.  La lecture d'images ne filtre plus
+    # (demande de l'humain, 2026-11-24 : il ne s'en sert pas).
+    fast_gpu = [m for m in usable if write[m] >= 40 and where.get(m) == "gpu"]
     if any(m in quiz for m in usable):
         accurate = max([m for m in usable if m in quiz], key=noted)
-        seen = [m for m in seeing if m in quiz]
-        general = (max(seen, key=noted) if seen else max(seeing, key=lambda m: write[m]) if seeing
+        fast_noted = [m for m in fast_gpu if m in quiz]
+        general = (max(fast_noted, key=noted) if fast_noted else max(fast_gpu, key=lambda m: write[m]) if fast_gpu
                    else fastest or max(usable, key=lambda m: write[m]))
     else:
         accurate = min(family, key=lambda m: ppl[m]) if family else None
-        seeing_family = [m for m in seeing if m in family]
-        general = (min(seeing_family, key=lambda m: ppl[m]) if seeing_family
-                   else max(seeing, key=lambda m: write[m]) if seeing else fastest or max(usable, key=lambda m: write[m]))
+        fast_family = [m for m in fast_gpu if m in family]
+        general = (min(fast_family, key=lambda m: ppl[m]) if fast_family
+                   else max(fast_gpu, key=lambda m: write[m]) if fast_gpu else fastest or max(usable, key=lambda m: write[m]))
     cyber_noted = [m for m in cyber_all if m in quiz]
     cyber = max(cyber_noted, key=noted) if cyber_noted else None
 
@@ -245,9 +248,9 @@ def main():
                 "settings": {"kv_type": kv_type(m), "draft_tokens": 7}}
 
     by_quiz = any(m in quiz for m in usable)
-    advice = [entry("general", general, "Pour tout faire, images comprises : " + (
-        "la meilleure note à l'épreuve des modèles qui voient les images et écrivent au moins 40 jetons/s sur le GPU."
-        if by_quiz else "le plus juste des modèles qui voient les images et écrivent au moins 40 jetons/s sur le GPU."))]
+    advice = [entry("general", general, "Pour tout faire : " + (
+        "la meilleure note à l'épreuve des modèles qui écrivent au moins 40 jetons/s sur le GPU."
+        if by_quiz else "le plus juste des modèles qui écrivent au moins 40 jetons/s sur le GPU."))]
     if accurate and accurate != general:
         advice.append(entry("accurate", accurate, "Les réponses les plus justes : " + (
             "la meilleure note à l'épreuve de 40 questions, toutes familles confondues." if by_quiz else
@@ -259,7 +262,7 @@ def main():
     if cyber:
         advice.append(entry("cyber", cyber, "Pour la cybersécurité : la meilleure note à l'épreuve des modèles "
                             "« abliterated » (sans réflexe de refus), à n'utiliser que pour un usage autorisé."))
-    labels = {"general": "Pour tout faire, images comprises", "accurate": "Pour les réponses les plus justes",
+    labels = {"general": "Pour tout faire", "accurate": "Pour les réponses les plus justes",
               "fastest": "Pour aller vite", "cyber": "Pour la cybersécurité (usage autorisé)"}
     # Le dernier du classement, retiré par tools/retrait_modeles.py.
     keep = {a["id"] for a in advice} | set(args.keep.split()) | ({previous} if previous else set())
