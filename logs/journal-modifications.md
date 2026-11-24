@@ -9,6 +9,13 @@ Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais
 - **Pourquoi** : les identifiants de `~/.config/carnets/gardien.env` (copie ancienne, tunnel vers borg) étaient refusés par le Bridge local (454) ; ceux d'auto-agent sont acceptés, avec ou sans STARTTLS. Un tunnel permanent vers borg a été envisagé puis abandonné (tortuetech tourne entièrement sur le Mac mini).
 - **Étapes** : connexion SMTP vérifiée sans envoi ; vrai envoi par le facteur de Gulliver depuis un service d'essai à part (`/setup` vers l'adresse d'alertes de l'humain) : `{"sent":true}`, aucun échec au journal ; service d'essai effacé.
 
+## 2026-11-24 — Le surveillant compte aussi les programmes éphémères
+
+- **Quoi** : `tools/surveillant.py` relève toutes les 10 s (au lieu de 60) et additionne ce que chaque exécutable a calculé depuis le relevé d'avant, au lieu de comparer les vivants au début et à la fin de la demi-heure ; seuls les processus qui calculent encore (un quart de cœur depuis le relevé d'avant) sont arrêtés, et le mail nomme leur parent. Motifs protégés resserrés : « /claude » protégeait aussi les programmes des brouillons des sessions de Claude (`/private/tmp/claude-501/…`), « temperature » et « bridge » trop larges.
+- **Fichiers** : `dlib/dlib/external/gulliver/tools/surveillant.py`, `macos/surveillance/README.md`.
+- **Pourquoi** : la série d'essais de miaou (13 cœurs) lance des programmes qui vivent environ 30 s : l'ancien calcul n'en voyait presque rien, et les croyait protégés. Le filtre « un quart de cœur », annoncé par le mode d'emploi, n'était pas dans le code (il était dans une commande refusée, jamais appliquée) : corrigé.
+- **Étapes** : `--essai` sur le Mac (miaou vu, 2 cœurs à cet instant, non protégé ; VS Code protégé) ; test sur processus d'essai seulement (`only`) : trois `yes` relancés toutes les 6 s, relevé toutes les 2 s, 2,6 cœurs comptés sur 3, arrêtés, parent nommé, `sleep` épargné, mail reçu ; agent réinstallé.
+
 ## 2026-11-24 — La veille prend les 10 modèles les plus téléchargés de Hugging Face
 
 - **Quoi** : `tools/modeles_semaine.py`, étape 5 : par la recherche du service (`/gulliver/v1/hub/search`, vide puis par éditeur), les dépôts d'éditeurs connus (`HUB_EDITORS`), sans « abliterated », « uncensored », « heretic », que le moteur lit, classés par téléchargements ; dans chacun, le premier fichier lisible en Q4_K_M, Q4_K_S, Q6_K ou Q8_0 (sans les fichiers d'aide : dflash, draft, eagle, imatrix), avec le projecteur F16 ; taille au plus les trois quarts de la mémoire ; un nom déjà installé est sauté (les variantes MTP comptent comme le même modèle). Ajoutés par `/gulliver/v1/hub/add`, ils passent par la mesure du lundi comme les autres.

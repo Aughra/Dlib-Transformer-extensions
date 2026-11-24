@@ -8,9 +8,10 @@ les processus qui posent souci »).  Lancé et relancé par launchd (macos/surve
     python3 tools/surveillant.py [GULLIVER_HOME]           # la boucle, toutes les minutes
     python3 tools/surveillant.py [GULLIVER_HOME] --essai   # un relevé, ce qu'il en penserait, rien n'est arrêté
 
-Toutes les minutes : la température de la puce (la sonde la plus chaude, par build/temperature, l'outil de
+Toutes les 10 secondes : la température de la puce (la sonde la plus chaude, par build/temperature, l'outil de
 macos/temperature), la charge du processeur, et le temps de calcul de chaque programme (ps), regroupé par
-exécutable.  Le Mac est « en souci » quand le processeur est occupé à SEUIL_CPU % ou plus, ou que la puce dépasse
+exécutable, et ce que chaque exécutable a pris depuis le relevé d'avant (même un programme mort entre-temps
+reste compté).  Le Mac est « en souci » quand le processeur est occupé à SEUIL_CPU % ou plus, ou que la puce dépasse
 SEUIL_TEMP °C.  Quand il l'a été pendant au moins 90 % des relevés des 30 dernières minutes :
   - les coupables sont les exécutables de l'utilisateur qui ont pris en moyenne au moins COEURS cœurs sur la demi-heure ;
   - ceux qui ne sont pas protégés reçoivent SIGTERM, puis SIGKILL 15 secondes plus tard s'ils vivent encore ;
@@ -36,16 +37,18 @@ SEUIL_TEMP = 95.0     # °C, la sonde la plus chaude de la puce
 COEURS = 2.0          # cœurs pris en moyenne sur la demi-heure pour être un coupable
 FENETRE = 30 * 60     # secondes
 PART = 0.9            # part des relevés de la fenêtre en souci
-PAS = 60              # secondes entre deux relevés
+PAS = 10              # secondes entre deux relevés (assez court pour voir un programme qui ne vit qu'une demi-minute)
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../../.."))
 TEMP_TOOL = os.path.join(ROOT, "build", "temperature")
 LOG_DIR = os.path.join(ROOT, "build", "surveillance")
 BENCH_AGENT = "fr.fork.gulliver.bench-hebdo"
 # Des morceaux du chemin des exécutables protégés.
-PROTEGES = ("gulliver-service", "cloudflared", "Proton Mail Bridge", "bridge", "Visual Studio Code", "Code Helper",
-            "/claude", "claude-code", "/build/macos-gulliver/bin/", "llama-", "mlx", "surveillant.py", "temperature",
-            "Finder", "Dock", "loginwindow", "Terminal", "iTerm")
+# Pas « /claude » seul : les brouillons des sessions de Claude (/private/tmp/claude-501/…) en contiennent aussi, et les
+# programmes qui y sont construits doivent rester surveillés.
+PROTEGES = ("gulliver-service", "cloudflared", "Proton Mail Bridge", "Visual Studio Code", "Code Helper",
+            "/Claude.app/", "anthropic.claude-code", "/claude-code/", "/build/macos-gulliver/bin/", "llama-", "mlx",
+            "surveillant.py", "/build/temperature", "Finder", "Dock", "loginwindow", "Terminal", "iTerm")
 
 
 def say(text):
@@ -65,9 +68,9 @@ def seconds(cputime):
 
 
 def processes():
-    """{pid: (uid, secondes de calcul, exécutable, protégé)} ; la protection se lit sur la ligne de commande entière
+    """{pid: (uid, secondes de calcul, exécutable, protégé, parent)} ; la protection se lit sur la ligne de commande entière
     (tous les scripts Python ont le même exécutable : le surveillant ne doit jamais se compter lui-même)."""
-    out = subprocess.run(["ps", "-Ao", "pid=,uid=,time=,comm="], capture_output=True, text=True).stdout
+    out = subprocess.run(["ps", "-Ao", "pid=,ppid=,uid=,time=,comm="], capture_output=True, text=True).stdout
     args = {}
     for line in subprocess.run(["ps", "-Ao", "pid=,args="], capture_output=True, text=True).stdout.splitlines():
         f = line.split(None, 1)
@@ -76,12 +79,12 @@ def processes():
     me = {os.getpid(), os.getppid()}
     procs = {}
     for line in out.splitlines():
-        f = line.split(None, 3)
-        if len(f) == 4:
+        f = line.split(None, 4)
+        if len(f) == 5:
             try:
-                pid, uid = int(f[0]), int(f[1])
-                safe = pid in me or uid != os.getuid() or any(p in f[3] or p in args.get(pid, "") for p in PROTEGES)
-                procs[pid] = (uid, seconds(f[2]), f[3], safe)
+                pid, ppid, uid = int(f[0]), int(f[1]), int(f[2])
+                safe = pid in me or uid != os.getuid() or any(p in f[4] or p in args.get(pid, "") for p in PROTEGES)
+                procs[pid] = (uid, seconds(f[3]), f[4], safe, ppid)
             except ValueError:
                 pass
     return procs
@@ -143,43 +146,64 @@ class Watch:
     def __init__(self, home, only=None):
         self.home = home
         self.only = only           # pour les tests : les seuls pid que le surveillant peut voir et arrêter
-        self.samples = []          # (instant, en souci, température, charge, {pid: (uid, secondes, exécutable)})
+        self.samples = []          # (instant, en souci, température, charge, {(exécutable, protégé): secondes prises})
+        self.prev = None           # les processus du relevé d'avant
+        self.last = {}             # {pid: secondes prises depuis le relevé d'avant}
+
+    def deltas(self, procs):
+        """Ce que chaque exécutable a pris depuis le relevé d'avant ; un processus né entre-temps compte en entier."""
+        prev, used, groups = self.prev or {}, {}, {}
+        for pid, (uid, secs, path, safe, ppid) in procs.items():
+            if self.only is not None and pid not in self.only:
+                continue
+            d = secs - prev[pid][1] if pid in prev and prev[pid][2] == path else (secs if self.prev is not None else 0.0)
+            used[pid] = max(0.0, d)
+            groups[(path, safe)] = groups.get((path, safe), 0.0) + used[pid]
+        return groups, used
 
     def tick(self, act=True):
         now = time.time()
         procs = processes()
         if bench_running():
             # La mesure du lundi chauffe le Mac exprès : rien n'est compté pendant qu'elle tourne.
-            self.samples = []
+            self.samples, self.prev = [], procs
             return
+        groups, self.last = self.deltas(procs)
+        interval = now - self.samples[-1][0] if self.samples else PAS
+        self.prev = procs
         temp, cpu = machine()
         trouble = (cpu is not None and cpu >= SEUIL_CPU) or (temp is not None and temp >= SEUIL_TEMP)
-        self.samples.append((now, trouble, temp, cpu, procs))
+        self.samples.append((now, trouble, temp, cpu, groups, interval))
         while self.samples and self.samples[0][0] < now - FENETRE:
             self.samples.pop(0)
-        span = now - self.samples[0][0]
+        span = now - self.samples[0][0] + self.samples[0][5]
         bad = sum(1 for x in self.samples if x[1])
         if span >= FENETRE - 1.5 * PAS and bad >= PART * len(self.samples):
             self.act(now, span, procs, act)
 
-    def culprits(self, span, procs, before):
-        """Les exécutables qui ont pris au moins COEURS cœurs en moyenne entre before et procs."""
-        groups = {}
-        for pid, (uid, secs, path, safe) in procs.items():
-            if self.only is not None and pid not in self.only:
+    def culprits(self, span, procs):
+        """Les exécutables qui ont pris au moins COEURS cœurs en moyenne sur la fenêtre, et leurs processus qui
+        calculent encore (un quart de cœur au moins depuis le relevé d'avant : un script Python au repos ne paie pas
+        pour un autre qui chauffe)."""
+        total = {}
+        for x in self.samples:
+            for key, secs in x[4].items():
+                total[key] = total.get(key, 0.0) + secs
+        interval = self.samples[-1][5] if self.samples else PAS
+        heavy = []
+        for (path, safe), secs in total.items():
+            if secs / span < COEURS:
                 continue
-            used = secs - (before[pid][1] if pid in before and before[pid][2] == path else 0.0)
-            # Les protégés et les autres d'un même exécutable font deux groupes.
-            g = groups.setdefault((path, safe), {"path": path, "safe": safe, "secs": 0.0, "pids": []})
-            g["secs"] += max(0.0, used)
-            g["pids"].append(pid)
-        heavy = [(g["path"], g) for g in groups.values() if g["secs"] / span >= COEURS]
+            pids = [pid for pid, p in procs.items() if p[2] == path and p[3] == safe
+                    and self.last.get(pid, 0.0) >= 0.25 * interval]
+            parents = sorted({procs[pid][4] for pid in pids})
+            heavy.append((path, {"safe": safe, "secs": secs, "pids": pids, "parents": parents}))
         return sorted(heavy, key=lambda x: -x[1]["secs"])
 
     def act(self, now, span, procs, act):
         temps = [s[2] for s in self.samples if s[2] is not None]
         cpus = [s[3] for s in self.samples if s[3] is not None]
-        heavy = self.culprits(span, procs, self.samples[0][4])
+        heavy = self.culprits(span, procs)
         lines, stopped, kept = [], [], []
         for path, g in heavy:
             cores = g["secs"] / span
@@ -189,7 +213,10 @@ class Watch:
                 continue
             done = stop(g["pids"]) if act else []
             left = f", {len(g['pids']) - len(done)} encore là" if act and len(done) < len(g["pids"]) else ""
-            stopped.append(f"{name} ({len(g['pids'])} processus{left}, {cores:.1f} cœurs en moyenne, {path})")
+            launcher = ""
+            if len(g["parents"]) == 1 and g["parents"][0] in procs:
+                launcher = f", lancés par {os.path.basename(procs[g['parents'][0]][2])} (pid {g['parents'][0]})"
+            stopped.append(f"{name} ({len(g['pids'])} processus{left}, {cores:.1f} cœurs en moyenne{launcher}, {path})")
         summary = (f"processeur {sum(cpus) / len(cpus):.0f} % en moyenne" if cpus else "processeur ?") + ", " + \
             (f"puce {sum(temps) / len(temps):.1f} °C en moyenne, {max(temps):.1f} °C au plus" if temps else "puce ?")
         say(f"souci depuis {span / 60:.0f} min : {summary}")
@@ -222,9 +249,12 @@ def main():
     if "--essai" in sys.argv:
         temp, cpu = machine()
         say(f"puce {temp} °C, processeur {cpu} % ; mesure du lundi en marche : {bench_running()}")
-        before = processes()
+        w.prev = processes()
         time.sleep(10)
-        for path, g in w.culprits(10, processes(), before):
+        now_procs = processes()
+        groups, w.last = w.deltas(now_procs)
+        w.samples = [(time.time(), True, temp, cpu, groups, 10.0)]
+        for path, g in w.culprits(10, now_procs):
             say(f"{g['secs'] / 10:.1f} cœurs : {path} ({len(g['pids'])} processus)"
                 + (" [protégé]" if g["safe"] else ""))
         return
