@@ -19,6 +19,10 @@
 # Puis il attend la fin des téléchargements (six heures au plus ; le service vérifie l'empreinte de chaque fichier) et
 # écrit les modèles installés dans build/bench/hebdo/nouveaux.json : la mesure de la semaine (tools/bench_modeles.sh) les
 # mesure en premier et les signale.  Avec --essai, il ne fait que dire ce qu'il ferait.
+# 5. les HUB_TOP modèles GGUF les plus téléchargés de Hugging Face (décision de l'humain du 2026-11-23 : « les plus
+#    populaires »), d'éditeurs connus (HUB_EDITORS), sans les versions « abliterated » ou « uncensored », qui tournent sur
+#    ce moteur (architecture et format de poids, d'après le service), en Q4_K_M de préférence, avec leur projecteur
+#    d'images, et qui tiennent dans ce Mac ; un modèle dont le nom est déjà installé est sauté.
 # Ce qu'il a trouvé part ensuite dans un mail à l'administrateur (tools/mail_admin.py ; décision de l'humain du
 # 2026-11-23 : il décide, d'après la mesure du matin, des modèles qu'on garde).
 import json
@@ -27,6 +31,7 @@ import ssl
 import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -35,6 +40,14 @@ from mail_admin import send_admin  # noqa: E402
 # Les architectures que le moteur lit (engine/model_config.cpp, read_model_config).
 ARCHS = {"llama", "mistral", "mistral3", "granite", "qwen2", "qwen3", "qwen3vl", "mixtral", "granitemoe", "qwen3moe",
          "qwen3vlmoe", "qwen35moe", "phi3", "qwen35", "gemma4", "gemma3", "lfm2", "lfm2moe"}
+HUB_TOP = 10
+HUB_EDITORS = {"Qwen", "mistralai", "google", "ibm-granite", "microsoft", "meta-llama", "LiquidAI", "ggml-org", "unsloth",
+               "bartowski", "lmstudio-community", "HuggingFaceTB", "allenai", "nvidia", "deepseek-ai", "openai",
+               "utter-project", "CohereLabs", "tiiuae"}
+HUB_REFUSED = ("abliterated", "uncensored", "heretic")
+# Les fichiers d'aide d'un dépôt (petits modèles de brouillon), qui ne sont pas le modèle lui-même.
+HUB_HELPERS = ("dflash", "draft", "eagle", "imatrix")
+QUANTS = ("Q4_K_M", "Q4_K_S", "Q6_K", "Q8_0")   # dans l'ordre de préférence
 RUNNING = {"queued", "downloading", "verifying"}
 
 
@@ -109,6 +122,54 @@ def hub_sha(url):
     return etag if len(etag) == 64 else None
 
 
+def core(name):
+    """Le nom d'un modèle réduit à ses lettres et chiffres, sans « gguf » ni format de poids, pour reconnaître un doublon."""
+    import re
+    n = re.sub(r"(-|_|\.)(gguf|q\d.*|iq\d.*|bf16|f16|ud)$", "", name.lower().split("/")[-1])
+    n = re.sub(r"-gguf", "", n)
+    n = re.sub(r"-mtp", "", n)   # la variante à plusieurs tokens par pas est le même modèle
+    return re.sub(r"[^a-z0-9]", "", n)
+
+
+def hub_popular(service, installed, budget):
+    """Les HUB_TOP dépôts populaires à ajouter : [(dépôt, fichier, projecteur, taille)]."""
+    seen, repos = set(), []
+    for q in [""] + sorted(HUB_EDITORS):
+        for m in service.call("GET", "/gulliver/v1/hub/search?q=" + urllib.parse.quote(q)).get("models", []):
+            repo = m.get("repo", "")
+            if repo in seen:
+                continue
+            seen.add(repo)
+            if (m.get("compatible") and repo.split("/")[0] in HUB_EDITORS
+                    and not any(w in repo.lower() for w in HUB_REFUSED)):
+                repos.append(m)
+    repos.sort(key=lambda m: -(m.get("downloads") or 0))
+    out, cores = [], set(installed)
+    for m in repos:
+        if len(out) >= HUB_TOP:
+            break
+        repo = m["repo"]
+        if core(repo) in cores:
+            continue
+        files = service.call("GET", "/gulliver/v1/hub/files?repo=" + urllib.parse.quote(repo))
+        pick = None
+        for quant in QUANTS:
+            pick = next((f for f in files.get("files", []) if f.get("compatible") and f.get("quantization") == quant
+                         and not any(w in f["file"].lower() for w in HUB_HELPERS)), None)
+            if pick:
+                break
+        if not pick:
+            continue
+        projs = files.get("projectors") or []
+        proj = next((x for x in projs if x.get("quantization") == "F16"), projs[0] if projs else None)
+        size = (pick.get("size") or 0) + ((proj or {}).get("size") or 0)
+        if size > budget:
+            continue
+        cores.add(core(repo))
+        out.append((repo, pick["file"], (proj or {}).get("file", ""), size, m.get("downloads") or 0))
+    return out
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     trial = "--essai" in sys.argv
@@ -178,6 +239,21 @@ def main():
                 started.append(mid)
             else:
                 say(f"{mid} : refusé ({r.get('code')})", True)
+    # 5. Les plus populaires de Hugging Face.
+    installed = {core(m.get("source") or "") for m in data.get("models", []) if m.get("origin") == "huggingface"}
+    installed |= {core(os.path.basename(m.get("file") or "")) for m in data.get("models", []) if m.get("installed")}
+    installed |= {core(m.get("name") or "") for m in data.get("models", []) if m.get("installed")}
+    installed.discard("")
+    for repo, name, proj, size, downloads in hub_popular(service, installed, budget):
+        count = f"{downloads:,}".replace(",", " ")
+        say(f"{repo} : parmi les plus téléchargés de Hugging Face ({count} téléchargements), {name}"
+            f"{' avec ' + proj if proj else ''}, {size / 1e9:.1f} Go, ajouté", True)
+        if not trial:
+            r = service.call("POST", "/gulliver/v1/hub/add", {"repo": repo, "file": name, "projector": proj})
+            if r.get("ok") and r.get("id"):
+                started.append(r["id"])
+            else:
+                say(f"{repo} : refusé ({r.get('code') or r.get('error')})", True)
     if trial or not started:
         say("rien à télécharger" if not started and not trial else "essai : rien n'a été lancé")
         mail_report(home, trial)
