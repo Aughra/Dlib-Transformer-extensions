@@ -342,7 +342,7 @@ export function modelsTab(body, env) {
       changements, active le modèle pour la discussion, le code et la sécurité, envoie les réglages qui changent et
       attend le service s'il redémarre.
   */
-  const adviceRoles = { general: 'Pour tout faire, images comprises', accurate: 'Les réponses les plus justes',
+  const adviceRoles = { general: 'Pour tout faire', accurate: 'Les réponses les plus justes',
     fastest: 'Le plus rapide', cyber: 'Pour la cybersécurité (usage autorisé)' };
   const kvLabel = (v) => v === 'f16' ? 'demi-précision' : '8 bits';
   async function applyAdvice(a, m) {

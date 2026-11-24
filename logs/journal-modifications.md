@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-24 — Le libellé « images comprises » retiré aussi de la page (7.2.2)
+
+- **Quoi** : la carte du conseil de l'onglet « Modèles » montrait encore « Pour tout faire, images comprises » (constante `adviceRoles.general` de `web/js/models.js`) même avec un modèle sans vision ; passe à « Pour tout faire », comme le texte du conseil et le résumé du document de vitesse.
+- **Fichiers** : `dlib/dlib/external/gulliver/web/js/models.js`, `common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md`.
+- **Pourquoi** : remarqué par l'humain après avoir basculé sur Granite 4.2 8B (« dans ta description tu mets image ») ; corrigé en 7.2.1 côté conseil mais pas côté affichage.
+- **Étapes** : édition, `cmake --build build/macos-gulliver --target gulliver-service` sans erreur, banc de la page (`tools/page_test/page_test.sh`).
+
 ## 2026-11-24 — La lecture d'images ne filtre plus le conseil « Pour tout faire » (7.2.1)
 
 - **Quoi** : le rôle « general » du conseil de la semaine (`tools/conseil_modeles.py`) ne retient plus `image.get(m)` comme condition : il prend la meilleure note de l'épreuve parmi les modèles qui écrivent au moins 40 jetons/s sur le GPU, qu'ils voient ou non les images. Variable `seeing` renommée `fast_gpu`, « images comprises » retiré de la description et du libellé de l'entrée. Le conseil de la semaine est recalculé sur le raw de l'après-midi : « Pour tout faire » bascule de Qwen3.6-35B-A3B-MTP Q4_K_M (quiz 98, multimodal) à **Granite 4.2 8B Q4_K_M** (quiz 100, sans vision) ; « Le plus rapide » reste Ministral 3 3B ; « Le plus juste » coïncide avec « Pour tout faire » et n'est pas réémis.
