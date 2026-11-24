@@ -15,6 +15,7 @@ Toutes les 10 secondes, il relève la température de la puce (la sonde la plus 
 |---|---|
 | Installer | `bash macos/surveillance/install.sh` |
 | Retirer | `bash macos/surveillance/install.sh --retirer` |
+| Le test (processus d'essai seulement, faux serveur d'envoi, une minute) | `python3 dlib/dlib/external/gulliver/tools/test_surveillant.py` |
 | Un relevé, sans rien arrêter | `python3 dlib/dlib/external/gulliver/tools/surveillant.py --essai` |
 | Voir s'il tourne | `launchctl print gui/$(id -u)/fr.fork.gulliver.surveillance` |
 | Journal | `build/surveillance/surveillant.log` |
