@@ -65,6 +65,8 @@ Reprise terminée (blog : épisode 48). Réglages du relais réservés au Mac se
 
 ## À faire, dans l'ordre proposé
 
+- **Ce soir (2026-11-24, accord de l'humain) : connexion en ligne à deux portes.** (1) Cloudflare Access : méthode « One-time PIN » (code par mail de Cloudflare) **ajoutée à côté de GitHub**, règle de `gulliver.tortuetech.com` sur la liste des adresses autorisées, session de 30 jours ; GitHub retiré seulement après un essai réussi depuis le téléphone hors du Wi-Fi ; c'est l'humain qui clique dans le tableau de bord, Claude écrit les étapes exactes. (2) Gulliver 8.0.0 : code à 6 chiffres d'une appli (TOTP, RFC 6238, HMAC-SHA1 par CommonCrypto) à la place du code par mail ; QR code dans la page (petit générateur JavaScript MIT, dépendance à signaler) ; le mail ne sert plus qu'au mot de passe (premier ou oublié) ; remise à zéro de l'appli par l'administrateur depuis le Mac (`mot_de_passe.py`) ; `test_comptes.py` étendu. Les adresses restent choisies par l'administrateur seul (déjà le cas, vérifié dans `server.cpp`).
+
 **Feuille de route : [docs/feuille-de-route.md](../docs/feuille-de-route.md)** (2026-11-19) — partie 1 : passer sur le Mac mini (**arrivé le 2026-11-19, l'humain le prépare**), par `docs/mac-mini-premier-jour.md` ; partie 2 : le reste en attente du Mac mini (liste ci-dessous) ; partie 3 : l'atelier d'entraînement demandé par l'humain, construit dans Gulliver (R1 à R17 : conversion GGUF → dlib, QLoRA, masquage, DPO, adaptateurs, retour dans Gulliver, distillation, retrait de blocs, MoE, tokenizer français, préentraînement, page « Atelier » et ses fiches) ; **fil rouge** : rendre Gulliver indépendant de dlib, un morceau à la fin de chaque chantier (premier : SHA-256 → CommonCrypto, à la fin de la partie 1).
 
 
