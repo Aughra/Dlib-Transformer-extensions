@@ -5,8 +5,8 @@
 # Remplace les bibliothèques tierces de l'application web par les versions données de leurs
 # paquets npm, et écrit les versions installées dans web/vendor/components.json :
 #
-#   tools/update_web_vendor.sh <marked> <dompurify> <highlight.js> <katex> <pdfjs-dist> <swagger-ui-dist>
-#   tools/update_web_vendor.sh 18.1.1 3.4.17 11.12.0 0.19.0 6.4.299 5.33.2
+#   tools/update_web_vendor.sh <marked> <dompurify> <highlight.js> <pdfjs-dist> <swagger-ui-dist>
+#   tools/update_web_vendor.sh 18.1.1 3.4.17 11.12.0 6.4.299 5.33.2
 #
 # L'application web tourne sans réseau : le service local sert chaque bibliothèque qu'elle utilise
 # depuis web/vendor et web/docs, chaque dossier avec la licence de son composant.  Les paquets
@@ -26,11 +26,11 @@
 # de pdfjs-dist ne servent qu'à dessiner les pages, ce que l'application ne fait pas, et sont
 # laissés de côté.
 #
-# Après une mise à jour, tester l'application (Markdown, code, formules, documents PDF et la
-# documentation de l'interface), puis relire les changements de components.json.
+# Après une mise à jour, tester l'application (Markdown, code, documents PDF et la documentation
+# de l'interface), puis relire les changements de components.json.
 
 set -euo pipefail
-if [ $# -ne 6 ]; then
+if [ $# -ne 5 ]; then
    sed -n '4,30p' "$0" | sed 's/^# \{0,1\}//'
    exit 2
 fi
@@ -43,7 +43,7 @@ trap 'rm -rf "$work"' EXIT
 cd "$work"
 npm init -y > /dev/null
 npm install --no-audit --no-fund --ignore-scripts "marked@$1" "dompurify@$2" "@highlightjs/cdn-assets@$3" \
-   "katex@$4" "pdfjs-dist@$5" "swagger-ui-dist@$6" > /dev/null
+   "pdfjs-dist@$4" "swagger-ui-dist@$5" > /dev/null
 m="$work/node_modules"
 
 copy() { # source destination
@@ -59,12 +59,6 @@ copy "$m/@highlightjs/cdn-assets/highlight.min.js" "$web/vendor/highlight/highli
 copy "$m/@highlightjs/cdn-assets/styles/github.min.css" "$web/vendor/highlight/github.min.css"
 copy "$m/@highlightjs/cdn-assets/styles/github-dark.min.css" "$web/vendor/highlight/github-dark.min.css"
 copy "$m/@highlightjs/cdn-assets/LICENSE" "$web/vendor/highlight/LICENSE"
-copy "$m/katex/dist/katex.min.js" "$web/vendor/katex/katex.min.js"
-copy "$m/katex/dist/katex.min.css" "$web/vendor/katex/katex.min.css"
-copy "$m/katex/LICENSE" "$web/vendor/katex/LICENSE"
-rm -rf "$web/vendor/katex/fonts"
-mkdir -p "$web/vendor/katex/fonts"
-cp "$m"/katex/dist/fonts/*.woff2 "$web/vendor/katex/fonts/"
 # PDF.js vient de son build legacy, qui tourne dans Edge et Chrome à partir de la version 125.  Le
 # build moderne demande la version 147 ou plus, et un ordinateur tenu hors du réseau peut avoir un
 # navigateur plus ancien.
@@ -97,4 +91,4 @@ for (const c of list.components)
 fs.writeFileSync(file, JSON.stringify(list, null, 2) + '\n');
 EOF
 
-echo "Updated: marked $1, DOMPurify $2, highlight.js $3, KaTeX $4, PDF.js $5, Swagger UI $6"
+echo "Updated: marked $1, DOMPurify $2, highlight.js $3, PDF.js $4, Swagger UI $5"

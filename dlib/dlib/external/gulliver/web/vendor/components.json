@@ -44,20 +44,6 @@
       "role": "Colors the code of the answers"
     },
     {
-      "id": "katex",
-      "name": "KaTeX",
-      "version": "0.19.0",
-      "package": "katex",
-      "license": "MIT",
-      "license_name": "MIT License",
-      "license_files": [
-        "vendor/katex/LICENSE"
-      ],
-      "files": "vendor/katex",
-      "source": "https://github.com/KaTeX/KaTeX",
-      "role": "Draws the mathematical formulas"
-    },
-    {
       "id": "pdfjs",
       "name": "PDF.js",
       "version": "6.4.299",

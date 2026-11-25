@@ -305,7 +305,7 @@ const texts = {
     licenseNotStated: 'Non indiquée : voir la source du fichier', licensePublicDomain: 'Domaine public',
     component_marked: 'Met en forme le Markdown des réponses',
     component_dompurify: 'Retire des réponses le HTML qui pourrait exécuter du code',
-    component_highlight: 'Colore le code des réponses', component_katex: 'Affiche les formules mathématiques',
+    component_highlight: 'Colore le code des réponses',
     component_pdfjs: 'Lit le texte des documents PDF',
     component_cmaps: 'Donne le texte des polices chinoises, japonaises et coréennes des documents PDF',
     component_swagger: 'Affiche la documentation interactive de l\'interface',

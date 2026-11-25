@@ -308,7 +308,6 @@ a { color: var(--blue); }
 .md .code-head svg { width: 13px; height: 13px; }
 .md hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
 .md img { max-width: 100%; border-radius: 8px; }
-.md .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
 /*
     Les champs de markdown (web/js/mdfield.js) et les questions du fil (md-text) : le texte tel que l'utilisateur
     l'écrit, dessiné comme les réponses le dessinent (repris de l'original, Albireo 1.0.15).

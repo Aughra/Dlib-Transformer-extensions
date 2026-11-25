@@ -2,6 +2,13 @@
 
 Le plus récent en haut. Une entrée par intervention ; on n'en réécrit jamais une ancienne.
 
+## 2026-11-25 — KaTeX retiré du navigateur (7.2.3)
+
+- **Quoi** : KaTeX disparaît entièrement de l'application web. Les formules mathématiques (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`) s'affichent en texte brut dans le fil, au même titre que le reste du Markdown. La page gagne 596 Ko de JavaScript et ~400 Ko de CSS et polices au premier chargement (vendor/ passe de 4,3 Mo à 3,7 Mo). Premier chantier d'allègement du navigateur demandé par l'humain, suivant la ligne « le navigateur n'affiche, le C++ calcule ».
+- **Fichiers** : `dlib/dlib/external/gulliver/web/index.html` (2 lignes retirées), `web/js/markdown.js` (commentaire, `tex()` et analyseurs `math[]` retirés, `extensions: [highlight]` à la place de `math.concat([highlight])`), `web/js/i18n.js` (clé `component_katex` retirée), `web/css/app.css` (règle `.md .katex-display`), `web/vendor/components.json` (entrée KaTeX retirée), `web/vendor/katex/` (dossier supprimé), `tools/update_web_vendor.sh` (paramètres passent de 6 à 5, bloc de copie KaTeX retiré), `tools/page_test/eslint.config.mjs` (global `katex` retiré), version 7.2.3 (`common/version.h`, `CMakeLists.txt`, `web/openapi.json`, `web/changelog.md`), `docs/differences-mac-windows.md`.
+- **Pourquoi** : l'humain a tranché « KaTeX on enlève » dans le cadre du chantier « le navigateur n'affiche, le C++ calcule ». Les formules mathématiques ne sont pas un usage central ; leur rendu coûte 1 Mo au premier chargement, pour une qualité visuelle qui n'est pas vitale. Les utilisateurs qui en rencontreront verront `$E = mc^2$` au lieu de la jolie version.
+- **Étapes** : édition des 8 fichiers en une passe, suppression du dossier `web/vendor/katex/`, `tools/bump_version.py patch` (7.2.2 → 7.2.3), rebuild de Gulliver, `bash tools/page_test/page_test.sh` (lint ok et scénarios qui ne concernent pas les formules), commit local (pas de push, forfait GitHub épuisé jusqu'à lundi 2026-11-30).
+
 ## 2026-11-24 — Le libellé « images comprises » retiré aussi de la page (7.2.2)
 
 - **Quoi** : la carte du conseil de l'onglet « Modèles » montrait encore « Pour tout faire, images comprises » (constante `adviceRoles.general` de `web/js/models.js`) même avec un modèle sans vision ; passe à « Pour tout faire », comme le texte du conseil et le résumé du document de vitesse.

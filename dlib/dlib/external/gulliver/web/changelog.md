@@ -2,6 +2,14 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.2.3 — 25 novembre 2026
+
+### Interface
+
+- KaTeX retiré : les formules mathématiques (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`) s'affichent désormais en texte brut, comme le reste du Markdown de la réponse. Le navigateur ne charge plus les 596 Ko de JavaScript ni les polices de KaTeX (soit 1 Mo d'économie au premier chargement). La règle CSS `.md .katex-display`, la fonction `tex()` et les analyseurs de formules de `web/js/markdown.js` ont été retirés, ainsi que l'entrée KaTeX de la liste des composants (`web/vendor/components.json`) et de la page des licences. Le script `tools/update_web_vendor.sh` prend désormais 5 versions au lieu de 6.
+
+---
+
 ## 7.2.2 — 24 novembre 2026
 
 ### Corrections

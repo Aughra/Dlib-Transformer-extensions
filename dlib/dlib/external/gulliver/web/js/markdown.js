@@ -2,13 +2,12 @@
 // License: Boost Software License   See LICENSE.txt for the full license.
 
 /*
-    Markdown des réponses : markdown à la GitHub, code coloré par highlight.js, formules
-    composées par KaTeX entre $...$, $$...$$, \(...\) et \[...\], et texte surligné entre == et ==,
-    comme les champs des questions le montrent (mdfield.js).  Le HTML qu'un modèle
-    écrit hors du code est affiché comme du texte, et le résultat est assaini avant
-    d'atteindre la page.  Une réponse ne charge rien d'une autre origine, et affiche une image
-    d'une autre origine comme un lien vers elle, que le navigateur ne suit que si l'utilisateur
-    le fait.
+    Markdown des réponses : markdown à la GitHub, code coloré par highlight.js, et
+    texte surligné entre == et ==, comme les champs des questions le montrent (mdfield.js).
+    Le HTML qu'un modèle écrit hors du code est affiché comme du texte, et le résultat
+    est assaini avant d'atteindre la page.  Une réponse ne charge rien d'une autre origine,
+    et affiche une image d'une autre origine comme un lien vers elle, que le navigateur
+    ne suit que si l'utilisateur le fait.
 */
 
 import { Marked } from '../vendor/marked/marked.esm.js';
@@ -28,55 +27,6 @@ function localSource(url) {
     return false;
   }
 }
-
-function tex(text, display) {
-  if (!window.katex) return escapeHtml(display ? '$$' + text + '$$' : '$' + text + '$');
-  try {
-    return window.katex.renderToString(text, { displayMode: display, throwOnError: false, output: 'html', strict: false });
-  } catch (e) {
-    return '<code>' + escapeHtml(text) + '</code>';
-  }
-}
-
-const math = [
-  {
-    name: 'blockMath',
-    level: 'block',
-    start(src) {
-      const i = src.search(/\$\$|\\\[/);
-      return i < 0 ? undefined : i;
-    },
-    tokenizer(src) {
-      const m = /^\$\$([\s\S]+?)\$\$/.exec(src) || /^\\\[([\s\S]+?)\\\]/.exec(src);
-      if (m) return { type: 'blockMath', raw: m[0], text: m[1].trim() };
-      return undefined;
-    },
-    renderer(token) {
-      return '<div class="math-block">' + tex(token.text, true) + '</div>';
-    }
-  },
-  {
-    name: 'inlineMath',
-    level: 'inline',
-    start(src) {
-      const i = src.search(/\$|\\\(/);
-      return i < 0 ? undefined : i;
-    },
-    tokenizer(src) {
-      let m = /^\$\$([\s\S]+?)\$\$/.exec(src);
-      if (m) return { type: 'inlineMath', raw: m[0], text: m[1].trim(), display: true };
-      // Un dollar suivi d'un chiffre après celui qui le ferme est un prix, pas une formule.
-      m = /^\$(?![\s$])((?:\\.|[^\\$\n])+?)\$(?!\d)/.exec(src);
-      if (m && !/\s$/.test(m[1])) return { type: 'inlineMath', raw: m[0], text: m[1], display: false };
-      m = /^\\\(([\s\S]+?)\\\)/.exec(src);
-      if (m) return { type: 'inlineMath', raw: m[0], text: m[1].trim(), display: false };
-      return undefined;
-    },
-    renderer(token) {
-      return tex(token.text, token.display);
-    }
-  }
-];
 
 // Le texte surligné entre == et ==, sans espace à l'intérieur des marques (repris de l'original, Albireo 1.0.15).
 const highlight = {
@@ -114,7 +64,7 @@ function openFence(raw) {
 
 const marked = new Marked({ gfm: true, breaks: false });
 marked.use({
-  extensions: math.concat([highlight]),
+  extensions: [highlight],
   renderer: {
     code({ text, lang, raw }) {
       const language = String(lang || '').trim().split(/\s+/)[0].toLowerCase();
