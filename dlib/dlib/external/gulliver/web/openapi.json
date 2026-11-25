@@ -2,7 +2,7 @@
  "openapi": "3.0.3",
  "info": {
   "title": "Interface locale d'Gulliver Community Edition",
-  "version": "7.2.3",
+  "version": "7.3.0",
   "description": "L'interface du service Gulliver, servie sur https://localhost (port 8443 sauf changement dans l'onglet « Service » de l'application web) et, une fois l'accès réseau activé, en HTTP simple sur chaque adresse du Mac, à son port réseau (8444 par défaut). Les routes sous /v1 suivent l'interface d'OpenAI, pour que ses bibliothèques clientes fonctionnent avec base_url https://localhost:8443/v1 et n'importe quelle clé d'API. Les fonctions gulliver-general, gulliver-code et gulliver-security désignent les modèles activés pour chaque fonction, gulliver-background le modèle livré avec Gulliver, que l'application web utilise pour son travail en arrière-plan, et gulliver-embedding le modèle d'embedding de la recherche dans les documents.\n\nUne version personnelle pour macOS. Les données d'un profil demandent sa session (en-tête X-Gulliver-Session, ouverte par /gulliver/v1/login puis /gulliver/v1/login/code). Les actions qui changent le service (modèles, réglages, redémarrage, mesures, journal) sont libres depuis le Mac lui-même ; depuis le port réseau, elles demandent la session de l'administrateur (401 session_required, 403 admin_required) ; par la passerelle de Cloudflare, elles sont refusées. Les autres routes (discussion, état, catalogue) sont ouvertes.\n\nLes requêtes portent des corps JSON de 64 Mo et 524 288 valeurs au plus, avec leur longueur : un corps sans longueur est refusé avec 411, un plus long avec 413, un autre type avec 415. GET, HEAD, DELETE et OPTIONS ne prennent pas de corps (400). Tant que les corps JSON lus en même temps occupent les valeurs de leur budget, une route qui en lit un répond 503 avec le code busy et un Retry-After de 2 secondes. Une réponse en cours d'écriture dont le modèle n'a plus de mémoire pour ses clés et valeurs se termine par le code d'erreur out_of_memory.\n\nAvant toute route, le serveur refuse, en texte simple, un corps de plus de 8 Mo pendant que quatre corps de cette taille sont en cours de lecture (503, avec un en-tête Retry-After).",
   "license": {
    "name": "Boost Software License 1.0",
@@ -1254,6 +1254,119 @@
      },
      "422": {
       "description": "Le fichier n'a pas pu être lu : code parmi pdf-images, pdf-password, pdf-invalid, pdf-reader, legacy, unsupported, too-large. pages donne le nombre de pages d'un PDF numérisé (pdf-images).",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Le document nommé n'est pas dans le dossier des documents du Mac (code document_not_found)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/gulliver/v1/extract/pages": {
+   "post": {
+    "tags": [
+     "Service"
+    ],
+    "summary": "Les pages d'un PDF en images",
+    "description": "Dessine les premières pages d'un PDF en images JPEG (qualité 0,9, sur fond blanc), par le moteur PDF de macOS (CoreGraphics), pour un PDF numérisé que lit un modèle de vision : la page n'embarque plus de lecteur PDF. Le fichier se donne comme pour /gulliver/v1/extract (bytes, ou document pour un fichier du dossier des documents du Mac).",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "properties": {
+         "name": {
+          "type": "string",
+          "description": "Le nom du fichier."
+         },
+         "bytes": {
+          "type": "string",
+          "description": "Les octets du PDF, en base64."
+         },
+         "document": {
+          "type": "string",
+          "description": "Le nom d'un fichier du dossier des documents du Mac, lu par le service à la place de bytes."
+         },
+         "side": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 4096,
+          "default": 1536,
+          "description": "Le plus grand côté de chaque image, en pixels."
+         },
+         "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "default": 64,
+          "description": "Le nombre de premières pages à dessiner."
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Les images des pages",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "properties": {
+          "pages": {
+           "type": "integer",
+           "description": "Le nombre de pages du fichier, toutes comptées."
+          },
+          "images": {
+           "type": "array",
+           "items": {
+            "type": "object",
+            "properties": {
+             "data": {
+              "type": "string",
+              "description": "L'image JPEG, en base64."
+             },
+             "width": {
+              "type": "integer"
+             },
+             "height": {
+              "type": "integer"
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "side ou limit hors de leurs bornes (code invalid_value)",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Le PDF n'a pas pu être dessiné : code parmi pdf-invalid, pdf-password, pdf-render, too-large",
       "content": {
        "application/json": {
         "schema": {

@@ -64,6 +64,7 @@
 #include "hub.h"
 #include "rag_engine.h"
 #include "doc_extract.h"
+#include "pdf_render.h"
 #include "relay.h"
 #include "service.h"
 #include "web_access.h"
@@ -2206,45 +2207,48 @@ namespace gulliver
             fichier en base64) → {text, format}.  En cas d'échec, 422 avec le code de doc_error
             (pdf-images, pdf-password, pdf-invalid, pdf-reader, legacy, unsupported, too-large, …),
             que la page connaît déjà (web/js/files.js).  Un PDF scanné lève "pdf-images" : la page
-            rend alors ses pages en images pour le modèle de vision, comme avant (ce rendu reste au
-            navigateur, il dessine les pages).
+            demande alors ses pages en images pour le modèle de vision (route /extract/pages).
 
             Corps {document} à la place de {name, bytes} (fork) : le service lit lui-même ce fichier
             du dossier des documents du Mac, sans qu'il fasse l'aller-retour par le navigateur (un
             téléphone en 4G le téléchargeait puis le renvoyait).  Un nom invalide ou absent : 404 ;
             un fichier de plus de 100 Mo : 422 too-large, comme pour des octets envoyés.
         */
-        srv.Post("/gulliver/v1/extract", [s](const httplib::Request& req, httplib::Response& res) {
-            json body;
-            if (!parse_body(req, res, body)) return;
-            std::string name = body.contains("name") ? body["name"].as_string() : std::string();
-            std::string bytes;
-            if (body.contains("document"))
-            {
-                name = body["document"].as_string();
-                const std::string path = join_path(s->documents_dir(), name);
-                struct stat st;
-                if (!document_name(name) || stat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
-                {
-                    send_error(res, 404, "invalid_request_error", "no such document", "document_not_found");
-                    return;
-                }
-                // La limite de doc_extract (max_file_bytes, 100 Mo), vérifiée avant de lire le fichier.
-                if (static_cast<uint64_t>(st.st_size) > (100ull << 20))
-                {
-                    send_error(res, 422, "invalid_request_error", "Fichier trop volumineux", "too-large");
-                    return;
-                }
-                if (!read_file(path, bytes, 100ull << 20))
-                {
-                    send_error(res, 404, "invalid_request_error", "no such document", "document_not_found");
-                    return;
-                }
-            }
-            else
+        // Le fichier d'une extraction : {document} (lu dans le dossier des documents du Mac) ou {name, bytes}.
+        // Faux, la réponse d'erreur déjà écrite, quand le document est absent, piégé ou trop gros.
+        auto extract_source = [s](const json& body, httplib::Response& res, std::string& name, std::string& bytes) {
+            name = body.contains("name") ? body["name"].as_string() : std::string();
+            if (!body.contains("document"))
             {
                 bytes = base64_decode(body.contains("bytes") ? body["bytes"].as_string() : std::string());
+                return true;
             }
+            name = body["document"].as_string();
+            const std::string path = join_path(s->documents_dir(), name);
+            struct stat st;
+            if (!document_name(name) || stat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+            {
+                send_error(res, 404, "invalid_request_error", "no such document", "document_not_found");
+                return false;
+            }
+            // La limite de doc_extract (max_file_bytes, 100 Mo), vérifiée avant de lire le fichier.
+            if (static_cast<uint64_t>(st.st_size) > (100ull << 20))
+            {
+                send_error(res, 422, "invalid_request_error", "Fichier trop volumineux", "too-large");
+                return false;
+            }
+            if (!read_file(path, bytes, 100ull << 20))
+            {
+                send_error(res, 404, "invalid_request_error", "no such document", "document_not_found");
+                return false;
+            }
+            return true;
+        };
+        srv.Post("/gulliver/v1/extract", [extract_source](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            std::string name, bytes;
+            if (!extract_source(body, res, name, bytes)) return;
             try
             {
                 const std::string text = extract_text(name, bytes);
@@ -2279,6 +2283,50 @@ namespace gulliver
                     res.set_content(err.dump(), "application/json");
                     return;
                 }
+                send_error(res, 422, "invalid_request_error", e.what(), e.code);
+            }
+        });
+        /*
+            Les pages d'un PDF en images (fork, 2026-11-25), pour un PDF numérisé que lit un modèle
+            de vision : le service les dessine par CoreGraphics (host/pdf_render.{h,cpp}), à la
+            place de pdf.js dans la page.  Corps {name, bytes} ou {document}, comme /extract, plus
+            side (le plus grand côté en pixels, 64 à 4 096, 1 536 par défaut) et limit (le nombre de
+            premières pages, 1 à 64, 64 par défaut) → {pages, images: [{data, width, height}]},
+            pages comptant toutes les pages du fichier et data étant un JPEG en base64.  En cas
+            d'échec, 422 avec le code de doc_error (pdf-invalid, pdf-password, pdf-render).
+        */
+        srv.Post("/gulliver/v1/extract/pages", [extract_source](const httplib::Request& req, httplib::Response& res) {
+            json body;
+            if (!parse_body(req, res, body)) return;
+            std::string name, bytes;
+            if (!extract_source(body, res, name, bytes)) return;
+            const int side = body.contains("side") ? static_cast<int>(body["side"].as_int(1536)) : 1536;
+            const int limit = body.contains("limit") ? static_cast<int>(body["limit"].as_int(64)) : 64;
+            if (side < 64 || side > 4096 || limit < 1 || limit > 64)
+            {
+                send_error(res, 400, "invalid_request_error", "side must be 64 to 4096 and limit 1 to 64", "invalid_value");
+                return;
+            }
+            try
+            {
+                int total = 0;
+                const auto pages = render_pdf_pages(bytes, side, limit, total);
+                json images = json::array();
+                for (const auto& p : pages)
+                {
+                    json one = json::object();
+                    one["data"] = base64_encode(p.jpeg);
+                    one["width"] = p.width;
+                    one["height"] = p.height;
+                    images.push_back(one);
+                }
+                json out = json::object();
+                out["pages"] = total;
+                out["images"] = images;
+                send_json(res, 200, out);
+            }
+            catch (const doc_error& e)
+            {
                 send_error(res, 422, "invalid_request_error", e.what(), e.code);
             }
         });

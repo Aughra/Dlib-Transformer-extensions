@@ -883,6 +883,31 @@ paths = {
                                    "numérisé (pdf-images).", ref("Error")),
                       "404": reply("Le document nommé n'est pas dans le dossier des documents du Mac (code "
                                    "document_not_found)", ref("Error"))}}},
+    "/gulliver/v1/extract/pages": {"post": {
+        "tags": ["Service"], "summary": "Les pages d'un PDF en images",
+        "description": "Dessine les premières pages d'un PDF en images JPEG (qualité 0,9, sur fond blanc), par le "
+                       "moteur PDF de macOS (CoreGraphics), pour un PDF numérisé que lit un modèle de vision : la page "
+                       "n'embarque plus de lecteur PDF. Le fichier se donne comme pour /gulliver/v1/extract (bytes, "
+                       "ou document pour un fichier du dossier des documents du Mac).",
+        "requestBody": json_body({"type": "object", "properties": {
+            "name": {"type": "string", "description": "Le nom du fichier."},
+            "bytes": {"type": "string", "description": "Les octets du PDF, en base64."},
+            "document": {"type": "string", "description": "Le nom d'un fichier du dossier des documents du Mac, "
+                                                          "lu par le service à la place de bytes."},
+            "side": {"type": "integer", "minimum": 64, "maximum": 4096, "default": 1536,
+                     "description": "Le plus grand côté de chaque image, en pixels."},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 64, "default": 64,
+                      "description": "Le nombre de premières pages à dessiner."}}}),
+        "responses": {"200": reply("Les images des pages", {"type": "object", "properties": {
+            "pages": {"type": "integer", "description": "Le nombre de pages du fichier, toutes comptées."},
+            "images": {"type": "array", "items": {"type": "object", "properties": {
+                "data": {"type": "string", "description": "L'image JPEG, en base64."},
+                "width": {"type": "integer"}, "height": {"type": "integer"}}}}}}),
+                      "400": reply("side ou limit hors de leurs bornes (code invalid_value)", ref("Error")),
+                      "422": reply("Le PDF n'a pas pu être dessiné : code parmi pdf-invalid, pdf-password, "
+                                   "pdf-render, too-large", ref("Error")),
+                      "404": reply("Le document nommé n'est pas dans le dossier des documents du Mac (code "
+                                   "document_not_found)", ref("Error"))}}},
     "/gulliver/v1/web/search": {"post": {
         "tags": ["Accès au web"], "summary": "Cherche dans Wikipedia",
         "description": "L'outil web_search du bouton Web, par l'interface REST de Wikipedia (GET "

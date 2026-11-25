@@ -2,6 +2,18 @@
 
 Gulliver, le service de chat local pour macOS sur puce Apple, dérivé d'Albireo Community Edition (Cydral Technology) et maintenu par papy cyber. Les numéros suivent la gestion sémantique des versions : majeur pour une rupture, mineur pour une fonction nouvelle, correctif pour une correction. Les versions sont présentées de la plus récente à la plus ancienne. (Les sections antérieures à la 6.0.0 nomment le service « Albireo », son nom avant le renommage.)
 
+## 7.3.0 — 25 novembre 2026
+
+### Plateforme
+
+- PDFium est retirée. L'extraction du texte des PDF passe désormais par **PDFKit**, le cadriciel natif de macOS (`host/doc_extract_pdf.mm` en Objective-C++), et le dessin des pages d'un PDF scanné passe par **CoreGraphics** (`host/pdf_render.cpp`, également côté service). Gulliver n'embarque plus aucune bibliothèque de lecture de PDF : le système fournit tout. La bibliothèque binaire `libpdfium.dylib` (~7,6 Mo) n'est plus récupérée ni livrée ; le dossier `third_party/pdfium/` et le script `tools/fetch_pdfium.sh` sont supprimés.
+- Le texte extrait vient de `PDFPage.attributedString.string`, pas de `PDFPage.string`, et est normalisé en NFKC avant d'être renvoyé. Cette combinaison préserve les lettres doublées sur les PDF anglais (que `PDFPage.string` perdait : « Hollyhill » → « Holyhil », « Specially » → « Specialy ») et ramène l'arabe aux formes génériques (U+0600-06FF) plutôt qu'aux formes de présentation (U+FB50-FDFF).
+- Le dessin des pages d'un PDF scanné sort du navigateur : une nouvelle route de service, `POST /gulliver/v1/extract/pages`, rend les premières pages d'un PDF en images JPEG prêtes pour un modèle de vision. Le navigateur n'a plus à embarquer `pdf.js` pour cela (son retrait complet suit en 7.4.0).
+- Le code d'erreur « pdf-reader » (PDFium absente) ne se produit plus : PDFKit est toujours là sur un Mac.
+- Le dessin des pages d'un PDF (`host/pdf_render.cpp`, nouveau module) vient d'une session Claude parallèle (« Gulliver [929ca4] »), inclus dans ce commit pour que le build soit cohérent ; le retrait de `pdf.js` du navigateur suit en 7.4.0.
+
+---
+
 ## 7.2.3 — 25 novembre 2026
 
 ### Interface

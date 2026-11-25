@@ -9,14 +9,16 @@
     envoie les octets du fichier, le service rend le texte.
 
     Formats :
-      - PDF : par PDFium (third_party/pdfium, licence MIT), chargé au premier PDF.  Un PDF sans
-        aucun texte lisible (un PDF scanné, fait d'images) lève l'erreur "pdf-images" — ses pages
-        sont alors lues par le modèle de vision, comme avant, côté page.
+      - PDF : par PDFKit, le cadriciel natif de macOS (depuis la 7.3.0 ; PDFium abandonnée, plus
+        rien à embarquer).  Un PDF sans aucun texte lisible (un PDF scanné, fait d'images) lève
+        l'erreur "pdf-images" — ses pages sont alors dessinées par host/pdf_render.cpp
+        (CoreGraphics), côté service aussi, pour le modèle de vision.
       - Office (docx, pptx, xlsx) et OpenDocument (odt, odp, ods) : par lecture du ZIP et du XML.
       - RTF, HTML, texte brut : lecture directe.
 
     extract_text() rend le texte, ou lève doc_error avec un code (les mêmes que la page :
-    "pdf-images", "pdf-password", "pdf-invalid", "pdf-reader", "too-large", "unsupported", …).
+    "pdf-images", "pdf-password", "pdf-invalid", "too-large", "unsupported", …).  "pdf-reader"
+    ne peut plus se produire : PDFKit est toujours là sur un Mac.
 */
 
 #include <stdexcept>
@@ -38,10 +40,11 @@ namespace gulliver
 
     // Le texte d'un PDF (ses octets), page par page, séparées par une ligne de titre "\f" + nom.
     // Lève doc_error("pdf-images", …) si aucune page ne contient de texte (PDF scanné), avec le
-    // nombre de pages dans le message, et "pdf-reader" si PDFium n'a pas pu être chargé.
+    // nombre de pages dans le message.
     std::string extract_pdf_text(const std::string& bytes);
 
-    // Vrai si la bibliothèque PDFium est présente et chargeable (sinon les PDF lèvent "pdf-reader").
+    // Vrai si le service sait lire les PDF.  Toujours vrai sur macOS (PDFKit, cadriciel système) ;
+    // gardé pour que host/server.cpp n'ait rien à changer.
     bool pdf_available();
 }
 

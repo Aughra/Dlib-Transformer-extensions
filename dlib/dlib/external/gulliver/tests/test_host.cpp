@@ -80,6 +80,9 @@
 
 #include <zlib.h>
 
+#include <CoreGraphics/CoreGraphics.h>
+#include <ImageIO/ImageIO.h>
+
 #include <httplib.h>
 
 #include "../common/builtin_models.h"
@@ -90,6 +93,8 @@
 #include "../host/crypto.h"
 #include "../host/http_fetch.h"
 #include "../host/models.h"
+#include "../host/doc_extract.h"
+#include "../host/pdf_render.h"
 #include "../host/pseudonyms.h"
 #include "../host/rag_engine.h"
 #include "../host/relay.h"
@@ -300,6 +305,71 @@ namespace
         std::atomic<bool> stopped_{false};
         std::thread thread_;
     };
+
+    /*
+        Un PDF écrit par CoreGraphics : une page de 595 x 842 points dont la moitié du haut est
+        noire, puis une page de 842 x 595 points, blanche.  password, s'il n'est pas vide, protège
+        l'ouverture du fichier.
+    */
+    std::string make_test_pdf(const std::string& password)
+    {
+        CFMutableDataRef data = CFDataCreateMutable(kCFAllocatorDefault, 0);
+        CGDataConsumerRef consumer = CGDataConsumerCreateWithCFData(data);
+        CFMutableDictionaryRef info = CFDictionaryCreateMutable(kCFAllocatorDefault, 0,
+            &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        CFStringRef secret = nullptr;
+        if (!password.empty())
+        {
+            secret = CFStringCreateWithCString(kCFAllocatorDefault, password.c_str(), kCFStringEncodingUTF8);
+            CFDictionarySetValue(info, kCGPDFContextUserPassword, secret);
+            CFDictionarySetValue(info, kCGPDFContextOwnerPassword, secret);
+        }
+        CGRect portrait = CGRectMake(0, 0, 595, 842);
+        CGContextRef ctx = CGPDFContextCreate(consumer, &portrait, info);
+        CGContextBeginPage(ctx, &portrait);
+        CGContextSetRGBFillColor(ctx, 0, 0, 0, 1);
+        CGContextFillRect(ctx, CGRectMake(0, 421, 595, 421));
+        CGContextEndPage(ctx);
+        CGRect landscape = CGRectMake(0, 0, 842, 595);
+        CGContextBeginPage(ctx, &landscape);
+        CGContextEndPage(ctx);
+        CGPDFContextClose(ctx);
+        CGContextRelease(ctx);
+        std::string out(reinterpret_cast<const char*>(CFDataGetBytePtr(data)), static_cast<size_t>(CFDataGetLength(data)));
+        if (secret) CFRelease(secret);
+        CFRelease(info);
+        CGDataConsumerRelease(consumer);
+        CFRelease(data);
+        return out;
+    }
+
+    // La luminosité moyenne (0 à 255) du pixel (x, y) d'une image JPEG, y compté depuis le haut ; -1 si illisible.
+    int jpeg_gray_at(const std::string& jpeg, int x, int y)
+    {
+        CFDataRef data = CFDataCreate(kCFAllocatorDefault, reinterpret_cast<const UInt8*>(jpeg.data()), static_cast<CFIndex>(jpeg.size()));
+        CGImageSourceRef src = CGImageSourceCreateWithData(data, nullptr);
+        CGImageRef image = src ? CGImageSourceCreateImageAtIndex(src, 0, nullptr) : nullptr;
+        int gray = -1;
+        if (image)
+        {
+            const size_t w = CGImageGetWidth(image), h = CGImageGetHeight(image);
+            std::vector<unsigned char> px(w * h * 4);
+            CGColorSpaceRef rgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+            CGContextRef ctx = CGBitmapContextCreate(px.data(), w, h, 8, w * 4, rgb, kCGImageAlphaNoneSkipLast | kCGBitmapByteOrder32Big);
+            CGContextDrawImage(ctx, CGRectMake(0, 0, w, h), image);
+            if (x >= 0 && y >= 0 && static_cast<size_t>(x) < w && static_cast<size_t>(y) < h)
+            {
+                const unsigned char* p = &px[(static_cast<size_t>(y) * w + static_cast<size_t>(x)) * 4];
+                gray = (p[0] + p[1] + p[2]) / 3;
+            }
+            CGContextRelease(ctx);
+            CGColorSpaceRelease(rgb);
+            CGImageRelease(image);
+        }
+        if (src) CFRelease(src);
+        CFRelease(data);
+        return gray;
+    }
 
     // Si text contient word, ses lettres ASCII comparées sans tenir compte de la casse (word en minuscules).
     bool holds_folded(const std::string& text, const std::string& word)
@@ -2654,6 +2724,40 @@ int main(int argc, char** argv)
         gulliver::relay_origin_for_tests("ollama", "");
         relay_server.stop();
         relay_listener.join();
+    }
+
+    {
+        // Le dessin des pages d'un PDF par CoreGraphics (host/pdf_render.cpp), qui remplace pdf.js dans la page.
+        const std::string pdf = make_test_pdf("");
+        int total = 0;
+        const auto pages = gulliver::render_pdf_pages(pdf, 1536, 5, total);
+        check(total == 2 && pages.size() == 2, "a PDF of two pages gives two images (" + std::to_string(total) + ")");
+        if (pages.size() == 2)
+        {
+            check(pages[0].height == 1536 && pages[0].width == 1085, "a portrait page is drawn with its longest side at the asked size ("
+                + std::to_string(pages[0].width) + "x" + std::to_string(pages[0].height) + ")");
+            check(pages[1].width == 1536 && pages[1].height == 1085, "a landscape page keeps its orientation ("
+                + std::to_string(pages[1].width) + "x" + std::to_string(pages[1].height) + ")");
+            check(pages[0].jpeg.size() > 2 && static_cast<unsigned char>(pages[0].jpeg[0]) == 0xFF
+                && static_cast<unsigned char>(pages[0].jpeg[1]) == 0xD8, "the pages are JPEG images");
+            const int top = jpeg_gray_at(pages[0].jpeg, 540, 300), bottom = jpeg_gray_at(pages[0].jpeg, 540, 1200);
+            check(top >= 0 && top < 40 && bottom > 215, "the page is drawn upright on white (top " + std::to_string(top)
+                + ", bottom " + std::to_string(bottom) + ")");
+            check(jpeg_gray_at(pages[1].jpeg, 700, 500) > 215, "an empty page is drawn white");
+        }
+        int counted = 0;
+        check(gulliver::render_pdf_pages(pdf, 768, 1, counted).size() == 1 && counted == 2,
+            "the limit keeps the first pages and the count names them all");
+        auto code_of = [](const std::string& bytes) {
+            int n = 0;
+            try { gulliver::render_pdf_pages(bytes, 512, 2, n); }
+            catch (const gulliver::doc_error& e) { return e.code; }
+            return std::string("none");
+        };
+        check(code_of(make_test_pdf("secret")) == "pdf-password", "a PDF locked by a password is refused as pdf-password");
+        check(code_of("not a pdf") == "pdf-invalid", "bytes that are not a PDF are refused as pdf-invalid");
+        check(code_of(pdf.substr(0, pdf.size() / 3)) == "pdf-invalid", "a truncated PDF is refused as pdf-invalid ("
+            + code_of(pdf.substr(0, pdf.size() / 3)) + ")");
     }
 
     server.stop();

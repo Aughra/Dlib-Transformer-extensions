@@ -9,7 +9,7 @@
 # est copiée dans <build>/bin/web.
 
 cmake_minimum_required(VERSION 3.16)
-project(gulliver VERSION 7.2.3 LANGUAGES C CXX OBJCXX)
+project(gulliver VERSION 7.3.0 LANGUAGES C CXX OBJCXX)
 
 # La version est écrite à quatre endroits qui doivent concorder : project() ci-dessus, les numéros et
 # le texte de common/version.h, que donnent le service et le moteur, et la description de
@@ -155,33 +155,20 @@ if (GULLIVER_PROGRAMS)
    add_executable(gulliver-service host/main.cpp host/service.cpp host/server.cpp host/settings.cpp host/store.cpp
       host/models.cpp host/engine_host.cpp host/http_fetch.cpp host/crypto.cpp host/accounts.cpp host/mailer.cpp
       host/certificates.cpp host/web_access.cpp host/hub.cpp host/carnet.cpp host/relay.cpp host/pseudonyms.cpp
-      host/rag_engine.cpp host/doc_extract.cpp host/doc_extract_pdf.cpp host/tls_gate.mm
+      host/rag_engine.cpp host/doc_extract.cpp host/doc_extract_pdf.mm host/pdf_render.cpp host/tls_gate.mm
       host/tls_client.mm host/thermal.mm)
-   set_source_files_properties(host/tls_gate.mm host/tls_client.mm host/thermal.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+   set_source_files_properties(host/tls_gate.mm host/tls_client.mm host/thermal.mm host/doc_extract_pdf.mm
+      PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
    target_include_directories(gulliver-service PRIVATE ${CMAKE_BINARY_DIR}/generated)
    # Le carnet du portage lit les documents du dépôt où le service est construit (host/carnet.h).
    get_filename_component(GULLIVER_FORK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
    target_compile_definitions(gulliver-service PRIVATE GULLIVER_FORK_ROOT_DEFAULT="${GULLIVER_FORK_ROOT}")
+   # L'extraction du texte des PDF passe par PDFKit (host/doc_extract_pdf.mm) et le dessin des
+   # pages par CoreGraphics (host/pdf_render.cpp) : deux cadriciels natifs de macOS, rien à
+   # embarquer (PDFium abandonnée en 7.3.0).
    target_link_libraries(gulliver-service PRIVATE gulliver_common gulliver_sqlite ZLIB::ZLIB gulliver_httplib
-      "-framework CoreFoundation" "-framework IOKit")
+      "-framework CoreFoundation" "-framework IOKit" "-framework PDFKit" "-framework Quartz")
    target_compile_options(gulliver-service PRIVATE ${GULLIVER_WARNINGS})
-
-   # L'extraction du texte des PDF passe par PDFium (third_party/pdfium, licence MIT), chargée au
-   # premier PDF par dlopen (host/doc_extract_pdf.cpp).  La bibliothèque binaire (~7,6 Mo) n'est pas
-   # versionnée : tools/fetch_pdfium.sh la récupère.  On la copie à côté de l'exécutable pour que
-   # dlopen la trouve (@loader_path) ; si elle manque, le service tourne et seuls les PDF lèvent
-   # « pdf-reader » (le build ne la rend pas obligatoire).
-   set(GULLIVER_PDFIUM_DYLIB "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pdfium/lib/libpdfium.dylib")
-   if (EXISTS "${GULLIVER_PDFIUM_DYLIB}")
-      add_custom_command(TARGET gulliver-service POST_BUILD
-         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GULLIVER_PDFIUM_DYLIB}"
-            "$<TARGET_FILE_DIR:gulliver-service>/libpdfium.dylib"
-         COMMENT "Copying libpdfium.dylib next to the service")
-   else()
-      message(STATUS "PDFium not found (third_party/pdfium/lib/libpdfium.dylib) — PDFs will raise "
-         "'pdf-reader'. Run tools/fetch_pdfium.sh to enable PDF text extraction.")
-   endif()
-   target_include_directories(gulliver-service PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pdfium/include")
 
    # La préparation des modèles fournis avec Gulliver : vérifiés et convertis avec le code
    # du moteur, puis remis aux programmes de l'arbre.
@@ -258,7 +245,7 @@ if (GULLIVER_TESTS AND GULLIVER_PROGRAMS)
    # téléchargements, les réglages, l'accès web et le relais, avec des serveurs locaux.
    add_executable(test_host tests/test_host.cpp host/models.cpp host/store.cpp host/http_fetch.cpp
       host/crypto.cpp host/settings.cpp host/web_access.cpp host/certificates.cpp host/relay.cpp host/rag_engine.cpp
-      host/pseudonyms.cpp host/tls_client.mm host/tls_gate.mm)
+      host/pseudonyms.cpp host/pdf_render.cpp host/tls_client.mm host/tls_gate.mm)
    target_include_directories(test_host PRIVATE ${CMAKE_BINARY_DIR}/generated)
    target_link_libraries(test_host PRIVATE gulliver_common gulliver_sqlite ZLIB::ZLIB gulliver_httplib)
    target_compile_options(test_host PRIVATE ${GULLIVER_WARNINGS})
